@@ -341,6 +341,8 @@ public class ARConfiguration {
     @ConfigProperty
     public int shipHeatDumpTriggerKelvin;
     @ConfigProperty
+    public int shipHeatHullSkinFraction;
+    @ConfigProperty
     public int solarGeneratorMult;
     @ConfigProperty
     public boolean gravityAffectsFuel;
@@ -647,6 +649,7 @@ public class ARConfiguration {
         arConfig.shipHeatSlugJoulesPerUnit = config.get(HEAT, "shipHeatSlugJoulesPerUnit", 1000, "How many real joules one heat unit stands for when a slug's capacity is worked out from its material. The materials table is ordinary physics in SI, and this is the single place those joules become the currency the rest of the thermal system deals in - so it scales every slug at once and changes no material's standing relative to another. At the default a litre of iron is worth about five thousand heat units.", 1, Integer.MAX_VALUE).getInt();
         arConfig.shipHeatMeltCheckTicks = config.get(HEAT, "shipHeatMeltCheckTicks", 20, "How often a coolant loop looks at what it is cooking, in ticks. This is the melting rung: past a material's own limit the block stops being damaged and is gone. Checking is the expensive half - it walks the loop and its neighbours - so this is the freshness of that answer rather than a balance number. Raising it does not make a ship safer, only slower to lose its hull.", 1, 1200).getInt();
         arConfig.shipHeatDumpThroughput = config.get(HEAT, "shipHeatDumpThroughput", 40000, "How much heat an emergency dump pushes into the slug it is charging each second. Deliberately well under what a radiator array sheds: the dump buys seconds while something else is fixed, and a value large enough to keep a ship cool would turn an emergency into a cooling system that eats iron.", 0, Integer.MAX_VALUE).getInt();
+        arConfig.shipHeatHullSkinFraction = config.get(HEAT, "shipHeatHullSkinFraction", 350, "How much of the difference between the air a ship encloses and the space outside reaches its outer skin, in thousandths. A hull is insulated, so the skin sits far colder than the cabin — and that gap is the only reason shutting the radiators is worth doing, because an uninsulated hull out-glows the array on its own. At the default a ship running silent is found at roughly a tenth of the distance the same ship is found at with its radiators open. It can never reach zero: whatever is written here, some of the ship's warmth gets out, so going dark buys range and never invisibility.", 0, 1000).getInt();
         arConfig.shipHeatDumpTriggerKelvin = config.get(HEAT, "shipHeatDumpTriggerKelvin", 700, "How hot the loop must be before an emergency dump will run at all, in kelvin. Below this it does nothing and costs nothing - a ship that is coping does not throw its cargo overboard. 700 K is far past anything a working ship sits at and short of the temperature at which the drive refuses to fire.", 1, 5000).getInt();
         arConfig.solarGeneratorMult = config.get(ENERGY, "solarGeneratorMultiplier", 1, "Power produced per tick by the solar generator.").getInt();
         arConfig.microwaveRecieverMulitplier = (float) config.get(ENERGY, "MicrowaveRecieverMultiplier", 1f, "Multiplier for microwave receiver power output.").getDouble();

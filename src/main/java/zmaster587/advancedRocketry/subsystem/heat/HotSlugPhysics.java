@@ -36,6 +36,16 @@ public class HotSlugPhysics {
     private static final int TICK_INTERVAL = 20;
 
     /**
+     * How much radiating surface a loose slug is: one cell, the same unit a radiator's area is
+     * counted in.
+     * <p>
+     * It is shared rather than written twice because two things read it - what the slug SPENDS as it
+     * cools, and what a seeker SEES of it. A decoy that looked brighter than it paid for, or paid for
+     * more than it showed, would be a different object depending on who asked.
+     */
+    public static final int RADIATING_CELLS = 1;
+
+    /**
      * How hot a stack is, in kelvin, given what it is carrying and how much of it there is. Ambient
      * for anything that carries nothing.
      */
@@ -76,8 +86,11 @@ public class HotSlugPhysics {
      *
      * <p>Both halves come out of the same purse, which is what makes the mess self-limiting: melting
      * a block costs that block's own heat capacity, so a slug carrying little melts nothing and a slug
-     * carrying a lot leaves a short trail and stops. Radiating costs it too - in vacuum that is slow,
-     * which is exactly why an ejected slug stays a bright object for a long time.</p>
+     * carrying a lot leaves a short trail and stops. Radiating costs it too, and at a slug's own
+     * temperature that is FAST rather than slow: the curve is quartic and a charged slug sits a
+     * thousand kelvin above anything else in the system, so it sheds most of what it took within
+     * seconds and then lingers a long time at a dull heat. Bright and brief, then warm and patient,
+     * which is the shape of a decoy rather than of a lasting fire.</p>
      */
     @SubscribeEvent
     public void onWorldTick(TickEvent.WorldTickEvent event) {
@@ -113,8 +126,10 @@ public class HotSlugPhysics {
             spend(stack, cost);
         }
 
-        // And it radiates, on the same curve as everything else in this subsystem.
-        long shed = (long) Math.max(1.0D, HeatNetwork.cellPowerAt(kelvin) * TICK_INTERVAL);
+        // And it radiates, on the same curve as everything else in this subsystem - through the same
+        // surface a sensor sees it by, so the decoy and the cooling are one object.
+        long shed = (long) Math.max(1.0D,
+                ThermalSignature.surface(RADIATING_CELLS, kelvin).radiatedPower() * TICK_INTERVAL);
         spend(stack, shed);
     }
 

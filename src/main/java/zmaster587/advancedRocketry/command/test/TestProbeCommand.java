@@ -10910,7 +10910,12 @@ public class TestProbeCommand extends CommandBase {
                     // already losing" has to arrange BOTH sides of that threshold, and naming the
                     // temperature in the test instead would restate the tuned number.
                     "shipHeatDumpTriggerKelvin",
-                    "shipHeatDumpThroughput"));
+                    "shipHeatDumpThroughput",
+                    // How much of a ship's warmth reaches its outer skin. Here for the same reason
+                    // the shield's attenuation is: the clause is that no configuration can make a
+                    // ship invisible, so a test has to be able to ASK for a perfectly cold skin and
+                    // watch the game refuse it.
+                    "shipHeatHullSkinFraction"));
 
     private void handleConfig(ICommandSender sender, String[] args) {
         if (args.length == 0) {
@@ -16780,6 +16785,14 @@ public class TestProbeCommand extends CommandBase {
             handleHeatCycle(server, sender, args);
             return;
         }
+        if (args.length >= 5 && "signature".equalsIgnoreCase(args[0])) {
+            handleHeatSignature(server, sender, args);
+            return;
+        }
+        if (args.length >= 5 && "silent".equalsIgnoreCase(args[0])) {
+            handleHeatSilent(server, sender, args);
+            return;
+        }
         if (args.length >= 5 && "dump".equalsIgnoreCase(args[0])) {
             // The emergency dump's own state: what the slug it holds has taken, what it can still
             // take, and whether the port is clear. Reported separately because "charge went to zero"
@@ -17053,6 +17066,102 @@ public class TestProbeCommand extends CommandBase {
                 + ",\"pumps\":" + after.getPumpPositions().size()
                 + ",\"incidentFluxMilli\":" + Math.round(after.getIncidentFluxPerCell() * 1000.0D)
                 + ",\"airTaken\":" + after.getAirTakenThisTick() + "}");
+    }
+
+    /**
+     * {@code /artest heat signature <dim> <x> <y> <z> [sensorRange]} — what a passive sensor sees of
+     * the whole ship this block belongs to.
+     *
+     * <p>Both terms are reported separately and neither is derived from the other, because that is
+     * the clause: total radiated power drives the range a ship is DETECTED from, radiance drives how
+     * well a seeker can LOCK it, and the two are different questions about the same object. A test
+     * that could only read one of them could not tell a compact hot array from a large cool one.</p>
+     *
+     * <p>{@code sensorRange} is the range at which the asking sensor would find the reference ship;
+     * the reported range is what THIS signature gives that same sensor. It is an argument rather than
+     * a constant because sensor quality belongs to the sensor, not to the thermal model.</p>
+     *
+     * <pre>
+     * {"ok":true,"isBody":true,"loops":2,"radiatingCells":9,"sizeBlocks":214,"hullCellsMilli":214000,
+     *  "cabinMilliK":293000,"skinMilliK":102550,"peakMilliK":500000,"radiatedPowerMilli":300000,
+     *  "radianceMilli":300000,"detectionRangeMilli":1000000,"referencePowerMilli":19200000,
+     *  "silent":false,"radiators":9}
+     * </pre>
+     */
+    private void handleHeatSignature(MinecraftServer server, ICommandSender sender, String[] args) {
+        int dim = parseIntOr(args[1], Integer.MIN_VALUE);
+        net.minecraft.world.WorldServer world = server.getWorld(dim);
+        if (world == null) {
+            send(sender, "{\"error\":\"world not loaded\",\"dim\":" + dim + "}");
+            return;
+        }
+        BlockPos pos = new BlockPos(parseIntOr(args[2], 0), parseIntOr(args[3], 0), parseIntOr(args[4], 0));
+        double sensorRange = args.length >= 6 ? parseIntOr(args[5], 2000) : 2000;
+        zmaster587.advancedRocketry.subsystem.heat.ThermalBody body =
+                zmaster587.advancedRocketry.subsystem.heat.ThermalBody.at(world, pos);
+        if (body == null) {
+            send(sender, "{\"ok\":true,\"isBody\":false,\"loops\":0,\"radiatingCells\":0,"
+                    + "\"sizeBlocks\":0,\"hullCellsMilli\":0,\"cabinMilliK\":0,\"skinMilliK\":0,"
+                    + "\"peakMilliK\":0,\"radiatedPowerMilli\":0,\"radianceMilli\":0,"
+                    + "\"detectionRangeMilli\":0,\"silent\":false,\"radiators\":0}");
+            return;
+        }
+        zmaster587.advancedRocketry.subsystem.heat.ThermalSignature signature = body.signature();
+        int cells = 0;
+        for (zmaster587.advancedRocketry.subsystem.heat.HeatNetworkState loop : body.loops()) {
+            cells += loop.getRadiatingCells();
+        }
+        send(sender, "{\"ok\":true,\"isBody\":true,\"loops\":" + body.loops().size()
+                + ",\"radiatingCells\":" + cells
+                + ",\"sizeBlocks\":" + body.sizeBlocks()
+                + ",\"hullCellsMilli\":" + Math.round(body.hullCells() * 1000.0D)
+                + ",\"cabinMilliK\":" + Math.round(body.cabinKelvin() * 1000.0D)
+                + ",\"skinMilliK\":" + Math.round(body.skinKelvin() * 1000.0D)
+                + ",\"peakMilliK\":" + Math.round(signature.peakKelvin() * 1000.0D)
+                + ",\"radiatedPowerMilli\":" + Math.round(signature.radiatedPower() * 1000.0D)
+                + ",\"radianceMilli\":" + Math.round(signature.radiance() * 1000.0D)
+                + ",\"detectionRangeMilli\":"
+                + Math.round(signature.detectionRangeBlocks(sensorRange) * 1000.0D)
+                + ",\"referencePowerMilli\":"
+                + Math.round(zmaster587.advancedRocketry.subsystem.heat.ThermalSignature
+                        .referencePower() * 1000.0D)
+                + ",\"silent\":" + body.isRunningSilent()
+                + ",\"radiators\":" + body.radiators().size() + "}");
+    }
+
+    /**
+     * {@code /artest heat silent <dim> <x> <y> <z> <on|off>} — shut every sink on this ship, or open
+     * them again.
+     *
+     * <p>Ship-wide and in one call, because that is what the control is: a pilot decides to go dark,
+     * not to shut cell 34. The verb exists because the station that will carry that control is not
+     * built yet and the MECHANIC is — a test may not wait on a GUI to pin what closing the sinks
+     * does.</p>
+     *
+     * <pre>
+     * {"ok":true,"isBody":true,"changed":9,"silent":true,"radiators":9}
+     * </pre>
+     */
+    private void handleHeatSilent(MinecraftServer server, ICommandSender sender, String[] args) {
+        int dim = parseIntOr(args[1], Integer.MIN_VALUE);
+        net.minecraft.world.WorldServer world = server.getWorld(dim);
+        if (world == null) {
+            send(sender, "{\"error\":\"world not loaded\",\"dim\":" + dim + "}");
+            return;
+        }
+        BlockPos pos = new BlockPos(parseIntOr(args[2], 0), parseIntOr(args[3], 0), parseIntOr(args[4], 0));
+        boolean closed = args.length < 6 || "on".equalsIgnoreCase(args[5])
+                || "true".equalsIgnoreCase(args[5]);
+        zmaster587.advancedRocketry.subsystem.heat.ThermalBody body =
+                zmaster587.advancedRocketry.subsystem.heat.ThermalBody.at(world, pos);
+        if (body == null) {
+            send(sender, "{\"ok\":true,\"isBody\":false,\"changed\":0,\"silent\":false,\"radiators\":0}");
+            return;
+        }
+        int changed = body.setSinksClosed(closed);
+        send(sender, "{\"ok\":true,\"isBody\":true,\"changed\":" + changed
+                + ",\"silent\":" + body.isRunningSilent()
+                + ",\"radiators\":" + body.radiators().size() + "}");
     }
 
     // Gas separator state probe ---------------------------------------

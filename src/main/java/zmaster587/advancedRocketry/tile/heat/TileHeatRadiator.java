@@ -1,5 +1,6 @@
 package zmaster587.advancedRocketry.tile.heat;
 
+import net.minecraft.nbt.NBTTagCompound;
 import net.minecraft.util.EnumFacing;
 import zmaster587.advancedRocketry.api.ARConfiguration;
 import zmaster587.advancedRocketry.block.BlockHeatRadiator;
@@ -22,11 +23,19 @@ import zmaster587.advancedRocketry.subsystem.hull.HullClearance;
  */
 public class TileHeatRadiator extends TileHeatLoopBlock implements IHeatExchanger {
 
+    private static final String NBT_CLOSED = "heatSinkClosed";
+
     /**
      * Heat this cell shed on the last tick, for a readout. Per-tick, so never persisted. Negative when
      * the cell was absorbing more than it radiated, which is what a radiator under a star does.
      */
     private long rejectedThisTick;
+
+    /**
+     * Whether this cell has been shut. Persisted, because a ship left dark is still dark when its
+     * chunks come back - a state a player chose and paid for may not be quietly undone by a reload.
+     */
+    private boolean closed;
 
     @Override
     public int getHeatCapacity() {
@@ -59,7 +68,38 @@ public class TileHeatRadiator extends TileHeatLoopBlock implements IHeatExchange
     public int getExchangeCells() {
         if (!HeatNetwork.enabled() || world == null || world.isRemote)
             return 0;
-        return getObstruction() == 0 ? 1 : 0;
+        // A shut cell is not working surface, which is the same statement an obstructed one makes.
+        // Everything downstream - what the loop sheds, what the environment can put back through it,
+        // and what a passive sensor sees of it - reads this one number, so a ship running silent
+        // stops radiating and stops being seen by the radiators through the same door it closed.
+        return !closed && getObstruction() == 0 ? 1 : 0;
+    }
+
+    /** Whether this cell has been shut - see {@code ThermalBody.setSinksClosed}. */
+    public boolean isClosed() {
+        return closed;
+    }
+
+    /** Shut this cell, or open it. Ship-wide silence is many of these, decided in one place. */
+    public void setClosed(boolean closed) {
+        if (this.closed == closed) {
+            return;
+        }
+        this.closed = closed;
+        markDirty();
+    }
+
+    @Override
+    public void readFromNBT(NBTTagCompound nbt) {
+        super.readFromNBT(nbt);
+        closed = nbt.getBoolean(NBT_CLOSED);
+    }
+
+    @Override
+    public NBTTagCompound writeToNBT(NBTTagCompound nbt) {
+        super.writeToNBT(nbt);
+        nbt.setBoolean(NBT_CLOSED, closed);
+        return nbt;
     }
 
     @Override
