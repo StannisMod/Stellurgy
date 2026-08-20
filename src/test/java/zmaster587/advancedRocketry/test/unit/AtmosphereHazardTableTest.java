@@ -10,7 +10,6 @@ import org.junit.Test;
 
 import zmaster587.advancedRocketry.api.atmosphere.Atmosphere;
 import zmaster587.advancedRocketry.api.atmosphere.AtmosphereHazard;
-import zmaster587.advancedRocketry.api.atmosphere.Atmosphere;
 import zmaster587.advancedRocketry.atmosphere.hazard.AtmosphereHazards;
 import zmaster587.advancedRocketry.atmosphere.hazard.HazardEffect;
 import zmaster587.advancedRocketry.atmosphere.hazard.HazardExposure;

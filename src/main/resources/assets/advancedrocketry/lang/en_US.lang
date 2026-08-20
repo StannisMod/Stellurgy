@@ -438,20 +438,17 @@ msg.observetory.req.open=Observatory must be open (night, clear sky, sky access)
 msg.observetory.print.already=You already printed a chip for this asteroid!
 
 # Atmosphere detector GUI labels
-msg.atmosphere.air=Normal Air
-msg.atmosphere.pressurizedair=Pressurized Air
-msg.atmosphere.lowo2=Low Oxygen
-msg.atmosphere.higho2=Oxygen Rich
-msg.atmosphere.vacuum=Vacuum
-msg.atmosphere.highpressure=High Pressure
-msg.atmosphere.superhighpressure=Super High Pressure
-msg.atmosphere.veryhot=Very Hot
-msg.atmosphere.superheated=Superheated
-msg.atmosphere.noo2=No Oxygen (No O₂)
-msg.atmosphere.highpressurenoo2=High Pressure (No O₂)
-msg.atmosphere.superhighpressurenoo2=Super High Pressure (No O₂)
-msg.atmosphere.veryhotnoo2=Very Hot (No O₂)
-msg.atmosphere.superheatednooxygen=Superheated (No O₂)
+msg.atmosphere.assertion.breathable=Breathable
+msg.atmosphere.assertion.not_breathable=Not Breathable
+msg.atmosphere.assertion.combustible=Fire Will Take
+msg.atmosphere.assertion.not_combustible=Nothing Will Burn
+msg.atmosphere.assertion.vacuum=Vacuum
+msg.atmosphere.assertion.toxic=Poisonous
+msg.atmosphere.assertion.corrosive=Corrosive
+msg.atmosphere.assertion.suffocating=Suffocating
+msg.atmosphere.assertion.too_hot=Too Hot
+msg.atmosphere.assertion.too_dense=Too Dense
+msg.atmosphere.assertion.oxygen_rich=Oxygen Rich
 msg.advancedrocketry.atmosphereDetector.selected=Selected atmosphere: %s
 msg.advancedrocketry.atmosphereDetector.alreadySelected=Already selected atmosphere: %s
 

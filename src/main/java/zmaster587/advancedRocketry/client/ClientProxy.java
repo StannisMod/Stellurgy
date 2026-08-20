@@ -652,8 +652,8 @@ public class ClientProxy extends CommonProxy {
     // atmosphere detector
 
     @Override
-    public ModuleBase createAtmosphereDetectorButton(int offsetX, int offsetY, int buttonId, Atmosphere atmosphere, String text, TileAtmosphereDetector detector, ResourceLocation[] buttonImages) {
-        return new ModuleSelectableAtmosphereButton(offsetX, offsetY, buttonId, atmosphere, text, detector, buttonImages);
+    public ModuleBase createAtmosphereDetectorButton(int offsetX, int offsetY, int buttonId, zmaster587.advancedRocketry.api.atmosphere.AtmosphereAssertion assertion, String text, TileAtmosphereDetector detector, ResourceLocation[] buttonImages) {
+        return new ModuleSelectableAtmosphereButton(offsetX, offsetY, buttonId, assertion, text, detector, buttonImages);
     }
 
     @Override

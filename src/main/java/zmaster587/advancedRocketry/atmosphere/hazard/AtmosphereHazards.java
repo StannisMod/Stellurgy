@@ -17,7 +17,6 @@ import zmaster587.advancedRocketry.api.atmosphere.Atmosphere;
 import zmaster587.advancedRocketry.api.atmosphere.AtmosphereHazard;
 import zmaster587.advancedRocketry.api.capability.CapabilitySpaceArmor;
 import zmaster587.advancedRocketry.atmosphere.AtmosphereHandler;
-import zmaster587.advancedRocketry.api.atmosphere.Atmosphere;
 import zmaster587.advancedRocketry.entity.EntityElevatorCapsule;
 import zmaster587.advancedRocketry.integration.MatterOvedriveIntegration;
 import zmaster587.advancedRocketry.util.ItemAirUtils;

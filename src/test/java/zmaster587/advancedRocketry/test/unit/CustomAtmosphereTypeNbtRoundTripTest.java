@@ -5,7 +5,6 @@ import org.junit.BeforeClass;
 import org.junit.Test;
 import zmaster587.advancedRocketry.api.atmosphere.Atmosphere;
 import zmaster587.advancedRocketry.api.atmosphere.AtmosphereRegister;
-import zmaster587.advancedRocketry.api.atmosphere.Atmosphere;
 import zmaster587.advancedRocketry.test.MinecraftBootstrap;
 
 import static org.junit.Assert.assertEquals;
@@ -17,11 +16,10 @@ import static org.junit.Assert.assertSame;
  *
  * <p>Companion mods extend the atmosphere system by constructing a fresh
  * {@link Atmosphere} (or subclass) and registering it via
- * {@link AtmosphereRegister#registerAtmosphere}. Tiles that persist a
- * reference to an atmosphere — most prominently
- * {@link zmaster587.advancedRocketry.tile.atmosphere.TileAtmosphereDetector}
- * which writes/reads the {@code atmName} NBT key — depend on the
- * unlocalized-name + registry-lookup loop being lossless: write
+ * {@link AtmosphereRegister#registerAtmosphere}. Anything that carries a
+ * reference to an atmosphere ACROSS a boundary — today that is the client
+ * sync packet, which sends the unlocalized name — depends on the
+ * name + registry-lookup loop being lossless: write
  * {@code atmosphere.getUnlocalizedName()} to NBT, restart, read the
  * string back, query {@link AtmosphereRegister#getAtmosphere}, get the
  * SAME registered instance back.</p>
@@ -88,19 +86,20 @@ public class CustomAtmosphereTypeNbtRoundTripTest {
         Atmosphere custom = new Atmosphere(true, false, false, name);
         AtmosphereRegister.getInstance().registerAtmosphere(custom);
 
-        // Mirror TileAtmosphereDetector.writeToNBT.
+        // The atmosphere detector used to be the headline consumer of this loop; it watches a
+        // STATEMENT about the air now and persists that instead, so the surviving consumer is the
+        // wire. When the packet stops sending a name too, this loop has no consumer left and this
+        // test retires with it rather than quietly pinning an unused path.
         NBTTagCompound nbt = new NBTTagCompound();
         nbt.setString("atmName", custom.getUnlocalizedName());
 
-        // Mirror TileAtmosphereDetector.readFromNBT.
         String readbackName = nbt.getString("atmName");
         Atmosphere readback = AtmosphereRegister.getInstance()
                 .getAtmosphere(readbackName);
         assertSame("custom Atmosphere must round-trip through the NBT "
                         + "unlocalized-name + registry-lookup loop intact — "
-                        + "this is the save-compat contract for any tile "
-                        + "that persists an atmosphere reference (e.g. "
-                        + "TileAtmosphereDetector)",
+                        + "this is the contract for anything that carries an "
+                        + "atmosphere reference across a boundary by name",
                 custom, readback);
     }
 }

@@ -10,7 +10,6 @@ import org.junit.Test;
 import zmaster587.advancedRocketry.api.atmosphere.Atmosphere;
 import zmaster587.advancedRocketry.armor.ItemSpaceArmor;
 import zmaster587.advancedRocketry.armor.ItemSpaceChest;
-import zmaster587.advancedRocketry.api.atmosphere.Atmosphere;
 import zmaster587.advancedRocketry.api.atmosphere.AtmosphereHazard;
 import zmaster587.advancedRocketry.test.MinecraftBootstrap;
 

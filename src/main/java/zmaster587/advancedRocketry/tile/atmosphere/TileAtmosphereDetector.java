@@ -14,9 +14,10 @@ import net.minecraftforge.fml.relauncher.Side;
 import zmaster587.advancedRocketry.AdvancedRocketry;
 import zmaster587.advancedRocketry.api.AdvancedRocketryBlocks;
 import zmaster587.advancedRocketry.api.atmosphere.Atmosphere;
+import zmaster587.advancedRocketry.api.atmosphere.AtmosphereAssertion;
 import zmaster587.advancedRocketry.api.atmosphere.AtmosphereRegister;
+import zmaster587.advancedRocketry.atmosphere.AtmosphereAssertions;
 import zmaster587.advancedRocketry.atmosphere.AtmosphereHandler;
-import zmaster587.advancedRocketry.api.atmosphere.Atmosphere;
 import zmaster587.advancedRocketry.block.BlockRedstoneEmitter;
 import zmaster587.libVulpes.LibVulpes;
 import zmaster587.libVulpes.inventory.modules.*;
@@ -31,7 +32,7 @@ import java.util.Locale;
 
 public class TileAtmosphereDetector extends TileEntity implements ITickable, IModularInventory, IButtonInventory, INetworkMachine {
 
-    private Atmosphere atmosphereToDetect;
+    private AtmosphereAssertion assertionToDetect;
 
     private static final int BUTTON_COLOR_NORMAL = 0xFF22FF22;
     private static final int BUTTON_COLOR_SELECTED = 0xFFFFFF55;
@@ -39,7 +40,7 @@ public class TileAtmosphereDetector extends TileEntity implements ITickable, IMo
     private static final int BUTTON_BG_SELECTED = 0xFF444444;
 
     public TileAtmosphereDetector() {
-        atmosphereToDetect = Atmosphere.AIR;
+        assertionToDetect = AtmosphereAssertion.BREATHABLE;
     }
 
 
@@ -52,10 +53,13 @@ public class TileAtmosphereDetector extends TileEntity implements ITickable, IMo
             //TODO: Galacticcraft support
             AtmosphereHandler atmhandler = AtmosphereHandler.getOxygenHandler(world.provider.getDimension());
             if (atmhandler == null) {
-                detectedAtm = atmosphereToDetect == Atmosphere.AIR;
+                // No handler for this dimension: the only thing anyone can honestly say about the air
+                // is that it is ordinary, so only the statement that it is breathable holds.
+                detectedAtm = assertionToDetect == AtmosphereAssertion.BREATHABLE;
             } else {
                 for (EnumFacing direction : EnumFacing.values()) {
-                    detectedAtm = (!world.getBlockState(pos.offset(direction)).isOpaqueCube() && atmosphereToDetect == atmhandler.getAtmosphereType(pos.offset(direction)));
+                    detectedAtm = !world.getBlockState(pos.offset(direction)).isOpaqueCube()
+                            && AtmosphereAssertions.holdsAt(atmhandler, pos.offset(direction), assertionToDetect);
                     if (detectedAtm) break;
                 }
             }
@@ -78,18 +82,17 @@ public class TileAtmosphereDetector extends TileEntity implements ITickable, IMo
         List<ModuleBase> modules = new LinkedList<>();
         List<ModuleBase> btns = new LinkedList<>();
 
-        List<Atmosphere> atmospheres = AtmosphereRegister.getInstance().getAtmosphereList();
+        AtmosphereAssertion[] assertions = AtmosphereAssertion.values();
 
-        for (int i = 0; i < atmospheres.size(); i++) {
-            Atmosphere atm = atmospheres.get(i);
-            String label = getLocalizedAtmosphereName(atm);
+        for (int i = 0; i < assertions.length; i++) {
+            AtmosphereAssertion assertion = assertions[i];
 
             btns.add(AdvancedRocketry.proxy.createAtmosphereDetectorButton(
                     60,
                     4 + i * 24,
                     i,
-                    atm,
-                    label,
+                    assertion,
+                    getLocalizedAssertionName(assertion),
                     this,
                     zmaster587.libVulpes.inventory.TextureResources.buttonBuild
             ));
@@ -117,19 +120,19 @@ public class TileAtmosphereDetector extends TileEntity implements ITickable, IMo
 
     @Override
     public void onInventoryButtonPressed(int buttonId) {
-        List<Atmosphere> atmospheres = AtmosphereRegister.getInstance().getAtmosphereList();
+        AtmosphereAssertion[] assertions = AtmosphereAssertion.values();
 
-        if (buttonId < 0 || buttonId >= atmospheres.size()) {
+        if (buttonId < 0 || buttonId >= assertions.length) {
             return;
         }
 
-        Atmosphere oldAtmosphere = atmosphereToDetect;
-        atmosphereToDetect = atmospheres.get(buttonId);
+        AtmosphereAssertion previous = assertionToDetect;
+        assertionToDetect = assertions[buttonId];
 
         if (world == null || world.isRemote) {
-            String atmosphereName = getLocalizedAtmosphereName(atmosphereToDetect);
+            String atmosphereName = getLocalizedAssertionName(assertionToDetect);
 
-            if (isSameAtmosphere(oldAtmosphere, atmosphereToDetect)) {
+            if (previous == assertionToDetect) {
                 AdvancedRocketry.proxy.sendClientStatusMessage(
                         "msg.advancedrocketry.atmosphereDetector.alreadySelected",
                         atmosphereName
@@ -145,23 +148,20 @@ public class TileAtmosphereDetector extends TileEntity implements ITickable, IMo
             PacketHandler.sendToServer(new PacketMachine(this, (byte) 0));
         }
     }
-    public boolean isAtmosphereSelected(Atmosphere atmosphere) {
-        return isSameAtmosphere(atmosphereToDetect, atmosphere);
+    public boolean isAssertionSelected(AtmosphereAssertion assertion) {
+        return assertionToDetect == assertion;
     }
 
-    public static String getLocalizedAtmosphereName(Atmosphere atmosphere) {
-        if (atmosphere == null) {
+    /** What the button says. Falls back to the constant's own name where a pack has no translation. */
+    public static String getLocalizedAssertionName(AtmosphereAssertion assertion) {
+        if (assertion == null) {
             return "";
         }
 
-        String key = "msg.atmosphere." + atmosphere.getUnlocalizedName().toLowerCase(Locale.ROOT);
+        String key = assertion.messageKey();
         String label = LibVulpes.proxy.getLocalizedString(key);
 
-        if (label.equals(key)) {
-            return atmosphere.getUnlocalizedName();
-        }
-
-        return label;
+        return label.equals(key) ? assertion.name() : label;
     }
 
     private static boolean isSameAtmosphere(Atmosphere first, Atmosphere second) {
@@ -178,11 +178,12 @@ public class TileAtmosphereDetector extends TileEntity implements ITickable, IMo
 
     @Override
     public void writeDataToNetwork(ByteBuf out, byte id) {
-        //Send the unlocalized name over the net to reduce chances of foulup due to client/server inconsistencies
+        // The assertion travels by NAME rather than by ordinal, so that adding one in the middle of
+        // the enum cannot silently re-point every detector already placed in a world.
         if (id == 0) {
             PacketBuffer buf = new PacketBuffer(out);
-            buf.writeShort(atmosphereToDetect.getUnlocalizedName().length());
-            buf.writeString(atmosphereToDetect.getUnlocalizedName());
+            buf.writeShort(assertionToDetect.name().length());
+            buf.writeString(assertionToDetect.name());
         }
     }
 
@@ -191,7 +192,7 @@ public class TileAtmosphereDetector extends TileEntity implements ITickable, IMo
                                     NBTTagCompound nbt) {
         if (packetId == 0) {
             PacketBuffer buf = new PacketBuffer(in);
-            nbt.setString("uName", buf.readString(buf.readShort()));
+            nbt.setString("assertion", buf.readString(buf.readShort()));
         }
     }
 
@@ -199,8 +200,7 @@ public class TileAtmosphereDetector extends TileEntity implements ITickable, IMo
     public void useNetworkData(EntityPlayer player, Side side, byte id,
                                NBTTagCompound nbt) {
         if (id == 0) {
-            String name = nbt.getString("uName");
-            atmosphereToDetect = AtmosphereRegister.getInstance().getAtmosphere(name);
+            assertionToDetect = parseAssertion(nbt.getString("assertion"));
         }
     }
 
@@ -208,7 +208,7 @@ public class TileAtmosphereDetector extends TileEntity implements ITickable, IMo
     public NBTTagCompound writeToNBT(NBTTagCompound nbt) {
         super.writeToNBT(nbt);
 
-        nbt.setString("atmName", atmosphereToDetect.getUnlocalizedName());
+        nbt.setString("assertion", assertionToDetect.name());
         return nbt;
     }
 
@@ -216,6 +216,22 @@ public class TileAtmosphereDetector extends TileEntity implements ITickable, IMo
     public void readFromNBT(NBTTagCompound nbt) {
         super.readFromNBT(nbt);
 
-        atmosphereToDetect = AtmosphereRegister.getInstance().getAtmosphere(nbt.getString("atmName"));
+        assertionToDetect = parseAssertion(nbt.getString("assertion"));
+    }
+
+    /**
+     * An assertion this build does not know reads as "is it breathable" — the same default a fresh
+     * detector starts on. Never a guess at what was meant: a detector whose statement has been removed
+     * from the game should sit on the harmless one rather than on whichever happens to be first.
+     */
+    private static AtmosphereAssertion parseAssertion(String name) {
+        if (name != null && !name.isEmpty()) {
+            for (AtmosphereAssertion candidate : AtmosphereAssertion.values()) {
+                if (candidate.name().equals(name)) {
+                    return candidate;
+                }
+            }
+        }
+        return AtmosphereAssertion.BREATHABLE;
     }
 }

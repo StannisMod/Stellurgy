@@ -9904,11 +9904,10 @@ public class TestProbeCommand extends CommandBase {
                 if (tile instanceof zmaster587.advancedRocketry.tile.atmosphere.TileAtmosphereDetector) {
                     try {
                         java.lang.reflect.Field f = zmaster587.advancedRocketry.tile.atmosphere
-                                .TileAtmosphereDetector.class.getDeclaredField("atmosphereToDetect");
+                                .TileAtmosphereDetector.class.getDeclaredField("assertionToDetect");
                         f.setAccessible(true);
-                        zmaster587.advancedRocketry.api.atmosphere.Atmosphere mode =
-                                (zmaster587.advancedRocketry.api.atmosphere.Atmosphere) f.get(tile);
-                        info.put("detectorMode", mode == null ? "null" : mode.getUnlocalizedName());
+                        Object mode = f.get(tile);
+                        info.put("detectorMode", mode == null ? "null" : ((Enum<?>) mode).name());
                     } catch (ReflectiveOperationException ignored) {
                         info.put("detectorMode", "reflect-failed");
                     }
@@ -10027,7 +10026,7 @@ public class TestProbeCommand extends CommandBase {
             int x = parseIntOr(args[2], 0);
             int y = parseIntOr(args[3], 0);
             int z = parseIntOr(args[4], 0);
-            String atmName = args[5];
+            String assertionName = args[5];
             net.minecraft.world.WorldServer world = server.getWorld(dim);
             if (world == null) {
                 send(sender, "{\"error\":\"world not loaded\",\"dim\":" + dim + "}");
@@ -10039,20 +10038,35 @@ public class TestProbeCommand extends CommandBase {
                         + (tile == null ? "null" : tile.getClass().getName()) + "\"}");
                 return;
             }
-            zmaster587.advancedRocketry.api.atmosphere.Atmosphere target =
-                    zmaster587.advancedRocketry.api.atmosphere.AtmosphereRegister.getInstance().getAtmosphere(atmName);
+            // The detector watches a STATEMENT about the air now, not a named atmosphere. Rejecting
+            // an unknown one loudly matters more here than anywhere: this reflects straight into the
+            // field, so a silent default would leave a test asserting against a detector watching
+            // something else entirely.
+            zmaster587.advancedRocketry.api.atmosphere.AtmosphereAssertion target = null;
+            for (zmaster587.advancedRocketry.api.atmosphere.AtmosphereAssertion candidate
+                    : zmaster587.advancedRocketry.api.atmosphere.AtmosphereAssertion.values()) {
+                if (candidate.name().equalsIgnoreCase(assertionName)) {
+                    target = candidate;
+                    break;
+                }
+            }
             if (target == null) {
-                send(sender, "{\"error\":\"unknown atmosphere name\",\"name\":\""
-                        + escapeJson(atmName) + "\"}");
+                send(sender, "{\"error\":\"unknown assertion\",\"name\":\""
+                        + escapeJson(assertionName) + "\",\"known\":"
+                        + jsonStringArray(java.util.Arrays.asList(
+                                java.util.Arrays.stream(
+                                        zmaster587.advancedRocketry.api.atmosphere.AtmosphereAssertion.values())
+                                        .map(Enum::name).toArray(String[]::new)))
+                        + "}");
                 return;
             }
             try {
                 java.lang.reflect.Field f = zmaster587.advancedRocketry.tile.atmosphere
-                        .TileAtmosphereDetector.class.getDeclaredField("atmosphereToDetect");
+                        .TileAtmosphereDetector.class.getDeclaredField("assertionToDetect");
                 f.setAccessible(true);
                 f.set(tile, target);
                 tile.markDirty();
-                send(sender, "{\"ok\":true,\"detectorMode\":\"" + escapeJson(atmName) + "\"}");
+                send(sender, "{\"ok\":true,\"detectorMode\":\"" + escapeJson(target.name()) + "\"}");
             } catch (ReflectiveOperationException e) {
                 send(sender, "{\"error\":\"reflection failed\",\"msg\":\""
                         + escapeJson(e.getMessage()) + "\"}");
@@ -10121,7 +10135,7 @@ public class TestProbeCommand extends CommandBase {
             send(sender, "{\"ok\":true,\"cleared\":" + n + "}");
             return;
         }
-        send(sender, "{\"error\":\"unknown atmosphere subcommand — try get <dim> <x> <y> <z> | set-density <dim> <value> | detector-output <dim> <x> <y> <z> | detector-set-mode <dim> <x> <y> <z> <atmName> | extinguish-at <dim> <x> <y> <z> | torch-block-add <blockId> | torch-block-clear\"}");
+        send(sender, "{\"error\":\"unknown atmosphere subcommand — try get <dim> <x> <y> <z> | set-density <dim> <value> | detector-output <dim> <x> <y> <z> | detector-set-mode <dim> <x> <y> <z> <assertion> | extinguish-at <dim> <x> <y> <z> | torch-block-add <blockId> | torch-block-clear\"}");
     }
 
     // Oxygen probe -------------------------------------------------------
@@ -17380,10 +17394,29 @@ public class TestProbeCommand extends CommandBase {
                 return;
             }
             zmaster587.advancedRocketry.atmosphere.AirState written =
-                    args.length >= 9
+                    args.length >= 9 && args[8].indexOf('=') < 0
                             ? new zmaster587.advancedRocketry.atmosphere.AirState(n2, o2, co2,
                                     parseIntOr(args[8], 0))
                             : new zmaster587.advancedRocketry.atmosphere.AirState(n2, o2, co2);
+            // Any further argument of the form <gas>=<amount> puts that SUBSTANCE in the room. The
+            // three named gases cover what life support moves around; a poison or an acid is a gas
+            // like any other to the model, and nothing in production can put one in a room on demand.
+            for (int i = 8; i < args.length; i++) {
+                int split = args[i].indexOf('=');
+                if (split <= 0) {
+                    continue;
+                }
+                zmaster587.advancedRocketry.atmosphere.gas.Gas gas =
+                        zmaster587.advancedRocketry.atmosphere.gas.GasRegistry
+                                .byName(args[i].substring(0, split));
+                if (gas == null) {
+                    send(sender, "{\"error\":\"unknown gas\",\"name\":\""
+                            + escapeJson(args[i].substring(0, split)) + "\"}");
+                    return;
+                }
+                written.add(gas, parseLongOr(args[i].substring(split + 1), 0L),
+                        written.getTemperatureKelvin());
+            }
             boolean ok = handler.setAirState(
                     (zmaster587.advancedRocketry.api.util.IBlobHandler) tile, written);
             if (ok)

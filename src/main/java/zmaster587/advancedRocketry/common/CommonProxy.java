@@ -150,7 +150,7 @@ public class CommonProxy {
 
     // atmosphere detector
 
-    public ModuleBase createAtmosphereDetectorButton(int offsetX, int offsetY, int buttonId, Atmosphere atmosphere, String text, TileAtmosphereDetector detector, ResourceLocation[] buttonImages) {
+    public ModuleBase createAtmosphereDetectorButton(int offsetX, int offsetY, int buttonId, zmaster587.advancedRocketry.api.atmosphere.AtmosphereAssertion assertion, String text, TileAtmosphereDetector detector, ResourceLocation[] buttonImages) {
         return new ModuleButton(offsetX, offsetY, buttonId, text, detector, buttonImages);
     }
 

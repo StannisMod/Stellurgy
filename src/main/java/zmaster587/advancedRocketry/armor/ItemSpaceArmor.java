@@ -23,7 +23,6 @@ import zmaster587.advancedRocketry.api.AdvancedRocketryItems;
 import zmaster587.advancedRocketry.api.atmosphere.Atmosphere;
 import zmaster587.advancedRocketry.api.armor.IProtectiveArmor;
 import zmaster587.advancedRocketry.api.capability.CapabilitySpaceArmor;
-import zmaster587.advancedRocketry.api.atmosphere.Atmosphere;
 import zmaster587.advancedRocketry.client.render.armor.RenderJetPack;
 import zmaster587.libVulpes.LibVulpes;
 import zmaster587.libVulpes.api.IArmorComponent;
