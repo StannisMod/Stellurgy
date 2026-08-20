@@ -1,6 +1,7 @@
 package zmaster587.advancedRocketry.test.server;
 
-import com.github.stannismod.forge.testing.TestTimeouts;
+
+import zmaster587.advancedRocketry.test.GameTicks;
 
 import org.junit.After;
 import org.junit.Assume;
@@ -54,7 +55,13 @@ public class VSUnpilotedEntryE2ETest extends AbstractSharedServerTest {
             Pattern.compile("\"builderPos\":\\[(-?\\d+),(-?\\d+),(-?\\d+)]");
 
     /** Poll iterations (250 ms apart) for the async crossing, stretched by the build's fork factor. */
-    private static final int SETTLE_POLLS = (int) Math.ceil(120 * TestTimeouts.factor());
+    /**
+     * Budgets in SERVER TICKS: 600 is the thirty seconds the old 120 x 250 ms meant on an idle box,
+     * 200 the ten of 40 x 250 ms. The fork multiplier is deleted rather than re-tuned - it said how
+     * much of the machine this test shares, and a crossing needs ticks, not a share of a box.
+     */
+    private static final int SETTLE_TICKS = 600;
+    private static final int LOAD_TICKS = 200;
 
     /** Where the ship is built — its own region, clear of every other server-tier fixture. */
     private static final int SRC_X = 6800, SRC_Y = 80, SRC_Z = 6800;
@@ -112,22 +119,19 @@ public class VSUnpilotedEntryE2ETest extends AbstractSharedServerTest {
         assertTrue("climb teleport failed: " + tp, tp.contains("\"ok\":true"));
         exec("artest vs unpark 0 " + (int) sx + " " + ABOVE_CEILING_Y + " " + (int) sz);
 
-        String status = "";
-        boolean settled = false;
-        for (int i = 0; i < SETTLE_POLLS; i++) {
-            status = exec("artest space entry-status");
-            if (extractInt(status, "ships") >= 1 && "SETTLED".equals(extractString(status, "state"))) {
-                settled = true;
-                break;
-            }
-            loadAllEntrySlots(setup);
-            Thread.sleep(250);
-        }
+        final String[] status = {""};
+        boolean settled = GameTicks.until(client(), GameTicks.server(), SETTLE_TICKS,
+                () -> {
+                    status[0] = exec("artest space entry-status");
+                    return extractInt(status[0], "ships") >= 1
+                            && "SETTLED".equals(extractString(status[0], "state"));
+                },
+                () -> loadAllEntrySlots(setup));
         assertTrue("a ship with NOBODY at the controls must still cross out of the atmosphere — the"
                 + " crossing is world plus geometry, and an atmosphere does not check whose hands are"
-                + " on the stick; last status=" + status, settled);
+                + " on the stick; last status=" + status[0], settled);
         assertEquals("entry settled in a different cell than the launch resolver answers", expectedCell,
-                extractString(status, "cellKey"));
+                extractString(status[0], "cellKey"));
     }
 
     // --- helpers (byte-identical to VSShipEntryE2ETest's, as the server-tier classes keep them) ------
@@ -149,17 +153,16 @@ public class VSUnpilotedEntryE2ETest extends AbstractSharedServerTest {
     }
 
     private int waitForLoadedShip(int dim) throws Exception {
-        for (int i = 0; i < 40; i++) {
-            if (extractInt(exec("artest vs ship-count-all " + dim), "count") >= 1) {
-                exec("artest vs load-ships " + dim);
-                int loaded = extractInt(exec("artest vs ship-count " + dim), "count");
-                if (loaded >= 1) {
-                    return loaded;
-                }
+        final int[] loaded = {0};
+        GameTicks.until(client(), GameTicks.server(), LOAD_TICKS, () -> {
+            if (extractInt(exec("artest vs ship-count-all " + dim), "count") < 1) {
+                return false;
             }
-            Thread.sleep(250);
-        }
-        return 0;
+            exec("artest vs load-ships " + dim);
+            loaded[0] = extractInt(exec("artest vs ship-count " + dim), "count");
+            return loaded[0] >= 1;
+        });
+        return loaded[0];
     }
 
     private void clearArea(int baseX, int baseZ) throws Exception {

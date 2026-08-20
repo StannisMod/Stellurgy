@@ -1,5 +1,7 @@
 package zmaster587.advancedRocketry.test.server;
 
+import zmaster587.advancedRocketry.test.GameTicks;
+
 import org.junit.After;
 import org.junit.Assume;
 import org.junit.Test;
@@ -36,6 +38,15 @@ public class VSShipAutoTakeoffE2ETest extends AbstractSharedServerTest {
     /** A short hop below the default orbit ceiling (1000), so the diagonal climb crosses it quickly. */
     private static final int NEAR_CEILING_Y = 985;
 
+    /**
+     * Budgets in SERVER TICKS, none fork-scaled: 100 for the autopilot's raycast to run on the AFC's
+     * own tick and decline (the old 20 x 250 ms), 800 for the diagonal climb under force plus the
+     * async entry (the old 160 x 250 ms), 200 for a ship becoming loadable.
+     */
+    private static final int DECLINE_TICKS = 100;
+    private static final int CLIMB_TICKS = 800;
+    private static final int LOAD_TICKS = 200;
+
     @Test
     public void autoTakeoffDeclinesWhenBlockedAndClimbsIntoSpaceWhenClear() throws Exception {
         Assume.assumeTrue("needs Valkyrien Skies on the server classpath (run with -PwithVS)", serverHasVs());
@@ -67,17 +78,15 @@ public class VSShipAutoTakeoffE2ETest extends AbstractSharedServerTest {
         String engaged = exec("artest space auto-takeoff 0");
         assertTrue("auto-takeoff did not engage: " + engaged, engaged.contains("\"engaged\":true"));
 
-        boolean declined = false;
-        String status = "";
-        for (int i = 0; i < 20; i++) {             // the raycast runs on the AFC's own tick; a few ticks
-            Thread.sleep(250);
-            status = exec("artest space auto-takeoff 0 status");
-            if (status.contains("\"engaged\":false")) {
-                declined = true;
-                break;
-            }
-        }
-        assertTrue("auto-takeoff did not decline a blocked corridor (still engaged): " + status, declined);
+        // The raycast runs on the AFC's OWN tick, so this is a wait for that tick to happen a few
+        // times - which is a number of ticks, not a number of seconds.
+        final String[] status = {""};
+        boolean declined = GameTicks.until(client(), GameTicks.server(), DECLINE_TICKS, () -> {
+            status[0] = exec("artest space auto-takeoff 0 status");
+            return status[0].contains("\"engaged\":false");
+        });
+        assertTrue("auto-takeoff did not decline a blocked corridor (still engaged): " + status[0],
+                declined);
 
         // ---- CLIMB + ENTER leg: clear the slab, hop the ship just below the ceiling, engage, enter. ----
         assertTrue("slab clear failed", exec("artest fill 0 " + ((int) sx - 20) + " " + slabY + " " + ((int) sz - 20)
@@ -92,17 +101,16 @@ public class VSShipAutoTakeoffE2ETest extends AbstractSharedServerTest {
                 reEngage.contains("\"engaged\":true"));
 
         boolean settled = false;
-        String entry = "";
-        for (int i = 0; i < 160; i++) {            // ~40 s: diagonal climb under force + async entry
-            entry = exec("artest space entry-status");
-            if (extractInt(entry, "ships") >= 1 && "SETTLED".equals(extractString(entry, "state"))) {
-                settled = true;
-                break;
-            }
-            loadAllEntrySlots(setup);
-            Thread.sleep(250);
-        }
-        assertTrue("auto-takeoff never climbed the ship into space (not SETTLED); last=" + entry, settled);
+        final String[] entry = {""};
+        settled = GameTicks.until(client(), GameTicks.server(), CLIMB_TICKS,
+                () -> {
+                    entry[0] = exec("artest space entry-status");
+                    return extractInt(entry[0], "ships") >= 1
+                            && "SETTLED".equals(extractString(entry[0], "state"));
+                },
+                () -> loadAllEntrySlots(setup));
+        assertTrue("auto-takeoff never climbed the ship into space (not SETTLED); last=" + entry[0],
+                settled);
     }
 
     @After
@@ -132,16 +140,13 @@ public class VSShipAutoTakeoffE2ETest extends AbstractSharedServerTest {
     }
 
     private int waitForLoadedShip(int dim) throws Exception {
-        for (int i = 0; i < 40; i++) {
-            if (extractInt(exec("artest vs ship-count-all " + dim), "count") >= 1) {
-                exec("artest vs load-ships " + dim);
-                if (extractInt(exec("artest vs ship-count " + dim), "count") >= 1) {
-                    return 1;
-                }
+        return GameTicks.until(client(), GameTicks.server(), LOAD_TICKS, () -> {
+            if (extractInt(exec("artest vs ship-count-all " + dim), "count") < 1) {
+                return false;
             }
-            Thread.sleep(250);
-        }
-        return 0;
+            exec("artest vs load-ships " + dim);
+            return extractInt(exec("artest vs ship-count " + dim), "count") >= 1;
+        }) ? 1 : 0;
     }
 
     private void clearArea(int baseX, int baseZ) throws Exception {

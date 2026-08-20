@@ -1,5 +1,7 @@
 package zmaster587.advancedRocketry.test.server;
 
+import zmaster587.advancedRocketry.test.GameTicks;
+
 import org.junit.Assume;
 import org.junit.Test;
 
@@ -34,6 +36,15 @@ public class VSJumpCarriesLooseBodiesE2ETest extends AbstractSharedServerTest {
 
     /** How close to the ship the body must land to count as aboard it rather than merely in the cell. */
     private static final double ABOARD_RADIUS = 8.0;
+
+    /**
+     * Budgets in SERVER TICKS, none fork-scaled: 400 is the twenty seconds the old 80 x 250 ms meant
+     * on an idle box, 300 the fifteen of 60 x 250 ms for the retry-based placement, 200 the ten of
+     * 40 x 250 ms for a ship becoming loadable.
+     */
+    private static final int ARRIVAL_TICKS = 400;
+    private static final int PLACEMENT_TICKS = 300;
+    private static final int LOAD_TICKS = 200;
 
     @Test
     public void aJumpCarriesTheBodiesLyingOnItsDeck() throws Exception {
@@ -76,36 +87,31 @@ public class VSJumpCarriesLooseBodiesE2ETest extends AbstractSharedServerTest {
         String begin = exec("artest space transit-begin " + originDim + " 1 64 1 " + HYPERSPACE_JUMP_SPEED);
         assertTrue("the transit must begin: " + begin, begin.contains("\"began\":true"));
 
-        int targetDim = -1;
-        String lastTick = "";
-        for (int i = 0; i < 80 && targetDim < 0; i++) {
-            lastTick = exec("artest space transit-tick 10");
-            if (extractInt(lastTick, "inTransit") == 0) {
-                targetDim = extractInt(lastTick, "targetDim");
-                break;
-            }
-            Thread.sleep(250);
-        }
-        assertTrue("the jump never completed; last tick=" + lastTick, targetDim >= 0);
+        final String[] lastTick = {""};
+        boolean done = GameTicks.until(client(), GameTicks.server(), ARRIVAL_TICKS, () -> {
+            lastTick[0] = exec("artest space transit-tick 10");
+            return extractInt(lastTick[0], "inTransit") == 0;
+        });
+        int targetDim = done ? extractInt(lastTick[0], "targetDim") : -1;
+        assertTrue("the jump never completed; last tick=" + lastTick[0], targetDim >= 0);
 
         // The placement is retry-based like the crew's, so drive the same retries the crew leg drives.
-        String arrived = "";
-        boolean carried = false;
-        for (int i = 0; i < 60 && !carried; i++) {
+        final String[] arrived = {""};
+        boolean carried = GameTicks.until(client(), GameTicks.server(), PLACEMENT_TICKS, () -> {
             exec("artest space transit-tick 10");
-            arrived = exec("artest vs ship-info " + targetDim + " 0 200 0");
-            if (arrived.contains("\"posX\"")) {
-                double px = extractDouble(arrived, "posX");
-                double py = extractDouble(arrived, "posY");
-                double pz = extractDouble(arrived, "posZ");
-                carried = extractInt(exec("artest space loose-body-count " + targetDim + " " + px + " "
-                        + py + " " + pz + " " + ABOARD_RADIUS), "count") >= 1;
+            arrived[0] = exec("artest vs ship-info " + targetDim + " 0 200 0");
+            if (!arrived[0].contains("\"posX\"")) {
+                return false;
             }
-            Thread.sleep(250);
-        }
+            double px = extractDouble(arrived[0], "posX");
+            double py = extractDouble(arrived[0], "posY");
+            double pz = extractDouble(arrived[0], "posZ");
+            return extractInt(exec("artest space loose-body-count " + targetDim + " " + px + " "
+                    + py + " " + pz + " " + ABOARD_RADIUS), "count") >= 1;
+        });
 
         assertTrue("a body lying on the deck must arrive WITH the ship — the crew is not the only "
-                + "thing aboard a jump. Ship report at the destination: " + arrived, carried);
+                + "thing aboard a jump. Ship report at the destination: " + arrived[0], carried);
 
         // ...and it is not still lying in the cell it left, which is the failure this replaces: a body
         // left behind is also "somewhere", and only asking both ends tells the two apart.
@@ -131,16 +137,13 @@ public class VSJumpCarriesLooseBodiesE2ETest extends AbstractSharedServerTest {
     }
 
     private int waitForLoadedShip(int dim) throws Exception {
-        for (int i = 0; i < 40; i++) {
-            if (extractInt(exec("artest vs ship-count-all " + dim), "count") >= 1) {
-                exec("artest vs load-ships " + dim);
-                if (extractInt(exec("artest vs ship-count " + dim), "count") >= 1) {
-                    return 1;
-                }
+        return GameTicks.until(client(), GameTicks.server(), LOAD_TICKS, () -> {
+            if (extractInt(exec("artest vs ship-count-all " + dim), "count") < 1) {
+                return false;
             }
-            Thread.sleep(250);
-        }
-        return 0;
+            exec("artest vs load-ships " + dim);
+            return extractInt(exec("artest vs ship-count " + dim), "count") >= 1;
+        }) ? 1 : 0;
     }
 
     private static int extractInt(String json, String key) {

@@ -1,5 +1,7 @@
 package zmaster587.advancedRocketry.test.server;
 
+import zmaster587.advancedRocketry.test.GameTicks;
+
 import org.junit.After;
 import org.junit.Assume;
 import org.junit.Test;
@@ -37,6 +39,14 @@ public class VSSeatDummyFacesTheShipE2ETest extends AbstractSharedServerTest {
 
     /** Quaternion for a ~90-degree yaw about world +Y: far from the fixture's own axis-aligned heading. */
     private static final double TURN_QW = 0.70711, TURN_QY = 0.70711;
+
+    /**
+     * Budgets in SERVER TICKS, neither fork-scaled: 200 is the ten seconds the old 40 x 250 ms meant
+     * on an idle box, for a slew that runs on the attitude controller's own tick and for a ship
+     * becoming loadable.
+     */
+    private static final int SLEW_TICKS = 200;
+    private static final int LOAD_TICKS = 200;
 
     /** Degrees. Generous: what is under test is that the mount TURNS WITH the ship, not the controller's
      *  settling error, and a hovering attitude hold parks within a couple of degrees. */
@@ -82,14 +92,13 @@ public class VSSeatDummyFacesTheShipE2ETest extends AbstractSharedServerTest {
                 exec("artest vs point-by-id 0 " + shipId
                         + " " + TURN_QW + " 0.0 " + TURN_QY + " 0.0").contains("\"commanded\":true"));
 
-        double shipYawAfter = shipYawBefore;
-        for (int i = 0; i < 40; i++) {
-            Thread.sleep(250);
-            shipYawAfter = shipYawOf(exec("artest vs ship-info 0 id " + shipId));
-            if (Math.abs(wrapDegrees(shipYawAfter - shipYawBefore)) > 45.0) {
-                break;
-            }
-        }
+        // The slew runs on the attitude controller's tick, so the budget is that controller's world.
+        final double[] yaw = {shipYawBefore};
+        GameTicks.until(client(), GameTicks.server(), SLEW_TICKS, () -> {
+            yaw[0] = shipYawOf(exec("artest vs ship-info 0 id " + shipId));
+            return Math.abs(wrapDegrees(yaw[0] - shipYawBefore)) > 45.0;
+        });
+        double shipYawAfter = yaw[0];
 
         // The gate: unless the SHIP really turned, "the mount agrees with the ship" is a comparison
         // of two zeroes and would be green on a build where nothing writes the mount at all.
@@ -158,16 +167,13 @@ public class VSSeatDummyFacesTheShipE2ETest extends AbstractSharedServerTest {
     }
 
     private int waitForLoadedShip(int dim) throws Exception {
-        for (int i = 0; i < 40; i++) {
-            if (extractInt(exec("artest vs ship-count-all " + dim), "count") >= 1) {
-                exec("artest vs load-ships " + dim);
-                if (extractInt(exec("artest vs ship-count " + dim), "count") >= 1) {
-                    return 1;
-                }
+        return GameTicks.until(client(), GameTicks.server(), LOAD_TICKS, () -> {
+            if (extractInt(exec("artest vs ship-count-all " + dim), "count") < 1) {
+                return false;
             }
-            Thread.sleep(250);
-        }
-        return 0;
+            exec("artest vs load-ships " + dim);
+            return extractInt(exec("artest vs ship-count " + dim), "count") >= 1;
+        }) ? 1 : 0;
     }
 
     private void clearArea(int baseX, int baseZ) throws Exception {

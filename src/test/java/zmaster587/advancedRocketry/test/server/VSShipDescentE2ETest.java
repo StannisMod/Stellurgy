@@ -1,5 +1,7 @@
 package zmaster587.advancedRocketry.test.server;
 
+import zmaster587.advancedRocketry.test.GameTicks;
+
 import org.junit.After;
 import org.junit.Assume;
 import org.junit.Test;
@@ -37,6 +39,14 @@ public class VSShipDescentE2ETest extends AbstractSharedServerTest {
     /** The descent target: the overworld — always registered, terrain-generated. */
     private static final int TARGET_DIM = 0;
 
+    /**
+     * Budgets in SERVER TICKS, none of them fork-scaled: 600 is the thirty seconds the old
+     * 120 x 250 ms meant on an idle box, 200 the ten seconds of 40 x 250 ms.
+     */
+    private static final int SETTLE_TICKS = 600;
+    private static final int FIND_AFC_TICKS = 200;
+    private static final int LOAD_TICKS = 200;
+
     @Test
     public void aSettledShipDescendsIntoAPlanetDimViaTheCrossing() throws Exception {
         Assume.assumeTrue("needs Valkyrien Skies on the server classpath (run with -PwithVS)", serverHasVs());
@@ -68,20 +78,19 @@ public class VSShipDescentE2ETest extends AbstractSharedServerTest {
         exec("artest vs unpark 0 " + (int) sx + " " + ABOVE_CEILING_Y + " " + (int) sz);
 
         String status = "";
-        boolean settled = false;
-        for (int i = 0; i < 120; i++) {
-            status = exec("artest space entry-status");
-            if (extractInt(status, "ships") >= 1 && "SETTLED".equals(extractString(status, "state"))) {
-                settled = true;
-                break;
-            }
-            loadAllEntrySlots(setup);
-            Thread.sleep(250);
-        }
-        assertTrue("precondition: ship never entered space to descend from; last status=" + status, settled);
-        int slotDim = extractInt(status, "slotDim");
-        String shipId = extractString(status, "shipId");
-        assertTrue("settled slot dim not reported: " + status, slotDim > Integer.MIN_VALUE);
+        final String[] entryStatus = {""};
+        boolean settled = GameTicks.until(client(), GameTicks.server(), SETTLE_TICKS,
+                () -> {
+                    entryStatus[0] = exec("artest space entry-status");
+                    return extractInt(entryStatus[0], "ships") >= 1
+                            && "SETTLED".equals(extractString(entryStatus[0], "state"));
+                },
+                () -> loadAllEntrySlots(setup));
+        assertTrue("precondition: ship never entered space to descend from; last status="
+                + entryStatus[0], settled);
+        int slotDim = extractInt(entryStatus[0], "slotDim");
+        String shipId = extractString(entryStatus[0], "shipId");
+        assertTrue("settled slot dim not reported: " + entryStatus[0], slotDim > Integer.MIN_VALUE);
 
         // --- Phase 2: DESCEND that settled ship into the overworld. ---
         // CONTROL: the overworld holds no VS ship now (entry cut the source out) — a later "1" is the descent.
@@ -97,17 +106,21 @@ public class VSShipDescentE2ETest extends AbstractSharedServerTest {
         // loadedTileEntityList only once VS loads the ship, so force-load + poll (async load).
         assertTrue("the settled ship never loaded in its slot", waitForLoadedShip(slotDim) >= 1);
         String afc = null;
-        for (int i = 0; i < 40 && afc == null; i++) {
+        final String[] found = {null};
+        // The load pump is inside the condition on purpose: the lookup is only answerable while the
+        // ship is resident, which is about a tick after the pump.
+        GameTicks.until(client(), GameTicks.server(), FIND_AFC_TICKS, () -> {
             exec("artest vs load-ships " + slotDim);
             // By id: this scenario already knows which ship it flew up, and "the first settled ship
             // in the slot" is a different question that happens to have the same answer today.
             String r = exec("artest space find-afc " + slotDim + " " + shipId);
-            if (r.contains("\"found\":true")) {
-                afc = r;
-            } else {
-                Thread.sleep(250);
+            if (!r.contains("\"found\":true")) {
+                return false;
             }
-        }
+            found[0] = r;
+            return true;
+        });
+        afc = found[0];
         assertTrue("could not locate the ship's flight computer in the slot", afc != null);
         int ax = extractInt(afc, "x"), ay = extractInt(afc, "y"), az = extractInt(afc, "z");
 
@@ -120,15 +133,9 @@ public class VSShipDescentE2ETest extends AbstractSharedServerTest {
                 extractInt(exec("artest space entry-status"), "ships"));
 
         // The crossing re-assembles the ship in the overworld (async); poll until it is loaded there.
-        boolean landed = false;
-        for (int i = 0; i < 120; i++) {   // ~30 s ceiling: async crossing + re-assembly
-            if (waitForLoadedShip(TARGET_DIM) >= 1) {
-                landed = true;
-                break;
-            }
-            exec("artest space descent-status");
-            Thread.sleep(250);
-        }
+        boolean landed = GameTicks.until(client(), GameTicks.server(), SETTLE_TICKS,
+                () -> waitForLoadedShip(TARGET_DIM) >= 1,
+                () -> exec("artest space descent-status"));
         assertTrue("the ship never crossed into the overworld via the descent; countAll="
                 + exec("artest vs ship-count-all " + TARGET_DIM), landed);
     }
@@ -160,17 +167,16 @@ public class VSShipDescentE2ETest extends AbstractSharedServerTest {
     }
 
     private int waitForLoadedShip(int dim) throws Exception {
-        for (int i = 0; i < 40; i++) {
-            if (extractInt(exec("artest vs ship-count-all " + dim), "count") >= 1) {
-                exec("artest vs load-ships " + dim);
-                int loaded = extractInt(exec("artest vs ship-count " + dim), "count");
-                if (loaded >= 1) {
-                    return loaded;
-                }
+        final int[] loaded = {0};
+        GameTicks.until(client(), GameTicks.server(), LOAD_TICKS, () -> {
+            if (extractInt(exec("artest vs ship-count-all " + dim), "count") < 1) {
+                return false;
             }
-            Thread.sleep(250);
-        }
-        return 0;
+            exec("artest vs load-ships " + dim);
+            loaded[0] = extractInt(exec("artest vs ship-count " + dim), "count");
+            return loaded[0] >= 1;
+        });
+        return loaded[0];
     }
 
     private void clearArea(int baseX, int baseZ) throws Exception {
