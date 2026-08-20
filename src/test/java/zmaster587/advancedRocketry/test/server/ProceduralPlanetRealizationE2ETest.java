@@ -151,6 +151,122 @@ public class ProceduralPlanetRealizationE2ETest extends AbstractHeadlessServerTe
 
     // ─── tiny JSON readers (the probe surface is flat JSON on purpose) ─────────
 
+    /**
+     * <b>A moon reached before its parent is still a moon.</b>
+     *
+     * <p>Moon-ness is carried by a parent DIMENSION id, so a moon realized while its parent has no
+     * world was written down as a plain planet standing at the parent's own distance from the star -
+     * silently, and permanently, since nothing re-parented it afterwards. The ordering is ordinary
+     * play: a moon orbits at a few parent radii, so it is often the nearer body when a ship closes on
+     * the family.</p>
+     *
+     * <p>What makes this an e2e and not a unit test: the corruption is in the DIMENSION the realizer
+     * writes, not in the registry's bookkeeping, so only a real server holds the thing that is wrong.</p>
+     */
+    @Test
+    public void aMoonRealizedBeforeItsParentIsStillAMoon() throws Exception {
+        String installed = exec(GEN_INSTALL);
+        assertTrue("the procedural generator must install: " + installed,
+                installed.contains("\"ok\":true"));
+
+        String found = exec("artest space find-moon " + SWEEP_RADIUS);
+        assertTrue("a dense procedural galaxy must offer a planet with a moon: " + found,
+                found.contains("\"ok\":true"));
+        String cell = jsonInt(found, "sx") + " " + jsonInt(found, "sy") + " " + jsonInt(found, "sz");
+        int moonVariant = jsonInt(found, "moonVariant");
+        int parentVariant = jsonInt(found, "parentVariant");
+
+        // CONTROL. Nothing in the family has a world yet, so the moon below is genuinely realized
+        // FIRST - without this the test could pass on a parent that happened to be realized already,
+        // which is the one arrangement the bug does not occur in.
+        String before = exec("artest space cell-info " + cell);
+        assertFalse("no member of the family may hold a world before the moon is realized: " + before,
+                before.contains("\"descendTarget\":true"));
+
+        String moon = exec("artest space realize " + cell + " " + moonVariant);
+        assertTrue("the moon must be realizable on its own account: " + moon,
+                moon.contains("\"ok\":true"));
+        assertTrue("a moon realized before its parent must still BE a moon: " + moon,
+                jsonBool(moon, "moon"));
+        int parentDim = jsonInt(moon, "parent");
+        assertTrue("and it must name a real parent dimension: " + moon, parentDim > 1);
+        assertNotEquals("which is not the moon itself", jsonInt(moon, "dim"), parentDim);
+
+        // The second half of the same corruption: a parentless moon kept its PARENT's distance from
+        // the star as its own orbital distance, because that is the number its climate is derived
+        // from. A moon's own orbit is around the parent, and the two are different numbers.
+        String parent = exec("artest space realize " + cell + " " + parentVariant);
+        assertTrue("the parent must answer with the world it was just given: " + parent,
+                parent.contains("\"ok\":true"));
+        assertEquals("realizing the parent afterwards must reuse the world the moon gave it",
+                parentDim, jsonInt(parent, "dim"));
+        assertFalse("the parent is not a moon: " + parent, jsonBool(parent, "moon"));
+        assertNotEquals("a moon's orbital distance is its own, not its parent's: moon " + moon
+                + " vs parent " + parent, jsonInt(parent, "orbitalDist"), jsonInt(moon, "orbitalDist"));
+    }
+
+    /**
+     * <b>A gas giant's moon is a moon, and its parent never becomes a place you can stand.</b>
+     *
+     * <p>The half of the same defect that is not an ordering accident. A gas giant is not a descent
+     * target, so no descent ever realizes it - which made "the parent has no world yet" permanent for
+     * every one of its up-to-five moons rather than a race one could lose. The parent is therefore
+     * given a properties record and, having no surface, no walkable dimension: that distinction is
+     * the whole reason this is safe to do.</p>
+     */
+    @Test
+    public void aGasGiantsMoonIsAMoonAndTheGiantStaysUnlandable() throws Exception {
+        String installed = exec(GEN_INSTALL);
+        assertTrue("the procedural generator must install: " + installed,
+                installed.contains("\"ok\":true"));
+
+        String found = exec("artest space find-moon " + SWEEP_RADIUS + " giant");
+        assertTrue("a dense procedural galaxy must offer a gas giant with a moon: " + found,
+                found.contains("\"ok\":true"));
+        assertTrue("arrangement: the parent must be the kind nothing can descend into: " + found,
+                jsonBool(found, "parentGasGiant"));
+        String cell = jsonInt(found, "sx") + " " + jsonInt(found, "sy") + " " + jsonInt(found, "sz");
+
+        String moon = exec("artest space realize " + cell + " " + jsonInt(found, "moonVariant"));
+        assertTrue("a gas giant's moon must be realizable: " + moon, moon.contains("\"ok\":true"));
+        assertTrue("and it must be a moon, which it can only be if the giant got a record of its own: "
+                + moon, jsonBool(moon, "moon"));
+        assertTrue("naming a real parent dimension: " + moon, jsonInt(moon, "parent") > 1);
+        assertFalse("the moon itself is not the gas giant: " + moon, jsonBool(moon, "gasGiant"));
+
+        // The giant now EXISTS as a place - the family's record carries its dimension - and is still
+        // not somewhere to land: it has no surface, so the descent flag every downstream consumer
+        // reads stays false for it. Both halves matter; a fix that made the giant landable would pass
+        // the moon assertions above and break the game.
+        String after = exec("artest space cell-info " + cell);
+        String giantEntry = bodyOfKind(after, "GAS_GIANT");
+        assertEquals("the giant must now hold the very dimension the moon calls its parent: " + after,
+                jsonInt(moon, "parent"), jsonInt(giantEntry, "dim"));
+        assertFalse("and it must still not be a descent target: " + giantEntry,
+                jsonBool(giantEntry, "descendTarget"));
+
+        // A descent aimed at the giant is still refused, which is what "not landable" MEANS here -
+        // the flag above is a report, this is the behaviour.
+        String refused = exec("artest space realize " + cell + " " + jsonInt(found, "parentVariant"));
+        assertTrue("realizing a gas giant as a DESCENT must stay refused: " + refused,
+                refused.contains("\"ok\":false"));
+    }
+
+    /**
+     * The one body object of a {@code cell-info} report whose {@code kind} is {@code kind}.
+     *
+     * <p>Cut out rather than matched against the whole report on purpose: {@code cell-info} lists the
+     * family, so a bare {@code contains("\"descendTarget\":false")} over the whole string would be
+     * satisfied by any OTHER member of it - an assertion about the wrong body reads exactly like an
+     * assertion about the right one.</p>
+     */
+    private static String bodyOfKind(String cellInfo, String kind) {
+        Matcher m = Pattern.compile("\\{[^{}]*\"kind\"\\s*:\\s*\"" + Pattern.quote(kind) + "\"[^{}]*\\}")
+                .matcher(cellInfo);
+        assertTrue("no body of kind " + kind + " in " + cellInfo, m.find());
+        return m.group();
+    }
+
     private static int jsonInt(String json, String key) {
         Matcher m = Pattern.compile("\"" + Pattern.quote(key) + "\"\\s*:\\s*(-?\\d+)").matcher(json);
         assertTrue("missing int '" + key + "' in " + json, m.find());

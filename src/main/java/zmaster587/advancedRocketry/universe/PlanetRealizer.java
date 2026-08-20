@@ -80,6 +80,14 @@ public final class PlanetRealizer {
         // body has a dimension its surroundings must already be unable to drift away from under it.
         registry.pinSystem(bodyCell);
 
+        // THE KIND IS REFUSED BEFORE THE WORLD IS LOOKED UP. This entry point is a DESCENT, and a body
+        // nobody can stand on is not one whatever it holds - a gas giant now has a dimension of its own
+        // (its moons need a parent to hang off), so the idempotent "already realized" answer below
+        // would otherwise hand a caller the giant's world and read as permission to land on it.
+        if (!approached.kind().canDescend()) {
+            return Constants.INVALID_PLANET;
+        }
+
         OptionalInt variantOpt = registry.variantOf(approached);
         if (!variantOpt.isPresent()) {
             return Constants.INVALID_PLANET; // not a body of that cell, or nothing landable
@@ -108,9 +116,11 @@ public final class PlanetRealizer {
         // The parent a moon hangs off: the first NON-moon of the same cell. A moon shares its
         // parent's cell by construction, so the family is right here.
         SystemBody parentBody = null;
-        for (SystemBody body : here) {
-            if (body.kind() != SystemBodyKind.MOON) {
-                parentBody = body;
+        int parentVariant = -1;
+        for (int i = 0; i < here.size(); i++) {
+            if (here.get(i).kind() != SystemBodyKind.MOON) {
+                parentBody = here.get(i);
+                parentVariant = i;
                 break;
             }
         }
@@ -120,6 +130,52 @@ public final class PlanetRealizer {
             return Constants.INVALID_PLANET;
         }
 
+        // A MOON NEEDS ITS PARENT TO EXIST AS A PLACE. Moon-ness is carried by a parent dimension id,
+        // so a moon realized while its parent has none is written down as a PLANET standing at the
+        // parent's own distance from the star - silently, and permanently, because nothing re-parents
+        // it when the parent is realized afterwards. There are two ways in and only one of them is an
+        // ordering accident: a ship reaches a moon before its rocky parent (a moon orbits at a few
+        // parent radii, so it is often the nearer body), and a GAS GIANT is not a descent target at
+        // all, so its up-to-five moons would take that path every single time.
+        // Realizing the parent here does not break rule 1 above. That rule bounds minting by what a
+        // player LANDS on, and this is bounded by the same thing - at most one parent per moon-first
+        // landing, never a sweep. A parent nobody can stand on costs less still: registerDim gives a
+        // gas giant its properties and no Forge dimension, because it has no surface.
+        if (target.kind() == SystemBodyKind.MOON
+                && parentBody.dimId() == Constants.INVALID_PLANET) {
+            int parentDim = materializeVariant(registry, anchor, bodyCell, parentVariant, parentBody,
+                    null);
+            if (parentDim == Constants.INVALID_PLANET) {
+                LOGGER.error("[UNIVERSE] not realizing the moon at {}: its parent could not be given "
+                        + "a world, and a parentless moon is written down as a planet at the parent's "
+                        + "orbit with every moon path dead for it", bodyCell.cellKey());
+                return Constants.INVALID_PLANET;
+            }
+            // The family list is a SNAPSHOT: the parent inside it still carries INVALID_PLANET. Re-read
+            // it, so the parent handed to materialize is the one that now has a world.
+            here = registry.realizableBodiesAt(bodyCell);
+            if (variant >= here.size() || parentVariant >= here.size()) {
+                return Constants.INVALID_PLANET;
+            }
+            target = here.get(variant);
+            parentBody = here.get(parentVariant);
+        }
+
+        return materializeVariant(registry, anchor, bodyCell, variant, target, parentBody);
+    }
+
+    /**
+     * Mint the world for one body of a cell, whatever its kind - the half of {@link #realize} that runs
+     * once the body has been identified and the descent rules have had their say.
+     *
+     * <p>Separate from {@code realize} because it is also how a MOON's parent is given a place to be:
+     * that call must not be refused for a body nobody can land on, since a gas giant is exactly such a
+     * body and its moons need it. The "can you descend into this" question therefore belongs to the
+     * caller, and this method asks only whether the body can be MATERIALIZED.</p>
+     */
+    private static int materializeVariant(UniverseRegistry registry, GalacticCoord anchor,
+                                          GalacticCoord bodyCell, int variant, SystemBody target,
+                                          SystemBody parentBody) {
         Optional<StellarBody> starOpt = registry.starAt(bodyCell);
         if (!starOpt.isPresent()) {
             LOGGER.warn("[UNIVERSE] cannot realize the body at {}: its system has no star", bodyCell.cellKey());

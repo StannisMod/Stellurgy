@@ -5240,6 +5240,80 @@ public class TestProbeCommand extends CommandBase {
             send(sender, "{\"ok\":false,\"reason\":\"no unrealized landable body in range\"}");
             return;
         }
+        // find-moon <radius> [giant]: the first cell in range whose family holds a MOON, reported by
+        // VARIANT for both the moon and the parent it hangs off - the identity `realize` takes, so a
+        // caller can mint a chosen member of a family instead of "whatever the cell offers first".
+        // With the literal "giant" the sweep accepts only a GAS GIANT parent: that kind is not a
+        // descent target, so no descent ever realizes it, and its moons are the ones for which "the
+        // parent has no world yet" is a permanent condition rather than an ordering accident.
+        if (args.length >= 2 && "find-moon".equalsIgnoreCase(args[0])) {
+            zmaster587.advancedRocketry.universe.UniverseRegistry reg =
+                    zmaster587.advancedRocketry.universe.UniverseRegistry.get(server);
+            if (reg == null) {
+                send(sender, "{\"error\":\"registry unavailable\"}");
+                return;
+            }
+            boolean giantOnly = args.length >= 3 && "giant".equalsIgnoreCase(args[2]);
+            long r = parseIntOr(args[1], 8);
+            long s = Math.max(1L, zmaster587.advancedRocketry.universe.UniverseRegistry.getGenerator()
+                    .minSpacingCells());
+            for (long x = -r; x <= r; x++) {
+                for (long y = -r; y <= r; y++) {
+                    for (long z = -r; z <= r; z++) {
+                        zmaster587.advancedRocketry.space.GalacticCoord probe =
+                                zmaster587.advancedRocketry.space.GalacticCoord.ofSectorLocal(
+                                        x * s, y * s, z * s, 0L, 0L, 0L);
+                        for (zmaster587.advancedRocketry.universe.SystemBody b
+                                : reg.systemBodiesAt(probe)) {
+                            if (b.kind() != zmaster587.advancedRocketry.universe.SystemBodyKind.MOON) {
+                                continue;
+                            }
+                            zmaster587.advancedRocketry.space.GalacticCoord cell = b.name();
+                            java.util.List<zmaster587.advancedRocketry.universe.SystemBody> family =
+                                    reg.realizableBodiesAt(cell);
+                            int moonVariant = -1;
+                            int parentVariant = -1;
+                            for (int i = 0; i < family.size(); i++) {
+                                zmaster587.advancedRocketry.universe.SystemBody m = family.get(i);
+                                if (m.kind() == zmaster587.advancedRocketry.universe.SystemBodyKind.MOON) {
+                                    if (moonVariant < 0) {
+                                        moonVariant = i;
+                                    }
+                                } else if (parentVariant < 0) {
+                                    parentVariant = i;
+                                }
+                            }
+                            if (moonVariant < 0 || parentVariant < 0) {
+                                continue;
+                            }
+                            zmaster587.advancedRocketry.universe.SystemBody parent =
+                                    family.get(parentVariant);
+                            boolean giant = parent.kind()
+                                    == zmaster587.advancedRocketry.universe.SystemBodyKind.GAS_GIANT;
+                            if (giantOnly && !giant) {
+                                continue;
+                            }
+                            int moons = 0;
+                            for (zmaster587.advancedRocketry.universe.SystemBody m : family) {
+                                if (m.kind() == zmaster587.advancedRocketry.universe.SystemBodyKind.MOON) {
+                                    moons++;
+                                }
+                            }
+                            send(sender, "{\"ok\":true,\"sx\":" + cell.sectorX() + ",\"sy\":"
+                                    + cell.sectorY() + ",\"sz\":" + cell.sectorZ()
+                                    + ",\"cellKey\":\"" + cell.cellKey() + "\",\"moonVariant\":"
+                                    + moonVariant + ",\"parentVariant\":" + parentVariant
+                                    + ",\"parentKind\":\"" + parent.kind() + "\",\"parentGasGiant\":"
+                                    + giant + ",\"moons\":" + moons + ",\"family\":" + family.size()
+                                    + "}");
+                            return;
+                        }
+                    }
+                }
+            }
+            send(sender, "{\"ok\":false,\"reason\":\"no moon in range\"}");
+            return;
+        }
         // derived <sx> <sy> <sz>: what the DERIVATION says about the body in that cell, without
         // realizing anything. This is the answer a telescope gives from across the system, and the whole
         // point of it is that a landing has to agree with it — so a test compares this against the
@@ -5344,7 +5418,12 @@ public class TestProbeCommand extends CommandBase {
                     + ",\"oxygen\":" + props.hasOxygen + ",\"locked\":" + props.isTidallyLocked()
                     + ",\"metallicity\":" + props.getMetallicity() + ",\"gasGiant\":"
                     + props.isGasGiant() + ",\"terrainSource\":\"" + props.getTerrainSource()
-                    + "\",\"descendTarget\":" + descendTarget + ",\"starId\":" + props.getStarId() + "}");
+                    // Moon-ness, and the dimension it hangs off. Reported because a moon whose parent
+                    // had no world was written down as a PLANET at the parent's own orbit, silently:
+                    // without these two fields the probe answers "ok" for a world that is wrong in the
+                    // one way that matters, and the test cannot tell.
+                    + "\",\"moon\":" + props.isMoon() + ",\"parent\":" + props.getParentPlanet()
+                    + ",\"descendTarget\":" + descendTarget + ",\"starId\":" + props.getStarId() + "}");
             return;
         }
         // find-afc <dim> [shipId]: report a subspace block position + durable ship id of the settled ship

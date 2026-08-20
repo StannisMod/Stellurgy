@@ -116,6 +116,66 @@ public class PlanetRealizationTest {
         return new SystemBody[] {null, null};
     }
 
+    /**
+     * The first {@code [parent, moonA, moonB]} found: a body of a swept system carrying TWO moons.
+     *
+     * <p>A rocky world takes at most two and a giant up to five, so a sibling PAIR is the ordinary
+     * arrangement rather than an exotic one — which is why a body's identity has to survive it.</p>
+     */
+    private static SystemBody[] findPlanetWithTwoMoons(UniverseRegistry reg) {
+        for (long i = 0; i <= 8; i++) {
+            for (GalacticCoord seat : reg.anchorsInTerritory(
+                    GalacticCoord.ofSectorLocal(i * SPACING, 0L, 0L, 0L, 0L, 0L), 64)) {
+                SystemBody parent = null;
+                java.util.List<SystemBody> moons = new java.util.ArrayList<>();
+                for (SystemBody b : reg.systemBodiesAt(seat)) {
+                    if (b.kind() == SystemBodyKind.MOON) {
+                        if (parent != null && b.name().sameCell(parent.name())) {
+                            moons.add(b);
+                            if (moons.size() == 2) {
+                                return new SystemBody[] {parent, moons.get(0), moons.get(1)};
+                            }
+                        }
+                    } else if (b.kind().canDescend()) {
+                        parent = b;
+                        moons.clear();
+                    }
+                }
+            }
+        }
+        return new SystemBody[] {null, null, null};
+    }
+
+    @Test
+    public void twoMoonsOfOnePlanetAreTwoDifferentBodies() {
+        // The sibling case of the test below. A moon is addressed by its variant - its rank among the
+        // realizable bodies of its cell - and the rank is recovered by MATCHING a body against that
+        // family. Every moon of one parent is built in the parent's cell, with kind MOON and with the
+        // PARENT's distance from the star as its orbital distance, so a match on those three fields
+        // answers "the first moon" for every one of them: approach the second and the game realizes
+        // the first, or, once the first has a world, descends into it.
+        UniverseRegistry reg = registryWithProceduralGalaxy();
+        SystemBody[] family = findPlanetWithTwoMoons(reg);
+        assertNotNull("arrangement: a planet carrying two moons must be findable", family[0]);
+        GalacticCoord cell = family[0].name();
+        assertTrue("arrangement: the siblings share their parent's cell",
+                family[1].name().sameCell(cell) && family[2].name().sameCell(cell));
+        reg.pinSystem(cell);
+
+        int firstMoon = reg.variantOf(family[1]).getAsInt();
+        int secondMoon = reg.variantOf(family[2]).getAsInt();
+        assertNotEquals("two moons of one planet are two bodies, not one", firstMoon, secondMoon);
+
+        assertTrue(reg.realizeBody(cell, firstMoon, 4101));
+        assertFalse("giving one moon a world must not give its sibling one",
+                reg.realizedDimAt(cell, secondMoon).isPresent());
+        assertTrue("and the sibling must still be able to get its own",
+                reg.realizeBody(cell, secondMoon, 4102));
+        assertEquals("which is its own", 4102, reg.realizedDimAt(cell, secondMoon).getAsInt());
+        assertEquals("while the first keeps the world it was given", 4101,
+                reg.realizedDimAt(cell, firstMoon).getAsInt());
+    }
+
     @Test
     public void aMoonGetsItsOwnWorldAndNotItsPlanetsOne() {
         // A moon is built in its PARENT's cell so the family travels as one destination, which makes

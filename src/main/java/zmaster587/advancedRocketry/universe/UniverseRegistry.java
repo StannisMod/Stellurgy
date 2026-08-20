@@ -862,24 +862,46 @@ public final class UniverseRegistry extends WorldSavedData implements CellFrames
      * Which body of its cell {@code body} is - its {@code variant} - or empty if the cell does not
      * hold it.
      *
-     * <p>Matched by ADDRESS, KIND and ORBIT rather than by object identity: a caller holds a body it
-     * got from a derived list, while the pinned snapshot holds another instance of the same body,
-     * and a realized one differs from both by carrying a dimension.</p>
+     * <p>Matched by ADDRESS, KIND, ORBIT and the body's own OFFSET LAW rather than by object identity:
+     * a caller holds a body it got from a derived list, while the pinned snapshot holds another
+     * instance of the same body, and a realized one differs from both by carrying a dimension.</p>
+     *
+     * <p><b>Why the offset law is part of the identity.</b> The first three fields do not separate
+     * SIBLINGS: every moon of one parent is built in the parent's cell, with kind {@code MOON}, and
+     * carrying the PARENT's distance from the star as its orbital distance - that number is what its
+     * climate is derived from, so it is shared on purpose. A match on those three therefore answered
+     * "the first moon" for every moon of the family, and a rocky world takes up to two while a giant
+     * takes up to five. What makes a sibling a sibling is its own orbit around the parent: radius,
+     * angle and period, which is exactly {@link SystemBody#offsetLaw()}. It compares by value and
+     * round-trips through NBT bit for bit, so it survives the pin the other three were chosen for.</p>
+     *
+     * <p><b>An ambiguous match is refused, never guessed.</b> If two bodies of the family answer to
+     * the same identity, that identity has collapsed again and the caller must not be handed one of
+     * them at random: picking the first is how a descent lands on the wrong world, silently. Empty
+     * fails the descent loudly instead, and says so in the log.</p>
      */
     public OptionalInt variantOf(SystemBody body) {
         if (body == null) {
             return OptionalInt.empty();
         }
         List<SystemBody> family = realizableBodiesAt(body.name());
+        int found = -1;
         for (int i = 0; i < family.size(); i++) {
             SystemBody candidate = family.get(i);
             if (candidate.kind() == body.kind()
                     && candidate.orbitalDistance() == body.orbitalDistance()
+                    && candidate.offsetLaw().equals(body.offsetLaw())
                     && candidate.name().sameCell(body.name())) {
-                return OptionalInt.of(i);
+                if (found >= 0) {
+                    LOGGER.warn("[UNIVERSE] {} at {} answers to two bodies of its cell (variants {} "
+                            + "and {}): the identity does not separate them, refusing to guess",
+                            body.kind(), body.name().cellKey(), found, i);
+                    return OptionalInt.empty();
+                }
+                found = i;
             }
         }
-        return OptionalInt.empty();
+        return found < 0 ? OptionalInt.empty() : OptionalInt.of(found);
     }
 
     /**
