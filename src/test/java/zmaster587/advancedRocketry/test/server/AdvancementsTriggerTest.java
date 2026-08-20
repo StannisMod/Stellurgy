@@ -6,7 +6,7 @@ import org.junit.After;
 import org.junit.Assume;
 import org.junit.Before;
 import org.junit.Test;
-import zmaster587.advancedRocketry.test.ServerTicks;
+import zmaster587.advancedRocketry.test.GameTicks;
 
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -103,7 +103,7 @@ public class AdvancementsTriggerTest {
         // Wait OFF the server thread: a console command runs ON the server thread, so a probe that
         // sleeps there blocks ticking entirely. The wait belongs in the test jvm — and it OBSERVES
         // the world's clock rather than hoping for it, so a world that is not ticking says so.
-        ServerTicks.await(harness.client(), dim, ticks + 10);
+        GameTicks.await(harness.client(), dim, ticks + 10);
     }
 
     private boolean isDone(String src) {

@@ -5,7 +5,7 @@ import com.github.stannismod.forge.testing.junit.AbstractClientE2ETest;
 import org.junit.Assume;
 import org.junit.Test;
 import org.lwjgl.input.Keyboard;
-import zmaster587.advancedRocketry.test.ServerTicks;
+import zmaster587.advancedRocketry.test.GameTicks;
 
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -576,7 +576,7 @@ public class SpikeFarCoordinateShipTest extends AbstractClientE2ETest {
         for (int attempt = 1; attempt <= DELIVERY_ATTEMPTS; attempt++) {
             exec("artest player far-tp " + fmt(x + 0.5d) + " " + (BASE_Y + 6) + " "
                     + fmt(ARENA_Z + 0.5d));
-            ServerTicks.await(serverClient(), 0, 40);
+            GameTicks.await(serverClient(), 0, 40);
             bot().waitTicks(30);
             lastX = field(exec("artest player health"), "posX");
             if (Math.abs(lastX - (x + 0.5d)) < ARRIVAL_TOLERANCE) {

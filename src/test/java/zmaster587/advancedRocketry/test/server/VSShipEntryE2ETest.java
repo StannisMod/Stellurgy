@@ -1,6 +1,7 @@
 package zmaster587.advancedRocketry.test.server;
 
 import zmaster587.advancedRocketry.space.GalacticCoord;
+import zmaster587.advancedRocketry.test.GameTicks;
 
 import org.junit.After;
 import org.junit.Assume;
@@ -11,7 +12,6 @@ import java.util.regex.Pattern;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
-import static zmaster587.advancedRocketry.test.server.WorldCommandFixtures.advanceTicks;
 import static zmaster587.advancedRocketry.test.server.WorldCommandFixtures.awaitWithinTicks;
 
 /**
@@ -36,7 +36,7 @@ public class VSShipEntryE2ETest extends AbstractSharedServerTest {
     private static final Pattern BUILDER_POS =
             Pattern.compile("\"builderPos\":\\[(-?\\d+),(-?\\d+),(-?\\d+)]");
 
-/**
+    /**
      * How much WORLD an async crossing is allowed in order to finish settling, in server ticks.
      * <p>
      * Thirty seconds of game time. Deliberately NOT scaled by the build's fork count: the number of
@@ -51,10 +51,13 @@ public class VSShipEntryE2ETest extends AbstractSharedServerTest {
     private static final int LOAD_TICKS = 200;
 
     /**
-     * How long the arrived ship's address is watched for drift, and how far apart the readings are —
-     * both in server ticks, because what drifts is driven by the ship's own flight-computer tick.
-     * Sampling on a wall clock would quietly shrink this window on a busy machine and let a drift
-     * through unseen.
+     * How long the arrived ship's address is watched for drift, and how far apart the readings are.
+     *
+     * <p>In ticks of the ship's OWN SLOT WORLD, not of the server: what drifts is driven by the
+     * ship's flight computer, which ticks in that world, so those are the ticks the window has to be
+     * measured in. Sampling on a wall clock would quietly shrink the window on a busy machine and let
+     * a drift through unseen — and a server-clock window would run its whole length even if the slot
+     * world had stopped ticking, reporting stability about a ship nothing ever asked to move.</p>
      */
     private static final int DRIFT_SAMPLES = 8;
     private static final int DRIFT_TICKS_BETWEEN_SAMPLES = 5;
@@ -252,26 +255,31 @@ public class VSShipEntryE2ETest extends AbstractSharedServerTest {
         // jump, never during it — and read the address again.
         int arrivedSlot = extractInt(arrived, "slotDim");
         exec("artest vs load-ships " + arrivedSlot);
-        String pose = "";
-        for (int i = 0; i < DRIFT_SAMPLES; i++) {
-            advanceTicks(DRIFT_TICKS_BETWEEN_SAMPLES);
-            exec("artest vs load-ships " + arrivedSlot);
-            pose = exec("artest vs ship-info " + arrivedSlot + " 0 200 0");
-            String held = exec("artest space entry-status");
-            assertEquals("the arrived ship's address drifted out of the cell it flew to once its"
-                            + " flight computer began self-reporting its position; status=" + held
-                            + " ship=" + pose,
-                    targetCell, extractString(held, "cellKey"));
-        }
+        final String[] pose = {""};
+        // Sampled on the SLOT WORLD's clock, not the server's. What drifts is the ship, and the ship
+        // drifts because its own flight computer ticks in that world - so the window has to be
+        // measured in the ticks the subject runs on. The two clocks are not interchangeable here: a
+        // slot world that had stopped ticking would let a server-clock window run its whole length
+        // and report stability about a ship that was never asked to move.
+        GameTicks.observe(client(), GameTicks.world(arrivedSlot),
+                DRIFT_SAMPLES, DRIFT_TICKS_BETWEEN_SAMPLES, () -> {
+                    exec("artest vs load-ships " + arrivedSlot);
+                    pose[0] = exec("artest vs ship-info " + arrivedSlot + " 0 200 0");
+                    String held = exec("artest space entry-status");
+                    assertEquals("the arrived ship's address drifted out of the cell it flew to once"
+                                    + " its flight computer began self-reporting its position;"
+                                    + " status=" + held + " ship=" + pose[0],
+                            targetCell, extractString(held, "cellKey"));
+                });
         // And the same fact read off the ship rather than off the ledger: a cell realizes its
         // contents in the pose band, while an arrival that never settled is left in the paste lane's
         // ordinary block Y. The band floor is the discriminator — no exact pose is pinned.
-        assertTrue("the arrived ship was never loaded in its destination cell: " + pose,
-                pose.contains("\"managed\":true"));
+        assertTrue("the arrived ship was never loaded in its destination cell: " + pose[0],
+                pose[0].contains("\"managed\":true"));
         assertTrue("the arrived ship is not in its cell's pose band, so it never reached the"
                         + " coordinate the jump was aimed at (band floor " + GalacticCoord.HALF_CELL
-                        + ", the paste lane sits near ordinary block Y): " + pose,
-                extractDouble(pose, "posY") > GalacticCoord.HALF_CELL);
+                        + ", the paste lane sits near ordinary block Y): " + pose[0],
+                extractDouble(pose[0], "posY") > GalacticCoord.HALF_CELL);
         assertEquals("nothing may still be in transit once the ledger reports arrival", 0,
                 extractInt(exec("artest space subsystem-status"), "transits"));
     }

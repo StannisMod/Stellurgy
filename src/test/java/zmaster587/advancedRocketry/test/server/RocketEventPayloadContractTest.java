@@ -2,7 +2,7 @@ package zmaster587.advancedRocketry.test.server;
 
 import org.junit.Test;
 
-import zmaster587.advancedRocketry.test.ServerTicks;
+import zmaster587.advancedRocketry.test.GameTicks;
 
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -145,7 +145,7 @@ public class RocketEventPayloadContractTest extends AbstractSharedServerTest {
         exec("artest rocket set-state " + rocketId
                 + " orbit=true flight=true ticksExisted=" + (DESCENT_TIMER + 5)
                 + " posY=" + (CY + 2) + " motionY=-10");
-        ServerTicks.await(client(), 0, 6);
+        GameTicks.await(client(), 0, 6);
 
         String countsAfter = exec("artest rocket event-counts-full");
         int landedAfter = extract(countsAfter, LANDED_COUNT);
@@ -196,7 +196,7 @@ public class RocketEventPayloadContractTest extends AbstractSharedServerTest {
         // event.
         exec("artest rocket set-state " + rocketId
                 + " orbit=true flight=false ticksExisted=18 posY=300 motionY=0");
-        ServerTicks.await(client(), 0, 3);
+        GameTicks.await(client(), 0, 3);
 
         String countsAfter = exec("artest rocket event-counts-full");
         int deOrbitAfter = extract(countsAfter, DEORBIT_COUNT);

@@ -1,7 +1,7 @@
 package zmaster587.advancedRocketry.test.server;
 
 import org.junit.Test;
-import zmaster587.advancedRocketry.test.ServerTicks;
+import zmaster587.advancedRocketry.test.GameTicks;
 
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -27,7 +27,7 @@ import static org.junit.Assert.assertTrue;
  * {@code /artest chunk forceload} probe). Holding the chunk hot lets
  * the headless dedicated server tick the rocket entity through its
  * production code paths exactly as a real game session would.
- * {@link zmaster587.advancedRocketry.test.ServerTicks#await} blocks the
+ * {@link zmaster587.advancedRocketry.test.GameTicks#await} blocks the
  * test thread until the world's own clock has advanced by the requested
  * number of ticks — the waiting happens in the test jvm, because a
  * command handler runs on the very thread that advances that clock.
@@ -136,7 +136,7 @@ public class RocketDescentLandingTest extends AbstractSharedServerTest {
                 + " orbit=true flight=false ticksExisted=" + (DESCENT_TIMER + 1)
                 + " posY=300 motionY=0"));
 
-        ServerTicks.await(client(), 0, 5);
+        GameTicks.await(client(), 0, 5);
 
         String info = ok(client().execute("artest rocket info " + id));
         assertTrue("descent gate must flip isInFlight under real ticking: " + info,
@@ -156,7 +156,7 @@ public class RocketDescentLandingTest extends AbstractSharedServerTest {
         ok(client().execute("artest rocket set-state " + id
                 + " orbit=true flight=false ticksExisted=5 posY=300 motionY=0"));
 
-        ServerTicks.await(client(), 0, 5);
+        GameTicks.await(client(), 0, 5);
 
         String info = ok(client().execute("artest rocket info " + id));
         // ticksExisted will have advanced by up to ~5 under real ticking;
@@ -184,7 +184,7 @@ public class RocketDescentLandingTest extends AbstractSharedServerTest {
                 + " orbit=true flight=true ticksExisted=" + (DESCENT_TIMER + 5)
                 + " posY=300 motionY=0"));
 
-        ServerTicks.await(client(), 0, 5);
+        GameTicks.await(client(), 0, 5);
 
         String info = ok(client().execute("artest rocket info " + id));
         Matcher m = POS_Y_FIELD.matcher(info);
@@ -218,7 +218,7 @@ public class RocketDescentLandingTest extends AbstractSharedServerTest {
                 + " orbit=true flight=true ticksExisted=" + (DESCENT_TIMER + 5)
                 + " posY=" + (baseY + 2) + " motionY=-10"));
 
-        ServerTicks.await(client(), 0, 6);
+        GameTicks.await(client(), 0, 6);
 
         String countsAfter = ok(client().execute("artest rocket event-counts-full"));
         int landedAfter = gi(LANDED_COUNT, countsAfter, "landed after");

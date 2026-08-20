@@ -304,7 +304,7 @@ public class HyperdriveE2ETest extends AbstractSharedServerTest {
         long before = field(exec("artest drive info 0 " + SHIP_E), "charge");
         assertEquals("a drained bank starts empty", 0L, before);
 
-        zmaster587.advancedRocketry.test.ServerTicks.await(client(), 0, 100);
+        zmaster587.advancedRocketry.test.GameTicks.await(client(), 0, 100);
 
         String after = exec("artest drive info 0 " + SHIP_E);
         assertEquals("100 ticks of a running server must not have put a single unit into a bank that"

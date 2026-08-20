@@ -1,5 +1,7 @@
 package zmaster587.advancedRocketry.test.server;
 
+import zmaster587.advancedRocketry.test.GameTicks;
+
 import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -34,21 +36,20 @@ final class WorldCommandFixtures {
         return String.join("\n", AbstractSharedServerTest.client().execute(cmd));
     }
 
-    private static final Pattern CLOCK_TICK = Pattern.compile("\"tick\":(-?\\d+)");
-
     /**
      * What time it is in the GAME, asked of the server.
      *
      * <p>The server's own tick counter. A test that needs to know how long it is willing to wait for
      * something asks here rather than looking at a watch.</p>
+     *
+     * <p>The three tick helpers below are DELEGATES. The implementation lives in the public
+     * {@link GameTicks}, because this class is package-private and bound to the shared-server
+     * harness while a third of the suite's waiting sites are in classes that cannot reach it — and
+     * because two implementations of "wait for the game" is exactly one too many. What stays here is
+     * the vocabulary: these names read better at a {@code /ar} call site.</p>
      */
     static long serverTick() throws Exception {
-        String clock = exec("artest clock");
-        Matcher m = CLOCK_TICK.matcher(clock);
-        if (!m.find()) {
-            throw new IllegalStateException("the server would not say what time it is: " + clock);
-        }
-        return Long.parseLong(m.group(1));
+        return GameTicks.read(AbstractSharedServerTest.client(), GameTicks.server());
     }
 
     /**
@@ -74,28 +75,8 @@ final class WorldCommandFixtures {
      */
     static boolean awaitWithinTicks(int tickBudget, TickCondition condition, TickAction eachPoll)
             throws Exception {
-        long start = serverTick();
-        // A liveness net, NOT the budget: a server that has stopped ticking altogether would leave
-        // this loop spinning until the harness killed the whole class with nothing to say about
-        // which step hung. Set far above any honest run at twenty ticks a second.
-        long deadline = System.nanoTime() + (long) tickBudget * 50L * 20L * 1_000_000L;
-        while (true) {
-            if (condition.holds()) {
-                return true;
-            }
-            if (eachPoll != null) {
-                eachPoll.run();
-            }
-            long elapsed = serverTick() - start;
-            if (elapsed >= tickBudget) {
-                return false;
-            }
-            if (System.nanoTime() > deadline) {
-                throw new IllegalStateException("the server stopped ticking while waiting: "
-                        + elapsed + " of " + tickBudget + " ticks elapsed");
-            }
-            Thread.sleep(50L);
-        }
+        return GameTicks.until(AbstractSharedServerTest.client(), GameTicks.server(),
+                tickBudget, condition, eachPoll);
     }
 
     /**
@@ -109,20 +90,20 @@ final class WorldCommandFixtures {
      * red, a wall-clock observation turns red into green.</p>
      */
     static void advanceTicks(int ticks) throws Exception {
-        long until = serverTick() + Math.max(0, ticks);
-        while (serverTick() < until) {
-            Thread.sleep(25L);
-        }
+        GameTicks.advance(AbstractSharedServerTest.client(), GameTicks.server(), ticks);
     }
 
-    /** What {@link #awaitWithinTicks} is waiting for. Allowed to ask the server, so it throws. */
-    interface TickCondition {
-        boolean holds() throws Exception;
+    /**
+     * What {@link #awaitWithinTicks} is waiting for. Allowed to ask the server, so it throws.
+     *
+     * <p>Kept as a name of its own, and made a subtype so the same lambda serves both: these read
+     * better at a {@code /ar} call site than the generic ones, and the implementation is shared.</p>
+     */
+    interface TickCondition extends GameTicks.Condition {
     }
 
     /** Work a wait has to keep doing. Allowed to talk to the server, so it throws. */
-    interface TickAction {
-        void run() throws Exception;
+    interface TickAction extends GameTicks.Action {
     }
 
     /** Read an integer field out of {@code /artest planet info <dim>}

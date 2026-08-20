@@ -3,7 +3,7 @@ package zmaster587.advancedRocketry.test.server;
 import com.github.stannismod.forge.testing.junit.AbstractHeadlessServerTest;
 
 import org.junit.Test;
-import zmaster587.advancedRocketry.test.ServerTicks;
+import zmaster587.advancedRocketry.test.GameTicks;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -53,7 +53,7 @@ public class SpikeFarCoordinateIntegrityTest extends AbstractHeadlessServerTest 
             exec("artest chunk forceload " + OVERWORLD + " " + chunkX + " 0");
             // Generation at a fresh, distant chunk is not instant; give the server real ticks rather
             // than reading an empty chunk and calling it a ceiling.
-            ServerTicks.await(client(), OVERWORLD, 40);
+            GameTicks.await(client(), OVERWORLD, 40);
 
             String sample = exec("artest worldgen sample " + OVERWORLD + " " + chunkX + " 0");
             String placed = exec("artest place " + OVERWORLD + " " + x + " " + PLACE_Y + " 0 "
@@ -100,7 +100,7 @@ public class SpikeFarCoordinateIntegrityTest extends AbstractHeadlessServerTest 
         List<String> broken = new ArrayList<>();
         for (int x : X_LADDER) {
             exec("artest chunk forceload " + OVERWORLD + " " + (x >> 4) + " 0");
-            ServerTicks.await(client(), OVERWORLD, 40);
+            GameTicks.await(client(), OVERWORLD, 40);
 
             String near = spawnAndRead(x + 0.5500d);
             String far = spawnAndRead(x + 0.6000d);

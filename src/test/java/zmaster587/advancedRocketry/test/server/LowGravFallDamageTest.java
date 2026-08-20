@@ -6,7 +6,7 @@ import org.junit.After;
 import org.junit.Assume;
 import org.junit.Before;
 import org.junit.Test;
-import zmaster587.advancedRocketry.test.ServerTicks;
+import zmaster587.advancedRocketry.test.GameTicks;
 
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -86,7 +86,7 @@ public class LowGravFallDamageTest {
         assertTrue("ensure-fake must succeed: " + fake, fake.contains("\"ok\":true"));
         // Off-thread settle: the wait runs in the test jvm, because a command handler runs on the
         // server thread and would block the clock it is waiting for.
-        ServerTicks.await(harness.client(), dim, 20);
+        GameTicks.await(harness.client(), dim, 20);
     }
 
     /** Overworld: not an IPlanetaryProvider &rarr; distance untouched. */
