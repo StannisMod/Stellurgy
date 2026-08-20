@@ -72,8 +72,10 @@ public class AtmosphereOxygenSmokeTest extends AbstractHeadlessServerTest {
         String pre = String.join("\n", client().execute(
                 "artest atmosphere detector-output 0 " + bx + " " + by + " " + bz));
         assertTrue("pre-tick probe failed: " + pre, pre.contains("\"isDetector\":true"));
-        assertEquals("detector should default to AIR mode: " + pre,
-                "air", matchOrFail(Pattern.compile("\"detectorMode\":\"([^\"]+)\""), pre));
+        // A fresh detector watches the harmless statement: "is this breathable". It used to default
+        // to the atmosphere NAMED "air", which is the same question asked through the vocabulary.
+        assertEquals("detector should default to watching for breathable air: " + pre,
+                "BREATHABLE", matchOrFail(Pattern.compile("\"detectorMode\":\"([^\"]+)\""), pre));
 
         // Drive the sample loop directly via probe — TileAtmosphereDetector.update()
         // is gated by world.getWorldTime() % 10 == 0, which force-tick doesn't
@@ -82,7 +84,7 @@ public class AtmosphereOxygenSmokeTest extends AbstractHeadlessServerTest {
         String sample1 = String.join("\n", client().execute(
                 "artest atmosphere detector-force-sample 0 " + bx + " " + by + " " + bz));
         assertTrue("force-sample failed: " + sample1, sample1.contains("\"ok\":true"));
-        assertTrue("AIR target on overworld must report detected=true: " + sample1,
+        assertTrue("overworld air must satisfy \"breathable\": " + sample1,
                 sample1.contains("\"detected\":true"));
 
         String postAir = String.join("\n", client().execute(
@@ -95,14 +97,14 @@ public class AtmosphereOxygenSmokeTest extends AbstractHeadlessServerTest {
         // Re-target detector to vacuum — there's no vacuum near here, so the
         // sample loop should report non-detect and the block should unpower.
         String setMode = String.join("\n", client().execute(
-                "artest atmosphere detector-set-mode 0 " + bx + " " + by + " " + bz + " vacuum"));
+                "artest atmosphere detector-set-mode 0 " + bx + " " + by + " " + bz + " VACUUM"));
         assertTrue("detector-set-mode failed: " + setMode, setMode.contains("\"ok\":true"));
 
         String sample2 = String.join("\n", client().execute(
                 "artest atmosphere detector-force-sample 0 " + bx + " " + by + " " + bz));
         assertTrue("force-sample (vacuum target) failed: " + sample2,
                 sample2.contains("\"ok\":true"));
-        assertTrue("vacuum target on overworld must report detected=false: " + sample2,
+        assertTrue("overworld air must not satisfy \"vacuum\": " + sample2,
                 sample2.contains("\"detected\":false"));
 
         String postVacuum = String.join("\n", client().execute(

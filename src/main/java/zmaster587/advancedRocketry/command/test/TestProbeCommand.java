@@ -9984,32 +9984,10 @@ public class TestProbeCommand extends CommandBase {
                 send(sender, "{\"error\":\"tile not TileAtmosphereDetector\"}");
                 return;
             }
-            zmaster587.advancedRocketry.api.atmosphere.Atmosphere mode;
-            try {
-                java.lang.reflect.Field f = zmaster587.advancedRocketry.tile.atmosphere
-                        .TileAtmosphereDetector.class.getDeclaredField("atmosphereToDetect");
-                f.setAccessible(true);
-                mode = (zmaster587.advancedRocketry.api.atmosphere.Atmosphere) f.get(tile);
-            } catch (ReflectiveOperationException e) {
-                send(sender, "{\"error\":\"reflection failed\",\"msg\":\""
-                        + escapeJson(e.getMessage()) + "\"}");
-                return;
-            }
-            zmaster587.advancedRocketry.atmosphere.AtmosphereHandler atmh =
-                    zmaster587.advancedRocketry.atmosphere.AtmosphereHandler.getOxygenHandler(dim);
-            boolean detected;
-            if (atmh == null) {
-                detected = mode == zmaster587.advancedRocketry.api.atmosphere.Atmosphere.AIR;
-            } else {
-                detected = false;
-                for (net.minecraft.util.EnumFacing dir : net.minecraft.util.EnumFacing.values()) {
-                    if (!world.getBlockState(pos.offset(dir)).isOpaqueCube()
-                            && mode == atmh.getAtmosphereType(pos.offset(dir))) {
-                        detected = true;
-                        break;
-                    }
-                }
-            }
+            // Asks the DETECTOR, rather than carrying a second copy of its sampling loop. The copy
+            // that used to live here is exactly the kind that survives a refactor by compiling.
+            boolean detected = ((zmaster587.advancedRocketry.tile.atmosphere.TileAtmosphereDetector) tile)
+                    .statementHolds();
             zmaster587.advancedRocketry.block.BlockRedstoneEmitter emitter =
                     (zmaster587.advancedRocketry.block.BlockRedstoneEmitter) state.getBlock();
             boolean was = emitter.getState(world, state, pos);

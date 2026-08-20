@@ -51,23 +51,36 @@ public class TileAtmosphereDetector extends TileEntity implements ITickable, IMo
             boolean detectedAtm = false;
 
             //TODO: Galacticcraft support
-            AtmosphereHandler atmhandler = AtmosphereHandler.getOxygenHandler(world.provider.getDimension());
-            if (atmhandler == null) {
-                // No handler for this dimension: the only thing anyone can honestly say about the air
-                // is that it is ordinary, so only the statement that it is breathable holds.
-                detectedAtm = assertionToDetect == AtmosphereAssertion.BREATHABLE;
-            } else {
-                for (EnumFacing direction : EnumFacing.values()) {
-                    detectedAtm = !world.getBlockState(pos.offset(direction)).isOpaqueCube()
-                            && AtmosphereAssertions.holdsAt(atmhandler, pos.offset(direction), assertionToDetect);
-                    if (detectedAtm) break;
-                }
-            }
+            detectedAtm = statementHolds();
 
             if (((BlockRedstoneEmitter) state.getBlock()).getState(world, state, pos) != detectedAtm) {
                 ((BlockRedstoneEmitter) state.getBlock()).setState(world, state, pos, detectedAtm);
             }
         }
+    }
+
+    /**
+     * Whether the statement this detector watches holds on any face it can see.
+     * <p>
+     * <b>Public because a test harness has to be able to ask the question the game asks.</b> The
+     * detector samples on a world-clock modulo that a force-ticked headless server never reaches, so
+     * something has to drive it — and the probe that did used to carry its OWN copy of this loop.
+     * Two implementations of one rule stay in step exactly as long as nobody edits one of them.
+     */
+    public boolean statementHolds() {
+        AtmosphereHandler handler = AtmosphereHandler.getOxygenHandler(world.provider.getDimension());
+        if (handler == null) {
+            // No handler for this dimension: the only thing anyone can honestly say about the air is
+            // that it is ordinary, so only the statement that it is breathable holds.
+            return assertionToDetect == AtmosphereAssertion.BREATHABLE;
+        }
+        for (EnumFacing direction : EnumFacing.values()) {
+            if (!world.getBlockState(pos.offset(direction)).isOpaqueCube()
+                    && AtmosphereAssertions.holdsAt(handler, pos.offset(direction), assertionToDetect)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     @Override

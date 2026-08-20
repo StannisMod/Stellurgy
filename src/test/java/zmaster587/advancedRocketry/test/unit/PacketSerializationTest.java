@@ -17,6 +17,7 @@ import java.util.Set;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertTrue;
 
 /**
@@ -63,7 +64,14 @@ public class PacketSerializationTest {
 
     @Test
     public void packetAtmSyncRoundTrip() {
-        PacketAtmSync sent = new PacketAtmSync("ar:test_atm", 850);
+        // A readout, not a model: a pressure, whether it can be breathed, a warning to show, and the
+        // statements that are true of the air — which is what a player reads as its name now that
+        // nothing branches on one.
+        zmaster587.advancedRocketry.atmosphere.AtmosphereSummary summary =
+                new zmaster587.advancedRocketry.atmosphere.AtmosphereSummary(
+                        850, false, "msg.noOxygen",
+                        java.util.Arrays.asList("NOT_BREATHABLE", "TOXIC"));
+        PacketAtmSync sent = new PacketAtmSync(summary);
 
         ByteBuf buffer = newBuffer();
         sent.write(buffer);
@@ -72,8 +80,13 @@ public class PacketSerializationTest {
         received.readClient(buffer);
 
         assertEquals(0, buffer.readableBytes());
-        assertEquals("ar:test_atm", PacketSerializationTest.<String>field(received, "type"));
-        assertEquals(850, (int) PacketSerializationTest.<Integer>field(received, "pressure"));
+        zmaster587.advancedRocketry.atmosphere.AtmosphereSummary back =
+                PacketSerializationTest.field(received, "summary");
+        assertEquals(850, back.pressureCentiAtm());
+        assertEquals(false, back.breathable());
+        assertEquals("msg.noOxygen", back.warningKey());
+        assertEquals("the statements must survive in order — they are the label a player reads",
+                java.util.Arrays.asList("NOT_BREATHABLE", "TOXIC"), back.assertions());
     }
 
     @Test
@@ -267,10 +280,12 @@ public class PacketSerializationTest {
         ByteBuf empty = newBuffer();
         PacketAtmSync packet = new PacketAtmSync();
         assertReadClientFailsSafely(() -> packet.readClient(empty));
-        // readCompoundTag underflowed -> field assignments inside the try block
-        // never executed -> fields are at no-arg-ctor defaults.
-        assertNull(PacketSerializationTest.<String>field(packet, "type"));
-        assertEquals(0, (int) PacketSerializationTest.<Integer>field(packet, "pressure"));
+        // readCompoundTag underflowed -> the assignment inside the try block never executed -> the
+        // packet still holds what a client that has been told nothing assumes. That default matters:
+        // a half-read packet must leave the HUD showing ordinary air rather than a null it will
+        // dereference while drawing.
+        assertSame(zmaster587.advancedRocketry.atmosphere.AtmosphereSummary.UNKNOWN,
+                PacketSerializationTest.field(packet, "summary"));
     }
 
     @Test
@@ -278,14 +293,14 @@ public class PacketSerializationTest {
         // Random bytes that don't form a valid NBT compound. Either the
         // tag-type byte is rejected by CompressedStreamTools.read or the
         // buffer underflows during structured read — either way, readClient's
-        // type/pressure assignments are skipped.
+        // assignment is skipped and the safe default survives.
         ByteBuf garbage = newBuffer();
         garbage.writeBytes(new byte[]{0x42, 0x13, 0x37, (byte) 0xFF, 0x00, 0x01});
 
         PacketAtmSync packet = new PacketAtmSync();
         assertReadClientFailsSafely(() -> packet.readClient(garbage));
-        assertNull(PacketSerializationTest.<String>field(packet, "type"));
-        assertEquals(0, (int) PacketSerializationTest.<Integer>field(packet, "pressure"));
+        assertSame(zmaster587.advancedRocketry.atmosphere.AtmosphereSummary.UNKNOWN,
+                PacketSerializationTest.field(packet, "summary"));
     }
 
     @Test

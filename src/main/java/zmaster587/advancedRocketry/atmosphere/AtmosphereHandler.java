@@ -41,8 +41,11 @@ public class AtmosphereHandler {
     private static final int MAX_BLOB_RADIUS = ((ARConfiguration.getCurrentConfig().atmosphereHandleBitMask & 1) == 1) ? 256 : ARConfiguration.getCurrentConfig().oxygenVentSize;
     public static long lastSuffocationTime = Integer.MIN_VALUE;
     //Stores current Atm on the CLIENT
-    public static Atmosphere currentAtm;
-    public static int currentPressure;
+    /**
+      * What the client has last been told about the air around it. One object rather than two loose
+      * statics, and a readout rather than a model: the client draws it and decides nothing with it.
+      */
+    public static AtmosphereSummary currentSummary = AtmosphereSummary.UNKNOWN;
     private static HashMap<Integer, AtmosphereHandler> dimensionOxygen = new HashMap<>();
     private static HashMap<EntityPlayer, Atmosphere> prevAtmosphere = new HashMap<>();
     private HashMap<IBlobHandler, AreaBlob> blobs;
@@ -104,8 +107,7 @@ public class AtmosphereHandler {
         }
         dimensionOxygen.clear();
         prevAtmosphere.clear();
-        currentAtm = null;
-        currentPressure = 0;
+        currentSummary = AtmosphereSummary.UNKNOWN;
         lastSuffocationTime = Integer.MIN_VALUE;
     }
 
@@ -277,8 +279,18 @@ public class AtmosphereHandler {
             respire(event.getEntityLiving());
             Atmosphere atmosType = getAtmosphereType(entity);
 
-            if (entity instanceof EntityPlayer && atmosType != prevAtmosphere.get(entity)) {
-                Atmosphere.sendToRealPlayer(new PacketAtmSync(atmosType.getUnlocalizedName(), getAtmospherePressure(entity)), (EntityPlayer) entity);
+            // Once a second per player, and phased by the PLAYER rather than by the world clock:
+            // `ticksExisted` differs between them because they joined at different moments, so the
+            // sends spread themselves out instead of every player on the server being told at once.
+            // The period is the thing that matters; the phase is what must not be shared.
+            //
+            // Periodic rather than edge-triggered, because there is no edge any more. The old packet
+            // fired when a COARSE LABEL changed, which worked only while the answer was one of
+            // fourteen names; a composition slides, and a readout that waited for it to cross a
+            // boundary would sit stale for as long as the room stayed nominally the same.
+            if (entity instanceof EntityPlayer && entity.ticksExisted % 20 == 0) {
+                Atmosphere.sendToRealPlayer(new PacketAtmSync(AtmosphereSummary.of(this, entity)),
+                        (EntityPlayer) entity);
                 prevAtmosphere.put((EntityPlayer) entity, atmosType);
             }
 

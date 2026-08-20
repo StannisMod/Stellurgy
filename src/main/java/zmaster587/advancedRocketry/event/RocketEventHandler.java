@@ -543,10 +543,10 @@ public class RocketEventHandler extends Gui {
             if (worldTime >= suppressSuffocationWarningUntil &&
                     worldTime - AtmosphereHandler.lastSuffocationTime < numTicksToDisplay) {
                 FontRenderer fontRenderer = mc.fontRenderer;
-                String str = "";
-                if (AtmosphereHandler.currentAtm != null) {
-                    str = AtmosphereHandler.currentAtm.getDisplayMessage();
-                }
+                // The server said what to warn about; the client only localizes it.
+                String warningKey = AtmosphereHandler.currentSummary.warningKey();
+                String str = warningKey.isEmpty()
+                        ? "" : zmaster587.libVulpes.LibVulpes.proxy.getLocalizedString(warningKey);
 
                 int screenX = event.getResolution().getScaledWidth() / 6 - fontRenderer.getStringWidth(str) / 2;
                 int screenY = event.getResolution().getScaledHeight() / 18;

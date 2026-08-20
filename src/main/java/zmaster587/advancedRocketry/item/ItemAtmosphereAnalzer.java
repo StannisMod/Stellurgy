@@ -57,7 +57,48 @@ public class ItemAtmosphereAnalzer extends Item implements IArmorComponent {
 
     }
 
-    private List<ITextComponent> getAtmosphereReadout(@Nonnull ItemStack stack, @Nullable Atmosphere atm, @Nonnull World world) {
+    /**
+      * The client's own readout, built entirely from what the server last said. Nothing here consults
+      * a model: the analyser is a display, and a display that reasoned would be a second answer to
+      * questions the server has already answered.
+      */
+    private List<ITextComponent> getClientReadout() {
+        zmaster587.advancedRocketry.atmosphere.AtmosphereSummary summary =
+                AtmosphereHandler.currentSummary;
+        List<ITextComponent> str = new LinkedList<>();
+
+        // The label is the statements that are true of the air, in order — which is what a name IS
+        // once nothing branches on it. Air that asserts nothing in particular says so.
+        StringBuilder label = new StringBuilder();
+        for (String assertion : summary.assertions()) {
+            if (label.length() > 0) {
+                label.append(", ");
+            }
+            label.append(zmaster587.libVulpes.LibVulpes.proxy.getLocalizedString(
+                    "msg.atmosphere.assertion." + assertion.toLowerCase(java.util.Locale.ROOT)));
+        }
+
+        str.add(new TextComponentTranslation("%s %s %s",
+                new TextComponentTranslation("msg.atmanal.atmtype"),
+                new TextComponentString(label.toString()),
+                new TextComponentString(summary.pressureCentiAtm() / 100f + " atm")));
+        str.add(new TextComponentTranslation("%s %s",
+                new TextComponentTranslation("msg.atmanal.canbreathe"),
+                summary.breathable() ? new TextComponentTranslation("msg.yes")
+                        : new TextComponentTranslation("msg.no")));
+        return str;
+    }
+
+    /**
+      * The SERVER's readout, asked of the handler where the player is standing.
+      * <p>
+      * It used to read the client mirror of the pressure — a static that a dedicated server never
+      * fills — so the number a player got by right-clicking was the dimension's nominal density
+      * rather than the air he was standing in. Being handed the pressure makes the caller say where
+      * the reading came from.
+      */
+    private List<ITextComponent> getAtmosphereReadout(@Nonnull ItemStack stack, @Nullable Atmosphere atm,
+                                                      int pressureCentiAtm, @Nonnull World world) {
         if (atm == null)
             atm = Atmosphere.AIR;
 
@@ -67,7 +108,7 @@ public class ItemAtmosphereAnalzer extends Item implements IArmorComponent {
         str.add(new TextComponentTranslation("%s %s %s",
                 new TextComponentTranslation("msg.atmanal.atmtype"),
                 new TextComponentTranslation(atm.getUnlocalizedName()),
-                new TextComponentString((AtmosphereHandler.currentPressure == -1 ? (DimensionManager.getInstance().isDimensionCreated(world.provider.getDimension()) ? DimensionManager.getInstance().getDimensionProperties(world.provider.getDimension()).getAtmosphereDensity() / 100f : 1) : AtmosphereHandler.currentPressure / 100f) + " atm")
+                new TextComponentString((pressureCentiAtm == -1 ? (DimensionManager.getInstance().isDimensionCreated(world.provider.getDimension()) ? DimensionManager.getInstance().getDimensionProperties(world.provider.getDimension()).getAtmosphereDensity() / 100f : 1) : pressureCentiAtm / 100f) + " atm")
         ));
         str.add(new TextComponentTranslation("%s %s",
                 new TextComponentTranslation("msg.atmanal.canbreathe"),
@@ -82,7 +123,9 @@ public class ItemAtmosphereAnalzer extends Item implements IArmorComponent {
         ItemStack stack = playerIn.getHeldItem(hand);
         if (!worldIn.isRemote) {
             AtmosphereHandler atmhandler = AtmosphereHandler.getOxygenHandler(worldIn.provider.getDimension());
-            List<ITextComponent> str = getAtmosphereReadout(stack, atmhandler == null ? null : (Atmosphere) atmhandler.getAtmosphereType(playerIn), worldIn);
+            List<ITextComponent> str = getAtmosphereReadout(stack,
+                    atmhandler == null ? null : (Atmosphere) atmhandler.getAtmosphereType(playerIn),
+                    atmhandler == null ? -1 : atmhandler.getAtmospherePressure(playerIn), worldIn);
             for (ITextComponent str1 : str)
                 playerIn.sendMessage(str1);
         }
@@ -127,7 +170,7 @@ public class ItemAtmosphereAnalzer extends Item implements IArmorComponent {
         int screenX = RocketEventHandler.atmBar.getRenderX();//8;
         int screenY = RocketEventHandler.atmBar.getRenderY();//event.getResolution().getScaledHeight() - fontRenderer.FONT_HEIGHT*3;
 
-        List<ITextComponent> str = getAtmosphereReadout(componentStack, (Atmosphere) AtmosphereHandler.currentAtm, Minecraft.getMinecraft().world);
+        List<ITextComponent> str = getClientReadout();
         //Draw BG
         gui.drawString(fontRenderer, str.get(0).getFormattedText(), screenX, screenY, 0xaaffff);
         gui.drawString(fontRenderer, str.get(1).getFormattedText(), screenX, screenY + fontRenderer.FONT_HEIGHT * 4 / 3, 0xaaffff);

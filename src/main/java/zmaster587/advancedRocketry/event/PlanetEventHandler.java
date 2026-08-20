@@ -541,8 +541,8 @@ public class PlanetEventHandler {
             }
 
             //Check environment
-            if (AtmosphereHandler.currentPressure != -1) {
-                atmosphere = Math.min(AtmosphereHandler.currentPressure, 200);
+            if (AtmosphereHandler.currentSummary.pressureCentiAtm() != -1) {
+                atmosphere = Math.min(AtmosphereHandler.currentSummary.pressureCentiAtm(), 200);
             }
 
             if (atmosphere > 100) {
