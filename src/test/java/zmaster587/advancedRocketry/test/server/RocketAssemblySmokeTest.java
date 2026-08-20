@@ -83,9 +83,10 @@ public class RocketAssemblySmokeTest extends AbstractSharedServerTest {
         assertTrue("weight_no_fuel must be > 0 with 6 tanks + 2 engines + guidance: " + info,
                 weight > 0);
         // At least one fuel type must have non-zero capacity (6 fuel tanks).
-        // jsonMap serialises nested maps via Map.toString() (capacity=N) rather
-        // than nested JSON ("capacity":N), so accept both spellings.
-        Matcher cm = Pattern.compile("capacity[=:](\\d+)").matcher(info);
+        // The probe emits real nested JSON ("capacity":N) since the atmosphere composition needed
+        // objects rather than a Java map's toString (capacity=N). Both spellings are accepted, so
+        // this reads the ANSWER rather than the serialiser that happened to produce it.
+        Matcher cm = Pattern.compile("capacity\"?[=:](\\d+)").matcher(info);
         long totalCap = 0;
         while (cm.find()) totalCap += Long.parseLong(cm.group(1));
         assertTrue("aggregate fuel capacity across types must be > 0: " + info, totalCap > 0);

@@ -267,6 +267,8 @@ public class ARConfiguration {
     @ConfigProperty
     public int lifeSupportMaxPartialO2;
     @ConfigProperty
+    public int lifeSupportCombustionMinPartialO2;
+    @ConfigProperty
     public int lifeSupportRespirationRate;
     @ConfigProperty
     public int lifeSupportAirHeatCapacity;
@@ -583,6 +585,7 @@ public class ARConfiguration {
         arConfig.scrubberRequiresCartrige = config.get(OXYGEN, "scrubberRequiresCartrige", true, "Require cartridges for oxygen scrubbers.").getBoolean();
         arConfig.lifeSupportZones = config.get(OXYGEN, "lifeSupportZones", true, "Track nitrogen/oxygen/CO2 separately inside a sealed zone: crew consume O2 and exhale CO2, and the breathability of the room follows its oxygen partial pressure. When false a sealed zone behaves exactly as it did before, with a fixed breathable atmosphere.").getBoolean();
         arConfig.lifeSupportMinPartialO2 = config.get(OXYGEN, "lifeSupportMinPartialO2", 160000, "Oxygen partial pressure below which a zone stops being breathable, in millionths of an atmosphere (210000 is sea-level air).", 0, AirState.ONE_ATM).getInt();
+        arConfig.lifeSupportCombustionMinPartialO2 = config.get(OXYGEN, "lifeSupportCombustionMinPartialO2", 150000, "Oxidiser partial pressure below which nothing will burn, in millionths of an atmosphere. This is NOT the breathing threshold and must not be set to it: a room can be too thin to breathe and still light a torch, which is why the two are separate numbers. Real materials stop burning a little below where a person stops coping, which is where the default sits. Set it to 0 and nothing burns anywhere.", 0, AirState.ONE_ATM).getInt();
         arConfig.lifeSupportMaxPartialO2 = config.get(OXYGEN, "lifeSupportMaxPartialO2", 300000, "Oxygen partial pressure above which a zone becomes toxic and fire-prone, in millionths of an atmosphere.", 0, AirState.ONE_ATM).getInt();
         arConfig.lifeSupportRespirationRate = config.get(OXYGEN, "lifeSupportRespirationRate", 2000, "Oxygen a single crew member turns into CO2 each second, in millionths of an atmosphere times the zone volume in blocks. Larger rooms therefore last proportionally longer.", 0, Integer.MAX_VALUE).getInt();
         arConfig.lifeSupportAirHeatCapacity = config.get(OXYGEN, "lifeSupportAirHeatCapacity", 40, "How much heat one block of air at one atmosphere absorbs per kelvin. This is what makes a compartment a heat reservoir rather than an empty space: a big pressurised room warms slowly and holds the warmth, a small or half-pressurised one swings fast, and a vacuum holds nothing at all. Set it to 0 and air stops carrying heat, which leaves every zone reading ambient forever.", 0, Integer.MAX_VALUE).getInt();

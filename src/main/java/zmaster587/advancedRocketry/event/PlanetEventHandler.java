@@ -259,7 +259,7 @@ public class PlanetEventHandler {
         AtmosphereHandler atmhandler = AtmosphereHandler.getOxygenHandler(provider.getDimension());
 
         if (!event.getWorld().isRemote && AtmosphereHandler.getOxygenHandler(provider.getDimension()) != null && atmhandler != null &&
-                !atmhandler.getAtmosphereType(event.getPos()).allowsCombustion()) {
+                !atmhandler.allowsCombustionAt(event.getPos())) {
 
             if (event.getPlacedBlock().getBlock() == Blocks.TORCH) {
                 EnumFacing direction = event.getPlacedBlock().getValue(BlockTorch.FACING);
@@ -278,7 +278,7 @@ public class PlanetEventHandler {
         AtmosphereHandler atmhandler = AtmosphereHandler.getOxygenHandler(provider.getDimension());
 
         if (!event.getWorld().isRemote && direction != null && event.getEntityPlayer() != null && AtmosphereHandler.getOxygenHandler(provider.getDimension()) != null && atmhandler != null &&
-                !atmhandler.getAtmosphereType(event.getPos().offset(direction)).allowsCombustion()) {
+                !atmhandler.allowsCombustionAt(event.getPos().offset(direction))) {
 
             if (!event.getEntityPlayer().getHeldItem(event.getHand()).isEmpty()) {
                 if (event.getEntityPlayer().getHeldItem(event.getHand()).getItem() == Items.FLINT_AND_STEEL || event.getEntityPlayer().getHeldItem(event.getHand()).getItem() == Items.FIRE_CHARGE || event.getEntityPlayer().getHeldItem(event.getHand()).getItem() == Items.BLAZE_POWDER || event.getEntityPlayer().getHeldItem(event.getHand()).getItem() == Items.BLAZE_ROD)

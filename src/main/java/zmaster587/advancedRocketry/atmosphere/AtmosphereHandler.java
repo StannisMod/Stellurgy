@@ -338,6 +338,28 @@ public class AtmosphereHandler {
     }
 
     /**
+     * Whether a fire can start at this position.
+     * <p>
+     * <b>Asked of the AIR, never of the atmosphere's label.</b> A type carries a hand-assigned
+     * combustion flag that was derived from BREATHABILITY, so a zone too thin to breathe reads as
+     * combustible on the label while its own oxidiser says otherwise. Everything that lights, ignites
+     * or refuses to ignite asks here, so there is one answer and it comes from the gas.
+     * <p>
+     * Where there is no zone — outdoors, on a planet — there is no composition to ask yet, so the
+     * dimension's own atmosphere still answers. That fallback is the boundary between the model and
+     * the half of the world that has not joined it, and it disappears when a planet carries a
+     * composition of its own.
+     */
+    public boolean allowsCombustionAt(@Nonnull BlockPos pos) {
+        AirState air = getAirStateAt(pos);
+        if (air != null) {
+            return air.allowsCombustion();
+        }
+        IAtmosphere outside = getDefaultAtmosphereType();
+        return outside != null && outside.allowsCombustion();
+    }
+
+    /**
      * How many cells the zone containing this position has, or 0 if it is in none. A machine that
      * converts between a room's partial pressures and a tank's millibuckets needs the volume it is
      * dividing by.

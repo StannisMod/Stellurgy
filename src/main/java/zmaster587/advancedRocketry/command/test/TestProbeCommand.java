@@ -9835,10 +9835,29 @@ public class TestProbeCommand extends CommandBase {
                 info.put("type", atm.getUnlocalizedName());
                 info.put("breathable", atm.isBreathable());
             } else {
-                IAtmosphere atm = handler.getAtmosphereType(new BlockPos(x, y, z));
+                BlockPos pos = new BlockPos(x, y, z);
+                IAtmosphere atm = handler.getAtmosphereType(pos);
                 info.put("source", "block-handler");
                 info.put("type", atm.getUnlocalizedName());
                 info.put("breathable", atm.isBreathable());
+                // What the AIR itself says, beside what its label says. The two are reported
+                // separately on purpose: the label carries a hand-assigned combustion flag and the
+                // air carries a measurement, and a test about which of them a mechanic obeys can
+                // only be written if it can see both.
+                info.put("labelCombustible", atm.allowsCombustion());
+                info.put("combustible", handler.allowsCombustionAt(pos));
+                zmaster587.advancedRocketry.atmosphere.AirState air = handler.getAirStateAt(pos);
+                if (air != null) {
+                    info.put("breathableAir", air.isBreathableAir());
+                    info.put("toxic", air.isToxic());
+                    info.put("corrosionMilli", Math.round(air.corrosionIndex() * 1000.0D));
+                    Map<String, Object> gases = new LinkedHashMap<>();
+                    for (Map.Entry<zmaster587.advancedRocketry.atmosphere.gas.Gas, Integer> entry
+                            : air.composition().entrySet()) {
+                        gases.put(entry.getKey().name(), entry.getValue());
+                    }
+                    info.put("gases", gases);
+                }
             }
             send(sender, jsonMap(info));
             return;
@@ -15933,6 +15952,10 @@ public class TestProbeCommand extends CommandBase {
                     else builder.append('"').append(escapeJson(item.toString())).append('"');
                 }
                 builder.append(']');
+            } else if (v instanceof Map) {
+                // A nested object, so a caller reading a composition gets JSON rather than a Java
+                // map's toString wrapped in quotes.
+                builder.append(jsonMap((Map<String, ?>) v));
             } else {
                 builder.append('"').append(escapeJson(v.toString())).append('"');
             }
