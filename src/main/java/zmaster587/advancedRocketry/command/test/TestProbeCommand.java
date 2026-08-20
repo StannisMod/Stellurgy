@@ -17497,6 +17497,10 @@ public class TestProbeCommand extends CommandBase {
      * </pre>
      */
     private void handleHeat(MinecraftServer server, ICommandSender sender, String[] args) {
+        if (args.length >= 5 && "emitter".equalsIgnoreCase(args[0])) {
+            handleHeatEmitter(server, sender, args);
+            return;
+        }
         if (args.length >= 6 && "cycle".equalsIgnoreCase(args[0])) {
             handleHeatCycle(server, sender, args);
             return;
@@ -17804,6 +17808,37 @@ public class TestProbeCommand extends CommandBase {
      *  "silent":false,"radiators":9}
      * </pre>
      */
+    /**
+     * {@code heat emitter <dim> <x> <y> <z>} — does the machine at this position OFFER a coolant loop
+     * the heat its work leaves behind, and how much is it holding right now.
+     *
+     * <p>The question is about WIRING rather than thermodynamics, and it has to be asked in a world
+     * because the capability object is populated by the mod's own load: a unit context has a null
+     * `HEAT_EMITTER`, where `hasCapability` answers TRUE by accident and the cast then throws.</p>
+     *
+     * <pre>{"ok":true,"present":true,"pending":0}</pre>
+     */
+    private void handleHeatEmitter(MinecraftServer server, ICommandSender sender, String[] args) {
+        int dim = parseIntOr(args[1], Integer.MIN_VALUE);
+        net.minecraft.world.WorldServer world = server.getWorld(dim);
+        if (world == null) {
+            send(sender, "{\"ok\":false,\"error\":\"world not loaded\",\"dim\":" + dim + "}");
+            return;
+        }
+        BlockPos pos = new BlockPos(Integer.parseInt(args[2]), Integer.parseInt(args[3]),
+                Integer.parseInt(args[4]));
+        net.minecraft.tileentity.TileEntity tile = world.getTileEntity(pos);
+        if (tile == null) {
+            send(sender, "{\"ok\":true,\"present\":false,\"pending\":0,\"tile\":\"none\"}");
+            return;
+        }
+        zmaster587.advancedRocketry.api.capability.IHeatEmitter emitter =
+                zmaster587.advancedRocketry.api.capability.CapabilityHeatEmitter.get(tile);
+        send(sender, "{\"ok\":true,\"present\":" + (emitter != null)
+                + ",\"pending\":" + (emitter == null ? 0 : emitter.getPendingHeat())
+                + ",\"tile\":\"" + tile.getClass().getSimpleName() + "\"}");
+    }
+
     private void handleHeatSignature(MinecraftServer server, ICommandSender sender, String[] args) {
         int dim = parseIntOr(args[1], Integer.MIN_VALUE);
         net.minecraft.world.WorldServer world = server.getWorld(dim);
