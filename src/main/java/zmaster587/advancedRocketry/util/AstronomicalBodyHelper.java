@@ -307,10 +307,30 @@ public class AstronomicalBodyHelper {
         double flux = getStellarBrightness(star, orbitalDistance);
         double absorbed = flux * (1d - Math.min(Math.max(albedo, 0d), 1d));
         double averageWithoutAtmosphere = REFERENCE_EQUILIBRIUM_K * Math.pow(absorbed, 0.25d);
-        //Slightly kludgey solution that works out mostly for Venus and well for Earth, without being overly complex
-        //Output is in Kelvin
-        return (int) (averageWithoutAtmosphere
-                * Math.max(1, (1.125d * Math.pow((atmPressure / (double) ATM_PRESSURE_UNITS_PER_ATMOSPHERE), 0.25))));
+        // Slightly kludgey solution that works out mostly for Venus and well for Earth, without being
+        // overly complex. Output is in Kelvin.
+        //
+        // IT IS A TWO-POINT FIT AND IT HAS A DOMAIN. Earth at 1 atm and Venus at 92 are the points it
+        // was drawn through; past them it is extrapolation, and `x^0.25` extrapolates quietly rather
+        // than obviously. While a planet's pressure could not exceed 16 atm the multiplier could not
+        // exceed 2.25 and the question never arose. Once the ceiling moved, the same expression was
+        // being asked about 21 000 atmospheres, where it answers 13.6 — a number with no observation
+        // behind it, applied to every world dense enough to reach it (ledger #330).
+        //
+        // So the correlation is used across the range it was fitted for and HELD past it. That is not
+        // a claim that greenhouse warming stops; it is a refusal to invent the part of the curve
+        // nobody measured. `planetGreenhouseCeilingAtm` is where the holding starts.
+        // A ceiling of zero means DO NOT HOLD, not "hold at one atmosphere". The difference matters
+        // twice: it is what an operator means by switching the bound off, and it is what an
+        // unconfigured field means — turning "nobody set this" into the most aggressive clamp
+        // available would make a guard change the answer hardest exactly where it was never asked to.
+        int ceiling = zmaster587.advancedRocketry.api.ARConfiguration.getCurrentConfig()
+                .planetGreenhouseCeilingAtm;
+        double atmospheres = atmPressure / (double) ATM_PRESSURE_UNITS_PER_ATMOSPHERE;
+        if (ceiling > 0) {
+            atmospheres = Math.min(ceiling, atmospheres);
+        }
+        return (int) (averageWithoutAtmosphere * Math.max(1, 1.125d * Math.pow(atmospheres, 0.25)));
     }
 
     /**

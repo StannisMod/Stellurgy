@@ -1,6 +1,9 @@
 package zmaster587.advancedRocketry.test.unit;
 
+import org.junit.After;
+import org.junit.Before;
 import org.junit.Test;
+import zmaster587.advancedRocketry.api.ARConfiguration;
 import zmaster587.advancedRocketry.api.dimension.solar.StellarBody;
 import zmaster587.advancedRocketry.util.AstronomicalBodyHelper;
 
@@ -203,6 +206,66 @@ public class AstronomicalBodyHelperTest {
         // A thick atmosphere heats the planet via the greenhouse multiplier in the formula.
         assertTrue("thicker atmosphere must imply higher surface temperature",
                 thickAtmosphereTemp > thinAtmosphereTemp);
+    }
+
+    /**
+     * The greenhouse correlation is a fit through TWO known worlds — Earth at 1 atmosphere and Venus
+     * at 92 — and these pin that it is used across that range and HELD past it.
+     *
+     * <p>Nothing here says warming stops at a hundred atmospheres. It says the game does not invent
+     * the part of the curve nobody measured: while pressure could not exceed 16 atm the multiplier
+     * could not exceed 2.25 and the question never arose, and once the ceiling moved the same
+     * expression was being asked about 21 000 atmospheres, where it answers 13.6.
+     */
+    private int prevCeiling;
+
+    @Before
+    public void boundTheGreenhouseFit() {
+        // Said out loud because a unit test runs against a config nobody loaded, where this is 0 —
+        // which means "do not hold" and would leave these scenarios measuring the unbounded curve.
+        prevCeiling = ARConfiguration.getCurrentConfig().planetGreenhouseCeilingAtm;
+        ARConfiguration.getCurrentConfig().planetGreenhouseCeilingAtm = 100;
+    }
+
+    @After
+    public void restoreGreenhouseBound() {
+        ARConfiguration.getCurrentConfig().planetGreenhouseCeilingAtm = prevCeiling;
+    }
+
+    @Test
+    public void insideTheFitAThickerAtmosphereIsStillWarmer() {
+        StellarBody star = sunLikeStar();
+
+        int earthish = AstronomicalBodyHelper.getAverageTemperature(star, 100, 100);
+        int venusish = AstronomicalBodyHelper.getAverageTemperature(star, 100, 9200);
+
+        assertTrue("Venus's own pressure is inside the fit and must still warm it: "
+                + earthish + " -> " + venusish, venusish > earthish);
+    }
+
+    @Test
+    public void pastTheFitTheCurveIsHeldRatherThanExtrapolated() {
+        StellarBody star = sunLikeStar();
+
+        int atCeiling = AstronomicalBodyHelper.getAverageTemperature(star, 100, 10_000);
+        int wellPast = AstronomicalBodyHelper.getAverageTemperature(star, 100, 2_147_483);
+
+        assertEquals("a world twenty thousand atmospheres thick may not be given a temperature the "
+                + "correlation was never shown: " + atCeiling + " against " + wellPast,
+                atCeiling, wellPast);
+    }
+
+    /** Switching the bound off restores the old unbounded extrapolation, and says so. */
+    @Test
+    public void aZeroCeilingExtrapolatesWithoutLimit() {
+        ARConfiguration.getCurrentConfig().planetGreenhouseCeilingAtm = 0;
+        StellarBody star = sunLikeStar();
+
+        int atCeiling = AstronomicalBodyHelper.getAverageTemperature(star, 100, 10_000);
+        int wellPast = AstronomicalBodyHelper.getAverageTemperature(star, 100, 2_147_483);
+
+        assertTrue("with the bound off the curve must keep climbing: "
+                + atCeiling + " -> " + wellPast, wellPast > atCeiling);
     }
 
     @Test

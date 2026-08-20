@@ -96,4 +96,15 @@ public interface UniverseSchema {
      * is handed this very instance, so the two can never describe different universes.
      */
     IUniverseLaws laws();
+
+    /**
+     * What this version derives a BODY with — the schema's other half.
+     *
+     * <p>It is here because the half was unnameable, and therefore unmeasurable. A schema's laws
+     * could be fingerprinted and compared at load; its derivation reached a world only through
+     * {@code generator(config)}, so a released version whose planets were re-derived left every
+     * stamp byte-identical and the guard against editing a released version in place could not see
+     * the edit (ledger #335).</p>
+     */
+    IBodyDerivation bodyDerivation();
 }

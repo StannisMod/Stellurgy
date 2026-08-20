@@ -60,6 +60,18 @@ import static org.junit.Assert.fail;
  * sweep is a spacing with no room for a system in it, which is a different generator from the shipped
  * one. Every sweep here walks the partition the generator itself walks.</p>
  */
+/*
+ * WHAT THIS CORPUS CAN AND CANNOT SEE.
+ *
+ * Nothing here touches `ARConfiguration`, and a unit test runs against a config nobody loaded — so
+ * every `@ConfigProperty` field is 0 while the corpus is derived. The fixture is therefore a record
+ * of the derivation's COMPILE-TIME CONSTANTS, not of the galaxy a running game generates.
+ *
+ * Measured both ways on 2026-08-20: moving `MAX_ATM_PRESSURE`, a `static final`, moved nine of 207
+ * lines; bounding the greenhouse correlation through a new CONFIG key moved none at all, while
+ * direct scenarios proved the formula does respond to it. A byte-identical corpus is evidence about
+ * constants and says nothing about a config-driven change.
+ */
 public class ClusteredGalaxyGeneratorTest {
 
     private static final long SEED = 0xC0FFEEL;

@@ -41,4 +41,9 @@ public final class UniverseSchemaV0 implements UniverseSchema {
                 ? new EmptyGalaxyGenerator()
                 : new ClusteredGalaxyGenerator(config, BodyDerivationV0.INSTANCE, laws());
     }
+
+    @Override
+    public IBodyDerivation bodyDerivation() {
+        return BodyDerivationV0.INSTANCE;
+    }
 }
