@@ -34,6 +34,97 @@ final class WorldCommandFixtures {
         return String.join("\n", AbstractSharedServerTest.client().execute(cmd));
     }
 
+    private static final Pattern CLOCK_TICK = Pattern.compile("\"tick\":(-?\\d+)");
+
+    /**
+     * What time it is in the GAME, asked of the server.
+     *
+     * <p>The server's own tick counter. A test that needs to know how long it is willing to wait for
+     * something asks here rather than looking at a watch.</p>
+     */
+    static long serverTick() throws Exception {
+        String clock = exec("artest clock");
+        Matcher m = CLOCK_TICK.matcher(clock);
+        if (!m.find()) {
+            throw new IllegalStateException("the server would not say what time it is: " + clock);
+        }
+        return Long.parseLong(m.group(1));
+    }
+
+    /**
+     * Wait for something to become true, budgeting in SERVER TICKS.
+     *
+     * <p><b>This is the difference between an experiment and a stopwatch.</b> An asynchronous
+     * mechanic needs a certain amount of WORLD to happen — so many ticks of a controller, a queue, a
+     * settle. A budget in seconds does not ask for that: it asks for a certain amount of the
+     * machine's attention, and a machine that is busy gives the same test less world for the same
+     * money. That is how a green test turns red because something unrelated was running, and it is
+     * why budgets here used to be multiplied by the build's fork count — a number about the machine,
+     * standing in for a number about the game.</p>
+     *
+     * <p>Ticks are asked of the server, so they are the same ticks the mechanic under test runs on.
+     * How OFTEN we ask is wall-clock and deliberately unimportant: polling faster changes nothing
+     * but the sharpness of the answer.</p>
+     *
+     * @param tickBudget how much world the mechanic is allowed, in server ticks
+     * @param condition  what is being waited for; asked once before any waiting at all
+     * @param eachPoll   work the wait itself must keep doing — arrangement that has to be re-applied
+     *                   while the mechanic runs. May be null.
+     * @return true if the condition held within the budget
+     */
+    static boolean awaitWithinTicks(int tickBudget, TickCondition condition, TickAction eachPoll)
+            throws Exception {
+        long start = serverTick();
+        // A liveness net, NOT the budget: a server that has stopped ticking altogether would leave
+        // this loop spinning until the harness killed the whole class with nothing to say about
+        // which step hung. Set far above any honest run at twenty ticks a second.
+        long deadline = System.nanoTime() + (long) tickBudget * 50L * 20L * 1_000_000L;
+        while (true) {
+            if (condition.holds()) {
+                return true;
+            }
+            if (eachPoll != null) {
+                eachPoll.run();
+            }
+            long elapsed = serverTick() - start;
+            if (elapsed >= tickBudget) {
+                return false;
+            }
+            if (System.nanoTime() > deadline) {
+                throw new IllegalStateException("the server stopped ticking while waiting: "
+                        + elapsed + " of " + tickBudget + " ticks elapsed");
+            }
+            Thread.sleep(50L);
+        }
+    }
+
+    /**
+     * Let the world run for this many server ticks.
+     *
+     * <p>For an OBSERVATION window rather than a wait: when a test wants to watch something hold
+     * still, the window has to be measured in the ticks the subject runs on. A window in seconds
+     * covers fewer of the subject's ticks on a busy machine, which does not merely make the test
+     * slower — it makes it BLIND, and a drift that needed forty ticks to show up passes as stable.
+     * That is the failure direction worth spending a helper on: a wall-clock wait turns green into
+     * red, a wall-clock observation turns red into green.</p>
+     */
+    static void advanceTicks(int ticks) throws Exception {
+        long until = serverTick() + Math.max(0, ticks);
+        while (serverTick() < until) {
+            Thread.sleep(25L);
+        }
+    }
+
+    /** What {@link #awaitWithinTicks} is waiting for. Allowed to ask the server, so it throws. */
+    interface TickCondition {
+        boolean holds() throws Exception;
+    }
+
+    /** Work a wait has to keep doing. Allowed to talk to the server, so it throws. */
+    interface TickAction {
+        void run() throws Exception;
+    }
+
     /** Read an integer field out of {@code /artest planet info <dim>}
      *  JSON. Asserts the field is present (matcher must find). */
     static int planetIntField(int dim, String field) throws Exception {

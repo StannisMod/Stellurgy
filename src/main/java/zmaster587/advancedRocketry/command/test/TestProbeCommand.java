@@ -79,6 +79,9 @@ public class TestProbeCommand extends CommandBase {
         }
         try {
             switch (args[0].toLowerCase()) {
+                case "clock":
+                    handleClock(server, sender);
+                    break;
                 case "registry":
                     handleRegistry(sender, tail(args));
                     break;
@@ -11565,6 +11568,40 @@ public class TestProbeCommand extends CommandBase {
             return;
         }
         send(sender, "{\"error\":\"unknown subcommand — try get <key> | set <key> <value>\"}");
+    }
+
+    /**
+     * {@code /artest clock} — what time it is IN THE GAME.
+     *
+     * <p>The server's own tick counter, plus the overworld's total world time. This exists so that a
+     * test can budget its waiting in TICKS rather than in seconds: a busy machine runs fewer ticks per
+     * second, so a wall-clock budget silently shrinks the experiment and turns load into a red, while
+     * a tick budget asks for the same amount of WORLD every time.</p>
+     *
+     * <p>Two clocks are reported because they can disagree and the difference matters. The tick
+     * counter advances once per server tick whatever the worlds are doing; a world's total time
+     * advances only while that world ticks. A waiter should read {@code tick}.</p>
+     */
+    private void handleClock(MinecraftServer server, ICommandSender sender) {
+        long tick = -1L;
+        try {
+            java.lang.reflect.Field f = MinecraftServer.class.getDeclaredField("tickCounter");
+            f.setAccessible(true);
+            tick = f.getInt(server);
+        } catch (ReflectiveOperationException e) {
+            // Obfuscated or renamed in a fork: fall back to the overworld's clock, which is the same
+            // rate. Reported as -1 only if BOTH are unavailable, so a caller can tell.
+            tick = -1L;
+        }
+        long worldTime = -1L;
+        net.minecraft.world.WorldServer overworld = server.getWorld(0);
+        if (overworld != null) {
+            worldTime = overworld.getTotalWorldTime();
+        }
+        if (tick < 0L) {
+            tick = worldTime;
+        }
+        send(sender, "{\"ok\":true,\"tick\":" + tick + ",\"worldTime\":" + worldTime + "}");
     }
 
     private static Object parseConfigValue(Class<?> type, String raw) {
