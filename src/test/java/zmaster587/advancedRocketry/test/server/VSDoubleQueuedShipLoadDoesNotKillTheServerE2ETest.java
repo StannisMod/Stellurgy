@@ -1,6 +1,8 @@
 package zmaster587.advancedRocketry.test.server;
 
 import com.github.stannismod.forge.testing.junit.AbstractHeadlessServerTest;
+import zmaster587.advancedRocketry.test.GameTicks;
+
 import org.junit.Assume;
 import org.junit.Test;
 
@@ -48,6 +50,16 @@ public class VSDoubleQueuedShipLoadDoesNotKillTheServerE2ETest extends AbstractH
 
     /** How far the ship's own pose may sit from the anchor it was assembled on. */
     private static final double POSE_TOLERANCE = 64.0;
+
+    /**
+     * Budgets in SERVER TICKS — 200 is the ten seconds the old {@code 40 x 250 ms} meant on an idle
+     * box. On the server's clock: what is waited for here is the tick loop SERVING two queued loads,
+     * which is the subject of the whole test.
+     */
+    private static final int WAIT_TICKS = 200;
+
+    /** The one pause that stays in milliseconds, and {@link #settle()} says why. */
+    private static final long SETTLE_MS = 3000L;
 
     @Test
     public void anImmediateLoadOfAPermanentlyLoadedShipDoesNotKillTheServer() throws Exception {
@@ -118,40 +130,32 @@ public class VSDoubleQueuedShipLoadDoesNotKillTheServerE2ETest extends AbstractH
     }
 
     private boolean waitUntilRegistryExceeds(int floor) throws Exception {
-        for (int i = 0; i < 40; i++) {
-            if (queryableShips() > floor) {
-                return true;
-            }
-            Thread.sleep(250);
-        }
-        return false;
+        return GameTicks.until(client(), GameTicks.server(), WAIT_TICKS,
+                () -> queryableShips() > floor);
     }
 
     /** Poll until no loaded ship sits at {@code (x,y,BASE_Z)}, deliberately without pumping any load. */
     private boolean waitUntilNoShipIsAt(int x, int y) throws Exception {
-        for (int i = 0; i < 40; i++) {
-            if (!shipIsAt(x, y)) {
-                return true;
-            }
-            Thread.sleep(250);
-        }
-        return false;
+        return GameTicks.until(client(), GameTicks.server(), WAIT_TICKS, () -> !shipIsAt(x, y));
     }
 
     /** Poll until the loaded set holds a ship. Permanent loading is already on, so nothing is re-pumped. */
     private boolean waitUntilLoaded() throws Exception {
-        for (int i = 0; i < 40; i++) {
-            if (loadedShips() >= 1) {
-                return true;
-            }
-            Thread.sleep(250);
-        }
-        return false;
+        return GameTicks.until(client(), GameTicks.server(), WAIT_TICKS, () -> loadedShips() >= 1);
     }
 
-    /** A bounded pause for the world ticks that serve the two queued loads. */
+    /**
+     * A bounded pause for the world ticks that serve the two queued loads.
+     *
+     * <p><b>Deliberately WALL-CLOCK, and the only one in this sweep.</b> Everywhere else a pause in
+     * seconds is the defect; here it is the requirement. This test's subject is the server DYING, and
+     * a tick-budgeted pause has to ask the server what time it is — so on the build where the defect
+     * is live it would throw its own "the clock stopped" out of {@code settle()}, before the test
+     * reached {@code client().isAlive()} and could say what actually happened. A sleep cannot fail,
+     * which is exactly why it belongs here: the instrument must outlive its subject.</p>
+     */
     private void settle() throws Exception {
-        Thread.sleep(3000);
+        Thread.sleep(SETTLE_MS);
     }
 
     // --- helpers ------------------------------------------------------------------------------------

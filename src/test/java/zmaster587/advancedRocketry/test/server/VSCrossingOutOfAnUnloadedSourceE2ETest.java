@@ -1,6 +1,8 @@
 package zmaster587.advancedRocketry.test.server;
 
 import com.github.stannismod.forge.testing.junit.AbstractHeadlessServerTest;
+import zmaster587.advancedRocketry.test.GameTicks;
+
 import org.junit.Assume;
 import org.junit.Test;
 
@@ -39,6 +41,15 @@ public class VSCrossingOutOfAnUnloadedSourceE2ETest extends AbstractHeadlessServ
     private static final int BUILD_Y = 80, SKY_Y = 150;
     private static final int HOP = 160;
     private static final double POSE_TOLERANCE = 64.0;
+
+    /**
+     * Budgets in SERVER TICKS — 200 is the ten seconds the old {@code 40 x 250 ms} meant on an idle
+     * box, 60 the three seconds of {@code settle()}. On the server's clock because what is waited for
+     * (a queued spawn, a cut ship being collected) is served by the server tick loop, and the world
+     * these ships live in is precisely the one that may not be ticking.
+     */
+    private static final int WAIT_TICKS = 200;
+    private static final int SETTLE_TICKS = 60;
 
     @Test
     public void aCrossingOutOfAnUnloadedSourceLeavesNoRegistryEntry() throws Exception {
@@ -123,13 +134,8 @@ public class VSCrossingOutOfAnUnloadedSourceE2ETest extends AbstractHeadlessServ
     }
 
     private boolean waitUntilRegistryExceeds(int floor) throws Exception {
-        for (int i = 0; i < 40; i++) {
-            if (queryableShips() > floor) {
-                return true;
-            }
-            Thread.sleep(250);
-        }
-        return false;
+        return GameTicks.until(client(), GameTicks.server(), WAIT_TICKS,
+                () -> queryableShips() > floor);
     }
 
     /**
@@ -138,30 +144,24 @@ public class VSCrossingOutOfAnUnloadedSourceE2ETest extends AbstractHeadlessServ
      * after the pump. Safe only because {@code permaload} is never set in this class.
      */
     private boolean waitUntilShipIsAt(int x, int y) throws Exception {
-        for (int i = 0; i < 40; i++) {
+        // The pump is INSIDE the condition, not in eachPoll, and that is deliberate: the ship is
+        // resident for about a tick after a load, so the read has to happen immediately after the
+        // pump. eachPoll runs after the check, which would put a sleep between them and ask about a
+        // ship that had already gone again. Here the arrangement and the reading are one act.
+        return GameTicks.until(client(), GameTicks.server(), WAIT_TICKS, () -> {
             exec("artest vs load-ships 0");
-            if (shipIsAt(x, y)) {
-                return true;
-            }
-            Thread.sleep(250);
-        }
-        return false;
+            return shipIsAt(x, y);
+        });
     }
 
     /** Poll until no loaded ship sits at {@code (x,y,BASE_Z)} — deliberately without pumping any load. */
     private boolean waitUntilNoShipIsAt(int x, int y) throws Exception {
-        for (int i = 0; i < 40; i++) {
-            if (!shipIsAt(x, y)) {
-                return true;
-            }
-            Thread.sleep(250);
-        }
-        return false;
+        return GameTicks.until(client(), GameTicks.server(), WAIT_TICKS, () -> !shipIsAt(x, y));
     }
 
     /** A bounded pause for the world ticks that spawn a queued ship and collect a cut one. */
     private void settle() throws Exception {
-        Thread.sleep(3000);
+        GameTicks.advance(client(), GameTicks.server(), SETTLE_TICKS);
     }
 
     // --- helpers ------------------------------------------------------------------------------------

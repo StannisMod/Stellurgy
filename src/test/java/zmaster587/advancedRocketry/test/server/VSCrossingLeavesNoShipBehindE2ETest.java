@@ -1,5 +1,7 @@
 package zmaster587.advancedRocketry.test.server;
 
+import zmaster587.advancedRocketry.test.GameTicks;
+
 import org.junit.Assume;
 import org.junit.Test;
 
@@ -57,6 +59,14 @@ public class VSCrossingLeavesNoShipBehindE2ETest extends AbstractSharedServerTes
     private static final int HOP = 160;
     /** How far a re-assembled ship's own pose may sit from the anchor it was seeded on. */
     private static final double POSE_TOLERANCE = 64.0;
+
+    /**
+     * How much WORLD a bounded wait is allowed: 200 server ticks, the ten seconds the old
+     * {@code 40 x 250 ms} meant on an idle box. On the SERVER's clock, because what these wait for —
+     * an assembly queued on the physics thread, a queued load being served — is driven by the server
+     * tick loop, and the worlds involved are often the ones that have not started ticking yet.
+     */
+    private static final int WAIT_TICKS = 200;
 
     /** The defect in one crossing: the ship object left behind in the world the crossing departed. */
     @Test
@@ -180,24 +190,13 @@ public class VSCrossingLeavesNoShipBehindE2ETest extends AbstractSharedServerTes
 
     /** Assembly is queued on the physics thread; the registry is where a new ship lands first. Bounded. */
     private boolean waitUntilRegistryExceeds(int floor) throws Exception {
-        for (int i = 0; i < 40; i++) {
-            if (queryableShips() > floor) {
-                return true;
-            }
-            Thread.sleep(250);
-        }
-        return false;
+        return GameTicks.until(client(), GameTicks.server(), WAIT_TICKS,
+                () -> queryableShips() > floor);
     }
 
     /** Poll until a loaded ship sits at {@code (x,y,BASE_Z)}. Bounded; deliberately pumps no load. */
     private boolean waitUntilShipIsAt(int x, int y) throws Exception {
-        for (int i = 0; i < 40; i++) {
-            if (shipIsAt(x, y)) {
-                return true;
-            }
-            Thread.sleep(250);
-        }
-        return false;
+        return GameTicks.until(client(), GameTicks.server(), WAIT_TICKS, () -> shipIsAt(x, y));
     }
 
     // --- helpers ------------------------------------------------------------------------------------
