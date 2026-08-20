@@ -139,7 +139,7 @@ public final class HeatEnvironment {
         if (properties == null) {
             return 0.0D;
         }
-        return HeatNetwork.cellPowerAt(Math.max(0, properties.averageTemperature));
+        return HeatNetwork.cellPowerAt(Math.max(0, properties.getAverageTemp()));
     }
 
     /**
