@@ -65,7 +65,20 @@ public class DimensionProperties implements Cloneable, IDimensionProperties {
     public static final ResourceLocation shadow = new ResourceLocation("advancedrocketry:textures/planets/shadow.png");
     public static final ResourceLocation shadow3 = new ResourceLocation("advancedrocketry:textures/planets/shadow3.png");
 
-    public static final int MAX_ATM_PRESSURE = 1600;
+    /**
+     * The ceiling on a planet's atmospheric pressure, in hundredths of an atmosphere.
+     * <p>
+     * <b>It is a property of the TYPE, not a statement about worlds.</b> The old value said 16
+     * atmospheres, which quietly declared Venus (92) unrepresentable and a gas giant absurd — a
+     * balance opinion wearing a constant's clothes. What a ceiling is legitimately for is keeping the
+     * arithmetic that reads this from overflowing, so it is derived from `int` with three orders of
+     * magnitude of headroom: every consumer either divides, compares, or widens to double, and the
+     * largest scaling any of them applies is nowhere near a thousand.
+     * <p>
+     * It exists at all only while pressure is an authored integer. Once a planet carries a
+     * composition and its pressure is the SUM of what is in it, there is nothing here to clamp.
+     */
+    public static final int MAX_ATM_PRESSURE = Integer.MAX_VALUE / 1000;
     public static final int MIN_ATM_PRESSURE = 0;
     public static final int MAX_DISTANCE = Integer.MAX_VALUE;
     public static final int MIN_DISTANCE = 1;

@@ -202,10 +202,13 @@ public class XMLPlanetLoaderTest {
 
     @Test
     public void atmosphereDensityClampsAboveMax() throws Exception {
+        // The value is COMPUTED from the ceiling rather than written out: a hard-coded number stops
+        // being "above the maximum" the moment the maximum moves, and then this pins nothing.
         DimensionPropertyCoupling coupling = parse(galaxy(star("Sol",
                 "<planet name=\"DenseAtm\" DIMID=\"7200\">\n"
               + "  <isKnown>true</isKnown>\n"
-              + "  <atmosphereDensity>99999</atmosphereDensity>\n"
+              + "  <atmosphereDensity>" + (DimensionProperties.MAX_ATM_PRESSURE + 1)
+              + "</atmosphereDensity>\n"
               + "</planet>\n")));
         DimensionProperties props = coupling.dims.get(0);
         assertEquals("atmosphere density must clamp to MAX_ATM_PRESSURE",
