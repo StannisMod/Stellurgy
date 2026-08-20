@@ -204,7 +204,10 @@ public class VSFlightSmoothnessAcrossJumpE2ETest extends AbstractClientE2ETest {
 
         int targetDim = -1;
         String lastTick = "";
-        int arriveBudget = (int) (120 * TestTimeouts.factor());
+        // No fork multiplier: this counts PUMPS, not elapsed time. Each iteration advances the
+        // transit ten ticks by hand, so what the budget buys is a number of probe calls - and a busy
+        // box does not need more of them to cover the same flight.
+        int arriveBudget = 120;
         for (int i = 0; i < arriveBudget && targetDim < 0; i++) {
             lastTick = exec("artest space transit-tick 10");
             if (readIntOr(lastTick, "inTransit", -1) == 0) {
@@ -217,7 +220,8 @@ public class VSFlightSmoothnessAcrossJumpE2ETest extends AbstractClientE2ETest {
                 targetDim >= 0);
 
         boolean seatedOnArrival = false;
-        int reseatBudget = (int) (60 * TestTimeouts.factor());
+        // Also a pump count: the arrival re-seating is retried by the same hand-driven ticks.
+        int reseatBudget = 60;
         String lastReseatTick = "";
         for (int i = 0; i < reseatBudget && !seatedOnArrival; i++) {
             lastReseatTick = exec("artest space transit-tick 10");

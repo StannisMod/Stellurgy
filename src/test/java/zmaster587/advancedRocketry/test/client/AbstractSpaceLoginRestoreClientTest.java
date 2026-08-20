@@ -1391,6 +1391,9 @@ public abstract class AbstractSpaceLoginRestoreClientTest {
      * client's own rendered player altitude out.
      */
     protected double climbWith(int key, double from) throws Exception {
+        // THE MULTIPLIER STAYS. A held key is re-sent by the CLIENT once per rendered FRAME, so under
+        // frame starvation the same climb takes more client ticks - wall-clock-bound work, which is
+        // the one shape a fork scale measures correctly.
         int budget = (int) (40 * TestTimeouts.factor());
         double last = from;
         bot().holdKey(key);

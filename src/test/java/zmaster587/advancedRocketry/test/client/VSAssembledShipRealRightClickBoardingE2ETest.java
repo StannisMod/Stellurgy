@@ -163,6 +163,9 @@ public class VSAssembledShipRealRightClickBoardingE2ETest {
         Assume.assumeTrue("needs Valkyrien Skies on the classpath (run with -PwithVS)",
                 exec("artest vs available").contains("\"available\":true"));
 
+        // THE MULTIPLIER STAYS. What it waits on is VS building the ship on its OWN thread, off the
+        // game loop: that work finishes in wall-clock time, so a busy box genuinely needs more game
+        // ticks to elapse before it is done. Measured at 8 forks on the sibling gate test.
         int budget = (int) (40 * TestTimeouts.factor());
 
         // ---- ARRANGEMENT: build, assemble, and get the ship LOADED with the client present. ------

@@ -334,6 +334,8 @@ public class VSPreAssemblyBoardingPilotControlE2ETest {
         // object going LIVE, so waiting for the rebind here measures the contract, not a softened
         // version of it; without the wait the measurement legs below just run out before the ship
         // exists. Early exit the moment the rebind lands; a cancelled/expired rebind is a red.
+        // THE MULTIPLIER STAYS: what is being waited for is the VS ship OBJECT going live, which VS
+        // does off the game loop, so a busy box needs more ticks to elapse before the rebind can land.
         int rebindBudget = (int) (240 * com.github.stannismod.forge.testing.TestTimeouts.factor());
         String rebindState = "";
         boolean rebound = false;

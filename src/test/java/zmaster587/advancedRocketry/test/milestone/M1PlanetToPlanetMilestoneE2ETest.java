@@ -244,6 +244,9 @@ public class M1PlanetToPlanetMilestoneE2ETest {
         Assume.assumeTrue("needs Valkyrien Skies on the classpath (run with -PwithVS)",
                 exec("artest vs available").contains("\"available\":true"));
 
+        // THE MULTIPLIER STAYS. What it waits on is VS building the ship on its OWN thread, off the
+        // game loop: that work finishes in wall-clock time, so a busy box genuinely needs more game
+        // ticks to elapse before it is done. Measured at 8 forks on the sibling gate test.
         int budget = (int) (40 * TestTimeouts.factor());
         long tLeg = System.currentTimeMillis();
 
@@ -351,6 +354,8 @@ public class M1PlanetToPlanetMilestoneE2ETest {
         // own ship loaded during the crossing.
         tLeg = System.currentTimeMillis();
         int ledger = 0;
+        // THE MULTIPLIER STAYS: a held key is re-sent per rendered FRAME, so frame starvation
+        // stretches the same climb in ticks.
         int climbBudget = (int) (800 * TestTimeouts.factor());
         bot().holdKey(Keyboard.KEY_R);
         try {
@@ -637,7 +642,10 @@ public class M1PlanetToPlanetMilestoneE2ETest {
         // The flight is short but the wind-up is not instant; poll the ledger, which is the only
         // place that answers "where is the ship" while it has no body anywhere.
         String arrivedCell = launchCell;
-        int jumpBudget = (int) (400 * TestTimeouts.factor());
+        // No fork multiplier: a jump's duration is distance over speed, which is a number of
+        // server TICKS fixed by the game. Scaling it by how many forks share this box granted the
+        // flight extra world on a busy machine and made two runs different experiments.
+        int jumpBudget = 400;
         for (int attempt = 0; attempt < jumpBudget && arrivedCell.equals(launchCell); attempt++) {
             bot().waitTicks(5);
             String entry = exec("artest space ledger-get " + shipId);
@@ -1350,6 +1358,9 @@ public class M1PlanetToPlanetMilestoneE2ETest {
         bot().clickButtonById(BUTTON_SCAN);
 
         int ships = 0;
+        // THE MULTIPLIER STAYS. What it waits on is VS building the ship on its OWN thread, off the
+        // game loop: that work finishes in wall-clock time, so a busy box genuinely needs more game
+        // ticks to elapse before it is done. Measured at 8 forks on the sibling gate test.
         int assembleBudget = (int) (90 * TestTimeouts.factor());
         for (int attempt = 0; attempt < assembleBudget && ships < 1; attempt++) {
             // The screen can be knocked shut (a chunk reload, a stray escape); re-open it rather

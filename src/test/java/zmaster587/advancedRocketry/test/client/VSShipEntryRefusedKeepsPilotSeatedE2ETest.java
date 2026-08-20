@@ -171,6 +171,9 @@ public class VSShipEntryRefusedKeepsPilotSeatedE2ETest {
         exec("tp @a " + (BX + 0.5) + " " + (BY + 6) + " " + (BZ + 0.5) + " 0 0");
         bot().waitTicks(20);
 
+        // THE MULTIPLIER STAYS. What it waits on is VS building the ship on its OWN thread, off the
+        // game loop: that work finishes in wall-clock time, so a busy box genuinely needs more game
+        // ticks to elapse before it is done. Measured at 8 forks on the sibling gate test.
         int budget = (int) (40 * TestTimeouts.factor());
         double yRest = Double.NaN;
         String shipInfo = "";
@@ -228,6 +231,8 @@ public class VSShipEntryRefusedKeepsPilotSeatedE2ETest {
             // the ship never reached the line, the trigger declined, the entry was declined, or the
             // message was sent to nobody. The last sample and the highest altitude seen are what
             // the assertion below reports.
+            // THE MULTIPLIER STAYS: the climb is driven by a held key the CLIENT re-sends once per
+            // rendered frame, so frame starvation stretches it in ticks.
             int climbBudget = (int) (800 * TestTimeouts.factor());
             for (int attempt = 0; attempt < climbBudget && refusalLine == null; attempt++) {
                 bot().waitTicks(5);
@@ -291,6 +296,8 @@ public class VSShipEntryRefusedKeepsPilotSeatedE2ETest {
         JsonObject riding = bot().reportRidingEntity();
         boolean prev = isRiding(riding);
         boolean seatedTwice = false;
+        // THE MULTIPLIER STAYS. This waits for state the SERVER restores on login to arrive at the
+        // client and be applied - a round trip whose latency is the machine's, not the game's.
         int settleBudget = (int) (20 * TestTimeouts.factor());
         for (int attempt = 0; attempt < settleBudget && !seatedTwice; attempt++) {
             bot().waitTicks(5);

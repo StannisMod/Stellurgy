@@ -1,5 +1,7 @@
 package zmaster587.advancedRocketry.test.client;
 
+import zmaster587.advancedRocketry.test.GameTicks;
+
 import com.google.gson.JsonObject;
 
 import org.junit.Test;
@@ -26,6 +28,12 @@ import static org.junit.Assert.assertTrue;
  * was split into three.</p>
  */
 public class SpaceLoginRestoreDeckCrewE2ETest extends AbstractSpaceLoginRestoreClientTest {
+
+    /**
+     * World the server is given to notice the logout, in SERVER ticks - the old 40 x 250 ms.
+     * The client cannot supply a clock here: it is the thing that went away.
+     */
+    private static final int LOGOUT_TICKS = 200;
 
     /**
      * THE REPORTED CASE, and it is deliberately NOT the restart case: a crew member standing on his
@@ -65,16 +73,18 @@ public class SpaceLoginRestoreDeckCrewE2ETest extends AbstractSpaceLoginRestoreC
         // A REAL logout that leaves the world running. The client has no world to wait ticks in while
         // it is away, so the offline window is polled from the server side.
         bot().disconnect();
-        String offline = "";
-        boolean gone = false;
-        for (int attempt = 0; attempt < 40 && !gone; attempt++) {
-            Thread.sleep(250);
-            offline = exec("artest player position-of " + BOT);
-            gone = offline.contains("\"error\":\"no such player\"")
-                    || offline.contains("\"error\":\"no players connected\"");
-        }
+        // The client is away, so it has no world of its own to wait in - but the SERVER is still
+        // ticking, and processing a disconnect is something it does on a tick. So the budget is the
+        // server's ticks, read through the server handle this test already holds.
+        final String[] offline = {""};
+        boolean gone = GameTicks.until(serverHarness.client(), GameTicks.server(), LOGOUT_TICKS,
+                () -> {
+                    offline[0] = exec("artest player position-of " + BOT);
+                    return offline[0].contains("\"error\":\"no such player\"")
+                            || offline[0].contains("\"error\":\"no players connected\"");
+                });
         assertTrue("ARRANGEMENT: the server must see him GONE after the disconnect, or nothing below "
-                + "is a relog: " + offline, gone);
+                + "is a relog: " + offline[0], gone);
 
         // Nobody is left near the ship to hold its chunks while he is away.
         exec("artest vs permaload true");
@@ -168,15 +178,17 @@ public class SpaceLoginRestoreDeckCrewE2ETest extends AbstractSpaceLoginRestoreC
                 capInverted.contains("\"alreadyTracked\":true"));
 
         bot().disconnect();
-        String offline = "";
-        boolean gone = false;
-        for (int attempt = 0; attempt < 40 && !gone; attempt++) {
-            Thread.sleep(250);
-            offline = exec("artest player position-of " + BOT);
-            gone = offline.contains("\"error\":\"no such player\"")
-                    || offline.contains("\"error\":\"no players connected\"");
-        }
-        assertTrue("ARRANGEMENT: the server must see him GONE after the disconnect: " + offline, gone);
+        // The client is away, so it has no world of its own to wait in - but the SERVER is still
+        // ticking, and processing a disconnect is something it does on a tick. So the budget is the
+        // server's ticks, read through the server handle this test already holds.
+        final String[] offline = {""};
+        boolean gone = GameTicks.until(serverHarness.client(), GameTicks.server(), LOGOUT_TICKS,
+                () -> {
+                    offline[0] = exec("artest player position-of " + BOT);
+                    return offline[0].contains("\"error\":\"no such player\"")
+                            || offline[0].contains("\"error\":\"no players connected\"");
+                });
+        assertTrue("ARRANGEMENT: the server must see him GONE after the disconnect: " + offline[0], gone);
 
         exec("artest vs permaload true");
         bot().connect();

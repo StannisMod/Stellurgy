@@ -1,5 +1,7 @@
 package zmaster587.advancedRocketry.test.client;
 
+import zmaster587.advancedRocketry.test.GameTicks;
+
 import com.github.stannismod.forge.testing.TestTimeouts;
 import com.github.stannismod.forge.testing.junit.AbstractClientE2ETest;
 import com.google.gson.JsonObject;
@@ -40,6 +42,12 @@ import static org.junit.Assert.assertTrue;
  */
 public class VSPilotSeatTakenWhileOfflineE2ETest extends AbstractClientE2ETest {
 
+    /**
+     * World the server is given to notice the logout, in SERVER ticks - the old 40 x 250 ms with a
+     * fork multiplier on top. The client cannot supply a clock here: it is the thing that went away.
+     */
+    private static final int LOGOUT_TICKS = 200;
+
     private static final Pattern BUILDER_POS =
             Pattern.compile("\"builderPos\":\\[(-?\\d+),(-?\\d+),(-?\\d+)]");
     private static final Pattern DUMMY_ID = Pattern.compile("\"dummyId\":(-?\\d+)");
@@ -76,9 +84,14 @@ public class VSPilotSeatTakenWhileOfflineE2ETest extends AbstractClientE2ETest {
         String assemble = assembleFixture(BX, BY, BZ);
         assertTrue("ARRANGEMENT: a with-pilot-seat build must route to a ship: " + assemble,
                 assemble.contains("\"rocketCount\":0"));
+        // THE FORK MULTIPLIER SURVIVES HERE, and this is what it is waiting on: VS builds the ship on
+        // its OWN thread, off the game loop entirely. That work finishes in wall-clock time, so a busy
+        // box genuinely needs more game ticks to elapse before it is done — which is the one shape
+        // where scaling a tick ceiling by the fork count is measuring the right thing. Contrast the
+        // logout wait below, which is server-tick work and carries no multiplier at all.
+        int assemblyBudget = (int) (40 * TestTimeouts.factor());
         int all = shipsBefore;
-        int budget = (int) (40 * TestTimeouts.factor());
-        for (int i = 0; i < budget && all <= shipsBefore; i++) {
+        for (int i = 0; i < assemblyBudget && all <= shipsBefore; i++) {
             bot().waitTicks(5);
             all = count("ship-count-all");
         }
@@ -108,18 +121,19 @@ public class VSPilotSeatTakenWhileOfflineE2ETest extends AbstractClientE2ETest {
 
         // ---- ACT 1: a REAL logout that leaves the world running (disconnect half only). ---------
         bot().disconnect();
-        String offline = "";
-        boolean gone = false;
-        for (int i = 0; i < budget && !gone; i++) {
-            Thread.sleep(250); // the client has no world to wait ticks in; poll the server side
-            offline = exec("artest player position-of " + BOT);
+        // The client is away, so it has no world of its own to wait in - but the SERVER is still
+        // ticking, and processing a disconnect is something it does on a tick. The budget is the
+        // server's ticks, and the fork multiplier that used to size it is gone with the wall clock.
+        final String[] offline = {""};
+        boolean gone = GameTicks.until(serverClient(), GameTicks.server(), LOGOUT_TICKS, () -> {
+            offline[0] = exec("artest player position-of " + BOT);
             // "no such player" = others online, he is not; "no players connected" = the server is
             // empty (this test's single-client case). Both mean he is gone.
-            gone = offline.contains("\"error\":\"no such player\"")
-                    || offline.contains("\"error\":\"no players connected\"");
-        }
+            return offline[0].contains("\"error\":\"no such player\"")
+                    || offline[0].contains("\"error\":\"no players connected\"");
+        });
         assertTrue("ARRANGEMENT: the server must see the pilot GONE after the disconnect (his "
-                + "player data, mount included, written to disk): " + offline, gone);
+                + "player data, mount included, written to disk): " + offline[0], gone);
 
         // With no player near them the ship's chunks can drop out from under the probes below —
         // force them back in before acting on the seat.
@@ -157,6 +171,8 @@ public class VSPilotSeatTakenWhileOfflineE2ETest extends AbstractClientE2ETest {
         // early once seen; the end-state assertions below run either way.
         String lastOverlay = "";
         boolean sawMessage = false;
+        // THE MULTIPLIER STAYS. This waits for state the SERVER restores on login to arrive at the
+        // client and be applied - a round trip whose latency is the machine's, not the game's.
         int settleBudget = (int) (80 * TestTimeouts.factor());
         for (int i = 0; i < settleBudget && !sawMessage; i++) {
             bot().waitTicks(5);

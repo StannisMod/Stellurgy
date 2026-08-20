@@ -58,6 +58,9 @@ public class VSPilotSeatRelogControlE2ETest extends AbstractClientE2ETest {
         assertTrue("ARRANGEMENT: a with-pilot-seat build must route to a ship: " + assemble,
                 assemble.contains("\"rocketCount\":0"));
         int all = shipsBefore;
+        // THE MULTIPLIER STAYS. What it waits on is VS building the ship on its OWN thread, off the
+        // game loop: that work finishes in wall-clock time, so a busy box genuinely needs more game
+        // ticks to elapse before it is done. Measured at 8 forks on the sibling gate test.
         int budget = (int) (40 * TestTimeouts.factor());
         for (int i = 0; i < budget && all <= shipsBefore; i++) {
             bot().waitTicks(5);
@@ -92,6 +95,8 @@ public class VSPilotSeatRelogControlE2ETest extends AbstractClientE2ETest {
         JsonObject riding = bot().reportRidingEntity();
         boolean prev = isRiding(riding);
         boolean seatedTwice = false;
+        // THE MULTIPLIER STAYS. This waits for state the SERVER restores on login to arrive at the
+        // client and be applied - a round trip whose latency is the machine's, not the game's.
         int rejoinBudget = (int) (60 * TestTimeouts.factor());
         for (int i = 0; i < rejoinBudget && !seatedTwice; i++) {
             bot().waitTicks(5);

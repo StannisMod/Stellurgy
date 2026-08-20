@@ -531,6 +531,8 @@ public class VSRemoteBodyModelGateE2ETest extends AbstractSharedVsClientE2ETest 
 
         String info = "";
         double[] where = null;
+        // THE MULTIPLIER STAYS, for the same reason as the assembly window above: VS pulls a ship
+        // LOADED off the game loop, so a busy box needs more ticks to elapse before it is resident.
         int loadIters = (int) Math.ceil(40 * TestTimeouts.factor());
         for (int i = 0; i < loadIters && where == null; i++) {
             bot().waitTicks(5);

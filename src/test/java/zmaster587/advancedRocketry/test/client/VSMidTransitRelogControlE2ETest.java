@@ -166,7 +166,9 @@ public class VSMidTransitRelogControlE2ETest extends AbstractClientE2ETest {
         // ---- ACT 3: drive the jump to arrival. --------------------------------------------------
         int targetDim = -1;
         String lastTick = "";
-        int arriveBudget = (int) (80 * TestTimeouts.factor());
+        // No fork multiplier: each iteration advances the transit ten ticks BY HAND, so the budget
+        // is a count of pumps and a slow box does not need extra ones to cover the same flight.
+        int arriveBudget = 80;
         for (int i = 0; i < arriveBudget && targetDim < 0; i++) {
             lastTick = exec("artest space transit-tick 10");
             if (readInt(lastTick, "inTransit") == 0) {
@@ -181,7 +183,8 @@ public class VSMidTransitRelogControlE2ETest extends AbstractClientE2ETest {
         // The arrival re-seating is retry-based and completes a few ticks after inTransit hits 0 —
         // keep ticking to drive the retries while observing the CLIENT.
         boolean seatedOnArrival = false;
-        int reseatBudget = (int) (60 * TestTimeouts.factor());
+        // A pump count too - the retries this drives are driven by these same hand-advanced ticks.
+        int reseatBudget = 60;
         String lastReseatTick = "";
         for (int i = 0; i < reseatBudget && !seatedOnArrival; i++) {
             lastReseatTick = exec("artest space transit-tick 10");
@@ -247,6 +250,9 @@ public class VSMidTransitRelogControlE2ETest extends AbstractClientE2ETest {
     /** Hold {@code key} until the client-rendered rider altitude climbs {@link #MIN_CLIMB} over
      *  {@code from} (bounded, early-exit); returns the last observed altitude. */
     private double climbWith(int key, double from) throws Exception {
+        // THE MULTIPLIER STAYS, and this is what it waits on: a held key is re-sent by the CLIENT
+        // once per rendered FRAME, so under frame starvation the same climb needs more client ticks
+        // to happen. That is wall-clock-bound work, which is the one shape a fork scale measures.
         int budget = (int) (40 * TestTimeouts.factor());
         double last = from;
         bot().holdKey(key);

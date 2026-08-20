@@ -156,6 +156,9 @@ public class VSShipPoweredEntryE2ETest {
         exec("tp @a " + (BX + 0.5) + " " + (BY + 6) + " " + (BZ + 0.5) + " 0 0");
         bot().waitTicks(20);
 
+        // THE MULTIPLIER STAYS. What it waits on is VS building the ship on its OWN thread, off the
+        // game loop: that work finishes in wall-clock time, so a busy box genuinely needs more game
+        // ticks to elapse before it is done. Measured at 8 forks on the sibling gate test.
         int budget = (int) (40 * TestTimeouts.factor());
         double yRest = Double.NaN;
         for (int attempt = 0; attempt < budget && Double.isNaN(yRest); attempt++) {
@@ -195,7 +198,9 @@ public class VSShipPoweredEntryE2ETest {
             // ---- ENTRY LEG: keep climbing until the ledger records the settled entry. ---------
             // While the crossing runs, the origin-world ship vanishes (the cut), so posY going
             // silent is progress, not failure; the ledger is the single source of arrival truth.
-            int climbBudget = (int) (800 * TestTimeouts.factor());
+            // THE MULTIPLIER STAYS: a held key is re-sent per rendered FRAME, so frame starvation
+        // stretches the same climb in ticks.
+        int climbBudget = (int) (800 * TestTimeouts.factor());
             int ledger = 0;
             double lastY = yControl;
             for (int attempt = 0; attempt < climbBudget && ledger < 1; attempt++) {
@@ -232,6 +237,8 @@ public class VSShipPoweredEntryE2ETest {
 
         // (1) The client's OWN world is a slot dim (the client followed the crossing).
         int clientDim = Integer.MIN_VALUE;
+        // THE MULTIPLIER STAYS. This waits for state the SERVER restores on login to arrive at the
+        // client and be applied - a round trip whose latency is the machine's, not the game's.
         int arrivalBudget = (int) (40 * TestTimeouts.factor());
         for (int attempt = 0; attempt < arrivalBudget; attempt++) {
             bot().waitTicks(5);
