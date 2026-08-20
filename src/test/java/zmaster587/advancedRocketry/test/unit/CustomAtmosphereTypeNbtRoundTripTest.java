@@ -3,9 +3,9 @@ package zmaster587.advancedRocketry.test.unit;
 import net.minecraft.nbt.NBTTagCompound;
 import org.junit.BeforeClass;
 import org.junit.Test;
-import zmaster587.advancedRocketry.api.IAtmosphere;
+import zmaster587.advancedRocketry.api.atmosphere.Atmosphere;
 import zmaster587.advancedRocketry.api.atmosphere.AtmosphereRegister;
-import zmaster587.advancedRocketry.atmosphere.AtmosphereType;
+import zmaster587.advancedRocketry.api.atmosphere.Atmosphere;
 import zmaster587.advancedRocketry.test.MinecraftBootstrap;
 
 import static org.junit.Assert.assertEquals;
@@ -13,10 +13,10 @@ import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertSame;
 
 /**
- * custom {@link AtmosphereType} NBT round-trip contract.
+ * custom {@link Atmosphere} NBT round-trip contract.
  *
  * <p>Companion mods extend the atmosphere system by constructing a fresh
- * {@link AtmosphereType} (or subclass) and registering it via
+ * {@link Atmosphere} (or subclass) and registering it via
  * {@link AtmosphereRegister#registerAtmosphere}. Tiles that persist a
  * reference to an atmosphere — most prominently
  * {@link zmaster587.advancedRocketry.tile.atmosphere.TileAtmosphereDetector}
@@ -29,7 +29,7 @@ import static org.junit.Assert.assertSame;
  * <p>This test pins that loop end-to-end against a freshly-registered
  * <em>custom</em> atmosphere type (mirroring the companion-mod use
  * case) — not just against the stock {@code AIR} / {@code VACUUM} /
- * etc. listed in the {@code AtmosphereType} static init block.</p>
+ * etc. listed in the {@code Atmosphere} static init block.</p>
  *
  * <p>Pyramid layer: testUnit. No world / server needed; the registry is
  * a process-wide singleton.</p>
@@ -42,12 +42,12 @@ public class CustomAtmosphereTypeNbtRoundTripTest {
     }
 
     /**
-     * Pin: registering a custom {@link AtmosphereType} makes it
+     * Pin: registering a custom {@link Atmosphere} makes it
      * resolvable via {@link AtmosphereRegister#getAtmosphere}, AND the
      * registry returns the SAME instance (not a copy). The instance-
      * identity pin matters because consumers compare atmospheres with
      * {@code ==} or {@code instanceof} in some branches (e.g.
-     * {@code AtmosphereType.LOWOXYGEN}).
+     * {@code Atmosphere.LOWOXYGEN}).
      */
     @Test
     public void customAtmosphereResolvesByUnlocalizedNameViaRegistry() {
@@ -55,10 +55,10 @@ public class CustomAtmosphereTypeNbtRoundTripTest {
         // other test classes that may also register custom types in the
         // same harness.
         String name = "task32CustomTestAtmosphere";
-        AtmosphereType custom = new AtmosphereType(false, true, name);
+        Atmosphere custom = new Atmosphere(false, true, name);
         AtmosphereRegister.getInstance().registerAtmosphere(custom);
 
-        IAtmosphere resolved = AtmosphereRegister.getInstance().getAtmosphere(name);
+        Atmosphere resolved = AtmosphereRegister.getInstance().getAtmosphere(name);
         assertNotNull("getAtmosphere on a registered unlocalized-name must "
                         + "resolve (not fall back to AIR) — companion mods "
                         + "depend on this for tile-state read-back",
@@ -85,7 +85,7 @@ public class CustomAtmosphereTypeNbtRoundTripTest {
     @Test
     public void customAtmosphereSurvivesNbtNameRoundTripThroughRegistry() {
         String name = "task32CustomTestAtmosphereForNbt";
-        AtmosphereType custom = new AtmosphereType(true, false, false, name);
+        Atmosphere custom = new Atmosphere(true, false, false, name);
         AtmosphereRegister.getInstance().registerAtmosphere(custom);
 
         // Mirror TileAtmosphereDetector.writeToNBT.
@@ -94,9 +94,9 @@ public class CustomAtmosphereTypeNbtRoundTripTest {
 
         // Mirror TileAtmosphereDetector.readFromNBT.
         String readbackName = nbt.getString("atmName");
-        IAtmosphere readback = AtmosphereRegister.getInstance()
+        Atmosphere readback = AtmosphereRegister.getInstance()
                 .getAtmosphere(readbackName);
-        assertSame("custom AtmosphereType must round-trip through the NBT "
+        assertSame("custom Atmosphere must round-trip through the NBT "
                         + "unlocalized-name + registry-lookup loop intact — "
                         + "this is the save-compat contract for any tile "
                         + "that persists an atmosphere reference (e.g. "

@@ -26,7 +26,7 @@ import net.minecraftforge.fml.relauncher.Side;
 import net.minecraftforge.fml.relauncher.SideOnly;
 import org.lwjgl.opengl.GL11;
 import zmaster587.advancedRocketry.atmosphere.AtmosphereHandler;
-import zmaster587.advancedRocketry.atmosphere.AtmosphereType;
+import zmaster587.advancedRocketry.api.atmosphere.Atmosphere;
 import zmaster587.advancedRocketry.client.TooltipInjector;
 import zmaster587.advancedRocketry.dimension.DimensionManager;
 import zmaster587.advancedRocketry.event.RocketEventHandler;
@@ -57,9 +57,9 @@ public class ItemAtmosphereAnalzer extends Item implements IArmorComponent {
 
     }
 
-    private List<ITextComponent> getAtmosphereReadout(@Nonnull ItemStack stack, @Nullable AtmosphereType atm, @Nonnull World world) {
+    private List<ITextComponent> getAtmosphereReadout(@Nonnull ItemStack stack, @Nullable Atmosphere atm, @Nonnull World world) {
         if (atm == null)
-            atm = AtmosphereType.AIR;
+            atm = Atmosphere.AIR;
 
 
         List<ITextComponent> str = new LinkedList<>();
@@ -82,7 +82,7 @@ public class ItemAtmosphereAnalzer extends Item implements IArmorComponent {
         ItemStack stack = playerIn.getHeldItem(hand);
         if (!worldIn.isRemote) {
             AtmosphereHandler atmhandler = AtmosphereHandler.getOxygenHandler(worldIn.provider.getDimension());
-            List<ITextComponent> str = getAtmosphereReadout(stack, atmhandler == null ? null : (AtmosphereType) atmhandler.getAtmosphereType(playerIn), worldIn);
+            List<ITextComponent> str = getAtmosphereReadout(stack, atmhandler == null ? null : (Atmosphere) atmhandler.getAtmosphereType(playerIn), worldIn);
             for (ITextComponent str1 : str)
                 playerIn.sendMessage(str1);
         }
@@ -127,7 +127,7 @@ public class ItemAtmosphereAnalzer extends Item implements IArmorComponent {
         int screenX = RocketEventHandler.atmBar.getRenderX();//8;
         int screenY = RocketEventHandler.atmBar.getRenderY();//event.getResolution().getScaledHeight() - fontRenderer.FONT_HEIGHT*3;
 
-        List<ITextComponent> str = getAtmosphereReadout(componentStack, (AtmosphereType) AtmosphereHandler.currentAtm, Minecraft.getMinecraft().world);
+        List<ITextComponent> str = getAtmosphereReadout(componentStack, (Atmosphere) AtmosphereHandler.currentAtm, Minecraft.getMinecraft().world);
         //Draw BG
         gui.drawString(fontRenderer, str.get(0).getFormattedText(), screenX, screenY, 0xaaffff);
         gui.drawString(fontRenderer, str.get(1).getFormattedText(), screenX, screenY + fontRenderer.FONT_HEIGHT * 4 / 3, 0xaaffff);

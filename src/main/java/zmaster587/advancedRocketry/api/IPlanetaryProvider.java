@@ -4,6 +4,7 @@ import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Vec3d;
 import zmaster587.advancedRocketry.api.dimension.IDimensionProperties;
 import zmaster587.advancedRocketry.dimension.DimensionProperties;
+import zmaster587.advancedRocketry.api.atmosphere.Atmosphere;
 
 public interface IPlanetaryProvider {
 
@@ -81,6 +82,6 @@ public interface IPlanetaryProvider {
      * @param pos location in block coords
      * @return Atmosphere type
      */
-    IAtmosphere getAtmosphere(BlockPos pos);
+    Atmosphere getAtmosphere(BlockPos pos);
 
 }

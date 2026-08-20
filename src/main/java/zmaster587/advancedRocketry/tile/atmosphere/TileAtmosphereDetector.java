@@ -13,10 +13,10 @@ import net.minecraft.world.World;
 import net.minecraftforge.fml.relauncher.Side;
 import zmaster587.advancedRocketry.AdvancedRocketry;
 import zmaster587.advancedRocketry.api.AdvancedRocketryBlocks;
-import zmaster587.advancedRocketry.api.IAtmosphere;
+import zmaster587.advancedRocketry.api.atmosphere.Atmosphere;
 import zmaster587.advancedRocketry.api.atmosphere.AtmosphereRegister;
 import zmaster587.advancedRocketry.atmosphere.AtmosphereHandler;
-import zmaster587.advancedRocketry.atmosphere.AtmosphereType;
+import zmaster587.advancedRocketry.api.atmosphere.Atmosphere;
 import zmaster587.advancedRocketry.block.BlockRedstoneEmitter;
 import zmaster587.libVulpes.LibVulpes;
 import zmaster587.libVulpes.inventory.modules.*;
@@ -31,7 +31,7 @@ import java.util.Locale;
 
 public class TileAtmosphereDetector extends TileEntity implements ITickable, IModularInventory, IButtonInventory, INetworkMachine {
 
-    private IAtmosphere atmosphereToDetect;
+    private Atmosphere atmosphereToDetect;
 
     private static final int BUTTON_COLOR_NORMAL = 0xFF22FF22;
     private static final int BUTTON_COLOR_SELECTED = 0xFFFFFF55;
@@ -39,7 +39,7 @@ public class TileAtmosphereDetector extends TileEntity implements ITickable, IMo
     private static final int BUTTON_BG_SELECTED = 0xFF444444;
 
     public TileAtmosphereDetector() {
-        atmosphereToDetect = AtmosphereType.AIR;
+        atmosphereToDetect = Atmosphere.AIR;
     }
 
 
@@ -52,7 +52,7 @@ public class TileAtmosphereDetector extends TileEntity implements ITickable, IMo
             //TODO: Galacticcraft support
             AtmosphereHandler atmhandler = AtmosphereHandler.getOxygenHandler(world.provider.getDimension());
             if (atmhandler == null) {
-                detectedAtm = atmosphereToDetect == AtmosphereType.AIR;
+                detectedAtm = atmosphereToDetect == Atmosphere.AIR;
             } else {
                 for (EnumFacing direction : EnumFacing.values()) {
                     detectedAtm = (!world.getBlockState(pos.offset(direction)).isOpaqueCube() && atmosphereToDetect == atmhandler.getAtmosphereType(pos.offset(direction)));
@@ -78,10 +78,10 @@ public class TileAtmosphereDetector extends TileEntity implements ITickable, IMo
         List<ModuleBase> modules = new LinkedList<>();
         List<ModuleBase> btns = new LinkedList<>();
 
-        List<IAtmosphere> atmospheres = AtmosphereRegister.getInstance().getAtmosphereList();
+        List<Atmosphere> atmospheres = AtmosphereRegister.getInstance().getAtmosphereList();
 
         for (int i = 0; i < atmospheres.size(); i++) {
-            IAtmosphere atm = atmospheres.get(i);
+            Atmosphere atm = atmospheres.get(i);
             String label = getLocalizedAtmosphereName(atm);
 
             btns.add(AdvancedRocketry.proxy.createAtmosphereDetectorButton(
@@ -117,13 +117,13 @@ public class TileAtmosphereDetector extends TileEntity implements ITickable, IMo
 
     @Override
     public void onInventoryButtonPressed(int buttonId) {
-        List<IAtmosphere> atmospheres = AtmosphereRegister.getInstance().getAtmosphereList();
+        List<Atmosphere> atmospheres = AtmosphereRegister.getInstance().getAtmosphereList();
 
         if (buttonId < 0 || buttonId >= atmospheres.size()) {
             return;
         }
 
-        IAtmosphere oldAtmosphere = atmosphereToDetect;
+        Atmosphere oldAtmosphere = atmosphereToDetect;
         atmosphereToDetect = atmospheres.get(buttonId);
 
         if (world == null || world.isRemote) {
@@ -145,11 +145,11 @@ public class TileAtmosphereDetector extends TileEntity implements ITickable, IMo
             PacketHandler.sendToServer(new PacketMachine(this, (byte) 0));
         }
     }
-    public boolean isAtmosphereSelected(IAtmosphere atmosphere) {
+    public boolean isAtmosphereSelected(Atmosphere atmosphere) {
         return isSameAtmosphere(atmosphereToDetect, atmosphere);
     }
 
-    public static String getLocalizedAtmosphereName(IAtmosphere atmosphere) {
+    public static String getLocalizedAtmosphereName(Atmosphere atmosphere) {
         if (atmosphere == null) {
             return "";
         }
@@ -164,7 +164,7 @@ public class TileAtmosphereDetector extends TileEntity implements ITickable, IMo
         return label;
     }
 
-    private static boolean isSameAtmosphere(IAtmosphere first, IAtmosphere second) {
+    private static boolean isSameAtmosphere(Atmosphere first, Atmosphere second) {
         if (first == second) {
             return true;
         }

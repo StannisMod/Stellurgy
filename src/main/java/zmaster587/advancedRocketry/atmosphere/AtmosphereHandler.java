@@ -17,7 +17,7 @@ import net.minecraftforge.fml.common.gameevent.PlayerEvent.PlayerChangedDimensio
 import net.minecraftforge.fml.common.gameevent.PlayerEvent.PlayerLoggedOutEvent;
 import zmaster587.advancedRocketry.api.ARConfiguration;
 import zmaster587.advancedRocketry.api.AreaBlob;
-import zmaster587.advancedRocketry.api.IAtmosphere;
+import zmaster587.advancedRocketry.api.atmosphere.Atmosphere;
 import zmaster587.advancedRocketry.api.event.AtmosphereEvent;
 import zmaster587.advancedRocketry.api.util.IBlobHandler;
 import zmaster587.advancedRocketry.dimension.DimensionManager;
@@ -41,10 +41,10 @@ public class AtmosphereHandler {
     private static final int MAX_BLOB_RADIUS = ((ARConfiguration.getCurrentConfig().atmosphereHandleBitMask & 1) == 1) ? 256 : ARConfiguration.getCurrentConfig().oxygenVentSize;
     public static long lastSuffocationTime = Integer.MIN_VALUE;
     //Stores current Atm on the CLIENT
-    public static IAtmosphere currentAtm;
+    public static Atmosphere currentAtm;
     public static int currentPressure;
     private static HashMap<Integer, AtmosphereHandler> dimensionOxygen = new HashMap<>();
-    private static HashMap<EntityPlayer, IAtmosphere> prevAtmosphere = new HashMap<>();
+    private static HashMap<EntityPlayer, Atmosphere> prevAtmosphere = new HashMap<>();
     private HashMap<IBlobHandler, AreaBlob> blobs;
     private int dimId;
 
@@ -172,7 +172,7 @@ public class AtmosphereHandler {
 
             //Block handling for what should and shouldn't exist or what should be on fire
             //Things should be on fire
-            if (!isStructurePasteInFlight() && handler.getAtmosphereType(bpos) == AtmosphereType.SUPERHEATED) {
+            if (!isStructurePasteInFlight() && handler.getAtmosphereType(bpos) == Atmosphere.SUPERHEATED) {
                 if (world.getBlockState(bpos).getBlock().isLeaves(world.getBlockState(bpos), world, bpos)) {
                     world.setBlockToAir(bpos);
                 } else if (world.getBlockState(bpos).getMaterial() == Material.CACTUS) {
@@ -219,7 +219,7 @@ public class AtmosphereHandler {
              */
 
             //Gasses should automatically vaporize and dissipate
-            if (!isStructurePasteInFlight() && handler.getAtmosphereType(bpos) == AtmosphereType.VACUUM) {
+            if (!isStructurePasteInFlight() && handler.getAtmosphereType(bpos) == Atmosphere.VACUUM) {
                 if (world.getBlockState(bpos).getMaterial() == Material.WATER && world.getBlockState(bpos).getBlock() instanceof IFluidBlock) {
                     IFluidBlock fluidblock = (IFluidBlock) world.getBlockState(bpos).getBlock();
                     if (fluidblock.getFluid().isGaseous())
@@ -232,7 +232,7 @@ public class AtmosphereHandler {
             every updated water causes the water next to it to update -> stackoverflow -> server goes boom
 
 
-            if (handler.getAtmosphereType(bpos) == AtmosphereType.SUPERHEATED || handler.getAtmosphereType(bpos) == AtmosphereType.SUPERHEATEDNOO2 || handler.getAtmosphereType(bpos) == AtmosphereType.VERYHOT || handler.getAtmosphereType(bpos) == AtmosphereType.VERYHOTNOO2) {
+            if (handler.getAtmosphereType(bpos) == Atmosphere.SUPERHEATED || handler.getAtmosphereType(bpos) == Atmosphere.SUPERHEATEDNOO2 || handler.getAtmosphereType(bpos) == Atmosphere.VERYHOT || handler.getAtmosphereType(bpos) == Atmosphere.VERYHOTNOO2) {
                 if (world.getBlockState(bpos).getMaterial() == Material.WATER && world.getBlockState(bpos).getValue(BlockLiquid.LEVEL) == 0) {
                     world.setBlockToAir(bpos);
                 }
@@ -275,10 +275,10 @@ public class AtmosphereHandler {
         Entity entity = event.getEntity();
         if (!entity.world.isRemote && entity.world.provider.getDimension() == this.dimId) {
             respire(event.getEntityLiving());
-            IAtmosphere atmosType = getAtmosphereType(entity);
+            Atmosphere atmosType = getAtmosphereType(entity);
 
             if (entity instanceof EntityPlayer && atmosType != prevAtmosphere.get(entity)) {
-                AtmosphereType.sendToRealPlayer(new PacketAtmSync(atmosType.getUnlocalizedName(), getAtmospherePressure(entity)), (EntityPlayer) entity);
+                Atmosphere.sendToRealPlayer(new PacketAtmSync(atmosType.getUnlocalizedName(), getAtmospherePressure(entity)), (EntityPlayer) entity);
                 prevAtmosphere.put((EntityPlayer) entity, atmosType);
             }
 
@@ -355,7 +355,7 @@ public class AtmosphereHandler {
         if (air != null) {
             return air.allowsCombustion();
         }
-        IAtmosphere outside = getDefaultAtmosphereType();
+        Atmosphere outside = getDefaultAtmosphereType();
         return outside != null && outside.allowsCombustion();
     }
 
@@ -512,7 +512,7 @@ public class AtmosphereHandler {
         if (blob == null) {
             blob = new AtmosphereBlob(handler);
             blobs.put(handler, blob);
-            blob.setData(AtmosphereType.PRESSURIZEDAIR);
+            blob.setData(Atmosphere.PRESSURIZEDAIR);
         }
     }
 
@@ -529,7 +529,7 @@ public class AtmosphereHandler {
         if (blob == null) {
             blob = blob2;
             blobs.put(handler, blob);
-            blob.setData(AtmosphereType.PRESSURIZEDAIR);
+            blob.setData(Atmosphere.PRESSURIZEDAIR);
         }
     }
 
@@ -580,16 +580,16 @@ public class AtmosphereHandler {
 
     /**
      * @param pos2
-     * @return AtmosphereType at this location
+     * @return Atmosphere at this location
      */
     @Nonnull
-    public IAtmosphere getAtmosphereType(@Nonnull BlockPos pos2) {
+    public Atmosphere getAtmosphereType(@Nonnull BlockPos pos2) {
         if (ARConfiguration.getCurrentConfig().enableOxygen) {
             HashedBlockPosition pos = new HashedBlockPosition(pos2);
 
             for (AreaBlob blob : blobs.values()) {
                 if (blob.contains(pos)) {
-                    IAtmosphere atmosphere = (IAtmosphere) blob.getData();
+                    Atmosphere atmosphere = (Atmosphere) blob.getData();
 
                     if (atmosphere != null)
                         return atmosphere;
@@ -599,14 +599,14 @@ public class AtmosphereHandler {
             return getDefaultAtmosphereType();
         }
 
-        return AtmosphereType.AIR;
+        return Atmosphere.AIR;
     }
 
     /**
      * @return the default atmosphere type used by this planet
      */
     @Nonnull
-    public IAtmosphere getDefaultAtmosphereType() {
+    public Atmosphere getDefaultAtmosphereType() {
         return DimensionManager.getInstance().getDimensionProperties(dimId).getAtmosphere();
     }
 
@@ -617,18 +617,18 @@ public class AtmosphereHandler {
      * @return The atmosphere type this entity is inside of
      */
     @Nullable
-    public IAtmosphere getAtmosphereType(@Nonnull Entity entity) {
+    public Atmosphere getAtmosphereType(@Nonnull Entity entity) {
         if (ARConfiguration.getCurrentConfig().enableOxygen) {
             HashedBlockPosition pos = new HashedBlockPosition((int) Math.floor(entity.posX), (int) Math.ceil(entity.posY), (int) Math.floor(entity.posZ));
             for (AreaBlob blob : blobs.values()) {
                 if (blob.contains(pos)) {
-                    return (IAtmosphere) blob.getData();
+                    return (Atmosphere) blob.getData();
                 }
             }
 
             return DimensionManager.getInstance().getDimensionProperties(dimId).getAtmosphere();
         }
-        return AtmosphereType.AIR;
+        return Atmosphere.AIR;
     }
 
     /**
@@ -657,7 +657,7 @@ public class AtmosphereHandler {
         if (ARConfiguration.getCurrentConfig().enableOxygen) {
             HashedBlockPosition pos = new HashedBlockPosition((int) Math.floor(entity.posX), (int) Math.ceil(entity.posY), (int) Math.floor(entity.posZ));
             for (AreaBlob blob : blobs.values()) {
-                IAtmosphere atmosphere = (IAtmosphere) blob.getData();
+                Atmosphere atmosphere = (Atmosphere) blob.getData();
                 if (blob.contains(pos) && atmosphere != null && atmosphere.isImmune(entity)) {
                     return true;
                 }
@@ -680,9 +680,9 @@ public class AtmosphereHandler {
      * Changes the atmosphere type of this blob
      *
      * @param handler the handler for the blob
-     * @param data    the AtmosphereType to set this blob to.
+     * @param data    the Atmosphere to set this blob to.
      */
-    public void setAtmosphereType(@Nonnull IBlobHandler handler, @Nonnull IAtmosphere data) {
+    public void setAtmosphereType(@Nonnull IBlobHandler handler, @Nonnull Atmosphere data) {
         blobs.get(handler).setData(data);
     }
 
@@ -717,15 +717,15 @@ public class AtmosphereHandler {
      * @param handler the handler for the blob
      */
     @Nonnull
-    public IAtmosphere getAtmosphereType(@Nonnull IBlobHandler handler) {
+    public Atmosphere getAtmosphereType(@Nonnull IBlobHandler handler) {
         if (ARConfiguration.getCurrentConfig().enableOxygen) {
-            IAtmosphere atmosphere = (IAtmosphere) blobs.get(handler).getData();
+            Atmosphere atmosphere = (Atmosphere) blobs.get(handler).getData();
             if (atmosphere != null)
                 return atmosphere;
             else
                 return getDefaultAtmosphereType();
         }
 
-        return AtmosphereType.AIR;
+        return Atmosphere.AIR;
     }
 }

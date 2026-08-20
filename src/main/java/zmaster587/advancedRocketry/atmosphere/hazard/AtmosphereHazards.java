@@ -13,11 +13,11 @@ import net.minecraft.item.ItemStack;
 import net.minecraftforge.fml.common.Loader;
 import zmaster587.advancedRocketry.api.ARConfiguration;
 import zmaster587.advancedRocketry.api.EntityRocketBase;
-import zmaster587.advancedRocketry.api.IAtmosphere;
+import zmaster587.advancedRocketry.api.atmosphere.Atmosphere;
 import zmaster587.advancedRocketry.api.atmosphere.AtmosphereHazard;
 import zmaster587.advancedRocketry.api.capability.CapabilitySpaceArmor;
 import zmaster587.advancedRocketry.atmosphere.AtmosphereHandler;
-import zmaster587.advancedRocketry.atmosphere.AtmosphereType;
+import zmaster587.advancedRocketry.api.atmosphere.Atmosphere;
 import zmaster587.advancedRocketry.entity.EntityElevatorCapsule;
 import zmaster587.advancedRocketry.integration.MatterOvedriveIntegration;
 import zmaster587.advancedRocketry.util.ItemAirUtils;
@@ -127,31 +127,31 @@ public final class AtmosphereHazards {
 
     // ─── which rows each atmosphere raises ─────────────────────────────────────────────────────
 
-    private static final Map<IAtmosphere, HazardExposure> BY_ATMOSPHERE = new HashMap<>();
+    private static final Map<Atmosphere, HazardExposure> BY_ATMOSPHERE = new HashMap<>();
 
     static {
-        put(AtmosphereType.VACUUM, DECOMPRESSION);
-        put(AtmosphereType.NOO2, SUFFOCATION);
-        put(AtmosphereType.LOWOXYGEN, THIN_AIR);
-        put(AtmosphereType.HIGHOXYGEN, OXYGEN_TOXICITY);
-        put(AtmosphereType.HIGHPRESSURE, PRESSURE);
-        put(AtmosphereType.SUPERHIGHPRESSURE, CRUSHING_PRESSURE_WHERE_BREATHABLE);
-        put(AtmosphereType.VERYHOT, HEAT);
-        put(AtmosphereType.SUPERHEATED, SEARING_HEAT);
-        put(AtmosphereType.HIGHPRESSURENOO2, SUFFOCATION_WHERE_DENSE, PRESSURE);
-        put(AtmosphereType.SUPERHIGHPRESSURENOO2, SUFFOCATION_WHERE_DENSE,
+        put(Atmosphere.VACUUM, DECOMPRESSION);
+        put(Atmosphere.NOO2, SUFFOCATION);
+        put(Atmosphere.LOWOXYGEN, THIN_AIR);
+        put(Atmosphere.HIGHOXYGEN, OXYGEN_TOXICITY);
+        put(Atmosphere.HIGHPRESSURE, PRESSURE);
+        put(Atmosphere.SUPERHIGHPRESSURE, CRUSHING_PRESSURE_WHERE_BREATHABLE);
+        put(Atmosphere.VERYHOT, HEAT);
+        put(Atmosphere.SUPERHEATED, SEARING_HEAT);
+        put(Atmosphere.HIGHPRESSURENOO2, SUFFOCATION_WHERE_DENSE, PRESSURE);
+        put(Atmosphere.SUPERHIGHPRESSURENOO2, SUFFOCATION_WHERE_DENSE,
                 CRUSHING_PRESSURE_WHERE_AIRLESS);
-        put(AtmosphereType.VERYHOTNOO2, SUFFOCATION, HEAT_WHERE_AIRLESS);
-        put(AtmosphereType.SUPERHEATEDNOO2, SUFFOCATION, SEARING_HEAT_WHERE_AIRLESS);
+        put(Atmosphere.VERYHOTNOO2, SUFFOCATION, HEAT_WHERE_AIRLESS);
+        put(Atmosphere.SUPERHEATEDNOO2, SUFFOCATION, SEARING_HEAT_WHERE_AIRLESS);
         // AIR and PRESSURIZEDAIR raise nothing, which is what makes them air.
     }
 
-    private static void put(IAtmosphere atmosphere, HazardEffect... rows) {
+    private static void put(Atmosphere atmosphere, HazardEffect... rows) {
         BY_ATMOSPHERE.put(atmosphere, new HazardExposure(Arrays.asList(rows)));
     }
 
     /** What this air is doing to the people in it. Never null: unknown air does nothing. */
-    public static HazardExposure exposureOf(IAtmosphere atmosphere) {
+    public static HazardExposure exposureOf(Atmosphere atmosphere) {
         HazardExposure found = atmosphere == null ? null : BY_ATMOSPHERE.get(atmosphere);
         return found == null ? HazardExposure.NONE : found;
     }

@@ -101,6 +101,7 @@ import zmaster587.libVulpes.util.*;
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
 import java.util.*;
+import zmaster587.advancedRocketry.api.atmosphere.Atmosphere;
 
 
 
@@ -1567,7 +1568,7 @@ public class EntityRocket extends EntityRocketBase implements INetworkEntity, IM
             for (Vector3F<Float> vec : stats.getEngineLocations()) {
 
                 AtmosphereHandler handler = AtmosphereHandler.getOxygenHandler(world.provider.getDimension());
-                IAtmosphere atmosphere = null;
+                Atmosphere atmosphere = null;
 
                 if (handler != null)
                     atmosphere = handler.getAtmosphereType(this);

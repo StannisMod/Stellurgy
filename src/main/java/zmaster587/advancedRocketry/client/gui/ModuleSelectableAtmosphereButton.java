@@ -5,7 +5,7 @@ import net.minecraft.client.gui.inventory.GuiContainer;
 import net.minecraft.util.ResourceLocation;
 import net.minecraftforge.fml.relauncher.Side;
 import net.minecraftforge.fml.relauncher.SideOnly;
-import zmaster587.advancedRocketry.api.IAtmosphere;
+import zmaster587.advancedRocketry.api.atmosphere.Atmosphere;
 import zmaster587.advancedRocketry.tile.atmosphere.TileAtmosphereDetector;
 import zmaster587.libVulpes.inventory.modules.ModuleButton;
 
@@ -17,10 +17,10 @@ public class ModuleSelectableAtmosphereButton extends ModuleButton {
     private static final int BUTTON_BG_NORMAL = 0xFFFFFFFF;
     private static final int BUTTON_BG_SELECTED = 0xFF444444;
 
-    private final IAtmosphere atmosphere;
+    private final Atmosphere atmosphere;
     private final TileAtmosphereDetector detector;
 
-    public ModuleSelectableAtmosphereButton(int offsetX, int offsetY, int buttonId, IAtmosphere atmosphere, String text, TileAtmosphereDetector detector, ResourceLocation[] buttonImages) {
+    public ModuleSelectableAtmosphereButton(int offsetX, int offsetY, int buttonId, Atmosphere atmosphere, String text, TileAtmosphereDetector detector, ResourceLocation[] buttonImages) {
         super(offsetX, offsetY, buttonId, text, detector, buttonImages);
         this.atmosphere = atmosphere;
         this.detector = detector;

@@ -7,7 +7,7 @@ import org.junit.BeforeClass;
 import org.junit.Test;
 import zmaster587.advancedRocketry.api.ARConfiguration;
 import zmaster587.advancedRocketry.atmosphere.AirState;
-import zmaster587.advancedRocketry.atmosphere.AtmosphereType;
+import zmaster587.advancedRocketry.api.atmosphere.Atmosphere;
 import zmaster587.advancedRocketry.test.MinecraftBootstrap;
 
 import static org.junit.Assert.assertEquals;
@@ -136,7 +136,7 @@ public class AirStateTest {
     public void aRecirculatorCanBringAStaleRoomBackIntoTheBand() {
         AirState air = AirState.earthLike();
         air.respire(ppm(60_000));
-        assertSame("premise: the room has gone stale", AtmosphereType.LOWOXYGEN, air.deriveAtmosphere());
+        assertSame("premise: the room has gone stale", Atmosphere.LOWOXYGEN, air.deriveAtmosphere());
 
         air.regenerate(ppm(60_000));
 
@@ -152,23 +152,23 @@ public class AirStateTest {
     @Test
     public void oxygenBelowTheBandSuffocates() {
         AirState air = new AirState(ppm(790_000), SAFE_MIN - 1, ppm(10_000));
-        assertSame(AtmosphereType.LOWOXYGEN, air.deriveAtmosphere());
+        assertSame(Atmosphere.LOWOXYGEN, air.deriveAtmosphere());
     }
 
     @Test
     public void airWithNoOxygenLeftIsNotMerelyLowOnIt() {
         AirState air = new AirState(ppm(790_000), 0L, ppm(210_000));
-        assertSame(AtmosphereType.NOO2, air.deriveAtmosphere());
+        assertSame(Atmosphere.NOO2, air.deriveAtmosphere());
     }
 
     @Test
     public void oxygenAboveTheBandIsToxicAndStillFeedsFire() {
         AirState air = new AirState(ppm(400_000), SAFE_MAX + 1, 0L);
 
-        assertSame(AtmosphereType.HIGHOXYGEN, air.deriveAtmosphere());
+        assertSame(Atmosphere.HIGHOXYGEN, air.deriveAtmosphere());
         assertTrue("an oxygen-rich room being flammable is the hazard, not a bug",
-                AtmosphereType.HIGHOXYGEN.allowsCombustion());
-        assertTrue(!AtmosphereType.HIGHOXYGEN.isBreathable());
+                Atmosphere.HIGHOXYGEN.allowsCombustion());
+        assertTrue(!Atmosphere.HIGHOXYGEN.isBreathable());
     }
 
     // ─── The first rung of the failure ladder: hot air is what hurts the crew ───────────────────
@@ -181,18 +181,18 @@ public class AirStateTest {
     @Test
     public void airHotEnoughToHurtIsTheSameHostileAtmosphereAScorchingPlanetPresents() {
         assertSame("a breathable room can still be a room that cooks you",
-                AtmosphereType.VERYHOT, earthLikeAt(VERY_HOT).deriveAtmosphere());
+                Atmosphere.VERYHOT, earthLikeAt(VERY_HOT).deriveAtmosphere());
     }
 
     @Test
     public void airJustBelowTheRungIsUnaffectedByHowWarmItIs() {
         assertSame("the rung is a threshold, not a slope: below it the gases decide alone",
-                AtmosphereType.PRESSURIZEDAIR, earthLikeAt(VERY_HOT - 1).deriveAtmosphere());
+                Atmosphere.PRESSURIZEDAIR, earthLikeAt(VERY_HOT - 1).deriveAtmosphere());
     }
 
     @Test
     public void lethallyHotAirIsTheHarsherOfTheTwoRungs() {
-        assertSame(AtmosphereType.SUPERHEATED, earthLikeAt(SUPERHEATED).deriveAtmosphere());
+        assertSame(Atmosphere.SUPERHEATED, earthLikeAt(SUPERHEATED).deriveAtmosphere());
     }
 
     @Test
@@ -200,7 +200,7 @@ public class AirStateTest {
         AirState suffocatingAndHot = new AirState(ppm(1_000_000), 0L, 0L, SUPERHEATED * 1000);
 
         assertSame("the NoO2 variants exist precisely so neither hazard hides the other",
-                AtmosphereType.SUPERHEATEDNOO2, suffocatingAndHot.deriveAtmosphere());
+                Atmosphere.SUPERHEATEDNOO2, suffocatingAndHot.deriveAtmosphere());
     }
 
     @Test
@@ -208,7 +208,7 @@ public class AirStateTest {
         AirState enrichedAndHot = new AirState(ppm(400_000), SAFE_MAX + 1, 0L, VERY_HOT * 1000);
 
         assertSame("a room that is burning its crew is not made safe by its gas mix",
-                AtmosphereType.VERYHOT, enrichedAndHot.deriveAtmosphere());
+                Atmosphere.VERYHOT, enrichedAndHot.deriveAtmosphere());
     }
 
     @Test
@@ -216,7 +216,7 @@ public class AirStateTest {
         AirState breached = new AirState(0L, 0L, 0L, SUPERHEATED * 1000);
 
         assertSame("there is no body left in the room to be hot",
-                AtmosphereType.VACUUM, breached.deriveAtmosphere());
+                Atmosphere.VACUUM, breached.deriveAtmosphere());
     }
 
     @Test
@@ -226,7 +226,7 @@ public class AirStateTest {
         config.shipHeatCrewSuperheatedKelvin = 0;
 
         assertSame("an unloaded or switched-off threshold must not make every room lethal",
-                AtmosphereType.PRESSURIZEDAIR, earthLikeAt(1_000).deriveAtmosphere());
+                Atmosphere.PRESSURIZEDAIR, earthLikeAt(1_000).deriveAtmosphere());
     }
 
     @Test
@@ -235,12 +235,12 @@ public class AirStateTest {
         config.shipHeat = false;
 
         assertSame("the flag that removes the mechanic removes its hazard too",
-                AtmosphereType.PRESSURIZEDAIR, earthLikeAt(1_000).deriveAtmosphere());
+                Atmosphere.PRESSURIZEDAIR, earthLikeAt(1_000).deriveAtmosphere());
     }
 
     @Test
     public void aZoneWithNoGasInItIsVacuumWhateverItsComposition() {
-        assertSame(AtmosphereType.VACUUM, AirState.vacuum().deriveAtmosphere());
+        assertSame(Atmosphere.VACUUM, AirState.vacuum().deriveAtmosphere());
     }
 
     @Test
@@ -250,7 +250,7 @@ public class AirStateTest {
         config.lifeSupportMaxPartialO2 = 0L;
 
         assertSame("no usable band means no governor, not a hazard",
-                AtmosphereType.PRESSURIZEDAIR, AirState.earthLike().deriveAtmosphere());
+                Atmosphere.PRESSURIZEDAIR, AirState.earthLike().deriveAtmosphere());
     }
 
     @Test

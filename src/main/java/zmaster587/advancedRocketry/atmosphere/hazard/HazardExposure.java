@@ -157,7 +157,7 @@ public final class HazardExposure {
             entity.addPotionEffect(new PotionEffect(potion, duration, effect.getValue()));
         }
         if (announce && entity instanceof EntityPlayer) {
-            zmaster587.advancedRocketry.atmosphere.AtmosphereType
+            zmaster587.advancedRocketry.api.atmosphere.Atmosphere
                     .sendToRealPlayer(new PacketOxygenState(), (EntityPlayer) entity);
         }
     }

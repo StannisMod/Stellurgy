@@ -1,12 +1,27 @@
-package zmaster587.advancedRocketry.atmosphere;
+package zmaster587.advancedRocketry.api.atmosphere;
 
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.EntityLivingBase;
 import zmaster587.advancedRocketry.api.ARConfiguration;
-import zmaster587.advancedRocketry.api.IAtmosphere;
-import zmaster587.advancedRocketry.api.atmosphere.AtmosphereRegister;
 
-public class AtmosphereType implements IAtmosphere {
+/**
+ * A named atmosphere: what the rest of the mod passes around when it means "the air here".
+ * <p>
+ * <b>A class, not an interface.</b> It used to be {@code IAtmosphere}, which invited anyone to supply
+ * their own answers to "can this be breathed" and "will this burn" — and those answers then had to be
+ * trusted, because nothing could check them against anything. Air is a composition and everything
+ * else about it is derived from that; an implementation that could assert otherwise is a second
+ * source of truth wearing an extension point's clothes.
+ * <p>
+ * <b>And it can no longer be told to lie.</b> The two setters that let a pack flip breathability and
+ * combustion on a shared singleton are gone. Adding an atmosphere is a matter of data — a composition
+ * — rather than of overriding a method that says what the data means.
+ * <p>
+ * What survives here is the NAME and the two flags the rest of the mod still reads. Both flags are
+ * still assigned by hand at construction, which is the last of the old model left standing: they
+ * become derivations of a composition when planets carry one.
+ */
+public class Atmosphere {
 
     /** Packet-safe send for atmosphere effects: FakePlayers / headless test
      *  players have no network connection — a raw sendToPlayer would NPE in
@@ -22,22 +37,22 @@ public class AtmosphereType implements IAtmosphere {
 
 
     //We're probably not getting a polluted atmosphere type
-    public static final AtmosphereType AIR = new AtmosphereType(false, true, "air");
-    public static final AtmosphereType PRESSURIZEDAIR = new AtmosphereType(false, true, true, "PressurizedAir");
+    public static final Atmosphere AIR = new Atmosphere(false, true, "air");
+    public static final Atmosphere PRESSURIZEDAIR = new Atmosphere(false, true, true, "PressurizedAir");
     // Twelve of these used to be twelve CLASSES, each carrying its own copy of the same tick method.
     // What they do now lives in one table, and what is left of them here is a name and two flags.
-    public static final AtmosphereType LOWOXYGEN = new AtmosphereType(true, false, true, "lowO2");
-    public static final AtmosphereType HIGHOXYGEN = new AtmosphereType(true, false, true, "highO2");
-    public static final AtmosphereType VACUUM = new AtmosphereType(true, false, false, "vacuum");
-    public static final AtmosphereType HIGHPRESSURE = new AtmosphereType(true, false, true, "HighPressure");
-    public static final AtmosphereType SUPERHIGHPRESSURE = new AtmosphereType(true, false, true, "SuperHighPressure");
-    public static final AtmosphereType VERYHOT = new AtmosphereType(true, false, true, "VeryHot");
-    public static final AtmosphereType SUPERHEATED = new AtmosphereType(true, false, true, "Superheated");
-    public static final AtmosphereType NOO2 = new AtmosphereType(true, false, false, "NoO2");
-    public static final AtmosphereType HIGHPRESSURENOO2 = new AtmosphereType(true, false, false, "HighPressureNoO2");
-    public static final AtmosphereType SUPERHIGHPRESSURENOO2 = new AtmosphereType(true, false, false, "SuperHighPressureNoO2");
-    public static final AtmosphereType VERYHOTNOO2 = new AtmosphereType(true, false, false, "VeryHotNoO2");
-    public static final AtmosphereType SUPERHEATEDNOO2 = new AtmosphereType(true, false, false, "SuperheatedNoOxygen");
+    public static final Atmosphere LOWOXYGEN = new Atmosphere(true, false, true, "lowO2");
+    public static final Atmosphere HIGHOXYGEN = new Atmosphere(true, false, true, "highO2");
+    public static final Atmosphere VACUUM = new Atmosphere(true, false, false, "vacuum");
+    public static final Atmosphere HIGHPRESSURE = new Atmosphere(true, false, true, "HighPressure");
+    public static final Atmosphere SUPERHIGHPRESSURE = new Atmosphere(true, false, true, "SuperHighPressure");
+    public static final Atmosphere VERYHOT = new Atmosphere(true, false, true, "VeryHot");
+    public static final Atmosphere SUPERHEATED = new Atmosphere(true, false, true, "Superheated");
+    public static final Atmosphere NOO2 = new Atmosphere(true, false, false, "NoO2");
+    public static final Atmosphere HIGHPRESSURENOO2 = new Atmosphere(true, false, false, "HighPressureNoO2");
+    public static final Atmosphere SUPERHIGHPRESSURENOO2 = new Atmosphere(true, false, false, "SuperHighPressureNoO2");
+    public static final Atmosphere VERYHOTNOO2 = new Atmosphere(true, false, false, "VeryHotNoO2");
+    public static final Atmosphere SUPERHEATEDNOO2 = new Atmosphere(true, false, false, "SuperheatedNoOxygen");
 
     static {
         AtmosphereRegister.getInstance().registerAtmosphere(AIR);
@@ -61,14 +76,14 @@ public class AtmosphereType implements IAtmosphere {
     private boolean canTick;
     private String name;
 
-    public AtmosphereType(boolean canTick, boolean isBreathable, String name) {
+    public Atmosphere(boolean canTick, boolean isBreathable, String name) {
         this.allowsCombustion = isBreathable;
         this.isBreathable = isBreathable;
         this.canTick = canTick;
         this.name = name;
     }
 
-    public AtmosphereType(boolean canTick, boolean isBreathable, boolean allowsCombustion, String name) {
+    public Atmosphere(boolean canTick, boolean isBreathable, boolean allowsCombustion, String name) {
         this(canTick, isBreathable, name);
         this.allowsCombustion = allowsCombustion;
     }
@@ -98,7 +113,6 @@ public class AtmosphereType implements IAtmosphere {
         return isBreathable() || ARConfiguration.getCurrentConfig().bypassEntity.contains(clazz);
     }
 
-    @Override
     public boolean isBreathable() {
         return isBreathable;
     }
@@ -110,24 +124,6 @@ public class AtmosphereType implements IAtmosphere {
      */
     public boolean allowsCombustion() {
         return allowsCombustion;
-    }
-
-    /**
-     * Sets the atmosphere to be breathable or not breathable
-     *
-     * @param isBreathable
-     */
-    public void setIsBreathable(boolean isBreathable) {
-        this.isBreathable = isBreathable;
-    }
-
-    /**
-     * Sets the atmosphere to allow combustion or not to allow combustion
-     *
-     * @param allowsCombustion
-     */
-    public void setAllowsCombustion(boolean allowsCombustion) {
-        this.allowsCombustion = allowsCombustion;
     }
 
     /**
@@ -151,7 +147,6 @@ public class AtmosphereType implements IAtmosphere {
                 .applyTo(player);
     }
 
-    @Override
     public String getUnlocalizedName() {
         return name;
     }

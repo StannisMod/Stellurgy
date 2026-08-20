@@ -10,7 +10,7 @@ import net.minecraft.nbt.NBTTagList;
 import net.minecraft.util.ResourceLocation;
 import org.junit.BeforeClass;
 import org.junit.Test;
-import zmaster587.advancedRocketry.atmosphere.AtmosphereType;
+import zmaster587.advancedRocketry.api.atmosphere.Atmosphere;
 import zmaster587.advancedRocketry.test.MinecraftBootstrap;
 
 import java.util.LinkedList;
@@ -24,9 +24,9 @@ import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertTrue;
 
 /**
- * Atmosphere — pure-logic checks on AtmosphereType subtypes.
+ * Atmosphere — pure-logic checks on Atmosphere subtypes.
  *
- * Loading {@code AtmosphereType} runs its static initializer which registers
+ * Loading {@code Atmosphere} runs its static initializer which registers
  * atmospheres into {@code AtmosphereRegister}. We trigger MC bootstrap defensively
  * because some atmosphere subclasses reference vanilla blocks transitively.
  */
@@ -39,72 +39,83 @@ public class AtmosphereLogicTest {
 
     @Test
     public void airIsBreathable() {
-        assertTrue(AtmosphereType.AIR.isBreathable());
-        assertTrue("normal air must allow combustion (torches burn)", AtmosphereType.AIR.allowsCombustion());
+        assertTrue(Atmosphere.AIR.isBreathable());
+        assertTrue("normal air must allow combustion (torches burn)", Atmosphere.AIR.allowsCombustion());
     }
 
     @Test
     public void pressurizedAirIsBreathable() {
-        assertTrue(AtmosphereType.PRESSURIZEDAIR.isBreathable());
+        assertTrue(Atmosphere.PRESSURIZEDAIR.isBreathable());
     }
 
     @Test
     public void vacuumIsNotBreathable() {
-        assertFalse(AtmosphereType.VACUUM.isBreathable());
-        assertFalse("vacuum must not support combustion", AtmosphereType.VACUUM.allowsCombustion());
+        assertFalse(Atmosphere.VACUUM.isBreathable());
+        assertFalse("vacuum must not support combustion", Atmosphere.VACUUM.allowsCombustion());
     }
 
     @Test
     public void noOxygenAtmospheresAreNotBreathable() {
-        assertFalse(AtmosphereType.NOO2.isBreathable());
-        assertFalse(AtmosphereType.HIGHPRESSURENOO2.isBreathable());
-        assertFalse(AtmosphereType.SUPERHIGHPRESSURENOO2.isBreathable());
-        assertFalse(AtmosphereType.VERYHOTNOO2.isBreathable());
-        assertFalse(AtmosphereType.SUPERHEATEDNOO2.isBreathable());
+        assertFalse(Atmosphere.NOO2.isBreathable());
+        assertFalse(Atmosphere.HIGHPRESSURENOO2.isBreathable());
+        assertFalse(Atmosphere.SUPERHIGHPRESSURENOO2.isBreathable());
+        assertFalse(Atmosphere.VERYHOTNOO2.isBreathable());
+        assertFalse(Atmosphere.SUPERHEATEDNOO2.isBreathable());
     }
 
     @Test
     public void hostileAtmospheresHaveTickingEnabled() {
         // Atmospheres that damage / affect entities every tick must report canTick.
-        assertTrue("vacuum ticks for suffocation damage", AtmosphereType.VACUUM.canTick());
-        assertTrue("LowO2 ticks for nausea/damage", AtmosphereType.LOWOXYGEN.canTick());
-        assertTrue("HighPressure ticks", AtmosphereType.HIGHPRESSURE.canTick());
-        assertTrue("VeryHot ticks", AtmosphereType.VERYHOT.canTick());
+        assertTrue("vacuum ticks for suffocation damage", Atmosphere.VACUUM.canTick());
+        assertTrue("LowO2 ticks for nausea/damage", Atmosphere.LOWOXYGEN.canTick());
+        assertTrue("HighPressure ticks", Atmosphere.HIGHPRESSURE.canTick());
+        assertTrue("VeryHot ticks", Atmosphere.VERYHOT.canTick());
     }
 
     @Test
     public void breathableAtmospheresDoNotTick() {
-        assertFalse("Breathable AIR is not expected to tick effects", AtmosphereType.AIR.canTick());
-        assertFalse("PressurizedAir does not tick", AtmosphereType.PRESSURIZEDAIR.canTick());
+        assertFalse("Breathable AIR is not expected to tick effects", Atmosphere.AIR.canTick());
+        assertFalse("PressurizedAir does not tick", Atmosphere.PRESSURIZEDAIR.canTick());
     }
 
     @Test
     public void atmosphereNamesArePreservedFromConstructor() {
-        assertEquals("air", AtmosphereType.AIR.getUnlocalizedName());
-        assertEquals("PressurizedAir", AtmosphereType.PRESSURIZEDAIR.getUnlocalizedName());
-        assertEquals("lowO2", AtmosphereType.LOWOXYGEN.getUnlocalizedName());
-        assertEquals("NoO2", AtmosphereType.NOO2.getUnlocalizedName());
+        assertEquals("air", Atmosphere.AIR.getUnlocalizedName());
+        assertEquals("PressurizedAir", Atmosphere.PRESSURIZEDAIR.getUnlocalizedName());
+        assertEquals("lowO2", Atmosphere.LOWOXYGEN.getUnlocalizedName());
+        assertEquals("NoO2", Atmosphere.NOO2.getUnlocalizedName());
     }
 
     @Test
-    public void breathableSetterFlipsBreathableFlag() {
-        // Local instance — DO NOT mutate the singleton AIR / VACUUM, that would leak
-        // into other tests.
-        AtmosphereType local = new AtmosphereType(false, true, "ar.test.local." + System.nanoTime());
-        assertTrue(local.isBreathable());
+    public void whatAnAtmosphereSaysAboutItselfCannotBeChangedAfterItIsBuilt() {
+        // There used to be two setters here, and two tests that checked the setters set. What they
+        // pinned was that a pack could take a SHARED singleton — the same VACUUM every zone and every
+        // planet resolves to — and declare it breathable. Nothing then re-checked that against any
+        // gas, so the lie simply became the answer everywhere.
+        //
+        // Asserted structurally because that is what the rule is: not "the current values are right"
+        // but "there is no way to change them". A test that only read the values would pass happily
+        // the day somebody added the setter back.
+        List<String> mutators = new LinkedList<>();
+        for (java.lang.reflect.Method m : Atmosphere.class.getMethods()) {
+            if (m.getDeclaringClass() != Atmosphere.class) {
+                continue;
+            }
+            boolean setsSomething = m.getName().startsWith("set") && m.getParameterCount() == 1;
+            if (setsSomething) {
+                mutators.add(m.getName());
+            }
+        }
+        assertTrue("an atmosphere must not be tellable to lie about itself, and these can tell it: "
+                + mutators, mutators.isEmpty());
 
-        local.setIsBreathable(false);
-        assertFalse(local.isBreathable());
-    }
-
-    @Test
-    public void allowsCombustionSetterIsIndependentOfBreathable() {
-        AtmosphereType local = new AtmosphereType(false, false, true, "ar.test.combust." + System.nanoTime());
-        assertFalse(local.isBreathable());
-        assertTrue("constructor must keep combustion flag distinct from breathable", local.allowsCombustion());
-
-        local.setAllowsCombustion(false);
-        assertFalse(local.allowsCombustion());
+        // And the two flags still have to be independent of each other at construction: fire and
+        // lungs are different questions about the same gas, which is the defect ledger #306 records.
+        Atmosphere unbreathableButFlammable =
+                new Atmosphere(false, false, true, "ar.test.combust." + System.nanoTime());
+        assertFalse(unbreathableButFlammable.isBreathable());
+        assertTrue("the constructor must keep combustion distinct from breathable",
+                unbreathableButFlammable.allowsCombustion());
     }
 
     /**

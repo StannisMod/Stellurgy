@@ -69,7 +69,7 @@ import zmaster587.libVulpes.inventory.modules.ModuleContainerPan;
 import zmaster587.libVulpes.tile.TileSchematic;
 
 import net.minecraft.util.text.TextComponentTranslation;
-import zmaster587.advancedRocketry.api.IAtmosphere;
+import zmaster587.advancedRocketry.api.atmosphere.Atmosphere;
 import zmaster587.advancedRocketry.client.gui.ModuleSelectableAtmosphereButton;
 import zmaster587.advancedRocketry.tile.atmosphere.TileAtmosphereDetector;
 
@@ -652,7 +652,7 @@ public class ClientProxy extends CommonProxy {
     // atmosphere detector
 
     @Override
-    public ModuleBase createAtmosphereDetectorButton(int offsetX, int offsetY, int buttonId, IAtmosphere atmosphere, String text, TileAtmosphereDetector detector, ResourceLocation[] buttonImages) {
+    public ModuleBase createAtmosphereDetectorButton(int offsetX, int offsetY, int buttonId, Atmosphere atmosphere, String text, TileAtmosphereDetector detector, ResourceLocation[] buttonImages) {
         return new ModuleSelectableAtmosphereButton(offsetX, offsetY, buttonId, atmosphere, text, detector, buttonImages);
     }
 

@@ -1,7 +1,7 @@
 package zmaster587.advancedRocketry.api.atmosphere;
 
 import net.minecraftforge.fluids.Fluid;
-import zmaster587.advancedRocketry.api.IAtmosphere;
+import zmaster587.advancedRocketry.api.atmosphere.Atmosphere;
 
 import java.util.HashMap;
 import java.util.LinkedList;
@@ -10,9 +10,9 @@ import java.util.Map;
 
 public class AtmosphereRegister {
     private static final AtmosphereRegister instance = new AtmosphereRegister();
-    private Map<String, IAtmosphere> atmosphereRegistration;
+    private Map<String, Atmosphere> atmosphereRegistration;
     private List<Fluid> harvestableAtmosphere;
-    private List<IAtmosphere> atmosphereList;
+    private List<Atmosphere> atmosphereList;
     private AtmosphereRegister() {
         atmosphereRegistration = new HashMap<>();
         atmosphereList = new LinkedList<>();
@@ -28,7 +28,7 @@ public class AtmosphereRegister {
      *
      * @param atmosphere atmosphere to register
      */
-    public void registerAtmosphere(IAtmosphere atmosphere) {
+    public void registerAtmosphere(Atmosphere atmosphere) {
         atmosphereRegistration.put(atmosphere.getUnlocalizedName(), atmosphere);
         atmosphereList.add(atmosphere);
     }
@@ -39,8 +39,8 @@ public class AtmosphereRegister {
      * @param identifier registered name of the atmosphere
      * @return atmosphere  or AIR if not in the list
      */
-    public IAtmosphere getAtmosphere(String identifier) {
-        IAtmosphere atm = atmosphereRegistration.get(identifier);
+    public Atmosphere getAtmosphere(String identifier) {
+        Atmosphere atm = atmosphereRegistration.get(identifier);
         return atm == null ? getAtmosphere("air") : atm;
     }
 
@@ -55,7 +55,7 @@ public class AtmosphereRegister {
     /**
      * @return list of all registered atmospheres
      */
-    public List<IAtmosphere> getAtmosphereList() {
+    public List<Atmosphere> getAtmosphereList() {
         return atmosphereList;
     }
 }

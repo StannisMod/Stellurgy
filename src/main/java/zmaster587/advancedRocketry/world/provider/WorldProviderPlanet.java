@@ -21,7 +21,7 @@ import org.apache.commons.lang3.ArrayUtils;
 import zmaster587.advancedRocketry.AdvancedRocketry;
 import zmaster587.advancedRocketry.api.ARConfiguration;
 import zmaster587.advancedRocketry.api.AdvancedRocketryItems;
-import zmaster587.advancedRocketry.api.IAtmosphere;
+import zmaster587.advancedRocketry.api.atmosphere.Atmosphere;
 import zmaster587.advancedRocketry.api.IPlanetaryProvider;
 import zmaster587.advancedRocketry.api.dimension.solar.StellarBody;
 import zmaster587.advancedRocketry.armor.ItemSpaceArmor;
@@ -579,7 +579,7 @@ public class WorldProviderPlanet extends WorldProvider implements IPlanetaryProv
     }
 
     @Override
-    public IAtmosphere getAtmosphere(@Nullable BlockPos pos) {
+    public Atmosphere getAtmosphere(@Nullable BlockPos pos) {
         return getDimensionProperties(pos).getAtmosphere();
     }
 

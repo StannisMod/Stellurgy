@@ -49,7 +49,7 @@ import zmaster587.advancedRocketry.api.AdvancedRocketryItems;
 import zmaster587.advancedRocketry.api.IPlanetaryProvider;
 import zmaster587.advancedRocketry.api.stations.ISpaceObject;
 import zmaster587.advancedRocketry.atmosphere.AtmosphereHandler;
-import zmaster587.advancedRocketry.atmosphere.AtmosphereType;
+import zmaster587.advancedRocketry.api.atmosphere.Atmosphere;
 import zmaster587.advancedRocketry.client.render.planet.RenderPlanetarySky;
 import zmaster587.advancedRocketry.dimension.DimensionManager;
 import zmaster587.advancedRocketry.dimension.DimensionProperties;
@@ -189,7 +189,7 @@ public class PlanetEventHandler {
         }
  */
         if (event.getEntity().isInWater()) {
-            if (AtmosphereType.LOWOXYGEN.isImmune(event.getEntityLiving()))
+            if (Atmosphere.LOWOXYGEN.isImmune(event.getEntityLiving()))
                 event.getEntity().setAir(300);
         }
 

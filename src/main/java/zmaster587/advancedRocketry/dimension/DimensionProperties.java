@@ -28,7 +28,7 @@ import zmaster587.advancedRocketry.api.atmosphere.AtmosphereRegister;
 import zmaster587.advancedRocketry.api.dimension.IDimensionProperties;
 import zmaster587.advancedRocketry.api.dimension.solar.StellarBody;
 import zmaster587.advancedRocketry.api.satellite.SatelliteBase;
-import zmaster587.advancedRocketry.atmosphere.AtmosphereType;
+import zmaster587.advancedRocketry.api.atmosphere.Atmosphere;
 import zmaster587.advancedRocketry.integrated_server_and_client_variable_sharing_fix.Afuckinginterface;
 import zmaster587.advancedRocketry.inventory.TextureResources;
 import zmaster587.advancedRocketry.network.PacketDimInfo;
@@ -141,7 +141,7 @@ public class DimensionProperties implements Cloneable, IDimensionProperties {
     private int thunderMarker;  // -1 - never thunder, 1 - always thunder, 0 - regular weather
     private boolean acidicRain;  // rain on this planet harms unprotected players under open sky
 
-    IAtmosphere atmosphereType;
+    Atmosphere atmosphereType;
     StellarBody star;
     int starId;
     private int originalAtmosphereDensity;
@@ -864,31 +864,31 @@ public class DimensionProperties implements Cloneable, IDimensionProperties {
     /**
      * @return the default atmosphere of this dimension
      */
-    public IAtmosphere getAtmosphere() {
+    public Atmosphere getAtmosphere() {
         if (hasAtmosphere() && hasOxygen) {
             if (averageTemperature >= 900)
-                return AtmosphereType.SUPERHEATED;
+                return Atmosphere.SUPERHEATED;
             if (Temps.getTempFromValue(getAverageTemp()) == Temps.TOOHOT)
-                return AtmosphereType.VERYHOT;
+                return Atmosphere.VERYHOT;
             if (AtmosphereTypes.getAtmosphereTypeFromValue(getAtmosphereDensity()) == AtmosphereTypes.SUPERHIGHPRESSURE)
-                return AtmosphereType.SUPERHIGHPRESSURE;
+                return Atmosphere.SUPERHIGHPRESSURE;
             if (AtmosphereTypes.getAtmosphereTypeFromValue(getAtmosphereDensity()) == AtmosphereTypes.HIGHPRESSURE)
-                return AtmosphereType.HIGHPRESSURE;
+                return Atmosphere.HIGHPRESSURE;
             if (AtmosphereTypes.getAtmosphereTypeFromValue(getAtmosphereDensity()) == AtmosphereTypes.LOW)
-                return AtmosphereType.LOWOXYGEN;
-            return AtmosphereType.AIR;
+                return Atmosphere.LOWOXYGEN;
+            return Atmosphere.AIR;
         } else if (hasAtmosphere() && !hasOxygen) {
             if (averageTemperature >= 900)
-                return AtmosphereType.SUPERHEATEDNOO2;
+                return Atmosphere.SUPERHEATEDNOO2;
             if (Temps.getTempFromValue(averageTemperature) == Temps.TOOHOT)
-                return AtmosphereType.VERYHOTNOO2;
+                return Atmosphere.VERYHOTNOO2;
             if (AtmosphereTypes.getAtmosphereTypeFromValue(getAtmosphereDensity()) == AtmosphereTypes.SUPERHIGHPRESSURE)
-                return AtmosphereType.SUPERHIGHPRESSURENOO2;
+                return Atmosphere.SUPERHIGHPRESSURENOO2;
             if (AtmosphereTypes.getAtmosphereTypeFromValue(getAtmosphereDensity()) == AtmosphereTypes.HIGHPRESSURE)
-                return AtmosphereType.HIGHPRESSURENOO2;
-            return AtmosphereType.NOO2;
+                return Atmosphere.HIGHPRESSURENOO2;
+            return Atmosphere.NOO2;
         }
-        return AtmosphereType.VACUUM;
+        return Atmosphere.VACUUM;
     }
 
     /**

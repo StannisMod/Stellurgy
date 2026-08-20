@@ -19,7 +19,7 @@ import net.minecraft.world.biome.Biome;
 import net.minecraft.world.chunk.Chunk;
 import net.minecraftforge.fluids.FluidRegistry;
 import net.minecraftforge.fml.common.registry.ForgeRegistries;
-import zmaster587.advancedRocketry.api.IAtmosphere;
+import zmaster587.advancedRocketry.api.atmosphere.Atmosphere;
 import zmaster587.advancedRocketry.api.fuel.FuelRegistry;
 import zmaster587.advancedRocketry.api.satellite.SatelliteBase;
 import zmaster587.advancedRocketry.api.stations.ISpaceObject;
@@ -9833,13 +9833,13 @@ public class TestProbeCommand extends CommandBase {
                     send(sender, "{\"error\":\"dim not registered\",\"dim\":" + dim + "}");
                     return;
                 }
-                IAtmosphere atm = props.getAtmosphere();
+                Atmosphere atm = props.getAtmosphere();
                 info.put("source", "dimension-default");
                 info.put("type", atm.getUnlocalizedName());
                 info.put("breathable", atm.isBreathable());
             } else {
                 BlockPos pos = new BlockPos(x, y, z);
-                IAtmosphere atm = handler.getAtmosphereType(pos);
+                Atmosphere atm = handler.getAtmosphereType(pos);
                 info.put("source", "block-handler");
                 info.put("type", atm.getUnlocalizedName());
                 info.put("breathable", atm.isBreathable());
@@ -9906,8 +9906,8 @@ public class TestProbeCommand extends CommandBase {
                         java.lang.reflect.Field f = zmaster587.advancedRocketry.tile.atmosphere
                                 .TileAtmosphereDetector.class.getDeclaredField("atmosphereToDetect");
                         f.setAccessible(true);
-                        zmaster587.advancedRocketry.api.IAtmosphere mode =
-                                (zmaster587.advancedRocketry.api.IAtmosphere) f.get(tile);
+                        zmaster587.advancedRocketry.api.atmosphere.Atmosphere mode =
+                                (zmaster587.advancedRocketry.api.atmosphere.Atmosphere) f.get(tile);
                         info.put("detectorMode", mode == null ? "null" : mode.getUnlocalizedName());
                     } catch (ReflectiveOperationException ignored) {
                         info.put("detectorMode", "reflect-failed");
@@ -9920,8 +9920,8 @@ public class TestProbeCommand extends CommandBase {
         if ("cached-for-player".equalsIgnoreCase(args[0])) {
             // read AtmosphereHandler.prevAtmosphere via reflection
             // so tests can assert dim-change cache invalidation. The map
-            // is private static HashMap<EntityPlayer, IAtmosphere>, keyed
-            // by reference; we report the current cached IAtmosphere
+            // is private static HashMap<EntityPlayer, Atmosphere>, keyed
+            // by reference; we report the current cached Atmosphere
             // (or null) for the first connected player.
             java.util.List<net.minecraft.entity.player.EntityPlayerMP> ps =
                     server.getPlayerList().getPlayers();
@@ -9940,10 +9940,10 @@ public class TestProbeCommand extends CommandBase {
                 f.setAccessible(true);
                 @SuppressWarnings("unchecked")
                 java.util.HashMap<net.minecraft.entity.player.EntityPlayer,
-                        zmaster587.advancedRocketry.api.IAtmosphere> map =
+                        zmaster587.advancedRocketry.api.atmosphere.Atmosphere> map =
                         (java.util.HashMap<net.minecraft.entity.player.EntityPlayer,
-                                zmaster587.advancedRocketry.api.IAtmosphere>) f.get(null);
-                zmaster587.advancedRocketry.api.IAtmosphere cached = map.get(player);
+                                zmaster587.advancedRocketry.api.atmosphere.Atmosphere>) f.get(null);
+                zmaster587.advancedRocketry.api.atmosphere.Atmosphere cached = map.get(player);
                 send(sender, "{\"ok\":true,\"player\":\""
                         + escapeJson(player.getName()) + "\""
                         + ",\"hasCachedAtmosphere\":" + (cached != null)
@@ -9985,12 +9985,12 @@ public class TestProbeCommand extends CommandBase {
                 send(sender, "{\"error\":\"tile not TileAtmosphereDetector\"}");
                 return;
             }
-            zmaster587.advancedRocketry.api.IAtmosphere mode;
+            zmaster587.advancedRocketry.api.atmosphere.Atmosphere mode;
             try {
                 java.lang.reflect.Field f = zmaster587.advancedRocketry.tile.atmosphere
                         .TileAtmosphereDetector.class.getDeclaredField("atmosphereToDetect");
                 f.setAccessible(true);
-                mode = (zmaster587.advancedRocketry.api.IAtmosphere) f.get(tile);
+                mode = (zmaster587.advancedRocketry.api.atmosphere.Atmosphere) f.get(tile);
             } catch (ReflectiveOperationException e) {
                 send(sender, "{\"error\":\"reflection failed\",\"msg\":\""
                         + escapeJson(e.getMessage()) + "\"}");
@@ -10000,7 +10000,7 @@ public class TestProbeCommand extends CommandBase {
                     zmaster587.advancedRocketry.atmosphere.AtmosphereHandler.getOxygenHandler(dim);
             boolean detected;
             if (atmh == null) {
-                detected = mode == zmaster587.advancedRocketry.atmosphere.AtmosphereType.AIR;
+                detected = mode == zmaster587.advancedRocketry.api.atmosphere.Atmosphere.AIR;
             } else {
                 detected = false;
                 for (net.minecraft.util.EnumFacing dir : net.minecraft.util.EnumFacing.values()) {
@@ -10039,7 +10039,7 @@ public class TestProbeCommand extends CommandBase {
                         + (tile == null ? "null" : tile.getClass().getName()) + "\"}");
                 return;
             }
-            zmaster587.advancedRocketry.api.IAtmosphere target =
+            zmaster587.advancedRocketry.api.atmosphere.Atmosphere target =
                     zmaster587.advancedRocketry.api.atmosphere.AtmosphereRegister.getInstance().getAtmosphere(atmName);
             if (target == null) {
                 send(sender, "{\"error\":\"unknown atmosphere name\",\"name\":\""
@@ -10142,7 +10142,7 @@ public class TestProbeCommand extends CommandBase {
             info.put("posY", player.posY);
             info.put("posZ", player.posZ);
             if (handler != null) {
-                IAtmosphere atm = handler.getAtmosphereType(player);
+                Atmosphere atm = handler.getAtmosphereType(player);
                 info.put("atmosphere", atm.getUnlocalizedName());
                 info.put("breathable", atm.isBreathable());
                 info.put("pressure", handler.getAtmospherePressure(player));
@@ -17584,7 +17584,7 @@ public class TestProbeCommand extends CommandBase {
         }
         String blobAtm = "no-handler";
         if (handler != null) {
-            zmaster587.advancedRocketry.api.IAtmosphere atm =
+            zmaster587.advancedRocketry.api.atmosphere.Atmosphere atm =
                     handler.getAtmosphereType(new BlockPos(x, y + 1, z));
             blobAtm = atm == null ? "null" : atm.getUnlocalizedName();
         }

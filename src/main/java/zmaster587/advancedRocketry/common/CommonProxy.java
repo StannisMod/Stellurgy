@@ -10,7 +10,7 @@ import net.minecraftforge.common.DimensionManager;
 import net.minecraftforge.fml.common.FMLCommonHandler;
 import zmaster587.advancedRocketry.api.ARConfiguration;
 import zmaster587.advancedRocketry.api.stations.ISpaceObject;
-import zmaster587.advancedRocketry.api.IAtmosphere;
+import zmaster587.advancedRocketry.api.atmosphere.Atmosphere;
 import zmaster587.advancedRocketry.tile.atmosphere.TileAtmosphereDetector;
 import zmaster587.libVulpes.inventory.modules.ModuleBase;
 import zmaster587.libVulpes.inventory.modules.ModuleButton;
@@ -150,7 +150,7 @@ public class CommonProxy {
 
     // atmosphere detector
 
-    public ModuleBase createAtmosphereDetectorButton(int offsetX, int offsetY, int buttonId, IAtmosphere atmosphere, String text, TileAtmosphereDetector detector, ResourceLocation[] buttonImages) {
+    public ModuleBase createAtmosphereDetectorButton(int offsetX, int offsetY, int buttonId, Atmosphere atmosphere, String text, TileAtmosphereDetector detector, ResourceLocation[] buttonImages) {
         return new ModuleButton(offsetX, offsetY, buttonId, text, detector, buttonImages);
     }
 

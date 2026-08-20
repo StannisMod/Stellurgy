@@ -3,7 +3,7 @@ package zmaster587.advancedRocketry.api.dimension;
 import net.minecraft.nbt.NBTTagCompound;
 import net.minecraft.util.ResourceLocation;
 import net.minecraft.world.World;
-import zmaster587.advancedRocketry.api.IAtmosphere;
+import zmaster587.advancedRocketry.api.atmosphere.Atmosphere;
 import zmaster587.advancedRocketry.api.dimension.solar.StellarBody;
 import zmaster587.advancedRocketry.api.satellite.SatelliteBase;
 import zmaster587.advancedRocketry.dimension.DimensionProperties;
@@ -70,7 +70,7 @@ public interface IDimensionProperties {
     /**
      * @return the default atmosphere of this dimension
      */
-    IAtmosphere getAtmosphere();
+    Atmosphere getAtmosphere();
 
     /**
      * @return true if the planet has an atmosphere

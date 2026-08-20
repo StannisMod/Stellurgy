@@ -12,6 +12,7 @@ import java.util.regex.Pattern;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
+import zmaster587.advancedRocketry.api.atmosphere.Atmosphere;
 
 /**
  * The player holds an AR item and right-clicks it. Six scenarios, one client.
@@ -113,7 +114,7 @@ public class ItemRightClickClientGroupE2ETest extends AbstractSharedClientE2ETes
      * {@code ItemAtmosphereAnalzer#onItemRightClick}, observed on the REAL client chat overlay —
      * i18n already resolved, exactly the two lines the player reads.
      *
-     * <p>Dim 0 has no AtmosphereHandler &rarr; production falls back to {@code AtmosphereType.AIR}.
+     * <p>Dim 0 has no AtmosphereHandler &rarr; production falls back to {@code Atmosphere.AIR}.
      * Both lines must reach the player's screen: "Atmosphere Type: …air…" and "Breathable: yes".</p>
      */
     @Test

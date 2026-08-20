@@ -5,7 +5,7 @@ import java.util.Map;
 
 import net.minecraft.nbt.NBTTagCompound;
 import zmaster587.advancedRocketry.api.ARConfiguration;
-import zmaster587.advancedRocketry.api.IAtmosphere;
+import zmaster587.advancedRocketry.api.atmosphere.Atmosphere;
 import zmaster587.advancedRocketry.atmosphere.gas.Gas;
 import zmaster587.advancedRocketry.atmosphere.gas.GasRegistry;
 import zmaster587.advancedRocketry.atmosphere.gas.GasRole;
@@ -459,7 +459,7 @@ public class AirState {
     /**
      * Which registered atmosphere this zone presents to everything downstream — tick damage, the
      * suit immunity check, the sync packet, the detector. The gas state is the model; the
-     * {@link AtmosphereType} singletons stay the interface, so nothing outside life support has
+     * {@link Atmosphere} singletons stay the interface, so nothing outside life support has
      * to learn about partial pressures.
      * <p>
      * <b>Every branch below now asks a PREDICATE rather than a field.</b> The singletons that come out
@@ -467,9 +467,9 @@ public class AirState {
      * wants to know whether something can burn must ask {@link #allowsCombustion()} here rather than
      * the type it gets back. That gap closes when the types go; until then this is the honest seam.
      */
-    public IAtmosphere deriveAtmosphere() {
+    public Atmosphere deriveAtmosphere() {
         if (getTotalPressure() <= VACUUM_CEILING)
-            return AtmosphereType.VACUUM;
+            return Atmosphere.VACUUM;
 
         ARConfiguration config = ARConfiguration.getCurrentConfig();
 
@@ -491,23 +491,23 @@ public class AirState {
         if (config.shipHeat) {
             if (config.shipHeatCrewSuperheatedKelvin > 0
                     && kelvin >= config.shipHeatCrewSuperheatedKelvin)
-                return breathableGas ? AtmosphereType.SUPERHEATED : AtmosphereType.SUPERHEATEDNOO2;
+                return breathableGas ? Atmosphere.SUPERHEATED : Atmosphere.SUPERHEATEDNOO2;
             if (config.shipHeatCrewVeryHotKelvin > 0 && kelvin >= config.shipHeatCrewVeryHotKelvin)
-                return breathableGas ? AtmosphereType.VERYHOT : AtmosphereType.VERYHOTNOO2;
+                return breathableGas ? Atmosphere.VERYHOT : Atmosphere.VERYHOTNOO2;
         }
 
         // An un-loaded config leaves both bounds at zero, which would otherwise read as "every
         // zone is oxygen-toxic". No usable band means no governor, not a hazard.
         if (config.lifeSupportMaxPartialO2 <= config.lifeSupportMinPartialO2)
-            return AtmosphereType.PRESSURIZEDAIR;
+            return Atmosphere.PRESSURIZEDAIR;
 
         long oxidiser = roleTotal(GasRole.OXIDISER);
         if (oxidiser < config.lifeSupportMinPartialO2)
-            return oxidiser <= 0L ? AtmosphereType.NOO2 : AtmosphereType.LOWOXYGEN;
+            return oxidiser <= 0L ? Atmosphere.NOO2 : Atmosphere.LOWOXYGEN;
         if (oxidiser > config.lifeSupportMaxPartialO2)
-            return AtmosphereType.HIGHOXYGEN;
+            return Atmosphere.HIGHOXYGEN;
 
-        return AtmosphereType.PRESSURIZEDAIR;
+        return Atmosphere.PRESSURIZEDAIR;
     }
 
     /**

@@ -11,6 +11,7 @@ import java.util.regex.Pattern;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 import static zmaster587.advancedRocketry.test.AdvancedRocketryTestConstants.ppm;
+import zmaster587.advancedRocketry.api.atmosphere.Atmosphere;
 
 /**
  * Vacuum, suits, and the air a player breathes. Nine scenarios, one client.
@@ -203,7 +204,7 @@ public class VacuumAndSuitClientGroupE2ETest extends AbstractSharedClientE2ETest
 
     /**
      * From {@code ItemSpaceChestSubInventoryDrainE2ETest}. Counter-test: same suit and tank in a
-     * breathable atmosphere. The breathable {@code AtmosphereType.onTick} is a no-op, so
+     * breathable atmosphere. The breathable {@code Atmosphere.onTick} is a no-op, so
      * {@code protectsFrom} &rarr; {@code decrementAir} is never called and the tank's oxygen stays
      * at its initial value.
      */
