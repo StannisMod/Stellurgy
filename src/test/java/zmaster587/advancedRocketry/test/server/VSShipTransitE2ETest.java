@@ -1,5 +1,7 @@
 package zmaster587.advancedRocketry.test.server;
 
+import zmaster587.advancedRocketry.test.GameTicks;
+
 import org.junit.Assume;
 import org.junit.Test;
 
@@ -21,6 +23,14 @@ import static org.junit.Assert.assertTrue;
  * <p>Gated on the server's real VS presence (run with {@code -PwithVS}); skips cleanly otherwise.</p>
  */
 public class VSShipTransitE2ETest extends AbstractSharedServerTest {
+
+    /**
+     * Budgets in SERVER TICKS — 400 is the twenty seconds the old {@code 80 x 250 ms} meant on an idle
+     * box, 200 the ten seconds of {@code 40 x 250 ms}. Neither carries a fork multiplier: how much of
+     * the machine this test shares says nothing about how much world an arrival needs.
+     */
+    private static final int ARRIVAL_TICKS = 400;
+    private static final int LOAD_TICKS = 200;
 
     @Test
     public void aVsShipTransitsFromOneCellToAnotherThroughHyperspace() throws Exception {
@@ -48,18 +58,17 @@ public class VSShipTransitE2ETest extends AbstractSharedServerTest {
         assertTrue("transit did not begin (departure crossing failed): " + begin, begin.contains("\"began\":true"));
 
         // Advance the transit until it arrives (arrival retries while the async hyperspace ship assembles).
-        int targetDim = -1;
-        String lastTick = "";
-        for (int i = 0; i < 80; i++) {
-            lastTick = exec("artest space transit-tick 10");
-            if (extractInt(lastTick, "inTransit") == 0) {
-                targetDim = extractInt(lastTick, "targetDim");
-                break;
-            }
-            Thread.sleep(250);
-        }
-        assertTrue("ship never arrived (still in transit after ~20 s); last tick=" + lastTick,
-                targetDim >= 0);
+        // The pump and the reading are one call, so both live in the condition; what the budget buys is
+        // the WORLD in which the async assembly the arrival retries against can finish.
+        final String[] lastTick = {""};
+        GameTicks.until(client(), GameTicks.server(), ARRIVAL_TICKS, () -> {
+            lastTick[0] = exec("artest space transit-tick 10");
+            return extractInt(lastTick[0], "inTransit") == 0;
+        });
+        int targetDim = extractInt(lastTick[0], "inTransit") == 0
+                ? extractInt(lastTick[0], "targetDim") : -1;
+        assertTrue("ship never arrived (still in transit after " + ARRIVAL_TICKS + " ticks of world);"
+                + " last tick=" + lastTick[0], targetDim >= 0);
 
         // The re-assembled ship must load + be VS-managed in the TARGET cell (arrival pastes near 0,200,0).
         assertTrue("transited ship never (re)loaded in the target cell (dim " + targetDim + "); countAll="
@@ -86,19 +95,24 @@ public class VSShipTransitE2ETest extends AbstractSharedServerTest {
         return exec("artest vs available").contains("\"available\":true");
     }
 
-    /** Poll for a loaded VS ship in {@code dim} (assembly is async; a headless server forces a load). */
+    /**
+     * Poll for a loaded VS ship in {@code dim} (assembly is async; a headless server forces a load).
+     *
+     * <p>Budgeted on the SERVER's clock rather than {@code dim}'s: the world being asked about is
+     * exactly the one that may not have started ticking, so budgeting against it would measure the
+     * wait with the thing the wait is waiting for.</p>
+     */
     private int waitForLoadedShip(int dim) throws Exception {
-        for (int i = 0; i < 40; i++) {
-            if (extractInt(exec("artest vs ship-count-all " + dim), "count") >= 1) {
-                exec("artest vs load-ships " + dim);
-                int loaded = extractInt(exec("artest vs ship-count " + dim), "count");
-                if (loaded >= 1) {
-                    return loaded;
-                }
+        final int[] loaded = {0};
+        GameTicks.until(client(), GameTicks.server(), LOAD_TICKS, () -> {
+            if (extractInt(exec("artest vs ship-count-all " + dim), "count") < 1) {
+                return false;
             }
-            Thread.sleep(250);
-        }
-        return 0;
+            exec("artest vs load-ships " + dim);
+            loaded[0] = extractInt(exec("artest vs ship-count " + dim), "count");
+            return loaded[0] >= 1;
+        });
+        return loaded[0];
     }
 
     private static int extractInt(String json, String key) {

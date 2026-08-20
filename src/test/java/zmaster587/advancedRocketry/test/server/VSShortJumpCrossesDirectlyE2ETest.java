@@ -1,5 +1,7 @@
 package zmaster587.advancedRocketry.test.server;
 
+import zmaster587.advancedRocketry.test.GameTicks;
+
 import org.junit.Assume;
 import org.junit.Test;
 
@@ -27,8 +29,14 @@ import static zmaster587.advancedRocketry.test.AdvancedRocketryTestConstants.HYP
  */
 public class VSShortJumpCrossesDirectlyE2ETest extends AbstractSharedServerTest {
 
-    /** Probe-driven ticks a crossing or a flight gets to complete before the test calls it stuck. */
-    private static final int TICK_POLLS = 80;
+    /**
+     * How much WORLD a jump gets to complete in: 400 server ticks, the twenty seconds the old
+     * 80 x 250 ms poll loop meant on an idle box, with no fork multiplier.
+     */
+    private static final int ARRIVAL_TICKS = 400;
+
+    /** The same, for a ship becoming loadable in its slot. */
+    private static final int LOAD_TICKS = 200;
 
     @Test
     public void aShortJumpArrivesWithoutEverBeingInFlight() throws Exception {
@@ -77,24 +85,21 @@ public class VSShortJumpCrossesDirectlyE2ETest extends AbstractSharedServerTest 
      * target cell's pose. Returns the last tick reply so a caller can assert on the mechanism too.
      */
     private String arrivesInTheTargetCell() throws Exception {
-        int targetDim = -1;
-        String lastTick = "";
-        for (int i = 0; i < TICK_POLLS && targetDim < 0; i++) {
-            lastTick = exec("artest space transit-tick 10");
-            if (extractInt(lastTick, "inTransit") == 0 && extractInt(lastTick, "crossing") == 0
-                    && extractInt(lastTick, "targetDim") >= 0) {
-                targetDim = extractInt(lastTick, "targetDim");
-                break;
-            }
-            Thread.sleep(250);
-        }
-        assertTrue("the ship never reached the target cell; last tick=" + lastTick, targetDim >= 0);
+        final String[] lastTick = {""};
+        boolean arrived = GameTicks.until(client(), GameTicks.server(), ARRIVAL_TICKS, () -> {
+            lastTick[0] = exec("artest space transit-tick 10");
+            return extractInt(lastTick[0], "inTransit") == 0
+                    && extractInt(lastTick[0], "crossing") == 0
+                    && extractInt(lastTick[0], "targetDim") >= 0;
+        });
+        int targetDim = arrived ? extractInt(lastTick[0], "targetDim") : -1;
+        assertTrue("the ship never reached the target cell; last tick=" + lastTick[0], targetDim >= 0);
         assertTrue("the ship never (re)loaded in the target cell (dim " + targetDim + "); countAll="
                 + exec("artest vs ship-count-all " + targetDim), waitForLoadedShip(targetDim) >= 1);
         String dstInfo = exec("artest vs ship-info " + targetDim + " 0 200 0");
         assertTrue("the arrived ship is not VS-managed in the target cell: " + dstInfo,
                 dstInfo.contains("\"managed\":true"));
-        return lastTick;
+        return lastTick[0];
     }
 
     private String setUpPilotedShip() throws Exception {
@@ -124,18 +129,18 @@ public class VSShortJumpCrossesDirectlyE2ETest extends AbstractSharedServerTest 
         return exec("artest vs available").contains("\"available\":true");
     }
 
+    /** On the SERVER's clock: the world asked about is the one that may not be ticking yet. */
     private int waitForLoadedShip(int dim) throws Exception {
-        for (int i = 0; i < 40; i++) {
-            if (extractInt(exec("artest vs ship-count-all " + dim), "count") >= 1) {
-                exec("artest vs load-ships " + dim);
-                int loaded = extractInt(exec("artest vs ship-count " + dim), "count");
-                if (loaded >= 1) {
-                    return loaded;
-                }
+        final int[] loaded = {0};
+        GameTicks.until(client(), GameTicks.server(), LOAD_TICKS, () -> {
+            if (extractInt(exec("artest vs ship-count-all " + dim), "count") < 1) {
+                return false;
             }
-            Thread.sleep(250);
-        }
-        return 0;
+            exec("artest vs load-ships " + dim);
+            loaded[0] = extractInt(exec("artest vs ship-count " + dim), "count");
+            return loaded[0] >= 1;
+        });
+        return loaded[0];
     }
 
     private static int extractInt(String json, String key) {

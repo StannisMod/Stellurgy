@@ -1,5 +1,7 @@
 package zmaster587.advancedRocketry.test.server;
 
+import zmaster587.advancedRocketry.test.GameTicks;
+
 import org.junit.Assume;
 import org.junit.Test;
 
@@ -35,7 +37,13 @@ public class VSUnmannedTransitSettlesOnItsPoseE2ETest extends AbstractSharedServ
      * ends while the ship is still trying and never reaches the question this test asks. A healthy
      * arrival exits the loop after a tick or two; only a stalled one spends the whole budget.
      */
-    private static final int TICK_POLLS = 260;
+    /**
+     * How much WORLD an unmanned arrival gets: 260 server ticks, the thirteen seconds the old
+     * 260 x 50 ms poll loop meant on an idle box, with no fork multiplier. And 200 for a ship
+     * appearing in the registry - ten seconds, as the old 40 x 250 ms meant.
+     */
+    private static final int ARRIVAL_TICKS = 260;
+    private static final int REGISTER_TICKS = 200;
 
     @Test
     public void anUnmannedJumpEndsOnItsPoseNotInThePasteBand() throws Exception {
@@ -56,26 +64,23 @@ public class VSUnmannedTransitSettlesOnItsPoseE2ETest extends AbstractSharedServ
         assertTrue("transit did not begin (departure crossing failed): " + begin,
                 begin.contains("\"began\":true"));
 
-        String lastTick = "";
-        for (int i = 0; i < TICK_POLLS; i++) {
-            lastTick = exec("artest space transit-tick 10");
-            if (extractInt(lastTick, "inTransit") == 0 && extractInt(lastTick, "targetDim") >= 0) {
-                break;
-            }
-            Thread.sleep(50L);
-        }
-        assertTrue("the ship never arrived at all; last tick=" + lastTick,
-                extractInt(lastTick, "inTransit") == 0 && extractInt(lastTick, "targetDim") >= 0);
+        final String[] lastTick = {""};
+        boolean arrived = GameTicks.until(client(), GameTicks.server(), ARRIVAL_TICKS, () -> {
+            lastTick[0] = exec("artest space transit-tick 10");
+            return extractInt(lastTick[0], "inTransit") == 0
+                    && extractInt(lastTick[0], "targetDim") >= 0;
+        });
+        assertTrue("the ship never arrived at all; last tick=" + lastTick[0], arrived);
 
         // Positive control for the instrument: the probe must have RESOLVED the arrived ship at all.
         // Without this, an assertion about where the ship is would also pass on a run where the registry
         // answered nothing — which is the opposite of what we mean to assert.
         // Control first: the target world must actually hold a ship, or "its position is not X" below
         // would pass on a run where the ship had vanished — the opposite of what this asserts.
-        Matcher ships = Pattern.compile("\"ships\":\"([^\"]*)\"").matcher(lastTick);
-        assertTrue("the probe reported no ships field at all: " + lastTick, ships.find());
+        Matcher ships = Pattern.compile("\"ships\":\"([^\"]*)\"").matcher(lastTick[0]);
+        assertTrue("the probe reported no ships field at all: " + lastTick[0], ships.find());
         String positions = ships.group(1);
-        assertTrue("the target world holds no ship, so nothing below measures the arrival: " + lastTick,
+        assertTrue("the target world holds no ship, so nothing below measures the arrival: " + lastTick[0],
                 !positions.isEmpty());
 
         // The whole assertion, asked WITHOUT a position-keyed lookup: the ship's own transform position
@@ -84,10 +89,10 @@ public class VSUnmannedTransitSettlesOnItsPoseE2ETest extends AbstractSharedServ
         // off" — it is a different world region, and its address inverts through the pose mapping into a
         // neighbouring cell. Compared as text on purpose: these are exact integers, and a tolerance here
         // would quietly accept the paste band on some future cell whose pose happens to be low.
-        String expected = extractInt(lastTick, "poseX") + "," + extractInt(lastTick, "poseY") + ","
-                + extractInt(lastTick, "poseZ");
+        String expected = extractInt(lastTick[0], "poseX") + "," + extractInt(lastTick[0], "poseY") + ","
+                + extractInt(lastTick[0], "poseZ");
         assertTrue("an unmanned arrival must settle ON the pose realizing its target coordinate; expected "
-                + "a ship at " + expected + " but the world holds " + positions + ": " + lastTick,
+                + "a ship at " + expected + " but the world holds " + positions + ": " + lastTick[0],
                 positions.contains(expected));
     }
 
@@ -114,13 +119,8 @@ public class VSUnmannedTransitSettlesOnItsPoseE2ETest extends AbstractSharedServ
 
     /** Poll until VS's queryable registry holds a ship in {@code dim}; never forces a load. */
     private boolean waitForRegisteredShip(int dim) throws Exception {
-        for (int i = 0; i < 40; i++) {
-            if (extractInt(exec("artest vs ship-count-all " + dim), "count") >= 1) {
-                return true;
-            }
-            Thread.sleep(250L);
-        }
-        return false;
+        return GameTicks.until(client(), GameTicks.server(), REGISTER_TICKS,
+                () -> extractInt(exec("artest vs ship-count-all " + dim), "count") >= 1);
     }
 
     private static int extractInt(String json, String key) {

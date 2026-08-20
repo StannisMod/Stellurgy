@@ -1,5 +1,7 @@
 package zmaster587.advancedRocketry.test.server;
 
+import zmaster587.advancedRocketry.test.GameTicks;
+
 import org.junit.Assume;
 import org.junit.Test;
 
@@ -34,6 +36,15 @@ import static org.junit.Assert.assertTrue;
  */
 public class VSShipTransitPersistE2ETest extends AbstractSharedServerTest {
 
+    /**
+     * Budgets in SERVER TICKS — the ten and twenty seconds the old {@code 40}/{@code 80 x 250 ms}
+     * meant on an idle box, with no fork multiplier: a re-cut and an arrival need world, and how much
+     * of the machine this test is sharing does not change how much.
+     */
+    private static final int REFRESH_TICKS = 200;
+    private static final int ARRIVAL_TICKS = 400;
+    private static final int LOAD_TICKS = 200;
+
     @Test
     public void aRestoredInFlightJumpRebuildsItsShipByPastingItsSnapshotIntoTheTargetCell() throws Exception {
         Assume.assumeTrue("needs Valkyrien Skies on the server classpath (run with -PwithVS)", serverHasVs());
@@ -64,18 +75,13 @@ public class VSShipTransitPersistE2ETest extends AbstractSharedServerTest {
         // true on the first iteration whether or not hyperspace was ever read. Waiting on it is waiting
         // on a condition that is already met: it exits immediately and the assertion that the PARKED
         // ship was re-cut becomes a statement about a cut that never happened.
-        boolean snapshotCut = false;
-        String lastRefresh = "";
-        for (int i = 0; i < 40; i++) {
-            lastRefresh = exec("artest space transit-refresh");
-            if (extractInt(lastRefresh, "refreshed") >= 1) {
-                snapshotCut = true;
-                break;
-            }
-            Thread.sleep(250);
-        }
+        final String[] lastRefresh = {""};
+        boolean snapshotCut = GameTicks.until(client(), GameTicks.server(), REFRESH_TICKS, () -> {
+            lastRefresh[0] = exec("artest space transit-refresh");
+            return extractInt(lastRefresh[0], "refreshed") >= 1;
+        });
         assertTrue("the parked hyperspace ship was never re-cut into a persisted snapshot; last="
-                + lastRefresh, snapshotCut);
+                + lastRefresh[0], snapshotCut);
 
         String lastExport = exec("artest space transit-export");
         assertTrue("the durable record must carry a block snapshot, or the restore below has no ship to "
@@ -90,18 +96,14 @@ public class VSShipTransitPersistE2ETest extends AbstractSharedServerTest {
 
         // Advance the RESTORED transit. With no live hyperspace ship it can only arrive by pasting its
         // snapshot into the target cell.
-        int targetDim = -1;
-        String lastTick = "";
-        for (int i = 0; i < 80; i++) {
-            lastTick = exec("artest space transit-tick 10");
-            if (extractInt(lastTick, "inTransit") == 0) {
-                targetDim = extractInt(lastTick, "targetDim");
-                break;
-            }
-            Thread.sleep(250);
-        }
-        assertTrue("the restored jump never completed (still in transit after ~20 s); last tick=" + lastTick,
-                targetDim >= 0);
+        final String[] lastTick = {""};
+        boolean arrived = GameTicks.until(client(), GameTicks.server(), ARRIVAL_TICKS, () -> {
+            lastTick[0] = exec("artest space transit-tick 10");
+            return extractInt(lastTick[0], "inTransit") == 0;
+        });
+        int targetDim = arrived ? extractInt(lastTick[0], "targetDim") : -1;
+        assertTrue("the restored jump never completed (still in transit after " + ARRIVAL_TICKS
+                + " ticks of world); last tick=" + lastTick[0], targetDim >= 0);
 
         // The snapshot-restored ship must load + be VS-managed in the TARGET cell. Restored arrivals paste in
         // the negative-X band (disjoint from live arrivals); the first lands near -64,200,0. This is reachable
@@ -130,19 +132,23 @@ public class VSShipTransitPersistE2ETest extends AbstractSharedServerTest {
         return exec("artest vs available").contains("\"available\":true");
     }
 
-    /** Poll for a loaded VS ship in {@code dim} (assembly is async; a headless server forces a load). */
+    /**
+     * Poll for a loaded VS ship in {@code dim} (assembly is async; a headless server forces a load).
+     *
+     * <p>On the SERVER's clock, not {@code dim}'s: the world asked about is the one that may not have
+     * started ticking, and budgeting against it would measure the wait with what it waits for.</p>
+     */
     private int waitForLoadedShip(int dim) throws Exception {
-        for (int i = 0; i < 40; i++) {
-            if (extractInt(exec("artest vs ship-count-all " + dim), "count") >= 1) {
-                exec("artest vs load-ships " + dim);
-                int loaded = extractInt(exec("artest vs ship-count " + dim), "count");
-                if (loaded >= 1) {
-                    return loaded;
-                }
+        final int[] loaded = {0};
+        GameTicks.until(client(), GameTicks.server(), LOAD_TICKS, () -> {
+            if (extractInt(exec("artest vs ship-count-all " + dim), "count") < 1) {
+                return false;
             }
-            Thread.sleep(250);
-        }
-        return 0;
+            exec("artest vs load-ships " + dim);
+            loaded[0] = extractInt(exec("artest vs ship-count " + dim), "count");
+            return loaded[0] >= 1;
+        });
+        return loaded[0];
     }
 
     private static int extractInt(String json, String key) {
