@@ -54,22 +54,6 @@ public class Atmosphere {
     public static final Atmosphere VERYHOTNOO2 = new Atmosphere(true, false, false, "VeryHotNoO2");
     public static final Atmosphere SUPERHEATEDNOO2 = new Atmosphere(true, false, false, "SuperheatedNoOxygen");
 
-    static {
-        AtmosphereRegister.getInstance().registerAtmosphere(AIR);
-        AtmosphereRegister.getInstance().registerAtmosphere(PRESSURIZEDAIR);
-        AtmosphereRegister.getInstance().registerAtmosphere(VACUUM);
-        AtmosphereRegister.getInstance().registerAtmosphere(LOWOXYGEN);
-        AtmosphereRegister.getInstance().registerAtmosphere(HIGHOXYGEN);
-        AtmosphereRegister.getInstance().registerAtmosphere(HIGHPRESSURE);
-        AtmosphereRegister.getInstance().registerAtmosphere(SUPERHIGHPRESSURE);
-        AtmosphereRegister.getInstance().registerAtmosphere(VERYHOT);
-        AtmosphereRegister.getInstance().registerAtmosphere(SUPERHEATED);
-        AtmosphereRegister.getInstance().registerAtmosphere(NOO2);
-        AtmosphereRegister.getInstance().registerAtmosphere(HIGHPRESSURENOO2);
-        AtmosphereRegister.getInstance().registerAtmosphere(SUPERHIGHPRESSURENOO2);
-        AtmosphereRegister.getInstance().registerAtmosphere(VERYHOTNOO2);
-        AtmosphereRegister.getInstance().registerAtmosphere(SUPERHEATEDNOO2);
-    }
 
     private boolean allowsCombustion;
     private boolean isBreathable;

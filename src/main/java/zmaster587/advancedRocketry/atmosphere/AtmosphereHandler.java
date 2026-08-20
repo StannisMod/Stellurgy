@@ -288,7 +288,7 @@ public class AtmosphereHandler {
             // fired when a COARSE LABEL changed, which worked only while the answer was one of
             // fourteen names; a composition slides, and a readout that waited for it to cross a
             // boundary would sit stale for as long as the room stayed nominally the same.
-            if (entity instanceof EntityPlayer && entity.ticksExisted % 20 == 0) {
+            if (entity instanceof EntityPlayer && isSyncTick(entity.ticksExisted)) {
                 Atmosphere.sendToRealPlayer(new PacketAtmSync(AtmosphereSummary.of(this, entity)),
                         (EntityPlayer) entity);
                 prevAtmosphere.put((EntityPlayer) entity, atmosType);
@@ -447,6 +447,26 @@ public class AtmosphereHandler {
         int volume = Math.max(1, blob.getBlobSize());
         blob.getAirState().respire(config.lifeSupportRespirationRate / volume);
         blob.setData(blob.getAirState().deriveAtmosphere());
+    }
+
+    /** How often a player is told what the air looks like. Once a second, at twenty ticks. */
+    public static final int SYNC_PERIOD_TICKS = 20;
+
+    /**
+     * Whether this is the tick on which a player of this AGE is told about the air.
+     * <p>
+     * <b>A function of the player's own age, and of nothing else.</b> That is the whole rule: the
+     * PERIOD is shared — everyone hears once a second — but the PHASE is not, because players join at
+     * different moments and so carry different ages. Written against a world clock instead, the same
+     * period would serve every player on the server on the same tick, which is the one thing a
+     * routine broadcast must never do.
+     * <p>
+     * Extracted so it can be asked without a world. The decision used to be an inline modulo, which
+     * is the shape that quietly becomes {@code world.getTotalWorldTime()} one day and takes nothing
+     * red with it.
+     */
+    public static boolean isSyncTick(int ticksExisted) {
+        return ticksExisted % SYNC_PERIOD_TICKS == 0;
     }
 
     @SubscribeEvent
