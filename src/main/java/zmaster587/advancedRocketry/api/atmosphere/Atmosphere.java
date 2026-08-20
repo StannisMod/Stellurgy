@@ -143,8 +143,17 @@ public class Atmosphere {
      * @param player entity being ticked
      */
     public void onTick(EntityLivingBase player) {
-        zmaster587.advancedRocketry.atmosphere.hazard.AtmosphereHazards.exposureOf(this)
-                .applyTo(player);
+        zmaster587.advancedRocketry.atmosphere.hazard.HazardExposure exposure =
+                zmaster587.advancedRocketry.atmosphere.hazard.AtmosphereHazards.exposureOf(this);
+        // Nothing acts on this tick: ask no further. Asking about protection is not free — it spends
+        // a unit of the suit's air — so it is asked only when there is something to be protected FROM.
+        if (!exposure.firesOn(player.world.getTotalWorldTime())) {
+            return;
+        }
+        if (zmaster587.advancedRocketry.atmosphere.hazard.AtmosphereHazards.isImmune(exposure, player)) {
+            return;
+        }
+        exposure.applyTo(player);
     }
 
     public String getUnlocalizedName() {

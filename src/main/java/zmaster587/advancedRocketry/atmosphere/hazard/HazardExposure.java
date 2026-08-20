@@ -108,6 +108,24 @@ public final class HazardExposure {
     }
 
     /**
+     * Whether anything at all acts on this tick.
+     * <p>
+     * Asked BEFORE immunity, and that order is the whole of it: finding out whether somebody is
+     * protected costs them a unit of their suit's air, so asking on a tick when nothing was going to
+     * happen anyway would drain a tank twenty times faster than the hazard it is protecting against.
+     * The fourteen methods this replaced got that right by accident of shape — each checked immunity
+     * inside its own period guard — and it stops being an accident here.
+     */
+    public boolean firesOn(long worldTime) {
+        for (HazardEffect row : rows) {
+            if (row.firesOn(worldTime)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
      * Do to this entity whatever the rows that fire on this tick say.
      * <p>
      * Immunity is NOT checked here — the caller decides whether this entity is exposed at all, because
