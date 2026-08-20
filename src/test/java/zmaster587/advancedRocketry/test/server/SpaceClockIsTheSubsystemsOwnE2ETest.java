@@ -11,6 +11,8 @@ import com.github.stannismod.forge.testing.server.RealDedicatedServerHarness;
 import org.junit.After;
 import org.junit.Assume;
 import org.junit.Before;
+import zmaster587.advancedRocketry.test.GameTicks;
+
 import org.junit.Test;
 
 import static org.junit.Assert.assertEquals;
@@ -40,6 +42,13 @@ import static org.junit.Assert.assertTrue;
  * elapsed-time slack can cover, and asserts the split it created before concluding anything from it.
  */
 public class SpaceClockIsTheSubsystemsOwnE2ETest {
+
+    /**
+     * Ticks of the SERVER's own counter the space clock is watched across - the old 3 000 ms said in
+     * the units of the thing being watched. The two clocks are deliberately different: the wait is on
+     * one, the assertion is about the other.
+     */
+    private static final int OBSERVED_TICKS = 60;
 
     /**
      * How far a clock is driven in a leg: twenty million ticks, ~11.6 real days at 20 tps. Six orders
@@ -177,8 +186,11 @@ public class SpaceClockIsTheSubsystemsOwnE2ETest {
     public void theClockAdvancesWithoutBeingTold() throws Exception {
         harness = RealDedicatedServerHarness.startWith(root, false);
 
+        // Wait on the SERVER's counter and measure the SPACE clock. Two different clocks, so this is
+        // not circular - and it is what the test means: the space clock must move because the server
+        // ticked, not because three seconds of somebody's wall clock went by.
         String first = exec("artest space clock");
-        Thread.sleep(3_000L);
+        GameTicks.advance(harness.client(), GameTicks.server(), OBSERVED_TICKS);
         String second = exec("artest space clock");
 
         long spaceMoved = spaceClock(second) - spaceClock(first);
@@ -295,7 +307,7 @@ public class SpaceClockIsTheSubsystemsOwnE2ETest {
         // controller-null return precisely so a stood-down session still gets a moving number; move
         // it below that return and this is the one assertion in the suite that goes red.
         long tickA = spaceClock(exec("artest space clock"));
-        Thread.sleep(3_000L);
+        GameTicks.advance(harness.client(), GameTicks.server(), OBSERVED_TICKS);
         long tickB = spaceClock(exec("artest space clock"));
         assertTrue("the clock must advance on a server where the space controller was never built —"
                         + " that is what the advance site sitting ahead of the controller check buys,"

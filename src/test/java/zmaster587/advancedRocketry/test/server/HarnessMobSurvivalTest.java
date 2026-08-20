@@ -1,5 +1,7 @@
 package zmaster587.advancedRocketry.test.server;
 
+import zmaster587.advancedRocketry.test.GameTicks;
+
 import org.junit.Test;
 
 import java.util.regex.Matcher;
@@ -20,6 +22,9 @@ import static org.junit.Assert.assertTrue;
  * after ~6 s of real server ticks.</p>
  */
 public class HarnessMobSurvivalTest extends AbstractSharedServerTest {
+
+    /** How much world the subject is given to survive, in ticks — the old "~6 s = 120 real ticks". */
+    private static final int SURVIVAL_TICKS = 120;
 
     private static final Pattern ENTITY_ID = Pattern.compile("\"entityId\":(-?\\d+)");
 
@@ -45,8 +50,8 @@ public class HarnessMobSurvivalTest extends AbstractSharedServerTest {
         assertTrue("spawn must report an entity id: " + spawned, m.find());
         int id = Integer.parseInt(m.group(1));
 
-        // The dedicated server keeps ticking while this JVM sleeps: ~6 s ≈ 120 real ticks.
-        Thread.sleep(6000L);
+        // The comment here already said what it meant: ~120 real ticks. Now it asks for them.
+        GameTicks.advance(client(), GameTicks.server(), SURVIVAL_TICKS);
 
         // deck-capture answers "entity not found" once the subject has been removed from the world.
         String after = exec("artest vs deck-capture 0 " + id);

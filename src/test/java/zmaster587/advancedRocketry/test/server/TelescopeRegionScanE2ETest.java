@@ -1,5 +1,7 @@
 package zmaster587.advancedRocketry.test.server;
 
+import zmaster587.advancedRocketry.test.GameTicks;
+
 import org.junit.Test;
 
 import static org.junit.Assert.assertEquals;
@@ -19,6 +21,13 @@ import static org.junit.Assert.assertTrue;
  * <p>Position-isolated at x=4300-4660 (clear of the observatory-multiblock fixtures at x=4000-4060).</p>
  */
 public class TelescopeRegionScanE2ETest extends AbstractSharedServerTest {
+
+    /**
+     * How much WORLD a survey is allowed to make progress in before it is inspected - the old
+     * 1 500 ms and 2 000 ms, said in the ticks the survey actually advances on.
+     */
+    private static final int MID_SURVEY_TICKS = 30;
+    private static final int STARVED_SURVEY_TICKS = 40;
 
     private static final int CY = 64;
     private static final int CZ = 4300;
@@ -277,7 +286,10 @@ public class TelescopeRegionScanE2ETest extends AbstractSharedServerTest {
 
         String started = exec("artest telescope scan " + where(x) + " 1 0 0 3");
         assertTrue("the survey did not start: " + started, started.contains("\"ok\":true"));
-        Thread.sleep(1500L);
+        // A survey advances per TICK, so how far it gets is a number of ticks. The old wall-clock
+        // pause gave it fewer of them on a busy box - which made "still scanning" easier to satisfy
+        // exactly when the machine was slowest, i.e. the test got weaker under load.
+        GameTicks.advance(client(), GameTicks.server(), MID_SURVEY_TICKS);
         String before = exec("artest telescope info " + where(x));
         assertTrue("the survey must still be running to be interrupted: " + before,
                 before.contains("\"scanning\":true"));
@@ -308,7 +320,7 @@ public class TelescopeRegionScanE2ETest extends AbstractSharedServerTest {
             String started = exec("artest telescope scan " + where(x) + " 1 0 0 2");
             assertTrue("the survey did not start: " + started, started.contains("\"ok\":true"));
 
-            Thread.sleep(2000L);
+            GameTicks.advance(client(), GameTicks.server(), STARVED_SURVEY_TICKS);
             String after = exec("artest telescope info " + where(x));
             assertTrue("an instrument with no data must still be waiting, not finished: " + after,
                     after.contains("\"scanning\":true"));

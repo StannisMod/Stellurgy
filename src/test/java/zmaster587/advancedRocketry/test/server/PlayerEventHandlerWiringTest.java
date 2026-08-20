@@ -2,6 +2,8 @@ package zmaster587.advancedRocketry.test.server;
 
 // migrated to AbstractSharedServerTest
 import org.junit.Assume;
+import zmaster587.advancedRocketry.test.GameTicks;
+
 import org.junit.Test;
 
 import java.util.regex.Matcher;
@@ -43,6 +45,12 @@ import static org.junit.Assert.assertTrue;
  * here is the necessary pre-condition for that join to be coherent.
  */
 public class PlayerEventHandlerWiringTest extends AbstractSharedServerTest {
+
+    /**
+     * Ticks the counters are watched across. The old 400 ms was "~4 ticks with headroom of 2"; asked
+     * for as ticks it is the same intent without the hope.
+     */
+    private static final int OBSERVED_TICKS = 10;
 
     private static final Pattern TIME_PATTERN = Pattern.compile("\"time\":(\\d+)");
     private static final Pattern WORLD_TIME_PATTERN =
@@ -89,9 +97,11 @@ public class PlayerEventHandlerWiringTest extends AbstractSharedServerTest {
         long t1 = parseGroup(TIME_PATTERN, first, "time");
         long w1 = parseGroup(WORLD_TIME_PATTERN, first, "worldTotalTime");
 
-        // The headless server ticks at ~20 Hz. 200ms wall = ~4 ticks; we
-        // ask for headroom of 2 to absorb scheduler jitter and CI noise.
-        Thread.sleep(400);
+        // Wait for TICKS of the server's own counter rather than for milliseconds. Not circular:
+        // three different counters are involved — the wait watches MinecraftServer's tick counter,
+        // and the assertions below are about vanilla's worldTotalTime and AR's own handler time. What
+        // the old sleep bought was "probably a few ticks"; this buys the ticks.
+        GameTicks.advance(client(), GameTicks.server(), OBSERVED_TICKS);
 
         String second = ok(client().execute("artest event tick-counter"));
         long t2 = parseGroup(TIME_PATTERN, second, "time");

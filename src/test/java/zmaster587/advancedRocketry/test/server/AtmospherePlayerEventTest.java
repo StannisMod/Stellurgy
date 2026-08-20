@@ -5,6 +5,8 @@ import com.github.stannismod.forge.testing.server.RealDedicatedServerHarness;
 import org.junit.After;
 import org.junit.Assume;
 import org.junit.Before;
+import zmaster587.advancedRocketry.test.GameTicks;
+
 import org.junit.Test;
 
 import java.nio.charset.StandardCharsets;
@@ -32,6 +34,12 @@ import static org.junit.Assert.assertTrue;
  * cadence {@code AtmosphereHandler.onTick} subscribes to.</p>
  */
 public class AtmospherePlayerEventTest {
+
+    /**
+     * Ticks granted beyond the ones explicitly requested, for the handler work that trails them.
+     * The old form was "+500 ms", which is the same slack said in the units of the machine.
+     */
+    private static final int TICK_SLACK = 10;
 
     private static final int DIM_VAC = 9411;
     private static final int DIM_AIR = 9412;
@@ -96,8 +104,10 @@ public class AtmospherePlayerEventTest {
         String fake = exec("artest player ensure-fake " + dim + " 8.5 120 8.5");
         assertTrue("ensure-fake must succeed: " + fake, fake.contains("\"ok\":true"));
         assertTrue(exec("artest player tick-living " + ticks).contains("\"ok\":true"));
-        // Off-thread wait — the server free-runs the ticks meanwhile.
-        Thread.sleep(ticks * 50L + 500L);
+        // Let the server actually RUN those ticks. Budgeted in ticks, which is what the caller asked
+        // for: the old wall-clock equivalent bought proportionally fewer of them on a busy box, so
+        // the atmosphere had less time to settle exactly when the machine was least able to give it.
+        GameTicks.advance(harness.client(), GameTicks.server(), ticks + TICK_SLACK);
     }
 
     private String field(Pattern p, String src) {

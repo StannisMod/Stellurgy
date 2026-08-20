@@ -5,6 +5,8 @@ import com.github.stannismod.forge.testing.server.RealDedicatedServerHarness;
 import org.junit.After;
 import org.junit.Assume;
 import org.junit.Before;
+import zmaster587.advancedRocketry.test.GameTicks;
+
 import org.junit.Test;
 
 import java.nio.charset.StandardCharsets;
@@ -27,6 +29,9 @@ import static org.junit.Assert.assertTrue;
  * Player supply: {@code ensure-fake}.
  */
 public class VacuumGuardsTest {
+
+    /** The 40 requested ticks plus room for the AtmosphereHandler to settle — the old 2500 ms. */
+    private static final int SETTLE_TICKS = 50;
 
     private static final int DIM_VAC = 9611;
     private static final int DIM_AIR = 9612;
@@ -98,8 +103,10 @@ public class VacuumGuardsTest {
         String fake = exec("artest player ensure-fake " + dim + " 8.5 120 8.5");
         assertTrue("ensure-fake must succeed: " + fake, fake.contains("\"ok\":true"));
         exec("artest player tick-living 40");
-        // Off-thread wait — the server free-runs the ticks meanwhile.
-        Thread.sleep(2500L);
+        // Let the server run those ticks plus room for the AtmosphereHandler to settle, so the guards
+        // below query a live atmosphere. In ticks: the settle is per-tick work, and a busy box used to
+        // buy it fewer of them.
+        GameTicks.advance(harness.client(), GameTicks.server(), SETTLE_TICKS);
     }
 
     /** Sleep in a vacuum dim is refused with OTHER_PROBLEM. */
