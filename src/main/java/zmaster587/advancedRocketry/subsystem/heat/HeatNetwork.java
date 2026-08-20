@@ -75,11 +75,16 @@ public final class HeatNetwork {
     public static final int TICKS_PER_SECOND = 20;
 
     /**
-     * A pump's efficiency is capped at this multiple of Carnot however wide the gap gets, so a hot
-     * side that has crept up to its cold side's temperature cannot divide by nearly zero and hand a
-     * ship unbounded free cooling.
+     * The ceiling on the cooling coefficient, from config.
+     * <p>
+     * Carnot climbs without bound as the two sides approach one temperature, and a machine that
+     * moves unlimited heat for nothing is not a machine. It was a hard-coded 50 until 2026-08-20 -
+     * the one number in this subsystem that was neither derived nor tunable, and the #347 fix moved
+     * it into the regime that decides how cheap a chiller is when it is barely fighting anything.
      */
-    private static final double MAX_COP = 50.0D;
+    private static double maxCop() {
+        return Math.max(1.0D, ARConfiguration.getCurrentConfig().shipHeatChillerMaxCop);
+    }
     /**
      * The floor on the cooling coefficient — a hundred units of work per unit moved.
      * <p>
@@ -654,14 +659,14 @@ public final class HeatNetwork {
         // price a cooling duty undercharged by that factor: 1.7x across a room-to-500 K gradient,
         // eight-fold at 100 K, without bound as the cold side approaches zero.
         double carnot = hotKelvin <= coldKelvin
-                ? MAX_COP
+                ? maxCop()
                 : coldKelvin / (hotKelvin - coldKelvin);
         // A cooling COP BELOW ONE is ordinary physics — it says the work costs more than the heat it
         // moves, which is exactly the regime a wide gradient puts you in. The old floor of 1.0
         // forbade that case, so one unit of work always moved at least one unit of heat however
         // hopeless the gradient, and the Carnot ceiling this whole mechanic advertises was not in
         // force at all. The floor that remains is only there to keep the division finite.
-        return Math.min(MAX_COP, Math.max(MIN_COP, carnot * fraction));
+        return Math.min(maxCop(), Math.max(MIN_COP, carnot * fraction));
     }
 
     private static boolean drawsFromThisLoop(IHeatPump pump, BlockPos pumpPos, Set<BlockPos> members) {

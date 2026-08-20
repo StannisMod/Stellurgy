@@ -375,10 +375,17 @@ public class TileOxygenVent extends TileInventoriedRFConsumerTank implements IBl
 
                         activateAdjBlocks();
 
-                        atmhandler.setAtmosphereType(this, Atmosphere.PRESSURIZEDAIR);
+                        atmhandler.refreshDerivedAtmosphere(this);
                     }
                 } else if (hasFluid) {
-                    atmhandler.setAtmosphereType(this, DimensionManager.getInstance().getDimensionProperties(this.world.provider.getDimension()).getAtmosphere());
+                    // NOT the planet's atmosphere. That was right while a zone had no contents of its
+                    // own and "the vent stopped supplying" therefore meant "the room is outside
+                    // again" — but a sealed room keeps the air it already holds when its tank runs
+                    // dry, and the crew go on breathing it down. Asserting vacuum over a room full of
+                    // air made the label disagree with the gas until something happened to derive it,
+                    // and the block-level readers of that label (fire, combustion) have no crew
+                    // walking past to trigger the refresh.
+                    atmhandler.refreshDerivedAtmosphere(this);
 
                     deactivateAdjBlocks();
 

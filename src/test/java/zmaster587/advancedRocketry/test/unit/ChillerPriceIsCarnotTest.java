@@ -23,10 +23,16 @@ import static org.junit.Assert.assertTrue;
  */
 public class ChillerPriceIsCarnotTest {
 
-    /** Pinned so no assertion depends on the shipped default moving. */
+    /**
+     * Pinned so no assertion depends on the shipped defaults moving — and because a unit test runs
+     * against a config nobody loaded, where both of these are 0 until they are said out loud. A
+     * ceiling of zero collapses every answer onto the floor, which is a different function.
+     */
     private static final int HALF_OF_IDEAL = 500;
+    private static final int MAX_COP = 50;
 
     private int prevFraction;
+    private int prevMaxCop;
 
     @BeforeClass
     public static void bootstrap() {
@@ -36,12 +42,15 @@ public class ChillerPriceIsCarnotTest {
     @Before
     public void setFraction() {
         prevFraction = ARConfiguration.getCurrentConfig().shipHeatChillerCopFraction;
+        prevMaxCop = ARConfiguration.getCurrentConfig().shipHeatChillerMaxCop;
         ARConfiguration.getCurrentConfig().shipHeatChillerCopFraction = HALF_OF_IDEAL;
+        ARConfiguration.getCurrentConfig().shipHeatChillerMaxCop = MAX_COP;
     }
 
     @After
     public void restoreFraction() {
         ARConfiguration.getCurrentConfig().shipHeatChillerCopFraction = prevFraction;
+        ARConfiguration.getCurrentConfig().shipHeatChillerMaxCop = prevMaxCop;
     }
 
     /** Half of the Carnot ideal, and the ideal is the COOLING one. */
