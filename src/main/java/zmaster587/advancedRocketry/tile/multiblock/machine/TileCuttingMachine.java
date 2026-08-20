@@ -1,5 +1,7 @@
 package zmaster587.advancedRocketry.tile.multiblock.machine;
 
+import zmaster587.advancedRocketry.tile.heat.TileWasteHeatMachine;
+
 import net.minecraft.block.state.IBlockState;
 import net.minecraft.entity.EntityLivingBase;
 import net.minecraft.entity.player.EntityPlayer;
@@ -17,11 +19,10 @@ import zmaster587.libVulpes.block.RotatableBlock;
 import zmaster587.libVulpes.inventory.modules.IModularInventory;
 import zmaster587.libVulpes.inventory.modules.ModuleBase;
 import zmaster587.libVulpes.inventory.modules.ModuleProgress;
-import zmaster587.libVulpes.tile.multiblock.TileMultiblockMachine;
 
 import java.util.List;
 
-public class TileCuttingMachine extends TileMultiblockMachine implements IModularInventory {
+public class TileCuttingMachine extends TileWasteHeatMachine implements IModularInventory {
 
     private static final Object[][][] structure = new Object[][][]{
             {{'I', 'c', 'O'},

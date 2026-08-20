@@ -1,5 +1,7 @@
 package zmaster587.advancedRocketry.tile.satellite;
 
+import zmaster587.advancedRocketry.tile.heat.TileWasteHeatPowerConsumer;
+
 import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.inventory.IInventory;
 import net.minecraft.item.ItemStack;
@@ -20,7 +22,6 @@ import zmaster587.libVulpes.client.util.ProgressBarImage;
 import zmaster587.libVulpes.inventory.modules.*;
 import zmaster587.libVulpes.network.PacketHandler;
 import zmaster587.libVulpes.network.PacketMachine;
-import zmaster587.libVulpes.tile.multiblock.TileMultiPowerConsumer;
 import zmaster587.libVulpes.util.EmbeddedInventory;
 
 import javax.annotation.Nonnull;
@@ -28,7 +29,7 @@ import javax.annotation.Nullable;
 import java.util.LinkedList;
 import java.util.List;
 
-public class TileSatelliteBuilder extends TileMultiPowerConsumer implements IModularInventory, IInventory, IButtonInventory {
+public class TileSatelliteBuilder extends TileWasteHeatPowerConsumer implements IModularInventory, IInventory, IButtonInventory {
 
     public static final Object[][][] structure = new Object[][][]{
             {{'c'}},

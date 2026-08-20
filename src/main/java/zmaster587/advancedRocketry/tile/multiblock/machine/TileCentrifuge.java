@@ -1,5 +1,7 @@
 package zmaster587.advancedRocketry.tile.multiblock.machine;
 
+import zmaster587.advancedRocketry.tile.heat.TileWasteHeatMachine;
+
 import io.netty.buffer.ByteBuf;
 import net.minecraft.block.state.IBlockState;
 import net.minecraft.entity.player.EntityPlayer;
@@ -29,13 +31,12 @@ import zmaster587.libVulpes.network.PacketHandler;
 import zmaster587.libVulpes.network.PacketMachine;
 import zmaster587.libVulpes.recipe.RecipesMachine;
 import zmaster587.libVulpes.recipe.RecipesMachine.ChanceFluidStack;
-import zmaster587.libVulpes.tile.multiblock.TileMultiblockMachine;
 
 import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.List;
 
-public class TileCentrifuge extends TileMultiblockMachine {
+public class TileCentrifuge extends TileWasteHeatMachine {
     public static final Object[][][] structure = {
 
             {{Blocks.AIR, new BlockMeta(LibVulpesBlocks.blockStructureBlock), 'l'},

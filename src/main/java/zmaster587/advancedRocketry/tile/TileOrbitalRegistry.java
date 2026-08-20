@@ -1,5 +1,7 @@
 package zmaster587.advancedRocketry.tile;
 
+import zmaster587.advancedRocketry.tile.heat.TileWasteHeatPowerConsumer;
+
 import io.netty.buffer.ByteBuf;
 import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.inventory.IInventory;
@@ -33,7 +35,6 @@ import zmaster587.libVulpes.inventory.GuiHandler;
 import zmaster587.libVulpes.inventory.modules.*;
 import zmaster587.libVulpes.network.PacketHandler;
 import zmaster587.libVulpes.network.PacketMachine;
-import zmaster587.libVulpes.tile.multiblock.TileMultiPowerConsumer;
 import zmaster587.libVulpes.util.EmbeddedInventory;
 import zmaster587.libVulpes.util.IconResource;
 
@@ -59,7 +60,7 @@ import java.util.List;
  *   - Slot 1: output written chip
  *   - "Scan" button to populate/refresh the list from server state
  */
-public class TileOrbitalRegistry extends TileMultiPowerConsumer
+public class TileOrbitalRegistry extends TileWasteHeatPowerConsumer
         implements IModularInventory, IButtonInventory, IGuiCallback, IInventory {
 
     // Simple 1x1 structure

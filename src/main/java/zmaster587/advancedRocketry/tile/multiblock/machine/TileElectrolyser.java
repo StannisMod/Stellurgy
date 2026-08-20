@@ -1,5 +1,7 @@
 package zmaster587.advancedRocketry.tile.multiblock.machine;
 
+import zmaster587.advancedRocketry.tile.heat.TileWasteHeatMachine;
+
 import net.minecraft.block.state.IBlockState;
 import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.util.SoundEvent;
@@ -13,11 +15,10 @@ import zmaster587.libVulpes.api.LibVulpesBlocks;
 import zmaster587.libVulpes.block.BlockMeta;
 import zmaster587.libVulpes.inventory.modules.ModuleBase;
 import zmaster587.libVulpes.inventory.modules.ModuleProgress;
-import zmaster587.libVulpes.tile.multiblock.TileMultiblockMachine;
 
 import java.util.List;
 
-public class TileElectrolyser extends TileMultiblockMachine {
+public class TileElectrolyser extends TileWasteHeatMachine {
     public static final Object[][][] structure = {
             {{null, null, null},
                     {'P', "blockCoil", 'P'}},

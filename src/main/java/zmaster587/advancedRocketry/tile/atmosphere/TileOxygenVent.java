@@ -81,8 +81,52 @@ public class TileOxygenVent extends TileInventoriedRFConsumerTank implements IBl
      * what it has, which is the behaviour a player who never opens this screen should get.
      */
     private int zonePriority;
+    /** How often a vent re-runs the flood fill that decides whether its room is closed. */
+    private static final int SEAL_CHECK_TICKS = 100;
+    /** How often an unsealed vent widens its diagnostic trace by one block. */
+    private static final int TRACE_STEP_TICKS = 10;
+    /** How often a scrubber cartridge is charged for the work it has been doing. */
+    private static final int SCRUBBER_CHARGE_TICKS = 200;
+
     /** Ticks since this vent last let a breached zone's air out. */
     private int ticksSinceVenting;
+    /**
+     * The three periodic jobs below, each on its OWN counter rather than on a world-clock modulo.
+     * <p>
+     * A modulo of the world clock has two faults, and this file documents both one method further
+     * down: every vent in the world fires on the same tick, and a tile the harness force-ticks sees
+     * ONE world time across all of its ticks, so the job either never runs or runs every time. The
+     * second fault reached a CONSUMABLE — cartridges were charged on a schedule no test could make
+     * happen — and it also decided when a vent notices its hull has opened.
+     * <p>
+     * The seal check starts due, so a vent placed into a finished room answers on its first tick
+     * instead of waiting out a period it happens to have started in the middle of.
+     */
+    private int ticksSinceSealCheck = SEAL_CHECK_TICKS;
+    private int ticksSinceTraceStep;
+    private int ticksSinceScrubberCharge;
+    /**
+     * This zone's hull is OPEN — not merely "the vent is not maintaining it right now".
+     * <p>
+     * The two are different facts and only one of them should cost the ship its air. A vent is
+     * momentarily not maintaining a perfectly intact room on its first tick after every load (the
+     * seal is deliberately dropped so it gets re-checked), while it is switched off, and while it is
+     * browning out. None of those is a hole in the hull, and treating them as one drained a sealed,
+     * powered, fuelled room on every chunk reload.
+     * <p>
+     * Set only where the room is actually gone: a seal that HELD and then found its zone empty, or a
+     * seal check that ran and failed. Deliberately not persisted — after a load the check runs again
+     * within a hundred ticks and answers for itself, which is a better authority than a saved bit.
+     */
+    private boolean breached;
+    /**
+     * This vent has held a seal at least once since it loaded.
+     * <p>
+     * It is what tells "the room opened" apart from "the room is not built yet", and both look
+     * identical from a single tick: no seal, no zone, air in hand. A vent that has never sealed is
+     * simply a machine somebody has just placed.
+     */
+    private boolean everSealed;
     private ModuleButton priorityButton;
 
 
@@ -258,6 +302,19 @@ public class TileOxygenVent extends TileInventoriedRFConsumerTank implements IBl
                 firstRun = false;
             }
 
+            // Observed every tick, never behind the `% 100` gate below. That gate is a world-clock
+            // modulo, and a force-ticked tile sees the same world time on every one of its ticks —
+            // the very trap `ventBreachedAir` keeps its own counter to avoid. A fact about whether
+            // this vent has ever held a seal must not be reachable only on one tick in a hundred.
+            everSealed |= isSealed;
+            // A vent that HAS sealed here and now has no zone left has lost its room, whether it
+            // notices while still flagged sealed or after something else has already cleared the
+            // flag. Both orders happen: breaking the hull runs a block update that can unseal the
+            // vent before its own tick comes round, which is why testing `isSealed` alone missed the
+            // ordinary case of a player opening a door.
+            if (everSealed && atmhandler.getBlobSize(this) == 0) {
+                breached = true;
+            }
             if (isSealed && atmhandler.getBlobSize(this) == 0) {
                 deactivateAdjBlocks();
                 setSealed(false);
@@ -271,12 +328,21 @@ public class TileOxygenVent extends TileInventoriedRFConsumerTank implements IBl
                 setSealed(false);
             } else if (!isSealed && isTurnedOn() && hasEnoughEnergy(getPowerPerOperation())) {
 
-                if (world.getTotalWorldTime() % 100 == 0)
-                    setSealed(atmhandler.addBlock(this, new HashedBlockPosition(pos)));
+                if (++ticksSinceSealCheck >= SEAL_CHECK_TICKS) {
+                    ticksSinceSealCheck = 0;
+                    // The check RAN, so its answer is worth acting on either way: sealed means the
+                    // hull closed, failed means it is open. Before it runs there is no answer, which
+                    // is why nothing above this line may conclude a breach.
+                    boolean sealed = atmhandler.addBlock(this, new HashedBlockPosition(pos));
+                    breached = !sealed;
+                    everSealed |= sealed;
+                    setSealed(sealed);
+                }
 
                 if (isSealed) {
                     activateAdjBlocks();
-                } else if (world.getTotalWorldTime() % 10 == 0 && allowTrace) {
+                } else if (allowTrace && ++ticksSinceTraceStep >= TRACE_STEP_TICKS) {
+                    ticksSinceTraceStep = 0;
                     radius++;
                     if (radius > 128)
                         radius = 0;
@@ -288,7 +354,8 @@ public class TileOxygenVent extends TileInventoriedRFConsumerTank implements IBl
                 //If scrubbers exist and the config allows then use the cartridge
                 if (ARConfiguration.getCurrentConfig().scrubberRequiresCartrige) {
                     //TODO: could be optimized
-                    if (world.getTotalWorldTime() % 200 == 0) {
+                    if (++ticksSinceScrubberCharge >= SCRUBBER_CHARGE_TICKS) {
+                        ticksSinceScrubberCharge = 0;
                         numScrubbers = 0;
                         for (TileCO2Scrubber scrubber : scrubbers) {
                             numScrubbers = scrubber.useCharge() ? numScrubbers + 1 : numScrubbers;
@@ -302,6 +369,7 @@ public class TileOxygenVent extends TileInventoriedRFConsumerTank implements IBl
 
                 if ((drainedFluid != null && drainedFluid.amount >= amtToDrain) || amtToDrain == 0) {
                     this.drain(amtToDrain, true);
+                    replenishOxygen(atmhandler, amtToDrain);
                     if (!hasFluid) {
                         hasFluid = true;
 
@@ -477,8 +545,49 @@ public class TileOxygenVent extends TileInventoriedRFConsumerTank implements IBl
      * <p>
      * All three gases go together and proportionally — vacuum does not sort them.
      */
+    /**
+     * The oxygen the vent just spent BECOMES the room's oxygen.
+     * <p>
+     * <b>Without this the machine only ever set a LABEL.</b> It drained its tank, published
+     * {@code PRESSURIZEDAIR} and left the zone's actual composition untouched — so a sealed, powered,
+     * oxygen-fed room could sit at zero oxygen while calling itself pressurised, and the first
+     * question anyone asked of the gas rather than of the name answered "unbreathable". A label is a
+     * view of the state; it cannot stand in for it.
+     * <p>
+     * The amount is not a new tuning number: it is the fluid the vent already pays, converted at the
+     * one exchange rate the rest of life support uses, so a bigger room costs proportionally more to
+     * fill and the fuel economy is exactly what it was.
+     * <p>
+     * <b>It tops up to SEA LEVEL and stops there</b>, rather than to the safe band's ceiling. A vent
+     * maintains a room; enriching one that is already breathable would walk it toward the toxic and
+     * fire-prone end on its own, which is a thing a player asks the separator for on purpose and
+     * never a thing the life-support machine should do behind their back. A room that needs nothing
+     * therefore receives nothing — and, because gas arrives at the temperature it was stored at, a
+     * hot room is not quietly chilled by a machine that had no work to do.
+     */
+    private void replenishOxygen(AtmosphereHandler atmhandler, int millibuckets) {
+        if (millibuckets <= 0 || !ARConfiguration.getCurrentConfig().lifeSupportZones)
+            return;
+        AirState air = atmhandler.getAirState(this);
+        if (air == null)
+            return;
+        long missing = Math.min(AirState.earthLike().getOxygen() - air.getOxygen(),
+                air.oxygenHeadroom());
+        if (missing <= 0L)
+            return;
+        long denominator = (long) Math.max(1, atmhandler.getBlobSize(this))
+                * ARConfiguration.getCurrentConfig().lifeSupportFluidPerAtmBlock;
+        if (denominator <= 0L)
+            return;
+        long admitted = Math.min((long) millibuckets * AirState.ONE_ATM / denominator, missing);
+        if (admitted > 0L) {
+            air.addOxygen(admitted, AirState.ambientKelvin());
+            markDirty();
+        }
+    }
+
     private void ventBreachedAir() {
-        if (world == null || world.isRemote || isMaintainingAtmosphere()
+        if (world == null || world.isRemote || !breached || isMaintainingAtmosphere()
                 || !ARConfiguration.getCurrentConfig().lifeSupportZones)
             return;
         long ratePerSecond = ARConfiguration.getCurrentConfig().lifeSupportBreachVentRate;

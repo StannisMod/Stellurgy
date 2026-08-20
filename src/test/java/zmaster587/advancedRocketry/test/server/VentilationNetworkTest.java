@@ -100,7 +100,11 @@ public class VentilationNetworkTest extends AbstractSharedServerTest {
         String after = ventInfo(CX_ISOLATION);
         assertEquals("no regeneration may cross a cable belonging to another subsystem: " + after,
                 ppm(150_000), extract(after, AIR_CO2));
-        assertEquals("and the oxygen must be untouched: " + after, ppm(60_000), extract(after, AIR_O2));
+        // A floor, not an equality: this room's own vent is running and restores oxygen toward sea
+        // level, which is its job. What a foreign subsystem's cable may not do is carry regeneration
+        // -- the CO2 assertion above -- or take the room's oxygen away.
+        assertTrue("and the oxygen must not be drawn down across it: " + after,
+                extract(after, AIR_O2) >= ppm(60_000));
     }
 
     /**

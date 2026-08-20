@@ -54,8 +54,13 @@ public class CombustionFollowsTheOxidiserTest extends AbstractSharedServerTest {
 
         setAir(AirMix.THIN);
         String thin = atmosphere();
-        assertEquals("premise: the composition must have arrived: " + thin,
-                ppm(THIN_OXYGEN), longOf(thin, OXYGEN));
+        // The premise is that the room is thin, not that it holds one exact figure: a maintained
+        // room's vent begins restoring oxygen the moment the composition lands, so the number moves
+        // between the write and the read. What matters to this test is that it stays far below the
+        // breathing threshold, which is what the rest of the scenario rests on.
+        long thinOxygen = longOf(thin, OXYGEN);
+        assertTrue("premise: the composition must have arrived, and thin: " + thin,
+                thinOxygen >= ppm(THIN_OXYGEN) && thinOxygen < ppm(THIN_OXYGEN) + ppm(1_000));
         assertEquals("premise: air this thin is not breathable: " + thin,
                 "false", stringOf(thin, BREATHABLE_AIR));
         assertEquals("nothing may light in air this thin - and this is the defect the slice closes,"

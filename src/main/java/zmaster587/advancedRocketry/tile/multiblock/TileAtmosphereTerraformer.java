@@ -1,5 +1,7 @@
 package zmaster587.advancedRocketry.tile.multiblock;
 
+import zmaster587.advancedRocketry.tile.heat.TileWasteHeatPowerConsumer;
+
 import io.netty.buffer.ByteBuf;
 import net.minecraft.client.Minecraft;
 import net.minecraft.entity.player.EntityPlayer;
@@ -30,7 +32,6 @@ import zmaster587.libVulpes.inventory.TextureResources;
 import zmaster587.libVulpes.inventory.modules.*;
 import zmaster587.libVulpes.network.PacketHandler;
 import zmaster587.libVulpes.network.PacketMachine;
-import zmaster587.libVulpes.tile.multiblock.TileMultiPowerConsumer;
 import zmaster587.libVulpes.tile.multiblock.TileMultiblockMachine;
 import zmaster587.libVulpes.util.INetworkMachine;
 import zmaster587.libVulpes.util.IconResource;
@@ -40,7 +41,7 @@ import java.util.List;
 
 //This code is a complete mess. it should be rewritten just like the space laser, but it kinda works, so I'll leave it with this for now
 
-public class TileAtmosphereTerraformer extends TileMultiPowerConsumer implements INetworkMachine {
+public class TileAtmosphereTerraformer extends TileWasteHeatPowerConsumer implements INetworkMachine {
 
     private static final Object[][][] structure = new Object[][][]{
             {{null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null},

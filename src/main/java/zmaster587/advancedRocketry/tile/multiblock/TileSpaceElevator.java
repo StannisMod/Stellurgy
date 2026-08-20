@@ -1,5 +1,7 @@
 package zmaster587.advancedRocketry.tile.multiblock;
 
+import zmaster587.advancedRocketry.tile.heat.TileWasteHeatPowerConsumer;
+
 import net.minecraft.block.state.IBlockState;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.player.EntityPlayer;
@@ -36,13 +38,12 @@ import zmaster587.libVulpes.inventory.modules.ModuleText;
 import zmaster587.libVulpes.items.ItemLinker;
 import zmaster587.libVulpes.network.PacketHandler;
 import zmaster587.libVulpes.network.PacketMachine;
-import zmaster587.libVulpes.tile.multiblock.TileMultiPowerConsumer;
 import zmaster587.libVulpes.util.HashedBlockPosition;
 
 import javax.annotation.Nonnull;
 import java.util.List;
 
-public class TileSpaceElevator extends TileMultiPowerConsumer implements IModularInventory, ILinkableTile, ITickable {
+public class TileSpaceElevator extends TileWasteHeatPowerConsumer implements IModularInventory, ILinkableTile, ITickable {
 
     private static final byte SUMMON_PACKET = 2;
     private static final int BUTTON_ID_OFFSET = 5;

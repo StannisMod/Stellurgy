@@ -1,5 +1,7 @@
 package zmaster587.advancedRocketry.tile.multiblock.machine;
 
+import zmaster587.advancedRocketry.tile.heat.TileWasteHeatMachine;
+
 import net.minecraft.block.state.IBlockState;
 import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.util.SoundEvent;
@@ -16,11 +18,10 @@ import zmaster587.libVulpes.inventory.modules.IModularInventory;
 import zmaster587.libVulpes.inventory.modules.ModuleBase;
 import zmaster587.libVulpes.inventory.modules.ModuleProgress;
 import zmaster587.libVulpes.inventory.modules.ModuleText;
-import zmaster587.libVulpes.tile.multiblock.TileMultiblockMachine;
 
 import java.util.List;
 
-public class TileCrystallizer extends TileMultiblockMachine implements IModularInventory {
+public class TileCrystallizer extends TileWasteHeatMachine implements IModularInventory {
 
 
     public static final Object[][][] structure = {{{AdvancedRocketryBlocks.blockQuartzCrucible, AdvancedRocketryBlocks.blockQuartzCrucible, AdvancedRocketryBlocks.blockQuartzCrucible},

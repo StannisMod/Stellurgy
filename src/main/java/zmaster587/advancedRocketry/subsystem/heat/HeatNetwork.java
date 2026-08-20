@@ -12,6 +12,7 @@ import zmaster587.advancedRocketry.api.capability.IHeatEmitter;
 import zmaster587.advancedRocketry.api.capability.IHeatPump;
 import zmaster587.advancedRocketry.api.capability.IHeatSink;
 import zmaster587.advancedRocketry.atmosphere.AirState;
+import zmaster587.advancedRocketry.atmosphere.AtmosphereHandler;
 import zmaster587.advancedRocketry.tile.heat.TileHeatChiller;
 import zmaster587.advancedRocketry.tile.heat.TileHeatIntakeDuct;
 import zmaster587.advancedRocketry.subsystem.network.ISubsystemNetworkController;
@@ -79,6 +80,14 @@ public final class HeatNetwork {
      * ship unbounded free cooling.
      */
     private static final double MAX_COP = 50.0D;
+    /**
+     * The floor on the cooling coefficient — a hundred units of work per unit moved.
+     * <p>
+     * It is a numerical guard and NOT a balance number: it keeps {@code Qc / cop} finite as the cold
+     * side approaches absolute zero. A chiller down here asks for work no reactor will pay, so it
+     * moves almost nothing, which is the correct answer rather than a clamped one.
+     */
+    private static final double MIN_COP = 0.01D;
 
     private HeatNetwork() {
     }
@@ -278,6 +287,16 @@ public final class HeatNetwork {
         // with several loops does not spend all of them on the same tick.
         double loopKelvin = temperature(stored, capacity);
         if (where != null && meltingDue(world, where)) {
+            // A loop is made of BLOCKS, and a block standing in a sealed room is in contact with that
+            // room's air. This is the only path by which a hot ship becomes hot to be inside, and it
+            // rides the melt clock because it walks the same members: both ask "what is this loop
+            // touching", and asking twice on different ticks would cost twice for one answer.
+            long intoCabins = conductIntoCabins(world, state.getMemberPositions(), loopKelvin, capacity);
+            if (intoCabins > 0L) {
+                stored = Math.max(0L, stored - intoCabins);
+                distribute(mass, capacity, stored);
+                loopKelvin = temperature(stored, capacity);
+            }
             HullMelting.sweep(world, state.getMemberPositions(), loopKelvin, environment);
         }
 
@@ -317,6 +336,15 @@ public final class HeatNetwork {
             }
             // Only the loop on the pump's HOT face carries its metal; the cold side merely feeds it.
             if (drawsFromThisLoop(pump, pumpPos, memberPositions)) {
+                continue;
+            }
+            // "Not the cold side" is not the same as "the hot side" — a loop that merely TOUCHES the
+            // chiller is neither, and an air-cooled one has no coolant cold side at all, so the test
+            // above can never exclude anything for it. Without this, a chiller's metal is bolted onto
+            // every loop it happens to sit against and conducts heat between loops the builder
+            // deliberately kept apart.
+            BlockPos hotAnchor = pump.getHotSideAnchor();
+            if (hotAnchor == null || !memberPositions.contains(hotAnchor)) {
                 continue;
             }
             bolted.add((IHeatNode) tile);
@@ -482,14 +510,23 @@ public final class HeatNetwork {
             if (throughput <= 0) {
                 continue;
             }
+            // Pay for what can actually MOVE, never for the size of the pipe. Charging for throughput
+            // against air that has nothing left to give bills the loop in full for heat that never
+            // arrives, and the machine becomes a pure heater with a cold room attached — the COP
+            // cannot catch it, because its own floor of 1 keeps the price finite however cold the
+            // room gets. Same shape the coolant branch already uses.
+            long movable = Math.min(throughput, air.availableHeat(volume));
+            if (movable <= 0L) {
+                continue;
+            }
 
             double cop = coefficientOfPerformance(air.getTemperatureKelvin(), hotKelvin);
-            long workWanted = Math.max(1L, (long) (throughput / cop));
+            long workWanted = Math.max(1L, (long) (movable / cop));
             long workPaid = Math.max(0L, pump.payWork(workWanted));
             if (workPaid <= 0L) {
                 continue;
             }
-            long moved = workPaid >= workWanted ? throughput : throughput * workPaid / workWanted;
+            long moved = workPaid >= workWanted ? movable : movable * workPaid / workWanted;
             long taken = air.removeHeat(moved, volume);
             delivered += taken + workPaid;
             workTotal += workPaid;
@@ -542,13 +579,89 @@ public final class HeatNetwork {
      * Carnot, scaled by what a real machine manages. Where the hot side is no hotter than the cold
      * one there is no gradient to fight, so the bound is only the absolute ceiling.
      */
-    static double coefficientOfPerformance(double coldKelvin, double hotKelvin) {
+    /**
+     * Warm the sealed rooms this loop's blocks stand in, and tell the caller what that cost the loop.
+     * <p>
+     * <b>Only downhill.</b> A cabin hotter than the loop is the chiller's business, through a duct a
+     * builder had to place; conduction is not a second, free way to cool a ship. One deposit per
+     * ZONE rather than per block: a run of twenty pipes through one cabin is one thermal contact seen
+     * twenty times, and charging it twenty times would make a long loop heat a room faster than a
+     * hotter one.
+     * <p>
+     * The rate is {@code shipHeatCabinConductionFraction} of the gap per call, so it is a relaxation
+     * toward equality rather than a fixed wattage: the hotter the loop is relative to the room, the
+     * faster the room follows it, and neither can overshoot the other.
+     */
+    private static long conductIntoCabins(World world, Set<BlockPos> members, double loopKelvin,
+                                          long capacity) {
+        int fraction = ARConfiguration.getCurrentConfig().shipHeatCabinConductionFraction;
+        if (fraction <= 0 || capacity <= 0L || members.isEmpty()) {
+            return 0L;
+        }
+        // The config states a rate PER SECOND and this runs on the melt clock, so the amount is
+        // scaled by how long that clock actually waited. Without the scale `shipHeatMeltCheckTicks`
+        // would silently become a second knob on how fast a ship cooks its crew, and its own comment
+        // — "raising it does not make a ship safer, only slower to lose its hull" — would be false.
+        // One number, one meaning: the melt clock decides GRANULARITY here and never rate.
+        double seconds = Math.max(1, HullMelting.checkIntervalTicks()) / 20.0D;
+        AtmosphereHandler handler =
+                AtmosphereHandler.getOxygenHandler(world.provider.getDimension());
+        if (handler == null) {
+            return 0L;
+        }
+        Set<AirState> served = new HashSet<>();
+        long given = 0L;
+        for (BlockPos pos : members) {
+            if (!world.isBlockLoaded(pos)) {
+                continue;
+            }
+            AirState air = handler.getAirStateAt(pos);
+            // Identity, not equality: two rooms holding the same gases are still two rooms.
+            if (air == null || !served.add(air)) {
+                continue;
+            }
+            int volume = Math.max(1, handler.getBlobSizeAt(pos));
+            double gap = loopKelvin - air.getTemperatureKelvin();
+            if (gap <= 0.0D) {
+                continue;
+            }
+            // Never past equilibrium. `fraction * seconds` can exceed 1 at a long melt interval, and
+            // an unclamped relaxation would then drive the cabin HOTTER than the loop that warmed
+            // it — which conduction cannot do, and which would hand the chiller path a room hotter
+            // than its own coolant on the next tick.
+            long toEquilibrium = Math.round(gap * air.getHeatCapacity(volume));
+            long wanted = Math.min(toEquilibrium,
+                    Math.round(gap * air.getHeatCapacity(volume) * fraction / 1000.0D * seconds));
+            if (wanted <= 0L) {
+                continue;
+            }
+            given += air.addHeat(wanted, volume);
+        }
+        return given;
+    }
+
+    /**
+     * What one unit of work buys, as heat taken off the COLD side. Public because it is the priced
+     * half of the chiller contract and a pure function of two temperatures: worth stating once, and
+     * worth being able to interrogate directly rather than through a loop that happens to run one.
+     */
+    public static double coefficientOfPerformance(double coldKelvin, double hotKelvin) {
         double fraction = Math.max(0.001D,
                 ARConfiguration.getCurrentConfig().shipHeatChillerCopFraction / 1000.0D);
+        // The COOLING coefficient, Qc/W, because Qc is what every caller divides by it: the heat
+        // taken OFF the cold side. It used to be `hot / (hot - cold)`, which is Qh/W — the HEATING
+        // coefficient of the same machine, and a different number by a factor of Th/Tc. Using it to
+        // price a cooling duty undercharged by that factor: 1.7x across a room-to-500 K gradient,
+        // eight-fold at 100 K, without bound as the cold side approaches zero.
         double carnot = hotKelvin <= coldKelvin
                 ? MAX_COP
-                : hotKelvin / (hotKelvin - coldKelvin);
-        return Math.max(1.0D, Math.min(MAX_COP, carnot * fraction));
+                : coldKelvin / (hotKelvin - coldKelvin);
+        // A cooling COP BELOW ONE is ordinary physics — it says the work costs more than the heat it
+        // moves, which is exactly the regime a wide gradient puts you in. The old floor of 1.0
+        // forbade that case, so one unit of work always moved at least one unit of heat however
+        // hopeless the gradient, and the Carnot ceiling this whole mechanic advertises was not in
+        // force at all. The floor that remains is only there to keep the division finite.
+        return Math.min(MAX_COP, Math.max(MIN_COP, carnot * fraction));
     }
 
     private static boolean drawsFromThisLoop(IHeatPump pump, BlockPos pumpPos, Set<BlockPos> members) {

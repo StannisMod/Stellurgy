@@ -1,5 +1,7 @@
 package zmaster587.advancedRocketry.tile.multiblock;
 
+import zmaster587.advancedRocketry.tile.heat.TileWasteHeatPowerConsumer;
+
 import java.util.HashSet;
 import java.util.Set;
 import zmaster587.advancedRocketry.dimension.DimensionManager;
@@ -49,7 +51,6 @@ import zmaster587.libVulpes.inventory.modules.*;
 import zmaster587.libVulpes.network.PacketHandler;
 import zmaster587.libVulpes.network.PacketMachine;
 import zmaster587.libVulpes.tile.multiblock.TileMultiBlock;
-import zmaster587.libVulpes.tile.multiblock.TileMultiPowerConsumer;
 import zmaster587.libVulpes.tile.multiblock.TilePlaceholder;
 import zmaster587.libVulpes.util.EmbeddedInventory;
 
@@ -64,7 +65,7 @@ import java.util.List;
 import java.util.Random;
 import java.util.Map;
 
-public class TileObservatory extends TileMultiPowerConsumer implements IModularInventory, IDataInventory, IGuiCallback {
+public class TileObservatory extends TileWasteHeatPowerConsumer implements IModularInventory, IDataInventory, IGuiCallback {
 
     private static final org.apache.logging.log4j.Logger LOGGER =
             org.apache.logging.log4j.LogManager.getLogger("AdvancedRocketry|Observatory");

@@ -321,6 +321,46 @@ public class AirState {
         return taken;
     }
 
+    /**
+     * How much energy this air still has to give up, in the same units {@link #removeHeat} takes.
+     * <p>
+     * A machine that wants to cool a room asks this FIRST and pays for what it can actually move.
+     * Paying for THROUGHPUT instead is how a chiller ends up charging its loop full price for air
+     * that has nothing left to give — a pure heater with a cold room attached.
+     */
+    public long availableHeat(int volumeBlocks) {
+        long capacity = getHeatCapacity(volumeBlocks);
+        if (capacity <= 0L)
+            return 0L;
+        return Math.max(0L, (long) ((double) temperatureMilliK / 1000.0D * capacity));
+    }
+
+    /**
+     * Put energy INTO this air. The mirror of {@link #removeHeat}, and it had been missing.
+     * <p>
+     * <b>Without it a compartment could only ever get colder.</b> Every reader of this class asked
+     * the air to give heat up — a chiller breathing the room, gas arriving cooler — and nothing could
+     * put any back, so the temperature the crew hazards are keyed on could never rise and the two
+     * rungs that read it were unreachable knobs describing a mechanic that did not run.
+     * <p>
+     * Air with no gas in it takes nothing: a vacuum has no body to warm, which is why a breached
+     * compartment does not heat up no matter what is glowing inside it.
+     *
+     * @param volumeBlocks the zone's size, as the flood-fill measured it
+     * @return the energy actually accepted
+     */
+    public long addHeat(long amount, int volumeBlocks) {
+        long capacity = getHeatCapacity(volumeBlocks);
+        if (amount <= 0L || capacity <= 0L)
+            return 0L;
+        double raised = getTemperatureKelvin() + (double) amount / capacity;
+        // The same ceiling `int` milli-kelvin can hold; past it the air is a plasma and this model
+        // has stopped describing anything, so it saturates rather than wrapping negative.
+        long milli = Math.min((long) Integer.MAX_VALUE, Math.round(raised * 1000.0D));
+        temperatureMilliK = (int) Math.max(0L, milli);
+        return amount;
+    }
+
     public void addNitrogen(long amount, double incomingKelvin) {
         add(GasRegistry.NITROGEN, Math.max(0L, amount), incomingKelvin);
     }

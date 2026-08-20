@@ -1,5 +1,7 @@
 package zmaster587.advancedRocketry.tile.multiblock;
 
+import zmaster587.advancedRocketry.tile.heat.TileWasteHeatPowerConsumer;
+
 import net.minecraft.block.state.IBlockState;
 import net.minecraft.init.Blocks;
 import net.minecraft.util.math.AxisAlignedBB;
@@ -9,10 +11,9 @@ import zmaster587.advancedRocketry.api.AdvancedRocketryBlocks;
 import zmaster587.advancedRocketry.dimension.DimensionManager;
 import zmaster587.advancedRocketry.dimension.DimensionProperties;
 import zmaster587.libVulpes.api.LibVulpesBlocks;
-import zmaster587.libVulpes.tile.multiblock.TileMultiPowerConsumer;
 import zmaster587.libVulpes.util.HashedBlockPosition;
 
-public class TileBeacon extends TileMultiPowerConsumer {
+public class TileBeacon extends TileWasteHeatPowerConsumer {
 
     private static final Object[][][] structure = new Object[][][]
             {

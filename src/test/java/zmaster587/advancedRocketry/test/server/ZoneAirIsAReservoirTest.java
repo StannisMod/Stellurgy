@@ -62,8 +62,11 @@ public class ZoneAirIsAReservoirTest extends AbstractSharedServerTest {
         String before = ventInfo(CX_MIX);
         long pressureBefore = extract(before, AIR_PRESSURE);
         long tempBefore = extract(before, AIR_TEMP);
-        assertEquals("premise: the room must actually start hot, or there is nothing to mix into: "
-                + before, HOT_MILLI_K, tempBefore);
+        // Within a kelvin. The vent tops this room up with gas at storage temperature, so a
+        // MAINTAINED room's temperature is not a figure that holds to the milli-kelvin -- and the
+        // scenario below is about a mixing rule worth whole kelvins, not about this digit.
+        assertTrue("premise: the room must actually start hot, or there is nothing to mix into: "
+                + before, Math.abs(tempBefore - HOT_MILLI_K) < 1_000);
         assertTrue("premise: and must hold air at all: " + before, pressureBefore > 0);
 
         int ambient = configInt("shipHeatAmbientKelvin");

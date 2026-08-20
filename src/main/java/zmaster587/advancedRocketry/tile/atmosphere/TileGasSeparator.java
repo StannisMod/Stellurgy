@@ -126,14 +126,39 @@ public class TileGasSeparator extends TileInventoriedRFConsumerTank implements I
             return;
         long rate = Math.min(ARConfiguration.getCurrentConfig().lifeSupportSeparatorRate, budget);
 
-        long taken = air.drawCarbonDioxide(rate);
-        Fluid gas = AdvancedRocketryFluids.fluidCarbonDioxide;
-        if (taken <= 0L) {
-            taken = air.drawNitrogen(rate);
-            gas = AdvancedRocketryFluids.fluidNitrogen;
-        }
-        if (taken > 0L)
-            fill(new FluidStack(gas, volumeFor(taken, cell)), true);
+        if (!moveToTank(air, cell, AdvancedRocketryFluids.fluidCarbonDioxide, rate))
+            moveToTank(air, cell, AdvancedRocketryFluids.fluidNitrogen, rate);
+    }
+
+    /**
+     * Move one gas out of the room, taking only what the tank has already agreed to hold.
+     * <p>
+     * <b>The tank is asked FIRST, with a simulated fill.</b> Drawing and then filling destroys
+     * whatever the tank refuses: the gas has left the air and arrived nowhere. Free space is not
+     * consent — a tank holding the OTHER gas has room and still rejects every drop, which is the
+     * ordinary state of a separator that has just been switched over, and the room would quietly
+     * lose its air for as long as the machine ran.
+     *
+     * @return whether anything moved, so the caller can fall through to the next gas
+     */
+    private boolean moveToTank(@Nonnull AirState air, @Nonnull BlockPos cell, Fluid gas, long rate) {
+        int wanted = volumeFor(rate, cell);
+        if (gas == null || wanted <= 0)
+            return false;
+        int accepted = fill(new FluidStack(gas, wanted), false);
+        if (accepted <= 0)
+            return false;
+        long take = pressureFor(accepted, cell);
+        if (take <= 0L)
+            return false;
+        long taken = gas == AdvancedRocketryFluids.fluidCarbonDioxide
+                ? air.drawCarbonDioxide(take)
+                : air.drawNitrogen(take);
+        if (taken <= 0L)
+            return false;
+        // Never offer more than the simulation cleared: the two conversions round independently.
+        fill(new FluidStack(gas, Math.min(accepted, volumeFor(taken, cell))), true);
+        return true;
     }
 
     /**
