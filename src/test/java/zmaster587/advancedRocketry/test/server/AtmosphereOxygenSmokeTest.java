@@ -225,7 +225,7 @@ public class AtmosphereOxygenSmokeTest extends AbstractHeadlessServerTest {
      * as a valid air container — see {@link zmaster587.advancedRocketry.util.ItemAirUtils#isStackValidAirContainer}.
      * A vanilla diamond chestplate is rejected; the same chestplate with
      * the enchant applied is accepted. That is the bypass branch that lets
-     * {@link zmaster587.advancedRocketry.atmosphere.AtmosphereNeedsSuit#isImmune}
+     * {@link zmaster587.advancedRocketry.atmosphere.hazard.AtmosphereHazards#isImmune}
      * skip vacuum damage for the wearer.
      */
     @Test

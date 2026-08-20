@@ -19,7 +19,6 @@ import zmaster587.advancedRocketry.api.atmosphere.AtmosphereRegister;
 import zmaster587.advancedRocketry.api.fuel.FuelRegistry;
 import zmaster587.advancedRocketry.api.fuel.FuelRegistry.FuelType;
 import zmaster587.advancedRocketry.atmosphere.AirState;
-import zmaster587.advancedRocketry.atmosphere.AtmosphereVacuum;
 import zmaster587.advancedRocketry.dimension.DimensionManager;
 import zmaster587.advancedRocketry.integration.MatterOvedriveIntegration;
 import zmaster587.advancedRocketry.util.Asteroid;
@@ -260,6 +259,13 @@ public class ARConfiguration {
     public HashMap<String, Asteroid> asteroidTypes = new HashMap<>();
     @ConfigProperty
     public int oxygenVentSize;
+    /**
+     * Damage a vacuum deals per second. Held HERE rather than on the class that used to apply it:
+     * a mutable static on a behaviour class is a dependency nothing can see, and the behaviour is
+     * now a row in a table that reads this at the moment it hurts somebody.
+     */
+    @ConfigProperty
+    public int vacuumDamage;
     @ConfigProperty
     public boolean lifeSupportZones;
     /**
@@ -606,7 +612,7 @@ public class ARConfiguration {
 
         //Oxygen
         arConfig.enableOxygen = config.get(OXYGEN, "EnableAtmosphericEffects", true, "Enable damage from lack of oxygen and effects from non-standard atmospheres.").getBoolean();
-        AtmosphereVacuum.damageValue = config.get(OXYGEN, "vacuumDamage", 1, "Damage taken per second in a vacuum.").getInt();
+        arConfig.vacuumDamage = config.get(OXYGEN, "vacuumDamage", 1, "Damage taken per second in a vacuum.").getInt();
         arConfig.overrideGCAir = config.get(OXYGEN, "OverrideGCAir", true, "Disable Galacticraft air and use AR oxygen on GC planets.").getBoolean();
         arConfig.oxygenVentConsumptionMult = config.get(OXYGEN, "oxygenVentConsumptionMultiplier", 1f, "Multiplier for oxygen vent O2 use per tick.").getDouble();
         arConfig.oxygenVentPowerMultiplier = config.get(OXYGEN, "OxygenVentPowerMultiplier", 1.0f, "Multiplier for oxygen vent power use.", 0, Float.MAX_VALUE).getDouble();

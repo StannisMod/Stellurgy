@@ -162,11 +162,19 @@ public class ItemAirUtils implements IFillableArmor {
             return ItemAirUtils.INSTANCE.getMaxAir(this.stack);
         }
 
+        /**
+          * Enchanted ordinary armour, which is the other way to survive out there. Its chest spends a
+          * unit of air every tick WHATEVER is outside — unlike the space suit it carries no extractor,
+          * so thin air buys it nothing. That asymmetry is deliberate and predates the hazard table;
+          * what changed here is only that the question no longer names an atmosphere.
+          */
         @Override
-        public boolean protectsFromSubstance(IAtmosphere atmosphere, @Nonnull ItemStack stack, boolean commitProtection) {
+        public boolean protectsFrom(java.util.Set<zmaster587.advancedRocketry.api.atmosphere.AtmosphereHazard> hazards,
+                                    boolean needsSuppliedOxygen, @Nonnull ItemStack stack,
+                                    boolean commitProtection) {
             if (!stack.isEmpty() && stack.getItem() instanceof ItemArmor) {
                 if (((ItemArmor) stack.getItem()).armorType == EntityEquipmentSlot.CHEST)
-                    return decrementAir(stack, 1) == 1;
+                    return commitProtection ? decrementAir(stack, 1) == 1 : getAirRemaining(stack) > 0;
 
                 return true;
             }

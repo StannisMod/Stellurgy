@@ -24,18 +24,20 @@ public class AtmosphereType implements IAtmosphere {
     //We're probably not getting a polluted atmosphere type
     public static final AtmosphereType AIR = new AtmosphereType(false, true, "air");
     public static final AtmosphereType PRESSURIZEDAIR = new AtmosphereType(false, true, true, "PressurizedAir");
-    public static final AtmosphereType LOWOXYGEN = new AtmosphereLowOxygen(true, false, true, "lowO2");
-    public static final AtmosphereType HIGHOXYGEN = new AtmosphereHighOxygen(true, false, true, "highO2");
-    public static final AtmosphereType VACUUM = new AtmosphereVacuum();
-    public static final AtmosphereType HIGHPRESSURE = new AtmosphereHighPressure(true, false, true, "HighPressure");
-    public static final AtmosphereType SUPERHIGHPRESSURE = new AtmosphereSuperHighPressure(true, false, true, "SuperHighPressure");
-    public static final AtmosphereType VERYHOT = new AtmosphereVeryHot(true, false, true, "VeryHot");
-    public static final AtmosphereType SUPERHEATED = new AtmosphereSuperheated(true, false, true, "Superheated");
-    public static final AtmosphereType NOO2 = new AtmosphereNoOxygen(true, false, false, "NoO2");
-    public static final AtmosphereType HIGHPRESSURENOO2 = new AtmosphereHighPressureNoOxygen(true, false, false, "HighPressureNoO2");
-    public static final AtmosphereType SUPERHIGHPRESSURENOO2 = new AtmosphereSuperHighPressureNoOxygen(true, false, false, "SuperHighPressureNoO2");
-    public static final AtmosphereType VERYHOTNOO2 = new AtmosphereVeryHotNoOxygen(true, false, false, "VeryHotNoO2");
-    public static final AtmosphereType SUPERHEATEDNOO2 = new AtmosphereSuperheatedNoOxygen(true, false, false, "SuperheatedNoOxygen");
+    // Twelve of these used to be twelve CLASSES, each carrying its own copy of the same tick method.
+    // What they do now lives in one table, and what is left of them here is a name and two flags.
+    public static final AtmosphereType LOWOXYGEN = new AtmosphereType(true, false, true, "lowO2");
+    public static final AtmosphereType HIGHOXYGEN = new AtmosphereType(true, false, true, "highO2");
+    public static final AtmosphereType VACUUM = new AtmosphereType(true, false, false, "vacuum");
+    public static final AtmosphereType HIGHPRESSURE = new AtmosphereType(true, false, true, "HighPressure");
+    public static final AtmosphereType SUPERHIGHPRESSURE = new AtmosphereType(true, false, true, "SuperHighPressure");
+    public static final AtmosphereType VERYHOT = new AtmosphereType(true, false, true, "VeryHot");
+    public static final AtmosphereType SUPERHEATED = new AtmosphereType(true, false, true, "Superheated");
+    public static final AtmosphereType NOO2 = new AtmosphereType(true, false, false, "NoO2");
+    public static final AtmosphereType HIGHPRESSURENOO2 = new AtmosphereType(true, false, false, "HighPressureNoO2");
+    public static final AtmosphereType SUPERHIGHPRESSURENOO2 = new AtmosphereType(true, false, false, "SuperHighPressureNoO2");
+    public static final AtmosphereType VERYHOTNOO2 = new AtmosphereType(true, false, false, "VeryHotNoO2");
+    public static final AtmosphereType SUPERHEATEDNOO2 = new AtmosphereType(true, false, false, "SuperheatedNoOxygen");
 
     static {
         AtmosphereRegister.getInstance().registerAtmosphere(AIR);
@@ -87,7 +89,9 @@ public class AtmosphereType implements IAtmosphere {
      * @return true if the atmosphere does not affect the entity in any way
      */
     public boolean isImmune(EntityLivingBase player) {
-        return isBreathable;
+        return zmaster587.advancedRocketry.atmosphere.hazard.AtmosphereHazards.isImmune(
+                zmaster587.advancedRocketry.atmosphere.hazard.AtmosphereHazards.exposureOf(this),
+                player);
     }
 
     public boolean isImmune(Class<? extends Entity> clazz) {
@@ -130,7 +134,9 @@ public class AtmosphereType implements IAtmosphere {
      * @return unlocalized message to display when player is in the gas with no protection
      */
     public String getDisplayMessage() {
-        return "";
+        String key = zmaster587.advancedRocketry.atmosphere.hazard.AtmosphereHazards
+                .exposureOf(this).messageKey();
+        return key.isEmpty() ? "" : zmaster587.libVulpes.LibVulpes.proxy.getLocalizedString(key);
     }
 
     //TODO: tick for all entities
@@ -141,6 +147,8 @@ public class AtmosphereType implements IAtmosphere {
      * @param player entity being ticked
      */
     public void onTick(EntityLivingBase player) {
+        zmaster587.advancedRocketry.atmosphere.hazard.AtmosphereHazards.exposureOf(this)
+                .applyTo(player);
     }
 
     @Override

@@ -239,9 +239,15 @@ public class ItemSpaceArmor extends ItemArmor implements ISpecialArmor, ICapabil
         return list;
     }
 
+    /**
+      * A space suit is proof against everything this mod's air can do. It used to say so by listing
+      * every atmosphere by name, which is the same claim written in the form that goes stale.
+      */
     @Override
-    public boolean protectsFromSubstance(IAtmosphere atmosphere, @Nonnull ItemStack stack, boolean commitProtection) {
-        return (atmosphere == AtmosphereType.SUPERHIGHPRESSURE || atmosphere == AtmosphereType.HIGHPRESSURE || atmosphere == AtmosphereType.VACUUM || atmosphere == AtmosphereType.VERYHOT || atmosphere == AtmosphereType.SUPERHEATED || atmosphere == AtmosphereType.LOWOXYGEN || atmosphere == AtmosphereType.SUPERHIGHPRESSURENOO2 || atmosphere == AtmosphereType.HIGHPRESSURENOO2 || atmosphere == AtmosphereType.VERYHOTNOO2 || atmosphere == AtmosphereType.SUPERHEATEDNOO2 || atmosphere == AtmosphereType.NOO2);
+    public boolean protectsFrom(java.util.Set<zmaster587.advancedRocketry.api.atmosphere.AtmosphereHazard> hazards,
+                                boolean needsSuppliedOxygen, @Nonnull ItemStack stack,
+                                boolean commitProtection) {
+        return !hazards.isEmpty();
     }
 
     @Override
