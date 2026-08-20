@@ -4,6 +4,8 @@ import com.github.stannismod.forge.testing.TestTimeouts;
 
 import org.junit.After;
 import org.junit.Assume;
+import zmaster587.advancedRocketry.test.GameTicks;
+
 import org.junit.Test;
 
 import java.util.regex.Matcher;
@@ -65,13 +67,16 @@ public class InterstellarJumpLegE2ETest extends AbstractSharedServerTest {
     private static final Pattern CELL_KEY = Pattern.compile("^(-?\\d+)_(-?\\d+)_(-?\\d+)$");
 
     /** Poll iterations for the CLIMB into space (250 ms apart), stretched by the fork factor. */
-    private static final int SETTLE_POLLS = (int) Math.ceil(120 * TestTimeouts.factor());
+    private static final int SETTLE_TICKS = 600;
+
+    /** The same, for a ship becoming loadable in its slot - the old 40 x 250 ms. */
+    private static final int LOAD_TICKS = 200;
     /**
      * Poll iterations for an ARRIVAL, one second apart. The far leg is thousands of ticks of real
      * server time by design, so this budget is sized from the leg itself — 537 sectors x 4M blocks
      * at 1M blocks/tick is ~2 150 ticks ~ 108 s — with room for the arrival's own retries on top.
      */
-    private static final int ARRIVAL_POLLS = (int) Math.ceil(300 * TestTimeouts.factor());
+    private static final int ARRIVAL_TICKS = 6000;
 
     @Test
     public void aJumpToAnotherStarSystemArrivesAndCostsMoreTimeThanAHop() throws Exception {
@@ -101,7 +106,7 @@ public class InterstellarJumpLegE2ETest extends AbstractSharedServerTest {
                 + " " + sx + " " + ABOVE_CEILING_Y + " " + sz).contains("\"ok\":true"));
         exec("artest vs unpark 0 " + sx + " " + ABOVE_CEILING_Y + " " + sz);
 
-        String status = waitForState("SETTLED", null, setup, SETTLE_POLLS, 250L);
+        String status = waitForState("SETTLED", null, setup, SETTLE_TICKS);
         assertTrue("precondition: the ship never entered space, so there is nothing to jump; last="
                 + status, "SETTLED".equals(extractString(status, "state")));
         int slotDim = extractInt(status, "slotDim");
@@ -156,7 +161,7 @@ public class InterstellarJumpLegE2ETest extends AbstractSharedServerTest {
                 + " nothing: " + fromCell + " -> " + targetCell, !targetCell.equals(fromCell));
 
         long departed = clock();
-        String arrived = waitForState("SETTLED", targetCell, setup, ARRIVAL_POLLS, 1000L);
+        String arrived = waitForState("SETTLED", targetCell, setup, ARRIVAL_TICKS);
         long elapsed = clock() - departed;
         if (!targetCell.equals(extractString(arrived, "cellKey"))) {
             System.out.println("[interstellar-leg] " + label + " NEVER ARRIVED after " + elapsed
@@ -175,19 +180,17 @@ public class InterstellarJumpLegE2ETest extends AbstractSharedServerTest {
     }
 
     /** Poll entry-status until the ledger reports {@code state} (and {@code cell}, when given). */
-    private String waitForState(String state, String cell, String setup, int polls, long sleepMs)
+    private String waitForState(String state, String cell, String setup, int budgetTicks)
             throws Exception {
-        String status = "";
-        for (int i = 0; i < polls; i++) {
-            status = exec("artest space entry-status");
-            if (state.equals(extractString(status, "state"))
-                    && (cell == null || cell.equals(extractString(status, "cellKey")))) {
-                return status;
-            }
-            loadAllEntrySlots(setup);
-            Thread.sleep(sleepMs);
-        }
-        return status;
+        final String[] status = {""};
+        GameTicks.until(client(), GameTicks.server(), budgetTicks,
+                () -> {
+                    status[0] = exec("artest space entry-status");
+                    return state.equals(extractString(status[0], "state"))
+                            && (cell == null || cell.equals(extractString(status[0], "cellKey")));
+                },
+                () -> loadAllEntrySlots(setup));
+        return status[0];
     }
 
     @After
@@ -217,17 +220,16 @@ public class InterstellarJumpLegE2ETest extends AbstractSharedServerTest {
     }
 
     private int waitForLoadedShip(int dim) throws Exception {
-        for (int i = 0; i < 40; i++) {
-            if (extractInt(exec("artest vs ship-count-all " + dim), "count") >= 1) {
-                exec("artest vs load-ships " + dim);
-                int loaded = extractInt(exec("artest vs ship-count " + dim), "count");
-                if (loaded >= 1) {
-                    return loaded;
-                }
+        final int[] loaded = {0};
+        GameTicks.until(client(), GameTicks.server(), LOAD_TICKS, () -> {
+            if (extractInt(exec("artest vs ship-count-all " + dim), "count") < 1) {
+                return false;
             }
-            Thread.sleep(250);
-        }
-        return 0;
+            exec("artest vs load-ships " + dim);
+            loaded[0] = extractInt(exec("artest vs ship-count " + dim), "count");
+            return loaded[0] >= 1;
+        });
+        return loaded[0];
     }
 
     private void clearArea(int baseX, int baseZ) throws Exception {

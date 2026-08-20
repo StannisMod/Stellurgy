@@ -12,6 +12,8 @@ import com.github.stannismod.forge.testing.server.RealDedicatedServerHarness;
 import org.junit.After;
 import org.junit.Assume;
 import org.junit.Before;
+import zmaster587.advancedRocketry.test.GameTicks;
+
 import org.junit.Test;
 
 import static org.junit.Assert.assertEquals;
@@ -63,6 +65,9 @@ import static org.junit.Assert.assertTrue;
  * made about, across a real restart.</p>
  */
 public class HyperspaceSurvivesARestartE2ETest {
+
+    /** World a ship is given to appear in VS's registry - the old 60 x 250 ms. */
+    private static final int REGISTER_TICKS = 300;
 
     /**
      * Slow enough that the ship is still parked in its lane when the server goes down AND for the
@@ -132,13 +137,8 @@ public class HyperspaceSurvivesARestartE2ETest {
 
     /** Poll for the ship the fixture assembles in its origin cell (VS assembly is asynchronous). */
     private boolean waitForShipIn(int dim) throws Exception {
-        for (int i = 0; i < 60; i++) {
-            if (readIntOr(exec("artest vs ship-count-all " + dim), "count", -1) >= 1) {
-                return true;
-            }
-            Thread.sleep(250);
-        }
-        return false;
+        return GameTicks.until(harness.client(), GameTicks.server(), REGISTER_TICKS,
+                () -> readIntOr(exec("artest vs ship-count-all " + dim), "count", -1) >= 1);
     }
 
     @Test

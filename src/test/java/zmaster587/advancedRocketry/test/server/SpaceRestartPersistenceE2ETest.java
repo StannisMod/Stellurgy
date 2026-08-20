@@ -13,6 +13,8 @@ import com.github.stannismod.forge.testing.server.RealDedicatedServerHarness;
 import org.junit.After;
 import org.junit.Assume;
 import org.junit.Before;
+import zmaster587.advancedRocketry.test.GameTicks;
+
 import org.junit.Test;
 
 import static org.junit.Assert.assertEquals;
@@ -55,7 +57,12 @@ public class SpaceRestartPersistenceE2ETest {
      * that — so the wait is scaled the way every other hard ceiling in this suite is, and is generous:
      * its only cost on a healthy build is that it ends early, the moment the fault reports it fired.
      */
-    private static final long AUTOSAVE_WAIT_MS = (long) (150_000L * TestTimeouts.factor());
+    /**
+     * World an armed autosave fault is given to fire in: 3 000 server ticks - three and a bit
+     * autosave intervals at vanilla's 900. The old form was 150 s x the fork factor, two facts about
+     * the machine standing in for "a few autosaves".
+     */
+    private static final int AUTOSAVE_WAIT_TICKS = 3_000;
 
     private Path root;
     private RealDedicatedServerHarness harness;
@@ -342,18 +349,18 @@ public class SpaceRestartPersistenceE2ETest {
         // Wait for the world autosave to walk into the fault. Every poll is itself a liveness check:
         // on an unguarded handler the server is gone by now and exec() reports the dead process.
         String live = "";
-        boolean fired = false;
-        long startedAt = System.currentTimeMillis();
-        while (System.currentTimeMillis() - startedAt < AUTOSAVE_WAIT_MS) {
-            live = exec("artest space subsystem-status");
-            if (live.contains("\"saveFaultArmed\":false")) {
-                fired = true;
-                break;
-            }
-            Thread.sleep(2000);
-        }
+        // An autosave is scheduled on the SERVER's tick counter (every 900 ticks), so waiting for
+        // one is waiting for ticks - and the fork multiplier this budget carried was compensating for
+        // a busy box delivering fewer of them per second, which is exactly what a tick budget removes.
+        final String[] seen = {""};
+        boolean fired = GameTicks.until(harness.client(), GameTicks.server(), AUTOSAVE_WAIT_TICKS,
+                () -> {
+                    seen[0] = exec("artest space subsystem-status");
+                    return seen[0].contains("\"saveFaultArmed\":false");
+                });
+        live = seen[0];
         assertTrue("no autosave reached the armed fault within "
-                + (AUTOSAVE_WAIT_MS / 1000) + "s, so this run never exercised a failing save at all "
+                + AUTOSAVE_WAIT_TICKS + " ticks, so this run never exercised a failing save at all "
                 + "and its green would be worth nothing: " + live, fired);
 
         // It fired, from the server tick, and the server is still answering.

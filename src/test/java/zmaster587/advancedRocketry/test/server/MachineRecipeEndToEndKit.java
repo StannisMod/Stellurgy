@@ -1,6 +1,7 @@
 package zmaster587.advancedRocketry.test.server;
 
 import com.github.stannismod.forge.testing.server.TestClient;
+import zmaster587.advancedRocketry.test.GameTicks;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -41,6 +42,12 @@ import static org.junit.Assert.assertTrue;
  * hatch positions for them.</p>
  */
 final class MachineRecipeEndToEndKit {
+
+    /**
+     * World between retries of a multiblock completion - the old 500 ms. The retry exists because
+     * the machine's own tick is what completes it, so the gap between asks is measured in those.
+     */
+    private static final int TICKS_BETWEEN_ATTEMPTS = 10;
 
     private static final Pattern INPUT_POS         = Pattern.compile("\"inputPos\":\\[(-?\\d+),(-?\\d+),(-?\\d+)]");
     private static final Pattern OUTPUT_POS        = Pattern.compile("\"outputPos\":\\[(-?\\d+),(-?\\d+),(-?\\d+)]");
@@ -149,7 +156,7 @@ final class MachineRecipeEndToEndKit {
             resp = String.join("\n",
                     c.execute("artest machine try-complete " + dim + " " + cx + " " + cy + " " + cz));
             if (resp.contains("\"attempted\":true")) return resp;
-            Thread.sleep(500);
+            GameTicks.advance(c, GameTicks.server(), TICKS_BETWEEN_ATTEMPTS);
         }
         return resp;
     }
@@ -164,7 +171,7 @@ final class MachineRecipeEndToEndKit {
                     c.execute("artest machine try-complete 0 " + cx + " " + cy + " " + cz));
             if (resp.contains("\"isComplete\":true")) return;
             attempts.append("\n  attempt ").append(attempt + 1).append(": ").append(resp);
-            Thread.sleep(500);
+            GameTicks.advance(c, GameTicks.server(), TICKS_BETWEEN_ATTEMPTS);
         }
         throw new AssertionError(tag + " — multiblock not complete after 8 attempts"
                 + attempts + "\n  fixture: " + fixtureResp);

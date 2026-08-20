@@ -1,6 +1,8 @@
 package zmaster587.advancedRocketry.test.server;
 
 import org.junit.Assume;
+import zmaster587.advancedRocketry.test.GameTicks;
+
 import org.junit.Test;
 
 import java.util.regex.Matcher;
@@ -20,6 +22,9 @@ import static org.junit.Assert.assertTrue;
  */
 public class SpaceSlotVsShipPersistTest extends AbstractSharedServerTest {
 
+    /** Ticks each of a caller's "tries" is worth - the old 500 ms per attempt. */
+    private static final int TICKS_PER_TRY = 10;
+
     private static final Pattern SLOT = Pattern.compile("\"slot\":(-?\\d+)");
     private static final Pattern COUNT = Pattern.compile("\"count\":(-?\\d+)");
     private static final Pattern COUNT_AFTER = Pattern.compile("\"countAfterReload\":(-?\\d+)");
@@ -31,14 +36,15 @@ public class SpaceSlotVsShipPersistTest extends AbstractSharedServerTest {
     /** VS assembly is queued on the physics thread; the dedicated server ticks in its own JVM, so a
      *  short test-JVM sleep lets VS process the spawn queue. */
     private int pollCount(int dim, int want, int tries) throws Exception {
-        int c = -1;
-        for (int i = 0; i < tries; i++) {
-            Thread.sleep(500);
+        final int[] c = {-1};
+        // VS drains its spawn queue on the server tick, so the budget is ticks of it: tries x the old
+        // 500 ms, said in the units of the thing that has to happen.
+        GameTicks.until(client(), GameTicks.server(), tries * TICKS_PER_TRY, () -> {
             Matcher m = COUNT.matcher(exec("artest space vs-count " + dim));
-            c = m.find() ? Integer.parseInt(m.group(1)) : -1;
-            if (c >= want) return c;
-        }
-        return c;
+            c[0] = m.find() ? Integer.parseInt(m.group(1)) : -1;
+            return c[0] >= want;
+        });
+        return c[0];
     }
 
     @Test

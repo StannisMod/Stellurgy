@@ -33,6 +33,9 @@ import static org.junit.Assert.assertTrue;
  */
 public class AdvancementsTriggerTest {
 
+    /** World the advancement is given to fire in - the old 15 s ceiling, said in ticks. */
+    private static final int GRANT_TICKS = 300;
+
     private static final int DIM_LUNA = 9511;
     private static final int DIM_OTHER = 9512;
     private static final String ADV_WENT = "advancedrocketry:normal/wenttothemoon";
@@ -123,11 +126,9 @@ public class AdvancementsTriggerTest {
         // Δy=15 from (2347,80,67) -> distSq=225 < 512 ✓. 60 ticks ≥ 3 windows.
         assertTrue(exec("artest player tick-living 60").contains("\"ok\":true"));
         // Poll off-thread — the server free-runs while the test JVM sleeps.
-        boolean done = false;
-        for (int waited = 0; waited < 15_000 && !done; waited += 1000) {
-            Thread.sleep(1000L);
-            done = isDone(exec("artest player advancement " + ADV_WENT));
-        }
+        // The trigger fires from a per-tick check, so the budget is that check's world.
+        boolean done = GameTicks.until(harness.client(), GameTicks.server(), GRANT_TICKS,
+                () -> isDone(exec("artest player advancement " + ADV_WENT)));
         assertEquals("standing near (2347,80,67) on Luna must grant WENT_TO_THE_MOON",
                 true, done);
     }

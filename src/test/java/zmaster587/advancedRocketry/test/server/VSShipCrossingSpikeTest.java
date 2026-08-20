@@ -1,6 +1,8 @@
 package zmaster587.advancedRocketry.test.server;
 
 import org.junit.Assume;
+import zmaster587.advancedRocketry.test.GameTicks;
+
 import org.junit.Test;
 
 import java.util.regex.Matcher;
@@ -27,6 +29,9 @@ import static org.junit.Assert.assertTrue;
  * subsystem's own e2e; if it goes RED it records a NO-GO (fall back to whole-slot rebind).</p>
  */
 public class VSShipCrossingSpikeTest extends AbstractSharedServerTest {
+
+    /** World a ship is given to become loadable - the old 40 x 250 ms. */
+    private static final int LOAD_TICKS = 200;
 
     private static final Pattern BUILDER_POS =
             Pattern.compile("\"builderPos\":\\[(-?\\d+),(-?\\d+),(-?\\d+)]");
@@ -133,17 +138,16 @@ public class VSShipCrossingSpikeTest extends AbstractSharedServerTest {
     /** Poll for a loaded VS ship (assembly is async on the physics thread; a headless server has no
      *  player near to auto-load it, so force a load each round). Bounded ~10 s. Returns the loaded count. */
     private int waitForLoadedShip() throws Exception {
-        for (int i = 0; i < 40; i++) {
-            if (extractInt(exec("artest vs ship-count-all 0"), "count") >= 1) {
-                exec("artest vs load-ships 0");
-                int loaded = extractInt(exec("artest vs ship-count 0"), "count");
-                if (loaded >= 1) {
-                    return loaded;
-                }
+        final int[] loaded = {0};
+        GameTicks.until(client(), GameTicks.server(), LOAD_TICKS, () -> {
+            if (extractInt(exec("artest vs ship-count-all 0"), "count") < 1) {
+                return false;
             }
-            Thread.sleep(250);
-        }
-        return 0;
+            exec("artest vs load-ships 0");
+            loaded[0] = extractInt(exec("artest vs ship-count 0"), "count");
+            return loaded[0] >= 1;
+        });
+        return loaded[0];
     }
 
     private void clearArea(int baseX, int baseZ) throws Exception {

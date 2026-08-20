@@ -5,6 +5,8 @@ import com.github.stannismod.forge.testing.server.RealDedicatedServerHarness;
 import org.junit.After;
 import org.junit.Assume;
 import org.junit.Before;
+import zmaster587.advancedRocketry.test.GameTicks;
+
 import org.junit.Test;
 
 import java.nio.charset.StandardCharsets;
@@ -32,6 +34,9 @@ import static org.junit.Assert.assertTrue;
  * back through {@code artest weather get}.</p>
  */
 public class PlanetWeatherGateTest {
+
+    /** Ticks the weather cycle is given to apply a marker - the old 250 ms settle. */
+    private static final int WEATHER_SETTLE_TICKS = 5;
 
     private static final int DIM_THIN_RAIN   = 9111; // density 10, rainMarker 1   -> must stay clear
     private static final int DIM_THICK_RAIN  = 9112; // density 100, rainMarker 1  -> must rain
@@ -129,8 +134,9 @@ public class PlanetWeatherGateTest {
         for (int i = 0; i < 5; i++) {
             last = String.join("\n", harness.client().execute("artest weather get " + dim));
             if (!last.contains("\"error\"")) {
-                // brief settle to let the weather cycle apply the marker/gate
-                try { Thread.sleep(250); } catch (InterruptedException ignored) { }
+                // Let the weather cycle apply the marker/gate. In ticks: the cycle runs per tick, so
+                // a wall-clock settle bought it proportionally less on a busy box.
+                GameTicks.advance(harness.client(), GameTicks.server(), WEATHER_SETTLE_TICKS);
             }
         }
         return last;

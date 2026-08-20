@@ -1,5 +1,7 @@
 package zmaster587.advancedRocketry.test.server;
 
+import zmaster587.advancedRocketry.test.GameTicks;
+
 import org.junit.Test;
 
 import static org.junit.Assert.assertTrue;
@@ -35,7 +37,8 @@ public class SpaceCellBindingSurvivesWorldUnloadE2ETest extends AbstractSharedSe
     private static final String HELD_CELL = "911 4 911";
 
     /** Bounded per the probe-authoring wall-time rule; Forge's sweep needs a handful of ticks. */
-    private static final long SWEEP_BUDGET_MS = 10_000L;
+    /** World Forge's unload sweep is given to collect an unheld slot - the old 10 000 ms. */
+    private static final int SWEEP_BUDGET_TICKS = 200;
 
     private String exec(String cmd) throws Exception {
         return String.join("\n", client().execute(cmd));
@@ -82,20 +85,21 @@ public class SpaceCellBindingSurvivesWorldUnloadE2ETest extends AbstractSharedSe
      * the unheld one.
      */
     private String awaitWorld(String cell, boolean expectLoaded) throws Exception {
-        long deadline = System.currentTimeMillis() + SWEEP_BUDGET_MS;
-        String last = "";
-        while (System.currentTimeMillis() < deadline) {
-            last = exec("artest space cell-slot " + cell);
-            if (!expectLoaded && last.contains("\"worldLoaded\":false")) {
-                return last;
-            }
-            Thread.sleep(250L);
+        // Forge's unload sweep runs ON the server tick, so the budget is that tick's world - a
+        // wall-clock ceiling gave the sweep fewer chances to run exactly when the box was busy.
+        final String[] last = {""};
+        boolean unloaded = GameTicks.until(client(), GameTicks.server(), SWEEP_BUDGET_TICKS, () -> {
+            last[0] = exec("artest space cell-slot " + cell);
+            return !expectLoaded && last[0].contains("\"worldLoaded\":false");
+        });
+        if (unloaded) {
+            return last[0];
         }
         if (!expectLoaded) {
-            fail("Forge never unloaded the unheld cell's slot world within " + SWEEP_BUDGET_MS
-                    + " ms, so this run's control leg exercised nothing and the held leg below would "
-                    + "pass on any build. Last: " + last);
+            fail("Forge never unloaded the unheld cell's slot world within " + SWEEP_BUDGET_TICKS
+                    + " ticks, so this run's control leg exercised nothing and the held leg below "
+                    + "would pass on any build. Last: " + last[0]);
         }
-        return last;
+        return last[0];
     }
 }

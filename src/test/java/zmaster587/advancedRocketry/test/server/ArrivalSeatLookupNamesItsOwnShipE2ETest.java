@@ -2,6 +2,8 @@ package zmaster587.advancedRocketry.test.server;
 
 import org.junit.After;
 import org.junit.Assume;
+import zmaster587.advancedRocketry.test.GameTicks;
+
 import org.junit.Test;
 
 import static org.junit.Assert.assertEquals;
@@ -29,6 +31,9 @@ import static org.junit.Assert.assertTrue;
  * otherwise.</p>
  */
 public class ArrivalSeatLookupNamesItsOwnShipE2ETest extends AbstractSharedServerTest {
+
+    /** World a ship is given to become loadable - the old 40 x 250 ms. */
+    private static final int LOAD_TICKS = 200;
 
     /** The craft that HAS a pilot seat — the one an arrival would be asking about. */
     private static final int SEATED_X = 5800, SEATED_Y = 80, SEATED_Z = 5800;
@@ -117,17 +122,16 @@ public class ArrivalSeatLookupNamesItsOwnShipE2ETest extends AbstractSharedServe
     }
 
     private int waitForLoadedShip(int dim) throws Exception {
-        for (int i = 0; i < 40; i++) {
-            if (extractInt(exec("artest vs ship-count-all " + dim), "count") >= 1) {
-                exec("artest vs load-ships " + dim);
-                int loaded = extractInt(exec("artest vs ship-count " + dim), "count");
-                if (loaded >= 1) {
-                    return loaded;
-                }
+        final int[] loaded = {0};
+        GameTicks.until(client(), GameTicks.server(), LOAD_TICKS, () -> {
+            if (extractInt(exec("artest vs ship-count-all " + dim), "count") < 1) {
+                return false;
             }
-            Thread.sleep(250);
-        }
-        return 0;
+            exec("artest vs load-ships " + dim);
+            loaded[0] = extractInt(exec("artest vs ship-count " + dim), "count");
+            return loaded[0] >= 1;
+        });
+        return loaded[0];
     }
 
     private void clearArea(int baseX, int baseZ) throws Exception {

@@ -1,5 +1,7 @@
 package zmaster587.advancedRocketry.test.server;
 
+import zmaster587.advancedRocketry.test.GameTicks;
+
 import org.junit.Test;
 
 import java.util.regex.Matcher;
@@ -39,6 +41,9 @@ import static org.junit.Assert.assertTrue;
  * deferred to a future follow-up.</p>
  */
 public class WirelessTransceiverContractTest extends AbstractSharedServerTest {
+
+    /** Ticks between asks while a tile entity materializes - the old 500 ms. */
+    private static final int TILE_POLL_TICKS = 10;
 
     private static final Pattern NET_ID = Pattern.compile("\"networkID\":(-?\\d+)");
     private static final Pattern SHARED_ID = Pattern.compile("\"sharedNetworkId\":(-?\\d+)");
@@ -324,7 +329,7 @@ public class WirelessTransceiverContractTest extends AbstractSharedServerTest {
                     ready = true;
                     break;
                 }
-                Thread.sleep(500);
+                GameTicks.advance(client(), GameTicks.server(), TILE_POLL_TICKS);
             }
             assertTrue("tile entity never materialized at x=" + x + ": " + last, ready);
         }

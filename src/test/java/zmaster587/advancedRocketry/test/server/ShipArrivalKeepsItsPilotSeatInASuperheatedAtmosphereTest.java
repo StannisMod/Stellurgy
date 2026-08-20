@@ -2,6 +2,8 @@ package zmaster587.advancedRocketry.test.server;
 
 import org.junit.After;
 import org.junit.Assume;
+import zmaster587.advancedRocketry.test.GameTicks;
+
 import org.junit.Test;
 
 import java.util.regex.Matcher;
@@ -33,6 +35,9 @@ import static org.junit.Assert.assertTrue;
  * <p>Gated on the server's real VS presence (run with {@code -PwithVS}); skips cleanly otherwise.</p>
  */
 public class ShipArrivalKeepsItsPilotSeatInASuperheatedAtmosphereTest extends AbstractSharedServerTest {
+
+    /** World a ship is given to become loadable - the old 40 x 250 ms. */
+    private static final int LOAD_TICKS = 200;
 
     private static final Pattern BUILDER_POS =
             Pattern.compile("\"builderPos\":\\[(-?\\d+),(-?\\d+),(-?\\d+)]");
@@ -160,17 +165,16 @@ public class ShipArrivalKeepsItsPilotSeatInASuperheatedAtmosphereTest extends Ab
 
     /** Poll for a loaded VS ship (assembly is asynchronous). Bounded ~10 s. Returns the loaded count. */
     private int waitForLoadedShip() throws Exception {
-        for (int i = 0; i < 40; i++) {
-            if (extractInt(exec("artest vs ship-count-all 0"), "count") >= 1) {
-                exec("artest vs load-ships 0");
-                int loaded = extractInt(exec("artest vs ship-count 0"), "count");
-                if (loaded >= 1) {
-                    return loaded;
-                }
+        final int[] loaded = {0};
+        GameTicks.until(client(), GameTicks.server(), LOAD_TICKS, () -> {
+            if (extractInt(exec("artest vs ship-count-all 0"), "count") < 1) {
+                return false;
             }
-            Thread.sleep(250);
-        }
-        return 0;
+            exec("artest vs load-ships 0");
+            loaded[0] = extractInt(exec("artest vs ship-count 0"), "count");
+            return loaded[0] >= 1;
+        });
+        return loaded[0];
     }
 
     private void clearArea(int baseX, int baseZ) throws Exception {

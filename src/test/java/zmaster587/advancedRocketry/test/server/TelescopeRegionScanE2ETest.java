@@ -29,6 +29,10 @@ public class TelescopeRegionScanE2ETest extends AbstractSharedServerTest {
     private static final int MID_SURVEY_TICKS = 30;
     private static final int STARVED_SURVEY_TICKS = 40;
 
+    /** World a whole survey is given to finish in - the old 40 x 250 ms and 60 x 250 ms. */
+    private static final int SURVEY_TICKS = 200;
+    private static final int SWEEP_TICKS = 300;
+
     private static final int CY = 64;
     private static final int CZ = 4300;
 
@@ -139,17 +143,17 @@ public class TelescopeRegionScanE2ETest extends AbstractSharedServerTest {
         systemAt(Long.parseLong(home[0]) + steps * stride(x) + 13L, home[1], home[2]);
     }
 
-    /** Poll the machine until its survey is finished. Bounded: 40 × 250 ms = 10 s. */
+    /** Poll the machine until its survey is finished. Bounded in the ticks a survey advances on. */
     private String awaitSurveyComplete(int x) throws Exception {
-        String info = "";
-        for (int attempt = 0; attempt < 40; attempt++) {
-            info = exec("artest telescope info " + where(x));
-            if (!info.contains("\"scanning\":true")) {
-                return info;
-            }
-            Thread.sleep(250L);
+        final String[] info = {""};
+        boolean finished = GameTicks.until(client(), GameTicks.server(), SURVEY_TICKS, () -> {
+            info[0] = exec("artest telescope info " + where(x));
+            return !info[0].contains("\"scanning\":true");
+        });
+        if (!finished) {
+            throw new AssertionError("the survey never finished: " + info[0]);
         }
-        throw new AssertionError("the survey never finished: " + info);
+        return info[0];
     }
 
     @Test
@@ -187,20 +191,21 @@ public class TelescopeRegionScanE2ETest extends AbstractSharedServerTest {
         assertEquals("a fresh survey has resolved nothing yet", 0L, field(started, "cellsDone"));
 
         long total = field(started, "cells");
-        long seen = 0;
-        for (int attempt = 0; attempt < 60 && seen < total; attempt++) {
-            Thread.sleep(250L);
+        final long[] seen = {0};
+        GameTicks.until(client(), GameTicks.server(), SWEEP_TICKS, () -> {
             String info = exec("artest telescope info " + where(x));
             if (!info.contains("\"scanning\":true")) {
-                seen = total;
-                break;
+                seen[0] = total;
+                return true;
             }
             long done = field(info, "cellsDone");
-            assertTrue("a sweep must never go backwards: " + done + " after " + seen, done >= seen);
-            seen = done;
-        }
-        assertTrue("the sweep never advanced through its region (" + seen + "/" + total + ")",
-                seen >= total);
+            assertTrue("a sweep must never go backwards: " + done + " after " + seen[0],
+                    done >= seen[0]);
+            seen[0] = done;
+            return seen[0] >= total;
+        });
+        assertTrue("the sweep never advanced through its region (" + seen[0] + "/" + total + ")",
+                seen[0] >= total);
     }
 
     @Test
