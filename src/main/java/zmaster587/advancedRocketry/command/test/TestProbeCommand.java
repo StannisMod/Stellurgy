@@ -9852,7 +9852,7 @@ public class TestProbeCommand extends CommandBase {
                     info.put("toxic", air.isToxic());
                     info.put("corrosionMilli", Math.round(air.corrosionIndex() * 1000.0D));
                     Map<String, Object> gases = new LinkedHashMap<>();
-                    for (Map.Entry<zmaster587.advancedRocketry.atmosphere.gas.Gas, Integer> entry
+                    for (Map.Entry<zmaster587.advancedRocketry.atmosphere.gas.Gas, Long> entry
                             : air.composition().entrySet()) {
                         gases.put(entry.getKey().name(), entry.getValue());
                     }
@@ -10999,6 +10999,9 @@ public class TestProbeCommand extends CommandBase {
         if (type == boolean.class || type == Boolean.class) return Boolean.parseBoolean(raw);
         if (type == int.class || type == Integer.class) {
             try { return Integer.parseInt(raw); } catch (NumberFormatException e) { return null; }
+        }
+        if (type == long.class || type == Long.class) {
+            try { return Long.parseLong(raw); } catch (NumberFormatException e) { return null; }
         }
         if (type == double.class || type == Double.class) {
             try { return Double.parseDouble(raw); } catch (NumberFormatException e) { return null; }
@@ -17292,9 +17295,9 @@ public class TestProbeCommand extends CommandBase {
      *   "isSealed": true|false,        // private TileOxygenVent.isSealed
      *   "blobSize": &lt;int&gt;,             // AtmosphereHandler.getBlobSize(vent)
      *   "blobAtmosphere": "...",       // current AreaBlob atmosphere unlocalized name
-     *   "airN2": &lt;int&gt;,               // zone gas partial pressures, millionths of an atm;
-     *   "airO2": &lt;int&gt;,               //   -1 means the position is in no zone at all
-     *   "airCO2": &lt;int&gt;,
+     *   "airN2": &lt;long&gt;,              // zone gas partial pressures, BILLIONTHS of an atm;
+     *   "airO2": &lt;long&gt;,              //   -1 means the position is in no zone at all
+     *   "airCO2": &lt;long&gt;,
      *   "airPressure": &lt;int&gt;,          // their sum in hundredths of an atm (100 = 1.00 atm)
      *   "airTempMilliK": &lt;int&gt;,        // the zone air's temperature, thousandths of a kelvin
      *   "airHeatCapacity": &lt;long&gt;,     // heat units per kelvin: pressure x volume, the mixing weight
@@ -17317,9 +17320,12 @@ public class TestProbeCommand extends CommandBase {
             int x = parseIntOr(args[2], 0);
             int y = parseIntOr(args[3], 0);
             int z = parseIntOr(args[4], 0);
-            int n2 = parseIntOr(args[5], 0);
-            int o2 = parseIntOr(args[6], 0);
-            int co2 = parseIntOr(args[7], 0);
+            // The composition's own unit — nano-atmospheres — not the millionths a config file is
+            // written in. A probe reports what the state holds and must be able to write the same
+            // thing back, and a gas giant's partial pressures do not fit an int.
+            long n2 = parseLongOr(args[5], 0L);
+            long o2 = parseLongOr(args[6], 0L);
+            long co2 = parseLongOr(args[7], 0L);
             net.minecraft.world.WorldServer world = server.getWorld(dim);
             if (world == null) {
                 send(sender, "{\"error\":\"world not loaded\",\"dim\":" + dim + "}");
@@ -17548,7 +17554,8 @@ public class TestProbeCommand extends CommandBase {
 
         // Gas contents of the zone this vent anchors. Reported as -1 where the position is in no
         // zone at all, so a caller can tell "no zone" from "a zone holding nothing".
-        int airN2 = -1, airO2 = -1, airCo2 = -1, airPressure = -1, airTempMilliK = -1;
+        long airN2 = -1L, airO2 = -1L, airCo2 = -1L;
+        int airPressure = -1, airTempMilliK = -1;
         long airHeatCapacity = -1L;
         // "zone" when the position is in a live zone, "none" otherwise. This field describes the
         // POSITION fields below and nothing else: -1 has meant "in no zone" since INV-ATM-19 was
@@ -17617,7 +17624,8 @@ public class TestProbeCommand extends CommandBase {
         // a breached room is losing its air the graph is already empty, so the position fields
         // above say -1 and only these can see the loss happening. Zeros once it is vacuum, which is
         // a state and not an absence; ventHasAir separates "no air left" from "no state at all".
-        int ventN2 = 0, ventO2 = 0, ventCo2 = 0, ventPressure = 0;
+        long ventN2 = 0L, ventO2 = 0L, ventCo2 = 0L;
+        int ventPressure = 0;
         boolean ventHasAir = false;
         if (handler != null && tile instanceof zmaster587.advancedRocketry.tile.atmosphere.TileOxygenVent) {
             zmaster587.advancedRocketry.atmosphere.AirState held = handler.getAirState(

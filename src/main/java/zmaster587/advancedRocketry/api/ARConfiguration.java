@@ -262,22 +262,31 @@ public class ARConfiguration {
     public int oxygenVentSize;
     @ConfigProperty
     public boolean lifeSupportZones;
+    /**
+     * The oxygen band, the ignition floor and the crew's draw, in the COMPOSITION's own unit rather
+     * than the millionths the config file states them in.
+     * <p>
+     * These are compared against, and subtracted from, a zone's partial pressures every tick, so they
+     * are held in the unit those pressures are in — the conversion happens once, where the file is
+     * read, instead of at every comparison. A config file stays in parts per million because that is
+     * what an oxygen fraction and an exposure limit are quoted in; see {@code AirState.PER_PPM}.
+     */
     @ConfigProperty
-    public int lifeSupportMinPartialO2;
+    public long lifeSupportMinPartialO2;
     @ConfigProperty
-    public int lifeSupportMaxPartialO2;
+    public long lifeSupportMaxPartialO2;
     @ConfigProperty
-    public int lifeSupportCombustionMinPartialO2;
+    public long lifeSupportCombustionMinPartialO2;
     @ConfigProperty
-    public int lifeSupportRespirationRate;
+    public long lifeSupportRespirationRate;
     @ConfigProperty
     public int lifeSupportAirHeatCapacity;
     @ConfigProperty
-    public int lifeSupportRecirculatorRate;
+    public long lifeSupportRecirculatorRate;
     @ConfigProperty
     public int lifeSupportRecirculatorPower;
     @ConfigProperty
-    public int lifeSupportCarbonPerDust;
+    public long lifeSupportCarbonPerDust;
     @ConfigProperty
     public int jettisonPortIntervalTicks;
     @ConfigProperty
@@ -285,7 +294,7 @@ public class ARConfiguration {
     @ConfigProperty
     public int lifeSupportFluidPerAtmBlock;
     @ConfigProperty
-    public int lifeSupportSeparatorRate;
+    public long lifeSupportSeparatorRate;
     @ConfigProperty
     public int lifeSupportSeparatorPower;
     @ConfigProperty
@@ -297,7 +306,7 @@ public class ARConfiguration {
     @ConfigProperty
     public int lifeSupportDuctThroughput;
     @ConfigProperty
-    public int lifeSupportBreachVentRate;
+    public long lifeSupportBreachVentRate;
     @ConfigProperty
     public boolean shipHeat;
     @ConfigProperty
@@ -538,6 +547,27 @@ public class ARConfiguration {
         }
     }
 
+    /**
+     * A partial pressure or a rate of one, authored in millionths of an atmosphere and returned in
+     * the composition's own unit.
+     * <p>
+     * The single place the two units meet. A person writing a config file thinks in parts per million
+     * because that is how an oxygen fraction and an exposure limit are quoted; the model stores a
+     * thousand times finer so a trace atmosphere still has digits left. Converting HERE, once, is what
+     * lets every comparison downstream be a plain {@code >=} against a zone's own numbers.
+     * <p>
+     * The bound is the one the TYPE imposes and nothing tighter: a Forge integer property, so whatever
+     * fits in one. Deciding here that no pack may want a threshold above one atmosphere would be a
+     * balance opinion wearing a limit's clothes, and a world like Venus is exactly where it would be
+     * wrong. The product cannot overflow either way — the internal unit holds some nine billion
+     * atmospheres.
+     */
+    private static long partialPressure(net.minecraftforge.common.config.Configuration config,
+                                        String key, int defaultPpm, String comment) {
+        return config.get(OXYGEN, key, defaultPpm, comment, 0, Integer.MAX_VALUE).getInt()
+                * AirState.PER_PPM;
+    }
+
     public static void loadPreInit() {
 
         ARConfiguration arConfig = getCurrentConfig();
@@ -584,24 +614,24 @@ public class ARConfiguration {
         arConfig.suitTankCapacity = (float) config.get(OXYGEN, "suitTankCapacity", 1.0f, "Multiplier for suit extra tank capacity.", 0, Float.MAX_VALUE).getDouble();
         arConfig.scrubberRequiresCartrige = config.get(OXYGEN, "scrubberRequiresCartrige", true, "Require cartridges for oxygen scrubbers.").getBoolean();
         arConfig.lifeSupportZones = config.get(OXYGEN, "lifeSupportZones", true, "Track nitrogen/oxygen/CO2 separately inside a sealed zone: crew consume O2 and exhale CO2, and the breathability of the room follows its oxygen partial pressure. When false a sealed zone behaves exactly as it did before, with a fixed breathable atmosphere.").getBoolean();
-        arConfig.lifeSupportMinPartialO2 = config.get(OXYGEN, "lifeSupportMinPartialO2", 160000, "Oxygen partial pressure below which a zone stops being breathable, in millionths of an atmosphere (210000 is sea-level air).", 0, AirState.ONE_ATM).getInt();
-        arConfig.lifeSupportCombustionMinPartialO2 = config.get(OXYGEN, "lifeSupportCombustionMinPartialO2", 150000, "Oxidiser partial pressure below which nothing will burn, in millionths of an atmosphere. This is NOT the breathing threshold and must not be set to it: a room can be too thin to breathe and still light a torch, which is why the two are separate numbers. Real materials stop burning a little below where a person stops coping, which is where the default sits. Set it to 0 and nothing burns anywhere.", 0, AirState.ONE_ATM).getInt();
-        arConfig.lifeSupportMaxPartialO2 = config.get(OXYGEN, "lifeSupportMaxPartialO2", 300000, "Oxygen partial pressure above which a zone becomes toxic and fire-prone, in millionths of an atmosphere.", 0, AirState.ONE_ATM).getInt();
-        arConfig.lifeSupportRespirationRate = config.get(OXYGEN, "lifeSupportRespirationRate", 2000, "Oxygen a single crew member turns into CO2 each second, in millionths of an atmosphere times the zone volume in blocks. Larger rooms therefore last proportionally longer.", 0, Integer.MAX_VALUE).getInt();
+        arConfig.lifeSupportMinPartialO2 = partialPressure(config, "lifeSupportMinPartialO2", 160000, "Oxygen partial pressure below which a zone stops being breathable, in millionths of an atmosphere (210000 is sea-level air).");
+        arConfig.lifeSupportCombustionMinPartialO2 = partialPressure(config, "lifeSupportCombustionMinPartialO2", 150000, "Oxidiser partial pressure below which nothing will burn, in millionths of an atmosphere. This is NOT the breathing threshold and must not be set to it: a room can be too thin to breathe and still light a torch, which is why the two are separate numbers. Real materials stop burning a little below where a person stops coping, which is where the default sits. Set it to 0 and nothing burns anywhere.");
+        arConfig.lifeSupportMaxPartialO2 = partialPressure(config, "lifeSupportMaxPartialO2", 300000, "Oxygen partial pressure above which a zone becomes toxic and fire-prone, in millionths of an atmosphere.");
+        arConfig.lifeSupportRespirationRate = partialPressure(config, "lifeSupportRespirationRate", 2000, "Oxygen a single crew member turns into CO2 each second, in millionths of an atmosphere times the zone volume in blocks. Larger rooms therefore last proportionally longer.");
         arConfig.lifeSupportAirHeatCapacity = config.get(OXYGEN, "lifeSupportAirHeatCapacity", 40, "How much heat one block of air at one atmosphere absorbs per kelvin. This is what makes a compartment a heat reservoir rather than an empty space: a big pressurised room warms slowly and holds the warmth, a small or half-pressurised one swings fast, and a vacuum holds nothing at all. Set it to 0 and air stops carrying heat, which leaves every zone reading ambient forever.", 0, Integer.MAX_VALUE).getInt();
-        arConfig.lifeSupportRecirculatorRate = config.get(OXYGEN, "lifeSupportRecirculatorRate", 6000, "CO2 a single recirculator turns back into oxygen each second, in millionths of an atmosphere. At the default it keeps up with three crew in a room of any size.", 0, Integer.MAX_VALUE).getInt();
+        arConfig.lifeSupportRecirculatorRate = partialPressure(config, "lifeSupportRecirculatorRate", 6000, "CO2 a single recirculator turns back into oxygen each second, in millionths of an atmosphere. At the default it keeps up with three crew in a room of any size.");
         arConfig.lifeSupportRecirculatorPower = config.get(OXYGEN, "lifeSupportRecirculatorPower", 400, "Power a recirculator draws per operation. Reversing combustion is endothermic: the energy cost is the point, not a tax.", 0, Integer.MAX_VALUE).getInt();
-        arConfig.lifeSupportCarbonPerDust = config.get(OXYGEN, "lifeSupportCarbonPerDust", 60000, "CO2 that must be regenerated before one carbon dust is produced, in millionths of an atmosphere. At the defaults a recirculator running flat out yields a dust every ten seconds.", 1, Integer.MAX_VALUE).getInt();
+        arConfig.lifeSupportCarbonPerDust = partialPressure(config, "lifeSupportCarbonPerDust", 60000, "CO2 that must be regenerated before one carbon dust is produced, in millionths of an atmosphere. At the defaults a recirculator running flat out yields a dust every ten seconds.");
         arConfig.jettisonPortIntervalTicks = config.get(OXYGEN, "jettisonPortIntervalTicks", 20, "How often a jettison port tries to throw its contents overboard, in ticks. This is a duty cycle, not a throttle on how much leaves: the port ejects whatever stack it holds, so a faster port empties a busier scrubber line rather than exporting more per firing.", 1, Integer.MAX_VALUE).getInt();
         arConfig.jettisonPortClearance = config.get(OXYGEN, "jettisonPortClearance", 3, "How many blocks in front of a jettison port must be empty before it will fire. The port refuses rather than firing into a wall, and it HOLDS its cargo while blocked instead of voiding it, so the only cost of a badly placed port is that nothing leaves.", 1, 64).getInt();
         arConfig.lifeSupportFluidPerAtmBlock = config.get(OXYGEN, "lifeSupportFluidPerAtmBlock", 1000, "How many millibuckets of gas one whole atmosphere of partial pressure amounts to in ONE block of room. This is the exchange rate between air in a room and gas in a pipe: at the default, emptying a 20-block cabin of its 0.21 atm of oxygen yields 4200 mB.", 1, Integer.MAX_VALUE).getInt();
-        arConfig.lifeSupportSeparatorRate = config.get(OXYGEN, "lifeSupportSeparatorRate", 20000, "Partial pressure a separator moves between room and tank each second, in millionths of an atmosphere. At the default it clears a badly stale room in under ten seconds.", 0, Integer.MAX_VALUE).getInt();
+        arConfig.lifeSupportSeparatorRate = partialPressure(config, "lifeSupportSeparatorRate", 20000, "Partial pressure a separator moves between room and tank each second, in millionths of an atmosphere. At the default it clears a badly stale room in under ten seconds.");
         arConfig.lifeSupportSeparatorPower = config.get(OXYGEN, "lifeSupportSeparatorPower", 300, "Power a separator draws per operation.", 0, Integer.MAX_VALUE).getInt();
         arConfig.lifeSupportPlantRate = config.get(OXYGEN, "lifeSupportPlantRate", 240000, "Regeneration a central life-support plant can supply to its ventilation network each second, in millionths of an atmosphere TIMES the served zone's volume in blocks. Unlike the per-room recirculator this is an absolute amount of gas, so one number can be split across rooms of different sizes: at the default it clears about 13000 millionths per second from a 18-block cabin, or half that from two of them.", 0, Integer.MAX_VALUE).getInt();
         arConfig.lifeSupportPlantPower = config.get(OXYGEN, "lifeSupportPlantPower", 2000, "Power a central plant draws per second while regenerating at its full rate; a plant running below capacity draws proportionally less. Reversing combustion is endothermic — the energy is the mechanic, and centralising it is what buys the better rate.", 0, Integer.MAX_VALUE).getInt();
         arConfig.lifeSupportPlantCarbonPerDust = config.get(OXYGEN, "lifeSupportPlantCarbonPerDust", 1200000, "Regeneration work a central plant must do before one carbon dust is produced, in the same millionths-times-blocks unit as lifeSupportPlantRate. The default is the per-room figure scaled to a nominal 20-block cabin, so a plant and a recirculator yield the same dust for the same gas.", 1, Integer.MAX_VALUE).getInt();
         arConfig.lifeSupportDuctThroughput = config.get(OXYGEN, "lifeSupportDuctThroughput", 120000, "Regeneration work one ventilation duct block will carry each second, in the same unit as lifeSupportPlantRate. This is a THROUGHPUT, not a gas content: the duct carries a rate, and running a second line is how a ship supports more crew.", 0, Integer.MAX_VALUE).getInt();
-        arConfig.lifeSupportBreachVentRate = config.get(OXYGEN, "lifeSupportBreachVentRate", 50000, "How fast a breached zone loses its air to space, in millionths of an atmosphere per second across all three gases. At the default a sea-level room empties in about twenty seconds, which is the window a player has to close a bulkhead or patch the hull. 0 disables venting: a breached room then keeps its air, which is the pre-3.0.0 behaviour.", 0, Integer.MAX_VALUE).getInt();
+        arConfig.lifeSupportBreachVentRate = partialPressure(config, "lifeSupportBreachVentRate", 50000, "How fast a breached zone loses its air to space, in millionths of an atmosphere per second across all three gases. At the default a sea-level room empties in about twenty seconds, which is the window a player has to close a bulkhead or patch the hull. 0 disables venting: a breached room then keeps its air, which is the pre-3.0.0 behaviour.");
         arConfig.dropExTorches = config.get(OXYGEN, "dropExtinguishedTorches", false, "Drop an extinguished torch instead of a vanilla torch, when breaking an extinguished torch.").getBoolean();
         sealableBlockWhiteList = config.getStringList("sealableBlockWhiteList", OXYGEN, new String[]{}, "Blocks that should count as sealable. Format: modid:block  for example \"minecraft:chest\"");
         sealableBlockBlackList = config.getStringList("sealableBlockBlackList", OXYGEN, new String[]{}, "Blocks that should not count as sealable.  Format: modid:block  for example \"minecraft:chest\"");
@@ -1087,6 +1117,8 @@ public class ARConfiguration {
 
         if (Integer.class.isAssignableFrom(type) || type == int.class)
             out.writeInt((Integer) value);
+        else if (Long.class.isAssignableFrom(type) || type == long.class)
+            out.writeLong((Long) value);
         else if (Float.class.isAssignableFrom(type) || type == float.class)
             out.writeFloat((Float) value);
         else if (Double.class.isAssignableFrom(type) || type == double.class)
@@ -1146,6 +1178,8 @@ public class ARConfiguration {
 
         if (Integer.class.isAssignableFrom(type) || type == int.class)
             return in.readInt();
+        else if (Long.class.isAssignableFrom(type) || type == long.class)
+            return in.readLong();
         else if (Float.class.isAssignableFrom(type) || type == float.class)
             return in.readFloat();
         else if (Double.class.isAssignableFrom(type) || type == double.class)

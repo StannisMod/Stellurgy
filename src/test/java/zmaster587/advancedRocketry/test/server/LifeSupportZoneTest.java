@@ -7,6 +7,7 @@ import java.util.regex.Pattern;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
+import static zmaster587.advancedRocketry.test.AdvancedRocketryTestConstants.ppm;
 import static zmaster587.advancedRocketry.test.server.WorldCommandFixtures.exec;
 
 /**
@@ -53,8 +54,8 @@ public class LifeSupportZoneTest extends AbstractSharedServerTest {
 
         String info = ventInfo(CX_FRESH);
         assertEquals("a fresh maintained zone must hold sea-level oxygen: " + info,
-                210_000, extract(info, AIR_O2));
-        assertEquals("and no carbon dioxide at all: " + info, 0, extract(info, AIR_CO2));
+                ppm(210_000), extract(info, AIR_O2));
+        assertEquals("and no carbon dioxide at all: " + info, 0L, extract(info, AIR_CO2));
         assertEquals("its pressure must read as one atmosphere: " + info,
                 100, extract(info, AIR_PRESSURE));
     }
@@ -73,7 +74,7 @@ public class LifeSupportZoneTest extends AbstractSharedServerTest {
 
         String info = ventInfo(CX_UNPOWERED);
         assertEquals("an unpowered vent must not be maintaining a zone: " + info,
-                -1, extract(info, AIR_O2));
+                -1L, extract(info, AIR_O2));
     }
 
     /** MECH-ATM-20 end to end: a powered recirculator standing in a stale room turns that room's
@@ -88,12 +89,12 @@ public class LifeSupportZoneTest extends AbstractSharedServerTest {
 
         // Make the room stale: most of its oxygen already breathed into CO2.
         String set = exec("artest vent setair 0 " + CX_RECIRC + " " + CY_BASE + " " + CZ_BASE
-                + " 790000 60000 150000");
+                + " " + ppm(790_000) + " " + ppm(60_000) + " " + ppm(150_000));
         assertTrue("setair failed: " + set, set.contains("\"ok\":true"));
 
         String before = ventInfo(CX_RECIRC);
         assertEquals("premise: the room is stale before the machine runs: " + before,
-                150_000, extract(before, AIR_CO2));
+                ppm(150_000), extract(before, AIR_CO2));
 
         placeRecirculator(CX_RECIRC);
         injectEnergy2(CX_RECIRC, 1_000_000);
@@ -101,12 +102,12 @@ public class LifeSupportZoneTest extends AbstractSharedServerTest {
         exec("artest tile force-tick 0 " + (CX_RECIRC + 1) + " " + CY_BASE + " " + CZ_BASE + " 400");
 
         String after = ventInfo(CX_RECIRC);
-        int co2After = extract(after, AIR_CO2);
-        int o2After = extract(after, AIR_O2);
+        long co2After = extract(after, AIR_CO2);
+        long o2After = extract(after, AIR_O2);
         assertTrue("the recirculator must consume its room's CO2 (before=150000 after="
-                + co2After + "): " + after, co2After < 150_000);
+                + co2After + "): " + after, co2After < ppm(150_000));
         assertTrue("and the oxygen must come back (before=60000 after=" + o2After + "): " + after,
-                o2After > 60_000);
+                o2After > ppm(60_000));
         assertEquals("regeneration must not change the room's pressure: " + after,
                 100, extract(after, AIR_PRESSURE));
         // The gases are only half the story: what damages the crew is the atmosphere the zone
@@ -133,7 +134,7 @@ public class LifeSupportZoneTest extends AbstractSharedServerTest {
         forceTickAndReseal(CX_SEPARATOR);
 
         String set = exec("artest vent setair 0 " + CX_SEPARATOR + " " + CY_BASE + " " + CZ_BASE
-                + " 790000 60000 150000");
+                + " " + ppm(790_000) + " " + ppm(60_000) + " " + ppm(150_000));
         assertTrue("setair failed: " + set, set.contains("\"ok\":true"));
 
         placeSeparator(CX_SEPARATOR);
@@ -141,11 +142,11 @@ public class LifeSupportZoneTest extends AbstractSharedServerTest {
         exec("artest tile force-tick 0 " + (CX_SEPARATOR + 1) + " " + CY_BASE + " " + CZ_BASE + " 200");
 
         String after = ventInfo(CX_SEPARATOR);
-        int co2After = extract(after, AIR_CO2);
+        long co2After = extract(after, AIR_CO2);
         assertTrue("the separator must pull CO2 out of the room (before=150000 after="
-                + co2After + "): " + after, co2After < 150_000);
+                + co2After + "): " + after, co2After < ppm(150_000));
         assertEquals("and must not touch the oxygen the crew are breathing: " + after,
-                60_000, extract(after, AIR_O2));
+                ppm(60_000), extract(after, AIR_O2));
 
         String tank = exec("artest fluid stored 0 " + (CX_SEPARATOR + 1) + " " + CY_BASE + " " + CZ_BASE);
         assertTrue("the gas it removed must be in its tank as carbon dioxide: " + tank,
@@ -166,7 +167,7 @@ public class LifeSupportZoneTest extends AbstractSharedServerTest {
         // A room whose oxygen has been stripped out: still pressurised by its nitrogen, but not
         // breathable. This is the state a split-mode separator leaves behind.
         String set = exec("artest vent setair 0 " + CX_COMBINE + " " + CY_BASE + " " + CZ_BASE
-                + " 790000 60000 0");
+                + " " + ppm(790_000) + " " + ppm(60_000) + " 0");
         assertTrue("setair failed: " + set, set.contains("\"ok\":true"));
         String before = ventInfo(CX_COMBINE);
         assertTrue("premise: the room must start un-breathable: " + before,
@@ -189,9 +190,9 @@ public class LifeSupportZoneTest extends AbstractSharedServerTest {
         exec("artest tile force-tick 0 " + (CX_COMBINE + 1) + " " + CY_BASE + " " + CZ_BASE + " 200");
 
         String after = ventInfo(CX_COMBINE);
-        int o2After = extract(after, AIR_O2);
+        long o2After = extract(after, AIR_O2);
         assertTrue("the separator must push its oxygen into the room (before=60000 after="
-                + o2After + "): " + after, o2After > 60_000);
+                + o2After + "): " + after, o2After > ppm(60_000));
         assertTrue("and the room must become breathable again: " + after,
                 after.contains("\"blobAtmosphere\":\"PressurizedAir\""));
 
@@ -206,8 +207,8 @@ public class LifeSupportZoneTest extends AbstractSharedServerTest {
      *  machine that simply did nothing would satisfy "never exceeds" without governing anything. */
     @Test
     public void theCombinerRefusesToPushOxygenPastTheSafeCeiling() throws Exception {
-        int ceiling = configInt("lifeSupportMaxPartialO2");
-        int start = ceiling - 40_000;
+        long ceiling = configValue("lifeSupportMaxPartialO2");
+        long start = ceiling - ppm(40_000);
 
         buildSealableRoom(CX_GOVERNOR);
         placeVent(CX_GOVERNOR);
@@ -216,7 +217,7 @@ public class LifeSupportZoneTest extends AbstractSharedServerTest {
         forceTickAndReseal(CX_GOVERNOR);
 
         String set = exec("artest vent setair 0 " + CX_GOVERNOR + " " + CY_BASE + " " + CZ_BASE
-                + " 790000 " + start + " 0");
+                + " " + ppm(790_000) + " " + start + " 0");
         assertTrue("setair failed: " + set, set.contains("\"ok\":true"));
 
         placeSeparator(CX_GOVERNOR);
@@ -232,7 +233,7 @@ public class LifeSupportZoneTest extends AbstractSharedServerTest {
         forceTick(CX_GOVERNOR + 1, 400);
 
         String after = ventInfo(CX_GOVERNOR);
-        int o2After = extract(after, AIR_O2);
+        long o2After = extract(after, AIR_O2);
         assertEquals("oxygen must stop exactly at the ceiling — climbing from " + start
                 + " and no further than " + ceiling + ": " + after, ceiling, o2After);
         assertTrue("and the room must stay breathable rather than turn oxygen-toxic: " + after,
@@ -405,15 +406,15 @@ public class LifeSupportZoneTest extends AbstractSharedServerTest {
         assertTrue("sneak-click failed: " + resp, resp.contains("\"handled\":true"));
     }
 
-    private int configInt(String key) throws Exception {
+    private long configValue(String key) throws Exception {
         String resp = exec("artest config get " + key);
         assertTrue("config get " + key + " failed: " + resp, resp.contains("\"ok\":true"));
         return extract(resp, CONFIG_VALUE);
     }
 
-    private static int extract(String src, Pattern pattern) {
+    private static long extract(String src, Pattern pattern) {
         Matcher m = pattern.matcher(src);
         assertTrue("pattern " + pattern.pattern() + " not found in: " + src, m.find());
-        return Integer.parseInt(m.group(1));
+        return Long.parseLong(m.group(1));
     }
 }

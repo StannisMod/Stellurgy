@@ -7,6 +7,7 @@ import java.util.regex.Pattern;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
+import static zmaster587.advancedRocketry.test.AdvancedRocketryTestConstants.ppm;
 import static zmaster587.advancedRocketry.test.server.WorldCommandFixtures.exec;
 
 /**
@@ -248,7 +249,8 @@ public class HeatLoopTest extends AbstractSharedServerTest {
         exec("artest vent reseal 0 " + cx + " " + CY + " " + CZ);
         exec("artest tile force-tick 0 " + cx + " " + CY + " " + CZ + " 5");
 
-        String set = exec("artest vent setair 0 " + cx + " " + CY + " " + CZ + " 790000 60000 150000");
+        String set = exec("artest vent setair 0 " + cx + " " + CY + " " + CZ
+                + " " + ppm(790_000) + " " + ppm(60_000) + " " + ppm(150_000));
         assertTrue("setair failed: " + set, set.contains("\"ok\":true"));
     }
 

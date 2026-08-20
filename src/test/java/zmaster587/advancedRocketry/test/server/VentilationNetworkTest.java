@@ -7,6 +7,7 @@ import java.util.regex.Pattern;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
+import static zmaster587.advancedRocketry.test.AdvancedRocketryTestConstants.ppm;
 import static zmaster587.advancedRocketry.test.server.WorldCommandFixtures.exec;
 
 /**
@@ -59,12 +60,12 @@ public class VentilationNetworkTest extends AbstractSharedServerTest {
         assertTrue("solve failed: " + solved, solved.contains("\"ticksSolved\":300"));
 
         String after = ventInfo(CX_PLANT);
-        int co2 = extract(after, AIR_CO2);
-        int o2 = extract(after, AIR_O2);
+        long co2 = extract(after, AIR_CO2);
+        long o2 = extract(after, AIR_O2);
         assertTrue("the plant must clear the room's CO2 through the ducts (before=150000 after="
-                + co2 + "): " + after, co2 < 150_000);
+                + co2 + "): " + after, co2 < ppm(150_000));
         assertTrue("and the oxygen must come back (before=60000 after=" + o2 + "): " + after,
-                o2 > 60_000);
+                o2 > ppm(60_000));
 
         String slot = exec("artest hatch read 0 " + (CX_PLANT + 4) + " " + CY + " " + CZ);
         assertTrue("the carbon it took out of that room must appear in the PLANT's slot, not the "
@@ -98,8 +99,8 @@ public class VentilationNetworkTest extends AbstractSharedServerTest {
 
         String after = ventInfo(CX_ISOLATION);
         assertEquals("no regeneration may cross a cable belonging to another subsystem: " + after,
-                150_000, extract(after, AIR_CO2));
-        assertEquals("and the oxygen must be untouched: " + after, 60_000, extract(after, AIR_O2));
+                ppm(150_000), extract(after, AIR_CO2));
+        assertEquals("and the oxygen must be untouched: " + after, ppm(60_000), extract(after, AIR_O2));
     }
 
     /**
@@ -138,8 +139,8 @@ public class VentilationNetworkTest extends AbstractSharedServerTest {
             // Measure from a snapshot taken HERE, not from the value setair wrote: the server ticks
             // between commands and solves the network as it goes, so anything asserted against the
             // authored figure is really asserting how long the setup took.
-            int baseA = extract(ventInfo(roomA), AIR_CO2);
-            int baseB = extract(ventInfo(roomB), AIR_CO2);
+            long baseA = extract(ventInfo(roomA), AIR_CO2);
+            long baseB = extract(ventInfo(roomB), AIR_CO2);
 
             exec("artest subnet solve lifesupport 0 300");
 
@@ -179,7 +180,8 @@ public class VentilationNetworkTest extends AbstractSharedServerTest {
         exec("artest vent reseal 0 " + cx + " " + CY + " " + CZ);
         exec("artest tile force-tick 0 " + cx + " " + CY + " " + CZ + " 5");
 
-        String set = exec("artest vent setair 0 " + cx + " " + CY + " " + CZ + " 790000 60000 150000");
+        String set = exec("artest vent setair 0 " + cx + " " + CY + " " + CZ
+                + " " + ppm(790_000) + " " + ppm(60_000) + " " + ppm(150_000));
         assertTrue("setair failed: " + set, set.contains("\"ok\":true"));
     }
 

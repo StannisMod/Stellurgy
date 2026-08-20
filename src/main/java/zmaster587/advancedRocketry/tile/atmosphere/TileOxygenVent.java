@@ -405,8 +405,8 @@ public class TileOxygenVent extends TileInventoriedRFConsumerTank implements IBl
         if (air == null || amount <= 0)
             return 0;
         int volume = zoneVolume();
-        int converted = air.regenerate(LifeSupportNetwork.partialPressure(amount, volume));
-        if (converted <= 0)
+        long converted = air.regenerate(LifeSupportNetwork.partialPressure(amount, volume));
+        if (converted <= 0L)
             return 0;
 
         AtmosphereHandler handler = AtmosphereHandler.getOxygenHandler(world.provider.getDimension());
@@ -481,8 +481,8 @@ public class TileOxygenVent extends TileInventoriedRFConsumerTank implements IBl
         if (world == null || world.isRemote || isMaintainingAtmosphere()
                 || !ARConfiguration.getCurrentConfig().lifeSupportZones)
             return;
-        int ratePerSecond = ARConfiguration.getCurrentConfig().lifeSupportBreachVentRate;
-        if (ratePerSecond <= 0)
+        long ratePerSecond = ARConfiguration.getCurrentConfig().lifeSupportBreachVentRate;
+        if (ratePerSecond <= 0L)
             return;
         // Its own counter, never a world-clock modulo: that would wake every breached vent in the
         // world on one tick and would be invisible to a force-ticking harness.
@@ -494,7 +494,7 @@ public class TileOxygenVent extends TileInventoriedRFConsumerTank implements IBl
         if (handler == null)
             return;
         AirState air = handler.getAirState(this);
-        if (air == null || air.getTotalPressure() <= 0)
+        if (air == null || air.getTotalPressure() <= 0L)
             return;
 
         air.drawNitrogen(ratePerSecond);

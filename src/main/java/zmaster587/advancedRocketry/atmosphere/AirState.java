@@ -23,12 +23,24 @@ import zmaster587.advancedRocketry.atmosphere.gas.GasRole;
  * the fluid it becomes when it is taken out — so the map of what is here and the map of what can be
  * collected here are one object rather than two lists that drift apart.
  * <p>
- * Units are <b>micro-atmospheres</b> (1_000_000 = 1 atm). That is fine enough for the trace
- * gases the life-support loop cares about — dangerous CO2 sits around 1% of an atmosphere — and
- * it converts to the pressure figure the rest of the mod already speaks: the atmosphere analyser
- * prints {@code pressure / 100f + " atm"}, so pressure is hundredths of an atmosphere and
- * {@link #getPressureCentiAtm()} divides by 10_000. {@link #earthLike()} totals exactly one
- * atmosphere, which is the constant the zone pressure used to be hard-coded to.
+ * <b>Units are nano-atmospheres in a {@code long}</b> (1_000_000_000 = 1 atm), and both ends of that
+ * range are deliberate. A ceiling of some nine billion atmospheres holds a gas giant's depths; a
+ * resolution of one part in a billion holds a trace that a coarser unit would round away — Mars's
+ * 0.13% oxygen at 6 mbar is 7.8e-6 atm, which is eight whole units in millionths and four significant
+ * digits here.
+ * <p>
+ * <b>What falls below one unit is ZERO, everywhere and consistently.</b> The icy moons' radiolytic
+ * oxygen sits around 1e-11 atm and this model says there is none of it: an exosphere that thin is not
+ * breathable, not harvestable and not a hazard, so "none" is the honest answer rather than a number
+ * kept in one code path and dropped in another. The floor is a statement about the model, not a bug
+ * in it.
+ * <p>
+ * The unit a HUMAN writes is coarser and stays that way: a config threshold and a gas's hazard limit
+ * are authored in parts per million of an atmosphere, which is what an exposure limit is quoted in,
+ * and {@link #PER_PPM} is the one bridge between the two. Pressure as the analyser and the HUD speak
+ * it is hundredths of an atmosphere, which {@link #getPressureCentiAtm()} still answers.
+ * {@link #earthLike()} totals exactly one atmosphere, which is the constant the zone pressure used to
+ * be hard-coded to.
  * <p>
  * Nitrogen is inert: nothing produces or consumes it. It exists so that the oxygen fraction is a
  * quantity a governor can act on rather than a synonym for "how much gas is in the room".
@@ -41,16 +53,26 @@ import zmaster587.advancedRocketry.atmosphere.gas.GasRole;
 public class AirState {
 
     /** One atmosphere, in the internal unit. */
-    public static final int ONE_ATM = 1_000_000;
+    public static final long ONE_ATM = 1_000_000_000L;
+
+    /**
+     * One part per million of an atmosphere, in the internal unit.
+     * <p>
+     * The bridge between what a person writes and what the model stores. Exposure limits, config
+     * thresholds and a planet's composition are all quoted in ppm because that is the unit the real
+     * numbers come in; the state is finer so that a trace still has digits left. Every authored
+     * number crosses here exactly once, at the boundary that reads it.
+     */
+    public static final long PER_PPM = ONE_ATM / 1_000_000L;
 
     /** Below this total pressure the zone is not air at all, whatever its composition. */
-    private static final int VACUUM_CEILING = ONE_ATM / 100;
+    private static final long VACUUM_CEILING = ONE_ATM / 100;
 
     /**
      * What is in the air, by substance. Sparse on purpose: a vacuum holds an empty map, and most
      * rooms hold three entries, so nothing pays for the substances it does not contain.
      */
-    private final Map<Gas, Integer> composition = new HashMap<>();
+    private final Map<Gas, Long> composition = new HashMap<>();
     /**
      * Kelvin. Held as thousandths so that a mix of two zones does not lose a degree to integer
      * truncation every time it happens — a room re-breathed a hundred times a minute would otherwise
@@ -58,11 +80,11 @@ public class AirState {
      */
     private int temperatureMilliK;
 
-    public AirState(int nitrogen, int oxygen, int carbonDioxide) {
+    public AirState(long nitrogen, long oxygen, long carbonDioxide) {
         this(nitrogen, oxygen, carbonDioxide, ambientKelvin() * 1000);
     }
 
-    public AirState(int nitrogen, int oxygen, int carbonDioxide, int temperatureMilliK) {
+    public AirState(long nitrogen, long oxygen, long carbonDioxide, int temperatureMilliK) {
         set(GasRegistry.NITROGEN, nitrogen);
         set(GasRegistry.OXYGEN, oxygen);
         set(GasRegistry.CARBON_DIOXIDE, carbonDioxide);
@@ -70,15 +92,15 @@ public class AirState {
     }
 
     /** Write one substance's partial pressure, dropping the entry when it reaches nothing. */
-    private void set(Gas gas, int amount) {
+    private void set(Gas gas, long amount) {
         if (gas == null) {
             // A substance this game does not know is DROPPED, not stored under a null key: a map that
             // accepted one would keep counting it toward the pressure while nothing could ever name,
             // draw or measure it again.
             return;
         }
-        int clamped = Math.max(0, amount);
-        if (clamped == 0) {
+        long clamped = Math.max(0L, amount);
+        if (clamped == 0L) {
             composition.remove(gas);
         } else {
             composition.put(gas, clamped);
@@ -86,14 +108,14 @@ public class AirState {
     }
 
     /** How much of this substance is here. Zero for anything the air does not contain. */
-    public int partialPressure(Gas gas) {
-        Integer held = gas == null ? null : composition.get(gas);
-        return held == null ? 0 : held;
+    public long partialPressure(Gas gas) {
+        Long held = gas == null ? null : composition.get(gas);
+        return held == null ? 0L : held;
     }
 
     /** Put this substance in, at its own temperature, mixing by the calorimeter rule. */
-    public void add(Gas gas, int amount, double incomingKelvin) {
-        if (gas == null || amount <= 0) {
+    public void add(Gas gas, long amount, double incomingKelvin) {
+        if (gas == null || amount <= 0L) {
             return;
         }
         mixIn(amount, incomingKelvin);
@@ -101,9 +123,9 @@ public class AirState {
     }
 
     /** Take this substance out, and answer how much was actually there to take. */
-    public int draw(Gas gas, int amount) {
-        int taken = Math.min(Math.max(0, amount), partialPressure(gas));
-        if (taken > 0) {
+    public long draw(Gas gas, long amount) {
+        long taken = Math.min(Math.max(0L, amount), partialPressure(gas));
+        if (taken > 0L) {
             set(gas, partialPressure(gas) - taken);
         }
         return taken;
@@ -113,14 +135,14 @@ public class AirState {
      * Everything present, by substance. The resource map and the state are the same object, so this
      * is also the answer to "what could be extracted here".
      */
-    public Map<Gas, Integer> composition() {
+    public Map<Gas, Long> composition() {
         return java.util.Collections.unmodifiableMap(composition);
     }
 
     /** Total partial pressure of every substance in this role - how a predicate asks its question. */
-    public int roleTotal(GasRole role) {
-        int total = 0;
-        for (Map.Entry<Gas, Integer> entry : composition.entrySet()) {
+    public long roleTotal(GasRole role) {
+        long total = 0L;
+        for (Map.Entry<Gas, Long> entry : composition.entrySet()) {
             if (entry.getKey().is(role)) {
                 total += entry.getValue();
             }
@@ -138,28 +160,28 @@ public class AirState {
      * touched by life support reports the same pressure it reported before zones had contents.
      */
     public static AirState earthLike() {
-        return new AirState(790_000, 210_000, 0);
+        return new AirState(790_000 * PER_PPM, 210_000 * PER_PPM, 0L);
     }
 
     public static AirState vacuum() {
-        return new AirState(0, 0, 0);
+        return new AirState(0L, 0L, 0L);
     }
 
-    public int getNitrogen() {
+    public long getNitrogen() {
         return partialPressure(GasRegistry.NITROGEN);
     }
 
-    public int getOxygen() {
+    public long getOxygen() {
         return partialPressure(GasRegistry.OXYGEN);
     }
 
-    public int getCarbonDioxide() {
+    public long getCarbonDioxide() {
         return partialPressure(GasRegistry.CARBON_DIOXIDE);
     }
 
-    public int getTotalPressure() {
-        int total = 0;
-        for (int amount : composition.values()) {
+    public long getTotalPressure() {
+        long total = 0L;
+        for (long amount : composition.values()) {
             total += amount;
         }
         return total;
@@ -167,7 +189,7 @@ public class AirState {
 
     /** The pressure figure the HUD, the analyser and {@code PacketAtmSync} speak: 100 = 1 atm. */
     public int getPressureCentiAtm() {
-        return getTotalPressure() / (ONE_ATM / 100);
+        return (int) Math.min(Integer.MAX_VALUE, getTotalPressure() / (ONE_ATM / 100L));
     }
 
     /**
@@ -177,8 +199,8 @@ public class AirState {
      * @param amount partial pressure to convert; clamped to the oxygen actually present
      * @return the amount actually converted, which is less than requested once the zone runs out
      */
-    public int respire(int amount) {
-        int converted = draw(GasRegistry.OXYGEN, amount);
+    public long respire(long amount) {
+        long converted = draw(GasRegistry.OXYGEN, amount);
         set(GasRegistry.CARBON_DIOXIDE, getCarbonDioxide() + converted);
         return converted;
     }
@@ -191,8 +213,8 @@ public class AirState {
      * @param amount partial pressure to regenerate; clamped to the CO2 actually present
      * @return the amount actually converted, which is the carbon the caller must now deal with
      */
-    public int regenerate(int amount) {
-        int converted = draw(GasRegistry.CARBON_DIOXIDE, amount);
+    public long regenerate(long amount) {
+        long converted = draw(GasRegistry.CARBON_DIOXIDE, amount);
         set(GasRegistry.OXYGEN, getOxygen() + converted);
         return converted;
     }
@@ -202,20 +224,20 @@ public class AirState {
      *
      * @return the amount actually removed, clamped to what is present
      */
-    public int drawNitrogen(int amount) {
-        int taken = draw(GasRegistry.NITROGEN, amount);
+    public long drawNitrogen(long amount) {
+        long taken = draw(GasRegistry.NITROGEN, amount);
         return taken;
     }
 
     /** Take carbon dioxide out of the air — the separator's main job, feeding regeneration. */
-    public int drawCarbonDioxide(int amount) {
-        int taken = draw(GasRegistry.CARBON_DIOXIDE, amount);
+    public long drawCarbonDioxide(long amount) {
+        long taken = draw(GasRegistry.CARBON_DIOXIDE, amount);
         return taken;
     }
 
     /** Take oxygen out of the air, e.g. to fill a tank with the pure gas. */
-    public int drawOxygen(int amount) {
-        int taken = draw(GasRegistry.OXYGEN, amount);
+    public long drawOxygen(long amount) {
+        long taken = draw(GasRegistry.OXYGEN, amount);
         return taken;
     }
 
@@ -227,14 +249,14 @@ public class AirState {
      * would hand the next thing that looked at it a number about a room that no longer exists.
      */
     public double getTemperatureKelvin() {
-        if (getTotalPressure() <= 0)
+        if (getTotalPressure() <= 0L)
             return ambientKelvin();
         return temperatureMilliK / 1000.0D;
     }
 
     /** The same reading in thousandths, which is what a probe and the NBT deal in. */
     public int getTemperatureMilliK() {
-        return getTotalPressure() <= 0 ? ambientKelvin() * 1000 : temperatureMilliK;
+        return getTotalPressure() <= 0L ? ambientKelvin() * 1000 : temperatureMilliK;
     }
 
     /**
@@ -252,7 +274,12 @@ public class AirState {
         long perBlockAtOneAtm = Math.max(0, ARConfiguration.getCurrentConfig().lifeSupportAirHeatCapacity);
         if (perBlockAtOneAtm <= 0)
             return 0L;
-        return (long) getTotalPressure() * Math.max(0, volumeBlocks) * perBlockAtOneAtm / ONE_ATM;
+        // Reduced to ppm BEFORE the multiply, which does two things at once: it keeps the product
+        // inside a long for a gas giant's pressure across a station's volume, and it leaves this
+        // arithmetic identical to what it was when ppm was the whole model. Air a thousand times
+        // thinner than one ppm holds no measurable heat, and reading its capacity as zero is the same
+        // floor the composition itself has.
+        return getTotalPressure() / PER_PPM * Math.max(0, volumeBlocks) * perBlockAtOneAtm / 1_000_000L;
     }
 
     /**
@@ -294,12 +321,12 @@ public class AirState {
         return taken;
     }
 
-    public void addNitrogen(int amount, double incomingKelvin) {
-        add(GasRegistry.NITROGEN, Math.max(0, amount), incomingKelvin);
+    public void addNitrogen(long amount, double incomingKelvin) {
+        add(GasRegistry.NITROGEN, Math.max(0L, amount), incomingKelvin);
     }
 
-    public void addOxygen(int amount, double incomingKelvin) {
-        add(GasRegistry.OXYGEN, Math.max(0, amount), incomingKelvin);
+    public void addOxygen(long amount, double incomingKelvin) {
+        add(GasRegistry.OXYGEN, Math.max(0L, amount), incomingKelvin);
     }
 
     /**
@@ -311,16 +338,16 @@ public class AirState {
      * arriving into a vacuum simply brings its own temperature, which is the degenerate case of the
      * same formula rather than a branch anyone had to think about.
      */
-    private void mixIn(int amountArriving, double incomingKelvin) {
-        if (amountArriving <= 0)
+    private void mixIn(long amountArriving, double incomingKelvin) {
+        if (amountArriving <= 0L)
             return;
-        int here = getTotalPressure();
-        if (here <= 0) {
+        long here = getTotalPressure();
+        if (here <= 0L) {
             temperatureMilliK = (int) Math.max(0, Math.round(incomingKelvin * 1000.0D));
             return;
         }
-        double mixed = (here * getTemperatureKelvin() + (double) amountArriving * incomingKelvin)
-                / (here + amountArriving);
+        double mixed = ((double) here * getTemperatureKelvin() + (double) amountArriving * incomingKelvin)
+                / ((double) here + (double) amountArriving);
         temperatureMilliK = (int) Math.max(0, Math.round(mixed * 1000.0D));
     }
 
@@ -331,11 +358,11 @@ public class AirState {
      * here, so a mis-set pipe cannot enrich a cabin into a fire hazard. Returns 0 when the zone is
      * already at or above the ceiling, and treats an unconfigured band as no ceiling.
      */
-    public int oxygenHeadroom() {
+    public long oxygenHeadroom() {
         ARConfiguration config = ARConfiguration.getCurrentConfig();
         if (config.lifeSupportMaxPartialO2 <= config.lifeSupportMinPartialO2)
-            return Integer.MAX_VALUE;
-        return Math.max(0, config.lifeSupportMaxPartialO2 - getOxygen());
+            return Long.MAX_VALUE;
+        return Math.max(0L, config.lifeSupportMaxPartialO2 - getOxygen());
     }
 
     /**
@@ -353,7 +380,7 @@ public class AirState {
         if (getTotalPressure() <= VACUUM_CEILING) {
             return false;
         }
-        int needed = ARConfiguration.getCurrentConfig().lifeSupportCombustionMinPartialO2;
+        long needed = ARConfiguration.getCurrentConfig().lifeSupportCombustionMinPartialO2;
         // A threshold of zero is no rung at all, the same reading every other threshold in this
         // system gets: an unloaded config may not turn every vacuum into a firebox.
         return needed > 0 && roleTotal(GasRole.OXIDISER) >= needed;
@@ -384,7 +411,7 @@ public class AirState {
     public Gas worstToxin() {
         Gas worst = null;
         double worstExcess = 1.0D;
-        for (Map.Entry<Gas, Integer> entry : composition.entrySet()) {
+        for (Map.Entry<Gas, Long> entry : composition.entrySet()) {
             Gas gas = entry.getKey();
             if (!gas.is(GasRole.TOXIC) || gas.hazardThreshold() <= 0) {
                 continue;
@@ -412,7 +439,7 @@ public class AirState {
      */
     public double corrosionIndex() {
         double attack = 0.0D;
-        for (Map.Entry<Gas, Integer> entry : composition.entrySet()) {
+        for (Map.Entry<Gas, Long> entry : composition.entrySet()) {
             Gas gas = entry.getKey();
             if (gas.is(GasRole.CORROSIVE) && gas.hazardThreshold() > 0) {
                 attack += (double) entry.getValue() / gas.hazardThreshold();
@@ -474,9 +501,9 @@ public class AirState {
         if (config.lifeSupportMaxPartialO2 <= config.lifeSupportMinPartialO2)
             return AtmosphereType.PRESSURIZEDAIR;
 
-        int oxidiser = roleTotal(GasRole.OXIDISER);
+        long oxidiser = roleTotal(GasRole.OXIDISER);
         if (oxidiser < config.lifeSupportMinPartialO2)
-            return oxidiser <= 0 ? AtmosphereType.NOO2 : AtmosphereType.LOWOXYGEN;
+            return oxidiser <= 0L ? AtmosphereType.NOO2 : AtmosphereType.LOWOXYGEN;
         if (oxidiser > config.lifeSupportMaxPartialO2)
             return AtmosphereType.HIGHOXYGEN;
 
@@ -489,8 +516,8 @@ public class AirState {
      */
     public void writeToNBT(NBTTagCompound nbt) {
         NBTTagCompound gases = new NBTTagCompound();
-        for (Map.Entry<Gas, Integer> entry : composition.entrySet()) {
-            gases.setInteger(entry.getKey().name(), entry.getValue());
+        for (Map.Entry<Gas, Long> entry : composition.entrySet()) {
+            gases.setLong(entry.getKey().name(), entry.getValue());
         }
         nbt.setTag("gases", gases);
         nbt.setInteger("airK", temperatureMilliK);
@@ -500,19 +527,21 @@ public class AirState {
         // A zone written before air had a temperature reads back 0, which is not a temperature any
         // room was ever at. Absent means ambient, not absolute zero.
         int written = nbt.getInteger("airK");
-        AirState state = new AirState(0, 0, 0, written > 0 ? written : ambientKelvin() * 1000);
+        AirState state = new AirState(0L, 0L, 0L, written > 0 ? written : ambientKelvin() * 1000);
         if (nbt.hasKey("gases")) {
             NBTTagCompound gases = nbt.getCompoundTag("gases");
             for (String name : gases.getKeySet()) {
                 // A gas the running game no longer knows is DROPPED rather than guessed at: a pack
                 // that removed a substance did not mean "and replace it with something else".
-                state.set(GasRegistry.byName(name), gases.getInteger(name));
+                state.set(GasRegistry.byName(name), gases.getLong(name));
             }
         } else {
-            // A zone written before the composition was keyed by substance.
-            state.set(GasRegistry.NITROGEN, nbt.getInteger("n2"));
-            state.set(GasRegistry.OXYGEN, nbt.getInteger("o2"));
-            state.set(GasRegistry.CARBON_DIOXIDE, nbt.getInteger("co2"));
+            // A zone written before the composition was keyed by substance, in the millionths this
+            // model used then. Scaled rather than read raw: the same room must come back at the same
+            // pressure, not a thousandth of it.
+            state.set(GasRegistry.NITROGEN, nbt.getInteger("n2") * PER_PPM);
+            state.set(GasRegistry.OXYGEN, nbt.getInteger("o2") * PER_PPM);
+            state.set(GasRegistry.CARBON_DIOXIDE, nbt.getInteger("co2") * PER_PPM);
         }
         return state;
     }

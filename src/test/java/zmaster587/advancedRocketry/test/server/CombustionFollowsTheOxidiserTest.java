@@ -7,6 +7,7 @@ import java.util.regex.Pattern;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
+import static zmaster587.advancedRocketry.test.AdvancedRocketryTestConstants.ppm;
 import static zmaster587.advancedRocketry.test.server.WorldCommandFixtures.exec;
 
 /**
@@ -35,7 +36,11 @@ public class CombustionFollowsTheOxidiserTest extends AbstractSharedServerTest {
     private static final int ROOM_Y = 100;
     private static final int ROOM_Z = 2880;
 
-    /** Far below anything that burns, and far below anything that can be breathed. */
+    /**
+     * Far below anything that burns, and far below anything that can be breathed. In parts per
+     * million of an atmosphere, which is the unit a room's mix is quoted in; the readout answers in
+     * the composition's own finer unit, so an assertion against it converts.
+     */
     private static final int THIN_OXYGEN = 50_000;
     private static final int NORMAL_OXYGEN = 210_000;
 
@@ -50,7 +55,7 @@ public class CombustionFollowsTheOxidiserTest extends AbstractSharedServerTest {
         setAir(AirMix.THIN);
         String thin = atmosphere();
         assertEquals("premise: the composition must have arrived: " + thin,
-                THIN_OXYGEN, longOf(thin, OXYGEN));
+                ppm(THIN_OXYGEN), longOf(thin, OXYGEN));
         assertEquals("premise: air this thin is not breathable: " + thin,
                 "false", stringOf(thin, BREATHABLE_AIR));
         assertEquals("nothing may light in air this thin - and this is the defect the slice closes,"
@@ -65,7 +70,7 @@ public class CombustionFollowsTheOxidiserTest extends AbstractSharedServerTest {
         setAir(AirMix.NORMAL);
         String normal = atmosphere();
         assertEquals("premise: the room was refilled: " + normal,
-                NORMAL_OXYGEN, longOf(normal, OXYGEN));
+                ppm(NORMAL_OXYGEN), longOf(normal, OXYGEN));
         assertEquals("ordinary air burns: " + normal, "true", stringOf(normal, COMBUSTIBLE));
         assertEquals("and is breathable: " + normal, "true", stringOf(normal, BREATHABLE_AIR));
     }
@@ -77,7 +82,7 @@ public class CombustionFollowsTheOxidiserTest extends AbstractSharedServerTest {
     private void setAir(AirMix mix) throws Exception {
         int oxygen = mix == AirMix.THIN ? THIN_OXYGEN : NORMAL_OXYGEN;
         String set = exec("artest vent setair 0 " + ROOM_X + " " + ROOM_Y + " " + ROOM_Z
-                + " " + (1_000_000 - oxygen) + " " + oxygen + " 0");
+                + " " + ppm(1_000_000 - oxygen) + " " + ppm(oxygen) + " 0");
         assertTrue("setair failed: " + set, set.contains("\"ok\":true"));
     }
 

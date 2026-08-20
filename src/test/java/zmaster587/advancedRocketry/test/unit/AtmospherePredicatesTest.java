@@ -34,10 +34,15 @@ import static org.junit.Assert.assertTrue;
  */
 public class AtmospherePredicatesTest {
 
-    private int prevMin;
-    private int prevMax;
-    private int prevBurn;
+    private long prevMin;
+    private long prevMax;
+    private long prevBurn;
     private int prevAmbient;
+
+    /** Parts per million of an atmosphere, which is the unit these numbers are quoted in. */
+    private static long ppm(long partsPerMillion) {
+        return partsPerMillion * AirState.PER_PPM;
+    }
 
     @BeforeClass
     public static void bootstrap() {
@@ -51,9 +56,9 @@ public class AtmospherePredicatesTest {
         prevMax = config.lifeSupportMaxPartialO2;
         prevBurn = config.lifeSupportCombustionMinPartialO2;
         prevAmbient = config.shipHeatAmbientKelvin;
-        config.lifeSupportMinPartialO2 = 160_000;
-        config.lifeSupportMaxPartialO2 = 300_000;
-        config.lifeSupportCombustionMinPartialO2 = 150_000;
+        config.lifeSupportMinPartialO2 = ppm(160_000);
+        config.lifeSupportMaxPartialO2 = ppm(300_000);
+        config.lifeSupportCombustionMinPartialO2 = ppm(150_000);
         config.shipHeatAmbientKelvin = 293;
     }
 
@@ -67,7 +72,7 @@ public class AtmospherePredicatesTest {
     }
 
     /** A room at one atmosphere with the oxygen asked for, and nitrogen making up the rest. */
-    private static AirState roomWithOxygen(int oxygen) {
+    private static AirState roomWithOxygen(long oxygen) {
         return new AirState(AirState.ONE_ATM - oxygen, oxygen, 0);
     }
 
@@ -81,7 +86,7 @@ public class AtmospherePredicatesTest {
         AirState between = roomWithOxygen((config.lifeSupportCombustionMinPartialO2
                 + config.lifeSupportMinPartialO2) / 2);
         AirState thin = roomWithOxygen(config.lifeSupportCombustionMinPartialO2 / 3);
-        AirState good = roomWithOxygen(210_000);
+        AirState good = roomWithOxygen(ppm(210_000));
 
         assertTrue("premise: the shipped bands must actually differ, or this scenario cannot exist",
                 config.lifeSupportCombustionMinPartialO2 < config.lifeSupportMinPartialO2);
@@ -114,17 +119,17 @@ public class AtmospherePredicatesTest {
      */
     @Test
     public void aStrictlyBetterAtmosphereNeverReadsAsWorse() {
-        for (int oxygen = 0; oxygen <= 300_000; oxygen += 10_000) {
+        for (long oxygen = 0; oxygen <= ppm(300_000); oxygen += ppm(10_000)) {
             AirState less = roomWithOxygen(oxygen);
-            AirState more = roomWithOxygen(oxygen + 10_000);
+            AirState more = roomWithOxygen(oxygen + ppm(10_000));
             assertTrue("adding oxidiser may never take combustion away (at " + oxygen + ")",
                     !less.allowsCombustion() || more.allowsCombustion());
             assertTrue("adding oxidiser may never take breathability away (at " + oxygen + ")",
                     !less.isBreathableAir() || more.isBreathableAir());
         }
 
-        AirState clean = roomWithOxygen(210_000);
-        AirState poisoned = roomWithOxygen(210_000);
+        AirState clean = roomWithOxygen(ppm(210_000));
+        AirState poisoned = roomWithOxygen(ppm(210_000));
         poisoned.add(GasRegistry.CARBON_MONOXIDE,
                 GasRegistry.CARBON_MONOXIDE.hazardThreshold() * 2, 293.0D);
         assertFalse("premise: clean air is not toxic", clean.isToxic());
@@ -132,7 +137,7 @@ public class AtmospherePredicatesTest {
         assertEquals("naming the poison, so a consumer can say which one", GasRegistry.CARBON_MONOXIDE,
                 poisoned.worstToxin());
 
-        poisoned.draw(GasRegistry.CARBON_MONOXIDE, Integer.MAX_VALUE);
+        poisoned.draw(GasRegistry.CARBON_MONOXIDE, Long.MAX_VALUE);
         assertFalse("and removing it must take the toxicity with it", poisoned.isToxic());
     }
 
@@ -147,12 +152,12 @@ public class AtmospherePredicatesTest {
         assertTrue("premise: the two poisons must have DIFFERENT limits, or this proves nothing",
                 ammonia.hazardThreshold() != sulphide.hazardThreshold());
 
-        int justUnderAmmonia = ammonia.hazardThreshold() - 1;
-        AirState room = roomWithOxygen(210_000);
+        long justUnderAmmonia = ammonia.hazardThreshold() - 1;
+        AirState room = roomWithOxygen(ppm(210_000));
         room.add(ammonia, justUnderAmmonia, 293.0D);
         assertFalse("under its own limit, a poison is not yet poisoning: " + room, room.isToxic());
 
-        AirState other = roomWithOxygen(210_000);
+        AirState other = roomWithOxygen(ppm(210_000));
         other.add(sulphide, justUnderAmmonia, 293.0D);
         assertTrue("the SAME amount of a stricter poison is over ITS limit: " + other,
                 other.isToxic());
@@ -165,14 +170,14 @@ public class AtmospherePredicatesTest {
      */
     @Test
     public void corrosionIsWorseWetAndWorseHot() {
-        AirState dry = roomWithOxygen(210_000);
+        AirState dry = roomWithOxygen(ppm(210_000));
         dry.add(GasRegistry.SULFUR_DIOXIDE, GasRegistry.SULFUR_DIOXIDE.hazardThreshold() * 10, 293.0D);
 
-        AirState wet = roomWithOxygen(210_000);
+        AirState wet = roomWithOxygen(ppm(210_000));
         wet.add(GasRegistry.SULFUR_DIOXIDE, GasRegistry.SULFUR_DIOXIDE.hazardThreshold() * 10, 293.0D);
         wet.add(GasRegistry.WATER, AirState.ONE_ATM / 2, 293.0D);
 
-        AirState hot = roomWithOxygen(210_000);
+        AirState hot = roomWithOxygen(ppm(210_000));
         hot.add(GasRegistry.SULFUR_DIOXIDE, GasRegistry.SULFUR_DIOXIDE.hazardThreshold() * 10, 600.0D);
 
         assertTrue("premise: a dry acid gas still attacks: " + dry.corrosionIndex(),
@@ -181,7 +186,7 @@ public class AtmospherePredicatesTest {
                 wet.corrosionIndex() > dry.corrosionIndex());
         assertTrue("and so does heat: dry=" + dry.corrosionIndex() + " hot=" + hot.corrosionIndex(),
                 hot.corrosionIndex() > dry.corrosionIndex());
-        assertEquals("clean air attacks nothing", 0.0D, roomWithOxygen(210_000).corrosionIndex(), 0.0D);
+        assertEquals("clean air attacks nothing", 0.0D, roomWithOxygen(ppm(210_000)).corrosionIndex(), 0.0D);
     }
 
     /**
@@ -213,8 +218,8 @@ public class AtmospherePredicatesTest {
      */
     @Test
     public void aCompositionSurvivesASaveAndAnUnknownGasIsDropped() {
-        AirState written = roomWithOxygen(210_000);
-        written.add(GasRegistry.METHANE, 1_234, 293.0D);
+        AirState written = roomWithOxygen(ppm(210_000));
+        written.add(GasRegistry.METHANE, 1_234L, 293.0D);
         NBTTagCompound nbt = new NBTTagCompound();
         written.writeToNBT(nbt);
 
@@ -222,11 +227,11 @@ public class AtmospherePredicatesTest {
         assertEquals("oxygen comes back", written.getOxygen(), read.getOxygen());
         assertEquals("so does the nitrogen", written.getNitrogen(), read.getNitrogen());
         assertEquals("and so does a gas the old three keys could not have named",
-                1_234, read.partialPressure(GasRegistry.METHANE));
+                1_234L, read.partialPressure(GasRegistry.METHANE));
         assertEquals("and the temperature with them", written.getTemperatureMilliK(),
                 read.getTemperatureMilliK());
 
-        nbt.getCompoundTag("gases").setInteger("unobtainium", 5_000);
+        nbt.getCompoundTag("gases").setLong("unobtainium", 5_000L);
         AirState afterRemoval = AirState.readFromNBT(nbt);
         assertEquals("a substance this game no longer knows is DROPPED, never guessed at",
                 read.getTotalPressure(), afterRemoval.getTotalPressure());

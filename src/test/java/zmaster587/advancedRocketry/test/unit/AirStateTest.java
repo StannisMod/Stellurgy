@@ -20,15 +20,24 @@ import static org.junit.Assert.assertTrue;
  */
 public class AirStateTest {
 
-    private static final int SAFE_MIN = 160_000;
-    private static final int SAFE_MAX = 300_000;
+    private static final long SAFE_MIN = ppm(160_000);
+    private static final long SAFE_MAX = ppm(300_000);
+
+    /**
+     * Parts per million of an atmosphere. Every quantity below is a FRACTION of an atmosphere and
+     * says so, rather than a count of whatever the model happens to store internally — which is what
+     * lets the unit underneath change without a single scenario changing what it means.
+     */
+    private static long ppm(long partsPerMillion) {
+        return partsPerMillion * AirState.PER_PPM;
+    }
 
     /** Where the crew rungs sit for these tests, so no assertion depends on the shipped defaults. */
     private static final int VERY_HOT = 323;
     private static final int SUPERHEATED = 373;
 
-    private int prevMin;
-    private int prevMax;
+    private long prevMin;
+    private long prevMax;
     private boolean prevShipHeat;
     private int prevVeryHot;
     private int prevSuperheated;
@@ -65,7 +74,7 @@ public class AirStateTest {
 
     /** Breathable sea-level air at a stated temperature, in kelvin. */
     private static AirState earthLikeAt(int kelvin) {
-        return new AirState(790_000, 210_000, 0, kelvin * 1000);
+        return new AirState(ppm(790_000), ppm(210_000), 0L, kelvin * 1000);
     }
 
     @Test
@@ -78,58 +87,58 @@ public class AirStateTest {
     @Test
     public void breathingConvertsOxygenIntoCarbonDioxideWithoutChangingPressure() {
         AirState air = AirState.earthLike();
-        int before = air.getTotalPressure();
+        long before = air.getTotalPressure();
 
-        air.respire(10_000);
+        air.respire(ppm(10_000));
 
-        assertEquals("oxygen must fall by exactly what was breathed", 200_000, air.getOxygen());
-        assertEquals("the same amount must appear as CO2", 10_000, air.getCarbonDioxide());
+        assertEquals("oxygen must fall by exactly what was breathed", ppm(200_000), air.getOxygen());
+        assertEquals("the same amount must appear as CO2", ppm(10_000), air.getCarbonDioxide());
         assertEquals("respiration rearranges air, it does not consume it", before, air.getTotalPressure());
     }
 
     @Test
     public void breathingCannotTakeOxygenThatIsNotThere() {
-        AirState air = new AirState(790_000, 5_000, 0);
+        AirState air = new AirState(ppm(790_000), ppm(5_000), 0L);
 
-        int taken = air.respire(50_000);
+        long taken = air.respire(ppm(50_000));
 
-        assertEquals("only the oxygen present may be converted", 5_000, taken);
-        assertEquals(0, air.getOxygen());
-        assertEquals(5_000, air.getCarbonDioxide());
+        assertEquals("only the oxygen present may be converted", ppm(5_000), taken);
+        assertEquals(0L, air.getOxygen());
+        assertEquals(ppm(5_000), air.getCarbonDioxide());
     }
 
     @Test
     public void regenerationIsBreathingRunBackwards() {
         AirState air = AirState.earthLike();
-        air.respire(30_000);
-        int pressureWithCrewAboard = air.getTotalPressure();
+        air.respire(ppm(30_000));
+        long pressureWithCrewAboard = air.getTotalPressure();
 
-        int carbon = air.regenerate(30_000);
+        long carbon = air.regenerate(ppm(30_000));
 
-        assertEquals("all of it must come back as oxygen", 210_000, air.getOxygen());
-        assertEquals(0, air.getCarbonDioxide());
-        assertEquals("the carbon that left the air is what the machine must now handle", 30_000, carbon);
+        assertEquals("all of it must come back as oxygen", ppm(210_000), air.getOxygen());
+        assertEquals(0L, air.getCarbonDioxide());
+        assertEquals("the carbon that left the air is what the machine must now handle", ppm(30_000), carbon);
         assertEquals("pressure is unchanged: the solid carbon never held any", pressureWithCrewAboard, air.getTotalPressure());
     }
 
     @Test
     public void regenerationCannotInventCarbonDioxide() {
-        AirState air = new AirState(790_000, 200_000, 10_000);
+        AirState air = new AirState(ppm(790_000), ppm(200_000), ppm(10_000));
 
-        int carbon = air.regenerate(50_000);
+        long carbon = air.regenerate(ppm(50_000));
 
-        assertEquals("only the CO2 present may be processed", 10_000, carbon);
-        assertEquals(0, air.getCarbonDioxide());
-        assertEquals(210_000, air.getOxygen());
+        assertEquals("only the CO2 present may be processed", ppm(10_000), carbon);
+        assertEquals(0L, air.getCarbonDioxide());
+        assertEquals(ppm(210_000), air.getOxygen());
     }
 
     @Test
     public void aRecirculatorCanBringAStaleRoomBackIntoTheBand() {
         AirState air = AirState.earthLike();
-        air.respire(60_000);
+        air.respire(ppm(60_000));
         assertSame("premise: the room has gone stale", AtmosphereType.LOWOXYGEN, air.deriveAtmosphere());
 
-        air.regenerate(60_000);
+        air.regenerate(ppm(60_000));
 
         assertTrue("and regeneration must be able to undo that, not merely stop it",
                 air.deriveAtmosphere().isBreathable());
@@ -142,19 +151,19 @@ public class AirStateTest {
 
     @Test
     public void oxygenBelowTheBandSuffocates() {
-        AirState air = new AirState(790_000, SAFE_MIN - 1, 10_000);
+        AirState air = new AirState(ppm(790_000), SAFE_MIN - 1, ppm(10_000));
         assertSame(AtmosphereType.LOWOXYGEN, air.deriveAtmosphere());
     }
 
     @Test
     public void airWithNoOxygenLeftIsNotMerelyLowOnIt() {
-        AirState air = new AirState(790_000, 0, 210_000);
+        AirState air = new AirState(ppm(790_000), 0L, ppm(210_000));
         assertSame(AtmosphereType.NOO2, air.deriveAtmosphere());
     }
 
     @Test
     public void oxygenAboveTheBandIsToxicAndStillFeedsFire() {
-        AirState air = new AirState(400_000, SAFE_MAX + 1, 0);
+        AirState air = new AirState(ppm(400_000), SAFE_MAX + 1, 0L);
 
         assertSame(AtmosphereType.HIGHOXYGEN, air.deriveAtmosphere());
         assertTrue("an oxygen-rich room being flammable is the hazard, not a bug",
@@ -188,7 +197,7 @@ public class AirStateTest {
 
     @Test
     public void hotAirWithNothingToBreatheSaysBothThingsAtOnce() {
-        AirState suffocatingAndHot = new AirState(1_000_000, 0, 0, SUPERHEATED * 1000);
+        AirState suffocatingAndHot = new AirState(ppm(1_000_000), 0L, 0L, SUPERHEATED * 1000);
 
         assertSame("the NoO2 variants exist precisely so neither hazard hides the other",
                 AtmosphereType.SUPERHEATEDNOO2, suffocatingAndHot.deriveAtmosphere());
@@ -196,7 +205,7 @@ public class AirStateTest {
 
     @Test
     public void heatOutranksAnOxygenSurplus() {
-        AirState enrichedAndHot = new AirState(400_000, SAFE_MAX + 1, 0, VERY_HOT * 1000);
+        AirState enrichedAndHot = new AirState(ppm(400_000), SAFE_MAX + 1, 0L, VERY_HOT * 1000);
 
         assertSame("a room that is burning its crew is not made safe by its gas mix",
                 AtmosphereType.VERYHOT, enrichedAndHot.deriveAtmosphere());
@@ -204,7 +213,7 @@ public class AirStateTest {
 
     @Test
     public void aVacuumIsNotHotHoweverHotTheGasThatLeftItWas() {
-        AirState breached = new AirState(0, 0, 0, SUPERHEATED * 1000);
+        AirState breached = new AirState(0L, 0L, 0L, SUPERHEATED * 1000);
 
         assertSame("there is no body left in the room to be hot",
                 AtmosphereType.VACUUM, breached.deriveAtmosphere());
@@ -237,8 +246,8 @@ public class AirStateTest {
     @Test
     public void anUnconfiguredSafeBandGovernsNothing() {
         ARConfiguration config = ARConfiguration.getCurrentConfig();
-        config.lifeSupportMinPartialO2 = 0;
-        config.lifeSupportMaxPartialO2 = 0;
+        config.lifeSupportMinPartialO2 = 0L;
+        config.lifeSupportMaxPartialO2 = 0L;
 
         assertSame("no usable band means no governor, not a hazard",
                 AtmosphereType.PRESSURIZEDAIR, AirState.earthLike().deriveAtmosphere());
@@ -249,43 +258,113 @@ public class AirStateTest {
         AirState air = AirState.earthLike();
 
         assertEquals("headroom is the distance to the ceiling, not to infinity",
-                SAFE_MAX - 210_000, air.oxygenHeadroom());
+                SAFE_MAX - ppm(210_000), air.oxygenHeadroom());
     }
 
     @Test
     public void anAlreadyEnrichedRoomGetsNoMoreOxygen() {
-        AirState air = new AirState(400_000, SAFE_MAX + 50_000, 0);
+        AirState air = new AirState(ppm(400_000), SAFE_MAX + ppm(50_000), 0L);
 
-        assertEquals("a combiner must be unable to make a fire hazard worse", 0, air.oxygenHeadroom());
+        assertEquals("a combiner must be unable to make a fire hazard worse", 0L, air.oxygenHeadroom());
     }
 
     @Test
     public void anUnconfiguredBandImposesNoCeilingEither() {
         ARConfiguration config = ARConfiguration.getCurrentConfig();
-        config.lifeSupportMinPartialO2 = 0;
-        config.lifeSupportMaxPartialO2 = 0;
+        config.lifeSupportMinPartialO2 = 0L;
+        config.lifeSupportMaxPartialO2 = 0L;
 
         assertEquals("with no band there is no governor, in both directions",
-                Integer.MAX_VALUE, AirState.earthLike().oxygenHeadroom());
+                Long.MAX_VALUE, AirState.earthLike().oxygenHeadroom());
     }
 
     @Test
     public void aSeparatorTakesTheStaleGasAndLeavesTheBreathableOne() {
-        AirState air = new AirState(790_000, 210_000, 90_000);
+        AirState air = new AirState(ppm(790_000), ppm(210_000), ppm(90_000));
 
-        int co2 = air.drawCarbonDioxide(50_000);
-        int n2 = air.drawNitrogen(40_000);
+        long co2 = air.drawCarbonDioxide(ppm(50_000));
+        long n2 = air.drawNitrogen(ppm(40_000));
 
-        assertEquals(50_000, co2);
-        assertEquals(40_000, n2);
-        assertEquals("splitting must not touch the oxygen the crew are breathing", 210_000, air.getOxygen());
-        assertEquals(40_000, air.getCarbonDioxide());
-        assertEquals(750_000, air.getNitrogen());
+        assertEquals(ppm(50_000), co2);
+        assertEquals(ppm(40_000), n2);
+        assertEquals("splitting must not touch the oxygen the crew are breathing", ppm(210_000), air.getOxygen());
+        assertEquals(ppm(40_000), air.getCarbonDioxide());
+        assertEquals(ppm(750_000), air.getNitrogen());
+    }
+
+    // ─── What the unit can express ─────────────────────────────────────────────────────────────
+    //
+    // A room is its FRACTIONS: how much of the air is oxygen, and how much air there is. The number
+    // the model stores those with is an implementation choice, and these say what that choice has to
+    // be good enough FOR — the two ends of the solar system at once, and an honest zero underneath.
+
+    @Test
+    public void aRoomIsItsFractionsAndNotTheNumbersUnderneathThem() {
+        AirState air = AirState.earthLike();
+
+        // Computed from the state rather than restated: whatever the storage does, sea-level air is
+        // a fifth oxygen at one atmosphere, which is what every threshold in this system is a
+        // fraction OF.
+        assertEquals("sea-level air is 21% oxygen",
+                0.21D, (double) air.getOxygen() / air.getTotalPressure(), 0.0005D);
+        assertEquals("and one whole atmosphere of it", 100, air.getPressureCentiAtm());
+    }
+
+    @Test
+    public void aTraceOnAThinWorldKeepsItsDigits() {
+        // Mars: six millibars of air, of which 0.13% is oxygen. That trace is what decides whether a
+        // base there can CONCENTRATE oxygen or has to make it, so a model that cannot tell 0.13%
+        // from 0.12% has thrown the mechanic away before it is written. In millionths of an
+        // atmosphere the whole trace is eight units, and eight units cannot carry that difference.
+        long martianAir = ppm(5_921);
+        long oxygenFraction = martianAir * 13 / 10_000;
+        AirState mars = new AirState(martianAir - oxygenFraction, oxygenFraction, 0L);
+
+        assertEquals("the oxygen fraction survives being stored",
+                0.0013D, (double) mars.getOxygen() / mars.getTotalPressure(), 0.000013D);
+
+        // And a world one part in a hundred poorer is a DIFFERENT world, not the same rounded number.
+        AirState poorer = new AirState(martianAir - oxygenFraction, oxygenFraction * 99 / 100, 0L);
+        assertTrue("a trace 1% thinner must read as thinner, not as the same integer: "
+                        + mars.getOxygen() + " vs " + poorer.getOxygen(),
+                poorer.getOxygen() < mars.getOxygen());
+    }
+
+    @Test
+    public void oneCompositionHoldsAGasGiantAndATraceAtTheSameTime() {
+        // The two ends the model has to span at once: a giant's depths in one gas and a few parts per
+        // billion in another. Both read back exactly, from the same composition — a range that only
+        // reaches one end is a model that quietly picks which worlds may exist.
+        long deep = 5_000L * AirState.ONE_ATM;
+        AirState giant = new AirState(deep, 0L, 0L);
+        giant.add(zmaster587.advancedRocketry.atmosphere.gas.GasRegistry.AMMONIA, 3L, 293.0D);
+
+        assertEquals("five thousand atmospheres is a number, not a saturated ceiling",
+                deep, giant.getNitrogen());
+        assertEquals("and three parts per billion of ammonia is still there beside it",
+                3L, giant.partialPressure(zmaster587.advancedRocketry.atmosphere.gas.GasRegistry.AMMONIA));
+        assertEquals(deep + 3L, giant.getTotalPressure());
+    }
+
+    @Test
+    public void whatIsGoneIsAbsentEverywhereRatherThanKeptAsAZero() {
+        AirState air = new AirState(ppm(790_000), ppm(210_000), ppm(1));
+
+        air.drawCarbonDioxide(ppm(1));
+
+        // The floor has to answer the same way to every question. A share that has run out must not
+        // survive as an entry worth nothing: something that can be listed but never drawn is exactly
+        // the inconsistency the model promises not to have.
+        assertEquals("nothing is left of it", 0L, air.getCarbonDioxide());
+        assertTrue("and it is not in the composition either: " + air.composition(),
+                !air.composition().containsKey(
+                        zmaster587.advancedRocketry.atmosphere.gas.GasRegistry.CARBON_DIOXIDE));
+        assertEquals("nor counted in the pressure", ppm(1_000_000), air.getTotalPressure());
     }
 
     @Test
     public void gasesSurviveASaveAndReload() {
-        AirState air = new AirState(700_000, 180_000, 40_000);
+        AirState air = new AirState(ppm(700_000), ppm(180_000), ppm(40_000));
         NBTTagCompound nbt = new NBTTagCompound();
 
         air.writeToNBT(nbt);

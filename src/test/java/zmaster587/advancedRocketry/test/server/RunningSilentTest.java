@@ -7,6 +7,7 @@ import java.util.regex.Pattern;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
+import static zmaster587.advancedRocketry.test.AdvancedRocketryTestConstants.ppm;
 import static zmaster587.advancedRocketry.test.server.WorldCommandFixtures.exec;
 
 /**
@@ -219,7 +220,7 @@ public class RunningSilentTest extends AbstractSharedServerTest {
     /** Put the room's air at a stated temperature, leaving its gases alone. */
     private void setAir(int milliK) throws Exception {
         String set = exec("artest vent setair 0 " + ROOM_X + " " + ROOM_Y + " " + ROOM_Z
-                + " 790000 210000 0 " + milliK);
+                + " " + ppm(790_000) + " " + ppm(210_000) + " 0 " + milliK);
         assertTrue("setair failed: " + set, set.contains("\"ok\":true"));
     }
 

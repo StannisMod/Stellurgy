@@ -121,18 +121,18 @@ public class TileGasSeparator extends TileInventoriedRFConsumerTank implements I
      * the crew are breathing.
      */
     private void split(@Nonnull AirState air, @Nonnull BlockPos cell) {
-        int budget = pressureFor(spaceInTank(), cell);
-        if (budget <= 0)
+        long budget = pressureFor(spaceInTank(), cell);
+        if (budget <= 0L)
             return;
-        int rate = Math.min(ARConfiguration.getCurrentConfig().lifeSupportSeparatorRate, budget);
+        long rate = Math.min(ARConfiguration.getCurrentConfig().lifeSupportSeparatorRate, budget);
 
-        int taken = air.drawCarbonDioxide(rate);
+        long taken = air.drawCarbonDioxide(rate);
         Fluid gas = AdvancedRocketryFluids.fluidCarbonDioxide;
-        if (taken <= 0) {
+        if (taken <= 0L) {
             taken = air.drawNitrogen(rate);
             gas = AdvancedRocketryFluids.fluidNitrogen;
         }
-        if (taken > 0)
+        if (taken > 0L)
             fill(new FluidStack(gas, volumeFor(taken, cell)), true);
     }
 
@@ -145,9 +145,9 @@ public class TileGasSeparator extends TileInventoriedRFConsumerTank implements I
         if (held == null || held.amount <= 0)
             return;
 
-        int rate = ARConfiguration.getCurrentConfig().lifeSupportSeparatorRate;
-        int available = Math.min(rate, pressureFor(held.amount, cell));
-        if (available <= 0)
+        long rate = ARConfiguration.getCurrentConfig().lifeSupportSeparatorRate;
+        long available = Math.min(rate, pressureFor(held.amount, cell));
+        if (available <= 0L)
             return;
 
         // Gas out of a tank arrives at the temperature the tank has been sitting at, not at the
@@ -156,8 +156,8 @@ public class TileGasSeparator extends TileInventoriedRFConsumerTank implements I
         // temperature at all.
         double fromTheTank = AirState.ambientKelvin();
         if (held.getFluid() == AdvancedRocketryFluids.fluidOxygen) {
-            int admitted = Math.min(available, air.oxygenHeadroom());
-            if (admitted <= 0)
+            long admitted = Math.min(available, air.oxygenHeadroom());
+            if (admitted <= 0L)
                 return;
             air.addOxygen(admitted, fromTheTank);
             drain(volumeFor(admitted, cell), true);
@@ -170,20 +170,19 @@ public class TileGasSeparator extends TileInventoriedRFConsumerTank implements I
     // ─── unit conversion ───────────────────────────────────────────────
 
     /** Millibuckets that a partial pressure amounts to across this zone's whole volume. */
-    private int volumeFor(int partialPressure, @Nonnull BlockPos cell) {
-        long mb = (long) partialPressure * zoneVolume(cell)
+    private int volumeFor(long partialPressure, @Nonnull BlockPos cell) {
+        long mb = partialPressure * zoneVolume(cell)
                 * ARConfiguration.getCurrentConfig().lifeSupportFluidPerAtmBlock / AirState.ONE_ATM;
         return (int) Math.max(0, Math.min(Integer.MAX_VALUE, mb));
     }
 
     /** The inverse: partial pressure that this many millibuckets can supply to the zone. */
-    private int pressureFor(int millibuckets, @Nonnull BlockPos cell) {
+    private long pressureFor(int millibuckets, @Nonnull BlockPos cell) {
         int perAtmBlock = ARConfiguration.getCurrentConfig().lifeSupportFluidPerAtmBlock;
         long denominator = (long) zoneVolume(cell) * perAtmBlock;
         if (denominator <= 0)
-            return 0;
-        long pressure = (long) millibuckets * AirState.ONE_ATM / denominator;
-        return (int) Math.max(0, Math.min(Integer.MAX_VALUE, pressure));
+            return 0L;
+        return Math.max(0L, millibuckets * AirState.ONE_ATM / denominator);
     }
 
     private int zoneVolume(@Nonnull BlockPos cell) {

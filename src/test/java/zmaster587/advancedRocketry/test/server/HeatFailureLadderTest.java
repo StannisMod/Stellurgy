@@ -7,6 +7,7 @@ import java.util.regex.Pattern;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
+import static zmaster587.advancedRocketry.test.AdvancedRocketryTestConstants.ppm;
 
 /**
  * What being too hot COSTS: the two rungs of the failure ladder that a ship can reach today.
@@ -213,9 +214,10 @@ public class HeatFailureLadderTest extends AbstractSharedServerTest {
         exec("artest tile force-tick 0 " + ROOM_X + " " + ROOM_Y + " " + ROOM_Z + " 5");
     }
 
+    /** Gases in parts per million of an atmosphere, which is how a room's mix is quoted. */
     private void setAir(int n2, int o2, int co2, int milliK) throws Exception {
         String set = exec("artest vent setair 0 " + ROOM_X + " " + ROOM_Y + " " + ROOM_Z
-                + " " + n2 + " " + o2 + " " + co2 + " " + milliK);
+                + " " + ppm(n2) + " " + ppm(o2) + " " + ppm(co2) + " " + milliK);
         assertTrue("setair failed: " + set, set.contains("\"ok\":true"));
     }
 

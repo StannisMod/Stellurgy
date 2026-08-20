@@ -7,6 +7,7 @@ import java.util.regex.Pattern;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
+import static zmaster587.advancedRocketry.test.AdvancedRocketryTestConstants.ppm;
 import static zmaster587.advancedRocketry.test.server.WorldCommandFixtures.exec;
 
 /**
@@ -176,9 +177,10 @@ public class HeatIntakeDuctTest extends AbstractSharedServerTest {
                 resp.contains("\"placed\":true"));
     }
 
+    /** Gases in parts per million of an atmosphere, which is how a room's mix is quoted. */
     private void setAir(int cx, int n2, int o2, int co2, int milliK) throws Exception {
         String set = exec("artest vent setair 0 " + cx + " " + CY + " " + CZ
-                + " " + n2 + " " + o2 + " " + co2 + " " + milliK);
+                + " " + ppm(n2) + " " + ppm(o2) + " " + ppm(co2) + " " + milliK);
         assertTrue("setair failed: " + set, set.contains("\"ok\":true"));
     }
 

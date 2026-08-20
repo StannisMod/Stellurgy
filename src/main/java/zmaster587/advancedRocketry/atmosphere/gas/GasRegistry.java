@@ -18,9 +18,9 @@ import java.util.Map;
  * nitrogen-methane of Titan, the hydrogen-helium of the giants with their ammonia and hydrogen
  * sulphide decks, and carbon monoxide for the thin cold worlds.
  * <p>
- * <b>Thresholds are in the composition's own units, where one unit is one part per million of an
- * atmosphere</b> — so the numbers below read as ppm and can be compared with the real exposure limits
- * they came from.
+ * <b>Thresholds are authored in parts per million of an atmosphere</b> — so the numbers below read as
+ * ppm and can be compared with the real exposure limits they came from. The composition itself is
+ * stored a thousand times finer, and the conversion happens once, in the constructor.
  */
 public final class GasRegistry {
 

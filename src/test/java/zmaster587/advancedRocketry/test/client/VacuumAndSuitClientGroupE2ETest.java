@@ -10,6 +10,7 @@ import java.util.regex.Pattern;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
+import static zmaster587.advancedRocketry.test.AdvancedRocketryTestConstants.ppm;
 
 /**
  * Vacuum, suits, and the air a player breathes. Nine scenarios, one client.
@@ -556,8 +557,9 @@ public class VacuumAndSuitClientGroupE2ETest extends AbstractSharedClientE2ETest
 
         // Pressurised, and short of oxygen: the three partials still total one atmosphere, so this
         // is emphatically NOT the vacuum every other scenario here uses - it is a room whose air has
-        // been breathed. 50 000 sits below lifeSupportMinPartialO2's 160 000 default.
-        String setAir = exec("artest vent setair " + at + " 790000 50000 160000");
+        // been breathed. 50 000 ppm sits below lifeSupportMinPartialO2's 160 000 ppm default.
+        String setAir = exec("artest vent setair " + at
+                + " " + ppm(790_000) + " " + ppm(50_000) + " " + ppm(160_000));
         scenario().requireArranged("setair must take: " + setAir, setAir.contains("\"ok\":true"));
 
         String info = exec("artest vent info " + at);
@@ -700,7 +702,8 @@ public class VacuumAndSuitClientGroupE2ETest extends AbstractSharedClientE2ETest
 
     /** Overwrites the room's air: breathable sea-level gas at a stated temperature, in milliK. */
     private void setRoomAir(String at, int milliK) throws Exception {
-        String setAir = exec("artest vent setair " + at + " 790000 210000 0 " + milliK);
+        String setAir = exec("artest vent setair " + at
+                + " " + ppm(790_000) + " " + ppm(210_000) + " 0 " + milliK);
         scenario().requireArranged("setair must take: " + setAir, setAir.contains("\"ok\":true"));
     }
 

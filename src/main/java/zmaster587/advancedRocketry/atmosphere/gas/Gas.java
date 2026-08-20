@@ -6,6 +6,7 @@ import java.util.Set;
 
 import net.minecraftforge.fluids.Fluid;
 import net.minecraftforge.fluids.FluidRegistry;
+import zmaster587.advancedRocketry.atmosphere.AirState;
 
 /**
  * One substance an atmosphere can be made of: what it is called, what it does, and what it is worth
@@ -29,14 +30,20 @@ public final class Gas {
     private final String name;
     private final String fluidName;
     private final Set<GasRole> roles;
-    private final int hazardThreshold;
+    private final long hazardThreshold;
     private final double molarMass;
 
-    Gas(String name, String fluidName, double molarMass, int hazardThreshold, GasRole... roles) {
+    /**
+     * @param hazardThresholdPpm the limit in parts per million of an atmosphere, which is the unit
+     *                           real exposure limits are quoted in, converted here to the
+     *                           composition's own finer unit. Authoring in ppm is what keeps the rows
+     *                           in the registry readable as the numbers they were taken from.
+     */
+    Gas(String name, String fluidName, double molarMass, int hazardThresholdPpm, GasRole... roles) {
         this.name = name;
         this.fluidName = fluidName;
         this.molarMass = molarMass;
-        this.hazardThreshold = Math.max(0, hazardThreshold);
+        this.hazardThreshold = Math.max(0, hazardThresholdPpm) * AirState.PER_PPM;
         this.roles = roles.length == 0
                 ? Collections.<GasRole>emptySet()
                 : Collections.unmodifiableSet(EnumSet.copyOf(java.util.Arrays.asList(roles)));
@@ -63,7 +70,7 @@ public final class Gas {
      * For a poison this is the concentration that hurts; for a corrosive it is where attack begins.
      * It is a property of the SUBSTANCE, so a predicate never needs to know which gas it is looking at.
      */
-    public int hazardThreshold() {
+    public long hazardThreshold() {
         return hazardThreshold;
     }
 

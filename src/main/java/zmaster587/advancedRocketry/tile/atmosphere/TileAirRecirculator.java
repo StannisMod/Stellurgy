@@ -28,7 +28,7 @@ import javax.annotation.Nullable;
 public class TileAirRecirculator extends TileInventoriedRFConsumer implements IModularInventory {
 
     /** Carbon regenerated but not yet worth a whole item, in the same unit as partial pressure. */
-    private int carbonBuffer;
+    private long carbonBuffer;
     /**
      * Ticks since this machine last acted. Its OWN counter, deliberately not
      * {@code world.getTotalWorldTime() % 20}: a shared clock wakes every recirculator in the world
@@ -105,8 +105,8 @@ public class TileAirRecirculator extends TileInventoriedRFConsumer implements IM
         if (air == null)
             return;
 
-        int regenerated = air.regenerate(ARConfiguration.getCurrentConfig().lifeSupportRecirculatorRate);
-        if (regenerated <= 0)
+        long regenerated = air.regenerate(ARConfiguration.getCurrentConfig().lifeSupportRecirculatorRate);
+        if (regenerated <= 0L)
             return;
 
         carbonBuffer += regenerated;
@@ -125,7 +125,7 @@ public class TileAirRecirculator extends TileInventoriedRFConsumer implements IM
      * up every tick, and the carbon it vents would stop matching the carbon it removed.
      */
     private void emitDust() {
-        int perDust = Math.max(1, ARConfiguration.getCurrentConfig().lifeSupportCarbonPerDust);
+        long perDust = Math.max(1L, ARConfiguration.getCurrentConfig().lifeSupportCarbonPerDust);
         while (carbonBuffer >= perDust) {
             ItemStack slot = getStackInSlot(0);
             if (slot.isEmpty()) {
@@ -148,7 +148,7 @@ public class TileAirRecirculator extends TileInventoriedRFConsumer implements IM
 
     private boolean hasCarbonDioxideToProcess() {
         AirState air = getZoneAir();
-        return air != null && air.getCarbonDioxide() > 0;
+        return air != null && air.getCarbonDioxide() > 0L;
     }
 
     /**
@@ -183,14 +183,14 @@ public class TileAirRecirculator extends TileInventoriedRFConsumer implements IM
     @Override
     public void readFromNBT(NBTTagCompound nbt) {
         super.readFromNBT(nbt);
-        carbonBuffer = nbt.getInteger("carbonBuffer");
+        carbonBuffer = nbt.getLong("carbonBuffer");
         ticksSinceOperation = nbt.getInteger("opTicks");
     }
 
     @Override
     public NBTTagCompound writeToNBT(NBTTagCompound nbt) {
         super.writeToNBT(nbt);
-        nbt.setInteger("carbonBuffer", carbonBuffer);
+        nbt.setLong("carbonBuffer", carbonBuffer);
         nbt.setInteger("opTicks", ticksSinceOperation);
         return nbt;
     }
