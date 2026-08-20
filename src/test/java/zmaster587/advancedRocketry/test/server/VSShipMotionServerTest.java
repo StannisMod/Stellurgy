@@ -1,5 +1,7 @@
 package zmaster587.advancedRocketry.test.server;
 
+import zmaster587.advancedRocketry.test.GameTicks;
+
 import org.junit.Assume;
 import org.junit.Ignore;
 import org.junit.Test;
@@ -47,6 +49,19 @@ public class VSShipMotionServerTest extends AbstractSharedServerTest {
     // nearest-ship probe never picks up that test's lingering ship on the shared server.
     private static final int BX = 2200, BY = 64, BZ = 2200;
 
+    /**
+     * Budgets in SERVER TICKS. The assembly relocation and the force-load are both driven by the
+     * server's own tick loop, so that is the clock they are asked for - and none of these carries a
+     * fork multiplier, because how much of the machine this test shares says nothing about how many
+     * ticks the work needs.
+     */
+    private static final int REGISTER_TICKS = 400;
+    private static final int LOAD_TICKS = 400;
+
+    /** How many velocity setpoints are applied, and how much world separates them. */
+    private static final int PUSHES = 25;
+    private static final int TICKS_BETWEEN_PUSHES = 1;
+
     private String exec(String cmd) throws Exception {
         return String.join("\n", client().execute(cmd));
     }
@@ -64,13 +79,13 @@ public class VSShipMotionServerTest extends AbstractSharedServerTest {
 
         // 1) Wait for the ship to appear in the queryable registry (VS relocates blocks
         //    into a ship on its own thread).
-        int all = 0;
-        for (int i = 0; i < 40 && all < 1; i++) {
-            Thread.sleep(500L);
-            all = shipCount("ship-count-all");
-        }
-        assertTrue("assembly must create a VS ship in the queryable registry (all=" + all + ")",
-                all >= 1);
+        final int[] all = {0};
+        GameTicks.until(client(), GameTicks.server(), REGISTER_TICKS, () -> {
+            all[0] = shipCount("ship-count-all");
+            return all[0] >= 1;
+        });
+        assertTrue("assembly must create a VS ship in the queryable registry (all=" + all[0] + ")",
+                all[0] >= 1);
 
         // 2) A headless server has no player near the ship to auto-load it, so it stays
         //    unloaded/dormant. Force it loaded + physics-enabled (a nearby client does
@@ -83,36 +98,38 @@ public class VSShipMotionServerTest extends AbstractSharedServerTest {
         //    at the build spot; everything below asks by id, which cannot start answering for a
         //    neighbour once this one has been pushed ten blocks away.
         double zBefore = Double.NaN;
-        String shipId = null;
-        StringBuilder loadTrace = new StringBuilder();
-        int loaded = 0;
-        for (int i = 0; i < 40 && Double.isNaN(zBefore); i++) {
-            Thread.sleep(500L);
-            loaded = shipCount("ship-count");
-            if (i % 4 == 0) {
-                loadTrace.append(i / 2).append("s=").append(loaded).append(' ');
+        final String[] shipId = {null};
+        final StringBuilder loadTrace = new StringBuilder();
+        final double[] z = {Double.NaN};
+        GameTicks.until(client(), GameTicks.server(), LOAD_TICKS, () -> {
+            int loaded = shipCount("ship-count");
+            loadTrace.append(loaded).append(' ');
+            if (loaded < 1) {
+                return false;
             }
-            if (loaded >= 1) {
-                String info = exec("artest vs ship-info 0 " + BX + " " + BY + " " + BZ);
-                if (info.contains("\"managed\":true")) {
-                    zBefore = shipPosZ(info);
-                    shipId = shipIdOf(info);
-                }
+            String info = exec("artest vs ship-info 0 " + BX + " " + BY + " " + BZ);
+            if (!info.contains("\"managed\":true")) {
+                return false;
             }
-        }
+            z[0] = shipPosZ(info);
+            shipId[0] = shipIdOf(info);
+            return !Double.isNaN(z[0]);
+        });
+        zBefore = z[0];
         assertTrue("ship must become loaded after force-load — loaded over time: ["
-                        + loadTrace.toString().trim() + "], all=" + all,
+                        + loadTrace.toString().trim() + "], all=" + all[0],
                 !Double.isNaN(zBefore));
 
-        // Command a steady +Z velocity each step for ~1.5 s. Re-applying every step
-        // mirrors the AFC's per-tick setpoint and defeats VS damping.
+        // Command a steady +Z velocity each step, re-applying every step: that mirrors the AFC's
+        // per-tick setpoint and defeats VS damping. The gap between pushes is a TICK, because what
+        // decays the velocity between them is the physics step, not the passage of a millisecond —
+        // on a loaded box the old 60 ms gap let a variable number of steps damp it.
         double vz = 10.0; // blocks/second
-        for (int i = 0; i < 25; i++) {
-            String push = exec("artest vs push-ship-by-id 0 " + shipId + " 0 0 " + vz);
+        GameTicks.observe(client(), GameTicks.server(), PUSHES, TICKS_BETWEEN_PUSHES, () -> {
+            String push = exec("artest vs push-ship-by-id 0 " + shipId[0] + " 0 0 " + vz);
             assertTrue("push-ship-by-id must find the ship: " + push, push.contains("\"pushed\":true"));
-            Thread.sleep(60L);
-        }
-        double zAfter = shipPosZ(exec("artest vs ship-info 0 id " + shipId));
+        });
+        double zAfter = shipPosZ(exec("artest vs ship-info 0 id " + shipId[0]));
 
         // Model A holds: a velocity setpoint moves a bare AR-assembled ship. A strict
         // displacement (not merely "changed") pins that VS integrated the commanded

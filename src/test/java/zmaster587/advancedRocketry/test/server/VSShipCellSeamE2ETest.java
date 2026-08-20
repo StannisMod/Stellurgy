@@ -1,9 +1,8 @@
 package zmaster587.advancedRocketry.test.server;
 
-import com.github.stannismod.forge.testing.TestTimeouts;
-
 import zmaster587.advancedRocketry.space.CellSeam;
 import zmaster587.advancedRocketry.space.GalacticCoord;
+import zmaster587.advancedRocketry.test.GameTicks;
 
 import org.junit.After;
 import org.junit.Assume;
@@ -54,8 +53,20 @@ public class VSShipCellSeamE2ETest extends AbstractSharedServerTest {
     /** A world Y comfortably above the default orbit ceiling (ARConfiguration.orbit = 1000). */
     private static final int ABOVE_CEILING_Y = 1200;
 
-    /** Async settle budget, stretched by the build's fork factor (the entry leg's sizing). */
-    private static final int SETTLE_POLLS = (int) Math.ceil(120 * TestTimeouts.factor());
+    /**
+     * How much WORLD an async settle is allowed, in server ticks — thirty seconds of game time.
+     *
+     * <p>The fork multiplier this carried was deleted rather than re-tuned: it said how much of the
+     * machine the test was sharing, and a crossing does not care. It needs a number of controller
+     * ticks and gets them whenever the server runs them.</p>
+     */
+    private static final int SETTLE_TICKS = 600;
+
+    /** The same, for waiting on a ship to become loadable in its slot. */
+    private static final int LOAD_TICKS = 200;
+
+    /** Ticks of the carried ship's own world between ping-pong readings. */
+    private static final int PING_PONG_TICKS_BETWEEN = 5;
 
     /**
      * How far past the face the ship is placed: comfortably beyond the carry margin, so the test is
@@ -116,23 +127,21 @@ public class VSShipCellSeamE2ETest extends AbstractSharedServerTest {
                         .contains("\"ok\":true"));
         exec("artest vs unpark 0 " + (int) sx + " " + ABOVE_CEILING_Y + " " + (int) sz);
 
-        String status = "";
-        String sourceCell = null;
-        for (int i = 0; i < SETTLE_POLLS; i++) {
-            status = exec("artest space entry-status");
-            if (extractInt(status, "ships") >= 1 && "SETTLED".equals(extractString(status, "state"))) {
-                sourceCell = extractString(status, "cellKey");
-                break;
-            }
-            loadAllEntrySlots(setup);
-            Thread.sleep(250);
-        }
-        assertTrue("the ship never reached space through the entry path; last status=" + status,
-                sourceCell != null);
-        String arShipId = extractString(status, "shipId");
-        assertTrue("the settled ship has no durable id: " + status, arShipId != null);
-        int sourceSlot = extractInt(status, "slotDim");
-        assertTrue("settled ship has no bound slot: " + status, sourceSlot > Integer.MIN_VALUE);
+        final String[] status = {""};
+        boolean settled = GameTicks.until(client(), GameTicks.server(), SETTLE_TICKS,
+                () -> {
+                    status[0] = exec("artest space entry-status");
+                    return extractInt(status[0], "ships") >= 1
+                            && "SETTLED".equals(extractString(status[0], "state"));
+                },
+                () -> loadAllEntrySlots(setup));
+        assertTrue("the ship never reached space through the entry path; last status=" + status[0],
+                settled);
+        String sourceCell = extractString(status[0], "cellKey");
+        String arShipId = extractString(status[0], "shipId");
+        assertTrue("the settled ship has no durable id: " + status[0], arShipId != null);
+        int sourceSlot = extractInt(status[0], "slotDim");
+        assertTrue("settled ship has no bound slot: " + status[0], sourceSlot > Integer.MIN_VALUE);
         assertTrue("the settled ship's cell world is not live", waitForLoadedShip(sourceSlot) >= 1);
 
         // --- CONTROL: while it is inside its cell, the ledger names THAT cell --------------------
@@ -181,22 +190,20 @@ public class VSShipCellSeamE2ETest extends AbstractSharedServerTest {
                 carry.contains("\"started\":true"));
 
         // --- Assert: carried into the neighbour ---------------------------------------------------
-        String carriedCell = null;
-        String afterMove = "";
-        for (int i = 0; i < SETTLE_POLLS; i++) {
-            afterMove = exec("artest space ledger-get " + arShipId);
-            String cell = extractString(afterMove, "cell");
-            if (cell != null && !sourceCell.equals(cell)
-                    && "SETTLED".equals(extractString(afterMove, "state"))) {
-                carriedCell = cell;
-                break;
-            }
-            loadAllEntrySlots(setup);
-            Thread.sleep(250);
-        }
+        final String[] afterMove = {""};
+        final String source = sourceCell;
+        boolean carriedOver = GameTicks.until(client(), GameTicks.server(), SETTLE_TICKS,
+                () -> {
+                    afterMove[0] = exec("artest space ledger-get " + arShipId);
+                    String cell = extractString(afterMove[0], "cell");
+                    return cell != null && !source.equals(cell)
+                            && "SETTLED".equals(extractString(afterMove[0], "state"));
+                },
+                () -> loadAllEntrySlots(setup));
         assertTrue("the carry started but the ship never settled in the neighbour; source="
-                + sourceCell + " shipX=" + mx + " carry=" + carry + " last ledger=" + afterMove,
-                carriedCell != null);
+                + sourceCell + " shipX=" + mx + " carry=" + carry + " last ledger=" + afterMove[0],
+                carriedOver);
+        String carriedCell = extractString(afterMove[0], "cell");
 
         long[] from = cellSectors(sourceCell);
         long[] to = cellSectors(carriedCell);
@@ -206,8 +213,9 @@ public class VSShipCellSeamE2ETest extends AbstractSharedServerTest {
 
         // It arrived INSIDE the neighbour's opposite face, not on it. This is the hysteresis as the
         // world sees it: the expected world X is the local offset itself (XZ realize directly).
-        int carriedSlot = extractInt(afterMove, "slotDim");
-        assertTrue("the carried ship has no bound slot: " + afterMove, carriedSlot > Integer.MIN_VALUE);
+        int carriedSlot = extractInt(afterMove[0], "slotDim");
+        assertTrue("the carried ship has no bound slot: " + afterMove[0],
+                carriedSlot > Integer.MIN_VALUE);
         assertTrue("the neighbour's cell world never came up", waitForLoadedShip(carriedSlot) >= 1);
         String arrived = shipInThatSlot(carriedSlot);
         double ax = extractDouble(arrived, "posX");
@@ -217,12 +225,15 @@ public class VSShipCellSeamE2ETest extends AbstractSharedServerTest {
                 expectedX, ax, ARRIVAL_TOLERANCE);
 
         // And it STAYS there: a ship parked on the face would cross straight back.
-        for (int i = 0; i < 8; i++) {
-            Thread.sleep(250);
+        // Watched on the CARRIED SLOT's clock, because the crossing that would take it back is decided
+        // by the seam check running in that world. Eight readings 250 ms apart covered fewer of those
+        // ticks on a loaded box, so a ping-pong slower than the sampling was simply not looked at —
+        // and an observation window that goes blind reports stability, which is the silent direction.
+        GameTicks.observe(client(), GameTicks.world(carriedSlot), 8, PING_PONG_TICKS_BETWEEN, () -> {
             String held = exec("artest space ledger-get " + arShipId);
             assertEquals("the carried ship bounced back across the face (ping-pong): " + held,
                     carriedCell, extractString(held, "cell"));
-        }
+        });
     }
 
     @After
@@ -279,17 +290,19 @@ public class VSShipCellSeamE2ETest extends AbstractSharedServerTest {
     }
 
     private int waitForLoadedShip(int dim) throws Exception {
-        for (int i = 0; i < 40; i++) {
-            if (extractInt(exec("artest vs ship-count-all " + dim), "count") >= 1) {
-                exec("artest vs load-ships " + dim);
-                int loaded = extractInt(exec("artest vs ship-count " + dim), "count");
-                if (loaded >= 1) {
-                    return loaded;
-                }
+        final int[] loaded = {0};
+        // Budgeted on the SERVER's clock, not on dim's: the world being asked about is precisely the
+        // one that may not have started ticking yet, and budgeting against it would measure the wait
+        // with the thing the wait is waiting for.
+        GameTicks.until(client(), GameTicks.server(), LOAD_TICKS, () -> {
+            if (extractInt(exec("artest vs ship-count-all " + dim), "count") < 1) {
+                return false;
             }
-            Thread.sleep(250);
-        }
-        return 0;
+            exec("artest vs load-ships " + dim);
+            loaded[0] = extractInt(exec("artest vs ship-count " + dim), "count");
+            return loaded[0] >= 1;
+        });
+        return loaded[0];
     }
 
     private void clearArea(int baseX, int baseZ) throws Exception {
