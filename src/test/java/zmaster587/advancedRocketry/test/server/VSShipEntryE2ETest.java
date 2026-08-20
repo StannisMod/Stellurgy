@@ -1,7 +1,5 @@
 package zmaster587.advancedRocketry.test.server;
 
-import com.github.stannismod.forge.testing.TestTimeouts;
-
 import zmaster587.advancedRocketry.space.GalacticCoord;
 
 import org.junit.After;
@@ -13,6 +11,8 @@ import java.util.regex.Pattern;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
+import static zmaster587.advancedRocketry.test.server.WorldCommandFixtures.advanceTicks;
+import static zmaster587.advancedRocketry.test.server.WorldCommandFixtures.awaitWithinTicks;
 
 /**
  * E2E: does the tier-2 ENTRY ON-RAMP take a piloted ship from a planet dimension into space through the
@@ -36,12 +36,28 @@ public class VSShipEntryE2ETest extends AbstractSharedServerTest {
     private static final Pattern BUILDER_POS =
             Pattern.compile("\"builderPos\":\\[(-?\\d+),(-?\\d+),(-?\\d+)]");
 
-    /**
-     * Poll iterations (250 ms apart) allowed for an async crossing to finish settling, stretched by
-     * the build's fork factor. 120 was the single-fork sizing; under load the same arrangement needs
-     * proportionally longer wall-clock for the same amount of work.
+/**
+     * How much WORLD an async crossing is allowed in order to finish settling, in server ticks.
+     * <p>
+     * Thirty seconds of game time. Deliberately NOT scaled by the build's fork count: the number of
+     * forks says how much of the machine this test is sharing, and the crossing does not care — it
+     * needs a certain number of controller ticks and gets them whenever the server runs them. A
+     * budget in seconds DID care, which is why this used to carry that multiplier and still turned
+     * red under load.
      */
-    private static final int SETTLE_POLLS = (int) Math.ceil(120 * TestTimeouts.factor());
+    private static final int SETTLE_TICKS = 600;
+
+    /** The same, for waiting on a ship to become loadable in its slot. Ten seconds of game time. */
+    private static final int LOAD_TICKS = 200;
+
+    /**
+     * How long the arrived ship's address is watched for drift, and how far apart the readings are —
+     * both in server ticks, because what drifts is driven by the ship's own flight-computer tick.
+     * Sampling on a wall clock would quietly shrink this window on a busy machine and let a drift
+     * through unseen.
+     */
+    private static final int DRIFT_SAMPLES = 8;
+    private static final int DRIFT_TICKS_BETWEEN_SAMPLES = 5;
 
     /** Where the piloted ship is built (a loaded overworld region, well clear of other tests). */
     private static final int SRC_X = 6000, SRC_Y = 80, SRC_Z = 6000;
@@ -107,25 +123,21 @@ public class VSShipEntryE2ETest extends AbstractSharedServerTest {
         // Keep the crossed ship loadable in its new slot while the async re-assembly settles.
         // (The Ticker drives ShipEntryController.tick() every server tick once the stack is installed.)
 
-        // Poll the ledger: the flight-computer tick fires the entry, the entry crosses + settles the ship.
-        String status = "";
-        boolean settled = false;
-        // The window is ARRANGEMENT, not the contract: what is asserted is that the ship settles, not
-        // that it settles inside 30 s. A fixed ceiling around an async crossing turns machine load
-        // into a red - measured 2026-07-28, when a ~10% heavier server boot (the space subsystem now
-        // registers on every boot) tipped this loop over on the FULL suite while every subset of it,
-        // up to 385 tests, stayed green. Scale with the fork factor the build already publishes;
-        // the loop still exits the moment the ship is SETTLED, so a healthy run costs nothing extra.
-        for (int i = 0; i < SETTLE_POLLS; i++) {
-            status = exec("artest space entry-status");
-            if (extractInt(status, "ships") >= 1 && "SETTLED".equals(extractString(status, "state"))) {
-                settled = true;
-                break;
-            }
-            // Keep the destination slots' ships load-queued (headless has no player to auto-load them).
-            loadAllEntrySlots(setup);
-            Thread.sleep(250);
-        }
+        // Wait on the ledger: the flight-computer tick fires the entry, the entry crosses + settles
+        // the ship. The window is ARRANGEMENT, not the contract — what is asserted is that the ship
+        // settles, not that it settles inside any particular stretch of anybody's afternoon. Budgeted
+        // in the server's own ticks so that a busy machine buys the crossing exactly as much world as
+        // an idle one does.
+        boolean settled = awaitWithinTicks(SETTLE_TICKS,
+                () -> {
+                    String seen = exec("artest space entry-status");
+                    return extractInt(seen, "ships") >= 1
+                            && "SETTLED".equals(extractString(seen, "state"));
+                },
+                // Keep the destination slots' ships load-queued (headless has no player to auto-load
+                // them). This is work the wait has to keep doing, not part of what is being waited for.
+                () -> loadAllEntrySlots(setup));
+        String status = exec("artest space entry-status");
         assertTrue("ship never entered space via the flight-computer tick (not SETTLED); last status="
                 + status, settled);
 
@@ -180,17 +192,14 @@ public class VSShipEntryE2ETest extends AbstractSharedServerTest {
                 .contains("\"ok\":true"));
         exec("artest vs unpark 0 " + (int) sx + " " + ABOVE_CEILING_Y + " " + (int) sz);
 
-        String status = "";
-        boolean settled = false;
-        for (int i = 0; i < SETTLE_POLLS; i++) {
-            status = exec("artest space entry-status");
-            if (extractInt(status, "ships") >= 1 && "SETTLED".equals(extractString(status, "state"))) {
-                settled = true;
-                break;
-            }
-            loadAllEntrySlots(setup);
-            Thread.sleep(250);
-        }
+        boolean settled = awaitWithinTicks(SETTLE_TICKS,
+                () -> {
+                    String seen = exec("artest space entry-status");
+                    return extractInt(seen, "ships") >= 1
+                            && "SETTLED".equals(extractString(seen, "state"));
+                },
+                () -> loadAllEntrySlots(setup));
+        String status = exec("artest space entry-status");
         assertTrue("precondition: the ship never entered space, so there is nothing to jump; last status="
                 + status, settled);
         int slotDim = extractInt(status, "slotDim");
@@ -223,17 +232,14 @@ public class VSShipEntryE2ETest extends AbstractSharedServerTest {
         exec("artest vs permaload false");
 
         // Nothing below pumps the manager either: the live Ticker advances the transit every tick.
-        String arrived = "";
-        boolean done = false;
-        for (int i = 0; i < SETTLE_POLLS; i++) {
-            arrived = exec("artest space entry-status");
-            if ("SETTLED".equals(extractString(arrived, "state"))
-                    && targetCell.equals(extractString(arrived, "cellKey"))) {
-                done = true;
-                break;
-            }
-            Thread.sleep(250);
-        }
+        boolean done = awaitWithinTicks(SETTLE_TICKS,
+                () -> {
+                    String seen = exec("artest space entry-status");
+                    return "SETTLED".equals(extractString(seen, "state"))
+                            && targetCell.equals(extractString(seen, "cellKey"));
+                },
+                null);
+        String arrived = exec("artest space entry-status");
         assertTrue("the ship never arrived at the cell the jump was aimed at; origin=" + originCell
                 + " requested=" + targetCell + " last status=" + arrived
                 + " subsystem=" + exec("artest space subsystem-status"), done);
@@ -247,8 +253,8 @@ public class VSShipEntryE2ETest extends AbstractSharedServerTest {
         int arrivedSlot = extractInt(arrived, "slotDim");
         exec("artest vs load-ships " + arrivedSlot);
         String pose = "";
-        for (int i = 0; i < 8; i++) {
-            Thread.sleep(250);
+        for (int i = 0; i < DRIFT_SAMPLES; i++) {
+            advanceTicks(DRIFT_TICKS_BETWEEN_SAMPLES);
             exec("artest vs load-ships " + arrivedSlot);
             pose = exec("artest vs ship-info " + arrivedSlot + " 0 200 0");
             String held = exec("artest space entry-status");
@@ -296,18 +302,22 @@ public class VSShipEntryE2ETest extends AbstractSharedServerTest {
         }
     }
 
+    /**
+      * How many ships are loaded in this slot, once at least one is — budgeted in server ticks, so a
+      * loaded machine is given the same number of chunk-load ticks as an idle one rather than the
+      * same number of seconds.
+      */
     private int waitForLoadedShip(int dim) throws Exception {
-        for (int i = 0; i < 40; i++) {
-            if (extractInt(exec("artest vs ship-count-all " + dim), "count") >= 1) {
-                exec("artest vs load-ships " + dim);
-                int loaded = extractInt(exec("artest vs ship-count " + dim), "count");
-                if (loaded >= 1) {
-                    return loaded;
-                }
-            }
-            Thread.sleep(250);
-        }
-        return 0;
+        boolean loaded = awaitWithinTicks(LOAD_TICKS,
+                () -> {
+                    if (extractInt(exec("artest vs ship-count-all " + dim), "count") < 1) {
+                        return false;
+                    }
+                    exec("artest vs load-ships " + dim);
+                    return extractInt(exec("artest vs ship-count " + dim), "count") >= 1;
+                },
+                null);
+        return loaded ? extractInt(exec("artest vs ship-count " + dim), "count") : 0;
     }
 
     private void clearArea(int baseX, int baseZ) throws Exception {
