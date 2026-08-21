@@ -132,27 +132,15 @@ public final class VSShipCrossingOps implements ShipCrossingService.Ops {
         if (!moved) {
             return false;
         }
-        ArrivalTrace.server("poseTp.ship t=" + world.getTotalWorldTime()
-                + " y=" + ArrivalTrace.fmt(sy) + "->" + ArrivalTrace.fmt(py)
-                + " riders=" + riders.size());
         for (EntityDummy d : riders) {
-            double oldY = d.posY;
             d.setPositionAndUpdate(d.posX + (px - sx), d.posY + (py - sy), d.posZ + (pz - sz));
-            ArrivalTrace.server("poseTp.dummy t=" + world.getTotalWorldTime()
-                    + " dummy=" + d.getEntityId()
-                    + " y=" + ArrivalTrace.fmt(oldY) + "->" + ArrivalTrace.fmt(d.posY)
-                    + " pass=" + ArrivalTrace.ids(d.getPassengers()));
             // Safety net: a mount must never leave a seated player behind (a rider split from his
             // mount by more than tracking range is unrecoverable client-side). The settle re-seats
             // AFTER this teleport so no crew normally rides through it, but probe mounts and any
             // future caller with a live rider are carried by the same delta.
             for (net.minecraft.entity.Entity p : d.getPassengers()) {
                 if (p instanceof net.minecraft.entity.player.EntityPlayerMP) {
-                    double riderY = p.posY;
                     p.setPositionAndUpdate(p.posX + (px - sx), p.posY + (py - sy), p.posZ + (pz - sz));
-                    ArrivalTrace.server("poseTp.rider t=" + world.getTotalWorldTime()
-                            + " p=" + p.getEntityId()
-                            + " y=" + ArrivalTrace.fmt(riderY) + "->" + ArrivalTrace.fmt(p.posY));
                 }
             }
         }

@@ -331,12 +331,8 @@ public final class CrewTransfer {
                 player.getServer().getPlayerList().transferPlayerToDimension(player,
                         dstWorld.provider.getDimension(),
                         (world, entity, yaw) -> entity.setLocationAndAngles(tx, ty, tz, yaw, 0f));
-                ArrivalTrace.server("reseat.dimTransfer t=" + dstWorld.getTotalWorldTime()
-                        + " p=" + player.getEntityId() + " toY=" + ArrivalTrace.fmt(ty));
             } else {
                 player.setPositionAndUpdate(seatWorld[0], seatWorld[1], seatWorld[2]);
-                ArrivalTrace.server("reseat.setPos t=" + dstWorld.getTotalWorldTime()
-                        + " p=" + player.getEntityId() + " toY=" + ArrivalTrace.fmt(seatWorld[1]));
             }
             // "Already seated" means seated ON THIS SEAT — riding the dummy bound to it, in this
             // world. Any other dummy is a leftover mount, and treating one as proof of a finished
@@ -352,13 +348,10 @@ public final class CrewTransfer {
             if (ridden instanceof EntityDummy && ridden == seatDummy) {
                 continue; // already re-seated by an earlier retry
             }
-            if (ridden instanceof EntityDummy) {
-                // Any OTHER dummy is a stale mount and must not stop the re-seat. The swap needs no
-                // dismount here — the mount below is forced, and a forced startRiding dismounts
-                // first — which is also how the pre-assembly rebind below does it.
-                ArrivalTrace.server("reseat.staleMount t=" + dstWorld.getTotalWorldTime()
-                        + " p=" + player.getEntityId() + " stale=" + ridden.getEntityId());
-            }
+            // Any OTHER dummy is a stale mount and must not stop the re-seat. The swap needs no
+            // dismount here — the mount below is forced, and a forced startRiding dismounts
+            // first — which is also how the pre-assembly rebind below does it.
+            //
             // The BlockPilotSeat mount recipe: a dummy at the seat's live world position, bound
             // to the seat's (new) subspace block, and the player riding it. Reuse the seat's
             // existing bound dummy when one is already there (one seat — one dummy; a second
@@ -383,9 +376,6 @@ public final class CrewTransfer {
                 continue;
             }
             player.startRiding(dummy, true);
-            ArrivalTrace.server("reseat.mount t=" + dstWorld.getTotalWorldTime()
-                    + " p=" + player.getEntityId() + " dummy=" + dummy.getEntityId()
-                    + " y=" + ArrivalTrace.fmt(seatWorld[1]));
         }
         lastReseatBlock = allSeated ? "" : joinBlocks(
                 seatLookupBlocked
@@ -478,8 +468,6 @@ public final class CrewTransfer {
             player.getServer().getPlayerList().transferPlayerToDimension(player,
                     dstWorld.provider.getDimension(),
                     (world, entity, yaw) -> entity.setLocationAndAngles(tx, ty, tz, yaw, 0f));
-            ArrivalTrace.server("deck.dimTransfer t=" + dstWorld.getTotalWorldTime()
-                    + " p=" + player.getEntityId() + " toY=" + ArrivalTrace.fmt(ty));
         } else {
             player.setPositionAndUpdate(deckWorld[0], deckWorld[1], deckWorld[2]);
         }
@@ -495,8 +483,6 @@ public final class CrewTransfer {
                 vsShipUuid == null
                         ? VSIntegration.shipIdManagingBlock(dstWorld, afc.pos) : vsShipUuid.toString(),
                 sub[0], sub[1], sub[2]);
-        ArrivalTrace.server("deck.place t=" + dstWorld.getTotalWorldTime()
-                + " p=" + player.getEntityId() + " y=" + ArrivalTrace.fmt(deckWorld[1]));
         return null;
     }
 
@@ -781,9 +767,6 @@ public final class CrewTransfer {
             return RebindOutcome.NOT_ON_STALE_MOUNT; // seat taken while he rode the stale mount
         }
         player.startRiding(dummy, true);
-        ArrivalTrace.server("rebind.swap t=" + world.getTotalWorldTime()
-                + " p=" + player.getEntityId() + " stale=" + staleDummyId
-                + " dummy=" + dummy.getEntityId() + " toY=" + ArrivalTrace.fmt(seatWorld[1]));
         return RebindOutcome.REBOUND;
     }
 

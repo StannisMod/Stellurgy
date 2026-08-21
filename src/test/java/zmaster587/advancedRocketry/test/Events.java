@@ -27,6 +27,7 @@ public final class Events {
     private static final Pattern COUNT = Pattern.compile("\"count\":(-?\\d+)");
     private static final Pattern TYPE = Pattern.compile("\"type\":\"([^\"]*)\"");
     private static final Pattern RECORDING = Pattern.compile("\"recording\":(true|false)");
+    private static final Pattern MIXINS = Pattern.compile("\"mixins\":(true|false)");
 
     /** How a caller runs one probe command and gets the raw reply. */
     public interface Probe {
@@ -61,6 +62,25 @@ public final class Events {
         Matcher m = SEQ.matcher(reply);
         assertTrue("events mark must report a sequence: " + reply, m.find());
         return Long.parseLong(m.group(1));
+    }
+
+    /**
+     * The same, for a chain that includes events only a test-only MIXIN can record — a position
+     * write, a mount refusal, anything the Forge bus does not fire.
+     *
+     * <p>Two things can be off independently and their silences look identical: the bus recorder may
+     * be unsubscribed, or the launch-time coremod may never have queued the mixin configuration. A
+     * test that awaits a mixin-sourced event must rule out BOTH before an empty log is allowed to
+     * mean anything.</p>
+     */
+    public long markInstrumented() throws Exception {
+        long seq = mark();
+        String reply = probe.exec("artest events mark");
+        Matcher m = MIXINS.matcher(reply);
+        assertTrue("the test-only mixins were never installed, so an absent position write below"
+                + " would mean nothing (is -Dfml.coreMods.load set on this JVM?): " + reply,
+                m.find() && "true".equals(m.group(1)));
+        return seq;
     }
 
     /** Everything recorded at or after {@code mark}, in order, as the raw reply. */

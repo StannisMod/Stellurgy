@@ -2,8 +2,12 @@ package zmaster587.advancedRocketry.command.test;
 
 import java.util.ArrayDeque;
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Comparator;
 import java.util.Deque;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 
 import net.minecraft.util.math.BlockPos;
 import net.minecraftforge.common.MinecraftForge;
@@ -57,16 +61,27 @@ import net.minecraftforge.fml.common.eventhandler.SubscribeEvent;
 public final class TestEventLog {
 
     /**
-     * How many records are kept. Bounded so a long client cannot grow it without limit; the count of
-     * what fell off the end is REPORTED, because a truncated log that reads as a quiet one is the
-     * same false negative a recorder that cannot say it was off produces.
+     * How many records are kept OF EACH TYPE. Bounded so a long session cannot grow the log without
+     * limit; what fell off the end is REPORTED, because a truncated log that reads as a quiet one is
+     * the same false negative a recorder that cannot say it was off produces.
+     *
+     * <p><b>Per type, not per log, and that is the whole point.</b> One shared ring is emptied by
+     * whichever type is chattiest, so a rare event is evicted by a common one and the log then
+     * answers "it never happened" about something it merely threw away. Measured 2026-08-21 on the
+     * client half: a ship crossing loads a thousand chunks, {@code chunk_data_applied} filled the
+     * ring, and the position writes the timeline exists for were gone before anything read them —
+     * with {@code dropped} honestly reporting 173, which made the log honest and useless at the same
+     * time. A ring per type costs a small map and leaves a chatty type unable to silence a quiet
+     * one.</p>
      */
-    public static final int CAPACITY = 512;
+    public static final int CAPACITY_PER_TYPE = 256;
 
     private static final Object LOCK = new Object();
-    private static final Deque<Record> RECORDS = new ArrayDeque<>();
+    /** One ring per type, insertion-ordered so a dump lists types in first-seen order. */
+    private static final Map<String, Deque<Record>> RECORDS = new LinkedHashMap<>();
+    /** Evictions per type. WHICH type is being truncated is the half a reader can act on. */
+    private static final Map<String, Long> DROPPED = new LinkedHashMap<>();
     private static long nextSeq;
-    private static long dropped;
 
     /**
      * Whether anything is subscribed. Reported on every read, on the same principle as the client
@@ -75,7 +90,29 @@ public final class TestEventLog {
      */
     private static volatile boolean recording;
 
+    /**
+     * Whether the test-only mixin configuration was ACCEPTED in this JVM.
+     *
+     * <p>Separate from {@link #recording}, because they can fail independently and their failures
+     * look identical from a test: the Forge-bus recorder covers events the bus already fires, while
+     * everything observed by a mixin — a position write, a mount refusal — appears only if the
+     * launch-time coremod queued the config. Set from the config's own plugin at the moment mixin
+     * prepares it, so it reports a checkable fact rather than an intention. A shipped game never
+     * queues the config and this stays false, which is correct: nothing there is instrumented.</p>
+     */
+    private static volatile boolean mixinsInstalled;
+
     private TestEventLog() {}
+
+    /** Called from the test mixin config's plugin when mixin prepares that configuration. */
+    public static void markMixinsInstalled() {
+        mixinsInstalled = true;
+    }
+
+    /** Whether the test-only mixin configuration was accepted — see the field's own note. */
+    public static boolean areMixinsInstalled() {
+        return mixinsInstalled;
+    }
 
     /** One thing that happened, in order. */
     public static final class Record {
@@ -111,32 +148,119 @@ public final class TestEventLog {
             return;
         }
         synchronized (LOCK) {
-            RECORDS.addLast(new Record(nextSeq++, tick, side, type, payload == null ? "" : payload));
-            while (RECORDS.size() > CAPACITY) {
-                RECORDS.removeFirst();
-                dropped++;
+            Deque<Record> ring = RECORDS.get(type);
+            if (ring == null) {
+                ring = new ArrayDeque<>();
+                RECORDS.put(type, ring);
+            }
+            ring.addLast(new Record(nextSeq++, tick, side, type, payload == null ? "" : payload));
+            while (ring.size() > CAPACITY_PER_TYPE) {
+                ring.removeFirst();
+                Long was = DROPPED.get(type);
+                DROPPED.put(type, was == null ? 1L : was + 1L);
             }
         }
     }
 
-    /** Everything recorded at or after {@code fromSeq}, oldest first. */
+    /**
+     * Everything recorded at or after {@code fromSeq}, oldest first.
+     *
+     * <p>Merged across the per-type rings and re-ordered by sequence, because ORDER is what a chain
+     * assertion reads and the sequence is the only thing that carries it once the rings are
+     * separate.</p>
+     */
     public static List<Record> since(long fromSeq) {
         List<Record> out = new ArrayList<>();
         synchronized (LOCK) {
-            for (Record r : RECORDS) {
-                if (r.seq >= fromSeq) {
-                    out.add(r);
+            for (Deque<Record> ring : RECORDS.values()) {
+                for (Record r : ring) {
+                    if (r.seq >= fromSeq) {
+                        out.add(r);
+                    }
                 }
             }
         }
+        Collections.sort(out, new Comparator<Record>() {
+            @Override
+            public int compare(Record a, Record b) {
+                return Long.compare(a.seq, b.seq);
+            }
+        });
         return out;
     }
 
-    /** How many records fell off the end of the ring since the process started. */
-    public static long dropped() {
-        synchronized (LOCK) {
-            return dropped;
+    /**
+     * The recorded chain as one readable line — {@code type t=<tick> <payload>}, oldest first,
+     * separated by {@code |}.
+     *
+     * <p>For a failure message, where a caller wants the whole timeline in a sentence rather than a
+     * structure to parse. Filters to {@code types} when any are given.</p>
+     */
+    public static String dump(String... types) {
+        StringBuilder sb = new StringBuilder();
+        for (Record r : since(0)) {
+            if (types != null && types.length > 0 && !matches(r.type, types)) {
+                continue;
+            }
+            if (sb.length() > 0) {
+                sb.append(" | ");
+            }
+            sb.append(r.type).append(" t=").append(r.tick);
+            if (!r.payload.isEmpty()) {
+                sb.append(' ').append(r.payload.replace('"', '\''));
+            }
         }
+        return sb.toString();
+    }
+
+    /** How many records of {@code types} the log currently holds. */
+    public static int count(String... types) {
+        int n = 0;
+        for (Record r : since(0)) {
+            if (types == null || types.length == 0 || matches(r.type, types)) {
+                n++;
+            }
+        }
+        return n;
+    }
+
+    private static boolean matches(String type, String[] types) {
+        for (String t : types) {
+            if (type.equals(t)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /** How many records fell off the end of any ring since the process started. */
+    public static long dropped() {
+        long total = 0;
+        synchronized (LOCK) {
+            for (Long n : DROPPED.values()) {
+                total += n;
+            }
+        }
+        return total;
+    }
+
+    /**
+     * Which types were truncated and by how much, as a JSON object body — {@code "chunk_data_applied":173}.
+     *
+     * <p>A bare total says a log is incomplete; this says WHERE, which is the difference between a
+     * reader who knows to raise a cap and one who quietly believes a short answer.</p>
+     */
+    public static String droppedByType() {
+        StringBuilder sb = new StringBuilder();
+        synchronized (LOCK) {
+            for (Map.Entry<String, Long> e : DROPPED.entrySet()) {
+                if (sb.length() > 0) {
+                    sb.append(',');
+                }
+                sb.append('"').append(e.getKey()).append("\":").append(e.getValue());
+            }
+        }
+        return sb.toString();
     }
 
     /** Whether a recorder is subscribed — see the field's own note on why this is reported. */
@@ -151,7 +275,7 @@ public final class TestEventLog {
     public static void reset() {
         synchronized (LOCK) {
             RECORDS.clear();
-            dropped = 0;
+            DROPPED.clear();
             nextSeq = 0;
         }
     }

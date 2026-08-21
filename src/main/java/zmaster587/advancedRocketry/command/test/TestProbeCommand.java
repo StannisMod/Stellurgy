@@ -53,6 +53,12 @@ import java.util.Map;
  */
 public class TestProbeCommand extends CommandBase {
 
+    /**
+     * The event types that make up a position-writer timeline: who moved a body, who seated it and
+     * who stood it up. Named once, because two verbs read the same slice for the same reason.
+     */
+    private static final String[] WRITER_EVENTS = {"pos_jump", "mount", "dismount"};
+
     @Override
     @Nonnull
     public String getName() {
@@ -1425,14 +1431,23 @@ public class TestProbeCommand extends CommandBase {
                     + "}");
             return;
         }
-        // arrival-trace - dump the SERVER JVM's position-writer timeline around ship crossings
-        // (the ungated ring on ArrivalTrace): every tagged write site, per-tick jump samples and
-        // mount/dismount call stacks. Read-only, no waits; the client half of the timeline is read
-        // from the client JVM via readStaticField(ArrivalTrace.CLIENT).
+        // arrival-trace - the SERVER JVM's position-writer timeline around ship crossings, as one
+        // readable line: every deliberate placement, mount and dismount, each naming the code that
+        // did it. Read-only, no waits; the client half is read from the client JVM through its own
+        // event log (`event_since` on the bridge).
+        //
+        // The records come from the event log, which test-only mixins feed. They used to come from
+        // ungated statics in the production tree: eleven hand-tagged call sites plus a per-tick
+        // sampler, all of them building formatted strings on the position-writer path of every
+        // crossing in a shipped game, for nobody. An observation a test wants belongs to the test
+        // side; the mixins that record these live in the test source set and a released jar carries
+        // none of them.
         if (args.length >= 1 && "arrival-trace".equalsIgnoreCase(args[0])) {
             send(sender, "{\"ok\":true"
-                    + ",\"count\":" + zmaster587.advancedRocketry.space.ArrivalTrace.SERVER.size()
-                    + ",\"events\":\"" + zmaster587.advancedRocketry.space.ArrivalTrace.dumpServer() + "\""
+                    + ",\"recording\":" + TestEventLog.isRecording()
+                    + ",\"mixins\":" + TestEventLog.areMixinsInstalled()
+                    + ",\"count\":" + TestEventLog.count(WRITER_EVENTS)
+                    + ",\"events\":\"" + TestEventLog.dump(WRITER_EVENTS) + "\""
                     // Why the last re-seat did NOT seat everyone, in the re-seat's own words: whether a
                     // ship claims the arrival point, how many seat tiles the scan reached, and per seat
                     // the three things the match discriminates on. Empty means the last re-seat seated
@@ -18305,7 +18320,8 @@ public class TestProbeCommand extends CommandBase {
     private void handleEvents(ICommandSender sender, String[] args) {
         if (args.length >= 1 && "mark".equalsIgnoreCase(args[0])) {
             send(sender, "{\"ok\":true,\"seq\":" + TestEventLog.mark()
-                    + ",\"recording\":" + TestEventLog.isRecording() + "}");
+                    + ",\"recording\":" + TestEventLog.isRecording()
+                    + ",\"mixins\":" + TestEventLog.areMixinsInstalled() + "}");
             return;
         }
         if (args.length >= 2 && "since".equalsIgnoreCase(args[0])) {
@@ -18313,7 +18329,9 @@ public class TestProbeCommand extends CommandBase {
             String wanted = args.length >= 3 ? args[2] : null;
             StringBuilder sb = new StringBuilder("{\"ok\":true,\"recording\":")
                     .append(TestEventLog.isRecording())
+                    .append(",\"mixins\":").append(TestEventLog.areMixinsInstalled())
                     .append(",\"dropped\":").append(TestEventLog.dropped())
+                    .append(",\"droppedByType\":{").append(TestEventLog.droppedByType()).append('}')
                     .append(",\"from\":").append(from)
                     .append(",\"events\":[");
             int n = 0;

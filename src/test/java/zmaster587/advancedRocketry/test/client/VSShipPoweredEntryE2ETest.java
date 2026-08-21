@@ -280,10 +280,10 @@ public class VSShipPoweredEntryE2ETest {
         }
         // Position-writer timeline for the arrival, printed win-or-lose: the harness deletes its
         // child workdirs on close, so the only way to read the writers post-run is through the
-        // test's own stdout. Server ring via the probe; client ring via a static-field read.
+        // test's own stdout. Both halves come from their side's event log, which test-only mixins
+        // feed — the client half used to be a static-field read of a ring that production carried.
         System.out.println("[ARRIVAL-TRACE server] " + exec("artest vs arrival-trace"));
-        System.out.println("[ARRIVAL-TRACE client] " + bot().readStaticField(
-                "zmaster587.advancedRocketry.space.ArrivalTrace", "CLIENT"));
+        System.out.println("[ARRIVAL-TRACE client] " + bot().eventsSince(0, null));
         assertTrue("the pilot who FLEW his ship into space must still be in his seat on arrival - "
                         + "a crossing must never stand him up. riding=" + riding
                         + " delivery=" + exec("artest vs seat-delivery"),

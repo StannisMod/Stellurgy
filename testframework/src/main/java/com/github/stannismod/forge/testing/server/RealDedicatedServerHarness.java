@@ -284,6 +284,12 @@ public final class RealDedicatedServerHarness implements AutoCloseable {
         command.add("-Xmx" + System.getProperty("forge.test.server.xmx", "1g"));
         command.add("-Djava.awt.headless=true");
         command.add("-Dforge.test.server=true");
+        // The harness's OWN coremod, so test-only mixin configurations are queued while mixin still
+        // accepts them — the same arrangement the client child already uses. This is what lets an
+        // observation a test needs live in the harness instead of in production code: a test mixin
+        // reaches from the test source set INTO the product, and a shipped game, which never sets
+        // this property and never carries the class, pays nothing for it.
+        command.add("-Dfml.coreMods.load=com.github.stannismod.forge.testing.mixin.ForgeTestCoreMod");
         command.add("-D" + com.github.stannismod.forge.testing.TestTimeouts.PROP_FACTOR + "="
                 + com.github.stannismod.forge.testing.TestTimeouts.factor());
         command.add("-cp");

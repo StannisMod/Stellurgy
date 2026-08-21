@@ -91,10 +91,23 @@ public final class ForgeTestClientBootstrap {
      * subscribed.</p>
      */
     private static final Object EVENT_LOG_LOCK = new Object();
-    private static final java.util.ArrayDeque<String> EVENT_LOG = new java.util.ArrayDeque<>();
-    private static final int EVENT_LOG_CAP = 512;
+    /**
+     * One ring PER TYPE, not one ring for the log.
+     *
+     * <p>A shared ring is emptied by whichever type is chattiest, so a rare event is evicted by a
+     * common one and the log then answers "it never happened" about something it merely threw away.
+     * Measured 2026-08-21: a ship crossing loads a thousand chunks, {@code chunk_data_applied}
+     * filled the ring, and the position writes a crossing test reads were gone before anything asked
+     * for them — with {@code dropped} honestly reporting 173, which made the log honest and useless
+     * at the same time.</p>
+     */
+    private static final java.util.LinkedHashMap<String, java.util.ArrayDeque<String>> EVENT_LOG =
+            new java.util.LinkedHashMap<>();
+    /** Evictions per type: WHICH type is being truncated is the half a reader can act on. */
+    private static final java.util.LinkedHashMap<String, Long> EVENTS_DROPPED_BY_TYPE =
+            new java.util.LinkedHashMap<>();
+    private static final int EVENT_LOG_CAP_PER_TYPE = 256;
     private static long eventSeq;
-    private static long eventsDropped;
     private static volatile boolean eventsRecording;
 
     private ForgeTestClientBootstrap() {
@@ -115,12 +128,14 @@ public final class ForgeTestClientBootstrap {
     }
 
     /**
-     * Register the harness's own mixin config, late but in time.
+     * Read back whether the launch-time coremod queued the mixin configurations, and say so loudly
+     * if it did not.
      *
-     * <p>Mixin prepares a configuration when the classes it targets are transformed, so a config
-     * added here still applies to anything not yet loaded. {@code NetHandlerPlayClient} is loaded
-     * when the client CONNECTS, which is well after this runs at FML init — so no launch-time
-     * tweaker is needed for it, and the harness stays in charge of its own instrumentation.</p>
+     * <p>The reasoning that first put a registration here was that mixin prepares a configuration
+     * when its targets are transformed, and {@code NetHandlerPlayClient} loads only when the client
+     * CONNECTS — long after FML init. It is sound and it is WRONG: what matters is when the
+     * ENVIRONMENT selects its configurations, not when a target class loads. The launch-time coremod
+     * is not optional, and this method no longer registers anything.</p>
      *
      * <p>If that assumption ever stops holding the failure is loud, not silent: the config is
      * {@code required}, and a test's {@code events mark} asserts {@code recording} before anything
@@ -148,20 +163,51 @@ public final class ForgeTestClientBootstrap {
                 + ",\"full\":" + full);
     }
 
-    private static void recordEvent(String type, String payload) {
+    /**
+     * Record one event from a CONSUMER's own test-only mixin.
+     *
+     * <p>The harness owns the log and the honesty flag; what is worth recording is the consuming
+     * project's business, and it says so through its own mixin config (see
+     * {@code ForgeTestCoreMod.CONSUMER_INDEX}). Self-gating: a no-op when nothing queued the mixin
+     * configs, so a caller never has to ask first.</p>
+     *
+     * @param payload a JSON fragment WITHOUT braces, or empty
+     */
+    public static void recordEvent(String type, String payload) {
         if (!eventsRecording) {
             return;
         }
         long tick = CLIENT_TICKS.get();
         synchronized (EVENT_LOG_LOCK) {
-            EVENT_LOG.addLast("{\"seq\":" + (eventSeq++) + ",\"tick\":" + tick
+            java.util.ArrayDeque<String> ring = EVENT_LOG.get(type);
+            if (ring == null) {
+                ring = new java.util.ArrayDeque<>();
+                EVENT_LOG.put(type, ring);
+            }
+            ring.addLast("{\"seq\":" + (eventSeq++) + ",\"tick\":" + tick
                     + ",\"side\":\"client\",\"type\":\"" + type + "\""
                     + (payload == null || payload.isEmpty() ? "" : "," + payload) + "}");
-            while (EVENT_LOG.size() > EVENT_LOG_CAP) {
-                EVENT_LOG.removeFirst();
-                eventsDropped++;
+            while (ring.size() > EVENT_LOG_CAP_PER_TYPE) {
+                ring.removeFirst();
+                Long was = EVENTS_DROPPED_BY_TYPE.get(type);
+                EVENTS_DROPPED_BY_TYPE.put(type, was == null ? 1L : was + 1L);
             }
         }
+    }
+
+    /** The {@code seq} of a rendered record — the first number in it, and the merge key. */
+    private static long seqOf(String record) {
+        int start = record.indexOf(':') + 1;
+        return Long.parseLong(record.substring(start, record.indexOf(',')));
+    }
+
+    /** Total evictions across every type's ring. Caller holds {@link #EVENT_LOG_LOCK}. */
+    private static long eventsDroppedTotal() {
+        long total = 0;
+        for (Long n : EVENTS_DROPPED_BY_TYPE.values()) {
+            total += n;
+        }
+        return total;
     }
 
     private static void installClientLogFile() {
@@ -1182,16 +1228,38 @@ public final class ForgeTestClientBootstrap {
                 int matched = 0;
                 StringBuilder items = new StringBuilder();
                 synchronized (EVENT_LOG_LOCK) {
-                    sb.append(eventsDropped).append(",\"from\":").append(from).append(",\"events\":[");
-                    for (String record : EVENT_LOG) {
-                        int seqStart = record.indexOf(":") + 1;
-                        long seq = Long.parseLong(record.substring(seqStart, record.indexOf(',')));
-                        if (seq < from) {
-                            continue;
+                    sb.append(eventsDroppedTotal()).append(",\"droppedByType\":{");
+                    int d = 0;
+                    for (java.util.Map.Entry<String, Long> e : EVENTS_DROPPED_BY_TYPE.entrySet()) {
+                        if (d++ > 0) {
+                            sb.append(',');
                         }
-                        if (wanted != null && !record.contains("\"type\":\"" + wanted + "\"")) {
-                            continue;
+                        sb.append('"').append(e.getKey()).append("\":").append(e.getValue());
+                    }
+                    sb.append("},\"from\":").append(from).append(",\"events\":[");
+                    // Merged across the per-type rings and re-ordered by sequence: ORDER is what a
+                    // chain assertion reads, and once the rings are separate the sequence is the
+                    // only thing still carrying it.
+                    java.util.List<String> merged = new java.util.ArrayList<>();
+                    for (java.util.ArrayDeque<String> ring : EVENT_LOG.values()) {
+                        for (String record : ring) {
+                            long seq = seqOf(record);
+                            if (seq < from) {
+                                continue;
+                            }
+                            if (wanted != null && !record.contains("\"type\":\"" + wanted + "\"")) {
+                                continue;
+                            }
+                            merged.add(record);
                         }
+                    }
+                    java.util.Collections.sort(merged, new java.util.Comparator<String>() {
+                        @Override
+                        public int compare(String a, String b) {
+                            return Long.compare(seqOf(a), seqOf(b));
+                        }
+                    });
+                    for (String record : merged) {
                         if (matched++ > 0) {
                             items.append(',');
                         }

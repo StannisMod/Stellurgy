@@ -1,0 +1,11 @@
+{
+  "required": true,
+  "minVersion": "0.8",
+  "package": "zmaster587.advancedRocketry.test.mixin",
+  "plugin": "zmaster587.advancedRocketry.test.trace.ARTestMixinPlugin",
+  "compatibilityLevel": "JAVA_8",
+  "target": "@env(DEFAULT)",
+  "mixins": [
+    "MixinEntityPositionWriters"
+  ]
+}

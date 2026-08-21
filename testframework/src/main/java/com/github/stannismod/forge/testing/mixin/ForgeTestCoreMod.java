@@ -1,6 +1,13 @@
 package com.github.stannismod.forge.testing.mixin;
 
+import java.io.BufferedReader;
+import java.io.InputStream;
+import java.io.InputStreamReader;
+import java.net.URL;
+import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Enumeration;
 import java.util.List;
 import java.util.Map;
 
@@ -36,6 +43,16 @@ import zone.rong.mixinbooter.IEarlyMixinLoader;
  * <p>Deliberately does NOT call {@code MixinBootstrap.init()} — see the same note on the mod's own
  * coremod: touching Mixin internals from the AppClassLoader raises a loader-constraint violation and
  * poisons the host's tweaker.</p>
+ *
+ * <h2>Configurations the CONSUMER owns</h2>
+ *
+ * <p>The harness is generic and must not name the mod under test. A consuming project that wants its
+ * own test-only mixins ships {@value #CONSUMER_INDEX} in its TEST resources, one config file name per
+ * line ({@code #} starts a comment); every copy of that resource on the classpath is read here and
+ * its configs are queued alongside the harness's own. This inverts the dependency — the harness
+ * offers the moment, the consumer names the file — and it keeps the same honesty property: what was
+ * queued is readable afterwards via {@link #queuedConfigs()}, so a test can tell "the mixin recorded
+ * nothing" from "the config was never accepted".</p>
  */
 @MCVersion("1.12.2")
 public class ForgeTestCoreMod implements IFMLLoadingPlugin, IEarlyMixinLoader {
@@ -51,14 +68,73 @@ public class ForgeTestCoreMod implements IFMLLoadingPlugin, IEarlyMixinLoader {
      */
     private static volatile boolean configQueued;
 
+    /** Classpath resource a consuming project ships to name its own test-only mixin configs. */
+    public static final String CONSUMER_INDEX = "META-INF/forge-test-mixins.txt";
+
+    /** The harness's own configuration — always queued. */
+    private static final String OWN_CONFIG = "mixins.forgetestframework.json";
+
+    /** Every configuration name handed to MixinBooter, in the order it was handed over. */
+    private static volatile List<String> queuedConfigs = Collections.emptyList();
+
+    /**
+     * Why consumer discovery produced nothing, when it failed. Never {@code null}-swallowed: a
+     * consumer whose index cannot be read must be able to see that, rather than reading an empty
+     * recorder as "the event did not happen".
+     */
+    private static volatile String discoveryError;
+
     public static boolean isConfigQueued() {
         return configQueued;
     }
 
+    public static List<String> queuedConfigs() {
+        return queuedConfigs;
+    }
+
+    public static String discoveryError() {
+        return discoveryError;
+    }
+
     @Override
     public List<String> getMixinConfigs() {
+        List<String> configs = new ArrayList<>();
+        configs.add(OWN_CONFIG);
+        configs.addAll(discoverConsumerConfigs());
         configQueued = true;
-        return Collections.singletonList("mixins.forgetestframework.json");
+        queuedConfigs = Collections.unmodifiableList(configs);
+        System.out.println("[forge-test-framework] queueing mixin configs " + configs
+                + (discoveryError == null ? "" : " (consumer discovery failed: " + discoveryError + ")"));
+        return configs;
+    }
+
+    /**
+     * Read every {@value #CONSUMER_INDEX} on the classpath. Uses this class's own loader, which at
+     * this point is the {@code LaunchClassLoader} carrying the full test classpath.
+     */
+    private static List<String> discoverConsumerConfigs() {
+        List<String> found = new ArrayList<>();
+        try {
+            Enumeration<URL> indexes = ForgeTestCoreMod.class.getClassLoader().getResources(CONSUMER_INDEX);
+            while (indexes.hasMoreElements()) {
+                URL index = indexes.nextElement();
+                try (InputStream in = index.openStream();
+                     BufferedReader reader = new BufferedReader(
+                             new InputStreamReader(in, StandardCharsets.UTF_8))) {
+                    String line;
+                    while ((line = reader.readLine()) != null) {
+                        int comment = line.indexOf('#');
+                        String name = (comment < 0 ? line : line.substring(0, comment)).trim();
+                        if (!name.isEmpty() && !found.contains(name)) {
+                            found.add(name);
+                        }
+                    }
+                }
+            }
+        } catch (Exception e) {
+            discoveryError = e.getClass().getSimpleName() + ": " + e.getMessage();
+        }
+        return found;
     }
 
     @Override
