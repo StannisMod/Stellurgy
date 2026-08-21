@@ -446,17 +446,6 @@ public class TileAdvancedFlightComputer extends TileEntity implements IModularIn
         // Same reasoning for the drive readout: a pilot mid-jump is exactly the pilot whose HUD must
         // keep saying something, and every gate below can decline to run for a ship in hyperspace.
         refreshHudDrive(world.getTotalWorldTime());
-        // Flight recorder, server-tick channel. Taken here, BEFORE every gate below, because the
-        // quantity it exists to measure is the interval between this tile's ticks: a tick the server
-        // never got round to is exactly the case in which every gate below would have skipped the
-        // sample. The command and setpoint recorded are last tick's published values - this sample
-        // describes the state the tick STARTS from, which is also the state the physics thread has
-        // been chasing since.
-        zmaster587.advancedRocketry.util.MotionTrace.game(
-                zmaster587.advancedRocketry.util.MotionTrace.keyOf(
-                        world.provider.getDimension(),
-                        getPos().getX(), getPos().getY(), getPos().getZ()),
-                pilotInput != null, magnitude(commandedVelocity), magnitude(velocitySetpoint));
         // BEFORE the physics gate below, and that is the whole point of its position here: this ship's
         // NAME is a property of its registry record, not of whether anybody is standing near enough
         // for the physics mod to simulate it. Left after the gate, a craft that is parked, unattended

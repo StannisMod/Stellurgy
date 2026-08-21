@@ -210,10 +210,6 @@ public class RocketEventHandler extends Gui {
         // is the only one that can answer "is the PICTURE jerking" as opposed to "is the ship". A
         // frame that arrives late — chunk meshing, a collection pause — shows up here as a gap and
         // nowhere else.
-        {
-            net.minecraft.util.math.Vec3d recEye = view.getPositionEyes(p);
-            zmaster587.advancedRocketry.util.MotionTrace.clientFrame(recEye.x, recEye.y, recEye.z, p);
-        }
 
         if (ridden instanceof zmaster587.advancedRocketry.entity.EntityRocket) {
             zmaster587.advancedRocketry.entity.EntityRocket rocket =

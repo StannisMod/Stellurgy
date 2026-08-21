@@ -6,12 +6,17 @@
   "compatibilityLevel": "JAVA_8",
   "target": "@env(DEFAULT)",
   "mixins": [
+    "MixinChunkLoadCount",
     "MixinEntityPositionWriters",
+    "MixinFlightComputerMotionSample",
+    "MixinShipTransformUpdateDiag",
     "MixinWorldServerShipManagerDiag"
   ],
   "client": [
     "MixinBoundarySkyDiag",
     "MixinClientProxyDiag",
-    "MixinHyperspaceTunnelDiag"
+    "MixinHyperspaceTunnelDiag",
+    "MixinKeyBindingsMotionSample",
+    "MixinRocketEventHandlerMotionSample"
   ]
 }

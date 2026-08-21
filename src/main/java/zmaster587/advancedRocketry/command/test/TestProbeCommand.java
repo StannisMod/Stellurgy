@@ -693,7 +693,7 @@ public class TestProbeCommand extends CommandBase {
         // four clocks, and they are not fixed by the same thing.
         if (args.length >= 1 && "motion-trace".equalsIgnoreCase(args[0])) {
             if (args.length >= 2 && "reset".equalsIgnoreCase(args[1])) {
-                zmaster587.advancedRocketry.util.MotionTrace.reset();
+                zmaster587.advancedRocketry.command.test.MotionTrace.reset();
                 send(sender, "{\"ok\":true,\"reset\":true}");
                 return;
             }
@@ -702,16 +702,16 @@ public class TestProbeCommand extends CommandBase {
                         + " [windowMs] | vs motion-trace reset\"}");
                 return;
             }
-            long key = zmaster587.advancedRocketry.util.MotionTrace.keyOf(
+            long key = zmaster587.advancedRocketry.command.test.MotionTrace.keyOf(
                     parseIntOr(args[1], Integer.MIN_VALUE), parseIntOr(args[2], 0),
                     parseIntOr(args[3], 0), parseIntOr(args[4], 0));
             long windowMs = args.length >= 6 ? parseIntOr(args[5], 10000) : 10000;
             send(sender, "{\"ok\":true,\"windowMs\":" + windowMs
                     + ",\"serverChunkLoads\":"
-                    + zmaster587.advancedRocketry.util.MotionTrace.serverChunkLoads
-                    + "," + zmaster587.advancedRocketry.util.MotionTrace.serverSummary(key, windowMs)
+                    + zmaster587.advancedRocketry.command.test.MotionTrace.serverChunkLoads
+                    + "," + zmaster587.advancedRocketry.command.test.MotionTrace.serverSummary(key, windowMs)
                     + ",\"client\":"
-                    + zmaster587.advancedRocketry.util.MotionTrace.clientSummary() + "}");
+                    + zmaster587.advancedRocketry.command.test.MotionTrace.clientSummary() + "}");
             return;
         }
         // permaload <bool> — keep VS ships permanently loaded (headless has no player to hold a ship

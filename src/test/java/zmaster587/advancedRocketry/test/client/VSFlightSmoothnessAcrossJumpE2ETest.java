@@ -42,7 +42,7 @@ import static zmaster587.advancedRocketry.test.AdvancedRocketryTestConstants.SHI
  */
 public class VSFlightSmoothnessAcrossJumpE2ETest extends AbstractClientE2ETest {
 
-    private static final String MOTION_TRACE = "zmaster587.advancedRocketry.util.MotionTrace";
+    private static final String MOTION_TRACE = "zmaster587.advancedRocketry.command.test.MotionTrace";
 
     /**
      * How long one measured leg holds the key. Long enough that the Flight-Assist setpoint has

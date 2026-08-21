@@ -179,8 +179,8 @@ public abstract class MixinTileAdvancedFlightComputer implements IPhysicsBlockCo
         double accelMag = calc.getMass() <= 0.0 ? 0.0
                 : Math.sqrt(fx * fx + fy * fy + fz * fz) / calc.getMass();
         BlockPos self2 = self.getPos();
-        zmaster587.advancedRocketry.util.MotionTrace.phys(
-                zmaster587.advancedRocketry.util.MotionTrace.keyOf(
+        zmaster587.advancedRocketry.command.test.MotionTrace.phys(
+                zmaster587.advancedRocketry.command.test.MotionTrace.keyOf(
                         physo.getWorld().provider.getDimension(),
                         self2.getX(), self2.getY(), self2.getZ()),
                 // WHO drove this step, and on WHICH ship. A block's flight computer is one object on

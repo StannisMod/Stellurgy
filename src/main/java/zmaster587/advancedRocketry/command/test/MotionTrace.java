@@ -1,4 +1,4 @@
-package zmaster587.advancedRocketry.util;
+package zmaster587.advancedRocketry.command.test;
 
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -145,22 +145,6 @@ public final class MotionTrace {
     private MotionTrace() {
     }
 
-    /**
-     * Chunk-arrival counters, one subscriber for both sides. Registered unconditionally: a counter
-     * is what turns "that tick ran long" into "that tick ran long WHILE four chunks arrived", and
-     * the alternative — correlating a stall against a separate log by eye — is how a suspicion gets
-     * mistaken for a measurement.
-     */
-    public static final class Hooks {
-        @net.minecraftforge.fml.common.eventhandler.SubscribeEvent
-        public void onChunkLoad(net.minecraftforge.event.world.ChunkEvent.Load event) {
-            if (event.getWorld() != null && event.getWorld().isRemote) {
-                clientChunkLoads++;
-            } else {
-                serverChunkLoads++;
-            }
-        }
-    }
 
     @SuppressWarnings("unchecked")
     private static Map<Long, Ring>[] newRingMaps() {
