@@ -1417,12 +1417,12 @@ public class TestProbeCommand extends CommandBase {
         // from the client JVM by the test.
         if (args.length >= 1 && "seat-delivery".equalsIgnoreCase(args[0])) {
             send(sender, "{\"ok\":true"
-                    + ",\"received\":" + zmaster587.advancedRocketry.tile.TilePilotSeat.pilotInputPacketsReceived
-                    + ",\"delivered\":" + zmaster587.advancedRocketry.tile.TilePilotSeat.pilotInputPacketsDelivered
-                    + ",\"commandsReceived\":" + zmaster587.advancedRocketry.tile.TilePilotSeat.pilotCommandPacketsReceived
-                    + ",\"lastVerdict\":\"" + zmaster587.advancedRocketry.tile.TilePilotSeat.lastPilotInputVerdict + "\""
-                    + ",\"riderResolveCount\":" + zmaster587.advancedRocketry.tile.TilePilotSeat.riderResolveCount
-                    + ",\"lastRiderResolve\":\"" + zmaster587.advancedRocketry.tile.TilePilotSeat.lastRiderResolve + "\""
+                    + ",\"received\":" + SeatDiag.pilotInputPacketsReceived
+                    + ",\"delivered\":" + SeatDiag.pilotInputPacketsDelivered
+                    + ",\"commandsReceived\":" + SeatDiag.pilotCommandPacketsReceived
+                    + ",\"lastVerdict\":\"" + SeatDiag.lastPilotInputVerdict + "\""
+                    + ",\"riderResolveCount\":" + SeatDiag.riderResolveCount
+                    + ",\"lastRiderResolve\":\"" + SeatDiag.lastRiderResolve + "\""
                     + ",\"rebindEnqueued\":" + zmaster587.advancedRocketry.space.AssemblyCrewRebind.enqueuedCount
                     + ",\"rebindRebound\":" + zmaster587.advancedRocketry.space.AssemblyCrewRebind.reboundCount
                     + ",\"rebindExpired\":" + zmaster587.advancedRocketry.space.AssemblyCrewRebind.expiredCount

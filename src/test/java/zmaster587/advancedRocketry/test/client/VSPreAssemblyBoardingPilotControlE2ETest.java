@@ -451,8 +451,8 @@ public class VSPreAssemblyBoardingPilotControlE2ETest {
             client = "gateClosedTicks=" + staticValue("zmaster587.advancedRocketry.client.KeyBindings", "shipGateClosedTicks")
                     + " gateOpenTicks=" + staticValue("zmaster587.advancedRocketry.client.KeyBindings", "shipGateOpenTicks")
                     + " sends=" + staticValue("zmaster587.advancedRocketry.client.KeyBindings", "shipInputSendCount")
-                    + " resolves=" + staticValue("zmaster587.advancedRocketry.tile.TilePilotSeat", "riderResolveCount")
-                    + " lastResolve[" + staticValue("zmaster587.advancedRocketry.tile.TilePilotSeat", "lastRiderResolve") + "]";
+                    + " resolves=" + staticValue("zmaster587.advancedRocketry.command.test.SeatDiag", "riderResolveCount")
+                    + " lastResolve[" + staticValue("zmaster587.advancedRocketry.command.test.SeatDiag", "lastRiderResolve") + "]";
         } catch (Exception e) {
             client = "unreadable(" + e + ")";
         }
