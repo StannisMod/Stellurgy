@@ -539,9 +539,13 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
                 totalIters = i + (int) (80 * loadFactor);
             }
             boolean up = i < phaseDownFrom;
-            String drive = exec("artest vs seat-input 0 0 " + (up ? "1" : "-1") + " 0 0 0 0");
-            assertTrue("seat-input must resolve the seat's AFC: " + drive,
-                    drive.contains("\"afcResolved\":true"));
+            // BY ID: the unaddressed `seat-input` drives whichever pilot seat the world lists first,
+            // and this world holds every other scenario's ship too — it answers afcResolved:true
+            // while flying somebody else's craft, which reads here as a ship that will not move.
+            String drive = exec("artest vs seat-input-by-id 0 " + scenarioShipId + " 0 "
+                    + (up ? "1" : "-1") + " 0 0 0 0");
+            assertTrue("seat-input must reach THIS scenario's seat and resolve its AFC: " + drive,
+                    drive.contains("\"seatFound\":true") && drive.contains("\"afcResolved\":true"));
             bot().waitTicks(1);
             if (i % 5 == 4) {
                 double yNow = readDouble(shipInfo(), POS_Y);
@@ -567,7 +571,7 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
                 }
             }
         }
-        exec("artest vs seat-input 0 0 0 0 0 0 0");
+        exec("artest vs seat-input-by-id 0 " + scenarioShipId + " 0 0 0 0 0 0");
         double shipY1 = readDouble(shipInfo(), POS_Y);
         long churn = (long) clientDouble(SHIP_FRAME_TRAVEL, "externalMoveDrops") - dropsBefore;
         long resolvedAfter = (long) clientDouble(SHIP_FRAME_TRAVEL, "resolvedTicks");

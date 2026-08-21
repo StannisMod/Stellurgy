@@ -89,6 +89,17 @@ public class DimensionManager implements IGalaxy {
         //Temperature in Kelvin, 286 is 13 Degrees C
         overworldProperties.setAverageTemp(286);
         overworldProperties.gravitationalMultiplier = 1f;
+        // Earth's bulk, and it is a DEFINITION rather than a choice: the Earth mass and the Earth
+        // radius are the units the whole catalogue is stated in, so this body is 1.0 of each.
+        // Without it nothing ever states one — the only writers of bulk are the procedural realizer
+        // and an admin command, and the overworld passes through neither — so getRadius() stays
+        // BULK_UNSET. A body with no radius has no descent shell (it falls back to the flat 512-block
+        // proximity sphere meant for belts, 1/50 of this world) and reaches the sky renderer with
+        // radiusBlocks = 0, which draws every planet at the marker size at every range.
+        // The gravity above is STATED, so it is marked authored and setBulk leaves it alone; here the
+        // derived value happens to agree, and that agreement is not what the mark is for.
+        overworldProperties.setGravityAuthored(true);
+        overworldProperties.setBulk(1d, 1d);
         overworldProperties.orbitalDist = 100;
         overworldProperties.skyColor = new float[]{1f, 1f, 1f};
         overworldProperties.setName("Earth");
@@ -775,6 +786,13 @@ public class DimensionManager implements IGalaxy {
                     dimensionProperties.setAverageTemp(20);
                     dimensionProperties.rotationalPeriod = 128000;
                     dimensionProperties.gravitationalMultiplier = .166f; //Actual moon value
+                    // The Moon's measured bulk, in the same units: 7.342e22 kg is 0.0123 Earth
+                    // masses and 1 737.4 km is 0.2727 Earth radii. The gravity above is the stated
+                    // one and stays stated — deriving it from these would give 0.1654 and silently
+                    // move a shipped number for no reason. What was missing is the RADIUS: without
+                    // it this body draws at the marker size and carries the flat 512-block shell.
+                    dimensionProperties.setGravityAuthored(true);
+                    dimensionProperties.setBulk(0.0123d, 0.2727d);
                     dimensionProperties.setName("Luna");
                     dimensionProperties.orbitalDist = 150;
                     dimensionProperties.addBiome(AdvancedRocketryBiomes.moonBiome);

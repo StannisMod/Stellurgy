@@ -375,8 +375,11 @@ public class VSGroundFlightGroupE2ETest extends AbstractSharedVsClientE2ETest {
         double yAfter = yBefore;
         String lastSeat = "";
         for (int i = 0; i < 80 && yAfter - yBefore <= 1.5; i++) {
-            lastSeat = exec("artest vs seat-input 0 0 1 0 0 0 0"); // throttleVertical = full up
-            assertTrue("seat-input must find the pilot seat: " + lastSeat,
+            // BY ID: this world is shared with every other scenario in the class, and the
+            // unaddressed `seat-input` takes whichever pilot seat it lists first — a command that
+            // answers afcResolved:true from somebody else's ship while this one sits still.
+            lastSeat = exec("artest vs seat-input-by-id 0 " + shipId + " 0 1 0 0 0 0"); // full up
+            assertTrue("seat-input must find THIS ship's pilot seat: " + lastSeat,
                     lastSeat.contains("\"seatFound\":true"));
             assertTrue("the pilot seat must resolve its linked flight computer (offset intact "
                             + "after VS relocation): " + lastSeat,

@@ -496,7 +496,7 @@ public class BoundarySky extends IRenderHandler {
         if (mc.fontRenderer == null)
             return false;
         String text = nameOf(body) + "  "
-                + ApparentSize.formatDistance(
+                + ApparentSize.formatChartDistance(
                         zmaster587.advancedRocketry.space.DescentShell.distanceToShell(
                                 distance, body.boundaryRadius));
         GlStateManager.pushMatrix();

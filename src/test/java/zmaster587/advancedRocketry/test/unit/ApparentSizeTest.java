@@ -3,6 +3,7 @@ package zmaster587.advancedRocketry.test.unit;
 import org.junit.Test;
 
 import zmaster587.advancedRocketry.client.render.planet.ApparentSize;
+import zmaster587.advancedRocketry.util.AstronomicalBodyHelper;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
@@ -114,5 +115,27 @@ public class ApparentSizeTest {
         assertEquals("120 km", ApparentSize.formatDistance(120_000d));
         assertEquals("45 Mm", ApparentSize.formatDistance(45_000_000d));
         assertEquals("12 Gm", ApparentSize.formatDistance(12_000_000_000d));
+    }
+
+    /**
+     * This test fails if production breaks the contract that a range shown to a pilot is a range in
+     * the units the label claims — so a chart length is converted before it is printed under a unit
+     * of length, rather than having its block count relabelled as metres.
+     */
+    @Test
+    public void aChartRangeIsPrintedInRealUnitsAndNotInBlocksWearingThem() {
+        // One chart block is 250 m, so the two forms of the same call must differ by exactly that.
+        assertEquals(ApparentSize.formatDistance(500d * AstronomicalBodyHelper.METRES_PER_CHART_BLOCK),
+                ApparentSize.formatChartDistance(500d));
+        assertEquals("125 km", ApparentSize.formatChartDistance(500d));
+
+        // The measured case: Earth read from a parked ship at 5 657 554 chart blocks. Printing the
+        // block count gave "6 Mm"; the range is 1.414e9 m, which this ladder spells "1414 Mm"
+        // (the Gm step is at 10 Gm, so a gigametre-scale range still reads in Mm).
+        assertEquals("1414 Mm", ApparentSize.formatChartDistance(5_657_554d));
+
+        // A negative range is clamped before conversion, not after — the sign must not survive the
+        // multiply and come back as a large positive number.
+        assertEquals("0 m", ApparentSize.formatChartDistance(-1d));
     }
 }

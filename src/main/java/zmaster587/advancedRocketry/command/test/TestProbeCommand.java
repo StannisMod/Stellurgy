@@ -1296,27 +1296,44 @@ public class TestProbeCommand extends CommandBase {
                 send(sender, "{\"seatFound\":false}");
                 return;
             }
-            zmaster587.advancedRocketry.tile.TileAdvancedFlightComputer afc = seat.getFlightComputer();
-            if (afc != null) {
-                afc.setPilotInput(new zmaster587.advancedRocketry.api.FreeFlightInput(
-                        (float) parseDoubleOr(args[2], 0), (float) parseDoubleOr(args[3], 0),
-                        (float) parseDoubleOr(args[4], 0), (float) parseDoubleOr(args[5], 0),
-                        (float) parseDoubleOr(args[6], 0), (float) parseDoubleOr(args[7], 0),
-                        0f, false));
+            probeApplySeatInput(sender, seat, args, 2);
+            return;
+        }
+        // seat-input-by-id <dim> <shipId> <fwd> <vert> <strafe> <yaw> <pitch> <roll> — the same
+        // seat->AFC drive, aimed at ONE craft by identity. The unaddressed form above takes
+        // whichever pilot seat the world happens to list first, which is only ever right in a world
+        // holding a single ship; a scenario sharing its world with other craft must say which one it
+        // means, exactly as `point-by-id` does. The computer is resolved from the ship, then the
+        // SEAT LINKED TO THAT COMPUTER — so the seat->AFC hop this verb exists to exercise is still
+        // the thing under test, rather than being short-circuited by the lookup.
+        if (args.length >= 9 && "seat-input-by-id".equalsIgnoreCase(args[0])) {
+            net.minecraft.world.WorldServer world = vsWorld(sender, parseIntOr(args[1], Integer.MIN_VALUE));
+            if (world == null) {
+                send(sender, "{\"error\":\"world not loaded\"}");
+                return;
             }
-            BlockPos sp = seat.getPos();
-            BlockPos ap = seat.getFlightComputerPos();
-            StringBuilder sb = new StringBuilder("{\"seatFound\":true");
-            sb.append(",\"seatLinked\":").append(seat.isLinked());
-            sb.append(",\"afcResolved\":").append(afc != null);
-            sb.append(",\"seatX\":").append(sp.getX()).append(",\"seatY\":").append(sp.getY())
-                    .append(",\"seatZ\":").append(sp.getZ());
-            if (ap != null) {
-                sb.append(",\"afcX\":").append(ap.getX()).append(",\"afcY\":").append(ap.getY())
-                        .append(",\"afcZ\":").append(ap.getZ());
+            zmaster587.advancedRocketry.tile.TileAdvancedFlightComputer target =
+                    probeTargetComputer(sender, world, args[2]);
+            if (target == null) {
+                return;
             }
-            sb.append("}");
-            send(sender, sb.toString());
+            zmaster587.advancedRocketry.tile.TilePilotSeat seat = null;
+            for (TileEntity te : world.loadedTileEntityList) {
+                if (te instanceof zmaster587.advancedRocketry.tile.TilePilotSeat
+                        && target.getPos().equals(((zmaster587.advancedRocketry.tile.TilePilotSeat) te)
+                                .getFlightComputerPos())) {
+                    seat = (zmaster587.advancedRocketry.tile.TilePilotSeat) te;
+                    break;
+                }
+            }
+            if (seat == null) {
+                BlockPos ap = target.getPos();
+                send(sender, "{\"seatFound\":false,\"shipFound\":true,\"afcResolved\":true"
+                        + ",\"afcX\":" + ap.getX() + ",\"afcY\":" + ap.getY()
+                        + ",\"afcZ\":" + ap.getZ() + "}");
+                return;
+            }
+            probeApplySeatInput(sender, seat, args, 3);
             return;
         }
         // seat-delivery - read the SERVER JVM's pilot-input delivery diagnostics (the ungated
@@ -2213,7 +2230,9 @@ public class TestProbeCommand extends CommandBase {
                 + "|ff-cruise-at|force-vel-at <dim> <x> <y> <z> <a> <b> <c>"
                 + "|point-at <dim> <x> <y> <z> <qw> <qx> <qy> <qz>"
                 + "|phys-diag <dim> <shipId> <afcX> <afcY> <afcZ>"
-                + "|seat-input <dim> <fwd> <vert> <strafe> <yaw> <pitch> <roll>|seat-mount <dim>|seat-occupy <dim> <x> <y> <z>|seat-delivery|arrival-trace"
+                + "|seat-input <dim> <fwd> <vert> <strafe> <yaw> <pitch> <roll>"
+                + "|seat-input-by-id <dim> <shipId> <fwd> <vert> <strafe> <yaw> <pitch> <roll>"
+                + "|seat-mount <dim>|seat-occupy <dim> <x> <y> <z>|seat-delivery|arrival-trace"
                 + "|player-ship-data|shipframe-stats|would-take-over|deck-capture [<dim> <id>]"
                 + "|subspace-census [<dim> <id>]\"}");
     }
@@ -2295,6 +2314,41 @@ public class TestProbeCommand extends CommandBase {
             return null;
         }
         return (zmaster587.advancedRocketry.tile.TileAdvancedFlightComputer) te;
+    }
+
+    /**
+     * Shared body of {@code seat-input} / {@code seat-input-by-id}: set the pilot input on the
+     * computer the seat is linked to, reading six axes from {@code args} starting at {@code base}.
+     *
+     * <p>The seat's and the computer's POSITIONS are in the reply on purpose. {@code afcResolved} says
+     * only that the seat found ITS computer, which is true of every seat in the world; a caller whose
+     * world holds more than one craft can tell a delivered command from a misdelivered one only by
+     * reading where this one landed.</p>
+     */
+    private static void probeApplySeatInput(ICommandSender sender,
+                                            zmaster587.advancedRocketry.tile.TilePilotSeat seat,
+                                            String[] args, int base) {
+        zmaster587.advancedRocketry.tile.TileAdvancedFlightComputer afc = seat.getFlightComputer();
+        if (afc != null) {
+            afc.setPilotInput(new zmaster587.advancedRocketry.api.FreeFlightInput(
+                    (float) parseDoubleOr(args[base], 0), (float) parseDoubleOr(args[base + 1], 0),
+                    (float) parseDoubleOr(args[base + 2], 0), (float) parseDoubleOr(args[base + 3], 0),
+                    (float) parseDoubleOr(args[base + 4], 0), (float) parseDoubleOr(args[base + 5], 0),
+                    0f, false));
+        }
+        BlockPos sp = seat.getPos();
+        BlockPos ap = seat.getFlightComputerPos();
+        StringBuilder sb = new StringBuilder("{\"seatFound\":true");
+        sb.append(",\"seatLinked\":").append(seat.isLinked());
+        sb.append(",\"afcResolved\":").append(afc != null);
+        sb.append(",\"seatX\":").append(sp.getX()).append(",\"seatY\":").append(sp.getY())
+                .append(",\"seatZ\":").append(sp.getZ());
+        if (ap != null) {
+            sb.append(",\"afcX\":").append(ap.getX()).append(",\"afcY\":").append(ap.getY())
+                    .append(",\"afcZ\":").append(ap.getZ());
+        }
+        sb.append("}");
+        send(sender, sb.toString());
     }
 
     /** Shared body of {@code force-vel-by-id} / {@code force-rot-by-id}: resolve, then command. */

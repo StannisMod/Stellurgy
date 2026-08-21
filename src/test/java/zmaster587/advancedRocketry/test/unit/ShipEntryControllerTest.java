@@ -9,6 +9,7 @@ import org.junit.Test;
 
 import net.minecraft.util.math.BlockPos;
 
+import zmaster587.advancedRocketry.space.AbsolutePos;
 import zmaster587.advancedRocketry.space.CellWorldMapper;
 import zmaster587.advancedRocketry.space.CrewTransfer;
 import zmaster587.advancedRocketry.space.GalacticCoord;
@@ -17,9 +18,14 @@ import zmaster587.advancedRocketry.space.ShipEntryController;
 import zmaster587.advancedRocketry.space.ShipLedger;
 import zmaster587.advancedRocketry.space.SlotBinder;
 import zmaster587.advancedRocketry.space.SpaceManager;
+import zmaster587.advancedRocketry.universe.BodyEphemeris;
+import zmaster587.advancedRocketry.universe.CellFrame;
+import zmaster587.advancedRocketry.universe.SystemBody;
+import zmaster587.advancedRocketry.universe.SystemBodyKind;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
@@ -359,5 +365,82 @@ public class ShipEntryControllerTest {
         // No physics mod -> no clamp -> the configured orbit height is untouched.
         assertEquals(1000,
                 ShipEntryController.effectiveEntryCeiling(1000, Double.POSITIVE_INFINITY));
+    }
+
+    /**
+     * How far {@code coord} lies from {@code where}, in blocks. Measured rather than compared field by
+     * field: what this test is about is WHICH POINT was chosen, and a distance says that without also
+     * pinning the sector/local split production happens to express it in.
+     */
+    private static double gapTo(GalacticCoord coord, AbsolutePos where) {
+        return AbsolutePos.ofSectorLocal(coord.sectorX(), coord.sectorY(), coord.sectorZ(),
+                coord.localX(), coord.localY(), coord.localZ()).distanceTo(where);
+    }
+
+    /** An orbiting body: named at its own cell, riding a frame that carries it around its star. */
+    private static SystemBody orbiting(GalacticCoord name, int dimId) {
+        return new SystemBody(name,
+                CellFrame.of(AbsolutePos.ofCellName(name),
+                        BodyEphemeris.orbit(100d, 0.0, 0.0, false, 1000d, 1_000_000L)),
+                BodyEphemeris.STATIC, SystemBodyKind.PLANET, dimId, 0);
+    }
+
+    /**
+     * This test fails if production breaks the contract that a ship arriving in space is put beside
+     * where its launch body IS, rather than beside the address that body is named after — so the
+     * spawn ring tracks a planet along its orbit instead of standing at a fixed point it has left.
+     */
+    @Test
+    public void anArrivalIsAimedAtTheBodyAndNotAtTheNameItIsCalledAfter() {
+        GalacticCoord name = GalacticCoord.ofSectorLocal(19, 0, 0, 0, 0, 0);
+        SystemBody planet = orbiting(name, LAUNCH_DIM);
+        List<SystemBody> atAddress = new ArrayList<>();
+        atAddress.add(planet);
+
+        // Even at the epoch the body does not stand at its own name: the name is its CELL, and an
+        // orbiting body sits an orbital radius away from that cell's centre from the very first tick.
+        // So the gap the old aim ignored is never zero, not even before anything has moved.
+        assertEquals("the aim lands ON the body, at tick 0 as much as later",
+                0.0, gapTo(ShipEntryController.aimPoint(atAddress, LAUNCH_DIM, 0L, name),
+                        planet.absoluteAt(0L)), 1e-6);
+        assertTrue("and the name is already an orbital radius away from it",
+                gapTo(name, planet.absoluteAt(0L)) > 1_000_000d);
+
+        // Later the body has moved on and the name still has not. The aim must follow the body: this
+        // is the whole defect — a ship was ringed around the name while the planet was elsewhere.
+        // A QUARTER of the orbital period below, deliberately: a whole number of periods puts the body
+        // back where it started and the assertion below would compare a point with itself and pass.
+        long later = 250L;
+        GalacticCoord aim = ShipEntryController.aimPoint(atAddress, LAUNCH_DIM, later, name);
+        assertEquals("the aim lands on the body at that tick", 0.0,
+                gapTo(aim, planet.absoluteAt(later)), 1e-6);
+        assertNotEquals("and by then that is a different point from the epoch's",
+                ShipEntryController.aimPoint(atAddress, LAUNCH_DIM, 0L, name), aim);
+
+        // A moon shares its parent's NAME, so an address can hold several bodies in different places.
+        // The one a ship is leaving is the one whose DIMENSION it launched from.
+        List<SystemBody> family = new ArrayList<>();
+        family.add(orbiting(name, LAUNCH_DIM + 1));
+        family.add(planet);
+        assertEquals("the launch dimension picks which of the family is aimed at", 0.0,
+                gapTo(ShipEntryController.aimPoint(family, LAUNCH_DIM, later, name),
+                        planet.absoluteAt(later)), 1e-6);
+
+        // An EMPTY address holds no body, so there is no position that beats the name: an unplaced
+        // launch or the config home anchor. This one is a real answer and not a degraded one.
+        assertEquals("with no body there, the name is the only place there is",
+                name, ShipEntryController.aimPoint(new ArrayList<SystemBody>(), LAUNCH_DIM, later, name));
+        assertEquals("and so does a missing list",
+                name, ShipEntryController.aimPoint(null, LAUNCH_DIM, later, name));
+
+        // A NON-empty address that does not hold the launch body is a different case entirely, and it
+        // must not be confused with the one above: bodies are there, the ship's own is not, and the
+        // name it falls back to is exactly the defect this method removes. It still places the ship —
+        // an arrival is never refused — but production REPORTS it, so it cannot pass for a working
+        // aim. The value is asserted here; that it is loud is the point of the branch.
+        List<SystemBody> strangers = new ArrayList<>();
+        strangers.add(orbiting(name, LAUNCH_DIM + 7));
+        assertEquals("a launch body missing from its own address still places the ship, at the name",
+                name, ShipEntryController.aimPoint(strangers, LAUNCH_DIM, later, name));
     }
 }
