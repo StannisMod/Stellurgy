@@ -11716,8 +11716,41 @@ public class TestProbeCommand extends CommandBase {
                 send(sender, "{\"error\":\"star not found\",\"id\":" + id + "}");
                 return;
             }
+            // planets/planetDims report what is ATTACHED to this star object, which is not the same
+            // question as which dimensions name it. A body carries a starId from the moment it is
+            // parsed, but it enters the star's own map only when setStar resolves a REGISTERED star —
+            // so a catalogue can be full of bodies that name a star none of which the star holds, and
+            // everything downstream that walks getPlanets() (the system body list, the cell sky, the
+            // navigation crystal) sees an almost-empty system. Reporting the two counts side by side
+            // is what makes that state visible instead of merely puzzling.
+            java.util.List<zmaster587.advancedRocketry.api.dimension.IDimensionProperties> attached =
+                    star.getPlanets();
+            StringBuilder dims = new StringBuilder("[");
+            int named = 0;
+            for (int probeDim : DimensionManager.getInstance().getRegisteredDimensions()) {
+                DimensionProperties p = DimensionManager.getInstance().getDimensionProperties(probeDim);
+                if (p != null && p.getStarId() == id) {
+                    named++;
+                }
+            }
+            for (int i = 0; attached != null && i < attached.size(); i++) {
+                if (i > 0) {
+                    dims.append(',');
+                }
+                dims.append(attached.get(i).getId());
+            }
+            dims.append(']');
             send(sender, "{\"ok\":true,\"id\":" + id
                     + ",\"isBlackHole\":" + star.isBlackHole()
+                    + ",\"planets\":" + (attached == null ? 0 : attached.size())
+                    + ",\"numPlanets\":" + star.getNumPlanets()
+                    // How many bodies this system's retinue may hold. Reported because a zero here is
+                    // indistinguishable, from outside, from a system that genuinely has nothing: both
+                    // draw a sky with a star and whatever was authored, and only this field says which
+                    // of the two you are looking at.
+                    + ",\"maxRetinue\":" + star.getMaxRetinueBodies()
+                    + ",\"dimsNamingThisStar\":" + named
+                    + ",\"planetDims\":" + dims
                     + ",\"name\":\"" + escapeJson(String.valueOf(star.getName())) + "\"}");
             return;
         }

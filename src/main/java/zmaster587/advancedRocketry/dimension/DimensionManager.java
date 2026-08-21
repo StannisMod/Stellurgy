@@ -927,13 +927,22 @@ public class DimensionManager implements IGalaxy {
             // (resetFromXml, or a re-copied config) this loop re-ran and accreted
             // duplicate random planets every load. Gate on the true first-run
             // discriminator: only generate randoms when no persisted dims exist.
-            if (!loadedFromXML && loadedPlanets.isEmpty()) {
-                // Carry each system's body count into the universe layer instead of spending it on a
-                // second world-making model here — see the sibling site above.
-                for (StellarBody star : dimCouplingList.stars) {
-                    star.setMaxRetinueBodies(loader.getMaxNumPlanets(star)
-                            + loader.getMaxNumGasGiants(star));
+            // Carry each system's body count into the universe layer instead of spending it on a
+            // second world-making model here — see the sibling site above.
+            //
+            // NOT gated on the first run. The gate above exists because this loop USED to generate
+            // random planets, and re-running that accreted duplicates every load; carrying a count is
+            // idempotent and has no such hazard. Left under the gate it meant a star's retinue size
+            // was known only in the session that created the world — every reload started it at zero,
+            // `withDerivedRetinue` then returned the authored list untouched, and a system that had
+            // shown its whole retinue came back holding only what was explicitly written down.
+            for (StellarBody star : dimCouplingList.stars) {
+                StellarBody registered = DimensionManager.getInstance().getStar(star.getId());
+                int retinue = loader.getMaxNumPlanets(star) + loader.getMaxNumGasGiants(star);
+                if (registered != null) {
+                    registered.setMaxRetinueBodies(retinue);
                 }
+                star.setMaxRetinueBodies(retinue);
             }
 
             // Buffer authored galactic anchor coords for the Layer-1 universe registry. Worlds are not

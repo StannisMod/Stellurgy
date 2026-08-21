@@ -691,7 +691,21 @@ public class XMLPlanetLoader {
                 }
             }
             nodeStar.setAttribute(ATTR_SIZE, Float.toString(star.getSize()));
-            nodeStar.setAttribute(ATTR_NUMPLANETS, "0");
+            // How many bodies this system's retinue may hold. This was the literal "0" for both
+            // attributes from 2024-02-02 until 2026-08-21, and harmless for all of that time because
+            // nothing read the number back out of a SAVED world: the old model spent the count at
+            // world creation, registering its random planets as real dimensions that were then written
+            // out as <planet> elements like any other. The procedural universe reads it instead —
+            // `UniverseRegistry.withDerivedRetinue` returns the authored list untouched when the count
+            // is zero — so from the moment that landed, every reload wrote every system's content down
+            // to whatever was explicitly authored, and a player who had seen a full system saw a star
+            // and a home planet.
+            //
+            // The planets/gas-giants SPLIT is collapsed into the first attribute on purpose: both of
+            // its readers add the two together and neither asks for one alone, so carrying the total
+            // round-trips exactly what anybody consumes, while inventing a split here would state a
+            // composition the star does not hold.
+            nodeStar.setAttribute(ATTR_NUMPLANETS, Integer.toString(star.getMaxRetinueBodies()));
             nodeStar.setAttribute(ATTR_NUMGASPLANETS, "0");
 
             for (StellarBody star2 : star.getSubStars()) {
