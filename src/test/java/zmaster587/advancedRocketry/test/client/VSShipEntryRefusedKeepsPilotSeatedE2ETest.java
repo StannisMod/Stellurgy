@@ -57,6 +57,9 @@ public class VSShipEntryRefusedKeepsPilotSeatedE2ETest {
 
     private static final Pattern BUILDER_POS =
             Pattern.compile("\"builderPos\":\\[(-?\\d+),(-?\\d+),(-?\\d+)]");
+    private static final Pattern AFC_X = Pattern.compile("\"afcX\":(-?\\d+)");
+    private static final Pattern AFC_Y = Pattern.compile("\"afcY\":(-?\\d+)");
+    private static final Pattern AFC_Z = Pattern.compile("\"afcZ\":(-?\\d+)");
     private static final Pattern POS_Y = Pattern.compile("\"posY\":(-?[0-9.E\\-]+)");
     private static final Pattern DUMMY_ID = Pattern.compile("\"dummyId\":(-?\\d+)");
     /** Ledger #264 discriminator: the seat's own delivery counters, sampled across the climb. */
@@ -285,13 +288,15 @@ public class VSShipEntryRefusedKeepsPilotSeatedE2ETest {
         // declined, the entry declined, or nobody was there to tell - and these two readings
         // separate all four. `lastDecision` NEVER-ASKED with a maxShipY under the ceiling is the
         // first of them, and it exonerates every part of the entry path.
+        String gate = exec("artest space entry-gate 0 " + shipUuid);
         assertTrue("a pilot whose entry is refused (pool exhausted) must be TOLD so in his own "
                         + "chat - a silent refusal reads as a dead ship. chat="
                         + bot().reportChat(8) + " subsystem=" + exec("artest space subsystem-status")
                         + " maxShipY=" + maxShipY
                         + " delivery(attempt:recv/deliv)=[" + diag.toString().trim() + "]"
                         + " climb(attempt:y/velY)=[" + climb.toString().trim()
-                        + "] gate=" + exec("artest space entry-gate 0 " + shipUuid),
+                        + "] gate=" + gate
+                        + " physics=" + physDiag(gate, shipUuid),
                 refusalLine != null);
 
         // Still seated: two consecutive positive samples (a lost seat can read riding=true for a
@@ -368,6 +373,35 @@ public class VSShipEntryRefusedKeepsPilotSeatedE2ETest {
 
     private static boolean isRiding(JsonObject riding) {
         return riding != null && riding.has("riding") && riding.get("riding").getAsBoolean();
+    }
+
+    /**
+     * Why a ship that IS being commanded is not moving — read only on the failing path.
+     *
+     * <p>The delivery trace above exonerates the packet chain (received == delivered, the guard and
+     * the AFC both resolved), and the climb trace shows the ship pinned. What those two cannot
+     * separate is what happens AFTER the input lands: the tile being reconstructed under the ship
+     * (a fresh {@code afcIdentity} between reads means a command written to one instance is invisible
+     * to the next), the controller never being invoked ({@code controllerTicks} flat), this ship's
+     * computer never being collected as a force controller at all ({@code controllers} 0), the
+     * physics loop skipping the ship on one of its three conjuncts, or a command that never became a
+     * velocity ({@code pilotCmdVel}). Those need opposite fixes, which is why they are separate
+     * fields — and why a red that reports none of them can only be answered by guessing.
+     *
+     * <p>Read HERE and not in the climb loop on purpose: {@code phys-diag} force-loads the computer's
+     * chunk, so sampling it along the way would make the watcher a load source in the very climb it
+     * is watching. The computer's position comes out of the gate readout that was just taken, so this
+     * costs one extra command and only on the way to a failure.
+     */
+    private String physDiag(String gateJson, String shipUuid) throws Exception {
+        Matcher ax = AFC_X.matcher(gateJson);
+        Matcher ay = AFC_Y.matcher(gateJson);
+        Matcher az = AFC_Z.matcher(gateJson);
+        if (!ax.find() || !ay.find() || !az.find()) {
+            return "(the gate readout named no flight computer, so its state cannot be read)";
+        }
+        return exec("artest vs phys-diag 0 " + shipUuid + " "
+                + ax.group(1) + " " + ay.group(1) + " " + az.group(1));
     }
 
     private String assembleFixture(int baseX, int baseY, int baseZ, String variant) throws Exception {

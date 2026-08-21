@@ -116,13 +116,25 @@ public class VSShipRenderPoseSkewE2ETest extends AbstractClientE2ETest {
         // freshly-teleported client may not tick until its chunks stream in).
         exec("tp @a " + sx + " " + (sy + 7) + " " + sz + " 0 0");
         double preY = bot().reportState().get("playerY").getAsDouble();
+        long preTicks = bot().reportState().get("ticks").getAsLong();
         // Event-gated fall detection (load-scaled ceiling + early exit): a fixed 60-iteration budget can
         // miss a slow chunk-stream / tick start under concurrent-fork load and red a healthy encounter.
         ClientPoll.Result<Double> fall = ClientPoll.until(bot()::waitTicks,
                 () -> bot().reportState().get("playerY").getAsDouble(),
                 y -> Math.abs(y - preY) > 0.4, 2, 60);
-        assertTrue("the teleported client must start falling before the hull leg "
-                + "(client tick/chunk-stream stall)", fall.satisfied);
+        // WHAT THIS FAILURE MAY NOT BLAME. It used to read "client tick/chunk-stream stall", and the
+        // arrangement rules that out by construction: the poll advances through waitTicks, which ERRORS
+        // on its own load-scaled timeout, so a completed poll is proof the client ticked - the delta is
+        // printed rather than asserted so the proof travels with the red. What remains is either the
+        // teleport never landing on the client (preY still at the old altitude, nowhere near the target)
+        // or something genuinely holding him up - the inverted hull's own collision or the deck capture,
+        // both of which would be the PRODUCT WORKING. deck-capture is read-only and names which.
+        long tickDelta = bot().reportState().get("ticks").getAsLong() - preTicks;
+        assertTrue("the teleported client must start falling before the hull leg."
+                + " target=" + (sy + 7) + " preY=" + preY + " poll=" + fall
+                + " clientTicksElapsed=" + tickDelta
+                + " (so this is NOT a tick stall) capture=" + exec("artest vs deck-capture"),
+                fall.satisfied);
 
         // Wait for the hull-stand hold to actually engage — the leg proves nothing otherwise.
         boolean hullHeld = false;

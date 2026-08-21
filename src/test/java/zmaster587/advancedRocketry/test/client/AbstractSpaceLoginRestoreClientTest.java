@@ -1392,9 +1392,13 @@ public abstract class AbstractSpaceLoginRestoreClientTest {
      * client's own rendered player altitude out.
      */
     protected double climbWith(int key, double from) throws Exception {
-        // THE MULTIPLIER STAYS. A held key is re-sent by the CLIENT once per rendered FRAME, so under
-        // frame starvation the same climb takes more client ticks - wall-clock-bound work, which is
-        // the one shape a fork scale measures correctly.
+        // THE MULTIPLIER STAYS, but NOT for the reason this comment used to give. A held key is
+        // sampled and re-sent per CLIENT TICK - on change, plus a re-assert every
+        // PilotInputCadence.REPEAT_TICKS - not once per rendered frame. What a loaded box stretches
+        // is therefore the client's TICK rate, not its frame rate, and that is still wall-clock-bound
+        // work a fork scale measures correctly. The frame story was refuted 2026-08-21 by arithmetic
+        // on a red: 111 packets over ~2150 ticks is exactly the 20-tick re-assert, i.e. no starvation
+        // at all - so a climb that stalls is NOT explained by this budget and must not be read that way.
         int budget = (int) (40 * TestTimeouts.factor());
         double last = from;
         bot().holdKey(key);

@@ -210,8 +210,9 @@ public class VSShipPoweredEntryE2ETest {
             // ---- ENTRY LEG: keep climbing until the ledger records the settled entry. ---------
             // While the crossing runs, the origin-world ship vanishes (the cut), so posY going
             // silent is progress, not failure; the ledger is the single source of arrival truth.
-            // THE MULTIPLIER STAYS: a held key is re-sent per rendered FRAME, so frame starvation
-        // stretches the same climb in ticks.
+            // THE MULTIPLIER STAYS: a held key is sampled and re-sent per CLIENT TICK (on change,
+        // plus a re-assert every PilotInputCadence.REPEAT_TICKS), so a loaded box stretches the climb
+        // through the client's TICK rate. NOT per rendered frame - that reading was refuted 2026-08-21.
         int climbBudget = (int) (800 * TestTimeouts.factor());
             int ledger = 0;
             double lastY = yControl;

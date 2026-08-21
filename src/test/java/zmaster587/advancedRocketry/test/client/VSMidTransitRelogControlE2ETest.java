@@ -259,9 +259,11 @@ public class VSMidTransitRelogControlE2ETest extends AbstractClientE2ETest {
     /** Hold {@code key} until the client-rendered rider altitude climbs {@link #MIN_CLIMB} over
      *  {@code from} (bounded, early-exit); returns the last observed altitude. */
     private double climbWith(int key, double from) throws Exception {
-        // THE MULTIPLIER STAYS, and this is what it waits on: a held key is re-sent by the CLIENT
-        // once per rendered FRAME, so under frame starvation the same climb needs more client ticks
-        // to happen. That is wall-clock-bound work, which is the one shape a fork scale measures.
+        // THE MULTIPLIER STAYS, and this is what it waits on: a held key is sampled and re-sent per
+        // CLIENT TICK - on change, plus a re-assert every PilotInputCadence.REPEAT_TICKS - so a loaded
+        // box stretches the climb through the client's TICK rate. Wall-clock-bound work, which is the
+        // one shape a fork scale measures. (NOT "once per rendered frame": that was the standing
+        // explanation until 2026-08-21 and it is false.)
         int budget = (int) (40 * TestTimeouts.factor());
         double last = from;
         bot().holdKey(key);
