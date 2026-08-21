@@ -199,8 +199,12 @@ public class SystemContentTest {
         GalacticCoord anchor = GalacticCoord.ofSectorLocal(5, 5, 5, 0, 0, 0);
         reg.place(anchor, 4243);
 
-        // Without content resolution (star not in the catalogue) the seam falls back to the anchor.
-        assertEquals("catalogue-miss fallback = the system anchor", Optional.of(anchor), reg.coordForPlanet(p));
+        // Without content resolution (star not in the catalogue) the body has no cell to be addressed
+        // by, and the seam says so. It used to answer with the system ANCHOR — a coordinate a caller
+        // cannot tell from a real one, and one that denotes the star rather than the world: a first
+        // memory crystal seeded from it carried a planet's name at its star's address.
+        assertFalse("a body its own system cannot account for has no address, and the seam must not"
+                + " substitute the star's", reg.coordForPlanet(p).isPresent());
 
         // With content resolvable, the planet resolves to its OWN cell, which is where its body sits.
         UniverseRegistry.setStarLookup(id -> id == 4243 ? star : null);

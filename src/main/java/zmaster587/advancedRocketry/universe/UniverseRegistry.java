@@ -975,7 +975,21 @@ public final class UniverseRegistry extends WorldSavedData implements CellFrames
                 return Optional.of(body.name()); // the body's OWN cell (moon: the parent's)
             }
         }
-        return anchor; // body not derivable from content — lenient anchor fallback
+        // A body its own system cannot account for has NO address, and saying so is the only honest
+        // answer. This used to return the system anchor, which is a valid-looking coordinate a caller
+        // cannot tell from a real one — and it denotes the STAR. A first memory crystal seeded from it
+        // carries a planet's name at its star's cell, and a jump aimed at that entry flies to the
+        // star; the entry path resolves launch coordinates through here too. Every production caller
+        // already handles absence (`isPresent`, `orElse(null)`), so the empty is not a new burden.
+        if (SystemContent.reportOnce("unaddressable:" + props.getStarId() + ':' + props.getId())) {
+            LOGGER.error("dimension {} names star {} but that system's content does not account for "
+                    + "it, so it has no cell to be addressed by. Answering EMPTY. Anything that needs "
+                    + "to reach this body — the navigation crystal, a jump, an entry placement — must "
+                    + "treat it as unreachable rather than aim at the system's anchor, which denotes "
+                    + "the star and not this world.",
+                    props.getId(), props.getStarId());
+        }
+        return Optional.empty();
     }
 
     /**
