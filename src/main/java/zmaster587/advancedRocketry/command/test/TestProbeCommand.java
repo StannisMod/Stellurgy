@@ -226,6 +226,9 @@ public class TestProbeCommand extends CommandBase {
                 case "player":
                     handlePlayer(server, sender, tail(args));
                     break;
+                case "events":
+                    handleEvents(sender, tail(args));
+                    break;
                 case "seal-detector":
                     handleSealDetector(server, sender, tail(args));
                     break;
@@ -18289,6 +18292,59 @@ public class TestProbeCommand extends CommandBase {
      *       (i.e. {@code openContainer != inventoryContainer}).</li>
      * </ul>
      */
+    /**
+     * {@code /artest events mark} and {@code /artest events since <seq>} — the ordered log of what
+     * HAPPENED on this side, so a test can wait for an event rather than sample a value.
+     *
+     * <p>The mark is taken BEFORE the action under test; the read afterwards returns everything since
+     * it, in order. See {@link TestEventLog} for why a poll cannot do this.</p>
+     *
+     * <p>Both replies carry {@code recording} and {@code dropped}: an empty log must never be
+     * confusable with a recorder that was never subscribed, nor with a ring that overflowed.</p>
+     */
+    private void handleEvents(ICommandSender sender, String[] args) {
+        if (args.length >= 1 && "mark".equalsIgnoreCase(args[0])) {
+            send(sender, "{\"ok\":true,\"seq\":" + TestEventLog.mark()
+                    + ",\"recording\":" + TestEventLog.isRecording() + "}");
+            return;
+        }
+        if (args.length >= 2 && "since".equalsIgnoreCase(args[0])) {
+            long from = (long) parseDoubleOr(args[1], 0);
+            String wanted = args.length >= 3 ? args[2] : null;
+            StringBuilder sb = new StringBuilder("{\"ok\":true,\"recording\":")
+                    .append(TestEventLog.isRecording())
+                    .append(",\"dropped\":").append(TestEventLog.dropped())
+                    .append(",\"from\":").append(from)
+                    .append(",\"events\":[");
+            int n = 0;
+            for (TestEventLog.Record r : TestEventLog.since(from)) {
+                if (wanted != null && !wanted.equalsIgnoreCase(r.type)) {
+                    continue;
+                }
+                if (n++ > 0) {
+                    sb.append(',');
+                }
+                sb.append("{\"seq\":").append(r.seq)
+                        .append(",\"tick\":").append(r.tick)
+                        .append(",\"side\":\"").append(r.side).append('"')
+                        .append(",\"type\":\"").append(r.type).append('"');
+                if (!r.payload.isEmpty()) {
+                    sb.append(',').append(r.payload);
+                }
+                sb.append('}');
+            }
+            sb.append("],\"count\":").append(n).append('}');
+            send(sender, sb.toString());
+            return;
+        }
+        if (args.length >= 1 && "reset".equalsIgnoreCase(args[0])) {
+            TestEventLog.reset();
+            send(sender, "{\"ok\":true}");
+            return;
+        }
+        send(sender, "{\"error\":\"usage: events mark | events since <seq> [type] | events reset\"}");
+    }
+
     private void handlePlayer(MinecraftServer server, ICommandSender sender, String[] args) {
         if (args.length < 1) {
             send(sender, "{\"error\":\"usage: /artest player inv-bypass <add|remove|status> | open-container\"}");

@@ -565,6 +565,30 @@ public final class ClientBot implements Closeable {
         return assertOk(execute(command("report_sounds")));
     }
 
+    /**
+     * The client event log's current sequence, taken BEFORE the action under test.
+     *
+     * <p>The client half of the ordered event log. Its first citizen is
+     * {@code chunk_data_applied} — the instant the client can actually SEE a chunk's blocks, which
+     * no Forge event reports (the load event fires on an empty chunk, before the data is applied).
+     * A test that teleports a player onto freshly-sent terrain has to wait for THAT, not for a
+     * number of ticks: movement is client-driven, so a client without the blocks simulates a fall
+     * and carries the server's player down with it.</p>
+     */
+    public JsonObject eventMark() throws IOException {
+        return assertOk(execute(command("event_mark")));
+    }
+
+    /** Client events recorded at or after {@code seq}, in order; {@code type} filters, or null. */
+    public JsonObject eventsSince(long seq, String type) throws IOException {
+        JsonObject command = command("event_since");
+        command.addProperty("seq", seq);
+        if (type != null) {
+            command.addProperty("type", type);
+        }
+        return assertOk(execute(command));
+    }
+
     /** Resets the played-sound log consumed by {@link #reportSounds()}. */
     public void clearSounds() throws IOException {
         assertOk(execute(command("clear_sounds")));

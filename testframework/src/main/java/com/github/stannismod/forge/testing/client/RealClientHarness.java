@@ -258,6 +258,12 @@ public final class RealClientHarness implements AutoCloseable {
         // driver can't provide a stable context — keeps the harness alive on
         // machines whose GL driver crashes on legacy MC 1.12 rendering.
         javaArgs.add("-Dorg.lwjgl.opengl.Display.allowSoftwareOpenGL=true");
+        // The harness's OWN coremod, so its mixin config is queued while mixin still accepts
+        // configurations. Registering it from the bootstrap at FML init is too late: the call
+        // throws nothing, does nothing, and leaves a recorder that reports itself as running
+        // while recording nothing. A normal game never sets this property, never discovers the
+        // class (it is compiled into the test source set only) and pays nothing for any of it.
+        javaArgs.add("-Dfml.coreMods.load=com.github.stannismod.forge.testing.mixin.ForgeTestCoreMod");
         javaArgs.add("-cp");
         javaArgs.add(launcherClassPath);
         javaArgs.add(launcherClass);

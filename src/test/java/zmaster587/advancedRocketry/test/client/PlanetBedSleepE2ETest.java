@@ -173,49 +173,33 @@ public class PlanetBedSleepE2ETest {
         // with them. Measured 2026-08-21: teleported to y=151, read back at 142.6 twenty ticks
         // later (free fall) and at 64 by the time the sleep was attempted. Waiting on the arrival
         // of the block is waiting for the precondition; a longer fixed sleep would only be a guess.
-        // Poll the client's own view WHILE HOLDING HIM THERE. Chunks stream to the client around
-        // where the player IS, so waiting before putting him on the platform waits for nothing; and
-        // once he is on it he falls, taking himself out of range of the chunk he is waiting for. So
-        // the teleport is repeated each iteration — this is a wait for a real precondition, not a
-        // tolerance.
+        // WAIT FOR THE EVENT, not for a value and not for a number of ticks. The client records
+        // `chunk_data_applied` at the TAIL of its chunk-data handler — the first instant it can see
+        // these blocks. No Forge event reports that moment: the load event fires on an EMPTY chunk,
+        // before the data is applied, so a recorder on it would confidently report a chunk that
+        // contains nothing.
         //
-        // NOTE ON THE PROBE: its `loaded` field is worthless on the client —
-        // `WorldClient.isChunkLoaded` returns `allowEmpty || …` and `isBlockLoaded` passes true, so
-        // it is unconditionally true everywhere, and an unreceived chunk reads as AIR from the
-        // EmptyChunk. The block identity is the only part of that reply worth reading.
-        String clientBlock = "";
+        // He is teleported inside the wait because chunks stream around where the player IS: waiting
+        // before putting him there waits for nothing, and once he is there he falls out of range of
+        // the very chunk he is waiting for. This is a wait for a PRECONDITION; the previous form
+        // waited 20 ticks and hoped, which is why this class was red for a month.
+        long chunkMark = readLong(clientHarness.bot().eventMark().toString(), "seq");
+        assertTrue("ARRANGEMENT: the client event recorder is not running, so an empty log below"
+                + " would mean nothing: " + clientHarness.bot().eventMark(),
+                clientHarness.bot().eventMark().get("recording").getAsBoolean());
+        String chunkSeen = "";
         for (int attempt = 0; attempt < 60; attempt++) {
             exec("tp " + PLAYER + " 8.5 " + BED_Y + " 7.5");
             clientHarness.bot().waitTicks(5);
-            clientBlock = clientHarness.bot().blockState(BED_X, PLAT_Y, 7).toString();
-            if (clientBlock.contains("stone")) {
+            chunkSeen = clientHarness.bot()
+                    .eventsSince(chunkMark, "chunk_data_applied").toString();
+            if (chunkSeen.contains("\"cx\":0") && chunkSeen.contains("\"cz\":0")) {
                 break;
             }
         }
-        // Read the client's view AFTER putting him over the platform, not before: the earlier form
-        // of this check ran while he was still at the arrival point, so "the client shows air" could
-        // equally have meant "he is nowhere near that chunk yet". The server-side pair below is the
-        // discriminator that no client reply can supply — the same block out of the player's OWN
-        // world and out of `server.getWorld(dim)`, plus whether those are one object.
-        exec("tp " + PLAYER + " 8.5 " + BED_Y + " 7.5");
-        clientHarness.bot().waitTicks(5);
-        String worldCheck = exec("artest player world-check " + BED_X + " " + PLAT_Y + " 7");
-        clientBlock = clientHarness.bot().blockState(BED_X, PLAT_Y, 7).toString();
-        assertTrue("ARRANGEMENT: the client never received the sleeping platform, so it will keep"
-                + " simulating a fall through it. client=" + clientBlock
-                + " worldCheck=" + worldCheck
-                // WHICH WORLD IS THE CLIENT LOOKING AT. `blockState` reads mc.world, so a client
-                // still rendering the dimension it came FROM answers about that one — and (8,150,7)
-                // is air in most of them. This is the last way "the client shows air" can mean
-                // something other than a desync.
-                + " clientDim=" + clientHarness.bot().reportWeather()
-                + " clientState=" + clientHarness.bot().reportState()
-                // BOTH SIDES, because "the client has not got it yet" and "it was never written"
-                // are different bugs and the client's answer alone cannot tell them apart. The fill
-                // reported ok:true either way — that only says the command ran.
-                + " server=" + exec("artest space get-block " + DIM + " " + BED_X + " " + PLAT_Y + " 7")
-                + " fill=" + platform,
-                clientBlock.contains("stone"));
+        assertTrue("ARRANGEMENT: the client never applied the platform's chunk data, so it keeps"
+                + " simulating a fall through blocks the server has: " + chunkSeen,
+                chunkSeen.contains("\"cx\":0") && chunkSeen.contains("\"cz\":0"));
 
         // Vanilla console /tp (same-dim) puts the player on the platform, a
         // bed-reach-range step north of the bed head (|Δz| = 2.5 ≤ 3).
@@ -250,31 +234,35 @@ public class PlanetBedSleepE2ETest {
         // head) -> production trySleep -> fully asleep after 100 ticks -> the
         // sleep skip runs WorldServer's setWorldTime through MixinWorldServer's
         // rotationalPeriod rounding.
+        // THE MARK, taken BEFORE the click. Everything the server records from here on is readable
+        // afterwards, so nothing can be missed between two samples and there is no race at the start
+        // — which is what a poll on the world clock could never give this test.
+        zmaster587.advancedRocketry.test.Events events = new zmaster587.advancedRocketry.test.Events(
+                this::exec, clientHarness.bot()::waitTicks);
+        long mark = events.mark();
+
         JsonObject click = clientHarness.bot().interactBlock(BED_X, BED_Y, BED_FOOT_Z);
         assertTrue("bed right-click must not error: " + click, click.has("result"));
 
-        // THE PLAYER MUST ACTUALLY GET INTO THE BED, asserted before the clock is ever consulted.
-        // Without this the only witness is the world time, and a clock that did not jump reports
-        // "the click missed", "trySleep refused" and "the sleep was broken before it completed" with
-        // the same silence. Measured 2026-08-21: this test failed for a month at
-        // `worldTime=20622` — the staged 20000 plus exactly the ticks the poll ran, i.e. the clock
-        // simply ticking — and the message could only offer the reader a choice of two causes.
-        String sleepState = awaitSleeping();
-        assertTrue("the player never got into the bed, so nothing downstream is about the sleep"
-                        + " SKIP at all — it is about the boarding. click=" + click
-                        + " state=" + sleepState
-                        // vanilla's BlockBed sends every trySleep refusal to the player as a STATUS
-                        // message ("you may not rest now…", "you can only sleep at night"), so the
-                        // reason is already in his own client. Carrying it here is what turns "he
-                        // did not sleep" into a named cause.
-                        + " chat=" + clientHarness.bot().reportChat(6)
-                        // AR refuses the sleep SILENTLY when the air at the bed is not breathable
-                        // (PlanetEventHandler sets SleepResult.OTHER_PROBLEM, and vanilla's BlockBed
-                        // sends the player no message for that one result), so the atmosphere is the
-                        // only witness that separates it from a vanilla refusal.
-                        + " air=" + String.join("\n",
-                                serverHarness.client().execute("artest oxygen player " + PLAYER)),
-                sleepState.contains("\"sleeping\":true"));
+        // THE CHAIN, in order. `result:SUCCESS` above is the CLIENT's own prediction and says
+        // nothing about the server; `right_click_block` is only recorded if the click actually
+        // reached it, and the reach check drops a far-away click before that event is ever fired.
+        // So a failure here names WHICH link broke instead of reporting a world clock that did not
+        // move: for a month this test could only say `worldTime=20622`.
+        events.assertChain(mark, "a player who right-clicks a bed at planet-night must reach the"
+                        + " server, be offered the bed, and wake from it", 260,
+                "right_click_block", "sleep_in_bed", "player_wake_up");
+
+        // WHY THERE IS NO "is he asleep now?" POLL HERE ANY MORE.
+        //
+        // There was one, and the chain above made it fail on a HEALTHY run — which is the clearest
+        // demonstration of what a poll cannot do. Sleeping is TRANSIENT: it lasts about a hundred
+        // ticks. `assertChain` legitimately waits until `player_wake_up`, by which time the state a
+        // poll would sample is over, and the poll reports "he never got into the bed" about a player
+        // who slept and woke. The event log recorded all three events; the poll saw none of them.
+        //
+        // `sleep_in_bed` and `player_wake_up` in the chain are the same fact, asserted where it
+        // cannot evaporate between two samples.
 
         // Poll for the planetary dawn: next multiple of 30000 after 20000 is
         // exactly 30000. Vanilla's hard-coded rounding would give 24000 —
@@ -299,6 +287,14 @@ public class PlanetBedSleepE2ETest {
         return String.join("\n", serverHarness.client().execute(command));
     }
 
+    /** A long field of a JSON reply, failing loudly rather than substituting a plausible zero. */
+    private static long readLong(String json, String key) {
+        java.util.regex.Matcher m = java.util.regex.Pattern
+                .compile("\"" + key + "\":(-?\\d+)").matcher(json);
+        assertTrue("expected \"" + key + "\" in: " + json, m.find());
+        return Long.parseLong(m.group(1));
+    }
+
     /** A numeric field of a probe reply, failing loudly rather than substituting a plausible zero. */
     private static double readDouble(String json, String key) {
         java.util.regex.Matcher m = java.util.regex.Pattern
@@ -313,24 +309,6 @@ public class PlanetBedSleepE2ETest {
         int start = raw.indexOf('{');
         assertTrue("dim time probe must return JSON: " + raw, start >= 0);
         return new JsonParser().parse(raw.substring(start)).getAsJsonObject();
-    }
-
-    /**
-     * Polls for the player to be IN the bed, and returns the last state read either way.
-     *
-     * <p>Deliberately not an assertion of its own: the caller reports it beside the click result, so
-     * a failure says which of the two halves of "he did not sleep" actually happened.</p>
-     */
-    private String awaitSleeping() throws Exception {
-        String last = "";
-        for (int waited = 0; waited < 200; waited += 10) {
-            last = String.join("\n", serverHarness.client().execute("artest player sleeping"));
-            if (last.contains("\"sleeping\":true")) {
-                return last;
-            }
-            clientHarness.bot().waitTicks(10);
-        }
-        return last;
     }
 
     /** Polls ~30 s for the planet clock to jump past the staged night (sleep takes 100+ ticks). */

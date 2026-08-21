@@ -161,6 +161,10 @@ if (propertyBool('enable_junit_testing')) {
     // its clone-sibling + publishToMavenLocal setup step. The external repo
     // (github.com/StannisMod/ForgeTestFramework) lives on for other consumers.
     sourceSets.test.java.srcDir 'testframework/src/main/java'
+    // The harness's own mixin config + class. They live in the TEST source set, so they are
+    // absent from the shipped jar entirely: a test-only mixin reaches from the harness INTO the
+    // product, never from production into itself, and a released game pays nothing for it.
+    sourceSets.test.resources.srcDir 'testframework/src/main/resources'
 }
 
 // Valkyrien Skies physics engine — vendored as a git subtree under valkyrienskies/

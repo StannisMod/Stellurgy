@@ -81,6 +81,22 @@ public final class ForgeTestClientBootstrap {
     private static final int PLAYED_SOUNDS_CAP = 256;
     private static final AtomicLong SOUNDS_TOTAL = new AtomicLong(0L);
 
+    /**
+     * The CLIENT half of the ordered event log (the server half lives in the mod's probe).
+     *
+     * <p>Same shape as the sound log above and for the same reason: a test must be able to WAIT FOR
+     * something that happened rather than sample a value that may not persist. Records are buffered,
+     * so a reader that arrives late still sees everything after its mark; {@code recording} is
+     * reported on every read so an empty log can never be mistaken for a recorder nobody
+     * subscribed.</p>
+     */
+    private static final Object EVENT_LOG_LOCK = new Object();
+    private static final java.util.ArrayDeque<String> EVENT_LOG = new java.util.ArrayDeque<>();
+    private static final int EVENT_LOG_CAP = 512;
+    private static long eventSeq;
+    private static long eventsDropped;
+    private static volatile boolean eventsRecording;
+
     private ForgeTestClientBootstrap() {
     }
 
@@ -90,11 +106,62 @@ public final class ForgeTestClientBootstrap {
         }
 
         installClientLogFile();
+        installEventMixins();
         FMLCommonHandler.instance().bus().register(new TickCounter());
         FMLCommonHandler.instance().bus().register(new SoundRecorder());
         Thread bridgeThread = new Thread(ForgeTestClientBootstrap::runBridge, "forge-test-client-bridge");
         bridgeThread.setDaemon(true);
         bridgeThread.start();
+    }
+
+    /**
+     * Register the harness's own mixin config, late but in time.
+     *
+     * <p>Mixin prepares a configuration when the classes it targets are transformed, so a config
+     * added here still applies to anything not yet loaded. {@code NetHandlerPlayClient} is loaded
+     * when the client CONNECTS, which is well after this runs at FML init — so no launch-time
+     * tweaker is needed for it, and the harness stays in charge of its own instrumentation.</p>
+     *
+     * <p>If that assumption ever stops holding the failure is loud, not silent: the config is
+     * {@code required}, and a test's {@code events mark} asserts {@code recording} before anything
+     * downstream is believed.</p>
+     */
+    private static void installEventMixins() {
+        // NOT a registration: by FML init the mixin environment has already chosen its
+        // configurations, and calling Mixins.addConfiguration here throws nothing and does nothing.
+        // (Measured: a recorder that reported `recording:true` and recorded nothing, forever — the
+        // exact false witness the flag exists to prevent.) The config is queued by the harness's own
+        // coremod at the early loader point; all that is read here is whether that happened.
+        eventsRecording = com.github.stannismod.forge.testing.mixin.ForgeTestCoreMod.isConfigQueued();
+        if (!eventsRecording) {
+            System.out.println("[forge-test] the harness mixin config was never queued —"
+                    + " client event recording is OFF (is -Dfml.coreMods.load set?)");
+        }
+    }
+
+    /**
+     * Called from the harness's own mixin at the TAIL of {@code handleChunkData} — the first instant
+     * the client can actually see a chunk's blocks. See that mixin for why no Forge event will do.
+     */
+    public static void recordChunkApplied(int chunkX, int chunkZ, boolean full) {
+        recordEvent("chunk_data_applied", "\"cx\":" + chunkX + ",\"cz\":" + chunkZ
+                + ",\"full\":" + full);
+    }
+
+    private static void recordEvent(String type, String payload) {
+        if (!eventsRecording) {
+            return;
+        }
+        long tick = CLIENT_TICKS.get();
+        synchronized (EVENT_LOG_LOCK) {
+            EVENT_LOG.addLast("{\"seq\":" + (eventSeq++) + ",\"tick\":" + tick
+                    + ",\"side\":\"client\",\"type\":\"" + type + "\""
+                    + (payload == null || payload.isEmpty() ? "" : "," + payload) + "}");
+            while (EVENT_LOG.size() > EVENT_LOG_CAP) {
+                EVENT_LOG.removeFirst();
+                eventsDropped++;
+            }
+        }
     }
 
     private static void installClientLogFile() {
@@ -1093,6 +1160,46 @@ public final class ForgeTestClientBootstrap {
                 }
                 response.addProperty("managerLoaded", managerLoaded);
                 return response;
+            }
+            case "event_mark":
+                // The sequence a reader asks `event_since` for, taken BEFORE the action under test.
+                // That is what removes the start race a poll always has: records are buffered, so a
+                // reader arriving late still sees everything that happened after its mark.
+                synchronized (EVENT_LOG_LOCK) {
+                    JsonObject markReply = ok();
+                    markReply.addProperty("seq", eventSeq);
+                    markReply.addProperty("recording", eventsRecording);
+                    return markReply;
+                }
+            case "event_since": {
+                // Everything recorded at or after `seq`, in order, optionally filtered by type.
+                // `recording` and `dropped` ride along on purpose: "nothing happened", "nobody was
+                // listening" and "the ring overflowed" must never be the same reply.
+                long from = requireInt(request, "seq");
+                String wanted = request.has("type") ? request.get("type").getAsString() : null;
+                StringBuilder sb = new StringBuilder("{\"ok\":true,\"recording\":")
+                        .append(eventsRecording).append(",\"dropped\":");
+                int matched = 0;
+                StringBuilder items = new StringBuilder();
+                synchronized (EVENT_LOG_LOCK) {
+                    sb.append(eventsDropped).append(",\"from\":").append(from).append(",\"events\":[");
+                    for (String record : EVENT_LOG) {
+                        int seqStart = record.indexOf(":") + 1;
+                        long seq = Long.parseLong(record.substring(seqStart, record.indexOf(',')));
+                        if (seq < from) {
+                            continue;
+                        }
+                        if (wanted != null && !record.contains("\"type\":\"" + wanted + "\"")) {
+                            continue;
+                        }
+                        if (matched++ > 0) {
+                            items.append(',');
+                        }
+                        items.append(record);
+                    }
+                }
+                sb.append(items).append("],\"count\":").append(matched).append('}');
+                return new com.google.gson.JsonParser().parse(sb.toString()).getAsJsonObject();
             }
             case "clear_sounds":
                 // Reset the played-sound log (see report_sounds) so a test can

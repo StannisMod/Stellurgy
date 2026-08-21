@@ -53,6 +53,9 @@ public final class TestProbeCommandRegistration {
         // register the rocket-event recorder at server start so
         // counters are accurate from the first rocket lifecycle event.
         TestProbeCommand.RocketEventRecorder.ensureRegistered();
+        // The ordered event log. Subscribed here and nowhere else, so a shipped game has no
+        // subscriber, builds no record and pays nothing for what only a test wants to see.
+        TestEventLog.ServerRecorder.ensureRegistered();
         AdvancedRocketry.logger.info("Registered /artest test-only probe commands (-D" + FLAG + "=true)");
     }
 }

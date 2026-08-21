@@ -167,29 +167,30 @@ public class PlanetBedSleepLockedE2ETest {
         serverHarness.client().execute("artest tp " + DIM);
         waitForClientDim(DIM);
 
-        // WAIT FOR THE CLIENT TO ACTUALLY HAVE THE PLATFORM, holding him on it while it streams.
-        // Movement is client-driven: a client that has not received these chunks simulates a fall
-        // through blocks the server has, and its movement packets carry the server's player down
-        // with it. Measured 2026-08-21 on the sibling class: teleported to y=151, read back at 142.6
-        // twenty ticks later and at 64 by the time the bed was clicked — 87 blocks away, so the
-        // server dropped the right-click on its reach check without a word while the client still
-        // reported SUCCESS from its own prediction. Chunks stream around where the player IS, so the
-        // teleport is repeated each iteration rather than waited out once.
+        // WAIT FOR THE EVENT the client records when it APPLIES a chunk's data — the first instant
+        // it can see these blocks. Movement is client-driven: a client without them simulates a fall
+        // through terrain the server has and carries the server's player down with it, 87 blocks
+        // below the bed, where the reach check drops his click WITHOUT a word.
         //
-        // The probe's `loaded` field is worthless here — `WorldClient.isChunkLoaded` returns
-        // `allowEmpty || …` and `isBlockLoaded` passes true, so it is unconditionally true and an
-        // unreceived chunk reads as AIR out of the EmptyChunk. Only the block identity means anything.
-        String clientBlock = "";
+        // He is teleported inside the loop because chunks stream around where the player IS. This
+        // class previously polled the block itself, which is a value and not an event: it raced, and
+        // the race is why the class was intermittently red.
+        long chunkMark = clientHarness.bot().eventMark().get("seq").getAsLong();
+        assertTrue("ARRANGEMENT: the client event recorder is not running, so an empty log below"
+                        + " would mean nothing: " + clientHarness.bot().eventMark(),
+                clientHarness.bot().eventMark().get("recording").getAsBoolean());
+        String chunkSeen = "";
         for (int attempt = 0; attempt < 60; attempt++) {
             serverHarness.client().execute("tp " + PLAYER + " 8.5 " + BED_Y + " 7.5");
             clientHarness.bot().waitTicks(5);
-            clientBlock = clientHarness.bot().blockState(BED_X, PLAT_Y, 7).toString();
-            if (clientBlock.contains("stone")) {
+            chunkSeen = clientHarness.bot().eventsSince(chunkMark, "chunk_data_applied").toString();
+            if (chunkSeen.contains("\"cx\":0") && chunkSeen.contains("\"cz\":0")) {
                 break;
             }
         }
-        assertTrue("ARRANGEMENT: the client never received the sleeping platform, so it keeps"
-                + " simulating a fall through it: " + clientBlock, clientBlock.contains("stone"));
+        assertTrue("ARRANGEMENT: the client never applied the platform's chunk data, so it keeps"
+                        + " simulating a fall through blocks the server has: " + chunkSeen,
+                chunkSeen.contains("\"cx\":0") && chunkSeen.contains("\"cz\":0"));
         clientHarness.bot().waitTicks(20);
 
         // Stage planet-night THROUGH the flag, then lock it again before anyone sleeps.
@@ -203,15 +204,33 @@ public class PlanetBedSleepLockedE2ETest {
                         + " player sleeps in daylight and nothing below is a measurement. got="
                         + staged, staged >= STAGED_NIGHT && staged < STAGED_NIGHT + DRIFT_ALLOWANCE);
 
+        // THE MARK, before the click. The assertion below used to name its own ambiguity and refuse
+        // to resolve it — "either the lock did not engage or the player never actually slept" — and
+        // it was right to refuse, because nothing it could read told the two apart. The chain does:
+        // if he never slept, `sleep_in_bed`/`player_wake_up` are simply absent, and the failure says
+        // so instead of leaving the reader with two candidates.
+        zmaster587.advancedRocketry.test.Events events = new zmaster587.advancedRocketry.test.Events(
+                cmd -> String.join("\n", serverHarness.client().execute(cmd)),
+                clientHarness.bot()::waitTicks);
+        long mark = events.mark();
+
         JsonObject click = clientHarness.bot().interactBlock(BED_X, BED_Y, BED_FOOT_Z);
         assertTrue("bed right-click must not error: " + click, click.has("result"));
+
+        // He must reach the server, be offered the bed, and WAKE from it. Only then does the absence
+        // of the message below mean what the assertion says it means.
+        events.assertChain(mark, "a player who right-clicks a bed on a time-locked planet must still"
+                        + " sleep in it — the lock withholds the MORNING, not the bed", 260,
+                "right_click_block", "sleep_in_bed", "player_wake_up");
 
         // A full vanilla sleep completes 100 ticks after everyone is in bed; poll past that.
         String seen = pollForLockedMessage();
         assertTrue("THE LOAD-BEARING ONE: the player must be TOLD that this world's morning is not"
                         + " coming, and that line is only ever sent from inside the completed-sleep"
                         + " branch — so its absence means either the lock did not engage or the"
-                        + " player never actually slept, and this test refuses to tell those two"
+                        + " player never actually slept — and the chain above has already ruled the"
+                        + " second one out, so this is the lock. Historically this test could not"
+                        + " tell those two"
                         + " apart by assuming. chat=" + seen,
                 seen.contains(LOCKED_NEEDLE));
 
