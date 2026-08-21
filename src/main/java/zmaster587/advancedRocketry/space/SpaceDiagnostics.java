@@ -23,7 +23,6 @@ public final class SpaceDiagnostics {
     public static void reset() {
         CrewTransfer.resetDiagnostics();
         VSShipCrosser.resetDiagnostics();
-        HyperspaceVoid.resetDiagnostics();
         AssemblyCrewRebind.resetDiagnostics();
     }
 }

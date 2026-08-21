@@ -72,40 +72,9 @@ public class BoundarySky extends IRenderHandler {
     /** How bright the densest cloud may draw at its core. Haze, never a light source. */
     private static final float NEBULA_MAX_ALPHA = 0.45F;
 
-    /**
-     * How many body labels the last frame actually drew. A counter rather than a flag: the contract
-     * is that the toggle removes the label ENTIRELY, and "zero drawn while bodies were fed" is the
-     * only reading of that a test can take without looking at pixels. Client-side diagnostic state;
-     * nothing in the render path branches on it.
-     */
-    public static volatile int labelsDrawnLastFrame;
 
-    /**
-     * How many atmosphere boundaries the client's LAST FRAME drew. Same shape as the label counter
-     * and for the same reason: "a boundary is drawn for a descend target and for nothing else" is
-     * a claim a test can only take without looking at pixels if the renderer counts what it drew.
-     *
-     * <p>Read it beside {@link #skyFramesDrawn}, never alone — a zero here means "no boundary was
-     * drawn" only if the renderer ran at all, and the two are separate questions.</p>
-     */
-    public static volatile int boundariesDrawnLastFrame;
 
-    /**
-     * How many nebulae the last frame drew. Same shape and same reason as the two counters above: a
-     * cloud is haze with no edge, so "is one on the screen" is a question pixels answer badly and the
-     * renderer answers exactly. Read it beside {@link #skyFramesDrawn}, never alone.
-     */
-    public static volatile int nebulaeDrawnLastFrame;
 
-    /**
-     * Frames on which this sky renderer ran AT ALL, counted before any branch inside it.
-     *
-     * <p>It is what makes "X was not drawn" falsifiable: a per-feature counter that stays at zero
-     * cannot tell "the feature was suppressed" from "nothing rendered here", and the first control
-     * leg written without this pair could not tell them apart and said so by failing on its own
-     * arrangement.</p>
-     */
-    public static volatile long skyFramesDrawn = 0L;
 
     private final Minecraft mc = Minecraft.getMinecraft();
 
@@ -126,7 +95,6 @@ public class BoundarySky extends IRenderHandler {
 
     @Override
     public void render(float partialTicks, WorldClient world, Minecraft mc) {
-        skyFramesDrawn++;
         List<PacketSystemBodiesSync.RenderBody> bodies =
                 PacketSystemBodiesSync.bodiesForDim(world.provider.getDimension());
 
@@ -141,7 +109,7 @@ public class BoundarySky extends IRenderHandler {
 
         // The backdrop: the clouds and the starfield, in the one order that is right for both. The
         // billboards below are meant to sit in front of all of it.
-        nebulaeDrawnLastFrame = drawBackdrop(
+        drawBackdrop(
                 PacketSystemBodiesSync.nebulaeForDim(world.provider.getDimension()));
 
         // In hyperspace this same provider serves the transit lanes, and the two things below are
@@ -163,27 +131,23 @@ public class BoundarySky extends IRenderHandler {
         // The atmosphere boundaries FIRST, untextured, while the texture unit is still off: they
         // belong behind the bodies they surround, and drawing them here saves toggling the texture
         // unit twice per frame.
-        int boundaries = 0;
         BufferBuilder buffer = Tessellator.getInstance().getBuffer();
         if (bodies != null) {
             GlStateManager.color(0.35F, 0.65F, 1.0F, 0.55F);
             for (PacketSystemBodiesSync.RenderBody body : bodies) {
-                boundaries += drawBoundary(buffer, body) ? 1 : 0;
+                drawBoundary(buffer, body);
             }
         }
-        boundariesDrawnLastFrame = boundaries;
 
         GlStateManager.enableTexture2D();
 
         // One billboard per synced body.
-        int labelled = 0;
         if (bodies != null && !bodies.isEmpty()) {
             boolean labels = SkyLabels.enabled();
             for (PacketSystemBodiesSync.RenderBody body : bodies) {
-                labelled += drawBody(buffer, body, labels) ? 1 : 0;
+                drawBody(buffer, body, labels);
             }
         }
-        labelsDrawnLastFrame = labelled;
 
         restoreState();
     }

@@ -36,7 +36,8 @@ import static org.junit.Assert.assertTrue;
 @FixMethodOrder(MethodSorters.NAME_ASCENDING)
 public class ClientBootBaselineGroupE2ETest extends AbstractSharedClientE2ETest {
 
-    private static final String CLIENT_PROXY = "zmaster587.advancedRocketry.client.ClientProxy";
+    /** The harness-side readback store; the mute itself still lives on the client proxy. */
+    private static final String CLIENT_DIAG = "zmaster587.advancedRocketry.command.test.ClientDiag";
 
     @Override
     protected String subsystem() {
@@ -103,9 +104,10 @@ public class ClientBootBaselineGroupE2ETest extends AbstractSharedClientE2ETest 
      * where the sound handler is up, gated on the {@code -Dforge.test.client=true} marker that every
      * {@code RealClientHarness} client carries (and a manual {@code runClient} does not).</p>
      *
-     * <p>This observes the REAL client state: the proxy publishes the master level it read back from
-     * {@code GameSettings} after muting, and this asserts that value is 0 — so it fails if the mute
-     * is removed, mis-gated, or clamped, not merely if the code path is skipped.</p>
+     * <p>This observes the REAL client state: a test-only mixin asks {@code GameSettings} for the
+     * master level immediately after the mute runs, and this asserts that value is 0 — so it fails if
+     * the mute is removed, mis-gated, or clamped, not merely if the code path is skipped. The
+     * readback used to be published by the proxy itself; production no longer keeps a field for it.</p>
      */
     @Test
     public void harnessTestClientHasMasterSoundMuted() throws Exception {
@@ -113,16 +115,16 @@ public class ClientBootBaselineGroupE2ETest extends AbstractSharedClientE2ETest 
         bot().waitForWorld();
 
         // The mute lands on the first client tick with the sound handler up; poll until the
-        // proxy has published the applied master level (NaN until then).
+        // readback has landed (NaN until then).
         String raw = "NaN";
         for (int i = 0; i < 40 && "NaN".equalsIgnoreCase(raw); i++) {
             bot().waitTicks(5);
-            raw = bot().readStaticField(CLIENT_PROXY, "testClientMasterVolume")
+            raw = bot().readStaticField(CLIENT_DIAG, "testClientMasterVolume")
                     .get("value").getAsString();
         }
         scenario().record("testClientMasterVolume", raw);
 
-        assertNotNull("proxy must publish the applied master volume", raw);
+        assertNotNull("the readback must report an applied master volume", raw);
         float master = Float.parseFloat(raw);
         assertEquals("a harness test client must have master sound muted to 0",
                 0.0f, master, 1e-6f);

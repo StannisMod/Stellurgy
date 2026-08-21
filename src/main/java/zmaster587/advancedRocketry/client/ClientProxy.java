@@ -301,13 +301,6 @@ public class ClientProxy extends CommonProxy {
      *  client), so the per-tick check stops doing any work after the first successful pass. */
     private static boolean testClientSoundHandled = false;
 
-    /**
-     * The REAL master sound level read back from {@code GameSettings} right after the test
-     * client is muted, or {@code NaN} until then. Published for the client e2e to observe
-     * (via the harness's static-field readback) that the master volume genuinely reached 0 —
-     * not merely that the mute code ran. Only ever written on a harness-spawned test client.
-     */
-    public static volatile float testClientMasterVolume = Float.NaN;
 
     /**
      * The dimension id of the world the CLIENT is currently in, or {@link Integer#MIN_VALUE} when no
@@ -375,9 +368,6 @@ public class ClientProxy extends CommonProxy {
             return; // sound not initialised yet — try again next tick
         }
         mc.gameSettings.setSoundLevel(SoundCategory.MASTER, 0.0F);
-        // Publish the value actually in effect (read back from GameSettings), so a client e2e
-        // can confirm the master volume really reached 0 rather than that this code merely ran.
-        testClientMasterVolume = mc.gameSettings.getSoundLevel(SoundCategory.MASTER);
         testClientSoundHandled = true;
     }
 

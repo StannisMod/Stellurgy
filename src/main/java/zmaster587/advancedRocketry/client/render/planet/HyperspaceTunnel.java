@@ -50,7 +50,6 @@ public final class HyperspaceTunnel {
      * an observable fact, and a test that cannot tell the difference between "drawn" and "never
      * reached" is not a test.
      */
-    public static volatile long framesDrawn = 0L;
 
     /**
      * Which way the SHIP is pointing, as {@code {yaw, pitch}} in degrees — the corridor's axis.
@@ -137,6 +136,5 @@ public final class HyperspaceTunnel {
         GlStateManager.disableBlend();
         GlStateManager.enableTexture2D();
         GlStateManager.popMatrix();
-        framesDrawn++;
     }
 }

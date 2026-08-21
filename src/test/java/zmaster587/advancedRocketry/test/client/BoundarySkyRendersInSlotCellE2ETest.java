@@ -115,7 +115,7 @@ public class BoundarySkyRendersInSlotCellE2ETest extends AbstractClientE2ETest {
     private static final String CLIENT_BODIES_CLASS =
             "zmaster587.advancedRocketry.network.PacketSystemBodiesSync";
     private static final String SKY_CLASS =
-            "zmaster587.advancedRocketry.client.render.planet.BoundarySky";
+            "zmaster587.advancedRocketry.command.test.RenderDiag";
 
     /**
      * Cell the ship settles in — FOUND at run time, never written down. See {@link #findEmptyCell()}.

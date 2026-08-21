@@ -8,5 +8,10 @@
   "mixins": [
     "MixinEntityPositionWriters",
     "MixinWorldServerShipManagerDiag"
+  ],
+  "client": [
+    "MixinBoundarySkyDiag",
+    "MixinClientProxyDiag",
+    "MixinHyperspaceTunnelDiag"
   ]
 }

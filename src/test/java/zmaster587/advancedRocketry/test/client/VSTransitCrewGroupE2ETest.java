@@ -552,9 +552,9 @@ private boolean waitForRegisteredShip(int dim) throws Exception {
 
     // ---- migrated: VSJumpTellsThePilotWhatIsHappeningE2ETest ----
 
-    private static final String SKY = "zmaster587.advancedRocketry.client.render.planet.BoundarySky";
+    private static final String SKY = "zmaster587.advancedRocketry.command.test.RenderDiag";
 
-    private static final String TUNNEL = "zmaster587.advancedRocketry.client.render.planet.HyperspaceTunnel";
+    private static final String TUNNEL = "zmaster587.advancedRocketry.command.test.RenderDiag";
 
     /** Above vanilla's sky-pass floor of 4 chunks; the harness otherwise pins the client at 2. */
 private static final int SKY_RENDER_DISTANCE = 8;
@@ -619,7 +619,7 @@ private long readCounter(String className, String field) throws Exception {
     }
 
     private long tunnelFrames() throws Exception {
-        return readCounter(TUNNEL, "framesDrawn");
+        return readCounter(TUNNEL, "tunnelFramesDrawn");
     }
 
     /** The client's recent chat history, as one string. Deep enough to survive the harness's own
