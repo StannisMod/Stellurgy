@@ -93,6 +93,10 @@ public class VSPreAssemblyBoardingPilotControlE2ETest {
     private static final Pattern BUILDER_POS =
             Pattern.compile("\"builderPos\":\\[(-?\\d+),(-?\\d+),(-?\\d+)]");
     private static final Pattern POS_Y = Pattern.compile("\"posY\":(-?[0-9.E\\-]+)");
+    private static final Pattern SHIP_ID = Pattern.compile("\"id\":\"([^\"]*)\"");
+
+    /** This scenario's ship, by identity — see {@link #captureShipId}. */
+    private String shipUuid;
     private static final Pattern DUMMY_ID = Pattern.compile("\"dummyId\":(-?\\d+)");
     private static final Pattern SEAT_XYZ = Pattern.compile(
             "\"seatX\":(-?\\d+),\"seatY\":(-?\\d+),\"seatZ\":(-?\\d+)");
@@ -363,6 +367,12 @@ public class VSPreAssemblyBoardingPilotControlE2ETest {
                 + " seatBuild=" + bot().blockState(SEAT_X, SEAT_Y, SEAT_Z)
                 + " seatPaste=" + bot().blockState(SEAT_X, SEAT_Y + 1, SEAT_Z));
 
+        // The ship's IDENTITY, captured here — the rebind above proves the craft is live, and it
+        // has not yet been asked to move. Every altitude read below is keyed on it: the legs that
+        // follow settle, drift-check and CLIMB the ship, and a nearest-ship query about the build
+        // site cannot tell "my ship rose" from "a neighbour is now the closest thing to that point".
+        captureShipId(how);
+
         // ---- CONTROL LEG ---------------------------------------------------------------------
         // Settle first: a freshly assembled physics object may be resolved upward out of the pad it
         // overlaps, and that motion is not the pilot's.
@@ -578,8 +588,33 @@ public class VSPreAssemblyBoardingPilotControlE2ETest {
         return String.join("\n", serverHarness.client().execute(cmd));
     }
 
+    /**
+     * Capture the assembled ship's IDENTITY at its build site, spending the one positional lookup
+     * this scenario is entitled to. Fails as an ARRANGEMENT failure: a scenario that cannot name
+     * its ship has not disproved anything about pilots.
+     */
+    private void captureShipId(Boarding how) throws Exception {
+        String info = "";
+        String found = null;
+        for (int attempt = 0; attempt < SETTLE_MAX_SAMPLES && found == null; attempt++) {
+            info = exec("artest vs ship-info 0 " + BX + " " + BY + " " + BZ + " 48");
+            Matcher m = SHIP_ID.matcher(info);
+            if (info.contains("\"managed\":true") && m.find() && !m.group(1).isEmpty()) {
+                found = m.group(1);
+            } else {
+                bot().waitTicks(TICKS_PER_SAMPLE);
+            }
+        }
+        assertTrue("ARRANGEMENT: the assembled ship must name itself at its own build site before "
+                + "anything can be measured on it. boarding=" + how + " reply=" + info,
+                found != null);
+        shipUuid = found;
+    }
+
+    /** The NAMED ship's report, wherever it now is — no distance term to be wrong about. */
     private String shipInfo() throws Exception {
-        return exec("artest vs ship-info 0 " + BX + " " + BY + " " + BZ);
+        assertTrue("shipInfo() before captureShipId()", shipUuid != null);
+        return exec("artest vs ship-info 0 id " + shipUuid);
     }
 
     /** The ship's world altitude, or {@code NaN} while it is not reporting one. */

@@ -75,7 +75,17 @@ public class ShipArrivalKeepsItsPilotSeatInASuperheatedAtmosphereTest extends Ab
                 asm.contains("\"rocketCount\":0"));
         assertTrue("the source VS ship never loaded", waitForLoadedShip() >= 1);
 
-        String pre = exec("artest vs seat-input 0 0 0 0 0 0 0");
+        // The source ship's identity, taken at its build site before anything moves it. Both seat
+        // questions below are asked THROUGH a ship rather than of the world, which is what makes
+        // the housekeeping two paragraphs down unnecessary in principle: an unaddressed seat probe
+        // answers about whichever pilot seat the world lists first, and this test has already been
+        // caught reading a loose control seat that never crossed anything.
+        String srcInfo = exec("artest vs ship-info 0 " + SRC_X + " " + SRC_Y + " " + SRC_Z + " 48");
+        assertTrue("source ship not managed by VS before the crossing: " + srcInfo,
+                srcInfo.contains("\"managed\":true"));
+        String srcShipId = extractString(srcInfo, "id");
+
+        String pre = exec("artest vs seat-input-by-id 0 " + srcShipId + " 0 0 0 0 0 0");
         assertTrue("before the crossing the ship must have a pilot seat to lose: " + pre,
                 pre.contains("\"seatFound\":true"));
 
@@ -113,12 +123,12 @@ public class ShipArrivalKeepsItsPilotSeatInASuperheatedAtmosphereTest extends Ab
         String control = placedHot;
 
         // SUBJECT: the same atmosphere, but the seat arrives as part of a crossing structure.
-        String srcInfo = exec("artest vs ship-info 0 " + SRC_X + " " + SRC_Y + " " + SRC_Z);
-        assertTrue("source ship not managed by VS before the crossing: " + srcInfo,
-                srcInfo.contains("\"managed\":true"));
+        String srcLive = exec("artest vs ship-info 0 id " + srcShipId);
+        assertTrue("source ship not managed by VS before the crossing: " + srcLive,
+                srcLive.contains("\"managed\":true"));
         String cross = exec("artest vs ship-repack 0 "
-                + (int) extractDouble(srcInfo, "posX") + " " + (int) extractDouble(srcInfo, "posY")
-                + " " + (int) extractDouble(srcInfo, "posZ")
+                + (int) extractDouble(srcLive, "posX") + " " + (int) extractDouble(srcLive, "posY")
+                + " " + (int) extractDouble(srcLive, "posZ")
                 + " " + DST_X + " " + DST_Y + " " + DST_Z);
         assertTrue("the crossing itself failed, so the seat question was never asked: " + cross,
                 cross.contains("\"ok\":true"));
@@ -126,7 +136,14 @@ public class ShipArrivalKeepsItsPilotSeatInASuperheatedAtmosphereTest extends Ab
                 waitForLoadedShip() >= 1);
 
         // The crew's own question: is there a seat on the arrived ship, still linked to its computer?
-        String post = exec("artest vs seat-input 0 0 0 0 0 0 0");
+        // Asked of the ARRIVED ship by its own id — the crossing re-assembles the craft and mints a
+        // new identity, so this deliberately is not srcShipId, and it is equally deliberately not
+        // "whatever seat the world lists first".
+        String dstInfo = exec("artest vs ship-info 0 " + DST_X + " " + DST_Y + " " + DST_Z + " 48");
+        assertTrue("the arrived ship is not managed by VS at the destination: " + dstInfo,
+                dstInfo.contains("\"managed\":true"));
+        String post = exec("artest vs seat-input-by-id 0 " + extractString(dstInfo, "id")
+                + " 0 0 0 0 0 0");
         assertTrue("the arrived ship has NO pilot seat - it burned on the way in, and its crew has "
                         + "nowhere to sit. control=" + control + " post=" + post,
                 post.contains("\"seatFound\":true"));
@@ -211,6 +228,18 @@ public class ShipArrivalKeepsItsPilotSeatInASuperheatedAtmosphereTest extends Ab
     private static String blockOf(String json) {
         Matcher m = Pattern.compile("\"block\":\"([^\"]*)\"").matcher(json);
         return m.find() ? m.group(1) : "<no block field in " + json + ">";
+    }
+
+    /**
+     * A string field of a probe reply. Fails loudly rather than answering with a placeholder: an id
+     * that silently came back empty would be handed to a {@code -by-id} verb and read as "that ship
+     * is not loaded", which is a different fact from "the reply carried no id".
+     */
+    private static String extractString(String json, String key) {
+        Matcher m = Pattern.compile("\"" + key + "\":\"([^\"]*)\"").matcher(json);
+        assertTrue("expected string \"" + key + "\" in: " + json, m.find());
+        assertTrue("\"" + key + "\" came back empty in: " + json, !m.group(1).isEmpty());
+        return m.group(1);
     }
 
     private static int extractInt(String json, String key) {

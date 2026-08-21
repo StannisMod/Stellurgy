@@ -46,6 +46,7 @@ import static org.junit.Assert.assertTrue;
 public class VSMidTransitRelogControlE2ETest extends AbstractClientE2ETest {
 
     private static final Pattern PLAYER_NAME = Pattern.compile("\"player\":\"([^\"]+)\"");
+    private static final Pattern SHIP_ID = Pattern.compile("\"id\":\"([^\"]*)\"");
 
     /** A demonstrable held-key climb: well above settle jitter, cheap to reach. */
     private static final double MIN_CLIMB = 1.0;
@@ -80,8 +81,15 @@ public class VSMidTransitRelogControlE2ETest extends AbstractClientE2ETest {
         assertTrue("the piloted origin ship never assembled/loaded in the pool cell (dim "
                 + originDim + ")", waitForLoadedShip(originDim) >= 1);
 
-        String seat = exec("artest vs find-seat " + originDim
-                + " " + (bx + 3) + " " + (by + 3) + " " + (bz + 3));
+        // The scenario's ship, by IDENTITY, captured at the ONE moment a positional lookup is
+        // defensible: freshly assembled, still at its own build site, inside a bound no other
+        // craft could satisfy. Every question afterwards is keyed on this — the ship is about to
+        // be flown, departed and re-materialised in another cell, and a query point left behind at
+        // the build site would answer about a neighbour (a transit cell is a POOL slot and routinely
+        // holds an earlier scenario's leavings) or about nothing, in the shape of a correct reply.
+        String shipId = captureShipIdNear(originDim, bx + 3, by + 3, bz + 3);
+
+        String seat = exec("artest vs find-seat " + originDim + " id " + shipId);
         assertTrue("the pilot seat must be found in the assembled ship (else the test is vacuous): "
                 + seat, readBool(seat, "seatFound"));
         int seatX = readInt(seat, "seatX"), seatY = readInt(seat, "seatY"), seatZ = readInt(seat, "seatZ");
@@ -135,12 +143,12 @@ public class VSMidTransitRelogControlE2ETest extends AbstractClientE2ETest {
         // catches it sinking), and the contract is a bounded window, not the first ten seconds.
         assertTrue("ARRANGEMENT (control leg): the pilot must be able to fly BEFORE the transit."
                 + " delivery=" + exec("artest vs seat-delivery")
-                + " ship=" + exec("artest vs ship-info " + originDim + " " + sx + " " + sy + " " + sz),
+                + " ship=" + shipInfoById(originDim, shipId),
                 climbedWithinAttempts(3));
         bot().waitTicks(30); // let the station-hold settle before the departure snapshot
 
         // The climb moved the ship: the departure anchor is its CURRENT pose, never the build pose.
-        String shipNow = exec("artest vs ship-info " + originDim + " " + sx + " " + sy + " " + sz);
+        String shipNow = shipInfoById(originDim, shipId);
         assertTrue("the ship must still be managed at its berth: " + shipNow,
                 shipNow.contains("\"managed\":true"));
         int ax = (int) Math.round(readDouble(shipNow, "posX"));
@@ -296,6 +304,39 @@ public class VSMidTransitRelogControlE2ETest extends AbstractClientE2ETest {
     }
 
     /** Poll for a loaded VS ship in {@code dim} (assembly is async; a headless server forces the load). */
+    /**
+     * The IDENTITY of the ship freshly assembled near {@code (x,y,z)} — the value every later
+     * question about it is keyed on.
+     *
+     * <p>The bound is spent HERE and nowhere else: the positional form of {@code ship-info} reports
+     * whichever loaded ship is nearest a point, and 48 blocks around a build site that has just
+     * produced one ship is the only place in this scenario where that cannot mean somebody else.</p>
+     */
+    private String captureShipIdNear(int dim, int x, int y, int z) throws Exception {
+        String info = "";
+        for (int attempt = 0; attempt < 40; attempt++) {
+            info = exec("artest vs ship-info " + dim + " " + x + " " + y + " " + z + " 48");
+            if (info.contains("\"managed\":true")) {
+                Matcher m = SHIP_ID.matcher(info);
+                if (m.find() && !m.group(1).isEmpty()) {
+                    return m.group(1);
+                }
+            }
+            bot().waitTicks(5);
+        }
+        throw new AssertionError("ARRANGEMENT: the assembled ship never reported an identity at its"
+                + " own build site (" + x + "," + y + "," + z + ") in dim " + dim
+                + "; last reply: " + info);
+    }
+
+    /**
+     * The report for the NAMED ship, wherever it now is. {@code managed:false} here means that ship
+     * is not loaded — never "it is somewhere else", which is the point of asking this way.
+     */
+    private String shipInfoById(int dim, String shipId) throws Exception {
+        return exec("artest vs ship-info " + dim + " id " + shipId);
+    }
+
     private int waitForLoadedShip(int dim) throws Exception {
         for (int i = 0; i < 40; i++) {
             if (readIntOr(exec("artest vs ship-count-all " + dim), "count", -1) >= 1) {

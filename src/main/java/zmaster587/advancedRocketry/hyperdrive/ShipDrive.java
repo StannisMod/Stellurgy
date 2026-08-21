@@ -259,10 +259,32 @@ public final class ShipDrive {
         return found;
     }
 
+    /**
+     * The subspace claim of the ship THIS flight computer is part of, or {@code null} when it is not
+     * part of one (an unassembled build on the ground) — in which case the claim constrains nothing,
+     * exactly as before, and the offset link alone decides membership.
+     *
+     * <p><b>Resolved by identity, not by proximity.</b> This used to ask which registered ship was
+     * "nearest" the flight computer. That ranking compares the query point against each ship's
+     * TRANSFORM POSITION — where the hull floats in the WORLD — while the point given to it is the
+     * computer's SUBSPACE block, which lives in the shipyard region tens of millions of blocks away.
+     * The two are different frames, so the claim it returned belonged to whichever hull happened to
+     * be flying nearest a coordinate in a space it does not inhabit. With one ship in the world that
+     * is always the right claim, which is why it stood; with two the drive would skip this ship's
+     * own machines — reporting no field generator aboard with the player looking at one — and, worse,
+     * ADOPT an unlinked machine of the neighbouring craft, welding it to this flight computer
+     * permanently.</p>
+     *
+     * <p>A block's managing claim is an exact answer: distinct ships' claims never overlap
+     * ({@code ShipChunkAllocator} spaces them), and the REGISTERED lookup is used rather than the
+     * live one because a ship nobody stands near still owns its machines.</p>
+     */
     private AxisAlignedBB yardBounds() {
-        return VSIntegration.shipyardBoundsAt(world,
-                flightComputerPos.getX() + 0.5, flightComputerPos.getY() + 0.5,
-                flightComputerPos.getZ() + 0.5);
+        String myShip = VSIntegration.registeredShipIdManagingBlock(world, flightComputerPos);
+        if (myShip == null) {
+            return null; // not aboard a ship — an unassembled build on the ground
+        }
+        return VSIntegration.shipyardBoundsOf(world, java.util.UUID.fromString(myShip));
     }
 
     /** A ship's blocks never leave their own claim's footprint; a null claim constrains nothing. */

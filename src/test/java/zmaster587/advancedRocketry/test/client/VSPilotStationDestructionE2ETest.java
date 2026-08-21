@@ -135,6 +135,13 @@ public class VSPilotStationDestructionE2ETest extends AbstractSharedVsClientE2ET
     // ---- Shared arrangement --------------------------------------------------------------------
 
     private static final class FlyingShip {
+        /**
+         * The ship's IDENTITY, captured at its base before it flies. Every altitude read afterwards
+         * is keyed on this: the scenario's whole point is a ship that CLIMBS, and a bounded
+         * nearest-ship query about the base it left answers {@code managed:false} the moment the
+         * climb clears the bound, while an unbounded one answers about a neighbour's craft.
+         */
+        String id;
         int seatX, seatY, seatZ;
         int afcX, afcY, afcZ;
     }
@@ -162,23 +169,16 @@ public class VSPilotStationDestructionE2ETest extends AbstractSharedVsClientE2ET
 
         exec("tp @a " + (bx + 0.5) + " " + (by + 6) + " " + (bz + 0.5) + " 0 0");
         bot().waitTicks(20);
-        double y0 = Double.NaN;
-        for (int i = 0; i < 40 && Double.isNaN(y0); i++) {
-            bot().waitTicks(5);
-            // Scoped to this scenario's own base: a whole-dimension ship count answers about
-            // whichever neighbour's ship is loaded, and the ship-info below is the real gate anyway.
-            String info = exec("artest vs ship-info 0 " + bx + " " + by + " " + bz
-                + " " + SHIP_QUERY_RADIUS);
-            if (info.contains("\"managed\":true")) {
-                y0 = readDouble(info, POS_Y);
-            }
-        }
-        assertTrue("the ship must LOAD with the client present", !Double.isNaN(y0));
+        FlyingShip ship = new FlyingShip();
+        // Scoped to this scenario's own base: a whole-dimension ship count answers about whichever
+        // neighbour's ship is loaded. The bound is spent HERE and only here — the ship is freshly
+        // assembled and has not moved — and its ANSWER is the identity every later read uses.
+        ship.id = captureShipIdAt(bx, by, bz);
+        double y0 = readDouble(shipInfoById(ship.id), POS_Y);
 
         // Resolve the seat + computer SUBSPACE blocks now, while the ship still sits at its build
         // site (subspace addresses are stationary; the ship's world pose is about to change).
-        FlyingShip ship = new FlyingShip();
-        String found = exec("artest vs find-seat 0 " + bx + " " + (by + 5) + " " + bz);
+        String found = exec("artest vs find-seat 0 id " + ship.id);
         Matcher sm = SEAT_SUB.matcher(found);
         assertTrue("find-seat must resolve the ship's subspace seat: " + found, sm.find());
         ship.seatX = Integer.parseInt(sm.group(1));

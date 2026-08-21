@@ -212,7 +212,9 @@ public class VSShipEntryRefusedKeepsPilotSeatedE2ETest {
         try {
             for (int attempt = 0; attempt < budget && (yControl - yRest) < MIN_CONTROL_CLIMB; attempt++) {
                 bot().waitTicks(5);
-                Matcher m = POS_Y.matcher(shipInfoAtBase());
+                // BY IDENTITY: this loop's whole subject is a ship LEAVING the base, so the base is
+                // the one point it is guaranteed not to be at by the end.
+                Matcher m = POS_Y.matcher(exec("artest vs ship-info 0 id " + shipUuid));
                 if (m.find()) {
                     yControl = Double.parseDouble(m.group(1));
                 }
@@ -339,8 +341,12 @@ public class VSShipEntryRefusedKeepsPilotSeatedE2ETest {
         return String.join("\n", serverHarness.client().execute(cmd));
     }
 
+    /**
+     * The ship at its BUILD SITE — for the arrangement's load poll and nothing else, since that is
+     * the only moment the ship is known to be there. Everything after the capture asks by id.
+     */
     private String shipInfoAtBase() throws Exception {
-        return exec("artest vs ship-info 0 " + BX + " " + BY + " " + BZ);
+        return exec("artest vs ship-info 0 " + BX + " " + BY + " " + BZ + " 48");
     }
 
     /** The newest client chat line containing {@code needle} (case-insensitive), or null. */

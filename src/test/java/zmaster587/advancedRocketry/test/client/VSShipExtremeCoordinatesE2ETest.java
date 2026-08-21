@@ -42,10 +42,30 @@ public class VSShipExtremeCoordinatesE2ETest extends AbstractClientE2ETest {
     private static final Pattern POS_Y = Pattern.compile("\"posY\":(-?[0-9.E\\-]+)");
     private static final Pattern COUNT = Pattern.compile("\"count\":(-?\\d+)");
     private static final Pattern DUMMY_ID = Pattern.compile("\"dummyId\":(-?\\d+)");
+    private static final Pattern SHIP_ID = Pattern.compile("\"id\":\"([^\"]*)\"");
 
     private static final String VARIANT = "with-pilot-seat";
     private static final int BX = 3400, BY = 64, BZ = 3400;
     private static final double EXTREME_Y = 3_999_000d;
+
+    /**
+     * How far from its base a {@code ship-info} answer may be and still be attributed to this
+     * scenario's freshly assembled ship, in blocks — spent ONCE, on the capture below.
+     */
+    private static final int SHIP_QUERY_RADIUS = 48;
+
+    /**
+     * This scenario's ship, by IDENTITY. Captured once at the base, where the ship is the only
+     * thing that can be there, and used for every question afterwards.
+     *
+     * <p>The positional form of {@code ship-info} is a NEAREST-ship lookup, and this scenario spends
+     * its whole length making that lookup meaningless on purpose: the ship is rigid-teleported to
+     * Y&nbsp;≈&nbsp;4,000,000 and then flown further. A query point that trails the ship answers
+     * about a neighbour or about nothing, and both replies have the shape of a correct one — so a
+     * red here would describe a craft the test never built, which is a worse outcome than the red
+     * it is trying to explain.</p>
+     */
+    private String shipId;
 
     private String exec(String cmd) throws Exception {
         return String.join("\n", serverClient().execute(cmd));
@@ -75,13 +95,18 @@ public class VSShipExtremeCoordinatesE2ETest extends AbstractClientE2ETest {
         for (int i = 0; i < 40 && Double.isNaN(y0); i++) {
             bot().waitTicks(5);
             if (count("ship-count") >= 1) {
-                String info = exec("artest vs ship-info 0 " + BX + " " + BY + " " + BZ);
+                // The one defensible positional query in this test: the ship is freshly assembled,
+                // has not moved, and the bound cannot admit anything else. Its ANSWER is the id.
+                String info = exec("artest vs ship-info 0 " + BX + " " + BY + " " + BZ
+                        + " " + SHIP_QUERY_RADIUS);
                 if (info.contains("\"managed\":true")) {
+                    shipId = readShipId(info);
                     y0 = readDouble(info, POS_Y);
                 }
             }
         }
         assertTrue("the ship must LOAD with the client present", !Double.isNaN(y0));
+        assertTrue("the loaded ship must report an identity to key the scenario on", shipId != null);
 
         String mountInfo = exec("artest vs seat-mount 0");
         assertTrue("seat-mount must find the pilot seat: " + mountInfo,
@@ -99,7 +124,7 @@ public class VSShipExtremeCoordinatesE2ETest extends AbstractClientE2ETest {
         assertTrue(exec("artest vs permaload true").contains("\"ok\":true"));
 
         // ── CONTROL leg: the pilot path works at ordinary coordinates (proves the instrument fires). ──
-        climbLeg("control @ base", BX, y0, BZ);
+        climbLeg("control @ base");
 
         // ── Leg 1: extreme Y (~2M). Source = wherever the rider (glued to the ship) currently is. ──
         double srcY = bot().reportRidingEntity().get("posY").getAsDouble();
@@ -109,12 +134,12 @@ public class VSShipExtremeCoordinatesE2ETest extends AbstractClientE2ETest {
         bot().waitTicks(30); // transform adoption + rider sync settle
         exec("artest vs unpark 0 " + BX + " " + EXTREME_Y + " " + BZ);
         bot().waitTicks(10);
-        String serverInfoAfterTp = exec("artest vs ship-info 0 " + BX + " " + EXTREME_Y + " " + BZ);
+        String serverInfoAfterTp = shipInfoById();
         double riderY = bot().reportRidingEntity().get("posY").getAsDouble();
         assertTrue("the CLIENT-rendered rider must arrive at extreme Y (got " + riderY
                         + "); server ship after teleport: " + serverInfoAfterTp,
                 riderY > EXTREME_Y - 200 && riderY < EXTREME_Y + 200);
-        climbLeg("extreme Y", BX, EXTREME_Y, BZ);
+        climbLeg("extreme Y");
 
         // The extreme-|X| leg is NOT automated yet — see the class javadoc: after a SECOND
         // relocation the ship's physics goes inert (neither the pilot key nor the push-ship
@@ -132,8 +157,8 @@ public class VSShipExtremeCoordinatesE2ETest extends AbstractClientE2ETest {
      * the same tolerance the ordinary-coordinates pilot e2e uses — a precision breakdown at extreme
      * coordinates shows up here as divergence).
      */
-    private void climbLeg(String label, double nearX, double nearY, double nearZ) throws Exception {
-        double yBefore = shipY(nearX, nearY, nearZ);
+    private void climbLeg(String label) throws Exception {
+        double yBefore = shipY();
         double riderYBefore = bot().reportRidingEntity().get("posY").getAsDouble();
         bot().holdKey(Keyboard.KEY_R); // flightVerticalUp
         ClientPoll.Result<Double> lift;
@@ -141,7 +166,7 @@ public class VSShipExtremeCoordinatesE2ETest extends AbstractClientE2ETest {
             // Event-gated hover-lift (load-scaled ceiling + early exit): a fixed 100-iteration budget
             // under-lifts a frame-starved client under concurrent-fork load and reds a healthy climb.
             lift = ClientPoll.until(bot()::waitTicks,
-                    () -> shipY(nearX, nearY, nearZ),
+                    this::shipY,
                     y -> y - yBefore > 1.5, 2, 100);
         } finally {
             bot().releaseKey(Keyboard.KEY_R);
@@ -150,7 +175,7 @@ public class VSShipExtremeCoordinatesE2ETest extends AbstractClientE2ETest {
         assertTrue("[" + label + "] the vertical-up key must lift the ship (yBefore=" + yBefore
                 + " yAfter=" + yAfter + ")", yAfter - yBefore > 1.0);
         bot().waitTicks(6);
-        double serverDelta = shipY(nearX, nearY, nearZ) - yBefore;
+        double serverDelta = shipY() - yBefore;
         double riderDelta = bot().reportRidingEntity().get("posY").getAsDouble() - riderYBefore;
         // Third witness on divergence: the SERVER-side player position separates "the seat glue died
         // server-side" (server player static too) from "the client stopped tracking" (server player
@@ -161,27 +186,44 @@ public class VSShipExtremeCoordinatesE2ETest extends AbstractClientE2ETest {
                 Math.abs(riderDelta - serverDelta) < 3.0);
     }
 
+    /** The report for THIS scenario's ship, wherever it now is — no distance term to be wrong about. */
+    private String shipInfoById() throws Exception {
+        return exec("artest vs ship-info 0 id " + shipId);
+    }
+
     /**
-     * The server ship's posY near a point, tolerant of unrelated console lines interleaving with the
-     * probe's JSON reply (at extreme coordinates a VS collision mixin spams STDERR lines, which can
-     * arrive inside the captured console window) — retry until a parseable reply comes back.
+     * The server ship's posY, tolerant of unrelated console lines interleaving with the probe's JSON
+     * reply (at extreme coordinates a VS collision mixin spams STDERR lines, which can arrive inside
+     * the captured console window) — retry until a parseable reply comes back.
+     *
+     * <p>A ship that has UNLOADED answers {@code managed:false} and carries no {@code posY}, so it
+     * exhausts the retries and fails naming the reply. That is the intended report: "this ship is
+     * not loaded" is a different fact from "the ship near this point moved", and the positional form
+     * this replaced could not tell them apart.</p>
      */
-    private double shipY(double nearX, double nearY, double nearZ) throws Exception {
+    private double shipY() throws Exception {
         String last = "";
         for (int i = 0; i < 10; i++) {
-            last = exec("artest vs ship-info 0 " + nearX + " " + nearY + " " + nearZ);
+            last = shipInfoById();
             Matcher m = POS_Y.matcher(last);
             if (m.find()) {
                 return Double.parseDouble(m.group(1));
             }
             bot().waitTicks(2);
         }
-        throw new AssertionError("ship-info never returned a parseable posY; last reply: " + last);
+        throw new AssertionError("ship-info never returned a parseable posY for ship " + shipId
+                + "; last reply: " + last);
     }
 
     private int count(String sub) throws Exception {
         Matcher m = COUNT.matcher(exec("artest vs " + sub + " 0"));
         return m.find() ? Integer.parseInt(m.group(1)) : -1;
+    }
+
+    /** The {@code "id"} field of a {@code ship-info} reply, or null when it carries none. */
+    private static String readShipId(String shipInfoJson) {
+        Matcher m = SHIP_ID.matcher(shipInfoJson);
+        return m.find() && !m.group(1).isEmpty() ? m.group(1) : null;
     }
 
     private double readDouble(String json, Pattern p) {

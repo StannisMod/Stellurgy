@@ -53,6 +53,10 @@ public class VSShipCrossingSpikeTest extends AbstractSharedServerTest {
 
         // CONTROL: no ship exists yet, so the seat witness must report a negative. This proves a
         // later "afcResolved:true" is a real observation, not a stuck-on witness.
+        //
+        // THE ONE SEAT PROBE HERE THAT CANNOT BE ADDRESSED, and the reason is the control itself:
+        // there is no ship yet, so there is no id to name. Every other seat probe in this test asks
+        // by identity.
         String control = exec("artest vs seat-input 0 0 0 0 0 0 0");
         assertTrue("witness sensitivity control — seat probe must report seatFound:false before any ship: "
                 + control, control.contains("\"seatFound\":false"));
@@ -66,9 +70,16 @@ public class VSShipCrossingSpikeTest extends AbstractSharedServerTest {
                 asm.contains("\"rocketCount\":0"));
         assertTrue("the source VS ship never loaded", waitForLoadedShip() >= 1);
 
+        // The SOURCE ship's identity, read at its build site before anything relocates it. The
+        // crossing below re-assembles the craft at the destination, which mints a NEW ship — so
+        // there are two identities in this test on purpose, and neither may stand in for the other.
+        String srcInfo = exec("artest vs ship-info 0 " + SRC_X + " " + SRC_Y + " " + SRC_Z + " 48");
+        assertTrue("source ship not managed by VS before crossing: " + srcInfo, srcInfo.contains("\"managed\":true"));
+        String srcShipId = extractString(srcInfo, "id");
+
         // BASELINE: the seat resolves its flight computer, and we record the RELATIVE offset between them
         // (invariant under any rigid relocation — the number the crossing must preserve).
-        String pre = exec("artest vs seat-input 0 0 0 0 0 0 0");
+        String pre = exec("artest vs seat-input-by-id 0 " + srcShipId + " 0 0 0 0 0 0");
         assertTrue("pre-crossing: seat must be found: " + pre, pre.contains("\"seatFound\":true"));
         assertTrue("pre-crossing: seat must be linked to its AFC: " + pre, pre.contains("\"seatLinked\":true"));
         assertTrue("pre-crossing: seat must resolve its AFC: " + pre, pre.contains("\"afcResolved\":true"));
@@ -78,10 +89,10 @@ public class VSShipCrossingSpikeTest extends AbstractSharedServerTest {
         String mount = exec("artest vs seat-mount 0");
         assertTrue("could not seat a rider on the source ship: " + mount, mount.contains("\"seatFound\":true"));
 
-        // Locate the ship's live world position, then perform the crossing to the destination.
-        String srcInfo = exec("artest vs ship-info 0 " + SRC_X + " " + SRC_Y + " " + SRC_Z);
-        assertTrue("source ship not managed by VS before crossing: " + srcInfo, srcInfo.contains("\"managed\":true"));
-        double sx = extractDouble(srcInfo, "posX"), sy = extractDouble(srcInfo, "posY"), sz = extractDouble(srcInfo, "posZ");
+        // Locate the ship's live world position, by identity, then cross it to the destination.
+        String srcLive = exec("artest vs ship-info 0 id " + srcShipId);
+        assertTrue("source ship not managed by VS before crossing: " + srcLive, srcLive.contains("\"managed\":true"));
+        double sx = extractDouble(srcLive, "posX"), sy = extractDouble(srcLive, "posY"), sz = extractDouble(srcLive, "posZ");
 
         String cross = exec("artest vs ship-repack 0 " + (int) sx + " " + (int) sy + " " + (int) sz
                 + " " + DST_X + " " + DST_Y + " " + DST_Z);
@@ -98,13 +109,17 @@ public class VSShipCrossingSpikeTest extends AbstractSharedServerTest {
         int loadedAfter = waitForLoadedShip();
         assertTrue("the crossed VS ship never re-loaded at the destination; crossing=" + cross
                 + " countAll=" + exec("artest vs ship-count-all 0"), loadedAfter >= 1);
-        String dstInfo = exec("artest vs ship-info 0 " + DST_X + " " + DST_Y + " " + DST_Z);
+        // The crossing pastes the craft AT the destination it was given, so this positional read is
+        // the one place the ARRIVED ship can be named from — and the bound makes that claim checkable.
+        String dstInfo = exec("artest vs ship-info 0 " + DST_X + " " + DST_Y + " " + DST_Z + " 48");
         assertTrue("re-assembled ship is not managed by VS at the destination (crossing did not re-VS): "
                 + dstInfo, dstInfo.contains("\"managed\":true"));
+        String dstShipId = extractString(dstInfo, "id");
 
         // POST: the seat still resolves its AFC, at the SAME relative offset — the linked-TE state and the
-        // ship's internal geometry survived the pack/paste round-trip.
-        String post = exec("artest vs seat-input 0 0 0 0 0 0 0");
+        // ship's internal geometry survived the pack/paste round-trip. Asked of the ARRIVED ship by its
+        // own id: the crossing mints a new one, so this is deliberately not srcShipId.
+        String post = exec("artest vs seat-input-by-id 0 " + dstShipId + " 0 0 0 0 0 0");
         assertTrue("post-crossing: seat must be found: " + post, post.contains("\"seatFound\":true"));
         assertTrue("post-crossing: seat must still be linked to its AFC: " + post,
                 post.contains("\"seatLinked\":true"));
@@ -173,6 +188,18 @@ public class VSShipCrossingSpikeTest extends AbstractSharedServerTest {
                 extractInt(json, "afcY") - extractInt(json, "seatY"),
                 extractInt(json, "afcZ") - extractInt(json, "seatZ"),
         };
+    }
+
+    /**
+     * A string field of a probe reply. Fails loudly rather than answering with a placeholder: an
+     * id that silently came back empty would be passed to a {@code -by-id} verb and read as "that
+     * ship is not loaded", which is a different fact from "the reply carried no id".
+     */
+    private static String extractString(String json, String key) {
+        Matcher m = Pattern.compile("\"" + key + "\":\"([^\"]*)\"").matcher(json);
+        assertTrue("expected string \"" + key + "\" in: " + json, m.find());
+        assertTrue("\"" + key + "\" came back empty in: " + json, !m.group(1).isEmpty());
+        return m.group(1);
     }
 
     private static int extractInt(String json, String key) {

@@ -58,6 +58,7 @@ public class VSShipPoweredEntryE2ETest {
             Pattern.compile("\"builderPos\":\\[(-?\\d+),(-?\\d+),(-?\\d+)]");
     private static final Pattern POS_Y = Pattern.compile("\"posY\":(-?[0-9.E\\-]+)");
     private static final Pattern DUMMY_ID = Pattern.compile("\"dummyId\":(-?\\d+)");
+    private static final Pattern SHIP_ID = Pattern.compile("\"id\":\"([^\"]*)\"");
     private static final Pattern LEDGER = Pattern.compile("\"ledger\":(-?\\d+)");
     private static final Pattern SLOT_DIMS = Pattern.compile("\"slotDims\":\\[([0-9,\\-]*)]");
 
@@ -161,14 +162,24 @@ public class VSShipPoweredEntryE2ETest {
         // ticks to elapse before it is done. Measured at 8 forks on the sibling gate test.
         int budget = (int) (40 * TestTimeouts.factor());
         double yRest = Double.NaN;
+        String atBase = "";
         for (int attempt = 0; attempt < budget && Double.isNaN(yRest); attempt++) {
             bot().waitTicks(5);
-            Matcher m = POS_Y.matcher(shipInfoAtBase());
+            atBase = shipInfoAtBase();
+            Matcher m = POS_Y.matcher(atBase);
             if (m.find()) {
                 yRest = Double.parseDouble(m.group(1));
             }
         }
         assertTrue("ARRANGEMENT: the ship must LOAD with the client present", !Double.isNaN(yRest));
+
+        // The ship's IDENTITY, taken at the one moment a position lookup is defensible — freshly
+        // assembled, still at its own base. This scenario then flies it past the orbit line and
+        // through the entry crossing, after which the base names nothing and a nearest-ship query
+        // would report a neighbour or a silence, in the same shape as a correct reply.
+        Matcher sid = SHIP_ID.matcher(atBase);
+        assertTrue("ARRANGEMENT: ship-info must name the ship: " + atBase, sid.find());
+        String shipUuid = sid.group(1);
 
         // Board post-assembly (the proven path - boarding variants have their own test).
         String mountInfo = exec("artest vs seat-mount 0");
@@ -185,7 +196,7 @@ public class VSShipPoweredEntryE2ETest {
         try {
             for (int attempt = 0; attempt < budget && (yControl - yRest) < MIN_CONTROL_CLIMB; attempt++) {
                 bot().waitTicks(5);
-                Matcher m = POS_Y.matcher(shipInfoAtBase());
+                Matcher m = POS_Y.matcher(shipInfoById(shipUuid));
                 if (m.find()) {
                     yControl = Double.parseDouble(m.group(1));
                 }
@@ -211,7 +222,7 @@ public class VSShipPoweredEntryE2ETest {
                         ledger = Integer.parseInt(lm.group(1));
                     }
                 } else {
-                    Matcher m = POS_Y.matcher(shipInfoAtBase());
+                    Matcher m = POS_Y.matcher(shipInfoById(shipUuid));
                     if (m.find()) {
                         lastY = Double.parseDouble(m.group(1));
                     }
@@ -335,8 +346,21 @@ public class VSShipPoweredEntryE2ETest {
         return String.join("\n", serverHarness.client().execute(cmd));
     }
 
+    /**
+     * The ship at its BUILD SITE — for the arrangement's load poll and the identity capture only,
+     * since that is the only moment the ship is known to be there. Everything after asks by id.
+     */
     private String shipInfoAtBase() throws Exception {
-        return exec("artest vs ship-info 0 " + BX + " " + BY + " " + BZ);
+        return exec("artest vs ship-info 0 " + BX + " " + BY + " " + BZ + " 48");
+    }
+
+    /**
+     * The NAMED ship, wherever it now is. After the entry crossing cuts it out of the origin world
+     * this answers {@code managed:false} carrying the id — "that ship is gone from here", which is
+     * the fact this scenario is watching for, rather than "nothing is near the base any more".
+     */
+    private String shipInfoById(String shipUuid) throws Exception {
+        return exec("artest vs ship-info 0 id " + shipUuid);
     }
 
     private double clientPlayerY() throws Exception {

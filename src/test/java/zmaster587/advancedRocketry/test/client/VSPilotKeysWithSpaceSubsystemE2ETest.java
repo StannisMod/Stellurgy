@@ -46,6 +46,7 @@ public class VSPilotKeysWithSpaceSubsystemE2ETest {
     private static final Pattern BUILDER_POS =
             Pattern.compile("\"builderPos\":\\[(-?\\d+),(-?\\d+),(-?\\d+)]");
     private static final Pattern POS_Y = Pattern.compile("\"posY\":(-?[0-9.E\\-]+)");
+    private static final Pattern SHIP_ID = Pattern.compile("\"id\":\"([^\"]*)\"");
     private static final Pattern DUMMY_ID = Pattern.compile("\"dummyId\":(-?\\d+)");
 
     private static final String VARIANT = "with-pilot-seat";
@@ -132,15 +133,24 @@ public class VSPilotKeysWithSpaceSubsystemE2ETest {
         clientHarness.bot().waitTicks(20);
 
         double yBefore = Double.NaN;
+        String atBase = "";
         for (int attempt = 0; attempt < 40 && Double.isNaN(yBefore); attempt++) {
             clientHarness.bot().waitTicks(5);
-            String info = exec("artest vs ship-info 0 " + BX + " " + BY + " " + BZ);
-            Matcher m = POS_Y.matcher(info);
+            // The one positional lookup this scenario spends: the ship is freshly assembled at its
+            // own base and the bound cannot admit anything else. Its answer is the identity below.
+            atBase = exec("artest vs ship-info 0 " + BX + " " + BY + " " + BZ + " 48");
+            Matcher m = POS_Y.matcher(atBase);
             if (m.find()) {
                 yBefore = Double.parseDouble(m.group(1));
             }
         }
         assertTrue("the ship must LOAD with the client present", !Double.isNaN(yBefore));
+
+        // Keyed on IDENTITY from here on: the whole measurement below is the ship CLIMBING away
+        // from this base, which is the one place a nearest-ship query stops meaning it.
+        Matcher sid = SHIP_ID.matcher(atBase);
+        assertTrue("ship-info must name the ship: " + atBase, sid.find());
+        final String shipUuid = sid.group(1);
 
         String mountInfo = exec("artest vs seat-mount 0");
         Matcher dm = DUMMY_ID.matcher(mountInfo);
@@ -160,7 +170,7 @@ public class VSPilotKeysWithSpaceSubsystemE2ETest {
             // is unparseable), so the predicate holds only on a genuine climb.
             lift = ClientPoll.until(clientHarness.bot()::waitTicks,
                     () -> {
-                        Matcher m = POS_Y.matcher(exec("artest vs ship-info 0 " + BX + " " + BY + " " + BZ));
+                        Matcher m = POS_Y.matcher(exec("artest vs ship-info 0 id " + shipUuid));
                         return m.find() ? Double.parseDouble(m.group(1)) : y0;
                     },
                     y -> (y - y0) >= MIN_CLIMB, 5, 40);

@@ -3,7 +3,6 @@ package zmaster587.advancedRocketry.navigation;
 import java.util.UUID;
 
 import net.minecraft.tileentity.TileEntity;
-import net.minecraft.util.math.AxisAlignedBB;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.world.World;
 
@@ -12,7 +11,6 @@ import zmaster587.advancedRocketry.hyperdrive.JumpWindow;
 import zmaster587.advancedRocketry.hyperdrive.ShipDrive;
 import zmaster587.advancedRocketry.hyperdrive.ShipDriveStats;
 import zmaster587.advancedRocketry.hyperdrive.ShipMassProvider;
-import zmaster587.advancedRocketry.integration.vs.VSIntegration;
 import zmaster587.advancedRocketry.space.GalacticCoord;
 import zmaster587.advancedRocketry.space.ShipLedger;
 import zmaster587.advancedRocketry.space.ShipTransitManager;
@@ -24,9 +22,13 @@ import zmaster587.advancedRocketry.tile.TileNavigationComputer;
  * {@link JumpGate.ShipContext}.
  *
  * <p>A ship is identified the way everything else in the space layer identifies it: by its flight
- * computer's block and its durable id. The navigation computer is found by searching the ship's own
- * subspace claim for a computer that points back at THIS flight computer, so a second ship parked
- * alongside can never lend its navigation.</p>
+ * computer's block and its durable id. The navigation computer is the console that points back at
+ * THIS flight computer's block, so a second ship parked alongside can never lend its navigation.
+ * Nothing here consults a region. The console's own link IS the answer, and the shipyard box this
+ * search used to pre-filter on was resolved in the WRONG FRAME: it ranked ships by their transform
+ * position (where the hull floats in the world) against the flight computer's SUBSPACE block, so
+ * with more than one craft loaded it could pre-filter this ship's own console away and report a
+ * jump-capable ship as having no navigation at all.</p>
  */
 public final class ShipNavigation implements JumpGate.ShipContext {
 
@@ -173,25 +175,22 @@ public final class ShipNavigation implements JumpGate.ShipContext {
     }
 
     /**
-     * The navigation computer of THIS ship, or {@code null}. Searched inside the ship's own subspace
-     * claim — the only region whose blocks belong to it — and confirmed by the computer's own link
-     * back to this flight computer.
+     * The navigation computer of THIS ship, or {@code null} — the loaded console whose own link
+     * points back at this flight computer's block.
      */
     public TileNavigationComputer findNavComputer() {
         if (world == null || flightComputerPos == null) {
             return null;
         }
-        AxisAlignedBB yard = VSIntegration.shipyardBoundsAt(world,
-                flightComputerPos.getX() + 0.5, flightComputerPos.getY() + 0.5,
-                flightComputerPos.getZ() + 0.5);
         for (TileEntity te : world.loadedTileEntityList.toArray(new TileEntity[0])) {
             if (!(te instanceof TileNavigationComputer)) {
                 continue;
             }
             TileNavigationComputer nav = (TileNavigationComputer) te;
-            if (yard != null && !withinXZ(yard, nav.getPos())) {
-                continue; // some other ship's computer, or one sitting on a planet
-            }
+            // The DECIDER, and the only test here: a console that points back at THIS flight
+            // computer's block. Subspace blocks live in per-ship yards at distinct world
+            // coordinates, so that block is a name, not a neighbourhood — a console on another ship
+            // or on a planet points somewhere else or nowhere.
             if (flightComputerPos.equals(nav.getFlightComputerPos())) {
                 return nav;
             }
@@ -199,9 +198,4 @@ public final class ShipNavigation implements JumpGate.ShipContext {
         return null;
     }
 
-    /** The claim gives an XZ region; a ship's blocks never leave their own claim's footprint. */
-    private static boolean withinXZ(AxisAlignedBB yard, BlockPos pos) {
-        return pos.getX() >= yard.minX && pos.getX() <= yard.maxX
-                && pos.getZ() >= yard.minZ && pos.getZ() <= yard.maxZ;
-    }
 }

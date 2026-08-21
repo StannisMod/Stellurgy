@@ -65,6 +65,10 @@ public class VSAssembledShipRealRightClickBoardingE2ETest {
     private static final Pattern BUILDER_POS =
             Pattern.compile("\"builderPos\":\\[(-?\\d+),(-?\\d+),(-?\\d+)]");
     private static final Pattern POS_Y = Pattern.compile("\"posY\":(-?[0-9.E\\-]+)");
+    private static final Pattern SHIP_ID = Pattern.compile("\"id\":\"([^\"]*)\"");
+
+    /** This scenario's ship, by identity — captured at its build site before anything moves. */
+    private String shipUuid;
     private static final Pattern SEAT_SUB = Pattern.compile(
             "\"seatX\":(-?\\d+),\"seatY\":(-?\\d+),\"seatZ\":(-?\\d+)");
     private static final Pattern SHIP_WORLD = Pattern.compile(
@@ -178,15 +182,25 @@ public class VSAssembledShipRealRightClickBoardingE2ETest {
         exec("tp @a " + (BX + 0.5) + " " + (BY + 8) + " " + (BZ + 0.5) + " 0 0");
         bot().waitTicks(20);
         double yRest = Double.NaN;
+        String atBase = "";
         for (int attempt = 0; attempt < budget && Double.isNaN(yRest); attempt++) {
             bot().waitTicks(5);
-            Matcher m = POS_Y.matcher(shipInfoAtBase());
+            atBase = shipInfoAtBase();
+            Matcher m = POS_Y.matcher(atBase);
             if (m.find()) {
                 yRest = Double.parseDouble(m.group(1));
             }
         }
-        assertTrue("ARRANGEMENT: the ship must LOAD with the client present: " + shipInfoAtBase(),
+        assertTrue("ARRANGEMENT: the ship must LOAD with the client present: " + atBase,
                 !Double.isNaN(yRest));
+
+        // The ship's IDENTITY, captured while it is still the only craft that can be at this base.
+        // The seat lookup below goes through it: `find-seat <dim> <x> <y> <z>` resolves the yard by
+        // "whichever craft is nearest that point", which is exact with one candidate and silently
+        // wrong with two — and this class is a re-home candidate onto a SHARED world.
+        Matcher sid = SHIP_ID.matcher(atBase);
+        assertTrue("ARRANGEMENT: ship-info must name the ship: " + atBase, sid.find());
+        shipUuid = sid.group(1);
 
         // The seat's SUBSPACE address (stationary, what the raytrace should report) and its live
         // WORLD position (what the bot has to aim at). Both come from the same probe reading.
@@ -340,13 +354,17 @@ public class VSAssembledShipRealRightClickBoardingE2ETest {
         return String.join("\n", serverHarness.client().execute(cmd));
     }
 
+    /**
+     * The ship at its BUILD SITE — for the arrangement's load poll and the identity capture only,
+     * since that is the only moment the ship is known to be there.
+     */
     private String shipInfoAtBase() throws Exception {
-        return exec("artest vs ship-info 0 " + BX + " " + BY + " " + BZ);
+        return exec("artest vs ship-info 0 " + BX + " " + BY + " " + BZ + " 48");
     }
 
-    /** The seat's subspace address + live world position, resolved from the craft's build site. */
+    /** The seat's subspace address + live world position, resolved from the craft's IDENTITY. */
     private String findSeat() throws Exception {
-        return exec("artest vs find-seat 0 " + BX + " " + (BY + 5) + " " + BZ);
+        return exec("artest vs find-seat 0 id " + shipUuid);
     }
 
     private static boolean isWorldReady(JsonObject report) {

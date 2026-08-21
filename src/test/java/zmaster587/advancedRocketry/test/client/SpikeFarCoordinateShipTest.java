@@ -378,7 +378,9 @@ public class SpikeFarCoordinateShipTest extends AbstractClientE2ETest {
             // ONE command. Forward throttle rather than vertical: horizontal travel has no ceiling to
             // be mistaken for a command that stopped surviving.
             double[] before = shipXZ(shipId);
-            String commanded = exec("artest vs seat-input 0 1 0 0 0 0 0");
+            // Addressed: this spike flies its ship to coordinates where "the first pilot seat the
+            // world lists" is the least trustworthy address there is, and the id is already in hand.
+            String commanded = exec("artest vs seat-input-by-id 0 " + shipId + " 1 0 0 0 0 0");
             out.append("  commanded once: ").append(oneLine(commanded)).append('\n');
             out.append("  subspaceSeat=(").append(fmt(field(mountInfo, "seatX"))).append(',')
                     .append(fmt(field(mountInfo, "seatZ"))).append(")\n");

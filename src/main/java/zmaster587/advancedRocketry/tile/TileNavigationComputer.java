@@ -354,19 +354,34 @@ public class TileNavigationComputer extends TileInventoryHatch
      * <p>The assembler is what normally binds the pair, at the one moment it holds the whole craft —
      * so a console <b>added to a ship that is already assembled</b> was never linked to anything and
      * stayed inert forever, with no way for the player to bind it short of rebuilding the craft. That
-     * is the only thing this covers: the console adopts the flight computer that shares its ship's
-     * subspace claim, which is the same region {@code ShipNavigation} searches in the other
-     * direction.</p>
+     * is the only thing this covers: the console adopts the flight computer OF ITS OWN SHIP, the one
+     * {@code ShipNavigation} looks for in the other direction.</p>
      *
-     * <p>Off a ship there is no claim and nothing is adopted — a console standing on a planet next to
+     * <p>Off a ship there is no ship and nothing is adopted — a console standing on a planet next to
      * a flight computer must NOT silently bind itself to it.</p>
+     *
+     * <p><b>Identity, not a box — and the box was read in the wrong frame.</b> This used to accept
+     * any flight computer inside the XZ span of the shipyard claim "nearest" the console's own
+     * position. That lookup ranks ships by their TRANSFORM POSITION, which is where the hull floats
+     * in the WORLD, while a console aboard a ship reports a SUBSPACE block — the two are different
+     * frames and are nowhere near each other, so the ship it picked was whichever hull happened to
+     * be flying closest to a coordinate in the shipyard region. With one craft in the world that is
+     * always the right answer and the mistake is invisible; with two it is a coin toss, and the
+     * claim it then measured against could equally admit a stranger's computer or reject this
+     * console's own. The console knows which craft it belongs to — the block it occupies is claimed
+     * by one — so a cheap type filter leaves a handful of tiles and only then is the identity
+     * asked for.</p>
+     *
+     * <p>The REGISTERED id, never the live one: a console is adopted on ships nobody is standing
+     * near — a docked craft, a world just reloaded — and the live lookup is null for exactly those.
+     * The comparison is {@code mine.equals(theirs)}, so a candidate whose id cannot be resolved
+     * fails to match instead of matching everything.</p>
      */
     private void adoptShipFlightComputer() {
-        net.minecraft.util.math.AxisAlignedBB yard =
-                zmaster587.advancedRocketry.integration.vs.VSIntegration.shipyardBoundsAt(
-                        world, pos.getX() + 0.5, pos.getY() + 0.5, pos.getZ() + 0.5);
-        if (yard == null) {
-            return;
+        String myShip = zmaster587.advancedRocketry.integration.vs.VSIntegration
+                .registeredShipIdManagingBlock(world, pos);
+        if (myShip == null) {
+            return; // not aboard a ship — there is nothing to adopt
         }
         for (net.minecraft.tileentity.TileEntity te
                 : world.loadedTileEntityList.toArray(new net.minecraft.tileentity.TileEntity[0])) {
@@ -374,8 +389,8 @@ public class TileNavigationComputer extends TileInventoryHatch
                 continue;
             }
             BlockPos afc = te.getPos();
-            if (afc.getX() < yard.minX || afc.getX() > yard.maxX
-                    || afc.getZ() < yard.minZ || afc.getZ() > yard.maxZ) {
+            if (!myShip.equals(zmaster587.advancedRocketry.integration.vs.VSIntegration
+                    .registeredShipIdManagingBlock(world, afc))) {
                 continue; // another ship's flight computer
             }
             linkToFlightComputer(afc);
