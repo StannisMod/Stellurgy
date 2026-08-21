@@ -448,9 +448,9 @@ public class VSPreAssemblyBoardingPilotControlE2ETest {
     private String deliveryDiagnostics() {
         String client;
         try {
-            client = "gateClosedTicks=" + staticValue("zmaster587.advancedRocketry.client.KeyBindings", "shipGateClosedTicks")
-                    + " gateOpenTicks=" + staticValue("zmaster587.advancedRocketry.client.KeyBindings", "shipGateOpenTicks")
-                    + " sends=" + staticValue("zmaster587.advancedRocketry.client.KeyBindings", "shipInputSendCount")
+            client = "gateClosedTicks=" + staticValue("zmaster587.advancedRocketry.command.test.SeatDiag", "shipGateClosedTicks")
+                    + " gateOpenTicks=" + staticValue("zmaster587.advancedRocketry.command.test.SeatDiag", "shipGateOpenTicks")
+                    + " sends=" + staticValue("zmaster587.advancedRocketry.command.test.SeatDiag", "shipInputSendCount")
                     + " resolves=" + staticValue("zmaster587.advancedRocketry.command.test.SeatDiag", "riderResolveCount")
                     + " lastResolve[" + staticValue("zmaster587.advancedRocketry.command.test.SeatDiag", "lastRiderResolve") + "]";
         } catch (Exception e) {

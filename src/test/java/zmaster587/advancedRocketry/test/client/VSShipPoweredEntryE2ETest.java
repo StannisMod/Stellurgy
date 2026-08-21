@@ -371,7 +371,7 @@ public class VSShipPoweredEntryE2ETest {
 
     /** The client-side pilot-input gate discriminators (the delivery chain's CLIENT half). */
     private String clientGateStats() throws Exception {
-        String cls = "zmaster587.advancedRocketry.client.KeyBindings";
+        String cls = "zmaster587.advancedRocketry.command.test.SeatDiag";
         return "open=" + bot().readStaticField(cls, "shipGateOpenTicks").get("value").getAsString()
                 + " closed=" + bot().readStaticField(cls, "shipGateClosedTicks").get("value").getAsString()
                 + " sends=" + bot().readStaticField(cls, "shipInputSendCount").get("value").getAsString()

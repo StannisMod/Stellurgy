@@ -42,6 +42,33 @@ public final class SeatDiag {
      *  was there, whether that seat was linked, and which side asked. */
     public static volatile String lastRiderResolve = "";
 
+    // ---- The CLIENT half of the same chain: whether this client even tried to send. ----------
+    //
+    // The client gate refuses SILENTLY — when the ridden mount resolves no linked pilot seat the
+    // client simply never sends, which from outside is indistinguishable from "sent but lost". The
+    // counters above attribute a packet that ARRIVED; these attribute one that was never posted.
+
+    /** Client ticks on which the tier-2 gate refused: riding, but no linked seat resolved. */
+    public static volatile int shipGateClosedTicks;
+    /** Client ticks on which the gate held a linked pilot seat (the pilot branch ran). */
+    public static volatile int shipGateOpenTicks;
+    /** Pilot-input packets this client actually dispatched to a seat. */
+    public static volatile int shipInputSendCount;
+
+    /** The client gate's decision for one tick. */
+    public static void clientGate(boolean open) {
+        if (open) {
+            shipGateOpenTicks++;
+        } else {
+            shipGateClosedTicks++;
+        }
+    }
+
+    /** One pilot-input packet left this client. */
+    public static void clientSent() {
+        shipInputSendCount++;
+    }
+
     /** In-flight state for the packet being handled right now. */
     private static boolean inPacket;
     private static String packetSeat = "";
@@ -57,6 +84,9 @@ public final class SeatDiag {
         pilotCommandPacketsReceived = 0;
         riderResolveCount = 0;
         lastRiderResolve = "";
+        shipGateClosedTicks = 0;
+        shipGateOpenTicks = 0;
+        shipInputSendCount = 0;
         inPacket = false;
     }
 

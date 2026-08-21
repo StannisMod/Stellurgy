@@ -18,6 +18,7 @@
     "MixinClientProxyDiag",
     "MixinHyperspaceTunnelDiag",
     "MixinKeyBindingsMotionSample",
+    "MixinKeyBindingsSeatGate",
     "MixinRocketEventHandlerMotionSample"
   ]
 }

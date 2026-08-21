@@ -122,20 +122,6 @@ public class KeyBindings {
     private static volatile boolean cameraPinValid = false;
 
     // ---- Ship-input delivery diagnostics (ungated statics) ----------------------------------
-    // The tier-2 gate below (handleShipPilotInput) refuses SILENTLY: when the ridden mount does
-    // not resolve a linked pilot seat the client just never sends, which from the outside is
-    // indistinguishable from "sent but lost". These counters make the gate's per-tick decision
-    // and the actual send observable (a client test reads them reflectively), so a dead cockpit
-    // can be attributed to the right link of the chain. See TilePilotSeat.lastRiderResolve for
-    // WHAT the resolution saw; deliberately not test-gated so they carry values everywhere.
-
-    /** Client ticks on which the tier-2 gate refused: riding, but no linked seat resolved. */
-    public static volatile int shipGateClosedTicks;
-    /** Client ticks on which the tier-2 gate held a linked pilot seat (the pilot branch ran). */
-    public static volatile int shipGateOpenTicks;
-    /** PACKET_PILOT_INPUT packets this client actually dispatched to the seat. */
-    public static volatile int shipInputSendCount;
-
     /** Client ticks of ship control, the clock {@link PilotInputCadence} counts its repeat
      *  interval on. Not a world time: it must keep counting while the world's own clock is
      *  whatever a loading screen left it at. */
@@ -150,11 +136,11 @@ public class KeyBindings {
     public static final int ENGINE_START_HOLD_TICKS = 60;
     /** Client-side hold progress, 0..ENGINE_START_HOLD_TICKS. Published for the
      *  HUD progress line and for client e2e readback. */
-    public static volatile int engineStartHoldTicks = 0;
+    private static volatile int engineStartHoldTicks = 0;
     /** Ticks left to flash the engine-state line ("Engines started/stopped"). */
-    public static volatile int engineFlashTicks = 0;
+    private static volatile int engineFlashTicks = 0;
     /** Which flash: true = "Engines started", false = "Engines stopped". */
-    public static volatile boolean engineFlashStarted = false;
+    private static volatile boolean engineFlashStarted = false;
     /** Guards the one-shot ENGINE_START send per hold. */
     private boolean engineStartSent = false;
     /** Commanded turn rates of the current tick, [-1,1] — drawn as the HUD
@@ -640,15 +626,13 @@ public class KeyBindings {
             // Diagnostics: count only ticks where the player IS on a seat mount - that is the
             // silent "seated but not piloting" state worth attributing (walking ticks are noise).
             if (player.getRidingEntity() instanceof EntityDummy) {
-                shipGateClosedTicks++;
-            }
+                }
             shipPilotPinValid = false;
             lastSentShipInput = FreeFlightInput.zero();
             pendingCursorYawDeg = 0f;
             pendingCursorPitchDeg = 0f;
             return false;
         }
-        shipGateOpenTicks++;
         BlockPos seatPos = seat.getPos();
 
         boolean cut = turnRocketDown.isKeyDown();
@@ -729,7 +713,6 @@ public class KeyBindings {
                 PilotInputCadence.phaseOfSeat(seatPos.getX(), seatPos.getY(), seatPos.getZ()))) {
             seat.pendingInput = input;
             PacketHandler.sendToServer(new PacketMachine(seat, TilePilotSeat.PACKET_PILOT_INPUT));
-            shipInputSendCount++;
             kbTrace("SHIP send " + input + " -> seat " + seatPos);
             lastSentShipInput = input;
         }
