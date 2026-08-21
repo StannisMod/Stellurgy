@@ -14,6 +14,7 @@ import java.util.regex.Pattern;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
+import static zmaster587.advancedRocketry.test.AdvancedRocketryTestConstants.SHIP_CAPTURE_RADIUS_BLOCKS;
 
 /**
  * E2E: a ship flown out through its cell's face ARRIVES IN THE NEIGHBOUR, and its ledger row names the
@@ -111,7 +112,8 @@ public class VSShipCellSeamE2ETest extends AbstractSharedServerTest {
         // which a crossing REPLACES — the arriving ship is a new VS body. The ledger is keyed by AR's
         // durable ship id, read from `entry-status` once the ship is in space. Asking either side with
         // the other's id answers "not found" and reads exactly like the mechanic being broken.
-        String srcInfo = exec("artest vs ship-info 0 " + SRC_X + " " + SRC_Y + " " + SRC_Z);
+        String srcInfo = exec("artest vs ship-info 0 " + SRC_X + " " + SRC_Y + " " + SRC_Z
+                + " " + SHIP_CAPTURE_RADIUS_BLOCKS);
         assertTrue("source ship not managed by VS: " + srcInfo, srcInfo.contains("\"managed\":true"));
         String srcVsId = extractString(srcInfo, "id");
         assertTrue("the assembled ship reported no VS id: " + srcInfo, srcVsId != null);

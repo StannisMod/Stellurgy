@@ -10,6 +10,7 @@ import java.util.regex.Pattern;
 
 import static zmaster587.advancedRocketry.test.AdvancedRocketryTestConstants.HYPERSPACE_JUMP_SPEED;
 import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.assertEquals;
 
 /**
  * E2E: can a restored in-flight tier-2 jump rebuild its ship by PASTING a block snapshot into the target
@@ -110,6 +111,11 @@ public class VSShipTransitPersistE2ETest extends AbstractSharedServerTest {
         // ONLY through the persisted snapshot — the live ship was discarded.
         assertTrue("the snapshot-restored ship never (re)loaded in the target cell (dim " + targetDim
                 + "); countAll=" + exec("artest vs ship-count-all " + targetDim), waitForLoadedShip(targetDim) >= 1);
+        // The assumption this positional read rests on, CHECKED rather than stated: a slot cell
+        // holds exactly one ship, so "nearest to any point" IS that ship. A second craft here would
+        // make the reply below indistinguishable from a correct one.
+        assertEquals("a slot cell must hold exactly ONE loaded ship for a positional read to name it",
+                1, extractInt(exec("artest vs ship-count " + targetDim), "count"));
         String dstInfo = exec("artest vs ship-info " + targetDim + " -64 200 0");
         assertTrue("the restored ship is not VS-managed in the target cell (snapshot paste/assembly failed): "
                 + dstInfo, dstInfo.contains("\"managed\":true"));

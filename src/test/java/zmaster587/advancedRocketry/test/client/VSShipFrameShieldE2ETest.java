@@ -8,6 +8,7 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 import static org.junit.Assert.assertTrue;
+import static zmaster587.advancedRocketry.test.AdvancedRocketryTestConstants.SHIP_CAPTURE_RADIUS_BLOCKS;
 
 /**
  * P3 (§4.3): the shield must ride an assembled Valkyrien Skies ship. A ship's blocks live in a
@@ -189,7 +190,8 @@ public class VSShipFrameShieldE2ETest extends AbstractClientE2ETest {
 
     /** The ship's identity, captured once while it is provably the only one at the build spot. */
     private String captureShipId() throws Exception {
-        String si = exec("artest vs ship-info 0 " + BX + " " + BY + " " + BZ);
+        String si = exec("artest vs ship-info 0 " + BX + " " + BY + " " + BZ
+                + " " + SHIP_CAPTURE_RADIUS_BLOCKS);
         Matcher m = Pattern.compile("\"id\":\"([^\"]+)\"").matcher(si);
         assertTrue("ship-info must name WHICH ship answered: " + si, m.find());
         return m.group(1);

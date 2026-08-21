@@ -21,6 +21,7 @@ import org.junit.Test;
 import org.lwjgl.input.Keyboard;
 
 import static org.junit.Assert.assertTrue;
+import static zmaster587.advancedRocketry.test.AdvancedRocketryTestConstants.SHIP_CAPTURE_RADIUS_BLOCKS;
 
 /**
  * A pilot who flies his ship through the atmosphere ceiling UNDER HIS OWN POWER must arrive in the
@@ -351,7 +352,8 @@ public class VSShipPoweredEntryE2ETest {
      * since that is the only moment the ship is known to be there. Everything after asks by id.
      */
     private String shipInfoAtBase() throws Exception {
-        return exec("artest vs ship-info 0 " + BX + " " + BY + " " + BZ + " 48");
+        return exec("artest vs ship-info 0 " + BX + " " + BY + " " + BZ
+                + " " + SHIP_CAPTURE_RADIUS_BLOCKS);
     }
 
     /**

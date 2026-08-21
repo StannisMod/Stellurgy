@@ -88,12 +88,22 @@ public class DimensionRandomPlanetReloadTest {
         firstBoot.close();
         firstBoot = null;
 
-        // writeXML always emits numPlanets="0"; bump the first star so a reload
-        // would (buggily) regenerate random planets for it.
+        // Ask the first star for MORE planets than the world holds, so a reload would (buggily)
+        // regenerate random ones for it.
+        //
+        // WHATEVER value is there, not a particular one. This used to require the literal
+        // numPlanets="0", on the comment "writeXML always emits numPlanets=\"0\"" — which was true
+        // only while writeXML ignored the star's real retinue size. That was a bug; when it was
+        // fixed to write star.getMaxRetinueBodies(), this ARRANGEMENT failed and took a healthy
+        // subject down with it. Nothing about the contract cares what number is written, only that
+        // a number asking for more than exists regenerates nothing.
         String content = new String(Files.readAllBytes(xmlPath), StandardCharsets.UTF_8);
-        assertTrue("saved world XML must contain numPlanets=\"0\": " + xmlPath,
-                content.contains("numPlanets=\"0\""));
-        String edited = content.replaceFirst("numPlanets=\"0\"", "numPlanets=\"3\"");
+        Matcher want = Pattern.compile("numPlanets=\"(\\d+)\"").matcher(content);
+        assertTrue("ARRANGEMENT: the saved world XML must record a planet count to bump: " + xmlPath,
+                want.find());
+        String edited = content.substring(0, want.start())
+                + "numPlanets=\"" + (Integer.parseInt(want.group(1)) + 3) + "\""
+                + content.substring(want.end());
         assertNotEquals("edit must change the XML", content, edited);
         Files.write(xmlPath, edited.getBytes(StandardCharsets.UTF_8));
 

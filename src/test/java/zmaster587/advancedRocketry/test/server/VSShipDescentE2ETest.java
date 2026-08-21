@@ -11,6 +11,7 @@ import java.util.regex.Pattern;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
+import static zmaster587.advancedRocketry.test.AdvancedRocketryTestConstants.SHIP_CAPTURE_RADIUS_BLOCKS;
 
 /**
  * E2E: does the tier-2 PLANET DESCENT take a ship in space across into a real planet dimension through the
@@ -63,7 +64,8 @@ public class VSShipDescentE2ETest extends AbstractSharedServerTest {
                 asm.contains("\"rocketCount\":0"));
         assertTrue("the source VS ship never loaded", waitForLoadedShip(0) >= 1);
 
-        String srcInfo = exec("artest vs ship-info 0 " + SRC_X + " " + SRC_Y + " " + SRC_Z);
+        String srcInfo = exec("artest vs ship-info 0 " + SRC_X + " " + SRC_Y + " " + SRC_Z
+                + " " + SHIP_CAPTURE_RADIUS_BLOCKS);
         assertTrue("source ship not managed by VS: " + srcInfo, srcInfo.contains("\"managed\":true"));
         double sx = extractDouble(srcInfo, "posX"), sy = extractDouble(srcInfo, "posY"),
                 sz = extractDouble(srcInfo, "posZ");

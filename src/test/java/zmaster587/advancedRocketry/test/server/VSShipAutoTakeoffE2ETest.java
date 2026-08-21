@@ -10,6 +10,7 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 import static org.junit.Assert.assertTrue;
+import static zmaster587.advancedRocketry.test.AdvancedRocketryTestConstants.SHIP_CAPTURE_RADIUS_BLOCKS;
 
 /**
  * E2E: the tier-2 AUTO-TAKEOFF autopilot — the AUTOMATED half of the entry on-ramp. Two legs on one
@@ -62,7 +63,8 @@ public class VSShipAutoTakeoffE2ETest extends AbstractSharedServerTest {
         assertTrue("AFC build must route to a ship: " + asm, asm.contains("\"rocketCount\":0"));
         assertTrue("source ship never loaded", waitForLoadedShip(0) >= 1);
 
-        String srcInfo = exec("artest vs ship-info 0 " + SRC_X + " " + SRC_Y + " " + SRC_Z);
+        String srcInfo = exec("artest vs ship-info 0 " + SRC_X + " " + SRC_Y + " " + SRC_Z
+                + " " + SHIP_CAPTURE_RADIUS_BLOCKS);
         double sx = extractDouble(srcInfo, "posX"), sy = extractDouble(srcInfo, "posY"),
                 sz = extractDouble(srcInfo, "posZ");
 

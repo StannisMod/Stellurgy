@@ -10,6 +10,7 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 import static org.junit.Assert.assertTrue;
+import static zmaster587.advancedRocketry.test.AdvancedRocketryTestConstants.SHIP_CAPTURE_RADIUS_BLOCKS;
 
 /**
  * Render-pose vs collision-pose consistency for a body standing on a ship.
@@ -293,7 +294,8 @@ public class VSShipRenderPoseSkewE2ETest extends AbstractClientE2ETest {
         double[] where = null;
         for (int i = 0; i < 40 && where == null; i++) {
             bot().waitTicks(5);
-            info = exec("artest vs ship-info 0 " + bx + " " + by + " " + bz + " 48");
+            info = exec("artest vs ship-info 0 " + bx + " " + by + " " + bz
+                    + " " + SHIP_CAPTURE_RADIUS_BLOCKS);
             if (!info.contains("\"managed\":true")) {
                 continue;
             }

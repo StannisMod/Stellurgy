@@ -17,6 +17,7 @@ import zmaster587.advancedRocketry.space.GalacticCoord;
 import static zmaster587.advancedRocketry.test.AdvancedRocketryTestConstants.HYPERSPACE_JUMP_SPEED;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
+import static zmaster587.advancedRocketry.test.AdvancedRocketryTestConstants.SHIP_CAPTURE_RADIUS_BLOCKS;
 
 /**
  * A pilot who RELOGS in the middle of a hyperspace transit regains control ON ARRIVAL: after the
@@ -315,7 +316,8 @@ public class VSMidTransitRelogControlE2ETest extends AbstractClientE2ETest {
     private String captureShipIdNear(int dim, int x, int y, int z) throws Exception {
         String info = "";
         for (int attempt = 0; attempt < 40; attempt++) {
-            info = exec("artest vs ship-info " + dim + " " + x + " " + y + " " + z + " 48");
+            info = exec("artest vs ship-info " + dim + " " + x + " " + y + " " + z
+                    + " " + SHIP_CAPTURE_RADIUS_BLOCKS);
             if (info.contains("\"managed\":true")) {
                 Matcher m = SHIP_ID.matcher(info);
                 if (m.find() && !m.group(1).isEmpty()) {

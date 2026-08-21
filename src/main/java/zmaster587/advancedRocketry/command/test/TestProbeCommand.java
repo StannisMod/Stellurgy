@@ -928,6 +928,71 @@ public class TestProbeCommand extends CommandBase {
             }
             return;
         }
+        // teleport-ship-by-id <dim> <shipId> <dstX> <dstY> <dstZ> — the same rigid teleport, aimed at
+        // ONE craft by identity. The positional form below resolves "whichever registered ship is
+        // nearest the source point", which is exact only while the world holds one candidate — and a
+        // scenario that teleports a ship is by definition one whose ship does not stay where it was.
+        // The riders it carries are still gathered around the ship's CURRENT pose, because being
+        // aboard is a spatial fact and not an identity one.
+        if (args.length >= 6 && "teleport-ship-by-id".equalsIgnoreCase(args[0])) {
+            net.minecraft.world.WorldServer world = vsWorld(sender, parseIntOr(args[1], Integer.MIN_VALUE));
+            if (world == null) {
+                send(sender, "{\"error\":\"world not loaded\"}");
+                return;
+            }
+            java.util.UUID uuid;
+            try {
+                uuid = java.util.UUID.fromString(args[2]);
+            } catch (IllegalArgumentException notAUuid) {
+                send(sender, "{\"ok\":false,\"error\":\"shipId is not a uuid\"}");
+                return;
+            }
+            // The REGISTERED pose, so this works for a ship nobody is standing near: the riders are
+            // gathered around where the ship actually is, not around where the caller guesses.
+            double[] before = zmaster587.advancedRocketry.integration.vs.VSIntegration
+                    .registeredShipPoses(world).get(uuid);
+            if (before == null) {
+                send(sender, "{\"ok\":false,\"error\":\"no registered ship with that id\"}");
+                return;
+            }
+            double dstX = parseDoubleOr(args[3], 0), dstY = parseDoubleOr(args[4], 0),
+                    dstZ = parseDoubleOr(args[5], 0);
+            java.util.List<zmaster587.advancedRocketry.entity.EntityDummy> riders =
+                    world.getEntitiesWithinAABB(zmaster587.advancedRocketry.entity.EntityDummy.class,
+                            new net.minecraft.util.math.AxisAlignedBB(
+                                    before[0] - 8, before[1] - 8, before[2] - 8,
+                                    before[0] + 8, before[1] + 8, before[2] + 8));
+            boolean ok = zmaster587.advancedRocketry.integration.vs.VSIntegration
+                    .teleportShipToByUuid(world, uuid, dstX, dstY, dstZ);
+            if (ok) {
+                for (zmaster587.advancedRocketry.entity.EntityDummy d : riders) {
+                    d.setPositionAndUpdate(d.posX + (dstX - before[0]),
+                            d.posY + (dstY - before[1]), d.posZ + (dstZ - before[2]));
+                }
+            }
+            send(sender, "{\"ok\":" + ok + ",\"ridersCarried\":" + riders.size()
+                    + ",\"fromX\":" + before[0] + ",\"fromY\":" + before[1]
+                    + ",\"fromZ\":" + before[2] + "}");
+            return;
+        }
+        // unpark-by-id <dim> <shipId> — re-enable physics on the ship NAMED by shipId, after a
+        // teleport that left it parked. The identity-keyed twin of `unpark` below: a ship that has
+        // just been moved is precisely the one a position lookup is least able to find.
+        if (args.length >= 3 && "unpark-by-id".equalsIgnoreCase(args[0])) {
+            net.minecraft.world.WorldServer world = vsWorld(sender, parseIntOr(args[1], Integer.MIN_VALUE));
+            if (world == null) {
+                send(sender, "{\"error\":\"world not loaded\"}");
+                return;
+            }
+            try {
+                boolean ok = zmaster587.advancedRocketry.integration.vs.VSIntegration.unparkShip(
+                        world, java.util.UUID.fromString(args[2]));
+                send(sender, "{\"ok\":" + ok + "}");
+            } catch (IllegalArgumentException notAUuid) {
+                send(sender, "{\"ok\":false,\"error\":\"shipId is not a uuid\"}");
+            }
+            return;
+        }
         // teleport-ship <dim> <x> <y> <z> <dstX> <dstY> <dstZ> — rigid-teleport the ship nearest to
         // (x,y,z): the world-frame POSE moves (subspace blocks stay), VS Y-limits widen as needed, and
         // any aboard EntityDummy (+its rider) is carried. Park->write->unpark around the transform write.
@@ -2232,6 +2297,8 @@ public class TestProbeCommand extends CommandBase {
                 + "|phys-diag <dim> <shipId> <afcX> <afcY> <afcZ>"
                 + "|seat-input <dim> <fwd> <vert> <strafe> <yaw> <pitch> <roll>"
                 + "|seat-input-by-id <dim> <shipId> <fwd> <vert> <strafe> <yaw> <pitch> <roll>"
+                + "|teleport-ship-by-id <dim> <shipId> <dstX> <dstY> <dstZ>"
+                + "|unpark-by-id <dim> <shipId>"
                 + "|seat-mount <dim>|seat-occupy <dim> <x> <y> <z>|seat-delivery|arrival-trace"
                 + "|player-ship-data|shipframe-stats|would-take-over|deck-capture [<dim> <id>]"
                 + "|subspace-census [<dim> <id>]\"}");

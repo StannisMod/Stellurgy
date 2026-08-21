@@ -8,6 +8,7 @@ import zmaster587.advancedRocketry.test.GameTicks;
 
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
+import static zmaster587.advancedRocketry.test.AdvancedRocketryTestConstants.SHIP_CAPTURE_RADIUS_BLOCKS;
 
 /**
  * A ship's navigation lookup must answer for the ship it was ASKED ABOUT, in a world holding more
@@ -47,7 +48,7 @@ public class NavLookupNamesItsOwnShipE2ETest extends AbstractSharedServerTest {
     private static final int SHIP_B_X = 6164, SHIP_B_Y = 80, SHIP_B_Z = 6100;
 
     /** How far a ship-info answer may be from a freshly assembled craft's own base, in blocks. */
-    private static final int SHIP_QUERY_RADIUS = 48;
+    private static final int SHIP_QUERY_RADIUS = SHIP_CAPTURE_RADIUS_BLOCKS;
 
     @Test
     public void eachShipsNavigationLookupAnswersForItsOwnShip() throws Exception {

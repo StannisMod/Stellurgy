@@ -11,6 +11,7 @@ import java.util.regex.Pattern;
 import static zmaster587.advancedRocketry.test.AdvancedRocketryTestConstants.HYPERSPACE_JUMP_SPEED;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
+import static zmaster587.advancedRocketry.test.AdvancedRocketryTestConstants.SHIP_CAPTURE_RADIUS_BLOCKS;
 
 /**
  * <b>A jump carries what is lying on the deck, not only who is sitting on it.</b> The half of JUMP-11
@@ -72,7 +73,7 @@ public class VSJumpCarriesLooseBodiesE2ETest extends AbstractSharedServerTest {
         // makes "it was not carried" indistinguishable from "it was not there". The ship's own
         // identity is handed in so the probe can answer production's question rather than a proxy.
         String shipId = extractString(exec("artest vs ship-info " + originDim + " " + (int) shipX + " "
-                + (int) shipY + " " + (int) shipZ), "id");
+                + (int) shipY + " " + (int) shipZ + " " + SHIP_CAPTURE_RADIUS_BLOCKS), "id");
         String dropped = exec("artest space loose-body " + originDim + " " + shipX + " " + shipY + " "
                 + shipZ + " " + shipId);
         assertTrue("ARRANGEMENT: the body must be dropped: " + dropped, dropped.contains("\"ok\":true"));
@@ -96,9 +97,15 @@ public class VSJumpCarriesLooseBodiesE2ETest extends AbstractSharedServerTest {
         assertTrue("the jump never completed; last tick=" + lastTick[0], targetDim >= 0);
 
         // The placement is retry-based like the crew's, so drive the same retries the crew leg drives.
+        // The positional read inside this loop rests on the target cell holding exactly one ship.
+        // It is checked ON EVERY ITERATION rather than once up front: the ship is still arriving, so
+        // "how many are in there" is precisely what changes while the loop runs.
         final String[] arrived = {""};
         boolean carried = GameTicks.until(client(), GameTicks.server(), PLACEMENT_TICKS, () -> {
             exec("artest space transit-tick 10");
+            if (extractInt(exec("artest vs ship-count " + targetDim), "count") != 1) {
+                return false; // not arrived yet, or not alone — either way not a nameable answer
+            }
             arrived[0] = exec("artest vs ship-info " + targetDim + " 0 200 0");
             if (!arrived[0].contains("\"posX\"")) {
                 return false;

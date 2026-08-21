@@ -7,6 +7,7 @@ import java.util.regex.Pattern;
 
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
+import static zmaster587.advancedRocketry.test.AdvancedRocketryTestConstants.SHIP_CAPTURE_RADIUS_BLOCKS;
 
 /**
  * The shared-client base for the Valkyrien Skies / tier-2 ship scenarios.
@@ -80,7 +81,7 @@ public abstract class AbstractSharedVsClientE2ETest extends AbstractSharedClient
      * moved — and everything afterwards goes through {@link #shipInfoById}, which has no distance
      * term at all.</p>
      */
-    protected static final int SHIP_QUERY_RADIUS = 48;
+    protected static final int SHIP_QUERY_RADIUS = SHIP_CAPTURE_RADIUS_BLOCKS;
 
     private static final Pattern SHIP_ID = Pattern.compile("\"id\":\"([^\"]*)\"");
 

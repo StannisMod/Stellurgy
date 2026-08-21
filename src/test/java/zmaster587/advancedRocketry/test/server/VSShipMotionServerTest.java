@@ -10,6 +10,7 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 import static org.junit.Assert.assertTrue;
+import static zmaster587.advancedRocketry.test.AdvancedRocketryTestConstants.SHIP_CAPTURE_RADIUS_BLOCKS;
 
 /**
  * Substrate checkpoint — proves Valkyrien Skies physics is LIVE in the test
@@ -107,7 +108,8 @@ public class VSShipMotionServerTest extends AbstractSharedServerTest {
             if (loaded < 1) {
                 return false;
             }
-            String info = exec("artest vs ship-info 0 " + BX + " " + BY + " " + BZ);
+            String info = exec("artest vs ship-info 0 " + BX + " " + BY + " " + BZ
+                    + " " + SHIP_CAPTURE_RADIUS_BLOCKS);
             if (!info.contains("\"managed\":true")) {
                 return false;
             }

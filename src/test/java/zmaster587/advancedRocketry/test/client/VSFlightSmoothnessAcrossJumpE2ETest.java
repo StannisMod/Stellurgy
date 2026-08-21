@@ -13,6 +13,7 @@ import java.util.regex.Pattern;
 
 import static zmaster587.advancedRocketry.test.AdvancedRocketryTestConstants.HYPERSPACE_JUMP_SPEED;
 import static org.junit.Assert.assertTrue;
+import static zmaster587.advancedRocketry.test.AdvancedRocketryTestConstants.SHIP_CAPTURE_RADIUS_BLOCKS;
 
 /**
  * Does a ship fly as SMOOTHLY after a jump as it did before one?
@@ -166,8 +167,11 @@ public class VSFlightSmoothnessAcrossJumpE2ETest extends AbstractClientE2ETest {
         assertTrue("ARRANGEMENT: the origin ship never assembled/loaded in dim " + originDim,
                 waitForLoadedShip(originDim) >= 1);
 
-        String seat = exec("artest vs find-seat " + originDim
-                + " " + (bx + 3) + " " + (by + 3) + " " + (bz + 3));
+        // The ship's IDENTITY, at the one moment a positional lookup is defensible: freshly
+        // assembled at its own base, before the pilot lifts it. The seat lookup goes through it too
+        // — the positional form of find-seat resolves the yard as "whichever craft is nearest".
+        String shipId = captureShipIdAtBase(originDim, bx + 3, by + 3, bz + 3);
+        String seat = exec("artest vs find-seat " + originDim + " id " + shipId);
         assertTrue("ARRANGEMENT: the pilot seat must be found in the assembled ship: " + seat,
                 readBool(seat, "seatFound"));
         int seatX = readInt(seat, "seatX"), seatY = readInt(seat, "seatY"), seatZ = readInt(seat, "seatZ");
@@ -191,7 +195,10 @@ public class VSFlightSmoothnessAcrossJumpE2ETest extends AbstractClientE2ETest {
 
         // ---- ACT: the jump. Probe-driven so the park cannot race the measurement either side. ---
         bot().waitTicks(40); // let the station-hold settle, so the departure anchor is a still pose
-        String shipNow = exec("artest vs ship-info " + originDim + " " + sx + " " + sy + " " + sz);
+        // BY IDENTITY: the control leg above LIFTS the ship clear of the ground, so its berth is
+        // exactly the place it is no longer at. A bounded read there answers managed:false and an
+        // unbounded one answers about whatever else is loaded; neither is this ship.
+        String shipNow = exec("artest vs ship-info " + originDim + " id " + shipId);
         assertTrue("ARRANGEMENT: the ship must still be managed at its berth: " + shipNow,
                 shipNow.contains("\"managed\":true"));
         String begin = exec("artest space transit-begin " + originDim
@@ -419,6 +426,27 @@ public class VSFlightSmoothnessAcrossJumpE2ETest extends AbstractClientE2ETest {
      * <p>A red here is an ARRANGEMENT failure, not a smoothness finding: the craft never left its
      * build site, so there is nothing to measure the jump against.</p>
      */
+    /**
+     * The identity of the ship freshly assembled near {@code (x,y,z)} — the single positional lookup
+     * this scenario is entitled to, spent before anything moves it.
+     */
+    private String captureShipIdAtBase(int dim, int x, int y, int z) throws Exception {
+        String info = "";
+        for (int attempt = 0; attempt < 40; attempt++) {
+            info = exec("artest vs ship-info " + dim + " " + x + " " + y + " " + z
+                    + " " + SHIP_CAPTURE_RADIUS_BLOCKS);
+            if (info.contains("\"managed\":true")) {
+                Matcher m = Pattern.compile("\"id\":\"([^\"]+)\"").matcher(info);
+                if (m.find()) {
+                    return m.group(1);
+                }
+            }
+            bot().waitTicks(5);
+        }
+        throw new AssertionError("ARRANGEMENT: the assembled ship never named itself at its own base"
+                + " (" + x + "," + y + "," + z + ") in dim " + dim + "; last reply: " + info);
+    }
+
     private void liftClear(int dim, int[] afc) throws Exception {
         double moved = 0.0;
         bot().holdKey(Keyboard.KEY_R);

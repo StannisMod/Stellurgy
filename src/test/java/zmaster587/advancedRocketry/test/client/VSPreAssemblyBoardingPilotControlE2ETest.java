@@ -20,6 +20,7 @@ import org.junit.Test;
 import org.lwjgl.input.Keyboard;
 
 import static org.junit.Assert.assertTrue;
+import static zmaster587.advancedRocketry.test.AdvancedRocketryTestConstants.SHIP_CAPTURE_RADIUS_BLOCKS;
 
 /**
  * A player who SITS DOWN IN THE PILOT SEAT BEFORE HIS SHIP IS ASSEMBLED must still be flying that
@@ -597,7 +598,8 @@ public class VSPreAssemblyBoardingPilotControlE2ETest {
         String info = "";
         String found = null;
         for (int attempt = 0; attempt < SETTLE_MAX_SAMPLES && found == null; attempt++) {
-            info = exec("artest vs ship-info 0 " + BX + " " + BY + " " + BZ + " 48");
+            info = exec("artest vs ship-info 0 " + BX + " " + BY + " " + BZ
+                    + " " + SHIP_CAPTURE_RADIUS_BLOCKS);
             Matcher m = SHIP_ID.matcher(info);
             if (info.contains("\"managed\":true") && m.find() && !m.group(1).isEmpty()) {
                 found = m.group(1);

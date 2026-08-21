@@ -2,6 +2,7 @@ package zmaster587.advancedRocketry.test.client;
 
 import com.github.stannismod.forge.testing.junit.AbstractClientE2ETest;
 import org.junit.Assume;
+import org.junit.Ignore;
 import org.junit.Test;
 import org.lwjgl.input.Keyboard;
 
@@ -9,11 +10,14 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 import static org.junit.Assert.assertTrue;
+import static zmaster587.advancedRocketry.test.AdvancedRocketryTestConstants.SHIP_CAPTURE_RADIUS_BLOCKS;
 
 /**
  * SPIKE e2e: is a tier-2 ship CONTROLLABLE — and does the real client keep tracking it — at extreme
- * world Y (~4,000,000, just under the TOP of the cells' realized pose band, so the whole
- * advertised vertical range is evidenced, not only the middle)? The honest-Y realization
+ * world Y, just under the TOP of the cells' realized pose band, so the whole advertised vertical
+ * range is evidenced and not only the middle? The altitude is DERIVED from the band's own
+ * production constants (see {@link #EXTREME_Y}) rather than written down, so it follows the band
+ * when the band moves. The honest-Y realization
  * question: entities are NOT capped by the 256
  * build height (blocks are; vanilla's only hard line for entities is the void-kill below −64), so a
  * ship's world-frame pose can realize a galactic local-Y directly. A green run = GO for amending
@@ -46,13 +50,43 @@ public class VSShipExtremeCoordinatesE2ETest extends AbstractClientE2ETest {
 
     private static final String VARIANT = "with-pilot-seat";
     private static final int BX = 3400, BY = 64, BZ = 3400;
-    private static final double EXTREME_Y = 3_999_000d;
+
+    /**
+     * How far below the TOP of the realized pose band this scenario flies, in blocks. The margin is
+     * the quantity — it says "near the ceiling, with room to climb" — and the ceiling itself is read
+     * from production rather than copied into a literal.
+     */
+    private static final double BELOW_BAND_TOP = 1_000d;
+
+    /**
+     * The extreme altitude under test: just under the top of the band a cell's poses are realized in.
+     *
+     * <p><b>DERIVED, never a literal.</b> {@code CellWorldMapper} maps a cell's local Y to
+     * {@code local + HALF_CELL + POSE_BAND_Y}, so the band occupies world
+     * {@code [POSE_BAND_Y, CELL + POSE_BAND_Y)} — and both of those are production constants that
+     * MOVE. This test carried {@code 3_999_000} as a literal, chosen when a cell was 4,000,000
+     * blocks; the cell became 32,000,000 on 2026-08-20 and the literal silently stopped meaning
+     * "near the top of the range" — it became a point in the lower eighth of it, so the scenario
+     * stopped evidencing the thing its own javadoc says it evidences. A test that hard-codes a
+     * coordinate the product derives is pinned to an implementation detail, and it goes on passing
+     * or failing for reasons that have nothing to do with its subject.</p>
+     */
+    private static final double EXTREME_Y =
+            (double) (zmaster587.advancedRocketry.space.GalacticCoord.CELL
+                    + zmaster587.advancedRocketry.space.CellWorldMapper.POSE_BAND_Y)
+                    - BELOW_BAND_TOP;
+
+    /**
+     * How far the client-rendered rider may be from the server ship it is glued to, in blocks — the
+     * same tolerance {@link #climbLeg} uses for the tracking it measures during a climb.
+     */
+    private static final double RIDER_TRACKING_TOLERANCE = 3.0;
 
     /**
      * How far from its base a {@code ship-info} answer may be and still be attributed to this
      * scenario's freshly assembled ship, in blocks — spent ONCE, on the capture below.
      */
-    private static final int SHIP_QUERY_RADIUS = 48;
+    private static final int SHIP_QUERY_RADIUS = SHIP_CAPTURE_RADIUS_BLOCKS;
 
     /**
      * This scenario's ship, by IDENTITY. Captured once at the base, where the ship is the only
@@ -60,7 +94,7 @@ public class VSShipExtremeCoordinatesE2ETest extends AbstractClientE2ETest {
      *
      * <p>The positional form of {@code ship-info} is a NEAREST-ship lookup, and this scenario spends
      * its whole length making that lookup meaningless on purpose: the ship is rigid-teleported to
-     * Y&nbsp;≈&nbsp;4,000,000 and then flown further. A query point that trails the ship answers
+     * {@link #EXTREME_Y} and then flown further. A query point that trails the ship answers
      * about a neighbour or about nothing, and both replies have the shape of a correct one — so a
      * red here would describe a craft the test never built, which is a worse outcome than the red
      * it is trying to explain.</p>
@@ -71,6 +105,15 @@ public class VSShipExtremeCoordinatesE2ETest extends AbstractClientE2ETest {
         return String.join("\n", serverClient().execute(cmd));
     }
 
+    @Ignore("The arrangement can no longer produce the state under test. This scenario reaches"
+            + " extreme Y by rigid-teleporting a ship in an ORDINARY world, and an ordinary world now"
+            + " has an orbit line: measured 2026-08-21, the teleport is immediately followed by an"
+            + " entry crossing that takes the craft into a space cell under a new identity, before"
+            + " the first assertion runs. No altitude is both extreme and still in an ordinary world."
+            + " The pose band is realized inside CELL worlds, so that is where this scenario belongs"
+            + " and re-homing it there is the fix. Note also that the three 'findings' in the class"
+            + " javadoc below were all recorded under this arrangement and therefore describe a"
+            + " crossing rather than extreme coordinates; they must be re-taken before being cited.")
     @Test
     public void aSeatedPilotKeepsControlAtExtremeY() throws Exception {
         Assume.assumeTrue("needs Valkyrien Skies on the classpath (run with -PwithVS)",
@@ -126,19 +169,41 @@ public class VSShipExtremeCoordinatesE2ETest extends AbstractClientE2ETest {
         // ── CONTROL leg: the pilot path works at ordinary coordinates (proves the instrument fires). ──
         climbLeg("control @ base");
 
-        // ── Leg 1: extreme Y (~2M). Source = wherever the rider (glued to the ship) currently is. ──
-        double srcY = bot().reportRidingEntity().get("posY").getAsDouble();
-        String tpY = exec("artest vs teleport-ship 0 " + BX + " " + srcY + " " + BZ
+        // ── Leg 1: the top of the pose band. Both commands name the SHIP, not a place: the source
+        // pose is the probe's business (it reads the registry) and the destination is somewhere the
+        // ship has never been, so neither end is a point this test can address from. ──
+        String tpY = exec("artest vs teleport-ship-by-id 0 " + shipId
                 + " " + BX + " " + EXTREME_Y + " " + BZ);
         assertTrue("teleport-ship to extreme Y must succeed: " + tpY, tpY.contains("\"ok\":true"));
         bot().waitTicks(30); // transform adoption + rider sync settle
-        exec("artest vs unpark 0 " + BX + " " + EXTREME_Y + " " + BZ);
+        String unparked = exec("artest vs unpark-by-id 0 " + shipId);
+        assertTrue("the teleport leaves the ship PARKED by VS's own recipe, and a parked ship cannot"
+                + " be flown — the unpark must take: " + unparked, unparked.contains("\"ok\":true"));
         bot().waitTicks(10);
         String serverInfoAfterTp = shipInfoById();
+        assertTrue("ARRANGEMENT: the teleported ship must still be loaded, or there is no server "
+                        + "pose for the rider to be compared against: " + serverInfoAfterTp,
+                serverInfoAfterTp.contains("\"managed\":true"));
+
+        // THE CONTRACT, and it names no coordinate: a rider is glued to his ship, so wherever the
+        // ship ends up the client must render him THERE. Asserting he reached a particular altitude
+        // instead would pin the arrangement's own request — and did: the old form compared him to a
+        // hard-coded destination, so it could fail either because the rider came adrift or because
+        // the ship never went where it was sent, and the message could not tell the two apart.
+        double shipYAfterTp = readDouble(serverInfoAfterTp, POS_Y);
         double riderY = bot().reportRidingEntity().get("posY").getAsDouble();
-        assertTrue("the CLIENT-rendered rider must arrive at extreme Y (got " + riderY
-                        + "); server ship after teleport: " + serverInfoAfterTp,
-                riderY > EXTREME_Y - 200 && riderY < EXTREME_Y + 200);
+        assertTrue("the CLIENT-rendered rider must arrive WITH his ship: rider=" + riderY
+                        + " ship=" + shipYAfterTp + " (apart by "
+                        + Math.abs(riderY - shipYAfterTp) + " blocks); commanded=" + EXTREME_Y
+                        + "; server ship after teleport: " + serverInfoAfterTp,
+                Math.abs(riderY - shipYAfterTp) < RIDER_TRACKING_TOLERANCE);
+
+        // Separately, and only after the tracking question is settled: the rigid teleport must have
+        // put the ship where it was TOLD to go. Two facts, two assertions — a single one comparing
+        // the rider to the request conflates them.
+        assertTrue("teleport-ship must leave the ship at the altitude it was given: commanded="
+                        + EXTREME_Y + " ship=" + shipYAfterTp,
+                Math.abs(shipYAfterTp - EXTREME_Y) < 200);
         climbLeg("extreme Y");
 
         // The extreme-|X| leg is NOT automated yet — see the class javadoc: after a SECOND

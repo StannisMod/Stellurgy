@@ -19,6 +19,7 @@ import org.junit.Before;
 import org.junit.Test;
 
 import static org.junit.Assert.assertTrue;
+import static zmaster587.advancedRocketry.test.AdvancedRocketryTestConstants.SHIP_CAPTURE_RADIUS_BLOCKS;
 
 /**
  * A player can board an ALREADY ASSEMBLED physics ship by aiming at its pilot seat and pressing the
@@ -359,7 +360,8 @@ public class VSAssembledShipRealRightClickBoardingE2ETest {
      * since that is the only moment the ship is known to be there.
      */
     private String shipInfoAtBase() throws Exception {
-        return exec("artest vs ship-info 0 " + BX + " " + BY + " " + BZ + " 48");
+        return exec("artest vs ship-info 0 " + BX + " " + BY + " " + BZ
+                + " " + SHIP_CAPTURE_RADIUS_BLOCKS);
     }
 
     /** The seat's subspace address + live world position, resolved from the craft's IDENTITY. */

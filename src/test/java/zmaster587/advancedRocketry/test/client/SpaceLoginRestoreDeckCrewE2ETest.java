@@ -164,6 +164,11 @@ public class SpaceLoginRestoreDeckCrewE2ETest extends AbstractSpaceLoginRestoreC
                 + " " + Math.cos(half) + " " + Math.sin(half) + " 0.0 0.0");
         assertTrue("ARRANGEMENT: the roll must reach THIS ship's own flight computer: " + rolled,
                 rolled.contains("\"commanded\":true"));
+        // The premise of the two positional reads below, CHECKED: a slot cell holds exactly one
+        // ship, so "nearest to any point" IS this scenario's ship. With a second craft in the cell
+        // the inversion could be read off a stranger and the leg would pass or fail about it.
+        assertEquals("a slot cell must hold exactly ONE loaded ship for a positional read to name it",
+                1, readInt(jsonOf(exec("artest vs ship-count " + slotDim)), "count"));
         double upY = 1.0;
         for (int attempt = 0; attempt < 40 && upY > -0.9; attempt++) {
             bot().waitTicks(10);

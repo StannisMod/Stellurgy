@@ -12,6 +12,7 @@ import java.util.regex.Pattern;
 import zmaster587.advancedRocketry.api.FreeFlightPhysics;
 
 import static org.junit.Assert.assertTrue;
+import static zmaster587.advancedRocketry.test.AdvancedRocketryTestConstants.SHIP_CAPTURE_RADIUS_BLOCKS;
 
 /**
  * A pilot seat's mount faces where its SHIP faces.
@@ -76,7 +77,8 @@ public class VSSeatDummyFacesTheShipE2ETest extends AbstractSharedServerTest {
         // The one positional lookup this scenario can defend — the ship is freshly assembled here and
         // has not moved. It yields the ship's IDENTITY, and the turn command plus every yaw sample
         // below name THAT ship: the craft is about to slew, and the harness server is shared.
-        String infoBefore = exec("artest vs ship-info 0 " + SRC_X + " " + SRC_Y + " " + SRC_Z);
+        String infoBefore = exec("artest vs ship-info 0 " + SRC_X + " " + SRC_Y + " " + SRC_Z
+                + " " + SHIP_CAPTURE_RADIUS_BLOCKS);
         assertTrue("the ship must be managed for its attitude to be readable: " + infoBefore,
                 infoBefore.contains("\"managed\":true"));
         String shipId = extractString(infoBefore, "id");

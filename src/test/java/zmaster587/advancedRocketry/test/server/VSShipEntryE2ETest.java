@@ -13,6 +13,7 @@ import java.util.regex.Pattern;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 import static zmaster587.advancedRocketry.test.server.WorldCommandFixtures.awaitWithinTicks;
+import static zmaster587.advancedRocketry.test.AdvancedRocketryTestConstants.SHIP_CAPTURE_RADIUS_BLOCKS;
 
 /**
  * E2E: does the tier-2 ENTRY ON-RAMP take a piloted ship from a planet dimension into space through the
@@ -108,7 +109,8 @@ public class VSShipEntryE2ETest extends AbstractSharedServerTest {
 
         // Locate the ship, then arrange the entry preconditions: a pilot (the static FF input channel makes
         // the AFC tick see "someone is flying") and a climb PAST the ceiling (rigid-teleport to Y=1200).
-        String srcInfo = exec("artest vs ship-info 0 " + SRC_X + " " + SRC_Y + " " + SRC_Z);
+        String srcInfo = exec("artest vs ship-info 0 " + SRC_X + " " + SRC_Y + " " + SRC_Z
+                + " " + SHIP_CAPTURE_RADIUS_BLOCKS);
         assertTrue("source ship not managed by VS: " + srcInfo, srcInfo.contains("\"managed\":true"));
         double sx = extractDouble(srcInfo, "posX"), sy = extractDouble(srcInfo, "posY"),
                 sz = extractDouble(srcInfo, "posZ");
@@ -183,7 +185,8 @@ public class VSShipEntryE2ETest extends AbstractSharedServerTest {
                 asm.contains("\"rocketCount\":0"));
         assertTrue("the source VS ship never loaded", waitForLoadedShip(0) >= 1);
 
-        String srcInfo = exec("artest vs ship-info 0 " + JUMP_SRC_X + " " + SRC_Y + " " + JUMP_SRC_Z);
+        String srcInfo = exec("artest vs ship-info 0 " + JUMP_SRC_X + " " + SRC_Y + " " + JUMP_SRC_Z
+                + " " + SHIP_CAPTURE_RADIUS_BLOCKS);
         assertTrue("source ship not managed by VS: " + srcInfo, srcInfo.contains("\"managed\":true"));
         double sx = extractDouble(srcInfo, "posX"), sy = extractDouble(srcInfo, "posY"),
                 sz = extractDouble(srcInfo, "posZ");
@@ -264,7 +267,22 @@ public class VSShipEntryE2ETest extends AbstractSharedServerTest {
         GameTicks.observe(client(), GameTicks.world(arrivedSlot),
                 DRIFT_SAMPLES, DRIFT_TICKS_BETWEEN_SAMPLES, () -> {
                     exec("artest vs load-ships " + arrivedSlot);
-                    pose[0] = exec("artest vs ship-info " + arrivedSlot + " 0 200 0");
+                    // The pose is DIAGNOSTIC — it appears only in the failure message below, while
+                    // the assertion is about the cell key. So the loaded-ship count travels WITH it
+                    // rather than gating on it: a nearest-ship answer is attributable only while the
+                    // cell holds one ship, and this loop samples a cell whose ship VS unloads and
+                    // reloads between samples (measured: count 0 mid-observation on a healthy run).
+                    // Asserting here would have turned that into a red about nothing.
+                    // THE POSE FIRST, with nothing between it and the load-ships above. Reading
+                    // the count before it inserted one probe round-trip into that gap, and the
+                    // ship unloaded inside the gap often enough to red a healthy run (measured).
+                    // A diagnostic that changes what it is measuring is worse than none.
+                    String poseNow = exec("artest vs ship-info " + arrivedSlot + " 0 200 0");
+                    // The count travels WITH the pose rather than gating on it: a nearest-ship
+                    // answer is attributable only while the cell holds one ship, and the reader of
+                    // a failure needs to know which case he is looking at.
+                    pose[0] = poseNow + " loadedShipsInCell="
+                            + extractInt(exec("artest vs ship-count " + arrivedSlot), "count");
                     String held = exec("artest space entry-status");
                     assertEquals("the arrived ship's address drifted out of the cell it flew to once"
                                     + " its flight computer began self-reporting its position;"

@@ -10,6 +10,7 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 import static org.junit.Assert.assertTrue;
+import static zmaster587.advancedRocketry.test.AdvancedRocketryTestConstants.SHIP_CAPTURE_RADIUS_BLOCKS;
 
 /**
  * Flight Assist is an AUTOPILOT, not a dead-man switch: the FA state (mode + cruise setpoint) is a
@@ -69,7 +70,8 @@ public class VSShipUnmannedCruiseE2ETest extends AbstractClientE2ETest {
         for (int i = 0; i < 40 && Double.isNaN(y0); i++) {
             bot().waitTicks(5);
             if (count("ship-count") >= 1) {
-                String info = exec("artest vs ship-info 0 " + BX + " " + BY + " " + BZ);
+                String info = exec("artest vs ship-info 0 " + BX + " " + BY + " " + BZ
+                        + " " + SHIP_CAPTURE_RADIUS_BLOCKS);
                 if (info.contains("\"managed\":true")) {
                     y0 = readDouble(info, POS_Y);
                     Matcher idM = SHIP_ID.matcher(info);

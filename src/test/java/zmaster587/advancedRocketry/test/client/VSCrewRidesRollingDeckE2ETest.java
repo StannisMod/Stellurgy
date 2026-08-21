@@ -8,6 +8,7 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 import static org.junit.Assert.assertTrue;
+import static zmaster587.advancedRocketry.test.AdvancedRocketryTestConstants.SHIP_CAPTURE_RADIUS_BLOCKS;
 
 /**
  * A crew member who is NOT seated rides a tier-2 ship's deck.
@@ -124,7 +125,8 @@ public class VSCrewRidesRollingDeckE2ETest extends AbstractClientE2ETest {
         // The scenario's ONE positional lookup, at the only moment it is defensible: the ship was
         // just assembled here and has not moved. Its IDENTITY is taken with it, and the roll command
         // below names THIS ship rather than whichever hull happens to be nearest the build spot.
-        String where = exec("artest vs ship-info 0 " + BX + " " + BY + " " + BZ);
+        String where = exec("artest vs ship-info 0 " + BX + " " + BY + " " + BZ
+                + " " + SHIP_CAPTURE_RADIUS_BLOCKS);
         Matcher shipIdM = Pattern.compile("\"id\":\"([^\"]+)\"").matcher(where);
         assertTrue("ARRANGEMENT: ship-info must name WHICH ship answered: " + where, shipIdM.find());
         String shipId = shipIdM.group(1);

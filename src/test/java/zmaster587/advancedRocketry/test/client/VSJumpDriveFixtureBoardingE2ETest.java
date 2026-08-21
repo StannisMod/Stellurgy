@@ -23,6 +23,7 @@ import org.lwjgl.input.Keyboard;
 import zmaster587.advancedRocketry.hyperdrive.DriveTuning;
 
 import static org.junit.Assert.assertTrue;
+import static zmaster587.advancedRocketry.test.AdvancedRocketryTestConstants.SHIP_CAPTURE_RADIUS_BLOCKS;
 
 /**
  * A jump-capable craft assembles WHOLE, and a pilot standing on its deck can reach both of the
@@ -493,7 +494,8 @@ public class VSJumpDriveFixtureBoardingE2ETest {
     }
 
     private String shipInfoAtBase() throws Exception {
-        return exec("artest vs ship-info 0 " + BX + " " + BY + " " + BZ);
+        return exec("artest vs ship-info 0 " + BX + " " + BY + " " + BZ
+                + " " + SHIP_CAPTURE_RADIUS_BLOCKS);
     }
 
     /** The seat's subspace address, its flight computer's, and the ship's live world position. */

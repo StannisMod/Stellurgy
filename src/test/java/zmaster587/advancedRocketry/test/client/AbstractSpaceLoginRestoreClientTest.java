@@ -27,6 +27,7 @@ import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
+import static zmaster587.advancedRocketry.test.AdvancedRocketryTestConstants.SHIP_CAPTURE_RADIUS_BLOCKS;
 
 /**
  * Login restore for a tier-2 ship's crew, observed on the REAL CLIENT across a REAL server restart:
@@ -1052,7 +1053,7 @@ public abstract class AbstractSpaceLoginRestoreClientTest {
                 waitForLoadedShip(LAUNCH_DIM) >= 1);
 
         String srcInfo = exec("artest vs ship-info " + LAUNCH_DIM
-                + " " + SRC_X + " " + SRC_Y + " " + SRC_Z);
+                + " " + SRC_X + " " + SRC_Y + " " + SRC_Z + " " + SHIP_CAPTURE_RADIUS_BLOCKS);
         assertTrue("the assembled build is not a physics ship: " + srcInfo,
                 srcInfo.contains("\"managed\":true"));
         int sx = (int) Math.round(readDouble(srcInfo, "posX"));
@@ -1161,7 +1162,7 @@ public abstract class AbstractSpaceLoginRestoreClientTest {
                 waitForLoadedShip(LAUNCH_DIM) >= 1);
 
         String srcInfo = exec("artest vs ship-info " + LAUNCH_DIM
-                + " " + SRC_X + " " + SRC_Y + " " + SRC_Z);
+                + " " + SRC_X + " " + SRC_Y + " " + SRC_Z + " " + SHIP_CAPTURE_RADIUS_BLOCKS);
         assertTrue("the assembled build is not a physics ship: " + srcInfo,
                 srcInfo.contains("\"managed\":true"));
         int sx = (int) Math.round(readDouble(srcInfo, "posX"));
@@ -1489,12 +1490,18 @@ public abstract class AbstractSpaceLoginRestoreClientTest {
 
     /**
      * The live world position of the one ship in {@code dim}, or {@code null} if none is up within
-     * the wait. The cell holds exactly one ship, so the nearest ship to any point is that ship.
+     * the wait.
+     *
+     * <p>The cell holds exactly one ship, so the nearest ship to any point is that ship — and that
+     * premise is now CHECKED on every answer rather than stated here, because a second craft in the
+     * cell would make the reply indistinguishable from a correct one.</p>
      */
     protected double[] awaitShipPose(int dim) throws Exception {
         for (int attempt = 0; attempt < 40; attempt++) {
             String info = exec("artest vs ship-info " + dim + " 0 0 0");
             if (info.contains("\"managed\":true")) {
+                assertEquals("a slot cell must hold exactly ONE loaded ship for a positional read"
+                        + " to name it", 1, readInt(exec("artest vs ship-count " + dim), "count"));
                 return new double[]{
                         readDouble(info, "posX"), readDouble(info, "posY"), readDouble(info, "posZ")};
             }

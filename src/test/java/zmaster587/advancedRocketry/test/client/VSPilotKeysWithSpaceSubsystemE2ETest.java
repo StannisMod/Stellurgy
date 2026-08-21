@@ -17,6 +17,7 @@ import org.junit.Test;
 import org.lwjgl.input.Keyboard;
 
 import static org.junit.Assert.assertTrue;
+import static zmaster587.advancedRocketry.test.AdvancedRocketryTestConstants.SHIP_CAPTURE_RADIUS_BLOCKS;
 
 /**
  * A seated pilot must be able to fly his ship WHILE THE SPACE SUBSYSTEM IS LIVE.
@@ -138,7 +139,8 @@ public class VSPilotKeysWithSpaceSubsystemE2ETest {
             clientHarness.bot().waitTicks(5);
             // The one positional lookup this scenario spends: the ship is freshly assembled at its
             // own base and the bound cannot admit anything else. Its answer is the identity below.
-            atBase = exec("artest vs ship-info 0 " + BX + " " + BY + " " + BZ + " 48");
+            atBase = exec("artest vs ship-info 0 " + BX + " " + BY + " " + BZ
+                    + " " + SHIP_CAPTURE_RADIUS_BLOCKS);
             Matcher m = POS_Y.matcher(atBase);
             if (m.find()) {
                 yBefore = Double.parseDouble(m.group(1));

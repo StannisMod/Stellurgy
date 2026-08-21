@@ -10,6 +10,7 @@ import java.util.regex.Pattern;
 
 import static zmaster587.advancedRocketry.test.AdvancedRocketryTestConstants.HYPERSPACE_JUMP_SPEED;
 import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.assertEquals;
 
 /**
  * E2E: does the transit subsystem move a live VS ship between bubble cells? A ship assembled in a fresh
@@ -73,6 +74,11 @@ public class VSShipTransitE2ETest extends AbstractSharedServerTest {
         // The re-assembled ship must load + be VS-managed in the TARGET cell (arrival pastes near 0,200,0).
         assertTrue("transited ship never (re)loaded in the target cell (dim " + targetDim + "); countAll="
                 + exec("artest vs ship-count-all " + targetDim), waitForLoadedShip(targetDim) >= 1);
+        // The assumption this positional read rests on, CHECKED rather than stated: a slot cell
+        // holds exactly one ship, so "nearest to any point" IS that ship. A second craft here would
+        // make the reply below indistinguishable from a correct one.
+        assertEquals("a slot cell must hold exactly ONE loaded ship for a positional read to name it",
+                1, extractInt(exec("artest vs ship-count " + targetDim), "count"));
         String dstInfo = exec("artest vs ship-info " + targetDim + " 0 200 0");
         assertTrue("arrived ship is not VS-managed in the target cell (transit did not re-VS): " + dstInfo,
                 dstInfo.contains("\"managed\":true"));

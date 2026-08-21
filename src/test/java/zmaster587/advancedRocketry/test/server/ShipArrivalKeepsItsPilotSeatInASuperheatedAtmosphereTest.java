@@ -11,6 +11,7 @@ import java.util.regex.Pattern;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
+import static zmaster587.advancedRocketry.test.AdvancedRocketryTestConstants.SHIP_CAPTURE_RADIUS_BLOCKS;
 
 /**
  * A ship that ARRIVES on a planet hot enough to set things alight must arrive WHOLE — with the
@@ -80,7 +81,8 @@ public class ShipArrivalKeepsItsPilotSeatInASuperheatedAtmosphereTest extends Ab
         // the housekeeping two paragraphs down unnecessary in principle: an unaddressed seat probe
         // answers about whichever pilot seat the world lists first, and this test has already been
         // caught reading a loose control seat that never crossed anything.
-        String srcInfo = exec("artest vs ship-info 0 " + SRC_X + " " + SRC_Y + " " + SRC_Z + " 48");
+        String srcInfo = exec("artest vs ship-info 0 " + SRC_X + " " + SRC_Y + " " + SRC_Z
+                + " " + SHIP_CAPTURE_RADIUS_BLOCKS);
         assertTrue("source ship not managed by VS before the crossing: " + srcInfo,
                 srcInfo.contains("\"managed\":true"));
         String srcShipId = extractString(srcInfo, "id");
@@ -139,7 +141,8 @@ public class ShipArrivalKeepsItsPilotSeatInASuperheatedAtmosphereTest extends Ab
         // Asked of the ARRIVED ship by its own id — the crossing re-assembles the craft and mints a
         // new identity, so this deliberately is not srcShipId, and it is equally deliberately not
         // "whatever seat the world lists first".
-        String dstInfo = exec("artest vs ship-info 0 " + DST_X + " " + DST_Y + " " + DST_Z + " 48");
+        String dstInfo = exec("artest vs ship-info 0 " + DST_X + " " + DST_Y + " " + DST_Z
+                + " " + SHIP_CAPTURE_RADIUS_BLOCKS);
         assertTrue("the arrived ship is not managed by VS at the destination: " + dstInfo,
                 dstInfo.contains("\"managed\":true"));
         String post = exec("artest vs seat-input-by-id 0 " + extractString(dstInfo, "id")

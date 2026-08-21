@@ -10,6 +10,7 @@ import java.util.regex.Pattern;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
+import static zmaster587.advancedRocketry.test.AdvancedRocketryTestConstants.SHIP_CAPTURE_RADIUS_BLOCKS;
 
 /**
  * SPIKE — does a per-ship "crossing": snapshot ONE Valkyrien Skies
@@ -73,7 +74,8 @@ public class VSShipCrossingSpikeTest extends AbstractSharedServerTest {
         // The SOURCE ship's identity, read at its build site before anything relocates it. The
         // crossing below re-assembles the craft at the destination, which mints a NEW ship — so
         // there are two identities in this test on purpose, and neither may stand in for the other.
-        String srcInfo = exec("artest vs ship-info 0 " + SRC_X + " " + SRC_Y + " " + SRC_Z + " 48");
+        String srcInfo = exec("artest vs ship-info 0 " + SRC_X + " " + SRC_Y + " " + SRC_Z
+                + " " + SHIP_CAPTURE_RADIUS_BLOCKS);
         assertTrue("source ship not managed by VS before crossing: " + srcInfo, srcInfo.contains("\"managed\":true"));
         String srcShipId = extractString(srcInfo, "id");
 
@@ -111,7 +113,8 @@ public class VSShipCrossingSpikeTest extends AbstractSharedServerTest {
                 + " countAll=" + exec("artest vs ship-count-all 0"), loadedAfter >= 1);
         // The crossing pastes the craft AT the destination it was given, so this positional read is
         // the one place the ARRIVED ship can be named from — and the bound makes that claim checkable.
-        String dstInfo = exec("artest vs ship-info 0 " + DST_X + " " + DST_Y + " " + DST_Z + " 48");
+        String dstInfo = exec("artest vs ship-info 0 " + DST_X + " " + DST_Y + " " + DST_Z
+                + " " + SHIP_CAPTURE_RADIUS_BLOCKS);
         assertTrue("re-assembled ship is not managed by VS at the destination (crossing did not re-VS): "
                 + dstInfo, dstInfo.contains("\"managed\":true"));
         String dstShipId = extractString(dstInfo, "id");

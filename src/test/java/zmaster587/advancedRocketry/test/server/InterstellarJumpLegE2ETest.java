@@ -13,6 +13,7 @@ import java.util.regex.Pattern;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
+import static zmaster587.advancedRocketry.test.AdvancedRocketryTestConstants.SHIP_CAPTURE_RADIUS_BLOCKS;
 
 /**
  * Does a jump to ANOTHER STAR SYSTEM fly, and how long does it take?
@@ -94,7 +95,8 @@ public class InterstellarJumpLegE2ETest extends AbstractSharedServerTest {
                 asm.contains("\"rocketCount\":0"));
         assertTrue("the source VS ship never loaded", waitForLoadedShip(0) >= 1);
 
-        String srcInfo = exec("artest vs ship-info 0 " + SRC_X + " " + SRC_Y + " " + SRC_Z);
+        String srcInfo = exec("artest vs ship-info 0 " + SRC_X + " " + SRC_Y + " " + SRC_Z
+                + " " + SHIP_CAPTURE_RADIUS_BLOCKS);
         assertTrue("source ship not managed by VS: " + srcInfo, srcInfo.contains("\"managed\":true"));
         int sx = (int) extractDouble(srcInfo, "posX");
         int sy = (int) extractDouble(srcInfo, "posY");

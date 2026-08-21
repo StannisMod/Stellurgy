@@ -12,6 +12,7 @@ import java.util.regex.Pattern;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
+import static zmaster587.advancedRocketry.test.AdvancedRocketryTestConstants.SHIP_CAPTURE_RADIUS_BLOCKS;
 
 /**
  * E2E: crossing OUT of an atmosphere is a PHYSICAL event, so it does not ask who is holding a key.
@@ -100,7 +101,8 @@ public class VSUnpilotedEntryE2ETest extends AbstractSharedServerTest {
         String expectedCell = extractString(launch, "cellKey");
         assertTrue("launch dim resolved to no cell: " + launch, expectedCell != null);
 
-        String srcInfo = exec("artest vs ship-info 0 " + SRC_X + " " + SRC_Y + " " + SRC_Z);
+        String srcInfo = exec("artest vs ship-info 0 " + SRC_X + " " + SRC_Y + " " + SRC_Z
+                + " " + SHIP_CAPTURE_RADIUS_BLOCKS);
         assertTrue("source ship not managed by VS: " + srcInfo, srcInfo.contains("\"managed\":true"));
         double sx = extractDouble(srcInfo, "posX"), sy = extractDouble(srcInfo, "posY"),
                 sz = extractDouble(srcInfo, "posZ");

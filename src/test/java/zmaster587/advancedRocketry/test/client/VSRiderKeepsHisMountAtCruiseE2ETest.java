@@ -11,6 +11,7 @@ import java.util.regex.Pattern;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
+import static zmaster587.advancedRocketry.test.AdvancedRocketryTestConstants.SHIP_CAPTURE_RADIUS_BLOCKS;
 
 /**
  * A player riding a mount aboard a CRUISING ship never loses that mount.
@@ -259,7 +260,8 @@ public class VSRiderKeepsHisMountAtCruiseE2ETest extends AbstractClientE2ETest {
         // command it by that id from here on. This leg deliberately flies the ship several hundred
         // blocks; a lookup keyed on where it STARTED stops describing it almost immediately, and on a
         // shared client the ship it starts describing instead is a neighbour's.
-        String atSeat = exec("artest vs ship-info " + dim + " " + sx + " " + sy + " " + sz + " 48");
+        String atSeat = exec("artest vs ship-info " + dim + " " + sx + " " + sy + " " + sz
+                + " " + SHIP_CAPTURE_RADIUS_BLOCKS);
         Matcher idM = Pattern.compile("\"id\":\"([^\"]+)\"").matcher(atSeat);
         assertTrue("ARRANGEMENT: the ship must name itself before it is commanded: " + atSeat,
                 idM.find());
