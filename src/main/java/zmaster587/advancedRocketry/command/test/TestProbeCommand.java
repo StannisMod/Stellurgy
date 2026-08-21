@@ -18454,6 +18454,65 @@ public class TestProbeCommand extends CommandBase {
                     + ",\"isInventoryContainer\":" + isInventoryContainer + "}");
             return;
         }
+        if ("world-check".equals(sub) && args.length >= 4) {
+            // /artest player world-check <x> <y> <z>
+            //
+            // Is the player standing in the SAME World object every other probe writes to?
+            //
+            // Every server-side probe resolves its world with `server.getWorld(dim)`. If a player is
+            // somehow in a different instance carrying the same dimension id, a fill and a read
+            // agree with each other perfectly and both describe a world he is not in — and his
+            // client, which is fed from HIS world, shows something else again. Nothing in the usual
+            // replies can distinguish that from a chunk-packet desync, because `dim` is equal in
+            // both cases.
+            //
+            // So this reports the block from BOTH worlds and whether they are the same object.
+            int wx = parseIntOr(args[1], 0), wy = parseIntOr(args[2], 0), wz = parseIntOr(args[3], 0);
+            net.minecraft.util.math.BlockPos at = new net.minecraft.util.math.BlockPos(wx, wy, wz);
+            int dim = player.world.provider.getDimension();
+            net.minecraft.world.WorldServer byId = server.getWorld(dim);
+            String fromPlayer = String.valueOf(player.world.getBlockState(at).getBlock().getRegistryName());
+            String fromById = byId == null ? "no-world"
+                    : String.valueOf(byId.getBlockState(at).getBlock().getRegistryName());
+            send(sender, "{\"ok\":true,\"dim\":" + dim
+                    + ",\"sameInstance\":" + (byId == player.world)
+                    + ",\"playerWorldId\":" + System.identityHashCode(player.world)
+                    + ",\"serverWorldId\":" + System.identityHashCode(byId)
+                    + ",\"blockFromPlayerWorld\":\"" + escapeJson(fromPlayer) + "\""
+                    + ",\"blockFromServerWorld\":\"" + escapeJson(fromById) + "\""
+                    + ",\"playerChunkLoaded\":" + player.world.isBlockLoaded(at)
+                    + ",\"posX\":" + player.posX + ",\"posY\":" + player.posY
+                    + ",\"posZ\":" + player.posZ
+                    + ",\"onGround\":" + player.onGround
+                    + ",\"motionY\":" + player.motionY + "}");
+            return;
+        }
+        if ("sleeping".equals(sub)) {
+            // /artest player sleeping — is this player IN A BED, and how far through the sleep?
+            //
+            // The discriminator a bed scenario cannot do without. A sleep test that only watches the
+            // world CLOCK can see that no time skip happened and has no way to say why: the click
+            // may have missed, `trySleep` may have refused (mobs near, not night on THIS world, bed
+            // obstructed, player not on the ground), or the sleep may have begun and been broken
+            // before it completed. Those are different bugs and the clock reports them identically.
+            //
+            // Server-side on purpose: `isPlayerSleeping` is authoritative there, and `sleepTimer`
+            // is the count vanilla itself compares against 100 to decide a sleep has COMPLETED — so
+            // "he is in the bed" and "he slept" are reported as the two separate facts they are.
+            net.minecraft.util.math.BlockPos bed = player.bedLocation;
+            send(sender, "{\"ok\":true,\"player\":\"" + escapeJson(player.getName()) + "\""
+                    + ",\"sleeping\":" + player.isPlayerSleeping()
+                    + ",\"sleepTimer\":" + player.sleepTimer
+                    + ",\"fullyAsleep\":" + player.isPlayerFullyAsleep()
+                    + ",\"hasBed\":" + (bed != null)
+                    + (bed == null ? "" : ",\"bedX\":" + bed.getX()
+                            + ",\"bedY\":" + bed.getY() + ",\"bedZ\":" + bed.getZ())
+                    + ",\"onGround\":" + player.onGround
+                    + ",\"dim\":" + player.world.provider.getDimension()
+                    + ",\"worldTime\":" + player.world.getWorldTime()
+                    + ",\"isDaytime\":" + player.world.isDaytime() + "}");
+            return;
+        }
         if ("health".equals(sub)) {
             send(sender, "{\"ok\":true,\"player\":\""
                     + escapeJson(player.getName()) + "\""

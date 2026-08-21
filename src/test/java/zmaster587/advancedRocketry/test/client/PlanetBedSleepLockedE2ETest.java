@@ -166,7 +166,30 @@ public class PlanetBedSleepLockedE2ETest {
 
         serverHarness.client().execute("artest tp " + DIM);
         waitForClientDim(DIM);
-        serverHarness.client().execute("tp " + PLAYER + " 8.5 " + BED_Y + " 7.5");
+
+        // WAIT FOR THE CLIENT TO ACTUALLY HAVE THE PLATFORM, holding him on it while it streams.
+        // Movement is client-driven: a client that has not received these chunks simulates a fall
+        // through blocks the server has, and its movement packets carry the server's player down
+        // with it. Measured 2026-08-21 on the sibling class: teleported to y=151, read back at 142.6
+        // twenty ticks later and at 64 by the time the bed was clicked — 87 blocks away, so the
+        // server dropped the right-click on its reach check without a word while the client still
+        // reported SUCCESS from its own prediction. Chunks stream around where the player IS, so the
+        // teleport is repeated each iteration rather than waited out once.
+        //
+        // The probe's `loaded` field is worthless here — `WorldClient.isChunkLoaded` returns
+        // `allowEmpty || …` and `isBlockLoaded` passes true, so it is unconditionally true and an
+        // unreceived chunk reads as AIR out of the EmptyChunk. Only the block identity means anything.
+        String clientBlock = "";
+        for (int attempt = 0; attempt < 60; attempt++) {
+            serverHarness.client().execute("tp " + PLAYER + " 8.5 " + BED_Y + " 7.5");
+            clientHarness.bot().waitTicks(5);
+            clientBlock = clientHarness.bot().blockState(BED_X, PLAT_Y, 7).toString();
+            if (clientBlock.contains("stone")) {
+                break;
+            }
+        }
+        assertTrue("ARRANGEMENT: the client never received the sleeping platform, so it keeps"
+                + " simulating a fall through it: " + clientBlock, clientBlock.contains("stone"));
         clientHarness.bot().waitTicks(20);
 
         // Stage planet-night THROUGH the flag, then lock it again before anyone sleeps.
