@@ -4,7 +4,6 @@ import com.github.stannismod.forge.testing.TestTimeouts;
 import com.github.stannismod.forge.testing.junit.AbstractClientE2ETest;
 import com.google.gson.JsonObject;
 
-import org.junit.Assume;
 import org.junit.Test;
 import org.lwjgl.input.Keyboard;
 
@@ -31,7 +30,6 @@ import static org.junit.Assert.assertTrue;
  * cannot right-click a post-assembly ship-subspace block); the flight stimulus and every
  * observation are the real client's (held key in; client-rendered rider altitude out).</p>
  *
- * <p>Gated on real VS — run with {@code -PwithVS}.</p>
  */
 public class VSPilotSeatRelogControlE2ETest extends AbstractClientE2ETest {
 
@@ -48,7 +46,6 @@ public class VSPilotSeatRelogControlE2ETest extends AbstractClientE2ETest {
 
     @Test
     public void aPilotWhoRelogsSeatedKeepsControlOfHisShip() throws Exception {
-        Assume.assumeTrue("needs Valkyrien Skies on the classpath (run with -PwithVS)", serverHasVs());
 
         // ---- ARRANGE: build + assemble a piloted ship, seat the client player on it. ------------
         exec("tp @a " + (BX + 600) + " 120 " + (BZ + 600) + " 0 0");
@@ -170,7 +167,4 @@ public class VSPilotSeatRelogControlE2ETest extends AbstractClientE2ETest {
         return m.find() ? Integer.parseInt(m.group(1)) : -1;
     }
 
-    private boolean serverHasVs() throws Exception {
-        return exec("artest vs available").contains("\"available\":true");
-    }
 }

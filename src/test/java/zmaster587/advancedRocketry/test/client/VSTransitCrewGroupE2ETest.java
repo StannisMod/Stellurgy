@@ -1,7 +1,6 @@
 package zmaster587.advancedRocketry.test.client;
 
 import com.google.gson.JsonObject;
-import org.junit.Assume;
 import org.junit.FixMethodOrder;
 import org.junit.Test;
 import org.junit.runners.MethodSorters;
@@ -146,12 +145,10 @@ private int waitForLoadedShip(int dim) throws Exception {
     /** Blocks per tick for the jump. Slow enough that the ship stays parked for tens of ticks. */
 private static final long PARK_SPEED = HYPERSPACE_JUMP_SPEED;
 
-
     // ---- migrated: VSShipTransitCrewE2ETest ----
 
     @Test
     public void aSeatedCrewMemberSurvivesAHyperspaceTransitStillRiding() throws Exception {
-        Assume.assumeTrue("needs Valkyrien Skies (run with -PwithVS)", serverHasVs());
 
         // Headless: pin ships loaded so a freshly assembled ship does not auto-unload between probe calls.
         exec("artest vs permaload true");
@@ -305,12 +302,10 @@ private static final long PARK_SPEED = HYPERSPACE_JUMP_SPEED;
         return m.find() ? m.group(1) : "(absent)";
     }
 
-
     // ---- migrated: VSCrewRidesItsShipThroughHyperspaceE2ETest ----
 
     @Test
     public void aSeatedCrewMemberIsAboardHisShipInHyperspaceWhileItIsStillFlying() throws Exception {
-        Assume.assumeTrue("needs Valkyrien Skies (run with -PwithVS)", serverHasVs());
 
         exec("artest vs permaload true");
 
@@ -415,7 +410,6 @@ private static final long PARK_SPEED = HYPERSPACE_JUMP_SPEED;
                 + bot().reportRidingEntity(), ridingInFlight);
     }
 
-
     // ---- migrated: VSCrewedArrivalReseatsWithNobodyToLoadTheShipE2ETest ----
 
     /** Ticks of transit driving after arrival. The re-seat is retry-based; a healthy one takes a few. */
@@ -455,7 +449,6 @@ private boolean waitForRegisteredShip(int dim) throws Exception {
 
     @Test
     public void aCrewMemberIsReseatedOnArrivalWithNothingForcingTheShipLoaded() throws Exception {
-        Assume.assumeTrue("needs Valkyrien Skies (run with -PwithVS)", serverHasVs());
 
         String setup = execEnvelope("artest space transit-setup-piloted");
         assertTrue("piloted transit setup must succeed: " + setup, readBool(setup, "ok"));
@@ -557,7 +550,6 @@ private boolean waitForRegisteredShip(int dim) throws Exception {
                 targetDim, bot().reportWeather().get("dim").getAsInt());
     }
 
-
     // ---- migrated: VSJumpTellsThePilotWhatIsHappeningE2ETest ----
 
     private static final String SKY = "zmaster587.advancedRocketry.client.render.planet.BoundarySky";
@@ -638,7 +630,6 @@ private String chat() throws Exception {
 
     @Test
     public void aJumpAnnouncesItselfInChatOnTheHudAndInTheSky() throws Exception {
-        Assume.assumeTrue("needs Valkyrien Skies on the server classpath", serverHasVs());
 
         // Vanilla runs the sky pass only at renderDistanceChunks >= 4 and the harness pins the client
         // at 2, so without this the sky renderer never executes and every sky reading below would be
@@ -754,7 +745,6 @@ private String chat() throws Exception {
         assertTrue("arriving must be said in the pilot's own chat: " + chat(),
                 chat().contains("Arrived"));
     }
-
 
     // ---- a crew member on his FEET crosses too ----
 
@@ -881,7 +871,6 @@ private String chat() throws Exception {
      */
     @Test
     public void aCrewMemberLivesInHyperspaceUntilHeStepsOffHisShip() throws Exception {
-        Assume.assumeTrue("needs Valkyrien Skies (run with -PwithVS)", serverHasVs());
 
         exec("artest vs permaload true");
         // The void exempts creative and spectator on purpose, so the mode is SET rather than assumed:
@@ -1117,7 +1106,6 @@ private String chat() throws Exception {
      */
     @Test
     public void aWalkingCrewMemberTravelsWithHisShipThroughHyperspace() throws Exception {
-        Assume.assumeTrue("needs Valkyrien Skies (run with -PwithVS)", serverHasVs());
 
         exec("artest vs permaload true");
 
@@ -1258,7 +1246,6 @@ private String chat() throws Exception {
      */
     @Test
     public void aStandingCrewMemberStillSeesTheHyperspaceCorridor() throws Exception {
-        Assume.assumeTrue("needs Valkyrien Skies (run with -PwithVS)", serverHasVs());
 
         // Vanilla runs the sky pass only at renderDistanceChunks >= 4 and the harness pins the client
         // at 2, so without this every sky reading below would be honestly zero for the wrong reason.
@@ -1370,7 +1357,6 @@ private String chat() throws Exception {
      */
     @Test
     public void aCrewMemberWhoStoodUpMidFlightArrivesOnHisFeet() throws Exception {
-        Assume.assumeTrue("needs Valkyrien Skies (run with -PwithVS)", serverHasVs());
 
         exec("artest vs permaload true");
         exec("gamemode survival @a");

@@ -1,7 +1,6 @@
 package zmaster587.advancedRocketry.test.client;
 
 import com.google.gson.JsonObject;
-import org.junit.Assume;
 import org.junit.FixMethodOrder;
 import org.junit.Test;
 import org.junit.runners.MethodSorters;
@@ -73,7 +72,6 @@ public class VSGroundFlightGroupE2ETest extends AbstractSharedVsClientE2ETest {
      */
     @Test
     public void aShipQuestionKeyedOnIdNamesItsOwnShipAndTheNearestFormDoesNot() throws Exception {
-        Assume.assumeTrue("needs Valkyrien Skies on the classpath", serverHasVs());
 
         final int ax = 5400, ay = 64, az = 5400;
         final int bx = 5500, by = 64, bz = 5500;
@@ -151,7 +149,6 @@ public class VSGroundFlightGroupE2ETest extends AbstractSharedVsClientE2ETest {
      */
     @Test
     public void assembledShipLoadsWithClientPresentAndFliesAndRotatesUnderForce() throws Exception {
-        Assume.assumeTrue("needs Valkyrien Skies on the classpath", serverHasVs());
 
         final int BX = 2200, BY = 64, BZ = 2200;
 
@@ -300,7 +297,6 @@ public class VSGroundFlightGroupE2ETest extends AbstractSharedVsClientE2ETest {
      */
     @Test
     public void assemblingWithAnObserverAtThePadDoesNotCrashVs() throws Exception {
-        Assume.assumeTrue("needs Valkyrien Skies on the classpath", serverHasVs());
 
         final int BX = 2400, BY = 64, BZ = 2400;
 
@@ -342,7 +338,6 @@ public class VSGroundFlightGroupE2ETest extends AbstractSharedVsClientE2ETest {
      */
     @Test
     public void seatPathResolvesAfcAndFliesTheShip() throws Exception {
-        Assume.assumeTrue("needs Valkyrien Skies on the classpath", serverHasVs());
 
         final int BX = 2600, BY = 64, BZ = 2600;
 
@@ -407,7 +402,6 @@ public class VSGroundFlightGroupE2ETest extends AbstractSharedVsClientE2ETest {
      */
     @Test
     public void seatedPilotFliesShipTravelsWithItAndCameraLocksToNose() throws Exception {
-        Assume.assumeTrue("needs Valkyrien Skies on the classpath", serverHasVs());
 
         final int BX = 2800, BY = 64, BZ = 2800;
 

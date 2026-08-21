@@ -3,7 +3,6 @@ package zmaster587.advancedRocketry.test.server;
 import zmaster587.advancedRocketry.test.GameTicks;
 
 import org.junit.After;
-import org.junit.Assume;
 import org.junit.Test;
 
 import java.util.regex.Matcher;
@@ -55,7 +54,6 @@ public class VSSeatDummyFacesTheShipE2ETest extends AbstractSharedServerTest {
 
     @Test
     public void theSeatMountTurnsWithItsShip() throws Exception {
-        Assume.assumeTrue("needs Valkyrien Skies on the server classpath", serverHasVs());
 
         exec("artest vs permaload true");
         clearArea(SRC_X, SRC_Z);
@@ -124,9 +122,7 @@ public class VSSeatDummyFacesTheShipE2ETest extends AbstractSharedServerTest {
 
     @After
     public void cleanup() throws Exception {
-        if (serverHasVs()) {
-            exec("artest vs permaload false");
-        }
+        exec("artest vs permaload false");
     }
 
     // --- observation --------------------------------------------------------------------------------
@@ -162,10 +158,6 @@ public class VSSeatDummyFacesTheShipE2ETest extends AbstractSharedServerTest {
 
     private String exec(String cmd) throws Exception {
         return String.join("\n", client().execute(cmd));
-    }
-
-    private boolean serverHasVs() throws Exception {
-        return exec("artest vs available").contains("\"available\":true");
     }
 
     private int waitForLoadedShip(int dim) throws Exception {

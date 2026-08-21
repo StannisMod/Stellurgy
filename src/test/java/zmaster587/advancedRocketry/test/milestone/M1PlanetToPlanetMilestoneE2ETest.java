@@ -63,7 +63,7 @@ import static org.junit.Assert.assertTrue;
  * for a reason that has nothing to do with the loop.</p>
  *
  * <p>Manual server + client lifecycle: the config has to be written into the game directory before
- * the server boots. Gated on real Valkyrien Skies — run with {@code -PwithVS}.</p>
+ * the server boots.</p>
  */
 public class M1PlanetToPlanetMilestoneE2ETest {
 
@@ -241,8 +241,6 @@ public class M1PlanetToPlanetMilestoneE2ETest {
 
     @Test
     public void aPlayerBuildsHisShipAtTheAssemblerBoardsItAndFliesItOffThePlanet() throws Exception {
-        Assume.assumeTrue("needs Valkyrien Skies on the classpath (run with -PwithVS)",
-                exec("artest vs available").contains("\"available\":true"));
 
         // THE MULTIPLIER STAYS. What it waits on is VS building the ship on its OWN thread, off the
         // game loop: that work finishes in wall-clock time, so a busy box genuinely needs more game

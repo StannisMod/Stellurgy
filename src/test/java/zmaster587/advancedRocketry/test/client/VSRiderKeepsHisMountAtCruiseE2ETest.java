@@ -2,7 +2,6 @@ package zmaster587.advancedRocketry.test.client;
 
 import com.github.stannismod.forge.testing.junit.AbstractClientE2ETest;
 
-import org.junit.Assume;
 import org.junit.Test;
 
 import java.util.regex.Matcher;
@@ -49,7 +48,6 @@ import static zmaster587.advancedRocketry.test.AdvancedRocketryTestConstants.SHI
  * 24/40 samples unseated with a 36.8-block anchor lag, GREEN with the fix at 0/40 and a 41.0-block
  * lag - i.e. the guard held under a HARDER load than the one that broke it.</p>
  *
- * <p>Gated on real VS - run with {@code -PwithVS}.</p>
  */
 public class VSRiderKeepsHisMountAtCruiseE2ETest extends AbstractClientE2ETest {
 
@@ -107,10 +105,6 @@ public class VSRiderKeepsHisMountAtCruiseE2ETest extends AbstractClientE2ETest {
         return bot().reportRidingEntity().get("riding").getAsBoolean();
     }
 
-    private boolean serverHasVs() throws Exception {
-        return exec("artest vs available").contains("\"available\":true");
-    }
-
     private static int readIntOr(String json, String key, int fallback) {
         Matcher m = Pattern.compile("\"" + key + "\":(-?\\d+)").matcher(json);
         return m.find() ? Integer.parseInt(m.group(1)) : fallback;
@@ -133,7 +127,6 @@ public class VSRiderKeepsHisMountAtCruiseE2ETest extends AbstractClientE2ETest {
 
     @Test
     public void aSeatedRiderNeverLosesTheMountHeIsRidingWhileTheShipCruises() throws Exception {
-        Assume.assumeTrue("needs Valkyrien Skies (run with -PwithVS)", serverHasVs());
 
         // Headless: nobody is near the ship between probe calls, so pin it loaded. This is
         // arrangement only - what is under test is what the client is TOLD about an entity it

@@ -1,7 +1,6 @@
 package zmaster587.advancedRocketry.test.client;
 
 import com.github.stannismod.forge.testing.junit.AbstractClientE2ETest;
-import org.junit.Assume;
 import org.junit.Test;
 import org.lwjgl.input.Keyboard;
 
@@ -42,7 +41,7 @@ import static org.junit.Assert.assertTrue;
  *       evidence.</li>
  * </ul>
  *
- * <p>Gated on real Valkyrien Skies — run with {@code -PwithVS}.</p>
+ * <p></p>
  */
 public class VSUnassembledCraftTakesNoOrdersE2ETest extends AbstractClientE2ETest {
 
@@ -64,8 +63,6 @@ public class VSUnassembledCraftTakesNoOrdersE2ETest extends AbstractClientE2ETes
 
     @Test
     public void aCraftThatNeverBecameAShipTakesNoOrdersFromItsPilot() throws Exception {
-        Assume.assumeTrue("needs Valkyrien Skies on the classpath (run with -PwithVS)",
-                serverHasVs());
 
         controlARealShipDoesTakeOrders();
         theUnassembledCraftDoesNot();
@@ -368,7 +365,4 @@ public class VSUnassembledCraftTakesNoOrdersE2ETest extends AbstractClientE2ETes
         return Integer.parseInt(m.group(1));
     }
 
-    private boolean serverHasVs() throws Exception {
-        return exec("artest vs available").contains("\"available\":true");
-    }
 }

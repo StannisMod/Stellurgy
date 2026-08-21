@@ -2,7 +2,6 @@ package zmaster587.advancedRocketry.test.server;
 
 import zmaster587.advancedRocketry.test.GameTicks;
 
-import org.junit.Assume;
 import org.junit.Test;
 
 import java.util.regex.Matcher;
@@ -33,7 +32,7 @@ import static org.junit.Assert.assertEquals;
  *
  * <p>Complements {@code VSShipTransitE2ETest} (the LIVE hyperspace crossing) and the deterministic
  * {@code ShipTransitManagerTest} (the restored state machine with a fake crosser). Gated on the server's
- * real VS presence (run with {@code -PwithVS}); skips cleanly otherwise.</p>
+ * real VS presence (run with); skips cleanly otherwise.</p>
  */
 public class VSShipTransitPersistE2ETest extends AbstractSharedServerTest {
 
@@ -48,7 +47,6 @@ public class VSShipTransitPersistE2ETest extends AbstractSharedServerTest {
 
     @Test
     public void aRestoredInFlightJumpRebuildsItsShipByPastingItsSnapshotIntoTheTargetCell() throws Exception {
-        Assume.assumeTrue("needs Valkyrien Skies on the server classpath (run with -PwithVS)", serverHasVs());
 
         // Headless: pin ships loaded so a freshly assembled ship does not auto-unload between probe calls.
         exec("artest vs permaload true");
@@ -123,19 +121,13 @@ public class VSShipTransitPersistE2ETest extends AbstractSharedServerTest {
 
     @org.junit.After
     public void resetPermaload() throws Exception {
-        if (serverHasVs()) {
-            exec("artest vs permaload false");
-        }
+        exec("artest vs permaload false");
     }
 
     // --- helpers (mirror VSShipTransitE2ETest) ------------------------------------------------------
 
     private String exec(String cmd) throws Exception {
         return String.join("\n", client().execute(cmd));
-    }
-
-    private boolean serverHasVs() throws Exception {
-        return exec("artest vs available").contains("\"available\":true");
     }
 
     /**

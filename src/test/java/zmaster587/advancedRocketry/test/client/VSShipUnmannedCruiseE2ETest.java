@@ -2,7 +2,6 @@ package zmaster587.advancedRocketry.test.client;
 
 import com.github.stannismod.forge.testing.TestTimeouts;
 import com.github.stannismod.forge.testing.junit.AbstractClientE2ETest;
-import org.junit.Assume;
 import org.junit.Test;
 import org.lwjgl.input.Keyboard;
 
@@ -24,7 +23,7 @@ import static zmaster587.advancedRocketry.test.AdvancedRocketryTestConstants.SHI
  * and re-mount are player actions (probe-driven where the harness cannot right-click a subspace
  * seat); the ship's continued motion is the server oracle. The zero-setpoint degenerate case
  * (station-hold, "the hovering ship fell" fix) stays pinned by the existing flight suite. Gated
- * on real VS — run with {@code -PwithVS}.</p>
+ * on real VS —</p>
  */
 public class VSShipUnmannedCruiseE2ETest extends AbstractClientE2ETest {
 
@@ -43,8 +42,6 @@ public class VSShipUnmannedCruiseE2ETest extends AbstractClientE2ETest {
 
     @Test
     public void aDismountedPilotsShipKeepsCruisingAndSurvivesRemount() throws Exception {
-        Assume.assumeTrue("needs Valkyrien Skies on the classpath (run with -PwithVS)",
-                serverHasVs());
 
         exec("tp @a " + (BX + 600) + " 120 " + (BZ + 600) + " 0 0");
         bot().waitTicks(10);
@@ -164,10 +161,6 @@ public class VSShipUnmannedCruiseE2ETest extends AbstractClientE2ETest {
         Matcher m = p.matcher(json);
         assertTrue("expected a number in: " + json, m.find());
         return Double.parseDouble(m.group(1));
-    }
-
-    private boolean serverHasVs() throws Exception {
-        return exec("artest vs available").contains("\"available\":true");
     }
 
     private String exec(String cmd) throws Exception {

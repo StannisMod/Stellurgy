@@ -1,6 +1,7 @@
 package zmaster587.advancedRocketry.test.server;
 
 import org.junit.Assume;
+import org.junit.Ignore;
 import org.junit.Test;
 
 import java.util.regex.Matcher;
@@ -18,7 +19,7 @@ import static org.junit.Assert.assertTrue;
  *   <li><b>no VS</b> (default suite) — the computer is inert; an AFC-bearing build
  *       still assembles a normal {@code EntityRocket}, with the computer captured
  *       inside it. This is the soft-dependency safety contract.</li>
- *   <li><b>with VS</b> (suite run with {@code -PwithVS}) — the fork routes to VS
+ *   <li><b>with VS</b> (suite run with) — the fork routes to VS
  *       ship assembly, so NO rocket is spawned.</li>
  * </ul>
  *
@@ -35,12 +36,14 @@ public class AdvancedFlightComputerTierGateTest extends AbstractSharedServerTest
     private static final String VARIANT = "with-advanced-flight-computer";
 
     @Test
+    @Ignore("UNREACHABLE PREMISE, retired in place 2026-08-21. It pins what an Advanced Flight "
+            + "Computer does when Valkyrien Skies is ABSENT, and VS cannot be absent: it is vendored "
+            + "into AR's own main source set and its classes ship inside the mod. The guard used to "
+            + "be Assume.assumeFalse(serverHasVs()), which SKIPPED this on every run since VS was "
+            + "vendored - dead coverage that read as coverage. Retired rather than deleted because "
+            + "the production fallback it describes may still exist, and would then be dead code with "
+            + "no test to say so; that is its own finding, not this file's.")
     public void flightComputerWithoutVsBuildsInertRocket() throws Exception {
-        // Contract is the no-VS branch; if the server actually has VS the ship path
-        // runs instead, so skip rather than assert the wrong thing.
-        Assume.assumeFalse("server has Valkyrien Skies — that is the VS ship path, not the fallback",
-                serverHasVs());
-
         String assemble = assembleFixture(1200, 64, 1200, VARIANT);
         // A rocket WAS built (fallback taken) ...
         assertTrue("expected exactly one rocket from the fallback path: " + assemble,
@@ -60,10 +63,8 @@ public class AdvancedFlightComputerTierGateTest extends AbstractSharedServerTest
 
     @Test
     public void flightComputerWithVsAssemblesShipNotRocket() throws Exception {
-        // Needs Valkyrien Skies on the server classpath (suite run with -PwithVS);
+        // Needs Valkyrien Skies on the server classpath (suite run with );
         // skips cleanly otherwise.
-        Assume.assumeTrue("needs Valkyrien Skies on the server classpath (run with -PwithVS)",
-                serverHasVs());
 
         String assemble = assembleFixture(1600, 64, 1600, VARIANT);
         // The defining contract of the fork WITH VS: the AFC diverts the build to a
@@ -78,8 +79,6 @@ public class AdvancedFlightComputerTierGateTest extends AbstractSharedServerTest
         // computer. The AFC IS the tier-2 ship's flight computer, so it must satisfy the
         // "computer with instructions" requirement — the scan must not reject it as NOGUIDANCE,
         // and with VS the build routes to a ship (no rocket).
-        Assume.assumeTrue("needs Valkyrien Skies on the server classpath (run with -PwithVS)",
-                serverHasVs());
 
         String assemble = assembleFixture(2000, 64, 2000, "advanced-flight-computer-only");
         assertTrue("an AFC alone must satisfy the guidance requirement and route to a ship "
@@ -88,23 +87,16 @@ public class AdvancedFlightComputerTierGateTest extends AbstractSharedServerTest
     }
 
     @Test
+    @Ignore("UNREACHABLE PREMISE, retired in place 2026-08-21 - see the sibling without-VS test. "
+            + "Valkyrien Skies is vendored and mandatory, so this scenario has been silently skipped "
+            + "on every run rather than failing. The mirror gate it describes: without VS the AFC is "
+            + "inert, the build falls back to a rocket, and a rocket still needs a guidance computer.")
     public void flightComputerAloneWithoutVsStillRequiresGuidance() throws Exception {
-        // The mirror gate: without VS the AFC is inert, the build falls back to a real rocket,
-        // and a rocket still needs a guidance computer to navigate. So an AFC-only build must
-        // NOT bypass the guidance requirement here — the scan must report NOGUIDANCE.
-        Assume.assumeFalse("server has Valkyrien Skies — the AFC satisfies guidance there",
-                serverHasVs());
-
         String coords = placeFixture(2000, 64, 2000, "advanced-flight-computer-only");
         String assemble = String.join("\n", client().execute("artest rocket assemble 0 " + coords));
         assertTrue("without VS, an AFC alone must not satisfy guidance — scan must be NOGUIDANCE: "
                         + assemble,
                 assemble.contains("\"status\":\"NOGUIDANCE\""));
-    }
-
-    private boolean serverHasVs() throws Exception {
-        String out = String.join("\n", client().execute("artest vs available"));
-        return out.contains("\"available\":true");
     }
 
     /**

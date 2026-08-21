@@ -1,7 +1,6 @@
 package zmaster587.advancedRocketry.test.client;
 
 import com.github.stannismod.forge.testing.junit.AbstractClientE2ETest;
-import org.junit.Assume;
 import org.junit.Ignore;
 import org.junit.Test;
 import org.lwjgl.input.Keyboard;
@@ -27,7 +26,7 @@ import static zmaster587.advancedRocketry.test.AdvancedRocketryTestConstants.SHI
  * vertical-up key, ship climbs; client rider tracks the server ship) — so a FAIL localises to the
  * coordinate regime, not to the pilot path. The arrange step is the rigid ship teleport
  * ({@code vs teleport-ship}: pose moves, subspace blocks stay, VS Y-limits widen, riders carried).
- * Gated on real VS — run with {@code -PwithVS}.</p>
+ *</p>
  *
  * <p>Findings recorded while building this spike:
  * (1) VS's load controller UNLOADS the teleported ship's physics object even with the pilot aboard
@@ -116,8 +115,6 @@ public class VSShipExtremeCoordinatesE2ETest extends AbstractClientE2ETest {
             + " crossing rather than extreme coordinates; they must be re-taken before being cited.")
     @Test
     public void aSeatedPilotKeepsControlAtExtremeY() throws Exception {
-        Assume.assumeTrue("needs Valkyrien Skies on the classpath (run with -PwithVS)",
-                serverHasVs());
 
         // ── Arrange: assemble a piloted ship at the base site (same recipe as the pilot-keys e2e). ──
         exec("tp @a " + (BX + 600) + " 120 " + (BZ + 600) + " 0 0");
@@ -295,10 +292,6 @@ public class VSShipExtremeCoordinatesE2ETest extends AbstractClientE2ETest {
         Matcher m = p.matcher(json);
         assertTrue("expected a number in: " + json, m.find());
         return Double.parseDouble(m.group(1));
-    }
-
-    private boolean serverHasVs() throws Exception {
-        return exec("artest vs available").contains("\"available\":true");
     }
 
     private String assembleFixture(int baseX, int baseY, int baseZ, String variant) throws Exception {

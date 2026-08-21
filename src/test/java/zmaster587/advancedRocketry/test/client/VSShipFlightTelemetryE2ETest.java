@@ -2,7 +2,6 @@ package zmaster587.advancedRocketry.test.client;
 
 import com.google.gson.JsonObject;
 
-import org.junit.Assume;
 import org.junit.FixMethodOrder;
 import org.junit.Test;
 import org.junit.runners.MethodSorters;
@@ -38,8 +37,6 @@ import static org.junit.Assert.assertTrue;
  *       components is bent steeply toward world +Y: the crew member is flung up a wall.</li>
  * </ul>
  *
- * <p>Gated on real VS - run with {@code -PwithVS}. Each test builds its own ship at its own base, so a
- * ship left rolled by one cannot poison the next.</p>
  */
 @FixMethodOrder(MethodSorters.NAME_ASCENDING)
 public class VSShipFlightTelemetryE2ETest extends AbstractSharedVsClientE2ETest {
@@ -48,7 +45,6 @@ public class VSShipFlightTelemetryE2ETest extends AbstractSharedVsClientE2ETest 
     protected String subsystem() {
         return "vs-flight-telemetry";
     }
-
 
     private static final Pattern COUNT = Pattern.compile("\"count\":(-?\\d+)");
     private static final Pattern BUILDER_POS =
@@ -85,7 +81,6 @@ public class VSShipFlightTelemetryE2ETest extends AbstractSharedVsClientE2ETest 
 
     @Test
     public void seatedPilotSeesLiveVelocityAndACentredCursorStopsTheShipTurning() throws Exception {
-        Assume.assumeTrue("needs Valkyrien Skies on the classpath (run with -PwithVS)", serverHasVs());
         final int bx = 3120, by = 64, bz = 3120;
 
         double[] ship = buildAndBoardShip(bx, by, bz);
@@ -166,7 +161,6 @@ public class VSShipFlightTelemetryE2ETest extends AbstractSharedVsClientE2ETest 
 
     @Test
     public void anInvertedShipTurnsThePilotsCameraOverAndKeepsHisEyeOutOfTheDeck() throws Exception {
-        Assume.assumeTrue("needs Valkyrien Skies on the classpath (run with -PwithVS)", serverHasVs());
         final int bx = 3220, by = 64, bz = 3220;
 
         buildAndBoardShip(bx, by, bz);
@@ -238,7 +232,6 @@ public class VSShipFlightTelemetryE2ETest extends AbstractSharedVsClientE2ETest 
 
     @Test
     public void crewStaysOnASteeplyRolledDeckInsteadOfBeingFlungIntoACorner() throws Exception {
-        Assume.assumeTrue("needs Valkyrien Skies on the classpath (run with -PwithVS)", serverHasVs());
         final int bx = 3320, by = 64, bz = 3320;
 
         double[] ship = buildShip(bx, by, bz);
@@ -310,7 +303,6 @@ public class VSShipFlightTelemetryE2ETest extends AbstractSharedVsClientE2ETest 
 
     @Test
     public void aCrewMemberRidesARotatingDeckWithoutTheCaptureThrashing() throws Exception {
-        Assume.assumeTrue("needs Valkyrien Skies on the classpath (run with -PwithVS)", serverHasVs());
         final int bx = 3520, by = 64, bz = 3520;
 
         double[] ship = buildShip(bx, by, bz);
@@ -354,7 +346,6 @@ public class VSShipFlightTelemetryE2ETest extends AbstractSharedVsClientE2ETest 
 
     @Test
     public void aBodyOnADeckWithWorldGroundBelowStaysOnTheDeck() throws Exception {
-        Assume.assumeTrue("needs Valkyrien Skies on the classpath (run with -PwithVS)", serverHasVs());
         final int bx = 3420, by = 64, bz = 3420;
 
         // Playtest report: standing on the deck of a DOCKED tier-2 ship (one resting on the ground), the
@@ -414,7 +405,6 @@ public class VSShipFlightTelemetryE2ETest extends AbstractSharedVsClientE2ETest 
 
     @Test
     public void aStationKeepingShipHoldsAltitudeInsteadOfSinking() throws Exception {
-        Assume.assumeTrue("needs Valkyrien Skies on the classpath (run with -PwithVS)", serverHasVs());
         final int bx = 3620, by = 64, bz = 3620;
 
         double[] ship = buildAndBoardShip(bx, by, bz);
@@ -630,7 +620,6 @@ public class VSShipFlightTelemetryE2ETest extends AbstractSharedVsClientE2ETest 
         return Math.sqrt(dx * dx + dy * dy + dz * dz);
     }
 
-
     private int count(String sub) throws Exception {
         Matcher m = COUNT.matcher(exec("artest vs " + sub + " 0"));
         return m.find() ? Integer.parseInt(m.group(1)) : -1;
@@ -647,7 +636,6 @@ public class VSShipFlightTelemetryE2ETest extends AbstractSharedVsClientE2ETest 
         assertTrue("expected an integer in: " + json, m.find());
         return Integer.parseInt(m.group(1));
     }
-
 
     private String assembleFixture(int baseX, int baseY, int baseZ) throws Exception {
         int cx1 = (baseX - 2) >> 4, cz1 = (baseZ - 2) >> 4;

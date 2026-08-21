@@ -6,7 +6,6 @@ import com.github.stannismod.forge.testing.TestTimeouts;
 import com.github.stannismod.forge.testing.junit.AbstractClientE2ETest;
 import com.google.gson.JsonObject;
 
-import org.junit.Assume;
 import org.junit.Test;
 
 import java.util.regex.Matcher;
@@ -38,7 +37,6 @@ import static org.junit.Assert.assertTrue;
  * occupant is the {@code vs seat-occupy} armor stand (no AI, holds the seat indefinitely — a
  * second human client is not needed to make the seat contested).</p>
  *
- * <p>Gated on real VS — run with {@code -PwithVS}.</p>
  */
 public class VSPilotSeatTakenWhileOfflineE2ETest extends AbstractClientE2ETest {
 
@@ -75,7 +73,6 @@ public class VSPilotSeatTakenWhileOfflineE2ETest extends AbstractClientE2ETest {
 
     @Test
     public void aSeatTakenWhileThePilotWasOfflineStaysWithTheOccupant() throws Exception {
-        Assume.assumeTrue("needs Valkyrien Skies on the classpath (run with -PwithVS)", serverHasVs());
 
         // ---- ARRANGE: build + assemble a piloted ship, seat the client player on it. ------------
         exec("tp @a " + (BX + 600) + " 120 " + (BZ + 600) + " 0 0");
@@ -277,10 +274,6 @@ public class VSPilotSeatTakenWhileOfflineE2ETest extends AbstractClientE2ETest {
     private int count(String sub) throws Exception {
         Matcher m = COUNT.matcher(exec("artest vs " + sub + " 0"));
         return m.find() ? Integer.parseInt(m.group(1)) : -1;
-    }
-
-    private boolean serverHasVs() throws Exception {
-        return exec("artest vs available").contains("\"available\":true");
     }
 
     private static boolean isRiding(JsonObject riding) {

@@ -1,6 +1,5 @@
 package zmaster587.advancedRocketry.test.server;
 
-import org.junit.Assume;
 import zmaster587.advancedRocketry.test.GameTicks;
 
 import org.junit.Test;
@@ -18,7 +17,7 @@ import static org.junit.Assert.assertTrue;
  * cell — the ship must still be in the registry. This proves our {@code setWorld(null)} unload +
  * reinit does not nuke VS state and that VS's per-world save round-trips through it (the risky
  * physics-thread interaction). The full pilotable-after-rebind check needs a client and lives at the
- * client tier. Run with {@code -PwithVS}; skipped otherwise.</p>
+ * client tier. Run with; skipped otherwise.</p>
  */
 public class SpaceSlotVsShipPersistTest extends AbstractSharedServerTest {
 
@@ -49,8 +48,6 @@ public class SpaceSlotVsShipPersistTest extends AbstractSharedServerTest {
 
     @Test
     public void vsShipDataSurvivesSlotUnloadReload() throws Exception {
-        Assume.assumeTrue("needs Valkyrien Skies on the classpath (run with -PwithVS)",
-                exec("artest vs available").contains("\"available\":true"));
 
         String asm = exec("artest space vs-assemble deep");
         Matcher m = SLOT.matcher(asm);

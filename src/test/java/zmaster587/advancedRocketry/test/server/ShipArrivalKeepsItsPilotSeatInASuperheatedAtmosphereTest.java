@@ -1,7 +1,6 @@
 package zmaster587.advancedRocketry.test.server;
 
 import org.junit.After;
-import org.junit.Assume;
 import zmaster587.advancedRocketry.test.GameTicks;
 
 import org.junit.Test;
@@ -33,7 +32,7 @@ import static zmaster587.advancedRocketry.test.AdvancedRocketryTestConstants.SHI
  * also pass on a build where nothing ever burns anything, which is exactly the shape of test that
  * cannot fail for the reason it was written.</p>
  *
- * <p>Gated on the server's real VS presence (run with {@code -PwithVS}); skips cleanly otherwise.</p>
+ * <p>Gated on the server's real VS presence (run with); skips cleanly otherwise.</p>
  */
 public class ShipArrivalKeepsItsPilotSeatInASuperheatedAtmosphereTest extends AbstractSharedServerTest {
 
@@ -60,7 +59,6 @@ public class ShipArrivalKeepsItsPilotSeatInASuperheatedAtmosphereTest extends Ab
 
     @Test
     public void aShipCrossingIntoASuperheatedAtmosphereKeepsItsPilotSeat() throws Exception {
-        Assume.assumeTrue("needs Valkyrien Skies on the server classpath (run with -PwithVS)", serverHasVs());
 
         // A headless server has nobody near a ship to hold it loaded; pin ships so the observations
         // below are of the ship and not of VS's unload policy. Reset in @After.
@@ -164,9 +162,6 @@ public class ShipArrivalKeepsItsPilotSeatInASuperheatedAtmosphereTest extends Ab
     public void restoreSharedServerState() throws Exception {
         // Shared-harness contract: a superheated overworld left behind would burn the next test's
         // fixtures, and a pinned ship set would hide the next test's unload behaviour.
-        if (!serverHasVs()) {
-            return;
-        }
         if (originalTemperature != Integer.MIN_VALUE) {
             exec("artest planet set-temp 0 " + originalTemperature);
         }
@@ -177,10 +172,6 @@ public class ShipArrivalKeepsItsPilotSeatInASuperheatedAtmosphereTest extends Ab
 
     private String exec(String cmd) throws Exception {
         return String.join("\n", client().execute(cmd));
-    }
-
-    private boolean serverHasVs() throws Exception {
-        return exec("artest vs available").contains("\"available\":true");
     }
 
     /** Poll for a loaded VS ship (assembly is asynchronous). Bounded ~10 s. Returns the loaded count. */

@@ -50,8 +50,7 @@ import static zmaster587.advancedRocketry.test.AdvancedRocketryTestConstants.SHI
  * the flight computer's own tick fires the entry against the production subsystem.</p>
  *
  * <p>Manual server + client lifecycle: the config (pool size, orbit line) must be written into the
- * game directory BEFORE the server boots. Gated on real Valkyrien Skies — run with
- * {@code -PwithVS}.</p>
+ * game directory BEFORE the server boots.
  */
 public class VSShipEntryRefusedKeepsPilotSeatedE2ETest {
 
@@ -149,8 +148,6 @@ public class VSShipEntryRefusedKeepsPilotSeatedE2ETest {
 
     @Test
     public void aRefusedEntryLeavesThePilotSeatedWithAMessage() throws Exception {
-        Assume.assumeTrue("needs Valkyrien Skies on the classpath (run with -PwithVS)",
-                exec("artest vs available").contains("\"available\":true"));
 
         String status = exec("artest space subsystem-status");
         assertTrue("ARRANGEMENT: the production space subsystem must be REGISTERED - the seeded "

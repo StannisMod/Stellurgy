@@ -29,10 +29,6 @@ import static org.junit.Assert.assertTrue;
  *       dismounted player is handed to a capture path at the exact moment the deck starts falling.</li>
  * </ul>
  *
- * <p>Gated on real VS - run with {@code -PwithVS}. Each test builds its own ship at its own base so a
- * ship one leaves behind cannot poison the next. Both assert the DESIRED contract, so both are RED
- * until the station-keeping (hover survives dismount) and capture-handoff fixes land - they are the
- * repro, written where a client e2e belongs instead of a manual playtest.</p>
  *
  * <h2>One client for all twelve scenarios</h2>
  *
@@ -89,7 +85,6 @@ public class VSDeckCaptureAndDismountE2ETest extends AbstractSharedVsClientE2ETe
 
     @Test
     public void aRealClientPlayerOnAGroundedDeckStaysOnItInsteadOfFallingThrough() throws Exception {
-        Assume.assumeTrue("needs Valkyrien Skies on the classpath (run with -PwithVS)", serverHasVs());
         final int bx = 3620, by = 64, bz = 3620;
 
         // Grounded on purpose: a freshly assembled ship has physics disabled, so it rests where it was
@@ -139,7 +134,6 @@ public class VSDeckCaptureAndDismountE2ETest extends AbstractSharedVsClientE2ETe
 
     @Test
     public void standingUpWhileHoveringKeepsTheShipUpAndThePilotOnTheDeck() throws Exception {
-        Assume.assumeTrue("needs Valkyrien Skies on the classpath (run with -PwithVS)", serverHasVs());
         final int bx = 3720, by = 64, bz = 3720;
 
         buildAndBoardShip(bx, by, bz);
@@ -216,7 +210,6 @@ public class VSDeckCaptureAndDismountE2ETest extends AbstractSharedVsClientE2ETe
 
     @Test
     public void aClientPlayerReturningToASavedShipStandsOnItsDeckInsteadOfFallingThrough() throws Exception {
-        Assume.assumeTrue("needs Valkyrien Skies on the classpath (run with -PwithVS)", serverHasVs());
         final int bx = 3820, by = 64, bz = 3820;
 
         // The maintainer's "old ships" are ones from a PRIOR SESSION - assembled, the world saved and
@@ -279,7 +272,6 @@ public class VSDeckCaptureAndDismountE2ETest extends AbstractSharedVsClientE2ETe
 
     @Test
     public void flyingIntoAShipsAirspaceWithoutStandingOnItDoesNotHijackTheCamera() throws Exception {
-        Assume.assumeTrue("needs Valkyrien Skies on the classpath (run with -PwithVS)", serverHasVs());
         final int bx = 3920, by = 64, bz = 3920;
 
         double[] ship = buildShip(bx, by, bz);
@@ -338,7 +330,6 @@ public class VSDeckCaptureAndDismountE2ETest extends AbstractSharedVsClientE2ETe
 
     @Test
     public void aHoveringShipKeepsHoveringAcrossAReloadInsteadOfFalling() throws Exception {
-        Assume.assumeTrue("needs Valkyrien Skies on the classpath (run with -PwithVS)", serverHasVs());
         final int bx = 4320, by = 64, bz = 4320;
 
         buildAndBoardShip(bx, by, bz);
@@ -415,7 +406,6 @@ public class VSDeckCaptureAndDismountE2ETest extends AbstractSharedVsClientE2ETe
 
     @Test
     public void standingUpFromASeatOnASteeplyTiltedShipKeepsThePilotOnTheDeck() throws Exception {
-        Assume.assumeTrue("needs Valkyrien Skies on the classpath (run with -PwithVS)", serverHasVs());
         final int bx = 4620, by = 64, bz = 4620;
 
         buildAndBoardShip(bx, by, bz);
@@ -510,7 +500,6 @@ public class VSDeckCaptureAndDismountE2ETest extends AbstractSharedVsClientE2ETe
      */
     private void assertDismountThenRollHolds(int bx, int by, int bz, double qw, double qz,
             double upYLo, double upYHi, String label) throws Exception {
-        Assume.assumeTrue("needs Valkyrien Skies on the classpath (run with -PwithVS)", serverHasVs());
 
         buildAndBoardShip(bx, by, bz);
         bot().waitTicks(20);
@@ -570,7 +559,6 @@ public class VSDeckCaptureAndDismountE2ETest extends AbstractSharedVsClientE2ETe
 
     @Test
     public void enteringAndLeavingTheSeatOnAnInvertedShipWorks() throws Exception {
-        Assume.assumeTrue("needs Valkyrien Skies on the classpath (run with -PwithVS)", serverHasVs());
         final int bx = 4520, by = 64, bz = 4520;
 
         double[] ship = buildShip(bx, by, bz);
@@ -628,7 +616,6 @@ public class VSDeckCaptureAndDismountE2ETest extends AbstractSharedVsClientE2ETe
 
     @Test
     public void aSeatedPilotCanStillTurnTheShipWhenItIsInverted() throws Exception {
-        Assume.assumeTrue("needs Valkyrien Skies on the classpath (run with -PwithVS)", serverHasVs());
         final int bx = 4420, by = 64, bz = 4420;
 
         buildAndBoardShip(bx, by, bz);
@@ -693,7 +680,6 @@ public class VSDeckCaptureAndDismountE2ETest extends AbstractSharedVsClientE2ETe
 
     @Test
     public void aClientPlayerRidingASteeplyTiltedDeckHasStableCaptureAndCamera() throws Exception {
-        Assume.assumeTrue("needs Valkyrien Skies on the classpath (run with -PwithVS)", serverHasVs());
         final int bx = 4120, by = 64, bz = 4120;
 
         double[] ship = buildShip(bx, by, bz);
@@ -749,7 +735,6 @@ public class VSDeckCaptureAndDismountE2ETest extends AbstractSharedVsClientE2ETe
 
     @Test
     public void anInvertedShipsMovementAndCameraFramesStayConsistent() throws Exception {
-        Assume.assumeTrue("needs Valkyrien Skies on the classpath (run with -PwithVS)", serverHasVs());
         final int bx = 4020, by = 64, bz = 4020;
 
         double[] ship = buildShip(bx, by, bz);

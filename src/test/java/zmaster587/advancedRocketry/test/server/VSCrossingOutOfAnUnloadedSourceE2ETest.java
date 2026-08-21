@@ -3,7 +3,6 @@ package zmaster587.advancedRocketry.test.server;
 import com.github.stannismod.forge.testing.junit.AbstractHeadlessServerTest;
 import zmaster587.advancedRocketry.test.GameTicks;
 
-import org.junit.Assume;
 import org.junit.Test;
 
 import java.util.regex.Matcher;
@@ -53,7 +52,6 @@ public class VSCrossingOutOfAnUnloadedSourceE2ETest extends AbstractHeadlessServ
 
     @Test
     public void aCrossingOutOfAnUnloadedSourceLeavesNoRegistryEntry() throws Exception {
-        Assume.assumeTrue("needs Valkyrien Skies on the server classpath", serverHasVs());
 
         buildShip();
         // With no player near it and no permaload, VS unloads the ship again and keeps its registry entry.
@@ -168,10 +166,6 @@ public class VSCrossingOutOfAnUnloadedSourceE2ETest extends AbstractHeadlessServ
 
     private String exec(String cmd) throws Exception {
         return String.join("\n", client().execute(cmd));
-    }
-
-    private boolean serverHasVs() throws Exception {
-        return exec("artest vs available").contains("\"available\":true");
     }
 
     private void clearArea(int baseX, int baseY) throws Exception {

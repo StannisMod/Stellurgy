@@ -231,9 +231,6 @@ public class SpaceClockIsTheSubsystemsOwnE2ETest {
         // --- boot 1 --------------------------------------------------------------------------------
         harness = RealDedicatedServerHarness.startWith(root, false);
         String vs = exec("artest vs available");
-        Assume.assumeTrue("Valkyrien Skies absent — the production space subsystem declines to "
-                + "register without it, and its save point is what writes the clock; run with "
-                + "-PwithVS: " + vs, vs.contains("\"available\":true"));
 
         String status = exec("artest space subsystem-status");
         assertTrue("the production space subsystem must be live on boot 1 — its world-save hook is "
@@ -282,7 +279,7 @@ public class SpaceClockIsTheSubsystemsOwnE2ETest {
      *
      * <p>The subsystem is turned off by config rather than by the absence of Valkyrien Skies, so this
      * leg runs and means the same thing in EVERY configuration of the gate — including {@code
-     * -PwithVS}, where the neighbouring reboot test covers the subsystem-up path instead. That the
+     * }, where the neighbouring reboot test covers the subsystem-up path instead. That the
      * subsystem really is down is asserted, not assumed: with it up, this would be a second copy of
      * the test above rather than the one that covers the other path.</p>
      */

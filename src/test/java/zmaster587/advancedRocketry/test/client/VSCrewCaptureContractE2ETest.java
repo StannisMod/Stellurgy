@@ -1,6 +1,5 @@
 package zmaster587.advancedRocketry.test.client;
 
-import org.junit.Assume;
 import org.junit.FixMethodOrder;
 import org.junit.Test;
 import org.junit.runners.MethodSorters;
@@ -30,8 +29,6 @@ import static org.junit.Assert.assertTrue;
  *       world-frame movement.</li>
  * </ul>
  *
- * <p>Gated on real VS — run with {@code -PwithVS}. Each test builds its own ship at its own base so
- * a ship one leaves behind cannot poison the next.</p>
  *
  * <h2>One client for all eleven scenarios</h2>
  *
@@ -69,7 +66,6 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
 
     @Test
     public void jumpingOnTheTopDeckKeepsTheCaptureAndLandsBackOnIt() throws Exception {
-        Assume.assumeTrue("needs Valkyrien Skies on the classpath (run with -PwithVS)", serverHasVs());
         final int bx = 5220, by = 64, bz = 5220;
 
         // The subject is on the HARD side of the geometry: the fixture's walkable deck is the hull's
@@ -144,7 +140,6 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
 
     @Test
     public void walkingOnTheGroundBesideAParkedShipNeverEntersItsFrame() throws Exception {
-        Assume.assumeTrue("needs Valkyrien Skies on the classpath (run with -PwithVS)", serverHasVs());
         final int bx = 5320, by = 64, bz = 5320;
 
         double[] ship = buildShip(bx, by, bz);
@@ -220,7 +215,6 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
 
     @Test
     public void aStillCrewMemberOnASteeplyRolledDeckIsNotDraggedSideways() throws Exception {
-        Assume.assumeTrue("needs Valkyrien Skies on the classpath (run with -PwithVS)", serverHasVs());
         final int bx = 5420, by = 64, bz = 5420;
 
         // Board and stand up on the LEVEL deck (the dismount seed captures the ex-pilot), then roll
@@ -303,7 +297,6 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
 
     @Test
     public void aStillCrewMemberOnAHoveringShipIsNotDraggedSideways() throws Exception {
-        Assume.assumeTrue("needs Valkyrien Skies on the classpath (run with -PwithVS)", serverHasVs());
         final int bx = 5520, by = 64, bz = 5520;
 
         // The playtest ship is not attitude-HELD by a probe - it HOVERS under station-keeping, which
@@ -375,7 +368,6 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
 
     @Test
     public void walkingAndJumpingOnAHoveringShipDoesNotChurnTheCapture() throws Exception {
-        Assume.assumeTrue("needs Valkyrien Skies on the classpath (run with -PwithVS)", serverHasVs());
         final int bx = 5620, by = 64, bz = 5620;
 
         // The round-11 playtest drag happens on a NEARLY-LEVEL hovering ship while the crew member
@@ -485,7 +477,6 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
 
     @Test
     public void aStillCrewMemberOnAFastClimbingShipKeepsHisCapture() throws Exception {
-        Assume.assumeTrue("needs Valkyrien Skies on the classpath (run with -PwithVS)", serverHasVs());
         final int bx = 5720, by = 64, bz = 5720;
 
         // The round-13 playtest thrash correlates with INVERSION, but the drop lines' real common
@@ -616,7 +607,6 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
 
     @Test
     public void aCreativeFlyingExPilotIsNeverSnappedBackByTheDismountHold() throws Exception {
-        Assume.assumeTrue("needs Valkyrien Skies on the classpath (run with -PwithVS)", serverHasVs());
         final int bx = 5820, by = 64, bz = 5820;
 
         // The live war: dismount the pilot seat and start creative-FLYING within the dismount
@@ -691,7 +681,6 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
 
     @Test
     public void standingOnTheWorldTopOfAnInvertedShipKeepsWorldFrameSemantics() throws Exception {
-        Assume.assumeTrue("needs Valkyrien Skies on the classpath (run with -PwithVS)", serverHasVs());
         final int bx = 5920, by = 64, bz = 5920;
 
         // The round-15 playtest residue: standing on the world-facing top of an inverted hull (its
@@ -771,7 +760,6 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
 
     @Test
     public void aHullTopEncounterNeverEntersTheShipFrame() throws Exception {
-        Assume.assumeTrue("needs Valkyrien Skies on the classpath (run with -PwithVS)", serverHasVs());
         final int bx = 6020, by = 64, bz = 6020;
 
         // The verified outer-hull half (the round-15 residue): a body meeting the world-facing
@@ -843,7 +831,6 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
 
     @Test
     public void theCrosshairPicksTheSameDeckBlockAtAnyAttitude() throws Exception {
-        Assume.assumeTrue("needs Valkyrien Skies on the classpath (run with -PwithVS)", serverHasVs());
         final int bx = 6120, by = 64, bz = 6120;
 
         // The raytrace origin (getPositionEyes) ran along WORLD up while the camera renders the eye
@@ -929,7 +916,6 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
 
     @Test
     public void theMouseTurnsTheWalkingCrewsAimInTheDeckFrameAndTheAimRidesTheDeck() throws Exception {
-        Assume.assumeTrue("needs Valkyrien Skies on the classpath (run with -PwithVS)", serverHasVs());
         final int bx = 6420, by = 64, bz = 6420;
 
         // The walking-crew look contract, in its two player-visible halves, on a STEEPLY ROLLED

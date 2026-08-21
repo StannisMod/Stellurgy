@@ -1,7 +1,6 @@
 package zmaster587.advancedRocketry.test.server;
 
 import org.junit.After;
-import org.junit.Assume;
 import zmaster587.advancedRocketry.test.GameTicks;
 
 import org.junit.Test;
@@ -43,7 +42,6 @@ public class ArrivalSeatLookupNamesItsOwnShipE2ETest extends AbstractSharedServe
 
     @Test
     public void theSeatLookupFindsItsOwnShipsSeatWithAnotherCraftNearer() throws Exception {
-        Assume.assumeTrue("needs Valkyrien Skies on the server classpath", serverHasVs());
 
         // Headless: nobody is near a ship to hold it loaded, and an unloaded ship reads as a missing
         // one. Reset in @After (shared-harness contract).
@@ -105,9 +103,6 @@ public class ArrivalSeatLookupNamesItsOwnShipE2ETest extends AbstractSharedServe
 
     @After
     public void restoreSharedServerState() throws Exception {
-        if (!serverHasVs()) {
-            return;
-        }
         exec("artest vs permaload false");
     }
 
@@ -115,10 +110,6 @@ public class ArrivalSeatLookupNamesItsOwnShipE2ETest extends AbstractSharedServe
 
     private String exec(String cmd) throws Exception {
         return String.join("\n", client().execute(cmd));
-    }
-
-    private boolean serverHasVs() throws Exception {
-        return exec("artest vs available").contains("\"available\":true");
     }
 
     private int waitForLoadedShip(int dim) throws Exception {

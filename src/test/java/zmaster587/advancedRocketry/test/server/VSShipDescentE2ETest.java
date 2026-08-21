@@ -3,7 +3,6 @@ package zmaster587.advancedRocketry.test.server;
 import zmaster587.advancedRocketry.test.GameTicks;
 
 import org.junit.After;
-import org.junit.Assume;
 import org.junit.Test;
 
 import java.util.regex.Matcher;
@@ -26,7 +25,7 @@ import static zmaster587.advancedRocketry.test.AdvancedRocketryTestConstants.SHI
  * ship is loaded in the overworld and the ship has left the ledger. The proximity TRIGGER predicate is
  * pinned separately + deterministically by {@code DescentControllerTest}; this e2e is the "the crossing
  * physically moves a settled ship into a planet dim" acceptance. Gated on the server's real VS presence
- * (run with {@code -PwithVS}); skips cleanly otherwise.</p>
+ * (run with); skips cleanly otherwise.</p>
  */
 public class VSShipDescentE2ETest extends AbstractSharedServerTest {
 
@@ -50,7 +49,6 @@ public class VSShipDescentE2ETest extends AbstractSharedServerTest {
 
     @Test
     public void aSettledShipDescendsIntoAPlanetDimViaTheCrossing() throws Exception {
-        Assume.assumeTrue("needs Valkyrien Skies on the server classpath (run with -PwithVS)", serverHasVs());
 
         exec("artest vs permaload true");
         String setup = exec("artest space entry-setup 2");
@@ -144,20 +142,14 @@ public class VSShipDescentE2ETest extends AbstractSharedServerTest {
 
     @After
     public void cleanup() throws Exception {
-        if (serverHasVs()) {
-            exec("artest space entry-clear");
-            exec("artest vs permaload false");
-        }
+        exec("artest space entry-clear");
+        exec("artest vs permaload false");
     }
 
     // --- helpers (mirror VSShipEntryE2ETest) --------------------------------------------------------
 
     private String exec(String cmd) throws Exception {
         return String.join("\n", client().execute(cmd));
-    }
-
-    private boolean serverHasVs() throws Exception {
-        return exec("artest vs available").contains("\"available\":true");
     }
 
     private void loadAllEntrySlots(String setup) throws Exception {

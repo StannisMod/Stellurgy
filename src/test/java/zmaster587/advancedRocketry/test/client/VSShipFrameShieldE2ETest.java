@@ -1,7 +1,6 @@
 package zmaster587.advancedRocketry.test.client;
 
 import com.github.stannismod.forge.testing.junit.AbstractClientE2ETest;
-import org.junit.Assume;
 import org.junit.Test;
 
 import java.util.regex.Matcher;
@@ -31,7 +30,7 @@ import static zmaster587.advancedRocketry.test.AdvancedRocketryTestConstants.SHI
  * </ul>
  * The frame-blind deflection math itself is pinned standalone by {@code ShieldImpactAbsorptionTest}; here
  * we verify the two frame-dependent quantities (moving world centre + live surface velocity) on a real
- * loaded ship, plus one on-hull deflection. Gated on real VS — run with {@code -PwithVS}.</p>
+ * loaded ship, plus one on-hull deflection.</p>
  */
 public class VSShipFrameShieldE2ETest extends AbstractClientE2ETest {
 
@@ -46,7 +45,6 @@ public class VSShipFrameShieldE2ETest extends AbstractClientE2ETest {
 
     @Test
     public void shieldRidesTheAssembledShipAndDeflectsOnBoard() throws Exception {
-        Assume.assumeTrue("needs Valkyrien Skies on the classpath (run with -PwithVS)", serverHasVs());
 
         exec("artest vs permaload true");
         exec("tp @a " + (BX + 40) + " 120 " + (BZ + 40) + " 0 0");
@@ -229,10 +227,6 @@ public class VSShipFrameShieldE2ETest extends AbstractClientE2ETest {
 
     private static double sq(double v) {
         return v * v;
-    }
-
-    private boolean serverHasVs() throws Exception {
-        return exec("artest vs available").contains("\"available\":true");
     }
 
     private String exec(String cmd) throws Exception {

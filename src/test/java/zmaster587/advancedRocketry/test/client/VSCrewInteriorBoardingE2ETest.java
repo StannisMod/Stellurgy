@@ -2,7 +2,6 @@ package zmaster587.advancedRocketry.test.client;
 
 import com.github.stannismod.forge.testing.TestTimeouts;
 
-import org.junit.Assume;
 import org.junit.FixMethodOrder;
 import org.junit.Test;
 import org.junit.runners.MethodSorters;
@@ -25,7 +24,6 @@ import static org.junit.Assert.assertTrue;
  * camera - the reported "captured, but the camera never flips" desync. Both flavors of that
  * gap are closed by the same gate this test pins.</p>
  *
- * <p>Gated on real VS - run with {@code -PwithVS}.</p>
  */
 @FixMethodOrder(MethodSorters.NAME_ASCENDING)
 public class VSCrewInteriorBoardingE2ETest extends AbstractSharedVsClientE2ETest {
@@ -34,7 +32,6 @@ public class VSCrewInteriorBoardingE2ETest extends AbstractSharedVsClientE2ETest
     protected String subsystem() {
         return "vs-crew-boarding";
     }
-
 
     private static final Pattern COUNT = Pattern.compile("\"count\":(-?\\d+)");
     private static final Pattern BUILDER_POS =
@@ -63,7 +60,6 @@ public class VSCrewInteriorBoardingE2ETest extends AbstractSharedVsClientE2ETest
     @Test
     public void aBodyReleasedInsideAnInvertedShipIsSeatedBackOnTheDeck()
             throws Exception {
-        Assume.assumeTrue("needs Valkyrien Skies on the classpath (run with -PwithVS)", serverHasVs());
         final int bx = 6620, by = 64, bz = 6620;
 
         // Seat the bot, invert the ship under him, dismount INSIDE: the dismount seed captures
@@ -192,7 +188,6 @@ public class VSCrewInteriorBoardingE2ETest extends AbstractSharedVsClientE2ETest
 
     @Test
     public void aBodyLostMidCavityOfAnEnclosedInvertedShipIsReclaimedByTheDeck() throws Exception {
-        Assume.assumeTrue("needs Valkyrien Skies on the classpath (run with -PwithVS)", serverHasVs());
         final int bx = 6820, by = 64, bz = 6820;
 
         // The open-topped cockpit above cannot exercise interior boarding: since the enclosure
@@ -323,7 +318,6 @@ public class VSCrewInteriorBoardingE2ETest extends AbstractSharedVsClientE2ETest
 
     @Test
     public void aFlyingCrewMemberAscendsAlongTheDeckNormalAndReseatsOnFlightOff() throws Exception {
-        Assume.assumeTrue("needs Valkyrien Skies on the classpath (run with -PwithVS)", serverHasVs());
         final int bx = 6720, by = 64, bz = 6720;
 
         // The flying-aboard contract on a steeply ROLLED ship: starting creative flight on the
@@ -629,7 +623,6 @@ public class VSCrewInteriorBoardingE2ETest extends AbstractSharedVsClientE2ETest
         return shipInfoById(scenarioShipId);
     }
 
-
     /** One CLIENT-side subspace-census static (ShipFrameTravel.census*), as a plain string. */
     private String censusStatic(String field) throws Exception {
         return bot().readStaticField(SHIP_FRAME_TRAVEL, field).get("value").getAsString();
@@ -658,7 +651,6 @@ public class VSCrewInteriorBoardingE2ETest extends AbstractSharedVsClientE2ETest
         Matcher m = COUNT.matcher(exec("artest vs " + sub + " 0"));
         return m.find() ? Integer.parseInt(m.group(1)) : -1;
     }
-
 
     private double readDouble(String json, Pattern p) {
         Matcher m = p.matcher(json);

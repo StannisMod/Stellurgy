@@ -5,7 +5,6 @@ import com.github.stannismod.forge.testing.junit.AbstractClientE2ETest;
 import com.google.gson.JsonObject;
 
 import org.junit.After;
-import org.junit.Assume;
 import org.junit.Test;
 import org.lwjgl.input.Keyboard;
 
@@ -42,7 +41,6 @@ import static zmaster587.advancedRocketry.test.AdvancedRocketryTestConstants.SHI
  * as the load-bearing acceptance. The transit only advances when the probe ticks it, so the park
  * deterministically outlasts the relog.</p>
  *
- * <p>Gated on real VS — run with {@code -PwithVS}.</p>
  */
 public class VSMidTransitRelogControlE2ETest extends AbstractClientE2ETest {
 
@@ -54,7 +52,6 @@ public class VSMidTransitRelogControlE2ETest extends AbstractClientE2ETest {
 
     @Test
     public void aPilotWhoRelogsMidTransitRegainsControlOnArrival() throws Exception {
-        Assume.assumeTrue("needs Valkyrien Skies (run with -PwithVS)", serverHasVs());
 
         // Headless: pin ships loaded so the assembled ship survives between probe calls.
         exec("artest vs permaload true");
@@ -246,10 +243,8 @@ public class VSMidTransitRelogControlE2ETest extends AbstractClientE2ETest {
     @After
     public void cleanup() {
         try {
-            if (serverHasVs()) {
-                exec("artest player dismount");
-                exec("artest vs permaload false");
-            }
+            exec("artest player dismount");
+            exec("artest vs permaload false");
         } catch (Exception ignored) {
         }
     }
@@ -300,10 +295,6 @@ public class VSMidTransitRelogControlE2ETest extends AbstractClientE2ETest {
 
     private String exec(String cmd) throws Exception {
         return String.join("\n", serverClient().execute(cmd));
-    }
-
-    private boolean serverHasVs() throws Exception {
-        return exec("artest vs available").contains("\"available\":true");
     }
 
     /** Poll for a loaded VS ship in {@code dim} (assembly is async; a headless server forces the load). */

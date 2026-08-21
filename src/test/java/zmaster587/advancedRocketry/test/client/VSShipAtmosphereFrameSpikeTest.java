@@ -1,7 +1,6 @@
 package zmaster587.advancedRocketry.test.client;
 
 import com.github.stannismod.forge.testing.junit.AbstractClientE2ETest;
-import org.junit.Assume;
 import org.junit.Test;
 
 import java.util.regex.Matcher;
@@ -34,7 +33,6 @@ import static org.junit.Assert.assertTrue;
  * payload, and each assertion carries them, so a red is a finished measurement rather than the
  * start of one.</p>
  *
- * <p>Gated on real VS — run with {@code -PwithVS}; skips otherwise.</p>
  *
  * <p><b>What it measured (2026-07-26).</b> The vent seals identically in both frames
  * ({@code blobSize=28} on the ground and aboard), so a ship's own blocks seal normally; the blob's
@@ -69,8 +67,6 @@ public class VSShipAtmosphereFrameSpikeTest extends AbstractClientE2ETest {
 
     @Test
     public void aSealedShipCabinDoesNotReachItsOwnCrew_documentsKnownBug() throws Exception {
-        Assume.assumeTrue("needs Valkyrien Skies on the classpath (run with -PwithVS)",
-                serverHasVs());
 
         // ── Control leg: the same cabin, in the plain world ───────────────────────────────
         buildCabin(CX, CY, CZ);
@@ -291,10 +287,6 @@ public class VSShipAtmosphereFrameSpikeTest extends AbstractClientE2ETest {
     private int count(String sub) throws Exception {
         Matcher m = COUNT.matcher(exec("artest vs " + sub + " 0"));
         return m.find() ? Integer.parseInt(m.group(1)) : -1;
-    }
-
-    private boolean serverHasVs() throws Exception {
-        return exec("artest vs available").contains("\"available\":true");
     }
 
     private String exec(String cmd) throws Exception {

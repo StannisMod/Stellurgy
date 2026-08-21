@@ -1,7 +1,6 @@
 package zmaster587.advancedRocketry.test.client;
 
 import com.google.gson.JsonObject;
-import org.junit.Assume;
 import org.junit.FixMethodOrder;
 import org.junit.Test;
 import org.junit.runners.MethodSorters;
@@ -31,8 +30,8 @@ import static org.junit.Assert.assertTrue;
  * <p>Full honest path: a real client pilot (real held key → packet → seat → computer → force)
  * flies the ship; the break is a server-side block removal exactly like a mined block (the same
  * {@code breakBlock} path); every outcome is read from the CLIENT (riding state, entity presence,
- * the action-bar overlay) with the server ship position as the motion oracle. Gated on real VS —
- * run with {@code -PwithVS}.</p>
+ * the action-bar overlay) with the server ship position as the motion oracle.
+</p>
  */
 @FixMethodOrder(MethodSorters.NAME_ASCENDING)
 public class VSPilotStationDestructionE2ETest extends AbstractSharedVsClientE2ETest {
@@ -41,7 +40,6 @@ public class VSPilotStationDestructionE2ETest extends AbstractSharedVsClientE2ET
     protected String subsystem() {
         return "vs-pilot-station";
     }
-
 
     private static final Pattern BUILDER_POS =
             Pattern.compile("\"builderPos\":\\[(-?\\d+),(-?\\d+),(-?\\d+)]");
@@ -57,8 +55,6 @@ public class VSPilotStationDestructionE2ETest extends AbstractSharedVsClientE2ET
 
     @Test
     public void breakingTheOccupiedSeatDismountsThePilotAndHoldsTheShip() throws Exception {
-        Assume.assumeTrue("needs Valkyrien Skies on the classpath (run with -PwithVS)",
-                serverHasVs());
         int bx = 4400, by = 64, bz = 4400;
         FlyingShip ship = assembleLoadAndFly(bx, by, bz);
 
@@ -97,8 +93,6 @@ public class VSPilotStationDestructionE2ETest extends AbstractSharedVsClientE2ET
 
     @Test
     public void breakingTheLinkedComputerDismountsMessagesAndNeverThrusts() throws Exception {
-        Assume.assumeTrue("needs Valkyrien Skies on the classpath (run with -PwithVS)",
-                serverHasVs());
         int bx = 4600, by = 64, bz = 4600;
         FlyingShip ship = assembleLoadAndFly(bx, by, bz);
         bot().releaseKey(Keyboard.KEY_R);
@@ -266,8 +260,6 @@ public class VSPilotStationDestructionE2ETest extends AbstractSharedVsClientE2ET
         assertTrue("expected a number in: " + json, m.find());
         return Double.parseDouble(m.group(1));
     }
-
-
 
     private String assembleFixture(int baseX, int baseY, int baseZ) throws Exception {
         int cx1 = (baseX - 2) >> 4, cz1 = (baseZ - 2) >> 4;

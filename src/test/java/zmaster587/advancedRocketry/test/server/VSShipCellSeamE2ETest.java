@@ -5,7 +5,6 @@ import zmaster587.advancedRocketry.space.GalacticCoord;
 import zmaster587.advancedRocketry.test.GameTicks;
 
 import org.junit.After;
-import org.junit.Assume;
 import org.junit.Test;
 
 import java.util.regex.Matcher;
@@ -41,7 +40,7 @@ import static zmaster587.advancedRocketry.test.AdvancedRocketryTestConstants.SHI
  * content of the hysteresis. CONTROL: the pre-move ledger read is asserted to name the source cell, so
  * the later change is a real observation rather than a first reading.</p>
  *
- * <p>Gated on the server's real VS presence (run with {@code -PwithVS}); skips cleanly otherwise.</p>
+ * <p>Gated on the server's real VS presence (run with); skips cleanly otherwise.</p>
  */
 public class VSShipCellSeamE2ETest extends AbstractSharedServerTest {
 
@@ -86,8 +85,6 @@ public class VSShipCellSeamE2ETest extends AbstractSharedServerTest {
 
     @Test
     public void aShipFlownPastItsCellFaceIsCarriedIntoTheNeighbourAndStaysThere() throws Exception {
-        Assume.assumeTrue("needs Valkyrien Skies on the server classpath (run with -PwithVS)",
-                serverHasVs());
 
         exec("artest vs permaload true");
         String setup = exec("artest space entry-setup 2");
@@ -240,10 +237,8 @@ public class VSShipCellSeamE2ETest extends AbstractSharedServerTest {
 
     @After
     public void cleanup() throws Exception {
-        if (serverHasVs()) {
-            exec("artest space entry-clear");
-            exec("artest vs permaload false");
-        }
+        exec("artest space entry-clear");
+        exec("artest vs permaload false");
     }
 
     /** The three sector indices of a {@code sx_sy_sz} cell key. */
@@ -277,10 +272,6 @@ public class VSShipCellSeamE2ETest extends AbstractSharedServerTest {
         assertTrue("the ship in slot " + slotDim + " could not be located: " + info,
                 info.contains("\"managed\":true"));
         return info;
-    }
-
-    private boolean serverHasVs() throws Exception {
-        return exec("artest vs available").contains("\"available\":true");
     }
 
     private void loadAllEntrySlots(String setup) throws Exception {

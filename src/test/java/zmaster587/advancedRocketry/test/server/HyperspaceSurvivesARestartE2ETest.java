@@ -145,8 +145,6 @@ public class HyperspaceSurvivesARestartE2ETest {
     public void aShipParkedInHyperspaceIsStillThereAfterTheServerRestarts() throws Exception {
         // ── boot 1: put a real ship into hyperspace and shut the server down under it ────────────
         harness = RealDedicatedServerHarness.startWith(root, false);
-        Assume.assumeTrue("needs Valkyrien Skies (run with -PwithVS)",
-                exec("artest vs available").contains("\"available\":true"));
 
         String setup = exec("artest space transit-setup-piloted");
         assertTrue("the piloted transit fixture must build: " + setup, readBool(setup, "ok"));

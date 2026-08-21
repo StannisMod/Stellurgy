@@ -40,7 +40,7 @@ import static zmaster587.advancedRocketry.test.AdvancedRocketryTestConstants.SHI
  * written into the game directory BEFORE the server boots and the base class owns a throwaway root
  * it never exposes.</p>
  *
- * <p>Gated on real Valkyrien Skies - run with {@code -PwithVS}.</p>
+ * <p></p>
  */
 public class VSPilotKeysWithSpaceSubsystemE2ETest {
 
@@ -112,8 +112,6 @@ public class VSPilotKeysWithSpaceSubsystemE2ETest {
 
     @Test
     public void aSeatedPilotCanStillFlyHisShipWhileTheSpaceSubsystemIsRegistered() throws Exception {
-        Assume.assumeTrue("needs Valkyrien Skies on the classpath (run with -PwithVS)",
-                exec("artest vs available").contains("\"available\":true"));
 
         // The subsystem must actually be up, or this test silently degrades into the plain
         // pilot-keys case and its green would mean nothing.

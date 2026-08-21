@@ -2,7 +2,6 @@ package zmaster587.advancedRocketry.test.server;
 
 import zmaster587.advancedRocketry.test.GameTicks;
 
-import org.junit.Assume;
 import org.junit.Test;
 
 import java.util.regex.Matcher;
@@ -71,7 +70,6 @@ public class VSCrossingLeavesNoShipBehindE2ETest extends AbstractSharedServerTes
     /** The defect in one crossing: the ship object left behind in the world the crossing departed. */
     @Test
     public void aCrossingDoesNotLeaveAShipInTheWorldItLeft() throws Exception {
-        Assume.assumeTrue("needs Valkyrien Skies on the server classpath", serverHasVs());
         exec("artest vs permaload true");
 
         buildShipAt(LEG1_X);
@@ -85,7 +83,6 @@ public class VSCrossingLeavesNoShipBehindE2ETest extends AbstractSharedServerTes
     /** The same leak three crossings deep — the shape a player walks (entry, jump, descent). */
     @Test
     public void threeCrossingsDoNotAccumulateShips() throws Exception {
-        Assume.assumeTrue("needs Valkyrien Skies on the server classpath", serverHasVs());
         exec("artest vs permaload true");
 
         buildShipAt(LEG2_X);
@@ -103,9 +100,7 @@ public class VSCrossingLeavesNoShipBehindE2ETest extends AbstractSharedServerTes
     @org.junit.After
     public void resetPermaload() throws Exception {
         // Shared-harness state-leak contract: never leave "permanently loaded" set for a later method.
-        if (serverHasVs()) {
-            exec("artest vs permaload false");
-        }
+        exec("artest vs permaload false");
     }
 
     // --- the invariant ------------------------------------------------------------------------------
@@ -203,10 +198,6 @@ public class VSCrossingLeavesNoShipBehindE2ETest extends AbstractSharedServerTes
 
     private String exec(String cmd) throws Exception {
         return String.join("\n", client().execute(cmd));
-    }
-
-    private boolean serverHasVs() throws Exception {
-        return exec("artest vs available").contains("\"available\":true");
     }
 
     private void clearArea(int baseX, int baseY) throws Exception {

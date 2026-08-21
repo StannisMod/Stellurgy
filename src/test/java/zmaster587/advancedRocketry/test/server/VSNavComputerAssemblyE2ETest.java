@@ -3,7 +3,6 @@ package zmaster587.advancedRocketry.test.server;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-import org.junit.Assume;
 import org.junit.Test;
 
 import static org.junit.Assert.assertTrue;
@@ -26,8 +25,6 @@ public class VSNavComputerAssemblyE2ETest extends AbstractSharedServerTest {
 
     @Test
     public void aBuiltNavigationComputerIsLinkedToItsShipByTheAssembler() throws Exception {
-        Assume.assumeTrue("needs Valkyrien Skies on the server classpath (run with -PwithVS)",
-                serverHasVs());
 
         exec("artest vs permaload true");
         String fixture = exec("artest fixture rocket 0 " + BASE_X + " " + BASE_Y + " " + BASE_Z
@@ -56,10 +53,6 @@ public class VSNavComputerAssemblyE2ETest extends AbstractSharedServerTest {
         assertTrue("the assembler must link the navigation computer it found in the build: " + after
                         + " (pre-assembly state was " + before + ")",
                 after.contains("\"linked\":true"));
-    }
-
-    private boolean serverHasVs() throws Exception {
-        return exec("artest vs available").contains("\"available\":true");
     }
 
     private String exec(String cmd) throws Exception {

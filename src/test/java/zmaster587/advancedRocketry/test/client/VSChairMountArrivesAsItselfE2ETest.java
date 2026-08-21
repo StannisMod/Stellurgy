@@ -3,7 +3,6 @@ package zmaster587.advancedRocketry.test.client;
 import com.github.stannismod.forge.testing.junit.AbstractClientE2ETest;
 import com.google.gson.JsonObject;
 
-import org.junit.Assume;
 import org.junit.Test;
 
 import java.util.regex.Matcher;
@@ -33,7 +32,6 @@ import static org.junit.Assert.fail;
  * riding report is its own control — {@code riding=true} means the mount did reach the client, so
  * a wrong class cannot be explained away as "the client never saw it".
  *
- * <p>Gated on real Valkyrien Skies being on the server.
  */
 public class VSChairMountArrivesAsItselfE2ETest extends AbstractClientE2ETest {
 
@@ -50,7 +48,6 @@ public class VSChairMountArrivesAsItselfE2ETest extends AbstractClientE2ETest {
 
     @Test
     public void aChairMountArrivesAtTheClientAsItself() throws Exception {
-        Assume.assumeTrue("needs Valkyrien Skies on the server", serverHasVs());
 
         // ---- ARRANGE: a floor, a chair on it, and the player standing next to the chair. --------
         assertTrue("ARRANGEMENT: chunk warmup failed",
@@ -151,7 +148,4 @@ public class VSChairMountArrivesAsItselfE2ETest extends AbstractClientE2ETest {
         return String.join("\n", serverClient().execute(cmd));
     }
 
-    private boolean serverHasVs() throws Exception {
-        return exec("artest vs available").contains("\"available\":true");
-    }
 }

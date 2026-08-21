@@ -4,7 +4,6 @@ import com.github.stannismod.forge.testing.TestTimeouts;
 import com.github.stannismod.forge.testing.junit.AbstractClientE2ETest;
 
 import org.junit.After;
-import org.junit.Assume;
 import org.junit.Test;
 import org.lwjgl.input.Keyboard;
 
@@ -39,7 +38,7 @@ import static zmaster587.advancedRocketry.test.AdvancedRocketryTestConstants.SHI
  * Both legs also carry their own stimulus control: a craft that never moved reads as perfectly
  * smooth, so each leg asserts it actually flew before it is allowed to say anything about how.</p>
  *
- * <p>Gated on real Valkyrien Skies — run with {@code -PwithVS}.</p>
+ * <p></p>
  */
 public class VSFlightSmoothnessAcrossJumpE2ETest extends AbstractClientE2ETest {
 
@@ -117,7 +116,6 @@ public class VSFlightSmoothnessAcrossJumpE2ETest extends AbstractClientE2ETest {
 
     @Test
     public void aShipFliesAsSmoothlyAfterAJumpAsBeforeOne() throws Exception {
-        Assume.assumeTrue("needs Valkyrien Skies (run with -PwithVS)", serverHasVs());
 
         // The rendered frame is one of the four clocks this test reads, and the harness seeds
         // maxFps:30. A pilot sees his stutter at 120; a 30 Hz sampler averages that away, so the
@@ -347,11 +345,9 @@ public class VSFlightSmoothnessAcrossJumpE2ETest extends AbstractClientE2ETest {
             if (previousFrameRate > 0) {
                 bot().setFrameRate(previousFrameRate);
             }
-            if (serverHasVs()) {
-                exec("artest player dismount");
-                exec("artest vs permaload false");
-                exec("artest vs motion-trace reset");
-            }
+            exec("artest player dismount");
+            exec("artest vs permaload false");
+            exec("artest vs motion-trace reset");
         } catch (Exception ignored) {
         }
     }
@@ -704,10 +700,6 @@ public class VSFlightSmoothnessAcrossJumpE2ETest extends AbstractClientE2ETest {
 
     private String exec(String cmd) throws Exception {
         return String.join("\n", serverClient().execute(cmd));
-    }
-
-    private boolean serverHasVs() throws Exception {
-        return exec("artest vs available").contains("\"available\":true");
     }
 
     private int waitForLoadedShip(int dim) throws Exception {

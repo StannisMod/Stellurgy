@@ -2,7 +2,6 @@ package zmaster587.advancedRocketry.test.server;
 
 import zmaster587.advancedRocketry.test.GameTicks;
 
-import org.junit.Assume;
 import org.junit.Test;
 
 import java.util.regex.Matcher;
@@ -28,7 +27,7 @@ import static org.junit.Assert.assertTrue;
  * The observation side is safe to leave un-forced: the probe reads through the queryable ship registry,
  * which answers for an unloaded ship.</p>
  *
- * <p>Gated on the server's real VS presence (run with {@code -PwithVS}); skips cleanly otherwise.</p>
+ * <p>Gated on the server's real VS presence (run with); skips cleanly otherwise.</p>
  */
 public class VSUnmannedTransitSettlesOnItsPoseE2ETest extends AbstractSharedServerTest {
 
@@ -47,7 +46,6 @@ public class VSUnmannedTransitSettlesOnItsPoseE2ETest extends AbstractSharedServ
 
     @Test
     public void anUnmannedJumpEndsOnItsPoseNotInThePasteBand() throws Exception {
-        Assume.assumeTrue("needs Valkyrien Skies on the server classpath (run with -PwithVS)", serverHasVs());
 
         String setup = exec("artest space transit-setup");
         assertTrue("transit setup failed: " + setup, setup.contains("\"ok\":true"));
@@ -111,10 +109,6 @@ public class VSUnmannedTransitSettlesOnItsPoseE2ETest extends AbstractSharedServ
             }
         }
         return envelope;
-    }
-
-    private boolean serverHasVs() throws Exception {
-        return exec("artest vs available").contains("\"available\":true");
     }
 
     /** Poll until VS's queryable registry holds a ship in {@code dim}; never forces a load. */

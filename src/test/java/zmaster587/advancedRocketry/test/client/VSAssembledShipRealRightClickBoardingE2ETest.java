@@ -59,7 +59,7 @@ import static zmaster587.advancedRocketry.test.AdvancedRocketryTestConstants.SHI
  * {@code reportMouseOver} before pressing; then {@code setKey(-99, true)} / wait / release.</p>
  *
  * <p>Manual server + client lifecycle rather than the shared base class, matching the other
- * ship-boarding e2e tests. Gated on real Valkyrien Skies - run with {@code -PwithVS}.</p>
+ * ship-boarding e2e tests.</p>
  */
 public class VSAssembledShipRealRightClickBoardingE2ETest {
 
@@ -165,8 +165,6 @@ public class VSAssembledShipRealRightClickBoardingE2ETest {
 
     @Test
     public void aRealUseKeyPressOnAnAssembledShipsSeatBoardsThePilot() throws Exception {
-        Assume.assumeTrue("needs Valkyrien Skies on the classpath (run with -PwithVS)",
-                exec("artest vs available").contains("\"available\":true"));
 
         // THE MULTIPLIER STAYS. What it waits on is VS building the ship on its OWN thread, off the
         // game loop: that work finishes in wall-clock time, so a busy box genuinely needs more game

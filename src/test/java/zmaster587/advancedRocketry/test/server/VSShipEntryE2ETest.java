@@ -4,7 +4,6 @@ import zmaster587.advancedRocketry.space.GalacticCoord;
 import zmaster587.advancedRocketry.test.GameTicks;
 
 import org.junit.After;
-import org.junit.Assume;
 import org.junit.Test;
 
 import java.util.regex.Matcher;
@@ -30,7 +29,7 @@ import static zmaster587.advancedRocketry.test.AdvancedRocketryTestConstants.SHI
  * the entry design; it composes the proven per-ship crossing with the entry state machine (pinned
  * deterministically by {@code ShipEntryControllerTest}).</p>
  *
- * <p>Gated on the server's real VS presence (run with {@code -PwithVS}); skips cleanly otherwise.</p>
+ * <p>Gated on the server's real VS presence (run with); skips cleanly otherwise.</p>
  */
 public class VSShipEntryE2ETest extends AbstractSharedServerTest {
 
@@ -80,7 +79,6 @@ public class VSShipEntryE2ETest extends AbstractSharedServerTest {
 
     @Test
     public void aPilotedShipClimbingPastTheCeilingEntersSpaceViaTheFlightComputerTick() throws Exception {
-        Assume.assumeTrue("needs Valkyrien Skies on the server classpath (run with -PwithVS)", serverHasVs());
 
         // Headless: pin ships loaded so a freshly assembled/crossed ship does not auto-unload between calls.
         exec("artest vs permaload true");
@@ -172,7 +170,6 @@ public class VSShipEntryE2ETest extends AbstractSharedServerTest {
      */
     @Test
     public void aShipThatEnteredSpaceCanJumpToAnotherCellOnTheLiveStack() throws Exception {
-        Assume.assumeTrue("needs Valkyrien Skies on the server classpath (run with -PwithVS)", serverHasVs());
 
         exec("artest vs permaload true");
         String setup = exec("artest space entry-setup 2");
@@ -304,20 +301,14 @@ public class VSShipEntryE2ETest extends AbstractSharedServerTest {
 
     @After
     public void cleanup() throws Exception {
-        if (serverHasVs()) {
-            exec("artest space entry-clear");
-            exec("artest vs permaload false");
-        }
+        exec("artest space entry-clear");
+        exec("artest vs permaload false");
     }
 
     // --- helpers (mirror VSShipCrossingSpikeTest / VSShipTransitE2ETest) -----------------------------
 
     private String exec(String cmd) throws Exception {
         return String.join("\n", client().execute(cmd));
-    }
-
-    private boolean serverHasVs() throws Exception {
-        return exec("artest vs available").contains("\"available\":true");
     }
 
     private void loadAllEntrySlots(String setup) throws Exception {

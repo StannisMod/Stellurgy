@@ -1,6 +1,5 @@
 package zmaster587.advancedRocketry.test.server;
 
-import org.junit.Assume;
 import org.junit.Test;
 
 import java.util.regex.Matcher;
@@ -23,7 +22,7 @@ import static org.junit.Assert.assertTrue;
  * </ul>
  *
  * <p>Both tests drive the REAL scan (fixture + one extra control block + {@code rocket assemble})
- * and read the scan status the builder GUI shows the player. Gated on real VS — the restriction
+ * and read the scan status the builder GUI shows the player. The restriction
  * exists for the ship path; without VS the blocks are inert cargo.</p>
  */
 public class VSShipMultiControlScanTest extends AbstractSharedServerTest {
@@ -33,8 +32,6 @@ public class VSShipMultiControlScanTest extends AbstractSharedServerTest {
 
     @Test
     public void aSecondFlightComputerIsRejectedAtScan() throws Exception {
-        Assume.assumeTrue("needs Valkyrien Skies on the server classpath (run with -PwithVS)",
-                serverHasVs());
 
         int baseX = 2400, baseY = 64, baseZ = 2400;
         String coords = placeFixture(baseX, baseY, baseZ, "with-pilot-seat");
@@ -53,8 +50,6 @@ public class VSShipMultiControlScanTest extends AbstractSharedServerTest {
 
     @Test
     public void aSecondPilotSeatIsRejectedAtScan() throws Exception {
-        Assume.assumeTrue("needs Valkyrien Skies on the server classpath (run with -PwithVS)",
-                serverHasVs());
 
         int baseX = 2600, baseY = 64, baseZ = 2400;
         String coords = placeFixture(baseX, baseY, baseZ, "with-pilot-seat");
@@ -69,11 +64,6 @@ public class VSShipMultiControlScanTest extends AbstractSharedServerTest {
         assertTrue("a build with TWO pilot seats must be rejected at scan with its own error code: "
                         + assemble,
                 assemble.contains("\"status\":\"MULTIPLEPILOTSEATS\""));
-    }
-
-    private boolean serverHasVs() throws Exception {
-        return String.join("\n", client().execute("artest vs available"))
-                .contains("\"available\":true");
     }
 
     /** Place the fixture on a pad WITHOUT assembling; returns the builder pos as "bx by bz". */

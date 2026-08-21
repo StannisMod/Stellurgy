@@ -1,6 +1,5 @@
 package zmaster587.advancedRocketry.test.server;
 
-import org.junit.Assume;
 import zmaster587.advancedRocketry.test.GameTicks;
 
 import org.junit.Test;
@@ -25,7 +24,7 @@ import static zmaster587.advancedRocketry.test.AdvancedRocketryTestConstants.SHI
  * the crossing. CONTROL: the seat probe reports {@code seatFound:false} before any ship exists,
  * proving the witness can report a negative.</p>
  *
- * <p>Gated on the server's real VS presence (run with {@code -PwithVS}); skips cleanly otherwise. This is
+ * <p>Gated on the server's real VS presence (run with); skips cleanly otherwise. This is
  * a spike test — if it goes GREEN the crossing is GO and its contract should be promoted into the transit
  * subsystem's own e2e; if it goes RED it records a NO-GO (fall back to whole-slot rebind).</p>
  */
@@ -45,7 +44,6 @@ public class VSShipCrossingSpikeTest extends AbstractSharedServerTest {
 
     @Test
     public void aPilotedVsShipSurvivesAPerShipPackPasteCrossing() throws Exception {
-        Assume.assumeTrue("needs Valkyrien Skies on the server classpath (run with -PwithVS)", serverHasVs());
 
         // A headless server has no player to hold a ship loaded, so a freshly assembled ship auto-unloads
         // between probe calls (its physics object drops out of the loaded set). Pin ships loaded so the
@@ -138,19 +136,13 @@ public class VSShipCrossingSpikeTest extends AbstractSharedServerTest {
     @org.junit.After
     public void resetPermaload() throws Exception {
         // Shared-harness state-leak contract: don't leave "permanently loaded" set for later tests.
-        if (serverHasVs()) {
-            exec("artest vs permaload false");
-        }
+        exec("artest vs permaload false");
     }
 
     // --- helpers ------------------------------------------------------------------------------------
 
     private String exec(String cmd) throws Exception {
         return String.join("\n", client().execute(cmd));
-    }
-
-    private boolean serverHasVs() throws Exception {
-        return exec("artest vs available").contains("\"available\":true");
     }
 
     /** Poll for a loaded VS ship (assembly is async on the physics thread; a headless server has no

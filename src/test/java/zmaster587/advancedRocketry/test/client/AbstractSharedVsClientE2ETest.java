@@ -176,8 +176,4 @@ public abstract class AbstractSharedVsClientE2ETest extends AbstractSharedClient
         return riding != null && riding.has("riding") && riding.get("riding").getAsBoolean();
     }
 
-    /** Is Valkyrien Skies on the server's classpath? Every scenario here is gated on it. */
-    protected final boolean serverHasVs() throws Exception {
-        return exec("artest vs available").contains("\"available\":true");
-    }
 }

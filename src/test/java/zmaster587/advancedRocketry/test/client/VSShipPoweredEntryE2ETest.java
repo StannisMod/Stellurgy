@@ -51,7 +51,7 @@ import static zmaster587.advancedRocketry.test.AdvancedRocketryTestConstants.SHI
  * load factor and exit early, so the test is parallel-gate-safe by construction.</p>
  *
  * <p>Manual server + client lifecycle: the config must be written into the game directory BEFORE
- * the server boots. Gated on real Valkyrien Skies - run with {@code -PwithVS}.</p>
+ * the server boots.</p>
  */
 public class VSShipPoweredEntryE2ETest {
 
@@ -142,8 +142,6 @@ public class VSShipPoweredEntryE2ETest {
 
     @Test
     public void aPilotWhoClimbsThroughTheCeilingArrivesSeatedAndInControl() throws Exception {
-        Assume.assumeTrue("needs Valkyrien Skies on the classpath (run with -PwithVS)",
-                exec("artest vs available").contains("\"available\":true"));
 
         String status = exec("artest space subsystem-status");
         assertTrue("ARRANGEMENT: the production space subsystem must be REGISTERED - the seeded "

@@ -95,7 +95,7 @@ import static zmaster587.advancedRocketry.test.AdvancedRocketryTestConstants.SHI
  *
  * <p>Skips (never fails) when the server harness is off, when the client harness is off, or when
  * Valkyrien Skies is absent - the production subsystem declines to register without it, so the
- * wiring under test would not exist at all. Run with {@code -PwithVS}.</p>
+ * wiring under test would not exist at all.</p>
  */
 public abstract class AbstractSpaceLoginRestoreClientTest {
 
@@ -1326,8 +1326,6 @@ public abstract class AbstractSpaceLoginRestoreClientTest {
      */
     protected void assumeProductionSubsystemAvailable() throws Exception {
         String vs = exec("artest vs available");
-        Assume.assumeTrue("Valkyrien Skies absent - the production space subsystem declines to "
-                + "register without it; run with -PwithVS: " + vs, vs.contains("\"available\":true"));
     }
 
     // --- lifecycle ---------------------------------------------------------------------------------

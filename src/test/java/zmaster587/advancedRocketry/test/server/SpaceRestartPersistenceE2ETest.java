@@ -38,7 +38,7 @@ import static org.junit.Assert.assertTrue;
  * config flag that opts back in. That flag is the whole reason this test can exist.</p>
  *
  * <p>Nothing here touches physics — what is under test is the persistence of the server's record of
- * where ships are, not a loaded ship. It is nonetheless a {@code -PwithVS} test, because the
+ * where ships are, not a loaded ship. It is nonetheless a test, because the
  * subsystem declines to register at all without Valkyrien Skies (no tier-2 ships to host means
  * nothing worth registering ten dimensions for), so the wiring under test would not exist.</p>
  */
@@ -91,13 +91,11 @@ public class SpaceRestartPersistenceE2ETest {
 
     /**
      * The production subsystem only registers when Valkyrien Skies is present — without tier-2 ships
-     * there is nothing for it to host, so it deliberately declines. That makes this an {@code -PwithVS}
+     * there is nothing for it to host, so it deliberately declines. That makes this an
      * test even though nothing here touches physics: the wiring under test refuses to exist otherwise.
      */
     private void assumeProductionSubsystemAvailable() throws Exception {
         String vs = exec("artest vs available");
-        Assume.assumeTrue("Valkyrien Skies absent — the production space subsystem declines to "
-                + "register without it; run with -PwithVS: " + vs, vs.contains("\"available\":true"));
     }
 
     @Test

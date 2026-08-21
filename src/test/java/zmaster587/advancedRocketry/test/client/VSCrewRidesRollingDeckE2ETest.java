@@ -1,7 +1,6 @@
 package zmaster587.advancedRocketry.test.client;
 
 import com.github.stannismod.forge.testing.junit.AbstractClientE2ETest;
-import org.junit.Assume;
 import org.junit.Test;
 
 import java.util.regex.Matcher;
@@ -72,10 +71,6 @@ public class VSCrewRidesRollingDeckE2ETest extends AbstractClientE2ETest {
         return Math.sqrt(dx * dx + dy * dy + dz * dz);
     }
 
-    private boolean serverHasVs() throws Exception {
-        return exec("artest vs available").contains("\"available\":true");
-    }
-
     private String assembleFixture(int baseX, int baseY, int baseZ, String variant) throws Exception {
         int cx1 = (baseX - 2) >> 4, cz1 = (baseZ - 2) >> 4;
         int cx2 = (baseX + 7) >> 4, cz2 = (baseZ + 7) >> 4;
@@ -95,7 +90,6 @@ public class VSCrewRidesRollingDeckE2ETest extends AbstractClientE2ETest {
 
     @Test
     public void aStandingCrewMemberStaysOnTheDeckWhenTheShipRolls() throws Exception {
-        Assume.assumeTrue("needs Valkyrien Skies on the classpath (run with -PwithVS)", serverHasVs());
 
         // Keep the observer far while the ship spawns (a nearby observer trips the double-load path).
         exec("tp @a " + (BX + 600) + " 120 " + (BZ + 600) + " 0 0");

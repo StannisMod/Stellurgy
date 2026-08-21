@@ -2,7 +2,6 @@ package zmaster587.advancedRocketry.test.client;
 
 import com.github.stannismod.forge.testing.TestTimeouts;
 
-import org.junit.Assume;
 import org.junit.FixMethodOrder;
 import org.junit.Test;
 import org.junit.runners.MethodSorters;
@@ -43,7 +42,6 @@ import static org.junit.Assert.assertTrue;
  * one shared client after the ship-building legs (a teleport/render-settle race), while the
  * ship-anchored legs sample reliably.
  *
- * <p>Gated on real VS - run with {@code -PwithVS}.</p>
  *
  * <p><b>Known limitation, REVISIT WHEN VALKYRIEN SKIES SOURCE IS AVAILABLE.</b> Under the parallel
  * client gate (many client JVMs contending for one GPU) leg A's subject was intermittently never
@@ -65,7 +63,6 @@ public class VSRemoteBodyModelGateE2ETest extends AbstractSharedVsClientE2ETest 
     protected String subsystem() {
         return "vs-remote-body-render";
     }
-
 
     private static final Pattern COUNT = Pattern.compile("\"count\":(-?\\d+)");
     private static final Pattern BUILDER_POS =
@@ -98,7 +95,6 @@ public class VSRemoteBodyModelGateE2ETest extends AbstractSharedVsClientE2ETest 
 
     @Test
     public void aBodyStandingOnTerrainBesideARolledShipIsNotDrawnShipAligned() throws Exception {
-        Assume.assumeTrue("needs Valkyrien Skies on the classpath (run with -PwithVS)", serverHasVs());
         final int bx = 7420, by = 64, bz = 7420;
 
         double[] ship = buildShip(bx, by, bz);
@@ -225,7 +221,6 @@ public class VSRemoteBodyModelGateE2ETest extends AbstractSharedVsClientE2ETest 
 
     @Test
     public void aBodyCarriedByARolledDeckIsStillDrawnShipAligned() throws Exception {
-        Assume.assumeTrue("needs Valkyrien Skies on the classpath (run with -PwithVS)", serverHasVs());
         final int bx = 7620, by = 64, bz = 7620;
 
         double[] ship = buildShip(bx, by, bz);
@@ -581,12 +576,10 @@ public class VSRemoteBodyModelGateE2ETest extends AbstractSharedVsClientE2ETest 
         return shipInfoById(scenarioShipId);
     }
 
-
     private int count(String sub) throws Exception {
         Matcher m = COUNT.matcher(exec("artest vs " + sub + " 0"));
         return m.find() ? Integer.parseInt(m.group(1)) : -1;
     }
-
 
     private double readDouble(String json, Pattern p) {
         Matcher m = p.matcher(json);

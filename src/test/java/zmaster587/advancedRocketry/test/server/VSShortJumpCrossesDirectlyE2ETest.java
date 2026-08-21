@@ -2,7 +2,6 @@ package zmaster587.advancedRocketry.test.server;
 
 import zmaster587.advancedRocketry.test.GameTicks;
 
-import org.junit.Assume;
 import org.junit.Test;
 
 import java.util.regex.Matcher;
@@ -40,7 +39,6 @@ public class VSShortJumpCrossesDirectlyE2ETest extends AbstractSharedServerTest 
 
     @Test
     public void aShortJumpArrivesWithoutEverBeingInFlight() throws Exception {
-        Assume.assumeTrue("needs Valkyrien Skies on the server", serverHasVs());
         exec("artest vs permaload true");
 
         String setup = setUpPilotedShip();
@@ -65,7 +63,6 @@ public class VSShortJumpCrossesDirectlyE2ETest extends AbstractSharedServerTest 
      */
     @Test
     public void theSameJumpFlownSlowlyStillGoesThroughHyperspace() throws Exception {
-        Assume.assumeTrue("needs Valkyrien Skies on the server", serverHasVs());
         exec("artest vs permaload true");
 
         String setup = setUpPilotedShip();
@@ -121,17 +118,11 @@ public class VSShortJumpCrossesDirectlyE2ETest extends AbstractSharedServerTest 
 
     @org.junit.After
     public void resetPermaload() throws Exception {
-        if (serverHasVs()) {
-            exec("artest vs permaload false");
-        }
+        exec("artest vs permaload false");
     }
 
     private String exec(String cmd) throws Exception {
         return String.join("\n", client().execute(cmd));
-    }
-
-    private boolean serverHasVs() throws Exception {
-        return exec("artest vs available").contains("\"available\":true");
     }
 
     /** On the SERVER's clock: the world asked about is the one that may not be ticking yet. */

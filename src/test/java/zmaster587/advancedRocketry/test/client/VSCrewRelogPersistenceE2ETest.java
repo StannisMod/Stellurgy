@@ -1,7 +1,5 @@
 package zmaster587.advancedRocketry.test.client;
 
-
-import org.junit.Assume;
 import org.junit.FixMethodOrder;
 import org.junit.Test;
 import org.junit.runners.MethodSorters;
@@ -23,7 +21,6 @@ import static org.junit.Assert.assertTrue;
  * un-captured tick starts a fall), across a REAL relog ({@code ClientBot.reconnect} - a full
  * server logout with player-data save and a fresh login, not a teleport).</p>
  *
- * <p>Gated on real VS - run with {@code -PwithVS}.</p>
  */
 @FixMethodOrder(MethodSorters.NAME_ASCENDING)
 public class VSCrewRelogPersistenceE2ETest extends AbstractSharedVsClientE2ETest {
@@ -32,7 +29,6 @@ public class VSCrewRelogPersistenceE2ETest extends AbstractSharedVsClientE2ETest
     protected String subsystem() {
         return "vs-crew-relog";
     }
-
 
     private static final Pattern COUNT = Pattern.compile("\"count\":(-?\\d+)");
     private static final Pattern BUILDER_POS =
@@ -86,7 +82,6 @@ public class VSCrewRelogPersistenceE2ETest extends AbstractSharedVsClientE2ETest
      */
     @Test
     public void aCrewMemberStandingOnADeckIsNotReleasedWhileTheShipRolls() throws Exception {
-        Assume.assumeTrue("needs Valkyrien Skies on the classpath (run with -PwithVS)", serverHasVs());
         requireHeIsHeldThroughARoll(6680, 6680, "ordinary world coordinates");
     }
 
@@ -198,7 +193,6 @@ public class VSCrewRelogPersistenceE2ETest extends AbstractSharedVsClientE2ETest
      */
     @Test
     public void aCrewMemberWalkingHisOwnDeckIsNeverReleasedByTheExternalMoveGuard() throws Exception {
-        Assume.assumeTrue("needs Valkyrien Skies on the classpath (run with -PwithVS)", serverHasVs());
         requireHeIsHeldThroughAWalk(6720, 6720, "ordinary world coordinates");
     }
 
@@ -316,7 +310,6 @@ public class VSCrewRelogPersistenceE2ETest extends AbstractSharedVsClientE2ETest
      */
     @Test
     public void aCrewMemberIsNotReleasedWhenTheServerSkipsATickBurst() throws Exception {
-        Assume.assumeTrue("needs Valkyrien Skies on the classpath (run with -PwithVS)", serverHasVs());
         final int bx = 6760, by = 64, bz = 6760;
 
         double[] ship = buildShip(bx, by, bz);
@@ -444,7 +437,6 @@ public class VSCrewRelogPersistenceE2ETest extends AbstractSharedVsClientE2ETest
 
     @Test
     public void aPlayerWhoRelogsOnAnInvertedDeckStaysAboardIt() throws Exception {
-        Assume.assumeTrue("needs Valkyrien Skies on the classpath (run with -PwithVS)", serverHasVs());
         final int bx = 6520, by = 64, bz = 6520;
 
         // Capture the client player on the OPEN top deck while the ship is upright, then roll the
@@ -522,7 +514,6 @@ public class VSCrewRelogPersistenceE2ETest extends AbstractSharedVsClientE2ETest
      */
     @Test
     public void aCrewMemberWhoLogsOutWalkingComesBackStandingStillOnHisDeckSpot() throws Exception {
-        Assume.assumeTrue("needs Valkyrien Skies on the classpath (run with -PwithVS)", serverHasVs());
         final int bx = 6620, by = 64, bz = 6620;
 
         double[] ship = buildShip(bx, by, bz);
@@ -992,12 +983,10 @@ public class VSCrewRelogPersistenceE2ETest extends AbstractSharedVsClientE2ETest
         return shipInfoById(scenarioShipId);
     }
 
-
     private int count(String sub) throws Exception {
         Matcher m = COUNT.matcher(exec("artest vs " + sub + " 0"));
         return m.find() ? Integer.parseInt(m.group(1)) : -1;
     }
-
 
     private double readDouble(String json, Pattern p) {
         Matcher m = p.matcher(json);

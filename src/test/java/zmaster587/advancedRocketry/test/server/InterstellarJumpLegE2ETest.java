@@ -3,7 +3,6 @@ package zmaster587.advancedRocketry.test.server;
 import com.github.stannismod.forge.testing.TestTimeouts;
 
 import org.junit.After;
-import org.junit.Assume;
 import zmaster587.advancedRocketry.test.GameTicks;
 
 import org.junit.Test;
@@ -81,7 +80,6 @@ public class InterstellarJumpLegE2ETest extends AbstractSharedServerTest {
 
     @Test
     public void aJumpToAnotherStarSystemArrivesAndCostsMoreTimeThanAHop() throws Exception {
-        Assume.assumeTrue("needs Valkyrien Skies on the server classpath", serverHasVs());
 
         exec("artest vs permaload true");
         String setup = exec("artest space entry-setup 2");
@@ -197,20 +195,14 @@ public class InterstellarJumpLegE2ETest extends AbstractSharedServerTest {
 
     @After
     public void cleanup() throws Exception {
-        if (serverHasVs()) {
-            exec("artest space entry-clear");
-            exec("artest vs permaload false");
-        }
+        exec("artest space entry-clear");
+        exec("artest vs permaload false");
     }
 
     // --- helpers (mirror VSShipEntryE2ETest) --------------------------------------------------------
 
     private String exec(String cmd) throws Exception {
         return String.join("\n", client().execute(cmd));
-    }
-
-    private boolean serverHasVs() throws Exception {
-        return exec("artest vs available").contains("\"available\":true");
     }
 
     private void loadAllEntrySlots(String setup) throws Exception {

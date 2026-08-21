@@ -53,8 +53,7 @@ import static zmaster587.advancedRocketry.test.AdvancedRocketryTestConstants.SHI
  * </ol>
  *
  * <p>Assembly here is ARRANGEMENT, not subject: it is driven by the probe. Manual server + client
- * lifecycle, matching the other ship-boarding e2e tests. Gated on real Valkyrien Skies — run with
- * {@code -PwithVS}.</p>
+ * lifecycle, matching the other ship-boarding e2e tests.
  */
 public class VSJumpDriveFixtureBoardingE2ETest {
 
@@ -167,8 +166,6 @@ public class VSJumpDriveFixtureBoardingE2ETest {
 
     @Test
     public void aJumpCraftAssemblesWholeAndBothItsConsolesAnswerARealKeyPress() throws Exception {
-        Assume.assumeTrue("needs Valkyrien Skies on the classpath (run with -PwithVS)",
-                exec("artest vs available").contains("\"available\":true"));
 
         // THE MULTIPLIER STAYS. What it waits on is VS building the ship on its OWN thread, off the
         // game loop: that work finishes in wall-clock time, so a busy box genuinely needs more game

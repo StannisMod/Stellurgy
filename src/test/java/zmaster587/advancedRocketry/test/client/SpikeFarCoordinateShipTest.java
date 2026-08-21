@@ -2,7 +2,6 @@ package zmaster587.advancedRocketry.test.client;
 
 import com.github.stannismod.forge.testing.junit.AbstractClientE2ETest;
 
-import org.junit.Assume;
 import org.junit.Test;
 import org.lwjgl.input.Keyboard;
 import zmaster587.advancedRocketry.test.GameTicks;
@@ -105,7 +104,6 @@ public class SpikeFarCoordinateShipTest extends AbstractClientE2ETest {
 
     @Test
     public void doesAShipAssembleLoadAndFlyFarFromTheOrigin() throws Exception {
-        Assume.assumeTrue("needs Valkyrien Skies on the server", serverHasVs());
 
         bot().waitForWorld();
         exec("gamerule sendCommandFeedback false");
@@ -331,7 +329,6 @@ public class SpikeFarCoordinateShipTest extends AbstractClientE2ETest {
      */
     @Test
     public void howLongDoesAOneShotCommandSurvive() throws Exception {
-        Assume.assumeTrue("needs Valkyrien Skies on the server", serverHasVs());
 
         bot().waitForWorld();
         exec("gamerule sendCommandFeedback false");
@@ -632,10 +629,6 @@ public class SpikeFarCoordinateShipTest extends AbstractClientE2ETest {
     private static double field(String json, String key) {
         Matcher m = Pattern.compile("\"" + key + "\"\\s*:\\s*([-0-9.eE]+)").matcher(json);
         return m.find() ? Double.parseDouble(m.group(1)) : Double.NaN;
-    }
-
-    private boolean serverHasVs() throws Exception {
-        return exec("artest vs available").contains("\"available\":true");
     }
 
     /** The report is the deliverable, so it also lands on disk and survives a truncated console. */

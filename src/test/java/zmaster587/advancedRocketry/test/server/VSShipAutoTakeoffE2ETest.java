@@ -3,7 +3,6 @@ package zmaster587.advancedRocketry.test.server;
 import zmaster587.advancedRocketry.test.GameTicks;
 
 import org.junit.After;
-import org.junit.Assume;
 import org.junit.Test;
 
 import java.util.regex.Matcher;
@@ -28,7 +27,7 @@ import static zmaster587.advancedRocketry.test.AdvancedRocketryTestConstants.SHI
  *
  * <p>The autopilot's pure geometry (diagonal slope, corridor length, obstruction test) is pinned
  * deterministically by {@code AutoTakeoffPlannerTest}; this e2e proves it composes with the real force
- * flight controller + entry state machine in a live world. Gated on {@code -PwithVS}; skips otherwise.</p>
+ * flight controller + entry state machine in a live world. Gated on; skips otherwise.</p>
  */
 public class VSShipAutoTakeoffE2ETest extends AbstractSharedServerTest {
 
@@ -50,7 +49,6 @@ public class VSShipAutoTakeoffE2ETest extends AbstractSharedServerTest {
 
     @Test
     public void autoTakeoffDeclinesWhenBlockedAndClimbsIntoSpaceWhenClear() throws Exception {
-        Assume.assumeTrue("needs Valkyrien Skies on the server classpath (run with -PwithVS)", serverHasVs());
 
         exec("artest vs permaload true");
         String setup = exec("artest space entry-setup 2");
@@ -117,20 +115,14 @@ public class VSShipAutoTakeoffE2ETest extends AbstractSharedServerTest {
 
     @After
     public void cleanup() throws Exception {
-        if (serverHasVs()) {
-            exec("artest space entry-clear");
-            exec("artest vs permaload false");
-        }
+        exec("artest space entry-clear");
+        exec("artest vs permaload false");
     }
 
     // --- helpers ------------------------------------------------------------------------------------
 
     private String exec(String cmd) throws Exception {
         return String.join("\n", client().execute(cmd));
-    }
-
-    private boolean serverHasVs() throws Exception {
-        return exec("artest vs available").contains("\"available\":true");
     }
 
     private void loadAllEntrySlots(String setup) throws Exception {

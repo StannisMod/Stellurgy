@@ -2,7 +2,6 @@ package zmaster587.advancedRocketry.test.client;
 
 import com.github.stannismod.forge.testing.junit.AbstractClientE2ETest;
 
-import org.junit.Assume;
 import org.junit.Test;
 
 import java.util.Locale;
@@ -27,7 +26,6 @@ import static zmaster587.advancedRocketry.test.AdvancedRocketryTestConstants.SHI
  * body is resolved against a ship. A parked ship is the control — its render transform converges,
  * so a large control reading would mean the instrument, not the subject.
  *
- * <p>Gated on real VS — run with {@code -PwithVS}.</p>
  */
 public class VSShipRenderPoseSkewE2ETest extends AbstractClientE2ETest {
 
@@ -58,7 +56,6 @@ public class VSShipRenderPoseSkewE2ETest extends AbstractClientE2ETest {
 
     @Test
     public void theSurfaceABodyStandsOnIsTheSurfaceTheRendererDraws() throws Exception {
-        Assume.assumeTrue("needs Valkyrien Skies on the classpath (run with -PwithVS)", serverHasVs());
         final int bx = 7220, by = 64, bz = 7220;
 
         // ---- Leg A (control): a PARKED ship's render transform converges onto its tick pose, so
@@ -355,10 +352,6 @@ public class VSShipRenderPoseSkewE2ETest extends AbstractClientE2ETest {
     private int count(String sub) throws Exception {
         Matcher m = COUNT.matcher(exec("artest vs " + sub + " 0"));
         return m.find() ? Integer.parseInt(m.group(1)) : -1;
-    }
-
-    private boolean serverHasVs() throws Exception {
-        return exec("artest vs available").contains("\"available\":true");
     }
 
     private double readDouble(String json, Pattern p) {

@@ -2,7 +2,6 @@ package zmaster587.advancedRocketry.test.server;
 
 import zmaster587.advancedRocketry.test.GameTicks;
 
-import org.junit.Assume;
 import org.junit.Test;
 
 import java.util.regex.Matcher;
@@ -31,7 +30,7 @@ import static zmaster587.advancedRocketry.test.AdvancedRocketryTestConstants.SHI
  * an item that moved was moved by something. It is also the body a player is most likely to have
  * lying about — the thing he dropped while building.
  *
- * <p>Gated on the server's real VS presence (run with {@code -PwithVS}); skips cleanly otherwise.</p>
+ * <p>Gated on the server's real VS presence (run with); skips cleanly otherwise.</p>
  */
 public class VSJumpCarriesLooseBodiesE2ETest extends AbstractSharedServerTest {
 
@@ -49,8 +48,6 @@ public class VSJumpCarriesLooseBodiesE2ETest extends AbstractSharedServerTest {
 
     @Test
     public void aJumpCarriesTheBodiesLyingOnItsDeck() throws Exception {
-        Assume.assumeTrue("needs Valkyrien Skies on the server classpath (run with -PwithVS)",
-                serverHasVs());
 
         exec("artest vs permaload true");
 
@@ -130,17 +127,11 @@ public class VSJumpCarriesLooseBodiesE2ETest extends AbstractSharedServerTest {
 
     @org.junit.After
     public void resetPermaload() throws Exception {
-        if (serverHasVs()) {
-            exec("artest vs permaload false");
-        }
+        exec("artest vs permaload false");
     }
 
     private String exec(String cmd) throws Exception {
         return String.join("\n", client().execute(cmd));
-    }
-
-    private boolean serverHasVs() throws Exception {
-        return exec("artest vs available").contains("\"available\":true");
     }
 
     private int waitForLoadedShip(int dim) throws Exception {

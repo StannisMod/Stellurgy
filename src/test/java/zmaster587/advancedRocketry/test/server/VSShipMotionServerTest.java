@@ -2,7 +2,6 @@ package zmaster587.advancedRocketry.test.server;
 
 import zmaster587.advancedRocketry.test.GameTicks;
 
-import org.junit.Assume;
 import org.junit.Ignore;
 import org.junit.Test;
 
@@ -21,10 +20,6 @@ import static zmaster587.advancedRocketry.test.AdvancedRocketryTestConstants.SHI
  * setpoint) would be invalid and a flight/piloting e2e built on it would be
  * false-green.
  *
- * <p>Gated on real VS presence (run with {@code -PwithVS}); skips otherwise. VS
- * assembly and physics run asynchronously on VS's own threads, so this waits real
- * ticks (the dedicated harness server free-runs at 20 TPS) and polls, rather than
- * force-ticking a tile (VS is not a tile tick).</p>
  *
  * <p>The push is horizontal (+Z) to keep gravity out of the measured delta, and is
  * re-applied every step — mirroring the per-tick setpoint the Advanced Flight
@@ -69,8 +64,6 @@ public class VSShipMotionServerTest extends AbstractSharedServerTest {
 
     @Test
     public void directVelocitySetpointTranslatesTheAssembledShip() throws Exception {
-        Assume.assumeTrue("needs Valkyrien Skies on the server classpath (run with -PwithVS)",
-                serverHasVs());
 
         // Assemble the tier-2 ship — with VS this routes to a ship (no rocket) and
         // queues an async VS relocation.
@@ -158,10 +151,6 @@ public class VSShipMotionServerTest extends AbstractSharedServerTest {
         Matcher m = Pattern.compile("\"id\":\"([^\"]+)\"").matcher(shipInfoJson);
         assertTrue("ship-info must name WHICH ship answered: " + shipInfoJson, m.find());
         return m.group(1);
-    }
-
-    private boolean serverHasVs() throws Exception {
-        return exec("artest vs available").contains("\"available\":true");
     }
 
     /** Place the fixture on a pad and run scan+assemble; returns the raw assemble JSON. */

@@ -1,7 +1,6 @@
 package zmaster587.advancedRocketry.test.client;
 
 import com.github.stannismod.forge.testing.junit.AbstractClientE2ETest;
-import org.junit.Assume;
 import org.junit.Test;
 
 import java.util.regex.Matcher;
@@ -18,8 +17,8 @@ import static org.junit.Assert.assertTrue;
  *
  * <p>Flow: assemble a ship in a pool slot; a bot enters the pool dimension so VS loads the ship;
  * the bot leaves (a world with a player cannot be unloaded); the slot is rebound (unload saves the
- * ship, reload restores its cell); the bot returns and the ship must load again. Gated on real VS —
- * run with {@code -PwithVS}.</p>
+ * ship, reload restores its cell); the bot returns and the ship must load again.
+</p>
  */
 public class SpaceSlotVsShipReloadE2ETest extends AbstractClientE2ETest {
 
@@ -37,10 +36,6 @@ public class SpaceSlotVsShipReloadE2ETest extends AbstractClientE2ETest {
         return String.join("\n", serverClient().execute(cmd));
     }
 
-    private boolean serverHasVs() throws Exception {
-        return exec("artest vs available").contains("\"available\":true");
-    }
-
     /** Poll the loaded-ship count in the pool dim until >= 1 (bounded). */
     private int pollLoaded(int dim, int tries) throws Exception {
         int c = -1;
@@ -54,7 +49,6 @@ public class SpaceSlotVsShipReloadE2ETest extends AbstractClientE2ETest {
 
     @Test
     public void vsShipReloadsLiveAfterASlotRebind() throws Exception {
-        Assume.assumeTrue("needs Valkyrien Skies on the classpath (run with -PwithVS)", serverHasVs());
 
         // Assemble a ship in a fresh pool slot (cell "deep").
         String asm = exec("artest space vs-assemble deep");

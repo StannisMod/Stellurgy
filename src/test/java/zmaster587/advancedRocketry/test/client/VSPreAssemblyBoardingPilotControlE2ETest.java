@@ -87,7 +87,7 @@ import static zmaster587.advancedRocketry.test.AdvancedRocketryTestConstants.SHI
  * it never exposes. Each method pays a full harness boot; that cost is accepted here because the
  * discrimination between the two variables is the entire point of the file.</p>
  *
- * <p>Gated on real Valkyrien Skies - run with {@code -PwithVS}.</p>
+ * <p></p>
  */
 public class VSPreAssemblyBoardingPilotControlE2ETest {
 
@@ -245,8 +245,6 @@ public class VSPreAssemblyBoardingPilotControlE2ETest {
      * {@code how}), assemble, settle, measure a no-key control leg, then measure the key-held climb.
      */
     private void runPreAssemblyBoardingScenario(Boarding how) throws Exception {
-        Assume.assumeTrue("needs Valkyrien Skies on the classpath (run with -PwithVS)",
-                exec("artest vs available").contains("\"available\":true"));
 
         // The subsystem must actually be up, or the run silently degrades into a different
         // configuration than the one a player is in and its result would mean nothing.
