@@ -1988,26 +1988,26 @@ public class TestProbeCommand extends CommandBase {
         // runs>0 & maxShips=0 -> processed but addShip skipped/threw; maxShips>=1 -> registered then destroyed.
         if (args.length >= 1 && "spawn-diag".equalsIgnoreCase(args[0])) {
             if (args.length >= 2 && "reset".equalsIgnoreCase(args[1])) {
-                zmaster587.advancedRocketry.integration.vs.VSIntegration.resetSpawnDiag();
+                SpawnDiag.reset();
                 send(sender, "{\"ok\":true,\"reset\":true}");
                 return;
             }
             send(sender, "{\"ok\":true,\"spawnNewShipsRuns\":"
-                    + zmaster587.advancedRocketry.integration.vs.VSIntegration.spawnNewShipsRuns
+                    + SpawnDiag.spawnNewShipsRuns
                     + ",\"spawnNewShipsReturns\":"
-                    + zmaster587.advancedRocketry.integration.vs.VSIntegration.spawnNewShipsReturns
+                    + SpawnDiag.spawnNewShipsReturns
                     + ",\"lastSpawnQueueSize\":"
-                    + zmaster587.advancedRocketry.integration.vs.VSIntegration.lastSpawnQueueSize
+                    + SpawnDiag.lastSpawnQueueSize
                     + ",\"maxShips\":"
-                    + zmaster587.advancedRocketry.integration.vs.VSIntegration.spawnDiagMaxShips
+                    + SpawnDiag.spawnDiagMaxShips
                     + ",\"lastFoundSetSize\":"
-                    + zmaster587.advancedRocketry.integration.vs.VSIntegration.lastFoundSetSize
+                    + SpawnDiag.lastFoundSetSize
                     + ",\"lastCleanHouse\":"
-                    + zmaster587.advancedRocketry.integration.vs.VSIntegration.lastCleanHouse
+                    + SpawnDiag.lastCleanHouse
                     + ",\"lastBlacklistSize\":"
-                    + zmaster587.advancedRocketry.integration.vs.VSIntegration.lastBlacklistSize
+                    + SpawnDiag.lastBlacklistSize
                     + ",\"floodShape\":\""
-                    + zmaster587.advancedRocketry.integration.vs.VSIntegration.lastFloodShape + "\"}");
+                    + SpawnDiag.lastFloodShape + "\"}");
             return;
         }
         if (args.length >= 3 && "would-take-over".equalsIgnoreCase(args[0])) {
