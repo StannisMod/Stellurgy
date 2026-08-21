@@ -54,10 +54,9 @@ public final class ShipFrameCamera {
     public static volatile double shipCamEyeX = 0.0;
     public static volatile double shipCamEyeY = 0.0;
     public static volatile double shipCamEyeZ = 0.0;
-    /** The ship's local up, in world coordinates, last frame. Identity (0,1,0) when not aboard. */
-    public static volatile double shipUpX = 0.0;
+    /** The world Y of the ship's local up, last frame: +1 upright, 0 on its side, -1 inverted.
+     *  Identity (1.0) when not aboard. */
     public static volatile double shipUpY = 1.0;
-    public static volatile double shipUpZ = 0.0;
 
     // ---- Remote-body model-gate telemetry. The decision is taken per entity per FRAME and is a
     // transient: a first/last-call snapshot lands on an arbitrary body at an arbitrary moment and
@@ -406,9 +405,7 @@ public final class ShipFrameCamera {
         shipCamEyeY = eyeY;
         shipCamEyeZ = eyeZ;
         if (shipUp != null) {
-            shipUpX = shipUp[0];
             shipUpY = shipUp[1];
-            shipUpZ = shipUp[2];
         }
     }
 

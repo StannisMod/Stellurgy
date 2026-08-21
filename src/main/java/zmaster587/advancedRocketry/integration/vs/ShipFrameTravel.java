@@ -97,13 +97,12 @@ public final class ShipFrameTravel {
      *  poll the attitude server-side and stop the spin at a target roll. {@code 2} until first measured. */
     public static volatile double lastShipUpY = 2.0;
     /** Diagnostics for the sideways-drag discriminator: what the last resolved tick received - the
-     *  walk inputs, the deck yaw the walk basis used, and the ship-frame lateral motion BEFORE the
+     *  walk inputs and the ship-frame lateral motion BEFORE the
      *  input was added. Lateral motion at zero input = an external motion writer; correct-magnitude
      *  motion at nonzero input off the look direction = a wrong walk basis. Read on either side's
      *  own JVM (a client e2e reads the CLIENT's values via the bot). */
     public static volatile float lastInStrafe = 0f;
     public static volatile float lastInForward = 0f;
-    public static volatile float lastDeckYawDeg = 0f;
     public static volatile double lastMotionShipX = 0.0;
     public static volatile double lastMotionShipY = 0.0;
     public static volatile double lastMotionShipZ = 0.0;
@@ -800,10 +799,7 @@ public final class ShipFrameTravel {
     /** The (single) pending seed. Client main thread only. */
     private static PendingSeed pendingSeed = null;
 
-    /** Diagnostics for the pending pipeline (read by tests via the bot). */
-    public static volatile long pendingSeedApplies = 0L;
-    public static volatile long pendingSeedExpiries = 0L;
-    public static volatile long pendingSeedSupersedes = 0L;
+    /** What the pending-seed pipeline decided on its last pass, in its own words. */
     public static volatile String lastSeedOutcome = "";
 
     /** What a pending seed should do this tick. Pure - pinned by unit tests. */
@@ -925,7 +921,6 @@ public final class ShipFrameTravel {
             case WAIT:
                 return;
             case EXPIRE:
-                pendingSeedExpiries++;
                 lastSeedOutcome = "expired";
                 pendingSeed = null;
                 return;
@@ -945,9 +940,6 @@ public final class ShipFrameTravel {
                     seedNotLoaded++;
                     return; // the ship is not on this side yet: stay pending, retry next tick
                 }
-                if (st != null) {
-                    pendingSeedSupersedes++;
-                }
                 if (zmaster587.advancedRocketry.command.test.TestProbeCommandRegistration.isTestMode()) {
                     zmaster587.advancedRocketry.AdvancedRocketry.logger.info("[FF-TRACE/CAP] pending "
                             + "seed applied ship=" + slot.shipId + " superseded=" + (st != null)
@@ -955,7 +947,6 @@ public final class ShipFrameTravel {
                 }
                 applySeedCapture(body, slot.shipId, slot.subX, slot.subY, slot.subZ, world);
                 seedOks++;
-                pendingSeedApplies++;
                 lastSeedOutcome = "applied";
                 pendingSeed = null;
         }
@@ -1421,11 +1412,8 @@ public final class ShipFrameTravel {
      *  exactly who must be caught (the sweep then resolves the contact instead of the physics
      *  mod's bounce-and-tunnel). Must agree with {@code hullStandTravel}'s collision solid, or
      *  hold and collision fight each other. */
-    /** Diagnostics of {@code hullContactFor} on THIS side: the most recent call's obstacle count
-     *  (-1 = transform away, -2 = axes away) and verdict, plus cumulative calls / the maximum
-     *  obstacle count ever seen / how many calls answered "touch". */
-    public static volatile int lastHullContactObstacles = -99;
-    public static volatile int lastHullContactTouch = -99;
+    /** Diagnostics of {@code hullContactFor} on THIS side: cumulative calls, the maximum obstacle
+     *  count ever seen, and how many calls answered "touch". */
     public static volatile long hullContactCalls = 0L;
     public static volatile int hullContactMaxObstacles = -99;
     public static volatile long hullContactTouches = 0L;
@@ -1444,8 +1432,6 @@ public final class ShipFrameTravel {
         hullContactCalls++;
         double[][] axes = shipAxesFor(entity.world, shipId);
         if (axes == null) {
-            lastHullContactObstacles = -2;
-            lastHullContactTouch = 0;
             return false;
         }
         AxisAlignedBB wb = entity.getEntityBoundingBox()
@@ -1455,19 +1441,15 @@ public final class ShipFrameTravel {
         List<double[]> obstacles = hullObstaclesFor(entity.world, shipId, entity, box,
                 0.0, 0.0, 0.0);
         if (obstacles == null) {
-            lastHullContactObstacles = -1;
-            lastHullContactTouch = 0;
             return false;
         }
         boolean touch = HullSweep.touchesAny(box, obstacles, axes);
-        lastHullContactObstacles = obstacles.size();
         if (obstacles.size() > hullContactMaxObstacles) {
             hullContactMaxObstacles = obstacles.size();
         }
         if (touch) {
             hullContactTouches++;
         }
-        lastHullContactTouch = touch ? 1 : 0;
         return touch;
     }
 
@@ -1785,7 +1767,6 @@ public final class ShipFrameTravel {
         // self-records a live playtest (test-gated, throttled).
         lastInStrafe = strafe;
         lastInForward = forward;
-        lastDeckYawDeg = deckYaw;
         lastMotionShipX = motion[0];
         lastMotionShipY = motion[1];
         lastMotionShipZ = motion[2];

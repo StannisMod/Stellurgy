@@ -86,12 +86,6 @@ public final class DeckLook {
     /** The held look, in the DECK frame (degrees; pitch clamped to +/-90 like vanilla). */
     public static volatile double deckYawDeg = 0.0;
     public static volatile double deckPitchDeg = 0.0;
-    /** The world yaw/pitch last derived from the deck look (what the fields were set to). */
-    public static volatile double lastDerivedYawDeg = 0.0;
-    public static volatile double lastDerivedPitchDeg = 0.0;
-    /** How many times an EXTERNAL world-rotation write (teleport / PosLook) re-seeded the deck
-     *  look. A steadily climbing count with no teleports names a writer fighting this class. */
-    public static volatile long reseeds = 0;
 
     /** What this class last wrote into the player's world rotation. A mismatch on the next sync
      *  means someone else wrote the fields and the deck look must re-seed from them. NaN = never
@@ -248,9 +242,6 @@ public final class DeckLook {
             active = false; // ship transform unavailable this instant; vanilla owns the turn
             return false;
         }
-        if (active) {
-            reseeds++;
-        }
         // Along the deck normal the yaw is degenerate; keep the previous heading rather than
         // snapping it to an arbitrary one (vanilla keeps yaw at pitch +/-90 the same way).
         if (Math.sqrt(deck[0] * deck[0] + deck[2] * deck[2]) >= 1.0E-4) {
@@ -295,8 +286,6 @@ public final class DeckLook {
         player.rotationPitch = pitch;
         lastWrittenYaw = yaw;
         lastWrittenPitch = pitch;
-        lastDerivedYawDeg = yaw;
-        lastDerivedPitchDeg = pitch;
     }
 
     /** Minecraft's look vector for a yaw/pitch pair (degrees). */

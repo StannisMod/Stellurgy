@@ -78,9 +78,7 @@ public class RocketEventHandler extends Gui {
      *  (most-negative nose Z over the flight) pins a pitch LOOP past vertical with
      *  no ±85° clamp (a clamped nose can never point backwards &rarr; Z stays ≳ 0).
      *  Reset when the flight ends. */
-    public static volatile double ffClientCamPitch = 0.0;
     public static volatile double ffClientCamRoll  = 0.0;
-    public static volatile double ffClientForwardZ = 1.0;
     public static volatile double ffClientMinForwardZ = 1.0;
     /** Frame counter that throttles the [FF-TRACE/CAM] deck-walking camera probe (test mode only). */
     private static int ffCamTraceFrames = 0;
@@ -236,10 +234,8 @@ public class RocketEventHandler extends Gui {
             event.setPitch(e[1]);
             event.setRoll(e[2]);
             // Client-attitude readback for perception-contract e2e (see the fields).
-            ffClientCamPitch = e[1];
             ffClientCamRoll  = e[2];
             double fz = cq.rotate(0, 0, 1)[2]; // client nose Z (world)
-            ffClientForwardZ = fz;
             if (fz < ffClientMinForwardZ) ffClientMinForwardZ = fz;
             return;
         }
