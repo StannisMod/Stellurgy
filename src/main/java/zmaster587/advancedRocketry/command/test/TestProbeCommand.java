@@ -10573,12 +10573,15 @@ public class TestProbeCommand extends CommandBase {
             send(sender, jsonMap(info));
             return;
         }
-        if ("cached-for-player".equalsIgnoreCase(args[0])) {
-            // read AtmosphereHandler.prevAtmosphere via reflection
-            // so tests can assert dim-change cache invalidation. The map
-            // is private static HashMap<EntityPlayer, Atmosphere>, keyed
-            // by reference; we report the current cached Atmosphere
-            // (or null) for the first connected player.
+        if ("for-player".equalsIgnoreCase(args[0])) {
+            // What the per-entity gate answers for the first connected player, RIGHT NOW: the same
+            // call every effect path makes, asked live.
+            //
+            // It used to reflect into AtmosphereHandler.prevAtmosphere instead. That map existed
+            // only to let an edge-triggered sync compare against the previous answer; once the sync
+            // became periodic nothing read it, and a probe reading it was measuring an artefact of
+            // its own instrument — a value written once a second, on a phase of the player's own
+            // ticksExisted, which a poll could catch one send stale.
             java.util.List<net.minecraft.entity.player.EntityPlayerMP> ps =
                     server.getPlayerList().getPlayers();
             if (ps.isEmpty() && fakePlayer != null) {
@@ -10589,28 +10592,21 @@ public class TestProbeCommand extends CommandBase {
                 return;
             }
             net.minecraft.entity.player.EntityPlayerMP player = ps.get(0);
-            try {
-                java.lang.reflect.Field f =
-                        zmaster587.advancedRocketry.atmosphere.AtmosphereHandler
-                                .class.getDeclaredField("prevAtmosphere");
-                f.setAccessible(true);
-                @SuppressWarnings("unchecked")
-                java.util.HashMap<net.minecraft.entity.player.EntityPlayer,
-                        zmaster587.advancedRocketry.api.atmosphere.Atmosphere> map =
-                        (java.util.HashMap<net.minecraft.entity.player.EntityPlayer,
-                                zmaster587.advancedRocketry.api.atmosphere.Atmosphere>) f.get(null);
-                zmaster587.advancedRocketry.api.atmosphere.Atmosphere cached = map.get(player);
-                send(sender, "{\"ok\":true,\"player\":\""
-                        + escapeJson(player.getName()) + "\""
-                        + ",\"hasCachedAtmosphere\":" + (cached != null)
-                        + ",\"cachedAtmosphere\":\""
-                        + escapeJson(cached == null ? "" : cached.getUnlocalizedName())
-                        + "\"}");
-            } catch (ReflectiveOperationException e) {
-                send(sender, "{\"error\":\"could not read prevAtmosphere: "
-                        + escapeJson(e.getClass().getSimpleName() + ": " + e.getMessage())
-                        + "\"}");
-            }
+            zmaster587.advancedRocketry.atmosphere.AtmosphereHandler handler =
+                    zmaster587.advancedRocketry.atmosphere.AtmosphereHandler
+                            .getOxygenHandler(player.world.provider.getDimension());
+            zmaster587.advancedRocketry.api.atmosphere.Atmosphere atm =
+                    handler == null ? null : handler.getAtmosphereType(player);
+            send(sender, "{\"ok\":true,\"player\":\"" + escapeJson(player.getName()) + "\""
+                    + ",\"dim\":" + player.world.provider.getDimension()
+                    + ",\"hasHandler\":" + (handler != null)
+                    + ",\"hasAtmosphere\":" + (atm != null)
+                    + ",\"atmosphere\":\""
+                    + escapeJson(atm == null ? "" : atm.getUnlocalizedName()) + "\""
+                    // The name AND what it means, so a test about whether the player can breathe
+                    // where he stands does not have to be written against a label.
+                    + ",\"breathable\":" + (atm != null && atm.isBreathable())
+                    + "}");
             return;
         }
         if (args.length >= 5 && "detector-force-sample".equalsIgnoreCase(args[0])) {

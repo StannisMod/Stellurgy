@@ -18,26 +18,27 @@ import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
 /**
- * {@code AtmosphereHandler} per-player cache bookkeeping — server tier.
- * Relabeled down the pyramid from the old client-harness
- * {@code AtmospherePlayerEventE2ETest} the
- * contract (onTick populates {@code prevAtmosphere} for players in AR dims;
- * {@code onPlayerChangeDim} clears the entry so the next dim repopulates)
- * is server-side handler state the old test read through server probes
- * anyway.
+ * What the per-entity atmosphere gate answers for a player, and that the answer is the one belonging
+ * to the dimension he is STANDING IN — server tier.
  *
- * <p>Player supply: {@code ensure-fake} (cross-dim moves fire the same
- * {@code PlayerChangedDimensionEvent} Forge's transfer fires);
- * {@code tick-living} supplies the per-tick {@code LivingUpdateEvent}
- * cadence {@code AtmosphereHandler.onTick} subscribes to.</p>
+ * <p>These three used to assert the shape of a per-player cache: that an AR dim populated it, that a
+ * dimension change cleared it. That cache is gone — it existed only so an edge-triggered sync packet
+ * could compare against the previous answer, and the sync is periodic now — and asserting its
+ * bookkeeping was pinning an implementation detail in the first place. What a player can actually
+ * feel is the resolution itself, so that is what is asserted: the gate answers his current
+ * dimension's air, and nothing of the dimension he left survives the move.</p>
+ *
+ * <p>Player supply: {@code ensure-fake} (a cross-dim move fires the same event Forge's transfer
+ * fires); {@code tick-living} supplies the per-tick {@code LivingUpdateEvent} cadence
+ * {@code AtmosphereHandler.onTick} subscribes to.</p>
  */
 public class AtmospherePlayerEventTest {
 
     private static final int DIM_VAC = 9411;
     private static final int DIM_AIR = 9412;
 
-    private static final Pattern HAS_CACHED = Pattern.compile("\"hasCachedAtmosphere\":(true|false)");
-    private static final Pattern CACHED_ATMOS = Pattern.compile("\"cachedAtmosphere\":\"([^\"]*)\"");
+    private static final Pattern PLAYER_ATMOS = Pattern.compile("\"atmosphere\":\"([^\"]*)\"");
+    private static final Pattern PLAYER_BREATHABLE = Pattern.compile("\"breathable\":(true|false)");
 
     private Path workDir;
     private RealDedicatedServerHarness harness;
@@ -106,45 +107,46 @@ public class AtmospherePlayerEventTest {
         return m.group(1);
     }
 
-    /** Overworld baseline: no AR atmosphere may be cached for the player. */
+    /** The overworld is breathable, and the gate says so for a player standing in it. */
     @Test
-    public void arDimWithoutVisitDoesNotCacheAtmosphereForPlayer() throws Exception {
+    public void aPlayerInTheOverworldResolvesBreathableAir() throws Exception {
         enterDimAndTick(0, 10);
-        String cache = exec("artest atmosphere cached-for-player");
-        String has = field(HAS_CACHED, cache);
-        String atmos = field(CACHED_ATMOS, cache);
-        assertTrue("overworld baseline: cache must be empty or non-AR; hasCached=" + has
-                + " atmos=" + atmos + " " + cache,
-                "false".equals(has) || atmos.isEmpty() || !atmos.contains("vacuum"));
+        String resp = exec("artest atmosphere for-player");
+        assertFalse("the gate must answer SOMETHING for a player in the overworld: " + resp,
+                field(PLAYER_ATMOS, resp).isEmpty());
+        assertEquals("the overworld must resolve as breathable for a player standing in it: "
+                + resp, "true", field(PLAYER_BREATHABLE, resp));
     }
 
-    /** Ticking in an AR dim populates the per-player cache. */
+    /** An airless AR planet resolves as unbreathable for a player standing on it. */
     @Test
-    public void arDimTickPopulatesPerPlayerCache() throws Exception {
+    public void aPlayerOnAnAirlessPlanetResolvesUnbreathableAir() throws Exception {
         enterDimAndTick(DIM_VAC, 40);
-        String cache = exec("artest atmosphere cached-for-player");
-        assertEquals("after >=1 living-update in an AR dim the per-player cache "
-                + "MUST be populated; cache=" + cache, "true", field(HAS_CACHED, cache));
-        assertFalse("cached atmosphere name must be non-empty: " + cache,
-                field(CACHED_ATMOS, cache).isEmpty());
+        String resp = exec("artest atmosphere for-player");
+        assertFalse("the gate must answer SOMETHING for a player on an AR planet: " + resp,
+                field(PLAYER_ATMOS, resp).isEmpty());
+        assertEquals("a planet declared with zero atmosphere must resolve as unbreathable for a "
+                + "player standing on it: " + resp, "false", field(PLAYER_BREATHABLE, resp));
     }
 
-    /** Dim change clears the entry; the new dim repopulates with its own. */
+    /**
+     * The answer follows the player across a dimension change: nothing of the airless planet he
+     * left survives into the breathable one he arrives on.
+     */
     @Test
-    public void dimChangeClearsAtmosphereCacheForPlayer() throws Exception {
+    public void aDimChangeMakesAPlayerResolveTheNewDimsAir() throws Exception {
         enterDimAndTick(DIM_VAC, 40);
-        String cacheVac = exec("artest atmosphere cached-for-player");
-        String atmoVac = field(CACHED_ATMOS, cacheVac);
-        assertFalse("vacuum-dim cache must populate before the dim change: " + cacheVac,
-                atmoVac.isEmpty());
+        String onVacuum = exec("artest atmosphere for-player");
+        String atmoVac = field(PLAYER_ATMOS, onVacuum);
+        assertEquals("the airless planet must resolve as unbreathable before the move: "
+                + onVacuum, "false", field(PLAYER_BREATHABLE, onVacuum));
 
         enterDimAndTick(DIM_AIR, 40);
-        String cacheAir = exec("artest atmosphere cached-for-player");
-        String atmoAir = field(CACHED_ATMOS, cacheAir);
-        assertFalse("breathable-dim cache must repopulate after dim change: " + cacheAir,
-                atmoAir.isEmpty());
-        assertFalse("the vacuum-dim atmosphere must NOT carry over into the breathable "
-                + "dim's cache slot (onPlayerChangeDim must clear); vacuumAtmos=" + atmoVac
-                + " breathableAtmos=" + atmoAir, atmoVac.equals(atmoAir));
+        String onAir = exec("artest atmosphere for-player");
+        String atmoAir = field(PLAYER_ATMOS, onAir);
+        assertEquals("the breathable planet must resolve as breathable after the move: " + onAir,
+                "true", field(PLAYER_BREATHABLE, onAir));
+        assertFalse("the airless planet's atmosphere must not survive the move; before=" + atmoVac
+                + " after=" + atmoAir, atmoVac.equals(atmoAir));
     }
 }

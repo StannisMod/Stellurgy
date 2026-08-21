@@ -565,10 +565,18 @@ public class VacuumAndSuitClientGroupE2ETest extends AbstractSharedClientE2ETest
 
         String info = exec("artest vent info " + at);
         scenario().record("ventInfo", info);
+        // What is asserted is the room's STATE, not the number that was written into it. The vent
+        // holding the seal is powered and fuelled, so it is adding the oxygen it pays for the whole
+        // time this room exists, and the composition sits a little above what setair asked for.
+        // Pinning `"airO2":50000` as a literal made the arrangement fail the moment that started
+        // working - and it was redundant anyway: `lowO2` IS the statement that the oxygen is below
+        // what a person needs, derived from this very number, and the pressure says the room is not
+        // a vacuum. The subject is "pressurised, and too thin to breathe"; these three say it.
+        Matcher o2m = Pattern.compile("\"airO2\":(\\d+)").matcher(info);
+        long o2 = o2m.find() ? Long.parseLong(o2m.group(1)) : -1L;
         scenario().requireArranged("the room must actually BE a zone before anyone stands in it, and"
                 + " it must read as pressurised-but-stale rather than as vacuum: " + info,
-                info.contains("\"airO2\":50000") && info.contains("\"airPressure\":100")
-                        && info.contains("lowO2"));
+                o2 > 0 && info.contains("\"airPressure\":100") && info.contains("lowO2"));
 
         standInTheRoomUnhurt();
         return at;

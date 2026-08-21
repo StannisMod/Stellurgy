@@ -51,7 +51,7 @@ public class VSShipAtmosphereFrameSpikeTest extends AbstractClientE2ETest {
             Pattern.compile("\"builderPos\":\\[(-?\\d+),(-?\\d+),(-?\\d+)]");
     private static final Pattern COUNT = Pattern.compile("\"count\":(-?\\d+)");
     private static final Pattern ATM_TYPE = Pattern.compile("\"type\":\"([^\"]*)\"");
-    private static final Pattern CACHED_ATM = Pattern.compile("\"cachedAtmosphere\":\"([^\"]*)\"");
+    private static final Pattern PLAYER_ATM = Pattern.compile("\"atmosphere\":\"([^\"]*)\"");
     private static final Pattern BLOB_SIZE = Pattern.compile("\"blobSize\":(-?\\d+)");
     private static final Pattern SEAT_SUB = Pattern.compile(
             "\"seatX\":(-?\\d+),\"seatY\":(-?\\d+),\"seatZ\":(-?\\d+)");
@@ -86,12 +86,12 @@ public class VSShipAtmosphereFrameSpikeTest extends AbstractClientE2ETest {
                         + ", raw=" + ctrlSeal + ")",
                 "PressurizedAir".equalsIgnoreCase(ctrlAtm));
 
-        String ctrlCached = cachedAtmosphereWithPlayerAt(CX + 0.5, CY, CZ + 0.5);
-        System.out.println("[S1/control] cachedForPlayer=" + ctrlCached);
+        String ctrlForPlayer = atmosphereForPlayerAt(CX + 0.5, CY, CZ + 0.5);
+        System.out.println("[S1/control] forPlayer=" + ctrlForPlayer);
         assertTrue("CONTROL: the per-entity gate must see the seal for a player standing INSIDE "
-                        + "the static cabin — this is the instrument the ship leg reads (cached="
-                        + ctrlCached + ")",
-                "PressurizedAir".equalsIgnoreCase(ctrlCached));
+                        + "the static cabin — this is the instrument the ship leg reads (forPlayer="
+                        + ctrlForPlayer + ")",
+                "PressurizedAir".equalsIgnoreCase(ctrlForPlayer));
 
         // ── Subject leg: the same cabin, aboard an assembled ship ─────────────────────────
         // Bring the client to the build site BEFORE assembling: a client near the ship is what
@@ -166,13 +166,13 @@ public class VSShipAtmosphereFrameSpikeTest extends AbstractClientE2ETest {
         // RESULT 3 — the gate that actually matters: a body standing inside the sealed cabin.
         // Re-map first: the ship keeps drifting, so the cabin's world image is only valid now.
         double[] wNow = toWorld(vx, vy, vz);
-        String aboardCached = cachedAtmosphereWithPlayerAt(wNow[0], wNow[1], wNow[2]);
-        System.out.println("[S1/ship] cachedForPlayerAboard=" + aboardCached);
+        String aboardForPlayer = atmosphereForPlayerAt(wNow[0], wNow[1], wNow[2]);
+        System.out.println("[S1/ship] forPlayerAboard=" + aboardForPlayer);
         assertTrue("RESULT-3: a player standing INSIDE the ship's pressurised cabin resolves "
-                        + aboardCached + " — the per-entity gate keys his WORLD position against "
+                        + aboardForPlayer + " — the per-entity gate keys his WORLD position against "
                         + "a SUBSPACE-keyed blob, so a sealed hull does not reach its own crew "
-                        + "(control, same cabin on the ground: " + ctrlCached + ")",
-                !"PressurizedAir".equalsIgnoreCase(aboardCached));
+                        + "(control, same cabin on the ground: " + ctrlForPlayer + ")",
+                !"PressurizedAir".equalsIgnoreCase(aboardForPlayer));
     }
 
     // ── cabin construction / sealing ──────────────────────────────────────────────────────
@@ -223,25 +223,30 @@ public class VSShipAtmosphereFrameSpikeTest extends AbstractClientE2ETest {
     }
 
     /**
-     * Teleport the player to a point and read back what the per-entity gate cached for him. The
-     * cache is only written when the resolved atmosphere CHANGES, so the two legs are run in
-     * opposite directions (pressurised control first, ship second) and each read is polled.
+     * Teleport the player to a point and read back what the per-entity gate answers for him THERE.
+     *
+     * <p>The read is live — the same call every effect path makes — so the only thing polled for is
+     * the teleport settling, not a write landing. The probe used to report a per-player cache
+     * instead, which was written once a second on the player's own phase; a poll that returned on
+     * the first non-empty answer could therefore read the value from before the teleport, and did.
+     * A live read has no such window, and the two legs no longer depend on being run in a
+     * particular order.</p>
      */
-    private String cachedAtmosphereWithPlayerAt(double x, double y, double z) throws Exception {
+    private String atmosphereForPlayerAt(double x, double y, double z) throws Exception {
         exec("tp @a " + x + " " + y + " " + z + " 0 0");
-        String cached = "";
+        String atm = "";
         for (int i = 0; i < 20; i++) {
             bot().waitTicks(5);
-            String resp = exec("artest atmosphere cached-for-player");
-            Matcher m = CACHED_ATM.matcher(resp);
+            String resp = exec("artest atmosphere for-player");
+            Matcher m = PLAYER_ATM.matcher(resp);
             if (m.find()) {
-                cached = m.group(1);
-                if (!cached.isEmpty()) {
+                atm = m.group(1);
+                if (!atm.isEmpty()) {
                     break;
                 }
             }
         }
-        return cached;
+        return atm;
     }
 
     /**

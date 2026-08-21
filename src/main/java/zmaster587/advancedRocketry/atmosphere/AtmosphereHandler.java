@@ -13,8 +13,6 @@ import net.minecraftforge.common.MinecraftForge;
 import net.minecraftforge.event.entity.living.LivingEvent.LivingUpdateEvent;
 import net.minecraftforge.fluids.IFluidBlock;
 import net.minecraftforge.fml.common.eventhandler.SubscribeEvent;
-import net.minecraftforge.fml.common.gameevent.PlayerEvent.PlayerChangedDimensionEvent;
-import net.minecraftforge.fml.common.gameevent.PlayerEvent.PlayerLoggedOutEvent;
 import zmaster587.advancedRocketry.api.ARConfiguration;
 import zmaster587.advancedRocketry.api.AreaBlob;
 import zmaster587.advancedRocketry.api.atmosphere.Atmosphere;
@@ -47,7 +45,6 @@ public class AtmosphereHandler {
       */
     public static AtmosphereSummary currentSummary = AtmosphereSummary.UNKNOWN;
     private static HashMap<Integer, AtmosphereHandler> dimensionOxygen = new HashMap<>();
-    private static HashMap<EntityPlayer, Atmosphere> prevAtmosphere = new HashMap<>();
     private HashMap<IBlobHandler, AreaBlob> blobs;
     private int dimId;
 
@@ -106,7 +103,6 @@ public class AtmosphereHandler {
             }
         }
         dimensionOxygen.clear();
-        prevAtmosphere.clear();
         currentSummary = AtmosphereSummary.UNKNOWN;
         lastSuffocationTime = Integer.MIN_VALUE;
     }
@@ -288,10 +284,14 @@ public class AtmosphereHandler {
             // fired when a COARSE LABEL changed, which worked only while the answer was one of
             // fourteen names; a composition slides, and a readout that waited for it to cross a
             // boundary would sit stale for as long as the room stayed nominally the same.
+            //
+            // NOTHING IS REMEMBERED BETWEEN SENDS, and that is the point. The edge-triggered send
+            // needed the previous answer to compare against, and kept a per-player map to hold it;
+            // a periodic send needs no such comparison, so the map went with it. Re-adding one to
+            // "avoid recomputing" would be state nothing reads.
             if (entity instanceof EntityPlayer && isSyncTick(entity.ticksExisted)) {
                 Atmosphere.sendToRealPlayer(new PacketAtmSync(AtmosphereSummary.of(this, entity)),
                         (EntityPlayer) entity);
-                prevAtmosphere.put((EntityPlayer) entity, atmosType);
             }
 
             // Connectionless player-shaped entities (FakePlayers, headless
@@ -469,11 +469,6 @@ public class AtmosphereHandler {
         return ticksExisted % SYNC_PERIOD_TICKS == 0;
     }
 
-    @SubscribeEvent
-    public void onPlayerChangeDim(PlayerChangedDimensionEvent event) {
-        prevAtmosphere.remove(event.player);
-    }
-
     //Called from World.setBlockMetaDataWithNotify
 	/*public static void onBlockMetaChange(World world, int x , int y, int z) {
 		if(Configuration.enableOxygen && !world.isRemote && world.getChunkFromBlockCoords(new BlockPos(x, y, z)).isLoaded()) {
@@ -496,11 +491,6 @@ public class AtmosphereHandler {
 			}
 		}
 	}*/
-
-    @SubscribeEvent
-    public void onPlayerLogoutEvent(PlayerLoggedOutEvent event) {
-        prevAtmosphere.remove(event.player);
-    }
 
     private void onBlockRemove(HashedBlockPosition pos) {
         List<AreaBlob> blobs = getBlobWithinRadius(pos, MAX_BLOB_RADIUS);
