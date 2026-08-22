@@ -1,6 +1,5 @@
 package zmaster587.advancedRocketry.test.client;
 
-import org.junit.Assume;
 import org.junit.FixMethodOrder;
 import org.junit.Test;
 import org.junit.runners.MethodSorters;
@@ -239,17 +238,22 @@ public class VSDeckCaptureAndDismountE2ETest extends AbstractSharedVsClientE2ETe
         exec("tp @a " + (bx + 4000) + " 120 " + (bz + 4000) + " 0 0");
         // Scoped to THIS ship: a whole-dimension "no ship is loaded" gate would wait on every
         // neighbour scenario's ship as well, and would answer about theirs rather than ours.
+        // ASK for the unload rather than waiting to see whether one happens. Walking away is what a
+        // player does; on a headless server with no other observer it is a wait on chance, and this
+        // scenario used to SKIP whenever the chance did not come — the "different mechanism" its old
+        // skip message asked for is this verb.
+        // Waiting for the unload is not waiting on chance, which is what the SKIP this replaced
+        // assumed: with nothing holding the craft, the substrate's own loading controller queues an
+        // unload every tick for any ship with no player inside its unload distance, and the shared
+        // base resets the one affordance that would override that. So the state below is REACHED,
+        // not hoped for, and failing to reach it is news.
         boolean stillLoaded = true;
         for (int i = 0; i < 80 && stillLoaded; i++) {
             bot().waitTicks(10);
             stillLoaded = shipLoadedAt(bx, by, bz);
         }
-        // If the harness will not unload the ship, we cannot honestly exercise the reload path this way -
-        // SKIP rather than pass vacuously (a false green is worse than no test). This flags that the
-        // reload axis needs a different mechanism (or a real session restart), which is a real result.
-        Assume.assumeTrue("harness did not unload this scenario's ship within the budget (still"
-                + " loaded at " + bx + "," + by + "," + bz + "); the reload axis needs another"
-                + " mechanism", !stillLoaded);
+        assertTrue("arrangement: the ship must actually unload before the RELOAD path can be"
+                + " exercised (still loaded at " + bx + "," + by + "," + bz + ")", !stillLoaded);
         // The registry must not have LOST it. Compared against the count taken right after this
         // scenario's own assembly, so it stays a statement about this ship on a shared world.
         assertTrue("the unloaded ship must survive in the registry (a saved ship): "
@@ -387,13 +391,19 @@ public class VSDeckCaptureAndDismountE2ETest extends AbstractSharedVsClientE2ETe
         exec("tp @a " + (bx + 4000) + " 120 " + (bz + 4000) + " 0 0");
         // Scoped to THIS ship, like the saved-ship scenario above: on a shared world a whole-dimension
         // count answers about whichever neighbour's ship is loaded.
+        // Asked for, not waited on — see the saved-ship scenario above.
+        // Waiting for the unload is not waiting on chance, which is what the SKIP this replaced
+        // assumed: with nothing holding the craft, the substrate's own loading controller queues an
+        // unload every tick for any ship with no player inside its unload distance, and the shared
+        // base resets the one affordance that would override that. So the state below is REACHED,
+        // not hoped for, and failing to reach it is news.
         boolean stillLoaded = true;
         for (int i = 0; i < 80 && stillLoaded; i++) {
             bot().waitTicks(10);
             stillLoaded = shipLoadedAt(bx, by, bz);
         }
-        Assume.assumeTrue("harness did not unload this scenario's ship at " + bx + "," + by + ","
-                + bz + "; cannot exercise the reload path", !stillLoaded);
+        assertTrue("arrangement: the ship must actually unload before the RELOAD path can be"
+                + " exercised (still loaded at " + bx + "," + by + "," + bz + ")", !stillLoaded);
 
         exec("tp @a " + (bx + 0.5) + " " + (by + 6) + " " + (bz + 0.5) + " 0 0");
         // Event-gated VS reload barrier (load-scaled ceiling + early exit): a fixed 40-iteration budget
@@ -432,29 +442,30 @@ public class VSDeckCaptureAndDismountE2ETest extends AbstractSharedVsClientE2ETe
         buildAndBoardShip(bx, by, bz);
         bot().waitTicks(20);
 
-        // Roll the ship to a steep tilt with the pilot's mouse, then stand up FROM the seat while it is
-        // tilted - the maintainer's "after leaving, I fall through" is on a non-upright ship, which the
-        // upright dismount test never exercised. Stop rolling EARLY (at ~40deg): angular momentum keeps
-        // rolling the ship after the cursor centres, so a low break target overshoots to a near-vertical
-        // wall; breaking at ~40 lands the settle in the steep-but-standable envelope.
-        for (int i = 0; i < 220; i++) {
-            if (shipUpYFromInfo(shipInfo()) < 0.76) {
-                break;
-            }
-            if (Math.abs(clientDouble(KEY_BINDINGS, "flightCursorX")) < 0.5) {
-                mouseDelta(20, 0);
-            }
-            bot().waitTicks(2);
+        // Put the craft at a steep but STANDABLE tilt, then stand up FROM the seat while it is
+        // tilted — the maintainer's "after leaving, I fall through" is on a non-upright ship, which
+        // the upright dismount test never exercised. 60 degrees of roll about X is
+        // q = (cos30, sin30, 0, 0), i.e. up.y = 0.5, in the middle of the envelope this scenario
+        // needs rather than at either edge of it.
+        //
+        // Commanded, not mouse-rolled. The roll this replaced was an open loop against a craft that
+        // keeps turning after the cursor centres — its own comment says so — so it landed anywhere
+        // between no tilt and a vertical wall and SKIPPED whenever it missed. The mouse is not the
+        // subject here; standing up on a tilted deck is, and it is still the real client that stands.
+        for (int i = 0; i < 40 && shipUpYFromInfo(shipInfo()) > 0.55; i++) {
+            exec("artest vs point-by-id 0 " + scenarioShipId + " 0.8660254 0.5 0 0");
+            bot().waitTicks(4);
         }
+        exec("artest vs force-clear-by-id 0 " + scenarioShipId);
         centreFlightCursor();
         bot().waitTicks(30);
         double tilted = shipUpYFromInfo(shipInfo());
-        // A steep but standable tilt is the subject. The client-side capture packet snaps the fresh
-        // dismount onto the deck and holds it there (like a crew member who rode in and holds at 90deg).
-        // Skip only if the mouse-roll under- or overshot the envelope (no tilt, or a near-vertical wall
-        // where standing is not physical) - the harness's angular momentum makes the landing variable.
-        Assume.assumeTrue("could not tilt the ship into the steep-but-standable envelope (upY=" + tilted
-                + ")", tilted >= 0.25 && tilted < 0.80);
+        // An ASSERT, not an Assume: the tilt is commanded to a value inside the envelope, so failing
+        // to be there is news about how a craft holds a commanded attitude — not a dice roll to be
+        // stepped over. The client-side capture packet snaps the fresh dismount onto the deck and
+        // holds it there, like a crew member who rode in and holds at 90 degrees.
+        assertTrue("arrangement: the craft must sit in the steep-but-standable envelope before the"
+                + " subject is exercised (upY=" + tilted + ")", tilted >= 0.25 && tilted < 0.80);
 
         double[] seat = readShipInfoXYZ(shipInfo());
         String statsBefore = exec("artest vs shipframe-stats");
@@ -584,23 +595,43 @@ public class VSDeckCaptureAndDismountE2ETest extends AbstractSharedVsClientE2ETe
 
         double[] ship = buildShip(bx, by, bz);
 
-        // Spin the FRESH (never-piloted -> no controller torque) ship to a full inversion with free
-        // physics. This reaches a real 180 flip that the attitude-hold controller stalls short of, and
-        // matches the maintainer's ship, which fell and tumbled fully inverted.
-        // VS strongly damps angular velocity, so a one-shot set decays before a full flip - RE-APPLY it
-        // every tick to sustain the spin until the ship is inverted.
-        double upY = 1.0;
-        for (int i = 0; i < 240 && upY > -0.9; i++) {
-            exec("artest vs spin-ship-by-id 0 " + scenarioShipId + " 5.0 0.0 0.0");
-            bot().waitTicks(1);
-            upY = shipUpYFromInfo(shipInfo());
+        // Put the FRESH (never-piloted) craft into a held inversion by writing the attitude: 180
+        // degrees about X is q = (0, 1, 0, 0), so the deck's own +Y points at world −Y. It STAYS
+        // there once written, because an attitude error this far past the reference reseed is
+        // ADOPTED and then held rather than corrected — which is also the maintainer's ship, stuck
+        // inverted after a tumble.
+        //
+        // Three arrangements were measured side by side (2026-08-22, server tier, same craft type),
+        // and only this one works. Re-applying a raw 5 rad/s spin — what this scenario did until
+        // today — never even reached inversion: best up.y = +0.490 over 60 attempts, because the
+        // unmanned auto-level torques the deck back to horizontal as fast as the write arrives, and
+        // that is why this scenario had been SKIPPING. Commanding the roll through the flight
+        // computer does reach it (−0.902) and then loses it: released, the craft rights itself to
+        // +0.353 within 60 ticks. Neither can arrange what this test is about.
+        // `point-by-id` COMMANDS a target attitude held by torque — it is the attitude-hold
+        // interface, not a pose write — so the craft has to slew there, and the command has to stand
+        // while it does. Measured cost of getting this wrong: commanded once and read 20 ticks later,
+        // the craft was at up.y = +0.038 with omega = 2.0 rad/s, i.e. still on its way round. Half a
+        // turn at that rate needs about 31 ticks.
+        double invertedUpY = 1.0;
+        for (int i = 0; i < 40 && invertedUpY > -0.9; i++) {
+            exec("artest vs point-by-id 0 " + scenarioShipId + " 0 1 0 0");
+            bot().waitTicks(4);
+            invertedUpY = shipUpYFromInfo(shipInfo());
         }
-        exec("artest vs spin-ship-by-id 0 " + scenarioShipId + " 0.0 0.0 0.0");
-        bot().waitTicks(10);
+        // Then let go, and let it sit: REACHING an attitude and KEEPING it are different questions,
+        // and everything below needs the second one.
+        exec("artest vs force-clear-by-id 0 " + scenarioShipId);
+        bot().waitTicks(40);
         String info0 = shipInfo();
-        double invertedUpY = shipUpYFromInfo(info0);
+        invertedUpY = shipUpYFromInfo(info0);
         System.out.println("[deckcap] force-invert upY=" + invertedUpY + " info=" + info0);
-        Assume.assumeTrue("could not spin the ship inverted (upY=" + invertedUpY + ")", invertedUpY < -0.85);
+        // An ASSERT, not an Assume: the attitude write is deterministic, so a craft that is not
+        // inverted here is a real change in how a craft holds an adopted attitude — which is a thing
+        // this suite should go red for, not skip over. The skip it replaces hid this scenario for as
+        // long as the spin arrangement was failing, and a scenario nobody sees fail is not a test.
+        assertTrue("arrangement: the craft must be INVERTED before the subject is exercised (upY="
+                + invertedUpY + "): " + info0, invertedUpY < -0.85);
 
         // ENTER the seat on the inverted ship — located inside THIS ship, not "the first seat in
         // the world" (see mountPilotSeatOfShipAt).
@@ -642,22 +673,24 @@ public class VSDeckCaptureAndDismountE2ETest extends AbstractSharedVsClientE2ETe
         buildAndBoardShip(bx, by, bz);
         bot().waitTicks(20);
 
-        // Roll the ship past inverted with the real mouse, as the pilot does (this reaches inversion when
-        // the controls WORK on the way over - the maintainer says they stop working once there).
-        for (int i = 0; i < 240; i++) {
-            if (clientDouble(SHIP_CAMERA, "shipUpY") < -0.45) {
-                break;
-            }
-            if (Math.abs(clientDouble(KEY_BINDINGS, "flightCursorX")) < 0.9) {
-                mouseDelta(60, 0);
-            }
-            bot().waitTicks(2);
+        // Command the craft over to inverted and let it hold there. The subject is what the pilot's
+        // controls do ONCE INVERTED — the maintainer's report is that they stop working there — and
+        // that subject is still driven below by the real mouse. Only the way IN changed: rolling
+        // over by mouse also demonstrated that the controls work on the way, but it arrived at a
+        // variable attitude and SKIPPED whenever it undershot, which bought that side observation at
+        // the price of the scenario running at all.
+        for (int i = 0; i < 40 && clientDouble(SHIP_CAMERA, "shipUpY") > -0.9; i++) {
+            exec("artest vs point-by-id 0 " + scenarioShipId + " 0 1 0 0");
+            bot().waitTicks(4);
         }
+        exec("artest vs force-clear-by-id 0 " + scenarioShipId);
         centreFlightCursor();
-        bot().waitTicks(40); // let the spin brake settle it inverted, omega -> ~0
+        bot().waitTicks(40); // let it settle inverted, omega -> ~0
         double shipUpY = clientDouble(SHIP_CAMERA, "shipUpY");
-        Assume.assumeTrue("could not roll the ship inverted to test control there (shipUpY=" + shipUpY
-                + ")", shipUpY < -0.4);
+        // An ASSERT: the attitude is commanded, so not being there is news, not a dice roll. And it
+        // is read from the CLIENT's own camera state, which is what the pilot below is looking at.
+        assertTrue("arrangement: the craft must be inverted ON THE CLIENT before its controls are"
+                + " tested there (shipUpY=" + shipUpY + ")", shipUpY < -0.4);
         double omegaSettled = readDouble(shipInfo(), OMEGA);
         System.out.println("[deckcap] inverted-control shipUpY=" + shipUpY + " omegaSettled=" + omegaSettled);
 
