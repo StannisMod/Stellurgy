@@ -352,11 +352,43 @@ public final class RealDedicatedServerHarness implements AutoCloseable {
         }
     }
 
+    /**
+     * Substrings of a child line that mean "this JVM is already broken, and every failure you are
+     * about to read is a consequence rather than a cause".
+     *
+     * <p>A mixin that cannot be applied is FATAL and names itself — but only in the CHILD's log,
+     * which nothing forwards. From the test's side its target class then fails to load and the
+     * scenario reds somewhere far away, looking exactly like an arrangement problem. Measured
+     * 2026-08-21: four runs were spent on a re-seat scenario that failed with "could not read the
+     * seated craft's ship identity" while the child had already printed
+     * {@code Critical injection failure: LVT … has incompatible changes}. The loudness existed the
+     * whole time; nobody could hear it.
+     */
+    private static final String[] FATAL_MARKERS = {
+        "Critical injection failure",
+        "InvalidMixinException",
+        "InvalidInjectionException",
+        "Mixin apply for mod",
+        "MixinTransformerError",
+    };
+
+    /** Put a child-side fatal on the TEST runner's own stdout, where a failure report can see it. */
+    private static void echoIfFatal(String line) {
+        for (String marker : FATAL_MARKERS) {
+            if (line.contains(marker)) {
+                System.out.println("[forge-test] CHILD FATAL — every later failure in this run is "
+                        + "probably a consequence of this: " + line);
+                return;
+            }
+        }
+    }
+
     private static Thread startReader(Process process, List<String> transcript) {
         Thread reader = new Thread(() -> {
             try (BufferedReader bufferedReader = new BufferedReader(new InputStreamReader(process.getInputStream(), StandardCharsets.UTF_8))) {
                 String line;
                 while ((line = bufferedReader.readLine()) != null) {
+                    echoIfFatal(line);
                     synchronized (transcript) {
                         transcript.add(line);
                         transcript.notifyAll();
