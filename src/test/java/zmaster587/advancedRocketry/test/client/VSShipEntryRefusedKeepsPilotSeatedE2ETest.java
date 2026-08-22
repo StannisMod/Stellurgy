@@ -67,6 +67,14 @@ public class VSShipEntryRefusedKeepsPilotSeatedE2ETest {
     private static final Pattern LEDGER = Pattern.compile("\"ledger\":(-?\\d+)");
     private static final Pattern SHIP_ID = Pattern.compile("\"id\":\"([0-9a-fA-F-]+)\"");
     private static final Pattern VEL_Y = Pattern.compile("\"velY\":(-?[0-9.E\\-]+)");
+    /** The ship's own attitude, so a climb that goes nowhere can be told from a climb that goes
+     *  SIDEWAYS. The pilot's "up" is a ship-frame command; on a tilted hull it maps to a world
+     *  vector with large horizontal components, and altitude then barely moves while the craft
+     *  travels. Without this the trace shows a stalled altitude and cannot say which it was. */
+    private static final Pattern Q_X = Pattern.compile("\"qx\":(-?[0-9.E\\-]+)");
+    private static final Pattern Q_Z = Pattern.compile("\"qz\":(-?[0-9.E\\-]+)");
+    private static final Pattern P_X = Pattern.compile("\"posX\":(-?[0-9.E\\-]+)");
+    private static final Pattern P_Z = Pattern.compile("\"posZ\":(-?[0-9.E\\-]+)");
 
     private static final String VARIANT = "with-pilot-seat";
     private static final int BX = 3000, BY = 64, BZ = 3000;
@@ -190,6 +198,22 @@ public class VSShipEntryRefusedKeepsPilotSeatedE2ETest {
 
         // The ship's own identity, so the gate readout below is about THIS craft rather than
         // whichever one a position lookup reaches.
+        // The craft's attitude BEFORE anyone boards it. The pilot's throttle is a BODY-frame command
+        // (FreeFlightPhysics.shipVelocityCommand maps it through the attitude), so a hull that is not
+        // upright turns "climb" into a diagonal - and the attitude controller pins its reference to
+        // wherever the ship IS whenever the pilot commands no rotation, so a tilt acquired once is
+        // held. This read separates "assembly left it crooked" from "flying tilted it", which the
+        // climb trace alone cannot.
+        {
+            Matcher aq = Q_X.matcher(shipInfo), az = Q_Z.matcher(shipInfo);
+            System.out.println("[entryrefused] attitude AT REST, pre-boarding: upY="
+                    + (aq.find() && az.find()
+                        ? String.valueOf(1.0 - 2.0 * (Double.parseDouble(aq.group(1))
+                            * Double.parseDouble(aq.group(1))
+                            + Double.parseDouble(az.group(1)) * Double.parseDouble(az.group(1))))
+                        : "?")
+                    + " :: " + shipInfo.replace('\n', ' '));
+        }
         Matcher sid = SHIP_ID.matcher(shipInfo);
         assertTrue("ARRANGEMENT: ship-info must name the ship: " + shipInfo, sid.find());
         String shipUuid = sid.group(1);
@@ -267,11 +291,33 @@ public class VSShipEntryRefusedKeepsPilotSeatedE2ETest {
                         // shape, and the tick it changed shape at is the whole question. The
                         // VERTICAL VELOCITY rides along because an altitude that stops rising
                         // cannot say whether the ship is being held, braked or simply not pushed.
-                        if (climb.length() < 900) {
+                        // upY (the world-frame Y of the ship's OWN up, from its attitude) and the
+                        // horizontal distance travelled ride along for one reason: the pilot's
+                        // "climb" is a SHIP-FRAME command, so on a tilted hull it is mostly
+                        // horizontal thrust. A flat altitude with upY well under 1 and a growing
+                        // travel is a ship flying SIDEWAYS, which is a different bug from a ship
+                        // that is not being pushed at all - and the two are identical in a
+                        // y/velY trace.
+                        Matcher qx = Q_X.matcher(s), qz = Q_Z.matcher(s);
+                        Matcher px = P_X.matcher(s), pz = P_Z.matcher(s);
+                        double upY = Double.NaN, horiz = Double.NaN;
+                        if (qx.find() && qz.find()) {
+                            double ax = Double.parseDouble(qx.group(1));
+                            double az = Double.parseDouble(qz.group(1));
+                            upY = 1.0 - 2.0 * (ax * ax + az * az);
+                        }
+                        if (px.find() && pz.find()) {
+                            double dx = Double.parseDouble(px.group(1)) - BX;
+                            double dz = Double.parseDouble(pz.group(1)) - BZ;
+                            horiz = Math.sqrt(dx * dx + dz * dz);
+                        }
+                        if (climb.length() < 1400) {
                             climb.append(' ').append(attempt).append(':')
                                     .append(String.format(Locale.ROOT, "%.1f", y))
                                     .append('/')
-                                    .append(vy.find() ? vy.group(1) : "?");
+                                    .append(vy.find() ? vy.group(1) : "?")
+                                    .append(String.format(Locale.ROOT, "/up=%.2f/horiz=%.1f",
+                                            upY, horiz));
                         }
                     }
                 }
@@ -279,6 +325,12 @@ public class VSShipEntryRefusedKeepsPilotSeatedE2ETest {
         } finally {
             bot().releaseKey(Keyboard.KEY_R);
         }
+        // Printed on the GREEN path too, deliberately. This class's red is intermittent and only
+        // appears under the loaded gate, so its trace is otherwise unreadable on the run you can
+        // actually iterate on - and the shape of a healthy climb is what tells you whether a sick
+        // one differs in altitude, in attitude, or only in speed.
+        System.out.println("[entryrefused] maxShipY=" + maxShipY + " yRest=" + yRest
+                + " climb(attempt:y/velY/up/horiz)=[" + climb.toString().trim() + "]");
         // The gate is read HERE, on the failing path only, for the same reason the climb is sampled
         // passively above: it resolves the ship through its subspace yard, which force-loads chunks.
         // A missing refusal has four explanations - the ship never reached the line, the trigger
