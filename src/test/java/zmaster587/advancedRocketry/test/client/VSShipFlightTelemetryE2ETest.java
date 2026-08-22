@@ -141,18 +141,27 @@ public class VSShipFlightTelemetryE2ETest extends AbstractSharedVsClientE2ETest 
         assertTrue("the client's flight cursor must return to centre (got " + cursorCentred + ")",
                 Math.abs(cursorCentred) < CURSOR_DEADZONE);
 
-        // With the cursor centred the controller must brake the ship to rest. Poll with a ceiling.
-        double settled = spinning;
-        for (int i = 0; i < 150 && settled > 0.05; i++) {
-            bot().waitTicks(2);
-            settled = readDouble(shipInfo(), OMEGA);
-        }
+        // With the cursor centred the controller must brake the ship to rest. Load-scaled, like the
+        // spin-UP poll twenty lines above — this was the one fixed budget left in the pair, and a
+        // brake that needs a few more ticks under fork load is not a ship that failed to stop.
+        ClientPoll.Result<Double> braked = ClientPoll.until(bot()::waitTicks,
+                () -> readDouble(shipInfo(), OMEGA), o -> o <= 0.05, 2, 150);
+        double settled = braked.value;
         String controller = exec("artest vs afc-debug");
         System.out.println("[tier2] omega spinning=" + spinning + " settled=" + settled
-                + " controller=" + controller);
+                + " poll=" + braked + " controller=" + controller);
+        // THE TWO READINGS ARE NOT THE SAME SUBJECT, and this message used to print them side by side
+        // as if they were. `ship-info` is asked about THIS ship. `afc-debug` reads
+        // TileAdvancedFlightComputer.debugControllerState, a GLOBAL mutable static written by
+        // whichever flight computer's controller ran last — on a shared client that is frequently a
+        // different craft. A near-zero omega there beside a large one here means the readings
+        // disagree about WHICH SHIP, not that the ship stopped.
         assertTrue("with the flight cursor centred the ship must STOP turning, not coast: it was "
                 + "spinning at " + spinning + " rad/s and is still at " + settled
-                + "; controller=" + controller, settled <= 0.05);
+                + " after " + braked
+                + ". The controller line below is a GLOBAL last-writer static and may describe"
+                + " another craft entirely — compare it for what it is: " + controller,
+                settled <= 0.05);
 
         exec("artest player dismount");
     }

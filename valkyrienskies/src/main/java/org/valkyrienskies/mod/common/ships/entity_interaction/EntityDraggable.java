@@ -16,6 +16,7 @@ import org.valkyrienskies.mod.common.entity.EntityShipMovementData;
 import org.valkyrienskies.mod.common.ships.ShipData;
 import org.valkyrienskies.mod.common.ships.ship_transform.ShipTransform;
 import org.valkyrienskies.mod.common.util.VSMath;
+import org.valkyrienskies.mod.common.ships.ship_world.PhysicsObject;
 import org.valkyrienskies.mod.common.util.ValkyrienUtils;
 
 import java.util.List;
@@ -80,6 +81,31 @@ public class EntityDraggable {
                 }
             }
         } else {
+            // A ship that TELEPORTED did not move at 58 000 blocks per tick, and the delta between
+            // its previous-tick and current transform is a JUMP rather than a velocity. Feeding that
+            // delta in as added velocity flings every entity that touched the ship in the last
+            // `ticksToStickToShip` ticks, and the fling compounds: the entity's next position is far
+            // enough away that the following tick's delta is larger still.
+            //
+            // The guard is not new here and is not invented: VS already wrote it for the OTHER path
+            // that moves an entity relative to a ship, in MixinNetHandlerPlayServer — "Don't move
+            // the player relative to the ship until the TicksSinceShipTeleport timer expires." That
+            // path consults it; this one never did (measured: zero references in this file). Ships
+            // are teleported deliberately here — cell crossings, relocations, transit parks — and
+            // that recipe already ARMS the timer, so half the engine was honouring a guard the other
+            // half ignored.
+            final PhysicsObject touchedShipObject = ValkyrienUtils.getPhysObjWorld(entity.world)
+                    .getPhysObjectFromUUID(lastShipTouchedPlayer.getUuid());
+            if (touchedShipObject != null && touchedShipObject.getTicksSinceShipTeleport()
+                    <= PhysicsObject.TICKS_SINCE_TELEPORT_TO_START_DRAGGING) {
+                // Carry nothing across the jump: there is no velocity here to inherit. Ordinary
+                // dragging resumes by itself once the timer expires.
+                draggable.setEntityShipMovementData(oldEntityShipMovementData
+                        .withAddedLinearVelocity(new Vector3d())
+                        .withAddedYawVelocity(0));
+                return;
+            }
+
             final float rotYaw = entity.rotationYaw;
             final float rotPitch = entity.rotationPitch;
             final float prevYaw = entity.prevRotationYaw;
