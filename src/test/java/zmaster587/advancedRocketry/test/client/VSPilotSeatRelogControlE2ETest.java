@@ -78,10 +78,9 @@ public class VSPilotSeatRelogControlE2ETest extends AbstractClientE2ETest {
 
         // ---- CONTROL LEG (pre-relog): the chain works before the relog, or the post-relog leg
         // cannot indict the relog. -----------------------------------------------------------
-        double y0 = clientPlayerY();
-        double y1 = climbWith(Keyboard.KEY_R, y0, budget);
+        Climb before = climbWith(Keyboard.KEY_R, clientPlayerY(), budget);
         assertTrue("ARRANGEMENT (control leg): the pilot must be able to fly BEFORE the relog. "
-                + "clientY " + y0 + " -> " + y1, (y1 - y0) >= MIN_CLIMB);
+                + before, before.climbed());
         bot().waitTicks(30); // let the station-hold settle the hovering ship
 
         // ---- ACT: the real relog — full server logout (player data saved) + fresh login. -------
@@ -105,30 +104,94 @@ public class VSPilotSeatRelogControlE2ETest extends AbstractClientE2ETest {
                 + riding, seatedTwice);
 
         // ---- ASSERT 2 (load-bearing): the restored chain still FLIES the ship. -----------------
-        double y2 = clientPlayerY();
-        double y3 = climbWith(Keyboard.KEY_R, y2, budget);
-        assertTrue("after the relog, held input must MOVE THE SHIP - a restored seat with a dead "
-                        + "key is a broken control chain. clientY " + y2 + " -> " + y3
-                        + " (need +" + MIN_CLIMB + ") delivery=" + exec("artest vs seat-delivery"),
-                (y3 - y2) >= MIN_CLIMB);
+        Climb after = climbWith(Keyboard.KEY_R, clientPlayerY(), budget);
+        assertTrue("after the relog, held input must MOVE THE SHIP - a restored seat with a dead key"
+                        + " is a broken control chain. WHAT THIS RED MAY NOT BLAME without reading"
+                        + " the trace: a ship whose `up` has fallen toward 0 has TIPPED, and the"
+                        + " pilot's throttle is a body-frame command, so the chain can be perfect"
+                        + " and the rider still sink. Compare against the control leg, which flew the"
+                        + " same key on the same craft: " + after
+                        + " | control leg was: " + before
+                        + " | delivery=" + exec("artest vs seat-delivery"),
+                after.climbed());
     }
 
     // ---- helpers -------------------------------------------------------------------------------
 
-    /** Hold {@code key} until the client-rendered rider altitude climbs {@link #MIN_CLIMB} over
-     *  {@code from} (bounded, early-exit); returns the last observed altitude. */
-    private double climbWith(int key, double from, int budget) throws Exception {
+    /** What a held-throttle climb DID, not just where it ended — printable whole into a red. */
+    private static final class Climb {
+        final double from;
+        final double last;
+        final String trace;
+
+        Climb(double from, double last, String trace) {
+            this.from = from;
+            this.last = last;
+            this.trace = trace;
+        }
+
+        boolean climbed() {
+            return (last - from) >= MIN_CLIMB;
+        }
+
+        @Override
+        public String toString() {
+            return String.format(java.util.Locale.ROOT,
+                    "clientY %.3f -> %.3f (need +%.1f) :: %s", from, last, MIN_CLIMB, trace);
+        }
+    }
+
+    /**
+     * Hold {@code key} until the client-rendered rider altitude climbs {@link #MIN_CLIMB} over
+     * {@code from} (bounded, early-exit), recording what the SHIP did while it happened.
+     *
+     * <p>The ship's pose rides along because without it this leg's red cannot be read. It used to
+     * report {@code clientY 67.107 -> 65.467} and nothing else, which reads as "the key is dead" —
+     * and the measured production behaviour it cannot be told apart from is a ship that has TIPPED:
+     * the pilot's throttle is a BODY-frame command (`FreeFlightPhysics.shipVelocityCommand` maps it
+     * through the attitude), so once the hull is over, "climb" is horizontal thrust and the rider
+     * sinks while the control chain works perfectly. {@code up} is the world-frame Y of the ship's
+     * own up: 1.0 upright, 0 on its side.</p>
+     */
+    private Climb climbWith(int key, double from, int budget) throws Exception {
         double last = from;
+        StringBuilder trace = new StringBuilder();
         bot().holdKey(key);
         try {
             for (int i = 0; i < budget && (last - from) < MIN_CLIMB; i++) {
                 bot().waitTicks(5);
                 last = clientPlayerY();
+                if (i % 4 == 0 && trace.length() < 700) {
+                    trace.append('[').append(i * 5).append("t y=")
+                            .append(String.format(java.util.Locale.ROOT, "%.2f", last))
+                            .append(' ').append(shipPose()).append("] ");
+                }
             }
         } finally {
             bot().releaseKey(key);
         }
-        return last;
+        trace.append("[end ").append(shipPose()).append(']');
+        return new Climb(from, last, trace.toString());
+    }
+
+    /** This scenario's ship, by position at its own base: its altitude and the world-frame Y of its
+     *  OWN up. Read-only. Returns a self-describing string rather than throwing, so a probe failure
+     *  can never mask the assertion it is annotating. */
+    private String shipPose() {
+        try {
+            String info = exec("artest vs ship-info 0 " + BX + " " + BY + " " + BZ + " 48");
+            Matcher qx = Pattern.compile("\"qx\":(-?[0-9.E\\-]+)").matcher(info);
+            Matcher qz = Pattern.compile("\"qz\":(-?[0-9.E\\-]+)").matcher(info);
+            Matcher py = Pattern.compile("\"posY\":(-?[0-9.E\\-]+)").matcher(info);
+            if (!(qx.find() && qz.find() && py.find())) {
+                return "NO-SHIP-AT-BASE " + info.replace('\n', ' ');
+            }
+            double ax = Double.parseDouble(qx.group(1)), az = Double.parseDouble(qz.group(1));
+            return String.format(java.util.Locale.ROOT, "shipY=%.2f up=%.2f",
+                    Double.parseDouble(py.group(1)), 1.0 - 2.0 * (ax * ax + az * az));
+        } catch (Exception e) {
+            return "ship-pose-failed: " + e;
+        }
     }
 
     private double clientPlayerY() throws Exception {

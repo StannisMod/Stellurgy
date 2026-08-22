@@ -163,19 +163,31 @@ public class VSDeckCaptureAndDismountE2ETest extends AbstractSharedVsClientE2ETe
         // flight brake, but a held sneak still triggers vanilla's dismount.) Confirm on the CLIENT that
         // the player left the seat; fall back to the server dismount only if the key path did not fire.
         boolean dismounted = false;
+        String dismountPath = "sneak-key";
         bot().holdKey(Keyboard.KEY_LSHIFT);
         for (int i = 0; i < 40 && !dismounted; i++) {
             bot().waitTicks(2);
             dismounted = !bot().reportRidingEntity().get("riding").getAsBoolean();
         }
         bot().releaseKey(Keyboard.KEY_LSHIFT);
+        String serverDismount = "";
         if (!dismounted) {
             System.out.println("[deckcap] sneak key did not dismount; using server dismount");
-            exec("artest player dismount");
+            dismountPath = "sneak-key-then-server-dismount";
+            serverDismount = exec("artest player dismount").replace('\n', ' ');
             bot().waitTicks(5);
             dismounted = !bot().reportRidingEntity().get("riding").getAsBoolean();
         }
-        assertTrue("the pilot must actually leave the seat", dismounted);
+        // Which PATH was taken is the diagnosis, and this message used to be a bare sentence. Both
+        // paths failing is a different fault from the key path alone failing: the first says the
+        // player cannot be un-seated at all, the second says only the real key route is dead, which
+        // is the one a player actually uses and the one this scenario is about.
+        assertTrue("the pilot must actually leave the seat, and NEITHER route got him out."
+                        + " tried=" + dismountPath
+                        + (serverDismount.isEmpty() ? "" : " serverDismount=" + serverDismount)
+                        + " riding=" + bot().reportRidingEntity()
+                        + " capture=" + exec("artest vs deck-capture"),
+                dismounted);
 
         // Let the now-unmanned ship reveal whether it holds or falls.
         bot().waitTicks(40);
@@ -321,9 +333,18 @@ public class VSDeckCaptureAndDismountE2ETest extends AbstractSharedVsClientE2ETe
             bot().waitTicks(5);
             onDeckCam = Boolean.parseBoolean(clientString(SHIP_CAMERA, "shipCamActive"));
         }
-        System.out.println("[deckcap] cam on-deck active=" + onDeckCam
-                + " cap=" + exec("artest vs deck-capture"));
-        assertTrue("a player actually standing on the deck must get the deck camera", onDeckCam);
+        String camCapture = exec("artest vs deck-capture");
+        System.out.println("[deckcap] cam on-deck active=" + onDeckCam + " cap=" + camCapture);
+        // The camera is DOWNSTREAM of the capture, so a bare "no deck camera" blames the renderer
+        // for something that usually happened one link earlier. The capture verdict is already read
+        // for the stdout line above; putting it in the message is free and it splits the two: a
+        // capture that says verdict=false means the body was never resolved on the deck at all and
+        // the camera is behaving correctly, while a true capture with no camera is a real render gap.
+        assertTrue("a player actually standing on the deck must get the deck camera. If the capture"
+                        + " below says the body is NOT on the deck then this is not a camera fault at"
+                        + " all - the body never got there. capture=" + camCapture.replace('\n', ' ')
+                        + " playerY=" + bot().reportState().get("playerY").getAsDouble(),
+                onDeckCam);
     }
 
     // ---- Bug: a hovering ship falls (and tumbles inverted) after a world reload -----------------

@@ -148,8 +148,15 @@ public class ItemRightClickClientGroupE2ETest extends AbstractSharedClientE2ETes
                 }
             }
         }
-        assertTrue("client chat must show the resolved 'Atmosphere Type: …air' line", sawType);
-        assertTrue("client chat must show the resolved 'Breathable: yes' line", sawBreathableYes);
+        // What the chat DOES hold. Two silences look identical from a bare boolean and need
+        // opposite fixes: an empty backlog means the click never produced a message at all, while a
+        // backlog full of other lines means it spoke and said something else (a wrong key, an
+        // unresolved i18n placeholder, the untranslated key itself).
+        String chatSeen = bot().reportChat(10).toString();
+        assertTrue("client chat must show the resolved 'Atmosphere Type: …air' line. chat="
+                + chatSeen, sawType);
+        assertTrue("client chat must show the resolved 'Breathable: yes' line. chat="
+                + chatSeen, sawBreathableYes);
     }
 
     // ── biome changer: the answer is a queue on a satellite ───────────────────

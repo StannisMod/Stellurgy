@@ -68,7 +68,12 @@ public class VSShipFrameShieldE2ETest extends AbstractClientE2ETest {
             bot().waitTicks(5);
             loaded = count("ship-count") >= 1;
         }
-        assertTrue("the ship must LOAD with the client present", loaded);
+        // The count is the diagnosis and this message used to omit it: a ZERO means the assembly
+        // never routed to a ship at all (look at the assemble reply above), while a non-zero here
+        // cannot happen - so a red on this line has exactly one meaning and now says it.
+        assertTrue("the ship must LOAD with the client present within 200 ticks; ship-count="
+                        + count("ship-count") + " (0 = assembly produced no ship)",
+                loaded);
 
         // Take its identity now, while nothing else is at the build spot. Every later question and
         // every push below names THIS ship: the hull ends up 20+ blocks up, and a nearest-ship lookup

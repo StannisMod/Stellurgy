@@ -144,7 +144,13 @@ public class VSPilotKeysWithSpaceSubsystemE2ETest {
                 yBefore = Double.parseDouble(m.group(1));
             }
         }
-        assertTrue("the ship must LOAD with the client present", !Double.isNaN(yBefore));
+        assertTrue("the ship must LOAD with the client present within 200 ticks. The lookup's own"
+                        + " answer IS the diagnosis and this message used to throw it away: an empty"
+                        + " reply means no ship near the base at all (assembly never routed to one),"
+                        + " while a reply carrying \"managed\":false means one is there and the"
+                        + " physics mod does not own it yet - a different wait, not a longer one."
+                        + " nearest=" + atBase.replace('\n', ' '),
+                !Double.isNaN(yBefore));
 
         // Keyed on IDENTITY from here on: the whole measurement below is the ship CLIMBING away
         // from this base, which is the one place a nearest-ship query stops meaning it.

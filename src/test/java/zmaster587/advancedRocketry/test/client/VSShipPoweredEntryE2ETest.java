@@ -170,7 +170,14 @@ public class VSShipPoweredEntryE2ETest {
                 yRest = Double.parseDouble(m.group(1));
             }
         }
-        assertTrue("ARRANGEMENT: the ship must LOAD with the client present", !Double.isNaN(yRest));
+        assertTrue("ARRANGEMENT: the ship must LOAD with the client present within " + (budget * 5)
+                        + " ticks (load-scaled). The lookup's own answer IS the diagnosis and this"
+                        + " message used to throw it away: an empty reply means no ship near the base"
+                        + " at all (assembly never routed to one), while a reply carrying"
+                        + " \"managed\":false means one is there and the physics mod does not own it"
+                        + " yet - a different wait, not a longer one. nearest="
+                        + atBase.replace('\n', ' '),
+                !Double.isNaN(yRest));
 
         // The ship's IDENTITY, taken at the one moment a position lookup is defensible — freshly
         // assembled, still at its own base. This scenario then flies it past the orbit line and

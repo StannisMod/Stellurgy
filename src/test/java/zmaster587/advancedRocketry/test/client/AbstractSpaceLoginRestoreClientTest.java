@@ -1260,7 +1260,17 @@ public abstract class AbstractSpaceLoginRestoreClientTest {
             bot().waitTicks(10);
             dim = clientDim();
         }
-        assertEquals("the pilot must arrive in his ship's slot dimension by riding it there",
+        // WHERE he actually is, and whether he is still ON the thing that was supposed to carry
+        // him. This used to be a bare sentence and a dimension mismatch, which is the same red
+        // whether the crossing never happened, happened without him, or happened and dropped him -
+        // three different bugs. The riding report is the discriminator: still seated in the WRONG
+        // dim means the ship did not cross; not seated in the RIGHT dim means it crossed and left
+        // him behind.
+        assertEquals("the pilot must arrive in his ship's slot dimension by riding it there."
+                        + " clientDim=" + dim + " expected=" + slotDim
+                        + " riding=" + bot().reportRidingEntity()
+                        + " serverSaysHeIsAt=" + exec("artest player position-of " + BOT)
+                                .replace('\n', ' '),
                 slotDim, dim);
         assertTrue("and he must still be seated after the crossing: " + bot().reportRidingEntity(),
                 bot().reportRidingEntity().get("riding").getAsBoolean());

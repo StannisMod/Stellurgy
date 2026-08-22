@@ -124,6 +124,14 @@ public class ClientBootBaselineGroupE2ETest extends AbstractSharedClientE2ETest 
         }
         scenario().record("testClientMasterVolume", raw);
 
+        // "NaN" is the sentinel this loop polls OUT of, so the first thing to say about a red is
+        // whether it ever left that sentinel. This assertion comes FIRST for that reason: the mute
+        // never landing within 200 ticks and the field being absent are different faults, and
+        // assertNotNull can only ever catch the second.
+        assertTrue("the master-volume readback never left its NaN sentinel within 200 ticks, so the"
+                        + " mute never landed on a client tick - a NaN here is the ABSENCE of a"
+                        + " reading, not a reading of zero. raw=" + raw,
+                !"NaN".equalsIgnoreCase(raw));
         assertNotNull("the readback must report an applied master volume", raw);
         float master = Float.parseFloat(raw);
         assertEquals("a harness test client must have master sound muted to 0",

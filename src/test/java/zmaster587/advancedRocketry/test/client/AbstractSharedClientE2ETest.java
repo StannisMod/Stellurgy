@@ -283,6 +283,14 @@ public abstract class AbstractSharedClientE2ETest {
             serverClient().execute("artest tp " + plot.dim);
             bot().waitTicks(20);
         }
+        // Mark the event log HERE, one statement before the teleport, so that a plot miss can ask
+        // the one question the diagnostic below could never answer: WHO wrote this body's position.
+        // Everything else it asks names CANDIDATES (a ship near the plot, a ship near the body, a
+        // deck capture, the client's resolver); `pos_jump` carries the writer's own caller trail.
+        // Defensive on purpose - this runs before EVERY scenario, and a base class must not fail a
+        // whole class because a recorder was unavailable. An unusable mark is REMEMBERED, not
+        // thrown, so an empty log later reads as "the recorder was off" rather than as a finding.
+        markThePositionRecorder();
         serverClient().execute("tp @a " + (plot.centerX() + 0.5) + " " + (Plot.DEFAULT_Y + 1)
                 + " " + (plot.centerZ() + 0.5) + " 0 0");
         bot().waitTicks(10);
@@ -444,12 +452,56 @@ public abstract class AbstractSharedClientE2ETest {
                           + " this is a round-trip budget, not a stray writer."
                         : " — the body never arrived at all; a second writer owns it, or the"
                           + " teleport never reached this client.")
+                + "\n  every POSITION WRITE since the teleport, with the caller that made it — this"
+                + " is the only line here that NAMES a writer instead of listing candidates: "
+                + positionWritesSinceTheTeleport()
                 + "\n  a ship within 64 blocks of the PLOT centre: " + shipOnPlot
                 + "\n  a ship within 256 blocks of where the BODY ended up: " + shipOnBody
                 + "\n  its deck capture, as the SERVER sees it: " + capture
                 + "\n  the CLIENT's own ship-frame resolver: " + clientResolver
                 + "\n  client world=" + bot().reportWeather()
                 + " riding=" + bot().reportRidingEntity();
+    }
+
+    /** The event-log sequence taken immediately BEFORE the between-scenario teleport. Negative when
+     *  the recorder could not be marked — and {@link #plotMarkFailure} then says why, because an
+     *  empty log from a recorder that was never running is not evidence of anything. */
+    private long plotMark = -1L;
+    private String plotMarkFailure = "";
+
+    /** Take the mark, or remember why it could not be taken. Never throws: this runs before every
+     *  scenario in a shared class, and a harness-side gap must not present as a scenario failure. */
+    private void markThePositionRecorder() {
+        plotMark = -1L;
+        plotMarkFailure = "";
+        String reply = askServer("artest events mark");
+        java.util.regex.Matcher seq =
+                java.util.regex.Pattern.compile("\"seq\":(-?\\d+)").matcher(reply);
+        java.util.regex.Matcher recording =
+                java.util.regex.Pattern.compile("\"recording\":(true|false)").matcher(reply);
+        java.util.regex.Matcher mixins =
+                java.util.regex.Pattern.compile("\"mixins\":(true|false)").matcher(reply);
+        // BOTH honesty flags, and they fail independently: the bus recorder may be unsubscribed, or
+        // the launch-time coremod may never have queued the test-only mixin that records a position
+        // write. Their silences are identical and only one of them is about this scenario.
+        boolean live = recording.find() && "true".equals(recording.group(1));
+        boolean woven = mixins.find() && "true".equals(mixins.group(1));
+        if (seq.find() && live && woven) {
+            plotMark = Long.parseLong(seq.group(1));
+        } else {
+            plotMarkFailure = "position-write recorder unusable at the mark (recording=" + live
+                    + " mixins=" + woven + "): " + reply;
+        }
+    }
+
+    /** Every recorded position WRITE since the pre-teleport mark, with the caller trail that names
+     *  the writer — or a sentence saying why there is none to show. */
+    private String positionWritesSinceTheTeleport() {
+        if (plotMark < 0) {
+            return "(not asked: " + (plotMarkFailure.isEmpty() ? "no mark was taken" : plotMarkFailure)
+                    + ")";
+        }
+        return askServer("artest events since " + plotMark + " pos_jump");
     }
 
     /** Client statics read from a diagnostic: a field that is absent says so and costs nothing else. */

@@ -64,20 +64,31 @@ public class VSShipUnmannedCruiseE2ETest extends AbstractClientE2ETest {
         // lookup anchored to the build spot compares distances in 3-D. Bounded it would answer "no
         // ship"; unbounded it answers about whatever else is loaded. Neither is this ship.
         double y0 = Double.NaN;
+        // Both readings are kept, because a miss has two causes that need opposite fixes: the count
+        // says whether a ship exists at ALL, the lookup says whether the one at this base is owned
+        // by the physics mod yet. The old message carried neither.
+        int shipsSeen = -1;
+        String lastLookup = "(never asked - the ship count never reached 1)";
         for (int i = 0; i < 40 && Double.isNaN(y0); i++) {
             bot().waitTicks(5);
-            if (count("ship-count") >= 1) {
-                String info = exec("artest vs ship-info 0 " + BX + " " + BY + " " + BZ
+            shipsSeen = count("ship-count");
+            if (shipsSeen >= 1) {
+                lastLookup = exec("artest vs ship-info 0 " + BX + " " + BY + " " + BZ
                         + " " + SHIP_CAPTURE_RADIUS_BLOCKS);
-                if (info.contains("\"managed\":true")) {
-                    y0 = readDouble(info, POS_Y);
-                    Matcher idM = SHIP_ID.matcher(info);
-                    assertTrue("ship-info must name WHICH ship answered: " + info, idM.find());
+                if (lastLookup.contains("\"managed\":true")) {
+                    y0 = readDouble(lastLookup, POS_Y);
+                    Matcher idM = SHIP_ID.matcher(lastLookup);
+                    assertTrue("ship-info must name WHICH ship answered: " + lastLookup, idM.find());
                     shipId = idM.group(1);
                 }
             }
         }
-        assertTrue("the ship must LOAD with the client present", !Double.isNaN(y0));
+        assertTrue("the ship must LOAD with the client present within 200 ticks. ship-count="
+                        + shipsSeen + " (0 = assembly never routed to a ship at all) nearest="
+                        + lastLookup.replace('\n', ' ')
+                        + " (a reply with \"managed\":false is a ship the physics mod does not own"
+                        + " yet - a different wait, not a longer one)",
+                !Double.isNaN(y0));
 
         // Seat the bot, ramp a vertical cruise with the REAL key (Flight Assist is on by default:
         // holding the throttle ramps the setpoint; ~3 s of full deflection reaches cruise speed).
