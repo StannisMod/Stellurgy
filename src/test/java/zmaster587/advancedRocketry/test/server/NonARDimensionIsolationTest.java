@@ -1,7 +1,6 @@
 package zmaster587.advancedRocketry.test.server;
 
 import com.github.stannismod.forge.testing.junit.AbstractHeadlessServerTest;
-import org.junit.Ignore;
 import org.junit.Test;
 
 import static org.junit.Assert.assertFalse;
@@ -27,14 +26,6 @@ import static org.junit.Assert.assertTrue;
  */
 public class NonARDimensionIsolationTest extends AbstractHeadlessServerTest {
 
-    @Ignore("hangs at suite scale (~44th testServer class) — the `dim info "
-            + "-1/1` probes force a Nether/End load on the long-lived shared "
-            + "AbstractHeadlessServerTest server, which deadlocks after ~43 prior "
-            + "classes; passes 2/2 in isolation. Not a wrap-policy regression: the "
-            + "wrapper-isolation half of this contract (Nether/End NOT "
-            + "ARDimensionWorldInfo) is still pinned green by "
-            + "overworldAndVanillaDimsAreNotWrapped below. Only the isARPlanet "
-            + "classification check is parked here until the harness hang is fixed.")
     @Test
     public void netherAndEndAreNotARPlanets() throws Exception {
         String nether = String.join("\n", client().execute("artest dim info -1"));
