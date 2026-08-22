@@ -145,7 +145,15 @@ public class BoundarySkyRendersInSlotCellE2ETest extends AbstractClientE2ETest {
             {"-30108", "-13988", "11037", "MOON", "0", "0.27"},       // ~34 985
             {"7644", "34614", "-16382", "GAS_GIANT", "-1", "11.0"},   // ~39 050 - not a descend target
             {"-42912", "-23517", "-24475", "MOON", "0", "0.27"},      // ~54 713
-            {"-39818", "28442", "-33418", "MOON", "0", "0.27"},       // ~59 255
+            // Placed where the LAW can express a difference, not where a tidy system would put a
+            // moon. Apparent size is clamped to its maximum for every angular size at or above
+            // NEAR_RATIO (0.1), and a 0.27-Earth moon subtends that out to ~68 900 chart blocks —
+            // so at the ~59 255 this used to sit at it was drawn at exactly the same size as the
+            // body twenty times nearer, and the size leg below could not tell them apart however
+            // correct the renderer was. The DIRECTION is unchanged, so every bearing-aimed leg
+            // still works; only the range is, chosen so the ratio lands mid-band and the drawn
+            // half-size is about half the maximum instead of exactly it.
+            {"-14601261", "10429681", "-12254381", "MOON", "0", "0.27"}, // ~21 729 000
     };
 
     /** A body's radius in Earth radii, as the fixture states it — the sixth column above. */
@@ -406,6 +414,20 @@ public class BoundarySkyRendersInSlotCellE2ETest extends AbstractClientE2ETest {
         // thing that can differ is the disc. Counted inside a box sized on the NEARER body's own
         // expected disc and centred on the aim, which the far body's smaller disc cannot fill and
         // which no other body reaches - the fixture spreads them 45 degrees apart at least.
+        // ARRANGEMENT, computed from the LAW rather than assumed: the two bodies must land at
+        // different half-sizes, or the pixel comparison below is asking the renderer for a
+        // distinction the law does not make. Both bodies used to sit above NEAR_RATIO, where every
+        // angular size is drawn at the maximum — so the leg asserted a difference that could not
+        // exist, and its red read as a render regression when nothing was rendering wrongly.
+        float nearHalf = ApparentSize.halfSizeFor(radiusBlocks(NEAREST), distanceOf(NEAREST));
+        float farHalf = ApparentSize.halfSizeFor(radiusBlocks(FARTHEST), distanceOf(FARTHEST));
+        assertTrue("ARRANGEMENT: the law must draw these two at clearly different sizes before their"
+                + " pixels can be compared — nearHalf=" + nearHalf + " farHalf=" + farHalf
+                + " (angular sizes " + (radiusBlocks(NEAREST) / distanceOf(NEAREST)) + " and "
+                + (radiusBlocks(FARTHEST) / distanceOf(FARTHEST)) + " against NEAR_RATIO "
+                + ApparentSize.NEAR_RATIO + ", above which everything is drawn at the maximum)",
+                nearHalf > farHalf * 1.2f);
+
         int sizeBox = (int) Math.ceil(discRadiusOf(NEAREST) * h);
         long nearArea = diffCount(before[NEAREST], after[NEAREST],
                 w / 2 - sizeBox, w / 2 + sizeBox, h / 2 - sizeBox, h / 2 + sizeBox);
