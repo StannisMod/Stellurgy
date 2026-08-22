@@ -2,7 +2,7 @@ package zmaster587.advancedRocketry.test.server;
 
 import zmaster587.advancedRocketry.test.GameTicks;
 
-import org.junit.Ignore;
+import org.junit.After;
 import org.junit.Test;
 
 import java.util.regex.Matcher;
@@ -12,27 +12,26 @@ import static org.junit.Assert.assertTrue;
 import static zmaster587.advancedRocketry.test.AdvancedRocketryTestConstants.SHIP_CAPTURE_RADIUS_BLOCKS;
 
 /**
- * Substrate checkpoint — proves Valkyrien Skies physics is LIVE in the test
- * harness: a bare AR-assembled tier-2 ship, given a direct linear-velocity
- * setpoint (flight-control model A), actually translates through VS's physics
- * loop. This is the load-bearing precondition for any pilotable-ship test — if a
- * setpoint did not move the ship here, model A ({@code ShipPhysicsData} velocity
- * setpoint) would be invalid and a flight/piloting e2e built on it would be
- * false-green.
+ * Substrate checkpoint — proves Valkyrien Skies physics is LIVE at the SERVER tier: a bare
+ * AR-assembled tier-2 ship, commanded through its own flight computer, actually translates through
+ * VS's physics loop. This is the load-bearing precondition for every pilotable-ship test — if a
+ * command did not move the ship here, an e2e built on it would be false-green for reasons nothing
+ * else in the suite would report.
  *
+ * <p>The command is horizontal (+Z) to keep gravity out of the measured delta. Ships are addressed
+ * by nearest-to-build-site exactly once, to learn this craft's identity; everything after asks by
+ * id, so a shared server carrying another test's ship cannot start answering for it.</p>
  *
- * <p>The push is horizontal (+Z) to keep gravity out of the measured delta, and is
- * re-applied every step — mirroring the per-tick setpoint the Advanced Flight
- * Computer will issue, and defeating VS's linear damping between steps. Ships are
- * addressed by nearest-to-build-site, so a shared server carrying the tier-gate
- * test's ship does not contaminate this one.</p>
+ * <p><b>Two things this class was wrong about until 2026-08-22, both measured rather than argued.</b>
+ * It was disabled for eight weeks on the premise that "a VS ship assembled on a HEADLESS server
+ * never becomes loaded", with the note that it should be re-enabled once a server-side force-load
+ * existed. That probe ({@code vs permaload}) was added eight days after the class was parked, and
+ * nobody came back: the ship loads, and the scenario runs. And the behaviour it pinned —
+ * flight-control "model A", a direct {@code ShipPhysicsData} velocity setpoint — does NOT move a
+ * ship, which is why the drive below goes through the flight computer instead. The dead model is
+ * kept as the control leg, because a checkpoint that cannot tell a working drive from a broken one
+ * is not a checkpoint.</p>
  */
-@Ignore("A Valkyrien Skies ship assembled on a HEADLESS server never becomes loaded — "
-        + "with no client/observer near it, VS leaves it in the registry but never pulls its "
-        + "chunks in, so the server tier can neither drive nor observe it (queryable count goes "
-        + "to 1, loaded count stays 0). Kept as executable documentation of that limit; the "
-        + "ship load + drive path is exercised at the client tier instead. Re-enable only if a "
-        + "server-side force-load of a bare ship is added.")
 public class VSShipMotionServerTest extends AbstractSharedServerTest {
 
     private static final Pattern BUILDER_POS =
@@ -54,16 +53,28 @@ public class VSShipMotionServerTest extends AbstractSharedServerTest {
     private static final int REGISTER_TICKS = 400;
     private static final int LOAD_TICKS = 400;
 
-    /** How many velocity setpoints are applied, and how much world separates them. */
-    private static final int PUSHES = 25;
-    private static final int TICKS_BETWEEN_PUSHES = 1;
+    /** The commanded speed, in blocks/second, and how long it is given to move the craft. */
+    private static final double COMMANDED_VZ = 10.0;
+    private static final int DRIVE_TICKS = 25;
 
     private String exec(String cmd) throws Exception {
         return String.join("\n", client().execute(cmd));
     }
 
+    @After
+    public void cleanup() throws Exception {
+        exec("artest vs permaload false");
+    }
+
     @Test
-    public void directVelocitySetpointTranslatesTheAssembledShip() throws Exception {
+    public void aCommandedVelocityTranslatesTheShipWhileARawSetpointDoesNot() throws Exception {
+
+        // A headless server has nobody standing near this craft, and an unattended ship UNLOADS
+        // again between probe calls — a one-shot load request is not enough, because the ship is
+        // gone from the loaded set by the time the next call asks about it. This is what the class
+        // was disabled for; the probe that holds a ship loaded server-side has existed since
+        // 2026-07-13.
+        exec("artest vs permaload true");
 
         // Assemble the tier-2 ship — with VS this routes to a ship (no rocket) and
         // queues an async VS relocation.
@@ -115,23 +126,39 @@ public class VSShipMotionServerTest extends AbstractSharedServerTest {
                         + loadTrace.toString().trim() + "], all=" + all[0],
                 !Double.isNaN(zBefore));
 
-        // Command a steady +Z velocity each step, re-applying every step: that mirrors the AFC's
-        // per-tick setpoint and defeats VS damping. The gap between pushes is a TICK, because what
-        // decays the velocity between them is the physics step, not the passage of a millisecond —
-        // on a loaded box the old 60 ms gap let a variable number of steps damp it.
-        double vz = 10.0; // blocks/second
-        GameTicks.observe(client(), GameTicks.server(), PUSHES, TICKS_BETWEEN_PUSHES, () -> {
-            String push = exec("artest vs push-ship-by-id 0 " + shipId[0] + " 0 0 " + vz);
-            assertTrue("push-ship-by-id must find the ship: " + push, push.contains("\"pushed\":true"));
-        });
+        // CONTROL, and the reason this class was rewritten: a raw velocity SETPOINT does not move a
+        // ship. Measured 2026-08-22 on the very run that re-enabled the class — 25 setpoints of
+        // 10 b/s applied a tick apart left the craft where it was (zBefore=2203.0, zAfter=2202.4).
+        // The substrate recomputes velocity from forces every physics step and overwrites what was
+        // written, so the write is not a command; the probe surface says as much in one line beside
+        // `force-vel-by-id` ("a velocity setpoint alone does nothing"). Asserting it here, rather
+        // than deleting it, is what stops the class quietly going back to the setpoint.
+        String setpoint = exec("artest vs push-ship-by-id 0 " + shipId[0] + " 0 0 " + COMMANDED_VZ);
+        assertTrue("push-ship-by-id must find the ship: " + setpoint, setpoint.contains("\"pushed\":true"));
+        GameTicks.advance(client(), GameTicks.server(), DRIVE_TICKS);
+        double zAfterSetpoint = shipPosZ(exec("artest vs ship-info 0 id " + shipId[0]));
+        assertTrue("a raw velocity setpoint must NOT be mistaken for a working drive: the ship moved "
+                        + (zAfterSetpoint - zBefore) + " blocks on a bare setpoint, which means this"
+                        + " control has stopped controlling and the test below no longer proves the"
+                        + " CONTROLLER moved anything",
+                Math.abs(zAfterSetpoint - zBefore) < 1.0);
+
+        // THE SUBJECT: the path production actually flies. `force-vel-by-id` commands a world-frame
+        // velocity that the ship's OWN flight computer realizes as force, once per physics tick, for
+        // as long as it stands — so this is one command and then time, not a setpoint re-written
+        // every tick against a substrate that keeps discarding it.
+        String drive = exec("artest vs force-vel-by-id 0 " + shipId[0] + " 0 0 " + COMMANDED_VZ);
+        assertTrue("the command must reach THIS ship's own flight computer: " + drive,
+                drive.contains("\"afcResolved\":true"));
+        GameTicks.advance(client(), GameTicks.server(), DRIVE_TICKS);
         double zAfter = shipPosZ(exec("artest vs ship-info 0 id " + shipId[0]));
 
-        // Model A holds: a velocity setpoint moves a bare AR-assembled ship. A strict
-        // displacement (not merely "changed") pins that VS integrated the commanded
-        // velocity into position — a substrate that ignored the setpoint (recompute
-        // from forces, or damp to zero) would leave the ship put.
-        assertTrue("commanded +Z velocity must translate the ship through VS physics "
-                        + "(zBefore=" + zBefore + " zAfter=" + zAfter + ")",
+        // A strict displacement, not merely "changed": it pins that VS integrated the commanded
+        // motion into position. A substrate that ignored the command, or damped it to zero, would
+        // leave the ship put — and the control above proves that outcome is reachable here.
+        assertTrue("a commanded +Z velocity must translate the ship through VS physics "
+                        + "(zBefore=" + zBefore + " zAfterSetpoint=" + zAfterSetpoint
+                        + " zAfter=" + zAfter + ")",
                 zAfter - zBefore > 1.0);
     }
 

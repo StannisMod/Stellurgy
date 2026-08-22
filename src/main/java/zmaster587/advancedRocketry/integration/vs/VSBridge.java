@@ -906,9 +906,16 @@ final class VSBridge {
         if (physo == null) {
             return false;
         }
-        // A bare assembled ship is loaded but has physics disabled by default, so a
-        // velocity setpoint is ignored. Enable physics (a flag, not a load — it does not
-        // trip the spawn/proximity double-load) before applying the setpoint.
+        // A bare assembled ship is loaded but has physics disabled by default, so enable it (a flag,
+        // not a load — it does not trip the spawn/proximity double-load) before writing anything.
+        //
+        // WHAT THIS DOES NOT DO, measured 2026-08-22: it does not drive the ship. The substrate
+        // recomputes velocity from forces on every physics step and overwrites this write, so 25
+        // setpoints of 10 b/s a tick apart moved a craft by −0.6 blocks. Enabling physics is what
+        // makes the write land, not what makes it take effect. Anything that wants a craft to MOVE
+        // goes through its flight computer (commandProbeVelocity), which realizes the command as
+        // force once per physics tick. Kept because a setpoint that is ignored is still worth being
+        // able to write: it is the control leg that tells a working drive from a broken one.
         physo.getShipData().setPhysicsEnabled(true);
         physo.getPhysicsData().setLinearVelocity(new Vector3d(vx, vy, vz));
         return true;
