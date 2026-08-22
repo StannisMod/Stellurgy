@@ -6,7 +6,6 @@ import net.minecraft.client.entity.EntityPlayerSP;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
-import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 import zmaster587.advancedRocketry.client.KeyBindings;
@@ -42,7 +41,13 @@ public abstract class MixinKeyBindingsSeatGate {
             at = @At(value = "INVOKE",
                     target = "Lzmaster587/libVulpes/network/PacketHandler;"
                             + "sendToServer(Lzmaster587/libVulpes/network/BasePacket;)V"))
-    private void arTest$inputSent(Minecraft mc, EntityPlayerSP player, CallbackInfo ci) {
+    // CallbackInfoReturnable, not CallbackInfo: the TARGET returns a boolean, and mixin requires the
+    // returnable form for ANY injection into it — including one in the middle of the method, which is
+    // where this one sits. Measured 2026-08-21: the plain form is refused with "Invalid descriptor …
+    // CallbackInfoReturnable is required!", KeyBindings then fails to load, and the whole client
+    // crashes at postInit registering keybinds.
+    private void arTest$inputSent(Minecraft mc, EntityPlayerSP player,
+                                  CallbackInfoReturnable<Boolean> cir) {
         SeatDiag.clientSent();
     }
 }

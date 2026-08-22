@@ -1085,15 +1085,44 @@ public final class RealClientHarness implements AutoCloseable {
             return delegate.isAlive();
         }
 
+        /**
+         * Substrings of a child line that mean "this JVM is already broken, and every failure you
+         * are about to read is a consequence rather than a cause".
+         *
+         * <p>A mixin that cannot be applied is FATAL and names itself — but only in the CHILD's log,
+         * which is a FILE nobody opens while reading a red gate. Measured 2026-08-21: an injection
+         * whose callback took {@code CallbackInfo} where the boolean-returning target required
+         * {@code CallbackInfoReturnable} made {@code KeyBindings} fail to load, crashed the client at
+         * postInit, and reported itself as "Failed to start real client harness" across THIRTY test
+         * classes. The message naming the exact fix was on disk the whole time.</p>
+         */
+        private static final String[] FATAL_MARKERS = {
+            "Critical injection failure",
+            "InvalidMixinException",
+            "InvalidInjectionException",
+            "Mixin apply for mod",
+            "MixinTransformerError",
+        };
+
         private static Thread pump(InputStream input, Path logFile) throws IOException {
             Thread thread = new Thread(() -> {
                 try (InputStream in = input;
                      OutputStream out = Files.newOutputStream(logFile, StandardOpenOption.CREATE, StandardOpenOption.APPEND)) {
                     byte[] buffer = new byte[4096];
                     int read;
+                    StringBuilder pending = new StringBuilder();
                     while ((read = in.read(buffer)) >= 0) {
                         out.write(buffer, 0, read);
                         out.flush();
+                        // Same bytes, scanned for a cause worth interrupting the reader with. Line
+                        // assembly is done here rather than with a reader so the FILE still receives
+                        // the stream verbatim, byte for byte.
+                        pending.append(new String(buffer, 0, read, StandardCharsets.UTF_8));
+                        int nl;
+                        while ((nl = pending.indexOf("\n")) >= 0) {
+                            echoIfFatal(pending.substring(0, nl));
+                            pending.delete(0, nl + 1);
+                        }
                     }
                 } catch (IOException ignored) {
                     // Best effort logging only.
@@ -1102,6 +1131,17 @@ public final class RealClientHarness implements AutoCloseable {
             thread.setDaemon(true);
             thread.start();
             return thread;
+        }
+
+        /** Put a child-side fatal on the TEST runner's own stdout, where a failure report sees it. */
+        private static void echoIfFatal(String line) {
+            for (String marker : FATAL_MARKERS) {
+                if (line.contains(marker)) {
+                    System.out.println("[forge-test] CLIENT CHILD FATAL — every later failure in this"
+                            + " run is probably a consequence of this: " + line.trim());
+                    return;
+                }
+            }
         }
 
         private static void joinPump(Thread thread) throws InterruptedException {
