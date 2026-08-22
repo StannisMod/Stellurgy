@@ -399,4 +399,74 @@ public class FreeFlightPhysicsTest {
         assertTrue("dv per tick must be bounded by the thrust budget",
                 s.motionY <= tiny + DELTA);
     }
+
+    // =====================================================================
+    // Ambient drag is an ATMOSPHERE (MOTION-7)
+    // =====================================================================
+
+    /**
+     * The substrate damped every craft's velocity AND spin by a flat 1 % per tick, everywhere — in a
+     * space cell, in hyperspace, on an airless moon. That is an air law applied where there is no
+     * air, and it contradicts what this class documents one tier down, where a craft in vacuum
+     * genuinely coasts.
+     *
+     * <p>{@link FreeFlightPhysics#ambientDragFactor} is the decision, factored out so it can be
+     * argued with here rather than inside a physics loop. It answers the retention multiplier for
+     * ONE step: 1.0 keeps all the momentum, less than 1.0 takes some away.</p>
+     */
+    @Test
+    public void vacuumTakesNoMomentumAtAll() {
+        assertEquals("a craft in vacuum keeps every unit of momentum it has",
+                1.0, FreeFlightPhysics.ambientDragFactor(0.0, 0.05), 0.0);
+        assertEquals("and it does so however long the step is",
+                1.0, FreeFlightPhysics.ambientDragFactor(0.0, 1.0), 0.0);
+    }
+
+    /**
+     * The full-atmosphere end is pinned to the value the substrate used unconditionally, so wiring
+     * density in changes VACUUM and nothing else. This is the whole claim of the minimal form: a
+     * planet-side craft flies exactly as it did.
+     */
+    @Test
+    public void aFullAtmosphereRetainsExactlyWhatTheSubstrateAlwaysDid() {
+        double perGameTick = FreeFlightPhysics.ambientDragFactor(1.0, 0.05);
+        assertEquals("one game tick of full atmosphere is the substrate's own constant",
+                FreeFlightPhysics.AMBIENT_DRAG_AT_ONE_ATMOSPHERE, perGameTick, 1e-12);
+    }
+
+    /** Retention falls monotonically as the air thickens — thicker air never takes LESS. */
+    @Test
+    public void thickerAirNeverTakesLessMomentum() {
+        double previous = Double.MAX_VALUE;
+        for (double density = 0.0; density <= 1.0001; density += 0.1) {
+            double retained = FreeFlightPhysics.ambientDragFactor(density, 0.05);
+            assertTrue("retention is a fraction at density " + density,
+                    retained > 0.0 && retained <= 1.0);
+            assertTrue("thicker air retains no more than thinner air, at density " + density,
+                    retained <= previous + 1e-12);
+            previous = retained;
+        }
+    }
+
+    /**
+     * The step length is honoured: two half-steps take the same momentum as one whole one. Without
+     * this the answer would depend on how often the physics loop happens to run, which is exactly
+     * the kind of number that describes an instrument rather than the world.
+     */
+    @Test
+    public void twoHalfStepsTakeTheSameAsOneWholeStep() {
+        double whole = FreeFlightPhysics.ambientDragFactor(1.0, 0.10);
+        double half = FreeFlightPhysics.ambientDragFactor(1.0, 0.05);
+        assertEquals("drag composes over time", whole, half * half, 1e-12);
+    }
+
+    /** A density outside 0..1 is clamped rather than producing a nonsense multiplier. */
+    @Test
+    public void anAbsurdDensityIsClampedNotObeyed() {
+        assertEquals("negative density is vacuum",
+                1.0, FreeFlightPhysics.ambientDragFactor(-5.0, 0.05), 0.0);
+        assertEquals("a density above one atmosphere saturates there",
+                FreeFlightPhysics.ambientDragFactor(1.0, 0.05),
+                FreeFlightPhysics.ambientDragFactor(9.0, 0.05), 1e-12);
+    }
 }

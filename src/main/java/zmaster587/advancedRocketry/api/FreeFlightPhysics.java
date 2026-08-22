@@ -117,6 +117,48 @@ public final class FreeFlightPhysics {
             MAX_THRUST_ACCEL / (ATMOSPHERIC_TERMINAL_SPEED * ATMOSPHERIC_TERMINAL_SPEED);
 
     /**
+     * How much of a craft's momentum one GAME TICK of a full one-atmosphere sky leaves it.
+     *
+     * <p>Not chosen here: this is the flat multiplier the physics substrate applied to every craft's
+     * linear AND angular velocity on every tick, everywhere, with no test of any kind for whether
+     * there was air to do it. Keeping the value at the full-atmosphere end means wiring density in
+     * changes VACUUM and nothing else — a planet-side craft flies exactly as it did.</p>
+     *
+     * <p>NOT ratified as a balance number, and it is the one to argue with if atmospheric flight
+     * ever feels wrong. The physical form (quadratic in speed, see {@link #DRAG_PER_DENSITY}) is a
+     * better law and a separate decision: it would change how planets feel, which this does not.</p>
+     */
+    public static final double AMBIENT_DRAG_AT_ONE_ATMOSPHERE = 0.99;
+
+    /**
+     * The fraction of its momentum a craft KEEPS across one step of {@code dtSeconds} in air of
+     * {@code density} atmospheres — 1.0 keeps everything, less takes some away.
+     *
+     * <p>Applies to angular momentum exactly as to linear: a spinning craft in vacuum keeps
+     * spinning, and air is the only thing that may stop it for free. The step length is honoured, so
+     * two half-steps take what one whole step takes and the answer never depends on how often the
+     * physics loop happens to run.</p>
+     *
+     * <p>{@code density} is clamped to {@code [0, 1]}: below zero is vacuum, above one atmosphere
+     * saturates. An absurd input is a fact about the caller, not a licence to invent a multiplier
+     * outside {@code (0, 1]}.</p>
+     *
+     * @param density   atmospheric density in atmospheres (0 = vacuum, 1 = one atmosphere)
+     * @param dtSeconds the step this retention is for, in seconds
+     */
+    public static double ambientDragFactor(double density, double dtSeconds) {
+        double rho = density < 0.0 ? 0.0 : (density > 1.0 ? 1.0 : density);
+        if (rho == 0.0) {
+            return 1.0; // vacuum: exact, never 1.0 - epsilon
+        }
+        // Interpolate the RETENTION of one game tick between "nothing taken" and the full-atmosphere
+        // constant, then raise it to the number of game ticks this step covers. Interpolating the
+        // retention (rather than the loss) is what keeps the vacuum end exactly 1.0.
+        double perGameTick = 1.0 - (1.0 - AMBIENT_DRAG_AT_ONE_ATMOSPHERE) * rho;
+        return Math.pow(perGameTick, dtSeconds * 20.0);
+    }
+
+    /**
      * Per-tick velocity retention used by the liftoff/hover assist to bleed
      * horizontal drift (0..1; ≈0.88 &rarr; settles in ~25–30 ticks).
      */
