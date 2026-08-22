@@ -107,7 +107,23 @@ public class VSShipRenderPoseSkewE2ETest extends AbstractClientE2ETest {
         }
         assertTrue("the ship must reach the steep inversion before the hull leg (upY=" + upY + "): "
                 + info, upY < -0.3);
+        // The drop point must be FREE AIR, and nothing here guaranteed that it was. The fixture is
+        // assembled into a 10-block band cleared inside whatever ground the base sits in, and the
+        // rolled ship then sinks, so shipY+7 can land INSIDE the world's own terrain. Measured once:
+        // the teleport reached the client (target == preY exactly), the body then rose 0.13 and
+        // rested there with supportedByWorldTerrain=true, and the leg red'd on its own arrangement.
+        // Clear the column the body must fall THROUGH. The ship's blocks live in the shipyard
+        // subspace, so this removes world terrain only — the hull is untouched, and so is the
+        // ground BELOW the ship, which is whatever its descent rests against.
+        clearDropColumn(readDouble(info, POS_X), readDouble(info, POS_Y), readDouble(info, POS_Z));
+        bot().waitTicks(20);
+        info = shipInfo(); // re-read: the ship may settle once the terrain above it is gone
         double sx = readDouble(info, POS_X), sy = readDouble(info, POS_Y), sz = readDouble(info, POS_Z);
+        String dropBlock = exec("artest block at 0 " + (int) Math.floor(sx) + " "
+                + (int) Math.floor(sy + 7) + " " + (int) Math.floor(sz));
+        assertTrue("the drop point must be free air — otherwise this leg measures the ground rather"
+                        + " than the hull: " + dropBlock + " ship=" + info,
+                dropBlock.contains("\"isAir\":true"));
 
         // Drop the bot onto the world-top of the inverted hull; gate on the fall beginning (a
         // freshly-teleported client may not tick until its chunks stream in).
@@ -119,13 +135,15 @@ public class VSShipRenderPoseSkewE2ETest extends AbstractClientE2ETest {
         ClientPoll.Result<Double> fall = ClientPoll.until(bot()::waitTicks,
                 () -> bot().reportState().get("playerY").getAsDouble(),
                 y -> Math.abs(y - preY) > 0.4, 2, 60);
-        // WHAT THIS FAILURE MAY NOT BLAME. It used to read "client tick/chunk-stream stall", and the
-        // arrangement rules that out by construction: the poll advances through waitTicks, which ERRORS
-        // on its own load-scaled timeout, so a completed poll is proof the client ticked - the delta is
-        // printed rather than asserted so the proof travels with the red. What remains is either the
-        // teleport never landing on the client (preY still at the old altitude, nowhere near the target)
-        // or something genuinely holding him up - the inverted hull's own collision or the deck capture,
-        // both of which would be the PRODUCT WORKING. deck-capture is read-only and names which.
+        // WHAT THIS FAILURE MAY NOT BLAME - three candidates are now excluded BY CONSTRUCTION.
+        // (1) "client tick/chunk-stream stall": the poll advances through waitTicks, which ERRORS on
+        // its own load-scaled timeout, so a completed poll is proof the client ticked - the delta is
+        // printed rather than asserted so the proof travels with the red. (2) "the teleport never
+        // landed": target and preY are both printed, so the red says whether it did. (3) "the world's
+        // ground caught him": the column above the ship was filled with air and the drop point was
+        // asserted air a moment ago. What remains is something genuinely holding him up - the
+        // inverted hull's own collision, or the deck capture - and BOTH would be the PRODUCT WORKING.
+        // deck-capture is read-only and names which.
         long tickDelta = bot().reportState().get("ticks").getAsLong() - preTicks;
         assertTrue("the teleported client must start falling before the hull leg."
                 + " target=" + (sy + 7) + " preY=" + preY + " poll=" + fall
@@ -263,6 +281,21 @@ public class VSShipRenderPoseSkewE2ETest extends AbstractClientE2ETest {
         }
         return distance(new double[]{cx, cy, cz}, new double[]{
                 readDouble(tw, WORLD_X), readDouble(tw, WORLD_Y), readDouble(tw, WORLD_Z)});
+    }
+
+    /** Empty the WORLD terrain the drop leg needs to be empty: a column around the ship's world
+     *  position, from just above it to well over the drop point at {@code y+7}. Ship blocks live in
+     *  the shipyard subspace, so nothing of the ship is touched — only ground that would catch the
+     *  body before the hull does. Deliberately does NOT clear below the ship: whatever its descent
+     *  rests against stays exactly where it was, so this changes the body's fall and nothing else. */
+    private void clearDropColumn(double x, double y, double z) throws Exception {
+        int fx = (int) Math.floor(x), fy = (int) Math.floor(y), fz = (int) Math.floor(z);
+        String cleared = exec("artest fill 0 " + (fx - 8) + " " + (fy + 1) + " " + (fz - 8)
+                + " " + (fx + 8) + " " + (fy + 14) + " " + (fz + 8) + " minecraft:air");
+        assertTrue("the drop column must be cleared of world terrain: " + cleared,
+                cleared.contains("\"ok\":true"));
+        System.out.println("[poseskew] drop column cleared around (" + fx + "," + fy + "," + fz
+                + "): " + cleared);
     }
 
     private String clientString(String className, String field) throws Exception {

@@ -43,18 +43,30 @@ import static org.junit.Assert.assertTrue;
  * ship-anchored legs sample reliably.
  *
  *
- * <p><b>Known limitation, REVISIT WHEN VALKYRIEN SKIES SOURCE IS AVAILABLE.</b> Under the parallel
- * client gate (many client JVMs contending for one GPU) leg A's subject was intermittently never
- * DRAWN: measured, a red window rendered 543 frames yet ran {@code RenderLivingBase.applyRotations}
- * zero times for any living body, while the same client drew leg B's carried cow fine. So a world
- * entity standing inside a steeply-rolled ship's world AABB (leg A's precondition) is sometimes absent
- * from the vanilla living-render dispatch. The camera→subject offset is fixed, so it is not a frustum
- * miss; the suspected cause is Valkyrien Skies' per-frame handling of world entities that fall inside a
- * ship's world box - but VS is jar-only here, so the exact render path was not opened. Leg A works
- * around it by re-staging the subject until the client provably draws it (see {@link #MAX_STAGINGS});
- * that keeps the test honest without root-causing a symptom that needs GPU contention to appear and so
- * does not reach a single-client player. When VS is vendored as source, root-cause the render path and
- * decide whether the re-stage workaround can be retired.</p>
+ * <p><b>The "render-observability gap" this class carried for a month was this arrangement, twice
+ * over.</b> Leg A's subject was reported as intermittently never DRAWN - 543 frames rendered, zero
+ * {@code RenderLivingBase.applyRotations} - and that was blamed on the physics mod's handling of world
+ * entities inside a ship's box, said to need GPU contention to appear. It reproduces at ONE fork, and
+ * neither half of the story was true. Two ordinary staging faults produced it, and each was found only
+ * once the diagnostic was made to report the link it was silent about:
+ *
+ * <ul>
+ *   <li>The candidate sweep lays a floor under every spot it probes, walking one column upward, so a
+ *       higher candidate's floor lands inside the body of the spot below it. The subject spawned in
+ *       stone, took {@code IN_WALL} damage and was GONE from the server world by the end of the
+ *       window - the "not drawn" body had stopped existing. Fixed by clearing a spot's own volume
+ *       immediately before the spawn that is measured on it.</li>
+ *   <li>The camera is teleported to {@code subject + (8,3,8)}, and the fixture base sits inside a
+ *       hill: feet and eye were both in dirt. Vanilla grows {@code RenderGlobal.renderInfos} out of
+ *       the chunk section the camera occupies, so a buried camera never reaches the section holding
+ *       the subject and draws no living model at all. Fixed by clearing the volume both ends live in.
+ *       </li>
+ * </ul>
+ *
+ * <p>With both fixed the subject draws on the FIRST staging, and the re-stage workaround built for
+ * the fiction is gone: one staging, and it must draw. The lesson worth keeping is about the
+ * instrument rather than the subject - "no living model was drawn" was read as a statement about
+ * rendering while it was silent on whether the body still existed and on where the camera was.</p>
  */
 @FixMethodOrder(MethodSorters.NAME_ASCENDING)
 public class VSRemoteBodyModelGateE2ETest extends AbstractSharedVsClientE2ETest {
@@ -119,7 +131,7 @@ public class VSRemoteBodyModelGateE2ETest extends AbstractSharedVsClientE2ETest 
             // hung ~1.7 blocks above its own support and the probe honestly reported
             // supportedByWorldTerrain=false.
             spot[1] = Math.floor(spot[1]);
-            floorUnder(spot);
+            standingSpot(spot);
             int candidate = spawnSubject(spot[0], spot[1], spot[2]);
             String probe = exec("artest vs deck-capture 0 " + candidate);
             boolean contained = probe.contains("\"aboardByContainment\":true");
@@ -154,7 +166,13 @@ public class VSRemoteBodyModelGateE2ETest extends AbstractSharedVsClientE2ETest 
         int drawAttempts = 0;
         for (double[] spot : valid) {
             exec("kill @e[type=cow]");
+            clearSightline(spot);
             lookAt(spot[0], spot[1], spot[2]);
+            // Re-establish the spot: the collect sweep laid a floor under EVERY candidate it tried,
+            // and a higher candidate's floor sits inside this one's body. Without this the subject
+            // spawns in stone and suffocates part-way through the very window being measured.
+            assertTrue("the measured spot must be re-cleared before the subject is staged on it",
+                    standingSpot(spot));
             int subject = spawnSubject(spot[0], spot[1], spot[2]);
             // Re-probe the FINAL body: validity was established while probing candidates; it is this
             // entity the assertions speak about. VS jitters a ship's world box between the collect loop
@@ -169,35 +187,35 @@ public class VSRemoteBodyModelGateE2ETest extends AbstractSharedVsClientE2ETest 
                         spot[0], spot[1], spot[2]));
                 continue;
             }
+            // ONE staging, and it must draw. This used to re-stage at up to three fresh spots when
+            // the client did not draw the subject, on the theory that a world body inside a ship box
+            // is intermittently culled. It is not: both real causes were in this arrangement (the
+            // subject spawned inside a neighbouring candidate's floor and suffocated; the camera was
+            // teleported inside the hill the fixture is buried in). With those fixed the subject
+            // draws on the first staging, so a second attempt would only hide the next such fault.
             drawAttempts++;
-            Sampling s = awaitRemoteSampling();
-            // Print every DRAW attempt so a GREEN run still proves whether the re-stage FIRED for the
-            // render cull: a lone "DRAWN" is a natural first-try render (fix idle), while a
-            // "not drawn ...subject-culled..." line FOLLOWED by a later "DRAWN" is the re-stage
-            // recovering a would-be-red run - the direct evidence the cull is per-spot, not run-global
-            // (ledger #101). Without it a pass is silent about the fix and could be the muffler, not the cure.
+            Sampling s = awaitRemoteSampling(subject);
             System.out.println(String.format(java.util.Locale.ROOT,
                     "[modelgate] legA draw attempt %d at [%.1f,%.1f,%.1f] -> %s",
                     drawAttempts, spot[0], spot[1], spot[2], s.drawn ? "DRAWN" : "not drawn " + s.diagnostic));
+            staging.append(String.format(java.util.Locale.ROOT, "[attempt %d %s]",
+                    drawAttempts, s.drawn ? "DRAWN" : s.diagnostic));
             if (s.drawn) {
                 before = remoteCounters();
                 bot().waitTicks(60);
                 after = remoteCounters();
-                break;
             }
-            staging.append(String.format(java.util.Locale.ROOT, "[attempt %d %s]", drawAttempts, s.diagnostic));
-            if (drawAttempts >= MAX_STAGINGS) {
-                break;
-            }
+            break;
         }
-        // Summarise on PASS too, so a recovered cull is on the record even when the assertion is green.
         System.out.println("[modelgate] legA staging summary: "
                 + (after != null ? "DREW after " + drawAttempts + " draw-attempt(s)" : "NEVER DREW")
                 + " | " + staging);
-        assertTrue("no valid terrain spot beside this ship had its body DRAWN by the client within the "
-                        + "load-scaled window after " + drawAttempts + " draw attempt(s) - a render-"
-                        + "observability gap for a world body inside a ship box, NOT a gate decision. "
-                        + "Per-spot: " + staging + " | client cows=" + safeReportCows(),
+        assertTrue("the staged body was never DRAWN by the client within the load-scaled window, so "
+                        + "nothing below can be concluded about the model gate's DECISION. The "
+                        + "diagnostic names the dead stage and reports both sides of the subject "
+                        + "(alive on the server? held by the client?) and what the camera is standing "
+                        + "in. Staged " + drawAttempts + " time(s): " + staging
+                        + " | client cows=" + safeReportCows(),
                 after != null);
 
         long samples = after[1] - before[1];
@@ -211,11 +229,6 @@ public class VSRemoteBodyModelGateE2ETest extends AbstractSharedVsClientE2ETest 
                         + clientString(SHIP_CAMERA, "remoteModelTrace"),
                 rotated == 0);
     }
-
-    /** Re-stage the subject at most this many times when the client does not draw it (ledger #101). At
-     *  the measured ~2/3 per-spot draw rate under load, three fresh spots drive a spurious "never drawn"
-     *  below ~4 %, while a run-GLOBAL cull still exhausts the budget and self-reports it. */
-    private static final int MAX_STAGINGS = 3;
 
     // ---- Leg B (control): the gate must still rotate a body the ship DOES carry ----------------
 
@@ -235,7 +248,7 @@ public class VSRemoteBodyModelGateE2ETest extends AbstractSharedVsClientE2ETest 
                 readInt(contact, OBSTACLES) > 0);
 
         lookAt(ship[0], ship[1], ship[2]);
-        Sampling s = awaitRemoteSampling();
+        Sampling s = awaitRemoteSampling(subject);
         assertTrue("the carried subject was never drawn by the client, so this control proves nothing: "
                         + s.diagnostic + " | client cows=" + safeReportCows(),
                 s.drawn);
@@ -289,15 +302,21 @@ public class VSRemoteBodyModelGateE2ETest extends AbstractSharedVsClientE2ETest 
      *  early on a samples predicate would move what the assertion sees — leg A's {@code rotated == 0}
      *  gets easier the fewer samples it saw, and leg B's {@code rotated > 0} can exit before the first
      *  ROTATED frame lands. That is exactly the case in which the fixed wait must stay.</p> */
-    private Sampling awaitRemoteSampling() throws Exception {
-        // First the subject must have ARRIVED on this side. Both legs spawn it and only then move the
-        // camera, and a teleport re-streams chunks AND entities - so the body reaches the client after
-        // a race a fixed wait wins only sometimes. > 1 because the client world always holds the player.
-        ClientPoll.Result<Long> arrived = ClientPoll.until(bot()::waitTicks,
-                () -> (long) clientDouble(SHIP_CAMERA, "clientLoadedEntities"),
-                v -> v > 1, 10, 12);
+    private Sampling awaitRemoteSampling(int subjectId) throws Exception {
+        // First THIS subject must have ARRIVED on this side. Both legs spawn it and only then move
+        // the camera, and a teleport re-streams chunks AND entities - so the body reaches the client
+        // after a race a fixed wait wins only sometimes.
+        //
+        // The gate asks for the SUBJECT BY ID. It used to ask whether the client's total loaded-entity
+        // count was > 1, and in a shared client that predicate cannot fail: measured, the count sat at
+        // 94-98 while the client held no cow at all, so the gate passed every time and the miss was
+        // then re-diagnosed downstream as a render cull. Entity ids are assigned server-side and
+        // repeated verbatim in the spawn packet, so the id is one address on both sides.
+        ClientPoll.Result<String> arrived = ClientPoll.until(bot()::waitTicks,
+                () -> clientSighting(subjectId), s -> s.startsWith("client-has"), 10, 12);
         if (!arrived.satisfied) {
-            return new Sampling(false, "[subject never reached the CLIENT world (" + arrived + ")]");
+            return new Sampling(false, "[subject " + subjectId + " never reached the CLIENT world "
+                    + arrived + " server=" + serverEntity(subjectId) + "]");
         }
 
         final long start = (long) clientDouble(SHIP_CAMERA, "remoteModelSamples");
@@ -312,11 +331,72 @@ public class VSRemoteBodyModelGateE2ETest extends AbstractSharedVsClientE2ETest 
         long frames = (long) clientDouble(SHIP_CAMERA, "cameraHookCalls") - framesBefore;
         long models = (long) clientDouble(SHIP_CAMERA, "modelRotationCalls") - modelsBefore;
         long loaded = (long) clientDouble(SHIP_CAMERA, "clientLoadedEntities");
+        // The subject may have LEFT between the arrival gate and here, and "it is gone" and "it is
+        // drawn wrong" are different bugs with the same zero. Read BOTH sides at the end of the
+        // window so the verdict below is a claim about rendering only when the body is still there
+        // to render: the server says whether the entity is alive and where, the client says whether
+        // it holds it at all.
+        String subject = "server=" + serverEntity(subjectId) + " " + clientSighting(subjectId)
+                + " " + cameraBlocks() + " modelGateInstalled="
+                + clientString(SHIP_CAMERA, "modelGateInstalledFlag");
         String verdict = frames == 0 ? "draw-stage-dead(no frames)"
                 : models == 0 ? "no-living-model-drawn(applyRotations unreached)"
                 : "subject-culled(models drawn, subject absent from render list)";
         return new Sampling(false, String.format(java.util.Locale.ROOT,
-                "[%s %s frames+=%d models+=%d loaded=%d]", verdict, r, frames, models, loaded));
+                "[%s %s frames+=%d models+=%d loaded=%d %s]",
+                verdict, r, frames, models, loaded, subject));
+    }
+
+    /** The subject as the SERVER holds it right now — alive, dead, or gone from the world entirely.
+     *  This is the link the render diagnostic cannot supply and cannot do without: every "the client
+     *  did not draw it" reading is vacuous if there was nothing left to draw. */
+    private String serverEntity(int subjectId) {
+        try {
+            return exec("artest entity info 0 " + subjectId).replace('\n', ' ');
+        } catch (Exception e) {
+            return "entity-info-failed: " + e;
+        }
+    }
+
+    /** What the camera is standing IN. Vanilla draws an entity only when its chunk SECTION reached
+     *  {@code RenderGlobal.renderInfos}, and that set is grown from the section the camera occupies
+     *  through the occlusion graph — so a camera buried in terrain can render hundreds of frames and
+     *  reach no living model at all, which is indistinguishable from a cull unless somebody asks. */
+    private String cameraBlocks() {
+        try {
+            double[] me = clientPos();
+            int cx = (int) Math.floor(me[0]), cy = (int) Math.floor(me[1]), cz = (int) Math.floor(me[2]);
+            return String.format(java.util.Locale.ROOT, "camera@[%d,%d,%d] feet=%s eye=%s",
+                    cx, cy, cz, blockAt(cx, cy, cz), blockAt(cx, cy + 1, cz));
+        } catch (Exception e) {
+            return "camera-blocks-failed: " + e;
+        }
+    }
+
+    private String blockAt(int x, int y, int z) throws Exception {
+        Matcher m = Pattern.compile("\"block\":\"([^\"]+)\"")
+                .matcher(exec("artest block at 0 " + x + " " + y + " " + z));
+        return m.find() ? m.group(1) : "?";
+    }
+
+    /** Whether the CLIENT world holds THIS subject, and where it puts it. Best effort: a probe
+     *  failure must not mask the assertion it is annotating. */
+    private String clientSighting(int subjectId) {
+        try {
+            com.google.gson.JsonArray seen =
+                    bot().reportEntities("Cow", 96.0).getAsJsonArray("entities");
+            for (int i = 0; i < seen.size(); i++) {
+                com.google.gson.JsonObject e = seen.get(i).getAsJsonObject();
+                if (e.get("id").getAsInt() == subjectId) {
+                    return String.format(java.util.Locale.ROOT, "client-has-subject@[%.1f,%.1f,%.1f]",
+                            e.get("x").getAsDouble(), e.get("y").getAsDouble(),
+                            e.get("z").getAsDouble());
+                }
+            }
+            return "client-LACKS-subject(cows within 96=" + seen + ")";
+        } catch (Exception e) {
+            return "client-sighting-failed: " + e;
+        }
     }
 
     /** Client-side positions of every cow the client currently sees, for a red-run diagnostic. Best
@@ -393,12 +473,49 @@ public class VSRemoteBodyModelGateE2ETest extends AbstractSharedVsClientE2ETest 
         return spots;
     }
 
-    /** Put a world block under {@code spot} so a body there is supported by the WORLD, whatever the
-     *  ship's box does. Returns false when the fill did not take. */
-    private boolean floorUnder(double[] spot) throws Exception {
-        int fx = (int) Math.floor(spot[0]), fy = (int) Math.floor(spot[1]) - 1, fz = (int) Math.floor(spot[2]);
-        return exec("artest fill 0 " + fx + " " + fy + " " + fz + " " + fx + " " + fy + " " + fz
-                + " minecraft:stone").contains("\"ok\":true");
+    /** Give the camera somewhere to stand and a clear volume between it and the subject.
+     *
+     *  <p>Measured, and it is the whole of what this leg's "render-observability gap" ever was: the
+     *  fixture base sits inside a hill, so the camera spot ({@code subject + (8,3,8)}) was INSIDE
+     *  dirt — feet and eye both. Vanilla grows {@code RenderGlobal.renderInfos} out of the chunk
+     *  SECTION the camera occupies, through the occlusion graph; a buried camera therefore renders
+     *  frame after frame and never reaches the section holding the subject. That reads as 543 frames
+     *  with zero {@code applyRotations} on a client that provably held the cow, and it is
+     *  indistinguishable from a cull unless somebody asks what the camera is standing in.
+     *
+     *  <p>Clears the volume both ends live in — never the subject's own floor, one block lower — and
+     *  lays a single block under the camera so it does not fall out of its aim mid-window.</p> */
+    private void clearSightline(double[] spot) throws Exception {
+        int sx = (int) Math.floor(spot[0]), sy = (int) Math.floor(spot[1]), sz = (int) Math.floor(spot[2]);
+        String box = exec("artest fill 0 " + (sx - 2) + " " + sy + " " + (sz - 2)
+                + " " + (sx + 10) + " " + (sy + 6) + " " + (sz + 10) + " minecraft:air");
+        assertTrue("the camera-to-subject volume must clear: " + box, box.contains("\"ok\":true"));
+        String pad = exec("artest fill 0 " + (sx + 8) + " " + (sy + 2) + " " + (sz + 8)
+                + " " + (sx + 8) + " " + (sy + 2) + " " + (sz + 8) + " minecraft:stone");
+        assertTrue("the camera needs a floor to stand on: " + pad, pad.contains("\"ok\":true"));
+    }
+
+    /** Make {@code spot} somewhere a body can actually STAND: a world block under it (so the support
+     *  is the WORLD's, whatever the ship's box does) and AIR in the two blocks its own volume fills.
+     *
+     *  <p>Both halves are load-bearing, and the second half is why this used to be
+     *  {@code floorUnder}. The candidate sweep walks one column at several heights and lays a floor
+     *  under each, so the floor laid for the spot one block HIGHER lands exactly inside the body of
+     *  the spot below it. A cow spawned there is inside stone: it takes {@code IN_WALL} damage at
+     *  1 HP per invulnerability window and dies roughly 200 ticks later — after the arrival gate has
+     *  seen it and well inside the measurement window that follows. Measured: the subject was gone
+     *  from the SERVER world ({@code isAlive:false}) at the end of every draw attempt, on a client
+     *  that had held it minutes earlier. Because a later candidate can re-fill this column, the
+     *  caller re-establishes the spot immediately before the spawn it measures.
+     *
+     *  <p>Returns false when either fill did not take.</p> */
+    private boolean standingSpot(double[] spot) throws Exception {
+        int fx = (int) Math.floor(spot[0]), fy = (int) Math.floor(spot[1]), fz = (int) Math.floor(spot[2]);
+        boolean floor = exec("artest fill 0 " + fx + " " + (fy - 1) + " " + fz
+                + " " + fx + " " + (fy - 1) + " " + fz + " minecraft:stone").contains("\"ok\":true");
+        boolean clear = exec("artest fill 0 " + fx + " " + fy + " " + fz
+                + " " + fx + " " + (fy + 1) + " " + fz + " minecraft:air").contains("\"ok\":true");
+        return floor && clear;
     }
 
     /** Spawn the subject mob ON the fixture's iron deck (built at {@code rocketY+3 = baseY+4}, walkable

@@ -566,15 +566,25 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
         double shipY1 = readDouble(shipInfo(), POS_Y);
         long churn = (long) clientDouble(SHIP_FRAME_TRAVEL, "externalMoveDrops") - dropsBefore;
         long resolvedAfter = (long) clientDouble(SHIP_FRAME_TRAVEL, "resolvedTicks");
+        // gapTicks is the discriminator the guard already computes and this message used to drop on
+        // the floor. The guard's budget is ONE tick and flat, so "frameMoved 0.626 against
+        // allowed 0.200" means two different things depending on it: gapTicks=1 says the deck really
+        // stepped that far in one tick with the carry-widening blind (the client velocity feed
+        // empty), gapTicks=N says the displacement accumulated over N ticks and is being compared
+        // against a one-tick budget - a defect in the comparison, not in the feed. Without it the
+        // red names a number and no cause.
         String dropShape = String.format(java.util.Locale.ROOT,
-                "lastDrop frameMoved=(%.3f,%.3f,%.3f) entityMoved=(%.3f,%.3f,%.3f) allowed=%.3f",
+                "lastDrop gapTicks=%d frameMoved=(%.3f,%.3f,%.3f) entityMoved=(%.3f,%.3f,%.3f)"
+                        + " allowed=%.3f vsAdded=%s",
+                (long) clientDouble(SHIP_FRAME_TRAVEL, "lastDropGapTicks"),
                 clientDouble(SHIP_FRAME_TRAVEL, "lastDropFrameMovedX"),
                 clientDouble(SHIP_FRAME_TRAVEL, "lastDropFrameMovedY"),
                 clientDouble(SHIP_FRAME_TRAVEL, "lastDropFrameMovedZ"),
                 clientDouble(SHIP_FRAME_TRAVEL, "lastDropEntityMovedX"),
                 clientDouble(SHIP_FRAME_TRAVEL, "lastDropEntityMovedY"),
                 clientDouble(SHIP_FRAME_TRAVEL, "lastDropEntityMovedZ"),
-                clientDouble(SHIP_FRAME_TRAVEL, "lastDropAllowed"));
+                clientDouble(SHIP_FRAME_TRAVEL, "lastDropAllowed"),
+                clientString(SHIP_FRAME_TRAVEL, "lastDropVsAdded"));
         System.out.println("[crewcap] climb-churn shipY=" + shipY0 + "->" + shipY1 + " travelled="
                 + travelled + " maxRate=" + maxRate + " churn=" + churn
                 + " control=" + controlChurn + " maxFrameStep=" + maxFrameStep + " maxCarry="
