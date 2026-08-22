@@ -1246,6 +1246,18 @@ public class TestProbeCommand extends CommandBase {
                 m.put("pilotCmdVel", diagAfc.commandedVelocity == null ? "null"
                         : diagAfc.commandedVelocity[0] + "," + diagAfc.commandedVelocity[1] + ","
                                 + diagAfc.commandedVelocity[2]);
+                // The ANGULAR channel, beside the linear one it has always been reported without.
+                // MOTION-2: a hold is a mode and not the law, so "is an attitude target published at
+                // all?" is a question about the craft's behaviour and not an implementation detail —
+                // and until this line it could not be asked from a test at any tier. A `null` here is
+                // the contract-conforming answer for a craft with no hold engaged; a quaternion means
+                // something is steering it.
+                m.put("pilotCmdAtt", diagAfc.targetAttitude == null ? "null"
+                        : diagAfc.targetAttitude[0] + "," + diagAfc.targetAttitude[1] + ","
+                                + diagAfc.targetAttitude[2] + "," + diagAfc.targetAttitude[3]);
+                m.put("pilotCmdAngVel", diagAfc.commandedAngVel == null ? "null"
+                        : diagAfc.commandedAngVel[0] + "," + diagAfc.commandedAngVel[1] + ","
+                                + diagAfc.commandedAngVel[2]);
             }
             send(sender, jsonMap(m));
             return;
