@@ -105,6 +105,72 @@ private int waitForLoadedShip(int dim) throws Exception {
         return 0;
     }
 
+    /** The three ways "drive the transit until the CLIENT is inside the corridor" can end. Only the
+     *  last is a budget problem; the other two are findings, and the shape this replaces reported
+     *  all three the same way. */
+    private enum CorridorEntry { ARRIVED, TRANSIT_ENDED_FIRST, BUDGET_SPENT }
+
+    /** What {@link #driveIntoCorridor} saw, printable whole so a red carries it. */
+    private static final class CorridorWait {
+        final CorridorEntry end;
+        final int corridorDim;
+        final int clientDim;
+        final String lastTick;
+
+        CorridorWait(CorridorEntry end, int corridorDim, int clientDim, String lastTick) {
+            this.end = end;
+            this.corridorDim = corridorDim;
+            this.clientDim = clientDim;
+            this.lastTick = lastTick;
+        }
+
+        @Override
+        public String toString() {
+            return "outcome=" + end + " corridorDim=" + corridorDim + " clientDim=" + clientDim
+                    + " lastTick=" + lastTick;
+        }
+    }
+
+    /**
+     * Drive the transit until the client's OWN dimension is the corridor, and name which terminal
+     * state it reached.
+     *
+     * <p>This replaces three byte-identical copies of a loop that ended in
+     * {@code assertEquals(hyperDim, clientDim)}. That assertion reports "expected 13 but was 3"
+     * for three different events, and only one of them is about a budget:</p>
+     * <ul>
+     *   <li>{@code ARRIVED} — the client crossed; the leg can proceed.</li>
+     *   <li>{@code TRANSIT_ENDED_FIRST} — the flight FINISHED while the crew stayed behind. Measured
+     *       once in the loaded gate: {@code inTransit=0 crewDim=-1} beside a server line reading
+     *       {@code transit settled … crew 0}. Nothing about that is a slow client, and the old
+     *       message blamed the client's dimension for it.</li>
+     *   <li>{@code BUDGET_SPENT} — still flying after the driven ticks. The only budget answer.</li>
+     * </ul>
+     *
+     * <p>The corridor dim is read from the LATEST tick BEFORE the end check: the previous order left
+     * it at {@code -1} when a transit ended inside the first iteration, so the failure compared the
+     * client against a sentinel.</p>
+     */
+    private CorridorWait driveIntoCorridor(int iterations) throws Exception {
+        int corridorDim = -1;
+        String lastTick = "";
+        for (int i = 0; i < iterations; i++) {
+            lastTick = exec("artest space transit-tick 10");
+            corridorDim = readInt(lastTick, "hyperDim");
+            int clientDim = bot().reportWeather().get("dim").getAsInt();
+            if (clientDim == corridorDim) {
+                return new CorridorWait(CorridorEntry.ARRIVED, corridorDim, clientDim, lastTick);
+            }
+            if (readInt(lastTick, "inTransit") == 0) {
+                return new CorridorWait(CorridorEntry.TRANSIT_ENDED_FIRST, corridorDim, clientDim,
+                        lastTick);
+            }
+            bot().waitTicks(2);
+        }
+        return new CorridorWait(CorridorEntry.BUDGET_SPENT, corridorDim,
+                bot().reportWeather().get("dim").getAsInt(), lastTick);
+    }
+
     private static int readInt(String json, String key) {
         Matcher m = Pattern.compile("\"" + key + "\":(-?\\d+)").matcher(json);
         assertTrue("expected int \"" + key + "\" in: " + json, m.find());
@@ -928,22 +994,11 @@ private String chat() throws Exception {
 
         // Fly only as far as hyperspace and then STOP driving the transit: an un-ticked jump parks
         // its ship in its lane indefinitely, which is the interval this scenario is about.
-        int hyperDim = -1;
-        String lastTick = "";
-        for (int i = 0; i < 120; i++) {
-            lastTick = exec("artest space transit-tick 10");
-            if (readInt(lastTick, "inTransit") == 0) {
-                break;
-            }
-            hyperDim = readInt(lastTick, "hyperDim");
-            if (bot().reportWeather().get("dim").getAsInt() == hyperDim) {
-                break;
-            }
-            bot().waitTicks(2);
-        }
-        assertEquals("ARRANGEMENT: the client must actually be in hyperspace before anything here is"
-                + " about hyperspace; last tick=" + lastTick,
-                hyperDim, bot().reportWeather().get("dim").getAsInt());
+        CorridorWait entry = driveIntoCorridor(120);
+        assertTrue("ARRANGEMENT: the client must be CARRIED into the corridor before anything here is"
+                + " about hyperspace, and he was not. " + entry,
+                entry.end == CorridorEntry.ARRIVED);
+        int hyperDim = entry.corridorDim;
 
         // The seat's own world position, as the CLIENT renders it — the deck reference for the
         // stand-up, read off the mount rather than from a probe that would need the lane's anchor.
@@ -1280,22 +1335,11 @@ private String chat() throws Exception {
         // scenario is about: it needs the flight to still be happening while it reads the sky.
         String begin = exec("artest space transit-begin " + originDim + " 1 64 1 " + PARK_SPEED);
         assertTrue("the transit must begin (departure crossing): " + begin, readBool(begin, "began"));
-        int hyperDim = -1;
-        String lastTick = "";
-        for (int i = 0; i < 120; i++) {
-            lastTick = exec("artest space transit-tick 10");
-            if (readInt(lastTick, "inTransit") == 0) {
-                break;
-            }
-            hyperDim = readInt(lastTick, "hyperDim");
-            if (bot().reportWeather().get("dim").getAsInt() == hyperDim) {
-                break;
-            }
-            bot().waitTicks(2);
-        }
-        assertEquals("ARRANGEMENT: the client must actually be in hyperspace before any reading here"
-                + " is about hyperspace; last tick=" + lastTick,
-                hyperDim, bot().reportWeather().get("dim").getAsInt());
+        CorridorWait entry = driveIntoCorridor(120);
+        assertTrue("ARRANGEMENT: the client must be CARRIED into the corridor before any reading here"
+                + " is about hyperspace, and he was not. " + entry,
+                entry.end == CorridorEntry.ARRIVED);
+        int hyperDim = entry.corridorDim;
 
         // ── READING 2, SEATED in hyperspace: the corridor comes up ───────────────────────────────
         JsonObject mount = bot().reportRidingEntity();
@@ -1375,21 +1419,10 @@ private String chat() throws Exception {
 
         // Fly as far as hyperspace and stop driving: the stand-up has to happen mid-flight, between the
         // two cuts, which is the whole point.
-        int hyperDim = -1;
-        String lastTick = "";
-        for (int i = 0; i < 120; i++) {
-            lastTick = exec("artest space transit-tick 10");
-            if (readInt(lastTick, "inTransit") == 0) {
-                break;
-            }
-            hyperDim = readInt(lastTick, "hyperDim");
-            if (bot().reportWeather().get("dim").getAsInt() == hyperDim) {
-                break;
-            }
-            bot().waitTicks(2);
-        }
-        assertEquals("ARRANGEMENT: the client must be in hyperspace before he can stand up in it;"
-                + " last tick=" + lastTick, hyperDim, bot().reportWeather().get("dim").getAsInt());
+        CorridorWait entry = driveIntoCorridor(120);
+        assertTrue("ARRANGEMENT: the client must be CARRIED into the corridor before he can stand up"
+                + " in it, and he was not. " + entry, entry.end == CorridorEntry.ARRIVED);
+        int hyperDim = entry.corridorDim;
 
         JsonObject mount = bot().reportRidingEntity();
         assertTrue("ARRANGEMENT: he must have crossed SEATED — a departure record that already said"
@@ -1408,6 +1441,7 @@ private String chat() throws Exception {
 
         // ── FINISH THE JUMP ─────────────────────────────────────────────────────────────────────
         int targetDim = -1;
+        String lastTick = entry.lastTick;
         for (int i = 0; i < 120 && targetDim < 0; i++) {
             lastTick = exec("artest space transit-tick 10");
             if (readInt(lastTick, "inTransit") == 0) {
