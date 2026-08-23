@@ -6,6 +6,7 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 import static org.junit.Assert.assertTrue;
+import static zmaster587.advancedRocketry.test.ArrangementFailure.requireArranged;
 
 /**
  * {@code /time set} obeys the time-skip policy per world: it moves the clocks it is allowed to move,
@@ -62,7 +63,7 @@ public class TimeCommandRespectsTheSkipPolicyE2ETest extends AbstractSharedServe
     @Test
     public void timeSetSkipsTheWorldsWhoseSkipIsLockedAndMovesTheRest() throws Exception {
         int planet = findAPlanet();
-        assertTrue("ARRANGEMENT: this test needs a non-overworld planet dimension in the shipped"
+        requireArranged("this test needs a non-overworld planet dimension in the shipped"
                 + " universe; without one there is nothing for the policy to protect and the test"
                 + " would pass on any build.", planet != Integer.MIN_VALUE);
 

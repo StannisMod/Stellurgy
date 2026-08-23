@@ -18,6 +18,7 @@ import org.junit.Test;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
+import static zmaster587.advancedRocketry.test.ArrangementFailure.requireArranged;
 
 /**
  * <b>A restart is something a jump survives.</b> A ship parked in hyperspace is still parked in
@@ -149,7 +150,7 @@ public class HyperspaceSurvivesARestartE2ETest {
         String setup = exec("artest space transit-setup-piloted");
         assertTrue("the piloted transit fixture must build: " + setup, readBool(setup, "ok"));
         int originDim = readInt(setup, "originDim");
-        assertTrue("ARRANGEMENT: the fixture ship never assembled in the origin cell (dim "
+        requireArranged("the fixture ship never assembled in the origin cell (dim "
                 + originDim + ")", waitForShipIn(originDim));
 
         String begin = exec("artest space transit-begin " + originDim + " 1 64 1 " + PARK_SPEED);
@@ -159,13 +160,13 @@ public class HyperspaceSurvivesARestartE2ETest {
         String tick = exec("artest space transit-tick 10");
         int hyperDimBefore = readInt(tick, "hyperDim");
         int inTransit = readInt(tick, "inTransit");
-        assertTrue("ARRANGEMENT: the jump must still be in flight when the server goes down, or"
+        requireArranged("the jump must still be in flight when the server goes down, or"
                 + " nothing is parked to survive anything: " + tick, inTransit >= 1);
 
         // THE CONTROL, and it is not optional: if no ship reached hyperspace on this boot, "no ship
         // after the restart" would be the arrangement's own answer rather than the product's.
         int parkedBefore = readIntOr(exec("artest vs ship-count-all " + hyperDimBefore), "count", -1);
-        assertTrue("ARRANGEMENT: a ship must actually be registered in hyperspace (dim "
+        requireArranged("a ship must actually be registered in hyperspace (dim "
                 + hyperDimBefore + ") before the restart - found " + parkedBefore, parkedBefore >= 1);
 
         // Hand the jump to PRODUCTION, so what crosses the restart is a claimed jump rather than a
@@ -173,7 +174,7 @@ public class HyperspaceSurvivesARestartE2ETest {
         // transit manager: without the claim the boot reconciliation is right to collect the hull, and
         // this test would be measuring an abandoned ship rather than a jump in flight.
         String claim = exec("artest space transit-claim");
-        assertTrue("ARRANGEMENT: production must take the claim, or nothing on the far side of the"
+        requireArranged("production must take the claim, or nothing on the far side of the"
                 + " restart is restoring a jump: " + claim,
                 readBool(claim, "ok") && readIntOr(claim, "claimed", 0) >= 1);
 

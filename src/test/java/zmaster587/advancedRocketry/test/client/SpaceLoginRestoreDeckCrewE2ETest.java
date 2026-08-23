@@ -15,6 +15,7 @@ import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
+import static zmaster587.advancedRocketry.test.ArrangementFailure.requireArranged;
 
 /**
  * Relogging while standing on a ship's deck — with no server restart — must not drag the crew member
@@ -62,10 +63,10 @@ public class SpaceLoginRestoreDeckCrewE2ETest extends AbstractSpaceLoginRestoreC
             bot().waitTicks(5);
             tag = exec("artest space aboard-tag " + BOT);
         }
-        assertTrue("ARRANGEMENT: standing up must keep him aboard as a STANDING record: " + tag,
+        requireArranged("standing up must keep him aboard as a STANDING record: " + tag,
                 tag.contains("\"tagged\":true") && tag.contains("\"posture\":\"STANDING\""));
         String capBefore = exec("artest vs deck-capture");
-        assertTrue("ARRANGEMENT: he must be captured ABOARD the deck before the relog, or the leg is "
+        requireArranged("he must be captured ABOARD the deck before the relog, or the leg is "
                         + "not about a restored deck capture at all: " + capBefore,
                 capBefore.contains("\"alreadyTracked\":true")
                         && !capBefore.contains("\"hullStand\":true"));
@@ -83,7 +84,7 @@ public class SpaceLoginRestoreDeckCrewE2ETest extends AbstractSpaceLoginRestoreC
                     return offline[0].contains("\"error\":\"no such player\"")
                             || offline[0].contains("\"error\":\"no players connected\"");
                 });
-        assertTrue("ARRANGEMENT: the server must see him GONE after the disconnect, or nothing below "
+        requireArranged("the server must see him GONE after the disconnect, or nothing below "
                 + "is a relog: " + offline[0], gone);
 
         // Nobody is left near the ship to hold its chunks while he is away.
@@ -132,9 +133,9 @@ public class SpaceLoginRestoreDeckCrewE2ETest extends AbstractSpaceLoginRestoreC
             bot().waitTicks(5);
             tag = exec("artest space aboard-tag " + BOT);
         }
-        assertTrue("ARRANGEMENT: standing up must keep him aboard as a STANDING record: " + tag,
+        requireArranged("standing up must keep him aboard as a STANDING record: " + tag,
                 tag.contains("\"tagged\":true") && tag.contains("\"posture\":\"STANDING\""));
-        assertTrue("ARRANGEMENT: he must be captured on the deck while the ship is still upright: "
+        requireArranged("he must be captured on the deck while the ship is still upright: "
                         + exec("artest vs deck-capture"),
                 exec("artest vs deck-capture").contains("\"alreadyTracked\":true"));
 
@@ -162,7 +163,7 @@ public class SpaceLoginRestoreDeckCrewE2ETest extends AbstractSpaceLoginRestoreC
         // `*-by-id` verbs resolve are DIFFERENT identities, and this scenario holds the first.
         String rolled = exec("artest vs point-at " + slotDim + " " + arrangedAfcPos
                 + " " + Math.cos(half) + " " + Math.sin(half) + " 0.0 0.0");
-        assertTrue("ARRANGEMENT: the roll must reach THIS ship's own flight computer: " + rolled,
+        requireArranged("the roll must reach THIS ship's own flight computer: " + rolled,
                 rolled.contains("\"commanded\":true"));
         // The premise of the two positional reads below, CHECKED: a slot cell holds exactly one
         // ship, so "nearest to any point" IS this scenario's ship. With a second craft in the cell
@@ -176,10 +177,10 @@ public class SpaceLoginRestoreDeckCrewE2ETest extends AbstractSpaceLoginRestoreC
         }
         bot().waitTicks(20);
         String info = jsonOf(exec("artest vs ship-info " + slotDim + " 0 0 0"));
-        assertTrue("ARRANGEMENT: the ship must be (near-)inverted before the relog, or this leg is "
+        requireArranged("the ship must be (near-)inverted before the relog, or this leg is "
                 + "silently the upright one again (upY=" + upY + "): " + info, upY < -0.9);
         String capInverted = exec("artest vs deck-capture");
-        assertTrue("ARRANGEMENT: he must still be captured on the INVERTED deck: " + capInverted,
+        requireArranged("he must still be captured on the INVERTED deck: " + capInverted,
                 capInverted.contains("\"alreadyTracked\":true"));
 
         bot().disconnect();
@@ -193,7 +194,7 @@ public class SpaceLoginRestoreDeckCrewE2ETest extends AbstractSpaceLoginRestoreC
                     return offline[0].contains("\"error\":\"no such player\"")
                             || offline[0].contains("\"error\":\"no players connected\"");
                 });
-        assertTrue("ARRANGEMENT: the server must see him GONE after the disconnect: " + offline[0], gone);
+        requireArranged("the server must see him GONE after the disconnect: " + offline[0], gone);
 
         exec("artest vs permaload true");
         bot().connect();

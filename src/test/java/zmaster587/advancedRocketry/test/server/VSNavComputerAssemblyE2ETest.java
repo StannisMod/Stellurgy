@@ -6,6 +6,7 @@ import java.util.regex.Pattern;
 import org.junit.Test;
 
 import static org.junit.Assert.assertTrue;
+import static zmaster587.advancedRocketry.test.ArrangementFailure.requireArranged;
 
 /**
  * The assembler links a built navigation computer to the ship it is part of.
@@ -37,9 +38,9 @@ public class VSNavComputerAssemblyE2ETest extends AbstractSharedServerTest {
         // west and three up from that origin, and the navigation computer one further along Z.
         int navX = BASE_X + 3 - 1, navY = BASE_Y + 1 + 3, navZ = BASE_Z + 3 + 1;
         String before = exec("artest nav status 0 " + navX + " " + navY + " " + navZ);
-        assertTrue("ARRANGEMENT: the fixture must actually contain a navigation computer: " + before,
+        requireArranged("the fixture must actually contain a navigation computer: " + before,
                 before.contains("\"ok\":true"));
-        assertTrue("ARRANGEMENT (control): a freshly built computer is NOT yet linked - without this"
+        requireArranged("control: a freshly built computer is NOT yet linked - without this"
                         + " the test could not tell assembly apart from doing nothing: " + before,
                 before.contains("\"linked\":false"));
 

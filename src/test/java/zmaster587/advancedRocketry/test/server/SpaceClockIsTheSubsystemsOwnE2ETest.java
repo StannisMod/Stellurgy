@@ -17,6 +17,7 @@ import org.junit.Test;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
+import static zmaster587.advancedRocketry.test.ArrangementFailure.requireArranged;
 
 /**
  * The space subsystem's clock is <b>its own</b>: it advances by itself and at the tick rate, no
@@ -139,7 +140,7 @@ public class SpaceClockIsTheSubsystemsOwnE2ETest {
         String worldMoved = exec("artest space set-world-clock " + (worldClock(exec("artest space clock"))
                 + JUMP_TICKS));
         assertTrue("the world clock must move: " + worldMoved, worldMoved.contains("\"ok\":true"));
-        assertTrue("ARRANGEMENT: the overworld's counter must really have jumped, or nothing below is"
+        requireArranged("the overworld's counter must really have jumped, or nothing below is"
                         + " a measurement: " + worldMoved,
                 worldClock(worldMoved) - jsonLong(worldMoved, "before") >= JUMP_TICKS / 2L);
 
@@ -154,7 +155,7 @@ public class SpaceClockIsTheSubsystemsOwnE2ETest {
         long worldBefore = worldClock(exec("artest space clock"));
         String spaceMoved = exec("artest space set-clock " + (spaceAfterWorldMove + JUMP_TICKS));
         assertTrue("the space clock must move: " + spaceMoved, spaceMoved.contains("\"ok\":true"));
-        assertTrue("ARRANGEMENT: the space clock must really have jumped: " + spaceMoved,
+        requireArranged("the space clock must really have jumped: " + spaceMoved,
                 spaceClock(spaceMoved) - spaceAfterWorldMove >= JUMP_TICKS / 2L);
 
         long worldAfterSpaceMove = worldClock(exec("artest space clock"));
@@ -200,7 +201,7 @@ public class SpaceClockIsTheSubsystemsOwnE2ETest {
                         + " last set to is not a clock, and a clock frozen at zero is the defect this"
                         + " one replaced. moved=" + spaceMoved + " (" + first + " -> " + second + ")",
                 spaceMoved > 0L);
-        assertTrue("ARRANGEMENT: the reference clock must have moved too, or the rate check below"
+        requireArranged("the reference clock must have moved too, or the rate check below"
                         + " compares against a stopped server. overworld moved=" + worldMoved,
                 worldMoved > 0L);
         assertTrue("...and it must advance ONCE per server tick, not twice: a second writer on the"
@@ -238,7 +239,7 @@ public class SpaceClockIsTheSubsystemsOwnE2ETest {
                         + status, status.contains("\"registered\":true"));
 
         long fresh = spaceClock(exec("artest space clock"));
-        assertTrue("ARRANGEMENT: a fresh boot's clock must be far below the value set below, or "
+        requireArranged("a fresh boot's clock must be far below the value set below, or "
                         + "reading that value back afterwards would prove nothing. fresh=" + fresh,
                 fresh < JUMP_TICKS / 2L);
 
@@ -296,7 +297,7 @@ public class SpaceClockIsTheSubsystemsOwnE2ETest {
         // --- boot 1 --------------------------------------------------------------------------------
         harness = RealDedicatedServerHarness.startWith(root, false);
         String status = exec("artest space subsystem-status");
-        assertTrue("ARRANGEMENT: the space subsystem must be DOWN on this server, or this leg is a "
+        requireArranged("the space subsystem must be DOWN on this server, or this leg is a "
                 + "duplicate of the one above and covers nothing: " + status,
                 status.contains("\"registered\":false"));
 
@@ -312,7 +313,7 @@ public class SpaceClockIsTheSubsystemsOwnE2ETest {
                         + " counter replaced. " + tickA + " -> " + tickB, tickB > tickA);
 
         long fresh = spaceClock(exec("artest space clock"));
-        assertTrue("ARRANGEMENT: a fresh boot's clock must be far below the value set below. fresh="
+        requireArranged("a fresh boot's clock must be far below the value set below. fresh="
                 + fresh, fresh < JUMP_TICKS / 2L);
 
         String moved = exec("artest space set-clock " + JUMP_TICKS);

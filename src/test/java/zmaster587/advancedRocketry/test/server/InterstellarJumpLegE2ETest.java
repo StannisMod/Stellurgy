@@ -13,6 +13,7 @@ import java.util.regex.Pattern;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 import static zmaster587.advancedRocketry.test.AdvancedRocketryTestConstants.SHIP_CAPTURE_RADIUS_BLOCKS;
+import static zmaster587.advancedRocketry.test.ArrangementFailure.requireArranged;
 
 /**
  * Does a jump to ANOTHER STAR SYSTEM fly, and how long does it take?
@@ -118,7 +119,7 @@ public class InterstellarJumpLegE2ETest extends AbstractSharedServerTest {
 
         // ---- CONTROL LEG: one sector over. Four ticks of flight; it proves the arrangement. -------
         long hopTicks = flyTo(osx + 1, osy, osz, slotDim, originCell, setup, "hop");
-        assertTrue("ARRANGEMENT: a one-sector hop must arrive, or nothing below is about distance."
+        requireArranged("a one-sector hop must arrive, or nothing below is about distance."
                 + " Fix the scaffolding before reading the far leg.", hopTicks >= 0);
 
         String afterHop = exec("artest space entry-status");

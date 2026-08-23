@@ -28,6 +28,7 @@ import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import static zmaster587.advancedRocketry.test.AdvancedRocketryTestConstants.SHIP_CAPTURE_RADIUS_BLOCKS;
+import static zmaster587.advancedRocketry.test.ArrangementFailure.requireArranged;
 
 /**
  * Login restore for a tier-2 ship's crew, observed on the REAL CLIENT across a REAL server restart:
@@ -323,7 +324,7 @@ public abstract class AbstractSpaceLoginRestoreClientTest {
         // chain the restored pilot will need again on the other side of the restart.
         double preY0 = clientPlayerY();
         double preY1 = climbWith(Keyboard.KEY_R, preY0);
-        assertTrue("ARRANGEMENT (control leg): the seated pilot must be able to fly his ship in "
+        requireArranged("control leg: the seated pilot must be able to fly his ship in "
                 + "its cell BEFORE the restart. clientY " + preY0 + " -> " + preY1
                 + " (need +" + MIN_CLIMB + ")", (preY1 - preY0) >= MIN_CLIMB);
         // Let the station-hold settle the hovering ship before he logs out: the restore below
@@ -555,12 +556,12 @@ public abstract class AbstractSpaceLoginRestoreClientTest {
         double[] deckAfter = awaitShipPose(dim);
         assertNotNull("the ship must still be live after the window", deckAfter);
         double deckMoved = distance(deckBefore, deckAfter);
-        assertTrue("ARRANGEMENT: the deck must MOVE during the observation window, or a body that "
+        requireArranged("the deck must MOVE during the observation window, or a body that "
                         + "stayed put proves nothing about the hold - a motionless deck cannot drag "
                         + "anyone (the ship moved " + deckMoved + " blocks, need > " + MIN_DECK_MOVE
                         + "). Transient window since connect: " + transient_,
                 deckMoved > MIN_DECK_MOVE);
-        assertTrue("ARRANGEMENT: this window must observe a SETTLING deck, not a ship at its cruise "
+        requireArranged("this window must observe a SETTLING deck, not a ship at its cruise "
                         + "cap - the reported symptom is a ship that is almost stationary, and at cap "
                         + "speed the hold has a separate suspected defect of its own (the ship moved "
                         + deckMoved + " blocks in " + OBSERVE_TICKS + " ticks = "
@@ -626,19 +627,19 @@ public abstract class AbstractSpaceLoginRestoreClientTest {
                 + "\n  restored 2: " + describeWalk(restoredWalkAgain)
                 + "\n  fresh 1:    " + describeWalk(freshWalk)
                 + "\n  fresh 2:    " + describeWalk(freshWalkAgain);
-        assertTrue("ARRANGEMENT: the walk must actually move him along the deck, or the pin below "
+        requireArranged("the walk must actually move him along the deck, or the pin below "
                         + "measures a body that never walked. A walk that is weak ONLY under the "
                         + "restored capture is itself the finding rather than an arrangement fault - "
                         + "read the four together:" + walkTable,
                 restoredWalk[0] > MIN_WALK_TRAVEL);
         double walkWindowTicks = 6 + 2 + OBSERVE_TICKS;
-        assertTrue("ARRANGEMENT: the deck must move during the walk window, in the settling band ("
+        requireArranged("the deck must move during the walk window, in the settling band ("
                         + (restoredWalk[3] / walkWindowTicks) + " blocks per tick, band "
                         + (MIN_DECK_MOVE / walkWindowTicks) + ".." + MAX_DECK_RATE + "): "
                         + describeWalk(restoredWalk) + " " + dropReasons(),
                 restoredWalk[3] > MIN_DECK_MOVE
                         && restoredWalk[3] / walkWindowTicks < MAX_DECK_RATE);
-        assertTrue("ARRANGEMENT: the record must cover the window AFTER the key was released, or the "
+        requireArranged("the record must cover the window AFTER the key was released, or the "
                         + "clean result is a frozen record rather than a still body - the tell is a "
                         + "travel figure identical to the previous leg's to the last digit: "
                         + describeWalk(restoredWalk) + " " + dropReasons(),
@@ -828,7 +829,7 @@ public abstract class AbstractSpaceLoginRestoreClientTest {
                 arrangedAfcPos);
         String driven = exec("artest vs force-vel-at " + dim + " " + arrangedAfcPos
                 + " 0 " + WINDOW_SPEED_BLOCKS_PER_SECOND + " 0");
-        assertTrue("ARRANGEMENT: the drive must reach THIS ship's own flight computer, or the window "
+        requireArranged("the drive must reach THIS ship's own flight computer, or the window "
                 + "below observes a motionless deck and cannot fail: " + driven,
                 driven.contains("\"afcResolved\":true"));
         bot().waitTicks(THROTTLE_PULSE_TICKS);
@@ -1117,7 +1118,7 @@ public abstract class AbstractSpaceLoginRestoreClientTest {
         // production leaves a flown ship holding when nobody is aboard.
         String holdsStation = exec("artest vs ff-cruise-at " + slotDim + " " + arrangedAfcPos
                 + " 0 0 0");
-        assertTrue("ARRANGEMENT: the settled ship must be left holding station like a flown ship, or "
+        requireArranged("the settled ship must be left holding station like a flown ship, or "
                 + "its physics never comes on and nothing can be aboard its deck: " + holdsStation,
                 holdsStation.contains("\"afcResolved\":true"));
 
@@ -1204,14 +1205,14 @@ public abstract class AbstractSpaceLoginRestoreClientTest {
         // so this is the one site in the family where a real throttle is the honest arrangement.
         String heldClimb = exec("artest vs ff-input-by-id " + LAUNCH_DIM + " " + groundShipId
                 + " " + HELD_CLIMB);
-        assertTrue("ARRANGEMENT: the throttle must reach the seated pilot's own flight computer: "
+        requireArranged("the throttle must reach the seated pilot's own flight computer: "
                 + heldClimb, heldClimb.contains("\"afcResolved\":true"));
         String climb = exec("artest vs teleport-ship " + LAUNCH_DIM + " " + sx + " " + sy + " " + sz
                 + " " + sx + " " + ABOVE_CEILING_Y + " " + sz);
         assertTrue("the climb past the orbit ceiling failed: " + climb, climb.contains("\"ok\":true"));
         exec("artest vs unpark " + LAUNCH_DIM + " " + sx + " " + ABOVE_CEILING_Y + " " + sz);
         bot().waitTicks(20);
-        assertTrue("ARRANGEMENT: the pilot must still be in his seat as the ship reaches the ceiling "
+        requireArranged("the pilot must still be in his seat as the ship reaches the ceiling "
                         + "- if the lift alone unseats him this leg never tests the crossing: "
                         + bot().reportRidingEntity(),
                 bot().reportRidingEntity().get("riding").getAsBoolean());
@@ -1250,7 +1251,7 @@ public abstract class AbstractSpaceLoginRestoreClientTest {
         // craft's 40 b/s cap inside 60 ticks - nearly three times the ceiling the observation windows
         // require - so a ship left holding it would make every one of them unreadable.
         String parked = exec("artest vs ff-cruise-at " + slotDim + " " + arrangedAfcPos + " 0 0 0");
-        assertTrue("ARRANGEMENT: the arrived ship must be left holding station: " + parked,
+        requireArranged("the arrived ship must be left holding station: " + parked,
                 parked.contains("\"afcResolved\":true"));
 
         // He rode his own ship across the seam: no probe transferred him, so a wrong dimension here

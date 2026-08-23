@@ -8,6 +8,7 @@ import zmaster587.advancedRocketry.test.GameTicks;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 import static zmaster587.advancedRocketry.test.AdvancedRocketryTestConstants.SHIP_CAPTURE_RADIUS_BLOCKS;
+import static zmaster587.advancedRocketry.test.ArrangementFailure.requireArranged;
 
 /**
  * A ship's navigation lookup must answer for the ship it was ASKED ABOUT, in a world holding more
@@ -61,27 +62,27 @@ public class NavLookupNamesItsOwnShipE2ETest extends AbstractSharedServerTest {
 
         String asmA = exec("artest rocket assemble 0 "
                 + placeFixture(SHIP_A_X, SHIP_A_Y, SHIP_A_Z, "with-nav-computer"));
-        assertTrue("ARRANGEMENT: with VS an AFC-bearing build must route to a ship (no rocket): "
+        requireArranged("with VS an AFC-bearing build must route to a ship (no rocket): "
                 + asmA, asmA.contains("\"rocketCount\":0"));
         String asmB = exec("artest rocket assemble 0 "
                 + placeFixture(SHIP_B_X, SHIP_B_Y, SHIP_B_Z, "with-nav-computer"));
-        assertTrue("ARRANGEMENT: the second craft did not become a ship either: " + asmB,
+        requireArranged("the second craft did not become a ship either: " + asmB,
                 asmB.contains("\"rocketCount\":0"));
-        assertTrue("ARRANGEMENT: the ships never loaded", waitForLoadedShips(0, 2) >= 2);
+        requireArranged("the ships never loaded", waitForLoadedShips(0, 2) >= 2);
 
         // ARRANGEMENT CHECK, before anything is asked: there must be TWO registered ships, or the
         // question this test exists to ask ("which one does the lookup answer for") does not exist
         // in this world and both assertions below would pass vacuously.
         String all = exec("artest vs ship-count-all 0");
-        assertTrue("ARRANGEMENT: fewer than two ships are registered, so no lookup can pick the "
+        requireArranged("fewer than two ships are registered, so no lookup can pick the "
                 + "wrong one and this run cannot exhibit the defect: " + all,
                 extractInt(all, "count") >= 2);
 
         String shipA = shipIdAt(SHIP_A_X, SHIP_A_Y, SHIP_A_Z);
         String shipB = shipIdAt(SHIP_B_X, SHIP_B_Y, SHIP_B_Z);
-        assertNotNull("ARRANGEMENT: craft A never named itself at its own base", shipA);
-        assertNotNull("ARRANGEMENT: craft B never named itself at its own base", shipB);
-        assertTrue("ARRANGEMENT: both bases resolved to the SAME ship (" + shipA + "), so the two "
+        requireArranged("craft A never named itself at its own base", shipA != null);
+        requireArranged("craft B never named itself at its own base", shipB != null);
+        requireArranged("both bases resolved to the SAME ship (" + shipA + "), so the two "
                 + "craft did not become two ships and there is nothing to confuse",
                 !shipA.equals(shipB));
 
@@ -96,8 +97,8 @@ public class NavLookupNamesItsOwnShipE2ETest extends AbstractSharedServerTest {
     private void assertNavigationIsFound(String label, String shipId, String otherShipId)
             throws Exception {
         int[] afc = flightComputerOf(shipId);
-        assertNotNull("ARRANGEMENT: ship " + label + " (" + shipId + ") has no resolvable flight "
-                + "computer, so its navigation cannot be asked about at all", afc);
+        requireArranged("ship " + label + " (" + shipId + ") has no resolvable flight "
+                + "computer, so its navigation cannot be asked about at all", afc != null);
         String gate = exec("artest nav gate 0 " + afc[0] + " " + afc[1] + " " + afc[2]);
         assertTrue("ship " + label + " carries a navigation computer built into it, and its own "
                         + "jump gate reports it has none — the lookup answered about some other "

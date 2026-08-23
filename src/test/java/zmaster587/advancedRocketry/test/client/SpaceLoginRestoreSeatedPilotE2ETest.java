@@ -14,6 +14,7 @@ import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
+import static zmaster587.advancedRocketry.test.ArrangementFailure.requireArranged;
 
 /**
  * Login restore for a pilot who was ABOARD when he left: seated in a cell, seated on the ground
@@ -110,7 +111,7 @@ public class SpaceLoginRestoreSeatedPilotE2ETest extends AbstractSpaceLoginResto
         // He must really be resolved on the DECK, in the ship's own frame, before the restart: that
         // is what produces the record asserted above, and a hull-stand catch is not it.
         String capBefore = exec("artest vs deck-capture");
-        assertTrue("ARRANGEMENT: he must be captured ABOARD the deck after standing up, or the record "
+        requireArranged("he must be captured ABOARD the deck after standing up, or the record "
                 + "above describes something other than a crew member on his feet: " + capBefore,
                 capBefore.contains("\"alreadyTracked\":true")
                         && !capBefore.contains("\"hullStand\":true"));

@@ -32,7 +32,7 @@ public class ScenarioVerdictClassificationTest {
 
     private static final Throwable ORDINARY = new AssertionError("an ordinary assertion");
     private static final Throwable ARRANGEMENT_FAILURE =
-            new Scenario.ArrangementFailure("the fixture did not build");
+            new zmaster587.advancedRocketry.test.ArrangementFailure("the fixture did not build");
 
     // ── rule 1: the group is already down, and that outranks everything ───────
 

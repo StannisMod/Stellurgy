@@ -5,6 +5,8 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
+import zmaster587.advancedRocketry.test.ArrangementFailure;
+
 /**
  * A scenario's own flight recorder, and the thing that makes its failure readable.
  *
@@ -93,15 +95,6 @@ public final class Scenario {
         return s;
     }
 
-    /** Thrown by arrangement helpers so a scaffolding failure cannot be mistaken for a verdict. */
-    public static final class ArrangementFailure extends AssertionError {
-        private static final long serialVersionUID = 1L;
-
-        public ArrangementFailure(String message) {
-            super(message);
-        }
-    }
-
     private final String name;
     private final String subsystem;
     private final Plot plot;
@@ -169,16 +162,20 @@ public final class Scenario {
         return this;
     }
 
-    /** Fails the scenario as an ARRANGEMENT problem — the contract was never reached. */
+    /**
+     * Fails the scenario as an ARRANGEMENT problem — the contract was never reached.
+     *
+     * <p>The TYPE it raises is {@link ArrangementFailure}, which lives at the test root rather than
+     * here: a class that pays its own harness cannot have a Scenario but must still be able to say
+     * "the fixture did not build" in a way a script can read.</p>
+     */
     public void arrangementFailed(String message) {
-        throw new ArrangementFailure(message);
+        ArrangementFailure.arrangementFailed(message);
     }
 
     /** Fails the scenario as an ARRANGEMENT problem unless {@code condition} holds. */
     public void requireArranged(String message, boolean condition) {
-        if (!condition) {
-            arrangementFailed(message);
-        }
+        ArrangementFailure.requireArranged(message, condition);
     }
 
     public Phase phase() {

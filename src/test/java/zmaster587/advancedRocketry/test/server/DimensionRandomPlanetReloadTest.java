@@ -17,6 +17,7 @@ import java.util.regex.Pattern;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertTrue;
+import static zmaster587.advancedRocketry.test.ArrangementFailure.requireArranged;
 
 /**
  * MED batch pack 4 — C130 reproduction + regression guard.
@@ -99,7 +100,7 @@ public class DimensionRandomPlanetReloadTest {
         // a number asking for more than exists regenerates nothing.
         String content = new String(Files.readAllBytes(xmlPath), StandardCharsets.UTF_8);
         Matcher want = Pattern.compile("numPlanets=\"(\\d+)\"").matcher(content);
-        assertTrue("ARRANGEMENT: the saved world XML must record a planet count to bump: " + xmlPath,
+        requireArranged("the saved world XML must record a planet count to bump: " + xmlPath,
                 want.find());
         String edited = content.substring(0, want.start())
                 + "numPlanets=\"" + (Integer.parseInt(want.group(1)) + 3) + "\""

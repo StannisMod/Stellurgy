@@ -11,6 +11,7 @@ import static zmaster587.advancedRocketry.test.AdvancedRocketryTestConstants.HYP
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 import static zmaster587.advancedRocketry.test.AdvancedRocketryTestConstants.SHIP_CAPTURE_RADIUS_BLOCKS;
+import static zmaster587.advancedRocketry.test.ArrangementFailure.requireArranged;
 
 /**
  * <b>A jump carries what is lying on the deck, not only who is sitting on it.</b> The half of JUMP-11
@@ -54,12 +55,12 @@ public class VSJumpCarriesLooseBodiesE2ETest extends AbstractSharedServerTest {
         String setup = exec("artest space transit-setup-piloted");
         assertTrue("piloted transit setup failed: " + setup, setup.contains("\"ok\":true"));
         int originDim = extractInt(setup, "originDim");
-        assertTrue("ARRANGEMENT: the origin ship never assembled/loaded (dim " + originDim + ")",
+        requireArranged("the origin ship never assembled/loaded (dim " + originDim + ")",
                 waitForLoadedShip(originDim) >= 1);
 
         // Where the ship actually is in its cell — the deck the body is dropped onto.
         String seat = exec("artest vs find-seat " + originDim + " 1 64 1");
-        assertTrue("ARRANGEMENT: the ship must resolve a world position: " + seat,
+        requireArranged("the ship must resolve a world position: " + seat,
                 seat.contains("\"shipWorldX\""));
         double shipX = extractDouble(seat, "shipWorldX");
         double shipY = extractDouble(seat, "shipWorldY");
@@ -73,13 +74,13 @@ public class VSJumpCarriesLooseBodiesE2ETest extends AbstractSharedServerTest {
                 + (int) shipY + " " + (int) shipZ + " " + SHIP_CAPTURE_RADIUS_BLOCKS), "id");
         String dropped = exec("artest space loose-body " + originDim + " " + shipX + " " + shipY + " "
                 + shipZ + " " + shipId);
-        assertTrue("ARRANGEMENT: the body must be dropped: " + dropped, dropped.contains("\"ok\":true"));
+        requireArranged("the body must be dropped: " + dropped, dropped.contains("\"ok\":true"));
 
         // CONTROL, and it is production's OWN aboard test rather than a proximity proxy: the body has
         // to be inside the ship's stay region — the same volume the crossing enumerates by, and the
         // same one the hyperspace void judges a crew member by. A green here means a later red is
         // about the carry.
-        assertTrue("ARRANGEMENT: the dropped body must be ABOARD by the definition the crossing uses,"
+        requireArranged("the dropped body must be ABOARD by the definition the crossing uses,"
                 + " not merely near the ship: " + dropped, dropped.contains("\"aboard\":true"));
 
         String begin = exec("artest space transit-begin " + originDim + " 1 64 1 " + HYPERSPACE_JUMP_SPEED);

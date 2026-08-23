@@ -24,6 +24,7 @@ import org.lwjgl.input.Keyboard;
 import zmaster587.advancedRocketry.space.TerrainHeightFinder;
 
 import static org.junit.Assert.assertTrue;
+import static zmaster587.advancedRocketry.test.ArrangementFailure.requireArranged;
 
 /**
  * The first milestone loop, walked the way a player walks it: build a jump-capable craft, turn it
@@ -250,14 +251,14 @@ public class M1PlanetToPlanetMilestoneE2ETest {
 
         // ---- LEG 0: the world this loop is walked in is the one the test asked for. -------------
         String fuelCfg = exec("artest config get rocketRequireFuel");
-        assertTrue("ARRANGEMENT: the seeded config file must have been PARSED. This reads the live "
+        requireArranged("the seeded config file must have been PARSED. This reads the live "
                         + "field back through the same config object production uses, so a stale "
                         + "`true` here means the file was written in a syntax the config reader "
                         + "skipped and every later leg would be running against defaults: " + fuelCfg,
                 fuelCfg.contains("\"value\":false"));
 
         String status = exec("artest space subsystem-status");
-        assertTrue("ARRANGEMENT: the production space subsystem must be REGISTERED — it owns the "
+        requireArranged("the production space subsystem must be REGISTERED — it owns the "
                         + "cells a ship arrives in, and without it the climb leg has nowhere to go: "
                         + status,
                 status.contains("\"registered\":true"));
@@ -266,7 +267,7 @@ public class M1PlanetToPlanetMilestoneE2ETest {
         // be flown to. One id doing both makes the registry's description a lie — it advertises a
         // planet whose world is empty space — and the descent that follows lands the ship nowhere.
         Matcher collided = SLOT_DIMS_ALSO_BODIES.matcher(status);
-        assertTrue("ARRANGEMENT: subsystem-status must report the slot/body id overlap: " + status,
+        requireArranged("subsystem-status must report the slot/body id overlap: " + status,
                 collided.find());
         assertTrue("no space-slot dimension may also be an Advanced Rocketry body. Forge's free-id "
                         + "scan cannot see AR's own body ids (a surface-less body is never registered "
@@ -301,7 +302,7 @@ public class M1PlanetToPlanetMilestoneE2ETest {
         String found = findSeat();
         int[] seatSub = readTriple(found, SEAT_SUB);
         int[] afcSub = readTriple(found, AFC_SUB);
-        assertTrue("ARRANGEMENT: the assembled ship must expose a pilot seat AND the flight computer "
+        requireArranged("the assembled ship must expose a pilot seat AND the flight computer "
                         + "it was linked to — the deck square the pilot works from is addressed from "
                         + "that computer: " + found,
                 seatSub != null && afcSub != null);
@@ -309,7 +310,7 @@ public class M1PlanetToPlanetMilestoneE2ETest {
         // The subspace copy is a RIGID relocation of the pad build, so the seat must sit at exactly
         // the offset it was built at. Without this control the deck square the pilot is placed on
         // below is a guess, and a failed press could just as easily be a bot standing nowhere.
-        assertTrue("ARRANGEMENT CONTROL: the ship's subspace copy must preserve the build's own "
+        requireArranged("CONTROL: the ship's subspace copy must preserve the build's own "
                         + "geometry — seat minus flight computer should be " + describe(OFF_SEAT)
                         + " but is " + describe(new int[]{seatSub[0] - afcSub[0],
                                 seatSub[1] - afcSub[1], seatSub[2] - afcSub[2]}) + ": " + found,
@@ -386,7 +387,7 @@ public class M1PlanetToPlanetMilestoneE2ETest {
         // ---- LEG 5: the arrival, measured from the CLIENT. --------------------------------------
         tLeg = System.currentTimeMillis();
         Matcher sd = SLOT_DIMS.matcher(statusAfter);
-        assertTrue("ARRANGEMENT: subsystem-status must list its slot dims: " + statusAfter, sd.find());
+        requireArranged("subsystem-status must list its slot dims: " + statusAfter, sd.find());
         String slotDims = "," + sd.group(1) + ",";
 
         // (1) The client's OWN world is a space cell. report_state carries no dimension, so this is
@@ -436,13 +437,13 @@ public class M1PlanetToPlanetMilestoneE2ETest {
         // generated from a wall-clock seed, so NOTHING about the destination may be assumed: every
         // cell and dimension this leg and the next work with is READ from the world the pilot is in.
         String afcProbe = exec("artest space find-afc " + slotDim);
-        assertTrue("ARRANGEMENT: the ship the pilot flew up must be findable in the space cell he "
+        requireArranged("the ship the pilot flew up must be findable in the space cell he "
                         + "arrived in — the ledger says he is here, so a ship that cannot be located "
                         + "means the arrival left no body behind: " + afcProbe,
                 afcProbe.contains("\"found\":true"));
         String shipId = readString(afcProbe, SHIP_ID);
         String launchCell = readString(exec("artest space ledger-get " + shipId), CELL);
-        assertTrue("ARRANGEMENT: the ledger must name the cell the jump departs FROM — without it "
+        requireArranged("the ledger must name the cell the jump departs FROM — without it "
                         + "the arrival assertion below cannot tell a jump from a no-op. shipId="
                         + shipId + " ledger=" + exec("artest space ledger-get " + shipId),
                 launchCell != null && !launchCell.isEmpty());
@@ -451,7 +452,7 @@ public class M1PlanetToPlanetMilestoneE2ETest {
         // moment in this loop when the pilot is not a reliable pointer to his craft.
         String seatProbe = findSeatAboard(slotDim, budget);
         int[] navAfcSub = readTriple(seatProbe, AFC_SUB);
-        assertTrue("ARRANGEMENT: the arrived ship must still expose the seat and the flight computer "
+        requireArranged("the arrived ship must still expose the seat and the flight computer "
                         + "it is linked to — the console the pilot reaches for is addressed from that "
                         + "computer: " + seatProbe,
                 navAfcSub != null);
@@ -490,7 +491,7 @@ public class M1PlanetToPlanetMilestoneE2ETest {
         // silently, with no error — so the two clicks are what a player actually performs here.
         JsonObject slots = bot().reportSlots();
         int crystalSlot = slotHolding(slots, CRYSTAL_ITEM);
-        assertTrue("ARRANGEMENT: the crystal handed to the pilot must be reachable from the console's "
+        requireArranged("the crystal handed to the pilot must be reachable from the console's "
                         + "own window — the console shows the hotbar and nothing else, so a crystal "
                         + "anywhere but the hotbar could never be inserted. slots=" + slots,
                 crystalSlot >= 0);
@@ -518,7 +519,7 @@ public class M1PlanetToPlanetMilestoneE2ETest {
         bot().closeScreen();
         bot().waitTicks(10);
         consoleScreen = openConsoleFromTheDeck(slotDim, navAfcSub, navSub, budget);
-        assertTrue("ARRANGEMENT: the console must reopen once the crystal is in it: " + consoleScreen,
+        requireArranged("the console must reopen once the crystal is in it: " + consoleScreen,
                 consoleScreen.startsWith("zmaster587.libVulpes.inventory.GuiModular"));
 
         // He picks where to go. Not blind: he clicks an address, sees what the console says is at it,
@@ -607,7 +608,7 @@ public class M1PlanetToPlanetMilestoneE2ETest {
         // And he sits back down: the jump key is the PILOT's, routed through the seat he occupies, so
         // a player standing on his own deck cannot fire the drive he just armed.
         JsonObject reboarded = sitBackDown(slotDim, navAfcSub, budget);
-        assertTrue("ARRANGEMENT: the pilot must be able to take his seat again after navigating — the "
+        requireArranged("the pilot must be able to take his seat again after navigating — the "
                         + "jump he armed is fired from the controls, not from the deck. riding="
                         + reboarded + " serverRiding=" + exec("artest player riding-entity"),
                 isRiding(reboarded));
@@ -682,7 +683,7 @@ public class M1PlanetToPlanetMilestoneE2ETest {
         // second world transition of the loop and a seat lost in it is lost just as silently.
         String statusAfterJump = exec("artest space subsystem-status");
         Matcher sdj = SLOT_DIMS.matcher(statusAfterJump);
-        assertTrue("ARRANGEMENT: subsystem-status must list its slot dims: " + statusAfterJump,
+        requireArranged("subsystem-status must list its slot dims: " + statusAfterJump,
                 sdj.find());
         String jumpSlotDims = "," + sdj.group(1) + ",";
         int jumpDim = Integer.MIN_VALUE;
@@ -752,7 +753,7 @@ public class M1PlanetToPlanetMilestoneE2ETest {
         // it is not loaded — a reading/arrangement probe, not an act: in a live game the world is
         // already up because somebody lives there.
         String loaded = exec("artest dim load " + nearestDim);
-        assertTrue("ARRANGEMENT: the destination world must be loaded before the descent is attempted, "
+        requireArranged("the destination world must be loaded before the descent is attempted, "
                         + "or the resolver refuses quietly and the leg measures nothing: " + loaded,
                 loaded.contains("\"loaded\":true"));
 
@@ -814,7 +815,7 @@ public class M1PlanetToPlanetMilestoneE2ETest {
         // fell short is simply a larger component next time round.
         String feed = bodies;
         long[] aim = nearestDescendTargetVector(feed);
-        assertTrue("ARRANGEMENT: the arrived cell must report WHERE its descend-target body is, not "
+        requireArranged("the arrived cell must report WHERE its descend-target body is, not "
                         + "only how far — the pilot's own sky draws it along that direction: " + feed,
                 aim != null);
         long rangeAtArrival = aim[3];
@@ -1019,7 +1020,7 @@ public class M1PlanetToPlanetMilestoneE2ETest {
         } finally {
             bot().releaseKey(Keyboard.KEY_F);
         }
-        assertTrue("ARRANGEMENT: the pilot must actually get the ship back below the orbit line, or "
+        requireArranged("the pilot must actually get the ship back below the orbit line, or "
                         + "the release half of this leg never gets its stimulus. downY=" + downY
                         + " orbitLine=" + ORBIT_LINE,
                 downY <= ORBIT_LINE);
@@ -1131,7 +1132,7 @@ public class M1PlanetToPlanetMilestoneE2ETest {
                 }
             }
         }
-        assertTrue("ARRANGEMENT: the pilot's main hand must be EMPTY so the use press reaches the "
+        requireArranged("the pilot's main hand must be EMPTY so the use press reaches the "
                 + "block rather than being consumed by a held item; held=" + heldId,
                 heldId != null && heldId.isEmpty());
     }
@@ -1527,7 +1528,7 @@ public class M1PlanetToPlanetMilestoneE2ETest {
 
     /** Every hop of the aim, asserted separately, so a red says which one broke. */
     private void assertAimed(Aim aim, int[] target, String what, String blockNeedle) {
-        assertTrue("ARRANGEMENT: the bot must OBSERVABLY stand within the server's interaction reach "
+        requireArranged("the bot must OBSERVABLY stand within the server's interaction reach "
                 + "of the " + what + ", or the press is discarded before the block ever sees it."
                 + aim.diagnosis, aim.distSq < MAX_INTERACT_DIST_SQ);
         assertTrue("HOP 1 (aim at the " + what + "): the client's crosshair must resolve to a BLOCK. "
@@ -1566,18 +1567,18 @@ public class M1PlanetToPlanetMilestoneE2ETest {
     private int[] placeFixture() throws Exception {
         int cx1 = (BX - 2) >> 4, cz1 = (BZ - 2) >> 4;
         int cx2 = (BX + 7) >> 4, cz2 = (BZ + 7) >> 4;
-        assertTrue("ARRANGEMENT: chunk warmup failed",
+        requireArranged("chunk warmup failed",
                 exec("artest chunk warmup 0 " + cx1 + " " + cz1 + " " + cx2 + " " + cz2)
                         .contains("\"ok\":true"));
-        assertTrue("ARRANGEMENT: pre-clear failed",
+        requireArranged("pre-clear failed",
                 exec("artest fill 0 " + (BX - 2) + " " + (BY + 1) + " " + (BZ - 2)
                         + " " + (BX + 7) + " " + (BY + 12) + " " + (BZ + 7) + " minecraft:air")
                         .contains("\"ok\":true"));
         String fixture = exec("artest fixture rocket 0 " + BX + " " + BY + " " + BZ + " " + VARIANT);
-        assertTrue("ARRANGEMENT: fixture (" + VARIANT + ") failed: " + fixture,
+        requireArranged("fixture (" + VARIANT + ") failed: " + fixture,
                 fixture.contains("\"ok\":true"));
         Matcher bp = BUILDER_POS.matcher(fixture);
-        assertTrue("ARRANGEMENT: fixture missing builderPos: " + fixture, bp.find());
+        requireArranged("fixture missing builderPos: " + fixture, bp.find());
         return new int[]{Integer.parseInt(bp.group(1)), Integer.parseInt(bp.group(2)),
                 Integer.parseInt(bp.group(3))};
     }
@@ -1597,7 +1598,7 @@ public class M1PlanetToPlanetMilestoneE2ETest {
             }
             bot().waitTicks(5);
         }
-        assertTrue("ARRANGEMENT: the bot's main hand must be EMPTY so the use press reaches the "
+        requireArranged("the bot's main hand must be EMPTY so the use press reaches the "
                 + "block rather than being consumed by a held item; held=" + heldId,
                 heldId != null && heldId.isEmpty());
     }

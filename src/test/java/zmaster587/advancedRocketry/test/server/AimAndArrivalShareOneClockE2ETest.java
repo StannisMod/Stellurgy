@@ -7,6 +7,7 @@ import java.util.regex.Pattern;
 
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
+import static zmaster587.advancedRocketry.test.ArrangementFailure.requireArranged;
 
 /**
  * Ledger #164's contract, at the server tier: <b>a jump's aim moves with the SPACE clock and with
@@ -65,7 +66,7 @@ public class AimAndArrivalShareOneClockE2ETest extends AbstractSharedServerTest 
     @Test
     public void theAimMovesWithTheSpaceClockAndWithNoOtherClock() throws Exception {
         int moonDim = findAMoon();
-        assertTrue("ARRANGEMENT: this test needs a body whose in-cell position is LIVE. A planet's is"
+        requireArranged("this test needs a body whose in-cell position is LIVE. A planet's is"
                 + " static, so a stale aim costs it nothing and every build would pass. No moon was"
                 + " found in the shipped universe.", moonDim != Integer.MIN_VALUE);
 
@@ -102,7 +103,7 @@ public class AimAndArrivalShareOneClockE2ETest extends AbstractSharedServerTest 
             // silently failed to diverge is the failure mode this line exists to make impossible.
             long spaceClock = jsonLong(lagged, "spaceClock");
             long proxyClock = jsonLong(lagged, "proxyClock");
-            assertTrue("ARRANGEMENT: the two clocks must actually be " + SPLIT_TICKS + " ticks apart"
+            requireArranged("the two clocks must actually be " + SPLIT_TICKS + " ticks apart"
                             + " before anything is concluded from the aim. spaceClock=" + spaceClock
                             + " proxyClock=" + proxyClock + " split=" + (spaceClock - proxyClock),
                     spaceClock - proxyClock == SPLIT_TICKS);
