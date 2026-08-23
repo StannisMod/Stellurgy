@@ -1,7 +1,8 @@
 package zmaster587.advancedRocketry.test.client;
 
-import com.github.stannismod.forge.testing.junit.AbstractClientE2ETest;
+import org.junit.FixMethodOrder;
 import org.junit.Test;
+import org.junit.runners.MethodSorters;
 
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -31,7 +32,13 @@ import static zmaster587.advancedRocketry.test.AdvancedRocketryTestConstants.SHI
  * shape of his collision box. Those are the open problems of the walking-crew work; this test only
  * guarantees the ground he stands on.</p>
  */
-public class VSCrewRidesRollingDeckE2ETest extends AbstractClientE2ETest {
+@FixMethodOrder(MethodSorters.NAME_ASCENDING)
+public class VSCrewRidesRollingDeckE2ETest extends AbstractSharedVsClientE2ETest {
+
+    @Override
+    protected String subsystem() {
+        return "vs-crew-rides-rolling-deck";
+    }
 
     private static final Pattern COUNT = Pattern.compile("\"count\":(-?\\d+)");
     private static final Pattern BUILDER_POS =
@@ -50,10 +57,6 @@ public class VSCrewRidesRollingDeckE2ETest extends AbstractClientE2ETest {
     private static final int BX = 2900, BY = 64, BZ = 2900;
     /** Roll to command, in degrees. Well past the angle at which an un-held entity would slide off. */
     private static final double ROLL_DEG = 45.0;
-
-    private String exec(String cmd) throws Exception {
-        return String.join("\n", serverClient().execute(cmd));
-    }
 
     private int count(String sub) throws Exception {
         Matcher m = COUNT.matcher(exec("artest vs " + sub + " 0"));
@@ -122,7 +125,7 @@ public class VSCrewRidesRollingDeckE2ETest extends AbstractClientE2ETest {
         String where = exec("artest vs ship-info 0 " + BX + " " + BY + " " + BZ
                 + " " + SHIP_CAPTURE_RADIUS_BLOCKS);
         Matcher shipIdM = Pattern.compile("\"id\":\"([^\"]+)\"").matcher(where);
-        assertTrue("ARRANGEMENT: ship-info must name WHICH ship answered: " + where, shipIdM.find());
+        scenario().requireArranged("ship-info must name WHICH ship answered: " + where, shipIdM.find());
         String shipId = shipIdM.group(1);
         assertTrue("ship must be managed: " + where, where.contains("\"managed\":true"));
         exec("tp @a " + readDouble(where, POS_X) + " " + (readDouble(where, POS_Y) + 4)

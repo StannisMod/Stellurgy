@@ -1,7 +1,8 @@
 package zmaster587.advancedRocketry.test.client;
 
-import com.github.stannismod.forge.testing.junit.AbstractClientE2ETest;
+import org.junit.FixMethodOrder;
 import org.junit.Test;
+import org.junit.runners.MethodSorters;
 
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -43,7 +44,13 @@ import static org.junit.Assert.assertTrue;
  * assertions therefore pin the CURRENT behaviour: when the atmosphere gate learns to resolve in
  * the ship frame this test goes red and must be rewritten to the new contract.</p>
  */
-public class VSShipAtmosphereFrameSpikeTest extends AbstractClientE2ETest {
+@FixMethodOrder(MethodSorters.NAME_ASCENDING)
+public class VSShipAtmosphereFrameSpikeTest extends AbstractSharedVsClientE2ETest {
+
+    @Override
+    protected String subsystem() {
+        return "vs-ship-atmosphere-frame";
+    }
 
     private static final Pattern BUILDER_POS =
             Pattern.compile("\"builderPos\":\\[(-?\\d+),(-?\\d+),(-?\\d+)]");
@@ -105,7 +112,7 @@ public class VSShipAtmosphereFrameSpikeTest extends AbstractClientE2ETest {
             bot().waitTicks(5);
             all = count("ship-count-all");
         }
-        assertTrue("ARRANGEMENT: assembly must create a VS ship (all=" + all + ", assemble="
+        scenario().requireArranged("assembly must create a VS ship (all=" + all + ", assemble="
                 + assemble + ")", all >= 1);
 
         int loaded = 0;
@@ -113,12 +120,12 @@ public class VSShipAtmosphereFrameSpikeTest extends AbstractClientE2ETest {
             bot().waitTicks(5);
             loaded = count("ship-count");
         }
-        assertTrue("ARRANGEMENT: the ship must LOAD with the client present (loaded=" + loaded
+        scenario().requireArranged("the ship must LOAD with the client present (loaded=" + loaded
                 + ", all=" + all + ")", loaded >= 1);
 
         String found = exec("artest vs find-seat 0 " + BX + " " + (BY + 5) + " " + BZ);
         Matcher sm = SEAT_SUB.matcher(found);
-        assertTrue("ARRANGEMENT: find-seat must resolve the ship's subspace seat: " + found,
+        scenario().requireArranged("find-seat must resolve the ship's subspace seat: " + found,
                 sm.find());
         int sx = Integer.parseInt(sm.group(1));
         int sy = Integer.parseInt(sm.group(2));
@@ -146,7 +153,7 @@ public class VSShipAtmosphereFrameSpikeTest extends AbstractClientE2ETest {
                 + " | worldCell=" + wx + "," + wy + "," + wz + " -> " + worldAtm);
 
         double separation = Math.abs(w[0] - vx) + Math.abs(w[1] - vy) + Math.abs(w[2] - vz);
-        assertTrue("ARRANGEMENT: the two frames must genuinely differ, else the comparison is "
+        scenario().requireArranged("the two frames must genuinely differ, else the comparison is "
                         + "vacuous (subspace=" + vx + "," + vy + "," + vz + " world=" + w[0] + ","
                         + w[1] + "," + w[2] + " separation=" + separation + ")",
                 separation > 100.0);
@@ -270,7 +277,7 @@ public class VSShipAtmosphereFrameSpikeTest extends AbstractClientE2ETest {
         String resp = exec("artest vs to-world 0 " + a[0] + " " + a[1] + " " + a[2]
                 + " " + sx + " " + sy + " " + sz);
         Matcher m = WORLD_XYZ.matcher(resp);
-        assertTrue("ARRANGEMENT: subspace->world mapping failed (anchor=" + a[0] + "," + a[1] + ","
+        scenario().requireArranged("subspace->world mapping failed (anchor=" + a[0] + "," + a[1] + ","
                 + a[2] + "): " + resp, m.find());
         return new double[]{Double.parseDouble(m.group(1)), Double.parseDouble(m.group(2)),
                 Double.parseDouble(m.group(3))};
@@ -287,10 +294,6 @@ public class VSShipAtmosphereFrameSpikeTest extends AbstractClientE2ETest {
     private int count(String sub) throws Exception {
         Matcher m = COUNT.matcher(exec("artest vs " + sub + " 0"));
         return m.find() ? Integer.parseInt(m.group(1)) : -1;
-    }
-
-    private String exec(String cmd) throws Exception {
-        return String.join("\n", serverClient().execute(cmd));
     }
 
     private String assembleFixture(int baseX, int baseY, int baseZ) throws Exception {

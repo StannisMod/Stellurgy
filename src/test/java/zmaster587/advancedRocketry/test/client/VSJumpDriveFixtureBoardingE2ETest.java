@@ -1,23 +1,15 @@
 package zmaster587.advancedRocketry.test.client;
 
-import java.nio.file.Files;
-import java.nio.file.Path;
 import java.util.Locale;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 import com.github.stannismod.forge.testing.TestTimeouts;
-import com.github.stannismod.forge.testing.client.ClientBot;
-import com.github.stannismod.forge.testing.client.RealClientHarness;
-import com.github.stannismod.forge.testing.junit.AbstractClientE2ETest;
-import com.github.stannismod.forge.testing.junit.AbstractHeadlessServerTest;
-import com.github.stannismod.forge.testing.server.RealDedicatedServerHarness;
 import com.google.gson.JsonObject;
 
-import org.junit.After;
-import org.junit.Assume;
-import org.junit.Before;
+import org.junit.FixMethodOrder;
 import org.junit.Test;
+import org.junit.runners.MethodSorters;
 import org.lwjgl.input.Keyboard;
 
 import zmaster587.advancedRocketry.hyperdrive.DriveTuning;
@@ -52,10 +44,21 @@ import static zmaster587.advancedRocketry.test.AdvancedRocketryTestConstants.SHI
  *       press so a red names the hop that failed rather than merely the outcome.</li>
  * </ol>
  *
- * <p>Assembly here is ARRANGEMENT, not subject: it is driven by the probe. Manual server + client
- * lifecycle, matching the other ship-boarding e2e tests.
+ * <p>Assembly here is ARRANGEMENT, not subject: it is driven by the probe.</p>
+ *
+ * <p>On the shared VS client base. It ran its own server + client pair per method until 2026-08-23,
+ * "matching the other ship-boarding e2e tests" — a reason to resemble its neighbours, never a reason
+ * to boot: its root was a fresh empty temp dir handed to a harness that makes one of those itself,
+ * and nothing was written into it before the server started. Off the shared base an arrangement
+ * failure here could not be TYPED as one either, and that is the half that mattered.</p>
  */
-public class VSJumpDriveFixtureBoardingE2ETest {
+@FixMethodOrder(MethodSorters.NAME_ASCENDING)
+public class VSJumpDriveFixtureBoardingE2ETest extends AbstractSharedVsClientE2ETest {
+
+    @Override
+    protected String subsystem() {
+        return "vs-jump-drive-boarding";
+    }
 
     private static final Pattern BUILDER_POS =
             Pattern.compile("\"builderPos\":\\[(-?\\d+),(-?\\d+),(-?\\d+)]");
@@ -112,58 +115,6 @@ public class VSJumpDriveFixtureBoardingE2ETest {
      */
     private static final int KEY_USE_ITEM = -99;
 
-    private Path root;
-    private RealDedicatedServerHarness serverHarness;
-    private RealClientHarness clientHarness;
-
-    @Before
-    public void startBoth() throws Exception {
-        Assume.assumeTrue("Server harness disabled - set -D" + AbstractHeadlessServerTest.PROP_HARNESS_ENABLED + "=true",
-                Boolean.parseBoolean(System.getProperty(
-                        AbstractHeadlessServerTest.PROP_HARNESS_ENABLED, "false")));
-        Assume.assumeTrue("Client harness disabled - set -D" + AbstractClientE2ETest.PROP_CLIENT_ENABLED + "=true",
-                Boolean.parseBoolean(System.getProperty(
-                        AbstractClientE2ETest.PROP_CLIENT_ENABLED, "false")));
-
-        root = Files.createTempDirectory("forge-jumpdrive-boarding-");
-        serverHarness = RealDedicatedServerHarness.startWith(root, false);
-        try {
-            clientHarness = RealClientHarness.start(serverHarness);
-        } catch (Exception startFailed) {
-            serverHarness.close();
-            serverHarness = null;
-            throw startFailed;
-        }
-    }
-
-    @After
-    public void stopBoth() throws Exception {
-        Exception first = null;
-        if (clientHarness != null) {
-            try {
-                clientHarness.close();
-            } catch (Exception e) {
-                first = e;
-            }
-            clientHarness = null;
-        }
-        if (serverHarness != null) {
-            try {
-                serverHarness.close();
-            } catch (Exception e) {
-                if (first == null) {
-                    first = e;
-                } else {
-                    first.addSuppressed(e);
-                }
-            }
-            serverHarness = null;
-        }
-        if (first != null) {
-            throw first;
-        }
-    }
-
     @Test
     public void aJumpCraftAssemblesWholeAndBothItsConsolesAnswerARealKeyPress() throws Exception {
 
@@ -176,7 +127,7 @@ public class VSJumpDriveFixtureBoardingE2ETest {
         exec("tp @a " + (BX + 600) + " 120 " + (BZ + 600) + " 0 0");
         bot().waitTicks(10);
         String assemble = assembleFixture();
-        assertTrue("ARRANGEMENT: a " + VARIANT + " build must route to a ship: " + assemble,
+        scenario().requireArranged("a " + VARIANT + " build must route to a ship: " + assemble,
                 assemble.contains("\"ok\":true"));
 
         exec("tp @a " + (BX + 0.5) + " " + (BY + 10) + " " + (BZ + 0.5) + " 0 0");
@@ -189,13 +140,13 @@ public class VSJumpDriveFixtureBoardingE2ETest {
                 yRest = Double.parseDouble(m.group(1));
             }
         }
-        assertTrue("ARRANGEMENT: the ship must LOAD with the client present: " + shipInfoAtBase(),
+        scenario().requireArranged("the ship must LOAD with the client present: " + shipInfoAtBase(),
                 !Double.isNaN(yRest));
 
         String found = findSeat();
         int[] seatSub = readTriple(found, SEAT_SUB);
         int[] afcSub = readTriple(found, AFC_SUB);
-        assertTrue("ARRANGEMENT: find-seat must resolve the ship's pilot seat AND the flight computer "
+        scenario().requireArranged("find-seat must resolve the ship's pilot seat AND the flight computer "
                         + "it was linked to — the whole layout below is addressed from the computer: "
                         + found,
                 seatSub != null && afcSub != null);
@@ -203,7 +154,7 @@ public class VSJumpDriveFixtureBoardingE2ETest {
         // The subspace copy is a RIGID relocation of the pad build, so the seat must sit at exactly
         // the offset it was built at. Without this control every derived address below is a guess,
         // and a component read as "missing" could just as easily be one read at the wrong cell.
-        assertTrue("ARRANGEMENT CONTROL: the ship's subspace copy must preserve the build's own "
+        scenario().requireArranged("CONTROL: the ship's subspace copy must preserve the build's own "
                         + "geometry — seat minus flight computer should be "
                         + describe(OFF_SEAT) + " but is "
                         + describe(new int[]{seatSub[0] - afcSub[0], seatSub[1] - afcSub[1],
@@ -283,7 +234,7 @@ public class VSJumpDriveFixtureBoardingE2ETest {
         // seat, whose world position a dedicated probe reports independently, before trusting it.
         double[] seatWorld = readTripleD(findSeat(), SHIP_WORLD);
         double[] seatMapped = toWorld(seatWorld, seatSub, 0.5, 0.2, 0.5);
-        assertTrue("ARRANGEMENT CONTROL: mapping the seat's own subspace cell through the ship's "
+        scenario().requireArranged("CONTROL: mapping the seat's own subspace cell through the ship's "
                         + "transform must land where the seat probe says the seat is; otherwise the "
                         + "console's aim point below is computed by an instrument that does not work."
                         + " probe=" + java.util.Arrays.toString(seatWorld)
@@ -415,7 +366,7 @@ public class VSJumpDriveFixtureBoardingE2ETest {
 
     /** Every hop of the aim, asserted separately, so a red says which one broke. */
     private void assertAimed(Aim aim, int[] targetSub, String what, String blockNeedle) {
-        assertTrue("ARRANGEMENT: the bot must OBSERVABLY stand within the server's interaction reach "
+        scenario().requireArranged("the bot must OBSERVABLY stand within the server's interaction reach "
                 + "of the " + what + ", or the press is discarded before the block ever sees it."
                 + aim.diagnosis, aim.distSq < MAX_INTERACT_DIST_SQ);
         assertTrue("HOP 1 (aim at the " + what + "): the client's crosshair must resolve to a BLOCK. "
@@ -482,14 +433,6 @@ public class VSJumpDriveFixtureBoardingE2ETest {
 
     // ---- helpers --------------------------------------------------------------------------------
 
-    private ClientBot bot() {
-        return clientHarness.bot();
-    }
-
-    private String exec(String cmd) throws Exception {
-        return String.join("\n", serverHarness.client().execute(cmd));
-    }
-
     private String shipInfoAtBase() throws Exception {
         return exec("artest vs ship-info 0 " + BX + " " + BY + " " + BZ
                 + " " + SHIP_CAPTURE_RADIUS_BLOCKS);
@@ -529,7 +472,7 @@ public class VSJumpDriveFixtureBoardingE2ETest {
             }
             bot().waitTicks(5);
         }
-        assertTrue("ARRANGEMENT: the bot's main hand must be EMPTY so the use press reaches the "
+        scenario().requireArranged("the bot's main hand must be EMPTY so the use press reaches the "
                 + "block rather than being consumed by a held item; held=" + heldId,
                 heldId != null && heldId.isEmpty());
     }
@@ -548,7 +491,7 @@ public class VSJumpDriveFixtureBoardingE2ETest {
             bot().waitTicks(5);
             off = !isRiding(bot().reportRidingEntity());
         }
-        assertTrue("ARRANGEMENT: the pilot must leave the seat before reaching for the console — a "
+        scenario().requireArranged("the pilot must leave the seat before reaching for the console — a "
                 + "seated player's use press goes to the ship, not to the block he is looking at.",
                 off);
     }
@@ -556,18 +499,18 @@ public class VSJumpDriveFixtureBoardingE2ETest {
     private String assembleFixture() throws Exception {
         int cx1 = (BX - 2) >> 4, cz1 = (BZ - 2) >> 4;
         int cx2 = (BX + 7) >> 4, cz2 = (BZ + 7) >> 4;
-        assertTrue("ARRANGEMENT: chunk warmup failed",
+        scenario().requireArranged("chunk warmup failed",
                 exec("artest chunk warmup 0 " + cx1 + " " + cz1 + " " + cx2 + " " + cz2)
                         .contains("\"ok\":true"));
-        assertTrue("ARRANGEMENT: pre-clear failed",
+        scenario().requireArranged("pre-clear failed",
                 exec("artest fill 0 " + (BX - 2) + " " + (BY + 1) + " " + (BZ - 2)
                         + " " + (BX + 7) + " " + (BY + 12) + " " + (BZ + 7) + " minecraft:air")
                         .contains("\"ok\":true"));
         String fixture = exec("artest fixture rocket 0 " + BX + " " + BY + " " + BZ + " " + VARIANT);
-        assertTrue("ARRANGEMENT: fixture (" + VARIANT + ") failed: " + fixture,
+        scenario().requireArranged("fixture (" + VARIANT + ") failed: " + fixture,
                 fixture.contains("\"ok\":true"));
         Matcher bp = BUILDER_POS.matcher(fixture);
-        assertTrue("ARRANGEMENT: fixture missing builderPos: " + fixture, bp.find());
+        scenario().requireArranged("fixture missing builderPos: " + fixture, bp.find());
         return exec("artest rocket assemble 0 " + bp.group(1) + " " + bp.group(2) + " " + bp.group(3));
     }
 

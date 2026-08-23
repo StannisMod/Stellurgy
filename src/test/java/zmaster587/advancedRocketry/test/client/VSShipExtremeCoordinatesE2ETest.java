@@ -1,15 +1,15 @@
 package zmaster587.advancedRocketry.test.client;
 
-import com.github.stannismod.forge.testing.junit.AbstractClientE2ETest;
 import org.junit.Ignore;
+import org.junit.FixMethodOrder;
 import org.junit.Test;
+import org.junit.runners.MethodSorters;
 import org.lwjgl.input.Keyboard;
 
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 import static org.junit.Assert.assertTrue;
-import static zmaster587.advancedRocketry.test.AdvancedRocketryTestConstants.SHIP_CAPTURE_RADIUS_BLOCKS;
 
 /**
  * SPIKE e2e: is a tier-2 ship CONTROLLABLE — and does the real client keep tracking it — at extreme
@@ -38,14 +38,19 @@ import static zmaster587.advancedRocketry.test.AdvancedRocketryTestConstants.SHI
  * relocation-SEQUENCE findings needing their own ordinary-coordinates control; the extreme-|X|
  * precision leg stays an open follow-up until they are resolved.</p>
  */
-public class VSShipExtremeCoordinatesE2ETest extends AbstractClientE2ETest {
+@FixMethodOrder(MethodSorters.NAME_ASCENDING)
+public class VSShipExtremeCoordinatesE2ETest extends AbstractSharedVsClientE2ETest {
+
+    @Override
+    protected String subsystem() {
+        return "vs-ship-extreme-coordinates";
+    }
 
     private static final Pattern BUILDER_POS =
             Pattern.compile("\"builderPos\":\\[(-?\\d+),(-?\\d+),(-?\\d+)]");
     private static final Pattern POS_Y = Pattern.compile("\"posY\":(-?[0-9.E\\-]+)");
     private static final Pattern COUNT = Pattern.compile("\"count\":(-?\\d+)");
     private static final Pattern DUMMY_ID = Pattern.compile("\"dummyId\":(-?\\d+)");
-    private static final Pattern SHIP_ID = Pattern.compile("\"id\":\"([^\"]*)\"");
 
     private static final String VARIANT = "with-pilot-seat";
     private static final int BX = 3400, BY = 64, BZ = 3400;
@@ -82,12 +87,6 @@ public class VSShipExtremeCoordinatesE2ETest extends AbstractClientE2ETest {
     private static final double RIDER_TRACKING_TOLERANCE = 3.0;
 
     /**
-     * How far from its base a {@code ship-info} answer may be and still be attributed to this
-     * scenario's freshly assembled ship, in blocks — spent ONCE, on the capture below.
-     */
-    private static final int SHIP_QUERY_RADIUS = SHIP_CAPTURE_RADIUS_BLOCKS;
-
-    /**
      * This scenario's ship, by IDENTITY. Captured once at the base, where the ship is the only
      * thing that can be there, and used for every question afterwards.
      *
@@ -99,10 +98,6 @@ public class VSShipExtremeCoordinatesE2ETest extends AbstractClientE2ETest {
      * it is trying to explain.</p>
      */
     private String shipId;
-
-    private String exec(String cmd) throws Exception {
-        return String.join("\n", serverClient().execute(cmd));
-    }
 
     @Ignore("The arrangement can no longer produce the state under test. This scenario reaches"
             + " extreme Y by rigid-teleporting a ship in an ORDINARY world, and an ordinary world now"
@@ -178,7 +173,7 @@ public class VSShipExtremeCoordinatesE2ETest extends AbstractClientE2ETest {
                 + " be flown — the unpark must take: " + unparked, unparked.contains("\"ok\":true"));
         bot().waitTicks(10);
         String serverInfoAfterTp = shipInfoById();
-        assertTrue("ARRANGEMENT: the teleported ship must still be loaded, or there is no server "
+        scenario().requireArranged("the teleported ship must still be loaded, or there is no server "
                         + "pose for the rider to be compared against: " + serverInfoAfterTp,
                 serverInfoAfterTp.contains("\"managed\":true"));
 
@@ -280,12 +275,6 @@ public class VSShipExtremeCoordinatesE2ETest extends AbstractClientE2ETest {
     private int count(String sub) throws Exception {
         Matcher m = COUNT.matcher(exec("artest vs " + sub + " 0"));
         return m.find() ? Integer.parseInt(m.group(1)) : -1;
-    }
-
-    /** The {@code "id"} field of a {@code ship-info} reply, or null when it carries none. */
-    private static String readShipId(String shipInfoJson) {
-        Matcher m = SHIP_ID.matcher(shipInfoJson);
-        return m.find() && !m.group(1).isEmpty() ? m.group(1) : null;
     }
 
     private double readDouble(String json, Pattern p) {

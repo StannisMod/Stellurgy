@@ -774,9 +774,11 @@ private String chat() throws Exception {
                         && bot().reportWeather().get("dim").getAsInt() != hyperDimNow; settle++) {
                     bot().waitTicks(1);
                 }
-                assertEquals("ARRANGEMENT: the client never reached the corridor's own dimension, so "
-                                + "the baseline below would be taken in the cell it left",
-                        hyperDimNow, bot().reportWeather().get("dim").getAsInt());
+                int clientDimNow = bot().reportWeather().get("dim").getAsInt();
+                scenario().requireArranged("the client never reached the corridor's own dimension, so "
+                                + "the baseline below would be taken in the cell it left — corridor "
+                                + hyperDimNow + ", client " + clientDimNow,
+                        clientDimNow == hyperDimNow);
                 tunnelAtStart = tunnelFrames();
                 scenario().record("tunnelAtStart", tunnelAtStart);
             }
@@ -1023,8 +1025,9 @@ private String chat() throws Exception {
         JsonObject standing = bot().reportRidingEntity();
         scenario().requireArranged("he must be on his FEET, or this leg is the seated case again: "
                 + standing, !standing.get("riding").getAsBoolean());
-        assertEquals("ARRANGEMENT: he must still be in hyperspace, or this reads a cell's sky",
-                hyperDim, bot().reportWeather().get("dim").getAsInt());
+        int standingDim = bot().reportWeather().get("dim").getAsInt();
+        scenario().requireArranged("he must still be in hyperspace, or this reads a cell's sky —"
+                + " corridor " + hyperDim + ", client " + standingDim, standingDim == hyperDim);
 
         long skyStanding = skyFrames();
         long tunnelStanding = tunnelFrames();
@@ -1476,9 +1479,11 @@ private String chat() throws Exception {
                     && readBool(exec("artest vs deck-capture"), "alreadyTracked");
         }
         String captureOnArrival = exec("artest vs deck-capture");
-        assertEquals("ARRANGEMENT: the arrival must have carried him at all — his own client must be in"
-                + " the TARGET cell before his posture there means anything: " + captureOnArrival,
-                targetDim, clientDim("the arrival verdict"));
+        int arrivedDim = clientDim("the arrival verdict");
+        scenario().requireArranged("the arrival must have carried him at all — his own client must be in"
+                + " the TARGET cell (" + targetDim + ") before his posture there means anything; it is"
+                + " in " + arrivedDim + ": " + captureOnArrival,
+                arrivedDim == targetDim);
         // ── THE CONTRACT, before the arrangement-shaped reading below ───────────────────────────
         // Posture first, deliberately: being off the deck is a CONSEQUENCE of having been seated, so a
         // red that leads with the missing deck capture describes the symptom's shadow. Riding at all is

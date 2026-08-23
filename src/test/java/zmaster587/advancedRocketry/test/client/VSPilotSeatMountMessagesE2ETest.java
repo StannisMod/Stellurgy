@@ -1,8 +1,9 @@
 package zmaster587.advancedRocketry.test.client;
 
-import com.github.stannismod.forge.testing.junit.AbstractClientE2ETest;
 import com.google.gson.JsonObject;
+import org.junit.FixMethodOrder;
 import org.junit.Test;
+import org.junit.runners.MethodSorters;
 
 import java.util.Locale;
 import java.util.regex.Matcher;
@@ -29,16 +30,18 @@ import static org.junit.Assert.assertTrue;
  * <p>Runs on a bare world seat (no ship assembly): these contracts live at the seat itself, and
  * the world frame is the one place the harness can land a real right-click. No VS required.</p>
  */
-public class VSPilotSeatMountMessagesE2ETest extends AbstractClientE2ETest {
+@FixMethodOrder(MethodSorters.NAME_ASCENDING)
+public class VSPilotSeatMountMessagesE2ETest extends AbstractSharedVsClientE2ETest {
+
+    @Override
+    protected String subsystem() {
+        return "vs-pilot-seat-messages";
+    }
 
     private static final int SEAT_X = 4200, SEAT_Y = 71, SEAT_Z = 4200;
     /** Leg 4's own seat, clear of leg 3's NPC occupant so neither leg has to be torn down. */
     private static final int LINKED_X = SEAT_X + 2, LINKED_Z = SEAT_Z + 2;
     private static final Pattern OCCUPANT_NAME = Pattern.compile("\"occupantName\":\"([^\"]+)\"");
-
-    private String exec(String cmd) throws Exception {
-        return String.join("\n", serverClient().execute(cmd));
-    }
 
     @Test
     public void theSeatAnswersTheClickerInsteadOfFailingSilently() throws Exception {
@@ -52,7 +55,7 @@ public class VSPilotSeatMountMessagesE2ETest extends AbstractClientE2ETest {
                 + " " + (SEAT_X + 3) + " " + (SEAT_Y + 4) + " " + (SEAT_Z + 3) + " minecraft:air");
         String place = exec("artest fill 0 " + SEAT_X + " " + SEAT_Y + " " + SEAT_Z
                 + " " + SEAT_X + " " + SEAT_Y + " " + SEAT_Z + " advancedrocketry:pilotSeat");
-        assertTrue("ARRANGEMENT: placing the pilot seat failed: " + place,
+        scenario().requireArranged("placing the pilot seat failed: " + place,
                 place.contains("\"ok\":true"));
 
         standBesideTheSeat();
@@ -82,17 +85,17 @@ public class VSPilotSeatMountMessagesE2ETest extends AbstractClientE2ETest {
         exec("artest player dismount");
         awaitRiding(30, false);
         String occupy = exec("artest vs seat-occupy 0 " + SEAT_X + " " + SEAT_Y + " " + SEAT_Z);
-        assertTrue("ARRANGEMENT: the seat-occupy probe must seat an NPC occupant: " + occupy,
+        scenario().requireArranged("the seat-occupy probe must seat an NPC occupant: " + occupy,
                 occupy.contains("\"ok\":true") && occupy.contains("\"mounted\":true"));
         Matcher nm = OCCUPANT_NAME.matcher(occupy);
-        assertTrue("ARRANGEMENT: seat-occupy must report the occupant's name: " + occupy, nm.find());
+        scenario().requireArranged("seat-occupy must report the occupant's name: " + occupy, nm.find());
         String occupantName = nm.group(1);
 
         standBesideTheSeat();
         // The occupancy must still HOLD at the moment of the click — measured server-side, not
         // assumed from the occupy call an instant earlier.
         String occupancy = exec("artest vs seat-status 0 " + SEAT_X + " " + SEAT_Y + " " + SEAT_Z);
-        assertTrue("ARRANGEMENT: the NPC occupant must still be seated when the bot clicks (it was "
+        scenario().requireArranged("the NPC occupant must still be seated when the bot clicks (it was "
                         + "mounted a moment ago): " + occupancy,
                 occupancy.contains("\"passengers\":[{"));
         bot().interactBlock(SEAT_X, SEAT_Y, SEAT_Z);
@@ -120,14 +123,14 @@ public class VSPilotSeatMountMessagesE2ETest extends AbstractClientE2ETest {
         awaitRiding(30, false);
         String place2 = exec("artest fill 0 " + LINKED_X + " " + SEAT_Y + " " + LINKED_Z
                 + " " + LINKED_X + " " + SEAT_Y + " " + LINKED_Z + " advancedrocketry:pilotSeat");
-        assertTrue("ARRANGEMENT: placing the second pilot seat failed: " + place2,
+        scenario().requireArranged("placing the second pilot seat failed: " + place2,
                 place2.contains("\"ok\":true"));
         String linked = exec("artest vs seat-link 0 " + LINKED_X + " " + SEAT_Y + " " + LINKED_Z
                 + " " + LINKED_X + " " + (SEAT_Y + 1) + " " + LINKED_Z);
-        assertTrue("ARRANGEMENT: the seat must end up LINKED — without that this leg tests the same "
+        scenario().requireArranged("the seat must end up LINKED — without that this leg tests the same "
                         + "unlinked case as leg 1 and proves nothing: " + linked,
                 linked.contains("\"linked\":true"));
-        assertTrue("ARRANGEMENT CONTROL: and it must NOT be managed by a ship, or the notice is "
+        scenario().requireArranged("CONTROL: and it must NOT be managed by a ship, or the notice is "
                         + "correctly absent for a reason that has nothing to do with the bug: " + linked,
                 linked.contains("\"managedByShip\":false"));
 
@@ -163,7 +166,7 @@ public class VSPilotSeatMountMessagesE2ETest extends AbstractClientE2ETest {
                 distSq = dx * dx + dy * dy + dz * dz;
             }
         }
-        assertTrue("ARRANGEMENT: the client must observably stand within reach of the seat, or the "
+        scenario().requireArranged("the client must observably stand within reach of the seat, or the "
                 + "right-click is dropped before the block sees it. state=" + state, distSq < 25.0);
     }
 
@@ -183,7 +186,7 @@ public class VSPilotSeatMountMessagesE2ETest extends AbstractClientE2ETest {
             }
             bot().waitTicks(5);
         }
-        assertTrue("ARRANGEMENT: the bot's hand must be observably empty; held=" + heldId,
+        scenario().requireArranged("the bot's hand must be observably empty; held=" + heldId,
                 heldId != null && heldId.isEmpty());
     }
 
@@ -224,7 +227,7 @@ public class VSPilotSeatMountMessagesE2ETest extends AbstractClientE2ETest {
             }
             bot().waitTicks(10);
         }
-        assertTrue("ARRANGEMENT: the previous action-bar message never expired within " + maxTicks
+        scenario().requireArranged("the previous action-bar message never expired within " + maxTicks
                 + " ticks", false);
     }
 

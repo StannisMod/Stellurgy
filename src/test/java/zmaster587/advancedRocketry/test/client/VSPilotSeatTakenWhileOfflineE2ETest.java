@@ -3,10 +3,11 @@ package zmaster587.advancedRocketry.test.client;
 import zmaster587.advancedRocketry.test.GameTicks;
 
 import com.github.stannismod.forge.testing.TestTimeouts;
-import com.github.stannismod.forge.testing.junit.AbstractClientE2ETest;
 import com.google.gson.JsonObject;
 
+import org.junit.FixMethodOrder;
 import org.junit.Test;
+import org.junit.runners.MethodSorters;
 
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -38,7 +39,13 @@ import static org.junit.Assert.assertTrue;
  * second human client is not needed to make the seat contested).</p>
  *
  */
-public class VSPilotSeatTakenWhileOfflineE2ETest extends AbstractClientE2ETest {
+@FixMethodOrder(MethodSorters.NAME_ASCENDING)
+public class VSPilotSeatTakenWhileOfflineE2ETest extends AbstractSharedVsClientE2ETest {
+
+    @Override
+    protected String subsystem() {
+        return "vs-pilot-seat-offline";
+    }
 
     /**
      * World the server is given to notice the logout, in SERVER ticks - the old 40 x 250 ms with a
@@ -79,7 +86,7 @@ public class VSPilotSeatTakenWhileOfflineE2ETest extends AbstractClientE2ETest {
         bot().waitTicks(10);
         int shipsBefore = count("ship-count-all");
         String assemble = assembleFixture(BX, BY, BZ);
-        assertTrue("ARRANGEMENT: a with-pilot-seat build must route to a ship: " + assemble,
+        scenario().requireArranged("a with-pilot-seat build must route to a ship: " + assemble,
                 assemble.contains("\"rocketCount\":0"));
         // THE FORK MULTIPLIER SURVIVES HERE, and this is what it is waiting on: VS builds the ship on
         // its OWN thread, off the game loop entirely. That work finishes in wall-clock time, so a busy
@@ -92,7 +99,7 @@ public class VSPilotSeatTakenWhileOfflineE2ETest extends AbstractClientE2ETest {
             bot().waitTicks(5);
             all = count("ship-count-all");
         }
-        assertTrue("ARRANGEMENT: assembly must create a NEW VS ship (was " + shipsBefore
+        scenario().requireArranged("assembly must create a NEW VS ship (was " + shipsBefore
                 + ", now " + all + ")", all > shipsBefore);
         // Keep the ship observable while nobody is online: the offline window below leaves the
         // server empty, and an unloaded ship would fail every probe the arrangement depends on.
@@ -102,18 +109,18 @@ public class VSPilotSeatTakenWhileOfflineE2ETest extends AbstractClientE2ETest {
 
         String mountInfo = exec("artest vs seat-mount 0");
         Matcher dm = DUMMY_ID.matcher(mountInfo);
-        assertTrue("ARRANGEMENT: seat-mount must report a dummy id: " + mountInfo, dm.find());
+        scenario().requireArranged("seat-mount must report a dummy id: " + mountInfo, dm.find());
         Matcher sm = SEAT_AT.matcher(mountInfo);
-        assertTrue("ARRANGEMENT: seat-mount must report the seat's block pos: " + mountInfo,
+        scenario().requireArranged("seat-mount must report the seat's block pos: " + mountInfo,
                 sm.find());
         final int seatX = Integer.parseInt(sm.group(1));
         final int seatY = Integer.parseInt(sm.group(2));
         final int seatZ = Integer.parseInt(sm.group(3));
         String mount = exec("artest player mount-entity " + dm.group(1));
-        assertTrue("ARRANGEMENT: bot must mount the seat dummy: " + mount,
+        scenario().requireArranged("bot must mount the seat dummy: " + mount,
                 mount.contains("\"mounted\":true"));
         bot().waitTicks(10);
-        assertTrue("ARRANGEMENT: the CLIENT must confirm it is seated before it logs out: "
+        scenario().requireArranged("the CLIENT must confirm it is seated before it logs out: "
                 + bot().reportRidingEntity(), isRiding(bot().reportRidingEntity()));
 
         // ---- ACT 1: a REAL logout that leaves the world running (disconnect half only). ---------
@@ -129,7 +136,7 @@ public class VSPilotSeatTakenWhileOfflineE2ETest extends AbstractClientE2ETest {
             return offline[0].contains("\"error\":\"no such player\"")
                     || offline[0].contains("\"error\":\"no players connected\"");
         });
-        assertTrue("ARRANGEMENT: the server must see the pilot GONE after the disconnect (his "
+        scenario().requireArranged("the server must see the pilot GONE after the disconnect (his "
                 + "player data, mount included, written to disk): " + offline[0], gone);
 
         // With no player near them the ship's chunks can drop out from under the probes below —
@@ -141,22 +148,22 @@ public class VSPilotSeatTakenWhileOfflineE2ETest extends AbstractClientE2ETest {
         // because the occupy below must therefore spawn the seat's fresh (single) dummy, and
         // because it is exactly what the returning login will try to re-spawn back into the world.
         String seatWhileGone = exec("artest vs seat-status 0 " + seatX + " " + seatY + " " + seatZ);
-        assertTrue("ARRANGEMENT: with its pilot offline the seat must have NO bound dummy left "
+        scenario().requireArranged("with its pilot offline the seat must have NO bound dummy left "
                 + "(vanilla persists the mount inside the player's own data): " + seatWhileGone,
                 seatWhileGone.contains("\"dummyFound\":false"));
 
         // ---- ACT 2: someone takes the seat while he is offline. ---------------------------------
         String occupy = exec("artest vs seat-occupy 0 " + seatX + " " + seatY + " " + seatZ);
-        assertTrue("ARRANGEMENT: the seat-occupy probe must seat an NPC occupant: " + occupy,
+        scenario().requireArranged("the seat-occupy probe must seat an NPC occupant: " + occupy,
                 occupy.contains("\"ok\":true") && occupy.contains("\"mounted\":true"));
         Matcher nm = OCCUPANT_NAME.matcher(occupy);
-        assertTrue("ARRANGEMENT: seat-occupy must report the occupant's name: " + occupy, nm.find());
+        scenario().requireArranged("seat-occupy must report the occupant's name: " + occupy, nm.find());
         final String occupantName = nm.group(1);
         Matcher om = OCCUPANT_ID.matcher(occupy);
-        assertTrue("ARRANGEMENT: seat-occupy must report the occupant's id: " + occupy, om.find());
+        scenario().requireArranged("seat-occupy must report the occupant's id: " + occupy, om.find());
         final String occupantId = om.group(1);
         String occupancy = exec("artest vs seat-status 0 " + seatX + " " + seatY + " " + seatZ);
-        assertTrue("ARRANGEMENT: the occupancy must HOLD before the pilot returns: " + occupancy,
+        scenario().requireArranged("the occupancy must HOLD before the pilot returns: " + occupancy,
                 occupancy.contains("\"id\":" + occupantId));
 
         // ---- ACT 3: the pilot comes back — a real fresh login over his saved data. --------------
@@ -252,23 +259,19 @@ public class VSPilotSeatTakenWhileOfflineE2ETest extends AbstractClientE2ETest {
     private String assembleFixture(int baseX, int baseY, int baseZ) throws Exception {
         int cx1 = (baseX - 2) >> 4, cz1 = (baseZ - 2) >> 4;
         int cx2 = (baseX + 7) >> 4, cz2 = (baseZ + 7) >> 4;
-        assertTrue("ARRANGEMENT: chunk warmup failed",
+        scenario().requireArranged("chunk warmup failed",
                 exec("artest chunk warmup 0 " + cx1 + " " + cz1 + " " + cx2 + " " + cz2)
                         .contains("\"ok\":true"));
-        assertTrue("ARRANGEMENT: pre-clear failed",
+        scenario().requireArranged("pre-clear failed",
                 exec("artest fill 0 " + (baseX - 2) + " " + (baseY + 1) + " " + (baseZ - 2)
                         + " " + (baseX + 7) + " " + (baseY + 10) + " " + (baseZ + 7) + " minecraft:air")
                         .contains("\"ok\":true"));
         String fixture = exec("artest fixture rocket 0 " + baseX + " " + baseY + " " + baseZ + " " + VARIANT);
-        assertTrue("ARRANGEMENT: fixture (" + VARIANT + ") failed: " + fixture,
+        scenario().requireArranged("fixture (" + VARIANT + ") failed: " + fixture,
                 fixture.contains("\"ok\":true"));
         Matcher bp = BUILDER_POS.matcher(fixture);
-        assertTrue("ARRANGEMENT: fixture missing builderPos: " + fixture, bp.find());
+        scenario().requireArranged("fixture missing builderPos: " + fixture, bp.find());
         return exec("artest rocket assemble 0 " + bp.group(1) + " " + bp.group(2) + " " + bp.group(3));
-    }
-
-    private String exec(String cmd) throws Exception {
-        return String.join("\n", serverClient().execute(cmd));
     }
 
     private int count(String sub) throws Exception {

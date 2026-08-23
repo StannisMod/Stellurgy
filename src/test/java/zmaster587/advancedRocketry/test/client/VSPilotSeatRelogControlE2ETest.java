@@ -1,10 +1,11 @@
 package zmaster587.advancedRocketry.test.client;
 
 import com.github.stannismod.forge.testing.TestTimeouts;
-import com.github.stannismod.forge.testing.junit.AbstractClientE2ETest;
 import com.google.gson.JsonObject;
 
+import org.junit.FixMethodOrder;
 import org.junit.Test;
+import org.junit.runners.MethodSorters;
 import org.lwjgl.input.Keyboard;
 
 import java.util.regex.Matcher;
@@ -31,7 +32,13 @@ import static org.junit.Assert.assertTrue;
  * observation are the real client's (held key in; client-rendered rider altitude out).</p>
  *
  */
-public class VSPilotSeatRelogControlE2ETest extends AbstractClientE2ETest {
+@FixMethodOrder(MethodSorters.NAME_ASCENDING)
+public class VSPilotSeatRelogControlE2ETest extends AbstractSharedVsClientE2ETest {
+
+    @Override
+    protected String subsystem() {
+        return "vs-pilot-seat-relog-control";
+    }
 
     private static final Pattern BUILDER_POS =
             Pattern.compile("\"builderPos\":\\[(-?\\d+),(-?\\d+),(-?\\d+)]");
@@ -52,7 +59,7 @@ public class VSPilotSeatRelogControlE2ETest extends AbstractClientE2ETest {
         bot().waitTicks(10);
         int shipsBefore = count("ship-count-all");
         String assemble = assembleFixture(BX, BY, BZ);
-        assertTrue("ARRANGEMENT: a with-pilot-seat build must route to a ship: " + assemble,
+        scenario().requireArranged("a with-pilot-seat build must route to a ship: " + assemble,
                 assemble.contains("\"rocketCount\":0"));
         int all = shipsBefore;
         // THE MULTIPLIER STAYS. What it waits on is VS building the ship on its OWN thread, off the
@@ -63,23 +70,23 @@ public class VSPilotSeatRelogControlE2ETest extends AbstractClientE2ETest {
             bot().waitTicks(5);
             all = count("ship-count-all");
         }
-        assertTrue("ARRANGEMENT: assembly must create a NEW VS ship (was " + shipsBefore
+        scenario().requireArranged("assembly must create a NEW VS ship (was " + shipsBefore
                 + ", now " + all + ")", all > shipsBefore);
         exec("tp @a " + (BX + 0.5) + " " + (BY + 6) + " " + (BZ + 0.5) + " 0 0");
         bot().waitTicks(40);
 
         String mountInfo = exec("artest vs seat-mount 0");
         Matcher dm = DUMMY_ID.matcher(mountInfo);
-        assertTrue("ARRANGEMENT: seat-mount must report a dummy id: " + mountInfo, dm.find());
+        scenario().requireArranged("seat-mount must report a dummy id: " + mountInfo, dm.find());
         String mount = exec("artest player mount-entity " + dm.group(1));
-        assertTrue("ARRANGEMENT: bot must mount the seat dummy: " + mount,
+        scenario().requireArranged("bot must mount the seat dummy: " + mount,
                 mount.contains("\"mounted\":true"));
         bot().waitTicks(10);
 
         // ---- CONTROL LEG (pre-relog): the chain works before the relog, or the post-relog leg
         // cannot indict the relog. -----------------------------------------------------------
         Climb before = climbWith(Keyboard.KEY_R, clientPlayerY(), budget);
-        assertTrue("ARRANGEMENT (control leg): the pilot must be able to fly BEFORE the relog. "
+        scenario().requireArranged("control leg: the pilot must be able to fly BEFORE the relog. "
                 + before, before.climbed());
         bot().waitTicks(30); // let the station-hold settle the hovering ship
 
@@ -206,23 +213,19 @@ public class VSPilotSeatRelogControlE2ETest extends AbstractClientE2ETest {
     private String assembleFixture(int baseX, int baseY, int baseZ) throws Exception {
         int cx1 = (baseX - 2) >> 4, cz1 = (baseZ - 2) >> 4;
         int cx2 = (baseX + 7) >> 4, cz2 = (baseZ + 7) >> 4;
-        assertTrue("ARRANGEMENT: chunk warmup failed",
+        scenario().requireArranged("chunk warmup failed",
                 exec("artest chunk warmup 0 " + cx1 + " " + cz1 + " " + cx2 + " " + cz2)
                         .contains("\"ok\":true"));
-        assertTrue("ARRANGEMENT: pre-clear failed",
+        scenario().requireArranged("pre-clear failed",
                 exec("artest fill 0 " + (baseX - 2) + " " + (baseY + 1) + " " + (baseZ - 2)
                         + " " + (baseX + 7) + " " + (baseY + 10) + " " + (baseZ + 7) + " minecraft:air")
                         .contains("\"ok\":true"));
         String fixture = exec("artest fixture rocket 0 " + baseX + " " + baseY + " " + baseZ + " " + VARIANT);
-        assertTrue("ARRANGEMENT: fixture (" + VARIANT + ") failed: " + fixture,
+        scenario().requireArranged("fixture (" + VARIANT + ") failed: " + fixture,
                 fixture.contains("\"ok\":true"));
         Matcher bp = BUILDER_POS.matcher(fixture);
-        assertTrue("ARRANGEMENT: fixture missing builderPos: " + fixture, bp.find());
+        scenario().requireArranged("fixture missing builderPos: " + fixture, bp.find());
         return exec("artest rocket assemble 0 " + bp.group(1) + " " + bp.group(2) + " " + bp.group(3));
-    }
-
-    private String exec(String cmd) throws Exception {
-        return String.join("\n", serverClient().execute(cmd));
     }
 
     private int count(String sub) throws Exception {

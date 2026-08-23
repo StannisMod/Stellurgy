@@ -1,26 +1,17 @@
 package zmaster587.advancedRocketry.test.client;
 
-import java.nio.file.Files;
-import java.nio.file.Path;
 import java.util.Locale;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-import com.github.stannismod.forge.testing.client.ClientBot;
-import com.github.stannismod.forge.testing.client.RealClientHarness;
-import com.github.stannismod.forge.testing.junit.AbstractClientE2ETest;
-import com.github.stannismod.forge.testing.junit.AbstractHeadlessServerTest;
-import com.github.stannismod.forge.testing.server.RealDedicatedServerHarness;
 import com.google.gson.JsonObject;
 
-import org.junit.After;
-import org.junit.Assume;
-import org.junit.Before;
+import org.junit.FixMethodOrder;
 import org.junit.Test;
+import org.junit.runners.MethodSorters;
 import org.lwjgl.input.Keyboard;
 
 import static org.junit.Assert.assertTrue;
-import static zmaster587.advancedRocketry.test.AdvancedRocketryTestConstants.SHIP_CAPTURE_RADIUS_BLOCKS;
 
 /**
  * A player who SITS DOWN IN THE PILOT SEAT BEFORE HIS SHIP IS ASSEMBLED must still be flying that
@@ -82,21 +73,27 @@ import static zmaster587.advancedRocketry.test.AdvancedRocketryTestConstants.SHI
  * every seated pilot's binding for re-expression onto the relocated seat, and both cells must stay
  * green.</p>
  *
- * <p>Manual server + client lifecycle rather than the shared base class, because the config has to be
- * written into the game directory BEFORE the server boots and the base class owns a throwaway root
- * it never exposes. Each method pays a full harness boot; that cost is accepted here because the
- * discrimination between the two variables is the entire point of the file.</p>
+ * <p>On the shared VS client base. This file ran its own server + client pair per method until
+ * 2026-08-23, justified by a config that "has to be written into the game directory BEFORE the
+ * server boots" - it writes none, and its root was a fresh empty temp dir handed to a harness that
+ * makes one of those itself. The second boot bought nothing, and off the shared base an arrangement
+ * failure here could not even be TYPED as one: the two are the same move.</p>
  *
  * <p></p>
  */
-public class VSPreAssemblyBoardingPilotControlE2ETest {
+@FixMethodOrder(MethodSorters.NAME_ASCENDING)
+public class VSPreAssemblyBoardingPilotControlE2ETest extends AbstractSharedVsClientE2ETest {
+
+    @Override
+    protected String subsystem() {
+        return "vs-pre-assembly-boarding";
+    }
 
     private static final Pattern BUILDER_POS =
             Pattern.compile("\"builderPos\":\\[(-?\\d+),(-?\\d+),(-?\\d+)]");
     private static final Pattern POS_Y = Pattern.compile("\"posY\":(-?[0-9.E\\-]+)");
-    private static final Pattern SHIP_ID = Pattern.compile("\"id\":\"([^\"]*)\"");
 
-    /** This scenario's ship, by identity — see {@link #captureShipId}. */
+    /** This scenario's ship, by identity — see the base's {@code captureShipIdAt}. */
     private String shipUuid;
     private static final Pattern DUMMY_ID = Pattern.compile("\"dummyId\":(-?\\d+)");
     private static final Pattern SEAT_XYZ = Pattern.compile(
@@ -164,61 +161,8 @@ public class VSPreAssemblyBoardingPilotControlE2ETest {
         RIGHT_CLICK
     }
 
-    private Path root;
-    private RealDedicatedServerHarness serverHarness;
-    private RealClientHarness clientHarness;
-
     /** Where the fixture reported its rocket builder - the block the assembly step is driven from. */
     private int builderX, builderY, builderZ;
-
-    @Before
-    public void startBoth() throws Exception {
-        Assume.assumeTrue("Server harness disabled - set -D" + AbstractHeadlessServerTest.PROP_HARNESS_ENABLED + "=true",
-                Boolean.parseBoolean(System.getProperty(
-                        AbstractHeadlessServerTest.PROP_HARNESS_ENABLED, "false")));
-        Assume.assumeTrue("Client harness disabled - set -D" + AbstractClientE2ETest.PROP_CLIENT_ENABLED + "=true",
-                Boolean.parseBoolean(System.getProperty(
-                        AbstractClientE2ETest.PROP_CLIENT_ENABLED, "false")));
-
-        root = Files.createTempDirectory("forge-preassembly-boarding-");
-
-        serverHarness = RealDedicatedServerHarness.startWith(root, false);
-        try {
-            clientHarness = RealClientHarness.start(serverHarness);
-        } catch (Exception startFailed) {
-            serverHarness.close();
-            serverHarness = null;
-            throw startFailed;
-        }
-    }
-
-    @After
-    public void stopBoth() throws Exception {
-        Exception first = null;
-        if (clientHarness != null) {
-            try {
-                clientHarness.close();
-            } catch (Exception e) {
-                first = e;
-            }
-            clientHarness = null;
-        }
-        if (serverHarness != null) {
-            try {
-                serverHarness.close();
-            } catch (Exception e) {
-                if (first == null) {
-                    first = e;
-                } else {
-                    first.addSuppressed(e);
-                }
-            }
-            serverHarness = null;
-        }
-        if (first != null) {
-            throw first;
-        }
-    }
 
     /**
      * The human's own route: right-click the seat of a craft that is still loose blocks, then
@@ -249,7 +193,7 @@ public class VSPreAssemblyBoardingPilotControlE2ETest {
         // The subsystem must actually be up, or the run silently degrades into a different
         // configuration than the one a player is in and its result would mean nothing.
         String status = exec("artest space subsystem-status");
-        assertTrue("ARRANGEMENT: the production space subsystem must be REGISTERED - the seeded "
+        scenario().requireArranged("the production space subsystem must be REGISTERED - the seeded "
                         + "config is what opts it in: " + status,
                 status.contains("\"registered\":true"));
 
@@ -278,11 +222,11 @@ public class VSPreAssemblyBoardingPilotControlE2ETest {
             seatChunkLoaded = seatBlock.has("loaded") && seatBlock.get("loaded").getAsBoolean();
             seatName = seatChunkLoaded ? seatBlock.get("block").getAsString() : "";
         }
-        assertTrue("ARRANGEMENT: the seat's chunk must be LOADED on the client before its block can "
+        scenario().requireArranged("the seat's chunk must be LOADED on the client before its block can "
                         + "be measured - an unloaded chunk reports an empty block name, not a wrong "
                         + "one. measured=" + seatBlock,
                 seatChunkLoaded);
-        assertTrue("ARRANGEMENT: the block the test is about to board must really be the pilot seat "
+        scenario().requireArranged("the block the test is about to board must really be the pilot seat "
                         + "as the CLIENT sees it, at (" + SEAT_X + "," + SEAT_Y + "," + SEAT_Z
                         + "). measured=" + seatBlock,
                 seatName.toLowerCase(Locale.ROOT).contains("pilotseat"));
@@ -294,25 +238,33 @@ public class VSPreAssemblyBoardingPilotControlE2ETest {
         // The boarding's own return value cannot be trusted to mean "he sat down" - confirm it from
         // what the client reports it is riding, WHAT that thing is, and WHERE it is.
         JsonObject riding = awaitRiding(20);
-        assertTrue("ARRANGEMENT FAILED (not a contract failure): the bot never took the seat, so the "
+        scenario().requireArranged("the bot never took the seat, so the "
                         + "scenario under test never started. Nothing can be concluded about flying a "
                         + "ship boarded before assembly. boarding=" + how
                         + " evidence=" + boardingEvidence + " riding=" + riding,
                 isRiding(riding));
-        assertTrue("ARRANGEMENT FAILED (not a contract failure): the bot is riding SOMETHING, but not "
+        scenario().requireArranged("the bot is riding SOMETHING, but not "
                         + "the pilot seat's mount, so it is not piloting anything. boarding=" + how
                         + " riding=" + riding,
                 entityClassOf(riding).contains("EntityDummy"));
         double mountDistSq = distanceSqFromMountToSeatCentre(riding);
-        assertTrue("ARRANGEMENT FAILED (not a contract failure): the mount the bot is riding is not "
+        scenario().requireArranged("the mount the bot is riding is not "
                         + "at the seat it was supposed to board, at (" + SEAT_X + "," + SEAT_Y + ","
                         + SEAT_Z + "). boarding=" + how + " distSq=" + mountDistSq
                         + " limit=" + MOUNT_AT_SEAT_DIST_SQ + " riding=" + riding,
                 mountDistSq < MOUNT_AT_SEAT_DIST_SQ);
 
+        // The rebind counters are CUMULATIVE for the server process, so they are read as a DELTA
+        // against a baseline taken here rather than as flags. Read as flags they answer for
+        // whichever scenario in this class ran FIRST: the second one's rebind lands, the counter
+        // reads 2, and `contains("rebindRebound":1)` stays false until the budget runs out — an
+        // arrangement failure reported against a rebind that demonstrably happened. Measured
+        // 2026-08-23, the first run after this class moved onto the shared client.
+        RebindCounts rebindBefore = rebindCounts();
+
         // Now assemble the craft, with the pilot already aboard.
         String assemble = assembleFixture();
-        assertTrue("ARRANGEMENT: a with-pilot-seat build must route to a ship: " + assemble,
+        scenario().requireArranged("a with-pilot-seat build must route to a ship: " + assemble,
                 assemble.contains("\"ok\":true"));
         bot().waitTicks(20);
 
@@ -345,16 +297,18 @@ public class VSPreAssemblyBoardingPilotControlE2ETest {
         for (int i = 0; i < rebindBudget && !rebound; i++) {
             bot().waitTicks(TICKS_PER_SAMPLE);
             rebindState = exec("artest vs seat-delivery");
-            rebound = rebindState.contains("\"rebindRebound\":1");
+            RebindCounts now = RebindCounts.of(rebindState);
+            rebound = now.rebound > rebindBefore.rebound;
             assertTrue("the pre-assembly boarding's rebind must never be CANCELLED or EXPIRED while "
-                            + "the pilot demonstrably sits on his stale mount: " + rebindState,
-                    rebindState.contains("\"rebindCancelled\":0")
-                            && rebindState.contains("\"rebindExpired\":0"));
+                            + "the pilot demonstrably sits on his stale mount: " + rebindState
+                            + " (baseline " + rebindBefore + ")",
+                    now.cancelled == rebindBefore.cancelled && now.expired == rebindBefore.expired);
         }
-        assertTrue("ARRANGEMENT: the assembly's crew rebind never completed within "
+        scenario().requireArranged("the assembly's crew rebind never completed within "
                         + (rebindBudget * TICKS_PER_SAMPLE) + " ticks (load-scaled) - the relocated "
                         + "ship/seat never became resolvable, so the control chain under test never "
-                        + "came up. boarding=" + how + " delivery=" + rebindState,
+                        + "came up. boarding=" + how + " delivery=" + rebindState
+                        + " (baseline " + rebindBefore + ")",
                 rebound);
 
         // Paste-site census, printed unconditionally (visible in green runs too): assembly pastes
@@ -370,20 +324,20 @@ public class VSPreAssemblyBoardingPilotControlE2ETest {
         // has not yet been asked to move. Every altitude read below is keyed on it: the legs that
         // follow settle, drift-check and CLIMB the ship, and a nearest-ship query about the build
         // site cannot tell "my ship rose" from "a neighbour is now the closest thing to that point".
-        captureShipId(how);
+        shipUuid = captureShipIdAt(BX, BY, BZ, SETTLE_MAX_SAMPLES);
 
         // ---- CONTROL LEG ---------------------------------------------------------------------
         // Settle first: a freshly assembled physics object may be resolved upward out of the pad it
         // overlaps, and that motion is not the pilot's.
         double yRest = settleShipAltitude();
-        assertTrue("ARRANGEMENT UNSOUND (not a contract failure): the ship never reached a stable "
+        scenario().requireArranged("the ship never reached a stable "
                         + "resting altitude within " + (SETTLE_MAX_SAMPLES * TICKS_PER_SAMPLE)
                         + " ticks, so it will not sit still and NO climb measured on it could be "
                         + "attributed to pilot input. boarding=" + how,
                 !Double.isNaN(yRest));
 
         double controlDrift = measureMaxDrift(yRest);
-        assertTrue("ARRANGEMENT UNSOUND (not a contract failure): with NO key held the ship still "
+        scenario().requireArranged("with NO key held the ship still "
                         + "moved " + controlDrift + " blocks over "
                         + (MEASURE_SAMPLES * TICKS_PER_SAMPLE) + " ticks (limit " + MAX_CONTROL_DRIFT
                         + "). A ship that drifts on its own cannot be used to measure whether the "
@@ -394,7 +348,7 @@ public class VSPreAssemblyBoardingPilotControlE2ETest {
 
         // ---- EXPERIMENTAL LEG ----------------------------------------------------------------
         double yBefore = shipPosY();
-        assertTrue("ARRANGEMENT: the ship must still report an altitude at the start of the "
+        scenario().requireArranged("the ship must still report an altitude at the start of the "
                         + "key-held window", !Double.isNaN(yBefore));
 
         // The real key, through the real client input path, exactly as a player holds it.
@@ -498,14 +452,14 @@ public class VSPreAssemblyBoardingPilotControlE2ETest {
                 bot().waitTicks(TICKS_PER_SAMPLE);
                 state = bot().reportState();
             }
-            assertTrue("ARRANGEMENT: the client's world must be ready before its position can be "
+            scenario().requireArranged("the client's world must be ready before its position can be "
                     + "read: " + state, isWorldReady(state));
             px = state.get("playerX").getAsDouble();
             py = state.get("playerY").getAsDouble();
             pz = state.get("playerZ").getAsDouble();
             distSq = distanceSqToSeatCentre(px, py, pz);
         }
-        assertTrue("ARRANGEMENT: the client must OBSERVABLY be standing within the server's "
+        scenario().requireArranged("the client must OBSERVABLY be standing within the server's "
                         + "interaction reach of the seat, or the right-click is discarded before it "
                         + "reaches the seat block - and repeated teleports could not put it there. "
                         + "observed=(" + px + "," + py + "," + pz + ")"
@@ -531,13 +485,13 @@ public class VSPreAssemblyBoardingPilotControlE2ETest {
             bot().waitTicks(TICKS_PER_SAMPLE);
             items = bot().reportPlayerItems();
         }
-        assertTrue("ARRANGEMENT: the client must be in a ready world before its held item can be "
+        scenario().requireArranged("the client must be in a ready world before its held item can be "
                         + "read - a not-yet-ready client reports no hand at all: " + items,
                 isWorldReady(items));
         if (heldId == null || !heldId.isEmpty()) {
             heldId = items.getAsJsonObject("held").get("id").getAsString();
         }
-        assertTrue("ARRANGEMENT: the bot's main hand must be EMPTY (it was cleared server-side) so "
+        scenario().requireArranged("the bot's main hand must be EMPTY (it was cleared server-side) so "
                         + "the right-click reaches the seat block rather than being consumed by a "
                         + "held item. held=" + heldId,
                 heldId != null && heldId.isEmpty());
@@ -553,15 +507,15 @@ public class VSPreAssemblyBoardingPilotControlE2ETest {
      */
     private String boardByProbe() throws Exception {
         String mountInfo = exec("artest vs seat-mount 0");
-        assertTrue("ARRANGEMENT: the seat probe must FIND the loose pilot seat before assembly: "
+        scenario().requireArranged("the seat probe must FIND the loose pilot seat before assembly: "
                 + mountInfo, mountInfo.contains("\"seatFound\":true"));
 
         // The probe takes the first pilot seat it finds anywhere in the world; pin that it found
         // OUR seat, at the position the block measurement just verified.
         Matcher sm = SEAT_XYZ.matcher(mountInfo);
-        assertTrue("ARRANGEMENT: seat-mount must report the seat position it bound: " + mountInfo,
+        scenario().requireArranged("seat-mount must report the seat position it bound: " + mountInfo,
                 sm.find());
-        assertTrue("ARRANGEMENT: the seat the probe bound must be the fixture's seat at (" + SEAT_X
+        scenario().requireArranged("the seat the probe bound must be the fixture's seat at (" + SEAT_X
                         + "," + SEAT_Y + "," + SEAT_Z + "), not some other pilot seat in the world: "
                         + mountInfo,
                 Integer.parseInt(sm.group(1)) == SEAT_X
@@ -569,9 +523,9 @@ public class VSPreAssemblyBoardingPilotControlE2ETest {
                         && Integer.parseInt(sm.group(3)) == SEAT_Z);
 
         Matcher dm = DUMMY_ID.matcher(mountInfo);
-        assertTrue("ARRANGEMENT: seat-mount must report a dummy id: " + mountInfo, dm.find());
+        scenario().requireArranged("seat-mount must report a dummy id: " + mountInfo, dm.find());
         String mount = exec("artest player mount-entity " + dm.group(1));
-        assertTrue("ARRANGEMENT: the bot must mount the seat's dummy: " + mount,
+        scenario().requireArranged("the bot must mount the seat's dummy: " + mount,
                 mount.contains("\"mounted\":true"));
         bot().waitTicks(10);
         return "seatMount=" + mountInfo + " mount=" + mount;
@@ -579,42 +533,11 @@ public class VSPreAssemblyBoardingPilotControlE2ETest {
 
     // ---- Observation helpers -----------------------------------------------------------------
 
-    private ClientBot bot() {
-        return clientHarness.bot();
-    }
-
-    private String exec(String cmd) throws Exception {
-        return String.join("\n", serverHarness.client().execute(cmd));
-    }
-
-    /**
-     * Capture the assembled ship's IDENTITY at its build site, spending the one positional lookup
-     * this scenario is entitled to. Fails as an ARRANGEMENT failure: a scenario that cannot name
-     * its ship has not disproved anything about pilots.
-     */
-    private void captureShipId(Boarding how) throws Exception {
-        String info = "";
-        String found = null;
-        for (int attempt = 0; attempt < SETTLE_MAX_SAMPLES && found == null; attempt++) {
-            info = exec("artest vs ship-info 0 " + BX + " " + BY + " " + BZ
-                    + " " + SHIP_CAPTURE_RADIUS_BLOCKS);
-            Matcher m = SHIP_ID.matcher(info);
-            if (info.contains("\"managed\":true") && m.find() && !m.group(1).isEmpty()) {
-                found = m.group(1);
-            } else {
-                bot().waitTicks(TICKS_PER_SAMPLE);
-            }
-        }
-        assertTrue("ARRANGEMENT: the assembled ship must name itself at its own build site before "
-                + "anything can be measured on it. boarding=" + how + " reply=" + info,
-                found != null);
-        shipUuid = found;
-    }
-
     /** The NAMED ship's report, wherever it now is — no distance term to be wrong about. */
     private String shipInfo() throws Exception {
-        assertTrue("shipInfo() before captureShipId()", shipUuid != null);
-        return exec("artest vs ship-info 0 id " + shipUuid);
+        scenario().requireArranged("shipInfo() before the ship's identity was captured",
+                shipUuid != null);
+        return shipInfoById(shipUuid);
     }
 
     /** The ship's world altitude, or {@code NaN} while it is not reporting one. */
@@ -695,6 +618,44 @@ public class VSPreAssemblyBoardingPilotControlE2ETest {
         return last;
     }
 
+    /**
+     * The three rebind counters, as NUMBERS. They count for the life of the server process, so the
+     * only thing a scenario may ask of them is how they MOVED across its own stimulus.
+     */
+    private static final class RebindCounts {
+        private static final Pattern REBOUND = Pattern.compile("\"rebindRebound\":(-?\\d+)");
+        private static final Pattern CANCELLED = Pattern.compile("\"rebindCancelled\":(-?\\d+)");
+        private static final Pattern EXPIRED = Pattern.compile("\"rebindExpired\":(-?\\d+)");
+
+        final int rebound, cancelled, expired;
+
+        private RebindCounts(int rebound, int cancelled, int expired) {
+            this.rebound = rebound;
+            this.cancelled = cancelled;
+            this.expired = expired;
+        }
+
+        /** A counter the probe did not report reads as -1, which can never equal a later baseline. */
+        static RebindCounts of(String seatDeliveryJson) {
+            return new RebindCounts(read(REBOUND, seatDeliveryJson), read(CANCELLED, seatDeliveryJson),
+                    read(EXPIRED, seatDeliveryJson));
+        }
+
+        private static int read(Pattern p, String json) {
+            Matcher m = p.matcher(json);
+            return m.find() ? Integer.parseInt(m.group(1)) : -1;
+        }
+
+        @Override
+        public String toString() {
+            return "rebound=" + rebound + " cancelled=" + cancelled + " expired=" + expired;
+        }
+    }
+
+    private RebindCounts rebindCounts() throws Exception {
+        return RebindCounts.of(exec("artest vs seat-delivery"));
+    }
+
     private static boolean isRiding(JsonObject riding) {
         return riding != null && riding.has("riding") && riding.get("riding").getAsBoolean();
     }
@@ -734,17 +695,17 @@ public class VSPreAssemblyBoardingPilotControlE2ETest {
     private void buildLooseFixture(int baseX, int baseY, int baseZ, String variant) throws Exception {
         int cx1 = (baseX - 2) >> 4, cz1 = (baseZ - 2) >> 4;
         int cx2 = (baseX + 7) >> 4, cz2 = (baseZ + 7) >> 4;
-        assertTrue("ARRANGEMENT: chunk warmup failed",
+        scenario().requireArranged("chunk warmup failed",
                 exec("artest chunk warmup 0 " + cx1 + " " + cz1 + " " + cx2 + " " + cz2)
                         .contains("\"ok\":true"));
-        assertTrue("ARRANGEMENT: pre-clear failed",
+        scenario().requireArranged("pre-clear failed",
                 exec("artest fill 0 " + (baseX - 2) + " " + (baseY + 1) + " " + (baseZ - 2)
                         + " " + (baseX + 7) + " " + (baseY + 10) + " " + (baseZ + 7) + " minecraft:air")
                         .contains("\"ok\":true"));
         String fixture = exec("artest fixture rocket 0 " + baseX + " " + baseY + " " + baseZ + " " + variant);
-        assertTrue("ARRANGEMENT: fixture (" + variant + ") failed: " + fixture, fixture.contains("\"ok\":true"));
+        scenario().requireArranged("fixture (" + variant + ") failed: " + fixture, fixture.contains("\"ok\":true"));
         Matcher bp = BUILDER_POS.matcher(fixture);
-        assertTrue("ARRANGEMENT: fixture missing builderPos: " + fixture, bp.find());
+        scenario().requireArranged("fixture missing builderPos: " + fixture, bp.find());
         builderX = Integer.parseInt(bp.group(1));
         builderY = Integer.parseInt(bp.group(2));
         builderZ = Integer.parseInt(bp.group(3));

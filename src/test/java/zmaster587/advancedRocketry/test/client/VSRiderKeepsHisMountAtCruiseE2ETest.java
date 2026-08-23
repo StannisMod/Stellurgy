@@ -1,8 +1,9 @@
 package zmaster587.advancedRocketry.test.client;
 
-import com.github.stannismod.forge.testing.junit.AbstractClientE2ETest;
 
+import org.junit.FixMethodOrder;
 import org.junit.Test;
+import org.junit.runners.MethodSorters;
 
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -49,7 +50,13 @@ import static zmaster587.advancedRocketry.test.AdvancedRocketryTestConstants.SHI
  * lag - i.e. the guard held under a HARDER load than the one that broke it.</p>
  *
  */
-public class VSRiderKeepsHisMountAtCruiseE2ETest extends AbstractClientE2ETest {
+@FixMethodOrder(MethodSorters.NAME_ASCENDING)
+public class VSRiderKeepsHisMountAtCruiseE2ETest extends AbstractSharedVsClientE2ETest {
+
+    @Override
+    protected String subsystem() {
+        return "vs-rider-mount-at-cruise";
+    }
 
     private static final Pattern PLAYER_NAME = Pattern.compile("\"player\":\"([^\"]+)\"");
     private static final Pattern BUILDER_POS =
@@ -80,10 +87,6 @@ public class VSRiderKeepsHisMountAtCruiseE2ETest extends AbstractClientE2ETest {
      *  of every one of them. */
     private static final int OBSERVE_TICKS = 80;
     private static final int POLL_EVERY_TICKS = 2;
-
-    private String exec(String cmd) throws Exception {
-        return String.join("\n", serverClient().execute(cmd));
-    }
 
     private static double readDouble(String json, Pattern p) {
         Matcher m = p.matcher(json);
@@ -134,29 +137,29 @@ public class VSRiderKeepsHisMountAtCruiseE2ETest extends AbstractClientE2ETest {
         exec("artest vs permaload true");
 
         String setup = exec("artest space transit-setup-empty");
-        assertTrue("ARRANGEMENT: empty cell setup must succeed: " + setup, readBool(setup, "ok"));
+        scenario().requireArranged("empty cell setup must succeed: " + setup, readBool(setup, "ok"));
         int dim = readInt(setup, "originDim");
 
         int bx = 40, by = 64, bz = 40;
-        assertTrue("ARRANGEMENT: chunk warmup failed",
+        scenario().requireArranged("chunk warmup failed",
                 readBool(exec("artest chunk warmup " + dim + " " + ((bx - 2) >> 4) + " " + ((bz - 2) >> 4)
                         + " " + ((bx + 7) >> 4) + " " + ((bz + 7) >> 4)), "ok"));
 
         String fixture = exec("artest fixture rocket " + dim + " " + bx + " " + by + " " + bz
                 + " with-pilot-seat");
-        assertTrue("ARRANGEMENT: with-pilot-seat fixture failed: " + fixture, readBool(fixture, "ok"));
+        scenario().requireArranged("with-pilot-seat fixture failed: " + fixture, readBool(fixture, "ok"));
         Matcher bp = BUILDER_POS.matcher(fixture);
-        assertTrue("ARRANGEMENT: fixture missing builderPos: " + fixture, bp.find());
+        scenario().requireArranged("fixture missing builderPos: " + fixture, bp.find());
         String assembled = exec("artest rocket assemble " + dim
                 + " " + bp.group(1) + " " + bp.group(2) + " " + bp.group(3));
-        assertTrue("ARRANGEMENT: a with-pilot-seat build must route to a ship: " + assembled,
+        scenario().requireArranged("a with-pilot-seat build must route to a ship: " + assembled,
                 assembled.contains("\"rocketCount\":0"));
-        assertTrue("ARRANGEMENT: the ship never assembled/loaded in the cell (dim " + dim + ")",
+        scenario().requireArranged("the ship never assembled/loaded in the cell (dim " + dim + ")",
                 waitForLoadedShip(dim) >= 1);
 
         String seat = exec("artest vs find-seat " + dim
                 + " " + (bx + 3) + " " + (by + 3) + " " + (bz + 3));
-        assertTrue("ARRANGEMENT: the pilot seat must be found (else the test is vacuous): " + seat,
+        scenario().requireArranged("the pilot seat must be found (else the test is vacuous): " + seat,
                 readBool(seat, "seatFound"));
         int seatX = readInt(seat, "seatX"), seatY = readInt(seat, "seatY"), seatZ = readInt(seat, "seatZ");
         int sx = (int) Math.round(readDouble(seat, Pattern.compile("\"shipWorldX\":(-?[0-9.E\\-]+)")));
@@ -168,12 +171,13 @@ public class VSRiderKeepsHisMountAtCruiseE2ETest extends AbstractClientE2ETest {
         assertTrue("player health must echo the player name: " + health, nameM.find());
         String botName = nameM.group(1);
 
-        assertTrue("ARRANGEMENT: the bot must enter the cell",
+        scenario().requireArranged("the bot must enter the cell",
                 readBool(exec("artest space enter " + botName + " " + dim
                         + " " + sx + " " + sy + " " + sz), "ok"));
         bot().waitTicks(20);
-        assertEquals("ARRANGEMENT: the client must have followed into the cell",
-                dim, bot().reportWeather().get("dim").getAsInt());
+        int clientDim = bot().reportWeather().get("dim").getAsInt();
+        scenario().requireArranged("the client must have followed into the cell — it renders dim "
+                + clientDim + ", the ship is in " + dim, clientDim == dim);
 
         // The subject is a mount on a MOVING SHIP whose data-watcher is quiet - a passenger seat,
         // not the pilot's. This is not a detail: a mount bound to a LINKED pilot seat republishes six
@@ -188,7 +192,7 @@ public class VSRiderKeepsHisMountAtCruiseE2ETest extends AbstractClientE2ETest {
         for (int attempt = 0; attempt < 5 && !mounted; attempt++) {
             String mountAt = exec("artest vs seat-mount-at " + dim
                     + " " + mountX + " " + mountY + " " + mountZ);
-            assertTrue("ARRANGEMENT: seat-mount-at must spawn the seat dummy: " + mountAt,
+            scenario().requireArranged("seat-mount-at must spawn the seat dummy: " + mountAt,
                     readBool(mountAt, "ok"));
             mount = exec("artest player mount-entity " + readInt(mountAt, "dummyId"));
             mounted = mount.contains("\"mounted\":true");
@@ -196,9 +200,9 @@ public class VSRiderKeepsHisMountAtCruiseE2ETest extends AbstractClientE2ETest {
                 bot().waitTicks(10);
             }
         }
-        assertTrue("ARRANGEMENT: the bot must mount the pilot-seat dummy: " + mount, mounted);
+        scenario().requireArranged("the bot must mount the pilot-seat dummy: " + mount, mounted);
         bot().waitTicks(10);
-        assertTrue("ARRANGEMENT: the client must report the bot seated before anything else",
+        scenario().requireArranged("the client must report the bot seated before anything else",
                 riding());
 
         // The instrument's own proof: it must be able to say FALSE. Without this leg, the cruise
@@ -218,9 +222,9 @@ public class VSRiderKeepsHisMountAtCruiseE2ETest extends AbstractClientE2ETest {
                 bot().waitTicks(10);
             }
         }
-        assertTrue("ARRANGEMENT: the bot must be re-seated after the control: " + mount, mounted);
+        scenario().requireArranged("the bot must be re-seated after the control: " + mount, mounted);
         bot().waitTicks(10);
-        assertTrue("ARRANGEMENT: seated again before the cruise", riding());
+        scenario().requireArranged("seated again before the cruise", riding());
 
         // ---- STIMULUS: a COASTING horizontal cruise. Three properties, each load-bearing.
         //
@@ -256,13 +260,13 @@ public class VSRiderKeepsHisMountAtCruiseE2ETest extends AbstractClientE2ETest {
         String atSeat = exec("artest vs ship-info " + dim + " " + sx + " " + sy + " " + sz
                 + " " + SHIP_CAPTURE_RADIUS_BLOCKS);
         Matcher idM = Pattern.compile("\"id\":\"([^\"]+)\"").matcher(atSeat);
-        assertTrue("ARRANGEMENT: the ship must name itself before it is commanded: " + atSeat,
+        scenario().requireArranged("the ship must name itself before it is commanded: " + atSeat,
                 idM.find());
         String shipId = idM.group(1);
 
         String commanded = exec("artest vs force-vel-by-id " + dim + " " + shipId
                 + " " + COMMANDED_SPEED_BLOCKS_PER_SECOND + " 0 0");
-        assertTrue("ARRANGEMENT: the cruise command must reach THIS ship's flight computer: "
+        scenario().requireArranged("the cruise command must reach THIS ship's flight computer: "
                 + commanded, readBool(commanded, "commanded"));
 
         double steady = Double.NaN, prev = Double.NaN;
@@ -279,7 +283,7 @@ public class VSRiderKeepsHisMountAtCruiseE2ETest extends AbstractClientE2ETest {
             }
             prev = speed;
         }
-        assertTrue("ARRANGEMENT: the ship must reach a STEADY cruise above "
+        scenario().requireArranged("the ship must reach a STEADY cruise above "
                 + EVICTION_THRESHOLD_BLOCKS_PER_TICK + " blocks/tick - while it is still accelerating"
                 + " the mount re-pins its own tracking anchor every tick and nothing can be evicted,"
                 + " so an unsettled ship makes this leg unfalsifiable. Last speed sample: " + prev,
@@ -352,11 +356,11 @@ public class VSRiderKeepsHisMountAtCruiseE2ETest extends AbstractClientE2ETest {
         // Both checked BEFORE the verdict. A ship that did not cruise, or a mount that did not
         // carry the player with it, makes the poll below unfalsifiable - and that is an
         // arrangement failure, not a passing build.
-        assertTrue("ARRANGEMENT: the ship must cruise faster than the mount's own tracking headroom"
+        scenario().requireArranged("the ship must cruise faster than the mount's own tracking headroom"
                 + " (" + EVICTION_THRESHOLD_BLOCKS_PER_TICK + " blocks/tick) or this leg cannot"
                 + " exhibit the fault." + measured,
                 fastestAxis > EVICTION_THRESHOLD_BLOCKS_PER_TICK);
-        assertTrue("ARRANGEMENT: the seated player must TRAVEL WITH the ship - a mount that stays"
+        scenario().requireArranged("the seated player must TRAVEL WITH the ship - a mount that stays"
                 + " put keeps its tracking anchor fresh, so nothing here could ever be evicted and"
                 + " the leg would pass on any build." + measured,
                 playerTravel > shipTravel * 0.5);

@@ -1,11 +1,12 @@
 package zmaster587.advancedRocketry.test.client;
 
 import com.github.stannismod.forge.testing.TestTimeouts;
-import com.github.stannismod.forge.testing.junit.AbstractClientE2ETest;
 import com.google.gson.JsonObject;
 
 import org.junit.After;
+import org.junit.FixMethodOrder;
 import org.junit.Test;
+import org.junit.runners.MethodSorters;
 import org.lwjgl.input.Keyboard;
 
 import java.util.regex.Matcher;
@@ -42,7 +43,13 @@ import static zmaster587.advancedRocketry.test.AdvancedRocketryTestConstants.SHI
  * deterministically outlasts the relog.</p>
  *
  */
-public class VSMidTransitRelogControlE2ETest extends AbstractClientE2ETest {
+@FixMethodOrder(MethodSorters.NAME_ASCENDING)
+public class VSMidTransitRelogControlE2ETest extends AbstractSharedVsClientE2ETest {
+
+    @Override
+    protected String subsystem() {
+        return "vs-mid-transit-relog-control";
+    }
 
     private static final Pattern PLAYER_NAME = Pattern.compile("\"player\":\"([^\"]+)\"");
     private static final Pattern SHIP_ID = Pattern.compile("\"id\":\"([^\"]*)\"");
@@ -63,18 +70,18 @@ public class VSMidTransitRelogControlE2ETest extends AbstractClientE2ETest {
         int originDim = readInt(setup, "originDim");
 
         int bx = 40, by = 64, bz = 40;
-        assertTrue("ARRANGEMENT: chunk warmup failed",
+        scenario().requireArranged("chunk warmup failed",
                 exec("artest chunk warmup " + originDim + " " + ((bx - 2) >> 4) + " " + ((bz - 2) >> 4)
                         + " " + ((bx + 7) >> 4) + " " + ((bz + 7) >> 4)).contains("\"ok\":true"));
         String fixture = exec("artest fixture rocket " + originDim + " " + bx + " " + by + " " + bz
                 + " with-pilot-seat");
-        assertTrue("ARRANGEMENT: fixture (with-pilot-seat) failed: " + fixture,
+        scenario().requireArranged("fixture (with-pilot-seat) failed: " + fixture,
                 fixture.contains("\"ok\":true"));
         Matcher bp = Pattern.compile("\"builderPos\":\\[(-?\\d+),(-?\\d+),(-?\\d+)]").matcher(fixture);
-        assertTrue("ARRANGEMENT: fixture missing builderPos: " + fixture, bp.find());
+        scenario().requireArranged("fixture missing builderPos: " + fixture, bp.find());
         String assembled = exec("artest rocket assemble " + originDim
                 + " " + bp.group(1) + " " + bp.group(2) + " " + bp.group(3));
-        assertTrue("ARRANGEMENT: a with-pilot-seat build must route to a ship: " + assembled,
+        scenario().requireArranged("a with-pilot-seat build must route to a ship: " + assembled,
                 assembled.contains("\"rocketCount\":0"));
         assertTrue("the piloted origin ship never assembled/loaded in the pool cell (dim "
                 + originDim + ")", waitForLoadedShip(originDim) >= 1);
@@ -99,7 +106,7 @@ public class VSMidTransitRelogControlE2ETest extends AbstractClientE2ETest {
         // standing-by crew, and a pilot who relogs mid-transit resumes FALLING at login — over a
         // void cell he would be dead before the arrival could re-seat him. Geometry measured off
         // the ship's own world pose, not assumed.
-        assertTrue("ARRANGEMENT: the landing platform must build: ",
+        scenario().requireArranged("the landing platform must build: ",
                 exec("artest fill " + originDim + " " + (sx - 12) + " " + (sy - 8) + " " + (sz - 12)
                         + " " + (sx + 12) + " " + (sy - 8) + " " + (sz + 12) + " minecraft:stone")
                         .contains("\"ok\":true"));
@@ -139,7 +146,7 @@ public class VSMidTransitRelogControlE2ETest extends AbstractClientE2ETest {
         // chain that never worked here at all. Retried on a bounded budget: right after the async
         // assembly the ship can still be settling (measured: the first climb window sometimes
         // catches it sinking), and the contract is a bounded window, not the first ten seconds.
-        assertTrue("ARRANGEMENT (control leg): the pilot must be able to fly BEFORE the transit."
+        scenario().requireArranged("control leg: the pilot must be able to fly BEFORE the transit."
                 + " delivery=" + exec("artest vs seat-delivery")
                 + " ship=" + shipInfoById(originDim, shipId),
                 climbedWithinAttempts(3));
@@ -291,10 +298,6 @@ public class VSMidTransitRelogControlE2ETest extends AbstractClientE2ETest {
     private double clientPlayerY() throws Exception {
         JsonObject state = bot().reportState();
         return state.has("playerY") ? state.get("playerY").getAsDouble() : Double.NaN;
-    }
-
-    private String exec(String cmd) throws Exception {
-        return String.join("\n", serverClient().execute(cmd));
     }
 
     /** Poll for a loaded VS ship in {@code dim} (assembly is async; a headless server forces the load). */

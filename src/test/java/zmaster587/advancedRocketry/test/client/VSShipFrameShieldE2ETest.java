@@ -1,7 +1,8 @@
 package zmaster587.advancedRocketry.test.client;
 
-import com.github.stannismod.forge.testing.junit.AbstractClientE2ETest;
+import org.junit.FixMethodOrder;
 import org.junit.Test;
+import org.junit.runners.MethodSorters;
 
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -32,7 +33,13 @@ import static zmaster587.advancedRocketry.test.AdvancedRocketryTestConstants.SHI
  * we verify the two frame-dependent quantities (moving world centre + live surface velocity) on a real
  * loaded ship, plus one on-hull deflection.</p>
  */
-public class VSShipFrameShieldE2ETest extends AbstractClientE2ETest {
+@FixMethodOrder(MethodSorters.NAME_ASCENDING)
+public class VSShipFrameShieldE2ETest extends AbstractSharedVsClientE2ETest {
+
+    @Override
+    protected String subsystem() {
+        return "vs-ship-frame-shield";
+    }
 
     private static final Pattern BUILDER_POS =
             Pattern.compile("\"builderPos\":\\[(-?\\d+),(-?\\d+),(-?\\d+)]");
@@ -150,7 +157,7 @@ public class VSShipFrameShieldE2ETest extends AbstractClientE2ETest {
                 + " ship=" + str(ship1) + ")", dist(shell1, ship1) < 32.0);
         for (int i = 0; i < 25; i++) {
             String push = exec("artest vs push-ship-by-id 0 " + shipId + " 0 14 0");
-            assertTrue("ARRANGEMENT: the push must reach THIS ship: " + push,
+            scenario().requireArranged("the push must reach THIS ship: " + push,
                     push.contains("\"pushed\":true"));
             bot().waitTicks(2);
         }
@@ -160,7 +167,7 @@ public class VSShipFrameShieldE2ETest extends AbstractClientE2ETest {
         double speed = Math.sqrt(sq(f(moved, "velX")) + sq(f(moved, "velY")) + sq(f(moved, "velZ")));
         double shipMoved = dist(ship1, ship2);
         double shellMoved = dist(shell1, shell2);
-        assertTrue("ARRANGEMENT: the hull must actually move to test tracking (shipMoved=" + shipMoved
+        scenario().requireArranged("the hull must actually move to test tracking (shipMoved=" + shipMoved
                 + ") — perturb harder if VS pinned it", shipMoved > 1.5);
         assertTrue("the shell's world centre did not move with the hull (shellMoved=" + shellMoved
                 + " shipMoved=" + shipMoved + ") — it is frozen, not tracking the flying hull:\n" + moved,
@@ -232,10 +239,6 @@ public class VSShipFrameShieldE2ETest extends AbstractClientE2ETest {
 
     private static double sq(double v) {
         return v * v;
-    }
-
-    private String exec(String cmd) throws Exception {
-        return String.join("\n", serverClient().execute(cmd));
     }
 
     private String assembleFixture(int baseX, int baseY, int baseZ) throws Exception {

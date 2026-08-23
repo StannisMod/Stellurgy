@@ -1,9 +1,10 @@
 package zmaster587.advancedRocketry.test.client;
 
-import com.github.stannismod.forge.testing.junit.AbstractClientE2ETest;
 import com.google.gson.JsonObject;
 
+import org.junit.FixMethodOrder;
 import org.junit.Test;
+import org.junit.runners.MethodSorters;
 
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -33,7 +34,13 @@ import static org.junit.Assert.fail;
  * a wrong class cannot be explained away as "the client never saw it".
  *
  */
-public class VSChairMountArrivesAsItselfE2ETest extends AbstractClientE2ETest {
+@FixMethodOrder(MethodSorters.NAME_ASCENDING)
+public class VSChairMountArrivesAsItselfE2ETest extends AbstractSharedVsClientE2ETest {
+
+    @Override
+    protected String subsystem() {
+        return "vs-chair-mount-identity";
+    }
 
     private static final Pattern SERVER_ENTITY =
             Pattern.compile("\\{\"id\":(-?\\d+),\"class\":\"([^\"]+)\"");
@@ -50,14 +57,14 @@ public class VSChairMountArrivesAsItselfE2ETest extends AbstractClientE2ETest {
     public void aChairMountArrivesAtTheClientAsItself() throws Exception {
 
         // ---- ARRANGE: a floor, a chair on it, and the player standing next to the chair. --------
-        assertTrue("ARRANGEMENT: chunk warmup failed",
+        scenario().requireArranged("chunk warmup failed",
                 exec("artest chunk warmup 0 " + (FX >> 4) + " " + (FZ >> 4) + " "
                         + ((FX + 1) >> 4) + " " + ((FZ + 1) >> 4)).contains("\"ok\":true"));
-        assertTrue("ARRANGEMENT: floor fill failed",
+        scenario().requireArranged("floor fill failed",
                 exec("artest fill 0 " + (FX - 2) + " " + FY + " " + (FZ - 2) + " "
                         + (FX + 2) + " " + FY + " " + (FZ + 2) + " minecraft:stone")
                         .contains("\"ok\":true"));
-        assertTrue("ARRANGEMENT: clearing the space above the floor failed",
+        scenario().requireArranged("clearing the space above the floor failed",
                 exec("artest fill 0 " + (FX - 2) + " " + (FY + 1) + " " + (FZ - 2) + " "
                         + (FX + 2) + " " + (FY + 3) + " " + (FZ + 2) + " minecraft:air")
                         .contains("\"ok\":true"));
@@ -66,10 +73,10 @@ public class VSChairMountArrivesAsItselfE2ETest extends AbstractClientE2ETest {
         // still reports success, which is why the placement is read back below.
         String chair = exec("artest fill 0 " + CX + " " + CY + " " + CZ + " "
                 + CX + " " + CY + " " + CZ + " advancedrocketry:passenger_chair");
-        assertTrue("ARRANGEMENT: the chair block must be placeable: " + chair,
+        scenario().requireArranged("the chair block must be placeable: " + chair,
                 chair.contains("\"ok\":true"));
         String rightAfter = exec("artest block at 0 " + CX + " " + CY + " " + CZ);
-        assertTrue("ARRANGEMENT: the chair must actually be in the world once the fill reports"
+        scenario().requireArranged("the chair must actually be in the world once the fill reports"
                 + " success: " + rightAfter, rightAfter.contains("passenger_chair"));
         // The platform is built into a chunk the client may not hold yet, so the first teleport can
         // land the player on nothing and he falls out of reach of the chair. Re-place him until his
@@ -82,16 +89,17 @@ public class VSChairMountArrivesAsItselfE2ETest extends AbstractClientE2ETest {
             stood = bot().reportState();
             standY = stood.get("playerY").getAsDouble();
         }
-        assertEquals("ARRANGEMENT: the player must end up standing ON the platform - one that fell"
-                        + " off it is out of reach of the chair: " + stood,
-                FY + 1, standY, 0.6);
+        scenario().requireArranged("the player must end up standing ON the platform - one that fell"
+                        + " off it is out of reach of the chair (expected y~" + (FY + 1)
+                        + ", measured " + standY + "): " + stood,
+                Math.abs(standY - (FY + 1)) <= 0.6);
         String placed = exec("artest block at 0 " + CX + " " + CY + " " + CZ);
-        assertTrue("ARRANGEMENT: the chair block must still be there when the player reaches for"
+        scenario().requireArranged("the chair block must still be there when the player reaches for"
                 + " it: " + placed, placed.contains("passenger_chair"));
 
         // ---- ACT: the player sits down, through a real right-click on his own client. -----------
         JsonObject click = bot().interactBlock(CX, CY, CZ);
-        assertTrue("ARRANGEMENT: the right-click must be accepted by the client: " + click,
+        scenario().requireArranged("the right-click must be accepted by the client: " + click,
                 click != null);
         bot().waitTicks(20);
 
@@ -107,7 +115,7 @@ public class VSChairMountArrivesAsItselfE2ETest extends AbstractClientE2ETest {
                 chairEntityClass = m.group(2);
             }
         }
-        assertTrue("ARRANGEMENT: sitting on the chair must give the server a mount entity -"
+        scenario().requireArranged("sitting on the chair must give the server a mount entity -"
                 + " without one this test has no subject: " + serverSide, chairEntityClass != null);
 
         // ---- ASSERT: the client is riding THAT entity, and it is the same class. ----------------
@@ -142,10 +150,6 @@ public class VSChairMountArrivesAsItselfE2ETest extends AbstractClientE2ETest {
                     + " in this error: " + dead);
             return null; // unreachable
         }
-    }
-
-    private String exec(String cmd) throws Exception {
-        return String.join("\n", serverClient().execute(cmd));
     }
 
 }

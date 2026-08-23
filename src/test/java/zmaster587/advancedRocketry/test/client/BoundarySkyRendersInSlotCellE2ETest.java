@@ -1,10 +1,11 @@
 package zmaster587.advancedRocketry.test.client;
 
-import com.github.stannismod.forge.testing.junit.AbstractClientE2ETest;
 import com.google.gson.JsonObject;
 import zmaster587.advancedRocketry.client.render.planet.ApparentSize;
 import org.junit.After;
+import org.junit.FixMethodOrder;
 import org.junit.Test;
+import org.junit.runners.MethodSorters;
 
 import javax.imageio.ImageIO;
 import java.awt.image.BufferedImage;
@@ -107,7 +108,24 @@ import static org.junit.Assert.assertTrue;
  * producer has, not which object, frame or lifecycle stage the renderer reads — the renderer is fed
  * through the identical production broadcast — so the rendering path under test is the real one.
  */
-public class BoundarySkyRendersInSlotCellE2ETest extends AbstractClientE2ETest {
+@FixMethodOrder(MethodSorters.NAME_ASCENDING)
+public class BoundarySkyRendersInSlotCellE2ETest extends AbstractSharedClientE2ETest {
+
+    @Override
+    protected String subsystem() {
+        return "cell-sky";
+    }
+
+    /**
+     * The cell entry this class installs is the family channel it must close: a scenario left
+     * bound to a slot hands the next one a world it never entered, and the shared reset reads
+     * the dimension the CLIENT renders. It runs here rather than in an {@code @After} because
+     * the base's own transfer back to dim 0 happens immediately after this hook.
+     */
+    @Override
+    protected void resetFamilyStateBeforeTeleport() throws Exception {
+        exec("artest space entry-clear");
+    }
 
     private static final Pattern PLAYER_NAME = Pattern.compile("\"player\":\"([^\"]+)\"");
     /** The slot the settle actually bound the cell to — the one place that decides it. */
@@ -214,18 +232,6 @@ public class BoundarySkyRendersInSlotCellE2ETest extends AbstractClientE2ETest {
 
     private Path outDir;
     private String botName;
-
-    private String exec(String cmd) throws Exception {
-        return String.join("\n", serverClient().execute(cmd));
-    }
-
-    @After
-    public void tearDownStack() {
-        try {
-            exec("artest space entry-clear");
-        } catch (Exception ignored) {
-        }
-    }
 
     @Test
     public void aPilotInASlotCellSeesTheBodiesAndStars() throws Exception {
@@ -421,7 +427,7 @@ public class BoundarySkyRendersInSlotCellE2ETest extends AbstractClientE2ETest {
         // exist, and its red read as a render regression when nothing was rendering wrongly.
         float nearHalf = ApparentSize.halfSizeFor(radiusBlocks(NEAREST), distanceOf(NEAREST));
         float farHalf = ApparentSize.halfSizeFor(radiusBlocks(FARTHEST), distanceOf(FARTHEST));
-        assertTrue("ARRANGEMENT: the law must draw these two at clearly different sizes before their"
+        scenario().requireArranged("the law must draw these two at clearly different sizes before their"
                 + " pixels can be compared — nearHalf=" + nearHalf + " farHalf=" + farHalf
                 + " (angular sizes " + (radiusBlocks(NEAREST) / distanceOf(NEAREST)) + " and "
                 + (radiusBlocks(FARTHEST) / distanceOf(FARTHEST)) + " against NEAR_RATIO "

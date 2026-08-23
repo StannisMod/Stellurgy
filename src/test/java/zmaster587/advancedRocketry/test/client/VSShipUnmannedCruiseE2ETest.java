@@ -1,8 +1,9 @@
 package zmaster587.advancedRocketry.test.client;
 
 import com.github.stannismod.forge.testing.TestTimeouts;
-import com.github.stannismod.forge.testing.junit.AbstractClientE2ETest;
+import org.junit.FixMethodOrder;
 import org.junit.Test;
+import org.junit.runners.MethodSorters;
 import org.lwjgl.input.Keyboard;
 
 import java.util.regex.Matcher;
@@ -25,7 +26,13 @@ import static zmaster587.advancedRocketry.test.AdvancedRocketryTestConstants.SHI
  * (station-hold, "the hovering ship fell" fix) stays pinned by the existing flight suite. Gated
  * on real VS —</p>
  */
-public class VSShipUnmannedCruiseE2ETest extends AbstractClientE2ETest {
+@FixMethodOrder(MethodSorters.NAME_ASCENDING)
+public class VSShipUnmannedCruiseE2ETest extends AbstractSharedVsClientE2ETest {
+
+    @Override
+    protected String subsystem() {
+        return "vs-ship-unmanned-cruise";
+    }
 
     private static final Pattern BUILDER_POS =
             Pattern.compile("\"builderPos\":\\[(-?\\d+),(-?\\d+),(-?\\d+)]");
@@ -119,7 +126,7 @@ public class VSShipUnmannedCruiseE2ETest extends AbstractClientE2ETest {
         } finally {
             bot().releaseKey(Keyboard.KEY_R);
         }
-        assertTrue("ARRANGEMENT: the held key must have ramped a real climb before the dismount "
+        scenario().requireArranged("the held key must have ramped a real climb before the dismount "
                         + "can test anything (y0=" + y0 + " yRamped=" + yRamped + ")",
                 yRamped - y0 > 2.0);
         bot().waitTicks(10);
@@ -172,10 +179,6 @@ public class VSShipUnmannedCruiseE2ETest extends AbstractClientE2ETest {
         Matcher m = p.matcher(json);
         assertTrue("expected a number in: " + json, m.find());
         return Double.parseDouble(m.group(1));
-    }
-
-    private String exec(String cmd) throws Exception {
-        return String.join("\n", serverClient().execute(cmd));
     }
 
     private String assembleFixture(int baseX, int baseY, int baseZ) throws Exception {

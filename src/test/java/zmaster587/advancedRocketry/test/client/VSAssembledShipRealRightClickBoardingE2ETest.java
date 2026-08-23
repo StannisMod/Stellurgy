@@ -1,22 +1,14 @@
 package zmaster587.advancedRocketry.test.client;
 
-import java.nio.file.Files;
-import java.nio.file.Path;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 import com.github.stannismod.forge.testing.TestTimeouts;
-import com.github.stannismod.forge.testing.client.ClientBot;
-import com.github.stannismod.forge.testing.client.RealClientHarness;
-import com.github.stannismod.forge.testing.junit.AbstractClientE2ETest;
-import com.github.stannismod.forge.testing.junit.AbstractHeadlessServerTest;
-import com.github.stannismod.forge.testing.server.RealDedicatedServerHarness;
 import com.google.gson.JsonObject;
 
-import org.junit.After;
-import org.junit.Assume;
-import org.junit.Before;
+import org.junit.FixMethodOrder;
 import org.junit.Test;
+import org.junit.runners.MethodSorters;
 
 import static org.junit.Assert.assertTrue;
 import static zmaster587.advancedRocketry.test.AdvancedRocketryTestConstants.SHIP_CAPTURE_RADIUS_BLOCKS;
@@ -58,10 +50,19 @@ import static zmaster587.advancedRocketry.test.AdvancedRocketryTestConstants.SHI
  * {@code setLook} computed from the CLIENT's own eye position; confirm the crosshair with
  * {@code reportMouseOver} before pressing; then {@code setKey(-99, true)} / wait / release.</p>
  *
- * <p>Manual server + client lifecycle rather than the shared base class, matching the other
- * ship-boarding e2e tests.</p>
+ * <p>On the shared VS client base. It ran its own server + client pair per method until 2026-08-23,
+ * "matching the other ship-boarding e2e tests" — a reason to resemble its neighbours, never a reason
+ * to boot: its root was a fresh empty temp dir handed to a harness that makes one of those itself,
+ * and nothing was written into it before the server started. Off the shared base an arrangement
+ * failure here could not be TYPED as one either, and that is the half that mattered.</p>
  */
-public class VSAssembledShipRealRightClickBoardingE2ETest {
+@FixMethodOrder(MethodSorters.NAME_ASCENDING)
+public class VSAssembledShipRealRightClickBoardingE2ETest extends AbstractSharedVsClientE2ETest {
+
+    @Override
+    protected String subsystem() {
+        return "vs-assembled-ship-right-click-boarding";
+    }
 
     private static final Pattern BUILDER_POS =
             Pattern.compile("\"builderPos\":\\[(-?\\d+),(-?\\d+),(-?\\d+)]");
@@ -111,58 +112,6 @@ public class VSAssembledShipRealRightClickBoardingE2ETest {
     /** The server drops a block interaction beyond (reach + 3), so the bot must observably be closer. */
     private static final double MAX_INTERACT_DIST_SQ = 64.0;
 
-    private Path root;
-    private RealDedicatedServerHarness serverHarness;
-    private RealClientHarness clientHarness;
-
-    @Before
-    public void startBoth() throws Exception {
-        Assume.assumeTrue("Server harness disabled - set -D" + AbstractHeadlessServerTest.PROP_HARNESS_ENABLED + "=true",
-                Boolean.parseBoolean(System.getProperty(
-                        AbstractHeadlessServerTest.PROP_HARNESS_ENABLED, "false")));
-        Assume.assumeTrue("Client harness disabled - set -D" + AbstractClientE2ETest.PROP_CLIENT_ENABLED + "=true",
-                Boolean.parseBoolean(System.getProperty(
-                        AbstractClientE2ETest.PROP_CLIENT_ENABLED, "false")));
-
-        root = Files.createTempDirectory("forge-realclick-boarding-");
-        serverHarness = RealDedicatedServerHarness.startWith(root, false);
-        try {
-            clientHarness = RealClientHarness.start(serverHarness);
-        } catch (Exception startFailed) {
-            serverHarness.close();
-            serverHarness = null;
-            throw startFailed;
-        }
-    }
-
-    @After
-    public void stopBoth() throws Exception {
-        Exception first = null;
-        if (clientHarness != null) {
-            try {
-                clientHarness.close();
-            } catch (Exception e) {
-                first = e;
-            }
-            clientHarness = null;
-        }
-        if (serverHarness != null) {
-            try {
-                serverHarness.close();
-            } catch (Exception e) {
-                if (first == null) {
-                    first = e;
-                } else {
-                    first.addSuppressed(e);
-                }
-            }
-            serverHarness = null;
-        }
-        if (first != null) {
-            throw first;
-        }
-    }
-
     @Test
     public void aRealUseKeyPressOnAnAssembledShipsSeatBoardsThePilot() throws Exception {
 
@@ -175,7 +124,7 @@ public class VSAssembledShipRealRightClickBoardingE2ETest {
         exec("tp @a " + (BX + 600) + " 120 " + (BZ + 600) + " 0 0");
         bot().waitTicks(10);
         String assemble = assembleFixture(BX, BY, BZ, VARIANT);
-        assertTrue("ARRANGEMENT: a " + VARIANT + " build must route to a ship: " + assemble,
+        scenario().requireArranged("a " + VARIANT + " build must route to a ship: " + assemble,
                 assemble.contains("\"ok\":true"));
 
         exec("tp @a " + (BX + 0.5) + " " + (BY + 8) + " " + (BZ + 0.5) + " 0 0");
@@ -190,7 +139,7 @@ public class VSAssembledShipRealRightClickBoardingE2ETest {
                 yRest = Double.parseDouble(m.group(1));
             }
         }
-        assertTrue("ARRANGEMENT: the ship must LOAD with the client present: " + atBase,
+        scenario().requireArranged("the ship must LOAD with the client present: " + atBase,
                 !Double.isNaN(yRest));
 
         // The ship's IDENTITY, captured while it is still the only craft that can be at this base.
@@ -198,14 +147,14 @@ public class VSAssembledShipRealRightClickBoardingE2ETest {
         // "whichever craft is nearest that point", which is exact with one candidate and silently
         // wrong with two — and this class is a re-home candidate onto a SHARED world.
         Matcher sid = SHIP_ID.matcher(atBase);
-        assertTrue("ARRANGEMENT: ship-info must name the ship: " + atBase, sid.find());
+        scenario().requireArranged("ship-info must name the ship: " + atBase, sid.find());
         shipUuid = sid.group(1);
 
         // The seat's SUBSPACE address (stationary, what the raytrace should report) and its live
         // WORLD position (what the bot has to aim at). Both come from the same probe reading.
         String found = findSeat();
         Matcher sm = SEAT_SUB.matcher(found);
-        assertTrue("ARRANGEMENT: find-seat must resolve the assembled ship's subspace seat: " + found,
+        scenario().requireArranged("find-seat must resolve the assembled ship's subspace seat: " + found,
                 sm.find());
         int seatSubX = Integer.parseInt(sm.group(1));
         int seatSubY = Integer.parseInt(sm.group(2));
@@ -228,7 +177,7 @@ public class VSAssembledShipRealRightClickBoardingE2ETest {
             bot().waitTicks(5);
             items = bot().reportPlayerItems();
         }
-        assertTrue("ARRANGEMENT: the bot's main hand must be EMPTY so the use press reaches the seat "
+        scenario().requireArranged("the bot's main hand must be EMPTY so the use press reaches the seat "
                 + "block rather than being consumed by a held item. held=" + heldId + " items=" + items,
                 heldId != null && heldId.isEmpty());
 
@@ -288,7 +237,7 @@ public class VSAssembledShipRealRightClickBoardingE2ETest {
                 + " buildSeat=(" + BUILD_SEAT_X + "," + BUILD_SEAT_Y + "," + BUILD_SEAT_Z + ")"
                 + " distSq=" + distSq + " mouseOver=" + aim + " findSeat=" + found;
 
-        assertTrue("ARRANGEMENT: the bot must OBSERVABLY stand within the server's interaction reach "
+        scenario().requireArranged("the bot must OBSERVABLY stand within the server's interaction reach "
                 + "of the seat, or the press is discarded before the seat block ever sees it."
                 + aimDiag, distSq < MAX_INTERACT_DIST_SQ);
 
@@ -345,14 +294,6 @@ public class VSAssembledShipRealRightClickBoardingE2ETest {
 
     // ---- helpers -------------------------------------------------------------------------------
 
-    private ClientBot bot() {
-        return clientHarness.bot();
-    }
-
-    private String exec(String cmd) throws Exception {
-        return String.join("\n", serverHarness.client().execute(cmd));
-    }
-
     /**
      * The ship at its BUILD SITE — for the arrangement's load poll and the identity capture only,
      * since that is the only moment the ship is known to be there.
@@ -387,18 +328,18 @@ public class VSAssembledShipRealRightClickBoardingE2ETest {
     private String assembleFixture(int baseX, int baseY, int baseZ, String variant) throws Exception {
         int cx1 = (baseX - 2) >> 4, cz1 = (baseZ - 2) >> 4;
         int cx2 = (baseX + 7) >> 4, cz2 = (baseZ + 7) >> 4;
-        assertTrue("ARRANGEMENT: chunk warmup failed",
+        scenario().requireArranged("chunk warmup failed",
                 exec("artest chunk warmup 0 " + cx1 + " " + cz1 + " " + cx2 + " " + cz2)
                         .contains("\"ok\":true"));
-        assertTrue("ARRANGEMENT: pre-clear failed",
+        scenario().requireArranged("pre-clear failed",
                 exec("artest fill 0 " + (baseX - 2) + " " + (baseY + 1) + " " + (baseZ - 2)
                         + " " + (baseX + 7) + " " + (baseY + 10) + " " + (baseZ + 7) + " minecraft:air")
                         .contains("\"ok\":true"));
         String fixture = exec("artest fixture rocket 0 " + baseX + " " + baseY + " " + baseZ + " " + variant);
-        assertTrue("ARRANGEMENT: fixture (" + variant + ") failed: " + fixture,
+        scenario().requireArranged("fixture (" + variant + ") failed: " + fixture,
                 fixture.contains("\"ok\":true"));
         Matcher bp = BUILDER_POS.matcher(fixture);
-        assertTrue("ARRANGEMENT: fixture missing builderPos: " + fixture, bp.find());
+        scenario().requireArranged("fixture missing builderPos: " + fixture, bp.find());
         return exec("artest rocket assemble 0 " + bp.group(1) + " " + bp.group(2) + " " + bp.group(3));
     }
 }

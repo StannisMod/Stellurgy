@@ -1,7 +1,8 @@
 package zmaster587.advancedRocketry.test.client;
 
-import com.github.stannismod.forge.testing.junit.AbstractClientE2ETest;
+import org.junit.FixMethodOrder;
 import org.junit.Test;
+import org.junit.runners.MethodSorters;
 import org.lwjgl.input.Keyboard;
 
 import java.util.Locale;
@@ -43,7 +44,13 @@ import static org.junit.Assert.assertTrue;
  *
  * <p></p>
  */
-public class VSUnassembledCraftTakesNoOrdersE2ETest extends AbstractClientE2ETest {
+@FixMethodOrder(MethodSorters.NAME_ASCENDING)
+public class VSUnassembledCraftTakesNoOrdersE2ETest extends AbstractSharedVsClientE2ETest {
+
+    @Override
+    protected String subsystem() {
+        return "vs-unassembled-craft-orders";
+    }
 
     private static final Pattern BUILDER_POS =
             Pattern.compile("\"builderPos\":\\[(-?\\d+),(-?\\d+),(-?\\d+)]");
@@ -56,10 +63,6 @@ public class VSUnassembledCraftTakesNoOrdersE2ETest extends AbstractClientE2ETes
     private static final int SHIP_X = 3600, SHIP_Y = 64, SHIP_Z = 3600;
     /** The subject craft, far enough that the control ship is unloaded while it is flown. */
     private static final int CRAFT_X = 4600, CRAFT_Y = 71, CRAFT_Z = 4600;
-
-    private String exec(String cmd) throws Exception {
-        return String.join("\n", serverClient().execute(cmd));
-    }
 
     @Test
     public void aCraftThatNeverBecameAShipTakesNoOrdersFromItsPilot() throws Exception {
@@ -79,14 +82,14 @@ public class VSUnassembledCraftTakesNoOrdersE2ETest extends AbstractClientE2ETes
         bot().waitTicks(10);
 
         String assemble = assembleShip();
-        assertTrue("ARRANGEMENT: a with-pilot-seat build must route to a ship: " + assemble,
+        scenario().requireArranged("a with-pilot-seat build must route to a ship: " + assemble,
                 assemble.contains("\"rocketCount\":0"));
         int ships = 0;
         for (int i = 0; i < 40 && ships < 1; i++) {
             bot().waitTicks(5);
             ships = count("ship-count-all");
         }
-        assertTrue("ARRANGEMENT: assembly must create a VS ship (all=" + ships + ")", ships >= 1);
+        scenario().requireArranged("assembly must create a VS ship (all=" + ships + ")", ships >= 1);
         bot().waitTicks(40);
 
         exec("tp @a " + (SHIP_X + 0.5) + " " + (SHIP_Y + 6) + " " + (SHIP_Z + 0.5) + " 0 0");
@@ -96,12 +99,12 @@ public class VSUnassembledCraftTakesNoOrdersE2ETest extends AbstractClientE2ETes
         }
 
         String mountInfo = exec("artest vs seat-mount 0");
-        assertTrue("ARRANGEMENT: seat-mount must find the ship's pilot seat: " + mountInfo,
+        scenario().requireArranged("seat-mount must find the ship's pilot seat: " + mountInfo,
                 mountInfo.contains("\"seatFound\":true"));
         Matcher dm = DUMMY_ID.matcher(mountInfo);
-        assertTrue("ARRANGEMENT: seat-mount must report a dummy id: " + mountInfo, dm.find());
+        scenario().requireArranged("seat-mount must report a dummy id: " + mountInfo, dm.find());
         String mount = exec("artest player mount-entity " + dm.group(1));
-        assertTrue("ARRANGEMENT: the bot must mount the seat dummy: " + mount,
+        scenario().requireArranged("the bot must mount the seat dummy: " + mount,
                 mount.contains("\"mounted\":true"));
         bot().waitTicks(10); // let the mount replicate and the client recognise the pilot seat
 
@@ -145,20 +148,20 @@ public class VSUnassembledCraftTakesNoOrdersE2ETest extends AbstractClientE2ETes
                 + " " + (CRAFT_X + 3) + " " + (CRAFT_Y + 4) + " " + (CRAFT_Z + 3) + " minecraft:air");
         String seat = exec("artest fill 0 " + CRAFT_X + " " + CRAFT_Y + " " + CRAFT_Z
                 + " " + CRAFT_X + " " + CRAFT_Y + " " + CRAFT_Z + " advancedrocketry:pilotSeat");
-        assertTrue("ARRANGEMENT: placing the pilot seat failed: " + seat, seat.contains("\"ok\":true"));
+        scenario().requireArranged("placing the pilot seat failed: " + seat, seat.contains("\"ok\":true"));
         String afc = exec("artest fill 0 " + CRAFT_X + " " + (CRAFT_Y + 2) + " " + CRAFT_Z
                 + " " + CRAFT_X + " " + (CRAFT_Y + 2) + " " + CRAFT_Z
                 + " advancedrocketry:advancedFlightComputer");
-        assertTrue("ARRANGEMENT: placing the flight computer failed: " + afc, afc.contains("\"ok\":true"));
+        scenario().requireArranged("placing the flight computer failed: " + afc, afc.contains("\"ok\":true"));
 
         // Link the two WITHOUT assembling: exactly what the assembler leaves behind when the
         // physics mod rejects the spawn. A real failed assembly cannot be arranged deterministically.
         String linked = exec("artest vs seat-link 0 " + CRAFT_X + " " + CRAFT_Y + " " + CRAFT_Z
                 + " " + CRAFT_X + " " + (CRAFT_Y + 2) + " " + CRAFT_Z);
-        assertTrue("ARRANGEMENT: the seat must end up LINKED — an unlinked seat is refused for a "
+        scenario().requireArranged("the seat must end up LINKED — an unlinked seat is refused for a "
                         + "reason that has nothing to do with this bug: " + linked,
                 linked.contains("\"linked\":true"));
-        assertTrue("ARRANGEMENT CONTROL: and NO ship may manage it — otherwise the craft is simply "
+        scenario().requireArranged("CONTROL: and NO ship may manage it — otherwise the craft is simply "
                         + "a ship and the refusal under test would be wrong: " + linked,
                 linked.contains("\"managedByShip\":false"));
 
@@ -166,7 +169,7 @@ public class VSUnassembledCraftTakesNoOrdersE2ETest extends AbstractClientE2ETes
         emptyTheHand();
         bot().interactBlock(CRAFT_X, CRAFT_Y, CRAFT_Z);
         JsonObject riding = awaitRiding(30, true);
-        assertTrue("ARRANGEMENT: the right-click must seat the player: " + riding, isRiding(riding));
+        scenario().requireArranged("the right-click must seat the player: " + riding, isRiding(riding));
 
         // The seat's own notice — also the positive control for the action-bar instrument, so the
         // "no answer to a command key" assertion below is silence from a microphone known to work.
@@ -272,7 +275,7 @@ public class VSUnassembledCraftTakesNoOrdersE2ETest extends AbstractClientE2ETes
                 distSq = dx * dx + dy * dy + dz * dz;
             }
         }
-        assertTrue("ARRANGEMENT: the client must observably stand within reach of the seat, or the "
+        scenario().requireArranged("the client must observably stand within reach of the seat, or the "
                 + "right-click is dropped before the block sees it. state=" + state, distSq < 25.0);
     }
 
@@ -291,7 +294,7 @@ public class VSUnassembledCraftTakesNoOrdersE2ETest extends AbstractClientE2ETes
             }
             bot().waitTicks(5);
         }
-        assertTrue("ARRANGEMENT: the bot's hand must be observably empty; held=" + heldId,
+        scenario().requireArranged("the bot's hand must be observably empty; held=" + heldId,
                 heldId != null && heldId.isEmpty());
     }
 
@@ -346,7 +349,7 @@ public class VSUnassembledCraftTakesNoOrdersE2ETest extends AbstractClientE2ETes
             }
             bot().waitTicks(10);
         }
-        assertTrue("ARRANGEMENT: the previous action-bar message never expired within " + maxTicks
+        scenario().requireArranged("the previous action-bar message never expired within " + maxTicks
                 + " ticks", false);
     }
 
