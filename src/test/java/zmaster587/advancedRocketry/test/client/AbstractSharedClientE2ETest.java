@@ -400,11 +400,25 @@ public abstract class AbstractSharedClientE2ETest {
         // at the right X/Z in the WRONG world — and the plot assertion below, which reads X and Z,
         // would happily agree. The transfer is conditional because it is not free: a scenario that
         // never left dim 0 must not pay a dimension change and a chunk re-send every time.
-        JsonObject where = bot().reportWeather();
-        int clientDim = where != null && where.has("dim") ? where.get("dim").getAsInt() : plot.dim;
-        if (clientDim != plot.dim) {
+        //
+        // ASKED OF THE SERVER, not of the client. The client's own weather report is where this read
+        // used to come from, and it is a channel that LAGS: right after a scenario that crossed a
+        // dimension the client can still name the world it left, the transfer is then skipped as
+        // unnecessary, and the teleport below places the body at the plot's X/Z inside the world it
+        // was actually in. Measured 2026-08-23 in a full tier run: a scenario opened with its body
+        // teleported to y=151 in a SPACE CELL, where there is no ground — it fell, the substrate's
+        // own entity-drag then took it, and the plot verdict reported it at x=3.0e7, thirty million
+        // blocks out. The event log named every writer and the teleport itself was innocent.
+        //
+        // The server cannot be stale about which world it is ticking a player in.
+        int serverDim = playerDimOnTheServer(plot.dim);
+        if (serverDim != plot.dim) {
             serverClient().execute("artest tp " + plot.dim);
             bot().waitTicks(20);
+            int afterTransfer = playerDimOnTheServer(plot.dim);
+            assertEquals("the between-scenario transfer must actually move the player's world, or"
+                    + " the teleport that follows puts him at the right coordinates in the wrong"
+                    + " one; the server still ticks him in", plot.dim, afterTransfer);
         }
         // Mark the event log HERE, one statement before the teleport, so that a plot miss can ask
         // the one question the diagnostic below could never answer: WHO wrote this body's position.
@@ -509,6 +523,27 @@ public abstract class AbstractSharedClientE2ETest {
         scenario.record("plot", plot)
                 .record("resetCleared", cleared)
                 .record("heldAtStart", state.has("heldItem") ? state.get("heldItem").getAsString() : "?");
+    }
+
+    /**
+     * The account every client harness launches under. The server keys his player data by it, and the
+     * probes that answer ABOUT a player take it by name.
+     */
+    private static final String HARNESS_ACCOUNT = "ForgeTestClient";
+
+    /**
+     * Which world the SERVER is ticking the harness player in, or {@code fallback} when it cannot
+     * say.
+     *
+     * <p>A fallback that equals the caller's expectation is deliberate: an unreadable answer must not
+     * trigger a dimension transfer on a guess. The transfer that follows is verified, so a wrong
+     * fallback fails loudly there instead of quietly moving a body nobody located.</p>
+     */
+    private int playerDimOnTheServer(int fallback) throws Exception {
+        String reply = exec("artest oxygen player " + HARNESS_ACCOUNT);
+        java.util.regex.Matcher m =
+                java.util.regex.Pattern.compile("\"dim\":(-?\\d+)").matcher(reply);
+        return m.find() ? Integer.parseInt(m.group(1)) : fallback;
     }
 
     /**
