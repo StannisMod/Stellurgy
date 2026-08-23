@@ -126,6 +126,59 @@ public abstract class AbstractSharedVsClientE2ETest extends AbstractSharedClient
         return exec("artest vs ship-info 0 id " + shipId);
     }
 
+    /** How many two-tick polls a client is given to re-establish a rider's mount after a dimension
+     *  change. 80 ticks: generous against an eight-fork load, short enough that a crossing which
+     *  genuinely drops its rider fails here rather than waiting out a budget. */
+    protected static final int CLIENT_REMOUNT_POLLS = 40;
+
+    /**
+     * The client's mount state once it has caught up with a dimension change — or an
+     * {@link AssertionError} carrying THE CHAIN that explains why it never did.
+     *
+     * <p>A dimension change tears the client's world down and rebuilds it, and the mount to the seat
+     * entity is re-established after the new dimension is known. A scenario that reads
+     * {@code riding} in the same breath sees {@code false} — not because the crossing dropped
+     * anyone, but because it asked a tick too soon.
+     *
+     * <p><b>The point is not the wait, it is what a failure SAYS.</b> "He is not riding" names a
+     * symptom and leaves the reader to guess whether the test was early or the product broke. So on
+     * timeout this reports the SERVER's own mount/dismount record across the same window: if it
+     * seated him and the client did not follow, that is a replication lag; if it never seated him,
+     * the crossing dropped him and no wait here would ever have helped. Raised through
+     * {@code scenario().arrangementFailed}, so the failure is TYPED as an arrangement problem
+     * rather than a contract one — the same cut the message describes, made machine-readable.
+     * The mark is refused unless
+     * the recorder says it is both live and woven — a dead recorder answers with a confident empty
+     * list, which is the one answer that could mislead.
+     */
+    protected final JsonObject ridingOnceTheClientHasCaughtUp(int iterations) throws Exception {
+        String mark = exec("artest events mark");
+        boolean usable = mark.contains("\"recording\":true") && mark.contains("\"mixins\":true");
+        java.util.regex.Matcher seqM =
+                java.util.regex.Pattern.compile("\"seq\":(-?\\d+)").matcher(mark);
+        long seq = seqM.find() ? Long.parseLong(seqM.group(1)) : -1L;
+
+        JsonObject mount = bot().reportRidingEntity();
+        for (int i = 0; i < iterations && !mount.get("riding").getAsBoolean(); i++) {
+            bot().waitTicks(2);
+            mount = bot().reportRidingEntity();
+        }
+        if (mount.get("riding").getAsBoolean()) {
+            return mount;
+        }
+        String chain = usable && seq >= 0
+                ? exec("artest events since " + seq + " mount") + " | "
+                        + exec("artest events since " + seq + " dismount")
+                : "NO CHAIN: the position-writer recorder was not usable at the mark (" + mark + ")";
+        scenario().arrangementFailed("the client never reported the remount within "
+                + (iterations * 2) + " ticks of the crossing. Client says " + mount
+                + "; the SERVER's mount/dismount record across the same window says " + chain
+                + " — if it seated him and the client did not follow this is a replication lag; if it"
+                + " never seated him the crossing dropped him, and that is a PRODUCT defect, not a"
+                + " wait that was too short.");
+        return mount; // unreachable: arrangementFailed always throws
+    }
+
     /** The {@code "id"} field of a {@code ship-info} reply, or null when it carries none. */
     protected static String readShipId(String shipInfoJson) {
         Matcher m = SHIP_ID.matcher(shipInfoJson);

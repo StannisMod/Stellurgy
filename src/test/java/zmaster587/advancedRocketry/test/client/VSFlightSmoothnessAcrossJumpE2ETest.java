@@ -1,10 +1,12 @@
 package zmaster587.advancedRocketry.test.client;
 
+import com.google.gson.JsonObject;
 import com.github.stannismod.forge.testing.TestTimeouts;
-import com.github.stannismod.forge.testing.junit.AbstractClientE2ETest;
 
 import org.junit.After;
+import org.junit.FixMethodOrder;
 import org.junit.Test;
+import org.junit.runners.MethodSorters;
 import org.lwjgl.input.Keyboard;
 
 import java.util.regex.Matcher;
@@ -40,7 +42,14 @@ import static zmaster587.advancedRocketry.test.AdvancedRocketryTestConstants.SHI
  *
  * <p></p>
  */
-public class VSFlightSmoothnessAcrossJumpE2ETest extends AbstractClientE2ETest {
+@FixMethodOrder(MethodSorters.NAME_ASCENDING)
+public class VSFlightSmoothnessAcrossJumpE2ETest extends AbstractSharedVsClientE2ETest {
+
+    @Override
+    protected String subsystem() {
+        return "vs-flight-smoothness";
+    }
+
 
     private static final String MOTION_TRACE = "zmaster587.advancedRocketry.command.test.MotionTrace";
 
@@ -686,9 +695,12 @@ public class VSFlightSmoothnessAcrossJumpE2ETest extends AbstractClientE2ETest {
         }
         assertTrue("ARRANGEMENT: the bot must mount the pilot-seat dummy: " + mount, mounted);
         bot().waitTicks(10);
-        assertTrue("ARRANGEMENT: the bot must be seated before the control leg: "
-                + bot().reportRidingEntity(),
-                bot().reportRidingEntity().get("riding").getAsBoolean());
+        // The base raises a TYPED arrangement failure carrying the server's own mount/dismount
+        // record, so a red here says whether the client was merely behind or the product dropped
+        // him. This class used to keep its own copy of that logic with a comment explaining why it
+        // could not use the shared one; the reason was that it sat on the wrong base, and it does
+        // not any more.
+        ridingOnceTheClientHasCaughtUp(CLIENT_REMOUNT_POLLS);
     }
 
     private String botName() throws Exception {
@@ -698,9 +710,6 @@ public class VSFlightSmoothnessAcrossJumpE2ETest extends AbstractClientE2ETest {
         return nameM.group(1);
     }
 
-    private String exec(String cmd) throws Exception {
-        return String.join("\n", serverClient().execute(cmd));
-    }
 
     private int waitForLoadedShip(int dim) throws Exception {
         for (int i = 0; i < 40; i++) {

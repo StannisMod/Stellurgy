@@ -619,6 +619,14 @@ public class VSShipFlightTelemetryE2ETest extends AbstractSharedVsClientE2ETest 
 
     private double[] localOf(int entityId) throws Exception {
         String json = exec("artest vs player-ship-data 0 " + entityId);
+        // TWO different failures wear the same message unless they are split here. "no subject
+        // entity" means the body this scenario meant to watch is NOT THERE — an arrangement that
+        // never got built, and nothing about the product. Anything else means the body exists and
+        // the ship frame did not resolve for it, which IS the subject. Reported as an arrangement
+        // failure so the two are distinguishable by TYPE, not only by reading the text.
+        scenario().requireArranged("the body this scenario watches (entity " + entityId + ") does not"
+                + " exist on the server, so nothing below is about ship-frame resolution: " + json,
+                !json.contains("\"error\":\"no subject entity\""));
         assertTrue("entity " + entityId + " must report a ship-frame position: " + json,
                 json.contains("\"localX\""));
         return new double[]{readDouble(json, LOCAL_X), readDouble(json, LOCAL_Y), readDouble(json, LOCAL_Z)};

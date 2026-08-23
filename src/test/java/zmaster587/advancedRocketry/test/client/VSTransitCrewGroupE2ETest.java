@@ -151,63 +151,7 @@ private int waitForLoadedShip(int dim) throws Exception {
      * it at {@code -1} when a transit ended inside the first iteration, so the failure compared the
      * client against a sentinel.</p>
      */
-    /**
-     * How many two-tick polls the client is given to re-establish a rider's mount after a dimension
-     * change. 80 ticks — four seconds of game time, generous against the eight-fork load that
-     * exposed the race and still short enough that a crossing which genuinely drops its rider fails
-     * here rather than waiting out a budget.
-     */
-    private static final int CLIENT_REMOUNT_POLLS = 40;
 
-    /**
-     * The client's mount state once it has caught up with the dimension change — or the last reading
-     * taken, if it never does.
-     *
-     * <p>{@link #driveIntoCorridor} returns the moment the CLIENT's dimension becomes the corridor's,
-     * and that is one step EARLIER than a seated reading needs: a dimension change tears the client's
-     * world down and rebuilds it, and the mount to the seat entity is re-established after the new
-     * dimension is known. Sampled in the same breath it reads {@code riding:false} — not because the
-     * crossing dropped him, but because the arrangement asked a tick too soon. Measured 2026-08-22:
-     * the two scenarios that use this failed exactly that way under an 8-fork whole-tier load while
-     * the class passed 8/8 in isolation.
-     *
-     * <p>This waits for an ARRANGEMENT, never for a subject. That a transit does not unseat a rider
-     * is pinned as a SUBJECT by {@code aSeatedCrewMemberSurvivesAHyperspaceTransitStillRiding}; if
-     * that stops being true, THAT scenario goes red, and no wait here can hide it.
-     */
-    private JsonObject ridingOnceTheClientHasCaughtUp(int iterations) throws Exception {
-        // MARK the position-writer recorder first, and refuse to trust a mark the recorder says is
-        // not live: both flags fail independently — the bus recorder may be unsubscribed, or the
-        // launch-time coremod may never have woven the test-only mixin that records a mount — and
-        // their silences look identical. A mark taken from a dead recorder would turn the diagnosis
-        // below into a confident empty list.
-        String mark = exec("artest events mark");
-        long seq = readIntOr(mark, "seq", -1);
-        boolean usable = mark.contains("\"recording\":true") && mark.contains("\"mixins\":true");
-
-        JsonObject mount = bot().reportRidingEntity();
-        for (int i = 0; i < iterations && !mount.get("riding").getAsBoolean(); i++) {
-            bot().waitTicks(2);
-            mount = bot().reportRidingEntity();
-        }
-        if (mount.get("riding").getAsBoolean()) {
-            return mount;
-        }
-
-        // He never came back. Do not just report the state — report the CHAIN, so the red names the
-        // link that broke instead of the symptom. The server's own record says whether it dismounted
-        // him and seated him again; if it did, the client is merely behind, and if it did not, the
-        // crossing is the subject and no wait here would ever have helped.
-        String chain = usable && seq >= 0
-                ? exec("artest events since " + seq + " mount") + " | "
-                        + exec("artest events since " + seq + " dismount")
-                : "NO CHAIN: the position-writer recorder was not usable at the mark (" + mark + ")";
-        throw new AssertionError("the client never reported the remount within " + (iterations * 2)
-                + " ticks of the crossing. Client says " + mount + "; the SERVER's mount/dismount"
-                + " record across the same window says " + chain + " — if it seated him and the"
-                + " client did not follow, this is a replication lag; if it never seated him, the"
-                + " crossing dropped him and that is the subject, not the wait.");
-    }
 
     private CorridorWait driveIntoCorridor(int iterations) throws Exception {
         int corridorDim = -1;
