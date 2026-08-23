@@ -84,6 +84,9 @@ public abstract class AbstractSharedVsClientE2ETest extends AbstractSharedClient
     protected static final int SHIP_QUERY_RADIUS = SHIP_CAPTURE_RADIUS_BLOCKS;
 
     private static final Pattern SHIP_ID = Pattern.compile("\"id\":\"([^\"]*)\"");
+    /** The two quaternion components an upright test needs; see {@link #upYOf}. */
+    private static final Pattern Q_X = Pattern.compile("\"qx\":(-?[0-9.E\\-]+)");
+    private static final Pattern Q_Z = Pattern.compile("\"qz\":(-?[0-9.E\\-]+)");
 
     /**
      * Wait for this scenario's ship to LOAD at its own base and return its IDENTITY — the value
@@ -177,6 +180,69 @@ public abstract class AbstractSharedVsClientE2ETest extends AbstractSharedClient
                 + " never seated him the crossing dropped him, and that is a PRODUCT defect, not a"
                 + " wait that was too short.");
         return mount; // unreachable: arrangementFailed always throws
+    }
+
+    /**
+     * How level a hull has to be before a pilot's "climb" is a climb at all.
+     *
+     * <p>A pilot's throttle is a BODY-frame command — it is mapped through the ship's attitude — so
+     * on a hull lying over, "up" is mostly horizontal thrust and the craft travels instead of
+     * rising. Any scenario whose claim is about ALTITUDE is therefore making a claim it cannot
+     * support once the hull has tipped, and its red would name the control chain, the seat binding or
+     * the crossing when none of them is at fault.</p>
+     *
+     * <p><b>The number is measured, not chosen.</b> A craft flying in clear air reads {@code up} =
+     * 1.00 for the whole window; a craft that took its tilt from ground contact reads 0.59, 0.38 or
+     * below within the first samples and decays toward 0. The audit that identified the substrate's
+     * collision solver as the source of the torque stated its own acceptance in these terms — level
+     * throughout at {@code >= 0.95}, tipped below {@code 0.9} — so this uses the same line.</p>
+     */
+    protected static final double UPRIGHT_UP_Y = 0.9;
+
+    /** The world-frame Y of a ship's OWN up, from a {@code ship-info} reply, or NaN if unreported. */
+    protected static double upYOf(String shipInfoJson) {
+        Matcher qx = Q_X.matcher(shipInfoJson);
+        Matcher qz = Q_Z.matcher(shipInfoJson);
+        if (!qx.find() || !qz.find()) {
+            return Double.NaN;
+        }
+        double ax = Double.parseDouble(qx.group(1));
+        double az = Double.parseDouble(qz.group(1));
+        return 1.0 - 2.0 * (ax * ax + az * az);
+    }
+
+    /**
+     * Refuse to make an ALTITUDE claim about a hull that has tipped, and say so as a PRECONDITION
+     * rather than as a verdict.
+     *
+     * <p>This is the difference between a red that reads "the restored control chain is dead" and one
+     * that reads "the craft was lying on its side, so nothing here was ever a measurement of the
+     * control chain". The state it declines to measure on is a known production defect with its own
+     * ledger entry — a craft that takes off from a pad is tipped by the physics substrate's collision
+     * response and the attitude law then holds the tilt, and a pilot cannot right it from the
+     * controls — so a scenario blocked by it must not report its own subject as broken.</p>
+     *
+     * <p>An UNREPORTED attitude is not treated as tipped: a probe that answered nothing is a harness
+     * problem, and turning it into a precondition failure would hide it.</p>
+     *
+     * @param shipInfoJson a {@code ship-info} reply for the craft the claim is about
+     * @param theClaim     what the caller was about to assert, for the failure line
+     */
+    protected final void requireUprightForAnAltitudeClaim(String shipInfoJson, String theClaim)
+            throws Exception {
+        double up = upYOf(shipInfoJson);
+        scenario().record("upY", up);
+        if (Double.isNaN(up) || up >= UPRIGHT_UP_Y) {
+            return;
+        }
+        scenario().step(Scenario.Phase.PRECONDITION, "read the hull's attitude before " + theClaim);
+        scenario().arrangementFailed("the hull is LYING OVER (up=" + up + ", level is 1.0 and this"
+                + " scenario needs at least " + UPRIGHT_UP_Y + "), so \"" + theClaim + "\" cannot be"
+                + " measured here at all: the pilot's throttle is a body-frame command, and on a"
+                + " tipped hull it is horizontal thrust. Nothing in this red is evidence about the"
+                + " subject. The craft is tipped by the physics substrate's collision response when it"
+                + " leaves the ground, and the attitude law then holds whatever tilt it was given."
+                + " ship=" + shipInfoJson.replace('\n', ' '));
     }
 
     /** The {@code "id"} field of a {@code ship-info} reply, or null when it carries none. */

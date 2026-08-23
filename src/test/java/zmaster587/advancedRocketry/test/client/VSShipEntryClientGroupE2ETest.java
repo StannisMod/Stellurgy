@@ -482,6 +482,24 @@ public class VSShipEntryClientGroupE2ETest extends AbstractSharedVsClientE2ETest
         // separate all four. `lastDecision` NEVER-ASKED with a maxShipY under the ceiling is the
         // first of them, and it exonerates every part of the entry path.
         String gate = exec("artest space entry-gate 0 " + shipUuid);
+
+        // THE PRECONDITION, before the verdict: a refusal can only be missing if a refusal was ever
+        // ASKED FOR, and that needs the craft to have crossed the ceiling. Declared here rather than
+        // folded into the message below, because the two need opposite responses — a craft that never
+        // got there says nothing whatever about the refusal path, while one that did and was told
+        // nothing is the defect this scenario exists for.
+        if (maxShipY < ORBIT_LINE) {
+            scenario().step(Scenario.Phase.PRECONDITION,
+                    "measure how high the craft actually got before judging the refusal");
+            requireUprightForAnAltitudeClaim(shipInfoById(shipUuid),
+                    "a climb past the orbit line, which is what makes a refusal possible");
+            scenario().arrangementFailed("the craft never reached the orbit line (" + ORBIT_LINE
+                    + "); the highest it got was " + maxShipY + ", so the entry was never asked for"
+                    + " and the absence of a refusal message means nothing. The hull was level"
+                    + " throughout, so the tilt this class usually dies of is NOT the reason —"
+                    + " climb(attempt:y/velY/up/horiz)=[" + climb.toString().trim() + "] gate=" + gate);
+        }
+
         assertTrue("a pilot whose entry is refused (pool exhausted) must be TOLD so in his own "
                         + "chat - a silent refusal reads as a dead ship. chat="
                         + bot().reportChat(8) + " subsystem=" + exec("artest space subsystem-status")

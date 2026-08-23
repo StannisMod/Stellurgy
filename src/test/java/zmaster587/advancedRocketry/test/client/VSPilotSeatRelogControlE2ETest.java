@@ -110,6 +110,14 @@ public class VSPilotSeatRelogControlE2ETest extends AbstractSharedVsClientE2ETes
         assertTrue("a pilot who logged out SEATED must log back in SEATED - no re-board. riding="
                 + riding, seatedTwice);
 
+        // ---- PRECONDITION before ASSERT 2 can mean anything: the hull is still level. ---------
+        // Declared, not guessed: this leg's claim is about ALTITUDE, and a pilot's throttle is a
+        // body-frame command. On a hull that has tipped the claim is unmeasurable, and the red would
+        // name the restored control chain when the control chain is perfect. The base refuses to make
+        // the claim in that state and says which one it is.
+        requireUprightForAnAltitudeClaim(exec("artest vs ship-info 0 " + BX + " " + BY + " " + BZ
+                + " 48"), "the restored control chain still lifts the ship");
+
         // ---- ASSERT 2 (load-bearing): the restored chain still FLIES the ship. -----------------
         Climb after = climbWith(Keyboard.KEY_R, clientPlayerY(), budget);
         assertTrue("after the relog, held input must MOVE THE SHIP - a restored seat with a dead key"
