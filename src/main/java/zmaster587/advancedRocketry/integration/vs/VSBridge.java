@@ -1388,10 +1388,66 @@ final class VSBridge {
         }
     }
 
+    /** Per-WORLD observation state for {@link #observationTick}: {@code [lastRawTime, monotonicTick]}.
+     *  Weak keys — an unloading world takes its entry with it. */
+    private static final Map<World, long[]> OBSERVATION_CLOCK =
+            java.util.Collections.synchronizedMap(new java.util.WeakHashMap<World, long[]>());
+
+    /**
+     * The monotonic observation tick for {@code world}, advanced whenever that world's raw clock
+     * moves in EITHER direction.
+     *
+     * <p><b>Keyed per WORLD, not per side, and that distinction is the whole of it.</b> Dimension
+     * time in AR is per-dimension by design (`perDimWorldInfo`, working beds), and a hyperspace
+     * transit has two worlds live on one side at once. A counter keyed by side sees the raw clock
+     * "change" on every call that alternates between them and advances several times per real tick,
+     * which inflates {@code dt} and collapses the derived carry velocity — measured 2026-08-22 as
+     * `VSTransitCrewGroup` going 7/8 red the moment a side-keyed version of this shipped.
+     *
+     * <p>Why a counter is needed at all: the world clock is not monotonic on the CLIENT.
+     * {@code WorldClient.tick} advances {@code totalWorldTime} by one every client tick, and
+     * {@code NetHandlerPlayClient.handleTimeUpdate} then OVERWRITES it with the server's absolute
+     * value every 20 ticks, so a client that has ticked ahead of a loaded server is pulled BACK.
+     * Read as a tick counter it breaks rate arithmetic both ways: a backward step used to blank the
+     * cache below for that tick — the external-move guard's allowance collapsing to the bare epsilon
+     * while a deck was carrying a body a block per tick, which is ledger #377 — and a forward jump
+     * inflates {@code dt} so the derived velocity comes out too small.
+     *
+     * <p><b>Why not the space clock, the subsystem's own counter?</b> Because on the CLIENT it is
+     * not monotonic either, and {@code SpaceClockSync} says so in its own words: a re-sync "MAY
+     * correct the value BACKWARDS ... Nothing may assume this value never decreases." It is a
+     * baseline plus local ticks, rebased periodically from the server — the same shape of correction
+     * as the world clock and for the same reason. It is the right clock for dwell and orbits, whose
+     * tolerances run to hundreds of ticks; it is the wrong one for a per-tick rate.</p>
+     *
+     * <p><b>Never reset, and it does not need to be</b> — stated because a shared harness runs many
+     * scenarios in one boot and an unreset static is normally a leak. Only DIFFERENCES between two
+     * observations of one ship are read, both maps are weak and die with their subject, and
+     * monotonicity is the entire contract: a counter still counting across a scenario boundary is
+     * behaving as specified. One writer, in this class.</p>
+     */
+    private static long observationTick(World world) {
+        synchronized (OBSERVATION_CLOCK) {
+            long raw = world.getTotalWorldTime();
+            long[] state = OBSERVATION_CLOCK.get(world);
+            if (state == null) {
+                state = new long[]{raw, 0L};
+                OBSERVATION_CLOCK.put(world, state);
+                return 0L;
+            }
+            if (raw != state[0]) {
+                state[0] = raw;
+                state[1]++;
+            }
+            return state[1];
+        }
+    }
+
     /** Per-side cache of each ship's last OBSERVED transform and the rates derived from its delta:
      *  {@code [tick, posXYZ, quatWXYZ, vLinXYZ, omegaXYZ]}. Weak keys: an unloading ship takes its
      *  entry with it. Synchronized only against the two logical sides' threads; entries are
      *  side-local because each side holds its own {@link PhysicsObject} instances. */
+
     private static final Map<PhysicsObject, double[]> OBSERVED_TRANSFORM =
             java.util.Collections.synchronizedMap(new java.util.WeakHashMap<PhysicsObject, double[]>());
 
@@ -1406,7 +1462,7 @@ final class VSBridge {
         ShipTransform t = physo.getShipData().getShipTransform();
         Vec3d c = t.getShipPositionVec3d();
         Quaterniond q = t.rotationQuaternion(TransformType.SUBSPACE_TO_GLOBAL);
-        long now = world.getTotalWorldTime();
+        long now = observationTick(world);
         double[] prev = OBSERVED_TRANSFORM.get(physo);
         double[] cur;
         if (prev != null && (long) prev[0] == now) {
@@ -1416,7 +1472,7 @@ final class VSBridge {
             cur[0] = now;
             cur[1] = c.x; cur[2] = c.y; cur[3] = c.z;
             cur[4] = q.w; cur[5] = q.x; cur[6] = q.y; cur[7] = q.z;
-            if (prev == null || now < (long) prev[0]) {
+            if (prev == null) {
                 OBSERVED_TRANSFORM.put(physo, cur);
                 return null; // first observation of this ship on this side: no rate yet
             }
