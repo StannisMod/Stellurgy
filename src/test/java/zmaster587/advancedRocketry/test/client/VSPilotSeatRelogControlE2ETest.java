@@ -51,6 +51,10 @@ public class VSPilotSeatRelogControlE2ETest extends AbstractSharedVsClientE2ETes
     /** A demonstrable climb: well above settle jitter, cheap to reach. */
     private static final double MIN_CLIMB = 1.0;
 
+    /** This scenario's ship, by identity — captured once, at the only moment a positional lookup is
+     *  defensible, and used for every question afterwards. */
+    private String shipId;
+
     @Test
     public void aPilotWhoRelogsSeatedKeepsControlOfHisShip() throws Exception {
 
@@ -74,6 +78,19 @@ public class VSPilotSeatRelogControlE2ETest extends AbstractSharedVsClientE2ETes
                 + ", now " + all + ")", all > shipsBefore);
         exec("tp @a " + (BX + 0.5) + " " + (BY + 6) + " " + (BZ + 0.5) + " 0 0");
         bot().waitTicks(40);
+
+        // NAME the ship, then take it OFF ITS PAD before anyone flies it.
+        //
+        // Both halves are load-bearing. The identity, because everything this scenario reads about
+        // the ship afterwards has to be about THIS ship: it is flown, relogged and flown again, and
+        // a positional lookup at the build site answers about whichever craft is nearest to a place
+        // this one has left. The lift, because a craft launched from a pad is tipped by the physics
+        // substrate's collision response and then holds the tilt — and this scenario's whole claim is
+        // about ALTITUDE, which a body-frame throttle cannot produce on a hull lying over. The red
+        // that state produces reads "the restored control chain is dead" while the control chain is
+        // perfect.
+        shipId = captureShipIdAt(BX, BY, BZ, budget);
+        liftClearOfTheGround(shipId, CLEAR_AIR_Y);
 
         String mountInfo = exec("artest vs seat-mount 0");
         Matcher dm = DUMMY_ID.matcher(mountInfo);
@@ -115,8 +132,8 @@ public class VSPilotSeatRelogControlE2ETest extends AbstractSharedVsClientE2ETes
         // body-frame command. On a hull that has tipped the claim is unmeasurable, and the red would
         // name the restored control chain when the control chain is perfect. The base refuses to make
         // the claim in that state and says which one it is.
-        requireUprightForAnAltitudeClaim(exec("artest vs ship-info 0 " + BX + " " + BY + " " + BZ
-                + " 48"), "the restored control chain still lifts the ship");
+        requireUprightForAnAltitudeClaim(shipInfoById(shipId),
+                "the restored control chain still lifts the ship");
 
         // ---- ASSERT 2 (load-bearing): the restored chain still FLIES the ship. -----------------
         Climb after = climbWith(Keyboard.KEY_R, clientPlayerY(), budget);
@@ -189,12 +206,15 @@ public class VSPilotSeatRelogControlE2ETest extends AbstractSharedVsClientE2ETes
         return new Climb(from, last, trace.toString());
     }
 
-    /** This scenario's ship, by position at its own base: its altitude and the world-frame Y of its
-     *  OWN up. Read-only. Returns a self-describing string rather than throwing, so a probe failure
-     *  can never mask the assertion it is annotating. */
+    /** This scenario's ship, BY IDENTITY: its altitude and the world-frame Y of its OWN up.
+     *  Read-only. Returns a self-describing string rather than throwing, so a probe failure can never
+     *  mask the assertion it is annotating. It used to ask by position at the build site — a lookup
+     *  that answers about the nearest craft, which after a lift and a climb is not this one. */
     private String shipPose() {
         try {
-            String info = exec("artest vs ship-info 0 " + BX + " " + BY + " " + BZ + " 48");
+            String info = shipId == null
+                    ? exec("artest vs ship-info 0 " + BX + " " + BY + " " + BZ + " 48")
+                    : shipInfoById(shipId);
             Matcher qx = Pattern.compile("\"qx\":(-?[0-9.E\\-]+)").matcher(info);
             Matcher qz = Pattern.compile("\"qz\":(-?[0-9.E\\-]+)").matcher(info);
             Matcher py = Pattern.compile("\"posY\":(-?[0-9.E\\-]+)").matcher(info);
