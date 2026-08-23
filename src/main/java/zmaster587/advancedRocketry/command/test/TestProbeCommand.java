@@ -6361,6 +6361,12 @@ public class TestProbeCommand extends CommandBase {
             info.put("parent", props.getParentPlanet());
             info.put("atmosphereDensity", props.getAtmosphereDensity());
             info.put("gravity", props.getGravitationalMultiplier());
+            // The body's BULK, in Earth units. Reported because zero is a real state that is
+            // invisible in every other field here: a body with no radius is drawn at the marker size
+            // at every range and carries the flat proximity shell instead of an atmosphere, while its
+            // name, gravity and pressure all read exactly as they should.
+            info.put("mass", props.getMass());
+            info.put("radius", props.getRadius());
             info.put("orbitalDistance", props.orbitalDist);
             info.put("rotationalPeriod", props.rotationalPeriod);
             info.put("hasRings", props.hasRings);

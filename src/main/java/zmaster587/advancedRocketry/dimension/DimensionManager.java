@@ -79,32 +79,9 @@ public class DimensionManager implements IGalaxy {
     public DimensionManager() {
         dimensionList = new HashMap<>();
         starList = new HashMap<>();
-        StellarBody sol = new StellarBody();
-        sol.setTemperature(100);
-        sol.setId(0);
-        sol.setName("Sol");
 
         overworldProperties = new DimensionProperties(0);
-        overworldProperties.setAtmosphereDensityDirect(100);
-        //Temperature in Kelvin, 286 is 13 Degrees C
-        overworldProperties.setAverageTemp(286);
-        overworldProperties.gravitationalMultiplier = 1f;
-        // Earth's bulk, and it is a DEFINITION rather than a choice: the Earth mass and the Earth
-        // radius are the units the whole catalogue is stated in, so this body is 1.0 of each.
-        // Without it nothing ever states one — the only writers of bulk are the procedural realizer
-        // and an admin command, and the overworld passes through neither — so getRadius() stays
-        // BULK_UNSET. A body with no radius has no descent shell (it falls back to the flat 512-block
-        // proximity sphere meant for belts, 1/50 of this world) and reaches the sky renderer with
-        // radiusBlocks = 0, which draws every planet at the marker size at every range.
-        // The gravity above is STATED, so it is marked authored and setBulk leaves it alone; here the
-        // derived value happens to agree, and that agreement is not what the mark is for.
-        overworldProperties.setGravityAuthored(true);
-        overworldProperties.setBulk(1d, 1d);
-        overworldProperties.orbitalDist = 100;
-        overworldProperties.skyColor = new float[]{1f, 1f, 1f};
-        overworldProperties.setName("Earth");
-        overworldProperties.isNativeDimension = false;
-        overworldProperties.setStar(sol);
+        seedEarthDefaults(overworldProperties);
 
         defaultSpaceDimensionProperties = new DimensionProperties(SpaceObjectManager.WARPDIMID, false);
         defaultSpaceDimensionProperties.setAtmosphereDensityDirect(0);
@@ -118,6 +95,79 @@ public class DimensionManager implements IGalaxy {
 
         random = new Random(System.currentTimeMillis());
         knownPlanets = new HashSet<>();
+    }
+
+    /**
+     * Give the loaded OVERWORLD the unit bulk when its planet file states none, and say so.
+     *
+     * <p>A save written while {@link #overworldProperties} was blank (see {@link #seedEarthDefaults})
+     * carries a dim-0 planet with no mass and no radius, because the writer emits bulk only for a body
+     * that has it. Nothing later restores it: the planet file is authoritative when present, so dim 0
+     * comes from the file and never from the static above, and the world stays sizeless in processes
+     * that no longer have the defect that made it.</p>
+     *
+     * <p>It is a REPAIR of the one body whose bulk is a definition rather than a measurement — Earth
+     * masses and Earth radii are the units the whole catalogue is stated in — and it is announced,
+     * because a body silently gaining a radius is indistinguishable from one that always had it. A
+     * pack that wants a different overworld states its own and this never fires.</p>
+     */
+    private static void repairOverworldBulk(DimensionProperties properties) {
+        if (properties == null || properties.getId() != 0 || properties.hasBulkProperties()) {
+            return;
+        }
+        properties.setBulk(1d, 1d);
+        logger.warn("The overworld's planet entry states no mass and no radius; applying the unit"
+                + " bulk (1 Earth mass, 1 Earth radius) it is DEFINED as. A body with no radius draws"
+                + " at the marker size at every range and carries the flat 512-block proximity shell"
+                + " instead of an atmosphere. Written by a version that blanked the overworld's"
+                + " defaults on world teardown; state <mass>/<radius> in planetDefs.xml to silence"
+                + " this.");
+    }
+
+    /**
+     * Earth's catalogue entry, STATED onto {@code earth} — the home world's shipped properties.
+     *
+     * <p>It is a method rather than a run of lines in the constructor because it has to be
+     * re-applicable. {@link DimensionProperties#resetProperties()} restores the GENERIC defaults of a
+     * planet (gravity 1, 100 K, no mass, no radius), and the overworld's defaults are not generic; it
+     * is called on {@link #overworldProperties} at every world teardown, while this object is a
+     * JVM-lifetime static seeded exactly once. So without a re-seed the first world opened in a
+     * process had an Earth and every world opened after a return to the title screen had a nameless
+     * 100-kelvin body of no size — and because the planet file writes bulk only when a body HAS it,
+     * that world's {@code planetDefs.xml} then recorded an Earth with no radius permanently.</p>
+     *
+     * <p>What a missing radius costs, measured 2026-08-23 from a live flight: the sky renderer draws
+     * the body at the marker size at every range (so Earth is invisible from orbit, behind the Moon)
+     * and the descent shell falls back to the flat 512-block proximity sphere meant for belts —
+     * 1/50 of this world.</p>
+     */
+    private static void seedEarthDefaults(DimensionProperties earth) {
+        StellarBody sol = new StellarBody();
+        sol.setTemperature(100);
+        sol.setId(0);
+        sol.setName("Sol");
+
+        earth.setAtmosphereDensityDirect(100);
+        //Temperature in Kelvin, 286 is 13 Degrees C
+        earth.setAverageTemp(286);
+        earth.gravitationalMultiplier = 1f;
+        // Earth's bulk, and it is a DEFINITION rather than a choice: the Earth mass and the Earth
+        // radius are the units the whole catalogue is stated in, so this body is 1.0 of each.
+        // Without it nothing ever states one — the only writers of bulk are the procedural realizer
+        // and an admin command, and the overworld passes through neither — so getRadius() stays
+        // BULK_UNSET.
+        // The gravity above is STATED, so it is marked authored and setBulk leaves it alone; here the
+        // derived value happens to agree, and that agreement is not what the mark is for.
+        earth.setGravityAuthored(true);
+        earth.setBulk(1d, 1d);
+        earth.orbitalDist = 100;
+        earth.skyColor = new float[]{1f, 1f, 1f};
+        earth.setName("Earth");
+        earth.isNativeDimension = false;
+        // The star is the throwaway Sol above rather than the registered one on purpose: this runs
+        // from the constructor (no instance to ask yet) and from teardown (the star registry has
+        // just been cleared), and in both the registry has no Sol to hand back.
+        earth.setStar(sol);
     }
 
     public static DimensionManager getInstance() {
@@ -393,7 +443,11 @@ public class DimensionManager implements IGalaxy {
     public void onServerStopped() {
         unregisterAllDimensions();
         knownPlanets.clear();
+        // CLEAR MEANS RESTORE. resetProperties() puts back the GENERIC defaults of a planet, and the
+        // overworld's are Earth's — so the reset alone leaves this JVM-lifetime static holding a
+        // nameless, sizeless body for every world opened after this one.
         overworldProperties.resetProperties();
+        seedEarthDefaults(overworldProperties);
         hasBeenInitialized = false;
         // C126: progression flags are process-global statics read from a world's
         // "stat" NBT on load. Reset them on teardown so a freshly-created world
@@ -991,6 +1045,11 @@ public class DimensionManager implements IGalaxy {
 
         DimensionManager.getInstance().knownPlanets.addAll(zmaster587.advancedRocketry.api.ARConfiguration.getCurrentConfig().initiallyKnownPlanets);
 
+
+        // Whatever path dim 0 arrived by — the planet file, temp.dat, or the shipped defaults — it is
+        // the overworld and it has a size. Here rather than in one of the loops above because there
+        // are three of them and only the LAST writer decides what the world runs with.
+        repairOverworldBulk(dimensionList.get(0));
 
         // Run all sanity checks now
         //Try to fix invalid objects
