@@ -9,7 +9,6 @@ import com.google.gson.JsonObject;
 import org.junit.AfterClass;
 import org.junit.Assume;
 import org.junit.Before;
-import org.junit.BeforeClass;
 import org.junit.FixMethodOrder;
 import org.junit.Rule;
 import org.junit.rules.TestName;
@@ -53,10 +52,22 @@ import static org.junit.Assert.assertTrue;
  *       {@code artest station list}) must narrow the answer with {@link Plot#contains}.</li>
  *   <li><b>Declare the phase</b> as it goes, through {@link #scenario()} — that is what lets a
  *       failure name the broken system without anyone opening this file.</li>
- *   <li><b>No un-restored global mutation.</b> Atmosphere density, weather, permaload and a server
- *       restart are not shareable; a scenario needing one belongs on the per-method
- *       {@link AbstractClientE2ETest} instead.</li>
+ *   <li><b>No un-restored global mutation.</b> Atmosphere density, weather and permaload are
+ *       shareable only if every scenario SETS what it needs and MEASURES that the set took; a
+ *       scenario that assumes a global instead belongs on the per-method
+ *       {@link AbstractClientE2ETest}.</li>
+ *   <li><b>Declare a config, do not write one.</b> A value the server reads at START goes through
+ *       {@link #seedGameDirectory}, which merges the class's keys into one file before boot; a value
+ *       read at every use is flipped per scenario through {@code artest config set} and restored in
+ *       the family reset. "This class writes its own {@code advancedRocketry.cfg}" stopped being a
+ *       reason to leave this base on 2026-08-23 — what could not be merged was the whole-FILE write,
+ *       never the settings, and the four classes that carried that justification turned out to want
+ *       one key, the same number twice, and a flag already on the runtime whitelist.</li>
  * </ol>
+ *
+ * <p><b>Still not shareable: a server RESTART.</b> The pair is owned by this class and a scenario
+ * that stops the server takes every later scenario with it — and the restart is the SUBJECT of the
+ * classes that do it, so there is nothing to amortise anyway.</p>
  *
  * <h2>The reset, and why it is asserted rather than trusted</h2>
  *
@@ -84,6 +95,8 @@ public abstract class AbstractSharedClientE2ETest {
     /** Scenario name -> its plot. Stable within a run because the method order is pinned. */
     private static final Map<String, Plot> PLOTS = new HashMap<>();
     private static int nextPlotIndex;
+    /** Which concrete class the live pair was booted for; null when nothing is up. */
+    private static Class<?> bootedFor;
 
     /**
      * Never cleared in an {@code @After}. JUnit runs {@code @After} BEFORE
@@ -149,8 +162,40 @@ public abstract class AbstractSharedClientE2ETest {
 
     // ── lifecycle ────────────────────────────────────────────────────────────
 
-    @BeforeClass
-    public static void bootSharedHarness() throws Exception {
+    /**
+     * The game directory this class needs BEFORE its server boots — declared as keys, not as a file.
+     *
+     * <p>Default: nothing, and a class that declares nothing boots in a bare temp directory exactly
+     * as this base always has. Override it when a scenario's premise is a config value or a planet
+     * catalogue that must exist at server start:</p>
+     *
+     * <pre>
+     * protected void seedGameDirectory(GameDirSeed seed) {
+     *     seed.config("performance", "I:spaceCellPoolSize", 1, getClass());
+     * }
+     * </pre>
+     *
+     * <p><b>Only for what the server reads at START.</b> A value read at every use — the time-skip
+     * policy, the terraform flags, anything on {@code artest config set}'s whitelist — is flipped
+     * PER SCENARIO through that verb instead, and restored in the family reset. Seeding such a key
+     * pins one side of it for the whole class and quietly makes the other side untestable there.</p>
+     */
+    protected void seedGameDirectory(GameDirSeed seed) throws Exception {
+        // declared by subclasses that need one; empty is the common case
+    }
+
+    /**
+     * Boot the class's pair once, on its FIRST scenario.
+     *
+     * <p>It is not a {@code @BeforeClass} because a static method cannot ask the subclass anything —
+     * and what it has to ask is {@link #seedGameDirectory}, which is the whole point: "this class
+     * writes its own config" stopped being a reason to leave the shared harness on 2026-08-23, and
+     * the only thing that had made it one was that a static boot could not see the declaration.</p>
+     *
+     * <p>The Assume guards moved here with it, so a run without the harness enabled skips each
+     * scenario instead of the class. Same runs skipped, one line each instead of one for the class.</p>
+     */
+    private void ensureHarnessBooted() throws Exception {
         Assume.assumeTrue(
                 "Server harness disabled — set -D"
                         + AbstractHeadlessServerTest.PROP_HARNESS_ENABLED + "=true",
@@ -162,13 +207,34 @@ public abstract class AbstractSharedClientE2ETest {
                 Boolean.parseBoolean(System.getProperty(
                         AbstractClientE2ETest.PROP_CLIENT_ENABLED, "false")));
 
+        if (bootedFor == getClass() && sharedServer != null) {
+            return;
+        }
+        // A previous class's pair in the same JVM (the tier runs forkEvery=1, so this is a
+        // belt-and-braces path rather than the usual one): close it before starting another, or the
+        // second boot contends with a live server for ports and disk.
+        if (sharedServer != null || sharedClient != null) {
+            closeSharedHarness();
+        }
+
         HARNESS_DEAD.set(false);
         firstFailure = null;
         PLOTS.clear();
         nextPlotIndex = 0;
 
+        GameDirSeed seed = new GameDirSeed();
+        seedGameDirectory(seed);
+
         long startedNanos = System.nanoTime();
-        sharedServer = RealDedicatedServerHarness.start();
+        String seeded = "";
+        if (seed.isEmpty()) {
+            sharedServer = RealDedicatedServerHarness.start();
+        } else {
+            java.nio.file.Path root =
+                    java.nio.file.Files.createTempDirectory("forge-shared-client-");
+            seeded = seed.writeInto(root);
+            sharedServer = RealDedicatedServerHarness.startWith(root, /*cleanupOnClose=*/true);
+        }
         try {
             sharedClient = RealClientHarness.start(sharedServer);
         } catch (Exception startupFailure) {
@@ -180,11 +246,14 @@ public abstract class AbstractSharedClientE2ETest {
             sharedServer = null;
             throw startupFailure;
         }
+        bootedFor = getClass();
         // The number this whole base class exists to amortise — print it so a run can be audited
-        // against the claim rather than against a memory of it.
+        // against the claim rather than against a memory of it. The seed is printed with it: a
+        // scenario whose premise is a config value must be able to show that value was there.
         System.out.println("[shared-harness] boot ms="
                 + (System.nanoTime() - startedNanos) / 1_000_000L
-                + " — one server JVM + one client JVM for the whole class");
+                + " — one server JVM + one client JVM for " + getClass().getSimpleName()
+                + (seeded.isEmpty() ? " (no seeded game directory)" : " seeded:" + seeded));
     }
 
     @AfterClass
@@ -207,6 +276,7 @@ public abstract class AbstractSharedClientE2ETest {
             }
             sharedServer = null;
         }
+        bootedFor = null;
         if (deferred != null) throw deferred;
     }
 
@@ -223,6 +293,7 @@ public abstract class AbstractSharedClientE2ETest {
     @Before
     public final void prepareScenario() throws Exception {
         enforceDeterministicOrder();
+        ensureHarnessBooted();
         failFastWhenTheGroupIsAlreadyDown();
         resetBetweenScenarios();
     }
