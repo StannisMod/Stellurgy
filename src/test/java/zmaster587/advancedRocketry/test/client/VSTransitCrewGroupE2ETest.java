@@ -853,7 +853,7 @@ private String chat() throws Exception {
             bot().waitTicks(5);
             dismounted = !bot().reportRidingEntity().get("riding").getAsBoolean();
         }
-        assertTrue("ARRANGEMENT: the crew member must actually leave his seat, or there is no crew"
+        scenario().requireArranged("the crew member must actually leave his seat, or there is no crew"
                 + " member on his feet to carry: " + bot().reportRidingEntity(), dismounted);
         bot().waitTicks(30); // let him settle and the capture take
         String capture = exec("artest vs deck-capture");
@@ -997,7 +997,7 @@ private String chat() throws Exception {
         // Fly only as far as hyperspace and then STOP driving the transit: an un-ticked jump parks
         // its ship in its lane indefinitely, which is the interval this scenario is about.
         CorridorWait entry = driveIntoCorridor(120);
-        assertTrue("ARRANGEMENT: the client must be CARRIED into the corridor before anything here is"
+        scenario().requireArranged("the client must be CARRIED into the corridor before anything here is"
                 + " about hyperspace, and he was not. " + entry,
                 entry.end == CorridorEntry.ARRIVED);
         int hyperDim = entry.corridorDim;
@@ -1005,7 +1005,7 @@ private String chat() throws Exception {
         // The seat's own world position, as the CLIENT renders it — the deck reference for the
         // stand-up, read off the mount rather than from a probe that would need the lane's anchor.
         JsonObject mount = bot().reportRidingEntity();
-        assertTrue("ARRANGEMENT: he must still be riding his seat on arrival in hyperspace: " + mount,
+        scenario().requireArranged("he must still be riding his seat on arrival in hyperspace: " + mount,
                 mount.get("riding").getAsBoolean());
         double deckX = mount.get("posX").getAsDouble();
         double deckY = mount.get("posY").getAsDouble();
@@ -1021,7 +1021,7 @@ private String chat() throws Exception {
         // The arrangement first, because both facts are the axis of the claim: he must be off his
         // seat (or this is the seated case again) and still in hyperspace (or this is a cell's sky).
         JsonObject standing = bot().reportRidingEntity();
-        assertTrue("ARRANGEMENT: he must be on his FEET, or this leg is the seated case again: "
+        scenario().requireArranged("he must be on his FEET, or this leg is the seated case again: "
                 + standing, !standing.get("riding").getAsBoolean());
         assertEquals("ARRANGEMENT: he must still be in hyperspace, or this reads a cell's sky",
                 hyperDim, bot().reportWeather().get("dim").getAsInt());
@@ -1106,7 +1106,7 @@ private String chat() throws Exception {
             bot().waitTicks(20);
             offHull = exec("artest vs deck-capture");
         }
-        assertTrue("ARRANGEMENT: he must actually be off the hull, or the void has nothing to take: "
+        scenario().requireArranged("he must actually be off the hull, or the void has nothing to take: "
                 + offHull, !readBool(offHull, "alreadyTracked"));
 
         // Arm the channel the verdict is read out of, immediately before the wait and with no server
@@ -1338,7 +1338,7 @@ private String chat() throws Exception {
         String begin = exec("artest space transit-begin " + originDim + " 1 64 1 " + PARK_SPEED);
         assertTrue("the transit must begin (departure crossing): " + begin, readBool(begin, "began"));
         CorridorWait entry = driveIntoCorridor(120);
-        assertTrue("ARRANGEMENT: the client must be CARRIED into the corridor before any reading here"
+        scenario().requireArranged("the client must be CARRIED into the corridor before any reading here"
                 + " is about hyperspace, and he was not. " + entry,
                 entry.end == CorridorEntry.ARRIVED);
         int hyperDim = entry.corridorDim;
@@ -1360,10 +1360,10 @@ private String chat() throws Exception {
         double deckY = mount.get("posY").getAsDouble();
         double deckZ = mount.get("posZ").getAsDouble();
         String capture = standTheBotOnTheDeck(deckX, deckY, deckZ);
-        assertTrue("ARRANGEMENT: he must be resolved on his deck in hyperspace, i.e. aboard on his"
+        scenario().requireArranged("he must be resolved on his deck in hyperspace, i.e. aboard on his"
                 + " feet rather than adrift in a void world: " + capture,
                 readBool(capture, "alreadyTracked"));
-        assertTrue("ARRANGEMENT: and off his seat — riding anything at all would make the reading below"
+        scenario().requireArranged("and off his seat — riding anything at all would make the reading below"
                         + " the seated case again: " + bot().reportRidingEntity(),
                 !bot().reportRidingEntity().get("riding").getAsBoolean());
 
@@ -1422,7 +1422,7 @@ private String chat() throws Exception {
         // Fly as far as hyperspace and stop driving: the stand-up has to happen mid-flight, between the
         // two cuts, which is the whole point.
         CorridorWait entry = driveIntoCorridor(120);
-        assertTrue("ARRANGEMENT: the client must be CARRIED into the corridor before he can stand up"
+        scenario().requireArranged("the client must be CARRIED into the corridor before he can stand up"
                 + " in it, and he was not. " + entry, entry.end == CorridorEntry.ARRIVED);
         int hyperDim = entry.corridorDim;
 
@@ -1433,10 +1433,10 @@ private String chat() throws Exception {
         // ── THE STIMULUS: off the seat, mid-flight ───────────────────────────────────────────────
         String capture = standTheBotOnTheDeck(mount.get("posX").getAsDouble(),
                 mount.get("posY").getAsDouble(), mount.get("posZ").getAsDouble());
-        assertTrue("ARRANGEMENT: he must be resolved on his deck in hyperspace — aboard on his feet is"
+        scenario().requireArranged("he must be resolved on his deck in hyperspace — aboard on his feet is"
                 + " what the arrival is supposed to give back: " + capture,
                 readBool(capture, "alreadyTracked"));
-        assertTrue("ARRANGEMENT: and genuinely out of the chair before the arrival: "
+        scenario().requireArranged("and genuinely out of the chair before the arrival: "
                         + bot().reportRidingEntity(),
                 !bot().reportRidingEntity().get("riding").getAsBoolean());
 

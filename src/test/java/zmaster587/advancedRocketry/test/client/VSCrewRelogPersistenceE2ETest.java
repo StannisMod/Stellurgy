@@ -96,7 +96,7 @@ public class VSCrewRelogPersistenceE2ETest extends AbstractSharedVsClientE2ETest
         double[] ship = buildShip(bx, by, bz);
         exec("tp @a " + ship[0] + " " + (ship[1] + 4) + " " + ship[2] + " 0 0");
         bot().waitTicks(80);
-        assertTrue("ARRANGEMENT: he must be captured on the deck before anything rotates: "
+        scenario().requireArranged("he must be captured on the deck before anything rotates: "
                         + exec("artest vs deck-capture"),
                 exec("artest vs deck-capture").contains("\"alreadyTracked\":true"));
 
@@ -113,7 +113,7 @@ public class VSCrewRelogPersistenceE2ETest extends AbstractSharedVsClientE2ETest
         // THE DRIVER: roll the ship under him, and measure WHILE it turns - the release happens during
         // the attitude change, not after it.
         double h = Math.toRadians(170.0) / 2.0;
-        assertTrue("ARRANGEMENT: the attitude hold must accept the roll command",
+        scenario().requireArranged("the attitude hold must accept the roll command",
                 exec("artest vs point-by-id 0 " + scenarioShipId + " "
                         + Math.cos(h) + " " + Math.sin(h) + " 0.0 0.0").contains("\"commanded\":true"));
         long rollMark = lastClientTick();
@@ -137,9 +137,9 @@ public class VSCrewRelogPersistenceE2ETest extends AbstractSharedVsClientE2ETest
                 + "\n" + mover();
         System.out.println("[roll-hold]" + observed);
 
-        assertTrue("ARRANGEMENT: the ship must actually have rotated, or nothing was driven (upY="
+        scenario().requireArranged("the ship must actually have rotated, or nothing was driven (upY="
                 + upY + ")" + observed, upY < -0.9);
-        assertTrue("ARRANGEMENT: the client must have resolved the body through the roll, or a clean "
+        scenario().requireArranged("the client must have resolved the body through the roll, or a clean "
                 + "result describes the instrument" + observed, resolvedDuringRoll >= 20);
         assertEquals("CONTROL: the guard must be quiet while the ship is still - otherwise the count "
                 + "during the roll is not attributable to the rotation" + observed,
@@ -202,7 +202,7 @@ public class VSCrewRelogPersistenceE2ETest extends AbstractSharedVsClientE2ETest
         double[] ship = buildShip(bx, by, bz);
         exec("tp @a " + ship[0] + " " + (ship[1] + 4) + " " + ship[2] + " 0 0");
         bot().waitTicks(80);
-        assertTrue("ARRANGEMENT: he must be captured on the deck before he walks (" + where + "): "
+        scenario().requireArranged("he must be captured on the deck before he walks (" + where + "): "
                         + exec("artest vs deck-capture"),
                 exec("artest vs deck-capture").contains("\"alreadyTracked\":true"));
 
@@ -238,16 +238,16 @@ public class VSCrewRelogPersistenceE2ETest extends AbstractSharedVsClientE2ETest
         System.out.println("[walk-hold]" + observed);
 
         // ARRANGEMENT first, so a clean result can never be the instrument's silence.
-        assertTrue("ARRANGEMENT: the client must have resolved the body through both windows, or "
+        scenario().requireArranged("the client must have resolved the body through both windows, or "
                 + "neither count means anything" + observed, resolvedIdle >= 20 && resolvedWalk >= 20);
-        assertTrue("ARRANGEMENT: the resolver must have SEEN the walk input, or the key never "
+        scenario().requireArranged("the resolver must have SEEN the walk input, or the key never "
                 + "reached the client's movement path" + observed, inputTicks >= 10);
-        assertTrue("ARRANGEMENT: he must actually have covered ground on the deck" + observed,
+        scenario().requireArranged("he must actually have covered ground on the deck" + observed,
                 walked > 1.0);
-        assertTrue("ARRANGEMENT: he must have stayed ON the deck for the whole walk - a body that "
+        scenario().requireArranged("he must have stayed ON the deck for the whole walk - a body that "
                 + "walked off the edge is measuring the edge, not the guard" + observed,
                 offDeckTicks == 0);
-        assertTrue("ARRANGEMENT: he must still be captured ABOARD at the end" + observed,
+        scenario().requireArranged("he must still be captured ABOARD at the end" + observed,
                 capAfter.contains("\"alreadyTracked\":true") && !capAfter.contains("\"hullStand\":true"));
         assertEquals("CONTROL: the guard must be quiet while he stands still - otherwise the count "
                 + "during the walk is not attributable to the walk" + observed, 0L, dropsIdle);
@@ -315,7 +315,7 @@ public class VSCrewRelogPersistenceE2ETest extends AbstractSharedVsClientE2ETest
         double[] ship = buildShip(bx, by, bz);
         exec("tp @a " + ship[0] + " " + (ship[1] + 4) + " " + ship[2] + " 0 0");
         bot().waitTicks(80);
-        assertTrue("ARRANGEMENT: he must be captured on the deck before the server stalls: "
+        scenario().requireArranged("he must be captured on the deck before the server stalls: "
                         + exec("artest vs deck-capture"),
                 exec("artest vs deck-capture").contains("\"alreadyTracked\":true"));
 
@@ -391,17 +391,17 @@ public class VSCrewRelogPersistenceE2ETest extends AbstractSharedVsClientE2ETest
                 + "\n" + mover();
         System.out.println("[tick-burst]" + observed);
 
-        assertTrue("ARRANGEMENT: both freezes must really have SKIPPED ticks, or nothing was driven - "
+        scenario().requireArranged("both freezes must really have SKIPPED ticks, or nothing was driven - "
                         + "a stall that advanced the world clock normally is not a stall" + observed,
                 stall.contains("\"ok\":true") && stalledTicks(stall) <= WALK_STALL_MS / 200
                         && idleStall.contains("\"ok\":true")
                         && stalledTicks(idleStall) <= STALL_MS / 200);
-        assertTrue("ARRANGEMENT: the client must have resolved the body through every window"
+        scenario().requireArranged("the client must have resolved the body through every window"
                         + observed,
                 resolvedControl >= 20 && resolvedIdleStall >= 20 && resolvedAfterStall >= 20);
-        assertTrue("ARRANGEMENT: he must have covered ground both times he walked" + observed,
+        scenario().requireArranged("he must have covered ground both times he walked" + observed,
                 controlWalked > 1.0 && stalledWalked > 1.0);
-        assertTrue("ARRANGEMENT: he must have stayed ON the deck across the stall - a body that "
+        scenario().requireArranged("he must have stayed ON the deck across the stall - a body that "
                 + "walked off the edge is measuring the edge, not the guard" + observed,
                 offDeckAfterStall == 0);
         assertEquals("CONTROL A: the guard must be quiet for the same walk without a stall, or the "

@@ -97,7 +97,7 @@ public class VSGroundFlightGroupE2ETest extends AbstractSharedVsClientE2ETest {
         String idA = captureShipIdAt(ax, ay, az);
         String idB = captureShipIdAt(bx, by, bz);
         scenario().record("idA", idA).record("idB", idB);
-        assertTrue("ARRANGEMENT: the two fixtures must be two DIFFERENT ships, or this control has "
+        scenario().requireArranged("the two fixtures must be two DIFFERENT ships, or this control has "
                 + "nothing to discriminate (idA=" + idA + " idB=" + idB + ")", !idA.equals(idB));
 
         // Move A far from its build site — the situation a bounded query cannot survive and an
@@ -262,7 +262,7 @@ public class VSGroundFlightGroupE2ETest extends AbstractSharedVsClientE2ETest {
         // force would make the FF rung measure the attitude hold that is still commanded, not the
         // throttle. Asserted: a release nobody checks is indistinguishable from no release.
         String released = exec("artest vs force-clear-by-id 0 " + shipId);
-        assertTrue("ARRANGEMENT: the probe command must be released before the FF path is measured: "
+        scenario().requireArranged("the probe command must be released before the FF path is measured: "
                 + released, released.contains("\"cleared\":true"));
 
         double[] pBefore = readVec(shipInfoById(shipId));

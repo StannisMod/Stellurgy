@@ -205,7 +205,7 @@ public class VSPilotStationDestructionE2ETest extends AbstractSharedVsClientE2ET
                 () -> shipY(bx, by, bz),
                 y -> y - baseY > 2.0, 2, 100);
         double yAfter = lift.value;
-        assertTrue("ARRANGEMENT: the seated bot must be flying the ship before its station can be "
+        scenario().requireArranged("the seated bot must be flying the ship before its station can be "
                         + "destroyed (y0=" + y0 + " yAfter=" + yAfter + ")",
                 yAfter - y0 > 2.0);
         return ship;

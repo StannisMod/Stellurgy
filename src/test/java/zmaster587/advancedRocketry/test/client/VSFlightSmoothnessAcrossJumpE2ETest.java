@@ -133,10 +133,10 @@ public class VSFlightSmoothnessAcrossJumpE2ETest extends AbstractSharedVsClientE
         // never assumed — the same discipline the sky-pass gate gets in the sibling jump e2e.
         com.google.gson.JsonObject fps = bot().setFrameRate(MEASURED_FPS);
         previousFrameRate = fps.get("previous").getAsInt();
-        assertTrue("ARRANGEMENT: the frame cap must actually be raised, read back off the client's "
+        scenario().requireArranged("the frame cap must actually be raised, read back off the client's "
                         + "own field - every frame-channel number below is measured through it: " + fps,
                 fps.get("effectiveLimit").getAsInt() >= MEASURED_FPS);
-        assertTrue("ARRANGEMENT: vsync must be off, or the driver caps the frame clock below the "
+        scenario().requireArranged("vsync must be off, or the driver caps the frame clock below the "
                 + "limit that was just set and the frame channel is throttled by something this "
                 + "test cannot see: " + fps, !fps.get("vsync").getAsBoolean());
 
@@ -149,11 +149,11 @@ public class VSFlightSmoothnessAcrossJumpE2ETest extends AbstractSharedVsClientE
         // in it by the real assembler. The piloted setup fixture's bare deck has no propulsion, so
         // a held key could move nothing and every number below would describe a parked craft. ----
         String setup = exec("artest space transit-setup-empty");
-        assertTrue("ARRANGEMENT: the empty transit setup must succeed: " + setup, readBool(setup, "ok"));
+        scenario().requireArranged("the empty transit setup must succeed: " + setup, readBool(setup, "ok"));
         int originDim = readInt(setup, "originDim");
 
         int bx = 40, by = 64, bz = 40;
-        assertTrue("ARRANGEMENT: chunk warmup failed",
+        scenario().requireArranged("chunk warmup failed",
                 exec("artest chunk warmup " + originDim + " " + ((bx - 2) >> 4) + " " + ((bz - 2) >> 4)
                         + " " + ((bx + 7) >> 4) + " " + ((bz + 7) >> 4)).contains("\"ok\":true"));
         // The BIGGEST flyable tier-2 variant the catalogue has, not the bare one. Mass and block
@@ -164,14 +164,14 @@ public class VSFlightSmoothnessAcrossJumpE2ETest extends AbstractSharedVsClientE
         // already enforces (tower-bounded scan, anchor connectivity, flyability).
         String fixture = exec("artest fixture rocket " + originDim + " " + bx + " " + by + " " + bz
                 + " with-pilot-seat");
-        assertTrue("ARRANGEMENT: fixture (with-pilot-seat) failed: " + fixture,
+        scenario().requireArranged("fixture (with-pilot-seat) failed: " + fixture,
                 fixture.contains("\"ok\":true"));
         Matcher bp = Pattern.compile("\"builderPos\":\\[(-?\\d+),(-?\\d+),(-?\\d+)]").matcher(fixture);
-        assertTrue("ARRANGEMENT: fixture missing builderPos: " + fixture, bp.find());
-        assertTrue("ARRANGEMENT: a with-pilot-seat build must route to a ship: ",
+        scenario().requireArranged("fixture missing builderPos: " + fixture, bp.find());
+        scenario().requireArranged("a with-pilot-seat build must route to a ship: ",
                 exec("artest rocket assemble " + originDim + " " + bp.group(1) + " " + bp.group(2)
                         + " " + bp.group(3)).contains("\"rocketCount\":0"));
-        assertTrue("ARRANGEMENT: the origin ship never assembled/loaded in dim " + originDim,
+        scenario().requireArranged("the origin ship never assembled/loaded in dim " + originDim,
                 waitForLoadedShip(originDim) >= 1);
 
         // The ship's IDENTITY, at the one moment a positional lookup is defensible: freshly
@@ -179,7 +179,7 @@ public class VSFlightSmoothnessAcrossJumpE2ETest extends AbstractSharedVsClientE
         // — the positional form of find-seat resolves the yard as "whichever craft is nearest".
         String shipId = captureShipIdAtBase(originDim, bx + 3, by + 3, bz + 3);
         String seat = exec("artest vs find-seat " + originDim + " id " + shipId);
-        assertTrue("ARRANGEMENT: the pilot seat must be found in the assembled ship: " + seat,
+        scenario().requireArranged("the pilot seat must be found in the assembled ship: " + seat,
                 readBool(seat, "seatFound"));
         int seatX = readInt(seat, "seatX"), seatY = readInt(seat, "seatY"), seatZ = readInt(seat, "seatZ");
         int[] afcOrigin = {readInt(seat, "afcX"), readInt(seat, "afcY"), readInt(seat, "afcZ")};
@@ -189,10 +189,10 @@ public class VSFlightSmoothnessAcrossJumpE2ETest extends AbstractSharedVsClientE
 
         String enter = exec("artest space enter " + botName() + " " + originDim
                 + " " + sx + " " + sy + " " + sz);
-        assertTrue("ARRANGEMENT: space enter into the origin cell must succeed: " + enter,
+        scenario().requireArranged("space enter into the origin cell must succeed: " + enter,
                 readBool(enter, "ok"));
         bot().waitTicks(20);
-        assertTrue("ARRANGEMENT: the client must have followed into the origin cell",
+        scenario().requireArranged("the client must have followed into the origin cell",
                 bot().reportWeather().get("dim").getAsInt() == originDim);
         mountTheSeat(originDim, seatX, seatY, seatZ);
 
@@ -206,14 +206,14 @@ public class VSFlightSmoothnessAcrossJumpE2ETest extends AbstractSharedVsClientE
         // exactly the place it is no longer at. A bounded read there answers managed:false and an
         // unbounded one answers about whatever else is loaded; neither is this ship.
         String shipNow = exec("artest vs ship-info " + originDim + " id " + shipId);
-        assertTrue("ARRANGEMENT: the ship must still be managed at its berth: " + shipNow,
+        scenario().requireArranged("the ship must still be managed at its berth: " + shipNow,
                 shipNow.contains("\"managed\":true"));
         String begin = exec("artest space transit-begin " + originDim
                 + " " + (int) Math.round(readDouble(shipNow, "posX"))
                 + " " + (int) Math.round(readDouble(shipNow, "posY"))
                 + " " + (int) Math.round(readDouble(shipNow, "posZ"))
                 + " " + HYPERSPACE_JUMP_SPEED);
-        assertTrue("ARRANGEMENT: the transit must begin (departure crossing): " + begin,
+        scenario().requireArranged("the transit must begin (departure crossing): " + begin,
                 readBool(begin, "began"));
 
         int targetDim = -1;
@@ -230,7 +230,7 @@ public class VSFlightSmoothnessAcrossJumpE2ETest extends AbstractSharedVsClientE
             }
             bot().waitTicks(2);
         }
-        assertTrue("ARRANGEMENT: the jump never completed (still in transit); last tick=" + lastTick,
+        scenario().requireArranged("the jump never completed (still in transit); last tick=" + lastTick,
                 targetDim >= 0);
 
         boolean seatedOnArrival = false;
@@ -247,7 +247,7 @@ public class VSFlightSmoothnessAcrossJumpE2ETest extends AbstractSharedVsClientE
         // exhaustion), so a red here would otherwise name no step. Carry the server's own account:
         // whether the retry loop was still running when we stopped ticking (`reseating`), where the
         // seat match stopped (`reseatBlock`), and who wrote the rider's position last.
-        assertTrue("ARRANGEMENT: the pilot must arrive SEATED in the target cell, or the post-jump "
+        scenario().requireArranged("the pilot must arrive SEATED in the target cell, or the post-jump "
                         + "leg has no pilot and measures a drifting hulk. riding="
                         + bot().reportRidingEntity() + " clientDim="
                         + bot().reportWeather().get("dim").getAsInt() + " targetDim=" + targetDim
@@ -269,7 +269,7 @@ public class VSFlightSmoothnessAcrossJumpE2ETest extends AbstractSharedVsClientE
                 bot().waitTicks(10);
             }
         }
-        assertTrue("ARRANGEMENT: the arrived ship must expose its flight computer, or the post-jump "
+        scenario().requireArranged("the arrived ship must expose its flight computer, or the post-jump "
                 + "recorder has nothing to key on: " + arrivedSeat, afcArrived != null);
 
         // ---- LEG B (the subject): the same pilot, the same key, the same craft, after a jump. ---
@@ -465,7 +465,7 @@ public class VSFlightSmoothnessAcrossJumpE2ETest extends AbstractSharedVsClientE
         } finally {
             bot().releaseKey(Keyboard.KEY_R);
         }
-        assertTrue("ARRANGEMENT: the craft never got under way on its own pad. It was given "
+        scenario().requireArranged("the craft never got under way on its own pad. It was given "
                         + (LIFT_ATTEMPTS * LIFT_POLL_TICKS) + " ticks of held climb key and moved "
                         + Leg.round(moved) + " blocks, against " + LIFT_CLEAR_BLOCKS + " asked for. "
                         + "A craft pushing at the authority ceiling while its net move stays near "
@@ -685,7 +685,7 @@ public class VSFlightSmoothnessAcrossJumpE2ETest extends AbstractSharedVsClientE
         for (int attempt = 0; attempt < 5 && !mounted; attempt++) {
             String mountAt = exec("artest vs seat-mount-at " + dim
                     + " " + seatX + " " + seatY + " " + seatZ);
-            assertTrue("ARRANGEMENT: seat-mount-at must spawn the seat dummy: " + mountAt,
+            scenario().requireArranged("seat-mount-at must spawn the seat dummy: " + mountAt,
                     readBool(mountAt, "ok"));
             mount = exec("artest player mount-entity " + readInt(mountAt, "dummyId"));
             mounted = mount.contains("\"mounted\":true");
@@ -693,7 +693,7 @@ public class VSFlightSmoothnessAcrossJumpE2ETest extends AbstractSharedVsClientE
                 bot().waitTicks(10);
             }
         }
-        assertTrue("ARRANGEMENT: the bot must mount the pilot-seat dummy: " + mount, mounted);
+        scenario().requireArranged("the bot must mount the pilot-seat dummy: " + mount, mounted);
         bot().waitTicks(10);
         // The base raises a TYPED arrangement failure carrying the server's own mount/dismount
         // record, so a red here says whether the client was merely behind or the product dropped
@@ -706,7 +706,7 @@ public class VSFlightSmoothnessAcrossJumpE2ETest extends AbstractSharedVsClientE
     private String botName() throws Exception {
         String health = exec("artest player health");
         Matcher nameM = Pattern.compile("\"player\":\"([^\"]+)\"").matcher(health);
-        assertTrue("ARRANGEMENT: player health must echo the player name: " + health, nameM.find());
+        scenario().requireArranged("player health must echo the player name: " + health, nameM.find());
         return nameM.group(1);
     }
 
