@@ -151,6 +151,39 @@ private int waitForLoadedShip(int dim) throws Exception {
      * it at {@code -1} when a transit ended inside the first iteration, so the failure compared the
      * client against a sentinel.</p>
      */
+    /**
+     * How many two-tick polls the client is given to re-establish a rider's mount after a dimension
+     * change. 80 ticks — four seconds of game time, generous against the eight-fork load that
+     * exposed the race and still short enough that a crossing which genuinely drops its rider fails
+     * here rather than waiting out a budget.
+     */
+    private static final int CLIENT_REMOUNT_POLLS = 40;
+
+    /**
+     * The client's mount state once it has caught up with the dimension change — or the last reading
+     * taken, if it never does.
+     *
+     * <p>{@link #driveIntoCorridor} returns the moment the CLIENT's dimension becomes the corridor's,
+     * and that is one step EARLIER than a seated reading needs: a dimension change tears the client's
+     * world down and rebuilds it, and the mount to the seat entity is re-established after the new
+     * dimension is known. Sampled in the same breath it reads {@code riding:false} — not because the
+     * crossing dropped him, but because the arrangement asked a tick too soon. Measured 2026-08-22:
+     * the two scenarios that use this failed exactly that way under an 8-fork whole-tier load while
+     * the class passed 8/8 in isolation.
+     *
+     * <p>This waits for an ARRANGEMENT, never for a subject. That a transit does not unseat a rider
+     * is pinned as a SUBJECT by {@code aSeatedCrewMemberSurvivesAHyperspaceTransitStillRiding}; if
+     * that stops being true, THAT scenario goes red, and no wait here can hide it.
+     */
+    private JsonObject ridingOnceTheClientHasCaughtUp(int iterations) throws Exception {
+        JsonObject mount = bot().reportRidingEntity();
+        for (int i = 0; i < iterations && !mount.get("riding").getAsBoolean(); i++) {
+            bot().waitTicks(2);
+            mount = bot().reportRidingEntity();
+        }
+        return mount;
+    }
+
     private CorridorWait driveIntoCorridor(int iterations) throws Exception {
         int corridorDim = -1;
         String lastTick = "";
@@ -1342,8 +1375,10 @@ private String chat() throws Exception {
         int hyperDim = entry.corridorDim;
 
         // ── READING 2, SEATED in hyperspace: the corridor comes up ───────────────────────────────
-        JsonObject mount = bot().reportRidingEntity();
-        assertTrue("ARRANGEMENT: he must still be in his seat for the seated reading: " + mount,
+        JsonObject mount = ridingOnceTheClientHasCaughtUp(CLIENT_REMOUNT_POLLS);
+        assertTrue("ARRANGEMENT: he must still be in his seat for the seated reading, and the client"
+                + " never reported the remount within " + (CLIENT_REMOUNT_POLLS * 2) + " ticks of the"
+                + " crossing: " + mount,
                 mount.get("riding").getAsBoolean());
         long tunnelSeated = tunnelFrames();
         bot().waitTicks(20);
@@ -1424,7 +1459,7 @@ private String chat() throws Exception {
                 + " in it, and he was not. " + entry, entry.end == CorridorEntry.ARRIVED);
         int hyperDim = entry.corridorDim;
 
-        JsonObject mount = bot().reportRidingEntity();
+        JsonObject mount = ridingOnceTheClientHasCaughtUp(CLIENT_REMOUNT_POLLS);
         assertTrue("ARRANGEMENT: he must have crossed SEATED — a departure record that already said"
                 + " STANDING is the sibling scenario, and it passes on the broken build: " + mount,
                 mount.get("riding").getAsBoolean());

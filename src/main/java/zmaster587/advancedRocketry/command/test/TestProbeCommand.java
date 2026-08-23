@@ -2282,6 +2282,13 @@ public class TestProbeCommand extends CommandBase {
             m.put("playerY", subject.posY);
             m.put("playerZ", subject.posZ);
             m.put("playerOnGround", subject.onGround);
+            // The body's OWN motion, beside the velocity the substrate holds for it. Both halves are
+            // reported because a body can be moving for either reason and the two are cleared by
+            // different things: an inherited velocity dies when the body lands, its own motion does
+            // not. Reading only one of them is how a drifting body gets attributed to the wrong cause.
+            m.put("motionX", subject.motionX);
+            m.put("motionY", subject.motionY);
+            m.put("motionZ", subject.motionZ);
             send(sender, jsonMap(m));
             return;
         }
