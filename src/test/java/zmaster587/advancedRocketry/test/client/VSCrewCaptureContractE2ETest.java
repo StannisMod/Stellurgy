@@ -807,6 +807,7 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
                 + "(client tick/chunk-stream stall)", fall.satisfied);
         long dropsBefore = (long) clientDouble(SHIP_FRAME_TRAVEL, "externalMoveDrops");
         int aboardSeen = 0, hullSeen = 0, samples = 0;
+        double settledY = Double.NaN;
         StringBuilder enc = new StringBuilder();
         for (int i = 0; i < 30; i++) {
             bot().waitTicks(3);
@@ -816,14 +817,48 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
             boolean hull = cap.contains("\"hullStand\":true");
             if (tracked && !hull) aboardSeen++;
             if (tracked && hull) hullSeen++;
+            settledY = bot().reportState().get("playerY").getAsDouble();
             if (i % 5 == 0) {
                 enc.append(String.format(java.util.Locale.ROOT, "[t%d y=%.2f cap=%b hull=%b] ",
-                        i * 3, bot().reportState().get("playerY").getAsDouble(), tracked, hull));
+                        i * 3, settledY, tracked, hull));
             }
         }
         long churn = (long) clientDouble(SHIP_FRAME_TRAVEL, "externalMoveDrops") - dropsBefore;
         System.out.println("[crewcap] hull-top-mode aboard=" + aboardSeen + " hull=" + hullSeen
-                + "/" + samples + " churn=" + churn + " :: " + enc);
+                + "/" + samples + " churn=" + churn + " settledY=" + settledY + " shipY=" + sy
+                + " :: " + enc);
+
+        // WHAT HE IS STANDING ON, before anything is claimed about the hold.
+        //
+        // This scenario drops a body onto an inverted hull hanging a few blocks over the site it was
+        // built on — and that site still holds the fixture's own launchpad and structure tower. The
+        // drop can therefore land on WORLD BLOCKS instead of the hull, and nothing downstream can
+        // tell that apart from "the hold refused to engage": both read as
+        // `alreadyTracked=false, hullStand=false` for the whole window, so the run accuses a hold
+        // that was never offered a body to hold.
+        //
+        // The discriminator is what the WORLD holds under his feet. A ship's blocks live in its own
+        // subspace, so under a genuine hull-stander the world is AIR; under a body resting on the
+        // pad or the tower it is a block. Measured 2026-08-23 over six runs of this one scenario,
+        // and the two populations do not overlap:
+        //
+        //   on the hull (4 runs, hull-stand 29-30/30): settledY - shipY = 2.130 every time
+        //   on world blocks (2 runs, hull-stand 0/30): settledY - shipY = 3.00, at a round y=72.00
+        //
+        // The sibling scenario's check ("not fallen through to the terrain far below") does not
+        // separate these: 3.00 above the ship centre passes it comfortably. It is the right check for
+        // what that scenario claims and too weak for what this one claims.
+        int footX = (int) Math.floor(bot().reportState().get("playerX").getAsDouble());
+        int footZ = (int) Math.floor(bot().reportState().get("playerZ").getAsDouble());
+        com.google.gson.JsonObject under = bot().blockState(footX, (int) Math.floor(settledY) - 1, footZ);
+        String underBlock = under != null && under.has("block") ? under.get("block").getAsString() : "?";
+        scenario().requireArranged("the body must come to rest ON THE HULL before the hold can be"
+                + " asked about at all, and the world block under his feet says which: it is \""
+                + underBlock + "\", so he is standing on world geometry (the fixture's pad or tower),"
+                + " not on a hull whose blocks live in the ship's own subspace. settledY=" + settledY
+                + " shipY=" + sy + " (a hull stand measures ~2.13 above the ship centre; this one is "
+                + String.format(java.util.Locale.ROOT, "%.2f", settledY - sy) + "): " + enc,
+                underBlock.isEmpty() || underBlock.contains("air"));
 
         // The outer-hull mode contract: the hull encounter may be HELD (hull-stand), but it must
         // NEVER read as ABOARD - no deck frame, no deck camera, no deck mouse for a hull stander.
