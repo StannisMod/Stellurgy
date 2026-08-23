@@ -245,6 +245,87 @@ public abstract class AbstractSharedVsClientE2ETest extends AbstractSharedClient
                 + " ship=" + shipInfoJson.replace('\n', ' '));
     }
 
+    /**
+     * Where a craft is lifted to before it is flown: high enough that the fixture's own launchpad is
+     * far below it, low enough to stay under the lowest orbit line the config permits (255).
+     */
+    protected static final int CLEAR_AIR_Y = 150;
+
+    /**
+     * Take a freshly assembled craft OFF THE PAD it was built on, straight up, and prove it came up
+     * level.
+     *
+     * <p><b>Why every scenario that flies wants this.</b> A craft assembled on a pad is resting on
+     * solid blocks, and the physics substrate resolves that contact with an impulse applied at the
+     * contact point — which on an asymmetric hull is off-axis and spins it. The attitude law then
+     * pins its reference to wherever the pilot's craft now IS, so the tilt is permanent, and a
+     * body-frame throttle on a hull lying over is horizontal thrust. Any scenario whose subject is
+     * altitude therefore spends its whole window measuring a craft that cannot climb, and its red
+     * accuses the control chain, the seat binding or the crossing instead. Off the ground the same
+     * craft flies dead vertical.</p>
+     *
+     * <p>This is arrangement, not a workaround for a test: a player launches from a pad and gets the
+     * same tilt, which is a live production defect with its own ledger entry. What the lift buys is
+     * the ability to measure anything ELSE while that defect stands.</p>
+     *
+     * <p>The move is the substrate's own rigid teleport: the pose moves, the subspace blocks stay,
+     * riders are carried. It leaves the ship PARKED by VS's recipe, so physics is re-enabled
+     * afterwards and the arrival is read back BY IDENTITY — a positional read at the old base would
+     * answer about whatever is nearest to a place this craft has just left.</p>
+     *
+     * @return the ship's report at its new altitude
+     */
+    protected final String liftClearOfTheGround(String shipId, int toY) throws Exception {
+        // The substrate's load controller drops a RIGID-TELEPORTED ship's physics object even with a
+        // pilot aboard, and a ship that is not loaded is not ticked: its flight computer stops, so it
+        // stops climbing and stops being reported at all. Measured 2026-08-23 — a craft lifted to 147
+        // flew to 242 at full commanded speed and then went silent for the remaining ten minutes of
+        // its window, with the gate reporting afcResolved=false. The affordance that holds it is this
+        // one, and the family reset switches it back off.
+        String held = exec("artest vs permaload true");
+        scenario().requireArranged("a lifted ship must be held loaded, or the substrate's load"
+                + " controller drops it mid-climb and every later reading is about a ship that is no"
+                + " longer being ticked: " + held, held.contains("\"ok\":true"));
+
+        String before = shipInfoById(shipId);
+        double x = readDoubleOr(before, POS_X, Double.NaN);
+        double z = readDoubleOr(before, POS_Z, Double.NaN);
+        scenario().requireArranged("the craft must report a position before it can be lifted off its"
+                + " pad: " + before, !Double.isNaN(x) && !Double.isNaN(z));
+
+        String moved = exec("artest vs teleport-ship-by-id 0 " + shipId
+                + " " + x + " " + toY + " " + z);
+        scenario().requireArranged("the lift off the pad must take, or the craft flies its whole"
+                + " window in ground contact: " + moved, moved.contains("\"ok\":true"));
+        bot().waitTicks(30); // transform adoption + rider sync settle
+        String unparked = exec("artest vs unpark-by-id 0 " + shipId);
+        scenario().requireArranged("the rigid teleport leaves the ship PARKED by the substrate's own"
+                + " recipe, and a parked ship cannot be flown: " + unparked,
+                unparked.contains("\"ok\":true"));
+        bot().waitTicks(10);
+
+        String after = shipInfoById(shipId);
+        double y = readDoubleOr(after, POS_Y, Double.NaN);
+        scenario().requireArranged("the lifted craft must still be loaded and report its new"
+                + " altitude (asked BY IDENTITY, so this cannot be a neighbour): " + after,
+                !Double.isNaN(y) && Math.abs(y - toY) < 20.0);
+        // The whole point of the lift, ASSERTED rather than assumed: it is only worth doing if the
+        // craft is level when it arrives, and a craft that was already tipped on the pad stays tipped
+        // through a rigid move.
+        requireUprightForAnAltitudeClaim(after, "flying the craft after lifting it off its pad");
+        scenario().record("liftedTo", y);
+        return after;
+    }
+
+    private static final Pattern POS_X = Pattern.compile("\"posX\":(-?[0-9.E\\-]+)");
+    private static final Pattern POS_Y = Pattern.compile("\"posY\":(-?[0-9.E\\-]+)");
+    private static final Pattern POS_Z = Pattern.compile("\"posZ\":(-?[0-9.E\\-]+)");
+
+    private static double readDoubleOr(String json, Pattern p, double fallback) {
+        Matcher m = p.matcher(json);
+        return m.find() ? Double.parseDouble(m.group(1)) : fallback;
+    }
+
     /** The {@code "id"} field of a {@code ship-info} reply, or null when it carries none. */
     protected static String readShipId(String shipInfoJson) {
         Matcher m = SHIP_ID.matcher(shipInfoJson);

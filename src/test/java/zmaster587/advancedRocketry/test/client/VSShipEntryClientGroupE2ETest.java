@@ -76,6 +76,7 @@ public class VSShipEntryClientGroupE2ETest extends AbstractSharedVsClientE2ETest
     private static final Pattern DUMMY_ID = Pattern.compile("\"dummyId\":(-?\\d+)");
     private static final Pattern LEDGER = Pattern.compile("\"ledger\":(-?\\d+)");
     private static final Pattern SLOT_DIMS = Pattern.compile("\"slotDims\":\\[([0-9,\\-]*)]");
+    private static final Pattern SLOT_DIM = Pattern.compile("\"slotDim\":(-?\\d+)");
     private static final Pattern AFC_X = Pattern.compile("\"afcX\":(-?\\d+)");
     private static final Pattern AFC_Y = Pattern.compile("\"afcY\":(-?\\d+)");
     private static final Pattern AFC_Z = Pattern.compile("\"afcZ\":(-?\\d+)");
@@ -331,9 +332,22 @@ public class VSShipEntryClientGroupE2ETest extends AbstractSharedVsClientE2ETest
     }
 
     // ── refused: he stays in his seat, in the launch world, and is told why ──────────────────────
+    //
+    // IT RUNS FIRST, and that is not a style choice. A refusal needs a pool that cannot be MADE room
+    // in, and the manager frees a slot by evicting the least-recently-visited bound cell with no
+    // occupants. A craft that settled in an earlier scenario leaves exactly such a cell — bound, and
+    // idle the moment its crew is gone — and the test cannot hold it, because evicting a settled
+    // craft's cell by hand is fault injection dressed as housekeeping. So this scenario has to be the
+    // one that holds EVERY slot, which means running before anything settles: the method name sorts
+    // it there under NAME_ASCENDING. The premise is verified anyway, so a future reorder fails
+    // loudly naming the slot it could not hold rather than silently measuring a granted entry.
+    //
+    // Measured 2026-08-23, which is how this is known rather than assumed: with the granted leg
+    // first, `pool=[3, 4] heldByThisScenario=[4]` and a further occupy answering `exhausted:true` —
+    // true at that instant, and forty ticks into the climb the entry evicted slot 3 and was granted.
 
     @Test
-    public void aRefusedEntryLeavesThePilotSeatedWithAMessage() throws Exception {
+    public void aFullPoolRefusesTheEntryAndLeavesThePilotSeatedWithAMessage() throws Exception {
 
         String status = exec("artest space subsystem-status");
         scenario().requireArranged("the production space subsystem must be REGISTERED - the seeded "
@@ -351,21 +365,39 @@ public class VSShipEntryClientGroupE2ETest extends AbstractSharedVsClientE2ETest
         // ledgered nothing — never that space is globally empty.
         int ledgerBefore = ledgerSize();
 
+        // Every slot must end up held by a cell of THIS scenario's own, and the reason is the
+        // difference between a pool that is full and a pool that can be MADE room in. The manager
+        // frees a slot by evicting the least-recently-visited bound cell with NO occupants, and only
+        // refuses when every bound cell still has one. A craft that settled in an earlier scenario
+        // leaves exactly such a cell: bound, and idle the moment its crew is gone. So "a further
+        // occupy comes back exhausted" is true at the instant it is asked and says nothing about the
+        // minutes that follow — measured 2026-08-23, the pool answered exhausted before the climb and
+        // the entry was granted forty ticks later, evicting that idle cell to make room.
+        //
+        // The premise this scenario needs is therefore not "the pool says it is full" but "no slot
+        // can be freed", and the only way to hold that is to be the occupant of every slot.
         String occupy = "";
-        boolean exhausted = false;
+        java.util.Set<Integer> pool = slotDimsOfPool();
+        scenario().requireArranged("the pool must report its slots before they can be held: " + pool,
+                !pool.isEmpty());
         for (int cell : PRESSURE_CELLS) {
-            occupy = exec("artest space occupy " + cell + " 0 0");
-            if (occupy.contains("\"exhausted\":true")) {
-                exhausted = true;
+            if (slotsHeldByPressureCells().containsAll(pool)) {
                 break;
             }
+            occupy = exec("artest space occupy " + cell + " 0 0");
             scenario().requireArranged("the pool must accept an occupant on cell " + cell
                     + " or say it is exhausted; it said neither: " + occupy,
-                    occupy.contains("\"ok\":true"));
+                    occupy.contains("\"ok\":true") || occupy.contains("\"exhausted\":true"));
         }
-        scenario().requireArranged("instrument control: with the slots held, a further occupy must be"
-                + " REFUSED - else the pool is not actually exhausted and the entry would be"
-                + " granted: " + occupy, exhausted);
+        java.util.Set<Integer> held = slotsHeldByPressureCells();
+        scenario().requireArranged("EVERY slot must be held by one of this scenario's own cells, or"
+                + " the pool can still free one by evicting an idle neighbour and the entry below is"
+                + " granted for a reason that has nothing to do with the refusal path. pool=" + pool
+                + " heldByThisScenario=" + held + " lastOccupy=" + occupy, held.containsAll(pool));
+        String further = exec("artest space occupy " + PRESSURE_CELLS[PRESSURE_CELLS.length - 1] + " 0 0");
+        scenario().requireArranged("instrument control: with every slot held by an OCCUPIED cell, a"
+                + " further occupy must be REFUSED - else the pool is not actually exhausted and the"
+                + " entry would be granted: " + further, further.contains("\"exhausted\":true"));
 
         int budget = (int) (40 * TestTimeouts.factor());
         String shipUuid = boardAssembledCraftAt(REFUSED_BX, REFUSED_BZ, budget);
@@ -408,6 +440,15 @@ public class VSShipEntryClientGroupE2ETest extends AbstractSharedVsClientE2ETest
             for (int attempt = 0; attempt < climbBudget && refusalLine == null; attempt++) {
                 bot().waitTicks(5);
                 refusalLine = chatLineContaining(REFUSAL_NEEDLE);
+                // The ALTITUDE is sampled every poll. It used to ride along with the heavy readouts
+                // below at one poll in ten, and at 40 blocks/s that is a hundred blocks between
+                // samples: a craft that crossed the ceiling and was taken by the crossing left its
+                // last seen altitude a hundred blocks short, and the failure then said it never got
+                // there. This read is off the registry — no chunk touched, no yard resolved.
+                double sampled = shipY(shipUuid);
+                if (!Double.isNaN(sampled)) {
+                    maxShipY = Math.max(maxShipY, sampled);
+                }
                 if (attempt % 10 == 0) {
                     // The ship's own state, asked BY IDENTITY and off the registry - it neither
                     // force-loads the ship's subspace yard nor touches a chunk, so the climb it is
@@ -422,9 +463,18 @@ public class VSShipEntryClientGroupE2ETest extends AbstractSharedVsClientE2ETest
                     // timelines line up tick for tick.
                     if (diag.length() < 900) {
                         String d = exec("artest vs seat-delivery");
+                        // The POOL rides along with the delivery counters, and it is the reading that
+                        // matters most here: the premise "the pool is full" is measured once, before
+                        // the climb, and this leg then spends minutes climbing. If the pressure
+                        // disappears in between — a probe-held cell evicted, a settled cell released,
+                        // anything — the entry is granted for a perfectly good reason and the missing
+                        // refusal says nothing about the refusal path. Sampled at the same cadence as
+                        // the altitude so the two timelines line up.
+                        String spaceSample = exec("artest space subsystem-status");
                         diag.append(' ').append(attempt).append(":recv=")
                                 .append(firstGroupOr(RECEIVED, d, "?"))
-                                .append("/deliv=").append(firstGroupOr(DELIVERED, d, "?"));
+                                .append("/deliv=").append(firstGroupOr(DELIVERED, d, "?"))
+                                .append("/ledger=").append(firstGroupOr(LEDGER, spaceSample, "?"));
                     }
                     Matcher py = POS_Y.matcher(s);
                     Matcher vy = VEL_Y.matcher(s);
@@ -493,10 +543,26 @@ public class VSShipEntryClientGroupE2ETest extends AbstractSharedVsClientE2ETest
                     "measure how high the craft actually got before judging the refusal");
             requireUprightForAnAltitudeClaim(shipInfoById(shipUuid),
                     "a climb past the orbit line, which is what makes a refusal possible");
-            scenario().arrangementFailed("the craft never reached the orbit line (" + ORBIT_LINE
-                    + "); the highest it got was " + maxShipY + ", so the entry was never asked for"
-                    + " and the absence of a refusal message means nothing. The hull was level"
-                    + " throughout, so the tilt this class usually dies of is NOT the reason —"
+            // "It stopped being reported" has four causes and they need opposite answers: the craft
+            // was TAKEN by the crossing (ledger grew, and the pilot is in a cell), it was UNLOADED
+            // (still counted in the world, not loaded), it is GONE from the world entirely, or it
+            // simply stopped climbing. One reading each, and only on the way to a failure.
+            String spaceNow = exec("artest space subsystem-status");
+            String loaded = exec("artest vs ship-count 0");
+            String all = exec("artest vs ship-count-all 0");
+            JsonObject where = bot().reportWeather();
+            int clientDim = where != null && where.has("dim") ? where.get("dim").getAsInt() : -9999;
+            scenario().arrangementFailed("the craft was last SEEN at " + maxShipY + ", below the orbit"
+                    + " line (" + ORBIT_LINE + "), so no refusal was ever asked for and the absence of"
+                    + " a message means nothing. The hull was level throughout, so the tilt this class"
+                    + " usually dies of is NOT the reason. WHICH of the four it is:"
+                    + " subsystem=" + spaceNow + " shipsLoadedInDim0=" + loaded
+                    + " shipsAtAllInDim0=" + all + " clientDim=" + clientDim
+                    + " byId=" + shipInfoById(shipUuid)
+                    // The pool's OWN timeline, sampled across the climb: the premise "the pool is
+                    // full" is measured once before the climb, and a slot freed during it grants the
+                    // entry for a perfectly good reason.
+                    + " delivery+pool(attempt:recv/deliv/ledger)=[" + diag.toString().trim() + "]"
                     + " climb(attempt:y/velY/up/horiz)=[" + climb.toString().trim() + "] gate=" + gate);
         }
 
@@ -585,6 +651,12 @@ public class VSShipEntryClientGroupE2ETest extends AbstractSharedVsClientE2ETest
                     : "?")
                 + " :: " + atRest.replace('\n', ' '));
 
+        // OFF THE PAD before anyone flies. Both legs of this class are about altitude — one climbs
+        // through the ceiling, the other has to reach it for a refusal to be asked for — and a craft
+        // launched from a pad is tipped by the substrate's collision response and then holds the
+        // tilt. The lift is asserted, including that the craft came up level.
+        liftClearOfTheGround(shipUuid, CLEAR_AIR_Y);
+
         // Board post-assembly (the proven path - boarding variants have their own test).
         String mountInfo = exec("artest vs seat-mount 0");
         Matcher dm = DUMMY_ID.matcher(mountInfo);
@@ -616,6 +688,43 @@ public class VSShipEntryClientGroupE2ETest extends AbstractSharedVsClientE2ETest
     }
 
     // ── observation helpers ─────────────────────────────────────────────────────────────────────
+
+    /** The pool's own slot dimension ids, from the subsystem's report. */
+    private java.util.Set<Integer> slotDimsOfPool() throws Exception {
+        String status = exec("artest space subsystem-status");
+        Matcher sd = SLOT_DIMS.matcher(status);
+        java.util.Set<Integer> dims = new java.util.LinkedHashSet<Integer>();
+        if (sd.find()) {
+            for (String piece : sd.group(1).split(",")) {
+                if (!piece.trim().isEmpty()) {
+                    dims.add(Integer.parseInt(piece.trim()));
+                }
+            }
+        }
+        return dims;
+    }
+
+    /**
+     * Which slots this scenario's OWN pressure cells are bound to right now.
+     *
+     * <p>Asked per cell rather than inferred from the occupy replies: a cell can be evicted out from
+     * under its occupant record between one probe call and the next, and the whole point of this
+     * reading is to catch exactly that.</p>
+     */
+    private java.util.Set<Integer> slotsHeldByPressureCells() throws Exception {
+        java.util.Set<Integer> held = new java.util.LinkedHashSet<Integer>();
+        for (int cell : PRESSURE_CELLS) {
+            String reply = exec("artest space cell-slot " + cell + " 0 0");
+            if (!reply.contains("\"managerLoaded\":true")) {
+                continue;
+            }
+            Matcher m = SLOT_DIM.matcher(reply);
+            if (m.find()) {
+                held.add(Integer.parseInt(m.group(1)));
+            }
+        }
+        return held;
+    }
 
     /** How many craft the space ledger holds right now. */
     private int ledgerSize() throws Exception {
