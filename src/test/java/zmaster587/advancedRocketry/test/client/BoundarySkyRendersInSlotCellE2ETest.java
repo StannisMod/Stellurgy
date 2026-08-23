@@ -117,6 +117,16 @@ public class BoundarySkyRendersInSlotCellE2ETest extends AbstractSharedClientE2E
     }
 
     /**
+     * This class MEASURES PIXELS, so its client is started with the framebuffer object rather than
+     * having one switched on mid-session — the difference between reading the world and reading the
+     * buffer's clear colour. See {@code clientNeedsFramebuffer} on the base for what that cost.
+     */
+    @Override
+    protected boolean clientNeedsFramebuffer() {
+        return true;
+    }
+
+    /**
      * The cell entry this class installs is the family channel it must close: a scenario left
      * bound to a slot hands the next one a world it never entered, and the shared reset reads
      * the dimension the CLIENT renders. It runs here rather than in an {@code @After} because
@@ -262,6 +272,20 @@ public class BoundarySkyRendersInSlotCellE2ETest extends AbstractSharedClientE2E
         boolean previousFbo = fb.get("previous").getAsBoolean();
         assertTrue("this client's GL must support the framebuffer capture path: " + fb,
                 fb.get("supported").getAsBoolean());
+        // THE INSTRUMENT'S OWN PRECONDITION, and it is the whole of a bug this class has been
+        // carrying since 2026-08-14. `previous` says whether the client was STARTED with the
+        // framebuffer, and only then does the world pass land in the buffer a capture reads. Turned
+        // on mid-session it receives the HUD pass and nothing else, so every frame below comes back
+        // as the buffer's own clear colour - opaque WHITE - and this class's harness control then
+        // reports "the client is not running the sky pass at all". The renderer is innocent; the
+        // capture path was never given a world. The base declares the option (clientNeedsFramebuffer)
+        // and this reads back that it took, because a declaration nobody checks is indistinguishable
+        // from no declaration.
+        scenario().requireArranged("the client must have been STARTED with the framebuffer, or a"
+                + " capture reads the buffer's clear colour instead of the world and every pixel"
+                + " count below is about an empty instrument. The class declares this through"
+                + " clientNeedsFramebuffer(); the client says previous=" + previousFbo + " (" + fb
+                + ")", previousFbo);
         boolean previousHud = bot().setHudHidden(true).get("previous").getAsBoolean();
 
         BufferedImage overworldZenith;

@@ -98,6 +98,16 @@ public abstract class AbstractSharedClientE2ETest {
     /** Which concrete class the live pair was booted for; null when nothing is up. */
     private static Class<?> bootedFor;
 
+    /** The client's start-time framebuffer switch, read by the harness as it launches the child. */
+    private static final String CLIENT_FBO_PROPERTY = "forge.test.client.fbo";
+    /**
+     * What {@link #CLIENT_FBO_PROPERTY} held before this class claimed it, and whether it claimed it
+     * at all. CLEAR MEANS RESTORE: a null here is a real state (the property was unset), so the flag
+     * is what says "we changed it", never the value.
+     */
+    private static String displacedFboProperty;
+    private static boolean fboPropertyClaimed;
+
     /**
      * Never cleared in an {@code @After}. JUnit runs {@code @After} BEFORE
      * {@link TestWatcher#failed}, so nulling it there destroys the journal the watcher exists to
@@ -185,6 +195,30 @@ public abstract class AbstractSharedClientE2ETest {
     }
 
     /**
+     * Whether this class's client must be STARTED with the framebuffer object, because it measures
+     * what the client drew.
+     *
+     * <p>Default false, which is the harness's own default and the render path every other class
+     * runs. Override it in a class that captures WORLD pixels.</p>
+     *
+     * <p><b>Turning the FBO on at runtime is not the same thing and does not work.</b> The harness
+     * measured it on 2026-07-29 and says so in {@code ClientBot.setFramebuffer}: a framebuffer
+     * recreated mid-session receives the HUD pass but not the world pass, so a capture comes back as
+     * the framebuffer's own clear colour — opaque WHITE — with the HUD drawn over it. That looks
+     * exactly like "the world rendered nothing", and it cost this project a session in July and six
+     * red tier runs since, under a bug entry the maintainer could never reproduce in play because
+     * there was nothing to reproduce.</p>
+     *
+     * <p>It is a per-CLASS client option and nothing else needs to know: the harness reads the system
+     * property when it launches the child, and this base sets it around the boot and puts the
+     * previous value back afterwards. It became declarable when the boot became lazy — a
+     * {@code @BeforeClass} could not have asked the subclass.</p>
+     */
+    protected boolean clientNeedsFramebuffer() {
+        return false;
+    }
+
+    /**
      * Boot the class's pair once, on its FIRST scenario.
      *
      * <p>It is not a {@code @BeforeClass} because a static method cannot ask the subclass anything —
@@ -235,6 +269,15 @@ public abstract class AbstractSharedClientE2ETest {
             seeded = seed.writeInto(root);
             sharedServer = RealDedicatedServerHarness.startWith(root, /*cleanupOnClose=*/true);
         }
+        // The client's start-time options come from system properties the harness reads as it
+        // launches the child, so a class that needs one sets it HERE, around the boot, and the value
+        // it displaced goes back in closeSharedHarness. Set, not assumed: a scenario that measures
+        // pixels asserts the option took (see ClientBot.setFramebuffer's own `previous`).
+        if (clientNeedsFramebuffer()) {
+            displacedFboProperty = System.getProperty(CLIENT_FBO_PROPERTY);
+            fboPropertyClaimed = true;
+            System.setProperty(CLIENT_FBO_PROPERTY, "true");
+        }
         try {
             sharedClient = RealClientHarness.start(sharedServer);
         } catch (Exception startupFailure) {
@@ -277,6 +320,15 @@ public abstract class AbstractSharedClientE2ETest {
             sharedServer = null;
         }
         bootedFor = null;
+        if (fboPropertyClaimed) {
+            if (displacedFboProperty == null) {
+                System.clearProperty(CLIENT_FBO_PROPERTY);
+            } else {
+                System.setProperty(CLIENT_FBO_PROPERTY, displacedFboProperty);
+            }
+            displacedFboProperty = null;
+            fboPropertyClaimed = false;
+        }
         if (deferred != null) throw deferred;
     }
 
