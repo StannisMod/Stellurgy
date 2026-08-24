@@ -489,6 +489,17 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
         String capture = exec("artest vs deck-capture");
         System.out.println("[crewcap] active-churn churn=" + churn + " clientResolved="
                 + resolvedBefore + "->" + resolvedAfter + " capture=" + capture);
+        // The INTERVAL the client's derived carry is divided by, over everything this shared client
+        // has run — the histogram is cumulative, so read from the last scenario it covers the whole
+        // boot rather than this window. It is the distribution a refusal bound rests on: a rate
+        // derived over a gap is an average presented as an instantaneous value, so the code may only
+        // speak for intervals it actually sees while a deck is carrying a body. Printed rather than
+        // asserted on: it describes the steady state, and pinning a number to it here would pin the
+        // harness's own scheduling.
+        System.out.println("[crewcap] derive gaps :: "
+                + bot().eventsSince(0L, "measured_velocity_gap_hist")
+                + "\n[crewcap] derive wide gaps :: "
+                + bot().eventsSince(0L, "measured_velocity_gap"));
 
         assertTrue("the client must be resolving through the activity window (resolvedTicks "
                 + resolvedBefore + " -> " + resolvedAfter + ")", resolvedAfter > resolvedBefore + 20);
@@ -1140,6 +1151,175 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
         assertTrue("the crosshair ray must originate from the rendered camera eye: ray=("
                 + rx + "," + ry + "," + rz + ") cam=(" + cx + "," + cy + "," + cz + ") dist="
                 + rayVsCam, rayVsCam < 0.25);
+    }
+
+    // ---- A deck that manoeuvred unwatched does not carry the body that arrives after -----------
+
+    /** The bridge that OWNS the client-side derivation, read for its own refusal accounting. Held
+     *  as a class name because the class is package-private, which is right: it is the gate between
+     *  AR and the physics mod and nothing outside that package should hold it. */
+    private static final String VS_BRIDGE = "zmaster587.advancedRocketry.integration.vs.VSBridge";
+
+    @Test
+    public void aBodyMeetingADeckThatManoeuvredUnwatchedIsNotCarriedByIt() throws Exception {
+        final int bx = 6220, by = 64, bz = 6220;
+
+        // The client is not TOLD a craft's velocity; while it is handling a body on a deck it
+        // reconstructs one by differencing two observations of the transform. That difference is an
+        // AVERAGE over the interval between them, and every consumer reads it as the deck's rate
+        // right now — the same statement over one tick, a different one over a long gap. This
+        // scenario opens exactly such a gap and then makes the two statements disagree: the craft
+        // climbs hard with nobody aboard to observe it, STOPS, and only then is a body dropped on.
+        // The average over that interval says the deck is rising; the deck is not. A body handed the
+        // average is carried by a manoeuvre that ended before it arrived.
+        double[] ship = buildShip(bx, by, bz);
+
+        // FIRST the client must have SEEN this craft, and that is not a detail of the staging — it
+        // is what the scenario is about. A rate is a difference between two observations, so a craft
+        // the client has never observed yields no rate at all (the first observation seeds and
+        // answers nothing) and there is no wrong number to be handed. The defect needs a client
+        // holding an OLD observation, which is what standing on the deck here leaves behind.
+        // Measured on the way to this: staged without this step the whole encounter produced 25
+        // derivations, every one of them one tick wide.
+        exec("tp @a " + ship[0] + " " + (ship[1] + 3) + " " + ship[2] + " 0 0");
+        bot().waitTicks(60);
+        String seeded = exec("artest vs deck-capture");
+        scenario().requireArranged("the body must stand on the deck ONCE before the manoeuvre, or"
+                + " the client holds no earlier observation and the interval under test does not"
+                + " exist: " + seeded, seeded.contains("\"alreadyTracked\":true"));
+
+        // NOW off the craft, but still in sight of it. The derivation runs only while the client is
+        // handling a body on a deck, so a body standing on the ground nearby observes nothing —
+        // which is the ordinary state of a craft nobody is aboard, and it leaves that last
+        // observation to go stale. NOT sent far away: at 600 blocks the craft leaves the loaded
+        // region and the physics mod stops managing it entirely (`"managed":false`), which is a
+        // different experiment — an unloaded craft does not manoeuvre at all.
+        exec("tp @a " + (bx + 24) + " " + (by + 10) + " " + (bz + 24) + " 0 0");
+        bot().waitTicks(40);
+
+        long refusedBefore = (long) clientDouble(VS_BRIDGE, "derivationsRefusedForGap");
+        String before = shipInfo();
+        scenario().requireArranged("the craft must still be LOADED and managed with the body"
+                + " standing off it, or nothing below manoeuvres: " + before,
+                before.contains("\"posY\""));
+        double yBefore = readDouble(before, POS_Y);
+
+        // THE UNWATCHED MANOEUVRE: a commanded ROLL, held. Attitude is deck motion as much as
+        // altitude is, and it is the manoeuvre this fixture can actually perform with nobody
+        // aboard — a seat-driven climb tops out at ~3 blocks unmanned (measured twice) and leaves
+        // the craft inside its own launch structure, where a body meets world blocks instead of a
+        // deck. The command sets an attitude TARGET and the craft's own controller flies to it,
+        // exactly as a pilot's would; nothing here writes a transform.
+        double upBefore = upYOf(before);
+        double half = Math.toRadians(40.0) / 2.0;
+        String commanded = exec("artest vs point-by-id 0 " + scenarioShipId + " "
+                + Math.cos(half) + " " + Math.sin(half) + " 0.0 0.0");
+        scenario().requireArranged("the attitude hold must accept the commanded roll, or the craft"
+                + " never manoeuvres and the interval under test spans nothing: " + commanded,
+                commanded.contains("\"commanded\":true"));
+        bot().waitTicks(200); // fly to it AND settle: the manoeuvre must be OVER when the body lands
+
+        // What the deck is ACTUALLY doing now, measured rather than assumed. A craft can be told to
+        // stop moving but never to stop turning, so this is a small residual rather than zero — and
+        // it is the number the carry a body receives has to match.
+        String after = shipInfo();
+        double upAfter = upYOf(after);
+        double settledOmega = readDouble(after, OMEGA_AT_HULL);
+        double ySettleStart = readDouble(after, POS_Y);
+        bot().waitTicks(20);
+        double ySettleEnd = readDouble(shipInfo(), POS_Y);
+        double settledPerTick = Math.abs(ySettleEnd - ySettleStart) / 20.0;
+        double climbed = Math.abs(ySettleEnd - yBefore);
+        int driveIterations = 200;
+
+        String si = shipInfo();
+        double sx = readDouble(si, POS_X), sy = readDouble(si, POS_Y), sz = readDouble(si, POS_Z);
+        // A CLEARING, not a pit, and cut around the CRAFT rather than the build base. The shared
+        // fixture pre-clear is anchored at a hard-coded y and the surface at this plot sits above
+        // it, so what it opens is a shaft whose rim is higher than the deck a body is aimed at: the
+        // body then stands on world geometry a metre off the craft and nothing downstream can tell
+        // that from a hold that refused to engage.
+        String clearing = exec("artest fill 0 " + ((int) sx - 12) + " " + SHAFT_FLOOR_Y + " "
+                + ((int) sz - 12) + " " + ((int) sx + 12) + " " + SHAFT_CEILING_Y + " "
+                + ((int) sz + 12) + " minecraft:air");
+        scenario().requireArranged("the staging clearing was not cut, so the body would meet the"
+                + " fixture's own structure instead of the deck: " + clearing,
+                clearing.contains("\"ok\":true"));
+        exec("tp @a " + sx + " " + (sy + 5) + " " + sz + " 0 0");
+
+        // Sampled every tick, because the value under test is installed ONCE, on the tick the
+        // capture takes hold: the held carry is what the next tick subtracts to recover the body's
+        // own motion, so a wrong one is a real displacement and not a reading.
+        double maxHeldCarry = 0.0;
+        boolean captured = false;
+        StringBuilder contact = new StringBuilder();
+        for (int i = 0; i < 25; i++) {
+            bot().waitTicks(1);
+            boolean tracked = exec("artest vs deck-capture").contains("\"alreadyTracked\":true");
+            captured |= tracked;
+            double heldCarry = Math.abs(clientDouble(SHIP_FRAME_TRAVEL, "lastCarryY"));
+            if (heldCarry > maxHeldCarry) {
+                maxHeldCarry = heldCarry;
+            }
+            if (i % 4 == 0 || tracked) {
+                contact.append(String.format(java.util.Locale.ROOT, "[t%d cap=%b carryY=%.4f y=%.2f] ",
+                        i, tracked, heldCarry,
+                        bot().reportState().get("playerY").getAsDouble()));
+            }
+        }
+
+        long refusedAfter = (long) clientDouble(VS_BRIDGE, "derivationsRefusedForGap");
+        double lastRefusedGap = clientDouble(VS_BRIDGE, "lastRefusedGapSeconds");
+        // The average the gap WOULD have produced, in the units the carry is applied in — the number
+        // a body would have been handed had the derivation spoken for that interval.
+        double gapTicks = lastRefusedGap / 0.05;
+        double averageOverGap = gapTicks > 0.0 ? Math.abs(climbed) / gapTicks : 0.0;
+        System.out.println("[crewcap] unwatched-manoeuvre upY " + upBefore + " -> " + upAfter
+                + " (settled omega=" + settledOmega + "), moved=" + climbed
+                + " blocks, settledPerTick=" + settledPerTick
+                + " refused=" + refusedBefore + "->" + refusedAfter
+                + " lastRefusedGap=" + lastRefusedGap + "s (" + gapTicks + " ticks)"
+                + " averageOverGap=" + averageOverGap + "/tick maxHeldCarry=" + maxHeldCarry
+                + " :: " + contact
+                // The intervals the client actually divided by, from the derivation's own recorder:
+                // a refusal that did not happen has two innocent readings — the interval was narrow,
+                // or there was no previous observation to be far from — and only these say which.
+                + "\n[crewcap] unwatched-manoeuvre intervals :: "
+                + bot().eventsSince(0L, "measured_velocity_gap")
+                + "\n[crewcap] unwatched-manoeuvre interval histogram :: "
+                + bot().eventsSince(0L, "measured_velocity_gap_hist"));
+
+        scenario().requireArranged("the craft must actually MOVE while nobody watches it, or the"
+                + " interval under test spans no motion at all (deck normal upY " + upBefore
+                + " -> " + upAfter + " over " + driveIterations + " ticks)",
+                Math.abs(upAfter - upBefore) > 0.1);
+        scenario().requireArranged("the manoeuvre must be OVER when the body arrives, or a carry"
+                + " equal to the deck's real motion would be correct and this scenario would pin"
+                + " nothing (settled " + settledPerTick + " blocks/tick, omega " + settledOmega
+                + ")", settledPerTick < 0.05 && settledOmega < 0.1);
+        scenario().requireArranged("the body must reach the deck and be captured, or nothing asked"
+                + " the client for a rate at all :: " + contact, captured);
+
+        // THE CONTRACT: a rate is derived from an interval the formula can speak for, or it is not
+        // derived at all. Everything the client knows about this craft's motion spans the whole
+        // unwatched window, so the only honest answer at first contact is to have none — and this
+        // fails the moment the code goes back to answering with the window's average.
+        assertTrue("first contact after an unwatched manoeuvre must REFUSE to derive a rate over"
+                + " that interval, not average across it (refusals " + refusedBefore + "->"
+                + refusedAfter + ", gap " + lastRefusedGap + "s)", refusedAfter > refusedBefore);
+        assertTrue("the refusal must be the one spanning the manoeuvre, not an incidental one"
+                + " (gap " + lastRefusedGap + "s, window at least " + driveIterations + " drive"
+                + " iterations plus 80 ticks of settling)", lastRefusedGap > 1.0);
+        // The carry the capture installed is the deck's real motion. This one does NOT discriminate
+        // on its own and is not asked to: the harness client's round-trips stretch the unwatched
+        // window in WALL-CLOCK, and the average a gap produces is the displacement divided by that
+        // same wall-clock, so on a loaded box the average is small even when the craft moved. It is
+        // asserted because it is what the body actually receives, and printed with the average so a
+        // reader can see both.
+        assertTrue("the carry installed when the body was captured must match what the deck is"
+                + " DOING (" + settledPerTick + "/tick), never the average of what it did ("
+                + averageOverGap + "/tick): held " + maxHeldCarry + " :: " + contact,
+                maxHeldCarry < settledPerTick + 0.02);
     }
 
     // ---- Deck-frame look: the walking crew's aim lives in the deck frame ------------------------

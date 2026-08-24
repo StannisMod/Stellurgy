@@ -1364,7 +1364,10 @@ final class VSBridge {
      *  blind client-side, and the client capture thrashed on any fast-moving ship (drop+re-capture
      *  every tick once the per-tick step crossed the bare 0.2 epsilon; reproduced in-harness on a
      *  level fast climb, ledger #47). The client instead derives the velocity the only honest way
-     *  it can: MEASURING the observed transform's per-tick delta. */
+     *  it can: MEASURING the observed transform's delta over the real time it took. That is still a
+     *  reconstruction of a quantity nobody sends the client, and a body should never be moved by a
+     *  number only its own client invented; the standing fix is for the craft to DECLARE its deck
+     *  motion on the wire, and this exists only until it does. */
     static double[] shipVelocityAtPointFor(World world, String shipId, double x, double y, double z) {
         try {
             PhysicsObject physo = physoById(world, shipId);
@@ -1388,95 +1391,139 @@ final class VSBridge {
         }
     }
 
-    /** Per-WORLD observation state for {@link #observationTick}: {@code [lastRawTime, monotonicTick]}.
-     *  Weak keys — an unloading world takes its entry with it. */
-    private static final Map<World, long[]> OBSERVATION_CLOCK =
-            java.util.Collections.synchronizedMap(new java.util.WeakHashMap<World, long[]>());
+    /** Origin of {@link #observationSeconds}, so the readings it hands out are small numbers a
+     *  {@code double} carries exactly rather than nanoseconds since an arbitrary epoch. */
+    private static final long OBSERVATION_ORIGIN_NANOS = System.nanoTime();
 
     /**
-     * The monotonic observation tick for {@code world}, advanced whenever that world's raw clock
-     * moves in EITHER direction.
+     * Real elapsed time, in SECONDS, on a monotonic clock — the divisor of every rate derived below.
      *
-     * <p><b>Keyed per WORLD, not per side, and that distinction is the whole of it.</b> Dimension
-     * time in AR is per-dimension by design (`perDimWorldInfo`, working beds), and a hyperspace
-     * transit has two worlds live on one side at once. A counter keyed by side sees the raw clock
-     * "change" on every call that alternates between them and advances several times per real tick,
-     * which inflates {@code dt} and collapses the derived carry velocity — measured 2026-08-22 as
-     * `VSTransitCrewGroup` going 7/8 red the moment a side-keyed version of this shipped.
+     * <p><b>A rate needs TIME, and no game clock available here measures it.</b> This used to be a
+     * counter that advanced once per distinct world time it was ASKED about, and the derivation then
+     * multiplied its difference by 0.05 as though a step of it were a tick. It is not: nobody asks
+     * for two hundred ticks, the counter gains one, and a 0.279 rad/s roll is reported as 55.5 rad/s
+     * — inflated by exactly the length of the pause (ledger #390). <b>Such a counter measures how
+     * often the code asked, never how much time passed</b>, and a divisor that depends on the query
+     * cadence makes the answer depend on who else called.
      *
-     * <p>Why a counter is needed at all: the world clock is not monotonic on the CLIENT.
-     * {@code WorldClient.tick} advances {@code totalWorldTime} by one every client tick, and
-     * {@code NetHandlerPlayClient.handleTimeUpdate} then OVERWRITES it with the server's absolute
-     * value every 20 ticks, so a client that has ticked ahead of a loaded server is pulled BACK.
-     * Read as a tick counter it breaks rate arithmetic both ways: a backward step used to blank the
-     * cache below for that tick — the external-move guard's allowance collapsing to the bare epsilon
-     * while a deck was carrying a body a block per tick, which is ledger #377 — and a forward jump
-     * inflates {@code dt} so the derived velocity comes out too small.
+     * <p><b>Why not the world clock, which does count ticks.</b> It is not monotonic on the CLIENT,
+     * which is the only side this path runs on. {@code WorldClient.tick} advances
+     * {@code totalWorldTime} by one every client tick and {@code NetHandlerPlayClient.handleTimeUpdate}
+     * then OVERWRITES it with the server's absolute value every 20 ticks, so a client that has ticked
+     * ahead is pulled BACK. Differencing it yields a negative dt roughly once a second on a drifting
+     * client — and refusing to derive a rate on those samples is ledger #377: the external-move
+     * guard's allowance collapses to the bare epsilon for that tick while the deck carries a body a
+     * block per tick, and the capture drops. The same objection retires the space clock, which says
+     * of itself that a re-sync "MAY correct the value BACKWARDS": right for dwell and orbits, whose
+     * tolerances run to hundreds of ticks, wrong for a per-tick rate.
      *
-     * <p><b>Why not the space clock, the subsystem's own counter?</b> Because on the CLIENT it is
-     * not monotonic either, and {@code SpaceClockSync} says so in its own words: a re-sync "MAY
-     * correct the value BACKWARDS ... Nothing may assume this value never decreases." It is a
-     * baseline plus local ticks, rebased periodically from the server — the same shape of correction
-     * as the world clock and for the same reason. It is the right clock for dwell and orbits, whose
-     * tolerances run to hundreds of ticks; it is the wrong one for a per-tick rate.</p>
+     * <p><b>What this measures, stated so a reader can judge it.</b> The client's ship transform
+     * advances with network updates and the substrate's interpolation, both paced by real time, so
+     * real time is the interval the observed delta actually occurred over. Where the two diverge —
+     * a lagging server simulating slower than wall-clock — this UNDER-states the rate rather than
+     * inflating it, and the bound in {@link #measuredVelocityAtPoint} refuses the samples where the
+     * divergence could matter. The world clock is still read there, for tick IDENTITY only
+     * (equality, never arithmetic), so two callers in one tick share one derivation.
      *
      * <p><b>Never reset, and it does not need to be</b> — stated because a shared harness runs many
      * scenarios in one boot and an unreset static is normally a leak. Only DIFFERENCES between two
-     * observations of one ship are read, both maps are weak and die with their subject, and
-     * monotonicity is the entire contract: a counter still counting across a scenario boundary is
-     * behaving as specified. One writer, in this class.</p>
+     * observations of one ship are read, the observation map is weak and dies with its subject, and
+     * monotonicity is the entire contract.
      */
-    private static long observationTick(World world) {
-        synchronized (OBSERVATION_CLOCK) {
-            long raw = world.getTotalWorldTime();
-            long[] state = OBSERVATION_CLOCK.get(world);
-            if (state == null) {
-                state = new long[]{raw, 0L};
-                OBSERVATION_CLOCK.put(world, state);
-                return 0L;
-            }
-            if (raw != state[0]) {
-                state[0] = raw;
-                state[1]++;
-            }
-            return state[1];
-        }
+    private static double observationSeconds() {
+        return (System.nanoTime() - OBSERVATION_ORIGIN_NANOS) * 1.0E-9;
     }
 
     /** Per-side cache of each ship's last OBSERVED transform and the rates derived from its delta:
-     *  {@code [tick, posXYZ, quatWXYZ, vLinXYZ, omegaXYZ]}. Weak keys: an unloading ship takes its
-     *  entry with it. Synchronized only against the two logical sides' threads; entries are
-     *  side-local because each side holds its own {@link PhysicsObject} instances. */
+     *  {@code [tick, posXYZ, quatWXYZ, vLinXYZ, omegaXYZ, observedSeconds]}. The tick is an IDENTITY
+     *  (two calls in one tick share one derivation); the seconds are what the rates were divided by.
+     *  Weak keys: an unloading ship takes its entry with it. Synchronized only against the two
+     *  logical sides' threads; entries are side-local because each side holds its own
+     *  {@link PhysicsObject} instances. */
 
     private static final Map<PhysicsObject, double[]> OBSERVED_TRANSFORM =
             java.util.Collections.synchronizedMap(new java.util.WeakHashMap<PhysicsObject, double[]>());
 
+    /**
+     * The widest interval, in seconds of real time, a rate may be derived from — beyond it
+     * {@link #measuredVelocityAtPoint} answers with ABSENCE instead of a number.
+     *
+     * <p><b>Why a bound exists at all.</b> Differencing two observations yields the AVERAGE rate over
+     * the interval between them, and every consumer here reads the answer as the deck's velocity
+     * RIGHT NOW. Over one tick those are the same statement; over a long gap they are not, and the
+     * difference is not small: a body meeting a craft nobody has watched for ten seconds would be
+     * carried by a manoeuvre that finished before it arrived. There is no way to make an average
+     * instantaneous, so the honest answer to a long interval is to have none — the callers all treat
+     * a missing rate as no carry, which is a state a body can be in, whereas a plausible wrong
+     * number cannot be told from a right one at any distance.
+     *
+     * <p><b>Where the number comes from — measured, not chosen.</b> 2275 derivations recorded on a
+     * real client running the crew-capture suite (a body carried on hovering, climbing, rolled and
+     * inverted decks), bucketed by the interval each was divided by:
+     *
+     * <pre>
+     *   =1 tick   2263   the steady state: the guard and the commit each ask, once per tick
+     *   2 ticks      3
+     *   3-20        NO SAMPLES AT ALL
+     *   26-237       9   first contact after a pause nobody queried through
+     * </pre>
+     *
+     * The two populations do not overlap and nothing lies between them: while a deck is actually
+     * carrying a body the interval is a tick, and every wide interval measured came from the
+     * first-contact path after a pause. Any bound inside the empty band separates them; this one
+     * sits at 5 ticks — 2.5x the widest interval the carrying state produced, 5x below the narrowest
+     * the other population did — so neither a loaded client's jitter nor the exact choice decides
+     * the outcome. Stated in real seconds because that is what the divisor is: a client stuttering
+     * below ~4 ticks per second stops deriving, which is the safe direction and the one where the
+     * transform it is differencing has stopped being a per-tick series anyway.
+     */
+    private static final double MAX_DERIVATION_GAP_SECONDS = 0.25;
+
+    /** How many derivations were refused for their interval, and the interval of the last one.
+     *  Absence is what the CALLER sees; these say so out loud to anyone reading the side's state —
+     *  a refusal and a genuinely motionless deck both produce no carry, and only these two tell
+     *  them apart. Observation only: nothing branches on them. */
+    static long derivationsRefusedForGap;
+    static double lastRefusedGapSeconds;
+
     /** The MEASURED world-frame velocity (blocks/second) of {@code physo}'s transform at the point
-     *  {@code (x,y,z)}: linear rate from the ship position's per-tick delta, angular rate from the
-     *  rotation quaternion's per-tick delta, combined as {@code v + omega x r}. This is the speed
-     *  the deck is ACTUALLY carrying that point as observed on this side — exactly the quantity the
-     *  external-move guard must tolerate — independent of any physics feed. Null until two distinct
-     *  ticks have been observed (one tick of warm-up per ship per side). */
+     *  {@code (x,y,z)}: linear rate from the ship position's delta, angular rate from the rotation
+     *  quaternion's delta, both over the REAL time between the two observations
+     *  ({@link #observationSeconds}), combined as {@code v + omega x r}. This is the speed the deck
+     *  is ACTUALLY carrying that point as observed on this side — exactly the quantity the
+     *  external-move guard must tolerate — independent of any physics feed. Null until a second
+     *  observation exists (one tick of warm-up per ship per side), and null when the interval
+     *  between the two is not one the formula can speak for. */
     private static double[] measuredVelocityAtPoint(World world, PhysicsObject physo,
                                                     double x, double y, double z) {
         ShipTransform t = physo.getShipData().getShipTransform();
         Vec3d c = t.getShipPositionVec3d();
         Quaterniond q = t.rotationQuaternion(TransformType.SUBSPACE_TO_GLOBAL);
-        long now = observationTick(world);
+        long now = world.getTotalWorldTime(); // identity only; the DIVISOR is real time, see above
+        double seconds = observationSeconds();
         double[] prev = OBSERVED_TRANSFORM.get(physo);
         double[] cur;
         if (prev != null && (long) prev[0] == now) {
             cur = prev; // second caller this tick (guard + commit): reuse the derived rates
         } else {
-            cur = new double[14];
+            cur = new double[15];
             cur[0] = now;
             cur[1] = c.x; cur[2] = c.y; cur[3] = c.z;
             cur[4] = q.w; cur[5] = q.x; cur[6] = q.y; cur[7] = q.z;
+            cur[14] = seconds;
             if (prev == null) {
                 OBSERVED_TRANSFORM.put(physo, cur);
                 return null; // first observation of this ship on this side: no rate yet
             }
-            double dt = (now - (long) prev[0]) * 0.05;
+            double dt = seconds - prev[14];
+            if (!(dt > 0.0) || dt > MAX_DERIVATION_GAP_SECONDS) {
+                // Not an interval this formula can speak for. Re-seed from the current observation
+                // so the NEXT tick has a fresh pair and the refusal lasts one tick, not the episode.
+                OBSERVED_TRANSFORM.put(physo, cur);
+                derivationsRefusedForGap++;
+                lastRefusedGapSeconds = dt;
+                return null;
+            }
             cur[8] = (c.x - prev[1]) / dt;
             cur[9] = (c.y - prev[2]) / dt;
             cur[10] = (c.z - prev[3]) / dt;

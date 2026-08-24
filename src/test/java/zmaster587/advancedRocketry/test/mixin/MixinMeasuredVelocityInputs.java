@@ -50,6 +50,32 @@ public abstract class MixinMeasuredVelocityInputs {
     /** Speed worth reporting, matching the recorder that first saw the 597. */
     private static final double REPORT_ABOVE = 4.0;
 
+    /** Upper edge, in ticks, of each bucket of {@link #arTest$gapBuckets}; the extra slot at the end
+     *  catches everything above the last edge. The fine buckets at the bottom are the whole point:
+     *  the formula under study is written for a ONE-tick difference, so the question a bound can be
+     *  set from is how far past one tick the interval actually goes while a body is being carried. */
+    private static final double[] GAP_BUCKET_TICKS = {1.5, 2.5, 3.5, 5.5, 10.5, 20.5, 50.5, 200.5};
+
+    /** Cumulative sample count per bucket of {@link #GAP_BUCKET_TICKS}, plus the overflow slot. */
+    private static final long[] arTest$gapBuckets = new long[GAP_BUCKET_TICKS.length + 1];
+
+    /** Every derivation counted so far, the widest interval one was divided by, and how many were
+     *  handed an interval that is not positive at all. */
+    private static long arTest$derivations;
+    private static long arTest$nonPositive;
+    private static double arTest$widestTicks;
+    private static double arTest$widestSeconds;
+
+    /** How often the cumulative histogram is emitted. Per-sample records are subject to the event
+     *  ring's per-type cap and the earliest are evicted on a long run; a CUMULATIVE record is not —
+     *  whichever one survives still counts every sample ever taken. */
+    private static final long HISTOGRAM_EVERY = 25L;
+
+    /** Interval, in ticks, above which a sample is recorded individually — with the caller trail,
+     *  which is what names the path that let the gap open. Below it only the histogram counts the
+     *  sample: a stack walk on every tick would perturb the very intervals being measured. */
+    private static final double TRAIL_ABOVE_TICKS = 1.5;
+
     @Shadow
     @Final
     private static Map<PhysicsObject, double[]> OBSERVED_TRANSFORM;
@@ -90,7 +116,58 @@ public abstract class MixinMeasuredVelocityInputs {
         double[] v = cir.getReturnValue();
         double[] prev = arTest$previous;
         double[] cur = OBSERVED_TRANSFORM.get(physo);
-        if (v == null || prev == null || cur == null) {
+        if (prev == null || cur == null) {
+            return;
+        }
+        // THE INTERVAL, recorded whether or not a value came out of it. What a rate may be derived
+        // from is an interval the formula can speak for, and that bound has to be measured on the
+        // path that actually carries bodies rather than picked; a refusal is as much a sample of
+        // that distribution as a success. Skipped only for the reuse branch, where the two callers
+        // of one tick share a derivation that already happened and no new interval exists.
+        if ((long) cur[0] != (long) prev[0]) {
+            double gapTicks = (cur[14] - prev[14]) / 0.05;
+            double gapSeconds = cur[14] - prev[14];
+            arTest$derivations++;
+            if (!(gapSeconds > 0.0)) {
+                arTest$nonPositive++;
+            }
+            int b = arTest$gapBuckets.length - 1;
+            for (int i = 0; i < GAP_BUCKET_TICKS.length; i++) {
+                if (gapTicks <= GAP_BUCKET_TICKS[i]) {
+                    b = i;
+                    break;
+                }
+            }
+            arTest$gapBuckets[b]++;
+            if (gapTicks > arTest$widestTicks) {
+                arTest$widestTicks = gapTicks;
+                arTest$widestSeconds = gapSeconds;
+            }
+            if (gapTicks > TRAIL_ABOVE_TICKS || !(gapSeconds > 0.0)) {
+                TestTrace.recordHere("measured_velocity_gap",
+                        "\"gapTicks\":" + TestTrace.fmt(gapTicks)
+                                + ",\"gapSeconds\":" + TestTrace.fmt(gapSeconds)
+                                + ",\"worldTicks\":" + TestTrace.fmt(cur[0] - prev[0])
+                                + ",\"derived\":" + (v == null ? "null"
+                                        : TestTrace.fmt(Math.sqrt(v[0] * v[0] + v[1] * v[1]
+                                                + v[2] * v[2])))
+                                + ",\"by\":\"" + TestTrace.json(TestTrace.callerTrail()) + "\"");
+            }
+            if (arTest$derivations % HISTOGRAM_EVERY == 0L) {
+                StringBuilder hist = new StringBuilder("[");
+                for (int i = 0; i < arTest$gapBuckets.length; i++) {
+                    hist.append(i == 0 ? "" : ",").append(arTest$gapBuckets[i]);
+                }
+                TestTrace.recordHere("measured_velocity_gap_hist",
+                        "\"edgesTicks\":" + java.util.Arrays.toString(GAP_BUCKET_TICKS)
+                                + ",\"counts\":" + hist.append(']')
+                                + ",\"derivations\":" + arTest$derivations
+                                + ",\"nonPositive\":" + arTest$nonPositive
+                                + ",\"widestTicks\":" + TestTrace.fmt(arTest$widestTicks)
+                                + ",\"widestSeconds\":" + TestTrace.fmt(arTest$widestSeconds));
+            }
+        }
+        if (v == null) {
             return;
         }
         if (Math.abs(v[0]) <= REPORT_ABOVE && Math.abs(v[1]) <= REPORT_ABOVE
