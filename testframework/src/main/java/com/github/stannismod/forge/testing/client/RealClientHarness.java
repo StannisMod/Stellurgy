@@ -264,6 +264,16 @@ public final class RealClientHarness implements AutoCloseable {
         // while recording nothing. A normal game never sets this property, never discovers the
         // class (it is compiled into the test source set only) and pays nothing for any of it.
         javaArgs.add("-Dfml.coreMods.load=com.github.stannismod.forge.testing.mixin.ForgeTestCoreMod");
+        // Every `mixin.*` property set on the test JVM is forwarded to the child. Queuing a
+        // configuration is not the same as WEAVING a class, and nothing reports the difference: a
+        // mixin whose target was already loaded is silently skipped, and its silence then reads as
+        // "the code I was watching never ran". Measured 2026-08-23 — three runs were read against a
+        // mixin that had not applied on this side. `-Dmixin.debug=true` is what says which did.
+        for (String property : System.getProperties().stringPropertyNames()) {
+            if (property.startsWith("mixin.")) {
+                javaArgs.add("-D" + property + "=" + System.getProperty(property));
+            }
+        }
         javaArgs.add("-cp");
         javaArgs.add(launcherClassPath);
         javaArgs.add(launcherClass);

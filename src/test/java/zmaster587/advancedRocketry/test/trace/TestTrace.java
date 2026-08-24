@@ -41,6 +41,27 @@ public final class TestTrace {
      *
      * @param payload a JSON fragment WITHOUT braces, or empty
      */
+    /**
+     * Announce that an observation point EXECUTED, before it decides whether it has anything to say.
+     *
+     * <p>Call it first thing, above every threshold and condition. What it buys is the difference
+     * between "nothing happened" and "nobody was looking" — three separate silences (a mixin that
+     * never wove, one that wove but whose method never ran, one that ran and saw nothing) otherwise
+     * produce the same empty reply, and the first two read as the third. Measured 2026-08-23: three
+     * runs and one wrong ledger entry were spent on exactly that confusion.</p>
+     *
+     * <p>Routed by side like {@link #record}, and deliberately NOT gated on the log recording: the
+     * fact that code ran is worth keeping even when nothing is subscribed to hear about it.</p>
+     */
+    public static void instrument(Entity entity, String name) {
+        if (entity != null && entity.world != null && entity.world.isRemote) {
+            com.github.stannismod.forge.testing.client.bridge.ForgeTestClientBootstrap
+                    .noteInstrumentEntered(name);
+        } else {
+            TestEventLog.noteInstrumentEntered(name);
+        }
+    }
+
     public static void record(Entity entity, String type, String payload) {
         if (entity.world.isRemote) {
             com.github.stannismod.forge.testing.client.bridge.ForgeTestClientBootstrap

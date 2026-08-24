@@ -173,6 +173,36 @@ public final class ForgeTestClientBootstrap {
      *
      * @param payload a JSON fragment WITHOUT braces, or empty
      */
+    /**
+     * Observation points that have EXECUTED on this side at least once, by name — see the note on the
+     * `instruments` field of an {@code event_since} reply. Recorded even when {@code eventsRecording}
+     * is false, because "the code ran" and "the log was listening" are separate facts and a caller
+     * that cannot tell them apart is exactly what this exists to prevent.
+     */
+    private static final java.util.Set<String> INSTRUMENTS_ENTERED =
+            java.util.Collections.synchronizedSet(new java.util.LinkedHashSet<String>());
+
+    /** Called by an observation point the first thing it does, before any threshold or condition. */
+    public static void noteInstrumentEntered(String name) {
+        if (name != null && !name.isEmpty()) {
+            INSTRUMENTS_ENTERED.add(name);
+        }
+    }
+
+    /** The names of every observation point that has executed here, as a JSON array. */
+    private static String instrumentsEntered() {
+        StringBuilder out = new StringBuilder("[");
+        synchronized (INSTRUMENTS_ENTERED) {
+            for (String name : INSTRUMENTS_ENTERED) {
+                if (out.length() > 1) {
+                    out.append(',');
+                }
+                out.append('"').append(name).append('"');
+            }
+        }
+        return out.append(']').toString();
+    }
+
     public static void recordEvent(String type, String payload) {
         if (!eventsRecording) {
             return;
@@ -1236,7 +1266,12 @@ public final class ForgeTestClientBootstrap {
                         }
                         sb.append('"').append(e.getKey()).append("\":").append(e.getValue());
                     }
-                    sb.append("},\"from\":").append(from).append(",\"events\":[");
+                    // Which observation points have EXECUTED on this side. An empty `events` list is
+                    // only an answer once this says somebody was looking: a mixin that never wove, one
+                    // that wove but whose method never ran, and one that ran and saw nothing are
+                    // otherwise the same reply — and the first two read as the third.
+                    sb.append("},\"instruments\":").append(instrumentsEntered());
+                    sb.append(",\"from\":").append(from).append(",\"events\":[");
                     // Merged across the per-type rings and re-ordered by sequence: ORDER is what a
                     // chain assertion reads, and once the rings are separate the sequence is the
                     // only thing still carrying it.

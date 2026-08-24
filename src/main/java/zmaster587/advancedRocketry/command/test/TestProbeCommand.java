@@ -57,7 +57,9 @@ public class TestProbeCommand extends CommandBase {
      * The event types that make up a position-writer timeline: who moved a body, who seated it and
      * who stood it up. Named once, because two verbs read the same slice for the same reason.
      */
-    private static final String[] WRITER_EVENTS = {"pos_jump", "mount", "dismount"};
+    // A body can be moved by being PLACED or by being handed a velocity, and a report that counts
+    // only the first reads as "nothing moved it" for the second.
+    private static final String[] WRITER_EVENTS = {"pos_jump", "vel_jump", "mount", "dismount"};
 
     @Override
     @Nonnull
@@ -18391,6 +18393,9 @@ public class TestProbeCommand extends CommandBase {
                     .append(",\"mixins\":").append(TestEventLog.areMixinsInstalled())
                     .append(",\"dropped\":").append(TestEventLog.dropped())
                     .append(",\"droppedByType\":{").append(TestEventLog.droppedByType()).append('}')
+                    // Which observation points have EXECUTED. Carried on every read because an empty
+                    // `events` list is only an answer once this says somebody was looking.
+                    .append(",\"instruments\":").append(TestEventLog.instrumentsEntered())
                     .append(",\"from\":").append(from)
                     .append(",\"events\":[");
             int n = 0;

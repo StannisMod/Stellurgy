@@ -84,6 +84,8 @@ public abstract class MixinEntityPositionWriters {
         if (!arTest$worthWatching(self)) {
             return;
         }
+        // Announced before the threshold — see TestTrace.instrument.
+        TestTrace.instrument(self, "entity_position_writers");
         double from = self.posY;
         if (Math.abs(y - from) <= JUMP_THRESHOLD) {
             return;

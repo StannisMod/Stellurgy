@@ -114,6 +114,43 @@ public final class TestEventLog {
         return mixinsInstalled;
     }
 
+    /**
+     * Observation points that have EXECUTED at least once, by name.
+     *
+     * <p>"The configuration was accepted" and "this code ran" are different claims, and until both can
+     * be asked, an empty log means nothing: a mixin that was never woven, one that was woven but whose
+     * method never ran, and one that ran and saw nothing are indistinguishable — and the first two
+     * read as the third, which is the answer a test then believes. So an instrument announces itself
+     * on ENTRY, before any threshold or condition, and a reader can tell "nothing happened" from
+     * "nobody was looking".</p>
+     *
+     * <p>Names are free-form and belong to the instrument, not to the event type: one observation
+     * point may emit several types, or none on a given run.</p>
+     */
+    private static final java.util.Set<String> INSTRUMENTS_ENTERED =
+            java.util.Collections.synchronizedSet(new java.util.LinkedHashSet<String>());
+
+    /** Called by an observation point the first thing it does, whether or not it goes on to record. */
+    public static void noteInstrumentEntered(String name) {
+        if (name != null && !name.isEmpty()) {
+            INSTRUMENTS_ENTERED.add(name);
+        }
+    }
+
+    /** The names of every observation point that has executed, as a JSON array. */
+    public static String instrumentsEntered() {
+        StringBuilder out = new StringBuilder("[");
+        synchronized (INSTRUMENTS_ENTERED) {
+            for (String name : INSTRUMENTS_ENTERED) {
+                if (out.length() > 1) {
+                    out.append(',');
+                }
+                out.append('"').append(name).append('"');
+            }
+        }
+        return out.append(']').toString();
+    }
+
     /** One thing that happened, in order. */
     public static final class Record {
         public final long seq;

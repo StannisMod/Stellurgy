@@ -17,6 +17,8 @@ import org.junit.rules.TestWatcher;
 import org.junit.runner.Description;
 import org.junit.runners.MethodSorters;
 
+import zmaster587.advancedRocketry.test.Events;
+
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -819,6 +821,24 @@ public abstract class AbstractSharedClientE2ETest {
     /** Runs a server probe and joins its reply — the shape every AR client test already uses. */
     protected final String exec(String command) throws Exception {
         return String.join("\n", serverClient().execute(command));
+    }
+
+    /**
+     * The server's ordered event log, as a scenario should reach it: {@code mark} before the action,
+     * {@code since}/{@code await} after, and a failure that prints the CHAIN rather than one last
+     * sample.
+     *
+     * <p>Offered here because the alternative is what keeps happening: a scenario that needs one
+     * trace reaches for {@code exec("artest events …")} and a regex of its own. That shape is right
+     * in exactly one place — the between-scenario reset below, which must never fail a whole class
+     * because a recorder was unavailable, and so REMEMBERS an unusable mark instead of throwing.
+     * Copied into a scenario the exemption inverts: a silent empty log becomes "it never happened",
+     * which is the one answer an instrument must not be able to fake. {@link Events#mark} asserts
+     * the recorder is subscribed and {@link Events#markInstrumented} additionally asserts the
+     * test-only mixins were woven — the two independent silences behind an empty position trace.
+     */
+    protected final Events events() {
+        return new Events(this::exec, bot()::waitTicks);
     }
 
     // ── internals ────────────────────────────────────────────────────────────

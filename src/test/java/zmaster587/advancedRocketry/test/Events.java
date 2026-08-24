@@ -89,6 +89,33 @@ public final class Events {
     }
 
     /**
+     * Fail unless the named observation point actually EXECUTED — the assertion that makes an empty
+     * log mean something.
+     *
+     * <p>Three different silences produce the same empty reply: a mixin that never wove, one that wove
+     * but whose method never ran, and one that ran and saw nothing. Only the third is an answer, and
+     * without this the other two are read as it. So an instrument announces itself on entry
+     * ({@code TestTrace.instrument}) and the reply carries the names; a test that is about to conclude
+     * something FROM a silence asserts here first, and gets a failure that names the cause instead of
+     * a green that names nothing.</p>
+     *
+     * <p>Deliberately an assertion and not a boolean: a caller who has to remember to check would be
+     * back where this started. Measured 2026-08-23 — three runs and one wrong ledger entry were spent
+     * reading a silence produced by an instrument that was not there.</p>
+     *
+     * @param reply    an {@code events since} reply, from {@link #since} or {@link #await}
+     * @param name     the instrument's name, as passed to {@code TestTrace.instrument}
+     * @param whatFor  what this test was about to conclude from the log, for the failure message
+     */
+    public static void assertInstrumentRan(String reply, String name, String whatFor) {
+        assertTrue("the observation point \"" + name + "\" never executed, so the log below cannot"
+                + " support \"" + whatFor + "\" — an empty log here means nobody was looking, not that"
+                + " nothing happened. Check the mixin wove (-PmixinDebug=true, then the preserved"
+                + " client log) and that its method is on a path this scenario reaches. Reply: "
+                + reply, reply != null && reply.contains("\"" + name + "\""));
+    }
+
+    /**
      * Wait for one event of {@code type} to appear after {@code mark}, or fail naming the whole
      * chain that DID happen.
      *

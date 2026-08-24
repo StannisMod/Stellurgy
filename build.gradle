@@ -425,6 +425,13 @@ def configureHarnessTest = { Test t, boolean enableClient ->
         if (project.hasProperty('clientFbo')) {
             t.systemProperty 'forge.test.client.fbo', project.property('clientFbo').toString()
         }
+        // -PmixinDebug turns on Mixin's own apply log in BOTH child JVMs (the harness forwards every
+        // `mixin.*` property it is given). Off by default because it is loud; reach for it the moment
+        // a test-only mixin returns an empty observation, since "queued" and "woven" are different
+        // claims and only this distinguishes them.
+        if (project.hasProperty('mixinDebug')) {
+            t.systemProperty 'mixin.debug', project.property('mixinDebug').toString()
+        }
         // -PclientWindowState=normal keeps the client's game window visible (default: the harness
         // suppresses it off-screen/minimized for the whole client lifetime). The visible mode is
         // both the debugging escape hatch and the control leg that proves the suppressor is the
