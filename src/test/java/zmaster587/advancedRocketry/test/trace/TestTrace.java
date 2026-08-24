@@ -62,6 +62,39 @@ public final class TestTrace {
         }
     }
 
+    /**
+     * The side-explicit forms, for an observation point that has no entity to route by.
+     *
+     * <p>Some of the code worth watching is pure geometry — a sweep takes boxes and vectors and knows
+     * nothing about a world. Forge's effective side answers for the calling thread, which is what the
+     * router needs and all it needs. Kept separate from the entity-routed pair rather than folded into
+     * it: where an entity IS available its world is the exact answer, and a thread-derived one would be
+     * a silent approximation of it.</p>
+     */
+    public static void instrumentHere(String name) {
+        if (isRemoteThread()) {
+            com.github.stannismod.forge.testing.client.bridge.ForgeTestClientBootstrap
+                    .noteInstrumentEntered(name);
+        } else {
+            TestEventLog.noteInstrumentEntered(name);
+        }
+    }
+
+    /** {@link #record} for an observation point with no entity — see {@link #instrumentHere}. */
+    public static void recordHere(String type, String payload) {
+        if (isRemoteThread()) {
+            com.github.stannismod.forge.testing.client.bridge.ForgeTestClientBootstrap
+                    .recordEvent(type, payload);
+        } else {
+            TestEventLog.record("server", 0L, type, payload);
+        }
+    }
+
+    private static boolean isRemoteThread() {
+        return net.minecraftforge.fml.common.FMLCommonHandler.instance().getEffectiveSide()
+                == net.minecraftforge.fml.relauncher.Side.CLIENT;
+    }
+
     public static void record(Entity entity, String type, String payload) {
         if (entity.world.isRemote) {
             com.github.stannismod.forge.testing.client.bridge.ForgeTestClientBootstrap

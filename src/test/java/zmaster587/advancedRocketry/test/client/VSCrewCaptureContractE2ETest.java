@@ -934,6 +934,9 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
                 bot().eventsSince(clientDropMark, "ship_transform_motion"));
         String clientShipFrame = String.valueOf(
                 bot().eventsSince(clientDropMark, "ship_frame_motion"));
+        String clientSweep = String.valueOf(bot().eventsSince(clientDropMark, "hull_sweep_big"));
+        String clientCarry = String.valueOf(
+                bot().eventsSince(clientDropMark, "ship_velocity_big"));
         long churn = (long) clientDouble(SHIP_FRAME_TRAVEL, "externalMoveDrops") - dropsBefore;
         // Printed on the PASSING path too, and with the horizontal numbers: this scenario passes
         // alone and fails when its class runs, so the only way to name the difference is to have the
@@ -953,7 +956,9 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
                 + "\n[crewcap] hull-top writers :: " + writers.since(dropMark)
                 + "\n[crewcap] hull-top client writers :: " + clientVelocity
                 + "\n[crewcap] hull-top client transform :: " + clientTransform
-                + "\n[crewcap] hull-top client shipframe :: " + clientShipFrame);
+                + "\n[crewcap] hull-top client shipframe :: " + clientShipFrame
+                + "\n[crewcap] hull-top client sweep :: " + clientSweep
+                + "\n[crewcap] hull-top client carry :: " + clientCarry);
 
         // Before anything is concluded from a silence, the instrument that produced it must be shown
         // to have run. Both of this scenario's client-side readings are about to be read that way.
@@ -963,6 +968,10 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
                 "the ship transform did or did not rewrite this body's velocity");
         Events.assertInstrumentRan(clientShipFrame, "ship_frame_travel",
                 "AR's ship-frame travel did or did not leave this body's velocity behind");
+        Events.assertInstrumentRan(clientSweep, "hull_sweep",
+                "the hull sweep was or was not asked for a large vertical move");
+        Events.assertInstrumentRan(clientCarry, "ship_velocity_at_point",
+                "the ship's velocity at the body's point was or was not large");
 
         // WHAT HE IS STANDING ON, before anything is claimed about the hold.
         //
