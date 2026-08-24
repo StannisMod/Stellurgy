@@ -8,12 +8,17 @@
   "mixins": [
     "MixinChunkLoadCount",
     "MixinEntityPositionWriters",
+    "MixinEntityVelocityWriters",
+    "MixinShipTransformEntityWrites",
     "MixinFlightComputerMotionSample",
+    "MixinPlayerPacketRubberBand",
     "MixinShipTransformUpdateDiag",
     "MixinTilePilotSeatDiag",
     "MixinWorldServerShipManagerDiag"
   ],
   "client": [
+    "MixinEntityVelocityWriters",
+    "MixinShipTransformEntityWrites",
     "MixinBoundarySkyDiag",
     "MixinClientProxyDiag",
     "MixinHyperspaceTunnelDiag",
