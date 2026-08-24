@@ -55,7 +55,26 @@ public class EntityDraggable {
         final Vector3dc oldVelocityAdded = oldEntityShipMovementData.getAddedLinearVelocity();
         final double oldYawVelocityAdded = oldEntityShipMovementData.getAddedYawVelocity();
 
-        if (lastShipTouchedPlayer == null || oldTicksSinceTouchedShip >= VSConfig.ticksToStickToShip) {
+        // The association above is a TIMER, and a timer says nothing about WHERE the body is. A
+        // teleport — a dimension change, a cell crossing, a command, a rocket — writes a position
+        // without routing through Entity.move, which is the only place the association is
+        // re-evaluated, so a body that stood on a deck a moment ago arrives on the far side of the
+        // world still holding it. The drag then transforms that body by the hull's rigid between-tick
+        // motion, whose displacement at a point grows with that point's distance from the hull:
+        // measured at 4 500 blocks of lever arm and a hull turning at 1 rad/s, a body at rest was
+        // written 157 blocks per tick, out of the world, with its own motion reading zero.
+        //
+        // So the timer is asked for TIME and the ship is asked for PLACE. Ordinary dragging is
+        // untouched: a body on, in or just off a hull is within the reach the collision injector
+        // itself uses to decide which ships an entity might touch, which covers the tick-to-tick
+        // flicker of contact that the timer exists to bridge. A body beyond it is not being carried,
+        // however recently it was aboard, and falls through to the same treatment as one whose timer
+        // has run out — it keeps the velocity it already had, decaying, and is offered nothing new.
+        final boolean stillAtThatHull =
+                ValkyrienUtils.isEntityWithinShipBounds(entity, lastShipTouchedPlayer);
+
+        if (lastShipTouchedPlayer == null || oldTicksSinceTouchedShip >= VSConfig.ticksToStickToShip
+                || !stillAtThatHull) {
             if (entity.onGround) {
                 // Player is on ground and not on a ship, therefore set their added velocity to 0.
                 draggable.setEntityShipMovementData(

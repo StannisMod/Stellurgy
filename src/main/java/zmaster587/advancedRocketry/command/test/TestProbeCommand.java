@@ -17911,6 +17911,40 @@ public class TestProbeCommand extends CommandBase {
                     + ",\"hasNoGravity\":" + entity.hasNoGravity() + "}");
             return;
         }
+        if (args.length >= 6 && "set-pos".equalsIgnoreCase(args[0])) {
+            // entity set-pos <dim> <entityId> <x> <y> <z>
+            // relocate ANY entity the way a teleport does: through
+            // setPositionAndUpdate, which writes the position and the
+            // previous-tick position without routing through move(). That
+            // distinction is the point of the verb rather than an accident of
+            // it — move() is where the physics mod re-evaluates which ship an
+            // entity is standing on, so a relocation that goes around it
+            // leaves the entity's ship association exactly as it was, which is
+            // what a vanilla teleport does to a player too. Reports the
+            // position it actually landed at, so a caller can tell a
+            // relocation that took from one the world undid.
+            int dim = parseIntOr(args[1], Integer.MIN_VALUE);
+            int id = parseIntOr(args[2], -1);
+            double px = parseDoubleOr(args[3], 0);
+            double py = parseDoubleOr(args[4], 0);
+            double pz = parseDoubleOr(args[5], 0);
+            net.minecraft.world.WorldServer world = server.getWorld(dim);
+            if (world == null) {
+                send(sender, "{\"error\":\"world not loaded\",\"dim\":" + dim + "}");
+                return;
+            }
+            net.minecraft.entity.Entity entity = world.getEntityByID(id);
+            if (entity == null) {
+                send(sender, "{\"error\":\"entity not found\",\"entityId\":" + id + "}");
+                return;
+            }
+            entity.setPositionAndUpdate(px, py, pz);
+            send(sender, "{\"ok\":true,\"entityId\":" + id
+                    + ",\"posX\":" + entity.posX
+                    + ",\"posY\":" + entity.posY
+                    + ",\"posZ\":" + entity.posZ + "}");
+            return;
+        }
         if (args.length >= 3 && "tick".equalsIgnoreCase(args[0])) {
             int dim = parseIntOr(args[1], Integer.MIN_VALUE);
             int id = parseIntOr(args[2], -1);
