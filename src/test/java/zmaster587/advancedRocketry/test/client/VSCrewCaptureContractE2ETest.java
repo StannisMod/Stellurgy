@@ -960,7 +960,9 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
                 + "\n[crewcap] hull-top client sweep :: " + clientSweep
                 + "\n[crewcap] hull-top client carry :: " + clientCarry
                 + "\n[crewcap] hull-top derive inputs :: "
-                + bot().eventsSince(clientDropMark, "measured_velocity_inputs"));
+                + bot().eventsSince(clientDropMark, "measured_velocity_inputs")
+                + "\n[crewcap] hull-top first observation :: "
+                + bot().eventsSince(clientDropMark, "measured_velocity_first"));
 
         // Before anything is concluded from a silence, the instrument that produced it must be shown
         // to have run. Both of this scenario's client-side readings are about to be read that way.

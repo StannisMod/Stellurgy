@@ -64,6 +64,22 @@ public abstract class MixinMeasuredVelocityInputs {
                                             CallbackInfoReturnable<double[]> cir) {
         TestTrace.instrumentHere("measured_velocity_inputs");
         double[] prev = OBSERVED_TRANSFORM.get(physo);
+        // The FIRST observation of a ship, recorded on its own. The derived rate is a difference, so
+        // knowing what the pair looked like is only half the story: if the first member is the
+        // client's freshly-constructed DEFAULT rather than a state the ship was ever in, then the
+        // "rotation" the rate describes never happened, and the trigger is the construction ordering
+        // rather than any movement. That distinction cannot be read off the pair.
+        if (prev == null) {
+            TestTrace.recordHere("measured_velocity_first",
+                    "\"qw\":" + TestTrace.fmt(physo.getShipData().getShipTransform()
+                            .rotationQuaternion(valkyrienwarfare.api.TransformType
+                                    .SUBSPACE_TO_GLOBAL).w)
+                            + ",\"posX\":" + TestTrace.fmt(physo.getShipData().getShipTransform()
+                                    .getShipPositionVec3d().x)
+                            + ",\"posY\":" + TestTrace.fmt(physo.getShipData().getShipTransform()
+                                    .getShipPositionVec3d().y)
+                            + ",\"by\":\"" + TestTrace.json(TestTrace.callerTrail()) + "\"");
+        }
         arTest$previous = prev == null ? null : prev.clone();
     }
 
