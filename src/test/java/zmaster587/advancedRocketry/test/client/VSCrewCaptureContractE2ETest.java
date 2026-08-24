@@ -8,6 +8,8 @@ import org.lwjgl.input.Keyboard;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import zmaster587.advancedRocketry.test.Events;
+
 import static org.junit.Assert.assertTrue;
 
 /**
@@ -48,6 +50,28 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
     private static final Pattern COUNT = Pattern.compile("\"count\":(-?\\d+)");
     private static final Pattern BUILDER_POS =
             Pattern.compile("\"builderPos\":\\[(-?\\d+),(-?\\d+),(-?\\d+)]");
+    /** Floor of the staging clearing: far enough below the hull that a body which MISSES it keeps
+     *  falling, so a miss fails this scenario as a miss instead of as a hold that never engaged. */
+    private static final int SHAFT_FLOOR_Y = 40;
+
+    /** Ceiling of the staging clearing: above the drop point (`shipY + 7`) with room to spare, so
+     *  the body is never released inside a block. */
+    private static final int SHAFT_CEILING_Y = 90;
+
+    /** The hull's angular rate, read beside a body that is supposed to be resting on it. */
+    private static final Pattern OMEGA_AT_HULL = Pattern.compile("\"omega\":(-?[0-9.E\\-]+)");
+
+    /** The body's OWN motion and the velocity the substrate holds for it — the two candidate
+     *  writers, read together because a body drifting for either reason looks the same. */
+    private static final Pattern MOTION_X = Pattern.compile("\"motionX\":(-?[0-9.E\\-]+)");
+    private static final Pattern MOTION_Y = Pattern.compile("\"motionY\":(-?[0-9.E\\-]+)");
+    private static final Pattern MOTION_Z = Pattern.compile("\"motionZ\":(-?[0-9.E\\-]+)");
+    private static final Pattern ADDED_X = Pattern.compile("\"addedVelX\":(-?[0-9.E\\-]+)");
+    private static final Pattern ADDED_Y = Pattern.compile("\"addedVelY\":(-?[0-9.E\\-]+)");
+    private static final Pattern ADDED_Z = Pattern.compile("\"addedVelZ\":(-?[0-9.E\\-]+)");
+    private static final Pattern TICKS_SINCE_TOUCHED =
+            Pattern.compile("\"ticksSinceTouchedShip\":(-?[0-9]+)");
+
     private static final Pattern POS_X = Pattern.compile("\"posX\":(-?[0-9.E\\-]+)");
     private static final Pattern POS_Y = Pattern.compile("\"posY\":(-?[0-9.E\\-]+)");
     private static final Pattern POS_Z = Pattern.compile("\"posZ\":(-?[0-9.E\\-]+)");
@@ -792,6 +816,45 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
                 upY < -0.3);
         double sx = readDouble(info, POS_X), sy = readDouble(info, POS_Y), sz = readDouble(info, POS_Z);
 
+        // Mark the position-write recorder one statement before the drop. The landing trace showed
+        // this body 10.8 blocks away three ticks after it began falling, with its OWN motion and the
+        // substrate's added velocity BOTH reading zero on either side of the jump — nobody's velocity
+        // accounts for the move, so it is a position WRITE and the only question left is whose.
+        // Everything else this scenario can ask names candidates; a position write carries the
+        // caller trail that names one.
+        //
+        // markInstrumented, not mark: a position write is recorded by a test-only MIXIN, so an empty
+        // trace below has two innocent explanations besides "nothing wrote it" — an unsubscribed
+        // recorder and an unwoven mixin config. Both are asserted here, because the whole point of
+        // this reading is that its silence must mean something.
+        Events writers = events();
+        long dropMark = writers.markInstrumented();
+        // The CLIENT's own log, marked beside the server's. The two are deliberately separate —
+        // cross-side ordering inside a tick is undefined — and the server's half already answered
+        // this scenario's question with "the server is following": every packet position it accepts
+        // equals the one it accepted last tick plus the climb. So the writer that starts the climb
+        // is on this side, and only this log can name it.
+        long clientDropMark = bot().eventMark().get("seq").getAsLong();
+
+        // A CLEARING, not a pit. The shared fixture pre-clear opens `base±(2,7)` over ten blocks of
+        // height, and the bases here are hard-coded at y=64 while the surface at this plot is around
+        // y=72 — so what it actually digs is a ten-block shaft with terrain on every side, and the
+        // rim of that shaft sits ABOVE the hull a body is supposed to land on. Two consequences, both
+        // measured on this scenario: a body that drifts a few blocks while falling meets a wall
+        // instead of the hull, and one that ends up on the rim is standing on grass a metre above the
+        // deck it was aimed at, which reads as "the hold refused to engage".
+        //
+        // Cleared around the SHIP rather than the build base, because the ship is what the body is
+        // aimed at and it settles away from where it was assembled. Wide enough that the body cannot
+        // leave it while falling, and deep enough that a body which MISSES the hull keeps falling and
+        // fails this scenario loudly, instead of landing on terrain and failing it as a hold that did
+        // not engage.
+        String clearing = exec("artest fill 0 " + ((int) sx - 12) + " " + (SHAFT_FLOOR_Y) + " "
+                + ((int) sz - 12) + " " + ((int) sx + 12) + " " + (SHAFT_CEILING_Y) + " "
+                + ((int) sz + 12) + " minecraft:air");
+        assertTrue("the staging clearing was not cut, so this scenario would stage a drop inside the"
+                + " fixture's own pit: " + clearing, clearing.contains("\"ok\":true"));
+
         exec("tp @a " + sx + " " + (sy + 7) + " " + sz + " 0 0");
         // The freshly-teleported client may not tick until its destination chunks stream in (the
         // whole encounter would then sample a frozen body and prove nothing). Gate the window on
@@ -809,6 +872,7 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
         int aboardSeen = 0, hullSeen = 0, samples = 0;
         double settledY = Double.NaN;
         StringBuilder enc = new StringBuilder();
+        StringBuilder fine = new StringBuilder();
         for (int i = 0; i < 30; i++) {
             bot().waitTicks(3);
             samples++;
@@ -818,15 +882,71 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
             if (tracked && !hull) aboardSeen++;
             if (tracked && hull) hullSeen++;
             settledY = bot().reportState().get("playerY").getAsDouble();
+            // The landing itself, sampled every iteration instead of every fifth, and with the two
+            // velocities that name WHO is moving the body: its own motion, and the added velocity
+            // the physics substrate holds for it. The coarse trace showed the body 10.8 blocks away
+            // by the first recorded sample after t0 — a gap that hides the entire event, and one in
+            // which "it slid off" and "something threw it" look identical.
+            if (i < 10) {
+                String psd = exec("artest vs player-ship-data");
+                fine.append(String.format(java.util.Locale.ROOT,
+                        // `touched` is the field that decides the branch, not just a label: the
+                        // packet path rebuilds a player's world position from the ship-subspace
+                        // coordinates his client sends, and it only does so while an association
+                        // exists. A non-null ship here at the moment of the launch says that branch
+                        // ran; a null one says the launch came from somewhere else entirely.
+                        "[t%d y=%.2f z=%.2f cap=%b hull=%b m=(%.2f,%.2f,%.2f) add=(%.2f,%.2f,%.2f)"
+                                + " since=%.0f touched=%s] ",
+                        i * 3, settledY, bot().reportState().get("playerZ").getAsDouble(),
+                        tracked, hull,
+                        readDouble(psd, MOTION_X), readDouble(psd, MOTION_Y), readDouble(psd, MOTION_Z),
+                        readDouble(psd, ADDED_X), readDouble(psd, ADDED_Y), readDouble(psd, ADDED_Z),
+                        readDouble(psd, TICKS_SINCE_TOUCHED),
+                        psd.contains("\"lastTouchedShip\":null") ? "null" : "a-ship"));
+            }
             if (i % 5 == 0) {
-                enc.append(String.format(java.util.Locale.ROOT, "[t%d y=%.2f cap=%b hull=%b] ",
-                        i * 3, settledY, tracked, hull));
+                // The hull's own angular rate, sampled beside the body rather than assumed: this
+                // scenario waits a fixed 200 ticks after commanding the roll and then asserts the
+                // ATTITUDE it reached, never that the hull stopped turning. A body dropped onto a
+                // still-turning hull is thrown off it, and the whole encounter then measures a hold
+                // that was never offered a body to hold.
+                enc.append(String.format(java.util.Locale.ROOT,
+                        "[t%d y=%.2f z=%.1f cap=%b hull=%b w=%.3f] ",
+                        i * 3, settledY, bot().reportState().get("playerZ").getAsDouble(),
+                        tracked, hull, readDouble(shipInfo(), OMEGA_AT_HULL)));
             }
         }
+        // Read once and held, because each is asserted on below as well as printed: a diagnostic read
+        // twice can disagree with itself, and the assertion must be about the text the reader sees.
+        String clientVelocity = String.valueOf(bot().eventsSince(clientDropMark, "vel_jump"));
+        String clientTransform = String.valueOf(
+                bot().eventsSince(clientDropMark, "ship_transform_motion"));
         long churn = (long) clientDouble(SHIP_FRAME_TRAVEL, "externalMoveDrops") - dropsBefore;
+        // Printed on the PASSING path too, and with the horizontal numbers: this scenario passes
+        // alone and fails when its class runs, so the only way to name the difference is to have the
+        // same readings from both. A message that exists only on the failing path can describe a
+        // defect but never a divergence.
         System.out.println("[crewcap] hull-top-mode aboard=" + aboardSeen + " hull=" + hullSeen
                 + "/" + samples + " churn=" + churn + " settledY=" + settledY + " shipY=" + sy
-                + " :: " + enc);
+                + " builtAt=(" + bx + "," + bz + ") shipXZ=("
+                + String.format(java.util.Locale.ROOT, "%.1f,%.1f", sx, sz) + ")"
+                + " playerXZ=(" + String.format(java.util.Locale.ROOT, "%.1f,%.1f",
+                        bot().reportState().get("playerX").getAsDouble(),
+                        bot().reportState().get("playerZ").getAsDouble()) + ")"
+                + " :: " + enc + "\n[crewcap] hull-top landing :: " + fine
+                // The WHOLE chain since the mark, not just the position writes: order is the thing
+                // sampling cannot see, and a mount or a dismount landing between two writes is the
+                // difference between "he was thrown" and "something took him".
+                + "\n[crewcap] hull-top writers :: " + writers.since(dropMark)
+                + "\n[crewcap] hull-top client writers :: " + clientVelocity
+                + "\n[crewcap] hull-top client transform :: " + clientTransform);
+
+        // Before anything is concluded from a silence, the instrument that produced it must be shown
+        // to have run. Both of this scenario's client-side readings are about to be read that way.
+        Events.assertInstrumentRan(clientVelocity, "entity_velocity_writers",
+                "the client-side velocity of this body was or was not rewritten");
+        Events.assertInstrumentRan(clientTransform, "ship_transform_entity_writes",
+                "the ship transform did or did not rewrite this body's velocity");
 
         // WHAT HE IS STANDING ON, before anything is claimed about the hold.
         //
@@ -852,12 +972,29 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
         int footZ = (int) Math.floor(bot().reportState().get("playerZ").getAsDouble());
         com.google.gson.JsonObject under = bot().blockState(footX, (int) Math.floor(settledY) - 1, footZ);
         String underBlock = under != null && under.has("block") ? under.get("block").getAsString() : "?";
+        // WHERE he came to rest, not only what he came to rest ON. The site is pre-cleared to air
+        // over a 10x10 column (assembleFixture: bx-2..bx+7, bz-2..bz+7, by+1..by+10), so a world
+        // block under his feet can only mean the drop happened outside that column — which separates
+        // "he slid off the hull" from "he was never over the hull at all because the ship drifted off
+        // its cleared plot during the roll". The message named the surface and left the reader to
+        // guess which, and the two want different fixes.
         scenario().requireArranged("the body must come to rest ON THE HULL before the hold can be"
                 + " asked about at all, and the world block under his feet says which: it is \""
-                + underBlock + "\", so he is standing on world geometry (the fixture's pad or tower),"
-                + " not on a hull whose blocks live in the ship's own subspace. settledY=" + settledY
-                + " shipY=" + sy + " (a hull stand measures ~2.13 above the ship centre; this one is "
-                + String.format(java.util.Locale.ROOT, "%.2f", settledY - sy) + "): " + enc,
+                + underBlock + "\", so he is standing on world geometry (terrain, the fixture's pad"
+                + " or its tower), not on a hull whose blocks live in the ship's own subspace."
+                + " settledY=" + settledY + " shipY=" + sy + " (a hull stand measures ~2.13 above"
+                + " the ship centre; this one is "
+                + String.format(java.util.Locale.ROOT, "%.2f", settledY - sy) + ")"
+                + " foot=(" + footX + "," + footZ + ") shipXZ=("
+                + String.format(java.util.Locale.ROOT, "%.1f,%.1f", sx, sz) + ")"
+                + " builtAt=(" + bx + "," + bz + ")"
+                + " clearedColumn=x[" + (bx - 2) + ".." + (bx + 7) + "] z[" + (bz - 2) + ".."
+                + (bz + 7) + "] y[" + (by + 1) + ".." + (by + 10) + "]"
+                + " footInsideCleared=" + (footX >= bx - 2 && footX <= bx + 7
+                        && footZ >= bz - 2 && footZ <= bz + 7)
+                + " shipInsideCleared=" + (sx >= bx - 2 && sx <= bx + 7
+                        && sz >= bz - 2 && sz <= bz + 7)
+                + ": " + enc,
                 underBlock.isEmpty() || underBlock.contains("air"));
 
         // The outer-hull mode contract: the hull encounter may be HELD (hull-stand), but it must
@@ -865,9 +1002,28 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
         assertTrue("a body meeting the OUTER hull of an inverted ship must never enter ABOARD/deck "
                 + "mode: aboard " + aboardSeen + "/" + samples + " (hull-stand " + hullSeen
                 + ") :: " + enc, aboardSeen == 0);
-        // The encounter must actually exercise the hull-stand hold, or this run proved nothing.
-        assertTrue("the encounter must engage the HULL-STAND hold (hull-stand seen " + hullSeen
-                + "/" + samples + "): " + enc, hullSeen > 0);
+        // The body must still BE at the hull when the window ends, and the bound is the drop itself:
+        // it was released `sy + 7`, so a body that finishes further from the hull than the height it
+        // was dropped from did not land on anything — it was thrown.
+        //
+        // This is the assertion whose absence made the scenario reportable as a pass while the body
+        // was a kilometre up. Every check around it is satisfiable from the sky: "the block under his
+        // feet is air" trivially, "never ABOARD" trivially, and "hull-stand seen at least once"
+        // by the single sample taken as he was launched. A negative check cannot tell resting on a
+        // hull from having left the world, and this scenario's whole subject is the resting.
+        assertTrue("a body that met the hull must still be AT it when the window ends, not thrown"
+                + " clear of it: it finished " + String.format(java.util.Locale.ROOT, "%.1f",
+                        Math.abs(settledY - sy)) + " blocks from the hull centre, having been"
+                + " released only 7 above it. settledY=" + settledY + " shipY=" + sy
+                + " shipXZ=(" + String.format(java.util.Locale.ROOT, "%.1f,%.1f", sx, sz) + ")"
+                + " :: " + enc + " :: " + fine,
+                Math.abs(settledY - sy) <= 7.0);
+
+        // The encounter must actually exercise the hull-stand hold, and SUSTAIN it: a body resting on
+        // a hull is held for the window, not for one sample of thirty. The one-sample form passed
+        // while the body was being launched THROUGH the hold.
+        assertTrue("the encounter must engage the HULL-STAND hold and keep it (hull-stand seen "
+                + hullSeen + "/" + samples + "): " + enc, hullSeen > samples / 2);
         assertTrue("and the capture machinery must not churn against it (drops=" + churn + ")",
                 churn == 0);
     }
