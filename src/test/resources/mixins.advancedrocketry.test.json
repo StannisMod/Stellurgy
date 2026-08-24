@@ -19,6 +19,7 @@
   "client": [
     "MixinEntityVelocityWriters",
     "MixinShipTransformEntityWrites",
+    "MixinShipFrameTravelWrites",
     "MixinBoundarySkyDiag",
     "MixinClientProxyDiag",
     "MixinHyperspaceTunnelDiag",

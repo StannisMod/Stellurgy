@@ -72,6 +72,12 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
     private static final Pattern TICKS_SINCE_TOUCHED =
             Pattern.compile("\"ticksSinceTouchedShip\":(-?[0-9]+)");
 
+    /** The two terms the hull-stand arm sums into the body's vertical velocity: the ship's own
+     *  velocity at the body's point, and what is left of the body's after drag and clipping. */
+    private static final Pattern CARRY_Y = Pattern.compile("\"lastCarryY\":(-?[0-9.E\\-]+)");
+    private static final Pattern MOTION_SHIP_Y =
+            Pattern.compile("\"lastMotionShipY\":(-?[0-9.E\\-]+)");
+
     private static final Pattern POS_X = Pattern.compile("\"posX\":(-?[0-9.E\\-]+)");
     private static final Pattern POS_Y = Pattern.compile("\"posY\":(-?[0-9.E\\-]+)");
     private static final Pattern POS_Z = Pattern.compile("\"posZ\":(-?[0-9.E\\-]+)");
@@ -889,6 +895,10 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
             // which "it slid off" and "something threw it" look identical.
             if (i < 10) {
                 String psd = exec("artest vs player-ship-data");
+                // The two terms the hull-stand arm adds together — `worldMotion[1] + carryY`. The
+                // carry is the ship's own velocity at the body's point; the rest is the body's. One
+                // of them is the +30, and this is what says which without a new instrument.
+                String frame = exec("artest vs shipframe-stats");
                 fine.append(String.format(java.util.Locale.ROOT,
                         // `touched` is the field that decides the branch, not just a label: the
                         // packet path rebuilds a player's world position from the ship-subspace
@@ -896,13 +906,14 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
                         // exists. A non-null ship here at the moment of the launch says that branch
                         // ran; a null one says the launch came from somewhere else entirely.
                         "[t%d y=%.2f z=%.2f cap=%b hull=%b m=(%.2f,%.2f,%.2f) add=(%.2f,%.2f,%.2f)"
-                                + " since=%.0f touched=%s] ",
+                                + " since=%.0f touched=%s carryY=%.2f shipMotY=%.2f] ",
                         i * 3, settledY, bot().reportState().get("playerZ").getAsDouble(),
                         tracked, hull,
                         readDouble(psd, MOTION_X), readDouble(psd, MOTION_Y), readDouble(psd, MOTION_Z),
                         readDouble(psd, ADDED_X), readDouble(psd, ADDED_Y), readDouble(psd, ADDED_Z),
                         readDouble(psd, TICKS_SINCE_TOUCHED),
-                        psd.contains("\"lastTouchedShip\":null") ? "null" : "a-ship"));
+                        psd.contains("\"lastTouchedShip\":null") ? "null" : "a-ship",
+                        readDouble(frame, CARRY_Y), readDouble(frame, MOTION_SHIP_Y)));
             }
             if (i % 5 == 0) {
                 // The hull's own angular rate, sampled beside the body rather than assumed: this
@@ -921,6 +932,8 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
         String clientVelocity = String.valueOf(bot().eventsSince(clientDropMark, "vel_jump"));
         String clientTransform = String.valueOf(
                 bot().eventsSince(clientDropMark, "ship_transform_motion"));
+        String clientShipFrame = String.valueOf(
+                bot().eventsSince(clientDropMark, "ship_frame_motion"));
         long churn = (long) clientDouble(SHIP_FRAME_TRAVEL, "externalMoveDrops") - dropsBefore;
         // Printed on the PASSING path too, and with the horizontal numbers: this scenario passes
         // alone and fails when its class runs, so the only way to name the difference is to have the
@@ -939,7 +952,8 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
                 // difference between "he was thrown" and "something took him".
                 + "\n[crewcap] hull-top writers :: " + writers.since(dropMark)
                 + "\n[crewcap] hull-top client writers :: " + clientVelocity
-                + "\n[crewcap] hull-top client transform :: " + clientTransform);
+                + "\n[crewcap] hull-top client transform :: " + clientTransform
+                + "\n[crewcap] hull-top client shipframe :: " + clientShipFrame);
 
         // Before anything is concluded from a silence, the instrument that produced it must be shown
         // to have run. Both of this scenario's client-side readings are about to be read that way.
@@ -947,6 +961,8 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
                 "the client-side velocity of this body was or was not rewritten");
         Events.assertInstrumentRan(clientTransform, "ship_transform_entity_writes",
                 "the ship transform did or did not rewrite this body's velocity");
+        Events.assertInstrumentRan(clientShipFrame, "ship_frame_travel",
+                "AR's ship-frame travel did or did not leave this body's velocity behind");
 
         // WHAT HE IS STANDING ON, before anything is claimed about the hold.
         //
