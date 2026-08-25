@@ -489,17 +489,6 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
         String capture = exec("artest vs deck-capture");
         System.out.println("[crewcap] active-churn churn=" + churn + " clientResolved="
                 + resolvedBefore + "->" + resolvedAfter + " capture=" + capture);
-        // The INTERVAL the client's derived carry is divided by, over everything this shared client
-        // has run — the histogram is cumulative, so read from the last scenario it covers the whole
-        // boot rather than this window. It is the distribution a refusal bound rests on: a rate
-        // derived over a gap is an average presented as an instantaneous value, so the code may only
-        // speak for intervals it actually sees while a deck is carrying a body. Printed rather than
-        // asserted on: it describes the steady state, and pinning a number to it here would pin the
-        // harness's own scheduling.
-        System.out.println("[crewcap] derive gaps :: "
-                + bot().eventsSince(0L, "measured_velocity_gap_hist")
-                + "\n[crewcap] derive wide gaps :: "
-                + bot().eventsSince(0L, "measured_velocity_gap"));
 
         assertTrue("the client must be resolving through the activity window (resolvedTicks "
                 + resolvedBefore + " -> " + resolvedAfter + ")", resolvedAfter > resolvedBefore + 20);
@@ -512,6 +501,170 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
         assertTrue("any release during deck activity must be geometric, never the external-move "
                 + "guard (lastDropReason='" + lastReason + "')",
                 !lastReason.startsWith("externalMove"));
+
+        // AND the server refused NOTHING of what he did. This is the false-positive leg of the
+        // movement bound, and it is the one that matters: a bound that rubber-bands a crew member
+        // for walking and jumping on his own deck has broken the game to protect it. Printed with
+        // the largest displacement he actually produced under his own power, because "nobody was
+        // refused" is only worth reading beside how close ordinary play came to the bound.
+        String bound = exec("artest vs shipframe-stats");
+        long refused = (long) readDouble(bound, DECK_BOUND_REFUSED);
+        double maxOwn = readDouble(bound, DECK_BOUND_MAX_OWN);
+        System.out.println("[crewcap] deck-bound after activity: refused=" + refused
+                + " maxOwnDisplacement=" + maxOwn + "/tick (bound is "
+                + "2.0/tick plus the deck's carry)");
+        assertTrue("walking and jumping on his own deck must never be refused by the server's"
+                + " movement bound: refused=" + refused + " after a window whose largest own"
+                + " displacement was " + maxOwn + "/tick :: " + legs, refused == 0);
+    }
+
+    // ---- A per-tick trace of the deck's pose, across the ticks a pose does not arrive -----------
+
+    @Test
+    public void aPerTickTraceShowsWhatTheDeckPoseDoesAcrossAPacketGap() throws Exception {
+        final int bx = 6520, by = 64, bz = 6520;
+
+        // A SPIKE, and it is allowed to come back "no". The client's pose source only behaves
+        // differently on the ticks a pose does NOT arrive for — 12 in 298 on a loaded client — and
+        // everything downstream reports averages over hundreds of ticks. Three mechanisms were tried
+        // against whole-scenario verdicts and each traded one regression for another with nobody
+        // having seen a gap boundary. This prints one line per tick so the boundary is read.
+        //
+        // What would make it say "no": no gap in the window (then the trace shows a steady state and
+        // says nothing about gaps), or a gap whose following tick is unremarkable — which would mean
+        // the churn measured on the predicting pose source came from somewhere else entirely.
+        buildAndBoardShip(bx, by, bz);
+        bot().waitTicks(20);
+        exec("artest player dismount");
+        bot().waitTicks(40);
+        scenario().requireArranged("a body must be on the deck, or the guard columns of this trace"
+                + " are empty and half the reading is missing: " + exec("artest vs deck-capture"),
+                exec("artest vs deck-capture").contains("\"alreadyTracked\":true"));
+
+        long mark = bot().eventMark().get("seq").getAsLong();
+        com.google.gson.JsonObject armed = bot().invokeStaticInt(
+                "org.valkyrienskies.mod.common.ships.ship_world.PhysicsObject",
+                "arTest$armPoseTrace", 120);
+        scenario().requireArranged("the per-tick trace must arm on the client: " + armed,
+                armed != null);
+
+        // Drive it, so the pose has something to say: a still craft's every tick looks alike whether
+        // a pose arrived or not, which is exactly the case this cannot learn anything from.
+        double loadFactor = com.github.stannismod.forge.testing.TestTimeouts.factor();
+        for (int i = 0; i < (int) (60 * loadFactor); i++) {
+            exec("artest vs seat-input-by-id 0 " + scenarioShipId + " 0 1 0 0 0 0");
+            bot().waitTicks(1);
+        }
+        exec("artest vs seat-input-by-id 0 " + scenarioShipId + " 0 0 0 0 0 0");
+        bot().waitTicks(20);
+
+        String trace = String.valueOf(bot().eventsSince(mark, "client_deck_pose_tick"));
+        System.out.println("[crewcap] deck-pose per-tick trace ::\n" + trace);
+        Events.assertInstrumentRan(trace, "client_deck_pose_tick",
+                "the per-tick pose trace did or did not run");
+        // The one thing asserted: the trace exists and covers ticks. Everything else here is a
+        // reading, and a spike that asserted its own expectations would stop being able to say "no".
+        assertTrue("the trace must contain per-tick records to read: " + trace,
+                trace.contains("client_deck_pose_tick") && trace.contains("\"stepY\""));
+    }
+
+    // ---- The server does not simply ratify what a client declares ------------------------------
+
+    @Test
+    public void aWildClientSideStepOnADeckNeverBecomesADeclaredPosition() throws Exception {
+        final int bx = 6320, by = 64, bz = 6320;
+
+        // Player movement is client-authoritative and the server accepts it. That is the contract,
+        // and it is not being changed here — what is added is a BOUND: a body AR is carrying on a
+        // deck can only be where its own speed plus the deck's carry could have put it. Without the
+        // bound the server ratified a thirty-blocks-per-tick climb tick after tick, because
+        // vanilla's own speed check is written for a body on solid ground and a body on a moving
+        // deck legitimately covers ground its legs never did.
+        //
+        // The stimulus is the DRIVER rather than the condition: the client's own idea of where it
+        // is moves, which is exactly what happened when a body met an inverted hull, and the next
+        // movement packet carries it.
+        buildAndBoardShip(bx, by, bz);
+        bot().waitTicks(20);
+        exec("artest player dismount");
+        bot().waitTicks(40);
+        scenario().requireArranged("the body must be captured on the deck before the server can be"
+                + " asked what it accepts FROM a deck: " + exec("artest vs deck-capture"),
+                exec("artest vs deck-capture").contains("\"alreadyTracked\":true"));
+
+        double startY = bot().reportState().get("playerY").getAsDouble();
+        long refusedBefore = (long) readDouble(exec("artest vs shipframe-stats"), DECK_BOUND_REFUSED);
+        long shoveMark = bot().eventMark().get("seq").getAsLong();
+        Events serverEvents = events();
+        long boundMark = serverEvents.markInstrumented();
+
+        // Forty blocks in one tick: no input and no deck can produce it, which is the whole point.
+        //
+        // Armed INSIDE the client's own travel commit rather than applied from outside it: while AR
+        // holds the capture it writes this body's position every tick, so a shove from anywhere else
+        // is undone before the client sends anything — measured, a forty-block external shove
+        // produced a movement packet identical to standing still. The code that owns the position is
+        // the only thing that can declare an impossible one, which is exactly how it happened in
+        // play.
+        // Named on the TARGET class: a mixin's own class is gone by runtime, its members live in
+        // what it was applied to.
+        com.google.gson.JsonObject shoved = bot().invokeStaticInt(
+                "zmaster587.advancedRocketry.integration.vs.ShipFrameTravel",
+                "arTest$armShove", 40);
+        scenario().requireArranged("the shove must be armed on the client, or nothing declares an"
+                + " impossible position: " + shoved, shoved != null);
+        bot().waitTicks(20);
+
+        String stats = exec("artest vs shipframe-stats");
+        long refusedAfter = (long) readDouble(stats, DECK_BOUND_REFUSED);
+        double excess = readDouble(stats, DECK_BOUND_LAST_EXCESS);
+        double endY = bot().reportState().get("playerY").getAsDouble();
+        String capture = exec("artest vs deck-capture");
+        // The shove's own record, so a refusal that did not happen has one reading and not two: the
+        // step was never applied, or it was applied and the server let it stand.
+        String shoveTrace = String.valueOf(bot().eventsSince(shoveMark, "ship_frame_travel_shove"));
+        // And what the SERVER's bound was asked about, from its own side's log: "refused nothing"
+        // and "was never asked about anything wild" are different answers.
+        String boundTrace = String.valueOf(serverEvents.since(boundMark));
+        System.out.println("[crewcap] deck-bound shove: y " + startY + " -> " + endY
+                + " refused=" + refusedBefore + "->" + refusedAfter + " excess=" + excess
+                + " capture=" + capture + "\n[crewcap] deck-bound shove trace :: " + shoveTrace
+                + "\n[crewcap] deck-bound server trace :: " + boundTrace);
+        Events.assertInstrumentRan(shoveTrace, "ship_frame_travel_shove",
+                "the client's travel commit did or did not take the armed step");
+        Events.assertInstrumentRan(boundTrace, "deck_movement_bound",
+                "the server's movement bound was or was not asked about a wild step");
+
+        // WHAT THIS PINS, and what it deliberately does not.
+        //
+        // A body whose own client committed a forty-block step never gets to DECLARE it. Measured
+        // three ways in one run: the client's travel took the step (its recorder says
+        // `toY:110, motionY:40`), the server saw an ordinary tick of 0.125 blocks, and the movement
+        // bound — which ran, on this body, on every packet — was never asked about anything wild.
+        //
+        // That is a structural fact rather than a gap in the staging, and it is worth stating: AR's
+        // own external-move guard is far TIGHTER than the server's region (a fifth of a block plus
+        // three times the carry, against two blocks plus the carry), so anything the region would
+        // refuse the guard has already caught, and a body that lost its capture is not a body the
+        // region has an opinion about. The server bound is therefore a LAST line whose subject is
+        // AR's own client arithmetic going wrong in a way that stays legal to the guard — which is
+        // precisely what happened when a client derived a wrong deck velocity and climbed on it,
+        // and precisely what the rest of this contract removed.
+        //
+        // So this scenario pins the two halves that CAN be established: the bound is consulted for
+        // a body standing on a deck, and a divergence that large does not survive to be declared.
+        assertTrue("a forty-block client-side step must not reach the server as a declared position:"
+                + " it arrived as y " + startY + " -> " + endY + " :: " + boundTrace,
+                Math.abs(endY - startY) < 4.0);
+        assertTrue("the body must still hold its deck after all of that: " + capture,
+                capture.contains("\"alreadyTracked\":true"));
+        assertTrue("the server's bound must have been consulted while he stood on the deck (it is"
+                + " what refuses a position the region cannot explain): " + boundTrace,
+                boundTrace.contains("deck_movement_bound"));
+        // Printed, not asserted: the refusal count is the number the region's own leg would move,
+        // and nothing here can move it without disabling the guard that fires first.
+        System.out.println("[crewcap] deck-bound region refusals in this window: "
+                + (refusedAfter - refusedBefore) + " (excess " + excess + ")");
     }
 
     // ---- #47 driver isolation: sustained fast ship motion vs the CLIENT external-move guard -----
@@ -553,7 +706,15 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
         long resolvedBefore = (long) clientDouble(SHIP_FRAME_TRAVEL, "resolvedTicks");
         dropsBefore = (long) clientDouble(SHIP_FRAME_TRAVEL, "externalMoveDrops");
         double shipY0 = readDouble(shipInfo(), POS_Y);
+        // The per-tick pose trace, armed HERE because this is the regime the question lives in: a
+        // craft moving 3-5 blocks per tick, which is where a pose that fails to arrive costs
+        // something. The spike that introduced the trace drives a craft that drifts at 0.1, and a
+        // gap boundary there looks like every other tick.
+        long poseTraceMark = bot().eventMark().get("seq").getAsLong();
+        bot().invokeStaticInt("org.valkyrienskies.mod.common.ships.ship_world.PhysicsObject",
+                "arTest$armPoseTrace", 160);
         double maxFrameStep = 0.0, maxCarry = -1.0, maxRate = 0.0, travelled = 0.0;
+        double maxDeclaredCarry = 0.0, maxClientCarryY = 0.0;
         double yPrev = shipY0;
         StringBuilder samples = new StringBuilder();
         // The drive's thrust duty-cycle is cadence-bound: the pilot input decays between re-sends,
@@ -587,6 +748,19 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
                 yPrev = yNow;
                 double step = clientDouble(SHIP_FRAME_TRAVEL, "lastGuardFrameStep");
                 double carry = clientDouble(SHIP_FRAME_TRAVEL, "lastGuardCarry");
+                // CROSS-SIDE, on ONE axis and one quantity: the craft's declared VERTICAL velocity
+                // (server, blocks/second) against the VERTICAL carry the client installs for the
+                // body (blocks/tick). Vertical because that is the axis this drive moves on, and
+                // because the two must be the same physical number for the body not to slide.
+                //
+                // Compared as MAXIMA over the window rather than as a pair of readings: each sample
+                // costs two round-trips and the craft accelerates between them, so a paired
+                // comparison measures the harness's latency as much as the client's agreement — it
+                // read 1.0667 against 0.7474 on a run where the extrema were within a tenth.
+                double declaredCarry = Math.abs(readDouble(shipInfo(), VEL_Y)) * SECONDS_PER_TICK;
+                maxDeclaredCarry = Math.max(maxDeclaredCarry, declaredCarry);
+                maxClientCarryY = Math.max(maxClientCarryY,
+                        Math.abs(clientDouble(SHIP_FRAME_TRAVEL, "lastCarryY")));
                 long drops = (long) clientDouble(SHIP_FRAME_TRAVEL, "externalMoveDrops") - dropsBefore;
                 maxFrameStep = Math.max(maxFrameStep, step);
                 maxCarry = Math.max(maxCarry, carry);
@@ -630,7 +804,10 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
                 + travelled + " maxRate=" + maxRate + " churn=" + churn
                 + " control=" + controlChurn + " maxFrameStep=" + maxFrameStep + " maxCarry="
                 + maxCarry + " resolved=" + resolvedBefore + "->" + resolvedAfter + " " + dropShape
-                + " :: " + samples);
+                + " declaredCarryY=" + maxDeclaredCarry + " clientCarryY=" + maxClientCarryY
+                + " :: " + samples
+                + "\n[crewcap] climb pose trace :: "
+                + bot().eventsSince(poseTraceMark, "client_deck_pose_tick"));
 
         // Instrument-fires guards: the ship really moved, fast enough to matter to the guard, the
         // client really resolved the body, and the control window was quiet - otherwise the churn
@@ -652,6 +829,26 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
         assertTrue("a fast-climbing ship must not churn its still crew member's capture: churn="
                 + churn + " maxFrameStep=" + maxFrameStep + " maxCarry=" + maxCarry + " " + dropShape
                 + " :: " + samples, churn == 0);
+
+        // AND the carry the body receives stays inside what the craft DECLARED. The craft states its
+        // velocity with every pose it sends and the client applies that, so the client can never
+        // carry a body faster than the craft says it is moving — which a client reconstructing the
+        // rate from its own observations could, and once did by a factor of two hundred.
+        //
+        // ONE-SIDED deliberately, and this is a limit of the instrument rather than of the claim.
+        // Equality cannot be asserted from this scenario: the drive oscillates hard (this window
+        // reached 4.99 blocks/tick of ship movement), each sample costs two round-trips on separate
+        // sides, and the maxima of sparsely sampled series of a fast-varying quantity are not
+        // comparable — two CLIENT-side readings of the same carry, sampled at different instants in
+        // this same window, differ by 0.65 between themselves. What a steady climb measured, where
+        // that objection does not apply: declared 1.5333/tick against 1.4700 applied. Pinning
+        // equality wants a per-tick paired trace from both sides, which is a separate instrument.
+        assertTrue("the client must carry the body, and never by more than the deck actually moved:"
+                + " client " + maxClientCarryY + "/tick against the craft's own measured rate "
+                + maxRate + "/tick (declared peak " + maxDeclaredCarry + ") :: " + samples,
+                maxDeclaredCarry > 0.2
+                        && maxClientCarryY > 0.2
+                        && maxClientCarryY <= maxRate + 0.25);
     }
 
     // ---- Excluded states: the dismount deck-hold must never snap a creative-flying ex-pilot -----
@@ -1155,10 +1352,21 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
 
     // ---- A deck that manoeuvred unwatched does not carry the body that arrives after -----------
 
-    /** The bridge that OWNS the client-side derivation, read for its own refusal accounting. Held
-     *  as a class name because the class is package-private, which is right: it is the gate between
-     *  AR and the physics mod and nothing outside that package should hold it. */
-    private static final String VS_BRIDGE = "zmaster587.advancedRocketry.integration.vs.VSBridge";
+    /** The craft's own declared vertical velocity, blocks per second, as the SERVER reports it —
+     *  the number the client is told and the one its carry has to equal. */
+    private static final Pattern VEL_Y = Pattern.compile("\"velY\":(-?[0-9.E\\-]+)");
+
+    /** One game tick, in seconds — the factor between a declared velocity (blocks per second) and
+     *  the carry a body receives for one tick of it. */
+    private static final double SECONDS_PER_TICK = 0.05;
+
+
+    /** The server's movement bound, as the ship-frame probe reports it: how many declared positions
+     *  it refused, the largest own-power displacement it has seen, and by how much the last refusal
+     *  overshot the region. */
+    private static final Pattern DECK_BOUND_REFUSED = Pattern.compile("\"deckBoundRefused\":(-?[0-9.E\\-]+)");
+    private static final Pattern DECK_BOUND_MAX_OWN = Pattern.compile("\"deckBoundMaxOwn\":(-?[0-9.E\\-]+)");
+    private static final Pattern DECK_BOUND_LAST_EXCESS = Pattern.compile("\"deckBoundLastExcess\":(-?[0-9.E\\-]+)");
 
     @Test
     public void aBodyMeetingADeckThatManoeuvredUnwatchedIsNotCarriedByIt() throws Exception {
@@ -1197,7 +1405,6 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
         exec("tp @a " + (bx + 24) + " " + (by + 10) + " " + (bz + 24) + " 0 0");
         bot().waitTicks(40);
 
-        long refusedBefore = (long) clientDouble(VS_BRIDGE, "derivationsRefusedForGap");
         String before = shipInfo();
         scenario().requireArranged("the craft must still be LOADED and managed with the body"
                 + " standing off it, or nothing below manoeuvres: " + before,
@@ -1268,26 +1475,21 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
             }
         }
 
-        long refusedAfter = (long) clientDouble(VS_BRIDGE, "derivationsRefusedForGap");
-        double lastRefusedGap = clientDouble(VS_BRIDGE, "lastRefusedGapSeconds");
-        // The average the gap WOULD have produced, in the units the carry is applied in — the number
-        // a body would have been handed had the derivation spoken for that interval.
-        double gapTicks = lastRefusedGap / 0.05;
-        double averageOverGap = gapTicks > 0.0 ? Math.abs(climbed) / gapTicks : 0.0;
+        // The craft's DECLARED motion at the moment the body was on it — the server's own numbers,
+        // which is what the client is supposed to have been told and what its carry must equal.
+        String atContact = shipInfo();
+        double declaredVelY = readDouble(atContact, VEL_Y);
+        double declaredCarryY = Math.abs(declaredVelY) * 0.05;
+        // The average the interval WOULD have produced, had anyone derived a rate across it: the
+        // number a body used to be handed here, kept as the counterfactual this scenario is about.
+        double windowTicks = (driveIterations + 80);
+        double averageOverWindow = Math.abs(climbed) / windowTicks;
         System.out.println("[crewcap] unwatched-manoeuvre upY " + upBefore + " -> " + upAfter
                 + " (settled omega=" + settledOmega + "), moved=" + climbed
                 + " blocks, settledPerTick=" + settledPerTick
-                + " refused=" + refusedBefore + "->" + refusedAfter
-                + " lastRefusedGap=" + lastRefusedGap + "s (" + gapTicks + " ticks)"
-                + " averageOverGap=" + averageOverGap + "/tick maxHeldCarry=" + maxHeldCarry
-                + " :: " + contact
-                // The intervals the client actually divided by, from the derivation's own recorder:
-                // a refusal that did not happen has two innocent readings — the interval was narrow,
-                // or there was no previous observation to be far from — and only these say which.
-                + "\n[crewcap] unwatched-manoeuvre intervals :: "
-                + bot().eventsSince(0L, "measured_velocity_gap")
-                + "\n[crewcap] unwatched-manoeuvre interval histogram :: "
-                + bot().eventsSince(0L, "measured_velocity_gap_hist"));
+                + " declaredVelY=" + declaredVelY + " (=" + declaredCarryY + "/tick)"
+                + " averageOverWindow=" + averageOverWindow + "/tick maxHeldCarry=" + maxHeldCarry
+                + " :: " + contact);
 
         scenario().requireArranged("the craft must actually MOVE while nobody watches it, or the"
                 + " interval under test spans no motion at all (deck normal upY " + upBefore
@@ -1300,26 +1502,21 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
         scenario().requireArranged("the body must reach the deck and be captured, or nothing asked"
                 + " the client for a rate at all :: " + contact, captured);
 
-        // THE CONTRACT: a rate is derived from an interval the formula can speak for, or it is not
-        // derived at all. Everything the client knows about this craft's motion spans the whole
-        // unwatched window, so the only honest answer at first contact is to have none — and this
-        // fails the moment the code goes back to answering with the window's average.
-        assertTrue("first contact after an unwatched manoeuvre must REFUSE to derive a rate over"
-                + " that interval, not average across it (refusals " + refusedBefore + "->"
-                + refusedAfter + ", gap " + lastRefusedGap + "s)", refusedAfter > refusedBefore);
-        assertTrue("the refusal must be the one spanning the manoeuvre, not an incidental one"
-                + " (gap " + lastRefusedGap + "s, window at least " + driveIterations + " drive"
-                + " iterations plus 80 ticks of settling)", lastRefusedGap > 1.0);
-        // The carry the capture installed is the deck's real motion. This one does NOT discriminate
-        // on its own and is not asked to: the harness client's round-trips stretch the unwatched
-        // window in WALL-CLOCK, and the average a gap produces is the displacement divided by that
-        // same wall-clock, so on a loaded box the average is small even when the craft moved. It is
-        // asserted because it is what the body actually receives, and printed with the average so a
-        // reader can see both.
-        assertTrue("the carry installed when the body was captured must match what the deck is"
-                + " DOING (" + settledPerTick + "/tick), never the average of what it did ("
-                + averageOverGap + "/tick): held " + maxHeldCarry + " :: " + contact,
-                maxHeldCarry < settledPerTick + 0.02);
+        // THE CONTRACT: what a body is carried by is what the craft SAYS it is doing — not what its
+        // own client could work out from watching. The craft declares its deck motion with its pose,
+        // so the answer at first contact is the craft's motion NOW, available on the tick the body
+        // arrives and independent of whether this client watched the manoeuvre, missed it, or was
+        // looking somewhere else entirely.
+        //
+        // What makes this scenario able to fail: the client's whole view of this craft spans an
+        // interval in which the craft did something it is no longer doing. Reconstructing a rate
+        // from that view — which is what the client used to do — yields the manoeuvre's average and
+        // carries the body by a motion that has ended.
+        assertTrue("the carry installed when the body was captured must be what the craft SAYS it"
+                + " is doing (" + declaredCarryY + "/tick, from its declared velocity "
+                + declaredVelY + " blocks/s), never the average of what it did ("
+                + averageOverWindow + "/tick): held " + maxHeldCarry + " :: " + contact,
+                maxHeldCarry <= declaredCarryY + 0.02);
     }
 
     // ---- Deck-frame look: the walking crew's aim lives in the deck frame ------------------------

@@ -69,6 +69,11 @@ public final class VSIntegration {
         }
         // Only here, behind the gate, do we touch a VS-importing class.
         VSBridge.onValkyrienSkiesPresent(LOGGER);
+        // Put the crew back on the deck after the substrate has moved its ships (see
+        // DeckFollowsItsShip). The client's counterpart is registered by the client proxy, because
+        // Forge fires no world tick event on that side; both are pure AR types, so this line loads
+        // nothing VS-importing of its own.
+        net.minecraftforge.common.MinecraftForge.EVENT_BUS.register(new DeckFollowsItsShip());
     }
 
     /**
@@ -837,6 +842,14 @@ public final class VSIntegration {
     public static double[] shipVelocityAtPointFor(World world, String shipId, double x, double y, double z) {
         return (!isAvailable() || world == null)
                 ? null : VSBridge.shipVelocityAtPointFor(world, shipId, x, y, z);
+    }
+
+    /** What the craft DECLARES it is doing at that point, as opposed to what the pose on this side
+     *  just did — for a TOLERANCE, never for a body's carry. See the bridge method for why a guard
+     *  must not be built from the tighter of two known readings. */
+    public static double[] declaredVelocityAtPointFor(World world, String shipId, double x, double y, double z) {
+        return (!isAvailable() || world == null)
+                ? null : VSBridge.declaredVelocityAtPointFor(world, shipId, x, y, z);
     }
 
     /** Clear the physics mod's own entity-to-ship association (its {@code EntityDraggable} drag

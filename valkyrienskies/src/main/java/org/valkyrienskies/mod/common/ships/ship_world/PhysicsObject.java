@@ -27,6 +27,7 @@ import org.valkyrienskies.mod.common.ships.ShipData;
 import org.valkyrienskies.mod.common.ships.block_relocation.MoveBlocks;
 import org.valkyrienskies.mod.common.ships.chunk_claims.ClaimedChunkCacheController;
 import org.valkyrienskies.mod.common.ships.chunk_claims.SurroundingChunkCacheController;
+import org.valkyrienskies.mod.common.ships.interpolation.DeclaredMotionTransformInterpolator;
 import org.valkyrienskies.mod.common.ships.interpolation.ITransformInterpolator;
 import org.valkyrienskies.mod.common.ships.interpolation.SimpleEMATransformInterpolator;
 import org.valkyrienskies.mod.common.ships.ship_transform.ShipTransform;
@@ -122,7 +123,19 @@ public class PhysicsObject implements IPhysicsEntity {
         // Note how this is last.
         if (world.isRemote) {
             this.shipRenderer = new PhysObjectRenderManager(this, referenceBlockPos);
-            this.transformInterpolator = new SimpleEMATransformInterpolator(initial.getShipTransform(), initial.getShipBB(), 0.5);
+            // The craft's OWN declared motion drives the pose it is shown at — see that class's
+            // note. The filter it replaces (SimpleEMATransformInterpolator, still present and still
+            // working) moved the shown pose half-way to the newest one each tick: a permanent lag,
+            // and a rate nobody declared.
+            //
+            // What kept the filter until 2026-08-25 was a claim that its lag CONCEALED a body-carry
+            // defect, and that correcting the pose would make standing bodies slide. Measured, that
+            // was wrong twice over: the defect was in the tick ORDER rather than in the carry, and
+            // it stood behind the filter at exactly the same one tick — 0.1974 blocks per tick at
+            // 2 rad/s and 1.974 blocks of arm, the identical number both pose sources produce. With
+            // a body put back on its deck point once the poses are current, the same scenario
+            // measures a seat miss of zero behind either one.
+            this.transformInterpolator = new DeclaredMotionTransformInterpolator(initial.getShipTransform(), initial.getShipBB());
         } else {
             this.shipRenderer = null;
             this.getShipTransformationManager().updateAllTransforms(this.getShipData().getShipTransform(), true, true);

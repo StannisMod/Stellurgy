@@ -41,6 +41,40 @@ public class SimpleEMATransformInterpolator implements ITransformInterpolator {
     }
 
     @Override
+    public void onNewTransformPacket(@Nonnull ShipTransform newTransform, @Nonnull AxisAlignedBB newAABB,
+                                     double linearX, double linearY, double linearZ,
+                                     double angularX, double angularY, double angularZ) {
+        // This filter chases the newest pose and has no use for the motion behind it. Kept as the
+        // comparison an alternative is judged against, not as a fallback to drift back into.
+        onNewTransformPacket(newTransform, newAABB);
+    }
+
+    @Override
+    public void getShownVelocity(@Nonnull Vector3d outLinear, @Nonnull Vector3d outAngular) {
+        // This filter's next step is a fixed fraction of whatever gap remains to the newest pose,
+        // so the rate it shows is that fraction per tick — which is a quantity nobody declared, and
+        // the reason a body carried by the craft's own velocity slides on a deck driven by it.
+        final double perSecond = filterAlpha / 0.05;
+        outLinear.set((latestReceivedTransform.getPosX() - curTickTransform.getPosX()) * perSecond,
+                (latestReceivedTransform.getPosY() - curTickTransform.getPosY()) * perSecond,
+                (latestReceivedTransform.getPosZ() - curTickTransform.getPosZ()) * perSecond);
+
+        final Quaterniondc curRot = curTickTransform.rotationQuaternion(TransformType.SUBSPACE_TO_GLOBAL);
+        final Quaterniondc latestRot = latestReceivedTransform.rotationQuaternion(TransformType.SUBSPACE_TO_GLOBAL);
+        final Quaterniond delta = new Quaterniond(latestRot).mul(new Quaterniond(curRot).invert()).normalize();
+        // java.lang.Math explicitly: this file imports org.joml.*, which brings its own Math in.
+        final double angle = 2.0 * java.lang.Math.acos(java.lang.Math.min(1.0, java.lang.Math.abs(delta.w)));
+        final double sinHalf = java.lang.Math.sqrt(java.lang.Math.max(0.0, 1.0 - delta.w * delta.w));
+        if (angle > 1.0E-9 && sinHalf > 1.0E-12) {
+            final double sign = delta.w < 0 ? -1.0 : 1.0;
+            final double k = sign * angle * perSecond / sinHalf;
+            outAngular.set(delta.x * k, delta.y * k, delta.z * k);
+        } else {
+            outAngular.set(0.0, 0.0, 0.0);
+        }
+    }
+
+    @Override
     public void tickTransformInterpolator() {
         // First compute the new position
         Vector3dc curPos = new Vector3d(curTickTransform.getPosX(), curTickTransform.getPosY(), curTickTransform.getPosZ());

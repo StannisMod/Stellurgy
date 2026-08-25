@@ -1357,25 +1357,101 @@ final class VSBridge {
     /** {@link #shipVelocityAtPoint}, but for the anchored ship {@code shipId} instead of a
      *  containment lookup — the guard of an anchored capture must widen by ITS ship's carry.
      *
-     *  <p>On the CLIENT the physics feed does not exist: {@code getPhysicsData()}'s velocities live
-     *  on the server's physics thread and read ZERO here even while the ship's transform visibly
-     *  steps between ticks (network transform updates). Everything built on this value — the
-     *  external-move guard's carry-widening AND the held-carry velocity subtraction — was therefore
-     *  blind client-side, and the client capture thrashed on any fast-moving ship (drop+re-capture
-     *  every tick once the per-tick step crossed the bare 0.2 epsilon; reproduced in-harness on a
-     *  level fast climb, ledger #47). The client instead derives the velocity the only honest way
-     *  it can: MEASURING the observed transform's delta over the real time it took. That is still a
-     *  reconstruction of a quantity nobody sends the client, and a body should never be moved by a
-     *  number only its own client invented; the standing fix is for the craft to DECLARE its deck
-     *  motion on the wire, and this exists only until it does. */
+     *  <p><b>One expression, both sides, and that is the point.</b> A craft's motion crosses the
+     *  wire with its pose ({@code ShipTransformUpdateMessage}, every tick), so the client evaluates
+     *  the same {@code v + omega x r} against the same declared numbers the server does — nobody
+     *  reconstructs anything.
+     *
+     *  <p>It was not always so, and the history is worth one paragraph because the shape recurs.
+     *  The client's {@code getPhysicsData()} used to read ZERO — the ship index packet carries
+     *  transform, inertia and the physics flag but never the velocities — while the ship's
+     *  transform visibly stepped between ticks. Everything built on the value was blind client-side
+     *  and the capture thrashed on any fast-moving ship (drop + re-capture every tick once the step
+     *  crossed the bare 0.2 epsilon; ledger #47). The client then DERIVED a rate by differencing
+     *  observations, which is a guess wearing a measurement's clothes: it was divided by a count of
+     *  calls rather than by time, and a 0.279 rad/s roll came back as 55.5 rad/s and threw a body a
+     *  kilometre into the sky (#390). A body is not moved by a number only its own client invented;
+     *  the craft says how it is moving, and both sides read the same answer. */
     static double[] shipVelocityAtPointFor(World world, String shipId, double x, double y, double z) {
         try {
             PhysicsObject physo = physoById(world, shipId);
             if (physo == null) {
                 return null;
             }
-            if (world.isRemote) {
-                return measuredVelocityAtPoint(world, physo, x, y, z);
+            // The motion of the pose THIS side is standing on. On the server that is the physics
+            // state the craft declares; on the client it is the pose the interpolator shows, which
+            // follows the declared motion and additionally retires whatever a mispredicted tick left
+            // behind. Taking the declared numbers on the client instead was measured to slide a body
+            // across its own deck: carried at 0.07 blocks/tick while the pose under it stepped 0.5,
+            // and the capture guard read the difference as a teleport.
+            Vector3dc vLin;
+            Vector3dc w;
+            if (world.isRemote && physo.getTransformInterpolator() != null) {
+                org.joml.Vector3d shownLinear = new org.joml.Vector3d();
+                org.joml.Vector3d shownAngular = new org.joml.Vector3d();
+                physo.getTransformInterpolator().getShownVelocity(shownLinear, shownAngular);
+                vLin = shownLinear;
+                w = shownAngular;
+            } else {
+                vLin = physo.getPhysicsData().getLinearVelocity();
+                w = physo.getPhysicsData().getAngularVelocity();
+            }
+            Vec3d c = physo.getShipData().getShipTransform().getShipPositionVec3d();
+            double rx = x - c.x, ry = y - c.y, rz = z - c.z;
+            return new double[]{
+                    vLin.x() + (w.y() * rz - w.z() * ry),
+                    vLin.y() + (w.z() * rx - w.x() * rz),
+                    vLin.z() + (w.x() * ry - w.y() * rx)
+            };
+        } catch (Throwable t) {
+            // ANSWERING NOTHING IS A DEGRADATION AND IT SAYS SO — once per cause, because this runs
+            // every tick for every carried body and a per-tick log would be its own outage.
+            //
+            // The silence this replaces cost a day: a client-side pose source that threw on the
+            // ticks a pose had not arrived made this return null, a body lost its carry entirely on
+            // one tick in six, and the capture guard — whose allowance is three times that carry —
+            // fell to its bare epsilon while the deck stepped half a block. What that looked like
+            // from outside was "the smoothing policy churns the capture", and three different
+            // policies were written and measured against a fault that was never in any of them.
+            reportSuppressed("shipVelocityAtPointFor", t);
+            return null;
+        }
+    }
+
+    /** Causes already reported by {@link #reportSuppressed}, so a per-tick failure says its piece
+     *  once instead of drowning the log it is trying to be visible in. */
+    private static final java.util.Set<String> REPORTED_SUPPRESSED =
+            java.util.Collections.synchronizedSet(new java.util.HashSet<String>());
+
+    /**
+     * Say, once, that this port answered with nothing because something threw.
+     *
+     * <p>Keyed on the operation plus the throwable's own class and site, so two different faults are
+     * two lines and one fault repeated is one. Deliberately not a rethrow: a body losing its carry
+     * for a tick is survivable and crashing the client over it is not, which is exactly why the
+     * catch is there — but a caller that cannot tell "the ship is not moving" from "nobody could
+     * work out whether it is" has been handed a wrong answer rather than none.</p>
+     */
+    /**
+     * The craft's DECLARED velocity at a point — what it says it is doing, rather than what the pose
+     * on this side has just done.
+     *
+     * <p>The two are one statement while a craft's motion is steady and two while it is changing: the
+     * shown pose reports the step it took over the PREVIOUS tick, and a hard-driven craft can change
+     * its rate several fold between two of them. A body's CARRY must be what the deck actually did —
+     * anything else slides it across the deck — but a TOLERANCE has no business being the tighter of
+     * two known numbers, and the capture guard was dropping bodies over exactly that difference:
+     * measured, a deck step of 1.6 blocks judged against an allowance built from 0.2.</p>
+     *
+     * <p>On the server this returns what {@link #shipVelocityAtPointFor} returns; the two can differ
+     * only on the client, which is the side with a pose source standing between the craft and the
+     * body.</p>
+     */
+    static double[] declaredVelocityAtPointFor(World world, String shipId, double x, double y, double z) {
+        try {
+            PhysicsObject physo = physoById(world, shipId);
+            if (physo == null) {
+                return null;
             }
             Vector3dc vLin = physo.getPhysicsData().getLinearVelocity();
             Vector3dc w = physo.getPhysicsData().getAngularVelocity();
@@ -1387,167 +1463,22 @@ final class VSBridge {
                     vLin.z() + (w.x() * ry - w.y() * rx)
             };
         } catch (Throwable t) {
+            reportSuppressed("declaredVelocityAtPointFor", t);
             return null;
         }
     }
 
-    /** Origin of {@link #observationSeconds}, so the readings it hands out are small numbers a
-     *  {@code double} carries exactly rather than nanoseconds since an arbitrary epoch. */
-    private static final long OBSERVATION_ORIGIN_NANOS = System.nanoTime();
-
-    /**
-     * Real elapsed time, in SECONDS, on a monotonic clock — the divisor of every rate derived below.
-     *
-     * <p><b>A rate needs TIME, and no game clock available here measures it.</b> This used to be a
-     * counter that advanced once per distinct world time it was ASKED about, and the derivation then
-     * multiplied its difference by 0.05 as though a step of it were a tick. It is not: nobody asks
-     * for two hundred ticks, the counter gains one, and a 0.279 rad/s roll is reported as 55.5 rad/s
-     * — inflated by exactly the length of the pause (ledger #390). <b>Such a counter measures how
-     * often the code asked, never how much time passed</b>, and a divisor that depends on the query
-     * cadence makes the answer depend on who else called.
-     *
-     * <p><b>Why not the world clock, which does count ticks.</b> It is not monotonic on the CLIENT,
-     * which is the only side this path runs on. {@code WorldClient.tick} advances
-     * {@code totalWorldTime} by one every client tick and {@code NetHandlerPlayClient.handleTimeUpdate}
-     * then OVERWRITES it with the server's absolute value every 20 ticks, so a client that has ticked
-     * ahead is pulled BACK. Differencing it yields a negative dt roughly once a second on a drifting
-     * client — and refusing to derive a rate on those samples is ledger #377: the external-move
-     * guard's allowance collapses to the bare epsilon for that tick while the deck carries a body a
-     * block per tick, and the capture drops. The same objection retires the space clock, which says
-     * of itself that a re-sync "MAY correct the value BACKWARDS": right for dwell and orbits, whose
-     * tolerances run to hundreds of ticks, wrong for a per-tick rate.
-     *
-     * <p><b>What this measures, stated so a reader can judge it.</b> The client's ship transform
-     * advances with network updates and the substrate's interpolation, both paced by real time, so
-     * real time is the interval the observed delta actually occurred over. Where the two diverge —
-     * a lagging server simulating slower than wall-clock — this UNDER-states the rate rather than
-     * inflating it, and the bound in {@link #measuredVelocityAtPoint} refuses the samples where the
-     * divergence could matter. The world clock is still read there, for tick IDENTITY only
-     * (equality, never arithmetic), so two callers in one tick share one derivation.
-     *
-     * <p><b>Never reset, and it does not need to be</b> — stated because a shared harness runs many
-     * scenarios in one boot and an unreset static is normally a leak. Only DIFFERENCES between two
-     * observations of one ship are read, the observation map is weak and dies with its subject, and
-     * monotonicity is the entire contract.
-     */
-    private static double observationSeconds() {
-        return (System.nanoTime() - OBSERVATION_ORIGIN_NANOS) * 1.0E-9;
-    }
-
-    /** Per-side cache of each ship's last OBSERVED transform and the rates derived from its delta:
-     *  {@code [tick, posXYZ, quatWXYZ, vLinXYZ, omegaXYZ, observedSeconds]}. The tick is an IDENTITY
-     *  (two calls in one tick share one derivation); the seconds are what the rates were divided by.
-     *  Weak keys: an unloading ship takes its entry with it. Synchronized only against the two
-     *  logical sides' threads; entries are side-local because each side holds its own
-     *  {@link PhysicsObject} instances. */
-
-    private static final Map<PhysicsObject, double[]> OBSERVED_TRANSFORM =
-            java.util.Collections.synchronizedMap(new java.util.WeakHashMap<PhysicsObject, double[]>());
-
-    /**
-     * The widest interval, in seconds of real time, a rate may be derived from — beyond it
-     * {@link #measuredVelocityAtPoint} answers with ABSENCE instead of a number.
-     *
-     * <p><b>Why a bound exists at all.</b> Differencing two observations yields the AVERAGE rate over
-     * the interval between them, and every consumer here reads the answer as the deck's velocity
-     * RIGHT NOW. Over one tick those are the same statement; over a long gap they are not, and the
-     * difference is not small: a body meeting a craft nobody has watched for ten seconds would be
-     * carried by a manoeuvre that finished before it arrived. There is no way to make an average
-     * instantaneous, so the honest answer to a long interval is to have none — the callers all treat
-     * a missing rate as no carry, which is a state a body can be in, whereas a plausible wrong
-     * number cannot be told from a right one at any distance.
-     *
-     * <p><b>Where the number comes from — measured, not chosen.</b> 2275 derivations recorded on a
-     * real client running the crew-capture suite (a body carried on hovering, climbing, rolled and
-     * inverted decks), bucketed by the interval each was divided by:
-     *
-     * <pre>
-     *   =1 tick   2263   the steady state: the guard and the commit each ask, once per tick
-     *   2 ticks      3
-     *   3-20        NO SAMPLES AT ALL
-     *   26-237       9   first contact after a pause nobody queried through
-     * </pre>
-     *
-     * The two populations do not overlap and nothing lies between them: while a deck is actually
-     * carrying a body the interval is a tick, and every wide interval measured came from the
-     * first-contact path after a pause. Any bound inside the empty band separates them; this one
-     * sits at 5 ticks — 2.5x the widest interval the carrying state produced, 5x below the narrowest
-     * the other population did — so neither a loaded client's jitter nor the exact choice decides
-     * the outcome. Stated in real seconds because that is what the divisor is: a client stuttering
-     * below ~4 ticks per second stops deriving, which is the safe direction and the one where the
-     * transform it is differencing has stopped being a per-tick series anyway.
-     */
-    private static final double MAX_DERIVATION_GAP_SECONDS = 0.25;
-
-    /** How many derivations were refused for their interval, and the interval of the last one.
-     *  Absence is what the CALLER sees; these say so out loud to anyone reading the side's state —
-     *  a refusal and a genuinely motionless deck both produce no carry, and only these two tell
-     *  them apart. Observation only: nothing branches on them. */
-    static long derivationsRefusedForGap;
-    static double lastRefusedGapSeconds;
-
-    /** The MEASURED world-frame velocity (blocks/second) of {@code physo}'s transform at the point
-     *  {@code (x,y,z)}: linear rate from the ship position's delta, angular rate from the rotation
-     *  quaternion's delta, both over the REAL time between the two observations
-     *  ({@link #observationSeconds}), combined as {@code v + omega x r}. This is the speed the deck
-     *  is ACTUALLY carrying that point as observed on this side — exactly the quantity the
-     *  external-move guard must tolerate — independent of any physics feed. Null until a second
-     *  observation exists (one tick of warm-up per ship per side), and null when the interval
-     *  between the two is not one the formula can speak for. */
-    private static double[] measuredVelocityAtPoint(World world, PhysicsObject physo,
-                                                    double x, double y, double z) {
-        ShipTransform t = physo.getShipData().getShipTransform();
-        Vec3d c = t.getShipPositionVec3d();
-        Quaterniond q = t.rotationQuaternion(TransformType.SUBSPACE_TO_GLOBAL);
-        long now = world.getTotalWorldTime(); // identity only; the DIVISOR is real time, see above
-        double seconds = observationSeconds();
-        double[] prev = OBSERVED_TRANSFORM.get(physo);
-        double[] cur;
-        if (prev != null && (long) prev[0] == now) {
-            cur = prev; // second caller this tick (guard + commit): reuse the derived rates
-        } else {
-            cur = new double[15];
-            cur[0] = now;
-            cur[1] = c.x; cur[2] = c.y; cur[3] = c.z;
-            cur[4] = q.w; cur[5] = q.x; cur[6] = q.y; cur[7] = q.z;
-            cur[14] = seconds;
-            if (prev == null) {
-                OBSERVED_TRANSFORM.put(physo, cur);
-                return null; // first observation of this ship on this side: no rate yet
-            }
-            double dt = seconds - prev[14];
-            if (!(dt > 0.0) || dt > MAX_DERIVATION_GAP_SECONDS) {
-                // Not an interval this formula can speak for. Re-seed from the current observation
-                // so the NEXT tick has a fresh pair and the refusal lasts one tick, not the episode.
-                OBSERVED_TRANSFORM.put(physo, cur);
-                derivationsRefusedForGap++;
-                lastRefusedGapSeconds = dt;
-                return null;
-            }
-            cur[8] = (c.x - prev[1]) / dt;
-            cur[9] = (c.y - prev[2]) / dt;
-            cur[10] = (c.z - prev[3]) / dt;
-            // omega from the rotation delta dq = q * conj(prevQ) (world-frame, left-multiplied)
-            double pw = prev[4], px = prev[5], py = prev[6], pz = prev[7];
-            double dw = q.w * pw + q.x * px + q.y * py + q.z * pz;
-            double dx = -q.w * px + q.x * pw - q.y * pz + q.z * py;
-            double dy = -q.w * py + q.x * pz + q.y * pw - q.z * px;
-            double dz = -q.w * pz - q.x * py + q.y * px + q.z * pw;
-            double s = Math.sqrt(dx * dx + dy * dy + dz * dz);
-            if (s > 1.0E-12) {
-                if (dw < 0) { dx = -dx; dy = -dy; dz = -dz; } // shortest arc
-                double angle = 2.0 * Math.atan2(s, Math.abs(dw));
-                double k = angle / (s * dt);
-                cur[11] = dx * k; cur[12] = dy * k; cur[13] = dz * k;
-            }
-            OBSERVED_TRANSFORM.put(physo, cur);
+    private static void reportSuppressed(String operation, Throwable t) {
+        StackTraceElement[] trace = t.getStackTrace();
+        String site = trace.length > 0 ? trace[0].toString() : "no frames";
+        String key = operation + "|" + t.getClass().getName() + "|" + site;
+        if (!REPORTED_SUPPRESSED.add(key)) {
+            return;
         }
-        double rx = x - c.x, ry = y - c.y, rz = z - c.z;
-        return new double[]{
-                cur[8] + (cur[12] * rz - cur[13] * ry),
-                cur[9] + (cur[13] * rx - cur[11] * rz),
-                cur[10] + (cur[11] * ry - cur[12] * rx)
-        };
+        zmaster587.advancedRocketry.AdvancedRocketry.logger.warn(
+                "[VS-PORT] " + operation + " answered NOTHING because " + t.getClass().getSimpleName()
+                        + " was thrown at " + site + " — a caller that reads this as \"not moving\""
+                        + " is acting on a wrong answer. Reported once per cause.", t);
     }
 
     /**

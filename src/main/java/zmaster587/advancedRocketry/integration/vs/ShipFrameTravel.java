@@ -2323,6 +2323,23 @@ public final class ShipFrameTravel {
         if (shipVel != null) {
             carrySeen = Math.sqrt(shipVel[0] * shipVel[0] + shipVel[1] * shipVel[1]
                     + shipVel[2] * shipVel[2]) * TICK_SECONDS;
+        }
+        // THE LARGER OF TWO KNOWN READINGS, for a tolerance rather than for a carry.
+        //
+        // The carry a body receives is what the deck DID over the last tick — anything else slides it.
+        // But this number is an ALLOWANCE, and it is judging the step the deck is taking NOW: on a
+        // craft whose drive changes hard between ticks the two differ severalfold, and building the
+        // allowance from the smaller one drops a body for the deck's own movement. Measured on a
+        // driven climb: a frame step of 1.6 blocks against an allowance built from 0.2, and a capture
+        // lost to it. The craft's declared velocity is the other reading, it is equally known, and a
+        // guard whose false positive costs a dropped capture takes the wider of the two.
+        double[] declaredVel = VSIntegration.declaredVelocityAtPointFor(
+                entity.world, state.shipId, entity.posX, entity.posY, entity.posZ);
+        if (declaredVel != null) {
+            carrySeen = Math.max(carrySeen, Math.sqrt(declaredVel[0] * declaredVel[0]
+                    + declaredVel[1] * declaredVel[1] + declaredVel[2] * declaredVel[2]) * TICK_SECONDS);
+        }
+        if (carrySeen > 0.0) {
             allowed += DECK_CARRY_MARGIN * carrySeen;
         }
         // Discriminators (diagnostic only, no guard effect): split the measured drift into the two
@@ -2422,6 +2439,89 @@ public final class ShipFrameTravel {
             // released mid-tick (externalMove) and this commit re-captures on the same anchor.
             logCapture(entity, shipId, localX, localY, localZ);
         }
+    }
+
+    /** Bodies re-seated by {@link #followShipPoses} since this side started.
+     *
+     *  <p>It exists because {@link #lastReseatStep} alone cannot say what a zero means: a pass that
+     *  never ran and a pass that ran on a still ship both leave it at 0.0. This counter separates
+     *  them, and a scenario that reads the step as a sensitivity witness has to read this too or
+     *  its witness can be satisfied by an absent mechanism.</p> */
+    public static volatile long reseatedBodies = 0L;
+    /** How far the last re-seat moved a body, in blocks: the deck's own step out from under it.
+     *  Zero on a still ship, one tick of ship motion at the body's radius on a moving one. */
+    public static volatile double lastReseatStep = 0.0;
+
+    /**
+     * Put every body this side carries back on its deck point, at the ship's pose as it stands NOW.
+     *
+     * <p><b>Why a body needs putting back at all.</b> An aboard body's position is derived, every
+     * tick, from the deck point it holds — but it is derived while the entities move, and the ships'
+     * poses advance AFTER that, at the end of the same tick (the physics substrate ticks its ships
+     * on {@code WorldTickEvent}/{@code ClientTickEvent} phase END, both sides). So from the moment
+     * the deck moves until the body's next movement tick — which is the whole interval anything
+     * else observes, the renderer included — the body stands where the deck WAS one tick ago. It is
+     * not a drift: the body's deck point is re-imaged every tick and never accumulates error. It is
+     * a standing lag of exactly one tick of ship motion, and under rotation it is a tangential
+     * offset that grows with the body's distance from the axis: measured at 2 rad/s, a body 1.974
+     * blocks off the roll axis stood 0.1974 blocks off its own deck spot on every tick of the roll,
+     * and the same craft would stand a body on its rim eight times further out.</p>
+     *
+     * <p><b>What it costs.</b> The body renders a tick behind the deck it is standing on — its
+     * render interpolation spans the tick BEFORE the one the ship's does — so a rolling craft
+     * visibly slides its crew and snaps them back, twenty times a second. And the capture guard,
+     * which measures how far a body has moved from the point this class committed for it, reads
+     * that whole lag as displacement it must find an allowance for; on a large enough craft it
+     * exceeds any allowance a still ship could justify.</p>
+     *
+     * <p><b>Why re-seating and not a better carry.</b> A carry is a velocity, and no velocity fixes
+     * this: the body's position never comes from one. It comes from the deck point mapped through a
+     * transform, and the fault is that the mapping happened against the previous pose. So the
+     * mapping is redone once the pose is current, and nothing is integrated across a tick boundary
+     * at all.</p>
+     *
+     * <p>Bodies whose movement this side merely FOLLOWS are left alone ({@link #followsRemoteOwner}
+     * — a real player's position is decided on his own client and arrives by packet; the server
+     * re-seating its copy would argue with the packet stream, which is the war the guard's rebase
+     * exists to avoid). So is a rider, whose position its vehicle owns.</p>
+     *
+     * @return how many bodies were re-seated
+     */
+    public static int followShipPoses(World world) {
+        if (world == null) {
+            return 0;
+        }
+        int reseated = 0;
+        for (java.util.Map.Entry<Entity, ShipFrameState> held : STATE.entrySet()) {
+            Entity entity = held.getKey();
+            ShipFrameState state = held.getValue();
+            if (entity == null || state == null || state.shipId == null
+                    || entity.world != world || entity.isDead || entity.isRiding()
+                    || followsRemoteOwner(entity)) {
+                continue;
+            }
+            double[] seat = VSIntegration.toWorldFrameFor(
+                    world, state.shipId, state.localX, state.localY, state.localZ);
+            if (seat == null) {
+                // The ship is not loaded on this side this tick; the body keeps the position its
+                // own movement left it, exactly as a declined travel tick does.
+                continue;
+            }
+            double dx = seat[0] - entity.posX;
+            double dy = seat[1] - entity.posY;
+            double dz = seat[2] - entity.posZ;
+            entity.setPosition(seat[0], seat[1], seat[2]);
+            // The committed world point moves WITH the body: it is what the guard's external-move
+            // discriminator measures a foreign mover against, and leaving it at the pre-pose value
+            // would hand the guard back the very lag this pass just removed.
+            state.worldX = seat[0];
+            state.worldY = seat[1];
+            state.worldZ = seat[2];
+            lastReseatStep = Math.sqrt(dx * dx + dy * dy + dz * dz);
+            reseated++;
+        }
+        reseatedBodies += reseated;
+        return reseated;
     }
 
     /** Client-installed provider of the LOCAL player's held deck-frame heading (degrees), or

@@ -2232,6 +2232,16 @@ public class TestProbeCommand extends CommandBase {
                     zmaster587.advancedRocketry.integration.vs.ShipFrameTravel.lastDropAllowed);
             m.put("dragSuppressions",
                     zmaster587.advancedRocketry.integration.vs.ShipFrameTravel.dragSuppressions);
+            // What the server REFUSED to ratify, and the number the refusal bound rests on: the
+            // largest displacement a captured body has produced under its own power. A test that
+            // asserts "nobody was refused" is only worth reading beside the second number, which
+            // says how close ordinary play came to the bound.
+            m.put("deckBoundRefused",
+                    zmaster587.advancedRocketry.integration.vs.DeckMovementBound.positionsRefused);
+            m.put("deckBoundMaxOwn",
+                    zmaster587.advancedRocketry.integration.vs.DeckMovementBound.maxOwnDisplacementSeen);
+            m.put("deckBoundLastExcess",
+                    zmaster587.advancedRocketry.integration.vs.DeckMovementBound.lastRefusedExcessBlocks);
             // The no-input-drift discriminator: the ship-RELATIVE motion the last resolved tick was
             // handed, the walk inputs that came with it, and the carry that tick held. A body that
             // creeps along a deck with lastInStrafe/lastInForward at 0 is being moved by one of

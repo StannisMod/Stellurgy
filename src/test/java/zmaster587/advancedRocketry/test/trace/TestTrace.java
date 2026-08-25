@@ -144,7 +144,19 @@ public final class TestTrace {
 
     /** One decimal place — enough to see a metre, short enough to read a whole chain on one line. */
     public static String fmt(double v) {
-        return String.format(Locale.ROOT, "%.1f", v);
+        // SIX SIGNIFICANT FIGURES, not one decimal place — the precision is part of what an
+        // instrument measures.
+        //
+        // This was "%.1f", which suits a distance in blocks and destroys anything smaller. An angle
+        // is measured in hundredths of a radian: a pose turning 0.05 rad in a tick and one turning
+        // 0.1 both printed as "0.1", and a trace built to tell a rotational LURCH from a rotational
+        // LAG could not resolve either. The first reading taken with it showed every column
+        // quantised to the same tenth — which is how a formatter announces that it, and not the
+        // subject, is what the numbers describe.
+        //
+        // Significant figures rather than decimals, because the same call renders 0.0004 rad and
+        // 1 537 600 blocks.
+        return String.format(Locale.ROOT, "%.6g", v);
     }
 
     /** Compact entity-id list, for tagging which passengers a mount carried through a write. */

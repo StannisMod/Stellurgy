@@ -402,6 +402,11 @@ public class ClientProxy extends CommonProxy {
         MinecraftForge.EVENT_BUS.register(new DelayedParticleRenderingEventHandler());
         MinecraftForge.EVENT_BUS.register(ModuleContainerPan.class);
         MinecraftForge.EVENT_BUS.register(new RenderComponents());
+        if (zmaster587.advancedRocketry.integration.vs.VSIntegration.isAvailable()) {
+            // The client ticks its ships from the client tick event, not the world one, so the
+            // re-seat that follows them needs its own handler on this side.
+            MinecraftForge.EVENT_BUS.register(new ClientDeckFollowsItsShip());
+        }
 
         if (Loader.isModLoaded("jei")) {
             FMLCommonHandler.instance().bus().register(

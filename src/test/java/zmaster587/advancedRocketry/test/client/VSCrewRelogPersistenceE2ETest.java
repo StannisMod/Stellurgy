@@ -118,13 +118,28 @@ public class VSCrewRelogPersistenceE2ETest extends AbstractSharedVsClientE2ETest
                         + Math.cos(h) + " " + Math.sin(h) + " 0.0 0.0").contains("\"commanded\":true"));
         long rollMark = lastClientTick();
         long dropsBeforeRoll = clientLong("externalMoveDrops");
+        // The per-tick pose trace, armed on the axis this scenario turns on: a body sliding across a
+        // rotating deck is an ANGLE going wrong, and a column of vertical positions cannot show it.
+        long poseTraceMark = bot().eventMark().get("seq").getAsLong();
+        bot().invokeStaticInt("org.valkyrienskies.mod.common.ships.ship_world.PhysicsObject",
+                "arTest$armPoseTrace", 200);
         double upY = 1.0;
+        // The deck's own step out from under a standing body, sampled as the roll runs: this is the
+        // displacement the leg below has to be able to see, so it is measured rather than assumed.
+        // Sampled here because it PEAKS mid-roll — read once at the end it would report the rate the
+        // craft had finished at, which is zero.
+        double deckStep = 0.0;
         for (int attempt = 0; attempt < 25 && upY > -0.9; attempt++) {
             bot().waitTicks(10);
+            deckStep = Math.max(deckStep, clientDouble(SHIP_FRAME_TRAVEL, "lastReseatStep"));
             double qx = readDouble(shipInfo(), Pattern.compile("\"qx\":(-?[0-9.E\\-]+)"));
             upY = 1.0 - 2.0 * qx * qx;
         }
         String rollHistory = clientTickHistory();
+        double rollSeatMiss = seatMiss(rollHistory, rollMark);
+        // A zero deckStep is ambiguous on its own — a pass that never ran and a pass that ran on a
+        // still ship both leave it there. This is the number that separates them.
+        long reseated = clientLong("reseatedBodies");
         long dropsDuringRoll = clientLong("externalMoveDrops") - dropsBeforeRoll;
         double rollTravel = bodyPointTravel(rollHistory, rollMark);
         int resolvedDuringRoll = resolvedSince(rollHistory, rollMark);
@@ -133,9 +148,12 @@ public class VSCrewRelogPersistenceE2ETest extends AbstractSharedVsClientE2ETest
                 + " resolved=" + resolvedSince(restHistory, restMark)
                 + "\n  during roll:  drops=" + dropsDuringRoll + " bodyTravel=" + rollTravel
                 + " resolved=" + resolvedDuringRoll + " upY=" + upY
+                + "\n  seat:         miss=" + rollSeatMiss + " deckStep=" + deckStep
+                + " reseated=" + reseated
                 + "\n  lastDropReason=" + clientString(SHIP_FRAME_TRAVEL, "lastDropReason")
                 + "\n" + mover();
-        System.out.println("[roll-hold]" + observed);
+        System.out.println("[roll-hold]" + observed
+                + "\n[roll-hold] pose trace :: " + bot().eventsSince(poseTraceMark, "client_deck_pose_tick"));
 
         scenario().requireArranged("the ship must actually have rotated, or nothing was driven (upY="
                 + upY + ")" + observed, upY < -0.9);
@@ -155,10 +173,43 @@ public class VSCrewRelogPersistenceE2ETest extends AbstractSharedVsClientE2ETest
                         + rollTravel + " blocks in the ship frame, bar " + ROLL_DRIFT_TOLERANCE + ")"
                         + observed,
                 rollTravel < ROLL_DRIFT_TOLERANCE);
+
+        // SENSITIVITY, stated before the verdict: the leg below is only worth reading if the deck
+        // genuinely stepped out from under him by more than the bar it is judged against. On this
+        // 5x5 fixture the body stands under two blocks from the roll axis, so the displacement is
+        // small in absolute terms however fast the craft turns - a bar chosen without this witness
+        // would be a bar the scenario cannot fail.
+        scenario().requireArranged("the mechanism that keeps him in step must have run at all, or a "
+                        + "zero deckStep below is the absence of a pass rather than a still ship "
+                        + "(reseated=" + reseated + ")" + observed,
+                reseated > 0L);
+        scenario().requireArranged("the deck must have stepped out from under him by several times "
+                        + "the bar, or this fixture cannot exhibit the lag at all (deckStep="
+                        + deckStep + ", bar=" + SEAT_MISS_TOLERANCE + ")" + observed,
+                deckStep > 5.0 * SEAT_MISS_TOLERANCE);
+        assertTrue("a crew member must stand on his deck point at the pose the ship holds NOW, not "
+                        + "at the one it held a tick ago: he was found " + rollSeatMiss + " blocks "
+                        + "off the point this class committed for him (bar " + SEAT_MISS_TOLERANCE
+                        + "), while the deck was stepping " + deckStep + " blocks a tick under him. "
+                        + "That lag is what a player sees as his own body sliding around the deck "
+                        + "and snapping back, twenty times a second, and it grows with his distance "
+                        + "from the axis the craft is turning about." + observed,
+                rollSeatMiss < SEAT_MISS_TOLERANCE);
     }
 
     /** How far a carried body may travel in the ship frame while the ship rotates, in blocks. */
     private static final double ROLL_DRIFT_TOLERANCE = 0.35D;
+
+    /**
+     * How far a body may be found from the deck point committed for it, in blocks.
+     *
+     * <p>Twenty times the record's own resolution (the per-tick history prints three decimals), and
+     * a fifth of what the same body measured before the deck was made to carry it in step: 0.197
+     * blocks a tick at 2 rad/s, two blocks off the axis. A bar between those two numbers separates
+     * "in step" from "one tick behind" on this fixture; it says nothing about a wider craft, where
+     * the same defect is the same angle through a longer arm.</p>
+     */
+    private static final double SEAT_MISS_TOLERANCE = 0.02D;
 
     /**
      * A crew member WALKING his own deck must never be released by the external-move guard.
@@ -770,6 +821,41 @@ public class VSCrewRelogPersistenceE2ETest extends AbstractSharedVsClientE2ETest
         return worst;
     }
 
+    /** The same line read for BOTH of its points at once — where the body was found and where it
+     *  was put. Their difference is the whole subject of the seat leg. */
+    private static final Pattern SEAT_LINE = Pattern.compile(
+            "(\\d+)([afh])\\|B=(-?[0-9.E\\-]+),(-?[0-9.E\\-]+),(-?[0-9.E\\-]+)"
+                    + "\\|H=(-?[0-9.E\\-]+),(-?[0-9.E\\-]+),(-?[0-9.E\\-]+)\\|");
+
+    /**
+     * The worst distance, over the window, between where a body was FOUND at the top of its
+     * movement tick and the deck point this class had committed for it.
+     *
+     * <p>Both points are in the ship frame, so a deck carrying a body honestly contributes nothing:
+     * what is left is the body standing somewhere its own deck point is not. A ship's pose advances
+     * at the END of a tick, after the entities have already moved, so a body that is not put back
+     * afterwards is found exactly one tick of ship motion away from its seat — every tick, for as
+     * long as the craft keeps moving.</p>
+     *
+     * <p>Distinct from {@link #bodyPointTravel}, which asks whether the body WANDERED and compares
+     * each sample against the first one. A steady one-tick lag does not wander: it is the same
+     * offset every tick, and the wander measure sees only the ramp into it.</p>
+     */
+    private double seatMiss(String history, long fromTick) {
+        Matcher m = SEAT_LINE.matcher(history);
+        double worst = 0.0;
+        while (m.find()) {
+            if (Long.parseLong(m.group(1)) <= fromTick) {
+                continue;
+            }
+            double dx = Double.parseDouble(m.group(3)) - Double.parseDouble(m.group(6));
+            double dy = Double.parseDouble(m.group(4)) - Double.parseDouble(m.group(7));
+            double dz = Double.parseDouble(m.group(5)) - Double.parseDouble(m.group(8));
+            worst = Math.max(worst, Math.sqrt(dx * dx + dy * dy + dz * dz));
+        }
+        return worst;
+    }
+
     /**
      * The same line read for what came INTO the tick rather than where the body ended up: the walk
      * inputs the resolver saw, and whether it had the deck under the feet.
@@ -995,6 +1081,11 @@ public class VSCrewRelogPersistenceE2ETest extends AbstractSharedVsClientE2ETest
     }
 
     /** Distance ALONG the deck - the ship-frame horizontal plane, with the deck normal dropped. */
+    /** A client-side static as a number. */
+    private double clientDouble(String className, String field) throws Exception {
+        return Double.parseDouble(clientString(className, field).trim());
+    }
+
     private static double alongDeck(double[] a, double[] b) {
         double dx = a[0] - b[0], dz = a[2] - b[2];
         return Math.sqrt(dx * dx + dz * dz);
