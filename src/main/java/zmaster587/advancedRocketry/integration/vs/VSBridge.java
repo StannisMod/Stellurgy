@@ -705,6 +705,16 @@ final class VSBridge {
         return true;
     }
 
+    /** PARK the ship NAMED by {@code uuid}. The identity-keyed twin of {@link #parkShipAt}. */
+    static boolean parkShip(World world, UUID uuid) {
+        ShipData ship = shipByUuid(world, uuid);
+        if (ship == null) {
+            return false;
+        }
+        ship.setPhysicsEnabled(false);
+        return true;
+    }
+
     /** UNPARK the ship NAMED by {@code uuid}. The identity-keyed twin of {@link #unparkShipAt}. */
     static boolean unparkShip(World world, UUID uuid) {
         ShipData ship = shipByUuid(world, uuid);

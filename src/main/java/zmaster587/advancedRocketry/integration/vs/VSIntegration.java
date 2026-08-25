@@ -146,6 +146,21 @@ public final class VSIntegration {
         return VSBridge.teleportShipToByUuid(world, shipUuid, x, y, z);
     }
 
+    /**
+     * PARK (disable physics on, so it holds position) the ship NAMED by {@code shipUuid}.
+     *
+     * <p>Prefer this over {@link #parkShipAt} wherever the caller knows which ship it means — which
+     * is every caller that has just crossed one, since a crossing hands back the identity it created.
+     * The position-keyed form parks whatever craft is nearest, and a hyperspace lane or an arrival
+     * point that has been used before is exactly where a second one is standing.</p>
+     */
+    public static boolean parkShip(World world, java.util.UUID shipUuid) {
+        if (!isAvailable()) {
+            return false;
+        }
+        return VSBridge.parkShip(world, shipUuid);
+    }
+
     /** UNPARK (re-enable physics on) the ship NAMED by {@code shipUuid}. */
     public static boolean unparkShip(World world, java.util.UUID shipUuid) {
         if (!isAvailable()) {
@@ -467,10 +482,25 @@ public final class VSIntegration {
      * in-flight jump survives a restart. Returns {@code null} when VS is absent or the shipyard is empty.
      */
     public static net.minecraft.nbt.NBTTagCompound snapshotShipAt(World world, double x, double y, double z) {
-        if (!isAvailable()) {
-            return null;
-        }
-        AxisAlignedBB yard = shipyardBoundsAt(world, x, y, z);
+        return snapshotOfYard(world, isAvailable() ? shipyardBoundsAt(world, x, y, z) : null);
+    }
+
+    /**
+     * The same snapshot, of the ship NAMED by {@code shipUuid} — and the one to reach for whenever the
+     * caller knows which ship it means.
+     *
+     * <p>What the position-keyed form snapshots is whatever craft is nearest the point, with no
+     * distance bound. A transit re-cuts its parked hull at every save point, and hyperspace lanes are
+     * reused: snapshotting by position there stores one ship's blocks against another ship's jump,
+     * and the restart that reads it back pastes the wrong craft into the destination.</p>
+     */
+    public static net.minecraft.nbt.NBTTagCompound snapshotShipOf(World world,
+            java.util.UUID shipUuid) {
+        return snapshotOfYard(world, isAvailable() ? shipyardBoundsOf(world, shipUuid) : null);
+    }
+
+    /** The snapshot both forms share, over an already-chosen subspace shipyard box. */
+    private static net.minecraft.nbt.NBTTagCompound snapshotOfYard(World world, AxisAlignedBB yard) {
         if (yard == null) {
             return null;
         }
@@ -550,11 +580,17 @@ public final class VSIntegration {
      * {@link #crossShip} runs internally. A safe no-op ({@code -1}) when VS is absent.
      */
     public static int shipBlockHeight(World world, double x, double y, double z) {
-        if (!isAvailable()) {
-            return -1;
-        }
-        AxisAlignedBB yard = shipyardBoundsAt(world, x, y, z);
-        if (yard == null) {
+        return shipBlockHeightIn(world, isAvailable() ? shipyardBoundsAt(world, x, y, z) : null);
+    }
+
+    /**
+     * The same height, of an ALREADY-CHOSEN shipyard box — the form a caller uses when it has resolved
+     * the yard of the ship it means (via {@link #shipyardBoundsOf}) and must not have a second reading
+     * silently taken of a different craft. Two measurements of "the ship" that resolve it separately
+     * are two chances to disagree.
+     */
+    public static int shipBlockHeightIn(World world, AxisAlignedBB yard) {
+        if (!isAvailable() || yard == null) {
             return -1;
         }
         int[] band = scanShipBlockYBand(world, (int) yard.minX, (int) yard.maxX,
@@ -659,6 +695,62 @@ public final class VSIntegration {
             return null;
         }
         return flightComputerInYard(world, shipyardBoundsOf(world, shipUuid));
+    }
+
+    /**
+     * The flight computer of the ship a caller NAMES, by whichever identity it holds — and never a
+     * stranger's.
+     *
+     * <p>Tries the physics id first ({@link #flightComputerOf}), which is an identity outright. Where
+     * there is none — a crossing whose destination hull the physics mod minted no id for — it falls
+     * back to the positional scan at {@code (x,y,z)} and then <b>verifies</b>: the computer it found
+     * has to call itself {@code durableShipId} in its own NBT, which is the one thing about a craft
+     * that survives every re-assembly. A mismatch answers {@code null} and says so, because the
+     * alternative is a real, wrong flight computer that every caller downstream treats as success.</p>
+     *
+     * <p><b>Why this exists.</b> Arrival points are DETERMINISTIC — a cell-seam carry always lands the
+     * same depth inside the face it came in by — so every craft that ever crosses into a cell arrives
+     * where the last one did, and "the flight computer at the arrival anchor" names the resident
+     * rather than the newcomer as soon as a cell has been visited twice. The crew re-seat learned this
+     * already and keys on identity; the paths that put back what was ABOARD did not, and handed one
+     * ship's cargo to another.</p>
+     *
+     * @param vsShipUuid    the physics mod's id for the ship, or {@code null} if the caller has none
+     * @param durableShipId the ship's durable AR id — what the fallback is checked against; a
+     *                      {@code null} here disables the fallback entirely rather than accepting
+     *                      whatever the scan reaches
+     */
+    public static BlockPos flightComputerOfNamedShip(net.minecraft.world.WorldServer world,
+            java.util.UUID vsShipUuid, java.util.UUID durableShipId, double x, double y, double z) {
+        if (!isAvailable() || world == null) {
+            return null;
+        }
+        if (vsShipUuid != null) {
+            BlockPos byIdentity = flightComputerOf(world, vsShipUuid);
+            if (byIdentity != null) {
+                return byIdentity;
+            }
+        }
+        if (durableShipId == null) {
+            return null;
+        }
+        BlockPos byPosition = flightComputerAt(world, x, y, z);
+        net.minecraft.tileentity.TileEntity te =
+                byPosition == null ? null : world.getTileEntity(byPosition);
+        java.util.UUID found = te instanceof zmaster587.advancedRocketry.tile.TileAdvancedFlightComputer
+                ? ((zmaster587.advancedRocketry.tile.TileAdvancedFlightComputer) te).shipIdOrNull()
+                : null;
+        if (durableShipId.equals(found)) {
+            return byPosition;
+        }
+        if (byPosition != null) {
+            // Loud, and it names both: a scan that reached a real computer belonging to somebody else
+            // is the failure this method exists to stop, and it is invisible from the caller's side.
+            LOGGER.warn("[VS] the flight computer at ({},{},{}) in dim {} belongs to ship {}, not to "
+                    + "{} - refusing to answer with a stranger's craft", x, y, z,
+                    world.provider.getDimension(), found, durableShipId);
+        }
+        return null;
     }
 
     /** The flight-computer scan both resolvers share, over an already-chosen subspace shipyard box. */

@@ -49,7 +49,13 @@ public final class DescentController {
      *  in-air pose it arrives at, or {@code null} when the destination cannot be resolved (world
      *  missing / VS lost the ship). Production wires the VS ship-geometry read; fakeable in tests. */
     public interface PasteResolver {
-        Landing resolve(int slotDim, double[] shipWorldPos, int destPlanetDim, int laneIndex);
+        /**
+         * {@code shipId} is the DURABLE id of the craft descending. The resolver measures that ship —
+         * its height and its shipyard footprint decide where the paste can go — and a cell holding a
+         * second craft would otherwise have it measured instead, sizing this landing to a stranger.
+         */
+        Landing resolve(int slotDim, double[] shipWorldPos, int destPlanetDim, int laneIndex,
+                        java.util.UUID shipId);
     }
 
     /** A resolved descent target: the block paste corner (clear sky inside the destination's block
@@ -145,7 +151,7 @@ public final class DescentController {
         crossing.ops().pinDim(targetPlanetDim);
 
         int laneIndex = (laneCounter++ % DESCENT_LANE_COUNT);
-        Landing landing = pasteResolver.resolve(slotDim, shipPos, targetPlanetDim, laneIndex);
+        Landing landing = pasteResolver.resolve(slotDim, shipPos, targetPlanetDim, laneIndex, shipId);
         if (landing == null) {
             // The arrival could not be resolved at all — the destination world is not loaded, or VS
             // no longer has the ship. (Terrain cannot cause this: the ship arrives in the air, so

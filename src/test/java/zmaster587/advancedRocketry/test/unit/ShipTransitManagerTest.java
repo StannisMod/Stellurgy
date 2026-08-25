@@ -157,8 +157,10 @@ public class ShipTransitManagerTest {
         }
 
         @Override
-        public NBTTagCompound snapshotParked(HyperspaceTiles.Tile tile, BlockPos hyperAnchor) {
+        public NBTTagCompound snapshotParked(HyperspaceTiles.Tile tile, BlockPos hyperAnchor,
+                                             String shipId) {
             snapshotParkedCalls++;
+            snapshotParkedFor = shipId;
             if (snapshotParkedThrows) {
                 throw new IllegalStateException("the physics world refused the cut");
             }
@@ -166,9 +168,16 @@ public class ShipTransitManagerTest {
         }
 
         @Override
-        public NBTTagCompound snapshotSource(int srcSlotDim, BlockPos srcAnchor) {
+        public NBTTagCompound snapshotSource(int srcSlotDim, BlockPos srcAnchor, String shipId) {
+            snapshotSourceFor = shipId;
+            snapshotSourceCalls++;
             return sourceSnapshotToReturn;
         }
+
+        /** Which ship each snapshot was told to cut — null when it was told nothing. */
+        String snapshotParkedFor;
+        String snapshotSourceFor;
+        int snapshotSourceCalls;
 
         @Override
         public ShipCrossingService.Crossed completeRestored(NBTTagCompound snapshot, int targetSlotDim) {
@@ -655,9 +664,16 @@ public class ShipTransitManagerTest {
                 new ShipLedger(), () -> 0L);
 
         int originDim = space.materialize(cell(1));
-        mgr.beginTransit(UUID.randomUUID().toString(), cell(1), originDim, new BlockPos(0, 64, 0),
-                cell(2), 7L);
+        String jumper = UUID.randomUUID().toString();
+        mgr.beginTransit(jumper, cell(1), originDim, new BlockPos(0, 64, 0), cell(2), 7L);
         int afterDepart = crosser.snapshotParkedCalls;
+
+        // BY NAME, both cuts. A hyperspace lane can hold more than one registered craft, and a
+        // snapshot taken of the wrong hull is stored against THIS jump and pasted into the
+        // destination on the very restart it exists to survive — a substitution nothing downstream
+        // can detect, because a well-formed snapshot of a stranger looks exactly like a good one.
+        assertEquals("the depart-time floor cut must name the ship it is of",
+                jumper, crosser.snapshotSourceFor);
 
         TransitRecord r = mgr.exportTransits().get(0);
         assertEquals("exporting for a save re-cuts nothing from the live world",
@@ -670,6 +686,7 @@ public class ShipTransitManagerTest {
         assertEquals("control: the re-cut path DOES ask the physics world", 1, mgr.refreshSnapshots());
         assertEquals("control: and the ask reaches the crosser", afterDepart + 1,
                 crosser.snapshotParkedCalls);
+        assertEquals("and the re-cut names the ship too", jumper, crosser.snapshotParkedFor);
     }
 
     /**

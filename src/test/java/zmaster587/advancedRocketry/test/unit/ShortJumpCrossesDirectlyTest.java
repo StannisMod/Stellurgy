@@ -66,7 +66,7 @@ public class ShortJumpCrossesDirectlyTest {
         }
 
         @Override
-        public NBTTagCompound snapshotSource(int srcSlotDim, BlockPos srcAnchor) {
+        public NBTTagCompound snapshotSource(int srcSlotDim, BlockPos srcAnchor, String shipId) {
             sourceSnapshots++;
             return new NBTTagCompound();
         }

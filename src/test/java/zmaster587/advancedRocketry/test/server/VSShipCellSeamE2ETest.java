@@ -289,9 +289,14 @@ public class VSShipCellSeamE2ETest extends AbstractSharedServerTest {
                         + arranged.sourceSlot + " and never appeared in the neighbour's slot "
                         + carriedSlot + "; last find=" + found[0],
                 carried || found[0].contains("\"found\":true"));
+        // The SHIP's pose is read again HERE, beside the body's, because "not aboard" has two very
+        // different causes and one number cannot separate them: the body was put down away from the
+        // deck, or the deck moved after it was put down. The two positions side by side say which.
         assertTrue("the body arrived in the right world but never came to rest ON the ship — "
                         + "production's own aboard predicate still refuses it after "
-                        + SETTLE_TICKS + " ticks, so it was put down beside the deck: " + found[0],
+                        + SETTLE_TICKS + " ticks. body=" + found[0]
+                        + " ship-now=" + arrivedShip(carriedSlot, arranged.arShipId)
+                        + " ship-at-arrival=" + arrived,
                 carried);
     }
 

@@ -139,7 +139,7 @@ public final class VSShipCrossingOps implements ShipCrossingService.Ops {
         // second `CrewTransfer.reseat` over crew that is already sitting down. Ordering the crew
         // behind the bodies would avoid that too, but it would also let a body that cannot be placed
         // keep a pilot standing in a world his ship has left — a far worse trade than a lost item.
-        boolean bodiesPlaced = releaseStowed(world, anchor, shipId);
+        boolean bodiesPlaced = releaseStowed(world, anchor, shipId, vsShipUuid);
         boolean crewSeated = shipId != null && crewAlreadySeated.contains(shipId);
         if (!crewSeated && CrewTransfer.reseat(world, anchor, crew, shipId, vsShipUuid)) {
             crewSeated = true;
@@ -162,13 +162,17 @@ public final class VSShipCrossingOps implements ShipCrossingService.Ops {
      * for. {@code false} means the ship is not rebuilt here yet, which is the same "come back next
      * tick" the crew placement answers with.</p>
      */
-    private boolean releaseStowed(WorldServer world, BlockPos anchor, java.util.UUID shipId) {
+    private boolean releaseStowed(WorldServer world, BlockPos anchor, java.util.UUID shipId,
+                                  java.util.UUID vsShipUuid) {
         List<AboardBodies.Stowed> bodies = shipId == null ? null : bodyStash.get(shipId);
         if (bodies == null || bodies.isEmpty()) {
             return true;
         }
-        BlockPos afcPos = VSIntegration.flightComputerAt(world, anchor.getX() + 0.5,
-                anchor.getY() + 0.5, anchor.getZ() + 0.5);
+        // NAMED, not "whatever is at the anchor". The anchor is the arrival pose and an arrival pose
+        // is deterministic, so a cell that has been crossed into before already has a craft sitting
+        // exactly there — and this used to hand it the newcomer's cargo.
+        BlockPos afcPos = VSIntegration.flightComputerOfNamedShip(world, vsShipUuid, shipId,
+                anchor.getX() + 0.5, anchor.getY() + 0.5, anchor.getZ() + 0.5);
         if (afcPos == null || AboardBodies.release(world, afcPos, bodies) == 0) {
             return false;
         }

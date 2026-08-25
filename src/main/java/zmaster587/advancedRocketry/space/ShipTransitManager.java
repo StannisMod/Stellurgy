@@ -116,10 +116,14 @@ public final class ShipTransitManager {
          * Re-cut the parked ship in hyperspace (lane {@code tile}, anchor {@code hyperAnchor}) as a
          * {@code StorageChunk} NBT snapshot, non-destructively, so an in-flight jump survives a restart
          * (the hyperspace world is ephemeral - wiped on restart). Returns {@code null} if VS is absent or
-         * the ship is gone. Called from the server tick on a cadence, never from a save handler; the
-         * default no-ops for the pure state-machine tests.
+         * the ship is gone. {@code shipId} is the jump's DURABLE id and names which hull to cut: a lane
+         * can hold more than one registered craft, and a snapshot taken of the wrong one is stored
+         * against this jump and pasted into the destination on the restart it was meant to survive.
+         * Called from the server tick on a cadence, never from a save handler; the default no-ops for
+         * the pure state-machine tests.
          */
-        default NBTTagCompound snapshotParked(HyperspaceTiles.Tile tile, BlockPos hyperAnchor) {
+        default NBTTagCompound snapshotParked(HyperspaceTiles.Tile tile, BlockPos hyperAnchor,
+                                              String shipId) {
             return null;
         }
 
@@ -131,7 +135,7 @@ public final class ShipTransitManager {
          * refreshes it via {@link #snapshotParked}. Returns {@code null} if VS is absent (the pure
          * state-machine tests).
          */
-        default NBTTagCompound snapshotSource(int srcSlotDim, BlockPos srcAnchor) {
+        default NBTTagCompound snapshotSource(int srcSlotDim, BlockPos srcAnchor, String shipId) {
             return null;
         }
 
@@ -465,7 +469,7 @@ public final class ShipTransitManager {
         // window before the hyperspace ship assembles (snapshotParked still empty) never persists a
         // snapshot-less record - which on restart would strand + silently delete the ship. Later saves refresh
         // it from hyperspace via snapshotParked.
-        NBTTagCompound initialSnapshot = crosser.snapshotSource(originSlotDim, originAnchor);
+        NBTTagCompound initialSnapshot = crosser.snapshotSource(originSlotDim, originAnchor, shipId);
         ShipCrossingService.Crossed departed = crosser.departToHyperspace(originSlotDim, originAnchor, shipId, tile);
         BlockPos hyperAnchor = departed == null ? null : departed.anchor;
         if (hyperAnchor == null) {
@@ -1070,7 +1074,8 @@ public final class ShipTransitManager {
                 continue;
             }
             try {
-                NBTTagCompound fresh = crosser.snapshotParked(t.tile, t.hyperAnchor);
+                // The map key IS the ship's durable id — the cut is named, not aimed.
+                NBTTagCompound fresh = crosser.snapshotParked(t.tile, t.hyperAnchor, e.getKey());
                 if (fresh != null) {
                     t.snapshot = fresh;
                     t.snapshotFailureReported = false;

@@ -137,9 +137,13 @@ public class DescentControllerTest {
     private static final class FakeResolver implements DescentController.PasteResolver {
         boolean fail;
         int calls;
+        /** The ship the last resolve was told to measure — null when it was told nothing. */
+        java.util.UUID measuredFor;
         @Override public DescentController.Landing resolve(int slotDim, double[] shipWorldPos,
-                                                           int destPlanetDim, int laneIndex) {
+                                                           int destPlanetDim, int laneIndex,
+                                                           java.util.UUID shipId) {
             calls++;
+            measuredFor = shipId;
             return fail ? null : new DescentController.Landing(0, 100, 0, new double[]{0.5, 101.0, 0.5});
         }
     }
@@ -169,6 +173,14 @@ public class DescentControllerTest {
         assertTrue(ctl.requestDescent(SLOT_DIM, AFC, SHIP, PLANET_DIM));
         assertEquals("a landing was resolved", 1, resolver.calls);
         assertEquals("one crossing was run", 1, ops.crossings);
+        // BOTH halves are told WHICH ship, and that is the contract, not a detail: the landing is
+        // sized from the descending craft's own height and footprint, and the capture empties its
+        // deck. A cell can hold a second craft, and a resolver or a capture that was told nothing
+        // measures and empties whichever one the position reaches — silently, and correctly-looking.
+        assertEquals("the landing must be resolved for the descending ship, by name",
+                SHIP, resolver.measuredFor);
+        assertEquals("the capture must be told whose deck it is emptying",
+                SHIP, ops.capturedFor);
         // The ship is physically cut from its cell at once: the ledger entry is gone and the cell is
         // released, so the single slot can be reused immediately (the occupant was released).
         assertNull("the descending ship leaves the ledger on the cut", ledger.get(SHIP));

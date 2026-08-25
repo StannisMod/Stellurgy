@@ -78,7 +78,7 @@ public final class VSDescentPasteResolver implements DescentController.PasteReso
 
     @Override
     public DescentController.Landing resolve(int slotDim, double[] shipWorldPos, int destPlanetDim,
-                                             int laneIndex) {
+                                             int laneIndex, java.util.UUID shipId) {
         WorldServer src = DimensionManager.getWorld(slotDim);
         WorldServer dst = DimensionManager.getWorld(destPlanetDim);
         if (src == null || dst == null || shipWorldPos == null) {
@@ -87,10 +87,23 @@ public final class VSDescentPasteResolver implements DescentController.PasteReso
                     shipWorldPos == null ? "null" : "present");
             return null;
         }
-        int shipHeight = VSIntegration.shipBlockHeight(
-                src, shipWorldPos[0], shipWorldPos[1], shipWorldPos[2]);
-        AxisAlignedBB yard = VSIntegration.shipyardBoundsAt(
-                src, shipWorldPos[0], shipWorldPos[1], shipWorldPos[2]);
+        // MEASURED BY NAME. Both readings size the landing to the craft they are taken of, and the
+        // position-keyed forms answer for whatever craft is nearest — so a cell holding a second one
+        // sizes this ship's descent to a stranger's hull. The fallback keeps a descent possible when
+        // the name resolves nothing, and says so rather than quietly measuring the neighbour.
+        java.util.UUID named = shipId == null ? null
+                : VSIntegration.shipUuidOfDurableId(src, shipId.toString());
+        AxisAlignedBB yard = named == null ? null : VSIntegration.shipyardBoundsOf(src, named);
+        if (yard == null) {
+            if (shipId != null) {
+                LOGGER.warn("[SPACE] descent could not resolve ship {} by name in dim {}; measuring "
+                        + "whatever craft is at {},{},{} instead", shipId, slotDim,
+                        shipWorldPos[0], shipWorldPos[1], shipWorldPos[2]);
+            }
+            yard = VSIntegration.shipyardBoundsAt(
+                    src, shipWorldPos[0], shipWorldPos[1], shipWorldPos[2]);
+        }
+        int shipHeight = VSIntegration.shipBlockHeightIn(src, yard);
         if (shipHeight <= 0 || yard == null) {
             LOGGER.warn("[SPACE] descent unresolved: no physics ship at {},{},{} in dim {} "
                             + "(shipHeight={}, shipyard={})", shipWorldPos[0], shipWorldPos[1],
