@@ -85,95 +85,12 @@ public class VSShipCellSeamE2ETest extends AbstractSharedServerTest {
 
     @Test
     public void aShipFlownPastItsCellFaceIsCarriedIntoTheNeighbourAndStaysThere() throws Exception {
-
-        exec("artest vs permaload true");
-        String setup = exec("artest space entry-setup 2");
-        assertTrue("entry setup failed: " + setup, setup.contains("\"ok\":true"));
-
-        // CONTROL: nothing is ledgered yet, so a later reading is a real observation — and the
-        // "first ledgered ship" this test reads its durable id from is unambiguously ours.
-        String before = exec("artest space entry-status");
-        assertEquals("no ship must be ledgered before the climb: " + before, 0,
-                extractInt(before, "ships"));
-
-        // --- Arrangement: get a ship into a cell through the production on-ramp ------------------
-        clearArea(SRC_X, SRC_Z);
-        String coords = placeFixture(SRC_X, SRC_Y, SRC_Z, "with-pilot-seat");
-        String asm = exec("artest rocket assemble 0 " + coords);
-        assertTrue("with VS an AFC-bearing build must route to a ship (no rocket): " + asm,
-                asm.contains("\"rocketCount\":0"));
-        assertTrue("the source VS ship never loaded", waitForLoadedShip(0) >= 1);
-
-        // TWO IDENTITIES, deliberately kept apart. `vs ship-info` answers the VS ship uuid
-        // (`VSBridge.nearestShipId` -> `getShipData().getUuid()`), which every `vs` verb takes and
-        // which a crossing REPLACES — the arriving ship is a new VS body. The ledger is keyed by AR's
-        // durable ship id, read from `entry-status` once the ship is in space. Asking either side with
-        // the other's id answers "not found" and reads exactly like the mechanic being broken.
-        String srcInfo = exec("artest vs ship-info 0 " + SRC_X + " " + SRC_Y + " " + SRC_Z
-                + " " + SHIP_CAPTURE_RADIUS_BLOCKS);
-        assertTrue("source ship not managed by VS: " + srcInfo, srcInfo.contains("\"managed\":true"));
-        String srcVsId = extractString(srcInfo, "id");
-        assertTrue("the assembled ship reported no VS id: " + srcInfo, srcVsId != null);
-        double sx = extractDouble(srcInfo, "posX"), sy = extractDouble(srcInfo, "posY"),
-                sz = extractDouble(srcInfo, "posZ");
-
-        String heldInput = exec("artest vs ff-input-by-id 0 " + srcVsId + " 0 1 0 0 0 0");
-        assertTrue("the held input must reach this ship's flight computer: " + heldInput,
-                heldInput.contains("\"afcResolved\":true"));
-        assertTrue("climb teleport failed",
-                exec("artest vs teleport-ship 0 " + (int) sx + " " + (int) sy + " " + (int) sz
-                        + " " + (int) sx + " " + ABOVE_CEILING_Y + " " + (int) sz)
-                        .contains("\"ok\":true"));
-        exec("artest vs unpark 0 " + (int) sx + " " + ABOVE_CEILING_Y + " " + (int) sz);
-
-        final String[] status = {""};
-        boolean settled = GameTicks.until(client(), GameTicks.server(), SETTLE_TICKS,
-                () -> {
-                    status[0] = exec("artest space entry-status");
-                    return extractInt(status[0], "ships") >= 1
-                            && "SETTLED".equals(extractString(status[0], "state"));
-                },
-                () -> loadAllEntrySlots(setup));
-        assertTrue("the ship never reached space through the entry path; last status=" + status[0],
-                settled);
-        String sourceCell = extractString(status[0], "cellKey");
-        String arShipId = extractString(status[0], "shipId");
-        assertTrue("the settled ship has no durable id: " + status[0], arShipId != null);
-        int sourceSlot = extractInt(status[0], "slotDim");
-        assertTrue("settled ship has no bound slot: " + status[0], sourceSlot > Integer.MIN_VALUE);
-        assertTrue("the settled ship's cell world is not live", waitForLoadedShip(sourceSlot) >= 1);
-
-        // --- CONTROL: while it is inside its cell, the ledger names THAT cell --------------------
-        String inside = exec("artest space ledger-get " + arShipId);
-        assertTrue("the ledger does not know the settled ship: " + inside,
-                inside.contains("\"found\":true"));
-        assertEquals("the ledger must name the source cell before the ship leaves it: " + inside,
-                sourceCell, extractString(inside, "cell"));
-
-        // --- Act: put the ship past the +X face of its cell --------------------------------------
-        String inCell = shipInThatSlot(sourceSlot);
-        double cx = extractDouble(inCell, "posX"), cy = extractDouble(inCell, "posY"),
-                cz = extractDouble(inCell, "posZ");
-        assertFalse("the ship's in-cell pose could not be read: " + inCell,
-                Double.isNaN(cx) || Double.isNaN(cy) || Double.isNaN(cz));
-
-        String outward = exec("artest vs teleport-ship " + sourceSlot + " "
-                + (long) cx + " " + (long) cy + " " + (long) cz + " "
-                + PAST_THE_FACE + " " + (long) cy + " " + (long) cz);
-        assertTrue("the move past the cell face failed: " + outward, outward.contains("\"ok\":true"));
-        exec("artest vs unpark " + sourceSlot + " " + PAST_THE_FACE + " " + (long) cy + " " + (long) cz);
-
-        // THE ARRANGEMENT IS ASSERTED, not assumed. "the probe returned ok" is not "the ship is past
-        // the face": a clamp, a refused transform or a Y-limit would all report ok and leave the ship
-        // inside its cell, and the carry would then be correctly not firing — a green mechanic
-        // reported as a red one.
-        String moved = shipInThatSlot(sourceSlot);
-        double mx = extractDouble(moved, "posX");
-        assertFalse("the moved ship's pose could not be read: " + moved, Double.isNaN(mx));
-        assertTrue("the ship is not actually past the cell face after the move — it is at x=" + mx
-                        + ", and the carry threshold is " + (GalacticCoord.HALF_CELL
-                        + CellSeam.CARRY_MARGIN) + "; the test moved nothing: " + moved,
-                mx > GalacticCoord.HALF_CELL + CellSeam.CARRY_MARGIN);
+        ShipPastItsFace arranged = arrangeAShipPastItsFace();
+        String setup = arranged.setup;
+        String arShipId = arranged.arShipId;
+        String sourceCell = arranged.sourceCell;
+        int sourceSlot = arranged.sourceSlot;
+        double mx = arranged.x;
 
         // Drive the production carry. NOT the flight computer's own tick: a headless slot world has
         // no player and no ticking chunks, so its tiles do not tick — an earlier revision of this test
@@ -216,7 +133,7 @@ public class VSShipCellSeamE2ETest extends AbstractSharedServerTest {
         assertTrue("the carried ship has no bound slot: " + afterMove[0],
                 carriedSlot > Integer.MIN_VALUE);
         assertTrue("the neighbour's cell world never came up", waitForLoadedShip(carriedSlot) >= 1);
-        String arrived = shipInThatSlot(carriedSlot);
+        String arrived = arrivedShip(carriedSlot, arShipId);
         double ax = extractDouble(arrived, "posX");
         assertFalse("the arrived ship's pose could not be read: " + arrived, Double.isNaN(ax));
         double expectedX = -(double) GalacticCoord.HALF_CELL + CellSeam.REENTRY_DEPTH;
@@ -235,8 +152,298 @@ public class VSShipCellSeamE2ETest extends AbstractSharedServerTest {
         });
     }
 
+    /**
+     * E2E: a body standing on the deck when the ship crosses a cell seam ARRIVES WITH IT, still
+     * aboard, in the neighbour's slot world.
+     *
+     * <p>The seam carry stows every aboard body to NBT, kills it, and re-creates it on the far side
+     * ({@code AboardBodies}, through the shared crossing every other crossing uses). What that leaves
+     * open is whether it happens on THIS crossing: the seam is the one caller whose e2e flew an empty
+     * ship, so a body left behind here would look exactly like a body left behind nowhere.</p>
+     *
+     * <p><b>An ITEM, not a mob and not a player.</b> A player is client-authoritative and belongs to
+     * the crew scenarios; a mob has AI that could walk itself out of the ship between the arrange and
+     * the assert, which would read as the carry dropping it. An item that was placed at rest moved
+     * because something moved it.</p>
+     *
+     * <p><b>The identity is the body's UUID.</b> A crossing re-creates the entity, so its int
+     * entityId is re-minted and following it by that id would report every successful carry as a
+     * loss.</p>
+     *
+     * <p><b>CONTROL, and it is the point of the scenario.</b> The body is looked up BEFORE the carry
+     * and asserted to be in the SOURCE slot. Without it, "found in the neighbour" cannot be told from
+     * an instrument that answers about whatever world it likes — and the previous attempt at this
+     * scenario died on exactly that: {@code loose-body-count} walks chunks, no chunk is loaded at a
+     * pose 16M blocks out, and it answered 0 for a body production itself had just called aboard.</p>
+     */
+    @Test
+    public void aBodyOnTheDeckIsCarriedAcrossTheSeamWithItsShip() throws Exception {
+        ShipPastItsFace arranged = arrangeAShipPastItsFace();
+
+        // The SOURCE ship's VS id, captured by the arrangement while the ship was still at its settle
+        // pose, and used only here: the crossing replaces the VS body, so this id names nothing on
+        // the far side.
+        String settledVsId = arranged.settledVsId;
+
+        // HOLD the deck's chunks first. A tier-2 ship's blocks are in a subspace shipyard, so its
+        // WORLD pose — where a body standing on its deck actually is — is backed by nothing: in play
+        // the pilot holds those chunks, headless nobody does, and vanilla removes the entity with the
+        // chunk on the next sweep. Measured: a body production had just called aboard was absent from
+        // its world one command later, with the world up and the ship still resolving.
+        String heldSrc = exec("artest chunk hold " + arranged.sourceSlot + " "
+                + (long) arranged.x + " " + (long) arranged.y + " " + (long) arranged.z);
+        assertTrue("the deck's chunks could not be held, so the body would be swept away before "
+                + "anything could carry it: " + heldSrc, heldSrc.contains("\"ok\":true"));
+
+        // Dropped at the ship's own pose: inside the hull box, which is what the stay region judges.
+        // Whole blocks deliberately — "on the deck" is a question about a volume thousands of blocks
+        // wide, and a fractional offset here would only look precise.
+        String drop = exec("artest space loose-body " + arranged.sourceSlot + " "
+                + (long) arranged.x + " " + (long) arranged.y + " " + (long) arranged.z
+                + " " + settledVsId);
+        assertTrue("the body could not be dropped: " + drop, drop.contains("\"ok\":true"));
+        assertTrue("PRODUCTION's own aboard predicate says this body is not on the ship, so the carry "
+                + "is under no obligation to take it and this scenario would pin nothing: " + drop,
+                drop.contains("\"aboard\":true"));
+        String bodyId = extractString(drop, "uuid");
+        assertTrue("the drop reported no uuid to follow the body by: " + drop, bodyId != null);
+
+        // CONTROL: the instrument can see this body WHERE IT IS, on the ship it was dropped on,
+        // before anything moves it. Without this the later reading measures the instrument.
+        String beforeCarry = exec("artest space loose-body-find " + bodyId + " "
+                + arranged.sourceSlot + " " + settledVsId);
+        assertTrue("the body cannot be found in the world it was just dropped into: " + beforeCarry,
+                beforeCarry.contains("\"found\":true"));
+        assertTrue("before the carry the body must be ABOARD the source ship, or what follows is not "
+                + "about a carry at all: " + beforeCarry, beforeCarry.contains("\"aboard\":true"));
+
+        String carry = exec("artest space seam-carry " + arranged.sourceSlot);
+        assertTrue("production does not agree the ship has left its cell: " + carry,
+                carry.contains("\"wouldCarry\":true"));
+        assertTrue("the carry did not start — the reason is in the reply: " + carry,
+                carry.contains("\"started\":true"));
+
+        // HOLD THE ARRIVAL DECK NOW, before the ship gets there. The crossing puts back what it
+        // carried the moment the ship is rebuilt on the far side, and an unheld chunk is swept with
+        // everything standing in it — so a hold placed after the ledger moves is a hold placed after
+        // the only moment that mattered. The carry acquires its destination cell before it cuts, so
+        // the neighbour's slot is already bound and askable here; the arrival X is the seam's own
+        // deterministic re-entry depth inside the opposite face, and Z is carried across unchanged.
+        long[] src = cellSectors(arranged.sourceCell);
+        String destSlotReply = exec("artest space cell-slot " + (src[0] + 1) + " " + src[1] + " " + src[2]);
+        int destSlot = extractInt(destSlotReply, "slotDim");
+        assertTrue("the carry did not bind the neighbour cell to a slot, so there is nowhere to hold "
+                + "the arrival deck: " + destSlotReply, destSlot > Integer.MIN_VALUE);
+        String heldDst = exec("artest chunk hold " + destSlot + " "
+                + (long) (-(double) GalacticCoord.HALF_CELL + CellSeam.REENTRY_DEPTH) + " "
+                + (long) arranged.y + " " + (long) arranged.z + " 2");
+        assertTrue("the arrival deck's chunks could not be held: " + heldDst,
+                heldDst.contains("\"ok\":true"));
+
+        final String[] afterMove = {""};
+        final String source = arranged.sourceCell;
+        final String setup = arranged.setup;
+        boolean carriedOver = GameTicks.until(client(), GameTicks.server(), SETTLE_TICKS,
+                () -> {
+                    afterMove[0] = exec("artest space ledger-get " + arranged.arShipId);
+                    String cell = extractString(afterMove[0], "cell");
+                    return cell != null && !source.equals(cell)
+                            && "SETTLED".equals(extractString(afterMove[0], "state"));
+                },
+                () -> loadAllEntrySlots(setup));
+        assertTrue("the ship itself never settled in the neighbour, so nothing can be concluded about "
+                + "what it was carrying; last ledger=" + afterMove[0], carriedOver);
+        int carriedSlot = extractInt(afterMove[0], "slotDim");
+        assertTrue("the carried ship has no bound slot: " + afterMove[0],
+                carriedSlot > Integer.MIN_VALUE);
+        assertTrue("the neighbour's cell world never came up", waitForLoadedShip(carriedSlot) >= 1);
+
+        // The ARRIVED ship's VS id — a new body, so a new id, traded for the durable one. Asking with
+        // the source's would answer "not aboard" for a body sitting perfectly on the deck.
+        String arrived = arrivedShip(carriedSlot, arranged.arShipId);
+        String dstVsId = extractString(arrived, "id");
+        assertTrue("the arrived ship reported no VS id: " + arrived, dstVsId != null);
+
+        assertEquals("the carry bound a different slot than the one whose deck was held before it, so "
+                + "the body was never protected where it landed", destSlot, carriedSlot);
+
+        // The release is on the crossing's own retry loop (it waits for the ship to be rebuilt in the
+        // destination), so the body can land a few ticks after the ledger has moved.
+        // WAITED ON IN FULL: found AND aboard. Waiting on "found" alone samples a moment rather than
+        // an outcome — the body is spawned during the arrival's own retry loop, and a reading taken on
+        // the tick it lands can catch the ship mid-settle and answer `aboard:false` about a body that
+        // is sitting exactly where it should be. Measured: the same scenario passes alone and fails in
+        // a full-class run at `x=-15984000`, which IS the arrival pose.
+        final String[] found = {""};
+        boolean carried = GameTicks.until(client(), GameTicks.world(carriedSlot), SETTLE_TICKS,
+                () -> {
+                    found[0] = exec("artest space loose-body-find " + bodyId + " "
+                            + carriedSlot + " " + dstVsId);
+                    return found[0].contains("\"found\":true")
+                            && found[0].contains("\"aboard\":true");
+                });
+        // The two failure modes are separated on the way out, because they mean different things: a
+        // body that never arrived is a crossing that dropped its cargo; a body that arrived and is not
+        // aboard is a crossing that put it down beside the deck.
+        assertTrue("the ship crossed the seam and left its cargo behind: the body was aboard in slot "
+                        + arranged.sourceSlot + " and never appeared in the neighbour's slot "
+                        + carriedSlot + "; last find=" + found[0],
+                carried || found[0].contains("\"found\":true"));
+        assertTrue("the body arrived in the right world but never came to rest ON the ship — "
+                        + "production's own aboard predicate still refuses it after "
+                        + SETTLE_TICKS + " ticks, so it was put down beside the deck: " + found[0],
+                carried);
+    }
+
+    /**
+     * What one arrangement hands its assertions: a ship settled in a cell and then moved past that
+     * cell's +X face, with everything needed to name it afterwards.
+     *
+     * <p>Extracted so a second scenario can put something ON that ship before the carry without
+     * repeating sixty lines of on-ramp — and so both scenarios are demonstrably arranged the same
+     * way, which is what makes the second one's extra witness attributable to the body rather than to
+     * a difference in how its ship got there.</p>
+     */
+    private static final class ShipPastItsFace {
+        /** The `entry-setup` reply; its slot dims are what {@link #loadAllEntrySlots} pumps. */
+        final String setup;
+        /** AR's DURABLE ship id — what the ledger is keyed by, and what survives the crossing. */
+        final String arShipId;
+        final String sourceCell;
+        final int sourceSlot;
+        /** The ship's live pose in its slot world, already past the face. */
+        final double x, y, z;
+        /**
+         * The PHYSICS mod's id for this ship AS IT STANDS IN ITS CELL — captured at the settle pose,
+         * where the slot holds exactly one ship and the count says so.
+         *
+         * <p>Not the id it was assembled under: entry is itself a crossing, so the craft that reached
+         * the cell is already a different VS body from the one built in dim 0. And not good past the
+         * seam either, for the same reason.</p>
+         */
+        final String settledVsId;
+
+        ShipPastItsFace(String setup, String arShipId, String sourceCell, int sourceSlot,
+                        double x, double y, double z, String settledVsId) {
+            this.setup = setup;
+            this.arShipId = arShipId;
+            this.sourceCell = sourceCell;
+            this.sourceSlot = sourceSlot;
+            this.x = x;
+            this.y = y;
+            this.z = z;
+            this.settledVsId = settledVsId;
+        }
+    }
+
+    /** Build a ship, fly it into space through the production on-ramp, and move it past its +X face. */
+    private ShipPastItsFace arrangeAShipPastItsFace() throws Exception {
+        exec("artest vs permaload true");
+        String setup = exec("artest space entry-setup 2");
+        assertTrue("entry setup failed: " + setup, setup.contains("\"ok\":true"));
+
+        // --- Arrangement: get a ship into a cell through the production on-ramp ------------------
+        clearArea(SRC_X, SRC_Z);
+        String coords = placeFixture(SRC_X, SRC_Y, SRC_Z, "with-pilot-seat");
+        String asm = exec("artest rocket assemble 0 " + coords);
+        assertTrue("with VS an AFC-bearing build must route to a ship (no rocket): " + asm,
+                asm.contains("\"rocketCount\":0"));
+
+        // THIS TEST'S OWN SHIP, named by the assembler that built it. Everything downstream is asked
+        // about THIS id and no other. The identity is not looked up — a lookup ("the first ledgered
+        // ship", "the ship nearest the cell centre") answers with whatever it reaches first, which
+        // stops being this craft the moment a second scenario shares the boot, and reads identically
+        // when it does.
+        String arShipId = extractString(asm, "shipId");
+        assertTrue("the assembler did not name the ship it built, so this scenario has no way to "
+                + "refer to its own craft: " + asm, arShipId != null);
+        assertEquals("the pad carried more than one flight computer, so the id names one of several "
+                + "craft: " + asm, 1, extractInt(asm, "afcCount"));
+
+        // CONTROL: this ship is not in the ledger before it climbs, so the settle read below is a
+        // real observation and not a first reading of something that was already there.
+        String before = exec("artest space ledger-get " + arShipId);
+        assertTrue("this ship is ledgered before it has flown: " + before,
+                before.contains("\"found\":false"));
+        assertTrue("the source VS ship never loaded", waitForLoadedShip(0) >= 1);
+
+        // TWO IDENTITIES, deliberately kept apart. `vs ship-info` answers the VS ship uuid
+        // (`VSBridge.nearestShipId` -> `getShipData().getUuid()`), which every `vs` verb takes and
+        // which a crossing REPLACES — the arriving ship is a new VS body, so this id is good only on
+        // the pad. The DURABLE id above is AR's, survives every crossing, and is what the ledger is
+        // keyed by. Asking either side with the other's id answers "not found" and reads exactly like
+        // the mechanic being broken.
+        String srcInfo = exec("artest vs ship-info 0 " + SRC_X + " " + SRC_Y + " " + SRC_Z
+                + " " + SHIP_CAPTURE_RADIUS_BLOCKS);
+        assertTrue("source ship not managed by VS: " + srcInfo, srcInfo.contains("\"managed\":true"));
+        String srcVsId = extractString(srcInfo, "id");
+        assertTrue("the assembled ship reported no VS id: " + srcInfo, srcVsId != null);
+        double sx = extractDouble(srcInfo, "posX"), sy = extractDouble(srcInfo, "posY"),
+                sz = extractDouble(srcInfo, "posZ");
+
+        String heldInput = exec("artest vs ff-input-by-id 0 " + srcVsId + " 0 1 0 0 0 0");
+        assertTrue("the held input must reach this ship's flight computer: " + heldInput,
+                heldInput.contains("\"afcResolved\":true"));
+        assertTrue("climb teleport failed",
+                exec("artest vs teleport-ship 0 " + (int) sx + " " + (int) sy + " " + (int) sz
+                        + " " + (int) sx + " " + ABOVE_CEILING_Y + " " + (int) sz)
+                        .contains("\"ok\":true"));
+        exec("artest vs unpark 0 " + (int) sx + " " + ABOVE_CEILING_Y + " " + (int) sz);
+
+        // Waited on BY ID: the ledger is asked about this craft, not about how many ships it holds.
+        final String[] status = {""};
+        boolean settled = GameTicks.until(client(), GameTicks.server(), SETTLE_TICKS,
+                () -> {
+                    status[0] = exec("artest space ledger-get " + arShipId);
+                    return status[0].contains("\"found\":true")
+                            && "SETTLED".equals(extractString(status[0], "state"));
+                },
+                () -> loadAllEntrySlots(setup));
+        assertTrue("the ship never reached space through the entry path; last ledger=" + status[0],
+                settled);
+        String sourceCell = extractString(status[0], "cell");
+        assertTrue("the settled ship names no cell: " + status[0], sourceCell != null);
+        int sourceSlot = extractInt(status[0], "slotDim");
+        assertTrue("settled ship has no bound slot: " + status[0], sourceSlot > Integer.MIN_VALUE);
+        assertTrue("the settled ship's cell world is not live", waitForLoadedShip(sourceSlot) >= 1);
+
+        // --- Act: put the ship past the +X face of its cell --------------------------------------
+        String inCell = shipInThatSlot(sourceSlot);
+        // Captured HERE, at the settle pose, and carried out with the rest: after the move the ledger
+        // still names the pre-move coordinate (a headless slot's tiles do not tick), so an
+        // identity-addressed lookup would be aimed at where the ship no longer is.
+        String settledVsId = extractString(inCell, "id");
+        assertTrue("the settled ship reported no VS id: " + inCell, settledVsId != null);
+        double cx = extractDouble(inCell, "posX"), cy = extractDouble(inCell, "posY"),
+                cz = extractDouble(inCell, "posZ");
+        assertFalse("the ship's in-cell pose could not be read: " + inCell,
+                Double.isNaN(cx) || Double.isNaN(cy) || Double.isNaN(cz));
+
+        String outward = exec("artest vs teleport-ship " + sourceSlot + " "
+                + (long) cx + " " + (long) cy + " " + (long) cz + " "
+                + PAST_THE_FACE + " " + (long) cy + " " + (long) cz);
+        assertTrue("the move past the cell face failed: " + outward, outward.contains("\"ok\":true"));
+        exec("artest vs unpark " + sourceSlot + " " + PAST_THE_FACE + " " + (long) cy + " " + (long) cz);
+
+        // THE ARRANGEMENT IS ASSERTED, not assumed. "the probe returned ok" is not "the ship is past
+        // the face": a clamp, a refused transform or a Y-limit would all report ok and leave the ship
+        // inside its cell, and the carry would then be correctly not firing — a green mechanic
+        // reported as a red one.
+        String moved = shipInThatSlot(sourceSlot);
+        double mx = extractDouble(moved, "posX");
+        assertFalse("the moved ship's pose could not be read: " + moved, Double.isNaN(mx));
+        assertTrue("the ship is not actually past the cell face after the move — it is at x=" + mx
+                        + ", and the carry threshold is " + (GalacticCoord.HALF_CELL
+                        + CellSeam.CARRY_MARGIN) + "; the test moved nothing: " + moved,
+                mx > GalacticCoord.HALF_CELL + CellSeam.CARRY_MARGIN);
+
+        return new ShipPastItsFace(setup, arShipId, sourceCell, sourceSlot,
+                mx, extractDouble(moved, "posY"), extractDouble(moved, "posZ"), settledVsId);
+    }
+
     @After
     public void cleanup() throws Exception {
+        exec("artest chunk release");
         exec("artest space entry-clear");
         exec("artest vs permaload false");
     }
@@ -262,6 +469,38 @@ public class VSShipCellSeamE2ETest extends AbstractSharedServerTest {
      * exactly ONE ship, which is asserted here rather than assumed: without the count this returns a
      * neighbour the moment a second ship shares the slot, and it reads identically.</p>
      */
+    /**
+     * The ship the ledger calls {@code arShipId}, in the slot it arrived in.
+     *
+     * <p><b>Why not "the ship nearest the cell centre".</b> A crossing puts every scenario's ship at
+     * the SAME arrival depth in the SAME neighbour cell, so a second scenario in one boot leaves two
+     * craft a few blocks apart in one world, and a positional lookup answers with whichever it reaches
+     * first while reading identically.</p>
+     *
+     * <p><b>Where the identity actually comes from — not from the find.</b> {@code find-afc} locates
+     * BY POSITION (the ledger's coordinate gives a pose and the world is asked what is there); a
+     * filter on the ledger row constrains which row supplies the pose, not which ship the world hands
+     * back. The one step that is not proximity is the flight computer: its tile carries the durable
+     * ship id in its own NBT, and the verb compares it with the ledger key before reporting
+     * {@code afcFound}. So this asserts THAT, and takes the VS id off the block that identified
+     * itself. Asserting only {@code found:true} would accept a neighbour's hull.</p>
+     */
+    private String arrivedShip(int slotDim, String arShipId) throws Exception {
+        String afc = exec("artest space find-afc " + slotDim + " " + arShipId);
+        assertTrue("the ledger says this ship is in slot " + slotDim + " but nothing there answers to "
+                + "its id: " + afc, afc.contains("\"found\":true"));
+        assertTrue("the flight computer found at this ship's coordinate does not carry this ship's "
+                + "durable id, so the hull the lookup reached is somebody else's: " + afc,
+                afc.contains("\"afcFound\":true"));
+        String vsId = extractString(afc, "vsId");
+        assertTrue("the arrived ship's flight computer is there but no physics ship manages it: " + afc,
+                vsId != null);
+        String info = exec("artest vs ship-info " + slotDim + " id " + vsId);
+        assertTrue("the arrived ship " + vsId + " is not managed in slot " + slotDim + ": " + info,
+                info.contains("\"managed\":true"));
+        return info;
+    }
+
     private String shipInThatSlot(int slotDim) throws Exception {
         String count = exec("artest vs ship-count " + slotDim);
         assertEquals("this lookup is only an identity while the slot holds exactly one ship: " + count,

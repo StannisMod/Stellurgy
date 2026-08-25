@@ -275,7 +275,7 @@ public final class ShipEntryController {
 
         // Capture only now, with the cell GRANTED — the last refusal is behind — and still before
         // the cut: the crossing cuts the seat blocks, and a post-cut capture finds nothing.
-        final List<CrewTransfer.Crew> crew = crossing.ops().captureCrew(launchDimId, afcPos, shipPos);
+        final List<CrewTransfer.Crew> crew = crossing.ops().captureCrew(launchDimId, afcPos, shipPos, shipId);
 
         int lane = (laneCounter++ % ENTRY_LANE_COUNT);
         double[] pose = CellWorldMapper.poseWorldOf(entryCoord);

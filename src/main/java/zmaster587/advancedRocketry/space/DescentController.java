@@ -172,7 +172,7 @@ public final class DescentController {
 
         // Capture only now, with the landing RESOLVED — the last refusal is behind — and still
         // before the cut: the crossing cuts the seat blocks, and a post-cut capture finds nothing.
-        final List<CrewTransfer.Crew> crew = crossing.ops().captureCrew(slotDim, afcPos, shipPos);
+        final List<CrewTransfer.Crew> crew = crossing.ops().captureCrew(slotDim, afcPos, shipPos, shipId);
 
         final List<CrewTransfer.Crew> settledCrew = crew;
         BlockPos anchor = crossing.begin(shipId, slotDim, shipPos, targetPlanetDim,

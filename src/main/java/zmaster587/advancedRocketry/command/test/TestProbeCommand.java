@@ -2533,6 +2533,24 @@ public class TestProbeCommand extends CommandBase {
     private static int[] entrySlotDims;
 
     /**
+     * The chunk tickets `chunk hold` is holding. Probe-local fixture state, written and read only by
+     * this command class, and CUMULATIVE: a scenario that follows a ship across a crossing has to
+     * hold both sides at once — the deck it departs from and the deck it arrives on are in different
+     * worlds, and the second must be held before the arrival, not after it. `chunk release` drops
+     * them all, which is what keeps "cumulative" from meaning "forgotten".
+     */
+    private static final java.util.List<net.minecraftforge.common.ForgeChunkManager.Ticket>
+            heldChunks = new java.util.ArrayList<>();
+
+    /** Drop every held ticket. Idempotent — an {@code @After} may call it blind. */
+    private static void releaseHeldChunks() {
+        for (net.minecraftforge.common.ForgeChunkManager.Ticket t : heldChunks) {
+            net.minecraftforge.common.ForgeChunkManager.releaseTicket(t);
+        }
+        heldChunks.clear();
+    }
+
+    /**
      * A {@link zmaster587.advancedRocketry.space.SlotBinder} that carries every world operation out
      * against the real pool but is only allowed to BIND the slots {@code own} — the ones the probe
      * stack asking for it just registered.
@@ -4530,7 +4548,12 @@ public class TestProbeCommand extends CommandBase {
                 aboard = stay != null && local != null && stay.contains(
                         new net.minecraft.util.math.Vec3d(local[0], local[1], local[2]));
             }
+            // BOTH identities, and the uuid is the one that survives. A crossing stows an aboard body
+            // to NBT, kills it, and re-creates it on the far side (`AboardBodies`), so the int
+            // entityId is re-minted from the JVM counter while the uuid round-trips through the NBT.
+            // A caller that followed a body by entityId across a crossing would be told it is gone.
             send(sender, "{\"ok\":true,\"entityId\":" + body.getEntityId()
+                    + ",\"uuid\":\"" + body.getUniqueID() + "\""
                     + ",\"aboard\":" + aboard + "}");
             return;
         }
@@ -4546,6 +4569,87 @@ public class TestProbeCommand extends CommandBase {
                     net.minecraft.entity.item.EntityItem.class,
                     new net.minecraft.util.math.AxisAlignedBB(bx, by, bz, bx, by, bz).grow(r));
             send(sender, "{\"ok\":true,\"count\":" + found.size() + "}");
+            return;
+        }
+        // loose-body-find <uuid> <dim> [vsShipId]: is the body NAMED by <uuid> in <dim>, where is it,
+        // and does production still call it aboard <vsShipId>.
+        //
+        // <p>THE CALLER NAMES THE WORLD. It knows which one it means — the slot its ship was in, or the
+        // slot its ship arrived in — and a sweep over "whatever is loaded" would be a lookup answering
+        // about wherever it happened to find something. It also cannot work here: a slot world with no
+        // player in it unloads, and a sweep then reports the body missing when what is missing is the
+        // world. Measured 2026-08-25: `searched:[0,3]` for a body dropped into a slot dim, one command
+        // earlier, on a ship production had just called aboard.
+        //
+        // <p>The named world is brought up if it is down (the same `vsWorld` every other verb here
+        // uses), and with a ship id the ship's own footprint is loaded first — an entity is restored
+        // with ITS CHUNK, so a world that is merely up holds nothing yet. What that buys is a
+        // `found:false` that means "not on that ship", which is the reading the caller wants, rather
+        // than "nothing is loaded there", which is a statement about the harness.
+        //
+        // <p>BY UUID, not by entityId. A crossing stows an aboard body to NBT, kills it and re-creates
+        // it on the far side, so the int id is re-minted while the uuid round-trips (`Entity`'s NBT
+        // carries it). Following a body by entityId across the very crossing under test would report
+        // it lost every time.
+        //
+        // <p>It replaces `loose-body-count` for anything past a cell face: that walks CHUNKS through
+        // `getEntitiesWithinAABB`, and a carried ship sits at a pose around 16M blocks out where none
+        // are loaded — measured as 0 immediately after a drop, and still 0 after 200 ticks.
+        if (args.length >= 3 && "loose-body-find".equalsIgnoreCase(args[0])) {
+            java.util.UUID wanted;
+            try {
+                wanted = java.util.UUID.fromString(args[1]);
+            } catch (IllegalArgumentException notAUuid) {
+                send(sender, "{\"error\":\"body id is not a uuid\"}");
+                return;
+            }
+            int dim = parseIntOr(args[2], Integer.MIN_VALUE);
+            net.minecraft.world.WorldServer w = vsWorld(sender, dim);
+            if (w == null) {
+                send(sender, "{\"error\":\"world not loaded\",\"dim\":" + dim + "}");
+                return;
+            }
+            String vsShipId = args.length >= 4 ? args[3] : null;
+            // The ship's own chunks FIRST. A body that was carried is standing on that ship, so this is
+            // where it comes back from disk; without it the uuid map is empty and every answer is
+            // `false` for reasons that have nothing to do with the crossing.
+            double[] shipPos = vsShipId == null ? null
+                    : zmaster587.advancedRocketry.integration.vs.VSIntegration.shipStateById(w, vsShipId);
+            if (shipPos != null) {
+                int cx = ((int) shipPos[0]) >> 4, cz = ((int) shipPos[2]) >> 4;
+                for (int dx = -1; dx <= 1; dx++) {
+                    for (int dz = -1; dz <= 1; dz++) {
+                        w.getChunkProvider().provideChunk(cx + dx, cz + dz);
+                    }
+                }
+            }
+            net.minecraft.entity.Entity body = w.getEntityFromUuid(wanted);
+            if (body == null) {
+                // ABSENCE AS A VALUE, and beside it what the search actually covered: whether the world
+                // was up, and whether the ship it was asked about resolved at all. "not found" with
+                // `shipResolved:false` is a broken arrangement; with `shipResolved:true` it is the
+                // finding.
+                send(sender, "{\"ok\":true,\"found\":false,\"dim\":" + dim
+                        + ",\"shipResolved\":" + (vsShipId == null ? "null" : shipPos != null) + "}");
+                return;
+            }
+            // Whether production would STILL call this body aboard. Reported beside the position
+            // because "it arrived" and "it arrived on the deck" are different claims, and a crossing
+            // can satisfy the first while failing the second.
+            String aboardJson = "null";
+            if (vsShipId != null) {
+                net.minecraft.util.math.AxisAlignedBB stay = zmaster587.advancedRocketry.integration.vs
+                        .VSIntegration.subspaceStayRegion(w, vsShipId, 1.0);
+                double[] local = zmaster587.advancedRocketry.integration.vs.VSIntegration
+                        .toShipFrameFor(w, vsShipId, body.posX, body.posY, body.posZ);
+                aboardJson = Boolean.toString(stay != null && local != null && stay.contains(
+                        new net.minecraft.util.math.Vec3d(local[0], local[1], local[2])));
+            }
+            send(sender, "{\"ok\":true,\"found\":true,\"dim\":" + dim
+                    + ",\"entityId\":" + body.getEntityId()
+                    + ",\"x\":" + body.posX + ",\"y\":" + body.posY + ",\"z\":" + body.posZ
+                    + ",\"shipResolved\":" + (vsShipId == null ? "null" : shipPos != null)
+                    + ",\"aboard\":" + aboardJson + "}");
             return;
         }
         // transit-refresh: run the periodic re-cut of every parked ship's block snapshot, on demand.
@@ -5664,10 +5768,28 @@ public class TestProbeCommand extends CommandBase {
                             .TileAdvancedFlightComputer
                             && e.getKey().equals(((zmaster587.advancedRocketry.tile
                                     .TileAdvancedFlightComputer) afcTe).shipIdOrNull());
+                    // The PHYSICS mod's id for this ship, so a caller holding a durable AR id can go
+                    // on asking about the same craft through the `vs` verbs — which are keyed by that
+                    // id and by nothing else. It is the missing half of following a NAMED ship across
+                    // a crossing: the crossing re-assembles the hull, so the VS id on the far side is
+                    // a new one, and a caller without this falls back to "the nearest ship", which
+                    // stops being an identity the moment two scenarios settle in one cell.
+                    //
+                    // OFF THE FLIGHT COMPUTER, and only when that computer is PROVEN to be ours.
+                    // Everything above is a position query — the ledger coord gives a pose and the
+                    // world is asked what is there — so `block` is whatever ship the lookup reached
+                    // first, which at a shared arrival depth need not be this one. `afcIsOurs` is the
+                    // one step in this verb that is not proximity: the tile's own NBT carries the
+                    // durable id and it is compared with the ledger key we are answering for. So the
+                    // id is taken from the block that IDENTIFIED itself, and is null otherwise —
+                    // absence a caller can act on, rather than a stranger's id it cannot tell apart.
+                    String vsId = afcIsOurs ? zmaster587.advancedRocketry.integration.vs.VSIntegration
+                            .shipIdManagingBlock(w, afc) : null;
                     StringBuilder out2 = new StringBuilder("{\"ok\":true,\"found\":true,\"x\":");
                     out2.append(block.getX()).append(",\"y\":").append(block.getY())
                             .append(",\"z\":").append(block.getZ())
                             .append(",\"shipId\":\"").append(e.getKey()).append("\"")
+                            .append(",\"vsId\":").append(vsId == null ? "null" : "\"" + vsId + "\"")
                             .append(",\"afcFound\":").append(afcIsOurs);
                     if (afcIsOurs) {
                         out2.append(",\"afcX\":").append(afc.getX())
@@ -8043,16 +8165,49 @@ public class TestProbeCommand extends CommandBase {
                 send(sender, "{\"error\":\"scan status not SUCCESS\",\"status\":\"" + statusName + "\"}");
                 return;
             }
-            // 4. Assemble. assembleRocket() re-runs scanRocket internally; if the
+            // 4. Mint this craft's DURABLE ship id while its flight computer is still on the pad, and
+            //    hand it back below. THE CALLER THAT BUILT THE SHIP IS THE ONE CALLER THAT NEVER HAS
+            //    TO GUESS: without this a scenario has to go looking for its own craft afterwards —
+            //    "the first ledgered ship", "the ship nearest the cell centre" — and every one of
+            //    those answers with whatever the lookup reaches first the moment a second scenario
+            //    shares the boot. The same reasoning, and the same line, as the piloted transit
+            //    fixture's own mint.
+            //
+            //    Read HERE and not after: the assembler moves the computer into a subspace shipyard,
+            //    so a scan of the pad afterwards finds nothing. Minting is what production does on
+            //    first use, so this only brings that moment forward.
+            java.util.UUID durableShipId = null;
+            int afcCount = 0;
+            for (TileEntity padTile : new java.util.ArrayList<>(world.loadedTileEntityList)) {
+                if (!(padTile instanceof zmaster587.advancedRocketry.tile.TileAdvancedFlightComputer)
+                        || !bb.contains(new net.minecraft.util.math.Vec3d(
+                                padTile.getPos().getX() + 0.5, padTile.getPos().getY() + 0.5,
+                                padTile.getPos().getZ() + 0.5))) {
+                    continue;
+                }
+                afcCount++;
+                durableShipId = ((zmaster587.advancedRocketry.tile.TileAdvancedFlightComputer) padTile)
+                        .getOrCreateShipId();
+            }
+            // Reported rather than resolved: two computers on one pad is a build the caller did not
+            // mean, and an id picked out of them at random would name one of two craft with nothing
+            // saying which. `afcCount` is beside `shipId` so a caller can refuse it.
+            if (afcCount > 1) {
+                durableShipId = null;
+            }
+            // 5. Assemble. assembleRocket() re-runs scanRocket internally; if the
             //    second scan changes status, abort there too.
             builder.assembleRocket();
             String postStatusName = ((Enum<?>) getStatusMethod.invoke(builder)).name();
-            // 5. Find the spawned rocket inside the pad BB.
+            // 6. Find the spawned rocket inside the pad BB.
             java.util.List<zmaster587.advancedRocketry.entity.EntityRocket> rockets =
                     world.getEntitiesWithinAABB(zmaster587.advancedRocketry.entity.EntityRocket.class, bb);
             int entityId = rockets.isEmpty() ? -1 : rockets.get(0).getEntityId();
             send(sender, "{\"ok\":true,\"status\":\"" + postStatusName
-                    + "\",\"entityId\":" + entityId + ",\"rocketCount\":" + rockets.size() + "}");
+                    + "\",\"entityId\":" + entityId + ",\"rocketCount\":" + rockets.size()
+                    + ",\"afcCount\":" + afcCount
+                    + ",\"shipId\":" + (durableShipId == null ? "null" : "\"" + durableShipId + "\"")
+                    + "}");
         } catch (ReflectiveOperationException e) {
             send(sender, "{\"error\":\"reflection failed: " + escapeJson(e.getMessage()) + "\"}");
         } catch (RuntimeException e) {
@@ -21216,6 +21371,66 @@ public class TestProbeCommand extends CommandBase {
             }
             sb.append("]}");
             send(sender, sb.toString());
+            return;
+        }
+        // /artest chunk hold <dim> <x> <y> <z> [radiusChunks]  |  /artest chunk release
+        //
+        // HOLD the chunks around a world position for the rest of the scenario, with a real Forge
+        // ticket — as opposed to `warmup`, which calls provideChunk once and lets everything go again
+        // on the next chunk sweep.
+        //
+        // <p><b>Why a scenario needs this at all.</b> A loose body standing on a tier-2 ship lives at
+        // the SHIP'S WORLD POSE, and that pose is a virtual transform: the ship's blocks are in a
+        // subspace shipyard somewhere else entirely, so nothing holds the chunks the body is actually
+        // standing in. In play the pilot does. Headless nobody does, the chunk goes on the next sweep,
+        // and vanilla removes the entity with it — measured 2026-08-25 as a body that production had
+        // just called {@code aboard:true} being absent from its world's uuid map one command later,
+        // with the world up and the ship still resolving.
+        //
+        // <p>Holds ACCUMULATE and `release` drops them all: following a ship across a crossing means
+        // holding two worlds at once, and the arrival side has to be held BEFORE the arrival — the
+        // crossing spawns what it carried the moment the ship is rebuilt, and an unheld chunk is swept
+        // with everything standing in it. A scenario that forgets to release leaks chunk loaders for
+        // the rest of the boot, which is why `release` is idempotent and cheap enough for an
+        // {@code @After}.
+        if ("hold".equals(sub) && args.length >= 5) {
+            int dim = parseIntOr(args[1], Integer.MIN_VALUE);
+            net.minecraft.world.WorldServer world = vsWorld(sender, dim);
+            if (world == null) {
+                send(sender, "{\"error\":\"world not loaded\",\"dim\":" + dim + "}");
+                return;
+            }
+            int cx = ((int) parseDoubleOr(args[2], 0)) >> 4;
+            int cz = ((int) parseDoubleOr(args[4], 0)) >> 4;
+            int radius = args.length >= 6 ? parseIntOr(args[5], 1) : 1;
+            net.minecraftforge.common.ForgeChunkManager.Ticket ticket =
+                    net.minecraftforge.common.ForgeChunkManager.requestTicket(
+                            zmaster587.advancedRocketry.AdvancedRocketry.instance, world,
+                            net.minecraftforge.common.ForgeChunkManager.Type.NORMAL);
+            if (ticket == null) {
+                // Loud: a refused ticket means the scenario is running without the hold it asked for,
+                // and everything downstream would then fail for a reason that is not its subject.
+                send(sender, "{\"ok\":false,\"error\":\"chunk ticket refused\",\"dim\":" + dim + "}");
+                return;
+            }
+            heldChunks.add(ticket);
+            int forced = 0;
+            for (int dx = -radius; dx <= radius; dx++) {
+                for (int dz = -radius; dz <= radius; dz++) {
+                    net.minecraftforge.common.ForgeChunkManager.forceChunk(
+                            ticket, new net.minecraft.util.math.ChunkPos(cx + dx, cz + dz));
+                    world.getChunkProvider().provideChunk(cx + dx, cz + dz);
+                    forced++;
+                }
+            }
+            send(sender, "{\"ok\":true,\"dim\":" + dim + ",\"cx\":" + cx + ",\"cz\":" + cz
+                    + ",\"forced\":" + forced + ",\"holds\":" + heldChunks.size() + "}");
+            return;
+        }
+        if ("release".equals(sub)) {
+            int had = heldChunks.size();
+            releaseHeldChunks();
+            send(sender, "{\"ok\":true,\"released\":" + had + "}");
             return;
         }
         if ("warmup".equals(sub) && args.length >= 6) {

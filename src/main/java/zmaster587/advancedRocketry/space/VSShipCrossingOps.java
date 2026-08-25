@@ -30,12 +30,49 @@ public final class VSShipCrossingOps implements ShipCrossingService.Ops {
         return world == null ? null : VSIntegration.getShipWorldPosition(world, afcPos);
     }
 
+    /**
+     * What each crossing took off its ship that was NOT crew, keyed by the ship's durable id and
+     * waiting for {@link #reseat} to put it back. Empty except between a capture and its arrival.
+     *
+     * <p>Keyed by the SHIP and not by the destination: a crossing is identified by the craft making
+     * it, and two craft can be crossing into the same slot world at once.</p>
+     */
+    private final java.util.Map<java.util.UUID, List<AboardBodies.Stowed>> bodyStash =
+            new java.util.HashMap<>();
+
+    /**
+     * Ships whose crew is already back in its seats but whose arrival is not finished — it is still
+     * waiting on the bodies. Dropped the moment both halves are down.
+     *
+     * <p>Both this and {@link #bodyStash} are emptied by a completed arrival and by nothing else, so
+     * a crossing that exhausts the settle loop's attempts leaves an entry behind. That is the same
+     * bound the transit path's own stashes carry, it costs a handful of bytes per abandoned crossing,
+     * and the alternative — clearing on the give-up path — would need this object to be told about a
+     * failure it is not currently part of.</p>
+     */
+    private final java.util.Set<java.util.UUID> crewAlreadySeated = new java.util.HashSet<>();
+
     @Override
-    public List<CrewTransfer.Crew> captureCrew(int dimId, BlockPos afcPos, double[] shipWorldPos) {
+    public List<CrewTransfer.Crew> captureCrew(int dimId, BlockPos afcPos, double[] shipWorldPos,
+                                               java.util.UUID shipId) {
         WorldServer world = DimensionManager.getWorld(dimId);
-        return world == null
-                ? new java.util.ArrayList<CrewTransfer.Crew>()
-                : CrewTransfer.capture(world, afcPos, shipWorldPos);
+        if (world == null) {
+            return new java.util.ArrayList<CrewTransfer.Crew>();
+        }
+        // Everything that is NOT crew comes out first, and ahead of the crew capture for the same
+        // reason the transit path does it in that order: these need no negotiation with a client, so
+        // they are stowed rather than held, and a crewless ship must still take its cargo with it.
+        //
+        // This is the call that was missing. `AboardBodies` was driven from ONE place — the transit
+        // path's own crosser — so a JUMP carried the mob on the deck while an entry, a descent and a
+        // cell-seam carry silently left it behind, in a world the ship had just been cut out of.
+        if (shipId != null) {
+            List<AboardBodies.Stowed> bodies = AboardBodies.capture(world, afcPos);
+            if (!bodies.isEmpty()) {
+                bodyStash.put(shipId, bodies);
+            }
+        }
+        return CrewTransfer.capture(world, afcPos, shipWorldPos);
     }
 
     @Override
@@ -90,7 +127,53 @@ public final class VSShipCrossingOps implements ShipCrossingService.Ops {
     public boolean reseat(int destDim, BlockPos anchor, List<CrewTransfer.Crew> crew,
             java.util.UUID shipId, java.util.UUID vsShipUuid) {
         WorldServer world = DimensionManager.getWorld(destDim);
-        return world != null && CrewTransfer.reseat(world, anchor, crew, shipId, vsShipUuid);
+        if (world == null) {
+            return false; // target world not up yet — retry next tick
+        }
+        // BOTH, reported as one verdict, on the same retry loop: the crossing is not finished while a
+        // mob that was standing on the deck is still in a map on this side.
+        //
+        // THE CREW IS ATTEMPTED EVERY TICK REGARDLESS, and its success is remembered rather than
+        // re-performed. This is the transit path's shape and it is copied on purpose: the two halves
+        // can succeed on different ticks, and without the memo a body that lands late would drive a
+        // second `CrewTransfer.reseat` over crew that is already sitting down. Ordering the crew
+        // behind the bodies would avoid that too, but it would also let a body that cannot be placed
+        // keep a pilot standing in a world his ship has left — a far worse trade than a lost item.
+        boolean bodiesPlaced = releaseStowed(world, anchor, shipId);
+        boolean crewSeated = shipId != null && crewAlreadySeated.contains(shipId);
+        if (!crewSeated && CrewTransfer.reseat(world, anchor, crew, shipId, vsShipUuid)) {
+            crewSeated = true;
+            if (shipId != null) {
+                crewAlreadySeated.add(shipId);
+            }
+        }
+        if (bodiesPlaced && crewSeated) {
+            crewAlreadySeated.remove(shipId);
+            return true;
+        }
+        return false;
+    }
+
+    /**
+     * Put the bodies stowed for {@code shipId} back on the ship that arrived at {@code anchor}, and
+     * drop the stash once they are down.
+     *
+     * <p>{@code true} with nothing stowed — a ship that carried no loose body has nothing to wait
+     * for. {@code false} means the ship is not rebuilt here yet, which is the same "come back next
+     * tick" the crew placement answers with.</p>
+     */
+    private boolean releaseStowed(WorldServer world, BlockPos anchor, java.util.UUID shipId) {
+        List<AboardBodies.Stowed> bodies = shipId == null ? null : bodyStash.get(shipId);
+        if (bodies == null || bodies.isEmpty()) {
+            return true;
+        }
+        BlockPos afcPos = VSIntegration.flightComputerAt(world, anchor.getX() + 0.5,
+                anchor.getY() + 0.5, anchor.getZ() + 0.5);
+        if (afcPos == null || AboardBodies.release(world, afcPos, bodies) == 0) {
+            return false;
+        }
+        bodyStash.remove(shipId);
+        return true;
     }
 
     @Override

@@ -187,7 +187,7 @@ public final class CellCrossingController {
 
         // Capture only now, with the destination GRANTED — the last refusal is behind — and still
         // before the cut: the crossing cuts the seat blocks, and a post-cut capture finds nothing.
-        final List<CrewTransfer.Crew> crew = crossing.ops().captureCrew(slotDim, afcPos, shipPos);
+        final List<CrewTransfer.Crew> crew = crossing.ops().captureCrew(slotDim, afcPos, shipPos, shipId);
 
         int lane = (laneCounter++ % SEAM_LANE_COUNT);
         double[] pose = CellWorldMapper.poseWorldOf(destCoord);

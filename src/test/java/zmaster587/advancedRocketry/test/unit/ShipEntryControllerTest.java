@@ -87,9 +87,13 @@ public class ShipEntryControllerTest {
             return shipPresent ? new double[]{10.0, 1200.0, 10.0} : null;
         }
 
+        /** The ship the last capture was told it was emptying — null when it was told nothing. */
+        java.util.UUID capturedFor;
         @Override public List<CrewTransfer.Crew> captureCrew(int dimId, BlockPos afcPos,
-                                                             double[] shipWorldPos) {
+                                                             double[] shipWorldPos,
+                                                             java.util.UUID shipId) {
             captures++;
+            capturedFor = shipId;
             lastCaptured = new ArrayList<>(); // crew mechanics are integration-tier; none here
             return lastCaptured;
         }

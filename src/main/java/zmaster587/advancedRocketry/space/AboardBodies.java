@@ -91,11 +91,15 @@ public final class AboardBodies {
                     afcPos, vsShipId);
             return stowed;
         }
+        int scanned = 0;
+        int considered = 0;
         for (Entity body : new ArrayList<>(world.loadedEntityList)) {
+            scanned++;
             if (body.isDead || body instanceof EntityPlayer || body instanceof EntityDummy
                     || body.isRiding()) {
                 continue;
             }
+            considered++;
             double[] local = VSIntegration.toShipFrameFor(
                     world, vsShipId, body.posX, body.posY, body.posZ);
             if (local == null || !stay.contains(new Vec3d(local[0], local[1], local[2]))) {
@@ -115,6 +119,16 @@ public final class AboardBodies {
         if (!stowed.isEmpty()) {
             LOGGER.info("[SPACE] stowed {} body(ies) aboard the ship at {} for its crossing",
                     stowed.size(), afcPos);
+        } else {
+            // CARRYING NOTHING IS ALSO AN ANSWER, and it used to be the one case here that said
+            // nothing at all. "there was nobody aboard" and "somebody was aboard and this did not
+            // see him" are the same silence otherwise, and only the second is a defect — so the
+            // SCAN is reported: how many entities this world offered, how many survived the
+            // filter, and which ship they were measured against. A crossing that quietly loses
+            // cargo is then a line in the log rather than an absence a player notices later.
+            LOGGER.info("[SPACE] the ship at {} (physics id {}) carries no loose body across its "
+                    + "crossing: {} entity(ies) in this world, {} of them eligible, none inside its "
+                    + "stay region {}", afcPos, vsShipId, scanned, considered, stay);
         }
         return stowed;
     }

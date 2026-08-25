@@ -68,9 +68,19 @@ public final class ShipCrossingService {
         /** The ship's live world position read off its managed block, or {@code null}. */
         double[] shipWorldPosition(int dimId, BlockPos afcPos);
 
-        /** Enumerate + dismount the seated crew of the ship at {@code afcPos}. Pre-cut, and only
-         *  once every refusal is behind — a capture unseats the crew. */
-        List<CrewTransfer.Crew> captureCrew(int dimId, BlockPos afcPos, double[] shipWorldPos);
+        /**
+         * Enumerate + dismount the seated crew of the ship at {@code afcPos}, AND take everything
+         * else that is aboard it with them. Pre-cut, and only once every refusal is behind — a
+         * capture unseats the crew.
+         *
+         * <p>{@code shipId} is the ship's DURABLE id and is what the non-crew bodies are stowed
+         * under, so {@link #reseat} can put back the ones belonging to the ship it is re-seating.
+         * The crew need no such key: they are handed back to the caller and travel with the
+         * crossing record. Nothing aboard is keyed by position — a slot world can hold two craft a
+         * few blocks apart.</p>
+         */
+        List<CrewTransfer.Crew> captureCrew(int dimId, BlockPos afcPos, double[] shipWorldPos,
+                                            java.util.UUID shipId);
 
         /** Enumerate the same seated crew WITHOUT dismounting — what a refusal path reads to
          *  message the crew while every pilot stays exactly where he sits. */
@@ -90,7 +100,9 @@ public final class ShipCrossingService {
          */
         void pinDim(int dimId);
 
-        /** Re-seat the captured crew on the re-assembled ship. Runs AFTER the pose teleport, so
+        /** Re-seat the captured crew on the re-assembled ship, AND put back what {@link #captureCrew}
+         *  stowed for {@code shipId} — both, or neither: a crossing is not finished while a mob that
+         *  was standing on the deck is still in a map on the far side. Runs AFTER the pose teleport, so
          *  {@code anchor} is a world point on the ship at its FINAL pose (the paste anchor no
          *  longer resolves the moved ship). {@code shipId} is the crossing ship's durable id —
          *  the re-seat accepts only THAT ship's seats (a neighbouring ship with the same seat
