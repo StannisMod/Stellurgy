@@ -796,13 +796,12 @@ public class TileRocketAssemblingMachine extends TileEntityRFConsumer implements
                         (int) rocketBB.maxY - scannedFlightComputerPos.getY(),
                         (int) rocketBB.maxZ - scannedFlightComputerPos.getZ());
             }
-            // BOUND at birth, not merely minted. The id above was being computed and then dropped:
-            // the craft went into the physics registry nameless, so "the ship carrying durable id X"
-            // could not be answered for a freshly built one at all, and every caller that knows which
-            // ship it means — a crossing, a descent, a snapshot — had to fall back to asking which
-            // craft is NEAREST some point. A new build keeps a fresh physics uuid (null), and gains
-            // the durable name it already had.
-            VSIntegration.assembleTier2Ship(world, shipAnchor, null, durableShipId);
+            // The name is NOT handed in, and that is the point. This assembly is anchored on the very
+            // flight computer that carries the durable id, so the ship is asked what it is called
+            // rather than told — one source of truth, the tile's own NBT, and no call site that can
+            // forget. It went unbound here for exactly that reason: the id above was minted and the
+            // value dropped, so a craft that had not yet crossed could not be found by its own name.
+            VSIntegration.assembleTier2Ship(world, shipAnchor);
             // A pilot who took the seat BEFORE assembly is riding a mount bound to the seat's
             // build-time position, which the cut above just vacated - once the blocks relocate
             // into the ship's subspace nothing in his control chain resolves and the ship ignores

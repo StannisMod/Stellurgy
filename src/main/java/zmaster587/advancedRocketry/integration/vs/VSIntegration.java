@@ -88,6 +88,23 @@ public final class VSIntegration {
     }
 
     /**
+     * The durable name a craft about to be assembled at {@code anchorPos} already carries, read off
+     * the flight computer standing there, or {@code null} when that block is not one.
+     *
+     * <p>A NEW build is anchored on its own flight computer, so its name never has to be handed in:
+     * the ship is asked what it is called. That the caller had to supply it is how the name went
+     * unbound for every craft that had not yet crossed — the assembler minted the id, dropped the
+     * value, and passed the two-argument form.</p>
+     */
+    private static java.util.UUID durableNameAtAnchor(World world, BlockPos anchorPos) {
+        net.minecraft.tileentity.TileEntity te =
+                world == null || anchorPos == null ? null : world.getTileEntity(anchorPos);
+        return te instanceof zmaster587.advancedRocketry.tile.TileAdvancedFlightComputer
+                ? ((zmaster587.advancedRocketry.tile.TileAdvancedFlightComputer) te).shipIdOrNull()
+                : null;
+    }
+
+    /**
      * The same, KEEPING the identity {@code keepUuid} the caller already holds for this ship, so a
      * craft that is cut out of one world and re-assembled in another stays the same ship to every
      * lookup instead of becoming a stranger that has to be found by position. {@code null} mints a
@@ -114,7 +131,13 @@ public final class VSIntegration {
         if (!isAvailable()) {
             return null;
         }
-        return VSBridge.assembleTier2Ship(world, anchorPos, LOGGER, keepUuid, keepDurableId);
+        // The caller's value only when the ship cannot speak for itself. An assembly anchored on the
+        // craft's own flight computer — every new build — reads the name off it, so there is nothing
+        // to forget; a crossing anchors on the first pasted block instead and hands the name in,
+        // which is legitimate because it is carrying the SAME ship across.
+        java.util.UUID durable = keepDurableId != null
+                ? keepDurableId : durableNameAtAnchor(world, anchorPos);
+        return VSBridge.assembleTier2Ship(world, anchorPos, LOGGER, keepUuid, durable);
     }
 
     /**
@@ -1171,16 +1194,27 @@ public final class VSIntegration {
      * re-assembly; everything in the physics mod is keyed by its own uuid. Indexed on that side, so
      * this costs one probe.</p>
      *
-     * <p>Answers {@code null} for a craft that was never bound — which is every craft AR does not own,
-     * and any of its own whose binding has not happened yet. A caller must treat that as "could not
-     * establish", never as "not this ship".</p>
+     * <p><b>The index is a CACHE, and a miss is answered from the source of truth.</b> The durable id
+     * lives in the flight computer's own NBT — that is the canonical copy, it rides every relocation
+     * and every crossing verbatim, and the record on the physics side is a reverse index kept beside
+     * it so this question costs one probe instead of a shipyard scan. Two copies of one fact can
+     * disagree, and one did: the assembler minted the id and never bound it, so every craft that had
+     * not yet crossed was unfindable by its own name. So a miss here does NOT answer {@code null} —
+     * it walks this world's ships, reads each one's computer, and REPAIRS the index from what it
+     * finds. A call site that forgets to bind therefore costs one scan, not a wrong answer.</p>
+     *
+     * <p>Answers {@code null} only when no craft in {@code world} carries that name — which is every
+     * craft AR does not own. A caller must treat that as "could not establish", never as "not this
+     * ship".</p>
      */
     public static java.util.UUID shipUuidOfDurableId(World world, String durableId) {
         if (!isAvailable() || world == null || durableId == null) {
             return null;
         }
         try {
-            return VSBridge.shipUuidOfDurableId(world, java.util.UUID.fromString(durableId));
+            java.util.UUID wanted = java.util.UUID.fromString(durableId);
+            java.util.UUID indexed = VSBridge.shipUuidOfDurableId(world, wanted);
+            return indexed != null ? indexed : rebindFromFlightComputers(world, wanted);
         } catch (IllegalArgumentException notAnIdentity) {
             return null; // a synthetic id names no ship; the caller falls back as before
         }
@@ -1191,6 +1225,39 @@ public final class VSIntegration {
      * question {@link #shipUuidOfDurableId} answers from the other end, and reading both separates a
      * craft that was never bound from a binding the lookup cannot find.
      */
+    /**
+     * The index repair: find the ship in {@code world} whose FLIGHT COMPUTER carries {@code wanted},
+     * bind it, and answer. {@code null} when no craft here does.
+     *
+     * <p>Deliberately the expensive path, and deliberately only on a miss. It resolves each candidate's
+     * computer, which force-loads that ship's subspace shipyard — affordable because a slot world holds
+     * a craft or two and hyperspace a handful of lanes, and because it happens once: the binding it
+     * writes is what every later question reads.</p>
+     */
+    private static java.util.UUID rebindFromFlightComputers(World world, java.util.UUID wanted) {
+        if (!(world instanceof net.minecraft.world.WorldServer)) {
+            return null;
+        }
+        net.minecraft.world.WorldServer server = (net.minecraft.world.WorldServer) world;
+        for (java.util.UUID candidate : registeredShipPoses(world).keySet()) {
+            BlockPos afc = flightComputerOf(server, candidate);
+            net.minecraft.tileentity.TileEntity te = afc == null ? null : server.getTileEntity(afc);
+            if (!(te instanceof zmaster587.advancedRocketry.tile.TileAdvancedFlightComputer)) {
+                continue;
+            }
+            java.util.UUID named = ((zmaster587.advancedRocketry.tile.TileAdvancedFlightComputer) te)
+                    .shipIdOrNull();
+            if (wanted.equals(named)) {
+                LOGGER.info("[VS] ship {} in dim {} carries durable id {} on its flight computer but "
+                                + "was not indexed under it; binding it now", candidate,
+                        server.provider.getDimension(), wanted);
+                VSBridge.bindDurableId(world, candidate, wanted);
+                return candidate;
+            }
+        }
+        return null;
+    }
+
     public static java.util.UUID durableIdOfShip(World world, java.util.UUID vsShipUuid) {
         return (!isAvailable() || world == null || vsShipUuid == null)
                 ? null : VSBridge.durableIdOf(world, vsShipUuid);
