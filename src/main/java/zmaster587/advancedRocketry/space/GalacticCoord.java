@@ -65,7 +65,28 @@ public final class GalacticCoord {
     private final int localY;
     private final int localZ;
 
+    /**
+     * The zone whose lattice this coordinate's sector triple is expressed in — the parent's own cell
+     * key — or {@code null} for the GALACTIC lattice, which is the outermost and has no parent.
+     *
+     * <p>A sector triple means nothing on its own: C15 ADDR-19 makes a zone's cell size a property of
+     * the zone, so the same triple denotes different places in different lattices. Two coordinates in
+     * different zones are therefore never the same cell, however their numbers compare — which is why
+     * this participates in {@link #equals} and {@link #sameCell} rather than being decoration on the
+     * key.</p>
+     *
+     * <p>The galactic lattice is the null path, so every coordinate written before zones existed
+     * keeps its exact meaning.</p>
+     */
+    private final String zone;
+
     private GalacticCoord(long sectorX, long sectorY, long sectorZ, int localX, int localY, int localZ) {
+        this(null, sectorX, sectorY, sectorZ, localX, localY, localZ);
+    }
+
+    private GalacticCoord(String zone, long sectorX, long sectorY, long sectorZ,
+                          int localX, int localY, int localZ) {
+        this.zone = zone;
         this.sectorX = sectorX;
         this.sectorY = sectorY;
         this.sectorZ = sectorZ;
@@ -80,14 +101,34 @@ public final class GalacticCoord {
      */
     public static GalacticCoord ofSectorLocal(long sectorX, long sectorY, long sectorZ,
                                               long localX, long localY, long localZ) {
+        return inZone(null, sectorX, sectorY, sectorZ, localX, localY, localZ);
+    }
+
+    /**
+     * The same, in the lattice of {@code zone} — the parent's cell key, or {@code null} for the
+     * galactic lattice.
+     *
+     * <p>The carry still uses the GLOBAL {@link #CELL}. That is a deliberate first step and not the
+     * finished state: C15 ADDR-19 makes the cell size a property of the zone, so a zone-local lattice
+     * will carry at its own width. Until every construction site can supply that width, a zoned
+     * coordinate normalises at the global one — exact for the galactic lattice, and what every
+     * existing caller already gets.</p>
+     */
+    public static GalacticCoord inZone(String zone, long sectorX, long sectorY, long sectorZ,
+                                       long localX, long localY, long localZ) {
         long carryX = Math.floorDiv(localX + HALF_CELL, CELL);
         long carryY = Math.floorDiv(localY + HALF_CELL, CELL);
         long carryZ = Math.floorDiv(localZ + HALF_CELL, CELL);
-        return new GalacticCoord(
+        return new GalacticCoord(zone,
                 sectorX + carryX, sectorY + carryY, sectorZ + carryZ,
                 (int) (localX - carryX * CELL),
                 (int) (localY - carryY * CELL),
                 (int) (localZ - carryZ * CELL));
+    }
+
+    /** The zone this coordinate's lattice belongs to, or {@code null} for the galactic one. */
+    public String zone() {
+        return zone;
     }
 
     /**
@@ -115,7 +156,8 @@ public final class GalacticCoord {
 
     /** {@code true} iff {@code other} is in the same cell (equal sector triple) as this coordinate. */
     public boolean sameCell(GalacticCoord other) {
-        return sectorX == other.sectorX && sectorY == other.sectorY && sectorZ == other.sectorZ;
+        return java.util.Objects.equals(zone, other.zone)
+                && sectorX == other.sectorX && sectorY == other.sectorY && sectorZ == other.sectorZ;
     }
 
     /**
@@ -123,7 +165,7 @@ public final class GalacticCoord {
      * where precision-critical content (stations, docking) is snapped so it never carries float jitter.
      */
     public GalacticCoord cellCentre() {
-        return new GalacticCoord(sectorX, sectorY, sectorZ, 0, 0, 0);
+        return new GalacticCoord(zone, sectorX, sectorY, sectorZ, 0, 0, 0);
     }
 
     /**
@@ -131,7 +173,7 @@ public final class GalacticCoord {
      * integration: repeatedly adding a per-tick velocity vector never drifts (exact integer carry).
      */
     public GalacticCoord plusLocal(long dx, long dy, long dz) {
-        return ofSectorLocal(sectorX, sectorY, sectorZ, localX + dx, localY + dy, localZ + dz);
+        return inZone(zone, sectorX, sectorY, sectorZ, localX + dx, localY + dy, localZ + dz);
     }
 
     /**
@@ -200,8 +242,19 @@ public final class GalacticCoord {
      * key the on-disk cell store and to bind a pool slot to a cell.
      */
     public String cellKey() {
-        return sectorX + "_" + sectorY + "_" + sectorZ;
+        String here = sectorX + "_" + sectorY + "_" + sectorZ;
+        return zone == null ? here : zone + ZONE_SEPARATOR + here;
     }
+
+    /**
+     * What separates one lattice level from the next inside a cell key.
+     *
+     * <p>A DOT, and not the obvious slash: a cell key becomes a directory name
+     * ({@code cell_<key>} under the pool's store) and is read straight back out of it, so a separator
+     * the filesystem treats as structure would turn one cell's store into a tree and break the
+     * round-trip. Underscore is already the field separator inside a level.</p>
+     */
+    public static final char ZONE_SEPARATOR = '.';
 
     /**
      * The cell-centre coordinate of a {@link #cellKey()} string, or {@code null} if malformed. The
@@ -212,12 +265,14 @@ public final class GalacticCoord {
         if (key == null) {
             return null;
         }
-        String[] parts = key.split("_");
+        int lastLevel = key.lastIndexOf(ZONE_SEPARATOR);
+        String zonePart = lastLevel < 0 ? null : key.substring(0, lastLevel);
+        String[] parts = key.substring(lastLevel + 1).split("_");
         if (parts.length != 3) {
             return null;
         }
         try {
-            return new GalacticCoord(Long.parseLong(parts[0]), Long.parseLong(parts[1]),
+            return new GalacticCoord(zonePart, Long.parseLong(parts[0]), Long.parseLong(parts[1]),
                     Long.parseLong(parts[2]), 0, 0, 0);
         } catch (NumberFormatException bad) {
             return null;
@@ -259,13 +314,15 @@ public final class GalacticCoord {
             return false;
         }
         GalacticCoord other = (GalacticCoord) o;
-        return sectorX == other.sectorX && sectorY == other.sectorY && sectorZ == other.sectorZ
+        return java.util.Objects.equals(zone, other.zone)
+                && sectorX == other.sectorX && sectorY == other.sectorY && sectorZ == other.sectorZ
                 && localX == other.localX && localY == other.localY && localZ == other.localZ;
     }
 
     @Override
     public int hashCode() {
-        int result = Long.hashCode(sectorX);
+        int result = zone == null ? 0 : zone.hashCode();
+        result = 31 * result + Long.hashCode(sectorX);
         result = 31 * result + Long.hashCode(sectorY);
         result = 31 * result + Long.hashCode(sectorZ);
         result = 31 * result + localX;
@@ -276,7 +333,8 @@ public final class GalacticCoord {
 
     @Override
     public String toString() {
-        return "GalacticCoord[sector=(" + sectorX + "," + sectorY + "," + sectorZ + "), local=("
+        return "GalacticCoord[" + (zone == null ? "" : "zone=" + zone + ", ")
+                + "sector=(" + sectorX + "," + sectorY + "," + sectorZ + "), local=("
                 + localX + "," + localY + "," + localZ + ")]";
     }
 }
