@@ -481,29 +481,48 @@ public class SystemContentTest {
         assertEquals("the fixture must be a giant, or the two readings coincide and prove nothing",
                 2.535d, parent.gravitationalMultiplier, 0.01d);
 
-        long massPeriodTicks = (long) (24000d
-                * AstronomicalBodyHelper.getMoonOrbitalPeriod(127f, (float) parent.getOrbitalMass()));
-        long gravityPeriodTicks = (long) (24000d
-                * AstronomicalBodyHelper.getMoonOrbitalPeriod(127f, parent.gravitationalMultiplier));
+        SystemBody moonBody = bodyOf(SystemContent.bodiesOf(star, GalacticCoord.ORIGIN), 781);
+        assertNotNull(moonBody);
+
+        // THE PERIOD OF THE ORBIT THE MOON IS ACTUALLY ON, not of the one it was authored with.
+        //
+        // This used to compute both readings at the authored 127 units, and the two disagreed with
+        // the body all along: a moon this close to an 11.2-radius parent is below the 2.5-parent-radii
+        // floor, so `moonLawOf` lifts it — to 3 572 units here — and it orbits at the lifted distance
+        // while the expectation was built from the authored one. The mismatch was a near-miss the old
+        // period law happened to keep inside the tolerance (3 815 blocks against a 500-block bar once
+        // the law was re-anchored on the real Moon), so the tolerance, not the arrangement, was doing
+        // the work. Asking the body for its own distance removes the disagreement entirely.
+        // `offsetLaw`, not `frame().law()`: a moon's FRAME is its parent's orbit around the star —
+        // the cell rides the planet — while what this test samples (`inCellOffsetAt`) is the moon's
+        // own turn about that parent. Reading the frame gave the parent's 200 units and a period for
+        // an orbit the moon is not on.
+        double actualUnits = moonBody.offsetLaw().distUnits();
+        long massPeriodTicks = (long) (24000d * AstronomicalBodyHelper.getMoonOrbitalPeriod(
+                (float) actualUnits, (float) parent.getOrbitalMass()));
+        long gravityPeriodTicks = (long) (24000d * AstronomicalBodyHelper.getMoonOrbitalPeriod(
+                (float) actualUnits, parent.gravitationalMultiplier));
         assertTrue("mass and gravity must give periods far enough apart to tell apart: "
                         + massPeriodTicks + " vs " + gravityPeriodTicks,
                 gravityPeriodTicks > massPeriodTicks * 5);
-
-        SystemBody moonBody = bodyOf(SystemContent.bodiesOf(star, GalacticCoord.ORIGIN), 781);
-        assertNotNull(moonBody);
 
         BlockDelta start = moonBody.inCellOffsetAt(0L);
         BlockDelta afterOnePeriod = moonBody.inCellOffsetAt(massPeriodTicks);
         BlockDelta afterHalf = moonBody.inCellOffsetAt(massPeriodTicks / 2L);
 
-        // The orbit is 127 units at MOON_UNIT_BLOCKS, so its radius is 25 400 blocks: half a turn puts
-        // the moon ~50 800 blocks from where it started, and one full turn puts it back.
+        // Both bounds are functions of the orbit the moon is ON: half a turn carries it to the far
+        // side (about two radii away) and a full turn brings it back to where it started. Stated as
+        // fractions of the radius rather than as block counts, so neither can quietly become the
+        // thing that passes the test when the layout scale moves again.
+        double radiusBlocks = actualUnits * 200d;
         double halfTurn = separation(start, afterHalf);
         double fullTurn = separation(start, afterOnePeriod);
-        assertTrue("half a mass-derived period must carry the moon to the far side (was " + halfTurn + ")",
-                halfTurn > 40_000d);
-        assertTrue("one mass-derived period must bring it back (was " + fullTurn + ")",
-                fullTurn < 500d);
+        assertTrue("half a mass-derived period must carry the moon to the far side (was " + halfTurn
+                        + ", orbit radius " + radiusBlocks + ")",
+                halfTurn > radiusBlocks * 1.5d);
+        assertTrue("one mass-derived period must bring it back (was " + fullTurn
+                        + ", orbit radius " + radiusBlocks + ")",
+                fullTurn < radiusBlocks * 0.02d);
     }
 
     private static double separation(BlockDelta a, BlockDelta b) {

@@ -838,7 +838,18 @@ public class DimensionManager implements IGalaxy {
                     DimensionProperties dimensionProperties = new DimensionProperties(zmaster587.advancedRocketry.api.ARConfiguration.getCurrentConfig().MoonId);
                     dimensionProperties.setAtmosphereDensityDirect(0);
                     dimensionProperties.setAverageTemp(20);
-                    dimensionProperties.rotationalPeriod = 128000;
+                    // TIDALLY LOCKED TO ITS PARENT, expressed the way this codebase expresses it:
+                    // `getParentPlanetThetaFromMoon` moves the parent across a moon's sky by
+                    // (orbitalPeriod / rotationalPeriod − 1), so a rotation equal to the orbit holds
+                    // Earth still — which is what standing on the Moon looks like.
+                    //
+                    // NOT `setTidallyLocked(true)`: that flag says a world keeps one face to its
+                    // STAR and removes the day/night cycle altogether. The Moon keeps one face to
+                    // EARTH and still has a day and a night, so the flag would describe a different
+                    // body. The period below is its own orbit — 27.32 days, 655 680 ticks.
+                    dimensionProperties.rotationalPeriod = (int) Math.round(
+                            zmaster587.advancedRocketry.util.AstronomicalBodyHelper.DAYS_PER_LUNAR_MONTH
+                                    * 24000d);
                     dimensionProperties.gravitationalMultiplier = .166f; //Actual moon value
                     // The Moon's measured bulk, in the same units: 7.342e22 kg is 0.0123 Earth
                     // masses and 1 737.4 km is 0.2727 Earth radii. The gravity above is the stated
@@ -848,7 +859,16 @@ public class DimensionManager implements IGalaxy {
                     dimensionProperties.setGravityAuthored(true);
                     dimensionProperties.setBulk(0.0123d, 0.2727d);
                     dimensionProperties.setName("Luna");
-                    dimensionProperties.orbitalDist = 150;
+                    // 384 400 km, in the moon-unit the layout measures a moon's orbit in (200 chart
+                    // blocks each, 250 m per block): 1 537 600 blocks / 200 = 7 688 units. The 150
+                    // this replaces meant 7 500 km — 51 times too small, close enough to Earth's own
+                    // 6 378 km radius that the two bodies' neighbourhoods overlapped, which is why
+                    // "which body is this craft's frame" had no answer worth giving.
+                    //
+                    // The field is an int and always was, so the real value was expressible from the
+                    // start; nothing about the model stood in the way of it.
+                    dimensionProperties.orbitalDist =
+                            zmaster587.advancedRocketry.util.AstronomicalBodyHelper.MOON_REFERENCE_UNITS;
                     dimensionProperties.addBiome(AdvancedRocketryBiomes.moonBiome);
                     dimensionProperties.addBiome(AdvancedRocketryBiomes.moonBiomeDark);
 

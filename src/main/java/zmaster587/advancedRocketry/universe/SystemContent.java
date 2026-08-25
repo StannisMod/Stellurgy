@@ -198,8 +198,6 @@ public final class SystemContent {
 
     /** A moon's orbital law about its PARENT — its offset inside the shared cell, live at every tick. */
     private static BodyEphemeris moonLawOf(DimensionProperties moon, DimensionProperties parent) {
-        double periodTicks = TICKS_PER_DAY * AstronomicalBodyHelper.getMoonOrbitalPeriod(
-                moon.getOrbitalDist(), (float) parent.getOrbitalMass());
         // A FLOOR rather than a replacement: an authored pack keeps the spacing it wrote, unless what
         // it wrote would put the moon inside its parent. That became possible only when bodies got a
         // real radius — an Earth is 25 513 blocks across, so an authored orbit of 100 units (20 000
@@ -210,6 +208,14 @@ public final class SystemContent {
         long floorUnits = Math.round(parentRadiusBlocks * MOON_MIN_PARENT_RADII
                 / (double) MOON_UNIT_BLOCKS);
         int orbit = (int) Math.max(authored, Math.max(1L, Math.min(Integer.MAX_VALUE, floorUnits)));
+        // THE PERIOD OF THE ORBIT THE MOON IS PUT ON, which is the floored one. This used to be
+        // derived from the AUTHORED distance and handed to an ephemeris built with the floored one,
+        // so a lifted moon turned at the angular rate of an orbit it is not on — a radius and a
+        // period that do not belong to each other are not a Keplerian orbit at all. It stayed
+        // invisible while both numbers were small; it showed up the moment the period law was
+        // anchored on the real Moon, as a body that failed to come back after one of its own periods.
+        double periodTicks = TICKS_PER_DAY * AstronomicalBodyHelper.getMoonOrbitalPeriod(
+                orbit, (float) parent.getOrbitalMass());
         return BodyEphemeris.orbit(orbit, moon.baseOrbitTheta, moon.orbitalPhi,
                 moon.isRetrograde, periodTicks, MOON_UNIT_BLOCKS);
     }

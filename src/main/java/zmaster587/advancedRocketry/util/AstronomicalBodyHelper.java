@@ -137,8 +137,25 @@ public class AstronomicalBodyHelper {
 
     /** Days in one year: the orbital period one AU from a mass-1 star. */
     public static final int DAYS_PER_YEAR = 48;
-    /** Days in one lunar month: a moon's period at the reference distance from a mass-1 parent. */
-    public static final int DAYS_PER_LUNAR_MONTH = 8;
+    /**
+     * The reference PAIR a moon's period is anchored on: our own Moon, at its own distance.
+     *
+     * <p>384 400 km is {@value #MOON_REFERENCE_UNITS} moon-units of 200 chart blocks, and the Moon
+     * takes 27.32 days to go round. Kepler's third scales every other moon from that pair.</p>
+     *
+     * <p><b>Why an anchor at all, rather than the 8-days-at-100-units it replaces.</b> That
+     * reference read a moon's distance against {@link #DISTANCE_UNITS_PER_AU} — the scale a PLANET's
+     * distance from its star is written in, where 100 units is an astronomical unit. A moon's
+     * distance is not written in that metric: the layout gives it 200 chart blocks per unit
+     * (`SystemContent.MOON_UNIT_BLOCKS`), so the same field meant 50 km to one reader and 1.5
+     * million km to the other. The error was invisible while our Moon carried a distance 51 times too
+     * small; correcting that distance made it plain, because the old law answered <b>5 392 days</b>
+     * for a Moon that takes 27.32.</p>
+     */
+    public static final int MOON_REFERENCE_UNITS = 7688;
+    /** Days in one lunar month at {@link #MOON_REFERENCE_UNITS} from a mass-1 parent — the Moon's own
+     *  sidereal period, and a measured fact rather than a tuned one. */
+    public static final double DAYS_PER_LUNAR_MONTH = 27.32d;
     /** Ticks in one day — the platform's rate, NOT a planet's rotational period (that is per-dim). */
     public static final int TICKS_PER_DAY = 24000;
     /**
@@ -194,10 +211,11 @@ public class AstronomicalBodyHelper {
      * @return the orbital period in MC Days (24000 ticks)
      */
     public static double getMoonOrbitalPeriod(float orbitalDistance, float planetaryMass) {
-        //One (lunar) MC month is 8 MC days, so the moon orbits in 8
-        //The same as the function for planets, with the parent's mass in place of the star's size
+        // Kepler's third, anchored on the Moon: 27.32 days at its own distance from a one-Earth
+        // parent. The reference LENGTH is a moon's own unit and not the astronomical one — see
+        // MOON_REFERENCE_UNITS for what reading a moon's distance as an AU-scaled number did.
         return DAYS_PER_LUNAR_MONTH
-                * Math.pow(Math.pow((orbitalDistance / (double) DISTANCE_UNITS_PER_AU), 3) / planetaryMass, 0.5d);
+                * Math.pow(Math.pow((orbitalDistance / (double) MOON_REFERENCE_UNITS), 3) / planetaryMass, 0.5d);
     }
 
     /**

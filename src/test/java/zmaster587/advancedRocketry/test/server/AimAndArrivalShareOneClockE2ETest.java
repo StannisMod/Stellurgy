@@ -57,7 +57,20 @@ public class AimAndArrivalShareOneClockE2ETest extends AbstractSharedServerTest 
      * the defect produces: a moon covers about half a block per tick, so the split above is worth
      * hundreds of thousands of blocks.
      */
-    private static final double ALLOWED_DRIFT_BLOCKS = 8.0;
+    /**
+     * How much of the CONTROL's movement a wrong clock is allowed to reproduce.
+     *
+     * <p>Stated as a fraction rather than as blocks, because blocks are not what this test is about:
+     * the same angular leak on a bigger orbit is a bigger number without anything having changed
+     * about the contract. The old bound was 8 blocks against a control required to exceed 1 000 —
+     * 0.8 % — and that ratio is kept exactly. It broke when the Moon moved to its real distance,
+     * fifty-one times further out, where 0.8 % of the arc is 44 blocks; a bound that a correct
+     * universe invalidates was measuring the universe, not the clock.</p>
+     */
+    private static final double ALLOWED_DRIFT_FRACTION_OF_CONTROL = 0.008;
+
+    /** A floor under the fraction, for the numeric noise of two long round-trips. */
+    private static final double ALLOWED_DRIFT_FLOOR_BLOCKS = 8.0;
 
     private String exec(String cmd) throws Exception {
         return String.join("\n", client().execute(cmd));
@@ -113,13 +126,17 @@ public class AimAndArrivalShareOneClockE2ETest extends AbstractSharedServerTest 
             long[] aimAfterLag = targetLocal(afterLag);
 
             double drift = distance(aimAfterSpaceMove, aimAfterLag);
+            double allowed = Math.max(ALLOWED_DRIFT_FLOOR_BLOCKS,
+                    controlMove * ALLOWED_DRIFT_FRACTION_OF_CONTROL);
             assertTrue("THE CONTRACT (ledger #164): an aim is evaluated on the SPACE clock, so a clock"
                             + " that is not the space clock may not move it. A proxy answering "
-                            + SPLIT_TICKS + " ticks behind moved the aim " + drift + " blocks"
-                            + " (allowed " + ALLOWED_DRIFT_BLOCKS + "). The control above proves the"
-                            + " aim does move when the SPACE clock moves, so this is not a dead"
-                            + " instrument. status=" + afterLag,
-                    drift <= ALLOWED_DRIFT_BLOCKS);
+                            + SPLIT_TICKS + " ticks behind moved the aim " + drift + " blocks —"
+                            + " that is " + (drift / controlMove * 100d) + "% of the " + controlMove
+                            + " blocks the RIGHT clock moves it, and at most "
+                            + (ALLOWED_DRIFT_FRACTION_OF_CONTROL * 100d) + "% is allowed. The control"
+                            + " above proves the aim does move when the SPACE clock moves, so this is"
+                            + " not a dead instrument. status=" + afterLag,
+                    drift <= allowed);
         } finally {
             // This server is shared with every other test in the fork: a left-behind proxy or an
             // aged clock is exactly the state that fails somebody else three classes later.
