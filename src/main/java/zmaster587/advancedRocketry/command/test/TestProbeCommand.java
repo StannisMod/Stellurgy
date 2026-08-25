@@ -796,6 +796,32 @@ public class TestProbeCommand extends CommandBase {
             send(sender, jsonMap(m));
             return;
         }
+        // ship-uuid <dim> <durableShipId> — the PHYSICS id of the craft whose flight computer carries
+        // the durable id <durableShipId>, or null.
+        //
+        // <p>The one honest bridge between the two identities a tier-2 craft has. A test that BUILT a
+        // ship knows its durable id — the assembler mints it on the pad and returns it — but every
+        // `vs` verb is keyed on the physics id, which the physics mod mints asynchronously and which a
+        // crossing REPLACES. Without this the only way across was `ship-info <dim> <x> <y> <z>`, a
+        // proximity lookup: it answers with a neighbour the moment a world holds two craft, and it
+        // reads identically when it does.
+        //
+        // <p>Resolved through the registry by name (`shipUuidOfDurableId`), never by distance. It
+        // answers `null` rather than a guess — a caller that gets null has an arrangement problem it
+        // can see, instead of a stranger's ship it cannot.
+        if (args.length >= 3 && "ship-uuid".equalsIgnoreCase(args[0])) {
+            net.minecraft.world.WorldServer world = vsWorld(sender, parseIntOr(args[1], Integer.MIN_VALUE));
+            if (world == null) {
+                send(sender, "{\"error\":\"world not loaded\"}");
+                return;
+            }
+            java.util.UUID vsId = zmaster587.advancedRocketry.integration.vs.VSIntegration
+                    .shipUuidOfDurableId(world, args[2]);
+            send(sender, "{\"ok\":true,\"durableId\":\"" + escapeJson(args[2]) + "\""
+                    + ",\"found\":" + (vsId != null)
+                    + ",\"id\":" + (vsId == null ? "null" : "\"" + vsId + "\"") + "}");
+            return;
+        }
         // ship-info <dim> id <shipId> — the ship report keyed on the ship's own IDENTITY. There is
         // no distance term to be wrong about: the ship may be anywhere, and an id naming nothing
         // loaded here answers managed:false, which is a loud arrangement failure rather than a

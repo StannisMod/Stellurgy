@@ -13,7 +13,6 @@ import java.util.regex.Pattern;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
-import static zmaster587.advancedRocketry.test.AdvancedRocketryTestConstants.SHIP_CAPTURE_RADIUS_BLOCKS;
 
 /**
  * E2E: a ship flown out through its cell's face ARRIVES IN THE NEIGHBOUR, and its ledger row names the
@@ -372,17 +371,15 @@ public class VSShipCellSeamE2ETest extends AbstractSharedServerTest {
                 before.contains("\"found\":false"));
         assertTrue("the source VS ship never loaded", waitForLoadedShip(0) >= 1);
 
-        // TWO IDENTITIES, deliberately kept apart. `vs ship-info` answers the VS ship uuid
-        // (`VSBridge.nearestShipId` -> `getShipData().getUuid()`), which every `vs` verb takes and
-        // which a crossing REPLACES — the arriving ship is a new VS body, so this id is good only on
-        // the pad. The DURABLE id above is AR's, survives every crossing, and is what the ledger is
-        // keyed by. Asking either side with the other's id answers "not found" and reads exactly like
-        // the mechanic being broken.
-        String srcInfo = exec("artest vs ship-info 0 " + SRC_X + " " + SRC_Y + " " + SRC_Z
-                + " " + SHIP_CAPTURE_RADIUS_BLOCKS);
+        // TWO IDENTITIES, deliberately kept apart, and NEITHER of them is searched for. The DURABLE
+        // id came from the assembler that built this craft. The PHYSICS id is minted asynchronously by
+        // the physics mod and is replaced by every crossing, so it cannot be known in advance — but it
+        // is TRANSLATED from the durable one through the registry, never found by proximity. Asking
+        // either side with the other's id answers "not found" and reads exactly like the mechanic
+        // being broken.
+        String srcVsId = vsIdOf(0, arShipId);
+        String srcInfo = exec("artest vs ship-info 0 id " + srcVsId);
         assertTrue("source ship not managed by VS: " + srcInfo, srcInfo.contains("\"managed\":true"));
-        String srcVsId = extractString(srcInfo, "id");
-        assertTrue("the assembled ship reported no VS id: " + srcInfo, srcVsId != null);
         double sx = extractDouble(srcInfo, "posX"), sy = extractDouble(srcInfo, "posY"),
                 sz = extractDouble(srcInfo, "posZ");
 
@@ -412,13 +409,24 @@ public class VSShipCellSeamE2ETest extends AbstractSharedServerTest {
         assertTrue("settled ship has no bound slot: " + status[0], sourceSlot > Integer.MIN_VALUE);
         assertTrue("the settled ship's cell world is not live", waitForLoadedShip(sourceSlot) >= 1);
 
+        // LET GO OF THE STICK. The climb held full up to get past the entry ceiling, and the flight
+        // computer RETAINS a cruise setpoint — so without this the craft is still under thrust for
+        // everything that follows. Measured: it crosses the seam climbing at 0.667 blocks a tick, and
+        // a body put down on its deck is 143 blocks below it by the time anything asks, which reads
+        // as "the crossing dropped the cargo" and is nothing of the kind. This scenario is about what
+        // a carry does with what is aboard; an accelerating deck is a different subject.
+        String settledVsId = vsIdOf(sourceSlot, arShipId);
+        String released = exec("artest vs ff-input-by-id " + sourceSlot + " " + settledVsId
+                + " 0 0 0 0 0 0");
+        assertTrue("the throttle could not be released, so the ship stays under power: " + released,
+                released.contains("\"afcResolved\":true"));
+
         // --- Act: put the ship past the +X face of its cell --------------------------------------
-        String inCell = shipInThatSlot(sourceSlot);
-        // Captured HERE, at the settle pose, and carried out with the rest: after the move the ledger
-        // still names the pre-move coordinate (a headless slot's tiles do not tick), so an
-        // identity-addressed lookup would be aimed at where the ship no longer is.
-        String settledVsId = extractString(inCell, "id");
-        assertTrue("the settled ship reported no VS id: " + inCell, settledVsId != null);
+        // The SAME durable craft, under the physics id translated above: entry is itself a crossing,
+        // so the body that reached the cell is not the one that was built.
+        String inCell = exec("artest vs ship-info " + sourceSlot + " id " + settledVsId);
+        assertTrue("the settled ship is not managed in its slot: " + inCell,
+                inCell.contains("\"managed\":true"));
         double cx = extractDouble(inCell, "posX"), cy = extractDouble(inCell, "posY"),
                 cz = extractDouble(inCell, "posZ");
         assertFalse("the ship's in-cell pose could not be read: " + inCell,
@@ -434,7 +442,7 @@ public class VSShipCellSeamE2ETest extends AbstractSharedServerTest {
         // the face": a clamp, a refused transform or a Y-limit would all report ok and leave the ship
         // inside its cell, and the carry would then be correctly not firing — a green mechanic
         // reported as a red one.
-        String moved = shipInThatSlot(sourceSlot);
+        String moved = exec("artest vs ship-info " + sourceSlot + " id " + settledVsId);
         double mx = extractDouble(moved, "posX");
         assertFalse("the moved ship's pose could not be read: " + moved, Double.isNaN(mx));
         assertTrue("the ship is not actually past the cell face after the move — it is at x=" + mx
@@ -466,56 +474,39 @@ public class VSShipCellSeamE2ETest extends AbstractSharedServerTest {
     }
 
     /**
-     * The one ship in a cell's slot world, asked for POSITIONALLY and guarded by a count.
+     * The PHYSICS id of the craft this test built, in {@code slotDim} — translated from the durable
+     * id the assembler handed back, never searched for.
      *
-     * <p>A ship cannot be followed across a crossing by VS id — the arriving body is a new one — and
-     * the cell frame is far from any origin a query could guess, so the lookup is "nearest to the
-     * cell centre pose, within the whole cell". That is only an identity because the slot world holds
-     * exactly ONE ship, which is asserted here rather than assumed: without the count this returns a
-     * neighbour the moment a second ship shares the slot, and it reads identically.</p>
+     * <p>This replaced a "the one ship in this slot, asked positionally and guarded by a count"
+     * helper. The guard was honest as far as it went — a proximity answer IS an identity while there
+     * is only one candidate — but the premise stops holding the moment a second scenario shares the
+     * boot, and a cell-seam arrival is DETERMINISTIC, so scenarios pile up in exactly the same
+     * places. A test that built its own craft never has to rely on being alone.</p>
      */
     /**
-     * The ship the ledger calls {@code arShipId}, in the slot it arrived in.
+     * The ship this test built, as it stands in the slot it arrived in.
      *
-     * <p><b>Why not "the ship nearest the cell centre".</b> A crossing puts every scenario's ship at
-     * the SAME arrival depth in the SAME neighbour cell, so a second scenario in one boot leaves two
-     * craft a few blocks apart in one world, and a positional lookup answers with whichever it reaches
-     * first while reading identically.</p>
-     *
-     * <p><b>Where the identity actually comes from — not from the find.</b> {@code find-afc} locates
-     * BY POSITION (the ledger's coordinate gives a pose and the world is asked what is there); a
-     * filter on the ledger row constrains which row supplies the pose, not which ship the world hands
-     * back. The one step that is not proximity is the flight computer: its tile carries the durable
-     * ship id in its own NBT, and the verb compares it with the ledger key before reporting
-     * {@code afcFound}. So this asserts THAT, and takes the VS id off the block that identified
-     * itself. Asserting only {@code found:true} would accept a neighbour's hull.</p>
+     * <p>The durable id is the one thing about the craft that survives a crossing — the physics body
+     * does not — so it is translated afresh in whichever world the question is about, and the report
+     * is then asked BY that id. Nothing here is a search: no anchor, no radius, no "the one ship in
+     * this slot".</p>
      */
-    private String arrivedShip(int slotDim, String arShipId) throws Exception {
-        String afc = exec("artest space find-afc " + slotDim + " " + arShipId);
-        assertTrue("the ledger says this ship is in slot " + slotDim + " but nothing there answers to "
-                + "its id: " + afc, afc.contains("\"found\":true"));
-        assertTrue("the flight computer found at this ship's coordinate does not carry this ship's "
-                + "durable id, so the hull the lookup reached is somebody else's: " + afc,
-                afc.contains("\"afcFound\":true"));
-        String vsId = extractString(afc, "vsId");
-        assertTrue("the arrived ship's flight computer is there but no physics ship manages it: " + afc,
-                vsId != null);
+    private String arrivedShip(int slotDim, String durableShipId) throws Exception {
+        String vsId = vsIdOf(slotDim, durableShipId);
         String info = exec("artest vs ship-info " + slotDim + " id " + vsId);
         assertTrue("the arrived ship " + vsId + " is not managed in slot " + slotDim + ": " + info,
                 info.contains("\"managed\":true"));
         return info;
     }
 
-    private String shipInThatSlot(int slotDim) throws Exception {
-        String count = exec("artest vs ship-count " + slotDim);
-        assertEquals("this lookup is only an identity while the slot holds exactly one ship: " + count,
-                1, extractInt(count, "count"));
-        long centreY = GalacticCoord.HALF_CELL + 256L; // the cell-centre pose (CellWorldMapper band)
-        String info = exec("artest vs ship-info " + slotDim + " 0 " + centreY + " 0 "
-                + (GalacticCoord.CELL * 2L));
-        assertTrue("the ship in slot " + slotDim + " could not be located: " + info,
-                info.contains("\"managed\":true"));
-        return info;
+    private String vsIdOf(int slotDim, String durableShipId) throws Exception {
+        String reply = exec("artest vs ship-uuid " + slotDim + " " + durableShipId);
+        assertTrue("no physics ship in dim " + slotDim + " carries this test's durable id "
+                + durableShipId + " — the craft is not there, or not assembled yet: " + reply,
+                reply.contains("\"found\":true"));
+        String vsId = extractString(reply, "id");
+        assertTrue("the translation returned no id: " + reply, vsId != null);
+        return vsId;
     }
 
     private void loadAllEntrySlots(String setup) throws Exception {
