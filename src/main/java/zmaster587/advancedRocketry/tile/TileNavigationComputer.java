@@ -1012,16 +1012,16 @@ public class TileNavigationComputer extends TileInventoryHatch
 
     /** Where this ship currently is, per the ledger, or {@code null} when it is not a settled ship. */
     public GalacticCoord shipCoord() {
-        ShipLedger ledger = SpaceSubsystem.ledger();
+        SpaceSubsystem stack = zmaster587.advancedRocketry.AdvancedRocketry.spaceSubsystem();
         BlockPos afc = getFlightComputerPos();
-        if (ledger == null || afc == null || world == null) {
+        if (stack == null || afc == null || world == null) {
             return null;
         }
         net.minecraft.tileentity.TileEntity te = world.getTileEntity(afc);
         if (!(te instanceof TileAdvancedFlightComputer)) {
             return null;
         }
-        ShipLedger.Entry entry = ledger.get(((TileAdvancedFlightComputer) te).getOrCreateShipId());
+        ShipLedger.Entry entry = stack.ledger.get(((TileAdvancedFlightComputer) te).getOrCreateShipId());
         return entry == null ? null : entry.coord;
     }
 

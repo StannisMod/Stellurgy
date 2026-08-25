@@ -478,13 +478,15 @@ public class TileAdvancedFlightComputer extends TileEntity implements IModularIn
         // no per-tick VS ship enumeration is ever needed — symmetric with the ascent ceiling read.
         if (world.provider instanceof zmaster587.advancedRocketry.space.WorldProviderSpaceSlot
                 && shipId != null) {
-            zmaster587.advancedRocketry.space.ShipLedger ledger =
-                    zmaster587.advancedRocketry.space.SpaceSubsystem.ledger();
+            // ONE read of the server's space subsystem for this whole block: the seam carry below is
+            // asked of the same stack whose ledger then takes the position report.
+            zmaster587.advancedRocketry.space.SpaceSubsystem stack =
+                    zmaster587.advancedRocketry.AdvancedRocketry.spaceSubsystem();
             String cellKey = zmaster587.advancedRocketry.space.SpaceSlotPool
                     .cellKeyFor(world.provider.getDimension());
             zmaster587.advancedRocketry.space.GalacticCoord cell =
                     zmaster587.advancedRocketry.space.GalacticCoord.fromCellKey(cellKey);
-            if (ledger != null && cell != null) {
+            if (stack != null && cell != null) {
                 double[] pose = VSIntegration.getShipWorldPosition(world, getPos());
                 if (pose != null) {
                     // FLYING OUT OF THE CELL. A ship far enough past its face is carried into the
@@ -494,9 +496,7 @@ public class TileAdvancedFlightComputer extends TileEntity implements IModularIn
                     // the carry is asked BEFORE the position is reported, because a report that
                     // saturates is what a ship gets when the carry was refused, not what it gets while
                     // one is available.
-                    zmaster587.advancedRocketry.space.CellCrossingController seamCtl =
-                            zmaster587.advancedRocketry.space.SpaceSubsystem.cellCrossings();
-                    if (seamCtl != null && seamCtl.requestCarry(world.provider.getDimension(),
+                    if (stack.cellCrossings.requestCarry(world.provider.getDimension(),
                             getPos(), shipId, cell, pose)) {
                         return;
                     }
@@ -505,14 +505,14 @@ public class TileAdvancedFlightComputer extends TileEntity implements IModularIn
                     // is bound to and the ledger row that protects that cell from collection, and none
                     // of those follow a pose over a cell face on their own. So a pose outside the local
                     // range is saturated - wrong by the overshoot, but naming a cell that exists.
-                    ledger.updatePosition(shipId, zmaster587.advancedRocketry.space.CellWorldMapper
+                    stack.ledger.updatePosition(shipId, zmaster587.advancedRocketry.space.CellWorldMapper
                             .coordOfPoseWithin(cell, pose[0], pose[1], pose[2]));
                     // Only a SETTLED ship can be at its cell's edge by flying there. A ship mid-crossing
                     // sits in the paste band — far below the cell's own pose range — for the few ticks
                     // between the paste and the settle, which reads as an escape on every single
                     // arrival. Reporting it there would spend this tile's one report on a ship that has
                     // not moved a block, and the real edge would then pass in silence.
-                    zmaster587.advancedRocketry.space.ShipLedger.Entry settledHere = ledger.get(shipId);
+                    zmaster587.advancedRocketry.space.ShipLedger.Entry settledHere = stack.ledger.get(shipId);
                     if (!cellEdgeReported
                             && settledHere != null
                             && settledHere.state == zmaster587.advancedRocketry.space.ShipLedger.State.SETTLED
@@ -551,13 +551,11 @@ public class TileAdvancedFlightComputer extends TileEntity implements IModularIn
         // planet dim. Proximity reads the ledger coord (self-reported above) + the body POIs of
         // the ship's own cell — no VS enumeration. Only planets/moons with a real dim are targets.
         if (!onPlanetSide && shipId != null) {
-            zmaster587.advancedRocketry.space.DescentController descentCtl =
-                    zmaster587.advancedRocketry.space.SpaceSubsystem.descent();
-            zmaster587.advancedRocketry.space.ShipLedger descentLedger =
-                    zmaster587.advancedRocketry.space.SpaceSubsystem.ledger();
+            zmaster587.advancedRocketry.space.SpaceSubsystem descentStack =
+                    zmaster587.advancedRocketry.AdvancedRocketry.spaceSubsystem();
             net.minecraft.server.MinecraftServer server = world.getMinecraftServer();
-            if (descentCtl != null && descentLedger != null && server != null) {
-                zmaster587.advancedRocketry.space.ShipLedger.Entry settled = descentLedger.get(shipId);
+            if (descentStack != null && server != null) {
+                zmaster587.advancedRocketry.space.ShipLedger.Entry settled = descentStack.ledger.get(shipId);
                 if (settled != null
                         && settled.state == zmaster587.advancedRocketry.space.ShipLedger.State.SETTLED) {
                     zmaster587.advancedRocketry.universe.UniverseRegistry reg =
@@ -592,7 +590,7 @@ public class TileAdvancedFlightComputer extends TileEntity implements IModularIn
                                     continue; // nothing landable here after all
                                 }
                             }
-                            if (descentCtl.requestDescent(world.provider.getDimension(),
+                            if (descentStack.descent.requestDescent(world.provider.getDimension(),
                                             getPos(), shipId, targetDim)) {
                                 // The crossing started: this tile was cut out of the slot world - stop
                                 // publishing from a stale tick. The re-assembled ship resumes planet-side.
@@ -618,14 +616,14 @@ public class TileAdvancedFlightComputer extends TileEntity implements IModularIn
         }
 
         if (onPlanetSide) {
-            zmaster587.advancedRocketry.space.ShipEntryController entryCtl =
-                    zmaster587.advancedRocketry.space.SpaceSubsystem.entry();
+            zmaster587.advancedRocketry.space.SpaceSubsystem entryStack =
+                    zmaster587.advancedRocketry.AdvancedRocketry.spaceSubsystem();
             double[] shipPos = VSIntegration.getShipWorldPosition(world, getPos());
             int ceiling = entryCeiling();
-            if (entryCtl != null && shipPos != null && !entryLatched
+            if (entryStack != null && shipPos != null && !entryLatched
                     && zmaster587.advancedRocketry.space.ShipEntryController
                             .shouldTriggerEntry(false, shipPos[1], ceiling)
-                    && entryCtl.requestEntry(world.provider.getDimension(), getPos(),
+                    && entryStack.entry.requestEntry(world.provider.getDimension(), getPos(),
                             getOrCreateShipId())) {
                 // The crossing started: this tile has just been cut out of the world - do not
                 // publish commands from a stale tick. The re-assembled ship's own computer
@@ -921,11 +919,11 @@ public class TileAdvancedFlightComputer extends TileEntity implements IModularIn
         // cannot say - it does not own this ship, or it is keyed differently - the honest answer is
         // still that the flight is under way.
         if (shipId != null) {
-            zmaster587.advancedRocketry.space.ShipTransitManager transit =
-                    zmaster587.advancedRocketry.space.SpaceSubsystem.transit();
-            if (transit != null) {
+            zmaster587.advancedRocketry.space.SpaceSubsystem stack =
+                    zmaster587.advancedRocketry.AdvancedRocketry.spaceSubsystem();
+            if (stack != null) {
                 zmaster587.advancedRocketry.space.ShipTransitManager.Phase refined =
-                        transit.phaseOf(shipId.toString());
+                        stack.transit.phaseOf(shipId.toString());
                 if (refined != zmaster587.advancedRocketry.space.ShipTransitManager.Phase.NONE) {
                     return refined;
                 }

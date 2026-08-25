@@ -58,9 +58,10 @@ public final class SpaceSubsystemEvents {
         // this subsystem (SpaceEventHandler) deliberately only READS it, because two writers on
         // the same event would run the clock at twice the tick rate and nothing would report it.
         SpaceSubsystem.advanceClock();
-        // One read of the live stack per tick: the five used to be read independently, so a swap
-        // landing mid-tick could tick one stack's transits against another's entries.
-        SpaceSubsystem live = SpaceSubsystem.get();
+        // One read of the server's stack per tick: the five used to be read through five independent
+        // accessors, so a swap landing mid-tick could tick one stack's transits against another's
+        // entries.
+        SpaceSubsystem live = AdvancedRocketry.spaceSubsystem();
         if (live == null) {
             return;
         }
@@ -115,8 +116,9 @@ public final class SpaceSubsystemEvents {
         }
         try {
             stageClock(event.getWorld());
-            if (SpaceSubsystem.ledger() != null) {
-                stageFleet(event.getWorld());
+            SpaceSubsystem stack = AdvancedRocketry.spaceSubsystem();
+            if (stack != null) {
+                stageFleet(event.getWorld(), stack);
             }
         } finally {
             flush(event.getWorld());
@@ -155,8 +157,14 @@ public final class SpaceSubsystemEvents {
         }
     }
 
-    /** Stage the whole fleet in one all-or-nothing write. Never propagates - see the class body. */
-    private void stageFleet(net.minecraft.world.World overworld) {
+    /**
+     * Stage the whole fleet in one all-or-nothing write. Never propagates - see the class body.
+     *
+     * <p>The stack is PASSED IN, read once by the caller: the fleet, the jumps and the visits written
+     * in a single pass have to be the same stack's, and three lookups inside here could straddle a
+     * change of it.</p>
+     */
+    private void stageFleet(net.minecraft.world.World overworld, SpaceSubsystem stack) {
         try {
             ShipLedgerData data = ShipLedgerData.get(overworld);
             if (data == null) {
@@ -167,12 +175,6 @@ public final class SpaceSubsystemEvents {
             // Gather EVERYTHING before touching the store. Whatever fails in here - a physics-mod
             // hiccup, a class that will not load - leaves the previously persisted snapshot exactly
             // as it was, which is a stale answer rather than a lost fleet.
-            // ONE read of the stack, so the fleet, the jumps and the visits written in a single
-            // pass are the same stack's — three independent reads could straddle a swap.
-            SpaceSubsystem stack = SpaceSubsystem.get();
-            if (stack == null) {
-                return;
-            }
             java.util.Map<java.util.UUID, ShipLedger.Entry> live = stack.ledger.snapshot();
             java.util.List<TransitRecord> inFlight = stack.transit.exportTransits();
             java.util.Map<String, Long> visits = stack.manager.exportVisits();

@@ -178,6 +178,36 @@ public class AdvancedRocketry {
     public static HashMap<AllowedProducts, HashSet<String>> modProducts = new HashMap<>();
     private static Configuration config;
 
+    /**
+     * This server's space subsystem, or {@code null} when it has none (before server start, on a
+     * remote client, or when the subsystem stood down — the config flag off, or Valkyrien Skies
+     * absent).
+     *
+     * <p><b>The mod owns it, and that is the whole point of the field being here.</b>
+     * {@link zmaster587.advancedRocketry.space.SpaceSubsystem} has a public constructor, so it is not
+     * a singleton and cannot hold a meaningful "current" one of itself — it used to, together with an
+     * attach/detach pair and six static per-service accessors, and its own start hook did
+     * {@code attach(new SpaceSubsystem(...))}: the class built itself and assigned itself to its own
+     * static field. Two instances could then be alive at once and which one a caller reached depended
+     * on which accessor it happened to use, with no way to ask whose subsystem it had.</p>
+     *
+     * <p>Written by the four server-lifecycle handlers in this class and by nothing else — there is
+     * no setter and no swap seam, so nothing can leave a running server without its subsystem. A test
+     * that wants an isolated stack builds its own {@code SpaceSubsystem} and ticks it itself; it
+     * cannot pass it off as the server's.</p>
+     */
+    private zmaster587.advancedRocketry.space.SpaceSubsystem spaceSubsystem;
+
+    /**
+     * The space subsystem this server is running, or {@code null} when it has none. THE one route to
+     * it: callers read the services they need off the returned object ({@code .ledger},
+     * {@code .manager}, {@code .transit}, …) in a single read, so a caller needing two of them can
+     * never end up holding one from each of two stacks.
+     */
+    public static zmaster587.advancedRocketry.space.SpaceSubsystem spaceSubsystem() {
+        return instance == null ? null : instance.spaceSubsystem;
+    }
+
     static {
         FluidRegistry.enableUniversalBucket(); // Must be called before preInit
     }
@@ -1270,7 +1300,7 @@ public class AdvancedRocketry {
                 net.minecraftforge.fml.common.FMLCommonHandler.instance().getMinecraftServerInstance());
         // Layer-2: restore the persisted ship ledger (settled positions survive a restart) now that the
         // overworld MapStorage is reachable, before any player logs in.
-        zmaster587.advancedRocketry.space.SpaceSubsystem.onServerStarted();
+        zmaster587.advancedRocketry.space.SpaceSubsystem.onServerStarted(spaceSubsystem);
     }
 
     @EventHandler
@@ -1286,9 +1316,10 @@ public class AdvancedRocketry {
         // (or a harness-spawned server sets -Dforge.test.server=true).
         TestProbeCommandRegistration.registerIfTestMode(event);
 
-        // Movable-ship space subsystem: register the slot pool + build the controller. No-op in test
-        // mode so it never collides with the /artest probe's own pool registration.
-        zmaster587.advancedRocketry.space.SpaceSubsystem.onServerStarting();
+        // Movable-ship space subsystem: register the slot pool + build the subsystem this server will
+        // run. Built here and HELD here — the mod is its owner; the step gives back what to hold and
+        // hands back what we already had when it stands down, so this assignment cannot lose one.
+        spaceSubsystem = zmaster587.advancedRocketry.space.SpaceSubsystem.buildForServer(spaceSubsystem);
 
         //Regenerate Chemical Reactor armor recipes
         TileChemicalReactor.reloadRecipesSpecial();
@@ -1392,7 +1423,7 @@ public class AdvancedRocketry {
      */
     @EventHandler
     public void serverStopping(net.minecraftforge.fml.common.event.FMLServerStoppingEvent event) {
-        zmaster587.advancedRocketry.space.SpaceSubsystem.onServerStopping();
+        zmaster587.advancedRocketry.space.SpaceSubsystem.onServerStopping(spaceSubsystem);
     }
 
     @EventHandler
@@ -1401,6 +1432,8 @@ public class AdvancedRocketry {
         zmaster587.advancedRocketry.dimension.DimensionManager.getInstance().onServerStopped();
         SpaceObjectManager.getSpaceManager().onServerStopped();
         zmaster587.advancedRocketry.space.SpaceSubsystem.onServerStopped();
+        // Released here, by the owner: the subsystem belonged to the server that has just stopped.
+        spaceSubsystem = null;
         zmaster587.advancedRocketry.atmosphere.AtmosphereHandler.clear();
         zmaster587.advancedRocketry.api.ARConfiguration.getCurrentConfig().MoonId = Constants.INVALID_PLANET;
         ((BlockSeal) AdvancedRocketryBlocks.blockPipeSealer).clearMap();

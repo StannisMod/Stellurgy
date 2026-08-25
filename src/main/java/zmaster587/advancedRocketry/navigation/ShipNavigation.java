@@ -49,8 +49,8 @@ public final class ShipNavigation implements JumpGate.ShipContext {
 
     @Override
     public boolean positionKnown() {
-        ShipLedger ledger = SpaceSubsystem.ledger();
-        return ledger == null || shipId == null || ledger.isPositionKnown(shipId);
+        SpaceSubsystem stack = zmaster587.advancedRocketry.AdvancedRocketry.spaceSubsystem();
+        return stack == null || shipId == null || stack.ledger.isPositionKnown(shipId);
     }
 
     @Override
@@ -166,11 +166,11 @@ public final class ShipNavigation implements JumpGate.ShipContext {
 
     /** Where the ship is now, as the durable ledger records it, or {@code null}. */
     public GalacticCoord currentCoord() {
-        ShipLedger ledger = SpaceSubsystem.ledger();
-        if (ledger == null || shipId == null) {
+        SpaceSubsystem stack = zmaster587.advancedRocketry.AdvancedRocketry.spaceSubsystem();
+        if (stack == null || shipId == null) {
             return null;
         }
-        ShipLedger.Entry entry = ledger.get(shipId);
+        ShipLedger.Entry entry = stack.ledger.get(shipId);
         return entry == null ? null : entry.coord;
     }
 

@@ -195,13 +195,13 @@ public final class SystemBodiesProducer {
 
     /** The live per-slot-dim render bodies from the production bindings + universe registry. */
     public static Map<Integer, List<RenderBody>> currentByDim(MinecraftServer server) {
-        ShipLedger ledger = SpaceSubsystem.ledger();
+        zmaster587.advancedRocketry.space.SpaceSubsystem stack =
+                zmaster587.advancedRocketry.AdvancedRocketry.spaceSubsystem();
         UniverseRegistry reg = UniverseRegistry.get(server);
-        SpaceManager space = SpaceSubsystem.space();
-        if (reg == null || space == null) {
+        if (reg == null || stack == null) {
             return new LinkedHashMap<>();
         }
-        return buildByDim(space.loadedCells(), ledger == null ? null : ledger.snapshot(),
+        return buildByDim(stack.manager.loadedCells(), stack.ledger.snapshot(),
                 reg::skyBodiesAt, reg, SpaceSubsystem.spaceClock());
     }
 

@@ -2523,13 +2523,14 @@ public class TestProbeCommand extends CommandBase {
     /** The last exported transit records (the persist e2e simulates a restart by rebuilding from these). */
     private static java.util.List<zmaster587.advancedRocketry.space.TransitRecord> transitExport;
 
-    // --- Entry e2e state (the entry-on-ramp probe stack; installed into SpaceSubsystem so the
-    //     PRODUCTION trigger path runs; cleared by entry-clear).
+    // --- Entry e2e state. These are the SERVER's own manager and ledger, remembered by `entry-setup`
+    //     so the fixture's verbs need not look them up again; the PRODUCTION trigger path runs
+    //     because it is the production subsystem, not because anything was installed over it.
+    //     `entry-clear` gives back what the scenario put in and drops these.
     private static zmaster587.advancedRocketry.space.SpaceManager entryMgr;
     private static zmaster587.advancedRocketry.space.ShipLedger entryLedger;
+    /** The scratch slot worlds `entry-setup` appended to the pool; unloaded by `entry-clear`. */
     private static int[] entrySlotDims;
-    /** The way BACK from the entry stack's install; closed by {@code entry-clear}. */
-    private static zmaster587.advancedRocketry.space.SpaceSubsystem.Handle entryInstall;
 
     /**
      * A {@link zmaster587.advancedRocketry.space.SlotBinder} that carries every world operation out
@@ -3658,12 +3659,12 @@ public class TestProbeCommand extends CommandBase {
         // anyone), the registry (a cell with genuinely nothing in it), or the drawing. This reports
         // the first two exactly, so "I see no planet" stops being a guess. Read-only.
         if (args.length >= 1 && "bodies".equalsIgnoreCase(args[0])) {
-            zmaster587.advancedRocketry.space.ShipLedger led =
-                    zmaster587.advancedRocketry.space.SpaceSubsystem.ledger();
-            if (led == null) {
+            zmaster587.advancedRocketry.space.SpaceSubsystem spaceStack = liveStack();
+            if (spaceStack == null) {
                 send(sender, "{\"error\":\"space subsystem not registered - see enableSpaceSubsystem\"}");
                 return;
             }
+            zmaster587.advancedRocketry.space.ShipLedger led = spaceStack.ledger;
             zmaster587.advancedRocketry.universe.UniverseRegistry reg =
                     zmaster587.advancedRocketry.universe.UniverseRegistry.get(server);
             StringBuilder out = new StringBuilder("{\"ok\":true,\"ships\":[");
@@ -3677,11 +3678,7 @@ public class TestProbeCommand extends CommandBase {
                 if (shipCount++ > 0) {
                     out.append(',');
                 }
-                zmaster587.advancedRocketry.space.SpaceManager bodiesMgr =
-                        zmaster587.advancedRocketry.space.SpaceSubsystem.space();
-                int shipSlot = bodiesMgr == null
-                        ? zmaster587.advancedRocketry.space.SpaceManager.UNBOUND_SLOT
-                        : bodiesMgr.slotDimOf(e.coord);
+                int shipSlot = spaceStack.manager.slotDimOf(e.coord);
                 out.append("{\"ship\":\"").append(shipEntry.getKey())
                         .append("\",\"state\":\"").append(e.state)
                         .append("\",\"slotDim\":").append(slotDimJson(shipSlot))
@@ -3811,10 +3808,10 @@ public class TestProbeCommand extends CommandBase {
 
         // subsystem-status: is the production subsystem live, and what does it hold?
         if (args.length >= 1 && "subsystem-status".equalsIgnoreCase(args[0])) {
-            zmaster587.advancedRocketry.space.ShipLedger led =
-                    zmaster587.advancedRocketry.space.SpaceSubsystem.ledger();
+            zmaster587.advancedRocketry.space.SpaceSubsystem spaceStack = liveStack();
+            zmaster587.advancedRocketry.space.ShipLedger led = spaceStack == null ? null : spaceStack.ledger;
             zmaster587.advancedRocketry.space.ShipTransitManager tm =
-                    zmaster587.advancedRocketry.space.SpaceSubsystem.transit();
+                    spaceStack == null ? null : spaceStack.transit;
             // The slot dim IDS, not just how many: they are minted from whatever dimension ids happen
             // to be free at registration, so a restart can hand the pool a DIFFERENT set. Anything
             // that persisted a slot id across the restart (a ledger entry, a saved player) has to be
@@ -3843,7 +3840,7 @@ public class TestProbeCommand extends CommandBase {
                 }
             }
             send(sender, "{\"registered\":"
-                    + (zmaster587.advancedRocketry.space.SpaceSubsystem.space() != null)
+                    + (spaceStack != null)
                     + ",\"pool\":" + zmaster587.advancedRocketry.space.SpaceSlotPool.slotDims().size()
                     + ",\"slotDims\":[" + slots + "]"
                     + ",\"slotDimsAlsoBodies\":[" + collisions + "]"
@@ -3865,12 +3862,12 @@ public class TestProbeCommand extends CommandBase {
         // occupant with no ship — the refcount alone). Lets a test fill a small seeded pool and
         // observe a REFUSED entry against real pool pressure without flying N extra ships.
         if (args.length >= 4 && "occupy".equalsIgnoreCase(args[0])) {
-            zmaster587.advancedRocketry.space.SpaceManager mgr =
-                    zmaster587.advancedRocketry.space.SpaceSubsystem.space();
-            if (mgr == null) {
+            zmaster587.advancedRocketry.space.SpaceSubsystem spaceStack = liveStack();
+            if (spaceStack == null) {
                 send(sender, "{\"error\":\"space subsystem not registered\"}");
                 return;
             }
+            zmaster587.advancedRocketry.space.SpaceManager mgr = spaceStack.manager;
             zmaster587.advancedRocketry.space.GalacticCoord coord =
                     zmaster587.advancedRocketry.space.GalacticCoord.ofSectorLocal(
                             parseIntOr(args[1], 0), parseIntOr(args[2], 0), parseIntOr(args[3], 0),
@@ -3905,12 +3902,12 @@ public class TestProbeCommand extends CommandBase {
         // positive control for the opposite assertion - "a held slot keeps its world" measures nothing
         // unless the same sequence is shown to remove an unheld one.
         if (args.length >= 4 && "release".equalsIgnoreCase(args[0])) {
-            zmaster587.advancedRocketry.space.SpaceManager mgr =
-                    zmaster587.advancedRocketry.space.SpaceSubsystem.space();
-            if (mgr == null) {
+            zmaster587.advancedRocketry.space.SpaceSubsystem spaceStack = liveStack();
+            if (spaceStack == null) {
                 send(sender, "{\"error\":\"space subsystem not registered\"}");
                 return;
             }
+            zmaster587.advancedRocketry.space.SpaceManager mgr = spaceStack.manager;
             zmaster587.advancedRocketry.space.GalacticCoord coord =
                     zmaster587.advancedRocketry.space.GalacticCoord.ofSectorLocal(
                             parseIntOr(args[1], 0), parseIntOr(args[2], 0), parseIntOr(args[3], 0),
@@ -3941,12 +3938,12 @@ public class TestProbeCommand extends CommandBase {
         // slot the manager has it bound to, whether the manager counts it as loaded, and whether a world
         // for that slot actually exists. A test polls this to watch them come apart.
         if (args.length >= 4 && "cell-slot".equalsIgnoreCase(args[0])) {
-            zmaster587.advancedRocketry.space.SpaceManager mgr =
-                    zmaster587.advancedRocketry.space.SpaceSubsystem.space();
-            if (mgr == null) {
+            zmaster587.advancedRocketry.space.SpaceSubsystem spaceStack = liveStack();
+            if (spaceStack == null) {
                 send(sender, "{\"error\":\"space subsystem not registered\"}");
                 return;
             }
+            zmaster587.advancedRocketry.space.SpaceManager mgr = spaceStack.manager;
             zmaster587.advancedRocketry.space.GalacticCoord coord =
                     zmaster587.advancedRocketry.space.GalacticCoord.ofSectorLocal(
                             parseIntOr(args[1], 0), parseIntOr(args[2], 0), parseIntOr(args[3], 0),
@@ -4015,14 +4012,13 @@ public class TestProbeCommand extends CommandBase {
         // to no slot is a state production never reaches, and a probe that manufactured one would let
         // a restart test read back a slot binding no real ship could ever have had.
         if (args.length >= 8 && "ledger-settle".equalsIgnoreCase(args[0])) {
-            zmaster587.advancedRocketry.space.ShipLedger led =
-                    zmaster587.advancedRocketry.space.SpaceSubsystem.ledger();
-            zmaster587.advancedRocketry.space.SpaceManager settleMgr =
-                    zmaster587.advancedRocketry.space.SpaceSubsystem.space();
-            if (led == null || settleMgr == null) {
+            zmaster587.advancedRocketry.space.SpaceSubsystem spaceStack = liveStack();
+            if (spaceStack == null) {
                 send(sender, "{\"error\":\"production ledger not live\"}");
                 return;
             }
+            zmaster587.advancedRocketry.space.ShipLedger led = spaceStack.ledger;
+            zmaster587.advancedRocketry.space.SpaceManager settleMgr = spaceStack.manager;
             int settledSlot;
             zmaster587.advancedRocketry.space.GalacticCoord settleCoord;
             try {
@@ -4051,12 +4047,12 @@ public class TestProbeCommand extends CommandBase {
         // reported side by side because the interesting failure is not "no world": it is a slot dim
         // that resolves to a world holding somebody else's cell, which reads as success everywhere.
         if (args.length >= 2 && "ledger-get".equalsIgnoreCase(args[0])) {
-            zmaster587.advancedRocketry.space.ShipLedger led =
-                    zmaster587.advancedRocketry.space.SpaceSubsystem.ledger();
-            if (led == null) {
+            zmaster587.advancedRocketry.space.SpaceSubsystem spaceStack = liveStack();
+            if (spaceStack == null) {
                 send(sender, "{\"error\":\"production ledger not live\"}");
                 return;
             }
+            zmaster587.advancedRocketry.space.ShipLedger led = spaceStack.ledger;
             zmaster587.advancedRocketry.space.ShipLedger.Entry e;
             try {
                 e = led.get(java.util.UUID.fromString(args[1]));
@@ -4068,11 +4064,7 @@ public class TestProbeCommand extends CommandBase {
                 send(sender, "{\"found\":false}");
                 return;
             }
-            zmaster587.advancedRocketry.space.SpaceManager getMgr =
-                    zmaster587.advancedRocketry.space.SpaceSubsystem.space();
-            int attributed = getMgr == null
-                    ? zmaster587.advancedRocketry.space.SpaceManager.UNBOUND_SLOT
-                    : getMgr.slotDimOf(e.coord);
+            int attributed = spaceStack.manager.slotDimOf(e.coord);
             String boundTo = zmaster587.advancedRocketry.space.SpaceSlotPool.cellKeyFor(attributed);
             send(sender, "{\"found\":true,\"cell\":\"" + e.cellKey() + "\",\"state\":\"" + e.state
                     + "\",\"slotDim\":" + slotDimJson(attributed)
@@ -4095,12 +4087,12 @@ public class TestProbeCommand extends CommandBase {
         // player has to be told about - he comes back aboard something the server has no record of -
         // which is otherwise only reachable by damaging the durable store.
         if (args.length >= 2 && "ledger-forget".equalsIgnoreCase(args[0])) {
-            zmaster587.advancedRocketry.space.ShipLedger led =
-                    zmaster587.advancedRocketry.space.SpaceSubsystem.ledger();
-            if (led == null) {
+            zmaster587.advancedRocketry.space.SpaceSubsystem spaceStack = liveStack();
+            if (spaceStack == null) {
                 send(sender, "{\"error\":\"production ledger not live\"}");
                 return;
             }
+            zmaster587.advancedRocketry.space.ShipLedger led = spaceStack.ledger;
             java.util.UUID forgetId;
             try {
                 forgetId = java.util.UUID.fromString(args[1]);
@@ -4139,7 +4131,7 @@ public class TestProbeCommand extends CommandBase {
         // server running; the real failure behind that promise is a class that will not load, which no
         // fixture can arrange from outside, so it is armed here instead.
         if (args.length >= 1 && "save-fault-once".equalsIgnoreCase(args[0])) {
-            if (zmaster587.advancedRocketry.space.SpaceSubsystem.ledger() == null) {
+            if (liveStack() == null) {
                 send(sender, "{\"error\":\"production ledger not live\"}");
                 return;
             }
@@ -4168,7 +4160,7 @@ public class TestProbeCommand extends CommandBase {
         // fresh origin cell. The test then waits for the origin ship to load, calls transit-begin, and
         // polls transit-tick until arrival.
         if (args.length >= 1 && "transit-setup".equalsIgnoreCase(args[0])) {
-            zmaster587.advancedRocketry.space.SpaceSlotPool.registerAdditionalSlots(2);
+            int[] transitSlots = zmaster587.advancedRocketry.space.SpaceSlotPool.registerAdditionalSlots(2);
             // Register hyperspace upfront too, mirroring the production start order. Idempotent, so it
             // costs nothing when the server-start hook has already registered it.
             zmaster587.advancedRocketry.space.HyperspaceWorld.register();
@@ -4178,7 +4170,11 @@ public class TestProbeCommand extends CommandBase {
             // by construction. Built by hand, this stack diverged from production on four axes at
             // once, and the fresh lane allocator among them is what parked two ships in one lane.
             transitStack = new zmaster587.advancedRocketry.space.SpaceSubsystem(
-                    null,
+                    // NARROWED to the two slots just appended — see ownSlotsOnly. This stack is the
+                    // one subsystem in the JVM that is not the server's, and it binds out of the same
+                    // pool the server's does; an unnarrowed binder would let it take a slot the
+                    // server's manager considers free and hand the same world to two owners.
+                    ownSlotsOnly(transitSlots),
                     () -> (long) server.getTickCounter(),
                     new zmaster587.advancedRocketry.space.SpaceManager.Config(
                             zmaster587.advancedRocketry.space.SpaceManager.GcPolicy.NEVER, 0L, 0));
@@ -4220,7 +4216,7 @@ public class TestProbeCommand extends CommandBase {
         // 3x3 deck has no propulsion (it can neither hold station nor climb), so a test that must FLY
         // builds the real with-pilot-seat fixture in the empty origin cell with the real assembler.
         if (args.length >= 1 && "transit-setup-empty".equalsIgnoreCase(args[0])) {
-            zmaster587.advancedRocketry.space.SpaceSlotPool.registerAdditionalSlots(2);
+            int[] transitSlots = zmaster587.advancedRocketry.space.SpaceSlotPool.registerAdditionalSlots(2);
             zmaster587.advancedRocketry.space.HyperspaceWorld.register();
             // Through the PRODUCTION factory, overriding only the two knobs this fixture needs: its
             // own clock and a manager that never collects. Everything else — the ledger, the arrival
@@ -4228,7 +4224,11 @@ public class TestProbeCommand extends CommandBase {
             // by construction. Built by hand, this stack diverged from production on four axes at
             // once, and the fresh lane allocator among them is what parked two ships in one lane.
             transitStack = new zmaster587.advancedRocketry.space.SpaceSubsystem(
-                    null,
+                    // NARROWED to the two slots just appended — see ownSlotsOnly. This stack is the
+                    // one subsystem in the JVM that is not the server's, and it binds out of the same
+                    // pool the server's does; an unnarrowed binder would let it take a slot the
+                    // server's manager considers free and hand the same world to two owners.
+                    ownSlotsOnly(transitSlots),
                     () -> (long) server.getTickCounter(),
                     new zmaster587.advancedRocketry.space.SpaceManager.Config(
                             zmaster587.advancedRocketry.space.SpaceManager.GcPolicy.NEVER, 0L, 0));
@@ -4252,7 +4252,7 @@ public class TestProbeCommand extends CommandBase {
         // a bot and carry it through the jump. Returns the ship anchor, the ship's world position (for
         // `space enter`), and the pilot seat's post-assembly subspace position (for `seat-mount-at`).
         if (args.length >= 1 && "transit-setup-piloted".equalsIgnoreCase(args[0])) {
-            zmaster587.advancedRocketry.space.SpaceSlotPool.registerAdditionalSlots(2);
+            int[] transitSlots = zmaster587.advancedRocketry.space.SpaceSlotPool.registerAdditionalSlots(2);
             zmaster587.advancedRocketry.space.HyperspaceWorld.register();
             // Through the PRODUCTION factory, overriding only the two knobs this fixture needs: its
             // own clock and a manager that never collects. Everything else — the ledger, the arrival
@@ -4260,7 +4260,11 @@ public class TestProbeCommand extends CommandBase {
             // by construction. Built by hand, this stack diverged from production on four axes at
             // once, and the fresh lane allocator among them is what parked two ships in one lane.
             transitStack = new zmaster587.advancedRocketry.space.SpaceSubsystem(
-                    null,
+                    // NARROWED to the two slots just appended — see ownSlotsOnly. This stack is the
+                    // one subsystem in the JVM that is not the server's, and it binds out of the same
+                    // pool the server's does; an unnarrowed binder would let it take a slot the
+                    // server's manager considers free and hand the same world to two owners.
+                    ownSlotsOnly(transitSlots),
                     () -> (long) server.getTickCounter(),
                     new zmaster587.advancedRocketry.space.SpaceManager.Config(
                             zmaster587.advancedRocketry.space.SpaceManager.GcPolicy.NEVER, 0L, 0));
@@ -4585,8 +4589,9 @@ public class TestProbeCommand extends CommandBase {
                 send(sender, "{\"error\":\"transit not set up\"}");
                 return;
             }
+            zmaster587.advancedRocketry.space.SpaceSubsystem prodStack = liveStack();
             zmaster587.advancedRocketry.space.ShipTransitManager prod =
-                    zmaster587.advancedRocketry.space.SpaceSubsystem.transit();
+                    prodStack == null ? null : prodStack.transit;
             if (prod == null) {
                 send(sender, "{\"error\":\"production transit manager is not up\"}");
                 return;
@@ -4624,38 +4629,39 @@ public class TestProbeCommand extends CommandBase {
             send(sender, "{\"ok\":true,\"inTransit\":" + transitTm.inTransitCount() + "}");
             return;
         }
-        // entry-setup [poolN]: build the entry-on-ramp stack — the PRODUCTION stack, built by the
-        // production factory, differing only in the two knobs this probe genuinely needs (its own
-        // narrowed slot binder and its own clock) — and INSTALL it over whatever is live, keeping the
-        // way BACK. `entry-clear` closes that handle, which RESTORES the previous occupant; it used
-        // to assign five nulls, which left the production subsystem dead for the rest of the boot.
+        // entry-setup [poolN]: ARRANGE the server's own entry on-ramp for a scenario — append poolN
+        // scratch slot worlds to the pool the server's subsystem binds from, make sure hyperspace is
+        // registered, and report the slots.
+        //
+        // <p>It builds NOTHING. It used to construct a second subsystem and install it over the
+        // server's, on the reasoning that a scenario wants its own clock, its own GC policy and a
+        // binder narrowed to its own slots. What that actually bought was two live subsystems whose
+        // relative visibility depended on which accessor a verb happened to use, and the narrowing
+        // was a defence against a problem only the second subsystem created: ONE manager tracks its
+        // own bindings, so no scenario can be handed a slot another one is still using. The remaining
+        // two knobs are not worth a second stack — the production GC thresholds (24 h, 4096 cells)
+        // cannot fire inside a scenario, and the space clock is the server's and is settable through
+        // `set-clock`.
         if (args.length >= 1 && "entry-setup".equalsIgnoreCase(args[0])) {
+            zmaster587.advancedRocketry.space.SpaceSubsystem live = liveStack();
+            if (live == null) {
+                // Not survivable-and-quiet: with no subsystem the production on-ramp this fixture
+                // exists to drive is not there at all, and every assertion downstream would be
+                // measuring its absence.
+                send(sender, "{\"error\":\"the server has no space subsystem - see enableSpaceSubsystem\"}");
+                return;
+            }
             int n = args.length >= 2 ? parseIntOr(args[1], 2) : 2;
+            // APPENDED, never re-registered: registerAdditionalSlots hands back fresh dimension ids,
+            // so a scenario's scratch worlds cannot collide with the pool the server already owns.
             entrySlotDims = zmaster587.advancedRocketry.space.SpaceSlotPool.registerAdditionalSlots(n);
-            // Narrowed to the slots THIS setup just registered — see ownSlotsOnly. A plain
-            // PoolSlotBinder lets this stack bind any slot in the whole pool, including every earlier
-            // consumer's, so the slot a scenario's cell lands in would depend on how many scenarios ran
-            // before it in this JVM while the report below still names only its own two.
-            zmaster587.advancedRocketry.space.SpaceSubsystem probeStack =
-                    new zmaster587.advancedRocketry.space.SpaceSubsystem(
-                            ownSlotsOnly(entrySlotDims),
-                            () -> (long) server.getTickCounter(),
-                            new zmaster587.advancedRocketry.space.SpaceManager.Config(
-                                    zmaster587.advancedRocketry.space.SpaceManager.GcPolicy.NEVER, 0L, 0));
-            entryMgr = probeStack.manager;
-            entryLedger = probeStack.ledger;
-            // The entry, descent and transit controllers all come from the factory above, on the SAME
-            // manager and ledger — so one e2e can enter a ship through this stack, JUMP it to another
-            // cell and descend it again. Nothing is wired by hand here any more: the arrival standoff
-            // and the offline-progress policy used to be re-attached at this point with a comment
-            // explaining that forgetting them makes the whole suite "quietly measure a different
-            // game", and forgetting them is now impossible rather than merely discouraged. (The
-            // `transit-setup` probe still builds a SEPARATE stack with its own cells and manual
-            // ticking; that one cannot touch a ship this stack put into space.) Registering
-            // hyperspace upfront mirrors the production start — idempotent, no world loads until a
-            // first jump.
+            entryMgr = live.manager;
+            entryLedger = live.ledger;
+            // Registering hyperspace upfront mirrors the production start — idempotent, and no world
+            // loads until a first jump. (The `transit-setup` probe still builds a SEPARATE stack with
+            // its own cells and manual ticking. That one is deliberately isolated and is ticked by
+            // hand; it is never the server's, and nothing can now make it look as though it were.)
             zmaster587.advancedRocketry.space.HyperspaceWorld.register();
-            entryInstall = zmaster587.advancedRocketry.space.SpaceSubsystem.install(probeStack);
             StringBuilder sb = new StringBuilder("{\"ok\":true,\"dims\":[");
             for (int i = 0; i < entrySlotDims.length; i++) {
                 if (i > 0) sb.append(',');
@@ -4701,8 +4707,9 @@ public class TestProbeCommand extends CommandBase {
                 send(sender, "{\"error\":\"entry not set up\"}");
                 return;
             }
+            zmaster587.advancedRocketry.space.SpaceSubsystem spaceStack = liveStack();
             zmaster587.advancedRocketry.space.ShipEntryController ctl =
-                    zmaster587.advancedRocketry.space.SpaceSubsystem.entry();
+                    spaceStack == null ? null : spaceStack.entry;
             StringBuilder sb = new StringBuilder("{\"ok\":true");
             sb.append(",\"pending\":").append(ctl == null ? -1 : ctl.enteringCount());
             sb.append(",\"ships\":").append(entryLedger.size());
@@ -4718,11 +4725,9 @@ public class TestProbeCommand extends CommandBase {
                 sb.append(",\"lx\":").append(e.coord.localX());
                 sb.append(",\"ly\":").append(e.coord.localY());
                 sb.append(",\"lz\":").append(e.coord.localZ());
-                zmaster587.advancedRocketry.space.SpaceManager entryMgrRead =
-                        zmaster587.advancedRocketry.space.SpaceSubsystem.space();
-                int entrySlot = entryMgrRead == null
+                int entrySlot = spaceStack == null
                         ? zmaster587.advancedRocketry.space.SpaceManager.UNBOUND_SLOT
-                        : entryMgrRead.slotDimOf(e.coord);
+                        : spaceStack.manager.slotDimOf(e.coord);
                 sb.append(",\"slotDim\":").append(slotDimJson(entrySlot));
                 sb.append(",\"slotBound\":").append(entrySlot
                         != zmaster587.advancedRocketry.space.SpaceManager.UNBOUND_SLOT);
@@ -4750,8 +4755,9 @@ public class TestProbeCommand extends CommandBase {
                 send(sender, "{\"ok\":false,\"afcResolved\":false,\"error\":\"shipId is not a uuid\"}");
                 return;
             }
+            zmaster587.advancedRocketry.space.SpaceSubsystem gateStack = liveStack();
             zmaster587.advancedRocketry.space.ShipEntryController gateCtl =
-                    zmaster587.advancedRocketry.space.SpaceSubsystem.entry();
+                    gateStack == null ? null : gateStack.entry;
             StringBuilder gate = new StringBuilder("{\"ok\":true");
             // The controller half first: it is answerable whether or not the ship resolves, and
             // "never asked" (decision null) is the reading that separates the two explanations.
@@ -4826,16 +4832,29 @@ public class TestProbeCommand extends CommandBase {
             }
             return;
         }
-        // entry-clear: uninstall the probe entry stack and unload its slots (shared-harness
-        // state-leak contract).
+        // entry-clear: give back everything the scenario put INTO the server's subsystem, and unload
+        // the scratch slots it registered (the shared-harness state-leak contract).
+        //
+        // It no longer uninstalls anything — there is nothing to uninstall, because the fixture never
+        // substituted a subsystem. That makes the clean-up this verb's own work rather than a side
+        // effect of throwing a stack away: every ship the scenario ledgered is forgotten and every
+        // cell it materialized is released, or the next scenario in the boot inherits both and the
+        // pool runs out of slots several scenarios later, somewhere else entirely.
         if (args.length >= 1 && "entry-clear".equalsIgnoreCase(args[0])) {
-            // RESTORE, not null. Closing the handle puts back whatever was live when this stack was
-            // installed — production's, in an ordinary boot. The five-nulls form this replaced left
-            // `SpaceSubsystem.space()/.ledger()/.entry()/.transit()/.descent()` answering null for
-            // the rest of the server's life, because the hook that builds them runs once at start.
-            if (entryInstall != null) {
-                entryInstall.close();
-                entryInstall = null;
+            zmaster587.advancedRocketry.space.SpaceSubsystem live = liveStack();
+            if (live != null) {
+                for (java.util.Map.Entry<java.util.UUID,
+                        zmaster587.advancedRocketry.space.ShipLedger.Entry> e
+                        : live.ledger.snapshot().entrySet()) {
+                    zmaster587.advancedRocketry.space.ShipLedger.Entry row = e.getValue();
+                    // FORGET first, release second. A cell is protected from collection while the
+                    // ledger holds a ship in it, so the reverse order asks the manager to drop a cell
+                    // it is still being told to keep.
+                    live.ledger.remove(e.getKey());
+                    if (row != null && row.coord != null) {
+                        live.manager.dematerialize(row.coord);
+                    }
+                }
             }
             if (entrySlotDims != null) {
                 for (int dim : entrySlotDims) {
@@ -4851,8 +4870,9 @@ public class TestProbeCommand extends CommandBase {
         // descent-begin <slotDim> <ax> <ay> <az> <shipIdStr> <planetDim>: drive requestDescent for a
         // SETTLED ship, so a descent e2e crosses it from its slot cell into a planet dim.
         if (args.length >= 7 && "descent-begin".equalsIgnoreCase(args[0])) {
+            zmaster587.advancedRocketry.space.SpaceSubsystem spaceStack = liveStack();
             zmaster587.advancedRocketry.space.DescentController d =
-                    zmaster587.advancedRocketry.space.SpaceSubsystem.descent();
+                    spaceStack == null ? null : spaceStack.descent;
             if (d == null) {
                 send(sender, "{\"error\":\"descent not set up\"}");
                 return;
@@ -4875,14 +4895,13 @@ public class TestProbeCommand extends CommandBase {
         // real ship. The ship's LIVE pose is used, never the ledger's: past the face the ledger's copy
         // is saturated, so a lookup from it would miss the ship by the whole overshoot.
         if (args.length >= 2 && "seam-carry".equalsIgnoreCase(args[0])) {
-            zmaster587.advancedRocketry.space.CellCrossingController seamCtl =
-                    zmaster587.advancedRocketry.space.SpaceSubsystem.cellCrossings();
-            zmaster587.advancedRocketry.space.ShipLedger seamLedger =
-                    zmaster587.advancedRocketry.space.SpaceSubsystem.ledger();
-            if (seamCtl == null || seamLedger == null) {
+            zmaster587.advancedRocketry.space.SpaceSubsystem spaceStack = liveStack();
+            if (spaceStack == null) {
                 send(sender, "{\"error\":\"space subsystem not registered\"}");
                 return;
             }
+            zmaster587.advancedRocketry.space.CellCrossingController seamCtl = spaceStack.cellCrossings;
+            zmaster587.advancedRocketry.space.ShipLedger seamLedger = spaceStack.ledger;
             int slotDim = parseIntOr(args[1], Integer.MIN_VALUE);
             net.minecraft.world.WorldServer slotWorld =
                     net.minecraftforge.common.DimensionManager.getWorld(slotDim);
@@ -4932,8 +4951,9 @@ public class TestProbeCommand extends CommandBase {
         }
         // descent-status: the in-flight descent count (settle progress).
         if (args.length >= 1 && "descent-status".equalsIgnoreCase(args[0])) {
+            zmaster587.advancedRocketry.space.SpaceSubsystem spaceStack = liveStack();
             zmaster587.advancedRocketry.space.DescentController d =
-                    zmaster587.advancedRocketry.space.SpaceSubsystem.descent();
+                    spaceStack == null ? null : spaceStack.descent;
             send(sender, "{\"ok\":true,\"pending\":" + (d == null ? -1 : d.descendingCount()) + "}");
             return;
         }
@@ -4952,14 +4972,13 @@ public class TestProbeCommand extends CommandBase {
         // that slot dim, mapped to its world pose, then to the actual ship block. beginTransit captures the
         // seated crew itself, so a pilot in the seat rides along without a second call.
         if (args.length >= 4 && "jump".equalsIgnoreCase(args[0])) {
-            zmaster587.advancedRocketry.space.ShipTransitManager tm =
-                    zmaster587.advancedRocketry.space.SpaceSubsystem.transit();
-            zmaster587.advancedRocketry.space.ShipLedger ledger =
-                    zmaster587.advancedRocketry.space.SpaceSubsystem.ledger();
-            if (tm == null || ledger == null) {
+            zmaster587.advancedRocketry.space.SpaceSubsystem spaceStack = liveStack();
+            if (spaceStack == null) {
                 send(sender, "{\"error\":\"space subsystem not registered - see enableSpaceSubsystem\"}");
                 return;
             }
+            zmaster587.advancedRocketry.space.ShipTransitManager tm = spaceStack.transit;
+            zmaster587.advancedRocketry.space.ShipLedger ledger = spaceStack.ledger;
             int slotDim = args.length >= 5
                     ? parseIntOr(args[4], sender.getEntityWorld().provider.getDimension())
                     : sender.getEntityWorld().provider.getDimension();
@@ -5021,14 +5040,13 @@ public class TestProbeCommand extends CommandBase {
         // and whether the two agree, so a probe pool that hands out a different slot shows up in the
         // response instead of silently producing a feed keyed to a world nobody is in.
         if (args.length >= 5 && "ledger-settle".equalsIgnoreCase(args[0])) {
-            zmaster587.advancedRocketry.space.ShipLedger led =
-                    zmaster587.advancedRocketry.space.SpaceSubsystem.ledger();
-            zmaster587.advancedRocketry.space.SpaceManager injectMgr =
-                    zmaster587.advancedRocketry.space.SpaceSubsystem.space();
-            if (led == null || injectMgr == null) {
+            zmaster587.advancedRocketry.space.SpaceSubsystem spaceStack = liveStack();
+            if (spaceStack == null) {
                 send(sender, "{\"error\":\"ledger not set up\"}");
                 return;
             }
+            zmaster587.advancedRocketry.space.ShipLedger led = spaceStack.ledger;
+            zmaster587.advancedRocketry.space.SpaceManager injectMgr = spaceStack.manager;
             long sx = parseIntOr(args[1], 0);
             long sy = parseIntOr(args[2], 0);
             long sz = parseIntOr(args[3], 0);
@@ -5059,12 +5077,12 @@ public class TestProbeCommand extends CommandBase {
         // The cell is NOT materialized here: whether it is live is exactly the variable such a test
         // controls, so it is left to the caller (ledger-settle / occupy). Requires an installed stack.
         if (args.length >= 4 && "ledger-transit".equalsIgnoreCase(args[0])) {
-            zmaster587.advancedRocketry.space.ShipLedger led =
-                    zmaster587.advancedRocketry.space.SpaceSubsystem.ledger();
-            if (led == null) {
+            zmaster587.advancedRocketry.space.SpaceSubsystem spaceStack = liveStack();
+            if (spaceStack == null) {
                 send(sender, "{\"error\":\"ledger not set up\"}");
                 return;
             }
+            zmaster587.advancedRocketry.space.ShipLedger led = spaceStack.ledger;
             java.util.UUID shipId;
             zmaster587.advancedRocketry.space.GalacticCoord target;
             try {
@@ -5612,8 +5630,9 @@ public class TestProbeCommand extends CommandBase {
             int slotDim = parseIntOr(args[1], Integer.MIN_VALUE);
             String wantShip = args.length >= 3 ? args[2] : null;
             net.minecraft.world.WorldServer w = net.minecraftforge.common.DimensionManager.getWorld(slotDim);
+            zmaster587.advancedRocketry.space.SpaceSubsystem spaceStack = liveStack();
             zmaster587.advancedRocketry.space.ShipLedger ledger =
-                    zmaster587.advancedRocketry.space.SpaceSubsystem.ledger();
+                    spaceStack == null ? null : spaceStack.ledger;
             if (w == null || ledger == null) {
                 send(sender, "{\"error\":\"world or ledger not ready\"}");
                 return;
@@ -6219,8 +6238,9 @@ public class TestProbeCommand extends CommandBase {
             // server). The cell sky draws its boundary ring unconditionally, so a keyed entry is not
             // required for the ring to appear — but a dim that is keyed while not being a cell is a
             // defect of its own, and it is worth seeing beside the rest.
+            zmaster587.advancedRocketry.space.SpaceSubsystem hereStack = liveStack();
             zmaster587.advancedRocketry.space.SpaceManager spaceHere =
-                    zmaster587.advancedRocketry.space.SpaceSubsystem.space();
+                    hereStack == null ? null : hereStack.manager;
             here.put("feedKeysThisDim", spaceHere != null
                     && spaceHere.loadedCells().containsValue(dim));
             send(sender, jsonMap(here));
@@ -16079,10 +16099,25 @@ public class TestProbeCommand extends CommandBase {
 
     /** The slot world a cell is bound to right now, from the one place that decides it. */
     private static int slotDimOfCell(zmaster587.advancedRocketry.space.GalacticCoord cell) {
-        zmaster587.advancedRocketry.space.SpaceManager mgr =
-                zmaster587.advancedRocketry.space.SpaceSubsystem.space();
-        return mgr == null
-                ? zmaster587.advancedRocketry.space.SpaceManager.UNBOUND_SLOT : mgr.slotDimOf(cell);
+        zmaster587.advancedRocketry.space.SpaceSubsystem stack = liveStack();
+        return stack == null
+                ? zmaster587.advancedRocketry.space.SpaceManager.UNBOUND_SLOT
+                : stack.manager.slotDimOf(cell);
+    }
+
+    /**
+     * The server's space subsystem, or {@code null} — <b>the one route any verb in this file has to
+     * it</b>.
+     *
+     * <p>It exists so that no two verbs can be reading different subsystems. They used to reach six
+     * separate statics on {@code SpaceSubsystem}, and a fixture that had installed a stack of its own
+     * made "the live one" mean different things to different verbs: a ship settled through one was
+     * invisible to another, and that cost an hour of misdiagnosis before the shape itself was named
+     * as the cause. The mod owns the subsystem now and a fixture ARRANGES that one rather than
+     * substituting for it, so this answers with the same object for every verb here.</p>
+     */
+    private static zmaster587.advancedRocketry.space.SpaceSubsystem liveStack() {
+        return zmaster587.advancedRocketry.AdvancedRocketry.spaceSubsystem();
     }
 
     /**

@@ -217,10 +217,10 @@ public final class SkyNebulaeProducer {
     /** The live per-slot-dim clouds from the production bindings + the installed generator. */
     public static Map<Integer, List<RenderNebula>> currentByDim(net.minecraft.server.MinecraftServer server) {
         UniverseRegistry reg = UniverseRegistry.get(server);
-        SpaceManager space = SpaceSubsystem.space();
-        if (reg == null || space == null) {
+        SpaceSubsystem stack = zmaster587.advancedRocketry.AdvancedRocketry.spaceSubsystem();
+        if (reg == null || stack == null) {
             return new LinkedHashMap<>();
         }
-        return buildByDim(space.loadedCells(), UniverseRegistry.getGenerator(), reg.worldSeed());
+        return buildByDim(stack.manager.loadedCells(), UniverseRegistry.getGenerator(), reg.worldSeed());
     }
 }

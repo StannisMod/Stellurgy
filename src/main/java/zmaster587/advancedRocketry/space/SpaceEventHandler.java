@@ -21,6 +21,7 @@ import net.minecraftforge.fml.common.eventhandler.SubscribeEvent;
 import net.minecraftforge.fml.common.gameevent.TickEvent;
 import net.minecraftforge.fml.common.network.FMLNetworkEvent.ServerConnectionFromClientEvent;
 
+import zmaster587.advancedRocketry.AdvancedRocketry;
 import zmaster587.advancedRocketry.network.PacketSlotDimSync;
 import zmaster587.libVulpes.network.PacketHandler;
 
@@ -253,14 +254,13 @@ public final class SpaceEventHandler {
 
     private void releaseHeldCell(UUID playerId) {
         UUID shipId = heldCells.remove(playerId);
-        SpaceManager manager = SpaceSubsystem.space();
-        ShipLedger ledger = SpaceSubsystem.ledger();
-        if (shipId == null || manager == null || ledger == null) {
+        SpaceSubsystem stack = AdvancedRocketry.spaceSubsystem();
+        if (shipId == null || stack == null) {
             return;
         }
-        ShipLedger.Entry entry = ledger.get(shipId);
+        ShipLedger.Entry entry = stack.ledger.get(shipId);
         if (entry != null) {
-            manager.dematerialize(entry.coord);
+            stack.manager.dematerialize(entry.coord);
         }
     }
 
@@ -398,8 +398,8 @@ public final class SpaceEventHandler {
         if (world == null || world.isRemote || !(world.provider instanceof WorldProviderSpaceSlot)) {
             return;
         }
-        SpaceManager manager = SpaceSubsystem.space();
-        if (manager == null) {
+        SpaceSubsystem stack = AdvancedRocketry.spaceSubsystem();
+        if (stack == null) {
             return;
         }
         // An UNBOUND slot has no cell behind it - that covers the shared hyperspace world, which is
@@ -407,7 +407,7 @@ public final class SpaceEventHandler {
         String cellKey = SpaceSlotPool.cellKeyFor(world.provider.getDimension());
         GalacticCoord coord = GalacticCoord.fromCellKey(cellKey);
         if (coord != null) {
-            manager.markDirty(coord);
+            stack.manager.markDirty(coord);
         }
     }
 
@@ -423,19 +423,18 @@ public final class SpaceEventHandler {
      * The cell's coordinate mapping is invertible, so the ledger's coordinate IS the ship's pose.
      */
     private static double[] shipPose(UUID shipId) {
-        ShipLedger ledger = SpaceSubsystem.ledger();
-        if (ledger == null) {
+        SpaceSubsystem stack = AdvancedRocketry.spaceSubsystem();
+        if (stack == null) {
             return null;
         }
-        ShipLedger.Entry entry = ledger.get(shipId);
+        ShipLedger.Entry entry = stack.ledger.get(shipId);
         if (entry == null) {
             return null;
         }
         if (entry.state == ShipLedger.State.IN_TRANSIT) {
             // Mid-jump the ledger's coordinate is the DESTINATION, which says nothing about where the
             // ship physically sits — it is parked in a hyperspace lane. Ask the transit for that.
-            ShipTransitManager transit = SpaceSubsystem.transit();
-            BlockPos parked = transit == null ? null : transit.hyperspaceAnchorOf(shipId.toString());
+            BlockPos parked = stack.transit.hyperspaceAnchorOf(shipId.toString());
             return parked == null ? null
                     : new double[] {parked.getX() + 0.5D, parked.getY() + 1.0D, parked.getZ() + 0.5D};
         }
@@ -459,18 +458,18 @@ public final class SpaceEventHandler {
 
         @Override
         public ShipLedger.Entry ledgerEntry(UUID shipId) {
-            ShipLedger ledger = SpaceSubsystem.ledger();
-            return ledger == null ? null : ledger.get(shipId);
+            SpaceSubsystem stack = AdvancedRocketry.spaceSubsystem();
+            return stack == null ? null : stack.ledger.get(shipId);
         }
 
         @Override
         public int materialize(GalacticCoord coord) {
-            SpaceManager manager = SpaceSubsystem.space();
-            if (manager == null) {
+            SpaceSubsystem stack = AdvancedRocketry.spaceSubsystem();
+            if (stack == null) {
                 return -1;
             }
             try {
-                return manager.materialize(coord);
+                return stack.manager.materialize(coord);
             } catch (SpaceManager.PoolExhaustedException exhausted) {
                 LOGGER.warn("[SPACE] cannot restore a player into {} - the slot pool is full",
                         coord.cellKey());
@@ -480,8 +479,8 @@ public final class SpaceEventHandler {
 
         @Override
         public int unpackTransit(UUID shipId) {
-            ShipTransitManager transit = SpaceSubsystem.transit();
-            return transit == null ? -1 : transit.crewDimensionOf(shipId.toString());
+            SpaceSubsystem stack = AdvancedRocketry.spaceSubsystem();
+            return stack == null ? -1 : stack.transit.crewDimensionOf(shipId.toString());
         }
 
         @Override

@@ -164,11 +164,14 @@ public final class JumpTrigger {
             return new Result(Outcome.REFUSED, verdict.firstMessage());
         }
         GalacticCoord target = nav.target();
-        ShipLedger ledger = SpaceSubsystem.ledger();
-        ShipTransitManager transit = SpaceSubsystem.transit();
-        if (ledger == null || transit == null) {
+        // ONE read of the server's stack: the ledger this departure is checked against, the transit it
+        // is handed to and the manager that resolves its origin slot all have to be the same one.
+        SpaceSubsystem stack = zmaster587.advancedRocketry.AdvancedRocketry.spaceSubsystem();
+        if (stack == null) {
             return new Result(Outcome.FAILED, MSG_NO_POSITION);
         }
+        ShipLedger ledger = stack.ledger;
+        ShipTransitManager transit = stack.transit;
         ShipLedger.Entry entry = ledger.get(shipId);
         if (entry == null || entry.coord == null) {
             // The ship is not recorded anywhere, so there is nowhere to depart FROM. Refused before
@@ -184,9 +187,7 @@ public final class JumpTrigger {
         // stored one names a different cell after a restart. A cell bound to no slot at all means the
         // ship is not in a world the departure could reach — refused HERE, above the commit line, so
         // it stays free. Nothing that can refuse belongs below it.
-        SpaceManager space = SpaceSubsystem.space();
-        int originSlotDim = space == null
-                ? SpaceManager.UNBOUND_SLOT : space.slotDimOf(entry.coord);
+        int originSlotDim = stack.manager.slotDimOf(entry.coord);
         if (originSlotDim == SpaceManager.UNBOUND_SLOT) {
             LOGGER.warn("[SPACE] jump refused for ship {}: its cell {} is bound to no slot world "
                     + "(the ship is flying in dim {})",
