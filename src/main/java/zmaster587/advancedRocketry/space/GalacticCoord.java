@@ -261,6 +261,20 @@ public final class GalacticCoord {
     }
 
     /**
+     * This cell with the given offset, exactly as given — <b>no carry and no saturation</b>.
+     *
+     * <p>Both of those are answers to questions this one is not. A carry is for INTEGRATING a path,
+     * where crossing into the next sector is the point; saturation is for REPORTING where a ship is,
+     * where a name must keep pointing at the world the ship is in. This is for ASKING how far past
+     * something a pose has gone — where an offset larger than the cell is the whole subject and has
+     * to survive being looked at. The lattice and its width are kept.</p>
+     */
+    public GalacticCoord withLocal(long dx, long dy, long dz) {
+        return new GalacticCoord(zone, cellBlocks, sectorX, sectorY, sectorZ,
+                (int) dx, (int) dy, (int) dz);
+    }
+
+    /**
      * This coordinate shifted by a local block delta, renormalised. The unit step of transit
      * integration: repeatedly adding a per-tick velocity vector never drifts (exact integer carry).
      */

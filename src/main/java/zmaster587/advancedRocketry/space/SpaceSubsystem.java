@@ -118,7 +118,7 @@ public final class SpaceSubsystem {
         this.descent = new DescentController(this.manager, this.ledger, new VSShipCrossingOps(),
                 new VSDescentPasteResolver(), useClock);
         this.cellCrossings = new CellCrossingController(this.manager, this.ledger, new VSShipCrossingOps(),
-                useClock);
+                useClock, SpaceSubsystem::zoneRadiusOf);
         // A jump too short to be worth a hyperspace leg is performed by the same machinery that carries
         // a ship across a cell face — one crossing, ledger straight to the destination, no lane and no
         // mid-flight. The transit manager decides WHICH jumps those are; this hands it the means.
@@ -408,6 +408,51 @@ public final class SpaceSubsystem {
      * <p>Public and static for the same reason {@link #launchBodyAddress(int)} is: a probe-built
      * stack wires the production resolver rather than a second one that could disagree with it.</p>
      */
+    /**
+     * How far the influence of the body {@code cell} rides reaches, in blocks, at {@code tick} —
+     * {@code 0} when the cell is in no zone, which is every cell of the galactic lattice.
+     *
+     * <p>The zone is the cell's own if a body stands in it, and otherwise the zone the cell BELONGS
+     * to: an empty cell of Earth's zone is bounded by Earth's sphere, because that is the influence
+     * carrying it. A zero is not a small sphere — the crossing reads it as "no sphere here" and
+     * falls back to the cube, which is what a galactic cell is bounded by anyway.</p>
+     */
+    public static double zoneRadiusOf(GalacticCoord cell, long tick) {
+        if (cell == null || cell.zone() == null) {
+            return 0d;
+        }
+        MinecraftServer server = FMLCommonHandler.instance().getMinecraftServerInstance();
+        zmaster587.advancedRocketry.universe.UniverseRegistry reg =
+                zmaster587.advancedRocketry.universe.UniverseRegistry.get(server);
+        if (reg == null) {
+            return 0d;
+        }
+        // The body whose ZONE this is — the one the cell's key names as its parent — and the body
+        // that zone's own parent is, which is what a sphere of influence is measured against.
+        GalacticCoord zoneCell = GalacticCoord.fromCellKey(cell.zone());
+        if (zoneCell == null) {
+            return 0d;
+        }
+        zmaster587.advancedRocketry.universe.SystemBody zoneBody = null;
+        for (zmaster587.advancedRocketry.universe.SystemBody b : reg.bodiesAt(zoneCell)) {
+            if (b.definesFrame()) {
+                zoneBody = b;
+                break;
+            }
+        }
+        if (zoneBody == null) {
+            return 0d;
+        }
+        zmaster587.advancedRocketry.universe.SystemBody primary = null;
+        for (zmaster587.advancedRocketry.universe.SystemBody b : reg.systemBodiesAt(zoneCell)) {
+            if (b.kind() == zmaster587.advancedRocketry.universe.SystemBodyKind.STAR) {
+                primary = b;
+                break;
+            }
+        }
+        return ZoneScale.realizedRadiusBlocks(zoneBody, primary, tick);
+    }
+
     public static AbsolutePos cellFrameOriginAt(GalacticCoord name, long tick) {
         MinecraftServer server = FMLCommonHandler.instance().getMinecraftServerInstance();
         zmaster587.advancedRocketry.universe.UniverseRegistry reg =

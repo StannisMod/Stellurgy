@@ -677,9 +677,20 @@ public final class UniverseRegistry extends WorldSavedData implements CellFrames
 
     /**
      * The absolute position of the frame origin of the cell NAMED by {@code name}, at {@code tick} —
-     * the position of that cell's PRIMARY. A cell with no primary is void and its origin is the
-     * static {@code sector * CELL}, which is also the answer when the registry cannot attribute the
-     * cell to any system at all.
+     * the position of that cell's PRIMARY.
+     *
+     * <p>Three answers, in order.</p>
+     * <ol>
+     *   <li><b>A body stands here</b> and defines a frame: its position at the tick.</li>
+     *   <li><b>The cell is EMPTY but sits inside a ZONE</b>: the zone's body at the tick, displaced by
+     *       this cell's fixed offset in that zone's lattice. Every cell of a zone rides the zone's
+     *       body, occupied or not — that is what a zone IS — and this is the clause that makes it
+     *       true. Without it an empty cell of Earth's zone took the static answer below and rode
+     *       NOTHING, so a craft that flew out of Luna's cell stopped being carried by anything at
+     *       all: it left one frame and was handed no other.</li>
+     *   <li><b>Otherwise</b> the cell is void in the galactic lattice and stands still, which is also
+     *       the answer when the registry cannot attribute the cell to any system.</li>
+     * </ol>
      */
     @Override
     public AbsolutePos originAt(GalacticCoord name, long tick) {
@@ -690,6 +701,12 @@ public final class UniverseRegistry extends WorldSavedData implements CellFrames
             if (b.definesFrame()) {
                 return b.frame().originAt(tick);
             }
+        }
+        GalacticCoord zone = name.zone() == null ? null : GalacticCoord.fromCellKey(name.zone());
+        if (zone != null && name.cellBlocks() > 0L) {
+            long width = name.cellBlocks();
+            return originAt(zone, tick).plus(name.sectorX() * width, name.sectorY() * width,
+                    name.sectorZ() * width);
         }
         return AbsolutePos.ofCellName(name);
     }

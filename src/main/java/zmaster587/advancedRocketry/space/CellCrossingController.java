@@ -81,19 +81,41 @@ public final class CellCrossingController {
         }
     }
 
+    /**
+     * How far the influence of the body a cell rides reaches, in blocks, at a tick — {@code 0} when
+     * the cell is in no zone (the galactic lattice, which has no sphere and is bounded by its cube).
+     *
+     * <p>A SEAM rather than a registry reference, for the reason the entry controller takes one:
+     * this class is arithmetic plus a crossing and must stay drivable without a server standing
+     * behind it. Production supplies the registry-backed reading; a test supplies a number.</p>
+     */
+    public interface ZoneExtent {
+        double radiusBlocks(GalacticCoord cell, long tick);
+    }
+
+    /** The reading for a caller with no universe to ask: no zone anywhere, so the cube decides. */
+    public static final ZoneExtent NO_ZONES = (cell, tick) -> 0d;
+
     private final SpaceManager space;
     private final ShipLedger ledger;
     private final ShipCrossingService crossing;
     private final LongSupplier clock;
+    private final ZoneExtent zones;
     private final Map<UUID, Long> retryAfter = new HashMap<>();
     private int laneCounter;
 
     public CellCrossingController(SpaceManager space, ShipLedger ledger, ShipCrossingService.Ops ops,
                                   LongSupplier clock) {
+        this(space, ledger, ops, clock, NO_ZONES);
+    }
+
+    public CellCrossingController(SpaceManager space, ShipLedger ledger, ShipCrossingService.Ops ops,
+                                  LongSupplier clock, ZoneExtent zones) {
         this.space = space;
         this.ledger = ledger;
         this.crossing = new ShipCrossingService(ops);
         this.clock = clock;
+        this.zones = zones == null ? NO_ZONES : zones;
     }
 
     /**
@@ -116,7 +138,18 @@ public final class CellCrossingController {
             // an escape on every single crossing.
             return false;
         }
-        if (!CellSeam.shouldCarry(shipPos[0], shipPos[1], shipPos[2])) {
+        // INSIDE A ZONE THE BOUNDARY IS A SPHERE, and the cube is only what a slot world can hold.
+        // A body's influence ends at a radius, not at a plane, so a craft that has left the sphere
+        // has left the thing that carries it — whatever face it is nearest. The cube stays the rule
+        // for the galactic lattice, which has no sphere: its extent IS the cube.
+        //
+        // The sphere is inscribed in the cube, so where both apply this fires FIRST and never later:
+        // a craft is never carried by the cube out of a zone it had not yet left.
+        double zoneRadius = zones.radiusBlocks(cell, clock.getAsLong());
+        double fromBody = CellSeam.distanceFromZoneBody(
+                CellSeam.coordOfPose(cell, shipPos[0], shipPos[1], shipPos[2]));
+        boolean leftSphere = fromBody >= 0d && CellSeam.hasLeftZone(fromBody, zoneRadius);
+        if (!leftSphere && !CellSeam.shouldCarry(shipPos[0], shipPos[1], shipPos[2])) {
             return false;
         }
         long now = clock.getAsLong();

@@ -128,4 +128,101 @@ public class CellSeamTest {
         assertTrue("the re-entry depth must exceed the carry margin, or the hysteresis is inverted",
                 CellSeam.REENTRY_DEPTH > CellSeam.CARRY_MARGIN);
     }
+
+    // ─── The SPHERE boundary, inside a zone ────────────────────────────────────
+
+    /** A zone whose cells are this wide — Earth's, at the shipped metric. */
+    private static final long ZONE_CELL = 1_849_294L;
+    private static final String ZONE = "19_0_0";
+
+    /**
+     * <b>Distance is measured from the BODY, not from the cell a craft happens to sit in.</b>
+     *
+     * <p>A sphere of influence is centred on a body and never on a lattice, so a craft in an EMPTY
+     * cell of a zone is displaced from the body by its cell's own offset PLUS its offset inside that
+     * cell. Reading the in-cell offset alone would put every craft at most half a cell from the body
+     * however far across the zone it had flown — which for Earth's zone is an error of millions of
+     * blocks and always in the direction of "you have not left yet".</p>
+     */
+    @Test
+    public void distanceIsMeasuredFromTheBodyAndNotFromTheCell() {
+        // The body's own cell, a third of a cell out: the offset IS the distance.
+        GalacticCoord atHome = GalacticCoord.inZone(ZONE, ZONE_CELL, 0, 0, 0, ZONE_CELL / 3L, 0L, 0L);
+        assertEquals(ZONE_CELL / 3d, CellSeam.distanceFromZoneBody(atHome), 1d);
+
+        // Three cells out along +x, at that cell's centre: three cell widths from the body.
+        GalacticCoord threeOut = GalacticCoord.inZone(ZONE, ZONE_CELL, 3, 0, 0, 0L, 0L, 0L);
+        assertEquals(3d * ZONE_CELL, CellSeam.distanceFromZoneBody(threeOut), 1d);
+
+        // A galactic coordinate is in no zone, and the answer says so rather than inventing one.
+        assertTrue("a galactic coordinate has no zone to be measured from",
+                CellSeam.distanceFromZoneBody(GalacticCoord.ofSectorLocal(19, 0, 0, 0, 0, 0)) < 0d);
+    }
+
+    /**
+     * The two sphere thresholds are a HYSTERESIS: strictly apart, and the wider one on the way out.
+     *
+     * <p>Between them a craft stays where it is. Without the gap a craft drifting on the boundary
+     * re-decides its frame every tick and pays a full cut-and-paste each time — the same failure the
+     * cube's two margins exist for, one level down, and the same ratio: ten to one.</p>
+     */
+    @Test
+    public void theSphereThresholdsAreAHysteresisAndNotOneBoundaryReadTwice() {
+        double r = 264_000d; // Luna's sphere, in blocks
+
+        assertFalse("exactly on the sphere is not yet out", CellSeam.hasLeftZone(r, r));
+        assertFalse("nor is a whisker past it", CellSeam.hasLeftZone(r * 1.00001d, r));
+        assertTrue("but past the carry fraction it is",
+                CellSeam.hasLeftZone(r * (1d + CellSeam.SPHERE_CARRY_FRACTION) + 1d, r));
+
+        assertFalse("exactly on the sphere is not yet IN either", CellSeam.hasEnteredZone(r, r));
+        assertTrue("well inside it is", CellSeam.hasEnteredZone(r * 0.5d, r));
+        assertFalse("but a whisker inside is not — that is the gap",
+                CellSeam.hasEnteredZone(r * 0.99999d, r));
+
+        assertTrue("the entry threshold must be strictly deeper than the exit one, or the two are "
+                        + "one boundary read twice and a drifting craft flickers between frames",
+                CellSeam.SPHERE_REENTRY_FRACTION > CellSeam.SPHERE_CARRY_FRACTION);
+
+        // Both are FRACTIONS, so they move with the sphere. A zone's radius spans four orders of
+        // magnitude across one system; an absolute margin would be a different rule for each body.
+        double tiny = 512d;
+        assertTrue("the same rule must hold at a tiny sphere",
+                CellSeam.hasLeftZone(tiny * (1d + CellSeam.SPHERE_CARRY_FRACTION) + 1d, tiny));
+    }
+
+    /**
+     * A zone with no radius has no sphere to leave, and both answers are NO rather than a guess.
+     *
+     * <p>That is the galactic lattice, where a cell's extent IS its cube. A sphere test that answered
+     * "yes, you have left" for a radius of zero would carry every craft in deep space out of a zone
+     * it was never in.</p>
+     */
+    @Test
+    public void noSphereMeansNoSphereAnswerRatherThanZero() {
+        assertFalse(CellSeam.hasLeftZone(1_000_000d, 0d));
+        assertFalse(CellSeam.hasEnteredZone(0d, 0d));
+    }
+
+    /**
+     * The sphere is INSCRIBED in the cell, so where both apply the sphere always fires first.
+     *
+     * <p>This is what makes the change safe to land ahead of the rest: a craft is never carried by
+     * the cube out of a zone it had not already left by the sphere. The relation holds because a
+     * childless body's zone is one cell of exactly twice its own radius, so the cell's half-width IS
+     * the radius — the sphere touches each face and is inside everywhere else.</p>
+     */
+    @Test
+    public void theSphereFiresBeforeTheCubeWhereBothApply() {
+        long radius = 264_000L;
+        long cell = 2L * radius;                 // a childless body's zone: one cell, span 2R
+        // Straight out along +x, one block past the sphere's carry threshold.
+        long past = (long) (radius * (1d + CellSeam.SPHERE_CARRY_FRACTION)) + 1L;
+        GalacticCoord at = GalacticCoord.inZone(ZONE, cell, 0, 0, 0, past, 0L, 0L);
+
+        assertTrue("the sphere must call this a departure",
+                CellSeam.hasLeftZone(CellSeam.distanceFromZoneBody(at), radius));
+        assertTrue("...while the cube has not, which is the ordering this rests on",
+                past < cell / 2L + CellSeam.CARRY_MARGIN);
+    }
 }
