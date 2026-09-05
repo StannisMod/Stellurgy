@@ -22,7 +22,13 @@
     "MixinVSShipCrosserEvents",
     "MixinLoginRestoreEvents",
     "MixinShipFrameTravelEvents",
-    "MixinShipAboardTagEvents"
+    "MixinShipAboardTagEvents",
+    "MixinShipEntryControllerEvents",
+    "MixinDescentControllerEvents",
+    "MixinCellCrossingControllerEvents",
+    "MixinShipCrossingServiceEvents",
+    "MixinVSShipCrossingOpsEvents",
+    "MixinShipLedgerEvents"
   ],
   "client": [
     "MixinEntityVelocityWriters",

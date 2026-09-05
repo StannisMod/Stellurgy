@@ -80,6 +80,20 @@ public final class TestTrace {
         }
     }
 
+    /**
+     * A SERVER-side record stamped with the overworld's clock — for an observation point that runs
+     * on the server thread with no entity in hand (a controller's decision, a ledger write). The
+     * overworld ticks whenever the server does, so its clock is the one every server record is
+     * correlated on; {@link #recordHere} stamps {@code 0} and is for a point that may run on either
+     * side.
+     */
+    public static void recordServer(String type, String payload) {
+        net.minecraft.world.WorldServer overworld =
+                net.minecraftforge.common.DimensionManager.getWorld(0);
+        TestEventLog.record("server", overworld == null ? 0L : overworld.getTotalWorldTime(),
+                type, payload);
+    }
+
     /** {@link #record} for an observation point with no entity — see {@link #instrumentHere}. */
     public static void recordHere(String type, String payload) {
         if (isRemoteThread()) {

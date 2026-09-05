@@ -97,6 +97,42 @@ public final class Events {
         return probe.exec("artest events since " + mark);
     }
 
+    /** The records of one {@code type} at or after {@code mark}, in order, as the raw reply. */
+    public String since(long mark, String type) throws Exception {
+        return probe.exec("artest events since " + mark + " " + type);
+    }
+
+    /** How many records in a {@code since} reply carry {@code needle} — a payload fragment such as
+     *  {@code "accepted":false}. Records are split on the envelope's own {@code {"seq":} prefix. */
+    public static int countRecords(String sinceReply, String needle) {
+        int n = 0;
+        for (String record : String.valueOf(sinceReply).split("\\{\"seq\":")) {
+            if (record.contains(needle)) {
+                n++;
+            }
+        }
+        return n;
+    }
+
+    /** The string {@code field} of the FIRST record in a {@code since} reply, or {@code null} when no
+     *  record carries it — the first thing that happened after the mark, which for a gate that goes
+     *  on answering every tick (a refusal, then COOLDOWN, COOLDOWN, …) is the decision itself. */
+    public static String firstField(String sinceReply, String field) {
+        Matcher m = Pattern.compile("\"" + field + "\":\"([^\"]*)\"").matcher(String.valueOf(sinceReply));
+        return m.find() ? m.group(1) : null;
+    }
+
+    /** The string {@code field} of the LAST record in a {@code since} reply, or {@code null} when no
+     *  record carries it. Records are in order, so the last one is the most recent. */
+    public static String lastField(String sinceReply, String field) {
+        Matcher m = Pattern.compile("\"" + field + "\":\"([^\"]*)\"").matcher(String.valueOf(sinceReply));
+        String last = null;
+        while (m.find()) {
+            last = m.group(1);
+        }
+        return last;
+    }
+
     /**
      * Fail unless the named observation point actually EXECUTED — the assertion that makes an empty
      * log mean something.
