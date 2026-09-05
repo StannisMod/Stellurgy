@@ -430,6 +430,65 @@ public class SystemContentTest {
     }
 
     /**
+     * <b>The query the descent scan uses can see a moon from its PARENT's cell; the cell read
+     * cannot, and both halves are the assertion.</b>
+     *
+     * <p>This test fails if production breaks the contract that <b>a craft can find a body it is
+     * able to reach without already being in that body's cell.</b> A moon has a cell of its own
+     * inside its parent's zone, so a craft flying at one is in a different cell for the whole
+     * approach — and the descent trigger's candidate list was built from {@code bodiesAt}, the CELL
+     * read, which by construction can never hold it. The trigger went dead for every moon in the
+     * game, silently, and every tier stayed green because they all ask the registry where bodies
+     * are rather than what a craft near one can see.</p>
+     *
+     * <p>The negative half is not decoration. {@code bodiesAt} answering "no moon" is CORRECT — it
+     * is the cell read and the moon is not in that cell — so a later "fix" that widened it would
+     * make the positive leg pass while quietly breaking every consumer that asks it a question
+     * about one cell (attribution, the wells query, entry placement).</p>
+     */
+    @Test
+    public void aMoonIsReachableFromItsParentsCellThroughTheSkyReadButNotTheCellRead() {
+        StellarBody star = new StellarBody();
+        star.setId(4261);
+        star.setSize(1f);
+        DimensionProperties parent = planet(790, 200, 0.5);
+        parent.gravitationalMultiplier = 1f;
+        DimensionProperties moon = planet(791, 127, 0.9);
+        DimensionManager.getInstance().setDimProperties(790, parent);
+        DimensionManager.getInstance().setDimProperties(791, moon);
+        parent.setStar(star);
+        moon.setParentPlanet(parent);
+
+        UniverseRegistry reg = new UniverseRegistry();
+        reg.place(GalacticCoord.ORIGIN, 4261);
+        UniverseRegistry.setStarLookup(id -> id == 4261 ? star : null);
+
+        GalacticCoord parentCell = reg.coordForPlanet(parent).orElse(null);
+        assertNotNull("arrangement: the planet must have a cell", parentCell);
+        GalacticCoord moonCell = reg.coordForPlanet(moon).orElse(null);
+        assertNotNull("arrangement: and so must the moon", moonCell);
+        assertFalse("arrangement: they are different cells, which is what makes this a question",
+                moonCell.sameCell(parentCell));
+
+        assertFalse("the CELL read of the planet's cell must not hold the moon — it is not in it",
+                holdsDim(reg.bodiesAt(parentCell), 791));
+        assertTrue("but the read a craft's descent scan uses must, or flying to a moon does nothing",
+                holdsDim(reg.skyBodiesAt(parentCell), 791));
+        assertTrue("...and it must still hold the planet itself",
+                holdsDim(reg.skyBodiesAt(parentCell), 790));
+    }
+
+    /** Whether {@code bodies} holds the body of dimension {@code dimId}. */
+    private static boolean holdsDim(List<SystemBody> bodies, int dimId) {
+        for (SystemBody b : bodies) {
+            if (b.dimId() == dimId) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
      * The live half of the moon rule, one level down. A moon's NAME is fixed forever; what moves is
      * its CELL, which rides it — so the moon sits at its own frame's origin at every tick while its
      * absolute position goes round its planet.

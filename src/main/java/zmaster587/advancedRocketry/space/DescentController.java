@@ -114,6 +114,55 @@ public final class DescentController {
     }
 
     /**
+     * Which body a craft at {@code craftAt} has closed within {@code radiusBlocks} of, at
+     * {@code tick} — the NEAREST one, or {@code null} if none.
+     *
+     * <p><b>Both positions are ABSOLUTE, evaluated at the same tick, and that is the whole point of
+     * this method.</b> The proximity check used to read an in-cell delta and filter the candidates
+     * to the craft's own cell, which is exact only while both endpoints share a frame. It stopped
+     * being so the day a moon got a cell of its own: the moon was never in the craft's cell, the
+     * candidate list never held one, and flying to a moon did nothing at all — no descent, no
+     * refusal, and no line in the log, because the check that would have said something is the one
+     * that could no longer see the body.</p>
+     *
+     * <p>An absolute reading takes each endpoint through its own frame's origin at the tick, so it
+     * is correct across cells and identical to the in-cell delta within one. It costs the
+     * ephemeris evaluations the old reading skipped by assuming one frame.</p>
+     *
+     * <p><b>What this does NOT do is decide MEMBERSHIP.</b> A craft belongs to the innermost sphere
+     * of influence containing it, and that rule is unimplemented; this is a proximity test over
+     * whatever candidates it is handed, which is exactly what it was before. It restores the trigger
+     * without pretending to answer the larger question.</p>
+     *
+     * <p>Nearest rather than first: two bodies can be inside the radius at once — a moon and its
+     * planet, when the craft is between them — and "whichever the list happened to hold first" is
+     * a landing site chosen by iteration order.</p>
+     *
+     * @param candidates bodies a ship could land on; nulls and non-landable kinds are skipped
+     */
+    public static zmaster587.advancedRocketry.universe.SystemBody nearestDescentTarget(
+            java.util.List<zmaster587.advancedRocketry.universe.SystemBody> candidates,
+            AbsolutePos craftAt, long tick, long radiusBlocks) {
+        if (candidates == null || craftAt == null) {
+            return null;
+        }
+        zmaster587.advancedRocketry.universe.SystemBody nearest = null;
+        double nearestDistance = Double.MAX_VALUE;
+        for (zmaster587.advancedRocketry.universe.SystemBody body : candidates) {
+            if (body == null || !body.kind().canDescend()) {
+                continue;
+            }
+            double distance = craftAt.distanceTo(body.absoluteAt(tick));
+            if (!shouldTriggerDescent(true, distance, radiusBlocks) || distance >= nearestDistance) {
+                continue;
+            }
+            nearest = body;
+            nearestDistance = distance;
+        }
+        return nearest;
+    }
+
+    /**
      * Begin a descent for the SETTLED ship whose flight computer sits at {@code afcPos} in slot
      * dimension {@code slotDim}, onto {@code targetPlanetDim}. Returns {@code true} if the crossing
      * was started (the ship has left its space cell). A ship not currently in space, or one already

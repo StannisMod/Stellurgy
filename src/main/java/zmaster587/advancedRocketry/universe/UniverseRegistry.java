@@ -426,10 +426,15 @@ public final class UniverseRegistry extends WorldSavedData implements CellFrames
     // ─── System content (bodies + POIs) ────────────────────────────────────────
 
     /**
-     * The ZONE read (A#1a sub-decision c): the bodies whose own cell IS {@code coord}'s cell — the one
-     * body whose orbital zone this cell hosts (or none: an inter-body void cell), any moons sharing the
-     * parent's cell, plus the POIs keyed at this cell. Consumers: the descent trigger, the wells query,
-     * entry placement. For the whole system, use {@link #systemBodiesAt}.
+     * The CELL read: the bodies whose own cell IS {@code coord}'s cell — the one body whose zone this
+     * cell hosts (or none: an inter-body void cell) — plus the POIs keyed at this cell. For the whole
+     * system, use {@link #systemBodiesAt}.
+     *
+     * <p><b>A moon of that body is NOT in this list.</b> It has a cell of its own inside the body's
+     * zone, so it is only ever in the list for ITS cell. This used to say the opposite, and a caller
+     * that reads "the bodies near here" out of that sentence gets a list that can never hold a moon —
+     * which is exactly what silently killed the descent trigger for every moon in the game. Anything
+     * asking what a craft can REACH wants {@link #skyBodiesAt} and a distance.</p>
      */
     public List<SystemBody> bodiesAt(GalacticCoord systemCoord) {
         GalacticCoord cell = systemCoord.cellCentre();

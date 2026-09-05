@@ -563,35 +563,40 @@ public class TileAdvancedFlightComputer extends TileEntity implements IModularIn
                     if (reg != null) {
                         zmaster587.advancedRocketry.space.GalacticCoord shipCoord = settled.coord;
                         long radius = zmaster587.advancedRocketry.space.ShipEntryController.DESCENT_RADIUS_BLOCKS;
-                        for (zmaster587.advancedRocketry.universe.SystemBody body
-                                : descendTargetsIn(reg, shipCoord)) {
-                            // Ship and body are in the SAME cell here (the list is filtered by name),
-                            // so both sit in one frame and its motion cancels: the in-cell delta is
-                            // the true distance without a frame lookup. A moon's offset is live,
-                            // hence the tick.
-                            double distance = Math.sqrt(shipCoord.staticFrameDistanceSqTo(
-                                    body.addressAt(zmaster587.advancedRocketry.space.SpaceSubsystem
-                                            .spaceClock())));
-                            if (!zmaster587.advancedRocketry.space.DescentController
-                                    .shouldTriggerDescent(true, distance, radius)) {
-                                continue;
-                            }
+                        long clock = zmaster587.advancedRocketry.space.SpaceSubsystem.spaceClock();
+                        // WHERE THE CRAFT IS, absolutely, at this tick — its cell's frame origin plus
+                        // its offset inside that cell. The proximity test below compares two absolute
+                        // positions, so it stays exact across cells; it used to difference two in-cell
+                        // offsets, which is exact only while both endpoints share one frame.
+                        zmaster587.advancedRocketry.space.AbsolutePos craftAt =
+                                zmaster587.advancedRocketry.space.SpaceSubsystem
+                                        .cellFrameOriginAt(shipCoord, clock)
+                                        .plus(shipCoord.localX(), shipCoord.localY(),
+                                                shipCoord.localZ());
+                        // ONE candidate, the nearest, and no walk to the next one if it declines.
+                        // The walk existed and was wrong in kind: a descent refused onto the body a
+                        // pilot was flying at would silently divert him onto a further one. A
+                        // refusal is transient (already crossing, or cooling down), so the right
+                        // answer is to try the same body again next tick.
+                        zmaster587.advancedRocketry.universe.SystemBody body =
+                                zmaster587.advancedRocketry.space.DescentController
+                                        .nearestDescentTarget(descendTargetsIn(reg, shipCoord),
+                                                craftAt, clock, radius);
+                        if (body != null) {
                             // A procedural body has no dimension until somebody flies down to it, so
                             // the world is minted HERE — once the ship is genuinely close enough to
                             // descend. The scan above must never allocate a dimension.
                             int targetDim = body.dimId();
                             if (targetDim == zmaster587.advancedRocketry.api.Constants.INVALID_PLANET) {
-                                // The BODY, not its cell: a moon shares its planet's address, so a
-                                // cell names a family and only the body says which of them was flown to.
+                                // The BODY, not its cell: a cell can hold more than one landable
+                                // thing, and only the body says which of them was flown to.
                                 targetDim = zmaster587.advancedRocketry.universe.PlanetRealizer
                                         .realize(server, body);
-                                if (targetDim
-                                        == zmaster587.advancedRocketry.api.Constants.INVALID_PLANET) {
-                                    continue; // nothing landable here after all
-                                }
                             }
-                            if (descentStack.descent.requestDescent(world.provider.getDimension(),
-                                            getPos(), shipId, targetDim)) {
+                            if (targetDim != zmaster587.advancedRocketry.api.Constants.INVALID_PLANET
+                                    && descentStack.descent.requestDescent(
+                                            world.provider.getDimension(), getPos(), shipId,
+                                            targetDim)) {
                                 // The crossing started: this tile was cut out of the slot world - stop
                                 // publishing from a stale tick. The re-assembled ship resumes planet-side.
                                 return;
@@ -761,13 +766,28 @@ public class TileAdvancedFlightComputer extends TileEntity implements IModularIn
     }
 
     /**
-     * The descend-target bodies of {@code shipCoord}'s cell, rebuilt only when it can have changed.
+     * The bodies a ship at {@code shipCoord} could descend onto — the whole SYSTEM's, not its
+     * cell's — rebuilt only when the answer can have changed.
      *
-     * <p>Rebuilt at once on a CELL CHANGE — the only thing that alters which bodies are in range —
-     * and otherwise once per {@link #DESCEND_TARGET_RESOLVE_TICKS} as a bound on staleness. The
-     * slow rebuild is phased by this tile's own position rather than run on a shared {@code % N}
-     * boundary, so a cell holding several ships does not stack every one of their rebuilds onto the
-     * same tick.</p>
+     * <p><b>The system, because a body a craft can reach is no longer necessarily in its cell.</b>
+     * A moon has a cell of its own inside its parent's zone, so a craft flying at one is in a
+     * different cell from it for the whole approach; filtering the candidates by the craft's cell
+     * therefore returned a list that could never contain a moon, and flying to a moon did nothing
+     * at all. Which of these is actually in range is the proximity test's business
+     * ({@link zmaster587.advancedRocketry.space.DescentController#nearestDescentTarget}), and it
+     * reads absolute positions, so being handed a candidate on the far side of the system costs a
+     * comparison and decides nothing.</p>
+     *
+     * <p>{@code skyBodiesAt} rather than {@code systemBodiesAt}: it is the union with whatever is
+     * keyed at the craft's own cell, so nothing the old cell-scoped list could see is lost — a
+     * body in a cell no anchor attributes included.</p>
+     *
+     * <p>Rebuilt at once on a CELL CHANGE and otherwise once per
+     * {@link #DESCEND_TARGET_RESOLVE_TICKS} as a bound on staleness. That bound is what makes the
+     * wider list affordable: the WALK is slow and cached, and only the distance comparison runs
+     * every tick. The slow rebuild is phased by this tile's own position rather than run on a
+     * shared {@code % N} boundary, so a cell holding several ships does not stack every one of
+     * their rebuilds onto the same tick.</p>
      */
     private java.util.List<zmaster587.advancedRocketry.universe.SystemBody> descendTargetsIn(
             zmaster587.advancedRocketry.universe.UniverseRegistry reg,
@@ -781,7 +801,7 @@ public class TileAdvancedFlightComputer extends TileEntity implements IModularIn
         }
         java.util.List<zmaster587.advancedRocketry.universe.SystemBody> found =
                 new java.util.ArrayList<>();
-        for (zmaster587.advancedRocketry.universe.SystemBody b : reg.bodiesAt(shipCoord)) {
+        for (zmaster587.advancedRocketry.universe.SystemBody b : reg.skyBodiesAt(shipCoord)) {
             // "Can a ship land here", not "does a world already exist". A procedural body has no
             // dimension until a descent mints one, so filtering on isDescendTarget() would hide
             // every world nobody has visited — and this list is the ONLY gate the descent loop
