@@ -204,18 +204,38 @@ public final class ZoneScale {
     public static GalacticCoord addressWithin(SystemBody zoneBody, SystemBody primary,
                                               BlockDelta offset, long tightestChildOffsetBlocks,
                                               long tick) {
-        if (zoneBody == null || offset == null) {
+        if (zoneBody == null) {
             return null;
         }
-        long width = cellBlocks(zoneBody, primary, tightestChildOffsetBlocks, tick);
-        if (width <= 0L) {
+        return addressOnLattice(zoneBody.name().cellKey(),
+                cellBlocks(zoneBody, primary, tightestChildOffsetBlocks, tick), offset);
+    }
+
+    /**
+     * The same address, for a caller that already KNOWS the zone's lattice and must not size a
+     * second one.
+     *
+     * <p>{@link #addressWithin} derives the width from the innermost child, which is the naming
+     * pass's job and needs the whole child set to be right. A crossing does not have that set — it
+     * has a craft and a body — so it reads the width the naming pass recorded
+     * ({@code UniverseRegistry.zoneLatticeBlocks}) and hands it here. The alternative is a second
+     * derivation of one number, and the two do not conflict when they disagree: a cell key carries
+     * no width, so a mismatch renames the cell instead of failing.</p>
+     *
+     * <p>{@code null} when there is no lattice to address in ({@code cellBlocks <= 0}) or no offset,
+     * with the same duty on the caller as {@link #cellWithin}: say what you do about it rather than
+     * carry on with a plausible cell.</p>
+     */
+    public static GalacticCoord addressOnLattice(String zoneKey, long cellBlocks, BlockDelta offset) {
+        if (zoneKey == null || offset == null || cellBlocks <= 0L) {
             return null;
         }
-        long ix = cellIndex(offset.dx(), width);
-        long iy = cellIndex(offset.dy(), width);
-        long iz = cellIndex(offset.dz(), width);
-        return GalacticCoord.inZone(zoneBody.name().cellKey(), width, ix, iy, iz,
-                offset.dx() - ix * width, offset.dy() - iy * width, offset.dz() - iz * width);
+        long ix = cellIndex(offset.dx(), cellBlocks);
+        long iy = cellIndex(offset.dy(), cellBlocks);
+        long iz = cellIndex(offset.dz(), cellBlocks);
+        return GalacticCoord.inZone(zoneKey, cellBlocks, ix, iy, iz,
+                offset.dx() - ix * cellBlocks, offset.dy() - iy * cellBlocks,
+                offset.dz() - iz * cellBlocks);
     }
 
     public static GalacticCoord cellWithin(SystemBody zoneBody, SystemBody primary, BlockDelta offset,

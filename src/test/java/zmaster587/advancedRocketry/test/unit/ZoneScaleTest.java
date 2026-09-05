@@ -305,6 +305,51 @@ public class ZoneScaleTest {
         assertTrue("but the two must agree on WHICH cell", centre.sameCell(address));
     }
 
+    /**
+     * <b>A craft re-addressed INTO a zone is named on the same lattice as the bodies of that zone.</b>
+     *
+     * <p>A zone has exactly ONE lattice, and two callers derive it: the naming path, which sizes it
+     * so the innermost child gets an index of its own, and the crossing path, which re-addresses a
+     * craft that has just left a child's sphere. If the two disagree about the cell width they
+     * disagree about the NAME — the width is deliberately not part of a cell key, so a mismatch does
+     * not fail anywhere, it silently renames the cell.</p>
+     *
+     * <p>The witness is the strongest one available: a craft sitting exactly where the moon sits must
+     * be addressed into the MOON's cell. On a lattice sized for nothing that is cell 0 — the planet's
+     * own — which is "a moon shares its parent's name" returning through the crossing, the one door
+     * the zone design has never been checked at.</p>
+     */
+    @Test
+    public void aCraftIsReAddressedOnTheLatticeItsZonesBodiesAreNamedIn() {
+        SystemBody earth = EARTH.body();
+        long lunaOut = EARTH.tightestMoonBlocks();
+        zmaster587.advancedRocketry.space.BlockDelta whereLunaIs =
+                zmaster587.advancedRocketry.space.BlockDelta.of(lunaOut, 0L, 0L);
+
+        // How the NAMING path builds Luna's cell: the lattice knows what it has to name apart.
+        GalacticCoord lunasCell = ZoneScale.cellWithin(earth, sol(), whereLunaIs,
+                EARTH.tightestMoonBlocks(), 0L);
+        assertNotNull("arrangement: Earth's zone must name its moon at all", lunasCell);
+        assertTrue("arrangement: Luna must not already share Earth's own cell",
+                lunasCell.sectorX() != 0L);
+
+        // How the CROSSING path addresses one: on the lattice the naming pass RECORDED, which is what
+        // a moon's own name carries. The crossing has a craft and a body, never the child set the
+        // width is derived from, so it must read the answer rather than size a second lattice.
+        GalacticCoord craft = ZoneScale.addressOnLattice(earth.name().cellKey(),
+                lunasCell.cellBlocks(), whereLunaIs);
+        assertNotNull("a craft in a zone must be addressable in it", craft);
+
+        assertTrue("a craft standing exactly where the moon stands is named by cell "
+                        + craft.cellKey() + " while the moon itself is named by " + lunasCell.cellKey()
+                        + ": the crossing addressed it on a lattice of " + craft.cellBlocks()
+                        + " blocks and the moon was named on one of " + lunasCell.cellBlocks()
+                        + ". The width is not part of a cell key, so this does not fail anywhere — it "
+                        + "renames the cell, and everything keyed on that name then answers about a "
+                        + "different place.",
+                craft.sameCell(lunasCell));
+    }
+
     private static SystemBody sol() {
         return SystemBody.fixedAt(GalacticCoord.ORIGIN, SystemBodyKind.STAR,
                         Constants.INVALID_PLANET, 1)

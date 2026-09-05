@@ -447,23 +447,32 @@ public final class UniverseRegistry extends WorldSavedData implements CellFrames
                 }
             }
         }
-        addPoisOf(cell, frameOf(bodies, cell), bodies);
+        addPoisOf(cell, bodies, bodies);
         return bodies;
     }
 
     /**
-     * Append the POIs keyed at {@code cell}, re-bound to {@code frame}.
+     * Append the POIs keyed at {@code cell}, re-bound to the frame that cell rides.
      *
      * <p>A POI is persisted as a name plus an offset — which frame that cell rides is a property of
      * the CELL and is resolved here. Without the rebinding an orbital station in a planet's cell
      * would keep a static frame while the planet's own cell moved, so the two would drift apart at
      * orbital speed while sharing one address.</p>
+     *
+     * <p><b>The frame is resolved only if there is a POI to bind</b>, and that is not an
+     * optimisation. The fallback for a cell no body stands in is a STATIC frame, and building one
+     * asks a zoned cell where it is statically — which a cell inside a MOON's zone cannot answer:
+     * placing it needs its parent zone's lattice width, and a cell key does not carry one, so
+     * {@code AbsolutePos.ofCellName} throws rather than guess. Computing that eagerly threw out of
+     * every read of an empty cell in a moon's zone, which is where a craft parked beside a moon
+     * lives.</p>
      */
-    private void addPoisOf(GalacticCoord cell, CellFrame frame, List<SystemBody> out) {
+    private void addPoisOf(GalacticCoord cell, List<SystemBody> bodiesHere, List<SystemBody> out) {
         List<SystemBody> pois = poiOverrides.get(cell.cellCentre().cellKey());
-        if (pois == null) {
+        if (pois == null || pois.isEmpty()) {
             return;
         }
+        CellFrame frame = frameOf(bodiesHere, cell);
         for (SystemBody poi : pois) {
             out.add(poi.withFrame(frame));
         }
@@ -505,9 +514,38 @@ public final class UniverseRegistry extends WorldSavedData implements CellFrames
             }
         }
         for (GalacticCoord cell : seenCells) {
-            addPoisOf(cell, frameOf(bodies, cell), out);
+            addPoisOf(cell, bodies, out);
         }
         return out;
+    }
+
+    /**
+     * The edge length, in blocks, of one cell of the lattice inside {@code zoneCell}'s zone —
+     * <b>read off the names of the bodies that live in it</b>, never re-derived.
+     *
+     * <p>A zone has exactly one lattice, and it was sized once, when its children were named
+     * ({@code SystemContent.moonCellIn}): the size depends on the innermost child, which only the
+     * naming pass sees in full. Any later caller that needs the width — a crossing re-addressing a
+     * craft, say — must read the answer rather than compute a second one, because the width is
+     * deliberately absent from a cell key ({@link GalacticCoord#cellBlocks()}): two lattices do not
+     * conflict, they silently produce different names for the same place.</p>
+     *
+     * <p>{@link GalacticCoord#WIDTH_UNKNOWN} when this zone names no body — which is a real answer
+     * and not a failure: a zone with nothing to name apart is undivided, and the caller can say so
+     * in its own terms. It is also the answer when the registry cannot attribute the cell.</p>
+     */
+    public long zoneLatticeBlocks(GalacticCoord zoneCell) {
+        if (zoneCell == null) {
+            return GalacticCoord.WIDTH_UNKNOWN;
+        }
+        String zoneKey = zoneCell.cellKey();
+        for (SystemBody b : systemBodiesAt(zoneCell)) {
+            GalacticCoord name = b == null ? null : b.name();
+            if (name != null && zoneKey.equals(name.zone()) && name.cellBlocks() > 0L) {
+                return name.cellBlocks();
+            }
+        }
+        return GalacticCoord.WIDTH_UNKNOWN;
     }
 
     /**

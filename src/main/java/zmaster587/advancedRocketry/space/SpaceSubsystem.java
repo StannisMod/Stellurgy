@@ -423,12 +423,27 @@ public final class SpaceSubsystem {
      * reach the moon.</p>
      */
     public static GalacticCoord zoneMembershipOf(GalacticCoord craftCoord, long tick) {
+        MinecraftServer server = FMLCommonHandler.instance().getMinecraftServerInstance();
+        return zoneMembershipIn(
+                zmaster587.advancedRocketry.universe.UniverseRegistry.get(server), craftCoord, tick);
+    }
+
+    /**
+     * The same decision, against a stated universe — the form the production entry point above is a
+     * one-line binding of.
+     *
+     * <p>Split out so the whole membership rule can be driven without a server standing behind it.
+     * It is the only decision in the crossing that consults the universe, and it is where a craft's
+     * NAME is chosen: an answer that is well-formed but points at the wrong cell is invisible at
+     * every layer below (a cell key carries no lattice width, so a mismatch renames rather than
+     * fails). A rule with that failure mode may not be reachable only through a booted server.</p>
+     */
+    public static GalacticCoord zoneMembershipIn(
+            zmaster587.advancedRocketry.universe.UniverseRegistry reg,
+            GalacticCoord craftCoord, long tick) {
         if (craftCoord == null || craftCoord.zone() == null || craftCoord.cellBlocks() <= 0L) {
             return null;
         }
-        MinecraftServer server = FMLCommonHandler.instance().getMinecraftServerInstance();
-        zmaster587.advancedRocketry.universe.UniverseRegistry reg =
-                zmaster587.advancedRocketry.universe.UniverseRegistry.get(server);
         GalacticCoord zoneCell = GalacticCoord.fromCellKey(craftCoord.zone());
         if (reg == null || zoneCell == null) {
             return null;
@@ -437,8 +452,8 @@ public final class SpaceSubsystem {
         if (zoneBody == null) {
             return null;
         }
-        zmaster587.advancedRocketry.universe.SystemBody primary = starOf(reg, zoneCell);
-        AbsolutePos craftAt = cellFrameOriginAt(craftCoord.cellCentre(), tick)
+        zmaster587.advancedRocketry.universe.SystemBody primary = primaryOf(reg, zoneCell);
+        AbsolutePos craftAt = reg.originAt(craftCoord.cellCentre(), tick)
                 .plus(craftCoord.localX(), craftCoord.localY(), craftCoord.localZ());
 
         // INWARD first — the innermost containing sphere governs.
@@ -455,7 +470,8 @@ public final class SpaceSubsystem {
             if (!CellSeam.hasEnteredZone(craftAt.distanceTo(childAt), childRadius)) {
                 continue;
             }
-            return ZoneScale.addressWithin(child, zoneBody, craftAt.minus(childAt), 0L, tick);
+            return addressIn(reg, ZoneScale.addressOnLattice(child.name().cellKey(),
+                    latticeOf(reg, child, zoneBody, tick), craftAt.minus(childAt)), craftAt, tick);
         }
 
         // OUTWARD — past this zone's own sphere, so the parent's lattice takes it.
@@ -466,17 +482,107 @@ public final class SpaceSubsystem {
         if (zoneCell.zone() == null) {
             // The parent lattice is the GALACTIC one, which is addressed by absolute sectors rather
             // than by an offset from a body. The craft keeps its position; only its name changes.
-            AbsolutePos parentOrigin = cellFrameOriginAt(zoneCell, tick);
-            zmaster587.advancedRocketry.space.BlockDelta out = craftAt.minus(parentOrigin);
-            return zoneCell.cellCentre().plusLocal(out.dx(), out.dy(), out.dz());
+            return addressIn(reg, zoneCell, craftAt, tick);
         }
+        // Resolved STRICTLY, and deliberately not reused from `primary`: that one falls back to the
+        // star when a parent cannot be found, which is the right reading for a RADIUS (a sphere has
+        // to be measured against something) and the wrong one for an ADDRESS — it would name the
+        // craft in the star's lattice, four levels away from where it is. A craft whose parent body
+        // is missing is left where it is instead.
         zmaster587.advancedRocketry.universe.SystemBody grandparent =
                 frameBodyAt(reg, GalacticCoord.fromCellKey(zoneCell.zone()));
         if (grandparent == null) {
             return null;
         }
-        return ZoneScale.addressWithin(grandparent, starOf(reg, zoneCell),
-                craftAt.minus(grandparent.absoluteAt(tick)), 0L, tick);
+        // The grandparent's lattice is the one THIS zone's body is itself named in — the craft is
+        // moving out into the company of its own parent, so the width is already on the name it is
+        // leaving. Read through the same helper anyway: one call site cannot be the place a width is
+        // decided, and the inward branch has no such shortcut.
+        return addressIn(reg, ZoneScale.addressOnLattice(grandparent.name().cellKey(),
+                latticeOf(reg, grandparent, primaryOf(reg, grandparent.name()), tick),
+                craftAt.minus(grandparent.absoluteAt(tick))), craftAt, tick);
+    }
+
+    /**
+     * The address a craft at {@code craftAt} holds, given the CELL a lattice has just named for it —
+     * with the in-cell offset measured from the origin that cell actually rides.
+     *
+     * <p>The lattice answers a cell and an offset from the zone body, and for an EMPTY cell those are
+     * the same thing: an empty cell's origin is its zone body displaced by the lattice slot. A cell a
+     * body STANDS in is different — its origin is that body ({@code UniverseRegistry.originAt} clause
+     * one), which is what "a cell rides its primary" means — and the body does not sit at its slot's
+     * centre, only inside it. Handing the lattice's own offset to such a cell measures it from the
+     * wrong point.</p>
+     *
+     * <p>That is not a rounding: a craft leaving a moon's sphere lands in the moon's OWN cell by
+     * construction (a cell contains the sphere of the body it names), so this is the ordinary case
+     * for the outward crossing rather than an edge of it. Measured before this existed: the craft was
+     * displaced <b>321 994 blocks</b> at the instant it crossed — the gap between Luna and its
+     * lattice slot — which is a teleport out of a crossing that is supposed to preserve position.</p>
+     */
+    private static GalacticCoord addressIn(zmaster587.advancedRocketry.universe.UniverseRegistry reg,
+                                           GalacticCoord latticeAddress, AbsolutePos craftAt,
+                                           long tick) {
+        if (reg == null || latticeAddress == null || craftAt == null) {
+            return null;
+        }
+        GalacticCoord cell = latticeAddress.cellCentre();
+        zmaster587.advancedRocketry.space.BlockDelta off = craftAt.minus(reg.originAt(cell, tick));
+        return cell.plusLocal(off.dx(), off.dy(), off.dz());
+    }
+
+    /**
+     * The body a zone's own sphere of influence is measured AGAINST — the body whose zone that zone
+     * lives in, and only where it lives in the galactic lattice, the system's star.
+     *
+     * <p>A sphere of influence is a two-body quantity: {@code r = a·(m/M)^(2/5)} with {@code a} the
+     * separation from the body being orbited. For a planet that body is the star; <b>for a moon it is
+     * its planet</b>, and reading the star there does not fail — it answers with a plausible number
+     * about the wrong pair. Measured on Luna: against Earth its sphere is <b>264 731</b> blocks
+     * (66 183 km, the published value); against Sol the same call returns <b>638 428</b>, so a craft
+     * is judged still inside the moon's influence 2.4 times further out than it is, and the outward
+     * crossing never fires where a pilot actually leaves.</p>
+     *
+     * <p>The inward test never had this: it measures a child against the zone body it was found in,
+     * which is its parent by construction. Only the outward one had to name the pair itself.</p>
+     */
+    private static zmaster587.advancedRocketry.universe.SystemBody primaryOf(
+            zmaster587.advancedRocketry.universe.UniverseRegistry reg, GalacticCoord cellOfZoneBody) {
+        if (reg == null || cellOfZoneBody == null) {
+            return null;
+        }
+        GalacticCoord parentZone = cellOfZoneBody.zone() == null ? null
+                : GalacticCoord.fromCellKey(cellOfZoneBody.zone());
+        zmaster587.advancedRocketry.universe.SystemBody parent =
+                parentZone == null ? null : frameBodyAt(reg, parentZone);
+        return parent != null ? parent : starOf(reg, cellOfZoneBody);
+    }
+
+    /**
+     * The cell width of {@code zoneBody}'s own lattice at {@code tick} — the width the NAMING pass
+     * recorded, and only failing that the width an undivided zone has.
+     *
+     * <p>A crossing may not size a lattice. The size depends on the innermost child of the zone,
+     * which only the naming pass sees in full, and a second derivation does not announce a
+     * disagreement: a cell key carries no width, so two lattices produce two different names for one
+     * place and every reader downstream answers correctly about the wrong cell. Measured before this
+     * existed: on the reference solar system a craft standing exactly where Luna stands was
+     * addressed on a lattice four times too coarse — 7 397 280 blocks against the 1 849 320 Luna is
+     * named on — so it arrived in the cell holding its PLANET and the moon beside it was not in its
+     * sky.
+     *
+     * <p>The fallback is the childless reading and it is an ANSWER, not a stand-in: a zone that names
+     * no body has nothing to divide for, so one cell spanning the whole sphere is what the naming
+     * pass would have produced too. The zero handed to {@code cellBlocks} here therefore states a
+     * fact the registry was asked for, rather than a parameter nobody filled in.</p>
+     */
+    private static long latticeOf(zmaster587.advancedRocketry.universe.UniverseRegistry reg,
+                                  zmaster587.advancedRocketry.universe.SystemBody zoneBody,
+                                  zmaster587.advancedRocketry.universe.SystemBody primary,
+                                  long tick) {
+        long named = reg == null ? GalacticCoord.WIDTH_UNKNOWN
+                : reg.zoneLatticeBlocks(zoneBody.name());
+        return named > 0L ? named : ZoneScale.cellBlocks(zoneBody, primary, 0L, tick);
     }
 
     /** The body whose frame {@code cell} rides, or {@code null} when the cell is void. */
