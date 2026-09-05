@@ -228,20 +228,16 @@ public final class RealDedicatedServerHarness implements AutoCloseable {
     }
 
     /**
-     * The stable post-mortem location of the last server log, one file PER TEST-JVM (the PID
-     * suffix), mirroring the client harness's {@code forge-test-client-last-pid*.log}: a single
-     * fixed name would let concurrent forks clobber each other's diagnostics, exactly when
-     * parallel runs make failures interesting.
+     * The stable post-mortem location of the last server log — inside THIS checkout and one file
+     * per test JVM, mirroring the client harness's {@code forge-test-client-last-pid*.log}. See
+     * {@link com.github.stannismod.forge.testing.PostMortemLogs} for why both halves of that are
+     * load-bearing.
      *
      * <p>Last-boot-wins within one JVM. A class whose failing test is not the last one to run
      * therefore loses its log — filter to the single method when the log is the evidence.</p>
      */
     public static Path preservedLogPath() {
-        String jvm = java.lang.management.ManagementFactory.getRuntimeMXBean().getName();
-        int at = jvm.indexOf('@');
-        String pid = at > 0 ? jvm.substring(0, at) : jvm;
-        return Paths.get(System.getProperty("java.io.tmpdir"),
-                "forge-test-server-last-pid" + pid + ".log");
+        return com.github.stannismod.forge.testing.PostMortemLogs.server();
     }
 
     /**
