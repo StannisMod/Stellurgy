@@ -430,7 +430,8 @@ public final class ClusteredGalaxyGenerator implements IGalaxyGenerator {
                     CellFrame.of(AbsolutePos.ofCellName(cell.cellCentre()), seat.law),
                     BodyEphemeris.STATIC, SystemBodyKind.STAR, Constants.INVALID_PLANET,
                     companion.getId(), companion.getOrbitalDistance())
-                    .withRadius(AstronomicalBodyHelper.starRadiusEarths(companion)));
+                    .withBulk(AstronomicalBodyHelper.starMassEarths(companion),
+                            AstronomicalBodyHelper.starRadiusEarths(companion)));
         }
 
         appendRetinue(bodies, seed, cell, star, systemId, lattice, taken, outerBound,
@@ -456,7 +457,7 @@ public final class ClusteredGalaxyGenerator implements IGalaxyGenerator {
         BodyProfile profile = derivation.deriveRogue(seed, cell, 0, giantFraction);
         // It does not move inside its own system: it IS the system, so its frame is the anchor's.
         bodies.add(SystemBody.fixedAt(cell, SystemBodyKind.ROGUE_PLANET, Constants.INVALID_PLANET,
-                systemId).withRadius(profile.radiusEarths()));
+                systemId).withBulk(profile.massEarths(), profile.radiusEarths()));
 
         double u = CellHash.norm(CellHash.ofCell(seed, cell, SALT_ROGUE_MOONCOUNT));
         int moons = (int) (Math.pow(u, MOON_COUNT_BIAS) * (MAX_MOONS_ROCKY + 1));
@@ -479,7 +480,7 @@ public final class ClusteredGalaxyGenerator implements IGalaxyGenerator {
             BodyProfile moonProfile = derivation.deriveRogue(seed, cell, j, giantFraction);
             bodies.add(new SystemBody(cell, frame, law, SystemBodyKind.MOON,
                     Constants.INVALID_PLANET, systemId, SystemBody.ORBIT_UNKNOWN)
-                    .withRadius(moonProfile.radiusEarths()));
+                    .withBulk(moonProfile.massEarths(), moonProfile.radiusEarths()));
         }
         return bodies;
     }
@@ -540,7 +541,7 @@ public final class ClusteredGalaxyGenerator implements IGalaxyGenerator {
             // no registry to ask.
             bodies.add(new SystemBody(seat.cell, bodyFrame, BodyEphemeris.STATIC, profile.kind(),
                     Constants.INVALID_PLANET, starId, orbit)
-                    .withRadius(profile.radiusEarths()));
+                    .withBulk(profile.massEarths(), profile.radiusEarths()));
             outermostOrbit = Math.max(outermostOrbit, orbit);
             if (profile.kind() == SystemBodyKind.GAS_GIANT
                     && (innermostGiantOrbit == 0 || orbit < innermostGiantOrbit)) {
@@ -750,7 +751,7 @@ public final class ClusteredGalaxyGenerator implements IGalaxyGenerator {
                     parentOrbit);
             bodies.add(new SystemBody(parent, parentFrame, law, SystemBodyKind.MOON,
                     Constants.INVALID_PLANET, starId, parentOrbit)
-                    .withRadius(moonProfile.radiusEarths()));
+                    .withBulk(moonProfile.massEarths(), moonProfile.radiusEarths()));
         }
     }
 

@@ -108,6 +108,37 @@ public class AstronomicalBodyHelper {
         return solarRadii * EARTH_RADII_PER_SOLAR_RADIUS;
     }
 
+    /**
+     * Earth masses in one SOLAR mass (1.989e30 kg / 5.972e24 kg). The counterpart of
+     * {@link #EARTH_RADII_PER_SOLAR_RADIUS}, and needed for the same reason: a star states its mass
+     * in solar masses and every other body in Earth masses.
+     */
+    public static final double EARTH_MASSES_PER_SOLAR_MASS = 332_946d;
+
+    /**
+     * A star's mass in EARTH masses — the unit a body carries its mass in.
+     *
+     * <p>The conversion is not cosmetic. A sphere of influence is computed from a mass RATIO, so a
+     * star's mass fed into a body-mass channel unconverted would understate the primary by five
+     * orders of magnitude and hand every planet a sphere of influence larger than its own orbit.</p>
+     *
+     * <p>A star with no stated mass falls back to one solar mass, matching
+     * {@link #starRadiusEarths}'s fallback for size — and, like it, this is a stand-in and reads as
+     * a perfectly ordinary Sun-like star to every caller. It is acceptable here only because
+     * {@code StellarBody.getMass()} already derives a mass from the radius where none is stated, so
+     * reaching this branch means the star has neither.</p>
+     */
+    public static double starMassEarths(zmaster587.advancedRocketry.api.dimension.solar.StellarBody star) {
+        if (star == null) {
+            return EARTH_MASSES_PER_SOLAR_MASS;
+        }
+        double solarMasses = star.getMass();
+        if (Double.isNaN(solarMasses) || solarMasses <= 0d) {
+            solarMasses = 1d;
+        }
+        return solarMasses * EARTH_MASSES_PER_SOLAR_MASS;
+    }
+
     /** Earth's equatorial radius in metres — the unit a body's {@code radius} is stated in. */
     public static final double EARTH_RADIUS_METRES = 6_378_137d;
     /** Earth's radius in chart blocks: what one unit of a body's radius is worth on the chart. */

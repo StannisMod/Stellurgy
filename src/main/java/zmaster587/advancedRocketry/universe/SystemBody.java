@@ -50,6 +50,17 @@ public final class SystemBody {
      */
     public static final double RADIUS_UNKNOWN = 0d;
 
+    /**
+     * Sentinel for {@link #massEarths()}: this body's mass is not known here.
+     *
+     * <p>Distinct from {@link #RADIUS_UNKNOWN} in what a consumer may do about it. A body with no
+     * radius can still be DRAWN, at a minimum size; a body with no mass has no sphere of influence
+     * at all, so whatever asks about frames must treat it as defining none rather than substituting
+     * a plausible mass. A stand-in mass would produce a well-formed boundary indistinguishable from
+     * a real one, which is the one thing a frame decision must never be handed.</p>
+     */
+    public static final double MASS_UNKNOWN = 0d;
+
     private final GalacticCoord name;
     private final CellFrame frame;
     private final BodyEphemeris offsetLaw;
@@ -59,6 +70,8 @@ public final class SystemBody {
     private final int orbitalDistance;
     /** This body's own radius in EARTH radii, or {@link #RADIUS_UNKNOWN}. See {@link #radiusEarths()}. */
     private final double radiusEarths;
+    /** This body's own mass in EARTH masses, or {@link #MASS_UNKNOWN}. See {@link #massEarths()}. */
+    private final double massEarths;
 
     /**
      * A body at rest in a STATIC frame — the reading for a POI, a fixture, or anything derived
@@ -103,6 +116,13 @@ public final class SystemBody {
     public SystemBody(GalacticCoord name, CellFrame frame, BodyEphemeris offsetLaw,
                       SystemBodyKind kind, int dimId, int starId, int orbitalDistance,
                       double radiusEarths) {
+        this(name, frame, offsetLaw, kind, dimId, starId, orbitalDistance, radiusEarths,
+                MASS_UNKNOWN);
+    }
+
+    public SystemBody(GalacticCoord name, CellFrame frame, BodyEphemeris offsetLaw,
+                      SystemBodyKind kind, int dimId, int starId, int orbitalDistance,
+                      double radiusEarths, double massEarths) {
         if (name == null) {
             throw new NullPointerException("name");
         }
@@ -118,6 +138,8 @@ public final class SystemBody {
         this.orbitalDistance = orbitalDistance;
         this.radiusEarths = Double.isNaN(radiusEarths) || radiusEarths < 0d
                 ? RADIUS_UNKNOWN : radiusEarths;
+        this.massEarths = Double.isNaN(massEarths) || massEarths < 0d
+                ? MASS_UNKNOWN : massEarths;
     }
 
     /**
@@ -136,7 +158,38 @@ public final class SystemBody {
     /** The same body, carrying {@code radiusEarths}. The generators' way of stating a body's size. */
     public SystemBody withRadius(double newRadiusEarths) {
         return new SystemBody(name, frame, offsetLaw, kind, dimId, starId, orbitalDistance,
-                newRadiusEarths);
+                newRadiusEarths, massEarths);
+    }
+
+    /**
+     * How much this body actually weighs, in EARTH masses, or {@link #MASS_UNKNOWN}.
+     *
+     * <p><b>It travels with the body for the same reason its radius does, and it answers a different
+     * question.</b> A radius says how big to draw a world and where its atmosphere begins; a mass
+     * says how far its influence reaches — the sphere inside which a craft's motion is naturally
+     * described against THIS body rather than against its primary. The two are independent inputs
+     * and must not be derived from each other: surface gravity {@code g = GM/R²} conflates them, so
+     * two worlds with equal {@code g} can have spheres of influence orders of magnitude apart.</p>
+     *
+     * <p>Nothing downstream can recover it either — a procedural world has no dimension to look it
+     * up in until somebody lands on it, and a client never sees the universe registry.</p>
+     */
+    public double massEarths() {
+        return massEarths;
+    }
+
+    /**
+     * The same body, carrying BOTH of its bulk properties — the generators' way of stating what a
+     * world is made of, and the counterpart of {@code DimensionProperties.setBulk}.
+     *
+     * <p>Named for both quantities rather than offered as a second {@code withMass} beside
+     * {@link #withRadius}, because a body whose mass and radius were set by two separate calls is a
+     * body one of whose calls can be forgotten — and the one that is forgotten is silently a
+     * sentinel that reads as "this body has no influence".</p>
+     */
+    public SystemBody withBulk(double newMassEarths, double newRadiusEarths) {
+        return new SystemBody(name, frame, offsetLaw, kind, dimId, starId, orbitalDistance,
+                newRadiusEarths, newMassEarths);
     }
 
     private static GalacticCoord requireAddress(GalacticCoord address) {
@@ -231,7 +284,8 @@ public final class SystemBody {
      */
     public SystemBody withDimId(int newDimId) {
         return newDimId == dimId ? this
-                : new SystemBody(name, frame, offsetLaw, kind, newDimId, starId, orbitalDistance);
+                : new SystemBody(name, frame, offsetLaw, kind, newDimId, starId, orbitalDistance,
+                        radiusEarths, massEarths);
     }
 
     /** {@code true} iff this body can be descended into as a walkable dimension. */
@@ -259,7 +313,7 @@ public final class SystemBody {
         return newFrame == null || newFrame.equals(frame)
                 ? this
                 : new SystemBody(name, newFrame, offsetLaw, kind, dimId, starId, orbitalDistance,
-                        radiusEarths);
+                        radiusEarths, massEarths);
     }
 
     public void writeToNBT(NBTTagCompound nbt) {
@@ -274,6 +328,9 @@ public final class SystemBody {
         }
         if (radiusEarths != RADIUS_UNKNOWN) {
             nbt.setDouble("radiusEarths", radiusEarths);
+        }
+        if (massEarths != MASS_UNKNOWN) {
+            nbt.setDouble("massEarths", massEarths);
         }
     }
 
@@ -290,7 +347,8 @@ public final class SystemBody {
                 nbt.hasKey("dimId") ? nbt.getInteger("dimId") : Constants.INVALID_PLANET,
                 nbt.getInteger("starId"),
                 nbt.getInteger("orbitalDist"),
-                nbt.getDouble("radiusEarths"));
+                nbt.getDouble("radiusEarths"),
+                nbt.getDouble("massEarths"));
     }
 
     @Override
@@ -305,6 +363,7 @@ public final class SystemBody {
         return dimId == other.dimId && starId == other.starId && kind == other.kind
                 && orbitalDistance == other.orbitalDistance
                 && Double.compare(radiusEarths, other.radiusEarths) == 0
+                && Double.compare(massEarths, other.massEarths) == 0
                 && name.equals(other.name) && offsetLaw.equals(other.offsetLaw)
                 && frame.equals(other.frame);
     }
@@ -317,6 +376,7 @@ public final class SystemBody {
         result = 31 * result + starId;
         result = 31 * result + orbitalDistance;
         result = 31 * result + Double.hashCode(radiusEarths);
+        result = 31 * result + Double.hashCode(massEarths);
         result = 31 * result + offsetLaw.hashCode();
         return result;
     }

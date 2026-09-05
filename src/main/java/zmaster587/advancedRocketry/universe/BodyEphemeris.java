@@ -120,6 +120,38 @@ public final class BodyEphemeris {
                 Math.round(inPlane * Math.sin(theta) * unitBlocks));
     }
 
+    /**
+     * The rate this displacement is changing at {@code tick}, in BLOCKS PER TICK — the analytic
+     * derivative of {@link #offsetAt}, not a difference of two of its readings.
+     *
+     * <p><b>Differencing the positions does not work, and the number that says so is measured.</b>
+     * {@link #offsetAt} rounds to whole blocks, so a central difference over two ticks is quantised
+     * to half a block per tick: Luna's true 14.7344 blocks/tick came back as exactly 15.0. At Luna's
+     * speed that is a 1.8 % error and survivable; at a slow body's — a fraction of a block per tick
+     * — the same quantisation is the difference between "stationary" and "twice its actual speed",
+     * and it is the SLOW bodies whose station a craft must keep most precisely, since a small error
+     * there is a large fraction of what there is to match.</p>
+     *
+     * <p>This is not a second source of truth for where a body is: it is the same law, differentiated.
+     * A velocity stated independently of {@link #offsetAt} could disagree with it; this one cannot.</p>
+     *
+     * <p>A static law has no rate — a fixed offset does not move — and answers zero on every axis.</p>
+     */
+    public double[] velocityBlocksPerTickAt(long tick) {
+        if (unitBlocks == 0L || !(periodTicks > 0d) || Double.isInfinite(periodTicks)) {
+            return new double[]{0d, 0d, 0d};
+        }
+        // dtheta/dt, carrying the direction the body actually travels in.
+        double omega = (2d * Math.PI / periodTicks) * (retrograde ? -1d : 1d);
+        double theta = thetaAt(tick);
+        double inPlane = distUnits * Math.cos(Math.toRadians(phiDegrees)) * unitBlocks;
+        // The out-of-plane component is a constant of the orbit, so it contributes no rate.
+        return new double[]{
+                -inPlane * Math.sin(theta) * omega,
+                0d,
+                inPlane * Math.cos(theta) * omega};
+    }
+
     /** The orbital angle (radians) at {@code tick}. */
     public double thetaAt(long tick) {
         double timeTheta = 0d;
