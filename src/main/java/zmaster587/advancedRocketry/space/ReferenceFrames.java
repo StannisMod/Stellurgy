@@ -139,27 +139,15 @@ public final class ReferenceFrames {
         return innermost;
     }
 
-    /**
-     * How fast {@code frame} is moving INSIDE its cell at {@code tick}, in blocks per tick — the
-     * velocity a craft holding station in that frame must itself be moving at.
-     *
-     * <p><b>This is the whole fix, and its shape says why the defect looked the way it did.</b> A
-     * cell's primary has an in-cell offset of zero at every tick, so this is identically zero for it
-     * — which is exactly why a craft parked beside a planet already kept station without anything
-     * carrying it. A moon moves inside the shared cell, so this is its orbital velocity about its
-     * parent, and a craft that does not match it is left behind at precisely that rate.</p>
-     *
-     * <p>Read from the ephemeris ANALYTICALLY rather than by differencing two of its positions.
-     * Measured 2026-08-25: positions are rounded to whole blocks, so a central difference is
-     * quantised to half a block per tick and returned exactly 15.0 where the truth was 14.7344 —
-     * tolerable at Luna's speed and ruinous at a slow body's, where the same half-block step is the
-     * whole quantity. See {@code BodyEphemeris.velocityBlocksPerTickAt}, which is the same law
-     * differentiated and therefore cannot disagree with the position it is the rate of.</p>
-     */
-    public static double[] frameVelocityBlocksPerTick(SystemBody frame, long tick) {
-        if (frame == null) {
-            return new double[]{0d, 0d, 0d};
-        }
-        return frame.offsetLaw().velocityBlocksPerTickAt(tick);
-    }
+    // `frameVelocityBlocksPerTick(frame, tick)` is GONE, and its absence is the answer rather than a
+    // gap. It reported how fast a frame moves INSIDE its cell — the speed a craft would have to hold
+    // to keep station in it — which is a question that only exists while a framing body can move
+    // inside a cell that is not its own. Every framing body now sits at its own frame's origin,
+    // moons included, so the method could only ever return zero: an accessor whose answer is a
+    // constant, and one a reader would take for "this body does not move".
+    //
+    // The design it belonged to was retracted before it: a craft co-moving with Luna would have to
+    // hold 294.7 blocks/s against a substrate that freezes a ship above 223.6, so the craft is not
+    // carried at all — its CELL rides the body and the craft stays exactly where it is. What moves is
+    // read off `SystemBody.frame()`, which states the body's own motion about its primary.
 }

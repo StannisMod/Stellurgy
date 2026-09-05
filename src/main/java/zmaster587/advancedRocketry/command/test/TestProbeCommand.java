@@ -3386,18 +3386,31 @@ public class TestProbeCommand extends CommandBase {
             String targetKind = "null";
             String descend = "false";
             boolean slotWorld = false;
-            // Where the aim points INSIDE its cell, and where the aimed body actually is right now.
-            // The cell key alone cannot answer "did the aim land on the body": a moon shares its
-            // parent's cell name and carries its own live offset inside it, so a badly-timed aim
-            // keeps the right cell and misses the body by tens of thousands of blocks. The MISS is
-            // reported together with both offsets it was computed from, so a caller can see WHICH
-            // component moved rather than only that a magnitude changed.
+            // Where the aim points and where the aimed body actually is, at the space clock — as
+            // ABSOLUTE positions, and that is the whole reading. The in-cell offsets beside them are
+            // components, kept so a caller can see WHICH one moved rather than only that a magnitude
+            // changed; they are not the miss and must never be differenced as though they were.
+            //
+            // They were, and it was right while a moon moved inside its parent's cell. A moon's cell
+            // now RIDES the moon, so both offsets are identically zero at every tick and their
+            // difference is zero on a broken build and a working one alike — an instrument that
+            // cannot report the defect it exists for. The aim's absolute position still moves with
+            // the clock, because its CELL does.
             String targetLocal = "null";
             String bodyNowLocal = "null";
+            String targetAbs = "null";
+            String bodyNowAbs = "null";
             String aimMissNow = "null";
+            long navClock = zmaster587.advancedRocketry.space.SpaceSubsystem.spaceClock();
+            zmaster587.advancedRocketry.space.AbsolutePos aimAt = null;
             if (nav.getTarget() != null) {
                 targetLocal = "[" + nav.getTarget().localX() + "," + nav.getTarget().localY()
                         + "," + nav.getTarget().localZ() + "]";
+                aimAt = zmaster587.advancedRocketry.space.SpaceSubsystem
+                        .cellFrameOriginAt(nav.getTarget(), navClock)
+                        .plus(nav.getTarget().localX(), nav.getTarget().localY(),
+                                nav.getTarget().localZ());
+                targetAbs = absTriple(aimAt);
             }
             if (targetDim != zmaster587.advancedRocketry.api.Constants.INVALID_PLANET) {
                 slotWorld = zmaster587.advancedRocketry.space.SpaceSlotPool.slotDims().contains(targetDim);
@@ -3411,14 +3424,14 @@ public class TestProbeCommand extends CommandBase {
                         if (b.dimId() == targetDim) {
                             targetKind = "\"" + b.kind() + "\"";
                             descend = Boolean.toString(b.isDescendTarget());
-                            long clockNow = zmaster587.advancedRocketry.space.SpaceSubsystem.spaceClock();
-                            zmaster587.advancedRocketry.space.BlockDelta here = b.inCellOffsetAt(clockNow);
+                            zmaster587.advancedRocketry.space.BlockDelta here =
+                                    b.inCellOffsetAt(navClock);
                             bodyNowLocal = "[" + here.dx() + "," + here.dy() + "," + here.dz() + "]";
-                            if (nav.getTarget() != null) {
-                                aimMissNow = Double.toString(zmaster587.advancedRocketry.space.BlockDelta
-                                        .of(nav.getTarget().localX() - here.dx(),
-                                                nav.getTarget().localY() - here.dy(),
-                                                nav.getTarget().localZ() - here.dz()).length());
+                            zmaster587.advancedRocketry.space.AbsolutePos bodyAt =
+                                    b.absoluteAt(navClock);
+                            bodyNowAbs = absTriple(bodyAt);
+                            if (aimAt != null) {
+                                aimMissNow = Double.toString(aimAt.distanceTo(bodyAt));
                             }
                             break;
                         }
@@ -3439,6 +3452,8 @@ public class TestProbeCommand extends CommandBase {
                     + ",\"armed\":" + nav.isArmed()
                     + ",\"targetLocal\":" + targetLocal
                     + ",\"bodyNowLocal\":" + bodyNowLocal
+                    + ",\"targetAbs\":" + targetAbs
+                    + ",\"bodyNowAbs\":" + bodyNowAbs
                     + ",\"aimMissNow\":" + aimMissNow
                     // Both clocks, so a caller measures the INPUT of an aim rather than only its
                     // outcome: an aim that agrees with the body proves nothing if the two clocks
@@ -5429,17 +5444,30 @@ public class TestProbeCommand extends CommandBase {
                     + zmaster587.advancedRocketry.AdvancedRocketry.proxy.getWorldTimeUniversal(0) + "}");
             return;
         }
-        if (args.length >= 4 && "cell-info".equalsIgnoreCase(args[0])) {
+        // cell-info <sx> <sy> <sz>  OR  cell-info <cellKey>
+        //
+        // The KEY form is not a convenience: a sector triple no longer names every cell, because a
+        // body inside a ZONE is counted in that zone's own lattice. Taking a key apart into three
+        // numbers reads it as galactic and asks about a different place entirely.
+        boolean cellInfoByKey = args.length >= 2 && "cell-info".equalsIgnoreCase(args[0])
+                && (args[1].indexOf('_') >= 0 || args[1].indexOf(
+                        zmaster587.advancedRocketry.space.GalacticCoord.ZONE_SEPARATOR) >= 0);
+        if (cellInfoByKey || (args.length >= 4 && "cell-info".equalsIgnoreCase(args[0]))) {
             zmaster587.advancedRocketry.universe.UniverseRegistry reg =
                     zmaster587.advancedRocketry.universe.UniverseRegistry.get(server);
             if (reg == null) {
                 send(sender, "{\"error\":\"registry unavailable\"}");
                 return;
             }
-            zmaster587.advancedRocketry.space.GalacticCoord cell =
-                    zmaster587.advancedRocketry.space.GalacticCoord.ofSectorLocal(
+            zmaster587.advancedRocketry.space.GalacticCoord cell = cellInfoByKey
+                    ? zmaster587.advancedRocketry.space.GalacticCoord.fromCellKey(args[1])
+                    : zmaster587.advancedRocketry.space.GalacticCoord.ofSectorLocal(
                             parseIntOr(args[1], 0), parseIntOr(args[2], 0), parseIntOr(args[3], 0),
                             0L, 0L, 0L);
+            if (cell == null) {
+                send(sender, "{\"error\":\"malformed cell key\"}");
+                return;
+            }
             java.util.Optional<zmaster587.advancedRocketry.space.GalacticCoord> anchor =
                     reg.anchorForCell(cell);
             StringBuilder out = new StringBuilder("{\"ok\":true,\"cellKey\":\"")
@@ -5561,12 +5589,20 @@ public class TestProbeCommand extends CommandBase {
             send(sender, "{\"ok\":false,\"reason\":\"no unrealized landable body in range\"}");
             return;
         }
-        // find-moon <radius> [giant]: the first cell in range whose family holds a MOON, reported by
-        // VARIANT for both the moon and the parent it hangs off - the identity `realize` takes, so a
-        // caller can mint a chosen member of a family instead of "whatever the cell offers first".
+        // find-moon <radius> [giant]: the first MOON in range, reported with its own cell and variant
+        // AND its parent's - the identity `realize` takes, so a caller can mint a chosen body instead
+        // of "whatever the cell offers first".
         // With the literal "giant" the sweep accepts only a GAS GIANT parent: that kind is not a
         // descent target, so no descent ever realizes it, and its moons are the ones for which "the
         // parent has no world yet" is a permanent condition rather than an ordering accident.
+        //
+        // TWO CELLS, not one. A moon used to share its parent's cell, so one cell key plus two
+        // variants named the whole family; a moon now has a cell of its own inside its parent's
+        // ZONE, whose key is the parent's cell. Reported as `cellKey` (the moon's, which is what
+        // `realize` is called with) and `parentCellKey` beside it, so a caller that needs the parent
+        // does not have to reconstruct it from a string. The old single-cell form did not merely go
+        // stale: `realizableBodiesAt(moonCell)` no longer holds the parent, so the sweep found no
+        // family at all and reported "no moon in range" for a galaxy full of them.
         if (args.length >= 2 && "find-moon".equalsIgnoreCase(args[0])) {
             zmaster587.advancedRocketry.universe.UniverseRegistry reg =
                     zmaster587.advancedRocketry.universe.UniverseRegistry.get(server);
@@ -5590,43 +5626,43 @@ public class TestProbeCommand extends CommandBase {
                                 continue;
                             }
                             zmaster587.advancedRocketry.space.GalacticCoord cell = b.name();
-                            java.util.List<zmaster587.advancedRocketry.universe.SystemBody> family =
-                                    reg.realizableBodiesAt(cell);
-                            int moonVariant = -1;
-                            int parentVariant = -1;
-                            for (int i = 0; i < family.size(); i++) {
-                                zmaster587.advancedRocketry.universe.SystemBody m = family.get(i);
+                            // The parent is the body whose CELL is this moon's zone: a moon's name
+                            // is a path and contains its parent's, so this is a lookup and not a
+                            // proximity guess.
+                            zmaster587.advancedRocketry.universe.SystemBody parent = null;
+                            int moons = 0;
+                            for (zmaster587.advancedRocketry.universe.SystemBody m
+                                    : reg.systemBodiesAt(probe)) {
                                 if (m.kind() == zmaster587.advancedRocketry.universe.SystemBodyKind.MOON) {
-                                    if (moonVariant < 0) {
-                                        moonVariant = i;
+                                    if (java.util.Objects.equals(m.name().zone(), cell.zone())) {
+                                        moons++;
                                     }
-                                } else if (parentVariant < 0) {
-                                    parentVariant = i;
+                                } else if (m.name().cellKey().equals(cell.zone())) {
+                                    parent = m;
                                 }
                             }
-                            if (moonVariant < 0 || parentVariant < 0) {
-                                continue;
+                            if (parent == null) {
+                                continue; // a moon whose zone names no body of this system
                             }
-                            zmaster587.advancedRocketry.universe.SystemBody parent =
-                                    family.get(parentVariant);
+                            java.util.OptionalInt moonVar = reg.variantOf(b);
+                            java.util.OptionalInt parentVar = reg.variantOf(parent);
+                            if (!moonVar.isPresent() || !parentVar.isPresent()) {
+                                continue; // an identity that does not separate: never guessed
+                            }
                             boolean giant = parent.kind()
                                     == zmaster587.advancedRocketry.universe.SystemBodyKind.GAS_GIANT;
                             if (giantOnly && !giant) {
                                 continue;
                             }
-                            int moons = 0;
-                            for (zmaster587.advancedRocketry.universe.SystemBody m : family) {
-                                if (m.kind() == zmaster587.advancedRocketry.universe.SystemBodyKind.MOON) {
-                                    moons++;
-                                }
-                            }
                             send(sender, "{\"ok\":true,\"sx\":" + cell.sectorX() + ",\"sy\":"
                                     + cell.sectorY() + ",\"sz\":" + cell.sectorZ()
-                                    + ",\"cellKey\":\"" + cell.cellKey() + "\",\"moonVariant\":"
-                                    + moonVariant + ",\"parentVariant\":" + parentVariant
+                                    + ",\"cellKey\":\"" + cell.cellKey() + "\",\"parentCellKey\":\""
+                                    + parent.name().cellKey() + "\",\"moonVariant\":"
+                                    + moonVar.getAsInt() + ",\"parentVariant\":"
+                                    + parentVar.getAsInt()
                                     + ",\"parentKind\":\"" + parent.kind() + "\",\"parentGasGiant\":"
-                                    + giant + ",\"moons\":" + moons + ",\"family\":" + family.size()
-                                    + "}");
+                                    + giant + ",\"moons\":" + moons + ",\"family\":"
+                                    + reg.realizableBodiesAt(cell).size() + "}");
                             return;
                         }
                     }
@@ -5690,15 +5726,32 @@ public class TestProbeCommand extends CommandBase {
         // realize <sx> <sy> <sz>: mint the dimension for the landable body in that cell and report what
         // the world it produced actually carries. The realization path a descent drives, called
         // directly, so the properties can be compared with `derived` without flying anything.
-        if (args.length >= 4 && "realize".equalsIgnoreCase(args[0])) {
-            zmaster587.advancedRocketry.space.GalacticCoord cell =
-                    zmaster587.advancedRocketry.space.GalacticCoord.ofSectorLocal(
+        // realize <sx> <sy> <sz> [variant]  OR  realize <cellKey> [variant]
+        //
+        // The KEY form exists because a sector triple no longer names every cell: a moon's is counted
+        // in its parent's ZONE lattice, so `19_0_0.213_0_0` and a bare `213 0 0` are different places
+        // and the second one is somewhere else entirely. A caller with a key must be able to pass it
+        // through unchanged rather than take it apart — taking it apart is exactly how it would be
+        // read as galactic.
+        boolean realizeByKey = args.length >= 2 && "realize".equalsIgnoreCase(args[0])
+                && (args[1].indexOf('_') >= 0 || args[1].indexOf(
+                        zmaster587.advancedRocketry.space.GalacticCoord.ZONE_SEPARATOR) >= 0);
+        if (realizeByKey || (args.length >= 4 && "realize".equalsIgnoreCase(args[0]))) {
+            zmaster587.advancedRocketry.space.GalacticCoord cell = realizeByKey
+                    ? zmaster587.advancedRocketry.space.GalacticCoord.fromCellKey(args[1])
+                    : zmaster587.advancedRocketry.space.GalacticCoord.ofSectorLocal(
                             parseIntOr(args[1], 0), parseIntOr(args[2], 0), parseIntOr(args[3], 0),
                             0L, 0L, 0L);
-            // A cell names a family - a planet and the moons that share its address - so the probe
-            // states WHICH of them it means. Default 0, the planet, with an optional variant arg;
-            // a caller that wants the moon has to say so, exactly as a descent does.
-            int variant = args.length >= 5 ? parseIntOr(args[4], 0) : 0;
+            if (cell == null) {
+                send(sender, "{\"ok\":false,\"reason\":\"malformed cell key\"}");
+                return;
+            }
+            // A cell names a family - a planet and whatever else stands in its address - so the probe
+            // states WHICH of them it means. Default 0, with an optional variant arg; a caller that
+            // wants a particular body has to say so, exactly as a descent does.
+            int variant = realizeByKey
+                    ? (args.length >= 3 ? parseIntOr(args[2], 0) : 0)
+                    : (args.length >= 5 ? parseIntOr(args[4], 0) : 0);
             java.util.List<zmaster587.advancedRocketry.universe.SystemBody> family =
                     zmaster587.advancedRocketry.universe.UniverseRegistry.get(server) == null
                             ? java.util.Collections.<zmaster587.advancedRocketry.universe.SystemBody>emptyList()
@@ -16946,6 +16999,25 @@ public class TestProbeCommand extends CommandBase {
 
     private static void send(ICommandSender sender, String text) {
         sender.sendMessage(new TextComponentString(text));
+    }
+
+    /**
+     * An absolute position as three block counts from the galactic origin, for a probe line.
+     *
+     * <p>The type deliberately holds a sector triple plus an offset instead of three raw blocks,
+     * because a sector index reaches magnitudes the product cannot express. This flattening is safe
+     * for what a probe reports — everything a test aims at is inside one system, tens of millions of
+     * blocks out at most — and the delta says so itself: a saturated one is reported as
+     * {@code null} rather than as three numbers, so a caller can never difference two clamped
+     * readings and call the result a distance.
+     */
+    private static String absTriple(zmaster587.advancedRocketry.space.AbsolutePos pos) {
+        if (pos == null) {
+            return "null";
+        }
+        zmaster587.advancedRocketry.space.BlockDelta d =
+                pos.minus(zmaster587.advancedRocketry.space.AbsolutePos.ORIGIN);
+        return d.isSaturated() ? "null" : "[" + d.dx() + "," + d.dy() + "," + d.dz() + "]";
     }
 
     private static void appendItemStackJson(StringBuilder out, net.minecraft.item.ItemStack stack, int slot) {

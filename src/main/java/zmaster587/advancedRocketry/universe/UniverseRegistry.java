@@ -241,7 +241,11 @@ public final class UniverseRegistry extends WorldSavedData implements CellFrames
      * sub-decision d): authored/pinned anchors win over the procedural generator inside one super-cell.
      */
     public Optional<GalacticCoord> anchorForCell(GalacticCoord coord) {
-        GalacticCoord cell = coord.cellCentre();
+        // Attribution is a GALACTIC question: which system's clear space this sits in. A zoned cell —
+        // a moon's, or anything named inside a zone's lattice — asks it through the galactic cell its
+        // zone is in, because its own triple counts cells thousands of times smaller and would land
+        // the query in an unrelated part of the sky while looking perfectly well-formed.
+        GalacticCoord cell = coord.galacticCell().cellCentre();
         if (byCell.containsKey(cell.cellKey())) {
             return Optional.of(cell);
         }
@@ -866,14 +870,19 @@ public final class UniverseRegistry extends WorldSavedData implements CellFrames
      * a caller holds a body it got from a derived list, while the pinned snapshot holds another
      * instance of the same body, and a realized one differs from both by carrying a dimension.</p>
      *
-     * <p><b>Why the offset law is part of the identity.</b> The first three fields do not separate
-     * SIBLINGS: every moon of one parent is built in the parent's cell, with kind {@code MOON}, and
-     * carrying the PARENT's distance from the star as its orbital distance - that number is what its
-     * climate is derived from, so it is shared on purpose. A match on those three therefore answered
-     * "the first moon" for every moon of the family, and a rocky world takes up to two while a giant
-     * takes up to five. What makes a sibling a sibling is its own orbit around the parent: radius,
-     * angle and period, which is exactly {@link SystemBody#offsetLaw()}. It compares by value and
-     * round-trips through NBT bit for bit, so it survives the pin the other three were chosen for.</p>
+     * <p><b>Why the two LAWS are part of the identity.</b> Address, kind and orbit do not separate
+     * SIBLINGS: two moons of one parent carry the PARENT's distance from the star as their orbital
+     * distance - that number is what their climate is derived from, so it is shared on purpose - and
+     * they can land in the same cell of their parent's zone lattice. What makes a sibling a sibling
+     * is its own orbit around the parent: radius, angle and period.
+     *
+     * <p>That orbit lives in the body's FRAME now, not in its offset law. A moon's cell rides the
+     * moon, so its {@link SystemBody#offsetLaw()} is {@code STATIC} exactly as a planet's is, and a
+     * match on the offset law alone would answer "the first moon" for every moon of a family again -
+     * the identical collapse this separator was added to fix, arriving through a change that made the
+     * two moons more distinct rather than less. Both are compared: the offset law still separates
+     * POIs standing in one cell, and the frame separates bodies that ARE their cells. Both compare by
+     * value and round-trip through NBT, so they survive the pin.</p>
      *
      * <p><b>An ambiguous match is refused, never guessed.</b> If two bodies of the family answer to
      * the same identity, that identity has collapsed again and the caller must not be handed one of
@@ -891,6 +900,7 @@ public final class UniverseRegistry extends WorldSavedData implements CellFrames
             if (candidate.kind() == body.kind()
                     && candidate.orbitalDistance() == body.orbitalDistance()
                     && candidate.offsetLaw().equals(body.offsetLaw())
+                    && candidate.frame().equals(body.frame())
                     && candidate.name().sameCell(body.name())) {
                 if (found >= 0) {
                     LOGGER.warn("[UNIVERSE] {} at {} answers to two bodies of its cell (variants {} "

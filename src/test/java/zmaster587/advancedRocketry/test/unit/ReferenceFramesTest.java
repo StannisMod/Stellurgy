@@ -137,24 +137,36 @@ public class ReferenceFramesTest {
     }
 
     /**
-     * A cell's primary has no in-cell velocity and a moon has its orbital one — the two halves of
-     * the measured defect, stated as arithmetic.
+     * NEITHER a planet NOR a moon moves inside its own cell — and for a moon that is the fix, not a
+     * loss of information.
      *
-     * <p>This is why a craft parked beside a planet already kept station while one parked beside a
-     * moon did not: the number a craft must match to hold station is identically zero in the first
-     * case and the moon's own orbital speed in the second.</p>
+     * <p>The two used to be the halves of the measured defect: zero for a planet, the moon's orbital
+     * speed for a moon, and that speed was the number a craft had to MATCH to hold station beside
+     * it. It could not match it — the game's Luna moves 14.75 blocks per tick and the physics
+     * substrate freezes a ship above 11.18 — so the answer was to move the CELL instead, which is
+     * what a moon owning its own cell does. A body that sits at its own frame's origin has nothing
+     * to match, and the speed a craft would have needed is nobody's problem.</p>
+     *
+     * <p>What still moves is read off the FRAME, and this pins that too: the moon's cell goes round
+     * its planet at the moon's own orbital speed — the same number, now describing the cell rather
+     * than the body inside it.</p>
      */
     @Test
-    public void aPrimaryHasNoInCellVelocityAndAMoonHasItsOrbitalOne() {
-        double[] planetV = ReferenceFrames.frameVelocityBlocksPerTick(earth(), 0L);
-        double[] moonV = ReferenceFrames.frameVelocityBlocksPerTick(luna(), 0L);
-        double moonSpeed = Math.sqrt(moonV[0] * moonV[0] + moonV[1] * moonV[1] + moonV[2] * moonV[2]);
+    public void neitherAPlanetNorAMoonMovesInsideItsOwnCellWhileTheMoonsCellCarriesTheOrbit() {
+        SystemBody earth = earth();
+        SystemBody luna = luna();
+        long quarterPeriod = (long) (LUNA_PERIOD_TICKS / 4d);
 
-        System.out.println("[frame-velocity] planet=" + Arrays.toString(planetV)
-                + " moon=" + Arrays.toString(moonV) + " moonSpeed=" + moonSpeed);
+        assertTrue("a planet does not move inside its own cell",
+                earth.inCellOffsetAt(0L).isZero() && earth.inCellOffsetAt(quarterPeriod).isZero());
+        assertTrue("and neither does a moon, because its cell rides it",
+                luna.inCellOffsetAt(0L).isZero() && luna.inCellOffsetAt(quarterPeriod).isZero());
 
-        assertEquals("a cell's primary does not move inside its own cell, on any axis", 0d,
-                Math.abs(planetV[0]) + Math.abs(planetV[1]) + Math.abs(planetV[2]), 1e-9d);
+        double[] cellV = luna.frame().law().velocityBlocksPerTickAt(0L);
+        double moonSpeed = Math.sqrt(cellV[0] * cellV[0] + cellV[1] * cellV[1] + cellV[2] * cellV[2]);
+
+        System.out.println("[frame-velocity] moon cell=" + Arrays.toString(cellV)
+                + " speed=" + moonSpeed);
 
         // The expected speed is the orbit's own: circumference over period, both of which the
         // ephemeris states. Computed rather than quoted, so the bar cannot drift away from the
@@ -166,7 +178,7 @@ public class ReferenceFramesTest {
         // that reading — the quantisation is only 1.8 % at Luna's speed — while the same half-block
         // step is the entire quantity for a body moving a fraction of a block per tick.
         double expected = 2d * Math.PI * LUNA_ORBIT_BLOCKS / LUNA_PERIOD_TICKS;
-        assertEquals("a moon's in-cell velocity is its orbital speed about its parent",
+        assertEquals("a moon's CELL travels at the moon's orbital speed about its parent",
                 expected, moonSpeed, expected * 0.001d);
     }
 
@@ -191,14 +203,28 @@ public class ReferenceFramesTest {
                 BodyEphemeris.STATIC, SystemBodyKind.PLANET, 0, 1, 100, 1d, EARTH_MASS_EARTHS);
     }
 
-    /** Luna: Earth's cell, Earth's frame, and its own live offset inside it. */
+    /**
+     * Luna: a cell of its own, NESTED in Earth's frame, standing still inside that cell.
+     *
+     * <p>Built the way production builds one, and the shape is load-bearing rather than tidy. It
+     * used to be Earth's cell, Earth's frame and a live offset inside it — the pre-zone shape — and
+     * a fixture that kept it would go on answering questions about a moon the game no longer makes:
+     * `frameOf` would still find the right sphere, so the legs would stay green while measuring a
+     * body whose in-cell offset production has since fixed at zero.</p>
+     *
+     * <p>The NAME is Earth's cell for the same reason it is not the point here: this class tests
+     * sphere-of-influence arithmetic, which reads `absoluteAt` and mass, and never a cell key. What
+     * matters is that the two agree on where the moon IS — Earth's position plus the moon's orbit —
+     * and the nested frame is what makes that true with a zero offset.</p>
+     */
     private static SystemBody luna() {
         BodyEphemeris earthOrbit = BodyEphemeris.orbit(
                 AstronomicalBodyHelper.DISTANCE_UNITS_PER_AU, 0d, 0d, false, EARTH_PERIOD_TICKS,
                 AstronomicalBodyHelper.BLOCKS_PER_ORBIT_UNIT);
         BodyEphemeris moonOrbit = BodyEphemeris.orbit(
                 AstronomicalBodyHelper.MOON_REFERENCE_UNITS, 0d, 0d, false, LUNA_PERIOD_TICKS, 200L);
-        return new SystemBody(ANCHOR, CellFrame.of(AbsolutePos.ofCellName(ANCHOR), earthOrbit),
-                moonOrbit, SystemBodyKind.MOON, 1, 1, 100, 0.2727d, LUNA_MASS_EARTHS);
+        CellFrame earthFrame = CellFrame.of(AbsolutePos.ofCellName(ANCHOR), earthOrbit);
+        return new SystemBody(ANCHOR, CellFrame.within(earthFrame, moonOrbit), BodyEphemeris.STATIC,
+                SystemBodyKind.MOON, 1, 1, 100, 0.2727d, LUNA_MASS_EARTHS);
     }
 }

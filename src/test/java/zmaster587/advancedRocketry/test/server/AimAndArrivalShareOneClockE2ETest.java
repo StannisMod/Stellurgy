@@ -37,9 +37,12 @@ import static zmaster587.advancedRocketry.test.ArrangementFailure.requireArrange
  * Leg&nbsp;A fires on a broken build and a fixed one alike; only leg&nbsp;B discriminates.
  *
  * <h2>Why a moon</h2>
- * A planet-level body's in-cell law is static, so a stale aim costs it nothing and this test would
- * pass on any build. The subject has to be a body whose position inside its cell is live, which is a
- * MOON — and the test refuses to run rather than quietly pass if it cannot find one.
+ * The fastest-turning body a shipped universe offers, so a clock split of a given size produces the
+ * largest miss and the control leg is unambiguous. It used to be a NECESSITY rather than a choice:
+ * the aim was read as an in-cell offset, which is static for a planet, so the defect was invisible
+ * on one. That is no longer so — every body's cell rides it, so the reading is the aim's ABSOLUTE
+ * position and a planet would serve — but a moon is still the sharpest instrument, and the test
+ * refuses to run rather than quietly pass if it cannot find one.
  */
 public class AimAndArrivalShareOneClockE2ETest extends AbstractSharedServerTest {
 
@@ -79,9 +82,9 @@ public class AimAndArrivalShareOneClockE2ETest extends AbstractSharedServerTest 
     @Test
     public void theAimMovesWithTheSpaceClockAndWithNoOtherClock() throws Exception {
         int moonDim = findAMoon();
-        requireArranged("this test needs a body whose in-cell position is LIVE. A planet's is"
-                + " static, so a stale aim costs it nothing and every build would pass. No moon was"
-                + " found in the shipped universe.", moonDim != Integer.MIN_VALUE);
+        requireArranged("this test needs the fastest-turning body the shipped universe offers, so"
+                + " that a clock split of this size is unmistakable. No moon was found.",
+                moonDim != Integer.MIN_VALUE);
 
         assertTrue("the navigation console must place: ",
                 exec("artest nav place 0 " + NAV_X + " " + NAV_Y + " " + NAV_Z).contains("\"ok\":true"));
@@ -93,13 +96,13 @@ public class AimAndArrivalShareOneClockE2ETest extends AbstractSharedServerTest 
         try {
             // ---- LEG A: the positive control. Move the SPACE clock; the aim must follow it. ----
             exec("artest nav refresh 0 " + NAV_X + " " + NAV_Y + " " + NAV_Z);
-            long[] aimAtStart = targetLocal(exec("artest nav status 0 " + NAV_X + " " + NAV_Y + " " + NAV_Z));
+            long[] aimAtStart = targetAbs(exec("artest nav status 0 " + NAV_X + " " + NAV_Y + " " + NAV_Z));
 
             String moved = exec("artest space set-clock " + (clockBefore + SPLIT_TICKS));
             assertTrue("the space clock must move: " + moved, moved.contains("\"ok\":true"));
             exec("artest nav refresh 0 " + NAV_X + " " + NAV_Y + " " + NAV_Z);
             String afterSpaceMove = exec("artest nav status 0 " + NAV_X + " " + NAV_Y + " " + NAV_Z);
-            long[] aimAfterSpaceMove = targetLocal(afterSpaceMove);
+            long[] aimAfterSpaceMove = targetAbs(afterSpaceMove);
 
             double controlMove = distance(aimAtStart, aimAfterSpaceMove);
             assertTrue("CONTROL: the aim must track the SPACE clock — without this, leg B's \"it did"
@@ -123,7 +126,7 @@ public class AimAndArrivalShareOneClockE2ETest extends AbstractSharedServerTest 
 
             exec("artest nav refresh 0 " + NAV_X + " " + NAV_Y + " " + NAV_Z);
             String afterLag = exec("artest nav status 0 " + NAV_X + " " + NAV_Y + " " + NAV_Z);
-            long[] aimAfterLag = targetLocal(afterLag);
+            long[] aimAfterLag = targetAbs(afterLag);
 
             double drift = distance(aimAfterSpaceMove, aimAfterLag);
             double allowed = Math.max(ALLOWED_DRIFT_FLOOR_BLOCKS,
@@ -164,8 +167,16 @@ public class AimAndArrivalShareOneClockE2ETest extends AbstractSharedServerTest 
         return moon.find() ? Integer.parseInt(moon.group(1)) : Integer.MIN_VALUE;
     }
 
-    private static long[] targetLocal(String status) {
-        Matcher m = Pattern.compile("\"targetLocal\":\\[(-?\\d+),(-?\\d+),(-?\\d+)\\]").matcher(status);
+    /**
+     * Where the aim POINTS, absolutely, at the space clock.
+     *
+     * <p>Not {@code targetLocal}. That is the aim's offset inside its cell, and every body's cell
+     * now rides the body, so the offset is zero at every tick for every target: differencing two of
+     * them yields zero on a broken build and a working one alike. The aim still moves — its CELL
+     * moves — and this is the field that says so.</p>
+     */
+    private static long[] targetAbs(String status) {
+        Matcher m = Pattern.compile("\"targetAbs\":\\[(-?\\d+),(-?\\d+),(-?\\d+)\\]").matcher(status);
         assertTrue("the console reports no resolved aim, so there is nothing to measure: " + status,
                 m.find());
         return new long[]{Long.parseLong(m.group(1)), Long.parseLong(m.group(2)),

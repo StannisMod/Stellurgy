@@ -288,12 +288,27 @@ public final class ClusteredGalaxyGenerator implements IGalaxyGenerator {
 
     @Override
     public Optional<PlanetarySystem> systemAt(long seed, GalacticCoord coord) {
+        GalacticCoord cell = galactic(coord);
         Optional<Generated> g = systemForLattice(seed,
-                latticeAt(seed, coord.sectorX(), coord.sectorY(), coord.sectorZ()));
-        if (g.isPresent() && g.get().cell.sameCell(coord)) {
+                latticeAt(seed, cell.sectorX(), cell.sectorY(), cell.sectorZ()));
+        if (g.isPresent() && g.get().cell.sameCell(cell)) {
             return Optional.of(g.get().system);
         }
         return Optional.empty();
+    }
+
+    /**
+     * The GALACTIC cell a query is really about.
+     *
+     * <p>Every question this generator answers — which lattice, which seat, which territory — is
+     * about a place in the galaxy, and its arithmetic counts galactic cells. A ZONED coordinate
+     * (a moon's, or anything named inside a body's zone) counts cells four orders of magnitude
+     * smaller, so feeding its raw triple to {@code latticeAt} does not fail: it names a lattice
+     * thousands of light years from the body that was asked about, and the caller gets a clean
+     * {@code Optional.empty} for a body that is certainly somewhere.</p>
+     */
+    private static GalacticCoord galactic(GalacticCoord coord) {
+        return coord == null ? GalacticCoord.ORIGIN : coord.galacticCell();
     }
 
     /**
@@ -388,7 +403,7 @@ public final class ClusteredGalaxyGenerator implements IGalaxyGenerator {
         List<SystemBody> bodies = new ArrayList<>();
         // The star sits at the anchor cell's centre.
         // A star does not move inside its own system: its frame IS the system's anchor.
-        bodies.add(SystemBody.fixedAt(cell, SystemBodyKind.STAR, Constants.INVALID_PLANET, systemId));
+        bodies.add(primaryStarBody(cell, star, systemId));
 
         // A body sits where its ORBIT puts it — one law, one constant, the same one an authored system
         // uses. What the neighbourhood decides is not how far a body goes but how many bodies there is
@@ -451,13 +466,31 @@ public final class ClusteredGalaxyGenerator implements IGalaxyGenerator {
      * inner few and nothing else — the same ceiling a rocky world has, applied whatever its bulk,
      * rather than the ceiling its mass would otherwise buy it.</p>
      */
+    /**
+     * The body that stands for a system's own star, carrying its BULK.
+     *
+     * <p>Its mass is not decoration: every zone in the system is sized as {@code r = a·(m/M)^(2/5)}
+     * against it, so a star built without one leaves {@code M} unknown and collapses every moon's
+     * zone lattice to nothing — the moons then fall back to sharing their planets' cells, which is
+     * the very rule this system was changed to remove, silently and system-wide.</p>
+     */
+    private static SystemBody primaryStarBody(GalacticCoord cell, StellarBody star, int systemId) {
+        SystemBody body = SystemBody.fixedAt(cell.cellCentre(), SystemBodyKind.STAR,
+                Constants.INVALID_PLANET, systemId);
+        return star == null ? body
+                : body.withBulk(AstronomicalBodyHelper.starMassEarths(star),
+                        AstronomicalBodyHelper.starRadiusEarths(star));
+    }
+
     private List<SystemBody> rogueBodiesFor(long seed, GalacticCoord cell, int systemId,
                                                    double giantFraction) {
         List<SystemBody> bodies = new ArrayList<>();
         BodyProfile profile = derivation.deriveRogue(seed, cell, 0, giantFraction);
         // It does not move inside its own system: it IS the system, so its frame is the anchor's.
-        bodies.add(SystemBody.fixedAt(cell, SystemBodyKind.ROGUE_PLANET, Constants.INVALID_PLANET,
-                systemId).withBulk(profile.massEarths(), profile.radiusEarths()));
+        SystemBody rogue = SystemBody.fixedAt(cell, SystemBodyKind.ROGUE_PLANET,
+                Constants.INVALID_PLANET, systemId)
+                .withBulk(profile.massEarths(), profile.radiusEarths());
+        bodies.add(rogue);
 
         double u = CellHash.norm(CellHash.ofCell(seed, cell, SALT_ROGUE_MOONCOUNT));
         int moons = (int) (Math.pow(u, MOON_COUNT_BIAS) * (MAX_MOONS_ROCKY + 1));
@@ -478,7 +511,12 @@ public final class ClusteredGalaxyGenerator implements IGalaxyGenerator {
             // A moon of a rogue is starless too, so it is derived the same way its parent was, one
             // variant along — never through the star-lit law with a star that is not there.
             BodyProfile moonProfile = derivation.deriveRogue(seed, cell, j, giantFraction);
-            bodies.add(new SystemBody(cell, frame, law, SystemBodyKind.MOON,
+            // A rogue has NO PRIMARY, so it has no Laplace sphere — its zone is bounded by the
+            // realized region alone (ZoneScale), which is the same rule with the first term absent.
+            // Its moons therefore get their own cells exactly as a star-lit planet's do.
+            bodies.add(new SystemBody(
+                    SystemContent.moonCellIn(rogue, null, law, systemId, Constants.INVALID_PLANET),
+                    CellFrame.within(frame, law), BodyEphemeris.STATIC, SystemBodyKind.MOON,
                     Constants.INVALID_PLANET, systemId, SystemBody.ORBIT_UNKNOWN)
                     .withBulk(moonProfile.massEarths(), moonProfile.radiusEarths()));
         }
@@ -501,6 +539,11 @@ public final class ClusteredGalaxyGenerator implements IGalaxyGenerator {
     private void appendRetinue(List<SystemBody> bodies, long seed, GalacticCoord cell, StellarBody star,
                                int starId, Lattice lattice, Set<String> taken, double outerBound,
                                int count) {
+        // Rebuilt rather than looked up in `bodies`: an AUTHORED system reaches this method through
+        // authoredRetinueFor, whose list holds only the DERIVED remainder and never the star. Every
+        // zone in the system is sized against this body's mass, so a missing one is not a cosmetic
+        // gap — it is every moon in the system losing its own cell.
+        SystemBody primary = primaryStarBody(cell, star, starId);
         int outermostOrbit = 0;
         int innermostGiantOrbit = 0;
         for (int i = 0; i < count; i++) {
@@ -539,15 +582,16 @@ public final class ClusteredGalaxyGenerator implements IGalaxyGenerator {
             // The body carries its OWN size. Nothing downstream can recover it: a procedural world
             // has no dimension until a descent mints one, and the render feed reaches a client with
             // no registry to ask.
-            bodies.add(new SystemBody(seat.cell, bodyFrame, BodyEphemeris.STATIC, profile.kind(),
-                    Constants.INVALID_PLANET, starId, orbit)
-                    .withBulk(profile.massEarths(), profile.radiusEarths()));
+            SystemBody planetBody = new SystemBody(seat.cell, bodyFrame, BodyEphemeris.STATIC,
+                    profile.kind(), Constants.INVALID_PLANET, starId, orbit)
+                    .withBulk(profile.massEarths(), profile.radiusEarths());
+            bodies.add(planetBody);
             outermostOrbit = Math.max(outermostOrbit, orbit);
             if (profile.kind() == SystemBodyKind.GAS_GIANT
                     && (innermostGiantOrbit == 0 || orbit < innermostGiantOrbit)) {
                 innermostGiantOrbit = orbit;
             }
-            addMoons(bodies, seed, cell, seat.cell, bodyFrame, orbit, star, starId, profile);
+            addMoons(bodies, seed, cell, planetBody, primary, orbit, star, starId, profile);
         }
 
         // An inner belt is DERIVED from a giant and never rolled: it is material a giant's resonances
@@ -718,9 +762,11 @@ public final class ClusteredGalaxyGenerator implements IGalaxyGenerator {
         return (int) Math.max(1L, Math.min(Integer.MAX_VALUE, units));
     }
 
-    private void addMoons(List<SystemBody> bodies, long seed, GalacticCoord anchor, GalacticCoord parent,
-                          CellFrame parentFrame, int parentOrbit, StellarBody star, int starId,
+    private void addMoons(List<SystemBody> bodies, long seed, GalacticCoord anchor, SystemBody parentBody,
+                          SystemBody primary, int parentOrbit, StellarBody star, int starId,
                           BodyProfile parentProfile) {
+        GalacticCoord parent = parentBody.name();
+        CellFrame parentFrame = parentBody.frame();
         boolean giant = parentProfile.kind() == SystemBodyKind.GAS_GIANT;
         int max = giant ? MAX_MOONS_GIANT : MAX_MOONS_ROCKY;
         double u = CellHash.norm(CellHash.ofCell(seed, parent, SALT_MOONCOUNT));
@@ -743,13 +789,18 @@ public final class ClusteredGalaxyGenerator implements IGalaxyGenerator {
                     * AstronomicalBodyHelper.getMoonOrbitalPeriod(moonOrbit, (float) parentMass);
             BodyEphemeris law = BodyEphemeris.orbit(moonOrbit, theta, 0d, false, periodTicks,
                     SystemContent.MOON_UNIT_BLOCKS);
-            // A moon rides its PARENT's frame, so a planet and its moons travel as one destination.
-            // It used to ride a static frame of its own, which pinned the whole family in place.
+            // A moon gets its OWN cell inside its parent's ZONE, and its frame is NESTED in the
+            // parent's: the moon's cell rides the moon, which rides the planet, which rides the star.
+            // It used to share the parent's name and ride the parent's frame directly, which made a
+            // planet-and-its-moons one destination and left a craft parked beside a moon carried by
+            // the planet instead of the moon.
             // A moon's size comes from the SAME derivation a descent will realize it with, so the
             // moon a pilot sees from orbit is the moon he lands on.
             BodyProfile moonProfile = derivation.derive(seed, anchor, parent, j, star, true,
                     parentOrbit);
-            bodies.add(new SystemBody(parent, parentFrame, law, SystemBodyKind.MOON,
+            bodies.add(new SystemBody(
+                    SystemContent.moonCellIn(parentBody, primary, law, starId, Constants.INVALID_PLANET),
+                    CellFrame.within(parentFrame, law), BodyEphemeris.STATIC, SystemBodyKind.MOON,
                     Constants.INVALID_PLANET, starId, parentOrbit)
                     .withBulk(moonProfile.massEarths(), moonProfile.radiusEarths()));
         }
@@ -825,11 +876,13 @@ public final class ClusteredGalaxyGenerator implements IGalaxyGenerator {
         // The SEAT and not the system: this is the hottest question in the game — every address
         // resolution, every descent check and every look of a survey goes through it — and it does
         // not need to know what stands at the seat in order to say where the seat is.
-        return seatForLattice(seed, latticeAt(seed, cell.sectorX(), cell.sectorY(), cell.sectorZ()));
+        GalacticCoord here = galactic(cell);
+        return seatForLattice(seed, latticeAt(seed, here.sectorX(), here.sectorY(), here.sectorZ()));
     }
 
     @Override
-    public List<GalacticCoord> anchorsInTerritory(long seed, GalacticCoord cell, int limit) {
+    public List<GalacticCoord> anchorsInTerritory(long seed, GalacticCoord coord, int limit) {
+        GalacticCoord cell = galactic(coord);
         long s = config.minSpacing;
         long supX = Math.floorDiv(cell.sectorX(), s);
         long supY = Math.floorDiv(cell.sectorY(), s);

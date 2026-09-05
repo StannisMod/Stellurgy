@@ -107,7 +107,10 @@ public class PlanetRealizationTest {
                 if (b.kind() != SystemBodyKind.MOON && b.kind().canDescend()) {
                     parent = b;
                 } else if (b.kind() == SystemBodyKind.MOON && parent != null
-                        && b.name().sameCell(parent.name())) {
+                        && parent.name().cellKey().equals(b.name().zone())) {
+                    // A moon's ZONE is its parent's cell: the name is a path and contains its
+                    // parent's, which is how "is this that body's moon" is asked now that the two no
+                    // longer share one cell.
                     return new SystemBody[] {parent, b};
                 }
             }
@@ -130,7 +133,7 @@ public class PlanetRealizationTest {
                 java.util.List<SystemBody> moons = new java.util.ArrayList<>();
                 for (SystemBody b : reg.systemBodiesAt(seat)) {
                     if (b.kind() == SystemBodyKind.MOON) {
-                        if (parent != null && b.name().sameCell(parent.name())) {
+                        if (parent != null && parent.name().cellKey().equals(b.name().zone())) {
                             moons.add(b);
                             if (moons.size() == 2) {
                                 return new SystemBody[] {parent, moons.get(0), moons.get(1)};
@@ -148,64 +151,81 @@ public class PlanetRealizationTest {
 
     @Test
     public void twoMoonsOfOnePlanetAreTwoDifferentBodies() {
-        // The sibling case of the test below. A moon is addressed by its variant - its rank among the
-        // realizable bodies of its cell - and the rank is recovered by MATCHING a body against that
-        // family. Every moon of one parent is built in the parent's cell, with kind MOON and with the
-        // PARENT's distance from the star as its orbital distance, so a match on those three fields
-        // answers "the first moon" for every one of them: approach the second and the game realizes
-        // the first, or, once the first has a world, descends into it.
+        // The sibling case of the test below. Realization is per BODY: a body is addressed by its
+        // cell plus its variant - its rank among the realizable bodies of that cell - and the rank is
+        // recovered by MATCHING a body against that family. Giving one moon a world must never give
+        // its sibling one, whether the two are in one cell or in two.
+        //
+        // Each moon now has its OWN cell inside its parent's zone, so the
+        // ordinary case is now two cells with one body each. That does not make the pin idle: the
+        // separation is asserted here rather than assumed, and a lattice too coarse to tell two
+        // siblings apart would put them back in one cell, which is the state this test was written
+        // for and the one a shrinking CELLS_ACROSS_A_ZONE would restore.
         UniverseRegistry reg = registryWithProceduralGalaxy();
         SystemBody[] family = findPlanetWithTwoMoons(reg);
         assertNotNull("arrangement: a planet carrying two moons must be findable", family[0]);
-        GalacticCoord cell = family[0].name();
-        assertTrue("arrangement: the siblings share their parent's cell",
-                family[1].name().sameCell(cell) && family[2].name().sameCell(cell));
-        reg.pinSystem(cell);
+        GalacticCoord parentCell = family[0].name();
+        assertEquals("arrangement: the siblings are named in their parent's zone",
+                parentCell.cellKey(), family[1].name().zone());
+        assertEquals(parentCell.cellKey(), family[2].name().zone());
+        reg.pinSystem(parentCell);
 
+        GalacticCoord firstCell = family[1].name();
+        GalacticCoord secondCell = family[2].name();
         int firstMoon = reg.variantOf(family[1]).getAsInt();
         int secondMoon = reg.variantOf(family[2]).getAsInt();
-        assertNotEquals("two moons of one planet are two bodies, not one", firstMoon, secondMoon);
+        assertFalse("two moons of one planet are two bodies, not one",
+                firstCell.sameCell(secondCell) && firstMoon == secondMoon);
 
-        assertTrue(reg.realizeBody(cell, firstMoon, 4101));
+        assertTrue(reg.realizeBody(firstCell, firstMoon, 4101));
         assertFalse("giving one moon a world must not give its sibling one",
-                reg.realizedDimAt(cell, secondMoon).isPresent());
+                reg.realizedDimAt(secondCell, secondMoon).isPresent());
         assertTrue("and the sibling must still be able to get its own",
-                reg.realizeBody(cell, secondMoon, 4102));
-        assertEquals("which is its own", 4102, reg.realizedDimAt(cell, secondMoon).getAsInt());
+                reg.realizeBody(secondCell, secondMoon, 4102));
+        assertEquals("which is its own", 4102, reg.realizedDimAt(secondCell, secondMoon).getAsInt());
         assertEquals("while the first keeps the world it was given", 4101,
-                reg.realizedDimAt(cell, firstMoon).getAsInt());
+                reg.realizedDimAt(firstCell, firstMoon).getAsInt());
     }
 
     @Test
     public void aMoonGetsItsOwnWorldAndNotItsPlanetsOne() {
-        // A moon is built in its PARENT's cell so the family travels as one destination, which makes
-        // a cell the address of several worlds. Realization used to be keyed on the cell alone: once
-        // the planet had a world, asking about the moon answered with the planet's, so a descent
-        // aimed at a moon put the ship on the planet - and a moon could never be realized at all.
+        // Realization used to be keyed on the cell alone: once the planet had a world, asking about
+        // the moon answered with the planet's, so a descent aimed at a moon put the ship on the
+        // planet - and a moon could never be realized at all.
+        //
+        // A moon now has its own cell inside its parent's zone, which removes ONE way that defect can
+        // return but not the defect: the two are still one family reached through one pinned system,
+        // and the pin, the variant lookup and the realization store all have to keep them apart. So
+        // the assertions stay exactly what they were, asked of each body's own address.
         UniverseRegistry reg = registryWithProceduralGalaxy();
         SystemBody[] pair = findPlanetWithMoon(reg);
         assertNotNull("arrangement: a planet with a moon must be findable", pair[0]);
         assertNotNull("arrangement: and the moon with it", pair[1]);
-        GalacticCoord cell = pair[0].name();
-        assertTrue("arrangement: the two must share one cell", pair[1].name().sameCell(cell));
-        reg.pinSystem(cell);
+        GalacticCoord planetCell = pair[0].name();
+        GalacticCoord moonCell = pair[1].name();
+        assertEquals("arrangement: the moon is named in the planet's zone",
+                planetCell.cellKey(), moonCell.zone());
+        assertFalse("arrangement: and its cell is NOT the planet's",
+                moonCell.sameCell(planetCell));
+        reg.pinSystem(planetCell);
 
-        java.util.List<SystemBody> family = reg.realizableBodiesAt(cell);
-        assertTrue("arrangement: the cell must hold at least the two of them", family.size() >= 2);
+        assertFalse("arrangement: the planet's cell must hold the planet",
+                reg.realizableBodiesAt(planetCell).isEmpty());
+        assertFalse("arrangement: and the moon's cell must hold the moon",
+                reg.realizableBodiesAt(moonCell).isEmpty());
         int planetVariant = reg.variantOf(pair[0]).getAsInt();
         int moonVariant = reg.variantOf(pair[1]).getAsInt();
-        assertNotEquals("a planet and its moon must not be the same body", planetVariant, moonVariant);
 
-        assertTrue(reg.realizeBody(cell, planetVariant, 4001));
+        assertTrue(reg.realizeBody(planetCell, planetVariant, 4001));
 
         assertFalse("the moon must NOT inherit the planet's world",
-                reg.realizedDimAt(cell, moonVariant).isPresent());
+                reg.realizedDimAt(moonCell, moonVariant).isPresent());
         assertTrue("and the moon must still be able to get one of its own",
-                reg.realizeBody(cell, moonVariant, 4002));
+                reg.realizeBody(moonCell, moonVariant, 4002));
         assertEquals("which is its own and not the planet's", 4002,
-                reg.realizedDimAt(cell, moonVariant).getAsInt());
+                reg.realizedDimAt(moonCell, moonVariant).getAsInt());
         assertEquals("while the planet keeps the world it was given", 4001,
-                reg.realizedDimAt(cell, planetVariant).getAsInt());
+                reg.realizedDimAt(planetCell, planetVariant).getAsInt());
     }
 
     @Test
@@ -241,7 +261,11 @@ public class PlanetRealizationTest {
         assertNotNull("the procedural galaxy must produce a moon to test with", moon);
         assertNotNull(itsParent);
 
-        double ownDistance = moon.offsetLaw().distUnits();
+        // The moon's own orbit lives in its FRAME's law: its cell rides the moon, so the cell's
+        // origin is the parent's position displaced by exactly this orbit, and the moon's own
+        // in-cell offset is zero. It used to be `offsetLaw`, back when the moon moved inside a cell
+        // that was its parent's.
+        double ownDistance = moon.frame().law().distUnits();
         assertTrue("a moon's own distance from its parent must be a real, positive number: " + ownDistance,
                 ownDistance > 0d);
         assertEquals("a moon's orbitalDistance() is its PARENT's distance from the star",

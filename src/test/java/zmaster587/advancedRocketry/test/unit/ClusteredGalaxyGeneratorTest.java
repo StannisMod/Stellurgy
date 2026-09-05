@@ -450,10 +450,13 @@ public class ClusteredGalaxyGeneratorTest {
                 assertEquals(0, body.name().localX());
                 assertEquals(0, body.name().localY());
                 assertEquals(0, body.name().localZ());
-                // Inside the anchor's super-cell (member attribution by floorDiv stays exact).
-                assertEquals(Math.floorDiv(anchor.sectorX(), s), Math.floorDiv(body.name().sectorX(), s));
-                assertEquals(Math.floorDiv(anchor.sectorY(), s), Math.floorDiv(body.name().sectorY(), s));
-                assertEquals(Math.floorDiv(anchor.sectorZ(), s), Math.floorDiv(body.name().sectorZ(), s));
+                // Inside the anchor's super-cell (member attribution by floorDiv stays exact), asked
+                // of the GALACTIC cell: a moon's own triple counts cells of its parent's zone, so
+                // dividing it by the galactic spacing compares two different units.
+                GalacticCoord here = body.name().galacticCell();
+                assertEquals(Math.floorDiv(anchor.sectorX(), s), Math.floorDiv(here.sectorX(), s));
+                assertEquals(Math.floorDiv(anchor.sectorY(), s), Math.floorDiv(here.sectorY(), s));
+                assertEquals(Math.floorDiv(anchor.sectorZ(), s), Math.floorDiv(here.sectorZ(), s));
                 if (body.kind() != SystemBodyKind.STAR && !body.name().sameCell(anchor)) {
                     sawOwnCell = true;
                 }
@@ -531,13 +534,18 @@ public class ClusteredGalaxyGeneratorTest {
             List<SystemBody> bodies = gen.bodiesFor(SEED, c);
             int real = 0;
             for (SystemBody body : bodies) {
+                // The GALACTIC cell, because a moon is named inside its parent's zone and its own
+                // triple counts that zone's cells — a lattice four orders of magnitude finer. What
+                // must not escape is the system's one galactic cell, which is what "a one-cell
+                // neighbourhood" means; a zone lives inside the cell of the body it belongs to.
                 assertTrue("nothing may escape the one cell this system has",
-                        body.name().sameCell(c));
-                if (body.definesFrame()) {
+                        body.name().galacticCell().sameCell(c));
+                if (body.name().zone() == null && body.definesFrame()) {
                     real++;
                 }
             }
-            assertEquals("a one-cell neighbourhood can host exactly one real body", 1, real);
+            assertEquals("a one-cell neighbourhood can host exactly one real body at galactic scale",
+                    1, real);
             assertTrue("and that body is the system's primary",
                     bodies.get(0).definesFrame() && bodies.get(0).name().sameCell(c));
         }
@@ -750,10 +758,12 @@ public class ClusteredGalaxyGeneratorTest {
                     if (moon.kind() != SystemBodyKind.MOON) {
                         continue;
                     }
+                    // The parent is the body whose cell is this moon's ZONE — a moon's name contains
+                    // its parent's, because a name became a path when moons got zones of their own.
                     SystemBody parent = null;
                     for (SystemBody candidate : bodies) {
                         if (candidate != moon && candidate.definesFrame()
-                                && candidate.name().cellKey().equals(moon.name().cellKey())) {
+                                && candidate.name().cellKey().equals(moon.name().zone())) {
                             parent = candidate;
                             break;
                         }
@@ -762,12 +772,10 @@ public class ClusteredGalaxyGeneratorTest {
                         continue;
                     }
                     checkedParents++;
-                    zmaster587.advancedRocketry.space.BlockDelta m = moon.inCellOffsetAt(tick);
-                    zmaster587.advancedRocketry.space.BlockDelta p = parent.inCellOffsetAt(tick);
-                    double ddx = (double) (m.dx() - p.dx());
-                    double ddy = (double) (m.dy() - p.dy());
-                    double ddz = (double) (m.dz() - p.dz());
-                    double separation = Math.sqrt(ddx * ddx + ddy * ddy + ddz * ddz);
+                    // ABSOLUTE positions at one tick, not in-cell offsets. A moon's cell rides the
+                    // moon, so its in-cell offset is zero at every tick exactly as its parent's is,
+                    // and differencing the two would report every moon as standing on its planet.
+                    double separation = moon.absoluteAt(tick).distanceTo(parent.absoluteAt(tick));
                     double parentRadiusBlocks =
                             parent.radiusEarths() * AstronomicalBodyHelper.EARTH_RADIUS_BLOCKS;
                     assertTrue("a moon must stand outside the world it orbits: separation "

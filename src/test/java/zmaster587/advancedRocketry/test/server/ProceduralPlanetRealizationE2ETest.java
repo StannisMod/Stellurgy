@@ -8,6 +8,8 @@ import org.junit.Test;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import zmaster587.advancedRocketry.dimension.DimensionProperties;
+
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotEquals;
@@ -172,7 +174,12 @@ public class ProceduralPlanetRealizationE2ETest extends AbstractHeadlessServerTe
         String found = exec("artest space find-moon " + SWEEP_RADIUS);
         assertTrue("a dense procedural galaxy must offer a planet with a moon: " + found,
                 found.contains("\"ok\":true"));
-        String cell = jsonInt(found, "sx") + " " + jsonInt(found, "sy") + " " + jsonInt(found, "sz");
+        // TWO cells, by KEY. A moon has a cell of its own inside its parent's zone, so the family is
+        // spread across two addresses and neither is a galactic sector triple: the moon's sectors
+        // count cells of ITS PARENT's lattice, and passing them as three numbers would ask about a
+        // galactic cell somewhere else entirely.
+        String cell = jsonString(found, "cellKey");
+        String parentCell = jsonString(found, "parentCellKey");
         int moonVariant = jsonInt(found, "moonVariant");
         int parentVariant = jsonInt(found, "parentVariant");
 
@@ -180,8 +187,11 @@ public class ProceduralPlanetRealizationE2ETest extends AbstractHeadlessServerTe
         // FIRST - without this the test could pass on a parent that happened to be realized already,
         // which is the one arrangement the bug does not occur in.
         String before = exec("artest space cell-info " + cell);
+        String beforeParent = exec("artest space cell-info " + parentCell);
         assertFalse("no member of the family may hold a world before the moon is realized: " + before,
                 before.contains("\"descendTarget\":true"));
+        assertFalse("...the parent's cell included: " + beforeParent,
+                beforeParent.contains("\"descendTarget\":true"));
 
         String moon = exec("artest space realize " + cell + " " + moonVariant);
         assertTrue("the moon must be realizable on its own account: " + moon,
@@ -195,7 +205,7 @@ public class ProceduralPlanetRealizationE2ETest extends AbstractHeadlessServerTe
         // The second half of the same corruption: a parentless moon kept its PARENT's distance from
         // the star as its own orbital distance, because that is the number its climate is derived
         // from. A moon's own orbit is around the parent, and the two are different numbers.
-        String parent = exec("artest space realize " + cell + " " + parentVariant);
+        String parent = exec("artest space realize " + parentCell + " " + parentVariant);
         assertTrue("the parent must answer with the world it was just given: " + parent,
                 parent.contains("\"ok\":true"));
         assertEquals("realizing the parent afterwards must reuse the world the moon gave it",
@@ -203,6 +213,13 @@ public class ProceduralPlanetRealizationE2ETest extends AbstractHeadlessServerTe
         assertFalse("the parent is not a moon: " + parent, jsonBool(parent, "moon"));
         assertNotEquals("a moon's orbital distance is its own, not its parent's: moon " + moon
                 + " vs parent " + parent, jsonInt(parent, "orbitalDist"), jsonInt(moon, "orbitalDist"));
+        // ...and it is its own on the only scale that says so: a moon's own orbit is small, a
+        // planet's distance from its star is hundreds of units. A moon that lost its own law is
+        // realized at MIN_DISTANCE, i.e. INSIDE its parent, and the assertion above cannot see that
+        // — MIN_DISTANCE differs from the parent's number too. This one names the floor.
+        assertTrue("a moon realized at the minimum distance has lost its own orbit and sits inside "
+                        + "its parent: " + moon,
+                jsonInt(moon, "orbitalDist") > DimensionProperties.MIN_DISTANCE);
     }
 
     /**
@@ -225,7 +242,8 @@ public class ProceduralPlanetRealizationE2ETest extends AbstractHeadlessServerTe
                 found.contains("\"ok\":true"));
         assertTrue("arrangement: the parent must be the kind nothing can descend into: " + found,
                 jsonBool(found, "parentGasGiant"));
-        String cell = jsonInt(found, "sx") + " " + jsonInt(found, "sy") + " " + jsonInt(found, "sz");
+        String cell = jsonString(found, "cellKey");
+        String parentCell = jsonString(found, "parentCellKey");
 
         String moon = exec("artest space realize " + cell + " " + jsonInt(found, "moonVariant"));
         assertTrue("a gas giant's moon must be realizable: " + moon, moon.contains("\"ok\":true"));
@@ -238,7 +256,7 @@ public class ProceduralPlanetRealizationE2ETest extends AbstractHeadlessServerTe
         // not somewhere to land: it has no surface, so the descent flag every downstream consumer
         // reads stays false for it. Both halves matter; a fix that made the giant landable would pass
         // the moon assertions above and break the game.
-        String after = exec("artest space cell-info " + cell);
+        String after = exec("artest space cell-info " + parentCell);
         String giantEntry = bodyOfKind(after, "GAS_GIANT");
         assertEquals("the giant must now hold the very dimension the moon calls its parent: " + after,
                 jsonInt(moon, "parent"), jsonInt(giantEntry, "dim"));
@@ -247,7 +265,8 @@ public class ProceduralPlanetRealizationE2ETest extends AbstractHeadlessServerTe
 
         // A descent aimed at the giant is still refused, which is what "not landable" MEANS here -
         // the flag above is a report, this is the behaviour.
-        String refused = exec("artest space realize " + cell + " " + jsonInt(found, "parentVariant"));
+        String refused = exec("artest space realize " + parentCell + " "
+                + jsonInt(found, "parentVariant"));
         assertTrue("realizing a gas giant as a DESCENT must stay refused: " + refused,
                 refused.contains("\"ok\":false"));
     }

@@ -18,8 +18,10 @@ import zmaster587.advancedRocketry.space.GalacticCoord;
  * comes in two readings:</p>
  * <ul>
  *   <li>{@link #inCellOffsetAt(long)} — where the body stands inside its own cell's frame. Zero for
- *       the cell's PRIMARY by construction (the primary is what the frame is centred on); LIVE for a
- *       moon, which shares its parent's cell name and orbits inside it.</li>
+ *       the cell's PRIMARY by construction (the primary is what the frame is centred on), which is
+ *       every framing body including a MOON: a moon's cell rides the moon, so it sits at its own
+ *       frame's origin exactly as a planet does. LIVE only for content that is not the primary of
+ *       the cell it stands in — a POI, a station.</li>
  *   <li>{@link #absoluteAt(long)} — the frame origin at that tick plus the offset. Only ever an
  *       intermediate for a distance or a direction; nothing is stored as one, because a stored
  *       coordinate may not mean something different from the tick it was written at.</li>
@@ -36,8 +38,6 @@ import zmaster587.advancedRocketry.space.GalacticCoord;
  */
 public final class SystemBody {
 
-    /** No content may sit outside its own cell — a cell is a whole neighbourhood — so an offset is bounded. */
-    private static final long MAX_IN_CELL = GalacticCoord.HALF_CELL - 1L;
 
     /** Sentinel for {@link #orbitalDistance()}: this body has no orbit of its own (a star, a POI). */
     public static final int ORBIT_UNKNOWN = 0;
@@ -213,22 +213,38 @@ public final class SystemBody {
         return name;
     }
 
-    /** The frame this body's cell rides. A planet and its moons share one: they are one destination. */
+    /**
+     * The frame this body's cell rides. A moon's is NESTED in its planet's (see
+     * {@link CellFrame#within}): the moon's cell rides the moon, which rides the planet.
+     */
     public CellFrame frame() {
         return frame;
     }
 
     /**
      * Where this body stands inside its own cell's frame at {@code tick}. Zero for the cell's
-     * primary; live for a moon. Held inside the cell — a body outside its own neighbourhood would be
-     * a body in a different cell.
+     * primary — which every body that {@link #definesFrame() defines a frame} is, moons included.
+     * Held inside the cell: a body outside its own neighbourhood would be a body in a different cell.
      */
     public BlockDelta inCellOffsetAt(long tick) {
         BlockDelta raw = offsetLaw.offsetAt(tick);
         if (raw.isZero()) {
             return raw;
         }
-        return BlockDelta.of(clampInCell(raw.dx()), clampInCell(raw.dy()), clampInCell(raw.dz()));
+        // Bounded by THIS cell, whose width is a property of the lattice the name is counted in — not
+        // by the galactic one. A zone cell is ~7 000 blocks where a galactic cell is 32 000 000, so a
+        // clamp at the galactic width inside a zone is no clamp at all, and the overflow it exists to
+        // report goes unsaid.
+        long half = GalacticCoord.CELL / 2L;
+        if (name.zone() != null) {
+            if (name.cellBlocks() <= 0L) {
+                throw new IllegalStateException("body " + this + " has a zoned name whose lattice "
+                        + "width was not carried, so its in-cell offset cannot be bounded");
+            }
+            half = name.cellBlocks() / 2L;
+        }
+        return BlockDelta.of(clampInCell(raw.dx(), half), clampInCell(raw.dy(), half),
+                clampInCell(raw.dz(), half));
     }
 
     /**
@@ -295,13 +311,19 @@ public final class SystemBody {
 
     /**
      * {@code true} iff this body is the kind that can be a cell's PRIMARY — the body a frame is
-     * centred on. Moons ride their parent's frame and POIs ride whatever frame their cell has, so
-     * neither may define one.
+     * centred on. A POI has no mass, so it defines no sphere of influence and rides whatever frame
+     * its cell has.
+     *
+     * <p><b>A MOON does define one</b>, since it got a cell of its own inside its planet's zone. It did
+     * not when a moon shared its parent's name: two bodies cannot both
+     * be the primary of one cell, and the planet was the one that was. That exclusion is what left a
+     * craft parked beside a moon riding the PLANET's frame — 7 066 blocks became 294 996 over a day,
+     * against a descent shell of 7 066.</p>
      */
     public boolean definesFrame() {
         return kind == SystemBodyKind.STAR || kind == SystemBodyKind.PLANET
                 || kind == SystemBodyKind.GAS_GIANT || kind == SystemBodyKind.ASTEROID_BELT
-                || kind == SystemBodyKind.ROGUE_PLANET;
+                || kind == SystemBodyKind.ROGUE_PLANET || kind == SystemBodyKind.MOON;
     }
 
     /**
@@ -397,26 +419,26 @@ public final class SystemBody {
      * looked for in the renderer, in the ephemeris and in the frame before anyone suspects a clamp.
      * One line per axis per JVM run, naming the overflow, turns a week into a grep.</p>
      */
-    private static long clampInCell(long v) {
-        if (v > MAX_IN_CELL) {
-            reportOverflow(v, MAX_IN_CELL);
-            return MAX_IN_CELL;
+    private static long clampInCell(long v, long half) {
+        if (v > half - 1L) {
+            reportOverflow(v, half - 1L, half);
+            return half - 1L;
         }
-        if (v < -GalacticCoord.HALF_CELL) {
-            reportOverflow(v, -GalacticCoord.HALF_CELL);
-            return -GalacticCoord.HALF_CELL;
+        if (v < -half) {
+            reportOverflow(v, -half, half);
+            return -half;
         }
         return v;
     }
 
     /** Said ONCE per distinct overflow magnitude: a flooded log is a log nobody reads either. */
-    private static void reportOverflow(long raw, long clamped) {
-        if (REPORTED_OVERFLOWS.add(raw / GalacticCoord.CELL)) {
+    private static void reportOverflow(long raw, long clamped, long half) {
+        if (REPORTED_OVERFLOWS.add(raw / Math.max(1L, 2L * half))) {
             LOGGER.error("a body's in-cell offset {} is outside its own cell (half-cell {}) and was "
                             + "flattened onto the face at {}. Every further point of that orbit lands "
                             + "on the same spot, so the body will appear to stop moving: its orbit is "
                             + "wider than the cell that names it.",
-                    raw, GalacticCoord.HALF_CELL, clamped);
+                    raw, half, clamped);
         }
     }
 

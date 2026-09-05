@@ -19,6 +19,7 @@ import zmaster587.advancedRocketry.dimension.DimensionProperties;
 import zmaster587.advancedRocketry.space.AbsolutePos;
 import zmaster587.advancedRocketry.space.BlockDelta;
 import zmaster587.advancedRocketry.space.GalacticCoord;
+import zmaster587.advancedRocketry.space.ZoneScale;
 import zmaster587.advancedRocketry.util.AstronomicalBodyHelper;
 
 /**
@@ -26,12 +27,14 @@ import zmaster587.advancedRocketry.util.AstronomicalBodyHelper;
  * from its planets/moons (universe-model.md &sect;2 amendment A#1a + &sect;4). A system is an anchored
  * NEIGHBOURHOOD of cells: the star sits at the anchor cell's centre; every planet/belt gets its <b>own cell</b>
  * at a sector offset scaled from its orbital position ({@link #ORBIT_UNIT_BLOCKS blocks per orbit-unit}),
- * snapped to that cell's centre (zone content sits near the cell centre); moons stay LOCAL
- * inside their parent planet's cell. Inter-body space is cells of void.
+ * snapped to that cell's centre (zone content sits near the cell centre); a moon gets its own cell
+ * inside its parent's ZONE, named in that zone's lattice ({@link ZoneScale}). Inter-body space is
+ * cells of void.
  *
  * <p>A body's cell is its durable NAME, derived once at {@link #NAME_TICK} and thereafter recorded. Where
  * that cell IS stays a function of time: each body cell carries a {@link CellFrame} whose origin is its
- * primary's position, so the neighbourhood rides the body it belongs to and a moon orbits inside it.</p>
+ * primary's position, so the neighbourhood rides the body it belongs to — and a moon's frame is NESTED
+ * in its planet's, so a moon's cell rides the moon while the moon rides the planet.</p>
  *
  * <p>The neighbourhood is BOUNDED: every body cell is clamped (with a WARN) into the system's declared
  * clear space around its anchor — the load-time guard that keeps two systems' neighbourhoods from
@@ -146,9 +149,13 @@ public final class SystemContent {
         GalacticCoord anchor = systemCoord.cellCentre();
         AbsolutePos anchorAbs = AbsolutePos.ofCellName(anchor);
         // The star sits at the anchor and does not move: a degenerate frame, not an exemption.
-        bodies.add(new SystemBody(anchor, CellFrame.staticAt(anchor), BodyEphemeris.STATIC,
+        // Its MASS travels with it because every zone in the system is sized against it: a sphere of
+        // influence is r = a·(m/M)^(2/5), and an M nobody stated makes every zone below it vanish.
+        SystemBody starBody = new SystemBody(anchor, CellFrame.staticAt(anchor), BodyEphemeris.STATIC,
                 SystemBodyKind.STAR, Constants.INVALID_PLANET, starId, SystemBody.ORBIT_UNKNOWN,
-                AstronomicalBodyHelper.starRadiusEarths(star)));
+                AstronomicalBodyHelper.starRadiusEarths(star),
+                AstronomicalBodyHelper.starMassEarths(star));
+        bodies.add(starBody);
 
         for (IDimensionProperties p : star.getPlanets()) {
             if (!(p instanceof DimensionProperties)) {
@@ -161,23 +168,31 @@ public final class SystemContent {
             // The orbit travels on the body for authored systems too, so the field means the same thing
             // for the whole catalogue: how far this body is from its star. A body that knew its orbit
             // only when it was procedural would be a field that lies for half the galaxy.
-            bodies.add(new SystemBody(planetName, planetFrame, BodyEphemeris.STATIC,
+            SystemBody planetBody = new SystemBody(planetName, planetFrame, BodyEphemeris.STATIC,
                     kindOf(planet, SystemBodyKind.PLANET), planet.getId(), starId,
-                    planet.getOrbitalDist(), planet.getRadius()));
+                    planet.getOrbitalDist(), planet.getRadius(), planet.getOrbitalMass());
+            bodies.add(planetBody);
 
             for (int moonId : planet.getChildPlanets()) {
                 DimensionProperties moon = DimensionManager.getInstance().getDimensionProperties(moonId);
                 if (moon == null) {
                     continue;
                 }
-                // A moon shares its parent's NAME and its parent's FRAME, and keeps its own live offset
-                // inside it: a planet-and-its-moons is one destination that moves as one.
+                BodyEphemeris moonLaw = moonLawOf(moon, planet);
+                // A moon has its OWN cell, inside its planet's ZONE, and that cell rides the moon —
+                // so the moon sits at its own frame's origin and has no in-cell offset, exactly as a
+                // planet does one level up. That is what makes a craft parked beside a moon keep
+                // station for free; while a moon shared its parent's cell, the parent's frame carried
+                // it and the moon did not, and the craft drifted 42 descent shells in a day.
                 // A moon carries its PARENT's distance from the star — what warms a moon is where its
-                // planet is; how far it sits from the planet is in its ephemeris, which is what
+                // planet is; how far it sits from the planet is in its frame's law, which is what
                 // positions it. Same convention as the procedural side.
-                bodies.add(new SystemBody(planetName, planetFrame, moonLawOf(moon, planet),
+                bodies.add(new SystemBody(
+                        moonNameOf(moon, planetBody, starBody, moonLaw, anchor, minSpacingCells,
+                                starId, names),
+                        CellFrame.within(planetFrame, moonLaw), BodyEphemeris.STATIC,
                         kindOf(moon, SystemBodyKind.MOON), moon.getId(), starId,
-                        planet.getOrbitalDist(), moon.getRadius()));
+                        planet.getOrbitalDist(), moon.getRadius(), moon.getOrbitalMass()));
             }
         }
         auditOneRealBodyPerCell(bodies, starId);
@@ -244,6 +259,56 @@ public final class SystemContent {
     }
 
     /**
+     * The cell a MOON occupies — a cell of its PARENT's zone lattice, whose key names the parent's own
+     * cell. Its durable name, derived at {@link #NAME_TICK} exactly as a planet's is.
+     *
+     * <p>Why not a finer galactic lattice: a moon 1.54M blocks from its planet cannot get a distinct
+     * galactic SECTOR at a cell of 32 000 000, so it would keep being named by the same cell as its
+     * parent — which is the thing being removed. The lattice a moon is named in is sized to the zone
+     * it is in ({@link ZoneScale}), and the name is a PATH — so "a name contains its parent's" holds
+     * structurally rather than by audit.</p>
+     *
+     * <p><b>When the parent defines no zone the moon keeps the parent's name, and it says so.</b> That
+     * is the pre-zone behaviour and it is a DEGRADATION, not an answer: the two bodies then share one
+     * address and a jump aimed at it cannot say which it meant. It happens only where a parent has no
+     * usable mass or no distance from its star, i.e. where there is no sphere of influence to divide.</p>
+     */
+    private static GalacticCoord moonNameOf(DimensionProperties moon, SystemBody parent,
+                                            SystemBody primary, BodyEphemeris moonLaw,
+                                            GalacticCoord anchor, int minSpacingCells, int starId,
+                                            CellNames names) {
+        GalacticCoord derived = moonCellIn(parent, primary, moonLaw, starId, moon.getId());
+        return names == null ? derived
+                : names.nameFor(moon.getId(), starId, anchor, minSpacingCells, derived);
+    }
+
+    /**
+     * The cell of {@code parent}'s zone lattice that a moon on {@code moonLaw} occupies — the
+     * derivation shared by the authored catalogue and the procedural generator, so a moon is named
+     * the same way whichever built it.
+     *
+     * <p>See {@link #moonNameOf} for what the fallback costs. Reported once per parent per session,
+     * because this derivation runs on every query.</p>
+     */
+    static GalacticCoord moonCellIn(SystemBody parent, SystemBody primary, BodyEphemeris moonLaw,
+                                    int starId, int moonDimId) {
+        GalacticCoord derived = ZoneScale.cellWithin(parent, primary, moonLaw.offsetAt(NAME_TICK),
+                NAME_TICK);
+        if (derived != null) {
+            return derived;
+        }
+        if (reportOnce("noZone:" + starId + ':' + parent.name().cellKey())) {
+            LOGGER.error("dim {} orbits the body at cell {}, which states no MASS ({}) and so has no "
+                    + "zone to divide - there is no lattice to name the moon in and it FALLS BACK to "
+                    + "sharing its parent's cell. The two are then one indistinguishable destination: "
+                    + "a jump aimed at that address cannot say which body it meant. Give the parent a "
+                    + "mass; a primary is NOT needed (a body without one is bounded by its cell).",
+                    moonDimId, parent.name().cellKey(), parent.massEarths());
+        }
+        return parent.name();
+    }
+
+    /**
      * What a dimensioned body IS, for the purposes of aiming at it. A body with no surface is not a
      * place a ship can put down — the descent resolver has no terrain to find and no world to paste
      * into — so it must not be advertised as one. That answer belongs HERE, at the one place bodies
@@ -278,9 +343,14 @@ public final class SystemContent {
     }
 
     /**
-     * INVARIANT: at most ONE real body per cell. A star and a planet are real bodies and each owns its
-     * own cell; moons are exempt by construction — a moon lives in its parent planet's cell, which is
-     * what makes a planet-and-its-moons one destination.
+     * INVARIANT: at most ONE real body per cell. Every real body owns its own cell — a moon included,
+     * whose cell is one of its parent's ZONE. A zone-qualified key can never equal a galactic one, so the audit compares moons against their siblings in the same
+     * zone and against nothing else.
+     *
+     * <p>The moon EXEMPTION this audit used to carry is gone with the rule that needed it. It was
+     * load-bearing while a moon shared its parent's cell — every planet with moons would have been
+     * reported — and keeping it now would silence the one collision that can still happen: two moons
+     * whose orbits land them in the same cell of their parent's lattice.</p>
      *
      * <p>Two real bodies in one cell is not a cosmetic problem. A cell is what a jump can be aimed at
      * and what a ship arrives into, so a collision means two destinations the player cannot tell apart
@@ -291,9 +361,6 @@ public final class SystemContent {
     private static void auditOneRealBodyPerCell(List<SystemBody> bodies, int starId) {
         Map<String, List<Integer>> realBodiesByCell = new LinkedHashMap<>();
         for (SystemBody body : bodies) {
-            if (body.kind() == SystemBodyKind.MOON) {
-                continue; // exempt: a moon shares its parent's cell on purpose
-            }
             String cell = body.name().cellKey();
             List<Integer> occupants = realBodiesByCell.get(cell);
             if (occupants == null) {
@@ -308,7 +375,7 @@ public final class SystemContent {
             }
             if (REPORTED.add("collision:" + starId + ':' + e.getKey() + ':' + e.getValue())) {
                 LOGGER.error("system {}: cell {} holds {} REAL bodies (dims {}) - a cell may hold at "
-                        + "most one, moons excepted. They are one indistinguishable destination: a jump "
+                        + "most one. They are one indistinguishable destination: a jump "
                         + "aimed at that address cannot say which body it meant, and an arrival cannot "
                         + "either. Spread the authored orbits, or give the bodies explicit cells.",
                         starId, e.getKey(), e.getValue().size(), e.getValue());
@@ -346,10 +413,16 @@ public final class SystemContent {
         if (cell == null || anchor == null) {
             return false;
         }
+        // The box is measured in GALACTIC cells, so a zoned name is asked about through the galactic
+        // cell its zone is in — a moon is inside its system's clear space exactly when its planet is.
+        // Comparing a zone-local index against a galactic anchor would compare counts of two lattices
+        // four orders of magnitude apart, and every moon in the game would read as inside the box for
+        // arithmetic reasons rather than geometric ones.
+        GalacticCoord here = cell.galacticCell();
         long reach = reachCells(Math.max(1, minSpacingCells));
-        return Math.abs(cell.sectorX() - anchor.sectorX()) <= reach
-                && Math.abs(cell.sectorY() - anchor.sectorY()) <= reach
-                && Math.abs(cell.sectorZ() - anchor.sectorZ()) <= reach;
+        return Math.abs(here.sectorX() - anchor.sectorX()) <= reach
+                && Math.abs(here.sectorY() - anchor.sectorY()) <= reach
+                && Math.abs(here.sectorZ() - anchor.sectorZ()) <= reach;
     }
 
     /**

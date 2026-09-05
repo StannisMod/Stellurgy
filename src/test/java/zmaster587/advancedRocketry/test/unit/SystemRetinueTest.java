@@ -470,9 +470,14 @@ public class SystemRetinueTest {
     // ─── E2: moons ─────────────────────────────────────────────────────────────
 
     @Test
-    public void moonsExistAndLiveInsideTheirParentsCell() {
+    public void moonsExistAndGetTheirOwnCellsInsideTheirParentsZone() {
         // Without moons the whole outer system is look-only: nothing out there is landable, because the
         // bodies big enough to be out there are the ones with no surface.
+        //
+        // A moon is a DESTINATION IN ITS OWN RIGHT: its own cell, inside its
+        // parent's zone, so its name literally contains its parent's. This used to assert the
+        // opposite — that a moon SHARES a major body's cell — and that shared name is what made a
+        // planet-and-its-moons one address a jump could not choose within.
         int minSpacing = SPACING;
         ClusteredGalaxyGenerator g = gen(minSpacing);
         int moons = 0;
@@ -490,8 +495,11 @@ public class SystemRetinueTest {
                     continue;
                 }
                 moons++;
-                assertTrue("a moon must share a major body's cell — a planet and its moons are ONE "
-                        + "destination", majorCells.contains(b.name().cellKey()));
+                assertTrue("a moon must be named inside a major body's ZONE, whose key is that "
+                                + "body's own cell (got zone " + b.name().zone() + ")",
+                        majorCells.contains(b.name().zone()));
+                assertFalse("...and its own name must not be that body's, or the two are one address",
+                        majorCells.contains(b.name().cellKey()));
                 assertTrue("a moon must be landable", b.kind().canDescend());
             }
             checked++;
@@ -501,20 +509,36 @@ public class SystemRetinueTest {
     }
 
     @Test
-    public void aMoonIsSomewhereElseInsideItsCellThanItsParent() {
-        // A moon that never moved inside the cell would be at the cell centre, i.e. exactly where the
-        // planet is — one address, two bodies, and a descent that cannot say which it came for.
+    public void aMoonIsSomewhereElseThanItsParentAndKeepsMoving() {
+        // A moon that stood exactly where its planet does would be one address with two bodies in it,
+        // and a descent that cannot say which it came for.
+        //
+        // The reading is the ABSOLUTE separation at a tick, not an in-cell offset. A moon's cell now
+        // rides the moon, so its in-cell offset is zero at every tick exactly as a planet's is — a
+        // test that kept asking the offset would be asking whether the moon has left its own frame's
+        // origin, which nothing may ever do.
         int minSpacing = SPACING;
         ClusteredGalaxyGenerator g = gen(minSpacing);
         boolean checkedAny = false;
         for (GalacticCoord anchor : anchors(g, SEED, minSpacing, 3)) {
-            for (SystemBody b : g.bodiesFor(SEED, anchor)) {
+            List<SystemBody> bodies = g.bodiesFor(SEED, anchor);
+            for (SystemBody b : bodies) {
                 if (b.kind() != SystemBodyKind.MOON) {
                     continue;
                 }
+                SystemBody parent = null;
+                for (SystemBody candidate : bodies) {
+                    if (candidate.name().cellKey().equals(b.name().zone())) {
+                        parent = candidate;
+                        break;
+                    }
+                }
+                assertNotNull("a moon's zone must name a body of this system", parent);
                 checkedAny = true;
-                assertFalse("a moon must stand off its cell's centre",
-                        b.inCellOffsetAt(0L).isZero() && b.inCellOffsetAt(6000L).isZero());
+                assertTrue("a moon must stand off the world it orbits",
+                        b.absoluteAt(0L).distanceTo(parent.absoluteAt(0L)) > 0d);
+                assertFalse("and it must MOVE about it, or its address is a second name for its parent",
+                        b.absoluteAt(0L).equals(b.absoluteAt(6000L)));
                 assertTrue("a moon must carry the orbit its climate is derived from — its PARENT's "
                         + "distance from the star", b.orbitalDistance() > 0);
             }

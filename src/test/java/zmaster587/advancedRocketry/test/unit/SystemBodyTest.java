@@ -138,18 +138,27 @@ public class SystemBodyTest {
                 carried.absoluteAt(0L), carried.absoluteAt(500L));
     }
 
-    /** Only a real body may define a frame: a moon rides its parent's and a POI rides its cell's. */
+    /**
+     * A body with MASS defines a frame; content without any rides the frame of the cell it stands in.
+     *
+     * <p>A MOON is on the first side of that line: it has a cell of its own inside its parent's zone,
+     * and that cell rides the moon. While it shared its parent's name
+     * it could not define one — two bodies cannot both be the primary of one cell — and that is what
+     * left a craft parked beside a moon riding the PLANET and drifting away from the moon.</p>
+     */
     @Test
-    public void onlyRealBodiesDefineACellsFrame() {
+    public void onlyBodiesWithMassDefineACellsFrame() {
         GalacticCoord at = GalacticCoord.ORIGIN;
         assertTrue(SystemBody.fixedAt(at, SystemBodyKind.STAR, Constants.INVALID_PLANET, 0).definesFrame());
         assertTrue(SystemBody.fixedAt(at, SystemBodyKind.PLANET, 1, 0).definesFrame());
         assertTrue(SystemBody.fixedAt(at, SystemBodyKind.GAS_GIANT, 2, 0).definesFrame());
         assertTrue(SystemBody.fixedAt(at, SystemBodyKind.ASTEROID_BELT,
                 Constants.INVALID_PLANET, 0).definesFrame());
-        assertFalse(SystemBody.fixedAt(at, SystemBodyKind.MOON, 3, 0).definesFrame());
-        assertFalse(SystemBody.fixedAt(at, SystemBodyKind.STATION_SLOT,
-                Constants.INVALID_PLANET, 0).definesFrame());
+        assertTrue("a moon owns its own cell and that cell rides it",
+                SystemBody.fixedAt(at, SystemBodyKind.MOON, 3, 0).definesFrame());
+        assertFalse("a station has no mass, so it rides whatever its cell rides",
+                SystemBody.fixedAt(at, SystemBodyKind.STATION_SLOT,
+                        Constants.INVALID_PLANET, 0).definesFrame());
     }
 
     @Test

@@ -46,30 +46,50 @@ public final class ZoneScale {
      * two above it. A power of two is not cosmetic: the lattice index is a division, and a body that
      * sits exactly on a cell boundary is a body whose name depends on a rounding mode.</p>
      *
-     * <p><b>What it costs at the top end</b>: Jupiter's zone cell is 376 562 blocks (94 141 km) and
-     * Earth's is 7 234 blocks (1 809 km). Earth's own descent shell is 25 513 blocks, so a big body
-     * SPANS several cells of its own zone. That is correct and not a defect — a cell is a naming and
-     * realization unit, never a claim that the thing inside it is smaller than it.</p>
+     * <p><b>What it costs at the top end</b>: a body whose sphere exceeds one cell has its lattice
+     * spanning the realized region instead, so the coarsest cell in the game is
+     * {@code CELL / 1024 = 31 250} blocks — Jupiter's, Neptune's and every rogue's. Earth's is 7 235
+     * blocks (1 809 km). Earth's own descent shell is 25 513 blocks, so a big body SPANS several
+     * cells of its own zone. That is correct and not a defect — a cell is a naming and realization
+     * unit, never a claim that the thing inside it is smaller than it.</p>
      */
     public static final int CELLS_ACROSS_A_ZONE = 1024;
 
     /**
      * The edge length, in chart blocks, of one cell inside {@code body}'s zone at {@code tick}.
      *
-     * <p>{@code 0} when the body defines no zone — no mass, no primary, or a primary no heavier than
-     * it. A zero is NOT a small cell: callers must read it as "this body has no lattice of its own"
-     * and pass over it, exactly as {@link ReferenceFrames#soiRadiusBlocks} requires of its own zero.
+     * <p>{@code 0} when the body has no zone to divide, which is exactly one case: it has no MASS.
+     * A zero is NOT a small cell — callers must read it as "this body has no lattice of its own" and
+     * pass over it, exactly as {@link ReferenceFrames#soiRadiusBlocks} requires of its own zero.
      * Handing back a stand-in would produce names for a zone that does not exist.</p>
+     *
+     * <h2>The lattice spans the REALIZED region, not the sphere of influence</h2>
+     *
+     * <p>These are different quantities and only for the small bodies do they coincide. A sphere of
+     * influence is where a craft's motion is naturally described against this body; the realized
+     * region is how much of that a slot world can hold, which is one cell. Measured against
+     * {@code HALF_CELL = 16 000 000}: Luna's sphere is 0.02 of it and Earth's 0.23, so for everything
+     * a player lands near the sphere is the binding term — but Jupiter's is <b>12&times;</b> and
+     * Neptune's <b>21.65&times;</b>, and a lattice spanning a region twenty times what can be
+     * realized would name most of its own cells after places no world reaches.</p>
+     *
+     * <p>A body with <b>no primary</b> — a rogue, which left its star behind — has no Laplace sphere
+     * at all, because there is nothing for one to be bounded against. Its bound is the realized one
+     * and nothing else, which is the same rule with the first term absent rather than a special case:
+     * a rogue's moons get their own cells exactly as a star-lit planet's do. Reading the missing
+     * sphere as "no zone" instead would leave every rogue's moons sharing their parent's address,
+     * which is the rule this class exists to retire.</p>
      */
     public static long cellBlocks(SystemBody body, SystemBody primary, long tick) {
-        double soi = ReferenceFrames.soiRadiusBlocks(body, primary, tick);
-        if (!(soi > 0d)) {
+        if (body == null || !(body.massEarths() > 0d)) {
             return 0L;
         }
+        double soi = ReferenceFrames.soiRadiusBlocks(body, primary, tick);
+        double radius = soi > 0d ? Math.min(soi, GalacticCoord.HALF_CELL) : GalacticCoord.HALF_CELL;
         // Rounded UP, so a lattice is never finer than the count asks for; a cell of zero blocks
         // would divide by zero at every naming site, which is a crash rather than a wrong name only
         // because nothing has called it yet.
-        return Math.max(1L, (long) Math.ceil(2d * soi / CELLS_ACROSS_A_ZONE));
+        return Math.max(1L, (long) Math.ceil(2d * radius / CELLS_ACROSS_A_ZONE));
     }
 
     /**
@@ -85,5 +105,31 @@ public final class ZoneScale {
             return 0L;
         }
         return Math.floorDiv(offsetBlocks + cellBlocks / 2L, cellBlocks);
+    }
+
+    /**
+     * The cell of {@code zoneBody}'s lattice that a point {@code offset} from that body falls in — as
+     * a NAME, in the zone whose key is {@code zoneBody}'s own cell.
+     *
+     * <p>{@code null} when {@code zoneBody} defines no zone, and the caller must say what it does
+     * about that rather than being handed a plausible cell: a stand-in here is a body named inside a
+     * lattice that does not exist, which is indistinguishable from a real address at every point
+     * downstream.</p>
+     *
+     * @param primary the body {@code zoneBody} orbits — its sphere of influence is measured against it
+     * @param tick    the moment the zone's extent, and hence its lattice, is evaluated at
+     */
+    public static GalacticCoord cellWithin(SystemBody zoneBody, SystemBody primary, BlockDelta offset,
+                                           long tick) {
+        if (zoneBody == null || offset == null) {
+            return null;
+        }
+        long width = cellBlocks(zoneBody, primary, tick);
+        if (width <= 0L) {
+            return null;
+        }
+        return GalacticCoord.inZone(zoneBody.name().cellKey(), width,
+                cellIndex(offset.dx(), width), cellIndex(offset.dy(), width),
+                cellIndex(offset.dz(), width), 0L, 0L, 0L);
     }
 }

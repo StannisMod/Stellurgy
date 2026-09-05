@@ -23,6 +23,7 @@ import zmaster587.advancedRocketry.universe.UniverseRegistry;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 
@@ -383,16 +384,16 @@ public class SystemContentTest {
     }
 
     /**
-     * A moon's ADDRESS is the moon, not the middle of the cell it shares with its parent.
+     * A moon's ADDRESS is the moon's OWN cell, and that cell is not its parent's.
      *
-     * <p>Both answers are wanted and they are not the same one. "Which cell is this body in"
-     * (cell-centred) is right for attribution and for anything comparing cell keys. "Where do I aim a
-     * ship at it" has to be the body's own position: a moon sits tens of thousands of blocks off its
-     * parent's cell centre — far beyond a descent's reach — so a ship flown to the cell arrives at the
-     * PARENT, and the pilot who picked the moon can never put down on it.</p>
+     * <p>This pin used to assert the opposite — that a moon is addressed INSIDE its parent's cell, tens of thousands of blocks off its centre, so a jump had to aim at the body
+     * rather than at the cell or the pilot who picked the moon arrived at the planet. The defect was
+     * real; the fix is that the moon has a cell of its own, in its parent's zone. Aiming at the cell
+     * and aiming at the body are now the same act, which is what "a moon is a destination in its own
+     * right" means — and the two answers coinciding is the assertion, not a coincidence to shrug at.</p>
      */
     @Test
-    public void aMoonIsAimedAtWhereItIsNotAtItsParentsCellCentre() {
+    public void aMoonIsAddressedByItsOwnCellInsideItsParentsZone() {
         StellarBody star = new StellarBody();
         star.setId(4247);
         star.setSize(1f);
@@ -408,25 +409,38 @@ public class SystemContentTest {
         reg.place(GalacticCoord.ORIGIN, 4247);
         UniverseRegistry.setStarLookup(id -> id == 4247 ? star : null);
 
+        Optional<GalacticCoord> parentCell = reg.coordForPlanet(parent);
         Optional<GalacticCoord> cell = reg.coordForPlanet(moon);
         Optional<GalacticCoord> aim = reg.addressForPlanet(moon, 0L);
+        assertTrue(parentCell.isPresent());
         assertTrue(cell.isPresent());
         assertTrue(aim.isPresent());
 
-        assertTrue("the moon is addressed inside its parent's cell", aim.get().sameCell(cell.get()));
+        assertEquals("the moon's cell is named inside its PARENT's zone",
+                parentCell.get().cellKey(), cell.get().zone());
+        assertFalse("...and it is not the parent's own cell",
+                cell.get().galacticCell().sameCell(cell.get()));
+        assertTrue("a moon's cell rides the moon, so aiming at the cell IS aiming at the body",
+                aim.get().sameCell(cell.get()));
         // Both endpoints are in ONE cell, so they share a frame and its motion cancels: the in-cell
-        // delta IS the distance, with no tick and no frame lookup needed.
-        assertTrue("...and a ship dropped at that cell's centre would be nowhere near the moon",
-                aim.get().staticFrameDistanceTo(cell.get()) > 1000d);
+        // delta IS the distance, with no tick and no frame lookup needed. It is ZERO, because a
+        // moon sits at its own frame's origin exactly as a planet does.
+        assertEquals("a ship dropped at that cell's centre arrives at the moon", 0d,
+                aim.get().staticFrameDistanceTo(cell.get()), 0d);
     }
 
     /**
-     * The live half of the moon rule. A moon shares its parent's cell NAME forever, and moves inside
-     * it — which is the one piece of a system's layout that is still a function of world time, and the
-     * reason a navigation computer has to lead its aim at a moon rather than at the cell.
+     * The live half of the moon rule, one level down. A moon's NAME is fixed forever; what moves is
+     * its CELL, which rides it — so the moon sits at its own frame's origin at every tick while its
+     * absolute position goes round its planet.
+     *
+     * <p>This used to assert the opposite of its own second clause: that a moon's offset INSIDE its
+     * parent's cell is live. It was, and that motion was exactly what nothing carried a parked craft
+     * through. A nav computer no longer has to lead its aim at a moon, because the address it aims
+     * at moves with the body.</p>
      */
     @Test
-    public void aMoonsOffsetInsideItsParentsCellIsLiveWhileItsNameIsNot() {
+    public void aMoonsCellRidesItSoItsOffsetIsZeroWhileItsPositionIsLive() {
         StellarBody star = new StellarBody();
         star.setId(4249);
         star.setSize(1f);
@@ -447,12 +461,17 @@ public class SystemContentTest {
         long quarterPeriod = (long) (24000d
                 * AstronomicalBodyHelper.getMoonOrbitalPeriod(127f, 1f) / 4d);
 
-        assertEquals("a moon carries its parent's cell name", planetBody.name(), moonBody.name());
-        assertEquals("...at every tick", planetBody.name().cellKey(),
+        assertEquals("a moon's name is its OWN cell, in its parent's zone",
+                planetBody.name().cellKey(), moonBody.name().zone());
+        assertNotEquals("which is not its parent's cell", planetBody.name(), moonBody.name());
+        assertEquals("...and it is the same name at every tick", moonBody.name().cellKey(),
                 moonBody.addressAt(quarterPeriod).cellKey());
-        assertFalse("a moon's position inside that cell is LIVE",
-                moonBody.inCellOffsetAt(0L).equals(moonBody.inCellOffsetAt(quarterPeriod)));
-        assertTrue("a planet is at its own cell's frame origin, so it has no offset to move",
+        assertTrue("a moon is at its own cell's frame origin, so it has no offset to move",
+                moonBody.inCellOffsetAt(0L).isZero()
+                        && moonBody.inCellOffsetAt(quarterPeriod).isZero());
+        assertFalse("what is LIVE is where that cell IS: the moon goes round its planet",
+                moonBody.absoluteAt(0L).equals(moonBody.absoluteAt(quarterPeriod)));
+        assertTrue("and a planet is at its own cell's frame origin for the same reason",
                 planetBody.inCellOffsetAt(quarterPeriod).isZero());
     }
 
@@ -493,11 +512,13 @@ public class SystemContentTest {
         // period law happened to keep inside the tolerance (3 815 blocks against a 500-block bar once
         // the law was re-anchored on the real Moon), so the tolerance, not the arrangement, was doing
         // the work. Asking the body for its own distance removes the disagreement entirely.
-        // `offsetLaw`, not `frame().law()`: a moon's FRAME is its parent's orbit around the star —
-        // the cell rides the planet — while what this test samples (`inCellOffsetAt`) is the moon's
-        // own turn about that parent. Reading the frame gave the parent's 200 units and a period for
-        // an orbit the moon is not on.
-        double actualUnits = moonBody.offsetLaw().distUnits();
+        // `frame().law()`, and it is now the moon's OWN turn about its parent: a moon's cell rides
+        // the moon, so the cell's frame is its parent's displaced by exactly this orbit, and the
+        // moon's `offsetLaw` is STATIC. The comment here used to say the opposite for the same
+        // reason — the frame was the PARENT's then, and reading it gave the parent's 200 units and a
+        // period for an orbit the moon is not on. One level down, the same sentence picks the other
+        // accessor. `frame().parent().law()` is what now gives the parent's orbit round the star.
+        double actualUnits = moonBody.frame().law().distUnits();
         long massPeriodTicks = (long) (24000d * AstronomicalBodyHelper.getMoonOrbitalPeriod(
                 (float) actualUnits, (float) parent.getOrbitalMass()));
         long gravityPeriodTicks = (long) (24000d * AstronomicalBodyHelper.getMoonOrbitalPeriod(
@@ -506,9 +527,10 @@ public class SystemContentTest {
                         + massPeriodTicks + " vs " + gravityPeriodTicks,
                 gravityPeriodTicks > massPeriodTicks * 5);
 
-        BlockDelta start = moonBody.inCellOffsetAt(0L);
-        BlockDelta afterOnePeriod = moonBody.inCellOffsetAt(massPeriodTicks);
-        BlockDelta afterHalf = moonBody.inCellOffsetAt(massPeriodTicks / 2L);
+        // Sampled off the same law, which is where the moon's displacement from its parent lives now.
+        BlockDelta start = moonBody.frame().law().offsetAt(0L);
+        BlockDelta afterOnePeriod = moonBody.frame().law().offsetAt(massPeriodTicks);
+        BlockDelta afterHalf = moonBody.frame().law().offsetAt(massPeriodTicks / 2L);
 
         // Both bounds are functions of the orbit the moon is ON: half a turn carries it to the far
         // side (about two radii away) and a full turn brings it back to where it started. Stated as

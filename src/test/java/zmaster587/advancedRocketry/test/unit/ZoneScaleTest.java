@@ -10,9 +10,9 @@ import static org.junit.Assert.assertTrue;
 /**
  * The one thing a zone's lattice has to do: <b>give two bodies two names.</b>
  *
- * <p>A body is named by the cell it occupies in its parent's zone (C15 ADDR-17), so a lattice too
- * coarse for the gap between a planet and its innermost moon names them both by the same cell — and
- * "a moon shares its parent's name" (the retired ADDR-5) returns through the back door, taking the
+ * <p>A body is named by the cell it occupies in its parent's zone, so a lattice too coarse for the
+ * gap between a planet and its innermost moon names them both by the same cell — and "a moon shares
+ * its parent's name" returns through the back door, taking the
  * defect this whole change exists to remove with it: a craft parked beside the moon is then carried
  * by the PARENT and left behind by the moon.</p>
  *
@@ -64,7 +64,7 @@ public class ZoneScaleTest {
             assertTrue("a moon orbiting " + (long) c[0] + " km out of a " + (long) c[1]
                             + " km sphere shares its planet's cell: lattice cell = " + cell
                             + " blocks, index = " + index + ". The planet sits at index 0, so this "
-                            + "moon has no name of its own and ADDR-5 is back.",
+                            + "moon has no name of its own, and it is sharing its planet's.",
                     index != 0L);
         }
     }
@@ -88,7 +88,7 @@ public class ZoneScaleTest {
     /**
      * A zone that does not exist has no lattice, and says so with a zero rather than a stand-in.
      *
-     * <p>A body with no mass defines no sphere of influence (C15 ADDR-17), and a small-but-nonzero
+     * <p>A body with no mass defines no sphere of influence, and a small-but-nonzero
      * cell handed back here would be indistinguishable from a real lattice at every call site — the
      * naming would succeed and produce an address for a zone nobody owns.</p>
      */
