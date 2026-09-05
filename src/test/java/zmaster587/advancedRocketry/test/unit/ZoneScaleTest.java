@@ -61,7 +61,7 @@ public class ZoneScaleTest {
             if (p.innermostMoonOrbitKm <= 0d) {
                 continue;
             }
-            long cell = ZoneScale.cellBlocks(p.body(), sol(), 0L);
+            long cell = ZoneScale.cellBlocks(p.body(), sol(), p.tightestMoonBlocks(), 0L);
             long index = ZoneScale.cellIndex(blocks(p.innermostMoonOrbitKm), cell);
             assertTrue(p.name + "'s innermost moon orbits " + (long) p.innermostMoonOrbitKm
                             + " km out and shares its planet's cell: lattice cell = " + cell
@@ -84,7 +84,7 @@ public class ZoneScaleTest {
     public void everyBodysOwnDescentShellFitsInsideItsOwnCell() {
         for (Planet p : SOLAR_SYSTEM) {
             SystemBody body = p.body();
-            long cell = ZoneScale.cellBlocks(body, sol(), 0L);
+            long cell = ZoneScale.cellBlocks(body, sol(), p.tightestMoonBlocks(), 0L);
             long shell = DescentShell.radiusAround(body);
             assertTrue(p.name + " has a descent shell of " + shell + " blocks against a zone cell "
                             + "of " + cell + " (half " + (cell / 2) + "): a craft parked at that "
@@ -95,49 +95,62 @@ public class ZoneScaleTest {
     }
 
     /**
-     * <b>The two bounds leave less than one power of two of room, and this states the margin
-     * instead of trusting it.</b>
+     * <b>A cell CONTAINS the sphere of influence of the body it names — the bound that makes
+     * membership by geometry possible at all.</b>
      *
-     * <p>The window is a factor of <b>2.461</b>: a body's descent shell stands at 1.0157 of its
-     * radius (the Kármán fraction) and the closest a moon may be authored is 2.5 radii (the floor
-     * {@code SystemContent} lifts an authored moon to). A power-of-two lattice steps by 2.000, so
-     * the usable slack is <b>1.23&times;</b> — the choice of where the count lands inside that
-     * window is not free, and a change to either constant can close it entirely.</p>
+     * <p>A cell is not only a name: it is the region a craft flies in before a seam carries it out,
+     * and it is concentric on its body, because a cell's frame origin IS that body. So if a body's
+     * sphere reaches past its own cell, the cube face fires before the sphere test ever can — and
+     * membership can then never be decided by the sphere, however the crossing is written. This is
+     * the bound the whole reference-frame clause rests on and it is the one that had to be found
+     * before the lattice could be sized at all.</p>
      *
-     * <p>The count is taken as the FINEST lattice the flying bound allows, which puts the slack on
-     * the naming side. That is the deliberate direction: a moon sharing its parent's cell is a
-     * DEFECT — two destinations at one address — while a tight flying margin is a degradation, a
-     * craft at 1.1 shells being carried by the parent rather than the body. The margins are
-     * measured here so an erosion of either shows up as a red rather than as a shipped surprise.</p>
+     * <p>It is satisfied by the naming bound automatically, and the reason is worth stating rather
+     * than trusting: {@code r_SOI = a * (m/M)^(2/5)} with {@code m < M} is always LESS than the
+     * orbit {@code a}, while the naming bound makes a cell about twice that orbit. So a lattice
+     * fine enough to name a moon apart is coarse enough to hold its sphere, for every mass ratio
+     * that can exist. Asserted on the real system anyway, because "always" is a claim about the
+     * arithmetic and this is a claim about the code.</p>
      */
     @Test
-    public void theTwoBoundsLeaveLessThanOnePowerOfTwoOfRoomAndBothAreMet() {
-        double moonFloorOverShell =
-                zmaster587.advancedRocketry.universe.SystemContent.MOON_MIN_PARENT_RADII
-                        / (1d + DescentShell.ATMOSPHERE_FRACTION);
-        assertTrue("the window between the two bounds has closed: a moon may be authored at "
-                        + zmaster587.advancedRocketry.universe.SystemContent.MOON_MIN_PARENT_RADII
-                        + " radii while a shell reaches " + (1d + DescentShell.ATMOSPHERE_FRACTION)
-                        + ", a factor of " + moonFloorOverShell + ". Below 2.0 no power-of-two "
-                        + "lattice can satisfy both, and one of them has to give.",
-                moonFloorOverShell > 2d);
-
+    public void everyCellContainsTheSphereOfTheBodyItNames() {
+        boolean checkedAMoon = false;
         for (Planet p : SOLAR_SYSTEM) {
-            SystemBody body = p.body();
-            long cell = ZoneScale.cellBlocks(body, sol(), 0L);
-            long shell = DescentShell.radiusAround(body);
-            // The naming half, stated against the CLOSEST a moon could ever be rather than against
-            // the moon this body happens to have: it is the bound the construction guarantee rests
-            // on, and the real moons are all further out than it.
-            long closestPossibleMoon = Math.round(
-                    p.radiusEarths * (6_371_000d / D)
-                            * zmaster587.advancedRocketry.universe.SystemContent.MOON_MIN_PARENT_RADII);
-            assertTrue(p.name + ": a moon at the authored floor (" + closestPossibleMoon
-                            + " blocks) would share its cell of " + cell,
-                    ZoneScale.cellIndex(closestPossibleMoon, cell) != 0L);
-            assertTrue(p.name + ": a craft at the body's own shell (" + shell + ") is outside its "
-                            + "cell of " + cell, shell <= cell / 2L);
+            if (p.innermostMoonOrbitKm <= 0d) {
+                continue;
+            }
+            long cell = ZoneScale.cellBlocks(p.body(), sol(), p.tightestMoonBlocks(), 0L);
+            // The innermost moon's own sphere, measured against its parent the way production does.
+            SystemBody moon = p.innermostMoon();
+            long sphere = ZoneScale.realizedRadiusBlocks(moon, p.body(), 0L);
+            assertTrue("arrangement: the moon must have a sphere at all", sphere > 0L);
+            checkedAMoon = true;
+            assertTrue(p.name + "'s innermost moon has a sphere of influence " + sphere
+                            + " blocks in radius against a cell of " + cell + " (half " + (cell / 2)
+                            + "): a craft inside that sphere is carried out of the moon's cell by "
+                            + "the cube face before the sphere is ever reached, so no crossing rule "
+                            + "written against the sphere can take effect",
+                    sphere <= cell / 2L);
         }
+        assertTrue("the sweep must actually check a moon", checkedAMoon);
+    }
+
+    /**
+     * A body with NO children gets ONE cell, and its lattice becomes its sphere of influence.
+     *
+     * <p>This is the case almost every body in the game is in, and it is where the design pays off:
+     * "which body carries this craft" and "which cell is it in" become the same question, because
+     * the cell and the sphere are the same region. Nothing needs naming apart inside it, so nothing
+     * asks for the lattice to be divided.</p>
+     */
+    @Test
+    public void aBodyWithNoChildrenGetsOneCellSpanningItsWholeSphere() {
+        SystemBody luna = LUNA.body();
+        assertEquals("a childless body's zone is not divided", 1,
+                ZoneScale.cellsAcrossZone(luna, EARTH.body(), 0L, 0L));
+        long cell = ZoneScale.cellBlocks(luna, EARTH.body(), 0L, 0L);
+        long sphere = ZoneScale.realizedRadiusBlocks(luna, EARTH.body(), 0L);
+        assertEquals("...so its one cell spans exactly its sphere", 2L * sphere, cell, 1d);
     }
 
     /**
@@ -160,7 +173,7 @@ public class ZoneScaleTest {
     @Test
     public void theCountIsAPowerOfTwo() {
         for (Planet p : SOLAR_SYSTEM) {
-            int count = ZoneScale.cellsAcrossZone(p.body(), sol(), 0L);
+            int count = ZoneScale.cellsAcrossZone(p.body(), sol(), p.tightestMoonBlocks(), 0L);
             assertTrue(p.name + " has a lattice of " + count + " cells, which is not a power of two",
                     count > 0 && (count & (count - 1)) == 0);
         }
@@ -176,7 +189,7 @@ public class ZoneScaleTest {
     @Test
     public void noZoneMeansNoLatticeAndTheZeroIsTheAnswer() {
         assertEquals("a body with no sphere of influence has no lattice",
-                0L, ZoneScale.cellBlocks(null, null, 0L));
+                0L, ZoneScale.cellBlocks(null, null, 0L, 0L));
         assertEquals("and an index against no lattice is not invented", 0L,
                 ZoneScale.cellIndex(1_234_567L, 0L));
     }
@@ -204,6 +217,34 @@ public class ZoneScaleTest {
         }
 
         /** The body, standing at its real distance from Sol so its sphere is the real one. */
+        /** How far this body's INNERMOST moon sits from it, in blocks; 0 when it has none. */
+        long tightestMoonBlocks() {
+            return innermostMoonOrbitKm <= 0d ? 0L : blocks(innermostMoonOrbitKm);
+        }
+
+        /**
+         * That moon as a body, at a MASS ratio typical of a real inner moon.
+         *
+         * <p>The mass is what its sphere is computed from, and it is stated as a RATIO to the parent
+         * rather than as a table of real values: the point of the case is that a lattice sized to
+         * name a moon apart is coarse enough to hold that moon's sphere <b>for any mass ratio</b>,
+         * so the ratio is the variable and a generous one is the honest choice. Real inner moons are
+         * far lighter than this.</p>
+         */
+        SystemBody innermostMoon() {
+            // NESTED in its parent's frame, the way production builds one — so the separation the
+            // sphere is computed from is the moon's orbit about its PARENT. Built on a frame of its
+            // own it would be that distance from the SUN instead, and the sphere would come back as
+            // the no-primary fallback (a whole half-cell), which is how this fixture first read.
+            BodyEphemeris parentOrbit = BodyEphemeris.fixed(blocks(orbitKm), 0L, 0L);
+            BodyEphemeris moonOrbit = BodyEphemeris.fixed(tightestMoonBlocks(), 0L, 0L);
+            CellFrame parentFrame =
+                    CellFrame.of(AbsolutePos.ofCellName(GalacticCoord.ORIGIN), parentOrbit);
+            return new SystemBody(GalacticCoord.ORIGIN, CellFrame.within(parentFrame, moonOrbit),
+                    BodyEphemeris.STATIC, SystemBodyKind.MOON, Constants.INVALID_PLANET, 1,
+                    100, radiusEarths / 4d, massEarths / 50d);
+        }
+
         SystemBody body() {
             BodyEphemeris orbit = BodyEphemeris.fixed(blocks(orbitKm), 0L, 0L);
             return new SystemBody(GalacticCoord.ORIGIN,

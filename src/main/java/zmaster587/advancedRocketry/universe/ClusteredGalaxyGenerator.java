@@ -498,6 +498,8 @@ public final class ClusteredGalaxyGenerator implements IGalaxyGenerator {
             moons = MAX_MOONS_ROCKY;
         }
         CellFrame frame = CellFrame.staticAt(cell);
+        long tightestMoon = tightestMoonOffset(seed, cell, moons, profile.radiusEarths(),
+                SALT_ROGUE_MOONRAD);
         for (int j = 1; j <= moons; j++) {
             int moonOrbit = moonOrbitUnits(profile.radiusEarths(),
                     CellHash.norm(CellHash.ofBody(seed, cell, j, SALT_ROGUE_MOONRAD)));
@@ -515,7 +517,8 @@ public final class ClusteredGalaxyGenerator implements IGalaxyGenerator {
             // realized region alone (ZoneScale), which is the same rule with the first term absent.
             // Its moons therefore get their own cells exactly as a star-lit planet's do.
             bodies.add(new SystemBody(
-                    SystemContent.moonCellIn(rogue, null, law, systemId, Constants.INVALID_PLANET),
+                    SystemContent.moonCellIn(rogue, null, law, tightestMoon, systemId,
+                            Constants.INVALID_PLANET),
                     CellFrame.within(frame, law), BodyEphemeris.STATIC, SystemBodyKind.MOON,
                     Constants.INVALID_PLANET, systemId, SystemBody.ORBIT_UNKNOWN)
                     .withBulk(moonProfile.massEarths(), moonProfile.radiusEarths()));
@@ -748,6 +751,33 @@ public final class ClusteredGalaxyGenerator implements IGalaxyGenerator {
      */
 
     /**
+     * How far the INNERMOST of {@code moons} drawn moons sits from its parent, in blocks — the
+     * number that decides how finely the parent's zone is divided
+     * ({@link zmaster587.advancedRocketry.space.ZoneScale#cellsAcrossZone}).
+     *
+     * <p>A PRE-PASS, redrawing the same orbits the loop below will draw, because the lattice a name
+     * is derived against has to be settled before the first sibling is named. Computing it as the
+     * loop went would name the first moon against a lattice the last one then changes — a name that
+     * moves, which is the one thing a name may not do. The draw is a pure hash, so redrawing it
+     * costs a hash per moon and cannot disagree with the loop.</p>
+     *
+     * <p>{@code 0} when there are no moons: nothing needs naming apart, so the zone is ONE cell.</p>
+     */
+    private long tightestMoonOffset(long seed, GalacticCoord parent, int moons,
+                                    double parentRadiusEarths, long salt) {
+        long tightest = 0L;
+        for (int j = 1; j <= moons; j++) {
+            long offset = (long) moonOrbitUnits(parentRadiusEarths,
+                    CellHash.norm(CellHash.ofBody(seed, parent, j, salt)))
+                    * SystemContent.ORBIT_UNIT_BLOCKS;
+            if (offset > 0L && (tightest == 0L || offset < tightest)) {
+                tightest = offset;
+            }
+        }
+        return tightest;
+    }
+
+    /**
      * A moon's orbit, in {@link SystemContent#ORBIT_UNIT_BLOCKS} units, drawn as a multiple of its
      * PARENT's radius.
      *
@@ -781,6 +811,8 @@ public final class ClusteredGalaxyGenerator implements IGalaxyGenerator {
         double parentMass = parentProfile.massEarths() > 0d
                 ? parentProfile.massEarths()
                 : Math.max(0.05d, parentProfile.gravityPercent() / 100d);
+        long tightestMoon = tightestMoonOffset(seed, parent, moons, parentProfile.radiusEarths(),
+                SALT_MOONRAD);
         for (int j = 1; j <= moons; j++) {
             int moonOrbit = moonOrbitUnits(parentProfile.radiusEarths(),
                     CellHash.norm(CellHash.ofBody(seed, parent, j, SALT_MOONRAD)));
@@ -799,7 +831,8 @@ public final class ClusteredGalaxyGenerator implements IGalaxyGenerator {
             BodyProfile moonProfile = derivation.derive(seed, anchor, parent, j, star, true,
                     parentOrbit);
             bodies.add(new SystemBody(
-                    SystemContent.moonCellIn(parentBody, primary, law, starId, Constants.INVALID_PLANET),
+                    SystemContent.moonCellIn(parentBody, primary, law, tightestMoon, starId,
+                            Constants.INVALID_PLANET),
                     CellFrame.within(parentFrame, law), BodyEphemeris.STATIC, SystemBodyKind.MOON,
                     Constants.INVALID_PLANET, starId, parentOrbit)
                     .withBulk(moonProfile.massEarths(), moonProfile.radiusEarths()));

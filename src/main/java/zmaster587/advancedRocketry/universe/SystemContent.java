@@ -187,6 +187,11 @@ public final class SystemContent {
                     planet.getOrbitalDist(), planet.getRadius(), planet.getOrbitalMass());
             bodies.add(planetBody);
 
+            // The lattice of a planet's zone is decided by its INNERMOST moon, so it is settled
+            // before any moon is named — a name derived against a lattice that a later sibling then
+            // changes is a name that moves, which is the one thing a name may not do.
+            long tightestMoon = tightestMoonOffsetOf(planet);
+
             for (int moonId : planet.getChildPlanets()) {
                 DimensionProperties moon = DimensionManager.getInstance().getDimensionProperties(moonId);
                 if (moon == null) {
@@ -202,8 +207,8 @@ public final class SystemContent {
                 // planet is; how far it sits from the planet is in its frame's law, which is what
                 // positions it. Same convention as the procedural side.
                 bodies.add(new SystemBody(
-                        moonNameOf(moon, planetBody, starBody, moonLaw, anchor, minSpacingCells,
-                                starId, names),
+                        moonNameOf(moon, planetBody, starBody, moonLaw, tightestMoon, anchor,
+                                minSpacingCells, starId, names),
                         CellFrame.within(planetFrame, moonLaw), BodyEphemeris.STATIC,
                         kindOf(moon, SystemBodyKind.MOON), moon.getId(), starId,
                         planet.getOrbitalDist(), moon.getRadius(), moon.getOrbitalMass()));
@@ -223,6 +228,34 @@ public final class SystemContent {
                         star.getMass());
         return BodyEphemeris.orbit(planet.getOrbitalDist(), planet.baseOrbitTheta, planet.orbitalPhi,
                 planet.isRetrograde, periodTicks, ORBIT_UNIT_BLOCKS);
+    }
+
+    /**
+     * How far {@code planet}'s INNERMOST moon sits from it at {@link #NAME_TICK}, in blocks — the
+     * number that decides how finely its zone is divided ({@link ZoneScale#cellsAcrossZone}).
+     *
+     * <p>{@code 0} for a planet with no moons, which is not an absence to work around: nothing needs
+     * naming apart, so the zone is ONE cell and the lattice coincides with the sphere of influence.
+     * That is the case almost every body in the game is in.</p>
+     *
+     * <p>Computed over the WHOLE moon set before any of them is named, because the lattice a name is
+     * derived against must not depend on the order the siblings are walked in, and must not change
+     * when a later sibling is reached. A recorded name survives a lattice change; a freshly derived
+     * one would not, and the two would then disagree about the same body.</p>
+     */
+    private static long tightestMoonOffsetOf(DimensionProperties planet) {
+        long tightest = 0L;
+        for (int moonId : planet.getChildPlanets()) {
+            DimensionProperties moon = DimensionManager.getInstance().getDimensionProperties(moonId);
+            if (moon == null) {
+                continue;
+            }
+            long offset = Math.round(moonLawOf(moon, planet).offsetAt(NAME_TICK).length());
+            if (offset > 0L && (tightest == 0L || offset < tightest)) {
+                tightest = offset;
+            }
+        }
+        return tightest;
     }
 
     /** A moon's orbital law about its PARENT — its offset inside the shared cell, live at every tick. */
@@ -289,9 +322,10 @@ public final class SystemContent {
      */
     private static GalacticCoord moonNameOf(DimensionProperties moon, SystemBody parent,
                                             SystemBody primary, BodyEphemeris moonLaw,
-                                            GalacticCoord anchor, int minSpacingCells, int starId,
-                                            CellNames names) {
-        GalacticCoord derived = moonCellIn(parent, primary, moonLaw, starId, moon.getId());
+                                            long tightestMoonOffsetBlocks, GalacticCoord anchor,
+                                            int minSpacingCells, int starId, CellNames names) {
+        GalacticCoord derived = moonCellIn(parent, primary, moonLaw, tightestMoonOffsetBlocks,
+                starId, moon.getId());
         return names == null ? derived
                 : names.nameFor(moon.getId(), starId, anchor, minSpacingCells, derived);
     }
@@ -305,9 +339,9 @@ public final class SystemContent {
      * because this derivation runs on every query.</p>
      */
     static GalacticCoord moonCellIn(SystemBody parent, SystemBody primary, BodyEphemeris moonLaw,
-                                    int starId, int moonDimId) {
+                                    long tightestMoonOffsetBlocks, int starId, int moonDimId) {
         GalacticCoord derived = ZoneScale.cellWithin(parent, primary, moonLaw.offsetAt(NAME_TICK),
-                NAME_TICK);
+                tightestMoonOffsetBlocks, NAME_TICK);
         if (derived != null) {
             return derived;
         }

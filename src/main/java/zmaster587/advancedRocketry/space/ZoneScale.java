@@ -31,65 +31,84 @@ public final class ZoneScale {
     }
 
     /**
-     * How many cells span {@code body}'s zone — <b>derived from the body, not a constant</b>, and
-     * squeezed between two bounds that pull opposite ways.
+     * How many cells span {@code body}'s zone — <b>derived, never a constant</b> — as the COARSEST
+     * lattice that still gives {@code tightestChildOffsetBlocks} an index of its own.
      *
-     * <p><b>B, the upper bound — a body's own descent shell must fit inside its own cell.</b> A cell
-     * is not only a name: it is the region a craft flies in before a seam carries it to the next one
-     * ({@code CellWorldMapper} maps a cell-local offset to a slot-world pose one for one). So a body
-     * whose shell reaches past its own cell has a craft at that shell sitting in a NEIGHBOURING
-     * cell, which rides the body's PARENT — the craft is then carried by the wrong thing while
-     * being, physically, right beside the body. That gives {@code count <= span / (2 * shell)}.</p>
+     * <p>Three bounds act on this number and they do not all pull the same way.</p>
      *
-     * <p><b>A, the lower bound — the innermost moon must land on an index of its own</b>, or "a moon
+     * <p><b>A, from below — the innermost child must land on an index of its own</b>, or "a moon
      * shares its parent's name" comes back one level down. Floor division puts a body at index 1
-     * once it is half a cell out, so this is {@code count >= span / (2 * orbit)}.</p>
+     * once it is half a cell out, so {@code count >= span / (2 * orbit)}. <b>This is the one that
+     * decides</b>, and the smallest power of two above it is taken: nothing else wants the lattice
+     * any finer, and everything wants the cells as large as they can be.</p>
      *
-     * <p><b>Taking B and not A is what makes this body-only.</b> A depends on the zone's CHILDREN, so
-     * deriving from it would make a body's name a function of its siblings — add a moon in XML and
-     * every sibling is renamed. B depends on the body alone, and it satisfies A <i>by
-     * construction</i>: at {@code count = B} a cell is about twice the shell, so a moon lands on its
-     * own index once it orbits outside its parent's shell — and every moon does, because
-     * {@code SystemContent} floors a moon at 2.5 parent radii while a shell is 1.016 of one. The
-     * naming bound is therefore met without ever being consulted.</p>
+     * <p><b>C, from above — a cell must CONTAIN the sphere of influence of the body it names.</b>
+     * A cell is not only a name: it is the region a craft flies in before a seam carries it out
+     * ({@code CellWorldMapper} maps a cell-local offset to a slot pose one for one, concentric on
+     * the body, because a cell's frame origin IS its body). If a body's sphere reaches past its own
+     * cell, the cube face fires before the sphere ever can, and membership can then NEVER be decided
+     * by the sphere however the crossing is written. C is satisfied by A automatically:
+     * {@code r_SOI = a * (m/M)^(2/5)} is always less than the orbit {@code a}, and A makes the cell
+     * about twice that orbit. Measured on the real system, worst case Callisto — 301 383 blocks of
+     * sphere against Jupiter's 1 000 000-block cell.</p>
      *
-     * <p><b>Measured, at the shipped metric</b> — {@code A}, {@code B} and what this picks:</p>
+     * <p><b>B — a body's own descent shell must fit inside its own cell</b> — is the same statement
+     * as C with a much smaller number (a shell is 1.0157 radii, a sphere is thousands), so anything
+     * satisfying C satisfies it. It is stated because it is the bound that FAILED: it was violated
+     * in the home system by a factor of two and put a craft parked one shell off Luna in a
+     * neighbouring cell riding Earth.</p>
+     *
+     * <p><b>Measured, at the shipped metric</b>:</p>
      *
      * <table>
-     *   <tr><th>zone of</th><th>span (blocks)</th><th>A</th><th>B</th><th>picked</th><th>cell</th></tr>
-     *   <tr><td>Luna (no moons)</td><td>528 000</td><td>1</td><td>37</td><td>32</td><td>16 500</td></tr>
-     *   <tr><td>Earth</td><td>7 408 000</td><td>3</td><td>143</td><td>128</td><td>57 875</td></tr>
-     *   <tr><td>Mars</td><td>4 616 000</td><td>62</td><td>167</td><td>128</td><td>36 063</td></tr>
-     *   <tr><td>Jupiter</td><td>32 000 000</td><td>32</td><td>55</td><td>32</td><td>1 000 000</td></tr>
-     *   <tr><td>Saturn</td><td>32 000 000</td><td>30</td><td>65</td><td>64</td><td>500 000</td></tr>
-     *   <tr><td>Neptune</td><td>32 000 000</td><td>83</td><td>159</td><td>128</td><td>250 000</td></tr>
+     *   <tr><th>zone of</th><th>span (blocks)</th><th>innermost child</th><th>count</th><th>cell</th></tr>
+     *   <tr><td>Luna (no moons)</td><td>528 000</td><td>none</td><td>1</td><td>528 000</td></tr>
+     *   <tr><td>Earth</td><td>7 408 000</td><td>Luna, 1 537 600</td><td>4</td><td>1 852 000</td></tr>
+     *   <tr><td>Mars</td><td>4 616 000</td><td>Phobos, 37 504</td><td>64</td><td>72 125</td></tr>
+     *   <tr><td>Jupiter</td><td>32 000 000</td><td>Metis, 512 000</td><td>32</td><td>1 000 000</td></tr>
      * </table>
      *
-     * <p><b>What this replaces, and why that number was wrong everywhere.</b> It was a flat
-     * {@code 1024}, derived from A alone and — the actual error — computed as the moon's orbit
-     * against the body's UNCLAMPED sphere of influence rather than against the span the zone is
-     * realized over. For a giant those differ by the clamp, six to twelve times, so the bound came
-     * out six to twelve times too tight; and B had not been noticed at all. The result was finer
-     * than B in EVERY zone, and in the home system by a factor of two: Earth's cell came out 7 235
-     * blocks against Luna's own 7 059-block shell, so a craft parked one shell off Luna fell into
-     * the next cell and was carried by Earth. That is the whole defect this class exists to remove,
-     * surviving inside the fix for it.</p>
+     * <p><b>A body with no children gets ONE cell</b>, and that is the case the design turns on: for
+     * every moon in the game the cell and the sphere of influence become the same region, so "which
+     * body carries this craft" and "which cell is it in" cannot disagree.</p>
+     *
+     * <p><b>What this replaces, twice over.</b> It was a flat {@code 1024}, derived from A alone and
+     * — the actual error — computing the child's orbit against the body's UNCLAMPED sphere rather
+     * than against the span the zone is realized over, six to twelve times too tight for a giant.
+     * Then it was B-driven and body-only, which satisfied A by construction but took the FINEST
+     * lattice B allows: it spent the flying room the whole exercise is about and left Luna's cell
+     * nine times smaller than Luna's own sphere, so C could not hold and membership could not be
+     * decided by geometry. The lower bound is the one that decides; the upper ones are checks.</p>
      *
      * <p>A power of two is not cosmetic: the lattice index is a division, and a body that sits
      * exactly on a cell boundary is a body whose name depends on a rounding mode.</p>
+     *
+     * @param tightestChildOffsetBlocks how far the INNERMOST body that must be named apart sits from
+     *                                  {@code body}, in blocks; {@code 0} when there is none
      */
-    public static int cellsAcrossZone(SystemBody body, SystemBody primary, long tick) {
+    public static int cellsAcrossZone(SystemBody body, SystemBody primary,
+                                      long tightestChildOffsetBlocks, long tick) {
         long span = 2L * realizedRadiusBlocks(body, primary, tick);
         if (span <= 0L) {
             return 0;
         }
-        long shell = DescentShell.radiusAround(body);
-        long bound = span / (2L * Math.max(1L, shell));
+        if (tightestChildOffsetBlocks <= 0L) {
+            // NOTHING to name apart, so nothing wants the lattice divided: one cell, the whole zone.
+            // This is the common case — every moon in the game — and it is where the design pays off:
+            // the cell and the sphere of influence become the same region, so "which body carries
+            // this craft" and "which cell is it in" cannot disagree.
+            return 1;
+        }
+        long needed = ceilDiv(span, 2L * tightestChildOffsetBlocks);
         int count = 1;
-        while ((long) count * 2L <= bound) {
+        while ((long) count < needed) {
             count *= 2;
         }
         return count;
+    }
+
+    private static long ceilDiv(long a, long b) {
+        return (a + b - 1L) / b;
     }
 
     /**
@@ -100,9 +119,10 @@ public final class ZoneScale {
      * callers must read it as "this body has no lattice of its own" and pass over it. Handing back a
      * stand-in would produce names for a zone that does not exist.</p>
      */
-    public static long cellBlocks(SystemBody body, SystemBody primary, long tick) {
+    public static long cellBlocks(SystemBody body, SystemBody primary,
+                                  long tightestChildOffsetBlocks, long tick) {
         long radius = realizedRadiusBlocks(body, primary, tick);
-        int count = cellsAcrossZone(body, primary, tick);
+        int count = cellsAcrossZone(body, primary, tightestChildOffsetBlocks, tick);
         if (radius <= 0L || count <= 0) {
             return 0L;
         }
@@ -169,11 +189,11 @@ public final class ZoneScale {
      * @param tick    the moment the zone's extent, and hence its lattice, is evaluated at
      */
     public static GalacticCoord cellWithin(SystemBody zoneBody, SystemBody primary, BlockDelta offset,
-                                           long tick) {
+                                           long tightestChildOffsetBlocks, long tick) {
         if (zoneBody == null || offset == null) {
             return null;
         }
-        long width = cellBlocks(zoneBody, primary, tick);
+        long width = cellBlocks(zoneBody, primary, tightestChildOffsetBlocks, tick);
         if (width <= 0L) {
             return null;
         }

@@ -554,7 +554,8 @@ public class DescentControllerTest {
                 zmaster587.advancedRocketry.util.AstronomicalBodyHelper.MOON_REFERENCE_UNITS,
                 0d, 0d, false, LUNA_PERIOD_TICKS,
                 zmaster587.advancedRocketry.util.AstronomicalBodyHelper.BLOCKS_PER_DISTANCE_UNIT);
-        long zoneCell = zmaster587.advancedRocketry.space.ZoneScale.cellBlocks(earth(), sol(), 0L);
+        long zoneCell = zmaster587.advancedRocketry.space.ZoneScale.cellBlocks(earth(), sol(),
+                Math.round(moonOrbit.offsetAt(0L).length()), 0L);
         zmaster587.advancedRocketry.space.BlockDelta at0 = moonOrbit.offsetAt(0L);
         GalacticCoord name = GalacticCoord.inZone(ANCHOR.cellKey(), zoneCell,
                 zmaster587.advancedRocketry.space.ZoneScale.cellIndex(at0.dx(), zoneCell),
