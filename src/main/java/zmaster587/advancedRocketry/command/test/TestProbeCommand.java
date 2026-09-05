@@ -4407,6 +4407,40 @@ public class TestProbeCommand extends CommandBase {
         // The arithmetic a caller needs: ticks = ceil(4M / speed), and a jump of at most
         // ShipTransitManager.DIRECT_CROSSING_MAX_TICKS ticks is performed as one crossing. So
         // speed >= 25_000 is a direct hop and speed <= 20_000 is a real flight with a park in it.
+        // transit-name <dim> <vsShipUuid>: tell the transit stack WHICH craft the next jump is about,
+        // for a fixture the stack did not build itself. `transit-setup-piloted` mints the durable id
+        // on its own pad; a scenario that assembles a flyable ship with the real assembler has a
+        // computer that minted one too, but the stack never heard of it, and `transit-begin` then
+        // departs under the synthetic "t" — a jump production never performs, because its caller IS
+        // the flight computer. Measured 2026-09-05 on two client scenarios: the nameless capture found
+        // no computer at the anchor, carried nobody, and the ledger — which never saw "t" — sent the
+        // relogging pilot to spawn as SHIP_UNKNOWN. Resolved by IDENTITY: the physics id names the
+        // shipyard, the computer in it names the craft.
+        if (args.length >= 3 && "transit-name".equalsIgnoreCase(args[0])) {
+            if (transitTm == null) {
+                send(sender, "{\"error\":\"transit not set up\"}");
+                return;
+            }
+            int dim = parseIntOr(args[1], Integer.MIN_VALUE);
+            net.minecraft.world.WorldServer w = net.minecraftforge.common.DimensionManager.getWorld(dim);
+            java.util.UUID vsUuid = null;
+            try {
+                vsUuid = java.util.UUID.fromString(args[2]);
+            } catch (IllegalArgumentException ignored) {
+                // reported below as afcFound:false
+            }
+            net.minecraft.util.math.BlockPos afcPos = w == null || vsUuid == null ? null
+                    : zmaster587.advancedRocketry.integration.vs.VSIntegration.flightComputerOf(w, vsUuid);
+            net.minecraft.tileentity.TileEntity afcTe = afcPos == null ? null : w.getTileEntity(afcPos);
+            transitDurableId = afcTe instanceof zmaster587.advancedRocketry.tile.TileAdvancedFlightComputer
+                    ? ((zmaster587.advancedRocketry.tile.TileAdvancedFlightComputer) afcTe).getOrCreateShipId()
+                    : null;
+            send(sender, "{\"ok\":true,\"afcFound\":" + (afcTe != null)
+                    + ",\"durableId\":\"" + (transitDurableId == null ? "" : transitDurableId) + "\""
+                    + (afcPos == null ? "" : ",\"afcX\":" + afcPos.getX() + ",\"afcY\":" + afcPos.getY()
+                            + ",\"afcZ\":" + afcPos.getZ()) + "}");
+            return;
+        }
         if (args.length >= 6 && "transit-begin".equalsIgnoreCase(args[0])) {
             if (transitTm == null) {
                 send(sender, "{\"error\":\"transit not set up\"}");

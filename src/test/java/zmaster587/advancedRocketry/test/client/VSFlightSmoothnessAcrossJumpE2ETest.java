@@ -12,6 +12,8 @@ import org.lwjgl.input.Keyboard;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import zmaster587.advancedRocketry.test.Events;
+
 import static zmaster587.advancedRocketry.test.AdvancedRocketryTestConstants.HYPERSPACE_JUMP_SPEED;
 import static org.junit.Assert.assertTrue;
 import static zmaster587.advancedRocketry.test.AdvancedRocketryTestConstants.SHIP_CAPTURE_RADIUS_BLOCKS;
@@ -178,6 +180,12 @@ public class VSFlightSmoothnessAcrossJumpE2ETest extends AbstractSharedVsClientE
         // assembled at its own base, before the pilot lifts it. The seat lookup goes through it too
         // — the positional form of find-seat resolves the yard as "whichever craft is nearest".
         String shipId = captureShipIdAtBase(originDim, bx + 3, by + 3, bz + 3);
+        // Name the craft to the transit stack, by its durable id: a jump begun for a ship the stack
+        // cannot name captures nobody (measured 2026-09-05 — the pilot arrived in nothing).
+        String named = exec("artest space transit-name " + originDim + " " + shipId);
+        scenario().requireArranged("the transit stack must resolve this ship's flight computer and its"
+                + " durable id, or the jump departs nameless: " + named,
+                named.contains("\"afcFound\":true") && !named.contains("\"durableId\":\"\""));
         String seat = exec("artest vs find-seat " + originDim + " id " + shipId);
         scenario().requireArranged("the pilot seat must be found in the assembled ship: " + seat,
                 readBool(seat, "seatFound"));
@@ -208,6 +216,9 @@ public class VSFlightSmoothnessAcrossJumpE2ETest extends AbstractSharedVsClientE
         String shipNow = exec("artest vs ship-info " + originDim + " id " + shipId);
         scenario().requireArranged("the ship must still be managed at its berth: " + shipNow,
                 shipNow.contains("\"managed\":true"));
+        // The mark before the departure, so every link of the jump is in the log in order.
+        Events events = transitEvents(this::exec);
+        long mark = events.markInstrumented();
         String begin = exec("artest space transit-begin " + originDim
                 + " " + (int) Math.round(readDouble(shipNow, "posX"))
                 + " " + (int) Math.round(readDouble(shipNow, "posY"))
@@ -215,45 +226,20 @@ public class VSFlightSmoothnessAcrossJumpE2ETest extends AbstractSharedVsClientE
                 + " " + HYPERSPACE_JUMP_SPEED);
         scenario().requireArranged("the transit must begin (departure crossing): " + begin,
                 readBool(begin, "began"));
+        scenario().requireArranged("the jump must depart under the craft's own name, never the synthetic"
+                + " id a nameless fixture gets: " + begin, !begin.contains("\"shipId\":\"t\""));
 
-        int targetDim = -1;
-        String lastTick = "";
-        // No fork multiplier: this counts PUMPS, not elapsed time. Each iteration advances the
-        // transit ten ticks by hand, so what the budget buys is a number of probe calls - and a busy
-        // box does not need more of them to cover the same flight.
-        int arriveBudget = 120;
-        for (int i = 0; i < arriveBudget && targetDim < 0; i++) {
-            lastTick = exec("artest space transit-tick 10");
-            if (readIntOr(lastTick, "inTransit", -1) == 0) {
-                targetDim = readIntOr(lastTick, "targetDim", -1);
-                break;
-            }
-            bot().waitTicks(2);
-        }
-        scenario().requireArranged("the jump never completed (still in transit); last tick=" + lastTick,
-                targetDim >= 0);
-
-        boolean seatedOnArrival = false;
-        // Also a pump count: the arrival re-seating is retried by the same hand-driven ticks.
-        int reseatBudget = 60;
-        String lastReseatTick = "";
-        for (int i = 0; i < reseatBudget && !seatedOnArrival; i++) {
-            lastReseatTick = exec("artest space transit-tick 10");
-            bot().waitTicks(2);
-            seatedOnArrival = bot().reportRidingEntity().get("riding").getAsBoolean()
-                    && bot().reportWeather().get("dim").getAsInt() == targetDim;
-        }
-        // The arrival re-seat gives up WITHOUT logging (only the departure boarding leg reports on
-        // exhaustion), so a red here would otherwise name no step. Carry the server's own account:
-        // whether the retry loop was still running when we stopped ticking (`reseating`), where the
-        // seat match stopped (`reseatBlock`), and who wrote the rider's position last.
-        scenario().requireArranged("the pilot must arrive SEATED in the target cell, or the post-jump "
-                        + "leg has no pilot and measures a drifting hulk. riding="
-                        + bot().reportRidingEntity() + " clientDim="
-                        + bot().reportWeather().get("dim").getAsInt() + " targetDim=" + targetDim
-                        + " lastTick=" + lastReseatTick
-                        + " arrival=" + exec("artest vs arrival-trace"),
-                seatedOnArrival);
+        // The jump is this scenario's ARRANGEMENT — the subject is how the ship flies afterwards —
+        // so the chain is required, not asserted: a jump that settles with its pilot left behind is
+        // a post-jump leg with no pilot, and the chain names the link that left him.
+        requireChain(events, mark, "the pilot must arrive SEATED in the target cell, or the post-jump"
+                + " leg has no pilot and measures a drifting hulk", PILOTED_JUMP_CHAIN);
+        int targetDim = arrivedTargetDim(this::exec);
+        JsonObject arrivedRiding = ridingOnceTheClientHasCaughtUp(CLIENT_REMOUNT_POLLS);
+        scenario().requireArranged("the arrived pilot's client must be in the target cell: riding="
+                        + arrivedRiding + " clientDim=" + bot().reportWeather().get("dim").getAsInt()
+                        + " targetDim=" + targetDim,
+                bot().reportWeather().get("dim").getAsInt() == targetDim);
 
         // The crossing re-pastes the ship, so its flight computer is at a NEW subspace block: read
         // the arrived one rather than reusing the departure's, which would key the recorder to a

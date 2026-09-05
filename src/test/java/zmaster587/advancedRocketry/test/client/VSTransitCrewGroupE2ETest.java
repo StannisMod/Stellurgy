@@ -107,58 +107,8 @@ private int waitForLoadedShip(int dim) throws Exception {
         return 0;
     }
 
-    // ---- the jump as a CHAIN of events, and the clock that drives it ----
-
-    /**
-     * The seven links a piloted hyperspace jump is, in the order production commits them: the crew is
-     * picked up, the hull is cut out of its cell into the lane, the departure is committed, the crew is
-     * seated on the parked hull for the flight, the hull is cut out of the lane into its destination,
-     * the crew is put back on it, and only then is the arrival committed.
-     *
-     * <p>Every link is recorded by a test-only mixin at the seam where production answers for it
-     * ({@code MixinShipTransitManagerEvents}, {@code MixinVSShipCrosserEvents}). A red on this chain
-     * names the link that did not happen and prints everything that did — where the loop this
-     * replaced reported {@code expected:<13> but was:<3>} for a flight that ended with nobody aboard, a
-     * crew that never boarded the parked hull, and a client that was merely slow, all alike.</p>
-     */
-    private static final String[] PILOTED_JUMP_CHAIN = {
-            "crew_captured", "hyperspace_depart_cut", "transit_departed", "crew_boarded_parked_hull",
-            "hyperspace_arrival_cut", "crew_reseated", "transit_settled"};
-
-    /**
-     * How long one link of the chain may take, in the {@link Events} clock's ticks. The transit
-     * manager under test advances ONLY when the probe ticks it, so every poll of the clock below also
-     * drives ten transit ticks: this budget is 120 polls, i.e. 1 200 transit ticks and 600 client
-     * ticks per link, against a flight priced at ~170 transit ticks by {@code HYPERSPACE_JUMP_SPEED}.
-     * It is a deadline for a discrete event, not a guess at how long a value takes to settle.
-     */
-    private static final int JUMP_LINK_BUDGET_TICKS = 600;
-
-    /**
-     * The event log read on the transit's own clock. This class's transit manager is the probe's,
-     * and it moves only on {@code transit-tick}; a reader that let the game run without ticking it
-     * would wait on a flight that is standing still. So every step the log takes between two reads
-     * advances the jump ten ticks and then lets the client breathe.
-     */
-    private Events transitEvents(Events.Probe probe) {
-        return new Events(probe, ticks -> {
-            probe.exec("artest space transit-tick 10");
-            bot().waitTicks(ticks);
-        });
-    }
-
-    /**
-     * The slot dimension the arrived ship sits in, read from the transit probe once the chain has
-     * settled — the same field the old arrival loops read from their last tick.
-     */
-    private static int arrivedTargetDim(Events.Probe probe) throws Exception {
-        String tick = probe.exec("artest space transit-tick 1");
-        assertEquals("the chain said the transit settled, so the probe must agree it is over: " + tick,
-                0, readInt(tick, "inTransit"));
-        int targetDim = readInt(tick, "targetDim");
-        assertTrue("a settled transit must name the target cell's slot dimension: " + tick, targetDim >= 0);
-        return targetDim;
-    }
+    // ---- the jump as a CHAIN of events: PILOTED_JUMP_CHAIN, transitEvents, arrivedTargetDim live in
+    // the VS base, shared with every transit scenario ----
 
     /**
      * Drive the transit until the crew member is CARRIED into the corridor, and return the corridor's

@@ -13,6 +13,7 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 import zmaster587.advancedRocketry.space.GalacticCoord;
+import zmaster587.advancedRocketry.test.Events;
 
 import static zmaster587.advancedRocketry.test.AdvancedRocketryTestConstants.HYPERSPACE_JUMP_SPEED;
 import static org.junit.Assert.assertEquals;
@@ -93,6 +94,13 @@ public class VSMidTransitRelogControlE2ETest extends AbstractSharedVsClientE2ETe
         // the build site would answer about a neighbour (a transit cell is a POOL slot and routinely
         // holds an earlier scenario's leavings) or about nothing, in the shape of a correct reply.
         String shipId = captureShipIdNear(originDim, bx + 3, by + 3, bz + 3);
+        // The transit stack must know WHICH craft the jump is about, by its durable name: a jump
+        // begun for a ship the stack cannot name captures nobody and never reaches the ledger, so a
+        // relogging pilot is sent to spawn as SHIP_UNKNOWN (measured 2026-09-05, this very class).
+        String named = exec("artest space transit-name " + originDim + " " + shipId);
+        scenario().requireArranged("the transit stack must resolve this ship's flight computer and its"
+                + " durable id, or the jump departs nameless: " + named,
+                named.contains("\"afcFound\":true") && !named.contains("\"durableId\":\"\""));
 
         String seat = exec("artest vs find-seat " + originDim + " id " + shipId);
         assertTrue("the pilot seat must be found in the assembled ship (else the test is vacuous): "
@@ -163,9 +171,15 @@ public class VSMidTransitRelogControlE2ETest extends AbstractSharedVsClientE2ETe
         // ---- ACT 1: depart into hyperspace. The reduced speed sizes the park at ~40 probe-driven
         // ticks (the cells sit one 4M-block sector apart), so the relog lands INSIDE the transit
         // instead of racing a single-tick jump. ---------------------------------------------------
+        // The mark is taken BEFORE the departure: every link of the jump, and the relog inside it,
+        // is then in the log, in order.
+        Events events = transitEvents(this::exec);
+        long mark = events.markInstrumented();
         String begin = exec("artest space transit-begin " + originDim
                 + " " + ax + " " + ay + " " + az + " " + HYPERSPACE_JUMP_SPEED);
         assertTrue("the transit must begin (departure crossing): " + begin, readBool(begin, "began"));
+        scenario().requireArranged("the jump must depart under the craft's own name, never the synthetic"
+                + " id a nameless fixture gets: " + begin, !begin.contains("\"shipId\":\"t\""));
         String firstTick = exec("artest space transit-tick 10");
         assertTrue("the ship must actually be IN TRANSIT when the pilot relogs — otherwise this "
                 + "pins an ordinary relog, not the mid-transit one: " + firstTick,
@@ -176,50 +190,22 @@ public class VSMidTransitRelogControlE2ETest extends AbstractSharedVsClientE2ETe
         bot().reconnect();
         bot().waitForWorld();
 
-        // ---- ACT 3: drive the jump to arrival. --------------------------------------------------
-        int targetDim = -1;
-        String lastTick = "";
-        // No fork multiplier: each iteration advances the transit ten ticks BY HAND, so the budget
-        // is a count of pumps and a slow box does not need extra ones to cover the same flight.
-        int arriveBudget = 80;
-        for (int i = 0; i < arriveBudget && targetDim < 0; i++) {
-            lastTick = exec("artest space transit-tick 10");
-            if (readInt(lastTick, "inTransit") == 0) {
-                targetDim = readInt(lastTick, "targetDim");
-                break;
-            }
-            bot().waitTicks(2);
-        }
-        assertTrue("the jump never completed (still in transit); last tick=" + lastTick,
-                targetDim >= 0);
+        // ---- ACT 3 + ASSERT 1, as the server commits it: the whole jump, link by link, with the
+        // relog's own restore verdict INSIDE the flight. The old form drove ticks until `inTransit`
+        // hit 0 and then polled the client for `riding`, so a jump that settled with its pilot left in
+        // the origin cell read as "not riding" and named no step; the chain stops at the link that did
+        // not happen and prints the placement's own account (`crew_reseat_blocked`) beside it.
+        events.assertChain(mark, "the relog must fall INSIDE the flight, between the departure and the"
+                + " arrival cut — or this pins an ordinary relog", JUMP_LINK_BUDGET_TICKS,
+                "transit_departed", "login_restored", "hyperspace_arrival_cut");
+        events.assertChain(mark, "a pilot who relogged mid-transit must be re-seated on his ship ON"
+                + " ARRIVAL: the jump must pick him up, board him on the parked hull, land, put him"
+                + " back aboard and only then settle", JUMP_LINK_BUDGET_TICKS, PILOTED_JUMP_CHAIN);
+        int targetDim = arrivedTargetDim(this::exec);
 
-        // The arrival re-seating is retry-based and completes a few ticks after inTransit hits 0 —
-        // keep ticking to drive the retries while observing the CLIENT.
-        boolean seatedOnArrival = false;
-        // A pump count too - the retries this drives are driven by these same hand-advanced ticks.
-        int reseatBudget = 60;
-        String lastReseatTick = "";
-        for (int i = 0; i < reseatBudget && !seatedOnArrival; i++) {
-            lastReseatTick = exec("artest space transit-tick 10");
-            bot().waitTicks(2);
-            seatedOnArrival = bot().reportRidingEntity().get("riding").getAsBoolean()
-                    && bot().reportWeather().get("dim").getAsInt() == targetDim;
-        }
-
-        // ---- ASSERT 1: the relogged pilot is SEATED on his ship in the target cell. -------------
-        // The arrival re-seat is the one leg of this scenario that fails MUTELY — it drops its
-        // pending entry without logging, unlike the departure boarding leg — so the failure
-        // message carries the server's own account of it: whether the retry loop was still
-        // running when we stopped ticking (`reseating`), where the seat match stopped
-        // (`reseatBlock`), and who wrote the rider's position last (the arrival trace). Without
-        // them a red here says only "not riding", which names no step.
-        JsonObject riding = bot().reportRidingEntity();
-        assertTrue("a pilot who relogged mid-transit must be re-seated on his ship ON ARRIVAL: "
-                + riding + " (targetDim=" + targetDim
-                + ", clientDim=" + bot().reportWeather().get("dim").getAsInt() + ")"
-                + " lastTick=" + lastReseatTick
-                + " arrival=" + exec("artest vs arrival-trace"),
-                riding.get("riding").getAsBoolean());
+        // The CLIENT's half: the server's re-seat is a link above; whether his own client followed it
+        // is read here, and the helper says which of the two failed when it did not.
+        JsonObject riding = ridingOnceTheClientHasCaughtUp(CLIENT_REMOUNT_POLLS);
         assertTrue("the re-mounted entity must be the ship's seat dummy: " + riding,
                 riding.get("entityClass").getAsString().endsWith("EntityDummy"));
         assertEquals("the relogged pilot must have followed his ship into the target cell",

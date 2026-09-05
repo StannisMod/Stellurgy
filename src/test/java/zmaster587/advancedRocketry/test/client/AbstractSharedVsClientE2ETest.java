@@ -5,6 +5,9 @@ import com.google.gson.JsonObject;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import zmaster587.advancedRocketry.test.Events;
+
+import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 import static zmaster587.advancedRocketry.test.AdvancedRocketryTestConstants.SHIP_CAPTURE_RADIUS_BLOCKS;
@@ -374,6 +377,77 @@ public abstract class AbstractSharedVsClientE2ETest extends AbstractSharedClient
 
     private static boolean isRiding(JsonObject riding) {
         return riding != null && riding.has("riding") && riding.get("riding").getAsBoolean();
+    }
+
+    // ---- the hyperspace jump as a CHAIN of events, and the clock that drives it ----
+
+    /**
+     * The seven links a piloted hyperspace jump is, in the order production commits them: the crew is
+     * picked up, the hull is cut out of its cell into the lane, the departure is committed, the crew is
+     * seated on the parked hull for the flight, the hull is cut out of the lane into its destination,
+     * the crew is put back on it, and only then is the arrival committed.
+     *
+     * <p>Every link is recorded by a test-only mixin at the seam where production performs it
+     * ({@code MixinShipTransitManagerEvents}, {@code MixinVSShipCrosserEvents}). A red on this chain
+     * names the link that did not happen and prints everything that did — where the loop it replaces
+     * reported {@code expected:<13> but was:<3>} for a flight that ended with nobody aboard, a crew
+     * that never boarded the parked hull, and a client that was merely slow, all alike.</p>
+     */
+    protected static final String[] PILOTED_JUMP_CHAIN = {
+            "crew_captured", "hyperspace_depart_cut", "transit_departed", "crew_boarded_parked_hull",
+            "hyperspace_arrival_cut", "crew_reseated", "transit_settled"};
+
+    /**
+     * How long one link of the chain may take, in the {@link Events} clock's ticks. The probe's
+     * transit manager advances ONLY when the probe ticks it, so every poll of the clock below also
+     * drives ten transit ticks: this budget is 120 polls, i.e. 1 200 transit ticks and 600 client
+     * ticks per link, against a flight priced at ~170 transit ticks by {@code HYPERSPACE_JUMP_SPEED}.
+     * It is a deadline for a discrete event, not a guess at how long a value takes to settle.
+     */
+    protected static final int JUMP_LINK_BUDGET_TICKS = 600;
+
+    /**
+     * The event log read on the transit's own clock. The transit manager these scenarios drive is the
+     * probe's, and it moves only on {@code transit-tick}; a reader that let the game run without
+     * ticking it would wait on a flight that is standing still. So every step the log takes between
+     * two reads advances the jump ten ticks and then lets the client breathe.
+     */
+    protected final Events transitEvents(Events.Probe probe) {
+        return new Events(probe, ticks -> {
+            probe.exec("artest space transit-tick 10");
+            bot().waitTicks(ticks);
+        });
+    }
+
+    /**
+     * {@link Events#assertChain} for a chain that is this scenario's ARRANGEMENT rather than its
+     * subject: the same chain, the same message, raised as an arrangement failure so the JUnit XML
+     * separates "the jump the test needed did not happen" from "the contract under test broke".
+     */
+    protected final void requireChain(Events events, long mark, String what, String... types)
+            throws Exception {
+        try {
+            events.assertChain(mark, what, JUMP_LINK_BUDGET_TICKS, types);
+        } catch (AssertionError e) {
+            scenario().arrangementFailed(e.getMessage());
+        }
+    }
+
+    /**
+     * The slot dimension the arrived ship sits in, read from the transit probe once the chain has
+     * settled — the field the old arrival loops read from their last tick.
+     */
+    protected static int arrivedTargetDim(Events.Probe probe) throws Exception {
+        String tick = probe.exec("artest space transit-tick 1");
+        Matcher inTransit = Pattern.compile("\"inTransit\":(-?\\d+)").matcher(tick);
+        assertTrue("the transit probe must report inTransit: " + tick, inTransit.find());
+        assertEquals("the chain said the transit settled, so the probe must agree it is over: " + tick,
+                0, Integer.parseInt(inTransit.group(1)));
+        Matcher target = Pattern.compile("\"targetDim\":(-?\\d+)").matcher(tick);
+        assertTrue("the transit probe must report targetDim: " + tick, target.find());
+        int targetDim = Integer.parseInt(target.group(1));
+        assertTrue("a settled transit must name the target cell's slot dimension: " + tick, targetDim >= 0);
+        return targetDim;
     }
 
 }

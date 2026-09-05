@@ -19,7 +19,8 @@
     "MixinTilePilotSeatDiag",
     "MixinWorldServerShipManagerDiag",
     "MixinShipTransitManagerEvents",
-    "MixinVSShipCrosserEvents"
+    "MixinVSShipCrosserEvents",
+    "MixinLoginRestoreEvents"
   ],
   "client": [
     "MixinEntityVelocityWriters",
