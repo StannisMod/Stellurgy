@@ -331,7 +331,7 @@ public class SystemRetinueTest {
                 double placed = body.absoluteAt(0L).distanceTo(
                         zmaster587.advancedRocketry.space.AbsolutePos.ofCellName(anchor));
                 double expected = (double) companion.getOrbitalDistance()
-                        * zmaster587.advancedRocketry.util.AstronomicalBodyHelper.BLOCKS_PER_ORBIT_UNIT;
+                        * zmaster587.advancedRocketry.util.AstronomicalBodyHelper.BLOCKS_PER_DISTANCE_UNIT;
                 assertEquals("a companion stands at the separation its own elements state",
                         expected, placed, expected * 1e-6d + 2d);
                 checkedCompanions++;

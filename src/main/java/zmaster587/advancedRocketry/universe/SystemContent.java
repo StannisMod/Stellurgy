@@ -26,7 +26,7 @@ import zmaster587.advancedRocketry.util.AstronomicalBodyHelper;
  * Derives the addressable {@link SystemBody} content of an AUTHORED system (a catalogued {@link StellarBody})
  * from its planets/moons (universe-model.md &sect;2 amendment A#1a + &sect;4). A system is an anchored
  * NEIGHBOURHOOD of cells: the star sits at the anchor cell's centre; every planet/belt gets its <b>own cell</b>
- * at a sector offset scaled from its orbital position ({@link #ORBIT_UNIT_BLOCKS blocks per orbit-unit}),
+ * at a sector offset scaled from its orbital position ({@link #ORBIT_UNIT_BLOCKS blocks per unit}),
  * snapped to that cell's centre (zone content sits near the cell centre); a moon gets its own cell
  * inside its parent's ZONE, named in that zone's lattice ({@link ZoneScale}). Inter-body space is
  * cells of void.
@@ -47,12 +47,17 @@ public final class SystemContent {
 
     /**
      * Blocks per unit of {@code DimensionProperties} orbital distance — the chart metric's own
-     * conversion, shared with the procedural generator so that one orbital distance means one distance
-     * in both families.
+     * conversion, shared with the procedural generator so that one orbital distance means one
+     * distance in both families AND at both LEVELS.
+     *
+     * <p>There used to be a second one beside it, {@code MOON_UNIT_BLOCKS = 200}, for a moon's
+     * distance from its planet — <b>a factor of 29 920 between two units for the same quantity</b>.
+     * Neither was arithmetically wrong; what was wrong is that the field meant a different LENGTH
+     * depending on which level had written it, so a reader that did not know the level was wrong by
+     * that factor. {@code ReferenceFrames.soiRadiusBlocks} takes a live block displacement rather
+     * than reading the field, and says so, for exactly this reason.</p>
      */
-    static final long ORBIT_UNIT_BLOCKS = AstronomicalBodyHelper.BLOCKS_PER_ORBIT_UNIT;
-    /** Blocks per unit of a moon's (parent-relative) orbital distance — moons cluster near their planet. */
-    static final long MOON_UNIT_BLOCKS = 200L;
+    static final long ORBIT_UNIT_BLOCKS = AstronomicalBodyHelper.BLOCKS_PER_DISTANCE_UNIT;
 
     /**
      * The floor an authored moon is lifted to, in parent radii — see {@link #moonLawOf}.
@@ -230,7 +235,7 @@ public final class SystemContent {
         double parentRadiusBlocks = Math.max(0.05d, parent.getRadius())
                 * AstronomicalBodyHelper.EARTH_RADIUS_BLOCKS;
         long floorUnits = Math.round(parentRadiusBlocks * MOON_MIN_PARENT_RADII
-                / (double) MOON_UNIT_BLOCKS);
+                / (double) ORBIT_UNIT_BLOCKS);
         int orbit = (int) Math.max(authored, Math.max(1L, Math.min(Integer.MAX_VALUE, floorUnits)));
         // THE PERIOD OF THE ORBIT THE MOON IS PUT ON, which is the floored one. This used to be
         // derived from the AUTHORED distance and handed to an ephemeris built with the floored one,
@@ -241,7 +246,7 @@ public final class SystemContent {
         double periodTicks = TICKS_PER_DAY * AstronomicalBodyHelper.getMoonOrbitalPeriod(
                 orbit, (float) parent.getOrbitalMass());
         return BodyEphemeris.orbit(orbit, moon.baseOrbitTheta, moon.orbitalPhi,
-                moon.isRetrograde, periodTicks, MOON_UNIT_BLOCKS);
+                moon.isRetrograde, periodTicks, ORBIT_UNIT_BLOCKS);
     }
 
     /**

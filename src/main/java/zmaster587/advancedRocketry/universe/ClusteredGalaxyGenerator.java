@@ -507,7 +507,7 @@ public final class ClusteredGalaxyGenerator implements IGalaxyGenerator {
                     * AstronomicalBodyHelper.getMoonOrbitalPeriod(moonOrbit,
                             (float) Math.max(0.05d, profile.massEarths()));
             BodyEphemeris law = BodyEphemeris.orbit(moonOrbit, theta, 0d, false, periodTicks,
-                    SystemContent.MOON_UNIT_BLOCKS);
+                    SystemContent.ORBIT_UNIT_BLOCKS);
             // A moon of a rogue is starless too, so it is derived the same way its parent was, one
             // variant along — never through the star-lit law with a star that is not there.
             BodyProfile moonProfile = derivation.deriveRogue(seed, cell, j, giantFraction);
@@ -697,7 +697,7 @@ public final class ClusteredGalaxyGenerator implements IGalaxyGenerator {
                                   double baseAngle, double phiDegrees, double periodTicks) {
         for (int attempt = 0; attempt < NUDGE_ATTEMPTS; attempt++) {
             BodyEphemeris law = BodyEphemeris.orbit(orbit, baseAngle + attempt * NUDGE_ANGLE,
-                    phiDegrees, false, periodTicks, AstronomicalBodyHelper.BLOCKS_PER_ORBIT_UNIT);
+                    phiDegrees, false, periodTicks, AstronomicalBodyHelper.BLOCKS_PER_DISTANCE_UNIT);
             BlockDelta at0 = law.offsetAt(SystemContent.NAME_TICK);
             // The body's address is its OWN cell's centre (zone content sits near the cell centre),
             // box-clamped into the anchor's super-cell so member attribution stays exact at ANY
@@ -748,7 +748,7 @@ public final class ClusteredGalaxyGenerator implements IGalaxyGenerator {
      */
 
     /**
-     * A moon's orbit, in {@link SystemContent#MOON_UNIT_BLOCKS} units, drawn as a multiple of its
+     * A moon's orbit, in {@link SystemContent#ORBIT_UNIT_BLOCKS} units, drawn as a multiple of its
      * PARENT's radius.
      *
      * @param parentRadiusEarths the parent's radius; a body with none stated falls back to one Earth,
@@ -758,7 +758,7 @@ public final class ClusteredGalaxyGenerator implements IGalaxyGenerator {
     private static int moonOrbitUnits(double parentRadiusEarths, double u) {
         double radiusBlocks = Math.max(0.05d, parentRadiusEarths) * AstronomicalBodyHelper.EARTH_RADIUS_BLOCKS;
         double factor = MOON_MIN_PARENT_RADII + u * (MOON_MAX_PARENT_RADII - MOON_MIN_PARENT_RADII);
-        long units = Math.round(radiusBlocks * factor / (double) SystemContent.MOON_UNIT_BLOCKS);
+        long units = Math.round(radiusBlocks * factor / (double) SystemContent.ORBIT_UNIT_BLOCKS);
         return (int) Math.max(1L, Math.min(Integer.MAX_VALUE, units));
     }
 
@@ -788,7 +788,7 @@ public final class ClusteredGalaxyGenerator implements IGalaxyGenerator {
             double periodTicks = AstronomicalBodyHelper.TICKS_PER_DAY
                     * AstronomicalBodyHelper.getMoonOrbitalPeriod(moonOrbit, (float) parentMass);
             BodyEphemeris law = BodyEphemeris.orbit(moonOrbit, theta, 0d, false, periodTicks,
-                    SystemContent.MOON_UNIT_BLOCKS);
+                    SystemContent.ORBIT_UNIT_BLOCKS);
             // A moon gets its OWN cell inside its parent's ZONE, and its frame is NESTED in the
             // parent's: the moon's cell rides the moon, which rides the planet, which rides the star.
             // It used to share the parent's name and ride the parent's frame directly, which made a

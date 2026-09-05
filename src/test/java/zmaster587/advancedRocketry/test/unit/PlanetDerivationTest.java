@@ -424,7 +424,11 @@ public class PlanetDerivationTest {
     public void aCloseOrbitIsLockedAndADistantOneIsNot() {
         StellarBody s = sol();
         assertTrue("a very close orbit must be locked", PlanetDerivation.tidallyLockedAt(s, 1));
-        assertFalse("a distant orbit must not be locked", PlanetDerivation.tidallyLockedAt(s, 100_000));
+        // A THOUSAND AU, stated as one. The literal 100 000 meant that while a distance unit was a
+        // hundredth of an AU; it is 0.067 AU now, which is very much locked.
+        assertFalse("a distant orbit must not be locked", PlanetDerivation.tidallyLockedAt(
+                s, 1_000 * zmaster587.advancedRocketry.util.AstronomicalBodyHelper
+                        .DISTANCE_UNITS_PER_AU));
     }
 
     @Test

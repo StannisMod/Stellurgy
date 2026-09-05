@@ -198,7 +198,13 @@ public final class PlanetDerivation {
         }
         double ratio = atOneAu / REFERENCE_TEMPERATURE_K;
         double ref = AstronomicalBodyHelper.DISTANCE_UNITS_PER_AU * ratio * ratio;
-        return (int) clamp(ref, DimensionProperties.MIN_DISTANCE, 100_000d);
+        // A THOUSAND AU, stated as one. The bound read 100 000, which was a thousand AU while a
+        // distance unit was a hundredth of one — and 0.067 AU once the unit became a length, so
+        // every star from a red dwarf to a blue giant saturated at the same reference distance and
+        // their zones came out identical. A bound on a physical quantity is written as that
+        // quantity.
+        return (int) clamp(ref, DimensionProperties.MIN_DISTANCE,
+                1_000d * AstronomicalBodyHelper.DISTANCE_UNITS_PER_AU);
     }
 
     /**
@@ -224,7 +230,12 @@ public final class PlanetDerivation {
                 - 0.5d);
         double f = (Math.min(index, slots - 1) + 0.5d + jitter) / slots;
         double distance = lo * Math.pow(hi / lo, clamp(f, 0d, 1d));
-        return (int) clamp(distance, DimensionProperties.MIN_DISTANCE, 1_000_000d);
+        // The bound is the FIELD's, not a literal. It read 1 000 000, which meant 10 000 AU while a
+        // distance unit was a hundredth of one — a number that says nothing about itself, and that
+        // the change of unit turned into a 0.67 AU cap on every procedural orbit in the galaxy
+        // without a line of it moving. What actually bounds a generated orbit is the system's own
+        // clear space, applied by the caller; this is only the field's range.
+        return (int) clamp(distance, DimensionProperties.MIN_DISTANCE, DimensionProperties.MAX_DISTANCE);
     }
 
     /**

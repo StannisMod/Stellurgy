@@ -35,10 +35,11 @@ public class ReferenceFramesTest {
 
     /** One AU and Luna's orbit, in chart blocks. */
     private static final double AU_BLOCKS =
-            (double) AstronomicalBodyHelper.BLOCKS_PER_ORBIT_UNIT
+            (double) AstronomicalBodyHelper.BLOCKS_PER_DISTANCE_UNIT
                     * AstronomicalBodyHelper.DISTANCE_UNITS_PER_AU;
     private static final double LUNA_ORBIT_BLOCKS =
-            (double) AstronomicalBodyHelper.MOON_REFERENCE_UNITS * 200L;
+            (double) AstronomicalBodyHelper.MOON_REFERENCE_UNITS
+                    * AstronomicalBodyHelper.BLOCKS_PER_DISTANCE_UNIT;
 
     /** How far a metre-stated reference value is in chart blocks. */
     private static double kmInBlocks(double km) {
@@ -198,7 +199,7 @@ public class ReferenceFramesTest {
     private static SystemBody earth() {
         BodyEphemeris orbit = BodyEphemeris.orbit(
                 AstronomicalBodyHelper.DISTANCE_UNITS_PER_AU, 0d, 0d, false, EARTH_PERIOD_TICKS,
-                AstronomicalBodyHelper.BLOCKS_PER_ORBIT_UNIT);
+                AstronomicalBodyHelper.BLOCKS_PER_DISTANCE_UNIT);
         return new SystemBody(ANCHOR, CellFrame.of(AbsolutePos.ofCellName(ANCHOR), orbit),
                 BodyEphemeris.STATIC, SystemBodyKind.PLANET, 0, 1, 100, 1d, EARTH_MASS_EARTHS);
     }
@@ -220,9 +221,10 @@ public class ReferenceFramesTest {
     private static SystemBody luna() {
         BodyEphemeris earthOrbit = BodyEphemeris.orbit(
                 AstronomicalBodyHelper.DISTANCE_UNITS_PER_AU, 0d, 0d, false, EARTH_PERIOD_TICKS,
-                AstronomicalBodyHelper.BLOCKS_PER_ORBIT_UNIT);
+                AstronomicalBodyHelper.BLOCKS_PER_DISTANCE_UNIT);
         BodyEphemeris moonOrbit = BodyEphemeris.orbit(
-                AstronomicalBodyHelper.MOON_REFERENCE_UNITS, 0d, 0d, false, LUNA_PERIOD_TICKS, 200L);
+                AstronomicalBodyHelper.MOON_REFERENCE_UNITS, 0d, 0d, false, LUNA_PERIOD_TICKS,
+                AstronomicalBodyHelper.BLOCKS_PER_DISTANCE_UNIT);
         CellFrame earthFrame = CellFrame.of(AbsolutePos.ofCellName(ANCHOR), earthOrbit);
         return new SystemBody(ANCHOR, CellFrame.within(earthFrame, moonOrbit), BodyEphemeris.STATIC,
                 SystemBodyKind.MOON, 1, 1, 100, 0.2727d, LUNA_MASS_EARTHS);

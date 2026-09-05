@@ -1,6 +1,6 @@
 # universe golden corpus - schema 0
 config 54856f457186f8ee
-scale spacingCells=3525313 galaxySpacingCells=2956478272682 seatMarginCells=93499
+scale spacingCells=3525313 galaxySpacingCells=2956478272682 seatMarginCells=26844
 scale ly=0.1 cells=118260 backLy=0.10000073490540135
 scale ly=1.0 cells=1182592 backLy=1.0000005842486757
 scale ly=4.23 cells=5002362 backLy=4.230000644874457
@@ -10,232 +10,228 @@ cosmology tick=0 scaleFactor=1.0
 cosmology tick=24000 scaleFactor=1.0000000000014915
 cosmology tick=24000000 scaleFactor=1.0000000014914552
 seed 1 systems=10
-  body -2557100_423979_3637445 -2557100_423979_3637445 kind=ROGUE_PLANET orbit=0 radius=1.4814447373908066 starId=-1134337153 frame=true at=0,0,0
-  body -2557100_423979_3637445 -2557100_423979_3637445.-1_0_-3 kind=MOON orbit=0 radius=1.8447368918446045 starId=-1134337153 frame=true at=0,0,0
-  body -2557100_423979_3637445 -2557100_423979_3637445.-2_0_-1 kind=MOON orbit=0 radius=2.414101865417722 starId=-1134337153 frame=true at=0,0,0
-  body -2655791_3860139_4556832 -2655791_3860139_4556832 kind=ROGUE_PLANET orbit=0 radius=1.9480617919050078 starId=-157245369 frame=true at=0,0,0
-  body -2673416_-3299924_-2542369 -2673416_-3299924_-2542369 kind=ROGUE_PLANET orbit=0 radius=0.5140134458397283 starId=-457888649 frame=true at=0,0,0
-  body -3057060_4504688_903368 -3057060_4504688_903368 kind=ROGUE_PLANET orbit=0 radius=0.9265150238967861 starId=-392700849 frame=true at=0,0,0
-  body -3057060_4504688_903368 -3057060_4504688_903368.-3_0_2 kind=MOON orbit=0 radius=0.6738095421217645 starId=-392700849 frame=true at=0,0,0
-  body -3057060_4504688_903368 -3057060_4504688_903368.1_0_1 kind=MOON orbit=0 radius=1.9863890836269211 starId=-392700849 frame=true at=0,0,0
-  body 1017499_549209_-2760817 1017499_549209_-2760817 kind=ROGUE_PLANET orbit=0 radius=1.6175224369918324 starId=-268045669 frame=true at=0,0,0
-  body 1017499_549209_-2760817 1017499_549209_-2760817.2_0_1 kind=MOON orbit=0 radius=1.2312835780207372 starId=-268045669 frame=true at=0,0,0
-  body 198207_-2510563_-2496053 198207_-2510563_-2496053 kind=ROGUE_PLANET orbit=0 radius=1.1591832445693329 starId=-914263305 frame=true at=0,0,0
-  body 3639726_-2990703_-2920715 3639726_-2990703_-2920715 kind=ROGUE_PLANET orbit=0 radius=1.1642707970044215 starId=-640125417 frame=true at=0,0,0
-  body 3639726_-2990703_-2920715 3639726_-2990703_-2920715.-3_0_-1 kind=MOON orbit=0 radius=1.5678731162225399 starId=-640125417 frame=true at=0,0,0
-  body 3823355_3745237_320026 3823355_3745237_320026 kind=ROGUE_PLANET orbit=0 radius=1.2113628889117705 starId=-1337270441 frame=true at=0,0,0
-  body 4187637_602139_-2869399 4187637_602139_-2869399 kind=ROGUE_PLANET orbit=0 radius=1.7454789147745489 starId=-636290765 frame=true at=0,0,0
-  body 976378_3636775_4086471 976378_3636775_4086471 kind=ROGUE_PLANET orbit=0 radius=0.6852144335756171 starId=-1484690657 frame=true at=0,0,0
-  derived -2557100_423979_3637445 -2557100_423979_3637445 type=superearth mass=4.944099558821902 radius=1.4814447373908066 gravity=225 pressure=0 tempK=43 oxygen=false locked=false rings=false rotation=14161 metallicity=0.7675045838421682 terrain=TerrainOption[NATIVE genType=0 w=1]
-  derived -2557100_423979_3637445 -2557100_423979_3637445.-1_0_-3 type=barren mass=0.11430266461933823 radius=0.5951872792186339 gravity=32 pressure=0 tempK=26 oxygen=false locked=false rings=false rotation=30155 metallicity=1.1395958137255642 terrain=TerrainOption[NATIVE genType=0 w=1]
-  derived -2557100_423979_3637445 -2557100_423979_3637445.-2_0_-1 type=ice mass=3.40149999083764 radius=1.3415417382877135 gravity=189 pressure=0 tempK=41 oxygen=false locked=false rings=false rotation=22470 metallicity=0.4511626377748935 terrain=TerrainOption[NATIVE genType=0 w=1]
-  derived -2655791_3860139_4556832 -2655791_3860139_4556832 type=ice mass=8.953986377182925 radius=1.9480617919050078 gravity=236 pressure=0 tempK=43 oxygen=false locked=false rings=false rotation=14966 metallicity=1.023458230313111 terrain=TerrainOption[NATIVE genType=0 w=1]
-  derived -2673416_-3299924_-2542369 -2673416_-3299924_-2542369 type=barren mass=0.08742513278618706 radius=0.5140134458397283 gravity=33 pressure=0 tempK=27 oxygen=false locked=false rings=false rotation=37319 metallicity=0.5432850188533043 terrain=TerrainOption[NATIVE genType=0 w=1]
-  derived -3057060_4504688_903368 -3057060_4504688_903368 type=ice mass=0.6907407385519565 radius=0.9265150238967861 gravity=80 pressure=0 tempK=33 oxygen=false locked=false rings=false rotation=24780 metallicity=1.4771347200268488 terrain=TerrainOption[NATIVE genType=0 w=1]
-  derived -3057060_4504688_903368 -3057060_4504688_903368.-3_0_2 type=ice mass=7.912279174435946 radius=1.6583152498372422 gravity=288 pressure=0 tempK=46 oxygen=false locked=false rings=false rotation=70324 metallicity=1.067026331087086 terrain=TerrainOption[NATIVE genType=0 w=1]
-  derived -3057060_4504688_903368 -3057060_4504688_903368.1_0_1 type=ice mass=4.0178111010479745 radius=1.4729509147881967 gravity=185 pressure=0 tempK=41 oxygen=false locked=false rings=false rotation=68974 metallicity=1.1864456019768 terrain=TerrainOption[NATIVE genType=0 w=1]
-  derived 1017499_549209_-2760817 1017499_549209_-2760817 type=superearth mass=6.720000591465987 radius=1.6175224369918324 gravity=257 pressure=0 tempK=44 oxygen=false locked=false rings=false rotation=25973 metallicity=1.5348057666632275 terrain=TerrainOption[NATIVE genType=0 w=1]
-  derived 1017499_549209_-2760817 1017499_549209_-2760817.2_0_1 type=barren mass=0.09001221313809951 radius=0.5501341775677937 gravity=30 pressure=0 tempK=26 oxygen=false locked=false rings=false rotation=53747 metallicity=0.9260130700472584 terrain=TerrainOption[NATIVE genType=0 w=1]
-  derived 198207_-2510563_-2496053 198207_-2510563_-2496053 type=ice mass=1.8782374156749306 radius=1.1591832445693329 gravity=140 pressure=0 tempK=38 oxygen=false locked=false rings=false rotation=81388 metallicity=1.5252855058290513 terrain=TerrainOption[NATIVE genType=0 w=1]
-  derived 3639726_-2990703_-2920715 3639726_-2990703_-2920715 type=ice mass=1.4281056559244625 radius=1.1642707970044215 gravity=105 pressure=0 tempK=35 oxygen=false locked=false rings=false rotation=30927 metallicity=0.43414167394403486 terrain=TerrainOption[NATIVE genType=0 w=1]
-  derived 3639726_-2990703_-2920715 3639726_-2990703_-2920715.-3_0_-1 type=ice mass=0.028444546324037406 radius=0.4077367957069592 gravity=17 pressure=0 tempK=23 oxygen=false locked=false rings=false rotation=8374 metallicity=0.6636435452382068 terrain=TerrainOption[NATIVE genType=0 w=1]
-  derived 3823355_3745237_320026 3823355_3745237_320026 type=ice mass=2.3245028760180175 radius=1.2113628889117705 gravity=158 pressure=0 tempK=39 oxygen=false locked=false rings=false rotation=34397 metallicity=1.4633582267369367 terrain=TerrainOption[NATIVE genType=0 w=1]
-  derived 4187637_602139_-2869399 4187637_602139_-2869399 type=ice mass=8.033586448333969 radius=1.7454789147745489 gravity=264 pressure=0 tempK=45 oxygen=false locked=false rings=false rotation=12742 metallicity=0.8463677000016181 terrain=TerrainOption[NATIVE genType=0 w=1]
-  derived 976378_3636775_4086471 976378_3636775_4086471 type=ice mass=0.23914383202211043 radius=0.6852144335756171 gravity=51 pressure=0 tempK=30 oxygen=false locked=false rings=false rotation=25305 metallicity=0.4173546565671391 terrain=TerrainOption[NATIVE genType=0 w=1]
-  system -2557100_423979_3637445 id=-1134337153 kind=ROGUE_PLANET name=PGR--3525313.0.3525313 starless
-  system -2655791_3860139_4556832 id=-157245369 kind=ROGUE_PLANET name=PGR--3525313.3525313.3525313 starless
-  system -2673416_-3299924_-2542369 id=-457888649 kind=ROGUE_PLANET name=PGR--3525313.-3525313.-3525313 starless
-  system -3057060_4504688_903368 id=-392700849 kind=ROGUE_PLANET name=PGR--3525313.3525313.0 starless
-  system 1017499_549209_-2760817 id=-268045669 kind=ROGUE_PLANET name=PGR-0.0.-3525313 starless
-  system 198207_-2510563_-2496053 id=-914263305 kind=ROGUE_PLANET name=PGR-0.-3525313.-3525313 starless
-  system 3639726_-2990703_-2920715 id=-640125417 kind=ROGUE_PLANET name=PGR-3525313.-3525313.-3525313 starless
-  system 3823355_3745237_320026 id=-1337270441 kind=ROGUE_PLANET name=PGR-3525313.3525313.0 starless
-  system 4187637_602139_-2869399 id=-636290765 kind=ROGUE_PLANET name=PGR-3525313.0.-3525313 starless
-  system 976378_3636775_4086471 id=-1484690657 kind=ROGUE_PLANET name=PGR-0.3525313.3525313 starless
+  body -2603363_545834_3739886 -2603363_545834_3739886 kind=ROGUE_PLANET orbit=0 radius=1.1235961452477488 starId=-1134337153 frame=true at=0,0,0
+  body -2603363_545834_3739886 -2603363_545834_3739886.5_0_-1 kind=MOON orbit=0 radius=0.24844955978232125 starId=-1134337153 frame=true at=0,0,0
+  body -2669475_-3094069_-2673142 -2669475_-3094069_-2673142 kind=ROGUE_PLANET orbit=0 radius=0.43107114895047205 starId=-457888649 frame=true at=0,0,0
+  body -2979846_3928856_4117923 -2979846_3928856_4117923 kind=ROGUE_PLANET orbit=0 radius=2.122925003790363 starId=-157245369 frame=true at=0,0,0
+  body -2987783_4368479_378109 -2987783_4368479_378109 kind=ROGUE_PLANET orbit=0 radius=1.9452529464448622 starId=-392700849 frame=true at=0,0,0
+  body -2987783_4368479_378109 -2987783_4368479_378109.3_0_-2 kind=MOON orbit=0 radius=0.25756370146342106 starId=-392700849 frame=true at=0,0,0
+  body 136574_-3354146_-2900430 136574_-3354146_-2900430 kind=ROGUE_PLANET orbit=0 radius=0.2810996189343181 starId=-914263305 frame=true at=0,0,0
+  body 136574_-3354146_-2900430 136574_-3354146_-2900430.2_0_-5 kind=MOON orbit=0 radius=1.3108692406219122 starId=-914263305 frame=true at=0,0,0
+  body 159440_531552_-2669356 159440_531552_-2669356 kind=ROGUE_PLANET orbit=0 radius=0.4256096670548609 starId=-268045669 frame=true at=0,0,0
+  body 3568584_3950692_206103 3568584_3950692_206103 kind=ROGUE_PLANET orbit=0 radius=1.78597097692513 starId=-1337270441 frame=true at=0,0,0
+  body 3876520_871762_-3332376 3876520_871762_-3332376 kind=ROGUE_PLANET orbit=0 radius=0.9976310873066614 starId=-636290765 frame=true at=0,0,0
+  body 3876520_871762_-3332376 3876520_871762_-3332376.-1_0_-2 kind=MOON orbit=0 radius=1.188748579502276 starId=-636290765 frame=true at=0,0,0
+  body 4642169_-2924420_-3369150 4642169_-2924420_-3369150 kind=ROGUE_PLANET orbit=0 radius=1.970858951771379 starId=-640125417 frame=true at=0,0,0
+  body 516641_4554538_3868452 516641_4554538_3868452 kind=ROGUE_PLANET orbit=0 radius=0.8986566177880602 starId=-1484690657 frame=true at=0,0,0
+  derived -2603363_545834_3739886 -2603363_545834_3739886 type=ice mass=1.7091350991898928 radius=1.1235961452477488 gravity=135 pressure=0 tempK=38 oxygen=false locked=false rings=false rotation=10067 metallicity=0.5092689475266982 terrain=TerrainOption[NATIVE genType=0 w=1]
+  derived -2603363_545834_3739886 -2603363_545834_3739886.5_0_-1 type=barren mass=0.3148701022852086 radius=0.6912896472187744 gravity=66 pressure=0 tempK=32 oxygen=false locked=false rings=false rotation=70455 metallicity=1.2399528462080192 terrain=TerrainOption[NATIVE genType=0 w=1]
+  derived -2669475_-3094069_-2673142 -2669475_-3094069_-2673142 type=ice mass=0.05071963708552558 radius=0.43107114895047205 gravity=27 pressure=0 tempK=25 oxygen=false locked=false rings=false rotation=86549 metallicity=1.5626901476868538 terrain=TerrainOption[NATIVE genType=0 w=1]
+  derived -2979846_3928856_4117923 -2979846_3928856_4117923 type=superearth mass=13.740006348329105 radius=2.122925003790363 gravity=305 pressure=0 tempK=46 oxygen=false locked=false rings=false rotation=35882 metallicity=1.1343540457369534 terrain=TerrainOption[NATIVE genType=0 w=1]
+  derived -2987783_4368479_378109 -2987783_4368479_378109 type=ice mass=14.407476393305705 radius=1.9452529464448622 gravity=381 pressure=0 tempK=49 oxygen=false locked=false rings=false rotation=37209 metallicity=0.4331908095092881 terrain=TerrainOption[NATIVE genType=0 w=1]
+  derived -2987783_4368479_378109 -2987783_4368479_378109.3_0_-2 type=barren mass=0.08557249324625806 radius=0.4941159609360391 gravity=35 pressure=0 tempK=27 oxygen=false locked=false rings=false rotation=33963 metallicity=1.1707224337994737 terrain=TerrainOption[NATIVE genType=0 w=1]
+  derived 136574_-3354146_-2900430 136574_-3354146_-2900430 type=ice mass=0.01128493387789213 radius=0.2810996189343181 gravity=14 pressure=0 tempK=22 oxygen=false locked=false rings=false rotation=84487 metallicity=0.6519688993968 terrain=TerrainOption[NATIVE genType=0 w=1]
+  derived 136574_-3354146_-2900430 136574_-3354146_-2900430.2_0_-5 type=ice mass=4.197287432403874 radius=1.4104227557976439 gravity=211 pressure=0 tempK=42 oxygen=false locked=false rings=false rotation=11038 metallicity=0.8118691525537689 terrain=TerrainOption[NATIVE genType=0 w=1]
+  derived 159440_531552_-2669356 159440_531552_-2669356 type=ice mass=0.05297626348055095 radius=0.4256096670548609 gravity=29 pressure=0 tempK=26 oxygen=false locked=false rings=false rotation=14588 metallicity=0.5078586259419884 terrain=TerrainOption[NATIVE genType=0 w=1]
+  derived 3568584_3950692_206103 3568584_3950692_206103 type=ice mass=8.183862928525135 radius=1.78597097692513 gravity=257 pressure=0 tempK=44 oxygen=false locked=false rings=false rotation=11722 metallicity=0.4692613021676675 terrain=TerrainOption[NATIVE genType=0 w=1]
+  derived 3876520_871762_-3332376 3876520_871762_-3332376 type=ice mass=0.7530000873477815 radius=0.9976310873066614 gravity=76 pressure=0 tempK=33 oxygen=false locked=false rings=false rotation=8845 metallicity=0.6627341526327659 terrain=TerrainOption[NATIVE genType=0 w=1]
+  derived 3876520_871762_-3332376 3876520_871762_-3332376.-1_0_-2 type=ice mass=0.10418714366968626 radius=0.5801994172645134 gravity=31 pressure=0 tempK=26 oxygen=false locked=false rings=false rotation=29495 metallicity=1.1434854613715149 terrain=TerrainOption[NATIVE genType=0 w=1]
+  derived 4642169_-2924420_-3369150 4642169_-2924420_-3369150 type=superearth mass=10.78961692468837 radius=1.970858951771379 gravity=278 pressure=0 tempK=45 oxygen=false locked=false rings=false rotation=53394 metallicity=1.341297761522604 terrain=TerrainOption[NATIVE genType=0 w=1]
+  derived 516641_4554538_3868452 516641_4554538_3868452 type=ice mass=0.8395124975888028 radius=0.8986566177880602 gravity=104 pressure=0 tempK=35 oxygen=false locked=false rings=false rotation=8591 metallicity=0.41398638291533807 terrain=TerrainOption[NATIVE genType=0 w=1]
+  system -2603363_545834_3739886 id=-1134337153 kind=ROGUE_PLANET name=PGR--3525313.0.3525313 starless
+  system -2669475_-3094069_-2673142 id=-457888649 kind=ROGUE_PLANET name=PGR--3525313.-3525313.-3525313 starless
+  system -2979846_3928856_4117923 id=-157245369 kind=ROGUE_PLANET name=PGR--3525313.3525313.3525313 starless
+  system -2987783_4368479_378109 id=-392700849 kind=ROGUE_PLANET name=PGR--3525313.3525313.0 starless
+  system 136574_-3354146_-2900430 id=-914263305 kind=ROGUE_PLANET name=PGR-0.-3525313.-3525313 starless
+  system 159440_531552_-2669356 id=-268045669 kind=ROGUE_PLANET name=PGR-0.0.-3525313 starless
+  system 3568584_3950692_206103 id=-1337270441 kind=ROGUE_PLANET name=PGR-3525313.3525313.0 starless
+  system 3876520_871762_-3332376 id=-636290765 kind=ROGUE_PLANET name=PGR-3525313.0.-3525313 starless
+  system 4642169_-2924420_-3369150 id=-640125417 kind=ROGUE_PLANET name=PGR-3525313.-3525313.-3525313 starless
+  system 516641_4554538_3868452 id=-1484690657 kind=ROGUE_PLANET name=PGR-0.3525313.3525313 starless
 seed 42 systems=5
-  body -2447011_3990067_1015768 -2447011_3990067_1015768 kind=ROGUE_PLANET orbit=0 radius=1.989945249401805 starId=-303078433 frame=true at=0,0,0
-  body -3084373_3721958_-2836759 -3084373_3721958_-2836759 kind=ROGUE_PLANET orbit=0 radius=0.6685266599064654 starId=-179570697 frame=true at=0,0,0
-  body -3084373_3721958_-2836759 -3084373_3721958_-2836759.2_0_2 kind=MOON orbit=0 radius=1.2391946808283263 starId=-179570697 frame=true at=0,0,0
-  body 1035243_295080_-2679253 1035243_295080_-2679253 kind=ROGUE_PLANET orbit=0 radius=1.3473679621970385 starId=-1652144877 frame=true at=0,0,0
-  body 190640_4091718_-3216585 190640_4091718_-3216585 kind=ROGUE_PLANET orbit=0 radius=1.538054696275251 starId=-502853333 frame=true at=0,0,0
-  body 3842895_743694_4157756 3842895_743694_4157756 kind=ROGUE_PLANET orbit=0 radius=0.5198799197186048 starId=-1165534741 frame=true at=0,0,0
-  body 3842895_743694_4157756 3842895_743694_4157756.-4_0_-1 kind=MOON orbit=0 radius=0.6284105220560577 starId=-1165534741 frame=true at=0,0,0
-  derived -2447011_3990067_1015768 -2447011_3990067_1015768 type=superearth mass=10.088778310024445 radius=1.989945249401805 gravity=255 pressure=0 tempK=44 oxygen=false locked=false rings=false rotation=79920 metallicity=1.5777697067277474 terrain=TerrainOption[NATIVE genType=0 w=1]
-  derived -3084373_3721958_-2836759 -3084373_3721958_-2836759 type=barren mass=0.24881424393731585 radius=0.6685266599064654 gravity=56 pressure=0 tempK=30 oxygen=false locked=false rings=false rotation=47156 metallicity=0.871880601372064 terrain=TerrainOption[NATIVE genType=0 w=1]
-  derived -3084373_3721958_-2836759 -3084373_3721958_-2836759.2_0_2 type=ice mass=2.7605874538633604 radius=1.3169364511312875 gravity=159 pressure=0 tempK=39 oxygen=false locked=false rings=false rotation=9923 metallicity=1.538814155703888 terrain=TerrainOption[NATIVE genType=0 w=1]
-  derived 1035243_295080_-2679253 1035243_295080_-2679253 type=ice mass=2.4573812328128533 radius=1.3473679621970385 gravity=135 pressure=0 tempK=38 oxygen=false locked=false rings=false rotation=40099 metallicity=1.5785510692143445 terrain=TerrainOption[NATIVE genType=0 w=1]
-  derived 190640_4091718_-3216585 190640_4091718_-3216585 type=superearth mass=4.8180484411980276 radius=1.538054696275251 gravity=204 pressure=0 tempK=42 oxygen=false locked=false rings=false rotation=19264 metallicity=0.7186063878043278 terrain=TerrainOption[NATIVE genType=0 w=1]
-  derived 3842895_743694_4157756 3842895_743694_4157756 type=barren mass=0.08318382388923339 radius=0.5198799197186048 gravity=31 pressure=0 tempK=26 oxygen=false locked=false rings=false rotation=70969 metallicity=0.6776328297933261 terrain=TerrainOption[NATIVE genType=0 w=1]
-  derived 3842895_743694_4157756 3842895_743694_4157756.-4_0_-1 type=superearth mass=6.554318321576027 radius=1.7055033573991043 gravity=225 pressure=0 tempK=43 oxygen=false locked=false rings=false rotation=10950 metallicity=0.7186177253700325 terrain=TerrainOption[NATIVE genType=0 w=1]
-  system -2447011_3990067_1015768 id=-303078433 kind=ROGUE_PLANET name=PGR--3525313.3525313.0 starless
-  system -3084373_3721958_-2836759 id=-179570697 kind=ROGUE_PLANET name=PGR--3525313.3525313.-3525313 starless
-  system 1035243_295080_-2679253 id=-1652144877 kind=ROGUE_PLANET name=PGR-0.0.-3525313 starless
-  system 190640_4091718_-3216585 id=-502853333 kind=ROGUE_PLANET name=PGR-0.3525313.-3525313 starless
-  system 3842895_743694_4157756 id=-1165534741 kind=ROGUE_PLANET name=PGR-3525313.0.3525313 starless
+  body -2378142_3868725_-2499310 -2378142_3868725_-2499310 kind=ROGUE_PLANET orbit=0 radius=2.2649030375236374 starId=-179570697 frame=true at=0,0,0
+  body -2378142_3868725_-2499310 -2378142_3868725_-2499310.3_0_-1 kind=MOON orbit=0 radius=0.9936433241544413 starId=-179570697 frame=true at=0,0,0
+  body -3033374_3585348_724813 -3033374_3585348_724813 kind=ROGUE_PLANET orbit=0 radius=1.4760379784899418 starId=-303078433 frame=true at=0,0,0
+  body 157649_4630165_-2879346 157649_4630165_-2879346 kind=ROGUE_PLANET orbit=0 radius=0.36387317919658735 starId=-502853333 frame=true at=0,0,0
+  body 157649_4630165_-2879346 157649_4630165_-2879346.2_0_-1 kind=MOON orbit=0 radius=1.7399174538121285 starId=-502853333 frame=true at=0,0,0
+  body 3620330_66163_4398163 3620330_66163_4398163 kind=ROGUE_PLANET orbit=0 radius=0.410294375035656 starId=-1165534741 frame=true at=0,0,0
+  body 3620330_66163_4398163 3620330_66163_4398163.-1_0_-3 kind=MOON orbit=0 radius=0.2100628653559492 starId=-1165534741 frame=true at=0,0,0
+  body 64330_299253_-3031972 64330_299253_-3031972 kind=ROGUE_PLANET orbit=0 radius=0.2738962722635326 starId=-1652144877 frame=true at=0,0,0
+  derived -2378142_3868725_-2499310 -2378142_3868725_-2499310 type=ice mass=23.827590583204362 radius=2.2649030375236374 gravity=400 pressure=0 tempK=51 oxygen=false locked=false rings=false rotation=9840 metallicity=1.3851333052739632 terrain=TerrainOption[NATIVE genType=0 w=1]
+  derived -2378142_3868725_-2499310 -2378142_3868725_-2499310.3_0_-1 type=barren mass=0.019209745666197868 radius=0.36164452464720126 gravity=15 pressure=0 tempK=22 oxygen=false locked=false rings=false rotation=7710 metallicity=1.4070711392468342 terrain=TerrainOption[NATIVE genType=0 w=1]
+  derived -3033374_3585348_724813 -3033374_3585348_724813 type=superearth mass=3.5442801290540538 radius=1.4760379784899418 gravity=163 pressure=0 tempK=40 oxygen=false locked=false rings=false rotation=17985 metallicity=1.493360121947434 terrain=TerrainOption[NATIVE genType=0 w=1]
+  derived 157649_4630165_-2879346 157649_4630165_-2879346 type=barren mass=0.028540720619192834 radius=0.36387317919658735 gravity=22 pressure=0 tempK=24 oxygen=false locked=false rings=false rotation=16324 metallicity=0.4812239757953283 terrain=TerrainOption[NATIVE genType=0 w=1]
+  derived 157649_4630165_-2879346 157649_4630165_-2879346.2_0_-1 type=barren mass=0.12841691544836012 radius=0.5739430102311365 gravity=39 pressure=0 tempK=28 oxygen=false locked=false rings=false rotation=59347 metallicity=0.3661278692037236 terrain=TerrainOption[NATIVE genType=0 w=1]
+  derived 3620330_66163_4398163 3620330_66163_4398163 type=barren mass=0.04293090880270918 radius=0.410294375035656 gravity=26 pressure=0 tempK=25 oxygen=false locked=false rings=false rotation=63303 metallicity=0.593224758471761 terrain=TerrainOption[NATIVE genType=0 w=1]
+  derived 3620330_66163_4398163 3620330_66163_4398163.-1_0_-3 type=ice mass=0.8088065540727817 radius=0.9057021393723035 gravity=99 pressure=0 tempK=35 oxygen=false locked=false rings=false rotation=63090 metallicity=0.7207629322208553 terrain=TerrainOption[NATIVE genType=0 w=1]
+  derived 64330_299253_-3031972 64330_299253_-3031972 type=barren mass=0.008466744709738449 radius=0.2738962722635326 gravity=11 pressure=0 tempK=20 oxygen=false locked=false rings=false rotation=9878 metallicity=0.7797203284553487 terrain=TerrainOption[NATIVE genType=0 w=1]
+  system -2378142_3868725_-2499310 id=-179570697 kind=ROGUE_PLANET name=PGR--3525313.3525313.-3525313 starless
+  system -3033374_3585348_724813 id=-303078433 kind=ROGUE_PLANET name=PGR--3525313.3525313.0 starless
+  system 157649_4630165_-2879346 id=-502853333 kind=ROGUE_PLANET name=PGR-0.3525313.-3525313 starless
+  system 3620330_66163_4398163 id=-1165534741 kind=ROGUE_PLANET name=PGR-3525313.0.3525313 starless
+  system 64330_299253_-3031972 id=-1652144877 kind=ROGUE_PLANET name=PGR-0.0.-3525313 starless
 seed 1337 systems=3
-  body 276785_671277_3636639 276785_671277_3636639 kind=ROGUE_PLANET orbit=0 radius=1.3493157557301982 starId=-1715483833 frame=true at=0,0,0
-  body 276785_671277_3636639 276785_671277_3636639.-3_0_0 kind=MOON orbit=0 radius=0.2956238533945368 starId=-1715483833 frame=true at=0,0,0
-  body 276785_671277_3636639 276785_671277_3636639.1_0_0 kind=MOON orbit=0 radius=0.30796799570160793 starId=-1715483833 frame=true at=0,0,0
-  body 4120657_566754_604545 4120657_566754_604545 kind=ROGUE_PLANET orbit=0 radius=0.31963922617475793 starId=-847248597 frame=true at=0,0,0
-  body 4597503_3784885_-3111897 4597503_3784885_-3111897 kind=ROGUE_PLANET orbit=0 radius=1.0444056015522982 starId=-1405460665 frame=true at=0,0,0
-  derived 276785_671277_3636639 276785_671277_3636639 type=superearth mass=3.437098370037941 radius=1.3493157557301982 gravity=189 pressure=0 tempK=41 oxygen=false locked=false rings=false rotation=15830 metallicity=0.7860854234824994 terrain=TerrainOption[NATIVE genType=0 w=1]
-  derived 276785_671277_3636639 276785_671277_3636639.-3_0_0 type=ice mass=0.010460633700031953 radius=0.2790558668806381 gravity=13 pressure=0 tempK=21 oxygen=false locked=false rings=false rotation=33853 metallicity=1.2432071993867861 terrain=TerrainOption[NATIVE genType=0 w=1]
-  derived 276785_671277_3636639 276785_671277_3636639.1_0_0 type=superearth mass=28.332729457376175 radius=2.4523252448556385 gravity=400 pressure=0 tempK=52 oxygen=false locked=false rings=false rotation=14983 metallicity=1.5610811789515493 terrain=TerrainOption[NATIVE genType=0 w=1]
-  derived 4120657_566754_604545 4120657_566754_604545 type=barren mass=0.015365480193628647 radius=0.31963922617475793 gravity=15 pressure=0 tempK=22 oxygen=false locked=false rings=false rotation=32523 metallicity=0.7510293998351121 terrain=TerrainOption[NATIVE genType=0 w=1]
-  derived 4597503_3784885_-3111897 4597503_3784885_-3111897 type=ice mass=1.0972317554809465 radius=1.0444056015522982 gravity=101 pressure=0 tempK=35 oxygen=false locked=false rings=false rotation=36365 metallicity=1.0545794786678782 terrain=TerrainOption[NATIVE genType=0 w=1]
-  system 276785_671277_3636639 id=-1715483833 kind=ROGUE_PLANET name=PGR-0.0.3525313 starless
-  system 4120657_566754_604545 id=-847248597 kind=ROGUE_PLANET name=PGR-3525313.0.0 starless
-  system 4597503_3784885_-3111897 id=-1405460665 kind=ROGUE_PLANET name=PGR-3525313.3525313.-3525313 starless
+  body 3645496_229239_350812 3645496_229239_350812 kind=ROGUE_PLANET orbit=0 radius=0.7142531877238099 starId=-847248597 frame=true at=0,0,0
+  body 4001558_4433376_-3417514 4001558_4433376_-3417514 kind=ROGUE_PLANET orbit=0 radius=0.22570904997092509 starId=-1405460665 frame=true at=0,0,0
+  body 776626_484552_4573170 776626_484552_4573170 kind=ROGUE_PLANET orbit=0 radius=1.1377415442460348 starId=-1715483833 frame=true at=0,0,0
+  body 776626_484552_4573170 776626_484552_4573170.3_0_3 kind=MOON orbit=0 radius=0.22540514807585402 starId=-1715483833 frame=true at=0,0,0
+  derived 3645496_229239_350812 3645496_229239_350812 type=ice mass=0.2851123943199405 radius=0.7142531877238099 gravity=56 pressure=0 tempK=30 oxygen=false locked=false rings=false rotation=64003 metallicity=0.37075674119152213 terrain=TerrainOption[NATIVE genType=0 w=1]
+  derived 4001558_4433376_-3417514 4001558_4433376_-3417514 type=ice mass=0.003813216361495322 radius=0.22570904997092509 gravity=7 pressure=0 tempK=18 oxygen=false locked=false rings=false rotation=47541 metallicity=0.6501067942890157 terrain=TerrainOption[NATIVE genType=0 w=1]
+  derived 776626_484552_4573170 776626_484552_4573170 type=ice mass=1.6495114171500087 radius=1.1377415442460348 gravity=127 pressure=0 tempK=37 oxygen=false locked=false rings=false rotation=22121 metallicity=0.6456985900363414 terrain=TerrainOption[NATIVE genType=0 w=1]
+  derived 776626_484552_4573170 776626_484552_4573170.3_0_3 type=barren mass=0.06469044141693903 radius=0.46968936421153773 gravity=29 pressure=0 tempK=26 oxygen=false locked=false rings=false rotation=12216 metallicity=1.5407500112761578 terrain=TerrainOption[NATIVE genType=0 w=1]
+  system 3645496_229239_350812 id=-847248597 kind=ROGUE_PLANET name=PGR-3525313.0.0 starless
+  system 4001558_4433376_-3417514 id=-1405460665 kind=ROGUE_PLANET name=PGR-3525313.3525313.-3525313 starless
+  system 776626_484552_4573170 id=-1715483833 kind=ROGUE_PLANET name=PGR-0.0.3525313 starless
 seed 8675309 systems=2
-  body 1046546_-2903040_725654 1046546_-2903040_725654 kind=ROGUE_PLANET orbit=0 radius=0.6470070511607549 starId=-1628626657 frame=true at=0,0,0
-  body 1063728_-2564249_-3016086 1063728_-2564249_-3016086 kind=ROGUE_PLANET orbit=0 radius=1.935067436969281 starId=-193170121 frame=true at=0,0,0
-  derived 1046546_-2903040_725654 1046546_-2903040_725654 type=barren mass=0.15646924852335253 radius=0.6470070511607549 gravity=37 pressure=0 tempK=27 oxygen=false locked=false rings=false rotation=27503 metallicity=0.9774911484366974 terrain=TerrainOption[NATIVE genType=0 w=1]
-  derived 1063728_-2564249_-3016086 1063728_-2564249_-3016086 type=ice mass=9.74459618037882 radius=1.935067436969281 gravity=260 pressure=0 tempK=44 oxygen=false locked=false rings=false rotation=7049 metallicity=1.075249972161227 terrain=TerrainOption[NATIVE genType=0 w=1]
-  system 1046546_-2903040_725654 id=-1628626657 kind=ROGUE_PLANET name=PGR-0.-3525313.0 starless
-  system 1063728_-2564249_-3016086 id=-193170121 kind=ROGUE_PLANET name=PGR-0.-3525313.-3525313 starless
+  body 41875_-3271758_-3092789 41875_-3271758_-3092789 kind=ROGUE_PLANET orbit=0 radius=0.43868338794202105 starId=-193170121 frame=true at=0,0,0
+  body 41875_-3271758_-3092789 41875_-3271758_-3092789.1_0_-1 kind=MOON orbit=0 radius=1.5865534256158422 starId=-193170121 frame=true at=0,0,0
+  body 41875_-3271758_-3092789 41875_-3271758_-3092789.1_0_-1 kind=MOON orbit=0 radius=1.6769724030448745 starId=-193170121 frame=true at=0,0,0
+  body 989705_-2793833_133179 989705_-2793833_133179 kind=ROGUE_PLANET orbit=0 radius=0.7020069470330881 starId=-1628626657 frame=true at=0,0,0
+  body 989705_-2793833_133179 989705_-2793833_133179.0_0_2 kind=MOON orbit=0 radius=0.48160437692371544 starId=-1628626657 frame=true at=0,0,0
+  body 989705_-2793833_133179 989705_-2793833_133179.1_0_1 kind=MOON orbit=0 radius=0.22693993280006405 starId=-1628626657 frame=true at=0,0,0
+  derived 41875_-3271758_-3092789 41875_-3271758_-3092789 type=barren mass=0.054202694270408636 radius=0.43868338794202105 gravity=28 pressure=0 tempK=25 oxygen=false locked=false rings=false rotation=18587 metallicity=1.3961826763507514 terrain=TerrainOption[NATIVE genType=0 w=1]
+  derived 41875_-3271758_-3092789 41875_-3271758_-3092789.1_0_-1 type=ice mass=1.2061932789244512 radius=1.0683389073869747 gravity=106 pressure=0 tempK=35 oxygen=false locked=false rings=false rotation=77470 metallicity=1.5720294081065687 terrain=TerrainOption[NATIVE genType=0 w=1]
+  derived 989705_-2793833_133179 989705_-2793833_133179 type=ice mass=0.2935795590593692 radius=0.7020069470330881 gravity=60 pressure=0 tempK=31 oxygen=false locked=false rings=false rotation=15078 metallicity=1.5678020084669662 terrain=TerrainOption[NATIVE genType=0 w=1]
+  derived 989705_-2793833_133179 989705_-2793833_133179.0_0_2 type=ice mass=0.021676774939251135 radius=0.3675390874942748 gravity=16 pressure=0 tempK=22 oxygen=false locked=false rings=false rotation=10707 metallicity=1.4535394595342144 terrain=TerrainOption[NATIVE genType=0 w=1]
+  derived 989705_-2793833_133179 989705_-2793833_133179.1_0_1 type=ice mass=0.3856017855868168 radius=0.7612164290969556 gravity=67 pressure=0 tempK=32 oxygen=false locked=false rings=false rotation=7435 metallicity=0.35905064701869943 terrain=TerrainOption[NATIVE genType=0 w=1]
+  system 41875_-3271758_-3092789 id=-193170121 kind=ROGUE_PLANET name=PGR-0.-3525313.-3525313 starless
+  system 989705_-2793833_133179 id=-1628626657 kind=ROGUE_PLANET name=PGR-0.-3525313.0 starless
 seed -1 systems=8
-  body -2782949_-3335311_-3172048 -2782949_-3335311_-3172048 kind=ROGUE_PLANET orbit=0 radius=1.2158739257305007 starId=-304935909 frame=true at=0,0,0
-  body -2782949_-3335311_-3172048 -2782949_-3335311_-3172048.-1_0_0 kind=MOON orbit=0 radius=1.7827041269401591 starId=-304935909 frame=true at=0,0,0
-  body -2782949_-3335311_-3172048 -2782949_-3335311_-3172048.-2_0_-2 kind=MOON orbit=0 radius=0.3811324069014488 starId=-304935909 frame=true at=0,0,0
-  body -3287314_3807297_3941148 -3287314_3807297_3941148 kind=ROGUE_PLANET orbit=0 radius=0.33955082250013896 starId=-1160817649 frame=true at=0,0,0
-  body 3664834_3776565_4532932 3664834_3776565_4532932 kind=ROGUE_PLANET orbit=0 radius=0.6082699126970779 starId=-284738901 frame=true at=0,0,0
-  body 3664834_3776565_4532932 3664834_3776565_4532932.1_0_-2 kind=MOON orbit=0 radius=0.5519257469023342 starId=-284738901 frame=true at=0,0,0
-  body 3664834_3776565_4532932 3664834_3776565_4532932.1_0_2 kind=MOON orbit=0 radius=2.3292049800084142 starId=-284738901 frame=true at=0,0,0
-  body 3853702_543117_1039757 3853702_543117_1039757 kind=ROGUE_PLANET orbit=0 radius=0.9898277293392106 starId=-589964249 frame=true at=0,0,0
-  body 4483478_-2850483_3653003 4483478_-2850483_3653003 kind=ROGUE_PLANET orbit=0 radius=1.435001513340223 starId=-1321358033 frame=true at=0,0,0
-  body 4483478_-2850483_3653003 4483478_-2850483_3653003.3_0_1 kind=MOON orbit=0 radius=1.7411223799459588 starId=-1321358033 frame=true at=0,0,0
-  body 743192_-3039588_157466 743192_-3039588_157466 kind=ROGUE_PLANET orbit=0 radius=0.4112854086051495 starId=-1078102009 frame=true at=0,0,0
-  body 743192_-3039588_157466 743192_-3039588_157466.-1_0_0 kind=MOON orbit=0 radius=1.8375370381187128 starId=-1078102009 frame=true at=0,0,0
-  body 878581_-3017002_4553300 872959_-3017002_4556800 kind=STAR orbit=35417 radius=75.04819331288338 starId=-1897301650 frame=true at=0,0,0
-  body 878581_-3017002_4553300 878553_-3017004_4553343 kind=PLANET orbit=276 radius=1.5157966496043178 starId=-1897301649 frame=true at=0,0,0
-  body 878581_-3017002_4553300 878566_-3017002_4553315 kind=PLANET orbit=116 radius=1.9962282827789826 starId=-1897301649 frame=true at=0,0,0
-  body 878581_-3017002_4553300 878566_-3017002_4553315.2_0_1 kind=MOON orbit=116 radius=0.20652907168649953 starId=-1897301649 frame=true at=0,0,0
-  body 878581_-3017002_4553300 878566_-3017002_4553315.3_0_0 kind=MOON orbit=116 radius=0.5437577907459678 starId=-1897301649 frame=true at=0,0,0
-  body 878581_-3017002_4553300 878572_-3017003_4553306 kind=PLANET orbit=59 radius=0.3484083052264197 starId=-1897301649 frame=true at=0,0,0
-  body 878581_-3017002_4553300 878575_-3017002_4553288 kind=GAS_GIANT orbit=70 radius=9.106319267554383 starId=-1897301649 frame=true at=0,0,0
-  body 878581_-3017002_4553300 878578_-3017002_4553300 kind=ASTEROID_BELT orbit=15 radius=0.0 starId=-1897301649 frame=true at=0,0,0
-  body 878581_-3017002_4553300 878580_-3017002_4553299 kind=PLANET orbit=9 radius=0.7705187789339893 starId=-1897301649 frame=true at=0,0,0
-  body 878581_-3017002_4553300 878580_-3017002_4553302 kind=PLANET orbit=15 radius=0.7882028558055201 starId=-1897301649 frame=true at=0,0,0
-  body 878581_-3017002_4553300 878581_-3017002_4553299 kind=PLANET orbit=6 radius=0.21883050688087927 starId=-1897301649 frame=true at=0,0,0
-  body 878581_-3017002_4553300 878581_-3017002_4553299.-1_0_1 kind=MOON orbit=6 radius=0.3285151555828062 starId=-1897301649 frame=true at=0,0,0
-  body 878581_-3017002_4553300 878581_-3017002_4553300 kind=STAR orbit=0 radius=77.45767830312252 starId=-1897301649 frame=true at=0,0,0
-  body 878581_-3017002_4553300 878584_-3017002_4553302 kind=PLANET orbit=19 radius=0.6020719857479297 starId=-1897301649 frame=true at=0,0,0
-  body 878581_-3017002_4553300 878584_-3017002_4553302.-1_0_0 kind=MOON orbit=19 radius=0.2091041602077615 starId=-1897301649 frame=true at=0,0,0
-  body 878581_-3017002_4553300 878586_-3017002_4553298 kind=GAS_GIANT orbit=27 radius=4.402691577407306 starId=-1897301649 frame=true at=0,0,0
-  body 878581_-3017002_4553300 878588_-3017002_4553300 kind=PLANET orbit=39 radius=0.3946638194579618 starId=-1897301649 frame=true at=0,0,0
-  body 878581_-3017002_4553300 878588_-3017002_4553300.2_0_-1 kind=MOON orbit=39 radius=0.6094488945358825 starId=-1897301649 frame=true at=0,0,0
-  body 878581_-3017002_4553300 878588_-3017002_4553300.3_0_1 kind=MOON orbit=39 radius=0.3351591521971312 starId=-1897301649 frame=true at=0,0,0
-  body 878581_-3017002_4553300 878597_-3017003_4553325 kind=GAS_GIANT orbit=160 radius=6.614858175508893 starId=-1897301649 frame=true at=0,0,0
-  body 878581_-3017002_4553300 878597_-3017003_4553325.-3_0_2 kind=MOON orbit=160 radius=0.6525910316854073 starId=-1897301649 frame=true at=0,0,0
-  body 878581_-3017002_4553300 878612_-3017003_4553330 kind=GAS_GIANT orbit=230 radius=3.2383609634026165 starId=-1897301649 frame=true at=0,0,0
-  body 878581_-3017002_4553300 878644_-3017001_4553348 kind=PLANET orbit=424 radius=0.3567889137917456 starId=-1897301649 frame=true at=0,0,0
-  body 878581_-3017002_4553300 878644_-3017001_4553348.-2_0_-2 kind=MOON orbit=424 radius=0.23115588832734993 starId=-1897301649 frame=true at=0,0,0
-  body 878581_-3017002_4553300 878680_-3017002_4553221 kind=ASTEROID_BELT orbit=678 radius=0.0 starId=-1897301649 frame=true at=0,0,0
-  body 905332_3909756_4056715 905332_3909756_4056715 kind=ROGUE_PLANET orbit=0 radius=1.6232022956018095 starId=-1020620017 frame=true at=0,0,0
-  derived -2782949_-3335311_-3172048 -2782949_-3335311_-3172048 type=ice mass=2.1148586853111633 radius=1.2158739257305007 gravity=143 pressure=0 tempK=38 oxygen=false locked=false rings=false rotation=20246 metallicity=0.38296507979539846 terrain=TerrainOption[NATIVE genType=0 w=1]
-  derived -2782949_-3335311_-3172048 -2782949_-3335311_-3172048.-1_0_0 type=ice mass=4.729769842034617 radius=1.4438721458077295 gravity=227 pressure=0 tempK=43 oxygen=false locked=false rings=false rotation=32619 metallicity=1.0746394335083378 terrain=TerrainOption[NATIVE genType=0 w=1]
-  derived -2782949_-3335311_-3172048 -2782949_-3335311_-3172048.-2_0_-2 type=barren mass=0.07319862660645765 radius=0.4656402598301144 gravity=34 pressure=0 tempK=27 oxygen=false locked=false rings=false rotation=66333 metallicity=0.7697955562105421 terrain=TerrainOption[NATIVE genType=0 w=1]
-  derived -3287314_3807297_3941148 -3287314_3807297_3941148 type=barren mass=0.022449370251015673 radius=0.33955082250013896 gravity=19 pressure=0 tempK=23 oxygen=false locked=false rings=false rotation=10256 metallicity=0.5725117772717905 terrain=TerrainOption[NATIVE genType=0 w=1]
-  derived 3664834_3776565_4532932 3664834_3776565_4532932 type=barren mass=0.1517947540551749 radius=0.6082699126970779 gravity=41 pressure=0 tempK=28 oxygen=false locked=false rings=false rotation=6065 metallicity=0.5186924118210909 terrain=TerrainOption[NATIVE genType=0 w=1]
-  derived 3664834_3776565_4532932 3664834_3776565_4532932.1_0_-2 type=ice mass=19.594339895272103 radius=2.1459110071832614 gravity=400 pressure=0 tempK=50 oxygen=false locked=false rings=false rotation=20535 metallicity=1.1707224337994737 terrain=TerrainOption[NATIVE genType=0 w=1]
-  derived 3664834_3776565_4532932 3664834_3776565_4532932.1_0_2 type=ice mass=0.004109312399504637 radius=0.2371703544259111 gravity=7 pressure=0 tempK=18 oxygen=false locked=false rings=false rotation=28467 metallicity=0.5968251957959696 terrain=TerrainOption[NATIVE genType=0 w=1]
-  derived 3853702_543117_1039757 3853702_543117_1039757 type=barren mass=0.8458563337067997 radius=0.9898277293392106 gravity=86 pressure=0 tempK=34 oxygen=false locked=false rings=false rotation=18539 metallicity=1.0208698050614735 terrain=TerrainOption[NATIVE genType=0 w=1]
-  derived 4483478_-2850483_3653003 4483478_-2850483_3653003 type=ice mass=3.0464390892959123 radius=1.435001513340223 gravity=148 pressure=0 tempK=39 oxygen=false locked=false rings=false rotation=13841 metallicity=1.3324770895609348 terrain=TerrainOption[NATIVE genType=0 w=1]
-  derived 4483478_-2850483_3653003 4483478_-2850483_3653003.3_0_1 type=ice mass=1.639529991374844 radius=1.1560593382336146 gravity=123 pressure=0 tempK=37 oxygen=false locked=false rings=false rotation=9074 metallicity=1.1864456019768 terrain=TerrainOption[NATIVE genType=0 w=1]
-  derived 743192_-3039588_157466 743192_-3039588_157466 type=barren mass=0.033909515805476215 radius=0.4112854086051495 gravity=20 pressure=0 tempK=23 oxygen=false locked=false rings=false rotation=26070 metallicity=1.586073172708923 terrain=TerrainOption[NATIVE genType=0 w=1]
-  derived 743192_-3039588_157466 743192_-3039588_157466.-1_0_0 type=ice mass=4.729769842034617 radius=1.4438721458077295 gravity=227 pressure=0 tempK=43 oxygen=false locked=false rings=false rotation=32619 metallicity=1.0746394335083378 terrain=TerrainOption[NATIVE genType=0 w=1]
-  derived 878581_-3017002_4553300 872959_-3017002_4556800 type=superearth mass=3.75245081793383 radius=1.3770899672024957 gravity=198 pressure=1600 tempK=11 oxygen=false locked=false rings=false rotation=19857 metallicity=0.8668625908386669 terrain=TerrainOption[NATIVE genType=0 w=1]
-  derived 878581_-3017002_4553300 878553_-3017004_4553343 type=ice mass=5.754990119461963 radius=1.5157966496043178 gravity=250 pressure=1600 tempK=101 oxygen=false locked=false rings=false rotation=79184 metallicity=0.8668625908386669 terrain=TerrainOption[NATIVE genType=0 w=1]
-  derived 878581_-3017002_4553300 878566_-3017002_4553315 type=ice mass=9.764724238485714 radius=1.9962282827789826 gravity=245 pressure=1600 tempK=156 oxygen=false locked=false rings=false rotation=70365 metallicity=0.8668625908386669 terrain=TerrainOption[NATIVE genType=0 w=1]
-  derived 878581_-3017002_4553300 878566_-3017002_4553315.2_0_1 type=ice mass=30.919035876189607 radius=2.4531463479781315 gravity=400 pressure=1600 tempK=156 oxygen=false locked=false rings=false rotation=35465 metallicity=0.8668625908386669 terrain=TerrainOption[NATIVE genType=0 w=1]
-  derived 878581_-3017002_4553300 878566_-3017002_4553315.3_0_0 type=ice mass=1.6802583098233206 radius=1.1633157384822481 gravity=124 pressure=1600 tempK=156 oxygen=false locked=false rings=false rotation=9007 metallicity=0.8668625908386669 terrain=TerrainOption[NATIVE genType=0 w=1]
-  derived 878581_-3017002_4553300 878572_-3017003_4553306 type=ice mass=0.016668815448320475 radius=0.3484083052264197 gravity=14 pressure=1 tempK=97 oxygen=false locked=false rings=false rotation=17983 metallicity=0.8668625908386669 terrain=TerrainOption[NATIVE genType=0 w=1]
-  derived 878581_-3017002_4553300 878575_-3017002_4553288 type=icegiant mass=205.92664840109282 radius=9.106319267554383 gravity=248 pressure=1600 tempK=213 oxygen=false locked=false rings=true rotation=9791 metallicity=0.8668625908386669 terrain=TerrainOption[NATIVE genType=0 w=1]
-  derived 878581_-3017002_4553300 878578_-3017002_4553300 type=desert mass=0.10615272231334011 radius=0.5866299417116883 gravity=31 pressure=3 tempK=222 oxygen=false locked=true rings=false rotation=73625 metallicity=0.8668625908386669 terrain=TerrainOption[NATIVE genType=0 w=1]
-  derived 878581_-3017002_4553300 878580_-3017002_4553299 type=barren mass=0.3390944455898112 radius=0.7705187789339893 gravity=57 pressure=13 tempK=304 oxygen=false locked=true rings=false rotation=83680 metallicity=0.8668625908386669 terrain=TerrainOption[NATIVE genType=0 w=1]
-  derived 878581_-3017002_4553300 878580_-3017002_4553302 type=ice mass=0.3704474492415404 radius=0.7882028558055201 gravity=60 pressure=30 tempK=193 oxygen=false locked=true rings=false rotation=85552 metallicity=0.8668625908386669 terrain=TerrainOption[NATIVE genType=0 w=1]
-  derived 878581_-3017002_4553300 878581_-3017002_4553299 type=barren mass=0.004279089534781598 radius=0.21883050688087927 gravity=9 pressure=0 tempK=372 oxygen=false locked=true rings=false rotation=50818 metallicity=0.8668625908386669 terrain=TerrainOption[NATIVE genType=0 w=1]
-  derived 878581_-3017002_4553300 878581_-3017002_4553299.-1_0_1 type=greenhouse mass=4.627701390911789 radius=1.4358086304792534 gravity=224 pressure=1600 tempK=612 oxygen=false locked=true rings=false rotation=32379 metallicity=0.8668625908386669 terrain=TerrainOption[NATIVE genType=0 w=1]
-  derived 878581_-3017002_4553300 878581_-3017002_4553300 type=barren mass=0.003697376618150787 radius=0.2099118806935753 gravity=8 pressure=0 tempK=912 oxygen=false locked=true rings=false rotation=50445 metallicity=0.8668625908386669 terrain=TerrainOption[NATIVE genType=0 w=1]
-  derived 878581_-3017002_4553300 878584_-3017002_4553302 type=ice mass=0.1570807560599777 radius=0.6020719857479297 gravity=43 pressure=18 tempK=171 oxygen=false locked=true rings=false rotation=74322 metallicity=0.8668625908386669 terrain=TerrainOption[NATIVE genType=0 w=1]
-  derived 878581_-3017002_4553300 878584_-3017002_4553302.-1_0_0 type=greenhouse mass=4.729769842034617 radius=1.4438721458077295 gravity=227 pressure=1600 tempK=343 oxygen=false locked=true rings=false rotation=32619 metallicity=0.8668625908386669 terrain=TerrainOption[NATIVE genType=0 w=1]
-  derived 878581_-3017002_4553300 878586_-3017002_4553298 type=gasgiant mass=38.705791121690105 radius=4.402691577407306 gravity=200 pressure=1600 tempK=343 oxygen=false locked=false rings=true rotation=12478 metallicity=0.8668625908386669 terrain=TerrainOption[NATIVE genType=0 w=1]
-  derived 878581_-3017002_4553300 878588_-3017002_4553300 type=barren mass=0.03288029815145879 radius=0.3946638194579618 gravity=21 pressure=1 tempK=146 oxygen=false locked=true rings=false rotation=25710 metallicity=0.8668625908386669 terrain=TerrainOption[NATIVE genType=0 w=1]
-  derived 878581_-3017002_4553300 878588_-3017002_4553300.2_0_-1 type=barren mass=0.002348967402671631 radius=0.2012543280634186 gravity=6 pressure=0 tempK=146 oxygen=false locked=true rings=false rotation=16482 metallicity=0.8668625908386669 terrain=TerrainOption[NATIVE genType=0 w=1]
-  derived 878581_-3017002_4553300 878588_-3017002_4553300.3_0_1 type=exotic mass=1.639529991374844 radius=1.1560593382336146 gravity=123 pressure=1044 tempK=279 oxygen=false locked=true rings=false rotation=9074 metallicity=0.8668625908386669 terrain=TerrainOption[NATIVE genType=0 w=1]
-  derived 878581_-3017002_4553300 878597_-3017003_4553325 type=gasgiant mass=98.72364455770969 radius=6.614858175508893 gravity=226 pressure=1600 tempK=140 oxygen=false locked=false rings=true rotation=7309 metallicity=0.8668625908386669 terrain=TerrainOption[NATIVE genType=0 w=1]
-  derived 878581_-3017002_4553300 878597_-3017003_4553325.-3_0_2 type=gasgiant mass=302.6581581640497 radius=10.766036398887882 gravity=261 pressure=1600 tempK=140 oxygen=false locked=false rings=true rotation=7988 metallicity=0.8668625908386669 terrain=TerrainOption[NATIVE genType=0 w=1]
-  derived 878581_-3017002_4553300 878612_-3017003_4553330 type=gasgiant mass=19.09730271296885 radius=3.2383609634026165 gravity=182 pressure=1600 tempK=117 oxygen=false locked=false rings=false rotation=11030 metallicity=0.8668625908386669 terrain=TerrainOption[NATIVE genType=0 w=1]
-  derived 878581_-3017002_4553300 878644_-3017001_4553348 type=barren mass=0.026873364146008688 radius=0.3567889137917456 gravity=21 pressure=11 tempK=44 oxygen=false locked=false rings=false rotation=31938 metallicity=0.8668625908386669 terrain=TerrainOption[NATIVE genType=0 w=1]
-  derived 878581_-3017002_4553300 878644_-3017001_4553348.-2_0_-2 type=ice mass=0.07319862660645765 radius=0.4656402598301144 gravity=34 pressure=33 tempK=36 oxygen=false locked=false rings=false rotation=66333 metallicity=0.8668625908386669 terrain=TerrainOption[NATIVE genType=0 w=1]
-  derived 878581_-3017002_4553300 878680_-3017002_4553221 type=superearth mass=24.824960233297325 radius=2.3661964095752266 gravity=400 pressure=1600 tempK=74 oxygen=false locked=false rings=false rotation=90978 metallicity=0.8668625908386669 terrain=TerrainOption[NATIVE genType=0 w=1]
-  derived 905332_3909756_4056715 905332_3909756_4056715 type=superearth mass=7.049954839078062 radius=1.6232022956018095 gravity=268 pressure=0 tempK=45 oxygen=false locked=false rings=false rotation=9498 metallicity=0.7464841711558176 terrain=TerrainOption[NATIVE genType=0 w=1]
-  system -2782949_-3335311_-3172048 id=-304935909 kind=ROGUE_PLANET name=PGR--3525313.-3525313.-3525313 starless
-  system -3287314_3807297_3941148 id=-1160817649 kind=ROGUE_PLANET name=PGR--3525313.3525313.3525313 starless
-  system 3664834_3776565_4532932 id=-284738901 kind=ROGUE_PLANET name=PGR-3525313.3525313.3525313 starless
-  system 3853702_543117_1039757 id=-589964249 kind=ROGUE_PLANET name=PGR-3525313.0.0 starless
-  system 4483478_-2850483_3653003 id=-1321358033 kind=ROGUE_PLANET name=PGR-3525313.-3525313.3525313 starless
-  system 743192_-3039588_157466 id=-1078102009 kind=ROGUE_PLANET name=PGR-0.-3525313.0 starless
-  system 878581_-3017002_4553300 id=-1897301649 kind=STAR name=PGS-0.-3525313.3525313 starTemp=40 starSize=0.709514319896698
-  system 905332_3909756_4056715 id=-1020620017 kind=ROGUE_PLANET name=PGR-0.3525313.3525313 starless
+  body -2575413_3924716_4420963 -2575413_3924716_4420963 kind=ROGUE_PLANET orbit=0 radius=2.0318508928218515 starId=-1160817649 frame=true at=0,0,0
+  body -3200230_-3151508_-2808019 -3200230_-3151508_-2808019 kind=ROGUE_PLANET orbit=0 radius=1.2131610693508628 starId=-304935909 frame=true at=0,0,0
+  body -3200230_-3151508_-2808019 -3200230_-3151508_-2808019.-1_0_2 kind=MOON orbit=0 radius=2.1969679676945 starId=-304935909 frame=true at=0,0,0
+  body -3200230_-3151508_-2808019 -3200230_-3151508_-2808019.-2_0_1 kind=MOON orbit=0 radius=0.4362620447458688 starId=-304935909 frame=true at=0,0,0
+  body 3598165_990054_855068 3598165_990054_855068 kind=ROGUE_PLANET orbit=0 radius=0.40939368278546967 starId=-589964249 frame=true at=0,0,0
+  body 4407803_4582652_4484037 4407803_4582652_4484037 kind=ROGUE_PLANET orbit=0 radius=1.0492396716501455 starId=-284738901 frame=true at=0,0,0
+  body 4519333_-3302276_4322510 4519333_-3302276_4322510 kind=ROGUE_PLANET orbit=0 radius=2.241660049902319 starId=-1321358033 frame=true at=0,0,0
+  body 4519333_-3302276_4322510 4519333_-3302276_4322510.2_0_-1 kind=MOON orbit=0 radius=0.5261493915115582 starId=-1321358033 frame=true at=0,0,0
+  body 708466_-3172811_4214657 708397_-3172812_4214677 kind=GAS_GIANT orbit=5723887 radius=6.227333340973214 starId=-1897301649 frame=true at=0,0,0
+  body 708466_-3172811_4214657 708397_-3172812_4214677.-1_0_-1 kind=MOON orbit=5723887 radius=0.29266952016001924 starId=-1897301649 frame=true at=0,0,0
+  body 708466_-3172811_4214657 708397_-3172812_4214677.-2_0_3 kind=MOON orbit=5723887 radius=0.20923698308234706 starId=-1897301649 frame=true at=0,0,0
+  body 708466_-3172811_4214657 708397_-3172812_4214677.-2_0_3 kind=MOON orbit=5723887 radius=0.5784383176098187 starId=-1897301649 frame=true at=0,0,0
+  body 708466_-3172811_4214657 708397_-3172812_4214677.2_0_-1 kind=MOON orbit=5723887 radius=0.6037432880441482 starId=-1897301649 frame=true at=0,0,0
+  body 708466_-3172811_4214657 708397_-3172812_4214677.2_0_-2 kind=MOON orbit=5723887 radius=0.4523520919135064 starId=-1897301649 frame=true at=0,0,0
+  body 708466_-3172811_4214657 708445_-3172811_4214647 kind=PLANET orbit=1808714 radius=2.106115305116033 starId=-1897301649 frame=true at=0,0,0
+  body 708466_-3172811_4214657 708445_-3172811_4214647.-2_0_1 kind=MOON orbit=1808714 radius=0.5309295676043116 starId=-1897301649 frame=true at=0,0,0
+  body 708466_-3172811_4214657 708448_-3172811_4214711 kind=PLANET orbit=4536960 radius=2.21558725314463 starId=-1897301649 frame=true at=0,0,0
+  body 708466_-3172811_4214657 708451_-3172812_4214663 kind=PLANET orbit=1342655 radius=0.6647977166873095 starId=-1897301649 frame=true at=0,0,0
+  body 708466_-3172811_4214657 708451_-3172812_4214663.-2_0_-1 kind=MOON orbit=1342655 radius=0.284058174353294 starId=-1897301649 frame=true at=0,0,0
+  body 708466_-3172811_4214657 708451_-3172812_4214663.-3_0_-1 kind=MOON orbit=1342655 radius=0.4083553550606436 starId=-1897301649 frame=true at=0,0,0
+  body 708466_-3172811_4214657 708453_-3172814_4214771 kind=ASTEROID_BELT orbit=9158219 radius=0.0 starId=-1897301649 frame=true at=0,0,0
+  body 708466_-3172811_4214657 708464_-3172811_4214658 kind=STAR orbit=171744 radius=75.04819331288338 starId=-1897301650 frame=true at=0,0,0
+  body 708466_-3172811_4214657 708464_-3172811_4214668 kind=GAS_GIANT orbit=890042 radius=5.273376361928946 starId=-1897301649 frame=true at=0,0,0
+  body 708466_-3172811_4214657 708464_-3172811_4214668.-2_0_-2 kind=MOON orbit=890042 radius=0.31244339383077513 starId=-1897301649 frame=true at=0,0,0
+  body 708466_-3172811_4214657 708464_-3172811_4214668.0_0_-2 kind=MOON orbit=890042 radius=0.44785138617711684 starId=-1897301649 frame=true at=0,0,0
+  body 708466_-3172811_4214657 708464_-3172811_4214668.1_0_-3 kind=MOON orbit=890042 radius=0.437741734239347 starId=-1897301649 frame=true at=0,0,0
+  body 708466_-3172811_4214657 708464_-3172811_4214668.2_0_-2 kind=MOON orbit=890042 radius=0.2307174013027877 starId=-1897301649 frame=true at=0,0,0
+  body 708466_-3172811_4214657 708464_-3172811_4214668.2_0_2 kind=MOON orbit=890042 radius=0.742914645158135 starId=-1897301649 frame=true at=0,0,0
+  body 708466_-3172811_4214657 708465_-3172811_4214650 kind=PLANET orbit=583985 radius=0.49855403009357496 starId=-1897301649 frame=true at=0,0,0
+  body 708466_-3172811_4214657 708465_-3172811_4214650.0_0_3 kind=MOON orbit=583985 radius=0.5045857625284749 starId=-1897301649 frame=true at=0,0,0
+  body 708466_-3172811_4214657 708465_-3172811_4214650.1_0_1 kind=MOON orbit=583985 radius=0.20301050237706103 starId=-1897301649 frame=true at=0,0,0
+  body 708466_-3172811_4214657 708466_-3172811_4214657 kind=STAR orbit=0 radius=77.45767830312252 starId=-1897301649 frame=true at=0,0,0
+  body 708466_-3172811_4214657 708467_-3172811_4214618 kind=PLANET orbit=3149240 radius=1.7765778307195101 starId=-1897301649 frame=true at=0,0,0
+  body 708466_-3172811_4214657 708467_-3172811_4214618.1_0_-4 kind=MOON orbit=3149240 radius=0.2656053566071776 starId=-1897301649 frame=true at=0,0,0
+  body 708466_-3172811_4214657 708470_-3172811_4214662 kind=ASTEROID_BELT orbit=494467 radius=0.0 starId=-1897301649 frame=true at=0,0,0
+  body 835483_4028447_4243122 835483_4028447_4243122 kind=ROGUE_PLANET orbit=0 radius=2.018019666141924 starId=-1020620017 frame=true at=0,0,0
+  body 988641_-2717767_143051 988641_-2717767_143051 kind=ROGUE_PLANET orbit=0 radius=1.9680639724467346 starId=-1078102009 frame=true at=0,0,0
+  body 988641_-2717767_143051 988641_-2717767_143051.-2_0_3 kind=MOON orbit=0 radius=0.2002136856707338 starId=-1078102009 frame=true at=0,0,0
+  derived -2575413_3924716_4420963 -2575413_3924716_4420963 type=superearth mass=13.688685363005574 radius=2.0318508928218515 gravity=332 pressure=0 tempK=47 oxygen=false locked=false rings=false rotation=17465 metallicity=0.6646523228175452 terrain=TerrainOption[NATIVE genType=0 w=1]
+  derived -3200230_-3151508_-2808019 -3200230_-3151508_-2808019 type=ice mass=1.9387906886172641 radius=1.2131610693508628 gravity=132 pressure=0 tempK=37 oxygen=false locked=false rings=false rotation=88694 metallicity=1.1688418814214097 terrain=TerrainOption[NATIVE genType=0 w=1]
+  derived -3200230_-3151508_-2808019 -3200230_-3151508_-2808019.-1_0_2 type=ice mass=4.939798604966337 radius=1.4600638970007471 gravity=232 pressure=0 tempK=43 oxygen=false locked=false rings=false rotation=32141 metallicity=1.067026331087086 terrain=TerrainOption[NATIVE genType=0 w=1]
+  derived -3200230_-3151508_-2808019 -3200230_-3151508_-2808019.-2_0_1 type=ice mass=3.6046268966480266 radius=1.5212484085314304 gravity=156 pressure=0 tempK=39 oxygen=false locked=false rings=false rotation=8748 metallicity=0.9528389104190547 terrain=TerrainOption[NATIVE genType=0 w=1]
+  derived 3598165_990054_855068 3598165_990054_855068 type=barren mass=0.037282258568097706 radius=0.40939368278546967 gravity=22 pressure=0 tempK=24 oxygen=false locked=false rings=false rotation=20702 metallicity=0.44368617447319036 terrain=TerrainOption[NATIVE genType=0 w=1]
+  derived 4407803_4582652_4484037 4407803_4582652_4484037 type=ice mass=1.1496787001129418 radius=1.0492396716501455 gravity=104 pressure=0 tempK=35 oxygen=false locked=false rings=false rotation=11726 metallicity=0.5876341743907824 terrain=TerrainOption[NATIVE genType=0 w=1]
+  derived 4519333_-3302276_4322510 4519333_-3302276_4322510 type=ice mass=16.85794149278378 radius=2.241660049902319 gravity=335 pressure=0 tempK=47 oxygen=false locked=false rings=false rotation=18122 metallicity=0.7080470042950562 terrain=TerrainOption[NATIVE genType=0 w=1]
+  derived 4519333_-3302276_4322510 4519333_-3302276_4322510.2_0_-1 type=barren mass=0.002348967402671631 radius=0.2012543280634186 gravity=6 pressure=0 tempK=17 oxygen=false locked=false rings=false rotation=16482 metallicity=0.35237713261607834 terrain=TerrainOption[NATIVE genType=0 w=1]
+  derived 708466_-3172811_4214657 708397_-3172812_4214677 type=gasgiant mass=85.9248544800862 radius=6.227333340973214 gravity=222 pressure=1600 tempK=91 oxygen=false locked=false rings=true rotation=8344 metallicity=1.0251139999614916 terrain=TerrainOption[NATIVE genType=0 w=1]
+  derived 708466_-3172811_4214657 708397_-3172812_4214677.-1_0_-1 type=ice mass=0.06386698276855537 radius=0.5073641070103734 gravity=25 pressure=10 tempK=38 oxygen=false locked=false rings=false rotation=17789 metallicity=1.0251139999614916 terrain=TerrainOption[NATIVE genType=0 w=1]
+  derived 708466_-3172811_4214657 708397_-3172812_4214677.-2_0_3 type=ice mass=3.7392237362892526 radius=1.5378460100795341 gravity=158 pressure=1600 tempK=86 oxygen=false locked=false rings=false rotation=8878 metallicity=1.0251139999614916 terrain=TerrainOption[NATIVE genType=0 w=1]
+  derived 708466_-3172811_4214657 708397_-3172812_4214677.2_0_-1 type=barren mass=0.002348967402671631 radius=0.2012543280634186 gravity=6 pressure=0 tempK=46 oxygen=false locked=false rings=false rotation=16482 metallicity=1.0251139999614916 terrain=TerrainOption[NATIVE genType=0 w=1]
+  derived 708466_-3172811_4214657 708397_-3172812_4214677.2_0_-2 type=barren mass=0.0023673754075688685 radius=0.201761347191578 gravity=6 pressure=0 tempK=46 oxygen=false locked=false rings=false rotation=16361 metallicity=1.0251139999614916 terrain=TerrainOption[NATIVE genType=0 w=1]
+  derived 708466_-3172811_4214657 708445_-3172811_4214647 type=superearth mass=12.18120940259023 radius=2.106115305116033 gravity=275 pressure=1600 tempK=176 oxygen=false locked=false rings=false rotation=21741 metallicity=1.0251139999614916 terrain=TerrainOption[NATIVE genType=0 w=1]
+  derived 708466_-3172811_4214657 708445_-3172811_4214647.-2_0_1 type=ice mass=3.6046268966480266 radius=1.5212484085314304 gravity=156 pressure=1600 tempK=153 oxygen=false locked=false rings=false rotation=8748 metallicity=1.0251139999614916 terrain=TerrainOption[NATIVE genType=0 w=1]
+  derived 708466_-3172811_4214657 708448_-3172811_4214711 type=superearth mass=15.94619566666693 radius=2.21558725314463 gravity=325 pressure=1600 tempK=111 oxygen=false locked=false rings=false rotation=21840 metallicity=1.0251139999614916 terrain=TerrainOption[NATIVE genType=0 w=1]
+  derived 708466_-3172811_4214657 708451_-3172812_4214663 type=ice mass=0.22632627129248192 radius=0.6647977166873095 gravity=51 pressure=43 tempK=79 oxygen=false locked=false rings=false rotation=14526 metallicity=1.0251139999614916 terrain=TerrainOption[NATIVE genType=0 w=1]
+  derived 708466_-3172811_4214657 708451_-3172812_4214663.-2_0_-1 type=barren mass=0.07067432394516751 radius=0.4613785717738022 gravity=33 pressure=10 tempK=96 oxygen=false locked=false rings=false rotation=65846 metallicity=1.0251139999614916 terrain=TerrainOption[NATIVE genType=0 w=1]
+  derived 708466_-3172811_4214657 708451_-3172812_4214663.-3_0_-1 type=barren mass=0.0022153663014351068 radius=0.2048264523700745 gravity=5 pressure=0 tempK=96 oxygen=false locked=false rings=false rotation=27145 metallicity=1.0251139999614916 terrain=TerrainOption[NATIVE genType=0 w=1]
+  derived 708466_-3172811_4214657 708453_-3172814_4214771 type=ice mass=3.4466979207497084 radius=1.5008774812392702 gravity=153 pressure=1600 tempK=68 oxygen=false locked=false rings=false rotation=48530 metallicity=1.0251139999614916 terrain=TerrainOption[NATIVE genType=0 w=1]
+  derived 708466_-3172811_4214657 708464_-3172811_4214658 type=desert mass=0.062215696782690184 radius=0.4455523505726028 gravity=31 pressure=0 tempK=254 oxygen=false locked=true rings=false rotation=10203 metallicity=1.0251139999614916 terrain=TerrainOption[NATIVE genType=0 w=1]
+  derived 708466_-3172811_4214657 708464_-3172811_4214668 type=icegiant mass=58.61761050064652 radius=5.273376361928946 gravity=211 pressure=1600 tempK=231 oxygen=false locked=false rings=false rotation=5959 metallicity=1.0251139999614916 terrain=TerrainOption[NATIVE genType=0 w=1]
+  derived 708466_-3172811_4214657 708464_-3172811_4214668.-2_0_-2 type=barren mass=0.07319862660645765 radius=0.4656402598301144 gravity=34 pressure=6 tempK=118 oxygen=false locked=false rings=false rotation=66333 metallicity=1.0251139999614916 terrain=TerrainOption[NATIVE genType=0 w=1]
+  derived 708466_-3172811_4214657 708464_-3172811_4214668.0_0_-2 type=superearth mass=12.568082732194316 radius=1.8953156729899179 gravity=350 pressure=1600 tempK=251 oxygen=false locked=false rings=false rotation=7337 metallicity=1.0251139999614916 terrain=TerrainOption[NATIVE genType=0 w=1]
+  derived 708466_-3172811_4214657 708464_-3172811_4214668.1_0_-3 type=superearth mass=20.52886303965903 radius=2.1751247384517827 gravity=400 pressure=1600 tempK=251 oxygen=false locked=false rings=false rotation=20384 metallicity=1.0251139999614916 terrain=TerrainOption[NATIVE genType=0 w=1]
+  derived 708466_-3172811_4214657 708464_-3172811_4214668.2_0_-2 type=barren mass=0.0023673754075688685 radius=0.201761347191578 gravity=6 pressure=0 tempK=118 oxygen=false locked=false rings=false rotation=16361 metallicity=1.0251139999614916 terrain=TerrainOption[NATIVE genType=0 w=1]
+  derived 708466_-3172811_4214657 708464_-3172811_4214668.2_0_2 type=superearth mass=32.275033259028135 radius=2.4841699745042027 gravity=400 pressure=1600 tempK=251 oxygen=false locked=false rings=false rotation=34689 metallicity=1.0251139999614916 terrain=TerrainOption[NATIVE genType=0 w=1]
+  derived 708466_-3172811_4214657 708465_-3172811_4214650 type=barren mass=0.08128747599299996 radius=0.49855403009357496 gravity=33 pressure=5 tempK=146 oxygen=false locked=true rings=false rotation=50543 metallicity=1.0251139999614916 terrain=TerrainOption[NATIVE genType=0 w=1]
+  derived 708466_-3172811_4214657 708465_-3172811_4214650.0_0_3 type=ice mass=0.009967193760009336 radius=0.3037695964686176 gravity=11 pressure=0 tempK=119 oxygen=false locked=true rings=false rotation=80261 metallicity=1.0251139999614916 terrain=TerrainOption[NATIVE genType=0 w=1]
+  derived 708466_-3172811_4214657 708465_-3172811_4214650.1_0_1 type=gasgiant mass=27.099202745969663 radius=3.7705566074689303 gravity=191 pressure=1600 tempK=285 oxygen=false locked=false rings=true rotation=8870 metallicity=1.0251139999614916 terrain=TerrainOption[NATIVE genType=0 w=1]
+  derived 708466_-3172811_4214657 708466_-3172811_4214657 type=unclassified mass=0.029744481680270822 radius=0.3778301795913468 gravity=21 pressure=0 tempK=105431 oxygen=false locked=true rings=false rotation=9675 metallicity=1.0251139999614916 terrain=TerrainOption[NATIVE genType=0 w=1]
+  derived 708466_-3172811_4214657 708467_-3172811_4214618 type=superearth mass=9.28682885040746 radius=1.7765778307195101 gravity=294 pressure=1600 tempK=133 oxygen=false locked=false rings=false rotation=28026 metallicity=1.0251139999614916 terrain=TerrainOption[NATIVE genType=0 w=1]
+  derived 708466_-3172811_4214657 708467_-3172811_4214618.1_0_-4 type=ice mass=20.21336104767195 radius=2.165366914591414 gravity=400 pressure=1600 tempK=116 oxygen=false locked=false rings=false rotation=20234 metallicity=1.0251139999614916 terrain=TerrainOption[NATIVE genType=0 w=1]
+  derived 708466_-3172811_4214657 708470_-3172811_4214662 type=ice mass=0.1965003583755118 radius=0.625838625436974 gravity=50 pressure=26 tempK=130 oxygen=false locked=true rings=false rotation=6912 metallicity=1.0251139999614916 terrain=TerrainOption[NATIVE genType=0 w=1]
+  derived 835483_4028447_4243122 835483_4028447_4243122 type=superearth mass=14.196932066776538 radius=2.018019666141924 gravity=349 pressure=0 tempK=48 oxygen=false locked=false rings=false rotation=27611 metallicity=0.421189131836096 terrain=TerrainOption[NATIVE genType=0 w=1]
+  derived 988641_-2717767_143051 988641_-2717767_143051 type=ice mass=14.262190548218715 radius=1.9680639724467346 gravity=368 pressure=0 tempK=48 oxygen=false locked=false rings=false rotation=24227 metallicity=1.5538803276824904 terrain=TerrainOption[NATIVE genType=0 w=1]
+  derived 988641_-2717767_143051 988641_-2717767_143051.-2_0_3 type=ice mass=3.7392237362892526 radius=1.5378460100795341 gravity=158 pressure=0 tempK=39 oxygen=false locked=false rings=false rotation=8878 metallicity=0.9455436999503046 terrain=TerrainOption[NATIVE genType=0 w=1]
+  system -2575413_3924716_4420963 id=-1160817649 kind=ROGUE_PLANET name=PGR--3525313.3525313.3525313 starless
+  system -3200230_-3151508_-2808019 id=-304935909 kind=ROGUE_PLANET name=PGR--3525313.-3525313.-3525313 starless
+  system 3598165_990054_855068 id=-589964249 kind=ROGUE_PLANET name=PGR-3525313.0.0 starless
+  system 4407803_4582652_4484037 id=-284738901 kind=ROGUE_PLANET name=PGR-3525313.3525313.3525313 starless
+  system 4519333_-3302276_4322510 id=-1321358033 kind=ROGUE_PLANET name=PGR-3525313.-3525313.3525313 starless
+  system 708466_-3172811_4214657 id=-1897301649 kind=STAR name=PGS-0.-3525313.3525313 starTemp=40 starSize=0.709514319896698
+  system 835483_4028447_4243122 id=-1020620017 kind=ROGUE_PLANET name=PGR-0.3525313.3525313 starless
+  system 988641_-2717767_143051 id=-1078102009 kind=ROGUE_PLANET name=PGR-0.-3525313.0 starless
 seed 6942069 systems=4
-  body -2734142_4401718_4309207 -2734142_4401718_4309207 kind=ROGUE_PLANET orbit=0 radius=0.43631553719843885 starId=-66168209 frame=true at=0,0,0
-  body -2908371_-2556424_3786953 -2908371_-2556424_3786953 kind=ROGUE_PLANET orbit=0 radius=1.908019290563573 starId=-264498101 frame=true at=0,0,0
-  body 744853_3857094_4340709 744853_3857094_4340709 kind=ROGUE_PLANET orbit=0 radius=10.804886830349613 starId=-1566341957 frame=true at=0,0,0
-  body 744853_3857094_4340709 744853_3857094_4340709.3_0_0 kind=MOON orbit=0 radius=0.31342515786159897 starId=-1566341957 frame=true at=0,0,0
-  body 748976_106008_-3408393 748976_106008_-3408393 kind=ROGUE_PLANET orbit=0 radius=2.171011837467088 starId=-333451093 frame=true at=0,0,0
-  derived -2734142_4401718_4309207 -2734142_4401718_4309207 type=barren mass=0.0410412584139839 radius=0.43631553719843885 gravity=22 pressure=0 tempK=24 oxygen=false locked=false rings=false rotation=18269 metallicity=0.4876802064323611 terrain=TerrainOption[NATIVE genType=0 w=1]
-  derived -2908371_-2556424_3786953 -2908371_-2556424_3786953 type=superearth mass=12.982415793011713 radius=1.908019290563573 gravity=357 pressure=0 tempK=48 oxygen=false locked=false rings=false rotation=71846 metallicity=0.5583921546780021 terrain=TerrainOption[NATIVE genType=0 w=1]
-  derived 744853_3857094_4340709 744853_3857094_4340709 type=icegiant mass=305.1760558389291 radius=10.804886830349613 gravity=261 pressure=1600 tempK=45 oxygen=false locked=false rings=true rotation=9642 metallicity=0.5678204702000748 terrain=TerrainOption[NATIVE genType=0 w=1]
-  derived 744853_3857094_4340709 744853_3857094_4340709.3_0_0 type=ice mass=1.423027976411291 radius=1.0869683038867584 gravity=120 pressure=0 tempK=37 oxygen=false locked=false rings=false rotation=8507 metallicity=0.6336003269710797 terrain=TerrainOption[NATIVE genType=0 w=1]
-  derived 748976_106008_-3408393 748976_106008_-3408393 type=ice mass=15.421880528808861 radius=2.171011837467088 gravity=327 pressure=0 tempK=47 oxygen=false locked=false rings=false rotation=39235 metallicity=0.3854381084175446 terrain=TerrainOption[NATIVE genType=0 w=1]
-  system -2734142_4401718_4309207 id=-66168209 kind=ROGUE_PLANET name=PGR--3525313.3525313.3525313 starless
-  system -2908371_-2556424_3786953 id=-264498101 kind=ROGUE_PLANET name=PGR--3525313.-3525313.3525313 starless
-  system 744853_3857094_4340709 id=-1566341957 kind=ROGUE_PLANET name=PGR-0.3525313.3525313 starless
-  system 748976_106008_-3408393 id=-333451093 kind=ROGUE_PLANET name=PGR-0.0.-3525313 starless
+  body -2638865_4126181_3742138 -2638865_4126181_3742138 kind=ROGUE_PLANET orbit=0 radius=0.6894449798965852 starId=-66168209 frame=true at=0,0,0
+  body -3152478_-3317707_3965976 -3152478_-3317707_3965976 kind=ROGUE_PLANET orbit=0 radius=0.46687077214031364 starId=-264498101 frame=true at=0,0,0
+  body 587420_3558873_4611454 587420_3558873_4611454 kind=ROGUE_PLANET orbit=0 radius=0.2728593549312144 starId=-1566341957 frame=true at=0,0,0
+  body 587420_3558873_4611454 587420_3558873_4611454.-1_0_1 kind=MOON orbit=0 radius=1.2444683071387133 starId=-1566341957 frame=true at=0,0,0
+  body 663915_582291_-3038966 663915_582291_-3038966 kind=ROGUE_PLANET orbit=0 radius=0.4406839672461317 starId=-333451093 frame=true at=0,0,0
+  derived -2638865_4126181_3742138 -2638865_4126181_3742138 type=ice mass=0.26933995352355106 radius=0.6894449798965852 gravity=57 pressure=0 tempK=30 oxygen=false locked=false rings=false rotation=19733 metallicity=0.6267916239775393 terrain=TerrainOption[NATIVE genType=0 w=1]
+  derived -3152478_-3317707_3965976 -3152478_-3317707_3965976 type=barren mass=0.071262072592031 radius=0.46687077214031364 gravity=33 pressure=0 tempK=26 oxygen=false locked=false rings=false rotation=6559 metallicity=0.7847221183355517 terrain=TerrainOption[NATIVE genType=0 w=1]
+  derived 587420_3558873_4611454 587420_3558873_4611454 type=barren mass=0.008665882860565806 radius=0.2728593549312144 gravity=12 pressure=0 tempK=20 oxygen=false locked=false rings=true rotation=9080 metallicity=1.1283487866311979 terrain=TerrainOption[NATIVE genType=0 w=1]
+  derived 587420_3558873_4611454 587420_3558873_4611454.-1_0_1 type=ice mass=0.016578030125197044 radius=0.3246435782420589 gravity=16 pressure=0 tempK=22 oxygen=false locked=false rings=false rotation=91312 metallicity=0.4057326924507553 terrain=TerrainOption[NATIVE genType=0 w=1]
+  derived 663915_582291_-3038966 663915_582291_-3038966 type=barren mass=0.03912846091421107 radius=0.4406839672461317 gravity=20 pressure=0 tempK=23 oxygen=false locked=false rings=false rotation=7954 metallicity=1.2389033107219085 terrain=TerrainOption[NATIVE genType=0 w=1]
+  system -2638865_4126181_3742138 id=-66168209 kind=ROGUE_PLANET name=PGR--3525313.3525313.3525313 starless
+  system -3152478_-3317707_3965976 id=-264498101 kind=ROGUE_PLANET name=PGR--3525313.-3525313.3525313 starless
+  system 587420_3558873_4611454 id=-1566341957 kind=ROGUE_PLANET name=PGR-0.3525313.3525313 starless
+  system 663915_582291_-3038966 id=-333451093 kind=ROGUE_PLANET name=PGR-0.0.-3525313 starless
 seed 2147483647 systems=9
-  body -2493723_-2839512_-3212741 -2493723_-2839512_-3212741 kind=ROGUE_PLANET orbit=0 radius=0.338498394763068 starId=-207345417 frame=true at=0,0,0
-  body -2493723_-2839512_-3212741 -2493723_-2839512_-3212741.-1_0_0 kind=MOON orbit=0 radius=0.5074630002826466 starId=-207345417 frame=true at=0,0,0
-  body -2493723_-2839512_-3212741 -2493723_-2839512_-3212741.-2_0_0 kind=MOON orbit=0 radius=0.33837544643821515 starId=-207345417 frame=true at=0,0,0
-  body -2742838_660938_3979190 -2742838_660938_3979190 kind=ROGUE_PLANET orbit=0 radius=0.22137561323537092 starId=-455553521 frame=true at=0,0,0
-  body 3834728_104915_3754932 3834728_104915_3754932 kind=ROGUE_PLANET orbit=0 radius=1.5925684061535028 starId=-940407273 frame=true at=0,0,0
-  body 3834728_104915_3754932 3834728_104915_3754932.0_0_3 kind=MOON orbit=0 radius=2.2091575932064966 starId=-940407273 frame=true at=0,0,0
-  body 4037900_4371065_-3063872 4037900_4371065_-3063872 kind=ROGUE_PLANET orbit=0 radius=2.093359451025224 starId=-657806589 frame=true at=0,0,0
-  body 4348408_-3060116_-3223142 4348408_-3060116_-3223142 kind=ROGUE_PLANET orbit=0 radius=1.7114977812892795 starId=-1865164581 frame=true at=0,0,0
-  body 4348408_-3060116_-3223142 4348408_-3060116_-3223142.1_0_1 kind=MOON orbit=0 radius=2.3843255919435293 starId=-1865164581 frame=true at=0,0,0
-  body 712998_-3013860_-3318391 712998_-3013860_-3318391 kind=ROGUE_PLANET orbit=0 radius=0.5936672169388442 starId=-1420637497 frame=true at=0,0,0
-  body 712998_-3013860_-3318391 712998_-3013860_-3318391.0_0_3 kind=MOON orbit=0 radius=2.095818752703184 starId=-1420637497 frame=true at=0,0,0
-  body 712998_-3013860_-3318391 712998_-3013860_-3318391.3_0_0 kind=MOON orbit=0 radius=6.667876582430962 starId=-1420637497 frame=true at=0,0,0
-  body 718851_3779944_691719 718851_3779944_691719 kind=ROGUE_PLANET orbit=0 radius=0.3838652235975247 starId=-1442192965 frame=true at=0,0,0
-  body 718851_3779944_691719 718851_3779944_691719.2_0_-1 kind=MOON orbit=0 radius=2.113264014264038 starId=-1442192965 frame=true at=0,0,0
-  body 718851_3779944_691719 718851_3779944_691719.3_0_-1 kind=MOON orbit=0 radius=1.5472070306152543 starId=-1442192965 frame=true at=0,0,0
-  body 744632_4318880_-2812679 744632_4318880_-2812679 kind=ROGUE_PLANET orbit=0 radius=2.280305265104321 starId=-965124545 frame=true at=0,0,0
-  body 744632_4318880_-2812679 744632_4318880_-2812679.1_0_3 kind=MOON orbit=0 radius=4.676773652233241 starId=-965124545 frame=true at=0,0,0
-  body 974479_672038_-3200167 974479_672038_-3200167 kind=ROGUE_PLANET orbit=0 radius=0.2751076136224251 starId=-1701373473 frame=true at=0,0,0
-  derived -2493723_-2839512_-3212741 -2493723_-2839512_-3212741 type=barren mass=0.014821975902813578 radius=0.338498394763068 gravity=13 pressure=0 tempK=21 oxygen=false locked=false rings=false rotation=63594 metallicity=0.404360462100807 terrain=TerrainOption[NATIVE genType=0 w=1]
-  derived -2493723_-2839512_-3212741 -2493723_-2839512_-3212741.-1_0_0 type=barren mass=0.0026856484428369244 radius=0.21083334605098222 gravity=6 pressure=0 tempK=17 oxygen=false locked=false rings=false rotation=83460 metallicity=0.4752128571532206 terrain=TerrainOption[NATIVE genType=0 w=1]
-  derived -2493723_-2839512_-3212741 -2493723_-2839512_-3212741.-2_0_0 type=barren mass=0.5458473251985271 radius=0.9095339645405638 gravity=66 pressure=0 tempK=32 oxygen=false locked=false rings=false rotation=29915 metallicity=0.36724184240104674 terrain=TerrainOption[NATIVE genType=0 w=1]
-  derived -2742838_660938_3979190 -2742838_660938_3979190 type=ice mass=0.004697374280323576 radius=0.22137561323537092 gravity=10 pressure=0 tempK=19 oxygen=false locked=false rings=false rotation=22932 metallicity=0.7697090492061979 terrain=TerrainOption[NATIVE genType=0 w=1]
-  derived 3834728_104915_3754932 3834728_104915_3754932 type=ice mass=5.40917540606095 radius=1.5925684061535028 gravity=213 pressure=0 tempK=42 oxygen=false locked=false rings=false rotation=37513 metallicity=0.6300762958523322 terrain=TerrainOption[NATIVE genType=0 w=1]
-  derived 3834728_104915_3754932 3834728_104915_3754932.0_0_3 type=barren mass=0.08236404195627137 radius=0.4799517893408855 gravity=36 pressure=0 tempK=27 oxygen=false locked=false rings=false rotation=56009 metallicity=0.9636833577349272 terrain=TerrainOption[NATIVE genType=0 w=1]
-  derived 4037900_4371065_-3063872 4037900_4371065_-3063872 type=ice mass=15.897400529235586 radius=2.093359451025224 gravity=363 pressure=0 tempK=48 oxygen=false locked=false rings=false rotation=14555 metallicity=0.4155887210628324 terrain=TerrainOption[NATIVE genType=0 w=1]
-  derived 4348408_-3060116_-3223142 4348408_-3060116_-3223142 type=superearth mass=5.782581482149673 radius=1.7114977812892795 gravity=197 pressure=0 tempK=41 oxygen=false locked=false rings=false rotation=13613 metallicity=1.0113311064379111 terrain=TerrainOption[NATIVE genType=0 w=1]
-  derived 4348408_-3060116_-3223142 4348408_-3060116_-3223142.1_0_1 type=barren mass=0.059313356898710055 radius=0.45030394815431823 gravity=29 pressure=0 tempK=26 oxygen=false locked=false rings=false rotation=36088 metallicity=1.4891348290519466 terrain=TerrainOption[NATIVE genType=0 w=1]
-  derived 712998_-3013860_-3318391 712998_-3013860_-3318391 type=ice mass=0.18065730676369665 radius=0.5936672169388442 gravity=51 pressure=0 tempK=30 oxygen=false locked=false rings=false rotation=57108 metallicity=0.37057061467784547 terrain=TerrainOption[NATIVE genType=0 w=1]
-  derived 712998_-3013860_-3318391 712998_-3013860_-3318391.0_0_3 type=barren mass=0.08236404195627137 radius=0.4799517893408855 gravity=36 pressure=0 tempK=27 oxygen=false locked=false rings=false rotation=56009 metallicity=0.9636833577349272 terrain=TerrainOption[NATIVE genType=0 w=1]
-  derived 712998_-3013860_-3318391 712998_-3013860_-3318391.3_0_0 type=barren mass=0.5994447319017069 radius=0.8983427597383515 gravity=74 pressure=0 tempK=32 oxygen=false locked=false rings=false rotation=91389 metallicity=1.352135221235239 terrain=TerrainOption[NATIVE genType=0 w=1]
-  derived 718851_3779944_691719 718851_3779944_691719 type=barren mass=0.023920205370259073 radius=0.3838652235975247 gravity=16 pressure=0 tempK=22 oxygen=false locked=false rings=false rotation=22790 metallicity=0.9000540929487959 terrain=TerrainOption[NATIVE genType=0 w=1]
-  derived 718851_3779944_691719 718851_3779944_691719.2_0_-1 type=ice mass=3.0762141444642666 radius=1.3191138026750882 gravity=177 pressure=0 tempK=40 oxygen=false locked=false rings=false rotation=19749 metallicity=1.2187699864207913 terrain=TerrainOption[NATIVE genType=0 w=1]
-  derived 718851_3779944_691719 718851_3779944_691719.3_0_-1 type=ice mass=0.8284914638081117 radius=0.9239762492849259 gravity=97 pressure=0 tempK=35 oxygen=false locked=false rings=false rotation=6349 metallicity=0.46448087164731133 terrain=TerrainOption[NATIVE genType=0 w=1]
-  derived 744632_4318880_-2812679 744632_4318880_-2812679 type=ice mass=18.458429998067526 radius=2.280305265104321 gravity=355 pressure=0 tempK=48 oxygen=false locked=false rings=false rotation=20045 metallicity=0.8219291577052881 terrain=TerrainOption[NATIVE genType=0 w=1]
-  derived 744632_4318880_-2812679 744632_4318880_-2812679.1_0_3 type=barren mass=0.05524397566981526 radius=0.4420164548647545 gravity=28 pressure=0 tempK=26 oxygen=false locked=false rings=false rotation=36624 metallicity=1.4976031436047035 terrain=TerrainOption[NATIVE genType=0 w=1]
-  derived 974479_672038_-3200167 974479_672038_-3200167 type=barren mass=0.009298637248549268 radius=0.2751076136224251 gravity=12 pressure=0 tempK=21 oxygen=false locked=false rings=false rotation=30428 metallicity=1.5915795954966696 terrain=TerrainOption[NATIVE genType=0 w=1]
-  system -2493723_-2839512_-3212741 id=-207345417 kind=ROGUE_PLANET name=PGR--3525313.-3525313.-3525313 starless
-  system -2742838_660938_3979190 id=-455553521 kind=ROGUE_PLANET name=PGR--3525313.0.3525313 starless
-  system 3834728_104915_3754932 id=-940407273 kind=ROGUE_PLANET name=PGR-3525313.0.3525313 starless
-  system 4037900_4371065_-3063872 id=-657806589 kind=ROGUE_PLANET name=PGR-3525313.3525313.-3525313 starless
-  system 4348408_-3060116_-3223142 id=-1865164581 kind=ROGUE_PLANET name=PGR-3525313.-3525313.-3525313 starless
-  system 712998_-3013860_-3318391 id=-1420637497 kind=ROGUE_PLANET name=PGR-0.-3525313.-3525313 starless
-  system 718851_3779944_691719 id=-1442192965 kind=ROGUE_PLANET name=PGR-0.3525313.0 starless
-  system 744632_4318880_-2812679 id=-965124545 kind=ROGUE_PLANET name=PGR-0.3525313.-3525313 starless
-  system 974479_672038_-3200167 id=-1701373473 kind=ROGUE_PLANET name=PGR-0.0.-3525313 starless
+  body -2823872_-2936473_-3419168 -2823872_-2936473_-3419168 kind=ROGUE_PLANET orbit=0 radius=0.2110778203116643 starId=-207345417 frame=true at=0,0,0
+  body -2823872_-2936473_-3419168 -2823872_-2936473_-3419168.1_0_0 kind=MOON orbit=0 radius=0.6978569421099132 starId=-207345417 frame=true at=0,0,0
+  body -3200233_930279_4239633 -3200233_930279_4239633 kind=ROGUE_PLANET orbit=0 radius=1.1971222434897224 starId=-455553521 frame=true at=0,0,0
+  body 3873319_-2581329_-2881317 3873319_-2581329_-2881317 kind=ROGUE_PLANET orbit=0 radius=0.5679244706624619 starId=-1865164581 frame=true at=0,0,0
+  body 4431185_388530_3645415 4431185_388530_3645415 kind=ROGUE_PLANET orbit=0 radius=0.26574681538904643 starId=-940407273 frame=true at=0,0,0
+  body 4511327_4615990_-3071945 4511327_4615990_-3071945 kind=ROGUE_PLANET orbit=0 radius=0.2878228095007049 starId=-657806589 frame=true at=0,0,0
+  body 4511327_4615990_-3071945 4511327_4615990_-3071945.-3_0_-4 kind=MOON orbit=0 radius=0.200066154728516 starId=-657806589 frame=true at=0,0,0
+  body 4511327_4615990_-3071945 4511327_4615990_-3071945.-5_0_2 kind=MOON orbit=0 radius=2.1878733575751963 starId=-657806589 frame=true at=0,0,0
+  body 484706_90715_-2858792 484706_90715_-2858792 kind=ROGUE_PLANET orbit=0 radius=1.5683770505809476 starId=-1701373473 frame=true at=0,0,0
+  body 507967_4561211_-3490570 507967_4561211_-3490570 kind=ROGUE_PLANET orbit=0 radius=1.2061765999848995 starId=-965124545 frame=true at=0,0,0
+  body 507967_4561211_-3490570 507967_4561211_-3490570.-1_0_0 kind=MOON orbit=0 radius=1.4459110282618335 starId=-965124545 frame=true at=0,0,0
+  body 546422_3839891_58086 546422_3839891_58086 kind=ROGUE_PLANET orbit=0 radius=1.2760467657966108 starId=-1442192965 frame=true at=0,0,0
+  body 975119_-3443041_-3020354 975119_-3443041_-3020354 kind=ROGUE_PLANET orbit=0 radius=0.24823802637866554 starId=-1420637497 frame=true at=0,0,0
+  body 975119_-3443041_-3020354 975119_-3443041_-3020354.-1_0_3 kind=MOON orbit=0 radius=0.6563362105335058 starId=-1420637497 frame=true at=0,0,0
+  body 975119_-3443041_-3020354 975119_-3443041_-3020354.1_0_1 kind=MOON orbit=0 radius=1.8814076395991461 starId=-1420637497 frame=true at=0,0,0
+  derived -2823872_-2936473_-3419168 -2823872_-2936473_-3419168 type=barren mass=0.0028523502859831235 radius=0.2110778203116643 gravity=6 pressure=0 tempK=18 oxygen=false locked=false rings=false rotation=28116 metallicity=1.443840114831199 terrain=TerrainOption[NATIVE genType=0 w=1]
+  derived -2823872_-2936473_-3419168 -2823872_-2936473_-3419168.1_0_0 type=ice mass=0.05724487258002346 radius=0.4461458393346074 gravity=29 pressure=0 tempK=26 oxygen=false locked=false rings=false rotation=35823 metallicity=1.4849061067578053 terrain=TerrainOption[NATIVE genType=0 w=1]
+  derived -3200233_930279_4239633 -3200233_930279_4239633 type=ice mass=2.095652300313431 radius=1.1971222434897224 gravity=146 pressure=0 tempK=38 oxygen=false locked=false rings=false rotation=35841 metallicity=1.4990780669212151 terrain=TerrainOption[NATIVE genType=0 w=1]
+  derived 3873319_-2581329_-2881317 3873319_-2581329_-2881317 type=ice mass=0.09294909673708825 radius=0.5679244706624619 gravity=29 pressure=0 tempK=26 oxygen=false locked=false rings=false rotation=25826 metallicity=1.4978460308087378 terrain=TerrainOption[NATIVE genType=0 w=1]
+  derived 4431185_388530_3645415 4431185_388530_3645415 type=barren mass=0.006790690864479928 radius=0.26574681538904643 gravity=10 pressure=0 tempK=19 oxygen=false locked=false rings=false rotation=41429 metallicity=0.7181638354944113 terrain=TerrainOption[NATIVE genType=0 w=1]
+  derived 4511327_4615990_-3071945 4511327_4615990_-3071945 type=ice mass=0.010455231447724114 radius=0.2878228095007049 gravity=13 pressure=0 tempK=21 oxygen=false locked=false rings=false rotation=24881 metallicity=0.5619401290006367 terrain=TerrainOption[NATIVE genType=0 w=1]
+  derived 4511327_4615990_-3071945 4511327_4615990_-3071945.-3_0_-4 type=barren mass=0.005838587995732763 radius=0.2466445134462422 gravity=10 pressure=0 tempK=19 oxygen=false locked=false rings=true rotation=89035 metallicity=1.029410570874182 terrain=TerrainOption[NATIVE genType=0 w=1]
+  derived 4511327_4615990_-3071945 4511327_4615990_-3071945.-5_0_2 type=ice mass=5.415869381530546 radius=1.497014636303833 gravity=242 pressure=0 tempK=44 oxygen=false locked=false rings=false rotation=56886 metallicity=1.4888133499451799 terrain=TerrainOption[NATIVE genType=0 w=1]
+  derived 484706_90715_-2858792 484706_90715_-2858792 type=ice mass=4.864766551879459 radius=1.5683770505809476 gravity=198 pressure=0 tempK=42 oxygen=false locked=false rings=false rotation=26343 metallicity=0.4997778751183005 terrain=TerrainOption[NATIVE genType=0 w=1]
+  derived 507967_4561211_-3490570 507967_4561211_-3490570 type=ice mass=2.1113962584448394 radius=1.2061765999848995 gravity=145 pressure=0 tempK=38 oxygen=false locked=false rings=false rotation=8136 metallicity=0.5994643096671511 terrain=TerrainOption[NATIVE genType=0 w=1]
+  derived 507967_4561211_-3490570 507967_4561211_-3490570.-1_0_0 type=barren mass=0.0026856484428369244 radius=0.21083334605098222 gravity=6 pressure=0 tempK=17 oxygen=false locked=false rings=false rotation=83460 metallicity=0.4752128571532206 terrain=TerrainOption[NATIVE genType=0 w=1]
+  derived 546422_3839891_58086 546422_3839891_58086 type=superearth mass=2.614459903038747 radius=1.2760467657966108 gravity=161 pressure=0 tempK=39 oxygen=false locked=false rings=false rotation=10247 metallicity=1.2319215026619459 terrain=TerrainOption[NATIVE genType=0 w=1]
+  derived 975119_-3443041_-3020354 975119_-3443041_-3020354 type=barren mass=0.006394800576334879 radius=0.24823802637866554 gravity=10 pressure=0 tempK=20 oxygen=false locked=false rings=false rotation=34220 metallicity=0.8792026851365714 terrain=TerrainOption[NATIVE genType=0 w=1]
+  derived 975119_-3443041_-3020354 975119_-3443041_-3020354.-1_0_3 type=barren mass=0.002620905193007693 radius=0.20971327020714092 gravity=6 pressure=0 tempK=17 oxygen=false locked=false rings=false rotation=82847 metallicity=0.4676422708826672 terrain=TerrainOption[NATIVE genType=0 w=1]
+  derived 975119_-3443041_-3020354 975119_-3443041_-3020354.1_0_1 type=barren mass=0.059313356898710055 radius=0.45030394815431823 gravity=29 pressure=0 tempK=26 oxygen=false locked=false rings=false rotation=36088 metallicity=1.4891348290519466 terrain=TerrainOption[NATIVE genType=0 w=1]
+  system -2823872_-2936473_-3419168 id=-207345417 kind=ROGUE_PLANET name=PGR--3525313.-3525313.-3525313 starless
+  system -3200233_930279_4239633 id=-455553521 kind=ROGUE_PLANET name=PGR--3525313.0.3525313 starless
+  system 3873319_-2581329_-2881317 id=-1865164581 kind=ROGUE_PLANET name=PGR-3525313.-3525313.-3525313 starless
+  system 4431185_388530_3645415 id=-940407273 kind=ROGUE_PLANET name=PGR-3525313.0.3525313 starless
+  system 4511327_4615990_-3071945 id=-657806589 kind=ROGUE_PLANET name=PGR-3525313.3525313.-3525313 starless
+  system 484706_90715_-2858792 id=-1701373473 kind=ROGUE_PLANET name=PGR-0.0.-3525313 starless
+  system 507967_4561211_-3490570 id=-965124545 kind=ROGUE_PLANET name=PGR-0.3525313.-3525313 starless
+  system 546422_3839891_58086 id=-1442192965 kind=ROGUE_PLANET name=PGR-0.3525313.0 starless
+  system 975119_-3443041_-3020354 id=-1420637497 kind=ROGUE_PLANET name=PGR-0.-3525313.-3525313 starless

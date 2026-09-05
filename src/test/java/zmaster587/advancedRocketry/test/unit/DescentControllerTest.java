@@ -536,7 +536,7 @@ public class DescentControllerTest {
         return BodyEphemeris.orbit(
                 zmaster587.advancedRocketry.util.AstronomicalBodyHelper.DISTANCE_UNITS_PER_AU,
                 0d, 0d, false, EARTH_PERIOD_TICKS,
-                zmaster587.advancedRocketry.util.AstronomicalBodyHelper.BLOCKS_PER_ORBIT_UNIT);
+                zmaster587.advancedRocketry.util.AstronomicalBodyHelper.BLOCKS_PER_DISTANCE_UNIT);
     }
 
     /** Earth: its own galactic cell, riding its orbit, standing still inside that cell. */
@@ -552,7 +552,8 @@ public class DescentControllerTest {
     private static SystemBody luna() {
         BodyEphemeris moonOrbit = BodyEphemeris.orbit(
                 zmaster587.advancedRocketry.util.AstronomicalBodyHelper.MOON_REFERENCE_UNITS,
-                0d, 0d, false, LUNA_PERIOD_TICKS, 200L);
+                0d, 0d, false, LUNA_PERIOD_TICKS,
+                zmaster587.advancedRocketry.util.AstronomicalBodyHelper.BLOCKS_PER_DISTANCE_UNIT);
         long zoneCell = zmaster587.advancedRocketry.space.ZoneScale.cellBlocks(earth(), sol(), 0L);
         zmaster587.advancedRocketry.space.BlockDelta at0 = moonOrbit.offsetAt(0L);
         GalacticCoord name = GalacticCoord.inZone(ANCHOR.cellKey(), zoneCell,

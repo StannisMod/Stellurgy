@@ -213,19 +213,28 @@ public class VoidContentTest {
                 bodies.get(0).kind());
         assertTrue(bodies.get(0).name().sameCell(anchor));
 
-        int framesDefined = 0;
+        int inTheRoguesZone = 0;
         for (SystemBody body : bodies) {
-            assertTrue("everything a rogue keeps shares its one cell", body.name().sameCell(anchor));
+            // Everything a rogue keeps is inside its ONE galactic cell — a moon by being named in
+            // the rogue's own ZONE, whose key is that cell. This used to read `sameCell(anchor)`,
+            // which was the same statement while a moon shared its parent's cell and became false
+            // when moons got cells of their own: a rogue has no primary and therefore no Laplace
+            // sphere, so its zone is bounded by the realized region alone, but it IS a zone.
+            assertTrue("everything a rogue keeps must be inside its one galactic cell, got "
+                            + body.name(), body.name().galacticCell().sameCell(anchor));
             assertTrue("nothing here is a star or a belt",
                     body.kind() == SystemBodyKind.ROGUE_PLANET || body.kind() == SystemBodyKind.MOON);
             assertFalse("a rogue is not a descend target yet, so neither is anything in its system",
                     body.isDescendTarget());
-            if (body.definesFrame()) {
-                framesDefined++;
+            if (body.kind() == SystemBodyKind.MOON) {
+                assertEquals("a rogue's moon is named in the rogue's own zone",
+                        anchor.cellKey(), body.name().zone());
+            } else if (body.name().zone() == null) {
+                inTheRoguesZone++;
             }
         }
-        assertEquals("AT MOST ONE REAL BODY PER CELL holds for a rogue too, moons excepted",
-                1, framesDefined);
+        assertEquals("AT MOST ONE REAL BODY PER CELL: the rogue alone holds the galactic cell",
+                1, inTheRoguesZone);
         assertEquals("and it is deterministic", bodies, gen.bodiesFor(SEED, anchor));
     }
 

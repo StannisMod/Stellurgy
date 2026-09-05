@@ -58,7 +58,7 @@ public class DimensionPropertiesTest {
     private static DimensionProperties earthLike() {
         DimensionProperties props = new DimensionProperties(9001, "TestEarthLike");
         props.gravitationalMultiplier = 1.0f;
-        props.orbitalDist = 100;
+        props.orbitalDist = zmaster587.advancedRocketry.util.AstronomicalBodyHelper.DISTANCE_UNITS_PER_AU;
         props.rotationalPeriod = 24000;
         props.setAtmosphereDensityDirect(100);
         props.skyColor = new float[]{0.5f, 0.7f, 1.0f};
@@ -73,7 +73,7 @@ public class DimensionPropertiesTest {
 
         assertEquals("Temp", props.getName());
         assertEquals(1.0f, props.getGravitationalMultiplier(), 1e-6);
-        assertEquals(100, props.orbitalDist);
+        assertEquals(zmaster587.advancedRocketry.util.AstronomicalBodyHelper.DISTANCE_UNITS_PER_AU, props.orbitalDist);
         assertEquals(24000, props.rotationalPeriod);
         assertEquals(63, props.getSeaLevel());
         assertTrue(props.hasOxygen);

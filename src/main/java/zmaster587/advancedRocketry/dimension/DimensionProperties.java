@@ -541,8 +541,11 @@ public class DimensionProperties implements Cloneable, IDimensionProperties {
         ringColor = new float[]{.4f, .4f, .7f};
         gravitationalMultiplier = 1;
         rotationalPeriod = DEFAULT_ROTATIONAL_PERIOD;
-        orbitalDist = 100;
-        originalAtmosphereDensity = atmosphereDensity = 100;
+        // One AU. The two 100s that used to sit here were NOT the same quantity — a distance
+        // and an atmosphere density — and only one of them is a distance unit.
+        orbitalDist = zmaster587.advancedRocketry.util.AstronomicalBodyHelper.DISTANCE_UNITS_PER_AU;
+        originalAtmosphereDensity = atmosphereDensity =
+                zmaster587.advancedRocketry.util.AstronomicalBodyHelper.ATM_PRESSURE_UNITS_PER_ATMOSPHERE;
         childPlanets = new HashSet<>();
         requiredArtifacts = new LinkedList<>();
         parentPlanet = Constants.INVALID_PLANET;

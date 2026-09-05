@@ -181,7 +181,11 @@ public class ParkedCraftKeepsStationTest {
         star.setSize(1f);
 
         DimensionProperties earth = new DimensionProperties(EARTH_DIM);
-        earth.orbitalDist = 100;
+        // ONE AU, stated as one. It read 100 while a distance unit was a hundredth of an AU; at
+        // the 10 000 km that literal now means, Earth sits inside its own star, its sphere of
+        // influence collapses and so does the zone cell derived from it (494 blocks, measured).
+        earth.orbitalDist =
+                zmaster587.advancedRocketry.util.AstronomicalBodyHelper.DISTANCE_UNITS_PER_AU;
         earth.baseOrbitTheta = 0.0;
         earth.orbitTheta = 0.0;
         earth.orbitalPhi = 0;

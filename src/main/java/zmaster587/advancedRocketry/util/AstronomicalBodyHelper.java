@@ -15,8 +15,6 @@ public class AstronomicalBodyHelper {
     // and 100d for the SAME scale, and float-vs-double division is not always the same number once
     // narrowed. The casts below are deliberate and preserve each site's original type exactly.
 
-    /** Distance units in one astronomical unit — the scale the whole system is written in. */
-    public static final int DISTANCE_UNITS_PER_AU = 100;
     /** Atmosphere-density units in one Earth atmosphere. NOT the distance scale. */
     public static final int ATM_PRESSURE_UNITS_PER_ATMOSPHERE = 100;
     /** Star-temperature units in one Sol. NOT the distance scale either. */
@@ -37,8 +35,41 @@ public class AstronomicalBodyHelper {
 
     /** Metres in one chart block — the scale the whole universe layer is drawn at. */
     public static final int METRES_PER_CHART_BLOCK = 250;
+    /**
+     * <b>The distance unit, stated as a LENGTH: 100 km.</b> One quantity, one unit, at every level —
+     * a planet's distance from its star and a moon's from its planet are the same kind of number and
+     * are written in the same one.
+     *
+     * <p><b>Why the unit is a length and the block count follows</b>, rather than the other way
+     * round: {@link #METRES_PER_CHART_BLOCK} is metres-per-block and {@link #BLOCKS_PER_DISTANCE_UNIT}
+     * is blocks-per-unit — two constants that merely share a scale, and merging them because the
+     * numbers look alike is the trap. Deriving the block count from the metric means one edit to the
+     * metric moves everything together and nothing is re-derived by hand.</p>
+     *
+     * <p><b>Why 100 km and not the 250 km first proposed</b>, chosen against the FINEST thing that
+     * depends on it rather than the widest. In an {@code int} field: 1 km cannot express Uranus;
+     * 250 km leaves a descent shell only 7 units of resolution, so an orbit could barely be moved
+     * within its own shell. 100 km leaves the shell 17.7 units and still reaches 1 436 AU, and its
+     * resolution error on Luna is 100 km in 384 400 — 0.026 %, three orders below anything that
+     * reads it.</p>
+     */
+    public static final int METRES_PER_DISTANCE_UNIT = 100_000;
     /** Metres in one astronomical unit (IAU 2012). */
     public static final double METRES_PER_AU = 1.495_978_707e11d;
+
+    /**
+     * Distance units in one astronomical unit — DERIVED, because the unit is a LENGTH.
+     *
+     * <p>See {@link #METRES_PER_DISTANCE_UNIT}. This was a literal {@code 100} while a distance unit
+     * meant "a hundredth of an AU", and it sat beside a second unit for the same quantity — a moon's
+     * orbit, in 200-block steps — <b>a factor of 29 920 between two units for one thing</b>. What
+     * that cost was not arithmetic error but ambiguity: a distance meant two different lengths
+     * depending on which LEVEL had written it, so anything reading the field without knowing the
+     * level was wrong by that factor, and {@code ReferenceFrames.soiRadiusBlocks} refuses to read
+     * the field at all for exactly this reason.</p>
+     */
+    public static final int DISTANCE_UNITS_PER_AU =
+            (int) Math.round(METRES_PER_AU / METRES_PER_DISTANCE_UNIT);
     /** Metres in one Julian light year. */
     public static final double METRES_PER_LIGHT_YEAR = 9.460_730_472_580_8e15d;
     /**
@@ -60,9 +91,14 @@ public class AstronomicalBodyHelper {
      * <p>It used to be a literal million blocks per unit, six times too small, because a system's
      * extent was defined as a fraction of the distance to the next star and the orbit scale was
      * shrunk until systems fit. Extent now follows the outermost orbit, so the scale can be what the
-     * metric says it is and one orbit unit means one distance everywhere.</p>
+     * metric says it is and one distance unit means one distance everywhere.</p>
+     *
+     * <p>DERIVED from the unit's own LENGTH, so the two levels that used to write distances in two
+     * different units — a planet's in hundredths of an AU, a moon's in 200-block steps — write them
+     * in the same one. See {@link #METRES_PER_DISTANCE_UNIT}.</p>
      */
-    public static final long BLOCKS_PER_ORBIT_UNIT = BLOCKS_PER_AU / DISTANCE_UNITS_PER_AU;
+    public static final long BLOCKS_PER_DISTANCE_UNIT =
+            METRES_PER_DISTANCE_UNIT / METRES_PER_CHART_BLOCK;
 
     /**
      * The smallest orbit, in {@code orbitalDistance} units, that can carry an ADDRESS of its own —
@@ -81,8 +117,8 @@ public class AstronomicalBodyHelper {
      * be a separate destination — it is not generated rather than being generated unreachable.</p>
      */
     public static final int MIN_ADDRESSABLE_ORBIT_UNITS = (int) Math.max(1L,
-            (zmaster587.advancedRocketry.space.GalacticCoord.CELL + BLOCKS_PER_ORBIT_UNIT - 1L)
-                    / BLOCKS_PER_ORBIT_UNIT);
+            (zmaster587.advancedRocketry.space.GalacticCoord.CELL + BLOCKS_PER_DISTANCE_UNIT - 1L)
+                    / BLOCKS_PER_DISTANCE_UNIT);
 
     /**
      * Earth radii in one SOLAR radius (696 340 km / 6 378 km). A star states its size in solar radii
@@ -171,19 +207,21 @@ public class AstronomicalBodyHelper {
     /**
      * The reference PAIR a moon's period is anchored on: our own Moon, at its own distance.
      *
-     * <p>384 400 km is {@value #MOON_REFERENCE_UNITS} moon-units of 200 chart blocks, and the Moon
-     * takes 27.32 days to go round. Kepler's third scales every other moon from that pair.</p>
+     * <p>384 400 km is 3 844 units of {@link #METRES_PER_DISTANCE_UNIT}, and the Moon takes 27.32
+     * days to go round. Kepler's third scales every other moon from that pair. The number is
+     * DERIVED from the Moon's real distance, so it follows the unit rather than restating it.</p>
      *
      * <p><b>Why an anchor at all, rather than the 8-days-at-100-units it replaces.</b> That
-     * reference read a moon's distance against {@link #DISTANCE_UNITS_PER_AU} — the scale a PLANET's
-     * distance from its star is written in, where 100 units is an astronomical unit. A moon's
-     * distance is not written in that metric: the layout gives it 200 chart blocks per unit
-     * (`SystemContent.MOON_UNIT_BLOCKS`), so the same field meant 50 km to one reader and 1.5
-     * million km to the other. The error was invisible while our Moon carried a distance 51 times too
-     * small; correcting that distance made it plain, because the old law answered <b>5 392 days</b>
-     * for a Moon that takes 27.32.</p>
+     * reference read a moon's distance against {@link #DISTANCE_UNITS_PER_AU}, the scale a PLANET's
+     * distance from its star was written in — and a moon's was written in a SECOND unit of 200
+     * chart blocks, so the same field meant 50 km to one reader and 1.5 million km to the other.
+     * The error was invisible while our Moon carried a distance 51 times too small; correcting that
+     * distance made it plain, because the old law answered <b>5 392 days</b> for a Moon that takes
+     * 27.32. <b>There is one unit now</b> and the two levels cannot disagree, which is what removes
+     * the whole class rather than this one instance of it.</p>
      */
-    public static final int MOON_REFERENCE_UNITS = 7688;
+    public static final int MOON_REFERENCE_UNITS =
+            (int) Math.round(384_400_000d / METRES_PER_DISTANCE_UNIT);
     /** Days in one lunar month at {@link #MOON_REFERENCE_UNITS} from a mass-1 parent — the Moon's own
      *  sidereal period, and a measured fact rather than a tuned one. */
     public static final double DAYS_PER_LUNAR_MONTH = 27.32d;

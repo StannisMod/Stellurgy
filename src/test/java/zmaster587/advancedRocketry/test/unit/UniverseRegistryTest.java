@@ -50,6 +50,17 @@ import static org.junit.Assert.fail;
 public class UniverseRegistryTest {
 
     /**
+     * One and a half AU, in the field's own units — the orbit every body fixture below is placed at.
+     *
+     * <p>It was the literal {@code 150}, which read as 1.5 AU while a distance unit was a hundredth
+     * of one. A distance unit is a LENGTH now (100 km), so 150 means 15 000 km — inside the star,
+     * with a period that rounds to nothing, and a "quarter of an orbit" of zero ticks. The pin then
+     * compares a frame origin with itself and reports that a cell does not ride its primary.</p>
+     */
+    private static final int AU_AND_A_HALF =
+            AstronomicalBodyHelper.DISTANCE_UNITS_PER_AU * 3 / 2;
+
+    /**
      * A sector far enough away to be a DIFFERENT system's territory. An anchor owns every cell of its
      * super-cell, so "elsewhere" has to be stated in super-cells; a literal few thousand sectors is
      * the same neighbourhood, and a fixture using one proves nothing about attribution.
@@ -143,7 +154,12 @@ public class UniverseRegistryTest {
         StellarBody host = star(4321);
         host.setSize(1f);
         DimensionProperties body = new DimensionProperties(4322);
-        body.orbitalDist = 120;
+        // 1.2 AU, and it has to be an ASTRONOMICAL distance for the negative leg to mean anything:
+        // the leg proves the name was RECORDED by moving the authored angle and requiring a fresh
+        // derivation to answer differently. At the 12 000 km this literal used to be (a distance
+        // unit is a LENGTH now, not a hundredth of an AU) every angle lands in the same cell, so the
+        // re-derivation agrees by accident and the leg proves nothing.
+        body.orbitalDist = AstronomicalBodyHelper.DISTANCE_UNITS_PER_AU * 6 / 5;
         body.baseOrbitTheta = 0.4;
         body.orbitalPhi = 0;
         body.setStar(host);
@@ -578,14 +594,14 @@ public class UniverseRegistryTest {
         reg.place(GalacticCoord.ORIGIN, 6001);
         reg.place(GalacticCoord.ofSectorLocal(ANOTHER_SUPER_CELL, 0, 0, 0, 0, 0), 6002);
 
-        DimensionProperties original = bodyOfStar(sol, 6100, 150, 0.3);
+        DimensionProperties original = bodyOfStar(sol, 6100, AU_AND_A_HALF, 0.3);
         Optional<GalacticCoord> firstName = reg.coordForPlanet(original);
         assertTrue(firstName.isPresent());
         assertTrue("control: the first body's name is recorded", reg.recordedName(6100).isPresent());
 
         // The planet is deleted and its id reissued to a body of a DIFFERENT star.
         sol.removePlanet(original);
-        DimensionProperties reissued = bodyOfStar(other, 6100, 150, 0.3);
+        DimensionProperties reissued = bodyOfStar(other, 6100, AU_AND_A_HALF, 0.3);
         Optional<GalacticCoord> secondName = reg.coordForPlanet(reissued);
 
         assertTrue(secondName.isPresent());
@@ -606,7 +622,7 @@ public class UniverseRegistryTest {
         UniverseRegistry.setStarLookup(id -> id == 6003 ? sol : null);
         UniverseRegistry reg = new UniverseRegistry();
         reg.place(GalacticCoord.ORIGIN, 6003);
-        reg.coordForPlanet(bodyOfStar(sol, 6101, 150, 0.3));
+        reg.coordForPlanet(bodyOfStar(sol, 6101, AU_AND_A_HALF, 0.3));
 
         assertTrue("control: the name was recorded", reg.recordedName(6101).isPresent());
         assertTrue("forgetting reports that it held one", reg.forgetName(6101));
@@ -625,7 +641,7 @@ public class UniverseRegistryTest {
         StellarBody host = star(6004);
         host.setSize(1f);
         UniverseRegistry.setStarLookup(id -> id == 6004 ? host : null);
-        DimensionProperties body = bodyOfStar(host, 6102, 150, 0.3);
+        DimensionProperties body = bodyOfStar(host, 6102, AU_AND_A_HALF, 0.3);
 
         UniverseRegistry reg = new UniverseRegistry();
         reg.place(GalacticCoord.ORIGIN, 6004);
@@ -656,7 +672,7 @@ public class UniverseRegistryTest {
         StellarBody host = star(6005);
         host.setSize(1f);
         UniverseRegistry.setStarLookup(id -> id == 6005 ? host : null);
-        DimensionProperties body = bodyOfStar(host, 6103, 150, 0.3);
+        DimensionProperties body = bodyOfStar(host, 6103, AU_AND_A_HALF, 0.3);
 
         UniverseRegistry reg = new UniverseRegistry();
         reg.place(GalacticCoord.ORIGIN, 6005);
@@ -682,7 +698,7 @@ public class UniverseRegistryTest {
         StellarBody host = star(6006);
         host.setSize(1f);
         UniverseRegistry.setStarLookup(id -> id == 6006 ? host : null);
-        DimensionProperties body = bodyOfStar(host, 6104, 150, 0.3);
+        DimensionProperties body = bodyOfStar(host, 6104, AU_AND_A_HALF, 0.3);
 
         UniverseRegistry reg = new UniverseRegistry();
         reg.place(GalacticCoord.ORIGIN, 6006);
@@ -690,7 +706,7 @@ public class UniverseRegistryTest {
         assertTrue(name.isPresent());
 
         long quarterOrbit = (long) (24000d
-                * AstronomicalBodyHelper.getOrbitalPeriod(150, 1f) / 4d);
+                * AstronomicalBodyHelper.getOrbitalPeriod(AU_AND_A_HALF, 1f) / 4d);
 
         assertFalse("a cell with a primary in it moves with that primary",
                 reg.originAt(name.get(), 0L).equals(reg.originAt(name.get(), quarterOrbit)));
@@ -712,7 +728,7 @@ public class UniverseRegistryTest {
         StellarBody host = star(6007);
         host.setSize(1f);
         UniverseRegistry.setStarLookup(id -> id == 6007 ? host : null);
-        DimensionProperties body = bodyOfStar(host, 6105, 150, 0.3);
+        DimensionProperties body = bodyOfStar(host, 6105, AU_AND_A_HALF, 0.3);
 
         UniverseRegistry reg = new UniverseRegistry();
         reg.place(GalacticCoord.ORIGIN, 6007);

@@ -483,7 +483,7 @@ public class ClusteredGalaxyGeneratorTest {
                     continue;
                 }
                 double expected = (double) body.orbitalDistance()
-                        * AstronomicalBodyHelper.BLOCKS_PER_ORBIT_UNIT;
+                        * AstronomicalBodyHelper.BLOCKS_PER_DISTANCE_UNIT;
                 double placed = body.absoluteAt(0L).distanceTo(star.absoluteAt(0L));
                 assertEquals("body at orbit " + body.orbitalDistance() + " of system "
                                 + anchor.cellKey() + " must stand that far from its star",

@@ -37,6 +37,18 @@ import static org.junit.Assert.assertTrue;
  */
 public class SystemContentTest {
 
+    /**
+     * A moon's orbit for these fixtures, in the hundredths-of-an-AU the {@link #planet} helper takes.
+     *
+     * <p>The literal was {@code 127}, and it was NOT in the same unit as the planet distances beside
+     * it: a moon's orbit was written in a second unit of 200 chart blocks — 25 400 blocks here —
+     * while a planet's was written in hundredths of an AU. One helper, one parameter, two meanings.
+     * There is one unit now, so this states the same physical distance the fixtures always had.</p>
+     */
+    private static final int MOON_CENTI_AU = (int) Math.max(1L,
+            25_400L * 100L / AstronomicalBodyHelper.BLOCKS_PER_DISTANCE_UNIT
+                    * 100L / AstronomicalBodyHelper.DISTANCE_UNITS_PER_AU);
+
     @BeforeClass
     public static void bootstrap() {
         MinecraftBootstrap.ensure();
@@ -60,9 +72,14 @@ public class SystemContentTest {
      * suite green while restoring exactly the bug that took planets out of a parked ship's sky. A
      * unit test never ticks the world, so the drift has to be authored in.</p>
      */
-    private static DimensionProperties planet(int dimId, int orbitalDist, double theta) {
+    private static DimensionProperties planet(int dimId, int orbitCentiAu, double theta) {
         DimensionProperties p = new DimensionProperties(dimId);
-        p.orbitalDist = orbitalDist;
+        // The argument is HUNDREDTHS OF AN AU, which is what these cases were written in
+        // when a distance unit WAS one. A distance unit is a length now (100 km), so the
+        // conversion happens here rather than at twenty call sites — and stating it once
+        // is what keeps the cases readable as "one AU", "two AU", "a quarter further out".
+        p.orbitalDist = (int) ((long) orbitCentiAu
+                * AstronomicalBodyHelper.DISTANCE_UNITS_PER_AU / 100L);
         p.baseOrbitTheta = theta;
         p.orbitTheta = theta + 1.0; // the body has moved since; a NAME must not notice
         p.orbitalPhi = 0;
@@ -311,7 +328,8 @@ public class SystemContentTest {
         // ever has from where it began. Which tick that is comes from the body's own orbit, so this
         // pins the DURABILITY of a name, never a particular period.
         long halfPeriodTicks = (long) (24000d
-                * AstronomicalBodyHelper.getOrbitalPeriod(100, 1f) / 2d);
+                * AstronomicalBodyHelper.getOrbitalPeriod(
+                        AstronomicalBodyHelper.DISTANCE_UNITS_PER_AU, 1f) / 2d);
 
         SystemBody body = bodyOf(SystemContent.bodiesOf(star, GalacticCoord.ORIGIN), 740);
         assertNotNull(body);
@@ -399,7 +417,7 @@ public class SystemContentTest {
         star.setSize(1f);
         DimensionProperties parent = planet(750, 200, 0.5);
         parent.gravitationalMultiplier = 1f;
-        DimensionProperties moon = planet(751, 127, 0.9);
+        DimensionProperties moon = planet(751, MOON_CENTI_AU, 0.9);
         DimensionManager.getInstance().setDimProperties(750, parent);
         DimensionManager.getInstance().setDimProperties(751, moon);
         parent.setStar(star);
@@ -453,7 +471,7 @@ public class SystemContentTest {
         star.setSize(1f);
         DimensionProperties parent = planet(790, 200, 0.5);
         parent.gravitationalMultiplier = 1f;
-        DimensionProperties moon = planet(791, 127, 0.9);
+        DimensionProperties moon = planet(791, MOON_CENTI_AU, 0.9);
         DimensionManager.getInstance().setDimProperties(790, parent);
         DimensionManager.getInstance().setDimProperties(791, moon);
         parent.setStar(star);
@@ -505,7 +523,7 @@ public class SystemContentTest {
         star.setSize(1f);
         DimensionProperties parent = planet(770, 200, 0.5);
         parent.gravitationalMultiplier = 1f;
-        DimensionProperties moon = planet(771, 127, 0.9);
+        DimensionProperties moon = planet(771, MOON_CENTI_AU, 0.9);
         DimensionManager.getInstance().setDimProperties(770, parent);
         DimensionManager.getInstance().setDimProperties(771, moon);
         parent.setStar(star);
@@ -550,7 +568,7 @@ public class SystemContentTest {
         star.setSize(1f);
         DimensionProperties parent = planet(780, 200, 0.5);
         parent.setBulk(318d, 11.2d); // a Jupiter: gravity falls out as M/R² = 2.53
-        DimensionProperties moon = planet(781, 127, 0.9);
+        DimensionProperties moon = planet(781, MOON_CENTI_AU, 0.9);
         DimensionManager.getInstance().setDimProperties(780, parent);
         DimensionManager.getInstance().setDimProperties(781, moon);
         parent.setStar(star);

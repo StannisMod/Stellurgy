@@ -89,7 +89,8 @@ public class SystemBodyTest {
     public void aMoonKeepsItsParentsNameAndMovesInsideIt() {
         GalacticCoord name = GalacticCoord.ofSectorLocal(9, 0, 0, 0, 0, 0);
         CellFrame parentFrame = CellFrame.of(AbsolutePos.ofCellName(name), orbit(200d, 1_000_000L));
-        SystemBody moon = new SystemBody(name, parentFrame, orbit(300d, 200L),
+        SystemBody moon = new SystemBody(name, parentFrame, orbit(300d,
+                zmaster587.advancedRocketry.util.AstronomicalBodyHelper.BLOCKS_PER_DISTANCE_UNIT),
                 SystemBodyKind.MOON, 11, 0);
 
         assertEquals(name, moon.name());

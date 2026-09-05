@@ -309,14 +309,14 @@ public final class UniverseScale {
 
     /** How many cells an orbital distance spans. Rounded up: a reach must not come out short. */
     public static long cellsForOrbitUnits(double orbitUnits) {
-        double blocks = Math.max(0d, orbitUnits) * AstronomicalBodyHelper.BLOCKS_PER_ORBIT_UNIT;
+        double blocks = Math.max(0d, orbitUnits) * AstronomicalBodyHelper.BLOCKS_PER_DISTANCE_UNIT;
         return (long) Math.ceil(blocks / (double) GalacticCoord.CELL);
     }
 
     /** The largest orbital distance that fits inside {@code cells} cells of a system's star. */
     public static double orbitUnitsForCells(long cells) {
         return Math.max(0d, cells) * (double) GalacticCoord.CELL
-                / AstronomicalBodyHelper.BLOCKS_PER_ORBIT_UNIT;
+                / AstronomicalBodyHelper.BLOCKS_PER_DISTANCE_UNIT;
     }
 
     /**

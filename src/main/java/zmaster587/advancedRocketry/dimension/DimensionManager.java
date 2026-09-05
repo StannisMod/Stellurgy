@@ -87,7 +87,7 @@ public class DimensionManager implements IGalaxy {
         defaultSpaceDimensionProperties.setAtmosphereDensityDirect(0);
         defaultSpaceDimensionProperties.setAverageTemp(0);
         defaultSpaceDimensionProperties.gravitationalMultiplier = 0.1f;
-        defaultSpaceDimensionProperties.orbitalDist = 100;
+        defaultSpaceDimensionProperties.orbitalDist = AstronomicalBodyHelper.DISTANCE_UNITS_PER_AU;
         defaultSpaceDimensionProperties.skyColor = new float[]{0f, 0f, 0f};
         defaultSpaceDimensionProperties.setName("Space");
         defaultSpaceDimensionProperties.fogColor = new float[]{0f, 0f, 0f};
@@ -160,7 +160,9 @@ public class DimensionManager implements IGalaxy {
         // derived value happens to agree, and that agreement is not what the mark is for.
         earth.setGravityAuthored(true);
         earth.setBulk(1d, 1d);
-        earth.orbitalDist = 100;
+        // ONE AU, stated as one: the field is a count of 100 km units, so a literal 100 would
+        // put Earth 10 000 km from the Sun.
+        earth.orbitalDist = AstronomicalBodyHelper.DISTANCE_UNITS_PER_AU;
         earth.skyColor = new float[]{1f, 1f, 1f};
         earth.setName("Earth");
         earth.isNativeDimension = false;
