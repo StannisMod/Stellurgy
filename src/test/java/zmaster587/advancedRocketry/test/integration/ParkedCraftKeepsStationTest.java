@@ -96,23 +96,31 @@ public class ParkedCraftKeepsStationTest {
     }
 
     /**
-     * A craft addressed INSIDE a moon's own cell keeps station with the moon — the same contract as
-     * the planet leg, one level down, and the half of it that has landed.
+     * <b>THE ACCEPTANCE: a craft parked one DESCENT SHELL out from a moon is exactly as far from it
+     * a day later.</b>
      *
-     * <p>It did not hold at all before: while a moon shared its parent's cell it could not be that
-     * cell's primary, so a moon's neighbourhood was no frame and nothing carried what was parked in
-     * it. Measured over this same window, a craft one descent shell out from Luna ended
-     * <b>294 996</b> blocks away against a shell of 7 066 — 42 shells, in 0.83 of a day. The craft
-     * never moved; its cell was riding Earth while the moon went round.</p>
+     * <p>The number to beat was measured before any of this: <b>7 066 blocks became 294 996</b> over
+     * this same window — 42 descent shells, in 0.83 of a day — while the identical craft beside a
+     * PLANET drifted zero. A moon shared its parent's cell, so it could not be that cell's primary;
+     * its neighbourhood was no frame and nothing carried what was parked in it. The craft never
+     * moved. Its cell was riding Earth while the moon went round.</p>
      *
-     * <p>What changed is not a carry and not a velocity: the moon has a CELL OF ITS OWN inside its
-     * parent's zone, and that cell rides the moon. Station-keeping therefore costs nothing at all,
-     * which is why the substrate's speed ceiling never enters — a craft co-moving with Luna would
-     * have had to hold 294.7 blocks/s against a freeze at 223.6, and that arithmetic is what ruled
-     * out carrying the craft instead of its cell.</p>
+     * <p>What closed it is not a carry and not a velocity: the moon has a CELL OF ITS OWN inside its
+     * parent's zone, and that cell rides the moon. Station-keeping costs nothing at all, which is
+     * why the substrate's speed ceiling never enters — a craft co-moving with Luna would have had to
+     * hold 294.7 blocks/s against a freeze at 223.6, and that arithmetic is what ruled out carrying
+     * the craft instead of its cell.</p>
+     *
+     * <p><b>It took two goes, and the second one is worth recording.</b> Giving the moon a cell was
+     * not enough: the zone lattice was 1024 cells across, so Earth's cell came out 7 224 blocks
+     * against Luna's own 7 066-block shell and the craft fell into the NEXT cell — carried by Earth
+     * again, one level down, by the fix itself. This test spent a commit asserting that gap and
+     * saying a coarser lattice was not the answer. It was: the count is now derived per body from
+     * the room its own shell needs, Earth's cell is 57 791 blocks, and the craft is inside the
+     * moon's cell with room to spare.</p>
      */
     @Test
-    public void aCraftInsideAMoonsOwnCellKeepsStationWithIt() {
+    public void aCraftParkedOneDescentShellOutFromAMoonKeepsStationWithIt() {
         StellarBody star = solWithEarthAndLuna();
         List<SystemBody> bodies = SystemContent.bodiesOf(star, GalacticCoord.ORIGIN);
         SystemBody luna = bodyOf(bodies, LUNA_DIM);
@@ -125,72 +133,33 @@ public class ParkedCraftKeepsStationTest {
         assertTrue("the moon must move over the window, or keeping station with it is vacuous "
                         + "(travelled " + moonTravel + " blocks)", moonTravel > 100_000d);
 
-        // A quarter of the cell out, which is a distance the moon's own cell can hold. One descent
-        // shell out cannot be used here and the leg below is why.
-        long standOff = luna.name().cellBlocks() / 4L;
-        GalacticCoord parked = luna.name().cellCentre().plusLocal(standOff, 0L, 0L);
-        assertTrue("arrangement: the craft is inside the moon's own cell", parked.sameCell(luna.name()));
+        long shell = DescentShell.radiusAround(luna);
+        GalacticCoord parked = parkedBeside(luna, 0L);
+        // ARRANGEMENT, and it is the half that was missing for a whole commit: one descent shell out
+        // has to be an address INSIDE the moon's own cell. It is a property of the lattice, not of
+        // the flight, so a craft can never reach it by flying and the test would be measuring the
+        // wrong body's frame without ever saying so.
+        assertTrue("a craft one descent shell (" + shell + ") out from the moon must be inside the "
+                        + "moon's OWN cell (" + luna.name() + "), or its address rides the PARENT "
+                        + "however well the rest of the machinery works — got " + parked,
+                parked.sameCell(luna.name()));
 
         double at0 = rangeFrom(luna, parked, 0L);
         double atEnd = rangeFrom(luna, parked, ABANDONED_TICKS);
 
-        System.out.println("[parked-craft] moon: travel=" + moonTravel + " standOff=" + standOff
-                + " range@0=" + at0 + " range@" + ABANDONED_TICKS + "=" + atEnd
+        System.out.println("[parked-craft] moon: travel=" + moonTravel + " shell=" + shell
                 + " cell=" + luna.name().cellBlocks()
-                + " shell=" + DescentShell.radiusAround(luna));
+                + " range@0=" + at0 + " range@" + ABANDONED_TICKS + "=" + atEnd);
 
         // The same bound as the planet leg, and deliberately the same one: a craft keeping station
         // has the range it started with, whatever that range was. "Still inside the shell" would
-        // pass a craft that had drifted a whole shell inward.
-        assertTrue("a craft inside a moon's cell must still be exactly as far from it after "
-                        + ABANDONED_TICKS + " ticks: it was " + at0 + " blocks out and is now "
-                        + atEnd + " (drift " + Math.abs(atEnd - at0) + "), while the moon itself "
-                        + "travelled " + moonTravel,
+        // pass a craft that had drifted a whole shell inward and fail one parked exactly on it.
+        assertTrue("a craft parked one descent shell out from a moon must still be exactly as far "
+                        + "from it after " + ABANDONED_TICKS + " ticks: it was " + at0
+                        + " blocks out and is now " + atEnd + " (drift " + Math.abs(atEnd - at0)
+                        + "), against a shell of " + shell + ", while the moon itself travelled "
+                        + moonTravel,
                 Math.abs(atEnd - at0) < 1d);
-    }
-
-    /**
-     * A craft parked one DESCENT SHELL out from a moon is <b>not</b> addressed inside that moon's
-     * cell — so the acceptance for this mechanic, stated in shells, is not met yet.
-     *
-     * <p><b>This asserts the remaining gap, deliberately</b>, the way the moon leg above used to
-     * assert the whole defect. Measured on the real Earth/Luna fixture: a cell of Earth's zone is
-     * <b>7 224</b> blocks across — one 1024th of Earth's sphere of influence, which is the lattice
-     * that lets a moon be named apart from its planet at all — while Luna's own descent shell is
-     * <b>7 066</b>. The shell is nearly two cells wide, so a craft at the shell sits in a
-     * NEIGHBOURING cell of Earth's zone, and that cell rides Earth.</p>
-     *
-     * <p>The design does not answer this with a coarser lattice, which would put Saturn's inner moons
-     * back into one address: it answers that the craft is inside LUNA's sphere of influence (264 000
-     * blocks, 37 shells) and must therefore be addressed in LUNA's OWN zone, whose cells are ~516
-     * blocks. That is the craft-addressing half of the task — membership by sphere rather than by
-     * lattice cube — and until it lands, "one descent shell out" is an address in the parent's zone.</p>
-     *
-     * <p>When it lands, this assertion is the one that must be turned round: a craft at the shell is
-     * inside the moon's zone and keeps station. Written so the flip has to be deliberate rather than
-     * a quietly widened bound.</p>
-     */
-    @Test
-    public void aCraftOneDescentShellOutFromAMoonIsNotYetAddressedInsideItsZone() {
-        StellarBody star = solWithEarthAndLuna();
-        List<SystemBody> bodies = SystemContent.bodiesOf(star, GalacticCoord.ORIGIN);
-        SystemBody luna = bodyOf(bodies, LUNA_DIM);
-        assertNotNull("the fixture must produce the moon", luna);
-
-        long shell = DescentShell.radiusAround(luna);
-        long cell = luna.name().cellBlocks();
-        GalacticCoord parked = parkedBeside(luna, 0L);
-
-        System.out.println("[parked-craft] moon shell vs cell: shell=" + shell + " cell=" + cell
-                + " moon=" + luna.name() + " parked=" + parked);
-
-        assertTrue("KNOWN, the craft-addressing half of this mechanic is unimplemented: a moon's descent "
-                        + "shell (" + shell + " blocks) is wider than half a cell of its parent's "
-                        + "zone (" + cell + " blocks across), so a craft parked at the shell falls "
-                        + "into a neighbouring cell — " + parked + " against the moon's "
-                        + luna.name() + " — which rides the PARENT. Membership by sphere of "
-                        + "influence is what closes it; a coarser lattice is not.",
-                !parked.sameCell(luna.name()));
     }
 
     // ---- fixture ------------------------------------------------------------------------------

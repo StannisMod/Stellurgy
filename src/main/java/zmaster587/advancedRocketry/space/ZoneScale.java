@@ -9,13 +9,19 @@ import zmaster587.advancedRocketry.universe.SystemBody;
  * granularity at which that region is realized and named. Those are different quantities and this
  * class owns the second one.</p>
  *
- * <h2>Why the cell size cannot be one global constant</h2>
+ * <h2>Why the cell size cannot be one global constant — twice over</h2>
  *
- * <p>A body is NAMED by the cell it occupies in its parent's zone. With a single lattice at
- * {@code GalacticCoord.CELL} that naming collapses at the first step: Earth's whole sphere of
- * influence is <b>0.23</b> of one such cell, so its local lattice would hold exactly ONE cell, Luna
- * would be named by that same cell, and "a moon shares its parent's name" would come back through the
- * door it was shown out of. The lattice inside a zone is therefore sized to the zone.</p>
+ * <p><b>Not the galactic one.</b> A body is NAMED by the cell it occupies in its parent's zone.
+ * With a single lattice at {@code GalacticCoord.CELL} that naming collapses at the first step:
+ * Earth's whole sphere of influence is <b>0.23</b> of one such cell, so its local lattice would
+ * hold exactly ONE cell, Luna would be named by that same cell, and "a moon shares its parent's
+ * name" would come back through the door it was shown out of.</p>
+ *
+ * <p><b>And not a global COUNT either</b>, which is the subtler half and cost a shipped defect. A
+ * cell is also the region a craft flies in before a seam moves it, so how many cells a zone holds
+ * is bounded from ABOVE by the body's own descent shell and from BELOW by its innermost moon's
+ * orbit — and those two bounds sit at different places in every zone. The count is therefore
+ * derived per body ({@link #cellsAcrossZone}), never chosen once.</p>
  *
  * <p>Pure arithmetic on bodies and a tick: no world, no registry, no client state.</p>
  */
@@ -25,71 +31,114 @@ public final class ZoneScale {
     }
 
     /**
-     * How many cells span a zone's DIAMETER. {@code tunable}, and derived rather than chosen.
+     * How many cells span {@code body}'s zone — <b>derived from the body, not a constant</b>, and
+     * squeezed between two bounds that pull opposite ways.
      *
-     * <p>The number a zone lattice has to beat is set by the tightest real moon relative to its
-     * planet's sphere of influence — that is the closest two bodies ever come while still being two
-     * destinations, and a lattice coarser than it names them both by the same cell. Measured on the
-     * real system, as {@code orbit / r_SOI} and the {@code 2/f} it implies:</p>
+     * <p><b>B, the upper bound — a body's own descent shell must fit inside its own cell.</b> A cell
+     * is not only a name: it is the region a craft flies in before a seam carries it to the next one
+     * ({@code CellWorldMapper} maps a cell-local offset to a slot-world pose one for one). So a body
+     * whose shell reaches past its own cell has a craft at that shell sitting in a NEIGHBOURING
+     * cell, which rides the body's PARENT — the craft is then carried by the wrong thing while
+     * being, physically, right beside the body. That gives {@code count <= span / (2 * shell)}.</p>
+     *
+     * <p><b>A, the lower bound — the innermost moon must land on an index of its own</b>, or "a moon
+     * shares its parent's name" comes back one level down. Floor division puts a body at index 1
+     * once it is half a cell out, so this is {@code count >= span / (2 * orbit)}.</p>
+     *
+     * <p><b>Taking B and not A is what makes this body-only.</b> A depends on the zone's CHILDREN, so
+     * deriving from it would make a body's name a function of its siblings — add a moon in XML and
+     * every sibling is renamed. B depends on the body alone, and it satisfies A <i>by
+     * construction</i>: at {@code count = B} a cell is about twice the shell, so a moon lands on its
+     * own index once it orbits outside its parent's shell — and every moon does, because
+     * {@code SystemContent} floors a moon at 2.5 parent radii while a shell is 1.016 of one. The
+     * naming bound is therefore met without ever being consulted.</p>
+     *
+     * <p><b>Measured, at the shipped metric</b> — {@code A}, {@code B} and what this picks:</p>
      *
      * <table>
-     *   <tr><th>moon</th><th>orbit</th><th>planet r_SOI</th><th>ratio</th><th>cells needed</th></tr>
-     *   <tr><td>Luna</td><td>384 400 km</td><td>926 000 km</td><td>0.415</td><td>5</td></tr>
-     *   <tr><td>Phobos</td><td>9 376 km</td><td>577 000 km</td><td>0.0163</td><td>123</td></tr>
-     *   <tr><td>Io</td><td>421 700 km</td><td>48 200 000 km</td><td>0.00875</td><td>229</td></tr>
-     *   <tr><td>Metis</td><td>128 000 km</td><td>48 200 000 km</td><td>0.00266</td><td>753</td></tr>
-     *   <tr><td>Miranda</td><td>129 900 km</td><td>51 800 000 km</td><td>0.00251</td><td>798</td></tr>
-     *   <tr><td><b>Pan</b></td><td>133 580 km</td><td>54 500 000 km</td><td><b>0.00245</b></td><td><b>816</b></td></tr>
+     *   <tr><th>zone of</th><th>span (blocks)</th><th>A</th><th>B</th><th>picked</th><th>cell</th></tr>
+     *   <tr><td>Luna (no moons)</td><td>528 000</td><td>1</td><td>37</td><td>32</td><td>16 500</td></tr>
+     *   <tr><td>Earth</td><td>7 408 000</td><td>3</td><td>143</td><td>128</td><td>57 875</td></tr>
+     *   <tr><td>Mars</td><td>4 616 000</td><td>62</td><td>167</td><td>128</td><td>36 063</td></tr>
+     *   <tr><td>Jupiter</td><td>32 000 000</td><td>32</td><td>55</td><td>32</td><td>1 000 000</td></tr>
+     *   <tr><td>Saturn</td><td>32 000 000</td><td>30</td><td>65</td><td>64</td><td>500 000</td></tr>
+     *   <tr><td>Neptune</td><td>32 000 000</td><td>83</td><td>159</td><td>128</td><td>250 000</td></tr>
      * </table>
      *
-     * <p>816 is the worst case in the system every player meets first, so this is the next power of
-     * two above it. A power of two is not cosmetic: the lattice index is a division, and a body that
-     * sits exactly on a cell boundary is a body whose name depends on a rounding mode.</p>
+     * <p><b>What this replaces, and why that number was wrong everywhere.</b> It was a flat
+     * {@code 1024}, derived from A alone and — the actual error — computed as the moon's orbit
+     * against the body's UNCLAMPED sphere of influence rather than against the span the zone is
+     * realized over. For a giant those differ by the clamp, six to twelve times, so the bound came
+     * out six to twelve times too tight; and B had not been noticed at all. The result was finer
+     * than B in EVERY zone, and in the home system by a factor of two: Earth's cell came out 7 235
+     * blocks against Luna's own 7 059-block shell, so a craft parked one shell off Luna fell into
+     * the next cell and was carried by Earth. That is the whole defect this class exists to remove,
+     * surviving inside the fix for it.</p>
      *
-     * <p><b>What it costs at the top end</b>: a body whose sphere exceeds one cell has its lattice
-     * spanning the realized region instead, so the coarsest cell in the game is
-     * {@code CELL / 1024 = 31 250} blocks — Jupiter's, Neptune's and every rogue's. Earth's is 7 235
-     * blocks (1 809 km). Earth's own descent shell is 25 513 blocks, so a big body SPANS several
-     * cells of its own zone. That is correct and not a defect — a cell is a naming and realization
-     * unit, never a claim that the thing inside it is smaller than it.</p>
+     * <p>A power of two is not cosmetic: the lattice index is a division, and a body that sits
+     * exactly on a cell boundary is a body whose name depends on a rounding mode.</p>
      */
-    public static final int CELLS_ACROSS_A_ZONE = 1024;
+    public static int cellsAcrossZone(SystemBody body, SystemBody primary, long tick) {
+        long span = 2L * realizedRadiusBlocks(body, primary, tick);
+        if (span <= 0L) {
+            return 0;
+        }
+        long shell = DescentShell.radiusAround(body);
+        long bound = span / (2L * Math.max(1L, shell));
+        int count = 1;
+        while ((long) count * 2L <= bound) {
+            count *= 2;
+        }
+        return count;
+    }
 
     /**
-     * The edge length, in chart blocks, of one cell inside {@code body}'s zone at {@code tick}.
+     * The edge length, in chart blocks, of one cell inside {@code body}'s zone at {@code tick} —
+     * {@link #realizedRadiusBlocks the span} divided by {@link #cellsAcrossZone the count}.
      *
-     * <p>{@code 0} when the body has no zone to divide, which is exactly one case: it has no MASS.
-     * A zero is NOT a small cell — callers must read it as "this body has no lattice of its own" and
-     * pass over it, exactly as {@link ReferenceFrames#soiRadiusBlocks} requires of its own zero.
-     * Handing back a stand-in would produce names for a zone that does not exist.</p>
-     *
-     * <h2>The lattice spans the REALIZED region, not the sphere of influence</h2>
-     *
-     * <p>These are different quantities and only for the small bodies do they coincide. A sphere of
-     * influence is where a craft's motion is naturally described against this body; the realized
-     * region is how much of that a slot world can hold, which is one cell. Measured against
-     * {@code HALF_CELL = 16 000 000}: Luna's sphere is 0.02 of it and Earth's 0.23, so for everything
-     * a player lands near the sphere is the binding term — but Jupiter's is <b>12&times;</b> and
-     * Neptune's <b>21.65&times;</b>, and a lattice spanning a region twenty times what can be
-     * realized would name most of its own cells after places no world reaches.</p>
-     *
-     * <p>A body with <b>no primary</b> — a rogue, which left its star behind — has no Laplace sphere
-     * at all, because there is nothing for one to be bounded against. Its bound is the realized one
-     * and nothing else, which is the same rule with the first term absent rather than a special case:
-     * a rogue's moons get their own cells exactly as a star-lit planet's do. Reading the missing
-     * sphere as "no zone" instead would leave every rogue's moons sharing their parent's address,
-     * which is the rule this class exists to retire.</p>
+     * <p>{@code 0} when the body has no zone to divide (see the span). A zero is NOT a small cell:
+     * callers must read it as "this body has no lattice of its own" and pass over it. Handing back a
+     * stand-in would produce names for a zone that does not exist.</p>
      */
     public static long cellBlocks(SystemBody body, SystemBody primary, long tick) {
+        long radius = realizedRadiusBlocks(body, primary, tick);
+        int count = cellsAcrossZone(body, primary, tick);
+        if (radius <= 0L || count <= 0) {
+            return 0L;
+        }
+        // Rounded UP, so a lattice is never finer than the count asks for; a cell of zero blocks
+        // would divide by zero at every naming site, which is a crash rather than a wrong name only
+        // because nothing has called it yet.
+        return Math.max(1L, (long) Math.ceil(2d * radius / count));
+    }
+
+    /**
+     * How far {@code body}'s zone is REALIZED, in blocks — the radius the lattice spans.
+     *
+     * <p>{@code 0} when the body has no zone to divide, which is exactly one case: it has no MASS.
+     * A zero is NOT a small zone — callers must read it as "this body has no lattice of its own" and
+     * pass over it, exactly as {@link ReferenceFrames#soiRadiusBlocks} requires of its own zero.</p>
+     *
+     * <p>The sphere of influence, capped at what one cell can hold. These are different quantities
+     * and only for the small bodies do they coincide: measured against
+     * {@code HALF_CELL = 16 000 000}, Luna's sphere is 0.02 of it and Earth's 0.23, but Jupiter's is
+     * <b>12&times;</b> and Neptune's <b>21.65&times;</b>. A lattice reference-spanning twenty times
+     * what can be realized would name most of its cells after places no slot world reaches. The cap
+     * is on the REALIZATION, never on the extent — station-keeping still ends at a property of the
+     * body.</p>
+     *
+     * <p>A body with <b>no primary</b> — a rogue, which left its star behind — has no Laplace sphere
+     * for the first term to exist, so its bound is the realized one alone. That is the same rule
+     * with a term absent, not a special case: a rogue's moons get their own cells exactly as a
+     * star-lit planet's do, where reading the missing sphere as "no zone" would leave them sharing
+     * their parent's address.</p>
+     */
+    public static long realizedRadiusBlocks(SystemBody body, SystemBody primary, long tick) {
         if (body == null || !(body.massEarths() > 0d)) {
             return 0L;
         }
         double soi = ReferenceFrames.soiRadiusBlocks(body, primary, tick);
-        double radius = soi > 0d ? Math.min(soi, GalacticCoord.HALF_CELL) : GalacticCoord.HALF_CELL;
-        // Rounded UP, so a lattice is never finer than the count asks for; a cell of zero blocks
-        // would divide by zero at every naming site, which is a crash rather than a wrong name only
-        // because nothing has called it yet.
-        return Math.max(1L, (long) Math.ceil(2d * radius / CELLS_ACROSS_A_ZONE));
+        return (long) (soi > 0d ? Math.min(soi, GalacticCoord.HALF_CELL) : GalacticCoord.HALF_CELL);
     }
 
     /**

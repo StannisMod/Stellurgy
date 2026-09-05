@@ -54,8 +54,17 @@ public final class SystemContent {
     /** Blocks per unit of a moon's (parent-relative) orbital distance — moons cluster near their planet. */
     static final long MOON_UNIT_BLOCKS = 200L;
 
-    /** The floor an authored moon is lifted to, in parent radii — see {@link #moonLawOf}. */
-    static final double MOON_MIN_PARENT_RADII = 2.5d;
+    /**
+     * The floor an authored moon is lifted to, in parent radii — see {@link #moonLawOf}.
+     *
+     * <p>PUBLIC because it is half of a window, not a private tuning knob. A zone's lattice has to
+     * be coarse enough that a body's own descent shell (1.0157 radii) fits in its own cell and fine
+     * enough that a moon at THIS floor still lands on an index of its own, so the two numbers
+     * together decide whether any lattice can satisfy both — a factor of 2.46, against a
+     * power-of-two step of 2.0. Lowering this closes that window, and the thing that notices must
+     * be able to read it rather than repeat it.</p>
+     */
+    public static final double MOON_MIN_PARENT_RADII = 2.5d;
     /** Cells kept clear of the super-cell faces when clamping a body cell into its system's box. */
     static final int BOX_MARGIN_CELLS = 2;
 
