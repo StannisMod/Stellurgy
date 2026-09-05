@@ -13,6 +13,7 @@ import zmaster587.advancedRocketry.universe.SystemBody;
 import zmaster587.advancedRocketry.universe.SystemBodyKind;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 
 /**
@@ -267,6 +268,42 @@ public class ZoneScaleTest {
             new Planet("Uranus", 14.54d, 4.007d, 2_867_000_000d, 129_900d),    // Miranda
             new Planet("Neptune", 17.15d, 3.883d, 4_515_000_000d, 48_227d),    // Naiad
     };
+
+    /**
+     * <b>A re-address keeps the craft where it is.</b> The cell is only half the answer.
+     *
+     * <p>{@code cellWithin} names a BODY, which sits at its own cell's centre by construction. A
+     * craft does not, and an address that dropped the in-cell remainder would move it to the nearest
+     * cell centre at the instant it crossed a sphere — up to half a cell, which in Earth's zone is
+     * 924 647 blocks of teleport nobody asked for. This is the assertion that separates the two.</p>
+     */
+    @Test
+    public void anAddressInsideAZoneKeepsTheOffsetAndDoesNotSnapToACellCentre() {
+        SystemBody earth = EARTH.body();
+        long width = ZoneScale.cellBlocks(earth, sol(), EARTH.tightestMoonBlocks(), 0L);
+        assertTrue("arrangement: Earth's zone must be divided for this to mean anything", width > 0L);
+
+        // Deliberately NOT on a cell boundary: two and a bit cells out, plus a remainder that must
+        // survive. If the remainder were dropped the craft would move by exactly that much.
+        long offset = 2L * width + width / 3L;
+        zmaster587.advancedRocketry.space.BlockDelta at =
+                zmaster587.advancedRocketry.space.BlockDelta.of(offset, 0L, 0L);
+
+        GalacticCoord address = ZoneScale.addressWithin(earth, sol(), at,
+                EARTH.tightestMoonBlocks(), 0L);
+        assertNotNull("a body with a zone must be able to address a craft in it", address);
+
+        // The address must denote the SAME displacement from the body it was built from.
+        long recovered = address.sectorX() * width + address.localX();
+        assertEquals("the address must denote where the craft actually is", offset, recovered);
+        assertTrue("...and it must not have been snapped to a cell centre",
+                address.localX() != 0L);
+
+        // The cell-only form is the other answer and is right for a BODY, which is why both exist.
+        GalacticCoord centre = ZoneScale.cellWithin(earth, sol(), at, EARTH.tightestMoonBlocks(), 0L);
+        assertEquals("the cell form snaps, and that is its job", 0, centre.localX());
+        assertTrue("but the two must agree on WHICH cell", centre.sameCell(address));
+    }
 
     private static SystemBody sol() {
         return SystemBody.fixedAt(GalacticCoord.ORIGIN, SystemBodyKind.STAR,

@@ -188,6 +188,36 @@ public final class ZoneScale {
      * @param primary the body {@code zoneBody} orbits — its sphere of influence is measured against it
      * @param tick    the moment the zone's extent, and hence its lattice, is evaluated at
      */
+    /**
+     * The full ADDRESS a craft {@code offset} from {@code zoneBody} has inside that body's zone —
+     * the cell it falls in AND where it stands inside that cell.
+     *
+     * <p>{@link #cellWithin} answers the first half and is the right call for NAMING a body, which
+     * sits at its own cell's centre by construction. A craft does not: it is somewhere in a cell,
+     * and a re-address that dropped the remainder would move it to the nearest cell centre — up to
+     * half a cell, which in Earth's zone is 924 647 blocks of silent teleport at the moment a craft
+     * crosses a sphere.</p>
+     *
+     * <p>{@code null} when the body defines no zone, for the same reason and with the same duty on
+     * the caller as {@link #cellWithin}.</p>
+     */
+    public static GalacticCoord addressWithin(SystemBody zoneBody, SystemBody primary,
+                                              BlockDelta offset, long tightestChildOffsetBlocks,
+                                              long tick) {
+        if (zoneBody == null || offset == null) {
+            return null;
+        }
+        long width = cellBlocks(zoneBody, primary, tightestChildOffsetBlocks, tick);
+        if (width <= 0L) {
+            return null;
+        }
+        long ix = cellIndex(offset.dx(), width);
+        long iy = cellIndex(offset.dy(), width);
+        long iz = cellIndex(offset.dz(), width);
+        return GalacticCoord.inZone(zoneBody.name().cellKey(), width, ix, iy, iz,
+                offset.dx() - ix * width, offset.dy() - iy * width, offset.dz() - iz * width);
+    }
+
     public static GalacticCoord cellWithin(SystemBody zoneBody, SystemBody primary, BlockDelta offset,
                                            long tightestChildOffsetBlocks, long tick) {
         if (zoneBody == null || offset == null) {

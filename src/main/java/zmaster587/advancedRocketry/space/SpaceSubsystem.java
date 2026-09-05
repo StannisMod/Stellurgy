@@ -118,7 +118,7 @@ public final class SpaceSubsystem {
         this.descent = new DescentController(this.manager, this.ledger, new VSShipCrossingOps(),
                 new VSDescentPasteResolver(), useClock);
         this.cellCrossings = new CellCrossingController(this.manager, this.ledger, new VSShipCrossingOps(),
-                useClock, SpaceSubsystem::zoneRadiusOf);
+                useClock, SpaceSubsystem::zoneMembershipOf);
         // A jump too short to be worth a hyperspace leg is performed by the same machinery that carries
         // a ship across a cell face — one crossing, ledger straight to the destination, no lane and no
         // mid-flight. The transit manager decides WHICH jumps those are; this hands it the means.
@@ -409,48 +409,102 @@ public final class SpaceSubsystem {
      * stack wires the production resolver rather than a second one that could disagree with it.</p>
      */
     /**
-     * How far the influence of the body {@code cell} rides reaches, in blocks, at {@code tick} —
-     * {@code 0} when the cell is in no zone, which is every cell of the galactic lattice.
+     * Where a craft BELONGS at {@code tick}, given the address it currently holds — the production
+     * reading of the reference-frame clause, decided by SPHERES.
      *
-     * <p>The zone is the cell's own if a body stands in it, and otherwise the zone the cell BELONGS
-     * to: an empty cell of Earth's zone is bounded by Earth's sphere, because that is the influence
-     * carrying it. A zero is not a small sphere — the crossing reads it as "no sphere here" and
-     * falls back to the cube, which is what a galactic cell is bounded by anyway.</p>
+     * <p>{@code null} means "leave it alone", and it is the answer for three different situations
+     * that must not be told apart by the caller: the craft is in the galactic lattice (no sphere to
+     * decide by), it is between the two thresholds (the hysteresis), or the universe cannot be
+     * asked. All three mean the cube goes on deciding, which is what it always did.</p>
+     *
+     * <p>Order matters: a child is tested BEFORE the parent's own boundary. A craft deep inside a
+     * moon's sphere is also inside its planet's, and the innermost containing sphere is the one that
+     * governs — asking the outer question first would answer "still in the planet's zone" and never
+     * reach the moon.</p>
      */
-    public static double zoneRadiusOf(GalacticCoord cell, long tick) {
-        if (cell == null || cell.zone() == null) {
-            return 0d;
+    public static GalacticCoord zoneMembershipOf(GalacticCoord craftCoord, long tick) {
+        if (craftCoord == null || craftCoord.zone() == null || craftCoord.cellBlocks() <= 0L) {
+            return null;
         }
         MinecraftServer server = FMLCommonHandler.instance().getMinecraftServerInstance();
         zmaster587.advancedRocketry.universe.UniverseRegistry reg =
                 zmaster587.advancedRocketry.universe.UniverseRegistry.get(server);
-        if (reg == null) {
-            return 0d;
+        GalacticCoord zoneCell = GalacticCoord.fromCellKey(craftCoord.zone());
+        if (reg == null || zoneCell == null) {
+            return null;
         }
-        // The body whose ZONE this is — the one the cell's key names as its parent — and the body
-        // that zone's own parent is, which is what a sphere of influence is measured against.
-        GalacticCoord zoneCell = GalacticCoord.fromCellKey(cell.zone());
-        if (zoneCell == null) {
-            return 0d;
-        }
-        zmaster587.advancedRocketry.universe.SystemBody zoneBody = null;
-        for (zmaster587.advancedRocketry.universe.SystemBody b : reg.bodiesAt(zoneCell)) {
-            if (b.definesFrame()) {
-                zoneBody = b;
-                break;
-            }
-        }
+        zmaster587.advancedRocketry.universe.SystemBody zoneBody = frameBodyAt(reg, zoneCell);
         if (zoneBody == null) {
-            return 0d;
+            return null;
         }
-        zmaster587.advancedRocketry.universe.SystemBody primary = null;
-        for (zmaster587.advancedRocketry.universe.SystemBody b : reg.systemBodiesAt(zoneCell)) {
-            if (b.kind() == zmaster587.advancedRocketry.universe.SystemBodyKind.STAR) {
-                primary = b;
-                break;
+        zmaster587.advancedRocketry.universe.SystemBody primary = starOf(reg, zoneCell);
+        AbsolutePos craftAt = cellFrameOriginAt(craftCoord.cellCentre(), tick)
+                .plus(craftCoord.localX(), craftCoord.localY(), craftCoord.localZ());
+
+        // INWARD first — the innermost containing sphere governs.
+        for (zmaster587.advancedRocketry.universe.SystemBody child : reg.systemBodiesAt(zoneCell)) {
+            if (child == null || child == zoneBody || child.equals(zoneBody)
+                    || !child.definesFrame()) {
+                continue;
+            }
+            if (!java.util.Objects.equals(child.name().zone(), zoneBody.name().cellKey())) {
+                continue; // not a child of THIS zone
+            }
+            double childRadius = ZoneScale.realizedRadiusBlocks(child, zoneBody, tick);
+            AbsolutePos childAt = child.absoluteAt(tick);
+            if (!CellSeam.hasEnteredZone(craftAt.distanceTo(childAt), childRadius)) {
+                continue;
+            }
+            return ZoneScale.addressWithin(child, zoneBody, craftAt.minus(childAt), 0L, tick);
+        }
+
+        // OUTWARD — past this zone's own sphere, so the parent's lattice takes it.
+        double zoneRadius = ZoneScale.realizedRadiusBlocks(zoneBody, primary, tick);
+        if (!CellSeam.hasLeftZone(craftAt.distanceTo(zoneBody.absoluteAt(tick)), zoneRadius)) {
+            return null;
+        }
+        if (zoneCell.zone() == null) {
+            // The parent lattice is the GALACTIC one, which is addressed by absolute sectors rather
+            // than by an offset from a body. The craft keeps its position; only its name changes.
+            AbsolutePos parentOrigin = cellFrameOriginAt(zoneCell, tick);
+            zmaster587.advancedRocketry.space.BlockDelta out = craftAt.minus(parentOrigin);
+            return zoneCell.cellCentre().plusLocal(out.dx(), out.dy(), out.dz());
+        }
+        zmaster587.advancedRocketry.universe.SystemBody grandparent =
+                frameBodyAt(reg, GalacticCoord.fromCellKey(zoneCell.zone()));
+        if (grandparent == null) {
+            return null;
+        }
+        return ZoneScale.addressWithin(grandparent, starOf(reg, zoneCell),
+                craftAt.minus(grandparent.absoluteAt(tick)), 0L, tick);
+    }
+
+    /** The body whose frame {@code cell} rides, or {@code null} when the cell is void. */
+    private static zmaster587.advancedRocketry.universe.SystemBody frameBodyAt(
+            zmaster587.advancedRocketry.universe.UniverseRegistry reg, GalacticCoord cell) {
+        if (reg == null || cell == null) {
+            return null;
+        }
+        for (zmaster587.advancedRocketry.universe.SystemBody b : reg.bodiesAt(cell)) {
+            if (b.definesFrame()) {
+                return b;
             }
         }
-        return ZoneScale.realizedRadiusBlocks(zoneBody, primary, tick);
+        return null;
+    }
+
+    /** The star of the system {@code cell} belongs to — what a sphere of influence is measured against. */
+    private static zmaster587.advancedRocketry.universe.SystemBody starOf(
+            zmaster587.advancedRocketry.universe.UniverseRegistry reg, GalacticCoord cell) {
+        if (reg == null || cell == null) {
+            return null;
+        }
+        for (zmaster587.advancedRocketry.universe.SystemBody b : reg.systemBodiesAt(cell)) {
+            if (b.kind() == zmaster587.advancedRocketry.universe.SystemBodyKind.STAR) {
+                return b;
+            }
+        }
+        return null;
     }
 
     public static AbsolutePos cellFrameOriginAt(GalacticCoord name, long tick) {
