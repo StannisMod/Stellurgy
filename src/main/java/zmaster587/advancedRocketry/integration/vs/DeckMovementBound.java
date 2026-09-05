@@ -64,12 +64,6 @@ public final class DeckMovementBound {
     private static final java.util.Map<java.util.UUID, Long> LAST_SEEN_TICK =
             java.util.Collections.synchronizedMap(new java.util.WeakHashMap<java.util.UUID, Long>());
 
-    /** Observation only — nothing branches on these. The first two are what the bound is set from;
-     *  the third is what it did. */
-    public static volatile double maxOwnDisplacementSeen;
-    public static volatile double lastRefusedExcessBlocks;
-    public static volatile long positionsRefused;
-
     /**
      * Whether the step from {@code (fromX, fromY, fromZ)} to {@code (toX, toY, toZ)} is one this
      * player could have taken in the handling of a single movement packet. {@code true} for anyone
@@ -118,18 +112,9 @@ public final class DeckMovementBound {
 
         final double allowed = (PLAYER_MAX_OWN_BLOCKS_PER_TICK + carryPerTick) * ticks + REGION_FLOOR_BLOCKS;
 
-        // What the body did under its OWN power, as far as this can tell: what it covered beyond
-        // what the deck carried it. This is the quantity the bound above is set from.
-        final double own = Math.max(0.0, moved - carryPerTick * ticks);
-        if (own > maxOwnDisplacementSeen) {
-            maxOwnDisplacementSeen = own;
-        }
-
-        if (moved > allowed) {
-            lastRefusedExcessBlocks = moved - allowed;
-            positionsRefused++;
-            return false;
-        }
-        return true;
+        // What the body did under its own power is `moved - carryPerTick * ticks`; the tests that
+        // want it read this method's arguments and verdict off a test-only mixin rather than a
+        // field kept here, so a shipped game keeps no telemetry for them.
+        return moved <= allowed;
     }
 }

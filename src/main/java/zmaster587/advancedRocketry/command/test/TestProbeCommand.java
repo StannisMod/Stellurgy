@@ -1637,6 +1637,10 @@ public class TestProbeCommand extends CommandBase {
             boolean mounted = occupant.startRiding(dummy, true);
             send(sender, "{\"ok\":true,\"dummyId\":" + dummy.getEntityId()
                     + ",\"occupantId\":" + occupant.getEntityId()
+                    // The DURABLE identity. An entity id is reassigned when its chunk reloads — which
+                    // is what happens to a seat whose only player logs out and back in — so a test
+                    // that recognises the occupant by id later finds a stranger with his name.
+                    + ",\"occupantUuid\":\"" + occupant.getUniqueID() + "\""
                     + ",\"spawned\":" + spawned
                     + ",\"mounted\":" + mounted
                     + ",\"passengers\":" + dummy.getPassengers().size()
@@ -1759,6 +1763,7 @@ public class TestProbeCommand extends CommandBase {
                 }
                 firstP = false;
                 sb.append("{\"id\":").append(p.getEntityId())
+                        .append(",\"uuid\":\"").append(p.getUniqueID()).append('"')
                         .append(",\"class\":\"").append(p.getClass().getSimpleName())
                         .append("\",\"name\":\"").append(escapeJson(p.getName())).append("\"}");
             }
@@ -2258,16 +2263,10 @@ public class TestProbeCommand extends CommandBase {
                     zmaster587.advancedRocketry.integration.vs.ShipFrameTravel.lastDropAllowed);
             m.put("dragSuppressions",
                     zmaster587.advancedRocketry.integration.vs.ShipFrameTravel.dragSuppressions);
-            // What the server REFUSED to ratify, and the number the refusal bound rests on: the
-            // largest displacement a captured body has produced under its own power. A test that
-            // asserts "nobody was refused" is only worth reading beside the second number, which
-            // says how close ordinary play came to the bound.
-            m.put("deckBoundRefused",
-                    zmaster587.advancedRocketry.integration.vs.DeckMovementBound.positionsRefused);
-            m.put("deckBoundMaxOwn",
-                    zmaster587.advancedRocketry.integration.vs.DeckMovementBound.maxOwnDisplacementSeen);
-            m.put("deckBoundLastExcess",
-                    zmaster587.advancedRocketry.integration.vs.DeckMovementBound.lastRefusedExcessBlocks);
+            // What the server REFUSED to ratify is no longer a counter here: every judgement of the
+            // deck movement bound is a `deck_movement_bound` record in the event log (a test-only
+            // mixin on its RETURN), with both endpoints and the verdict, so a test reads the
+            // refusals of ITS window rather than a total for the life of the server.
             // The no-input-drift discriminator: the ship-RELATIVE motion the last resolved tick was
             // handed, the walk inputs that came with it, and the carry that tick held. A body that
             // creeps along a deck with lastInStrafe/lastInForward at 0 is being moved by one of

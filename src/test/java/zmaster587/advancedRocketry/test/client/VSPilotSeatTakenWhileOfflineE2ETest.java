@@ -58,7 +58,7 @@ public class VSPilotSeatTakenWhileOfflineE2ETest extends AbstractSharedVsClientE
     private static final Pattern DUMMY_ID = Pattern.compile("\"dummyId\":(-?\\d+)");
     private static final Pattern COUNT = Pattern.compile("\"count\":(-?\\d+)");
     private static final Pattern OCCUPANT_NAME = Pattern.compile("\"occupantName\":\"([^\"]+)\"");
-    private static final Pattern OCCUPANT_ID = Pattern.compile("\"occupantId\":(-?\\d+)");
+    private static final Pattern OCCUPANT_UUID = Pattern.compile("\"occupantUuid\":\"([^\"]+)\"");
     private static final Pattern BOUND_COUNT = Pattern.compile("\"boundCount\":(-?\\d+)");
     private static final Pattern SEAT_AT = Pattern.compile(
             "\"seatX\":(-?\\d+),\"seatY\":(-?\\d+),\"seatZ\":(-?\\d+)");
@@ -159,12 +159,17 @@ public class VSPilotSeatTakenWhileOfflineE2ETest extends AbstractSharedVsClientE
         Matcher nm = OCCUPANT_NAME.matcher(occupy);
         scenario().requireArranged("seat-occupy must report the occupant's name: " + occupy, nm.find());
         final String occupantName = nm.group(1);
-        Matcher om = OCCUPANT_ID.matcher(occupy);
-        scenario().requireArranged("seat-occupy must report the occupant's id: " + occupy, om.find());
-        final String occupantId = om.group(1);
+        // By UUID, never by entity id. The pilot's logout unloads the seat's chunk and his return
+        // reloads it, and a reloaded entity gets a FRESH id: under load the gate of 2026-09-05 saw
+        // the occupant holding the seat as `{"id":2651,"class":"EntityArmorStand"}` and the test
+        // calling that a lost seat because it remembered him as 2650. Serially the chunk happened to
+        // stay loaded. The identity that survives a reload is the UUID.
+        Matcher om = OCCUPANT_UUID.matcher(occupy);
+        scenario().requireArranged("seat-occupy must report the occupant's uuid: " + occupy, om.find());
+        final String occupantUuid = om.group(1);
         String occupancy = exec("artest vs seat-status 0 " + seatX + " " + seatY + " " + seatZ);
         scenario().requireArranged("the occupancy must HOLD before the pilot returns: " + occupancy,
-                occupancy.contains("\"id\":" + occupantId));
+                occupancy.contains("\"uuid\":\"" + occupantUuid + "\""));
 
         // ---- ACT 3: the pilot comes back — a real fresh login over his saved data. --------------
         bot().connect();
@@ -194,7 +199,8 @@ public class VSPilotSeatTakenWhileOfflineE2ETest extends AbstractSharedVsClientE
 
         // ---- ASSERT 1: the occupant KEEPS the seat. ---------------------------------------------
         assertTrue("the occupant who took the seat while its pilot was offline must still hold it "
-                + "after the pilot returns: " + observed, seatAfter.contains("\"id\":" + occupantId));
+                + "after the pilot returns: " + observed,
+                seatAfter.contains("\"uuid\":\"" + occupantUuid + "\""));
 
         // ---- ASSERT 2: one seat — ONE dummy, even across a relog. -------------------------------
         // Vanilla re-spawns the returning pilot's persisted mount; unreconciled, that is a second

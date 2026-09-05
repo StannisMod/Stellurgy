@@ -426,7 +426,14 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
         bot().waitTicks(40);
 
         long resolvedBefore = (long) clientDouble(SHIP_FRAME_TRAVEL, "resolvedTicks");
-        long dropsBefore = (long) clientDouble(SHIP_FRAME_TRAVEL, "externalMoveDrops");
+        // Two marks, one per side, BEFORE the activity: the client's resolver records every release
+        // of its capture with the gate that released it (`deck_released`), and the server's movement
+        // bound records every step it judged with both endpoints (`deck_movement_bound`). A churn
+        // and a refusal are then records in THIS window, in order — where a cumulative drop counter
+        // and a server-lifetime maximum could only say that something, some time, had happened.
+        long releaseMark = bot().eventMark().get("seq").getAsLong();
+        Events boundEvents = events();
+        long boundMark = boundEvents.markInstrumented();
 
         // Walk in a tight square (short bursts each direction so the crew member stays on the small
         // deck) and jump twice - real client keys, the real activity of the playtest. Sample the
@@ -485,37 +492,68 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
         System.out.println("[crewcap] active-legs " + legs);
 
         long resolvedAfter = (long) clientDouble(SHIP_FRAME_TRAVEL, "resolvedTicks");
-        long churn = (long) clientDouble(SHIP_FRAME_TRAVEL, "externalMoveDrops") - dropsBefore;
         String capture = exec("artest vs deck-capture");
+        // The client's releases in THIS window, each with the gate that released it.
+        String releases = String.valueOf(bot().eventsSince(releaseMark, "deck_released"));
+        Events.assertInstrumentRan(releases, "deck_capture_events",
+                "the client's capture was or was not cycled during the activity");
+        long churn = countRecords(releases, "\"reason\":\"externalMove");
         System.out.println("[crewcap] active-churn churn=" + churn + " clientResolved="
-                + resolvedBefore + "->" + resolvedAfter + " capture=" + capture);
+                + resolvedBefore + "->" + resolvedAfter + " capture=" + capture
+                + "\n[crewcap] client releases in window :: " + releases);
 
         assertTrue("the client must be resolving through the activity window (resolvedTicks "
                 + resolvedBefore + " -> " + resolvedAfter + ")", resolvedAfter > resolvedBefore + 20);
         // The churn contract: activity must never cycle the capture through the external-move guard
         // (the drag war). A GEOMETRIC release (walked off the tiny fixture deck -> leftShipRegion /
-        // steppedOntoTerrain) is legitimate and not this test's subject.
-        assertTrue("walking and jumping on a hovering ship must not churn the capture (client drops "
-                + "in window=" + churn + ")", churn < 5);
-        String lastReason = clientString(SHIP_FRAME_TRAVEL, "lastDropReason");
+        // steppedOntoTerrain) is legitimate and not this test's subject. The releases are the
+        // client's own records since the mark, so a red names every gate that fired and in which
+        // order, not a count.
+        assertTrue("walking and jumping on a hovering ship must not churn the capture (external-move"
+                + " releases in window=" + churn + "): " + releases, churn < 5);
+        String lastReason = lastRecordField(releases, "reason");
         assertTrue("any release during deck activity must be geometric, never the external-move "
-                + "guard (lastDropReason='" + lastReason + "')",
+                + "guard (last release='" + lastReason + "'): " + releases,
                 !lastReason.startsWith("externalMove"));
 
         // AND the server refused NOTHING of what he did. This is the false-positive leg of the
         // movement bound, and it is the one that matters: a bound that rubber-bands a crew member
-        // for walking and jumping on his own deck has broken the game to protect it. Printed with
-        // the largest displacement he actually produced under his own power, because "nobody was
-        // refused" is only worth reading beside how close ordinary play came to the bound.
-        String bound = exec("artest vs shipframe-stats");
-        long refused = (long) readDouble(bound, DECK_BOUND_REFUSED);
-        double maxOwn = readDouble(bound, DECK_BOUND_MAX_OWN);
-        System.out.println("[crewcap] deck-bound after activity: refused=" + refused
-                + " maxOwnDisplacement=" + maxOwn + "/tick (bound is "
-                + "2.0/tick plus the deck's carry)");
+        // for walking and jumping on his own deck has broken the game to protect it. Read off the
+        // bound's own records for THIS window — every step it judged above a block, and every
+        // refusal whatever its size, each with BOTH endpoints. A refusal is then readable: a `moved`
+        // of nineteen million blocks with one endpoint at x≈19 200 000 is the shipyard's subspace
+        // read against the world, a frame mix and not a movement — which a lifetime maximum of
+        // "own displacement" could only ever report as a number.
+        String judged = String.valueOf(boundEvents.since(boundMark));
+        Events.assertInstrumentRan(judged, "deck_movement_bound",
+                "the server's movement bound was or was not asked about his steps");
+        long refused = countRecords(judged, "\"accepted\":false");
+        System.out.println("[crewcap] deck-bound after activity: refusedInWindow=" + refused
+                + " (bound is 2.0/tick plus the deck's carry) :: " + judged);
         assertTrue("walking and jumping on his own deck must never be refused by the server's"
-                + " movement bound: refused=" + refused + " after a window whose largest own"
-                + " displacement was " + maxOwn + "/tick :: " + legs, refused == 0);
+                + " movement bound: " + refused + " refusal(s) in the window. The bound's own"
+                + " records, both endpoints each: " + judged + " :: " + legs, refused == 0);
+    }
+
+    /** How many event records in an {@code events since} reply carry {@code needle}. */
+    private static long countRecords(String sinceReply, String needle) {
+        long n = 0;
+        for (String record : String.valueOf(sinceReply).split("\\{\"seq\":")) {
+            if (record.contains(needle)) {
+                n++;
+            }
+        }
+        return n;
+    }
+
+    /** The {@code field} of the LAST record in an {@code events since} reply, or {@code "(none)"}. */
+    private static String lastRecordField(String sinceReply, String field) {
+        Matcher m = Pattern.compile("\"" + field + "\":\"([^\"]*)\"").matcher(String.valueOf(sinceReply));
+        String last = "(none)";
+        while (m.find()) {
+            last = m.group(1);
+        }
+        return last;
     }
 
     // ---- A per-tick trace of the deck's pose, across the ticks a pose does not arrive -----------
@@ -593,7 +631,6 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
                 exec("artest vs deck-capture").contains("\"alreadyTracked\":true"));
 
         double startY = bot().reportState().get("playerY").getAsDouble();
-        long refusedBefore = (long) readDouble(exec("artest vs shipframe-stats"), DECK_BOUND_REFUSED);
         long shoveMark = bot().eventMark().get("seq").getAsLong();
         Events serverEvents = events();
         long boundMark = serverEvents.markInstrumented();
@@ -615,9 +652,6 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
                 + " impossible position: " + shoved, shoved != null);
         bot().waitTicks(20);
 
-        String stats = exec("artest vs shipframe-stats");
-        long refusedAfter = (long) readDouble(stats, DECK_BOUND_REFUSED);
-        double excess = readDouble(stats, DECK_BOUND_LAST_EXCESS);
         double endY = bot().reportState().get("playerY").getAsDouble();
         String capture = exec("artest vs deck-capture");
         // The shove's own record, so a refusal that did not happen has one reading and not two: the
@@ -626,8 +660,9 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
         // And what the SERVER's bound was asked about, from its own side's log: "refused nothing"
         // and "was never asked about anything wild" are different answers.
         String boundTrace = String.valueOf(serverEvents.since(boundMark));
+        // What the bound REFUSED in this window: its own records since the mark, never a total.
         System.out.println("[crewcap] deck-bound shove: y " + startY + " -> " + endY
-                + " refused=" + refusedBefore + "->" + refusedAfter + " excess=" + excess
+                + " refusedInWindow=" + countRecords(boundTrace, "\"accepted\":false")
                 + " capture=" + capture + "\n[crewcap] deck-bound shove trace :: " + shoveTrace
                 + "\n[crewcap] deck-bound server trace :: " + boundTrace);
         Events.assertInstrumentRan(shoveTrace, "ship_frame_travel_shove",
@@ -664,7 +699,8 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
         // Printed, not asserted: the refusal count is the number the region's own leg would move,
         // and nothing here can move it without disabling the guard that fires first.
         System.out.println("[crewcap] deck-bound region refusals in this window: "
-                + (refusedAfter - refusedBefore) + " (excess " + excess + ")");
+                + countRecords(boundTrace, "\"accepted\":false") + " (each with both endpoints in"
+                + " the trace above)");
     }
 
     // ---- #47 driver isolation: sustained fast ship motion vs the CLIENT external-move guard -----
@@ -1359,14 +1395,6 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
     /** One game tick, in seconds — the factor between a declared velocity (blocks per second) and
      *  the carry a body receives for one tick of it. */
     private static final double SECONDS_PER_TICK = 0.05;
-
-
-    /** The server's movement bound, as the ship-frame probe reports it: how many declared positions
-     *  it refused, the largest own-power displacement it has seen, and by how much the last refusal
-     *  overshot the region. */
-    private static final Pattern DECK_BOUND_REFUSED = Pattern.compile("\"deckBoundRefused\":(-?[0-9.E\\-]+)");
-    private static final Pattern DECK_BOUND_MAX_OWN = Pattern.compile("\"deckBoundMaxOwn\":(-?[0-9.E\\-]+)");
-    private static final Pattern DECK_BOUND_LAST_EXCESS = Pattern.compile("\"deckBoundLastExcess\":(-?[0-9.E\\-]+)");
 
     @Test
     public void aBodyMeetingADeckThatManoeuvredUnwatchedIsNotCarriedByIt() throws Exception {

@@ -42,13 +42,24 @@ public abstract class MixinDeckMovementBoundInputs {
         TestTrace.instrumentHere("deck_movement_bound");
         final double dx = toX - fromX, dy = toY - fromY, dz = toZ - fromZ;
         final double moved = Math.sqrt(dx * dx + dy * dy + dz * dz);
-        if (moved <= REPORT_ABOVE_BLOCKS) {
+        final boolean accepted = cir.getReturnValueZ();
+        // Every REFUSAL is recorded, whatever its size: a refusal is the bound's whole output, and a
+        // test asserting "he was refused nothing" reads this record and nothing else. Accepted steps
+        // are recorded above ordinary walking only.
+        if (accepted && moved <= REPORT_ABOVE_BLOCKS) {
             return;
         }
+        // Both ENDPOINTS, all three axes. A refusal's size alone hid what it was: a `moved` of
+        // 19.2 million blocks read as "the bound went mad" until the X coordinates said one end was
+        // the shipyard's subspace (x=19199999) and the other the world — a from/to pair in two
+        // frames, which is a frame mix and not a movement at all.
         TestTrace.recordHere("deck_movement_bound",
-                "\"moved\":" + TestTrace.fmt(moved)
-                        + ",\"fromY\":" + TestTrace.fmt(fromY)
-                        + ",\"toY\":" + TestTrace.fmt(toY)
-                        + ",\"accepted\":" + cir.getReturnValue());
+                "\"who\":\"" + TestTrace.json(player == null ? "?" : player.getName()) + "\""
+                        + ",\"moved\":" + TestTrace.fmt(moved)
+                        + ",\"from\":\"" + TestTrace.fmt(fromX) + "," + TestTrace.fmt(fromY) + ","
+                        + TestTrace.fmt(fromZ) + "\""
+                        + ",\"to\":\"" + TestTrace.fmt(toX) + "," + TestTrace.fmt(toY) + ","
+                        + TestTrace.fmt(toZ) + "\""
+                        + ",\"accepted\":" + accepted);
     }
 }
