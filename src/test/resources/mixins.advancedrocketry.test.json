@@ -28,7 +28,8 @@
     "MixinCellCrossingControllerEvents",
     "MixinShipCrossingServiceEvents",
     "MixinVSShipCrossingOpsEvents",
-    "MixinShipLedgerEvents"
+    "MixinShipLedgerEvents",
+    "MixinQueryableShipDataEvents"
   ],
   "client": [
     "MixinEntityVelocityWriters",

@@ -87,8 +87,7 @@ public class VSShipEntryClientGroupE2ETest extends AbstractSharedVsClientE2ETest
      * where production performs it ({@code MixinShipCrossingServiceEvents},
      * {@code MixinShipEntryControllerEvents}, {@code MixinVSShipCrossingOpsEvents}, {@code MixinShipLedgerEvents}).
      */
-    private static final String[] ENTRY_CHAIN = {"cell_crossing_begun", "entry_decided",
-            "crossing_pose_settled", "crossing_crew_reseated", "ledger_settled"};
+    private static final String[] ENTRY_CHAIN = zmaster587.advancedRocketry.test.Chains.GRANTED_ENTRY;
     private static final Pattern SLOT_DIMS = Pattern.compile("\"slotDims\":\\[([0-9,\\-]*)]");
     private static final Pattern SLOT_DIM = Pattern.compile("\"slotDim\":(-?\\d+)");
     private static final Pattern AFC_X = Pattern.compile("\"afcX\":(-?\\d+)");

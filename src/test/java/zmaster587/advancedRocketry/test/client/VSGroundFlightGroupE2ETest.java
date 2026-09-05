@@ -10,6 +10,7 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 import zmaster587.advancedRocketry.api.FreeFlightPhysics;
+import zmaster587.advancedRocketry.test.Events;
 
 import static org.junit.Assert.assertTrue;
 
@@ -160,21 +161,16 @@ public class VSGroundFlightGroupE2ETest extends AbstractSharedVsClientE2ETest {
         exec("tp @a " + (BX + 600) + " 120 " + (BZ + 600) + " 0 0");
         bot().waitTicks(10);
 
-        int allBefore = count("ship-count-all");
+        // The registry's own record of the ship being added, since a mark taken before the assembly
+        // was queued: THIS scenario's ship by construction — where a count incremented on a shared
+        // world is answered by every neighbour that ever assembled one — and it names the ship.
+        Events events = events();
+        long spawnMark = events.markInstrumented();
         String assemble = assembleFixture(BX, BY, BZ, AFC_VARIANT);
         assertTrue("with VS, the AFC build must route to a ship (no rocket): " + assemble,
                 assemble.contains("\"rocketCount\":0"));
-
-        // Wait for the ship to appear in the queryable registry (async spawn), then let
-        // it fully settle with no observer. An INCREMENT, not an absolute count: on a shared world
-        // "there is a ship in dim 0" is answered by every neighbour that ever assembled one.
-        int all = allBefore;
-        for (int i = 0; i < 40 && all <= allBefore; i++) {
-            bot().waitTicks(5);
-            all = count("ship-count-all");
-        }
-        assertTrue("assembly must create a VS ship in the queryable registry (before=" + allBefore
-                + " after=" + all + ")", all > allBefore);
+        awaitShipSpawned(events, spawnMark,
+                "assembly must create a VS ship in the queryable registry (async spawn)");
         bot().waitTicks(40); // settle before any observer approaches
 
         // Now walk the client ONTO the ship's projected location. A real client near the
@@ -305,20 +301,15 @@ public class VSGroundFlightGroupE2ETest extends AbstractSharedVsClientE2ETest {
         exec("tp @a " + (BX + 0.5) + " " + (BY + 6) + " " + (BZ + 0.5) + " 0 0");
         bot().waitTicks(10);
 
-        int allBefore = count("ship-count-all");
+        Events events = events();
+        long spawnMark = events.markInstrumented();
         String assemble = assembleFixture(BX, BY, BZ, AFC_VARIANT);
         assertTrue("with VS, the AFC build must route to a ship (no rocket): " + assemble,
                 assemble.contains("\"rocketCount\":0"));
 
-        // The ship must appear in the queryable registry (async spawn did not fault) ...
-        int all = allBefore;
-        for (int i = 0; i < 40 && all <= allBefore; i++) {
-            bot().waitTicks(5);
-            all = count("ship-count-all");
-        }
-        assertTrue("assembly with an observer present must still create a VS ship (before="
-                        + allBefore + " after=" + all
-                        + ") — a fault in the double-load window would prevent it", all > allBefore);
+        // The ship must appear in the queryable registry (async spawn did not fault) — its own record.
+        awaitShipSpawned(events, spawnMark, "assembly with an observer present must still create a VS"
+                + " ship — a fault in the double-load window would prevent it");
 
         // ... and it must LOAD (the observer never left, so the proximity load runs in the same
         // window as the spawn load). Reaching LOADED with the observer present through spawn is
@@ -326,7 +317,7 @@ public class VSGroundFlightGroupE2ETest extends AbstractSharedVsClientE2ETest {
         // THIS ship, at THIS base — a neighbour's loaded ship is not evidence about this window.
         String shipId = captureShipIdAt(BX, BY, BZ, 60);
         assertTrue("a VS ship assembled under a nearby observer must load without VS faulting "
-                        + "(id=" + shipId + ", registry before=" + allBefore + " after=" + all + ")",
+                        + "(id=" + shipId + ", registry: " + events.since(spawnMark, "ship_spawned") + ")",
                 shipInfoById(shipId).contains("\"managed\":true"));
     }
 
@@ -345,18 +336,12 @@ public class VSGroundFlightGroupE2ETest extends AbstractSharedVsClientE2ETest {
         exec("tp @a " + (BX + 600) + " 120 " + (BZ + 600) + " 0 0");
         bot().waitTicks(10);
 
-        int allBefore = count("ship-count-all");
+        Events events = events();
+        long spawnMark = events.markInstrumented();
         String assemble = assembleFixture(BX, BY, BZ, SEAT_VARIANT);
         assertTrue("a with-pilot-seat build must route to a ship (no rocket): " + assemble,
                 assemble.contains("\"rocketCount\":0"));
-
-        int all = allBefore;
-        for (int i = 0; i < 40 && all <= allBefore; i++) {
-            bot().waitTicks(5);
-            all = count("ship-count-all");
-        }
-        assertTrue("assembly must create a VS ship (before=" + allBefore + " after=" + all + ")",
-                all > allBefore);
+        awaitShipSpawned(events, spawnMark, "assembly must create a VS ship");
         bot().waitTicks(40);
 
         exec("tp @a " + (BX + 0.5) + " " + (BY + 6) + " " + (BZ + 0.5) + " 0 0");
@@ -408,18 +393,12 @@ public class VSGroundFlightGroupE2ETest extends AbstractSharedVsClientE2ETest {
         exec("tp @a " + (BX + 600) + " 120 " + (BZ + 600) + " 0 0");
         bot().waitTicks(10);
 
-        int allBefore = count("ship-count-all");
+        Events events = events();
+        long spawnMark = events.markInstrumented();
         String assemble = assembleFixture(BX, BY, BZ, SEAT_VARIANT);
         assertTrue("a with-pilot-seat build must route to a ship: " + assemble,
                 assemble.contains("\"rocketCount\":0"));
-
-        int all = allBefore;
-        for (int i = 0; i < 40 && all <= allBefore; i++) {
-            bot().waitTicks(5);
-            all = count("ship-count-all");
-        }
-        assertTrue("assembly must create a VS ship (before=" + allBefore + " after=" + all + ")",
-                all > allBefore);
+        awaitShipSpawned(events, spawnMark, "assembly must create a VS ship");
         bot().waitTicks(40);
 
         // Approach so the client loads the ship (and its seat/AFC tiles).

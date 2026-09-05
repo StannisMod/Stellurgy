@@ -94,13 +94,14 @@ public final class TestTrace {
                 type, payload);
     }
 
-    /** {@link #record} for an observation point with no entity — see {@link #instrumentHere}. */
+    /** {@link #record} for an observation point with no entity — see {@link #instrumentHere}. On the
+     *  server the record carries the overworld's clock, like {@link #recordServer}. */
     public static void recordHere(String type, String payload) {
         if (isRemoteThread()) {
             com.github.stannismod.forge.testing.client.bridge.ForgeTestClientBootstrap
                     .recordEvent(type, payload);
         } else {
-            TestEventLog.record("server", 0L, type, payload);
+            recordServer(type, payload);
         }
     }
 

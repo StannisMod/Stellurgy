@@ -393,9 +393,20 @@ public abstract class AbstractSharedVsClientE2ETest extends AbstractSharedClient
      * reported {@code expected:<13> but was:<3>} for a flight that ended with nobody aboard, a crew
      * that never boarded the parked hull, and a client that was merely slow, all alike.</p>
      */
-    protected static final String[] PILOTED_JUMP_CHAIN = {
-            "crew_captured", "hyperspace_depart_cut", "transit_departed", "crew_boarded_parked_hull",
-            "hyperspace_arrival_cut", "crew_reseated", "transit_settled"};
+    protected static final String[] PILOTED_JUMP_CHAIN = zmaster587.advancedRocketry.test.Chains.PILOTED_JUMP;
+
+    /**
+     * Wait for THIS scenario's assembly to become a ship in the physics mod's registry, and return
+     * its physics id — read off the {@code ship_spawned} record rather than off a nearest-ship lookup
+     * at the build site a tick later. The mark is taken before the assembly is queued, so the record
+     * is this scenario's own ship and never a neighbour's.
+     */
+    protected final String awaitShipSpawned(Events events, long mark, String what) throws Exception {
+        String reply = events.await(mark, "ship_spawned", what, 200);
+        String vsShip = Events.lastField(reply, "vsShip");
+        scenario().requireArranged("a ship_spawned record must name the ship: " + reply, vsShip != null);
+        return vsShip;
+    }
 
     /**
      * How long one link of the chain may take, in the {@link Events} clock's ticks. The probe's

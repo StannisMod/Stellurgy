@@ -22,6 +22,8 @@ import org.junit.Test;
 import org.lwjgl.input.Keyboard;
 
 import zmaster587.advancedRocketry.space.TerrainHeightFinder;
+import zmaster587.advancedRocketry.test.Chains;
+import zmaster587.advancedRocketry.test.Events;
 
 import static org.junit.Assert.assertTrue;
 import static zmaster587.advancedRocketry.test.ArrangementFailure.requireArranged;
@@ -352,35 +354,32 @@ public class M1PlanetToPlanetMilestoneE2ETest {
         // harness affordance that kept the ship loaded would hide a production failure to keep its
         // own ship loaded during the crossing.
         tLeg = System.currentTimeMillis();
-        int ledger = 0;
+        // The entry as the server's own chain of events, awaited while the key is held: the hull is
+        // cut into the cell, the gate records STARTED, the pose is written, the crew is put back, the
+        // ledger is told. The old form polled the ledger's SIZE and reported "ledger=0" for a
+        // refusal, a failed cut, a stalled re-seat and a slow climb alike.
         // THE MULTIPLIER STAYS: a held key is sampled and re-sent per CLIENT TICK (on change, plus a
         // re-assert every PilotInputCadence.REPEAT_TICKS), so a loaded box stretches the climb through
         // the client's TICK rate. NOT per rendered frame - that reading was refuted 2026-08-21.
-        int climbBudget = (int) (800 * TestTimeouts.factor());
+        // 4 000 ticks is the old 800 polls of 5.
+        Events events = new Events(this::exec, bot()::waitTicks);
+        long entryMark = events.markInstrumented();
+        long entryClientMark = bot().eventMark().get("seq").getAsLong();
+        int climbBudget = (int) (4000 * TestTimeouts.factor());
         bot().holdKey(Keyboard.KEY_R);
         try {
-            for (int attempt = 0; attempt < climbBudget && ledger < 1; attempt++) {
-                bot().waitTicks(5);
-                // While the crossing runs the origin-world ship vanishes (the cut), so the ledger —
-                // not a position read — is the single source of arrival truth.
-                if ((attempt & 1) == 1) {
-                    Matcher lm = LEDGER.matcher(exec("artest space subsystem-status"));
-                    if (lm.find()) {
-                        ledger = Integer.parseInt(lm.group(1));
-                    }
-                }
-            }
+            events.assertChain(entryMark, "a ship climbing under its own power past the orbit line ("
+                    + ORBIT_LINE + ") must be taken by the entry crossing and SETTLE in a space cell —"
+                    + " that is the on-ramp a real player flies, and holding one key is the whole of"
+                    + " his input", climbBudget, Chains.GRANTED_ENTRY);
         } finally {
             bot().releaseKey(Keyboard.KEY_R);
         }
         String statusAfter = exec("artest space subsystem-status");
-        assertTrue("a ship climbing under its own power past the orbit line (" + ORBIT_LINE + ") must "
-                        + "be taken by the entry crossing and SETTLE in a space cell — that is the "
-                        + "on-ramp a real player flies, and holding one key is the whole of his input. "
-                        + "ledger=" + ledger + " status=" + statusAfter
-                        + " clientRiding=" + bot().reportRidingEntity()
-                        + " delivery=" + exec("artest vs seat-delivery"),
-                ledger >= 1);
+        String entryDecisions = events.since(entryMark, "entry_decided");
+        assertTrue("the entry gate must have GRANTED this entry (STARTED): " + entryDecisions
+                        + " status=" + statusAfter,
+                entryDecisions.contains("\"decision\":\"STARTED\""));
         System.out.println("[M1] leg 4 (powered climb to the cell) " + elapsed(tLeg)
                 + " status=" + statusAfter);
 
@@ -390,24 +389,24 @@ public class M1PlanetToPlanetMilestoneE2ETest {
         requireArranged("subsystem-status must list its slot dims: " + statusAfter, sd.find());
         String slotDims = "," + sd.group(1) + ",";
 
-        // (1) The client's OWN world is a space cell. report_state carries no dimension, so this is
-        // read from the client's world info — the pilot followed his ship through the seam or he
-        // did not, and nothing server-side can answer that for him.
+        // (1) The client's OWN world is a space cell — the pilot followed his ship through the seam
+        // or he did not, and nothing server-side can answer that for him. Read off the client's own
+        // record of its dimension changes since the climb began, in order: a world rebuilt twice
+        // between two samples shows one change or none, and the records show both.
+        String dimChanges = "";
         int clientDim = Integer.MIN_VALUE;
-        for (int attempt = 0; attempt < budget; attempt++) {
+        for (int attempt = 0; attempt < budget && !slotDims.contains("," + clientDim + ","); attempt++) {
             bot().waitTicks(5);
-            JsonObject weather = bot().reportWeather();
-            if (weather.has("dim")) {
-                clientDim = weather.get("dim").getAsInt();
-                if (slotDims.contains("," + clientDim + ",")) {
-                    break;
-                }
+            dimChanges = String.valueOf(bot().eventsSince(entryClientMark, "client_dimension_changed"));
+            Matcher dm = Pattern.compile("\"dim\":(-?\\d+)").matcher(dimChanges);
+            while (dm.find()) {
+                clientDim = Integer.parseInt(dm.group(1)); // the LAST change is where he is now
             }
         }
         assertTrue("after the crossing the CLIENT itself must be in a space-cell dimension — a pilot "
                         + "whose ship left without him is the exact failure this leg exists to catch. "
-                        + "clientDim=" + clientDim + " slotDims=[" + sd.group(1) + "] status="
-                        + statusAfter,
+                        + "clientDim=" + clientDim + " slotDims=[" + sd.group(1) + "] client dimension"
+                        + " changes since the climb: " + dimChanges + " status=" + statusAfter,
                 slotDims.contains("," + clientDim + ","));
 
         // (2) Still seated, sampled TWICE with a wait between: a seat lost in the crossing can read
@@ -613,6 +612,8 @@ public class M1PlanetToPlanetMilestoneE2ETest {
                         + reboarded + " serverRiding=" + exec("artest player riding-entity"),
                 isRiding(reboarded));
 
+        // The mark BEFORE the key: the arrival's ledger write is awaited from here.
+        long jumpMark = events.markInstrumented();
         pressJumpKey();
         String pressChat = chatText(30);
         // Two legitimate branches, both real player paths: a clean ship spools straight up, and a
@@ -639,19 +640,25 @@ public class M1PlanetToPlanetMilestoneE2ETest {
         }
         System.out.println("[M1] jump branch: " + jumpBranch + " chat=" + pressChat);
 
-        // The flight is short but the wind-up is not instant; poll the ledger, which is the only
-        // place that answers "where is the ship" while it has no body anywhere.
-        String arrivedCell = launchCell;
+        // The flight is short but the wind-up is not instant. The arrival is the ledger's own WRITE:
+        // `ledger_settled` for this ship, since the mark taken before the fire button — whichever
+        // mechanism the drive chose (a hyperspace flight, or the direct crossing a short hop is
+        // performed as), it ends by telling the ledger where the ship now is. The record names the
+        // cell; a poll of the ledger's row could only see the row once it had changed.
         // No fork multiplier: a jump's duration is distance over speed, which is a number of
         // server TICKS fixed by the game. Scaling it by how many forks share this box granted the
-        // flight extra world on a busy machine and made two runs different experiments.
-        int jumpBudget = 400;
-        for (int attempt = 0; attempt < jumpBudget && arrivedCell.equals(launchCell); attempt++) {
-            bot().waitTicks(5);
-            String entry = exec("artest space ledger-get " + shipId);
-            String cell = readString(entry, CELL);
-            if (cell != null && !cell.isEmpty() && entry.contains("\"state\":\"SETTLED\"")) {
-                arrivedCell = cell;
+        // flight extra world on a busy machine and made two runs different experiments. 2 000 ticks
+        // is the old 400 polls of 5.
+        String arrivedCell = launchCell;
+        String settled = events.await(jumpMark, "ledger_settled", "a jump the pilot armed and fired"
+                + " must end with the ledger told where the ship now is — the arrival's own commit",
+                2000);
+        for (String record : settled.split("\\{\"seq\":")) {
+            if (record.contains("\"ship\":\"" + shipId + "\"")) {
+                String cell = Events.lastField(record, "cell");
+                if (cell != null && !cell.isEmpty()) {
+                    arrivedCell = cell;
+                }
             }
         }
         String ledgerAfterJump = exec("artest space ledger-get " + shipId);
@@ -1358,6 +1365,11 @@ public class M1PlanetToPlanetMilestoneE2ETest {
         bot().clickButtonById(BUTTON_SCAN);
 
         int ships = 0;
+        // The registry's own record of the ship being added (`ship_spawned`), since a mark taken
+        // before the first BUILD click: a count of ships in dim 0 was an absolute on a world nothing
+        // else builds in here, but it could not say WHICH ship, and the record names it.
+        Events spawnEvents = new Events(this::exec, bot()::waitTicks);
+        long spawnMark = spawnEvents.markInstrumented();
         // THE MULTIPLIER STAYS. What it waits on is VS building the ship on its OWN thread, off the
         // game loop: that work finishes in wall-clock time, so a busy box genuinely needs more game
         // ticks to elapse before it is done. Measured at 8 forks on the sibling gate test.
@@ -1373,10 +1385,7 @@ public class M1PlanetToPlanetMilestoneE2ETest {
             }
             bot().clickButtonById(BUTTON_BUILD);
             bot().waitTicks(40);
-            Matcher m = COUNT.matcher(exec("artest vs ship-count-all 0"));
-            if (m.find()) {
-                ships = Integer.parseInt(m.group(1));
-            }
+            ships = Events.countRecords(spawnEvents.since(spawnMark, "ship_spawned"), "\"vsShip\":");
         }
         bot().closeScreen();
         return ships;
@@ -1670,8 +1679,15 @@ public class M1PlanetToPlanetMilestoneE2ETest {
     }
 
     /** A {@code sx_sy_sz} cell key as the three sector arguments a probe takes. */
+    /**
+     * The cell key as the probe's {@code cell-info} takes it: VERBATIM. The probe reads a key form
+     * whenever the argument carries a level separator, and a nested key such as
+     * {@code 19_0_0.213_0_0} (a moon's own cell inside its planet's zone) has no numeric form at all —
+     * splitting it on underscores handed the probe {@code 19 0 0.213 0 0}, which it read as the
+     * PARENT cell and answered about the planet instead of the moon.
+     */
     private static String cellArgs(String cellKey) {
-        return cellKey.replace('_', ' ');
+        return cellKey;
     }
 
     private static String readString(String json, Pattern p) {
