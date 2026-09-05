@@ -8,6 +8,8 @@ import org.junit.runners.MethodSorters;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import zmaster587.advancedRocketry.test.Events;
+
 import static zmaster587.advancedRocketry.test.AdvancedRocketryTestConstants.HYPERSPACE_JUMP_SPEED;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
@@ -105,72 +107,92 @@ private int waitForLoadedShip(int dim) throws Exception {
         return 0;
     }
 
-    /** The three ways "drive the transit until the CLIENT is inside the corridor" can end. Only the
-     *  last is a budget problem; the other two are findings, and the shape this replaces reported
-     *  all three the same way. */
-    private enum CorridorEntry { ARRIVED, TRANSIT_ENDED_FIRST, BUDGET_SPENT }
+    // ---- the jump as a CHAIN of events, and the clock that drives it ----
 
-    /** What {@link #driveIntoCorridor} saw, printable whole so a red carries it. */
-    private static final class CorridorWait {
-        final CorridorEntry end;
-        final int corridorDim;
-        final int clientDim;
-        final String lastTick;
+    /**
+     * The seven links a piloted hyperspace jump is, in the order production commits them: the crew is
+     * picked up, the hull is cut out of its cell into the lane, the departure is committed, the crew is
+     * seated on the parked hull for the flight, the hull is cut out of the lane into its destination,
+     * the crew is put back on it, and only then is the arrival committed.
+     *
+     * <p>Every link is recorded by a test-only mixin at the seam where production answers for it
+     * ({@code MixinShipTransitManagerEvents}, {@code MixinVSShipCrosserEvents}). A red on this chain
+     * names the link that did not happen and prints everything that did — where the loop this
+     * replaced reported {@code expected:<13> but was:<3>} for a flight that ended with nobody aboard, a
+     * crew that never boarded the parked hull, and a client that was merely slow, all alike.</p>
+     */
+    private static final String[] PILOTED_JUMP_CHAIN = {
+            "crew_captured", "hyperspace_depart_cut", "transit_departed", "crew_boarded_parked_hull",
+            "hyperspace_arrival_cut", "crew_reseated", "transit_settled"};
 
-        CorridorWait(CorridorEntry end, int corridorDim, int clientDim, String lastTick) {
-            this.end = end;
-            this.corridorDim = corridorDim;
-            this.clientDim = clientDim;
-            this.lastTick = lastTick;
-        }
+    /**
+     * How long one link of the chain may take, in the {@link Events} clock's ticks. The transit
+     * manager under test advances ONLY when the probe ticks it, so every poll of the clock below also
+     * drives ten transit ticks: this budget is 120 polls, i.e. 1 200 transit ticks and 600 client
+     * ticks per link, against a flight priced at ~170 transit ticks by {@code HYPERSPACE_JUMP_SPEED}.
+     * It is a deadline for a discrete event, not a guess at how long a value takes to settle.
+     */
+    private static final int JUMP_LINK_BUDGET_TICKS = 600;
 
-        @Override
-        public String toString() {
-            return "outcome=" + end + " corridorDim=" + corridorDim + " clientDim=" + clientDim
-                    + " lastTick=" + lastTick;
-        }
+    /**
+     * The event log read on the transit's own clock. This class's transit manager is the probe's,
+     * and it moves only on {@code transit-tick}; a reader that let the game run without ticking it
+     * would wait on a flight that is standing still. So every step the log takes between two reads
+     * advances the jump ten ticks and then lets the client breathe.
+     */
+    private Events transitEvents(Events.Probe probe) {
+        return new Events(probe, ticks -> {
+            probe.exec("artest space transit-tick 10");
+            bot().waitTicks(ticks);
+        });
     }
 
     /**
-     * Drive the transit until the client's OWN dimension is the corridor, and name which terminal
-     * state it reached.
-     *
-     * <p>This replaces three byte-identical copies of a loop that ended in
-     * {@code assertEquals(hyperDim, clientDim)}. That assertion reports "expected 13 but was 3"
-     * for three different events, and only one of them is about a budget:</p>
-     * <ul>
-     *   <li>{@code ARRIVED} — the client crossed; the leg can proceed.</li>
-     *   <li>{@code TRANSIT_ENDED_FIRST} — the flight FINISHED while the crew stayed behind. Measured
-     *       once in the loaded gate: {@code inTransit=0 crewDim=-1} beside a server line reading
-     *       {@code transit settled … crew 0}. Nothing about that is a slow client, and the old
-     *       message blamed the client's dimension for it.</li>
-     *   <li>{@code BUDGET_SPENT} — still flying after the driven ticks. The only budget answer.</li>
-     * </ul>
-     *
-     * <p>The corridor dim is read from the LATEST tick BEFORE the end check: the previous order left
-     * it at {@code -1} when a transit ended inside the first iteration, so the failure compared the
-     * client against a sentinel.</p>
+     * The slot dimension the arrived ship sits in, read from the transit probe once the chain has
+     * settled — the same field the old arrival loops read from their last tick.
      */
+    private static int arrivedTargetDim(Events.Probe probe) throws Exception {
+        String tick = probe.exec("artest space transit-tick 1");
+        assertEquals("the chain said the transit settled, so the probe must agree it is over: " + tick,
+                0, readInt(tick, "inTransit"));
+        int targetDim = readInt(tick, "targetDim");
+        assertTrue("a settled transit must name the target cell's slot dimension: " + tick, targetDim >= 0);
+        return targetDim;
+    }
 
-
-    private CorridorWait driveIntoCorridor(int iterations) throws Exception {
-        int corridorDim = -1;
-        String lastTick = "";
-        for (int i = 0; i < iterations; i++) {
-            lastTick = exec("artest space transit-tick 10");
-            corridorDim = readInt(lastTick, "hyperDim");
-            int clientDim = bot().reportWeather().get("dim").getAsInt();
-            if (clientDim == corridorDim) {
-                return new CorridorWait(CorridorEntry.ARRIVED, corridorDim, clientDim, lastTick);
+    /**
+     * Drive the transit until the crew member is CARRIED into the corridor, and return the corridor's
+     * dimension. An arrangement step: every caller stands him up or reads his sky IN the corridor, so
+     * whatever this cannot establish is raised as an arrangement failure with the chain attached.
+     *
+     * <p>Two links, one per side, each read off its own log. The SERVER's: he has been seated on the
+     * hull parked in the lane ({@code crew_boarded_parked_hull}) — a flight that settles without that
+     * record is one that carried nobody, and the old loop reported it as a slow client. The CLIENT's:
+     * its own dimension became the corridor ({@code client_dimension_changed} with the lane's world),
+     * recorded at the tail of the respawn packet that rebuilds its world — the fact the old loop
+     * sampled with {@code reportWeather} on a tick budget, and could miss when the world was rebuilt
+     * twice between two samples.</p>
+     */
+    private int driveIntoCorridor(Events events, long serverMark, long clientMark) throws Exception {
+        events.await(serverMark, "crew_boarded_parked_hull", "the crew must be seated on the hull"
+                + " parked in the lane before anyone can be in the corridor", JUMP_LINK_BUDGET_TICKS);
+        int corridorDim = readInt(exec("artest space transit-tick 1"), "hyperDim");
+        String seen = "";
+        for (int waited = 0; waited <= JUMP_LINK_BUDGET_TICKS; waited += 5) {
+            seen = bot().eventsSince(clientMark, "client_dimension_changed").toString();
+            if (seen.contains("\"dim\":" + corridorDim + ",")
+                    || seen.contains("\"dim\":" + corridorDim + "}")) {
+                return corridorDim;
             }
-            if (readInt(lastTick, "inTransit") == 0) {
-                return new CorridorWait(CorridorEntry.TRANSIT_ENDED_FIRST, corridorDim, clientDim,
-                        lastTick);
-            }
-            bot().waitTicks(2);
+            exec("artest space transit-tick 10");
+            bot().waitTicks(5);
         }
-        return new CorridorWait(CorridorEntry.BUDGET_SPENT, corridorDim,
-                bot().reportWeather().get("dim").getAsInt(), lastTick);
+        scenario().arrangementFailed("the client was never carried into the corridor (dim "
+                + corridorDim + "): the server seated the crew on the parked hull, but no"
+                + " client_dimension_changed for that world was recorded within " + JUMP_LINK_BUDGET_TICKS
+                + " ticks. Client dimension changes since the mark: " + seen
+                + " | server chain since the mark: " + events.since(serverMark));
+        return corridorDim; // unreachable: arrangementFailed always throws
     }
 
     private static int readInt(String json, String key) {
@@ -283,36 +305,26 @@ private static final long PARK_SPEED = HYPERSPACE_JUMP_SPEED;
         assertTrue("the bot must be seated on the ship BEFORE the jump (control): "
                 + bot().reportRidingEntity(), bot().reportRidingEntity().get("riding").getAsBoolean());
 
+        // The mark is taken BEFORE the departure, so nothing the jump does can fall between two reads.
+        Events events = transitEvents(this::exec);
+        long mark = events.markInstrumented();
+
         // Depart into hyperspace at the ship anchor (1,64,1 from transit-setup-piloted).
         String begin = exec("artest space transit-begin " + originDim + " 1 64 1 " + HYPERSPACE_JUMP_SPEED);
         assertTrue("the transit must begin (departure crossing): " + begin, readBool(begin, "began"));
 
-        // Advance the jump: tick until it arrives (inTransit == 0), capturing the target cell's slot dim.
-        int targetDim = -1;
-        String lastTick = "";
-        for (int i = 0; i < 80 && targetDim < 0; i++) {
-            lastTick = exec("artest space transit-tick 10");
-            if (readInt(lastTick, "inTransit") == 0) {
-                targetDim = readInt(lastTick, "targetDim");
-                break;
-            }
-            bot().waitTicks(2);
-        }
-        assertTrue("the jump never completed (still in transit); last tick=" + lastTick, targetDim >= 0);
-
-        // The crew reseat is retry-based and completes a few ticks AFTER inTransit hits 0. Keep ticking (to
-        // drive the retries) and observe the CLIENT until it is riding again in the target dim, bounded.
-        boolean crewSurvived = false;
-        for (int i = 0; i < 60 && !crewSurvived; i++) {
-            exec("artest space transit-tick 10");
-            bot().waitTicks(2);
-            crewSurvived = bot().reportRidingEntity().get("riding").getAsBoolean()
-                    && bot().reportWeather().get("dim").getAsInt() == targetDim;
-        }
+        // THE CONTRACT, as the server commits it: the whole jump, link by link and in order. This is
+        // where "the jump never completed" and "the crew was left behind" used to be one number.
+        events.assertChain(mark, "a seated crew member's jump must pick him up, cut the hull into the"
+                + " lane, seat him on the parked hull, cut the hull into its destination and put him"
+                + " back aboard before it settles", JUMP_LINK_BUDGET_TICKS, PILOTED_JUMP_CHAIN);
+        int targetDim = arrivedTargetDim(this::exec);
 
         // ACCEPTANCE (client oracle): the client itself must render the crew member STILL RIDING the ship's
-        // seat, in the TARGET cell — the reseat carried it across dims and re-mounted it.
-        JsonObject riding = bot().reportRidingEntity();
+        // seat, in the TARGET cell — the reseat carried it across dims and re-mounted it. The server's
+        // re-seat is a link above; what is read here is whether the CLIENT followed it, and the helper
+        // says which of the two failed when it did not.
+        JsonObject riding = ridingOnceTheClientHasCaughtUp(CLIENT_REMOUNT_POLLS);
         assertTrue("the crew member must survive the jump still riding, on the CLIENT: " + riding
                 + " (targetDim=" + targetDim + ", clientDim=" + bot().reportWeather().get("dim").getAsInt() + ")",
                 riding.get("riding").getAsBoolean());
@@ -480,9 +492,6 @@ private static final long PARK_SPEED = HYPERSPACE_JUMP_SPEED;
 
     // ---- migrated: VSCrewedArrivalReseatsWithNobodyToLoadTheShipE2ETest ----
 
-    /** Ticks of transit driving after arrival. The re-seat is retry-based; a healthy one takes a few. */
-private static final int RESEAT_POLLS = 90;
-
     /**
      * Run a probe and return ONLY its JSON envelope. The server writes its own log lines to the same
      * stream, so joining every returned line hands the assertions whatever unrelated line happened to
@@ -581,33 +590,21 @@ private boolean waitForRegisteredShip(int dim) throws Exception {
         assertTrue("the bot must be seated on the ship BEFORE the jump (control): "
                 + bot().reportRidingEntity(), bot().reportRidingEntity().get("riding").getAsBoolean());
 
+        Events events = transitEvents(this::execEnvelope);
+        long mark = events.markInstrumented();
+
         String begin = execEnvelope("artest space transit-begin " + originDim + " 1 64 1 " + HYPERSPACE_JUMP_SPEED);
         assertTrue("the transit must begin (departure crossing): " + begin, readBool(begin, "began"));
 
-        int targetDim = -1;
-        String lastTick = "";
-        for (int i = 0; i < 80 && targetDim < 0; i++) {
-            lastTick = execEnvelope("artest space transit-tick 10");
-            if (readInt(lastTick, "inTransit") == 0) {
-                targetDim = readInt(lastTick, "targetDim");
-                break;
-            }
-            bot().waitTicks(2);
-        }
-        assertTrue("the jump never completed (still in transit); last tick=" + lastTick, targetDim >= 0);
+        // The leg under test: the whole chain, with NOTHING forcing the arriving ship loaded — no
+        // load-ships against the target, no permaload. If the re-seat needs the ship loaded, there is
+        // nothing in this world to load it, and the chain stops at `crew_reseated` with the placement's
+        // own account of what it is waiting on (`crew_reseat_blocked`) in the log it prints.
+        events.assertChain(mark, "a crew member must be re-seated on arrival with NOTHING forcing the"
+                + " ship loaded", JUMP_LINK_BUDGET_TICKS, PILOTED_JUMP_CHAIN);
+        int targetDim = arrivedTargetDim(this::execEnvelope);
 
-        // The leg under test. Drive the transit's retries and watch the CLIENT. Note what is NOT here: no
-        // load-ships against targetDim, no permaload. If the re-seat needs the arriving ship loaded, there
-        // is nothing in this world to load it.
-        boolean reseated = false;
-        for (int i = 0; i < RESEAT_POLLS && !reseated; i++) {
-            execEnvelope("artest space transit-tick 10");
-            bot().waitTicks(2);
-            reseated = bot().reportRidingEntity().get("riding").getAsBoolean()
-                    && bot().reportWeather().get("dim").getAsInt() == targetDim;
-        }
-
-        JsonObject riding = bot().reportRidingEntity();
+        JsonObject riding = ridingOnceTheClientHasCaughtUp(CLIENT_REMOUNT_POLLS);
         assertTrue("a crew member must be re-seated on arrival with NOTHING forcing the ship loaded; client "
                 + "reports " + riding + " (targetDim=" + targetDim + ", clientDim="
                 + bot().reportWeather().get("dim").getAsInt() + ")",
@@ -734,6 +731,8 @@ private String chat() throws Exception {
                 !hud().contains("HYPERSPACE"));
 
         // ── THE JUMP ────────────────────────────────────────────────────────────────────────────
+        Events events = transitEvents(this::exec);
+        long mark = events.markInstrumented();
         String begin = exec("artest space transit-begin " + originDim + " 1 64 1 " + PARK_SPEED);
         assertTrue("the transit must begin (departure crossing): " + begin, readBool(begin, "began"));
         bot().waitTicks(10);
@@ -805,12 +804,10 @@ private String chat() throws Exception {
                 tunnelInFlight > tunnelAtStart);
 
         // ── ARRIVAL ─────────────────────────────────────────────────────────────────────────────
-        for (int i = 0; i < 60 && readInt(lastTick, "inTransit") != 0; i++) {
-            lastTick = exec("artest space transit-tick 10");
-            bot().waitTicks(2);
-        }
-        assertEquals("the transit must have finished for the arrival message to be owed: " + lastTick,
-                0, readInt(lastTick, "inTransit"));
+        // The arrival message is owed once the transit has SETTLED — the commit that follows the crew
+        // being back aboard — and the chain names which link is missing if it never does.
+        events.assertChain(mark, "the transit must finish for the arrival message to be owed",
+                JUMP_LINK_BUDGET_TICKS, PILOTED_JUMP_CHAIN);
         bot().waitTicks(20);
         assertTrue("arriving must be said in the pilot's own chat: " + chat(),
                 chat().contains("Arrived"));
@@ -890,27 +887,6 @@ private String chat() throws Exception {
 
     /** Forward, on the real client — the key a player walks with. */
     private static final int FORWARD_KEY = org.lwjgl.input.Keyboard.KEY_W;
-
-    private static final Pattern RESEAT_BLOCK = Pattern.compile("\"reseatBlock\":\"([^\"]*)\"");
-
-    /**
-     * The crossing's own account of why it has not finished putting this crew back aboard, in the
-     * placement's words: which step of the seat lookup or of the deck placement it is waiting on.
-     *
-     * <p>Read out of {@code arrival-trace} but reduced to that one field. The full envelope carries
-     * the whole position-writer ring, which is hundreds of events long by the time an arrival has
-     * stalled, and a verdict nobody scrolls to the end of is a verdict nobody reads. Empty means the
-     * last re-seat put everyone aboard — a real answer, not a missing one.</p>
-     */
-    private String reseatBlock() throws Exception {
-        String trace = exec("artest vs arrival-trace");
-        Matcher m = RESEAT_BLOCK.matcher(trace);
-        Matcher cut = ARRIVAL_CUT.matcher(trace);
-        Matcher lane = DEPART_LANE.matcher(trace);
-        return (m.find() ? m.group(1) : "(no arrival-trace envelope)")
-                + (cut.find() ? " ;; cut: " + cut.group(1) : "")
-                + (lane.find() ? " ;; depart: " + lane.group(1) : "");
-    }
 
     private static final Pattern ARRIVAL_CUT = Pattern.compile("\"arrivalCut\":\"([^\"]*)\"");
 
@@ -993,16 +969,15 @@ private String chat() throws Exception {
                         + " for " + cellAfcKey + ")",
                 cellTileTicksAfter > cellTileTicks);
 
+        Events events = transitEvents(this::exec);
+        long mark = events.markInstrumented();
+        long clientMark = bot().eventMark().get("seq").getAsLong();
         String begin = exec("artest space transit-begin " + originDim + " 1 64 1 " + PARK_SPEED);
         assertTrue("the transit must begin (departure crossing): " + begin, readBool(begin, "began"));
 
         // Fly only as far as hyperspace and then STOP driving the transit: an un-ticked jump parks
         // its ship in its lane indefinitely, which is the interval this scenario is about.
-        CorridorWait entry = driveIntoCorridor(120);
-        scenario().requireArranged("the client must be CARRIED into the corridor before anything here is"
-                + " about hyperspace, and he was not. " + entry,
-                entry.end == CorridorEntry.ARRIVED);
-        int hyperDim = entry.corridorDim;
+        int hyperDim = driveIntoCorridor(events, mark, clientMark);
 
         // The seat's own world position, as the CLIENT renders it — the deck reference for the
         // stand-up, read off the mount rather than from a probe that would need the lane's anchor.
@@ -1198,6 +1173,8 @@ private String chat() throws Exception {
                 bot().reportWeather().get("dim").getAsInt());
 
         // ── THE JUMP ────────────────────────────────────────────────────────────────────────────
+        Events events = transitEvents(this::exec);
+        long mark = events.markInstrumented();
         String begin = exec("artest space transit-begin " + originDim + " 1 64 1 " + PARK_SPEED);
         assertTrue("the transit must begin (departure crossing): " + begin, readBool(begin, "began"));
 
@@ -1251,26 +1228,20 @@ private String chat() throws Exception {
         // the departure boards him onto a ship parked in hyperspace, the arrival re-establishes him
         // on a ship being re-assembled in a cell that may hold other craft. A green on the first
         // says nothing about the second.
-        int targetDim = -1;
-        for (int i = 0; i < 120 && targetDim < 0; i++) {
-            lastTick = exec("artest space transit-tick 10");
-            if (readInt(lastTick, "inTransit") == 0) {
-                targetDim = readInt(lastTick, "targetDim");
-                break;
-            }
-            bot().waitTicks(2);
-        }
-        // An arrival that never completes is now a statement about the crew: the settle waits for
-        // everyone to be back aboard, so "still in transit" IS the placement not converging, and the
-        // placement's own account of the step it is stuck on belongs in the verdict rather than in a
-        // server log somebody has to go and find.
-        assertTrue("the jump never completed (still in transit); last tick=" + lastTick
-                + "; the crossing says it is blocked at: " + reseatBlock(), targetDim >= 0);
+        //
+        // An arrival that never completes is a statement about the crew: the settle waits for everyone
+        // to be back aboard, so a chain that stops before `transit_settled` IS the placement not
+        // converging — and the placement's own account of the step it is stuck on is in the log the
+        // failure prints (`crew_reseat_blocked`), not in a server log somebody has to go and find.
+        events.assertChain(mark, "a crew member on his feet must be carried by BOTH crossings: seated"
+                + " on the parked hull for the flight, put back on his deck at the far end, and only"
+                + " then the arrival committed", JUMP_LINK_BUDGET_TICKS, PILOTED_JUMP_CHAIN);
+        int targetDim = arrivedTargetDim(this::exec);
 
-        // Drive the placement's retries and watch the CLIENT, exactly as the seated siblings do.
+        // The CLIENT's half of the arrival: the server's placement is a link above; whether his own
+        // client followed it into the target cell is a separate link, read here.
         boolean carriedOn = false;
-        for (int i = 0; i < RESEAT_POLLS && !carriedOn; i++) {
-            exec("artest space transit-tick 10");
+        for (int i = 0; i < 60 && !carriedOn; i++) {
             bot().waitTicks(2);
             carriedOn = bot().reportWeather().get("dim").getAsInt() == targetDim
                     && readBool(exec("artest vs deck-capture"), "alreadyTracked");
@@ -1278,10 +1249,10 @@ private String chat() throws Exception {
         String captureOnArrival = exec("artest vs deck-capture");
         assertEquals("the arrival crossing must carry the crew member on his feet too — his own"
                 + " client must be in the TARGET cell: " + captureOnArrival
-                + "; placement blocked at: " + reseatBlock(),
+                + "; the server's chain: " + events.since(mark),
                 targetDim, bot().reportWeather().get("dim").getAsInt());
         assertTrue("...and he must be back ON THE DECK there, not merely in the right world: "
-                + captureOnArrival + "; placement blocked at: " + reseatBlock(),
+                + captureOnArrival + "; the server's chain: " + events.since(mark),
                 readBool(captureOnArrival, "alreadyTracked"));
         assertTrue("...and still on his feet, never seated late by the arrival: "
                 + bot().reportRidingEntity(),
@@ -1338,13 +1309,12 @@ private String chat() throws Exception {
         // ── INTO HYPERSPACE, then stop driving the jump ──────────────────────────────────────────
         // An un-ticked transit parks its ship in its lane indefinitely, which is the interval this
         // scenario is about: it needs the flight to still be happening while it reads the sky.
+        Events events = transitEvents(this::exec);
+        long mark = events.markInstrumented();
+        long clientMark = bot().eventMark().get("seq").getAsLong();
         String begin = exec("artest space transit-begin " + originDim + " 1 64 1 " + PARK_SPEED);
         assertTrue("the transit must begin (departure crossing): " + begin, readBool(begin, "began"));
-        CorridorWait entry = driveIntoCorridor(120);
-        scenario().requireArranged("the client must be CARRIED into the corridor before any reading here"
-                + " is about hyperspace, and he was not. " + entry,
-                entry.end == CorridorEntry.ARRIVED);
-        int hyperDim = entry.corridorDim;
+        int hyperDim = driveIntoCorridor(events, mark, clientMark);
 
         // ── READING 2, SEATED in hyperspace: the corridor comes up ───────────────────────────────
         // Throws with the server's own mount/dismount record if he never came back — the arrangement
@@ -1419,15 +1389,15 @@ private String chat() throws Exception {
         // Boards SEATED and jumps from the chair: that is what writes a SEATED departure record, and
         // the record is the subject here.
         seatTheBot(originDim, setupShipId(setup));
+        Events events = transitEvents(this::exec);
+        long mark = events.markInstrumented();
+        long clientMark = bot().eventMark().get("seq").getAsLong();
         String begin = exec("artest space transit-begin " + originDim + " 1 64 1 " + PARK_SPEED);
         assertTrue("the transit must begin (departure crossing): " + begin, readBool(begin, "began"));
 
         // Fly as far as hyperspace and stop driving: the stand-up has to happen mid-flight, between the
         // two cuts, which is the whole point.
-        CorridorWait entry = driveIntoCorridor(120);
-        scenario().requireArranged("the client must be CARRIED into the corridor before he can stand up"
-                + " in it, and he was not. " + entry, entry.end == CorridorEntry.ARRIVED);
-        int hyperDim = entry.corridorDim;
+        int hyperDim = driveIntoCorridor(events, mark, clientMark);
 
         // He must have crossed SEATED — a departure record that already said STANDING is the sibling
         // scenario, and it passes on the broken build. Asserted inside, with the chain.
@@ -1444,37 +1414,30 @@ private String chat() throws Exception {
                 !bot().reportRidingEntity().get("riding").getAsBoolean());
 
         // ── FINISH THE JUMP ─────────────────────────────────────────────────────────────────────
-        int targetDim = -1;
-        String lastTick = entry.lastTick;
-        for (int i = 0; i < 120 && targetDim < 0; i++) {
-            lastTick = exec("artest space transit-tick 10");
-            if (readInt(lastTick, "inTransit") == 0) {
-                targetDim = readInt(lastTick, "targetDim");
-                break;
-            }
-            bot().waitTicks(2);
-        }
-        assertTrue("the jump never completed (still in transit); last tick=" + lastTick, targetDim >= 0);
+        // The whole chain from the mark taken before the departure: the second cut removes the hull
+        // he is standing on, and the arrival may not settle until he is back on it. A chain that stops
+        // at `crew_reseated` prints the placement's own account of what it is stuck on.
+        events.assertChain(mark, "a crew member who stood up mid-flight must be put back on his deck"
+                + " at the far end before the arrival is committed", JUMP_LINK_BUDGET_TICKS,
+                PILOTED_JUMP_CHAIN);
+        int targetDim = arrivedTargetDim(this::exec);
 
-        // Drive the placement's retries and watch the CLIENT, as the siblings do — and watch whether he
-        // is still THERE, which is a separate question from his posture and has to be asked first.
-        //
-        // The second cut removes the hull he is standing on. A body left adrift on it has only the
-        // void's budget before hyperspace takes him, and that budget is SHORTER than this arrival
-        // window, so "adrift" and "put back aboard" are separated here by whether he is alive at all.
-        // Without this the loss surfaces as an NPE on a later line about dimensions, which names
-        // neither the loss nor the window it happened in.
+        // Is he still THERE — a separate question from his posture, and asked first. A body left
+        // adrift on the cut hull has only the void's budget before hyperspace takes him, and that
+        // budget is SHORTER than the arrival window the chain just waited through, so "adrift" and
+        // "put back aboard" are separated here by whether he is alive at all. Without this the loss
+        // surfaces as an NPE on a later line about dimensions, which names neither the loss nor the
+        // window it happened in.
+        JsonObject state = bot().reportState();
+        com.google.gson.JsonElement health = state.get("health");
+        assertTrue("the crew member was LOST during the arrival window rather than re-established on"
+                        + " the ship: state=" + state + "; the server's chain: " + events.since(mark),
+                health != null && health.getAsFloat() > 0f);
+
+        // The CLIENT's half of the arrival, as the siblings read it.
         boolean carriedOn = false;
-        for (int i = 0; i < RESEAT_POLLS && !carriedOn; i++) {
-            exec("artest space transit-tick 10");
+        for (int i = 0; i < 60 && !carriedOn; i++) {
             bot().waitTicks(2);
-            JsonObject state = bot().reportState();
-            com.google.gson.JsonElement health = state.get("health");
-            assertTrue("the crew member was LOST during the arrival window rather than re-established"
-                            + " on the ship: a body adrift on a hull that has just been cut has only"
-                            + " the void's " + VOID_GRACE_TICKS + " ticks, and this window is longer"
-                            + " than that. Iteration " + i + " of " + RESEAT_POLLS + ", state=" + state,
-                    health != null && health.getAsFloat() > 0f);
             carriedOn = clientDim("the arrival poll") == targetDim
                     && readBool(exec("artest vs deck-capture"), "alreadyTracked");
         }

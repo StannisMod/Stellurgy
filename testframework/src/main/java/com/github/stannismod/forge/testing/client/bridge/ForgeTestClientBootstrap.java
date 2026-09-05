@@ -1271,7 +1271,7 @@ public final class ForgeTestClientBootstrap {
                     // that wove but whose method never ran, and one that ran and saw nothing are
                     // otherwise the same reply — and the first two read as the third.
                     sb.append("},\"instruments\":").append(instrumentsEntered());
-                    sb.append(",\"from\":").append(from).append(",\"events\":[");
+                    sb.append(",\"from\":").append(from);
                     // Merged across the per-type rings and re-ordered by sequence: ORDER is what a
                     // chain assertion reads, and once the rings are separate the sequence is the
                     // only thing still carrying it.
@@ -1301,7 +1301,11 @@ public final class ForgeTestClientBootstrap {
                         items.append(record);
                     }
                 }
-                sb.append(items).append("],\"count\":").append(matched).append('}');
+                // `count` BEFORE the records, like every other envelope key: a reader that takes the
+                // first `"count":` in the text must never meet a record's own field first (the server
+                // probe was bitten by exactly that on 2026-09-05).
+                sb.append(",\"count\":").append(matched)
+                        .append(",\"events\":[").append(items).append("]}");
                 return new com.google.gson.JsonParser().parse(sb.toString()).getAsJsonObject();
             }
             case "clear_sounds":

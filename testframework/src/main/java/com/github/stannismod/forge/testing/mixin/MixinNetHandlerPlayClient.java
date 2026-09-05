@@ -2,6 +2,8 @@ package com.github.stannismod.forge.testing.mixin;
 
 import net.minecraft.client.network.NetHandlerPlayClient;
 import net.minecraft.network.play.server.SPacketChunkData;
+import net.minecraft.network.play.server.SPacketJoinGame;
+import net.minecraft.network.play.server.SPacketRespawn;
 
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
@@ -42,5 +44,29 @@ public class MixinNetHandlerPlayClient {
     private void forgeTest$recordChunkApplied(SPacketChunkData packet, CallbackInfo ci) {
         ForgeTestClientBootstrap.recordChunkApplied(
                 packet.getChunkX(), packet.getChunkZ(), packet.isFullChunk());
+    }
+
+    /**
+     * The client is now IN a dimension — the far side of every dimension change a test drives.
+     *
+     * <p>{@code handleRespawn} is what the server's dimension transfer arrives as: the old world is
+     * torn down, a new {@code WorldClient} is built for the packet's dimension and the player is put
+     * into it. Its TAIL is the first instant "the client's own dimension is N" is true. Sampling
+     * {@code mc.world.provider.getDimension()} on a tick budget sees the same fact later, if at all —
+     * a client that is torn down and rebuilt twice between two samples shows one change or none.</p>
+     *
+     * <p>{@code handleJoinGame} carries the same fact for the FIRST world, so a chain that starts
+     * from a fresh login reads one record shape throughout.</p>
+     */
+    @Inject(method = "handleRespawn", at = @At("TAIL"))
+    private void forgeTest$recordRespawn(SPacketRespawn packet, CallbackInfo ci) {
+        ForgeTestClientBootstrap.recordEvent("client_dimension_changed",
+                "\"dim\":" + packet.getDimensionID() + ",\"via\":\"respawn\"");
+    }
+
+    @Inject(method = "handleJoinGame", at = @At("TAIL"))
+    private void forgeTest$recordJoin(SPacketJoinGame packet, CallbackInfo ci) {
+        ForgeTestClientBootstrap.recordEvent("client_dimension_changed",
+                "\"dim\":" + packet.getDimension() + ",\"via\":\"join\"");
     }
 }

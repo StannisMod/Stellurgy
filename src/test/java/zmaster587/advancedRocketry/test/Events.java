@@ -20,6 +20,15 @@ import static org.junit.Assert.assertTrue;
  * buffered on the far side: a slow reader loses nothing. A blocking await inside the game would be a
  * deadlock by construction — the tick that must advance for the event to happen is the tick being
  * blocked.</p>
+ *
+ * <p><b>The reply is read by regex, so the envelope's keys are reserved.</b> {@code count},
+ * {@code seq}, {@code type}, {@code tick}, {@code side}, {@code recording}, {@code mixins} are taken
+ * as the FIRST occurrence in the reply; both probes emit every envelope key before the records, so a
+ * record's payload can never be mistaken for the envelope — provided no payload reuses one of those
+ * names. Measured 2026-09-05: a {@code crew_captured} payload carrying {@code "count":0} for an empty
+ * crew, in a reply whose envelope count then trailed the records, made {@link #await} report a link
+ * as "never recorded" while it sat in the very list the message printed. A recorder names its fields
+ * for what they are ({@code crew}), never for the envelope's vocabulary.</p>
  */
 public final class Events {
 
@@ -174,9 +183,37 @@ public final class Events {
         return out;
     }
 
-    /** "right_click_block, sleep_in_bed" — or an explicit nothing, never an empty string. */
+    /**
+     * "dismount, pos_jump ×14, crew_captured, …" — the recorded types in order, consecutive repeats
+     * collapsed into one entry with a count; or an explicit nothing, never an empty string.
+     *
+     * <p>Collapsed because a chain failure's first line is where a reader decides what happened, and
+     * a chatty instrument (a position writer records every tick a rider is re-placed by his mount)
+     * buries the six links that matter under two hundred identical names. The ORDER survives, the
+     * count survives, and the raw reply beside it still carries every record.</p>
+     */
     private static String describe(String sinceReply) {
         List<String> types = typesOf(sinceReply);
-        return types.isEmpty() ? "(nothing was recorded at all)" : String.join(", ", types);
+        if (types.isEmpty()) {
+            return "(nothing was recorded at all)";
+        }
+        StringBuilder sb = new StringBuilder();
+        int run = 0;
+        for (int i = 0; i < types.size(); i++) {
+            run++;
+            boolean last = i + 1 == types.size() || !types.get(i + 1).equals(types.get(i));
+            if (!last) {
+                continue;
+            }
+            if (sb.length() > 0) {
+                sb.append(", ");
+            }
+            sb.append(types.get(i));
+            if (run > 1) {
+                sb.append(" ×").append(run);
+            }
+            run = 0;
+        }
+        return sb.toString();
     }
 }

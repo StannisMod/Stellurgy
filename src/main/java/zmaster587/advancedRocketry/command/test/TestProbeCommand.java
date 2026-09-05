@@ -18686,6 +18686,31 @@ public class TestProbeCommand extends CommandBase {
         if (args.length >= 2 && "since".equalsIgnoreCase(args[0])) {
             long from = (long) parseDoubleOr(args[1], 0);
             String wanted = args.length >= 3 ? args[2] : null;
+            // The records are rendered FIRST and the envelope assembled around them, so that every
+            // envelope key - `count` above all - precedes the records in the reply. A reader takes the
+            // first `"count":` it sees; with the count trailing the array, a record whose payload
+            // carried a `count` field of its own was read as the envelope's, and a chain whose link
+            // HAD been recorded failed as "never recorded" (measured 2026-09-05 on `crew_captured`
+            // with a crew of 0: the payload said count:0, the envelope said count:1, and the reader
+            // believed the payload).
+            StringBuilder records = new StringBuilder();
+            int n = 0;
+            for (TestEventLog.Record r : TestEventLog.since(from)) {
+                if (wanted != null && !wanted.equalsIgnoreCase(r.type)) {
+                    continue;
+                }
+                if (n++ > 0) {
+                    records.append(',');
+                }
+                records.append("{\"seq\":").append(r.seq)
+                        .append(",\"tick\":").append(r.tick)
+                        .append(",\"side\":\"").append(r.side).append('"')
+                        .append(",\"type\":\"").append(r.type).append('"');
+                if (!r.payload.isEmpty()) {
+                    records.append(',').append(r.payload);
+                }
+                records.append('}');
+            }
             StringBuilder sb = new StringBuilder("{\"ok\":true,\"recording\":")
                     .append(TestEventLog.isRecording())
                     .append(",\"mixins\":").append(TestEventLog.areMixinsInstalled())
@@ -18695,25 +18720,8 @@ public class TestProbeCommand extends CommandBase {
                     // `events` list is only an answer once this says somebody was looking.
                     .append(",\"instruments\":").append(TestEventLog.instrumentsEntered())
                     .append(",\"from\":").append(from)
-                    .append(",\"events\":[");
-            int n = 0;
-            for (TestEventLog.Record r : TestEventLog.since(from)) {
-                if (wanted != null && !wanted.equalsIgnoreCase(r.type)) {
-                    continue;
-                }
-                if (n++ > 0) {
-                    sb.append(',');
-                }
-                sb.append("{\"seq\":").append(r.seq)
-                        .append(",\"tick\":").append(r.tick)
-                        .append(",\"side\":\"").append(r.side).append('"')
-                        .append(",\"type\":\"").append(r.type).append('"');
-                if (!r.payload.isEmpty()) {
-                    sb.append(',').append(r.payload);
-                }
-                sb.append('}');
-            }
-            sb.append("],\"count\":").append(n).append('}');
+                    .append(",\"count\":").append(n)
+                    .append(",\"events\":[").append(records).append("]}");
             send(sender, sb.toString());
             return;
         }

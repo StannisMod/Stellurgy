@@ -17,7 +17,9 @@
     "MixinPlayerPacketRubberBand",
     "MixinShipTransformUpdateDiag",
     "MixinTilePilotSeatDiag",
-    "MixinWorldServerShipManagerDiag"
+    "MixinWorldServerShipManagerDiag",
+    "MixinShipTransitManagerEvents",
+    "MixinVSShipCrosserEvents"
   ],
   "client": [
     "MixinEntityVelocityWriters",
