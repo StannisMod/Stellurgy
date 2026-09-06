@@ -564,10 +564,22 @@ final class VSBridge {
 
     /**
      * The subspace SHIPYARD bounding box (world coordinates, in VS's far-off shipyard region) of the
-     * loaded ship whose world BB contains {@code (x,y,z)}, or {@code null} if no ship is there. VS stores
-     * a ship's blocks in a fixed shipyard keyed by its chunk claim, NOT at the ship's rendered position;
-     * to snapshot a ship's actual blocks you must cut THIS region, not the visible AABB. Spans the claim's
-     * chunks over the full Y column. Only MC types cross back to AR core.
+     * ship NEAREST to {@code (x,y,z)}, or {@code null} if the world holds none. VS stores a ship's
+     * blocks in a fixed shipyard keyed by its chunk claim, NOT at the ship's rendered position; to
+     * snapshot a ship's actual blocks you must cut THIS region, not the visible AABB. Spans the
+     * claim's chunks over the full Y column. Only MC types cross back to AR core.
+     *
+     * <p><b>Nearest, not containing, and with NO distance bound</b> — {@link #nearestQueryableShip}
+     * walks every registered ship and keeps the smallest distance, so this answers for a craft
+     * 51 200 blocks away as readily as for one under the caller's feet, and it answers out of the
+     * REGISTRY, which includes ships that are not loaded and the blockless remnants a crossing
+     * deliberately leaves behind. This javadoc claimed "the loaded ship whose world BB contains
+     * (x,y,z)" until 2026-09-06; the body has never done either of those things, and every caller
+     * that trusted the word "contains" was reading a guarantee that was not there.</p>
+     *
+     * <p>Prefer {@link #shipyardBoundsOf} wherever the caller knows which ship it means. Where a
+     * BLOCK is the question, VS answers it exactly — {@code ValkyrienUtils.getShipManagingBlock}
+     * tests {@code ChunkClaim.containsBlock} — and that is a different question from this one.</p>
      */
     static AxisAlignedBB shipyardBoundsAt(World world, double x, double y, double z) {
         return claimBounds(nearestQueryableShip(world, x, y, z));
@@ -1106,6 +1118,12 @@ final class VSBridge {
                 physo = loadedPhysoByUuid(entity.world, lastTouched);
             }
             out.put("shipLoaded", physo != null);
+            // WHICH ship, not merely that there is one. `shipLoaded` alone is a claim no reader can
+            // pin to a subject: a caller asserting "he is aboard his ship" gets the same true from a
+            // body aboard somebody else's, and `lastTouchedShip` is null on the path AR resolves
+            // itself, so it cannot stand in. Measured 2026-09-06: 21 test call sites rested on
+            // `shipLoaded` and not one of them could name the craft it had just asserted about.
+            out.put("shipId", physo == null ? null : physo.getShipData().getUuid().toString());
             if (physo != null) {
                 Vec3d local = physo.getShipData().getShipTransform().transform(
                         new Vec3d(entity.posX, entity.posY, entity.posZ), TransformType.GLOBAL_TO_SUBSPACE);

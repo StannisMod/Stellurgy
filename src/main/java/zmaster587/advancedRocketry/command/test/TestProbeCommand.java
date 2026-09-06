@@ -1508,11 +1508,12 @@ public class TestProbeCommand extends CommandBase {
                     + "}");
             return;
         }
-        // seat-mount <dim> [near <x> <y> <z> [maxDist]] — spawn the pilot seat's dummy mount and
-        // return its entity id, so a test bot can `player mount-entity <id>` and become the ship's
-        // pilot. Mirrors BlockPilotSeat.onBlockActivated server-side (the bot cannot right-click a
-        // ship block). Without "near" the FIRST loaded seat answers, which is only defensible on a
-        // world holding one ship — the reply carries "seatsLoaded" so a caller can see when it is not.
+        // seat-mount <dim> [id <shipUuid> | near <x> <y> <z> [maxDist]] — spawn the pilot seat's dummy
+        // mount and return its entity id, so a test bot can `player mount-entity <id>` and become the
+        // ship's pilot. Mirrors BlockPilotSeat.onBlockActivated server-side (the bot cannot right-click
+        // a ship block). Without a qualifier the FIRST loaded seat answers, which is only defensible on
+        // a world holding one ship — the reply carries "seatsLoaded" so a caller can see when it is not,
+        // and measured 2026-09-06 not one of the twelve bare call sites in the suite read it.
         if (args.length >= 2 && "seat-mount".equalsIgnoreCase(args[0])) {
             net.minecraft.world.WorldServer world = vsWorld(sender, parseIntOr(args[1], Integer.MIN_VALUE));
             if (world == null) {
@@ -1533,7 +1534,15 @@ public class TestProbeCommand extends CommandBase {
                 }
             }
             String wantShipId = null;
-            if (args.length >= 6 && "near".equalsIgnoreCase(args[2])) {
+            // seat-mount <dim> id <shipUuid> — the only form that is an IDENTITY rather than a
+            // narrower guess. `near` still resolves through nearestShipId, so it answers with the
+            // closest ship within its bound and a caller that means one particular craft is trusting
+            // a distance; this branch names it. The seat is then matched through the ship's own chunk
+            // CLAIM (shipIdOwningBlock, containment), so the seat found belongs to that hull or none
+            // is returned.
+            if (args.length >= 4 && "id".equalsIgnoreCase(args[2])) {
+                wantShipId = args[3];
+            } else if (args.length >= 6 && "near".equalsIgnoreCase(args[2])) {
                 double maxDist = args.length >= 7
                         ? parseDoubleOr(args[6], Double.POSITIVE_INFINITY) : Double.POSITIVE_INFINITY;
                 wantShipId = zmaster587.advancedRocketry.integration.vs.VSIntegration.nearestShipId(

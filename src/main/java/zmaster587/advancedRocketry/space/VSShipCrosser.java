@@ -138,17 +138,24 @@ public final class VSShipCrosser implements ShipTransitManager.Crosser {
      * while the arrival cut whatever the anchor reached — and hyperspace is a shared parking world by
      * construction, so the leg that resolved by position is the one that could deliver a stranger.</p>
      *
-     * <p><b>It may never turn a leg that would have worked into a failure.</b> Only a POSITIVE
-     * mismatch refuses — the craft at the anchor carries a durable id and it is somebody else's. Every
-     * other outcome (no flight computer resolvable there, no durable id minted on it, the physics mod
-     * not naming the craft) proceeds exactly as before and SAYS that it could not verify. The
-     * defect being closed is "the anchor silently selected a stranger's craft"; a check that also
-     * blocks the cases it cannot judge trades one silent failure for a loud one and is not an
-     * improvement.</p>
+     * <p><b>A leg is resolved by identity or it is refused. There is no third answer</b>, and the
+     * positional fallback that used to be one is gone entirely. Every crossing is anchored on a craft
+     * that has a flight computer — that is what mints the durable name in the first place — and every
+     * craft the substrate holds has a uuid, so "this jump cannot find its ship" is a defect to
+     * surface, not a case to accommodate. Accommodating it meant cutting whatever craft the anchor
+     * reached, and the anchor reaches by DISTANCE with no bound ({@code nearestQueryableShip}), in a
+     * hyperspace world built to hold every ship in flight at once.</p>
      *
-     * <p>Requiring the flight computer here was tried and reverted: the capture path has warned
-     * "found no flight computer at anchor" on these departures for as long as it has existed, without
-     * stopping them, because the crossing needs only a shipyard box.</p>
+     * <p>A fallback for a non-uuid {@code shipId} survived one revision of this rule and was removed:
+     * the only caller that produces one is a test probe driving a transit for a fixture that
+     * assembled no ship. Such a leg has no hull of its own, so the branch was not "a weaker caller
+     * getting a weaker answer" — it was the one case guaranteed to cut a neighbour. Production has a
+     * single caller ({@code JumpTrigger}) and it passes a uuid.</p>
+     *
+     * <p><b>{@code afcNames} is a tripwire and may not be promoted to an answer.</b> It is read by
+     * scanning the shipyard box that the SAME positional lookup produced, so on a wrong pick it is
+     * the stranger's flight computer talking. It can therefore convict (the craft at the anchor
+     * positively names someone else) but it can never aim.</p>
      */
     public static java.util.UUID identifyShipToCut(String leg, BlockPos anchor, String shipId,
                                                    int dim, java.util.UUID byDurableId,
@@ -180,7 +187,15 @@ public final class VSShipCrosser implements ShipTransitManager.Crosser {
                     leg, anchor, dim, afcNames, shipId);
             return REFUSED;
         }
-        return byPosition;
+        // Nothing here can aim. The only remaining candidate is the anchor, which picks by distance
+        // with no bound, so cutting it is how a jump delivers a stranger. The leg stops and the
+        // transit retries: a jump that cannot find its own hull must not move a different one.
+        LOGGER.error("[SPACE] {} REFUSED: ship {} could not be resolved in dim {} by identity, so "
+                        + "nothing at anchor {} can be cut. The anchor reaches by distance and would "
+                        + "hand back whichever craft is nearest. Nothing is cut. byPosition would "
+                        + "have been {}, afcNames {}.",
+                leg, shipId, dim, anchor, byPosition, afcNames);
+        return REFUSED;
     }
 
     /** What the flight computer at {@code anchor} calls its ship, or {@code null} if there is no

@@ -143,7 +143,7 @@ public class VSShipExtremeCoordinatesE2ETest extends AbstractSharedVsClientE2ETe
         assertTrue("the ship must LOAD with the client present", !Double.isNaN(y0));
         assertTrue("the loaded ship must report an identity to key the scenario on", shipId != null);
 
-        String mountInfo = exec("artest vs seat-mount 0");
+        String mountInfo = exec("artest vs seat-mount 0 id " + shipId);
         assertTrue("seat-mount must find the pilot seat: " + mountInfo,
                 mountInfo.contains("\"seatFound\":true"));
         Matcher dm = DUMMY_ID.matcher(mountInfo);

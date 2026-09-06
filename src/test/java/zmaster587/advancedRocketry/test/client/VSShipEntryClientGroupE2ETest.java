@@ -700,7 +700,7 @@ public class VSShipEntryClientGroupE2ETest extends AbstractSharedVsClientE2ETest
         liftClearOfTheGround(shipUuid, CLEAR_AIR_Y);
 
         // Board post-assembly (the proven path - boarding variants have their own test).
-        String mountInfo = exec("artest vs seat-mount 0");
+        String mountInfo = exec("artest vs seat-mount 0 id " + shipUuid);
         Matcher dm = DUMMY_ID.matcher(mountInfo);
         scenario().requireArranged("seat-mount must report a dummy id: " + mountInfo, dm.find());
         String mount = exec("artest player mount-entity " + dm.group(1));

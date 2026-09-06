@@ -119,7 +119,7 @@ public class VSPilotSeatRelogControlE2ETest extends AbstractSharedVsClientE2ETes
         awaitShipUsable(events, spawnMark, shipId, budget * 5);
         liftClearOfTheGround(shipId, CLEAR_AIR_Y);
 
-        String mountInfo = exec("artest vs seat-mount 0");
+        String mountInfo = exec("artest vs seat-mount 0 id " + shipId);
         Matcher dm = DUMMY_ID.matcher(mountInfo);
         scenario().requireArranged("seat-mount must report a dummy id: " + mountInfo, dm.find());
         String mount = exec("artest player mount-entity " + dm.group(1));

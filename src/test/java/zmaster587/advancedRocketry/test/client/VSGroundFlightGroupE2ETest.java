@@ -423,10 +423,13 @@ public class VSGroundFlightGroupE2ETest extends AbstractSharedVsClientE2ETest {
      * uninterrupted ticks to climb clear of the terrain, which puts the ship far outside any bound
      * a nearest-lookup could carry.
      *
-     * <p>Its seat lookup is scoped too. {@code vs seat-mount} takes the FIRST pilot seat in the
-     * world's loaded-tile list with no position filter, so on a shared world it mounts whichever
-     * ship happens to be listed first; {@code vs find-seat} resolves the seat inside the ship at a
-     * given world anchor, and {@code seat-mount-at} mounts that one.</p>
+     * <p>Its seat lookup is NARROWER, not scoped. {@code vs seat-mount} takes the FIRST pilot seat in
+     * the world's loaded-tile list with no position filter, so on a shared world it mounts whichever
+     * ship happens to be listed first; the anchored {@code vs find-seat} resolves through
+     * {@code VSBridge.shipyardBoundsAt}, which answers for the ship NEAREST the anchor — unbounded,
+     * over the registry. This paragraph claimed it "resolves the seat inside the ship at a given
+     * world anchor", which is the guarantee the first {@code @Test} of this very class exists to
+     * disprove. The identity-keyed form is {@code find-seat <dim> id <shipUuid>}.</p>
      */
     @Test
     public void seatedPilotFliesShipTravelsWithItAndCameraLocksToNose() throws Exception {

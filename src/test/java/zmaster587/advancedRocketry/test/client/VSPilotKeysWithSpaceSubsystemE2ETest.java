@@ -164,7 +164,7 @@ public class VSPilotKeysWithSpaceSubsystemE2ETest {
                         + " reply=" + atBase.replace('\n', ' '),
                 !Double.isNaN(yBefore));
 
-        String mountInfo = exec("artest vs seat-mount 0");
+        String mountInfo = exec("artest vs seat-mount 0 id " + shipUuid);
         Matcher dm = DUMMY_ID.matcher(mountInfo);
         assertTrue("seat-mount must report a dummy id: " + mountInfo, dm.find());
         String mount = exec("artest player mount-entity " + dm.group(1));

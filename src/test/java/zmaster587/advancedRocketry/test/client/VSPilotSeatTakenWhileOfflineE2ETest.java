@@ -108,7 +108,10 @@ public class VSPilotSeatTakenWhileOfflineE2ETest extends AbstractSharedVsClientE
         String assemble = assembleFixture(BX, BY, BZ);
         scenario().requireArranged("a with-pilot-seat build must route to a ship: " + assemble,
                 assemble.contains("\"rocketCount\":0"));
-        awaitShipSpawned(events, spawnMark,
+        // The return value is KEPT: it is this scenario's ship by construction (the mark precedes the
+        // assembly), and every question below has to name that craft rather than whichever one a
+        // world-wide scan lists first.
+        String shipUuid = awaitShipSpawned(events, spawnMark,
                 "assembly must create a NEW VS ship in the queryable registry (async spawn)");
         // Keep the ship observable while nobody is online: the offline window below leaves the
         // server empty, and an unloaded ship would fail every probe the arrangement depends on.
@@ -116,7 +119,7 @@ public class VSPilotSeatTakenWhileOfflineE2ETest extends AbstractSharedVsClientE
         exec("tp @a " + (BX + 0.5) + " " + (BY + 6) + " " + (BZ + 0.5) + " 0 0");
         bot().waitTicks(40);
 
-        String mountInfo = exec("artest vs seat-mount 0");
+        String mountInfo = exec("artest vs seat-mount 0 id " + shipUuid);
         Matcher dm = DUMMY_ID.matcher(mountInfo);
         scenario().requireArranged("seat-mount must report a dummy id: " + mountInfo, dm.find());
         Matcher sm = SEAT_AT.matcher(mountInfo);

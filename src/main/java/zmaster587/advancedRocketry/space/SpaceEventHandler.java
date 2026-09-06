@@ -369,9 +369,10 @@ public final class SpaceEventHandler {
         CrewTransfer.Crew rider = new CrewTransfer.Crew(player,
                 pending.aboard.afcDx, pending.aboard.afcDy, pending.aboard.afcDz);
         // The aboard record names the ship by its durable id — hand it to the re-seat so a
-        // neighbouring ship with the same seat offset can never claim the returning pilot.
-        // Position-keyed by nature: a login restore is driven by the record of where the player was,
-        // not by a crossing that knows which ship it just created.
+        // neighbouring ship with the same seat offset can never claim the returning pilot. The
+        // substrate uuid is null here because a login restore is driven by the player's record
+        // rather than by a crossing that just created the ship; that is NOT the same as having no
+        // identity, and reseat resolves the name to a uuid rather than scanning by position.
         return CrewTransfer.reseat(world, anchor, Collections.singletonList(rider),
                 pending.aboard.shipId, null);
     }

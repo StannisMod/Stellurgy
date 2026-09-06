@@ -97,9 +97,16 @@ public class DescentControllerTest {
             return new ArrayList<>();
         }
 
-        @Override public ShipCrossingService.Crossed cross(int srcDimId, double[] srcShipPos, int destDim,
+        /** Which ship each crossing was asked to cut, IN ORDER. Recorded rather than ignored: the
+         *  seam's identity argument exists so a crossing cannot act on whatever a position lookup
+         *  reaches, and a double that drops it would let that regress with every test still green. */
+        final List<java.util.UUID> crossedShips = new ArrayList<>();
+
+        @Override public ShipCrossingService.Crossed cross(java.util.UUID shipId, int srcDimId,
+                                        double[] srcShipPos, int destDim,
                                         int pasteX, int pasteY, int pasteZ) {
             crossings++;
+            crossedShips.add(shipId);
             return failCross ? null : new ShipCrossingService.Crossed(
                     new BlockPos(pasteX, pasteY, pasteZ), CROSSED_SHIP);
         }
@@ -181,6 +188,13 @@ public class DescentControllerTest {
                 SHIP, resolver.measuredFor);
         assertEquals("the capture must be told whose deck it is emptying",
                 SHIP, ops.capturedFor);
+        // And so is the CUT, which is the half that was told nothing at all: the seam took a
+        // position and no identity, so a destination already holding a craft — or a blockless
+        // remnant of a previous crossing, sitting at exactly this pose — decided by registry order
+        // which hull left the cell. The crossing also reads the durable NAME off that pick, so a
+        // wrong one re-assembles a stranger carrying this ship's name.
+        assertEquals("the crossing must be told WHICH ship to cut, not just where to look",
+                java.util.Collections.singletonList(SHIP), ops.crossedShips);
         // The ship is physically cut from its cell at once: the ledger entry is gone and the cell is
         // released, so the single slot can be reused immediately (the occupant was released).
         assertNull("the descending ship leaves the ledger on the cut", ledger.get(SHIP));

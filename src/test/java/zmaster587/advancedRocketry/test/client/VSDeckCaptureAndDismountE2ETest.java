@@ -949,9 +949,14 @@ public class VSDeckCaptureAndDismountE2ETest extends AbstractSharedVsClientE2ETe
         clientEvents.await(landingMark, "deck_captured",
                 "the client must be captured on the upright deck before the ship is tilted under him",
                 DECK_LINK_BUDGET_TICKS);
+        // Read ONCE, and proved to be about THIS ship: the two execs this replaces
+        // printed one sample and asserted a second, and neither said which craft
+        // held the body.
+        String deckCapture = deckCaptureOfThisShip(scenarioShipId,
+                "the capture this assertion reads must be on this scenario's own ship");
         assertTrue("server must agree the body is on the upright deck first: "
-                + exec("artest vs deck-capture"),
-                exec("artest vs deck-capture").contains("\"verdict\":true"));
+                + deckCapture,
+                deckCapture.contains("\"verdict\":true"));
 
         double h = Math.toRadians(90.0) / 2.0; // 90deg roll about the nose (+Z): deck on its side
         assertTrue("attitude hold must accept the tilt",
@@ -1114,9 +1119,15 @@ public class VSDeckCaptureAndDismountE2ETest extends AbstractSharedVsClientE2ETe
      *
      * <p>{@code artest vs seat-mount <dim>} takes the first {@code TilePilotSeat} in the world's
      * loaded-tile list, with no position filter — unambiguous when the world holds exactly one ship,
-     * and a scenario mounting a NEIGHBOUR's ship once several scenarios share a world. {@code
-     * find-seat} resolves the shipyard bounds at a given world anchor and searches inside that ship
-     * only, so the seat is located by identity rather than by being first.</p>
+     * and a scenario mounting a NEIGHBOUR's ship once several scenarios share a world. The
+     * positional {@code find-seat} below is narrower but is NOT the cure this javadoc used to claim
+     * it was: it said the seat was "located by identity rather than by being first", and the
+     * anchored form resolves through {@code VSBridge.shipyardBoundsAt}, which answers for the ship
+     * NEAREST the anchor — no containment test, no distance bound, over the registry, so an unloaded
+     * craft or a blockless crossing remnant is a candidate. Twelve scenarios share dim 0 here.</p>
+     *
+     * <p>The identity-keyed form is {@code find-seat <dim> id <shipUuid>} and this class holds
+     * {@code scenarioShipId}; converting these sites is tracked separately rather than done inline.</p>
      */
     private void mountPilotSeatOfShipAt(int bx, int by, int bz) throws Exception {
         String seat = exec("artest vs find-seat 0 " + bx + " " + by + " " + bz);

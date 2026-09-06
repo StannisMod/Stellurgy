@@ -21,6 +21,9 @@ import zmaster587.advancedRocketry.integration.vs.VSIntegration;
  */
 public final class VSShipCrossingOps implements ShipCrossingService.Ops {
 
+    private static final org.apache.logging.log4j.Logger LOGGER =
+            org.apache.logging.log4j.LogManager.getLogger(VSShipCrossingOps.class);
+
     /** Rider-carry box half-width around a ship pose — the proven probe recipe's range. */
     private static final double RIDER_RANGE = 8.0;
 
@@ -97,15 +100,32 @@ public final class VSShipCrossingOps implements ShipCrossingService.Ops {
     }
 
     @Override
-    public ShipCrossingService.Crossed cross(int srcDimId, double[] srcShipPos, int destDim,
+    public ShipCrossingService.Crossed cross(java.util.UUID shipId, int srcDimId,
+                                             double[] srcShipPos, int destDim,
                                              int pasteX, int pasteY, int pasteZ) {
         WorldServer src = DimensionManager.getWorld(srcDimId);
         WorldServer dst = DimensionManager.getWorld(destDim);
         if (src == null || dst == null || srcShipPos == null) {
             return null;
         }
+        // BY IDENTITY. The durable name is indexed beside the ship's uuid on its own record, so this
+        // is one hash probe, and it is the difference between cutting this craft and cutting the one
+        // that happens to be nearest the same point — which in a destination already crossed into is
+        // an exact tie decided by registry iteration order, with a blockless remnant of a previous
+        // crossing as a live candidate.
+        java.util.UUID named = shipId == null
+                ? null : VSIntegration.shipUuidOfDurableId(src, shipId.toString());
+        if (named == null) {
+            LOGGER.error("[SPACE] crossing REFUSED: ship {} is not registered in dim {} under its own"
+                            + " durable name. Cutting by position at {},{},{} would hand back"
+                            + " whichever craft is nearest and re-assemble it carrying this ship's"
+                            + " name. Nothing is cut.",
+                    shipId, srcDimId, srcShipPos[0], srcShipPos[1], srcShipPos[2]);
+            return null;
+        }
         VSIntegration.CrossResult res = VSIntegration.crossShip(
-                src, srcShipPos[0], srcShipPos[1], srcShipPos[2], dst, pasteX, pasteY, pasteZ);
+                src, srcShipPos[0], srcShipPos[1], srcShipPos[2], named,
+                dst, pasteX, pasteY, pasteZ);
         return res.ok() ? new ShipCrossingService.Crossed(res.anchor, res.shipUuid) : null;
     }
 

@@ -10,6 +10,7 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 import zmaster587.advancedRocketry.test.Events;
+import zmaster587.advancedRocketry.test.ShipIdentity;
 
 import static org.junit.Assert.assertTrue;
 
@@ -284,6 +285,11 @@ public class VSCrewInteriorBoardingE2ETest extends AbstractSharedVsClientE2ETest
         assertTrue("the body must stay WITH the inverted ship at its deck spot, not fall out "
                 + "(preY=" + preY + " settledY=" + settledY + ", cap=" + capEnd + "): " + trace,
                 Math.abs(settledY - preY) < 2.5 && capEnd.contains("\"alreadyTracked\":true"));
+        // ...and by THIS ship. "He is held" and "he is held by the craft this scenario built"
+        // are different claims, and on a world three scenarios share only the second one is the
+        // contract. The id is in the reply already.
+        ShipIdentity.assertCaptureAnchoredOn(capEnd, scenarioShipId,
+                "the body must stay with the INVERTED ship it was released inside");
         assertTrue("the client camera must engage for the re-seated interior body "
                 + "(shipCamActive=" + shipCam + ")", shipCam);
     }
@@ -456,6 +462,8 @@ public class VSCrewInteriorBoardingE2ETest extends AbstractSharedVsClientE2ETest
         assertTrue("deck gravity must carry the body BACK to the deck, not let it settle on the "
                 + "roof ~3 world blocks below (preY=" + preY + " settledY=" + settledY + "): " + trace,
                 Math.abs(settledY - preY) < 1.5 && capEnd.contains("\"alreadyTracked\":true"));
+        ShipIdentity.assertCaptureAnchoredOn(capEnd, scenarioShipId,
+                "deck gravity must carry the body back to THIS ship's deck");
         assertTrue("the body must re-seat at its deck stand in subspace (subY " + subEnd[1]
                 + " vs stand " + sub0[1] + "; seat-top landing allowed): " + trace,
                 Math.abs(subEnd[1] - sub0[1]) <= 1.1);

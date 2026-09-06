@@ -294,6 +294,15 @@ public final class CrewTransfer {
         if (crew.isEmpty()) {
             return true;
         }
+        // A caller with no substrate uuid but a DURABLE name has not run out of identity — the name
+        // is indexed beside the uuid on the ship's own record, so the substrate id is one hash probe
+        // away. Resolved here rather than at each caller so no future one can reach the positional
+        // scan while holding the answer: the login-restore path did exactly that, and described
+        // itself as "position-keyed by nature" while carrying the ship's name in the aboard record
+        // it was driven by.
+        if (vsShipUuid == null && expectedShipId != null) {
+            vsShipUuid = VSIntegration.shipUuidOfDurableId(dstWorld, expectedShipId.toString());
+        }
         List<TilePilotSeat> seats = seatsOfShipAt(dstWorld, anchor, vsShipUuid);
         boolean allSeated = true;
         boolean seatLookupBlocked = false;

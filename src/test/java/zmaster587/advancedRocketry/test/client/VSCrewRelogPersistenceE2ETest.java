@@ -108,9 +108,14 @@ public class VSCrewRelogPersistenceE2ETest extends AbstractSharedVsClientE2ETest
         events.await(captureMark, "deck_captured", "the crew member must be TAKEN by the ship's deck"
                 + " after being put on it - nothing below is about a deck capture until there is"
                 + " one", CAPTURE_BUDGET_TICKS);
+        // Read ONCE, and proved to be about THIS ship: the two execs this replaces
+        // printed one sample and asserted a second, and neither said which craft
+        // held the body.
+        String deckCapture = deckCaptureOfThisShip(scenarioShipId,
+                "the capture this assertion reads must be on this scenario's own ship");
         scenario().requireArranged("he must be captured on the deck before anything rotates: "
-                        + exec("artest vs deck-capture"),
-                exec("artest vs deck-capture").contains("\"alreadyTracked\":true"));
+                        + deckCapture,
+                deckCapture.contains("\"alreadyTracked\":true"));
 
         // CONTROL: a still ship must produce no releases and no travel. Without it, a nonzero count
         // during the roll could belong to the arrangement (the walk onto the deck, the settle) rather
@@ -278,9 +283,14 @@ public class VSCrewRelogPersistenceE2ETest extends AbstractSharedVsClientE2ETest
         exec("tp @a " + ship[0] + " " + (ship[1] + 4) + " " + ship[2] + " 0 0");
         events.await(captureMark, "deck_captured", "the crew member must be TAKEN by the ship's deck"
                 + " before he walks on it (" + where + ")", CAPTURE_BUDGET_TICKS);
+        // Read ONCE, and proved to be about THIS ship: the two execs this replaces
+        // printed one sample and asserted a second, and neither said which craft
+        // held the body.
+        String deckCapture2 = deckCaptureOfThisShip(scenarioShipId,
+                "the capture this assertion reads must be on this scenario's own ship");
         scenario().requireArranged("he must be captured on the deck before he walks (" + where + "): "
-                        + exec("artest vs deck-capture"),
-                exec("artest vs deck-capture").contains("\"alreadyTracked\":true"));
+                        + deckCapture2,
+                deckCapture2.contains("\"alreadyTracked\":true"));
 
         // CONTROL, same body, same deck, same window length, stimulus absent. Counted off the
         // client's own release records - see the roll leg for why a difference of two counter reads
@@ -399,9 +409,14 @@ public class VSCrewRelogPersistenceE2ETest extends AbstractSharedVsClientE2ETest
         exec("tp @a " + ship[0] + " " + (ship[1] + 4) + " " + ship[2] + " 0 0");
         events.await(captureMark, "deck_captured", "the crew member must be TAKEN by the ship's deck"
                 + " before the server is made to stall under him", CAPTURE_BUDGET_TICKS);
+        // Read ONCE, and proved to be about THIS ship: the two execs this replaces
+        // printed one sample and asserted a second, and neither said which craft
+        // held the body.
+        String deckCapture3 = deckCaptureOfThisShip(scenarioShipId,
+                "the capture this assertion reads must be on this scenario's own ship");
         scenario().requireArranged("he must be captured on the deck before the server stalls: "
-                        + exec("artest vs deck-capture"),
-                exec("artest vs deck-capture").contains("\"alreadyTracked\":true"));
+                        + deckCapture3,
+                deckCapture3.contains("\"alreadyTracked\":true"));
 
         // CONTROL: the same body, the same deck, the same walk - without the stall. The walking leg
         // measures this too, but it has to be in THIS run: a control from another boot has a
@@ -572,9 +587,14 @@ public class VSCrewRelogPersistenceE2ETest extends AbstractSharedVsClientE2ETest
         events.await(captureMark, "deck_captured", "the player must be TAKEN by the deck while the"
                 + " ship is still upright - the capture is what carries his deck spot through the"
                 + " roll", CAPTURE_BUDGET_TICKS);
+        // Read ONCE, and proved to be about THIS ship: the two execs this replaces
+        // printed one sample and asserted a second, and neither said which craft
+        // held the body.
+        String deckCapture4 = deckCaptureOfThisShip(scenarioShipId,
+                "the capture this assertion reads must be on this scenario's own ship");
         assertTrue("the player must be captured on the deck before the roll: "
-                + exec("artest vs deck-capture"),
-                exec("artest vs deck-capture").contains("\"alreadyTracked\":true"));
+                + deckCapture4,
+                deckCapture4.contains("\"alreadyTracked\":true"));
 
         double h = Math.toRadians(170.0) / 2.0;
         assertTrue("attitude hold must accept the inversion",
@@ -676,9 +696,14 @@ public class VSCrewRelogPersistenceE2ETest extends AbstractSharedVsClientE2ETest
         events.await(captureMark, "deck_captured", "the player must be TAKEN by the deck before he"
                 + " walks on it - the walk he logs out carrying is only meaningful under a capture",
                 CAPTURE_BUDGET_TICKS);
+        // Read ONCE, and proved to be about THIS ship: the two execs this replaces
+        // printed one sample and asserted a second, and neither said which craft
+        // held the body.
+        String deckCapture5 = deckCaptureOfThisShip(scenarioShipId,
+                "the capture this assertion reads must be on this scenario's own ship");
         assertTrue("the player must be captured on the deck before he walks: "
-                + exec("artest vs deck-capture"),
-                exec("artest vs deck-capture").contains("\"alreadyTracked\":true"));
+                + deckCapture5,
+                deckCapture5.contains("\"alreadyTracked\":true"));
 
         // CONTROL, before anything is done to him: does a settled crew member creep along this deck
         // ANYWAY? The ship holds station rather than standing still, and a station-keeping deck is

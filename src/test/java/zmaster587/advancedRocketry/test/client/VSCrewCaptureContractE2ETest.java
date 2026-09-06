@@ -125,9 +125,14 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
         client.await(arrivalMark, "deck_captured", "the client player must be taken by the deck"
                 + " before the jump — the whole scenario is about a capture that already exists",
                 CAPTURE_LINK_BUDGET_TICKS);
+        // Read ONCE, and proved to be about THIS ship: the two execs this replaces
+        // printed one sample and asserted a second, and neither said which craft
+        // held the body.
+        String deckCapture = deckCaptureOfThisShip(scenarioShipId,
+                "the capture this assertion reads must be on this scenario's own ship");
         scenario().requireArranged("the client player must be captured on the deck before the jump: "
-                + exec("artest vs deck-capture"),
-                exec("artest vs deck-capture").contains("\"verdict\":true"));
+                + deckCapture,
+                deckCapture.contains("\"verdict\":true"));
         double deckY = bot().reportState().get("playerY").getAsDouble();
 
         // A REAL jump: the space key on the real client. The contract is that the capture does not
@@ -727,9 +732,14 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
         client.await(dismountMark, "deck_captured", "a body must be taken by the deck, or the guard"
                 + " columns of this trace are empty and half the reading is missing",
                 CAPTURE_LINK_BUDGET_TICKS);
+        // Read ONCE, and proved to be about THIS ship: the two execs this replaces
+        // printed one sample and asserted a second, and neither said which craft
+        // held the body.
+        String deckCapture2 = deckCaptureOfThisShip(scenarioShipId,
+                "the capture this assertion reads must be on this scenario's own ship");
         scenario().requireArranged("a body must be on the deck, or the guard columns of this trace"
-                + " are empty and half the reading is missing: " + exec("artest vs deck-capture"),
-                exec("artest vs deck-capture").contains("\"alreadyTracked\":true"));
+                + " are empty and half the reading is missing: " + deckCapture2,
+                deckCapture2.contains("\"alreadyTracked\":true"));
 
         long mark = clientEvents().mark();
         com.google.gson.JsonObject armed = bot().invokeStaticInt(
@@ -781,9 +791,14 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
         exec("artest player dismount");
         client.await(dismountMark, "deck_captured", "the body must be taken by the deck before the"
                 + " server can be asked what it accepts FROM a deck", CAPTURE_LINK_BUDGET_TICKS);
+        // Read ONCE, and proved to be about THIS ship: the two execs this replaces
+        // printed one sample and asserted a second, and neither said which craft
+        // held the body.
+        String deckCapture3 = deckCaptureOfThisShip(scenarioShipId,
+                "the capture this assertion reads must be on this scenario's own ship");
         scenario().requireArranged("the body must be captured on the deck before the server can be"
-                + " asked what it accepts FROM a deck: " + exec("artest vs deck-capture"),
-                exec("artest vs deck-capture").contains("\"alreadyTracked\":true"));
+                + " asked what it accepts FROM a deck: " + deckCapture3,
+                deckCapture3.contains("\"alreadyTracked\":true"));
 
         double startY = bot().reportState().get("playerY").getAsDouble();
         long shoveMark = client.mark();
@@ -895,9 +910,14 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
         client.await(arrivalMark, "deck_captured", "the client player must be taken by the deck"
                 + " before the drive, or the churn window is about nobody",
                 CAPTURE_LINK_BUDGET_TICKS);
+        // Read ONCE, and proved to be about THIS ship: the two execs this replaces
+        // printed one sample and asserted a second, and neither said which craft
+        // held the body.
+        String deckCapture4 = deckCaptureOfThisShip(scenarioShipId,
+                "the capture this assertion reads must be on this scenario's own ship");
         scenario().requireArranged("the client player must be captured on the deck before the drive: "
-                + exec("artest vs deck-capture"),
-                exec("artest vs deck-capture").contains("\"verdict\":true"));
+                + deckCapture4,
+                deckCapture4.contains("\"verdict\":true"));
 
         // CONTROL: a quiet parked window. The guard must be quiet here (the still-crew pins), or a
         // quiet driver window would prove nothing about the driver. Read as the client's own
@@ -1567,9 +1587,14 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
         exec("artest player dismount");
         client.await(dismountMark, "deck_captured", "the ex-pilot must be taken by the deck before"
                 + " any claim about a crosshair on that deck", CAPTURE_LINK_BUDGET_TICKS);
+        // Read ONCE, and proved to be about THIS ship: the two execs this replaces
+        // printed one sample and asserted a second, and neither said which craft
+        // held the body.
+        String deckCapture5 = deckCaptureOfThisShip(scenarioShipId,
+                "the capture this assertion reads must be on this scenario's own ship");
         scenario().requireArranged("the ex-pilot must be captured on the deck: "
-                + exec("artest vs deck-capture"),
-                exec("artest vs deck-capture").contains("\"alreadyTracked\":true"));
+                + deckCapture5,
+                deckCapture5.contains("\"alreadyTracked\":true"));
 
         exec("tp @a ~ ~ ~ 0 90"); // look straight down at the deck underfoot
         bot().waitTicks(10);
@@ -1843,9 +1868,14 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
         exec("artest player dismount");
         client.await(dismountMark, "deck_captured", "the ex-pilot must be taken by the deck before"
                 + " any claim about looking or walking on it", CAPTURE_LINK_BUDGET_TICKS);
+        // Read ONCE, and proved to be about THIS ship: the two execs this replaces
+        // printed one sample and asserted a second, and neither said which craft
+        // held the body.
+        String deckCapture6 = deckCaptureOfThisShip(scenarioShipId,
+                "the capture this assertion reads must be on this scenario's own ship");
         scenario().requireArranged("the ex-pilot must be captured on the deck: "
-                + exec("artest vs deck-capture"),
-                exec("artest vs deck-capture").contains("\"alreadyTracked\":true"));
+                + deckCapture6,
+                deckCapture6.contains("\"alreadyTracked\":true"));
         // Out of the cockpit pocket onto the OPEN top deck while the ship is still upright (the
         // dismount leaves the body beside the seat, walled in on all four sides - the walk legs
         // below need runway). The capture then carries this open-deck spot through the rolls.
@@ -1856,9 +1886,14 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
         // and no event names a move within one deck. The state read below is the honest instrument.
         exec("tp @a " + ship[0] + " " + (ship[1] + 4) + " " + ship[2] + " 0 0");
         bot().waitTicks(40);
+        // Read ONCE, and proved to be about THIS ship: the two execs this replaces
+        // printed one sample and asserted a second, and neither said which craft
+        // held the body.
+        String deckCapture7 = deckCaptureOfThisShip(scenarioShipId,
+                "the capture this assertion reads must be on this scenario's own ship");
         scenario().requireArranged("the crew member must be captured on the OPEN deck before the"
-                + " roll: " + exec("artest vs deck-capture"),
-                exec("artest vs deck-capture").contains("\"alreadyTracked\":true"));
+                + " roll: " + deckCapture7,
+                deckCapture7.contains("\"alreadyTracked\":true"));
 
         // Roll the ship to ~60 degrees about X and hold it there.
         double h = Math.toRadians(60.0) / 2.0;
@@ -1869,9 +1904,14 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
         double[] up = shipUpFromInfo(shipInfo());
         assertTrue("the ship must be steeply rolled for the frames to diverge (upY=" + up[1] + ")",
                 up[1] < 0.7 && up[1] > 0.1);
+        // Read ONCE, and proved to be about THIS ship: the two execs this replaces
+        // printed one sample and asserted a second, and neither said which craft
+        // held the body.
+        String deckCapture8 = deckCaptureOfThisShip(scenarioShipId,
+                "the capture this assertion reads must be on this scenario's own ship");
         assertTrue("the crew member must still be captured after the roll: "
-                + exec("artest vs deck-capture"),
-                exec("artest vs deck-capture").contains("\"alreadyTracked\":true"));
+                + deckCapture8,
+                deckCapture8.contains("\"alreadyTracked\":true"));
 
         // Baseline aim (a server re-aim, which must RE-SEED the deck look, not fight it).
         exec("tp @a ~ ~ ~ 20 10");
@@ -1925,9 +1965,14 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
         double rolledBy = Math.toDegrees(Math.acos(clampUnit(dot(up, up2))));
         assertTrue("the ship must actually roll further for this leg to prove anything (rolled "
                 + rolledBy + " deg more, upY " + up[1] + " -> " + up2[1] + ")", rolledBy > 15.0);
+        // Read ONCE, and proved to be about THIS ship: the two execs this replaces
+        // printed one sample and asserted a second, and neither said which craft
+        // held the body.
+        String deckCapture9 = deckCaptureOfThisShip(scenarioShipId,
+                "the capture this assertion reads must be on this scenario's own ship");
         assertTrue("the crew member must still be captured on the further-rolled deck: "
-                + exec("artest vs deck-capture"),
-                exec("artest vs deck-capture").contains("\"alreadyTracked\":true"));
+                + deckCapture9,
+                deckCapture9.contains("\"alreadyTracked\":true"));
         double[] lookAfter = clientLook();
         double coneAfter = dot(up2, lookAfter);
         double aimTurned = Math.toDegrees(Math.acos(clampUnit(dot(lookBefore, lookAfter))));

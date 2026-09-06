@@ -86,7 +86,7 @@ public class VSShipCrossingSpikeTest extends AbstractSharedServerTest {
         int[] preOffset = seatToAfcOffset(pre);
 
         // Put a rider aboard (an EntityDummy bound to the pilot seat).
-        String mount = exec("artest vs seat-mount 0");
+        String mount = exec("artest vs seat-mount 0 id " + srcShipId);
         assertTrue("could not seat a rider on the source ship: " + mount, mount.contains("\"seatFound\":true"));
 
         // Locate the ship's live world position, by identity, then cross it to the destination.

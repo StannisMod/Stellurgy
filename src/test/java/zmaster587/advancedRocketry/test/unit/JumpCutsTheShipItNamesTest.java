@@ -9,21 +9,33 @@ import net.minecraft.util.math.BlockPos;
 import zmaster587.advancedRocketry.space.VSShipCrosser;
 
 import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNull;
 
 /**
- * A jump leg cuts the ship the jump NAMES — on the way out and on the way back alike.
+ * A jump leg cuts the ship the jump NAMES, or it cuts nothing — on the way out and on the way back
+ * alike.
  *
  * <p>Both legs park in, and cut out of, a world that holds every ship in flight at once, so "the
- * craft at this anchor" is a question with more than one answer by construction. The rule under test
- * is the one both legs now share: the durable id the jump is keyed by decides which craft is cut; a
- * flight computer at the anchor that POSITIVELY names another ship refuses the cut outright; and
- * everything the rule cannot establish falls back to the anchor exactly as before, because a leg
- * that would have worked may never be turned into a failure by a check that cannot judge it.</p>
+ * craft at this anchor" is a question with more than one answer by construction. And the anchor does
+ * not even answer it by containment: the lookup behind it keeps the smallest distance over every
+ * REGISTERED ship, with no distance bound and no claim test, so it reaches unloaded craft and the
+ * blockless remnants a crossing deliberately leaves behind.</p>
  *
- * <p>The last clause is the one with a history: the refusal was written as a gate three times over
- * and each version refused real jumps, so the "cannot establish" cases below are as load-bearing as
- * the refusal itself.</p>
+ * <h2>The rule, and the polarity flip in its history</h2>
+ *
+ * <p>The rule under test: a leg that names a real ship is resolved by its durable id or it is
+ * REFUSED. There is no third answer. Three scenarios below previously pinned the opposite — an
+ * unresolvable leg falling back to the anchor — on the argument that a check which cannot judge a
+ * case must not block it. That argument is what kept a jump able to deliver a stranger, and it was
+ * overruled: every crossing is anchored on a craft with a flight computer, which is what mints the
+ * durable name, so "this jump names a ship and the world cannot find it" is a defect to surface
+ * rather than a case to accommodate.</p>
+ *
+ * <p>The one surviving positional path is a leg that makes no identity claim at all — an id that is
+ * not a uuid, which is a synthetic fixture and never a jump the game started.</p>
+ *
+ * <p><b>Read the failures accordingly.</b> A red here after a production change means the resolution
+ * changed, not that a jump "stopped working"; a jump refusing to move a craft it cannot name is this
+ * contract holding.</p>
  */
 public class JumpCutsTheShipItNamesTest {
 
@@ -57,30 +69,41 @@ public class JumpCutsTheShipItNamesTest {
     }
 
     @Test
-    public void anAnchorThatNamesOurOwnShipIsCutByPosition() {
-        // Agreement is not a mismatch: with no durable binding, an anchor whose computer names US is
-        // the ordinary healthy case and must cross exactly as it always did.
-        assertEquals(AT_ANCHOR, cut(null, AT_ANCHOR, OURS));
+    public void anAnchorThatAgreesWithUsStillCannotAimTheCut() {
+        // Agreement is not resolution. `afcNames` is read by scanning the shipyard box the SAME
+        // positional lookup produced, so on a wrong pick it is the STRANGER's computer agreeing with
+        // whatever it was asked about. It can convict and it can never aim, so a leg whose index
+        // lookup missed is refused even when the anchor's computer says our own name.
+        assertEquals("an anchor that agrees is still an anchor, and an anchor cannot aim",
+                REFUSED, cut(null, AT_ANCHOR, OURS));
     }
 
     @Test
-    public void nothingEstablishableFallsBackToTheAnchor() {
-        // No durable binding, no computer to ask: the leg proceeds by position, as before the rule
-        // existed. This is the case a gate-shaped check would have refused.
-        assertEquals(AT_ANCHOR, cut(null, AT_ANCHOR, null));
+    public void aNamedShipTheIndexCannotFindIsRefusedRatherThanApproximated() {
+        // The case the old contract called "nothing establishable, fall back to the anchor". The
+        // fallback is the defect: the leg names a real ship, and the only other candidate reaches by
+        // distance with no bound.
+        assertEquals("a jump that cannot find its own hull must not move a different one",
+                REFUSED, cut(null, AT_ANCHOR, null));
     }
 
     @Test
-    public void aSyntheticJumpIdIsNotAnIdentityClaimAndCannotRefuse() {
-        // A leg driven under a non-uuid key makes no identity claim, so there is nothing to compare
-        // and nothing to refuse — even against a computer that names somebody.
-        assertEquals(AT_ANCHOR, VSShipCrosser.identifyShipToCut("test", ANCHOR, "fixture-ship-1",
-                DIM, null, AT_ANCHOR, STRANGER));
+    public void aSyntheticJumpIdIsRefusedTooRatherThanCrossingByPosition() {
+        // A leg driven under a non-uuid key is a test probe moving a transit for a fixture that
+        // assembled no ship. It has no hull of its own, so letting it cross "whatever the anchor
+        // reaches" was not a weaker answer to a weaker question — it was the one case guaranteed to
+        // cut a neighbour. Production's single caller passes a uuid.
+        assertEquals("a leg with no hull of its own must not cut somebody else's",
+                REFUSED, VSShipCrosser.identifyShipToCut("test", ANCHOR, "fixture-ship-1",
+                        DIM, null, AT_ANCHOR, STRANGER));
     }
 
     @Test
-    public void anUnresolvableAnchorAnswersNothingRatherThanGuessing() {
-        assertNull("no identity and no craft at the anchor is 'nothing to cut', not a guess",
-                cut(null, null, null));
+    public void aNamedShipWithNothingAtTheAnchorIsAlsoRefusedRatherThanNull() {
+        // Previously null, meaning "nothing to cut" — which the caller then passed to crossShip,
+        // where a null uuid means "resolve by position". So the old "honest nothing" reached the
+        // very fallback this contract removes, one layer down.
+        assertEquals("no identity and no craft at the anchor is a refusal, not a null that becomes"
+                + " a positional resolve one layer down", REFUSED, cut(null, null, null));
     }
 }

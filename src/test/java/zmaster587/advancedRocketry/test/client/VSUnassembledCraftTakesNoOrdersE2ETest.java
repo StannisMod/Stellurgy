@@ -116,7 +116,9 @@ public class VSUnassembledCraftTakesNoOrdersE2ETest extends AbstractSharedVsClie
         String assemble = assembleShip();
         scenario().requireArranged("a with-pilot-seat build must route to a ship: " + assemble,
                 assemble.contains("\"rocketCount\":0"));
-        awaitShipSpawned(events, spawnMark,
+        // Kept, not discarded: the mark precedes the assembly, so this record is this scenario's
+        // own ship, and the mount below has to name it rather than take the first loaded seat.
+        String controlShipId = awaitShipSpawned(events, spawnMark,
                 "assembly must create a VS ship in the queryable registry (async spawn)");
         bot().waitTicks(40);
 
@@ -135,7 +137,7 @@ public class VSUnassembledCraftTakesNoOrdersE2ETest extends AbstractSharedVsClie
                 + " answer, and the control leg would indict the harness's keys instead (loaded="
                 + loaded + ")", loaded >= 1);
 
-        String mountInfo = exec("artest vs seat-mount 0");
+        String mountInfo = exec("artest vs seat-mount 0 id " + controlShipId);
         scenario().requireArranged("seat-mount must find the ship's pilot seat: " + mountInfo,
                 mountInfo.contains("\"seatFound\":true"));
         Matcher dm = DUMMY_ID.matcher(mountInfo);

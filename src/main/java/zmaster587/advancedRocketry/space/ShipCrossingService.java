@@ -86,9 +86,18 @@ public final class ShipCrossingService {
          *  message the crew while every pilot stays exactly where he sits. */
         List<CrewTransfer.Crew> peekCrew(int dimId, BlockPos afcPos, double[] shipWorldPos);
 
-        /** Cross the ship at {@code srcShipPos} into {@code destDim} at the paste point.
-         *  Returns the destination ship's anchor AND identity, or {@code null} on failure. */
-        Crossed cross(int srcDimId, double[] srcShipPos, int destDim,
+        /** Cross the ship NAMED by {@code shipId} into {@code destDim} at the paste point.
+         *  Returns the destination ship's anchor AND identity, or {@code null} on failure.
+         *
+         *  <p>{@code shipId} is the crossing ship's durable id, and it is the thing that decides
+         *  WHICH craft is cut — {@code srcShipPos} only says where to look for it. The two used to
+         *  be one argument and it was the position: this seam had no identity parameter at all while
+         *  {@link #begin} held the id, put it in its own pending record and handed it to
+         *  {@link #reseat} on the far side. So entry, descent and the cell seam cut whatever craft a
+         *  position lookup reached, in a destination that by construction can already hold one — and
+         *  the crossing also reads the DURABLE NAME off that same pick, so a wrong one re-assembles
+         *  a stranger carrying this ship's name and poisons the index every later lookup uses.</p> */
+        Crossed cross(UUID shipId, int srcDimId, double[] srcShipPos, int destDim,
                       int pasteX, int pasteY, int pasteZ);
 
         /** Pin {@code dimId} loaded across the crossing (the arrival pin pattern). */
@@ -216,7 +225,7 @@ public final class ShipCrossingService {
         // tick end, discarding the ship VS is still assembling; a planet dim is usually loaded, but
         // the pin is dim-agnostic and harmless when the dim is already held).
         ops.pinDim(destDim);
-        Crossed crossed = ops.cross(srcDim, srcShipPos, destDim, pasteX, pasteY, pasteZ);
+        Crossed crossed = ops.cross(shipId, srcDim, srcShipPos, destDim, pasteX, pasteY, pasteZ);
         if (crossed == null || crossed.anchor == null) {
             return null;
         }

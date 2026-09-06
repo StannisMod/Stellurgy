@@ -90,7 +90,7 @@ public class VSShipUnmannedCruiseE2ETest extends AbstractSharedVsClientE2ETest {
 
         // Seat the bot, ramp a vertical cruise with the REAL key (Flight Assist is on by default:
         // holding the throttle ramps the setpoint; ~3 s of full deflection reaches cruise speed).
-        String mountInfo = exec("artest vs seat-mount 0");
+        String mountInfo = exec("artest vs seat-mount 0 id " + shipId);
         assertTrue("seat-mount must find the pilot seat: " + mountInfo,
                 mountInfo.contains("\"seatFound\":true"));
         Matcher dm = DUMMY_ID.matcher(mountInfo);
@@ -163,7 +163,7 @@ public class VSShipUnmannedCruiseE2ETest extends AbstractSharedVsClientE2ETest {
 
         // Re-mounting must not interrupt (or reset) the executing cruise: the seat's dummy is
         // REUSED and the ship flies on while the returned pilot holds no key.
-        String remount = exec("artest vs seat-mount 0");
+        String remount = exec("artest vs seat-mount 0 id " + shipId);
         assertTrue("seat-mount must still find the seat: " + remount,
                 remount.contains("\"seatFound\":true"));
         assertTrue("the re-mount must REUSE the seat's single dummy: " + remount,

@@ -449,9 +449,50 @@ public abstract class AbstractSharedVsClientE2ETest extends AbstractSharedClient
      * its physics id — read off the {@code ship_spawned} record rather than off a nearest-ship lookup
      * at the build site a tick later. The mark is taken before the assembly is queued, so the record
      * is this scenario's own ship and never a neighbour's.
+     *
+     * <p><b>Exactly ONE record, and that is the part the caller cannot check afterwards.</b>
+     * {@link Events#await} returns the moment the count goes above zero and {@link Events#lastField}
+     * then takes the LAST record in that reply — so a second assembly landing in the same window
+     * silently re-points every question the scenario asks from here on, and the id it returns looks
+     * exactly as legitimate as the right one. The window is the caller's own mark, so two records in
+     * it means the mark was taken too early or a neighbour assembled inside it; either way the
+     * scenario cannot be told which ship is its own, and a wrong answer here is worse than a refusal.
+     * ({@code VSGroundFlightGroupE2ETest} already sidesteps this by taking a separate mark per
+     * assembly — that is the shape a class with two builds wants.)</p>
      */
+    /**
+     * The deck-capture verdict for the player, read ONCE and proved to be about {@code shipId}.
+     *
+     * <p>Two defects it exists to remove, both measured 2026-09-06 across this family:</p>
+     *
+     * <ul>
+     *   <li><b>Two samples, one verdict.</b> The idiom it replaces calls {@code exec("artest vs
+     *       deck-capture")} twice — once to build the failure message, once for the assertion — so
+     *       the reply a reader diagnoses from is not the reply that decided the test. Under load
+     *       they disagree, and the disagreement looks like the subject misbehaving.</li>
+     *   <li><b>A verdict with no subject.</b> {@code alreadyTracked} / {@code verdict} /
+     *       {@code hullStand} say a ship holds this body, never WHICH. On a world this class shares
+     *       with its siblings a body resolved against a neighbour's hull answers identically, and
+     *       the id was in the reply the whole time ({@code anchorShipId}, 0 readers across 103 call
+     *       sites).</li>
+     * </ul>
+     *
+     * @param shipId this scenario's own ship, from {@link #awaitShipSpawned}
+     * @param what   the scenario's sentence for what the capture means, used in the failure
+     * @return the single reply, for the caller's own flag assertions and failure messages
+     */
+    protected final String deckCaptureOfThisShip(String shipId, String what) throws Exception {
+        String reply = exec("artest vs deck-capture");
+        zmaster587.advancedRocketry.test.ShipIdentity.assertCaptureAnchoredOn(reply, shipId, what);
+        return reply;
+    }
+
     protected final String awaitShipSpawned(Events events, long mark, String what) throws Exception {
         String reply = events.await(mark, "ship_spawned", what, 200);
+        int spawned = Events.countRecords(reply, "\"vsShip\":");
+        scenario().requireArranged("exactly ONE ship may be spawned in this scenario's window, or"
+                + " nothing here can say which is its own — " + spawned + " were: " + reply,
+                spawned == 1);
         String vsShip = Events.lastField(reply, "vsShip");
         scenario().requireArranged("a ship_spawned record must name the ship: " + reply, vsShip != null);
         return vsShip;

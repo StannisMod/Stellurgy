@@ -104,9 +104,16 @@ public class ShipEntryControllerTest {
             return new ArrayList<>();
         }
 
-        @Override public ShipCrossingService.Crossed cross(int srcDimId, double[] srcShipPos,
+        /** Which ship each crossing was asked to cut, IN ORDER. Recorded rather than ignored: the
+         *  seam's identity argument exists so a crossing cannot act on whatever a position lookup
+         *  reaches, and a double that drops it would let that regress with every test still green. */
+        final List<java.util.UUID> crossedShips = new ArrayList<>();
+
+        @Override public ShipCrossingService.Crossed cross(java.util.UUID shipId, int srcDimId,
+                                        double[] srcShipPos,
                                         int slotDim, int pasteX, int pasteY, int pasteZ) {
             crossings++;
+            crossedShips.add(shipId);
             return failCross ? null : new ShipCrossingService.Crossed(
                     new BlockPos(pasteX, pasteY, pasteZ), CROSSED_SHIP);
         }
@@ -321,6 +328,12 @@ public class ShipEntryControllerTest {
         assertTrue(ctl.requestEntry(LAUNCH_DIM, AFC, SHIP));
         assertFalse("an in-flight entry is not restarted", ctl.requestEntry(LAUNCH_DIM, AFC, SHIP));
         assertEquals(1, ops.crossings);
+        // The cut is told WHICH ship, not merely where to look. The seam carried no identity at all
+        // until 2026-09-06, so the craft that left a launch world was whichever one a position
+        // lookup reached — and a launch site that has been entered from before already holds a
+        // blockless remnant of the last crossing at that very pose.
+        assertEquals("the entry crossing must be told which ship to cut",
+                java.util.Collections.singletonList(SHIP), ops.crossedShips);
 
         ctl.tick();
         ctl.tick();
