@@ -20,8 +20,11 @@ import org.junit.runners.MethodSorters;
 import zmaster587.advancedRocketry.test.Events;
 
 import java.util.HashMap;
+import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
@@ -868,6 +871,75 @@ public abstract class AbstractSharedClientE2ETest {
     protected final Events events() {
         return new Events(this::exec, bot()::waitTicks);
     }
+
+    /**
+     * The CLIENT's ordered event log, behind the same verbs.
+     *
+     * <p>Offered beside {@link #events()} because the two logs answer different questions and a
+     * scenario picks by SUBJECT, not by convenience: a body released and reclaimed inside a hull is
+     * the client's fact — the server rebases an {@code EntityPlayerMP}'s position instead of
+     * releasing at all, so its probe reports "still tracked" straight through a release the client
+     * really performed — while an assembly or a dimension change is the server's.</p>
+     *
+     * <p>{@link Events#markInstrumented} must never be called on this one: the client reply carries
+     * no {@code mixins} flag. {@link ClientEvents} says why, and what to assert instead.</p>
+     */
+    protected final Events clientEvents() {
+        return ClientEvents.of(bot());
+    }
+
+    /**
+     * Wait until a chat line the player was actually SHOWN contains {@code needle}, and return that
+     * line's own text; or fail naming the link and printing every line the HUD was handed.
+     *
+     * <p>A chat message is the shape a poll can never see: it is handed to the HUD, counted down and
+     * gone, so a reader arriving late cannot tell a message that was shown from one that was never
+     * sent. It is also the half of a "the player is told" contract the server's own log cannot
+     * reach — a {@code chat_message_sent} record says the server composed and dispatched it, not
+     * that it landed on a screen.</p>
+     *
+     * <p><b>Matched without case, deliberately.</b> A chat line is prose, and its capitalisation
+     * belongs to the translation rather than to the contract. A test that pinned the case would fail
+     * on a language file edit that broke nothing.</p>
+     *
+     * <p>Four classes carried a copy of these twenty lines, each saying in its javadoc that it was
+     * written locally only because no shared base offered it.</p>
+     *
+     * @param needle a fragment of the line the player must read, matched ignoring case
+     * @param what   a player-facing sentence for what this message means, used in the failure
+     * @return the {@code text} of the first matching line — the caller asserts on the line itself
+     */
+    protected final String awaitClientChat(long mark, String needle, int tickBudget, String what)
+            throws Exception {
+        String lower = needle.toLowerCase(Locale.ROOT);
+        String reply;
+        try {
+            reply = clientEvents().awaitMatching(mark, "client_chat_received",
+                    seen -> firstChatTextContaining(seen, lower) != null,
+                    "carrying \"" + needle + "\"", what, tickBudget);
+        } catch (AssertionError never) {
+            // Which of the silences it was, as an assertion rather than as prose in a message: an
+            // absent instrument means nobody was looking, and that must not read as "no such line".
+            Events.assertInstrumentRan(clientEvents().since(mark, "client_chat_received"),
+                    "client_chat_events", what);
+            throw never;
+        }
+        return firstChatTextContaining(reply, lower);
+    }
+
+    /** The {@code text} of the first record in a client chat reply containing {@code lowerNeedle},
+     *  or null. The needle is matched against the line's own text, never against the envelope. */
+    private static String firstChatTextContaining(String reply, String lowerNeedle) {
+        Matcher m = CHAT_TEXT.matcher(String.valueOf(reply));
+        while (m.find()) {
+            if (m.group(1).toLowerCase(Locale.ROOT).contains(lowerNeedle)) {
+                return m.group(1);
+            }
+        }
+        return null;
+    }
+
+    private static final Pattern CHAT_TEXT = Pattern.compile("\"text\":\"([^\"]*)\"");
 
     // ── internals ────────────────────────────────────────────────────────────
 

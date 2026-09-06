@@ -178,8 +178,22 @@ public final class Events {
         }
         throw new AssertionError(what + " — no `" + type + "` was recorded within " + tickBudget
                 + " ticks. What DID happen since the mark: " + describe(since(mark))
-                + " | raw: " + since(mark));
+                + TRIAGE + " | raw: " + since(mark));
     }
+
+    /**
+     * How to read the silence printed beside it — the sentence fifteen classes carried a copy of.
+     *
+     * <p>An empty result has four causes and only one of them is an answer, so a failure that does
+     * not separate them sends its reader to the wrong subsystem. Both probes emit the same four
+     * envelope keys ({@code TestProbeCommand}'s reply and the client bridge's {@code event_since}),
+     * so this is true of either log.</p>
+     */
+    private static final String TRIAGE = ". An empty result has four causes and the reply below tells"
+            + " them apart: `recording` false = the log was never armed, the instrument absent from"
+            + " `instruments` = the observation point never ran, a non-zero entry in `droppedByType`"
+            + " for this type = the ring turned over before it was read, and none of those = it ran"
+            + " and the thing never happened";
 
     /**
      * Wait for one event of {@code type} whose payload CARRIES {@code needle}, or fail naming the
@@ -199,17 +213,43 @@ public final class Events {
      */
     public String awaitCarrying(long mark, String type, String needle, String what, int tickBudget)
             throws Exception {
+        return awaitMatching(mark, type, reply -> countRecords(reply, needle) > 0,
+                "carrying " + needle, what, tickBudget);
+    }
+
+    /**
+     * Wait until the records of {@code type} since {@code mark} satisfy {@code holds}, or fail
+     * naming the whole chain that did happen.
+     *
+     * <p>The general form the two waits above are written in terms of, and the one to reach for when
+     * "did it happen" is not a substring: a frame that must DIFFER from the one before it, a count
+     * that must reach a floor, a chat line matched without its capitalisation — prose case belongs to
+     * the translation, not to the contract, and a needle folded by the caller is the only honest way
+     * to say so.</p>
+     *
+     * <p>Three classes had grown a private copy of this loop with three different predicates baked
+     * in, and each copy's failure message had drifted a different distance from the chain it was
+     * supposed to print. The predicate is the part that differs between scenarios; the waiting, the
+     * budget arithmetic and the narrative are not.</p>
+     *
+     * @param holds    tested against the whole {@code since} reply for {@code type}, re-read each step
+     * @param matching how to say what {@code holds} wanted, for the failure — e.g. {@code "carrying
+     *                 \"ship\":\"a1\""} or {@code "differing from the previous frame"}
+     */
+    public String awaitMatching(long mark, String type, java.util.function.Predicate<String> holds,
+                                String matching, String what, int tickBudget) throws Exception {
         String reply = "";
         for (int waited = 0; waited <= tickBudget; waited += 5) {
             reply = since(mark, type);
-            if (countRecords(reply, needle) > 0) {
+            if (holds.test(reply)) {
                 return reply;
             }
             step.ticks(5);
         }
-        throw new AssertionError(what + " — no `" + type + "` carrying " + needle + " was recorded"
+        throw new AssertionError(what + " — no `" + type + "` " + matching + " was recorded"
                 + " within " + tickBudget + " ticks. What DID happen since the mark: "
-                + describe(since(mark)) + " | raw: " + reply);
+                + describe(since(mark)) + TRIAGE + " | `" + type + "` records: " + reply
+                + " | everything since the mark: " + since(mark));
     }
 
     /**
