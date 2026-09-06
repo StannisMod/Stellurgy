@@ -53,13 +53,11 @@ public class ApparentSizeTest {
                 giant > earth);
     }
 
-    @Test
-    public void twoBodiesOfEqualRadiusAtEqualRangeAreDrawnEqual() {
-        // The contract stated positively: nothing but the pair (radius, distance) may enter, so two
-        // bodies that agree on both are the same size whatever else differs about them.
-        assertEquals(ApparentSize.halfSizeFor(EARTH_R, 3_000_000d),
-                ApparentSize.halfSizeFor(EARTH_R, 3_000_000d), 0f);
-    }
+    // `twoBodiesOfEqualRadiusAtEqualRangeAreDrawnEqual` stood here and called halfSizeFor twice
+    // with identical arguments, comparing the results. For a pure function of (radius, distance)
+    // that is true by construction whatever the body does, so it could not fail; and "nothing but
+    // the pair may enter" is a statement about the SIGNATURE, which no call can test. onlyTheRATIOMatters
+    // below carries the claim that is actually about the function.
 
     @Test
     public void onlyTheRATIOMatters() {

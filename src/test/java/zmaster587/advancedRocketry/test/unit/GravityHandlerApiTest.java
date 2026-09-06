@@ -172,9 +172,8 @@ public class GravityHandlerApiTest {
         // Successive reads must return the same instance — companion
         // mods cache the manager reference on world load and don't
         // re-resolve.
-        IGravityManager first = AdvancedRocketryAPI.gravityManager;
-        IGravityManager second = AdvancedRocketryAPI.gravityManager;
-        assertSame("repeated reads of AdvancedRocketryAPI.gravityManager "
-                + "must return the same singleton", first, second);
+        // Two reads of a plain static field with nothing between them cannot differ, so this
+        // asserted nothing — and passed identically when the field was null. The registration
+        // test above is what pins that a manager is there to cache.
     }
 }

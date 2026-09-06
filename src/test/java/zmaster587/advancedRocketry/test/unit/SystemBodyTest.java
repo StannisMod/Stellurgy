@@ -57,7 +57,8 @@ public class SystemBodyTest {
                 BodyEphemeris.STATIC, SystemBodyKind.PLANET, 3, 0);
 
         assertEquals(name, planet.name());
-        assertEquals("a name is not a function of time", planet.name(), planet.name());
+        // (`planet.name()` was compared with itself here, at one instant, under the message "a
+        // name is not a function of time". The loop below is what varies the time.)
         for (long tick : new long[]{0L, 137L, 250L, 500_000L}) {
             assertEquals("tick " + tick + " renamed the cell", name.cellKey(),
                     planet.addressAt(tick).cellKey());

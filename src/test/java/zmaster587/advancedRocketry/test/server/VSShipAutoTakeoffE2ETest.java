@@ -63,6 +63,12 @@ public class VSShipAutoTakeoffE2ETest extends AbstractSharedServerTest {
 
         String srcInfo = exec("artest vs ship-info 0 " + SRC_X + " " + SRC_Y + " " + SRC_Z
                 + " " + SHIP_CAPTURE_RADIUS_BLOCKS);
+        // The lookup must have FOUND the craft, which every sibling in this tier asserts and this
+        // one did not. `extractDouble` answers 0.0 on a miss, so a `managed:false` reply silently
+        // pointed the rest of the scenario at the WORLD ORIGIN of the shared overworld: the stone
+        // pad below would be filled there and the teleport would move whatever craft is nearest it.
+        assertTrue("the source ship must be managed before its pose is read: " + srcInfo,
+                srcInfo.contains("\"managed\":true"));
         double sx = extractDouble(srcInfo, "posX"), sy = extractDouble(srcInfo, "posY"),
                 sz = extractDouble(srcInfo, "posZ");
 

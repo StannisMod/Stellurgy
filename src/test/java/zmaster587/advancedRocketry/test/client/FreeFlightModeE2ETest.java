@@ -1356,7 +1356,10 @@ public class FreeFlightModeE2ETest extends AbstractSharedClientE2ETest {
                 () -> readClientDouble("ffClientMinForwardZ"),
                 z -> z < -0.5, 5, 12);
         double minFwdZ = loop.value;
-        boolean stillRiding = bot().reportRidingEntity() != null;
+        // `riding`, not `!= null`: reportRidingEntity throws on a failed reply and otherwise
+        // returns an object, so the null test was a compile-time true and the pilot could have
+        // been ejected with this still green. The file reads it correctly elsewhere.
+        boolean stillRiding = bot().reportRidingEntity().get("riding").getAsBoolean();
         bot().releaseKey(Keyboard.KEY_X);
 
         assertTrue("the nose must loop past vertical — client min forward.z must go "
@@ -1395,8 +1398,10 @@ public class FreeFlightModeE2ETest extends AbstractSharedClientE2ETest {
         // Stop and let the client keep rendering the banked craft a moment.
         exec("artest rocket free-flight-input " + rocketId + " 0 0 0 0 0 0 0 0");
         bot().waitTicks(10);
-        boolean stillRiding = bot().reportState().get("screen").getAsString() != null
-                && bot().reportRidingEntity() != null;
+        // Both halves were compile-time true: a present JSON primitive never renders as a null
+        // String, and reportRidingEntity throws rather than returning null. What the sentence
+        // means is that the pilot is still aboard the banked craft.
+        boolean stillRiding = bot().reportRidingEntity().get("riding").getAsBoolean();
 
         exec("artest player dismount");
 

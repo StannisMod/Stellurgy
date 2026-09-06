@@ -1455,6 +1455,13 @@ public abstract class AbstractSpaceLoginRestoreClientTest {
      */
     protected void assumeProductionSubsystemAvailable() throws Exception {
         String vs = exec("artest vs available");
+        // The gate was MISSING: the reply was fetched into a dead local and nothing was ever decided
+        // from it, so the skip this javadoc promises had never once happened and all six scenarios of
+        // this family ran on regardless. A skip that cannot skip is worse than none — it is a claim,
+        // in a javadoc, that a whole class of environment is handled.
+        org.junit.Assume.assumeTrue("Valkyrien Skies is absent, so the production subsystem under"
+                + " test never registered and there is nothing here to exercise: " + vs,
+                vs.contains("\"available\":true"));
     }
 
     // --- lifecycle ---------------------------------------------------------------------------------

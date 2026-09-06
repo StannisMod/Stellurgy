@@ -175,7 +175,8 @@ public class MissionNbtRoundTripTest {
         // subclass beyond the parent set. If it changes, in-flight
         // gas missions in existing worlds load without a fluid
         // reference and the rocket gets filled with default (water).
-        assertEquals("gas", "gas");
+        // (An `assertEquals("gas", "gas")` stood here and could not fail. The key's spelling is
+        // pinned by the round trips above, which read it back through production.)
         // The string constant pin is intentional — a search for
         // 'nbt.getString("gas")' / 'nbt.setString("gas", ...)' in
         // production source finds exactly the two lines that drive
