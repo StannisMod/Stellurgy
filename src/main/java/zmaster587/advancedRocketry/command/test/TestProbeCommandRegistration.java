@@ -57,5 +57,34 @@ public final class TestProbeCommandRegistration {
         // subscriber, builds no record and pays nothing for what only a test wants to see.
         TestEventLog.ServerRecorder.ensureRegistered();
         AdvancedRocketry.logger.info("Registered /artest test-only probe commands (-D" + FLAG + "=true)");
+        bootstrapTestServerBridge();
+    }
+
+    /**
+     * Test-only hook, the server-side twin of the client proxy's bridge start: when the JVM was
+     * launched with a control port, reflectively start the test framework's in-JVM server bridge so
+     * the harness can run a command and read that command's own reply over a socket, instead of
+     * writing it into the console and slicing the answer out of the log behind a chat-broadcast
+     * sentinel.
+     *
+     * <p>Started HERE because this is the first point at which the command tree above exists and
+     * the {@code MinecraftServer} instance is in hand — the bridge executes through the server's own
+     * command manager, so anything it can run, the console can run identically.</p>
+     *
+     * <p>Inert in normal gameplay twice over: this whole method is reached only in test mode, and
+     * the bridge itself no-ops without its port property. The bridge class lives in the test-only
+     * framework and is NOT on the production runtime classpath; the {@link ClassNotFoundException}
+     * branch is what makes a production launch cost nothing.</p>
+     */
+    private static void bootstrapTestServerBridge() {
+        try {
+            Class<?> bridge = Class.forName(
+                    "com.github.stannismod.forge.testing.server.bridge.ForgeTestServerBootstrap");
+            bridge.getMethod("bootstrap").invoke(null);
+        } catch (ClassNotFoundException ignored) {
+            // Test framework absent at runtime — no-op (production launch).
+        } catch (ReflectiveOperationException e) {
+            throw new RuntimeException("Failed to bootstrap forge test server bridge", e);
+        }
     }
 }

@@ -1,8 +1,10 @@
 package com.github.stannismod.forge.testing.server;
 
 import java.io.BufferedReader;
+import java.io.BufferedWriter;
 import java.io.IOException;
 import java.io.InputStreamReader;
+import java.io.OutputStreamWriter;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.*;
 import java.nio.file.attribute.BasicFileAttributes;
@@ -20,14 +22,22 @@ public final class RealDedicatedServerHarness implements AutoCloseable {
     private final TestClient client;
     private final Thread readerThread;
     private final boolean cleanupOnClose;
+    /**
+     * The listening socket the server child's control bridge dials back on. Held for the life of
+     * the harness rather than closed after the accept, so a child whose bridge starts late (a mod
+     * whose server-starting handler runs after the ready marker) still finds the port open instead
+     * of failing its connect with a stack trace nobody reads.
+     */
+    private final java.net.ServerSocket controlSocket;
 
     private RealDedicatedServerHarness(Path root, int port, TestClient client, Thread readerThread,
-                                       boolean cleanupOnClose) {
+                                       boolean cleanupOnClose, java.net.ServerSocket controlSocket) {
         this.root = root;
         this.port = port;
         this.client = client;
         this.readerThread = readerThread;
         this.cleanupOnClose = cleanupOnClose;
+        this.controlSocket = controlSocket;
     }
 
     /**
@@ -78,10 +88,14 @@ public final class RealDedicatedServerHarness implements AutoCloseable {
             // after a child JVM lost the TOCTOU race to bind it.
             Files.write(root.resolve("server.properties"),
                     buildServerProperties(port).getBytes(StandardCharsets.UTF_8));
-            Process process = launchServer(root, port);
+            // Bind the control port and KEEP the socket, exactly as the client harness does: the
+            // bound port is read off it, so nothing can steal the port between a probe and a rebind.
+            java.net.ServerSocket controlSocket = openControlSocket();
+            Process process = launchServer(root, port, controlSocket.getLocalPort());
             List<String> transcript = new ArrayList<>();
             Thread readerThread = startReader(process, transcript);
             TestClient client = new TestClient(process, TestClient.newWriter(process), transcript);
+            startBridgeAcceptor(controlSocket, client);
             BootOutcome outcome;
             try {
                 // Load-scaled: N concurrent modded boots contend on disk + CPU.
@@ -89,12 +103,16 @@ public final class RealDedicatedServerHarness implements AutoCloseable {
                         com.github.stannismod.forge.testing.TestTimeouts.scaled(Duration.ofMinutes(3)));
             } catch (RuntimeException | InterruptedException failure) {
                 destroyAndJoin(process, readerThread);
+                closeQuietly(controlSocket);
                 throw failure;
             }
             if (outcome == BootOutcome.READY) {
-                return new RealDedicatedServerHarness(root, port, client, readerThread, cleanupOnClose);
+                awaitBridge(client);
+                return new RealDedicatedServerHarness(root, port, client, readerThread, cleanupOnClose,
+                        controlSocket);
             }
             destroyAndJoin(process, readerThread);
+            closeQuietly(controlSocket);
             lastFailure = new IOException("BindException on port " + port
                     + " (attempt " + attempt + " of " + MAX_PORT_BIND_ATTEMPTS + ")");
         }
@@ -193,8 +211,10 @@ public final class RealDedicatedServerHarness implements AutoCloseable {
     @Override
     public void close() throws IOException {
         try {
+            // Closes the bridge connection too; the control port itself is ours to release.
             client.close();
         } finally {
+            closeQuietly(controlSocket);
             try {
                 readerThread.join(TimeUnit.SECONDS.toMillis(5));
             } catch (InterruptedException interruptedException) {
@@ -266,7 +286,7 @@ public final class RealDedicatedServerHarness implements AutoCloseable {
      */
     public static final String PROP_LEGACY_ARGS = "forge.test.launcher.legacyArgs";
 
-    private static Process launchServer(Path root, int port) throws IOException {
+    private static Process launchServer(Path root, int port, int bridgePort) throws IOException {
         String javaExe = System.getProperty("java.home");
         boolean windows = System.getProperty("os.name", "").toLowerCase(java.util.Locale.ROOT).contains("win");
         String javaName = windows ? "java.exe" : "java";
@@ -284,6 +304,9 @@ public final class RealDedicatedServerHarness implements AutoCloseable {
         command.add("-Xmx" + System.getProperty("forge.test.server.xmx", "1g"));
         command.add("-Djava.awt.headless=true");
         command.add("-Dforge.test.server=true");
+        // The control port for the child's in-JVM bridge, mirroring -Dforge.test.client.port on the
+        // client side. A child with no bridge-starting mod simply ignores it.
+        command.add("-D" + PROP_BRIDGE_PORT + "=" + bridgePort);
         // The harness's OWN coremod, so test-only mixin configurations are queued while mixin still
         // accepts them — the same arrangement the client child already uses. This is what lets an
         // observation a test needs live in the harness instead of in production code: a test mixin
@@ -343,6 +366,106 @@ public final class RealDedicatedServerHarness implements AutoCloseable {
             return Paths.get(env.trim());
         }
         return Paths.get(System.getProperty("user.home"), ".gradle");
+    }
+
+    /**
+     * System property naming the control port handed to the server child. The child's in-JVM half
+     * ({@code ForgeTestServerBootstrap}) reads exactly this, and does nothing when it is absent.
+     */
+    public static final String PROP_BRIDGE_PORT = "forge.test.server.port";
+
+    /**
+     * System property (milliseconds) bounding how long {@code start} waits after the ready marker
+     * for the child's bridge to dial back. Default 15 s, load-scaled. {@code 0} skips the wait
+     * entirely — the right setting for a consumer whose server carries no bridge, which otherwise
+     * pays this once per boot for a connection that will never arrive.
+     */
+    public static final String PROP_BRIDGE_WAIT_MILLIS = "forge.test.server.bridge.waitMillis";
+
+    /**
+     * Bind an ephemeral control port on loopback and keep it — mirrors the client harness's
+     * {@code openControlSocket}, and for the same reason: reserving a port and rebinding it later
+     * leaves a window in which another process (a sibling fork churning ephemeral ports) takes it.
+     */
+    private static java.net.ServerSocket openControlSocket() throws IOException {
+        java.net.ServerSocket socket = new java.net.ServerSocket();
+        socket.setReuseAddress(true);
+        socket.bind(new java.net.InetSocketAddress("127.0.0.1", 0));
+        return socket;
+    }
+
+    /**
+     * Accept the child's control connection in the background and hand it to {@code client}.
+     *
+     * <p>Background rather than inline because the connection is made from the mod's
+     * {@code FMLServerStartingEvent} handler, which on a dedicated server runs AFTER the
+     * {@code For help, type "help"} line this harness boots on — and because a server carrying no
+     * bridge at all must not stall the boot. The {@code READY} line the child writes first is
+     * consumed here, so the socket handed over is idle.</p>
+     */
+    private static void startBridgeAcceptor(java.net.ServerSocket controlSocket, TestClient client) {
+        Thread acceptor = new Thread(() -> {
+            try {
+                // Load-scaled like the client bot's handshake: a contended child reaches its
+                // server-starting handlers late.
+                controlSocket.setSoTimeout(com.github.stannismod.forge.testing.TestTimeouts
+                        .scaledMillis(TimeUnit.MINUTES.toMillis(2)));
+                java.net.Socket socket = controlSocket.accept();
+                BufferedReader reader = new BufferedReader(
+                        new InputStreamReader(socket.getInputStream(), StandardCharsets.UTF_8));
+                BufferedWriter writer = new BufferedWriter(
+                        new OutputStreamWriter(socket.getOutputStream(), StandardCharsets.UTF_8));
+                String ready = reader.readLine();
+                if (!"READY".equals(ready)) {
+                    System.out.println("[forge-test] server bridge said '" + ready
+                            + "' instead of READY — ignoring it and staying on the console channel");
+                    socket.close();
+                    return;
+                }
+                client.attachBridge(socket, reader, writer);
+                System.out.println("[forge-test] server bridge connected");
+            } catch (IOException ignored) {
+                // No bridge in this child (or the harness closed the port on shutdown). The
+                // console channel is the documented fallback; awaitBridge says so out loud.
+            }
+        }, "forge-dedicated-server-bridge-acceptor");
+        acceptor.setDaemon(true);
+        acceptor.start();
+    }
+
+    /**
+     * Give the child's bridge a bounded chance to connect before the first command is issued, so a
+     * suite does not silently send its first few commands down the console channel (each of which
+     * broadcasts a {@code say} sentinel into every player's chat) and the rest down the bridge.
+     *
+     * <p>Announces the outcome either way: a channel this different is not something a reader of a
+     * failing log should have to infer.</p>
+     */
+    private static void awaitBridge(TestClient client) throws InterruptedException {
+        long budgetMillis = com.github.stannismod.forge.testing.TestTimeouts
+                .scaledMillis(Long.getLong(PROP_BRIDGE_WAIT_MILLIS, 15_000L).longValue());
+        if (budgetMillis <= 0L) {
+            return;
+        }
+        long deadline = System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(budgetMillis);
+        while (System.nanoTime() < deadline) {
+            if (client.hasBridge()) {
+                return;
+            }
+            Thread.sleep(50L);
+        }
+        System.out.println("[forge-test] no server control bridge after " + budgetMillis
+                + " ms — commands use the console channel, whose replies are log slices and whose"
+                + " completion sentinel is broadcast to chat (set -D" + PROP_BRIDGE_WAIT_MILLIS
+                + "=0 if this server never has one)");
+    }
+
+    private static void closeQuietly(java.net.ServerSocket socket) {
+        try {
+            socket.close();
+        } catch (IOException ignored) {
+            // Nothing left to do.
+        }
     }
 
     private static int reservePort() throws IOException {

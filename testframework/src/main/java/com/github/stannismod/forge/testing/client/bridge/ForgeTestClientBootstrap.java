@@ -11,6 +11,9 @@ import net.minecraft.client.gui.GuiScreen;
 import net.minecraft.client.gui.GuiTextField;
 import net.minecraft.client.gui.inventory.GuiContainer;
 import net.minecraft.client.multiplayer.PlayerControllerMP;
+import net.minecraft.entity.Entity;
+import net.minecraft.entity.item.EntityItem;
+import net.minecraft.entity.item.EntityXPOrb;
 import net.minecraft.inventory.ClickType;
 import net.minecraft.inventory.Slot;
 import net.minecraft.item.ItemStack;
@@ -21,7 +24,10 @@ import net.minecraft.client.renderer.OpenGlHelper;
 import net.minecraft.util.ScreenShotHelper;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Vec3d;
+import net.minecraftforge.client.event.GuiOpenEvent;
+import net.minecraftforge.event.entity.EntityJoinWorldEvent;
 import net.minecraftforge.fml.common.FMLCommonHandler;
+import net.minecraftforge.fml.common.eventhandler.EventPriority;
 import net.minecraftforge.fml.common.eventhandler.SubscribeEvent;
 import net.minecraftforge.fml.common.gameevent.TickEvent;
 import org.lwjgl.input.Keyboard;
@@ -122,6 +128,8 @@ public final class ForgeTestClientBootstrap {
         installEventMixins();
         FMLCommonHandler.instance().bus().register(new TickCounter());
         FMLCommonHandler.instance().bus().register(new SoundRecorder());
+        FMLCommonHandler.instance().bus().register(new GuiOpenRecorder());
+        FMLCommonHandler.instance().bus().register(new EntityJoinRecorder());
         Thread bridgeThread = new Thread(ForgeTestClientBootstrap::runBridge, "forge-test-client-bridge");
         bridgeThread.setDaemon(true);
         bridgeThread.start();
@@ -1915,9 +1923,62 @@ public final class ForgeTestClientBootstrap {
         throw new NoSuchFieldException(fieldName);
     }
 
+    /**
+     * The client bus recorders — three Forge events the harness turns into ordered records, beside
+     * the sound ring they predate.
+     *
+     * <p>Each one observes a fact the CLIENT already produces and writes it through
+     * {@link #recordEvent}, so a test awaits it on the client log like any mixin-recorded event.
+     * None of them adds a line to production: the bus posts these events whether or not anyone is
+     * subscribed. Every handler calls {@link #noteInstrumentEntered} first thing, above its own
+     * gates, so "the recorder never ran" and "the recorder ran and filtered" stay distinguishable.</p>
+     *
+     * <ul>
+     *   <li>{@code client_sound_played} — inside {@link SoundRecorder#onPlaySound}, beside the ring
+     *       write: the {@code SoundManager} was ASKED to play a sound ({@code location} is the
+     *       registry name; {@code category} the {@code SoundCategory} it was filed under, or
+     *       {@code "none"} when the sound reports none). Silent about whether the sound was then
+     *       actually heard: {@code PlaySoundEvent} fires before asset resolution and before the
+     *       category volume is applied, and a handler after this one may still swap or null the
+     *       result sound. Silent too about a sound with no location at all — it sits behind the
+     *       ring's own pre-existing guard and never reaches either the ring or this record.</li>
+     *   <li>{@code client_gui_opened} — {@link GuiOpenRecorder}: the client was asked to display a
+     *       screen ({@code gui} is the screen's simple class name, or {@code "none"} for a null gui,
+     *       which is how a screen CLOSES and is a fact worth a record, so it is never filtered).
+     *       Taken at {@code LOWEST} priority with cancelled events delivered, so {@code cancelled}
+     *       is the verdict every other subscriber left, not this one's own view. Silent about which
+     *       block, entity or item the screen belongs to — the server's {@code container_opened}
+     *       says that — and about what the screen shows once drawn.</li>
+     *   <li>{@code entity_joined_world} — {@link EntityJoinRecorder}: an entity was added to the
+     *       CLIENT world ({@code e} the id, {@code cls} the simple class name, {@code x,y,z} its
+     *       position at the join, {@code dim} the world's dimension id). The integrated server posts
+     *       the same event for its own worlds in this JVM, so the record is gated on
+     *       {@code world.isRemote}; the server half is the probe's own recorder. {@code EntityItem}
+     *       and {@code EntityXPOrb} are skipped — a drop or a mining session would turn the ring
+     *       over with nothing a chain waits for. A join cancelled by another subscriber is not a
+     *       join and is not recorded. Silent about the entity's identity beyond its class and id,
+     *       and about respawns of the same id.</li>
+     * </ul>
+     *
+     * <p>Order between any two of these, and between them and any mixin-recorded event, is a fact
+     * of a run and is not asserted here.</p>
+     *
+     * <p><b>What gates them, honestly.</b> These are BUS subscribers, not mixins: the game posts
+     * every event above whether or not a mixin was ever woven, and they are registered from
+     * {@link #bootstrap()} beside the tick and sound recorders. On the SERVER half of this vocabulary
+     * that makes the recording flag the only gate. Here it does not, and the difference is worth
+     * stating rather than inheriting: {@link #recordEvent} drops everything while
+     * {@code eventsRecording} is false, and that flag is set from
+     * {@code ForgeTestCoreMod.isConfigQueued()} in {@link #installEventMixins()} — so on the client
+     * a harness whose coremod never queued its mixin config records none of these either, even
+     * though nothing here needs a mixin. The reply's own {@code recording} field is the fact to
+     * read; a false there means these three are silent for a reason that has nothing to do with the
+     * game.</p>
+     */
     private static final class SoundRecorder {
         @SubscribeEvent
         public void onPlaySound(net.minecraftforge.client.event.sound.PlaySoundEvent event) {
+            noteInstrumentEntered("client_sound_events");
             net.minecraft.client.audio.ISound sound = event.getSound();
             if (sound == null || sound.getSoundLocation() == null) {
                 return;
@@ -1930,7 +1991,49 @@ public final class ForgeTestClientBootstrap {
                 }
                 SOUNDS_TOTAL.incrementAndGet();
             }
+            net.minecraft.util.SoundCategory category = sound.getCategory();
+            recordEvent("client_sound_played", "\"location\":\"" + location + "\",\"category\":\""
+                    + (category == null ? "none" : category.getName()) + "\"");
         }
+    }
+
+    /** See the recorder note on {@link SoundRecorder}. */
+    private static final class GuiOpenRecorder {
+        // LOWEST + receiveCanceled: the record carries the bus's FINAL verdict on the open, which
+        // only the last subscriber to run can read. A cancelled open is still recorded — the test
+        // that awaits a screen and finds it cancelled has learned exactly what it needed.
+        @SubscribeEvent(priority = EventPriority.LOWEST, receiveCanceled = true)
+        public void onGuiOpen(GuiOpenEvent event) {
+            noteInstrumentEntered("client_gui_events");
+            GuiScreen gui = event.getGui();
+            recordEvent("client_gui_opened", "\"gui\":\""
+                    + (gui == null ? "none" : gui.getClass().getSimpleName())
+                    + "\",\"cancelled\":" + event.isCanceled());
+        }
+    }
+
+    /** See the recorder note on {@link SoundRecorder}. */
+    private static final class EntityJoinRecorder {
+        @SubscribeEvent(priority = EventPriority.LOWEST, receiveCanceled = true)
+        public void onEntityJoin(EntityJoinWorldEvent event) {
+            noteInstrumentEntered("client_entity_join_events");
+            Entity entity = event.getEntity();
+            if (entity == null || event.getWorld() == null || !event.getWorld().isRemote
+                    || event.isCanceled()
+                    || entity instanceof EntityItem || entity instanceof EntityXPOrb) {
+                return;
+            }
+            recordEvent("entity_joined_world", "\"e\":" + entity.getEntityId()
+                    + ",\"cls\":\"" + entity.getClass().getSimpleName() + "\""
+                    + ",\"x\":" + jsonNumber(entity.posX) + ",\"y\":" + jsonNumber(entity.posY)
+                    + ",\"z\":" + jsonNumber(entity.posZ)
+                    + ",\"dim\":" + event.getWorld().provider.getDimension());
+        }
+    }
+
+    /** Six significant figures, {@code Locale.ROOT} — a coordinate, never a locale's comma. */
+    private static String jsonNumber(double v) {
+        return String.format(Locale.ROOT, "%.6g", v);
     }
 
     private static final class TickCounter {
