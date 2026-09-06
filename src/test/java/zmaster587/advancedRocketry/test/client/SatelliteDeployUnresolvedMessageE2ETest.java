@@ -1,7 +1,6 @@
 package zmaster587.advancedRocketry.test.client;
 
 import com.github.stannismod.forge.testing.junit.AbstractClientE2ETest;
-import com.google.gson.JsonObject;
 import org.junit.Test;
 
 import zmaster587.advancedRocketry.test.Events;
@@ -71,75 +70,33 @@ public class SatelliteDeployUnresolvedMessageE2ETest extends AbstractClientE2ETe
         assertTrue("deploy-unresolved probe must succeed: " + resp, resp.contains("\"ok\":true"));
         assertTrue("the probe must have mounted the pilot: " + resp, resp.contains("\"mounted\":true"));
 
-        // Link 1 (server): production chose to tell the pilot, and told him THIS message.
-        awaitServerRecord(events, serverMark, "chat_message_sent",
+        // Link 1 (server): production chose to tell the pilot, and told him THIS message. Carrying,
+        // not the type alone: a chat line was sent either way, and any other message in the window
+        // would satisfy a type-only wait.
+        events.awaitCarrying(serverMark, "chat_message_sent",
                 "\"key\":\"" + DEPLOY_FAILED_KEY + "\"",
                 "an unresolvable satellite chassis must make the rocket TELL its pilot rather than"
                         + " fail silently (C151)", MESSAGE_BUDGET_TICKS);
 
         // Link 2 (client): the pilot's own client was handed the line, i18n already resolved — the
         // player-visible half, and the one that also proves the key has a translation at all.
-        awaitClientEvent(clientMark, "client_chat_received", DEPLOY_FAILED_TEXT,
+        clientEvents().awaitCarrying(clientMark, "client_chat_received", DEPLOY_FAILED_TEXT,
                 "the notice production sent must reach the pilot's chat as readable text",
                 MESSAGE_BUDGET_TICKS);
     }
 
-    // ---- the two logs, reached from a class with no shared base to put these on -----------------
+    // ---- the two logs -----------------------------------------------------------------------
+    //
+    // This class extends the harness base rather than an AR shared one, so the client log is
+    // reached through the adapter directly rather than through a shared base's clientEvents().
 
-    /**
-     * The client log's sequence, taken BEFORE the action under test — the client half of
-     * {@link Events#mark()}, including its honesty check: {@code recording} false means the harness
-     * never armed the log, and an empty log after such a mark would say "nobody was listening".
-     */
+    private Events clientEvents() {
+        return ClientEvents.of(bot());
+    }
+
+    /** The client log's sequence, taken BEFORE the action under test — refused unless a recorder is
+     *  subscribed, so an empty log afterwards cannot read as "it never happened". */
     private long clientMark() throws Exception {
-        JsonObject reply = bot().eventMark();
-        assertTrue("the CLIENT event recorder is not armed, so an empty client log below would mean"
-                        + " nothing: " + reply,
-                reply.has("recording") && reply.get("recording").getAsBoolean());
-        return reply.get("seq").getAsLong();
-    }
-
-    /**
-     * Wait for a record of {@code type} carrying {@code needle} on the SERVER log.
-     *
-     * <p>{@link Events#await} waits for the TYPE; here the type alone is not the link — a chat line
-     * was sent, but this test is about one particular notice, and any other message in the window
-     * would satisfy a type-only wait. Lives in this class because it extends the harness base
-     * rather than an AR shared base.</p>
-     */
-    private String awaitServerRecord(Events events, long mark, String type, String needle,
-                                     String what, int tickBudget) throws Exception {
-        String reply = "";
-        for (int waited = 0; waited <= tickBudget; waited += 5) {
-            reply = events.since(mark, type);
-            if (Events.countRecords(reply, needle) > 0) {
-                return reply;
-            }
-            bot().waitTicks(5);
-        }
-        throw new AssertionError(what + " — no `" + type + "` carrying " + needle + " was recorded"
-                + " on the SERVER log within " + tickBudget + " ticks. Records of that type: "
-                + reply + " | everything the server recorded since the mark: " + events.since(mark));
-    }
-
-    /**
-     * The same, on the CLIENT log, which is reached through the bot rather than through the probe.
-     * The reply it prints carries both honesty flags a silence needs: {@code recording} (the log was
-     * armed at all) and {@code instruments} (which observation points have actually executed).
-     */
-    private String awaitClientEvent(long mark, String type, String needle, String what,
-                                    int tickBudget) throws Exception {
-        String reply = "";
-        for (int waited = 0; waited <= tickBudget; waited += 5) {
-            reply = String.valueOf(bot().eventsSince(mark, type));
-            if (reply.contains(needle)) {
-                return reply;
-            }
-            bot().waitTicks(5);
-        }
-        throw new AssertionError(what + " — no `" + type + "` carrying \"" + needle + "\" was"
-                + " recorded on the CLIENT log within " + tickBudget + " ticks. Matching records: "
-                + reply + " | everything the client recorded since the mark: "
-                + bot().eventsSince(mark, null));
+        return clientEvents().mark();
     }
 }

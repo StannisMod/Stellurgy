@@ -120,7 +120,7 @@ public class VSCrewRelogPersistenceE2ETest extends AbstractSharedVsClientE2ETest
         // What stood here was a difference of two reads of a production counter, and the reader
         // answers -1 when the field cannot be read at all: an unreadable instrument produced
         // -1 - -1 == 0 and every zero-release pin in this class went green on it, saying nothing.
-        long restReleaseMark = bot().eventMark().get("seq").getAsLong();
+        long restReleaseMark = clientEvents().mark();
         long restMark = lastClientTick();
         bot().waitTicks(30);
         String restHistory = clientTickHistory();
@@ -135,10 +135,10 @@ public class VSCrewRelogPersistenceE2ETest extends AbstractSharedVsClientE2ETest
                 exec("artest vs point-by-id 0 " + scenarioShipId + " "
                         + Math.cos(h) + " " + Math.sin(h) + " 0.0 0.0").contains("\"commanded\":true"));
         long rollMark = lastClientTick();
-        long rollReleaseMark = bot().eventMark().get("seq").getAsLong();
+        long rollReleaseMark = clientEvents().mark();
         // The per-tick pose trace, armed on the axis this scenario turns on: a body sliding across a
         // rotating deck is an ANGLE going wrong, and a column of vertical positions cannot show it.
-        long poseTraceMark = bot().eventMark().get("seq").getAsLong();
+        long poseTraceMark = clientEvents().mark();
         bot().invokeStaticInt("org.valkyrienskies.mod.common.ships.ship_world.PhysicsObject",
                 "arTest$armPoseTrace", 200);
         double upY = 1.0;
@@ -285,7 +285,7 @@ public class VSCrewRelogPersistenceE2ETest extends AbstractSharedVsClientE2ETest
         // CONTROL, same body, same deck, same window length, stimulus absent. Counted off the
         // client's own release records - see the roll leg for why a difference of two counter reads
         // could not fail.
-        long idleReleaseMark = bot().eventMark().get("seq").getAsLong();
+        long idleReleaseMark = clientEvents().mark();
         long idleMark = lastClientTick();
         bot().waitTicks(40);
         String idleHistory = clientTickHistory();
@@ -296,7 +296,7 @@ public class VSCrewRelogPersistenceE2ETest extends AbstractSharedVsClientE2ETest
         // THE STIMULUS: a real key on the real client input surface, in bursts that keep him on a
         // 5x5 deck. The turn between bursts is a real look, so each burst walks the way he faces.
         long walkMark = lastClientTick();
-        long walkReleaseMark = bot().eventMark().get("seq").getAsLong();
+        long walkReleaseMark = clientEvents().mark();
         double walked = walkInBursts();
         String walkHistory = clientTickHistory();
         String walkReleases = clientReleases(walkReleaseMark, "a walk the resolver swept and committed");
@@ -408,7 +408,7 @@ public class VSCrewRelogPersistenceE2ETest extends AbstractSharedVsClientE2ETest
         // different ship pose and a different settle history.
         // Counted off the client's own release records - see the roll leg for why a difference of
         // two counter reads could not fail.
-        long controlReleaseMark = bot().eventMark().get("seq").getAsLong();
+        long controlReleaseMark = clientEvents().mark();
         long controlMark = lastClientTick();
         bot().waitTicks(20);
         double controlWalked = walkInBursts();
@@ -421,7 +421,7 @@ public class VSCrewRelogPersistenceE2ETest extends AbstractSharedVsClientE2ETest
         // halves of the driver - a frozen tick loop on its own, versus a frozen tick loop while the
         // client keeps resolving movement the server has not applied yet.
         long idleStallMark = lastClientTick();
-        long idleStallReleaseMark = bot().eventMark().get("seq").getAsLong();
+        long idleStallReleaseMark = clientEvents().mark();
         String idleStall = exec("artest server stall " + STALL_MS);
         bot().waitTicks(20);
         String idleStallReleases = clientReleases(idleStallReleaseMark,
@@ -445,7 +445,7 @@ public class VSCrewRelogPersistenceE2ETest extends AbstractSharedVsClientE2ETest
         bot().setLook(0f, 0f);
         bot().waitTicks(4);
         long stallMark = lastClientTick();
-        long stallReleaseMark = bot().eventMark().get("seq").getAsLong();
+        long stallReleaseMark = clientEvents().mark();
         double[] beforeStalledWalk = clientPos();
         bot().holdKey(Keyboard.KEY_W);
         String stall = exec("artest server stall " + WALK_STALL_MS);
@@ -602,12 +602,12 @@ public class VSCrewRelogPersistenceE2ETest extends AbstractSharedVsClientE2ETest
         // the client JVM is REUSED across a reconnect, so its log still holds this session and zero
         // would be the whole scenario rather than the relog.
         long relogMark = events.markInstrumented();
-        long clientRelogMark = bot().eventMark().get("seq").getAsLong();
+        long clientRelogMark = clientEvents().mark();
         bot().reconnect();
         bot().waitForWorld();
         // The rejoined client must be given a world, and the resolver must TAKE him again. The two
         // are read off the two logs separately: cross-side order within a tick is undefined.
-        awaitClientEvent(clientRelogMark, "client_dimension_changed",
+        clientEvents().await(clientRelogMark, "client_dimension_changed",
                 "the reconnected client must be given a world before anything can be asked about"
                         + " where it put him", CAPTURE_BUDGET_TICKS);
         events.await(relogMark, "deck_captured", "after the relog the deck must TAKE him again -"
@@ -722,10 +722,10 @@ public class VSCrewRelogPersistenceE2ETest extends AbstractSharedVsClientE2ETest
         // Both marks before the reconnect - the client JVM is reused across it, so its own log
         // still holds the walk and zero would be the whole scenario rather than the relog.
         long relogMark = events.markInstrumented();
-        long clientRelogMark = bot().eventMark().get("seq").getAsLong();
+        long clientRelogMark = clientEvents().mark();
         bot().reconnect();
         bot().waitForWorld();
-        awaitClientEvent(clientRelogMark, "client_dimension_changed",
+        clientEvents().await(clientRelogMark, "client_dimension_changed",
                 "the reconnected client must be given a world before anything can be asked about"
                         + " where it put him", CAPTURE_BUDGET_TICKS);
         events.await(relogMark, "deck_captured", "after the relog the deck must TAKE him again -"
@@ -1122,31 +1122,10 @@ public class VSCrewRelogPersistenceE2ETest extends AbstractSharedVsClientE2ETest
      */
     private static final int CAPTURE_BUDGET_TICKS = 200;
 
-    /**
-     * Wait for one record of {@code type} on the CLIENT's own log, or fail naming everything the
-     * client DID record since {@code mark}.
-     *
-     * <p>Written here rather than on the shared VS base, which this migration does not own: the two
-     * logs are separate instruments with separate sequences, and {@link Events} reads the server's
-     * through the probe channel while the client's is reachable only through the bot. A client link
-     * is therefore always awaited BESIDE a server one and never inside the same chain - cross-side
-     * order within a tick is undefined.</p>
-     */
-    private String awaitClientEvent(long mark, String type, String what, int tickBudget)
-            throws Exception {
-        String reply = "";
-        for (int waited = 0; waited <= tickBudget; waited += 5) {
-            JsonObject seen = bot().eventsSince(mark, type);
-            reply = String.valueOf(seen);
-            if (seen.get("count").getAsInt() > 0) {
-                return reply;
-            }
-            bot().waitTicks(5);
-        }
-        throw new AssertionError(what + " - no client `" + type + "` was recorded within "
-                + tickBudget + " ticks. Everything the client recorded since the mark: "
-                + bot().eventsSince(mark, null));
-    }
+    // The two logs are separate instruments with separate sequences: events() reads the server's
+    // through the probe channel, clientEvents() the client's through the bot. A client link is
+    // therefore always awaited BESIDE a server one and never inside the same chain - cross-side
+    // order within a tick is undefined.
 
     /** Every verdict the client took on a pending deck seed since {@code mark}, in order. */
     private String clientSeedDecisions(long mark) throws Exception {

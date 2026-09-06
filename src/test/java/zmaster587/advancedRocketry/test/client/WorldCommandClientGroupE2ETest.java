@@ -109,25 +109,8 @@ public class WorldCommandClientGroupE2ETest extends AbstractSharedClientE2ETest 
     // ── the CLIENT's own event log ────────────────────────────────────────────
     //
     // Every scenario here types a command and then waits for its outcome to reach the CLIENT — a
-    // reply on the chat overlay, a slot in the inventory it draws, a world it is respawned into.
-    // The base class's {@link #events()} reads the SERVER log and {@code ClientBot} speaks a
-    // different verb pair, so the adapter below puts the client log behind the same {@link Events}
-    // reader: the same mark, the same "is anybody recording" assertion, the same failure narrative.
-    // Local to this class because this migration owns only its own files; the second class outside
-    // this group that wants it is the signal to lift it onto the shared base rather than copy it.
-
-    private Events clientEvents() {
-        return new Events(this::execClientEventCommand, bot()::waitTicks);
-    }
-
-    private String execClientEventCommand(String command) throws Exception {
-        String[] parts = command.split(" ");
-        if (parts.length >= 3 && "mark".equals(parts[2])) {
-            return String.valueOf(bot().eventMark());
-        }
-        long seq = Long.parseLong(parts[3]);
-        return String.valueOf(bot().eventsSince(seq, parts.length > 4 ? parts[4] : null));
-    }
+    // reply on the chat overlay, a slot in the inventory it draws, a world it is respawned into — so
+    // they read the base's {@link #clientEvents()}, not {@link #events()}, which is the server's log.
 
     /**
      * How long the far side of a typed command may take to reach the client — a deadline for a

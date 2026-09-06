@@ -9,7 +9,6 @@ import org.junit.FixMethodOrder;
 import org.junit.Test;
 import org.junit.runners.MethodSorters;
 
-import java.util.Locale;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -196,7 +195,7 @@ public class VSPilotSeatTakenWhileOfflineE2ETest extends AbstractSharedVsClientE
         // silently-lost chair from a message that was shown, and the fork multiplier on that loop was
         // buying nothing but a bigger chance of watching an empty bar. A record waits.
         long loginMark = events.markInstrumented();
-        long loginClientMark = bot().eventMark().get("seq").getAsLong();
+        long loginClientMark = clientEvents().mark();
         bot().connect();
         bot().waitForWorld();
 
@@ -279,38 +278,10 @@ public class VSPilotSeatTakenWhileOfflineE2ETest extends AbstractSharedVsClientE
                 + observed, shown.contains(occupantName));
     }
 
-    /**
-     * Wait for the client's HUD to be HANDED a line containing {@code needle}, and return its text.
-     *
-     * <p>The client half of a message, taken off {@code client_chat_received} — the harness records
-     * every line the in-game HUD is given, chat and action bar alike, so a record made three seconds
-     * ago is still there when this asks. The overlay poll it replaces read a FADING value, which is
-     * why its budget had a fork multiplier on it: on a loaded box the reader was more likely to
-     * arrive after the message had gone, and a green then meant nothing while a red said "silently
-     * lost chair" about a chair that was announced.</p>
-     *
-     * <p>Written here rather than on the shared base because this class does not own that base;
-     * three other classes in this family carry the same lines for the same reason.</p>
-     */
-    private String awaitClientChat(long mark, String needle, int tickBudget, String what)
-            throws Exception {
-        String reply = "";
-        String lower = needle.toLowerCase(Locale.ROOT);
-        for (int waited = 0; waited <= tickBudget; waited += 5) {
-            reply = String.valueOf(bot().eventsSince(mark, "client_chat_received"));
-            Matcher m = Pattern.compile("\"text\":\"([^\"]*)\"").matcher(reply);
-            while (m.find()) {
-                if (m.group(1).toLowerCase(Locale.ROOT).contains(lower)) {
-                    return m.group(1);
-                }
-            }
-            bot().waitTicks(5);
-        }
-        Events.assertInstrumentRan(reply, "client_chat_events", what);
-        throw new AssertionError(what + " — no `client_chat_received` carrying \"" + needle
-                + "\" within " + tickBudget + " ticks. Everything the HUD WAS handed since the mark: "
-                + reply);
-    }
+    // The message is read off the CLIENT's log rather than the overlay: the overlay is a FADING
+    // value, so on a loaded box a reader was more likely to arrive after the message had gone — a
+    // green then meant nothing, and a red said "silently lost chair" about a chair that was
+    // announced. The base's awaitClientChat is the reader.
 
     // ---- helpers -------------------------------------------------------------------------------
 

@@ -4,6 +4,8 @@ import com.github.stannismod.forge.testing.junit.AbstractClientE2ETest;
 import com.google.gson.JsonObject;
 import org.junit.Test;
 
+import zmaster587.advancedRocketry.test.Events;
+
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
@@ -87,7 +89,7 @@ public class SatelliteUnknownTypeClientE2ETest extends AbstractClientE2ETest {
         // PRESENCE: the packet reached this client and its registry lookup came back empty — the
         // exact branch the contract is about. Without this the absence below is also satisfied by a
         // packet that was never delivered or never decoded.
-        awaitClientEvent(clientMark, "satellite_nbt_resolved",
+        clientEvents().awaitCarrying(clientMark, "satellite_nbt_resolved",
                 "\"dataType\":\"" + BOGUS_TYPE + "\",\"resolved\":false",
                 "an unknown satellite type must be LOOKED UP on the client and come back"
                         + " unresolved — that is the branch readClient must then drop",
@@ -125,35 +127,12 @@ public class SatelliteUnknownTypeClientE2ETest extends AbstractClientE2ETest {
      * which is the one answer an instrument must not be able to fake.
      */
     private long clientMark() throws Exception {
-        JsonObject reply = bot().eventMark();
-        assertTrue("the CLIENT event recorder is not armed, so neither the lookup nor the absence of"
-                        + " a disconnect below would mean anything: " + reply,
-                reply.has("recording") && reply.get("recording").getAsBoolean());
-        return reply.get("seq").getAsLong();
+        return clientEvents().mark();
     }
 
-    /**
-     * Wait for one record of {@code type} carrying {@code needle} on the CLIENT log, or fail naming
-     * everything that log DID record since the mark. Lives here because this class extends the
-     * harness base rather than an AR shared base, and the client log is reached through the bot
-     * rather than through the server probe {@code Events} speaks to.
-     */
-    private String awaitClientEvent(long mark, String type, String needle, String what,
-                                    int tickBudget) throws Exception {
-        String reply = "";
-        for (int waited = 0; waited <= tickBudget; waited += 5) {
-            reply = String.valueOf(bot().eventsSince(mark, type));
-            if (reply.contains(needle)) {
-                return reply;
-            }
-            bot().waitTicks(5);
-        }
-        throw new AssertionError(what + " — no `" + type + "` carrying " + needle + " was recorded"
-                + " on the CLIENT log within " + tickBudget + " ticks. An empty log here has three"
-                + " causes and the reply tells them apart: `recording` false = the harness never"
-                + " armed the log, the instrument missing from `instruments` = the observation point"
-                + " never ran, and neither = it ran and saw nothing. Matching records: " + reply
-                + " | everything the client recorded since the mark: "
-                + bot().eventsSince(mark, null));
+    /** The client log, behind the same verbs. This class extends the harness base rather than an AR
+     *  shared one, so it reaches the adapter directly. */
+    private Events clientEvents() {
+        return ClientEvents.of(bot());
     }
 }

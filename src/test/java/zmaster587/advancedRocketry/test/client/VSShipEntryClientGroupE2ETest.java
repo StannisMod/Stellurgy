@@ -226,7 +226,7 @@ public class VSShipEntryClientGroupE2ETest extends AbstractSharedVsClientE2ETest
             // refuted 2026-08-21. 4 000 ticks is the old 800 polls of 5.
             Events events = events();
             entryMark = events.markInstrumented();
-            clientMark = bot().eventMark().get("seq").getAsLong();
+            clientMark = clientEvents().mark();
             int climbBudget = (int) (4000 * TestTimeouts.factor());
             events.assertChain(entryMark, "a ship climbing under its own power past the orbit line ("
                     + ORBIT_LINE + ") must be taken by the entry crossing and SETTLE in a cell - the"

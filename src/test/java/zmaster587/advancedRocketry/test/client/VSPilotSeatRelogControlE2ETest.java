@@ -183,7 +183,7 @@ public class VSPilotSeatRelogControlE2ETest extends AbstractSharedVsClientE2ETes
         // that input to the ship's computer. Each is asked of its own side's log, in no claimed
         // order — cross-side order within one tick is undefined.
         long flyMark = events.markInstrumented();
-        long flyClientMark = bot().eventMark().get("seq").getAsLong();
+        long flyClientMark = clientEvents().mark();
         Climb after = climbWith(Keyboard.KEY_R, clientPlayerY(), budget);
         String clientSends = String.valueOf(bot().eventsSince(flyClientMark, "pilot_input_sent"));
         assertTrue("after the relog the CLIENT's own pilot gate must re-open against the restored"

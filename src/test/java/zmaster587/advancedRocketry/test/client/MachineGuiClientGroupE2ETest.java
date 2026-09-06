@@ -194,7 +194,7 @@ public class MachineGuiClientGroupE2ETest extends AbstractSharedClientE2ETest {
     private String openMachineGui(int[] at) throws Exception {
         Events events = events();
         long serverMark = events.mark();
-        long clientMark = bot().eventMark().get("seq").getAsLong();
+        long clientMark = clientEvents().mark();
 
         String displayed = "";
         for (int attempt = 0; attempt < 6 && !displayed.contains("\"gui\":\"Gui"); attempt++) {
@@ -314,7 +314,7 @@ public class MachineGuiClientGroupE2ETest extends AbstractSharedClientE2ETest {
         scenario().asserting("Scan then Build, clicked on the real GUI, assemble a rocket");
         Events events = events();
         long buildMark = events.markInstrumented();
-        long clientMark = bot().eventMark().get("seq").getAsLong();
+        long clientMark = clientEvents().mark();
         exec("artest energy inject " + builder + " 100000000");
         bot().clickButtonById(0);
 
@@ -802,7 +802,7 @@ public class MachineGuiClientGroupE2ETest extends AbstractSharedClientE2ETest {
         // a line already in flight, and it cannot see a reply that arrived and scrolled away.
         scenario().asserting("arming with no destination is refused, and the pilot is told why");
         long refusalMark = events.markInstrumented();
-        long refusalOnClient = bot().eventMark().get("seq").getAsLong();
+        long refusalOnClient = clientEvents().mark();
         bot().clickButtonById(BUTTON_ARM);
         events.assertChain(refusalMark, "an ARM click with nowhere to go must REACH the console and"
                         + " be ANSWERED - a click that never arrived and a console that answered"
@@ -882,7 +882,7 @@ public class MachineGuiClientGroupE2ETest extends AbstractSharedClientE2ETest {
         // ---- 5) Arm, and stand down again. Both answered. ---------------------------------------
         scenario().asserting("arming a chosen destination is accepted, confirmed, and real");
         long armMark = events.markInstrumented();
-        long armOnClient = bot().eventMark().get("seq").getAsLong();
+        long armOnClient = clientEvents().mark();
         bot().clickButtonById(BUTTON_ARM);
         events.assertChain(armMark, "an ARM click on a chosen destination must reach the console and"
                 + " be answered", 150, "nav_command_received", "nav_console_told");
@@ -899,7 +899,7 @@ public class MachineGuiClientGroupE2ETest extends AbstractSharedClientE2ETest {
 
         scenario().asserting("pressing the same button again stands the jump down, and says so");
         long disarmMark = events.markInstrumented();
-        long disarmOnClient = bot().eventMark().get("seq").getAsLong();
+        long disarmOnClient = clientEvents().mark();
         bot().clickButtonById(BUTTON_ARM);
         events.assertChain(disarmMark, "a second ARM click must reach the console and be answered",
                 150, "nav_command_received", "nav_console_told");
@@ -989,7 +989,7 @@ public class MachineGuiClientGroupE2ETest extends AbstractSharedClientE2ETest {
         // The S2C open-window packet makes the real client render GuiChest.
         Events events = events();
         long openMark = events.mark();
-        long openOnClient = bot().eventMark().get("seq").getAsLong();
+        long openOnClient = clientEvents().mark();
         String open = exec("artest player open-chest " + dim + " " + x + " " + Y + " " + z);
         scenario().requireArranged("server-side open-chest must succeed: " + open,
                 open.contains("\"ok\":true"));
@@ -1039,7 +1039,7 @@ public class MachineGuiClientGroupE2ETest extends AbstractSharedClientE2ETest {
 
         scenario().asserting("with the bypass off, vanilla's distance check closes it");
         long closeMark = events.markInstrumented();
-        long closeOnClient = bot().eventMark().get("seq").getAsLong();
+        long closeOnClient = clientEvents().mark();
         String removeResp = exec("artest player inv-bypass remove");
         scenario().requireArranged("inv-bypass remove must report inBypass:false: " + removeResp,
                 removeResp.contains("\"inBypass\":false"));

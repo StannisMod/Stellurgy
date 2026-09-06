@@ -2,7 +2,6 @@ package zmaster587.advancedRocketry.test.client;
 
 import com.github.stannismod.forge.testing.junit.AbstractClientE2ETest;
 
-import com.google.gson.JsonObject;
 
 import org.junit.Test;
 
@@ -163,8 +162,8 @@ public class VSShipRenderPoseSkewE2ETest extends AbstractClientE2ETest {
         // awaited before anything is sampled. preY used to be read straight after the command, so on
         // a client that had not applied the teleport yet it was the OLD altitude and the "he began to
         // fall" poll below was satisfied by the teleport itself.
-        awaitClientLog(dropMark, "client_pos_look_applied", "the drop teleport must be APPLIED on"
-                + " the client before its fall can be watched", POS_LOOK_BUDGET_TICKS);
+        clientEvents().await(dropMark, "client_pos_look_applied", "the drop teleport must be APPLIED"
+                + " on the client before its fall can be watched", POS_LOOK_BUDGET_TICKS);
         double preY = bot().reportState().get("playerY").getAsDouble();
         long preTicks = bot().reportState().get("ticks").getAsLong();
         // Event-gated fall detection (load-scaled ceiling + early exit): a fixed 60-iteration budget can
@@ -200,8 +199,9 @@ public class VSShipRenderPoseSkewE2ETest extends AbstractClientE2ETest {
         // first contact on the inverted hull is.
         String hullCommit;
         try {
-            hullCommit = awaitServerRecord(events, hullMark, "deck_mode_committed",
-                    "\"mode\":\"hull\"",
+            // Carrying, not the type alone: this seam answers more than one verdict and the wait is
+            // about one of them.
+            hullCommit = events.awaitCarrying(hullMark, "deck_mode_committed", "\"mode\":\"hull\"",
                     "the encounter must engage the HULL-STAND hold before sampling",
                     DECK_LINK_BUDGET_TICKS);
         } catch (AssertionError missed) {
@@ -439,49 +439,17 @@ public class VSShipRenderPoseSkewE2ETest extends AbstractClientE2ETest {
         return new Events(this::exec, bot()::waitTicks);
     }
 
-    /** Wait for a server record of {@code type} carrying {@code needle}, or fail naming the link and
-     *  printing the chain that DID happen. {@link Events#await} filters by type alone, and every
-     *  wait here is about one particular verdict of a seam that answers more than one. */
-    private String awaitServerRecord(Events events, long mark, String type, String needle,
-                                     String what, int budgetTicks) throws Exception {
-        String reply = "";
-        for (int waited = 0; waited <= budgetTicks; waited += 5) {
-            reply = events.since(mark, type);
-            if (Events.countRecords(reply, needle) > 0) {
-                return reply;
-            }
-            bot().waitTicks(5);
-        }
-        throw new AssertionError(what + " — no `" + type + "` carrying " + needle + " was recorded"
-                + " within " + budgetTicks + " ticks. What DID happen since the mark: "
-                + Events.typesOf(events.since(mark)) + " | `" + type + "` records: " + reply);
+    /** The CLIENT's ordered event log, behind the same verbs. This class extends the harness base
+     *  rather than an AR shared one, so it reaches the adapter directly. */
+    private Events clientEvents() {
+        return ClientEvents.of(bot());
     }
 
     /** The CLIENT event log's sequence, taken BEFORE the stimulus — refused unless a recorder is
      *  actually subscribed, since an empty log afterwards would otherwise read as "it never
      *  happened" when the truth is "nobody was listening". */
     private long clientMark() throws Exception {
-        JsonObject mark = bot().eventMark();
-        assertTrue("the CLIENT event recorder is not subscribed, so an empty log below would mean"
-                + " nothing: " + mark, mark.get("recording").getAsBoolean());
-        return mark.get("seq").getAsLong();
-    }
-
-    /** Wait for any client record of {@code type} at or after {@code mark}. */
-    private String awaitClientLog(long mark, String type, String what, int budgetTicks)
-            throws Exception {
-        String reply = "";
-        for (int waited = 0; waited <= budgetTicks; waited += 5) {
-            reply = String.valueOf(bot().eventsSince(mark, type));
-            if (Events.countRecords(reply, "\"type\":\"" + type + "\"") > 0) {
-                return reply;
-            }
-            bot().waitTicks(5);
-        }
-        throw new AssertionError(what + " — no `" + type + "` was recorded on the CLIENT within "
-                + budgetTicks + " ticks. What it DID record: "
-                + Events.typesOf(String.valueOf(bot().eventsSince(mark, null)))
-                + " | `" + type + "` reply: " + reply);
+        return clientEvents().mark();
     }
 
     private double readDouble(String json, Pattern p) {

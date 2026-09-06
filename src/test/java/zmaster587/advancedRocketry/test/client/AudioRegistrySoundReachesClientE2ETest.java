@@ -4,6 +4,8 @@ import com.github.stannismod.forge.testing.junit.AbstractClientE2ETest;
 import com.google.gson.JsonObject;
 import org.junit.Test;
 
+import zmaster587.advancedRocketry.test.Events;
+
 import static org.junit.Assert.assertTrue;
 
 /**
@@ -76,9 +78,12 @@ public class AudioRegistrySoundReachesClientE2ETest extends AbstractClientE2ETes
         // Contract: the sound reaches the real client's SoundManager — the client records the play
         // request it was handed, and a failure prints everything the client DID play since the mark
         // (and which observation points ran) instead of one stale ring read.
-        awaitClientEvent(soundMark, "client_sound_played", "\"location\":\"" + COMBUSTION + "\"",
+        clientEvents().awaitCarrying(soundMark, "client_sound_played",
+                "\"location\":\"" + COMBUSTION + "\"",
                 "a registered AR sound played by the server must reach the real client's"
-                        + " SoundManager", SOUND_BUDGET_TICKS);
+                        + " SoundManager (this type also carries vanilla ambience and music, so a"
+                        + " non-zero droppedByType entry for it means the ring turned over)",
+                SOUND_BUDGET_TICKS);
 
         // And the round-trip must leave the client in the world: the pre-fix symptom of an
         // unresolvable sound was an NPE on the packet thread, and a client that has left the world
@@ -89,49 +94,20 @@ public class AudioRegistrySoundReachesClientE2ETest extends AbstractClientE2ETes
                 state.get("worldReady").getAsBoolean());
     }
 
-    // ---- the client event log, reached from a class with no shared base to put this on ----------
+    // ---- the client event log ------------------------------------------------------------------
+    //
+    // This class extends the harness base rather than an AR shared one, so it reaches the adapter
+    // directly instead of through the shared base's clientEvents().
 
-    /**
-     * The client log's sequence, taken BEFORE the action under test — the client half of
-     * {@code Events.mark()}, including its honesty check: a reply whose {@code recording} is false
-     * means the harness never armed the log, and an empty log after such a mark would say "nobody
-     * was listening", not "nothing happened".
-     */
+    private Events clientEvents() {
+        return ClientEvents.of(bot());
+    }
+
+    /** The client log's sequence, taken BEFORE the action under test — {@link Events#mark} refuses
+     *  it unless a recorder is subscribed, so an empty log afterwards cannot read as "it never
+     *  happened" when the truth is "nobody was listening". */
     private long clientMark() throws Exception {
-        JsonObject reply = bot().eventMark();
-        assertTrue("the CLIENT event recorder is not armed, so an empty client log below would mean"
-                        + " nothing: " + reply,
-                reply.has("recording") && reply.get("recording").getAsBoolean());
-        return reply.get("seq").getAsLong();
+        return clientEvents().mark();
     }
 
-    /**
-     * Wait for one record of {@code type} carrying {@code needle} on the CLIENT log, or fail naming
-     * everything that log DID record since the mark.
-     *
-     * <p>{@code Events} speaks to the server probe; the client log is reached through the bot, and
-     * this class extends the harness base rather than an AR shared base, so the helper lives here.
-     * The reply it prints carries the log's own {@code recording} flag and its {@code instruments}
-     * list, which is what keeps "the sound was never played" apart from "the recorder never ran".</p>
-     */
-    private String awaitClientEvent(long mark, String type, String needle, String what,
-                                    int tickBudget) throws Exception {
-        String reply = "";
-        for (int waited = 0; waited <= tickBudget; waited += 5) {
-            reply = String.valueOf(bot().eventsSince(mark, type));
-            if (reply.contains(needle)) {
-                return reply;
-            }
-            bot().waitTicks(5);
-        }
-        throw new AssertionError(what + " — no `" + type + "` carrying " + needle + " was recorded"
-                + " on the CLIENT log within " + tickBudget + " ticks. An empty result here has four"
-                + " causes and the reply tells them apart: `recording` false = the harness never"
-                + " armed the log, the instrument missing from `instruments` = the observation point"
-                + " never ran, a non-zero entry in `droppedByType` = the ring turned over (this type"
-                + " also carries vanilla ambience and music), and none of those = it ran and the"
-                + " sound never arrived. Matching records: " + reply
-                + " | everything the client recorded since the mark: "
-                + bot().eventsSince(mark, null));
-    }
 }

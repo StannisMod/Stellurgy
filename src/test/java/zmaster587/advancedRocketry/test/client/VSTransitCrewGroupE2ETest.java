@@ -921,7 +921,7 @@ private String chat() throws Exception {
 
         Events events = transitEvents(this::exec);
         long mark = events.markInstrumented();
-        long clientMark = bot().eventMark().get("seq").getAsLong();
+        long clientMark = clientEvents().mark();
         String begin = exec("artest space transit-begin " + originDim + " 1 64 1 " + PARK_SPEED);
         assertTrue("the transit must begin (departure crossing): " + begin, readBool(begin, "began"));
 
@@ -1261,7 +1261,7 @@ private String chat() throws Exception {
         // scenario is about: it needs the flight to still be happening while it reads the sky.
         Events events = transitEvents(this::exec);
         long mark = events.markInstrumented();
-        long clientMark = bot().eventMark().get("seq").getAsLong();
+        long clientMark = clientEvents().mark();
         String begin = exec("artest space transit-begin " + originDim + " 1 64 1 " + PARK_SPEED);
         assertTrue("the transit must begin (departure crossing): " + begin, readBool(begin, "began"));
         int hyperDim = driveIntoCorridor(events, mark, clientMark);
@@ -1341,7 +1341,7 @@ private String chat() throws Exception {
         seatTheBot(originDim, setupShipId(setup));
         Events events = transitEvents(this::exec);
         long mark = events.markInstrumented();
-        long clientMark = bot().eventMark().get("seq").getAsLong();
+        long clientMark = clientEvents().mark();
         String begin = exec("artest space transit-begin " + originDim + " 1 64 1 " + PARK_SPEED);
         assertTrue("the transit must begin (departure crossing): " + begin, readBool(begin, "began"));
 

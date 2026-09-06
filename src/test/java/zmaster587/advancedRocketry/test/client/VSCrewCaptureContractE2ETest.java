@@ -731,7 +731,7 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
                 + " are empty and half the reading is missing: " + exec("artest vs deck-capture"),
                 exec("artest vs deck-capture").contains("\"alreadyTracked\":true"));
 
-        long mark = bot().eventMark().get("seq").getAsLong();
+        long mark = clientEvents().mark();
         com.google.gson.JsonObject armed = bot().invokeStaticInt(
                 "org.valkyrienskies.mod.common.ships.ship_world.PhysicsObject",
                 "arTest$armPoseTrace", 120);
@@ -925,7 +925,7 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
         // craft moving 3-5 blocks per tick, which is where a pose that fails to arrive costs
         // something. The spike that introduced the trace drives a craft that drifts at 0.1, and a
         // gap boundary there looks like every other tick.
-        long poseTraceMark = bot().eventMark().get("seq").getAsLong();
+        long poseTraceMark = clientEvents().mark();
         bot().invokeStaticInt("org.valkyrienskies.mod.common.ships.ship_world.PhysicsObject",
                 "arTest$armPoseTrace", 160);
         double maxFrameStep = 0.0, maxCarry = -1.0, maxRate = 0.0, travelled = 0.0;
@@ -1308,7 +1308,7 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
         // this scenario's question with "the server is following": every packet position it accepts
         // equals the one it accepted last tick plus the climb. So the writer that starts the climb
         // is on this side, and only this log can name it.
-        long clientDropMark = bot().eventMark().get("seq").getAsLong();
+        long clientDropMark = clientEvents().mark();
 
         // A CLEARING, not a pit. The shared fixture pre-clear opens `base±(2,7)` over ten blocks of
         // height, and the bases here are hard-coded at y=64 while the surface at this plot is around
@@ -2151,40 +2151,16 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
         return ship;
     }
 
-    /**
-     * The CLIENT's own event log, read through the verbs {@link Events} speaks.
-     *
-     * <p>This class's subject lives on the client: the resolver that captures a body, carries it and
-     * lets it go is the client's, and every link it commits is recorded in the client log. {@code
-     * events()} on the base reaches the SERVER's log through the probe, so without this a client link
-     * could only be sampled — {@code bot().eventsSince} with a regex per call site, which is the shape
-     * this migration exists to remove. The adapter translates the two probe commands {@link Events}
-     * issues into the harness's client verbs; it lives here rather than on a shared base because this
-     * class is the only member of its group and the base is not this agent's to write.</p>
-     *
-     * <p><b>{@link Events#markInstrumented} is deliberately not usable here.</b> The client reply
-     * carries {@code recording} — so {@link Events#mark} does assert somebody is listening — but no
-     * {@code mixins} flag, because the client's coremod gate is a different fact from the server's.
-     * What proves a client instrument was installed AND ran is
-     * {@link Events#assertInstrumentRan}, against the instrument that produced the reading, and every
-     * absence claim below carries one.</p>
-     */
-    private Events clientEvents() {
-        return new Events(command -> {
-            // "artest events mark" | "artest events since <seq> [type]" — the only two forms Events
-            // issues. Anything else is a programming error here and says so rather than answering.
-            String[] parts = command.trim().split("\\s+");
-            if (parts.length >= 3 && "mark".equals(parts[2])) {
-                return String.valueOf(bot().eventMark());
-            }
-            if (parts.length < 4 || !"since".equals(parts[2])) {
-                throw new IllegalArgumentException("the client event log answers `mark` and `since`"
-                        + " only, not: " + command);
-            }
-            return String.valueOf(bot().eventsSince(Long.parseLong(parts[3]),
-                    parts.length > 4 ? parts[4] : null));
-        }, bot()::waitTicks);
-    }
+    // This class's subject lives on the client: the resolver that captures a body, carries it and
+    // lets it go is the client's, and every link it commits is recorded in the client log. So every
+    // wait below reads the base's {@link #clientEvents()}, not {@link #events()}, which reaches the
+    // server's log through the probe.
+    //
+    // {@link Events#markInstrumented} is deliberately not usable on it: the client reply carries
+    // {@code recording} — so {@link Events#mark} does assert somebody is listening — but no
+    // {@code mixins} flag, because the client's coremod gate is a different fact from the server's.
+    // What proves a client instrument was installed AND ran is {@link Events#assertInstrumentRan},
+    // against the instrument that produced the reading, and every absence claim below carries one.
 
     /**
      * The largest vertical CARRY any capture in a {@code deck_captured} reply was committed with.

@@ -77,25 +77,8 @@ public class SpaceSubsystemClientSyncGroupE2ETest extends AbstractSharedClientE2
     // ── the CLIENT's own event log ────────────────────────────────────────────
     //
     // Every one of these three scenarios waits for something that happens ON THE CLIENT — a world
-    // rebuilt for a slot dim, a sky feed applied, a clock baseline accepted. The base class's
-    // {@link #events()} reads the SERVER log and {@code ClientBot} speaks a different verb pair, so
-    // the adapter below puts the client log behind the same {@link Events} reader: the same mark,
-    // the same "is anybody recording" assertion, the same failure narrative on both sides. Local to
-    // this class because this migration owns only its own files; the second class outside this group
-    // that wants it is the signal to lift it onto the shared base rather than copy it again.
-
-    private Events clientEvents() {
-        return new Events(this::execClientEventCommand, bot()::waitTicks);
-    }
-
-    private String execClientEventCommand(String command) throws Exception {
-        String[] parts = command.split(" ");
-        if (parts.length >= 3 && "mark".equals(parts[2])) {
-            return String.valueOf(bot().eventMark());
-        }
-        long seq = Long.parseLong(parts[3]);
-        return String.valueOf(bot().eventsSince(seq, parts.length > 4 ? parts[4] : null));
-    }
+    // rebuilt for a slot dim, a sky feed applied, a clock baseline accepted — so they read the base's
+    // {@link #clientEvents()} rather than {@link #events()}, which is the server's log.
 
     /**
      * Wait for a record of {@code type} that CARRIES {@code needle}, failing with the whole chain

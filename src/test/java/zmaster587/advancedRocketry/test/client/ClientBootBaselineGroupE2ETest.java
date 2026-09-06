@@ -130,7 +130,7 @@ public class ClientBootBaselineGroupE2ETest extends AbstractSharedClientE2ETest 
         // ticks, before any scenario in this class can take a mark, so a since(mark) window would
         // be empty however long it waited. Nothing can have evicted the record — the ring is 256
         // deep PER TYPE and production reaches this seam at most once per client session.
-        String muted = awaitClientEvent(0L, "test_client_muted", "\"master\"",
+        String muted = clientEvents().awaitCarrying(0L, "test_client_muted", "\"master\"",
                 "a harness-spawned client must mute its master sound level on the first client tick"
                         + " with the sound handler up (instrument: client_proxy_events)",
                 MUTE_BUDGET_TICKS);
@@ -144,34 +144,4 @@ public class ClientBootBaselineGroupE2ETest extends AbstractSharedClientE2ETest 
                 0.0f, master, 1e-6f);
     }
 
-    // ---- the client event log, reached from a base that only offers the SERVER's ----------------
-
-    /**
-     * Wait for one record of {@code type} carrying {@code needle} on the CLIENT log, or fail naming
-     * everything that log DID record since {@code mark}.
-     *
-     * <p>{@code Events} (and this class's {@code events()}) speaks to the server probe; the client
-     * log is reached through the bot, and this class does not own the shared base a client-side
-     * counterpart would belong on — so the helper lives here. The reply it prints carries both
-     * honesty flags a silence needs: {@code recording} (the harness armed the log at all) and
-     * {@code instruments} (which observation points have actually executed).</p>
-     */
-    private String awaitClientEvent(long mark, String type, String needle, String what,
-                                    int tickBudget) throws Exception {
-        String reply = "";
-        for (int waited = 0; waited <= tickBudget; waited += 5) {
-            reply = String.valueOf(bot().eventsSince(mark, type));
-            if (reply.contains(needle)) {
-                return reply;
-            }
-            bot().waitTicks(5);
-        }
-        throw new AssertionError(what + " — no `" + type + "` carrying " + needle + " was recorded"
-                + " on the CLIENT log within " + tickBudget + " ticks. An empty log here has three"
-                + " causes and the reply tells them apart: `recording` false = the harness never"
-                + " armed the log, the instrument missing from `instruments` = the observation point"
-                + " never ran, and neither = it ran and saw nothing. Matching records: " + reply
-                + " | everything the client recorded since the mark: "
-                + bot().eventsSince(mark, null));
-    }
 }

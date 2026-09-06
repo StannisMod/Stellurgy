@@ -24,6 +24,7 @@ import org.lwjgl.input.Keyboard;
 import zmaster587.advancedRocketry.space.TerrainHeightFinder;
 import zmaster587.advancedRocketry.test.Chains;
 import zmaster587.advancedRocketry.test.Events;
+import zmaster587.advancedRocketry.test.client.ClientEvents;
 
 import static org.junit.Assert.assertTrue;
 import static zmaster587.advancedRocketry.test.ArrangementFailure.requireArranged;
@@ -364,7 +365,7 @@ public class M1PlanetToPlanetMilestoneE2ETest {
         // 4 000 ticks is the old 800 polls of 5.
         Events events = new Events(this::exec, bot()::waitTicks);
         long entryMark = events.markInstrumented();
-        long entryClientMark = bot().eventMark().get("seq").getAsLong();
+        long entryClientMark = clientEvents().mark();
         int climbBudget = (int) (4000 * TestTimeouts.factor());
         bot().holdKey(Keyboard.KEY_R);
         try {
@@ -1616,6 +1617,13 @@ public class M1PlanetToPlanetMilestoneE2ETest {
 
     private ClientBot bot() {
         return clientHarness.bot();
+    }
+
+    /** The CLIENT's own ordered event log, behind the same verbs the server's is read through.
+     *  {@link Events#mark} refuses a sequence unless a recorder is subscribed, which is what keeps
+     *  an empty log later from reading as "it never happened". */
+    private Events clientEvents() {
+        return ClientEvents.of(bot());
     }
 
     private String exec(String cmd) throws Exception {

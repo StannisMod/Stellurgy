@@ -70,6 +70,12 @@ public class ItemStationChipGuiReopenClientE2ETest extends AbstractClientE2ETest
         return new Events(this::exec, bot()::waitTicks);
     }
 
+    /** The CLIENT's own, behind the same verbs. This class extends the harness base rather than an
+     *  AR shared one, so it reaches the adapter directly. */
+    private Events clientEvents() {
+        return ClientEvents.of(bot());
+    }
+
     /**
      * The CLIENT's own records of {@code type} since {@code mark}, waited for until one carries
      * {@code needle} or the budget runs out. Returns the last reply either way, so a failure prints
@@ -127,7 +133,7 @@ public class ItemStationChipGuiReopenClientE2ETest extends AbstractClientE2ETest
         // opened a container the client never displayed (no `client_gui_opened`).
         Events events = events();
         long openMark = events.mark();
-        long openOnClient = bot().eventMark().get("seq").getAsLong();
+        long openOnClient = clientEvents().mark();
         bot().setKey(LSHIFT, true);
         String opened;
         try {
@@ -158,7 +164,7 @@ public class ItemStationChipGuiReopenClientE2ETest extends AbstractClientE2ETest
                 arr != null && arr.size() > 0);
 
         long pressMark = events.markInstrumented();
-        long pressOnClient = bot().eventMark().get("seq").getAsLong();
+        long pressOnClient = clientEvents().mark();
         bot().clickButtonById(1);
 
         // Fixed: the button press re-opens the GUI as GuiModularFullScreen (the

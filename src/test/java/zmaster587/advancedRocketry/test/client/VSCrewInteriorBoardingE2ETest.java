@@ -66,44 +66,11 @@ public class VSCrewInteriorBoardingE2ETest extends AbstractSharedVsClientE2ETest
      */
     private static final int DECK_LINK_BUDGET_TICKS = 240;
 
-    /**
-     * The CLIENT's event log behind the same {@link Events} verbs the server log is read through.
-     *
-     * <p>Every contract this class pins is a CLIENT fact — the resolver that releases and reclaims a
-     * body inside a hull is the client's, and for an {@code EntityPlayerMP} the server rebases the
-     * position instead of releasing at all, so a server probe can answer "still tracked" straight
-     * through a release the client really performed. {@code Events} speaks one probe language
-     * ({@code artest events mark} / {@code artest events since <seq> [type]}) and the client bot
-     * answers the same two questions on its own channel; this is the translation, so a client-side
-     * chain gets {@code await}/{@code assertChain} and their failure narrative instead of a
-     * hand-rolled poll and a regex.</p>
-     *
-     * <p>Local to this class because the shared base owns the SERVER log's {@code events()} and this
-     * migration does not extend it. The client reply carries {@code recording} — so {@link
-     * Events#mark} means something — but no {@code mixins} flag, so {@link Events#markInstrumented}
-     * must never be called on it; anything concluded from a client SILENCE asserts
-     * {@link Events#assertInstrumentRan} on the reply instead, which is the stronger check anyway.</p>
-     */
-    private final class ClientEventProbe implements Events.Probe {
-        @Override
-        public String exec(String command) throws Exception {
-            if ("artest events mark".equals(command)) {
-                return String.valueOf(bot().eventMark());
-            }
-            if (command.startsWith("artest events since ")) {
-                String[] parts = command.substring("artest events since ".length()).trim().split(" ");
-                return String.valueOf(bot().eventsSince(Long.parseLong(parts[0]),
-                        parts.length > 1 ? parts[1] : null));
-            }
-            throw new IllegalArgumentException("the client event log answers `mark` and `since` only,"
-                    + " not: " + command);
-        }
-    }
-
-    /** The client's own ordered event log, read through {@link Events}. */
-    private Events clientEvents() {
-        return new Events(new ClientEventProbe(), bot()::waitTicks);
-    }
+    // Every contract this class pins is a CLIENT fact — the resolver that releases and reclaims a
+    // body inside a hull is the client's, and for an {@code EntityPlayerMP} the server rebases the
+    // position instead of releasing at all, so a server probe can answer "still tracked" straight
+    // through a release the client really performed. So every wait below reads the base's
+    // {@link #clientEvents()}, not {@link #events()}.
 
     /**
      * {@link Events#await} for a link this scenario ARRANGES rather than pins — raised through

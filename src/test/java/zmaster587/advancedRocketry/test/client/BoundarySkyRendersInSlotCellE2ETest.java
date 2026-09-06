@@ -752,36 +752,29 @@ public class BoundarySkyRendersInSlotCellE2ETest extends AbstractSharedClientE2E
      * happened" when the truth is "nobody was listening".
      */
     private long clientMark() throws Exception {
-        JsonObject mark = bot().eventMark();
-        assertTrue("the CLIENT event recorder is not subscribed, so an empty log below would mean"
-                + " nothing: " + mark, mark.get("recording").getAsBoolean());
-        return mark.get("seq").getAsLong();
+        return clientEvents().mark();
     }
 
     /** Every client record of {@code type} at or after {@code mark}, in order, as the raw reply. */
-    private String clientEvents(long mark, String type) throws Exception {
-        return String.valueOf(bot().eventsSince(mark, type));
+    private String clientRecords(long mark, String type) throws Exception {
+        return clientEvents().since(mark, type);
     }
 
     /**
      * Wait until the client log since {@code mark} satisfies {@code holds}, or fail naming the link
      * and printing what the client DID record.
      *
+     * <p>Every link here is a predicate over the whole reply rather than a substring — a frame drawn
+     * in one particular dim, a feed that carries every body of a system, a count at a floor — which
+     * is what {@link Events#awaitMatching} is for. This stays as a named local because the budget and
+     * the {@code holds}/{@code what} pair are how the eight call sites below read.</p>
+     *
      * @param what a player-facing sentence for what this link means, used in the failure
      */
     private String awaitClientLog(long mark, String type, Predicate<String> holds, String what,
                                   int budgetTicks) throws Exception {
-        String reply = "";
-        for (int waited = 0; waited <= budgetTicks; waited += 5) {
-            reply = clientEvents(mark, type);
-            if (holds.test(reply)) {
-                return reply;
-            }
-            bot().waitTicks(5);
-        }
-        throw new AssertionError(what + " — no matching `" + type + "` was recorded on the CLIENT"
-                + " within " + budgetTicks + " ticks. What it DID record: "
-                + Events.typesOf(clientEvents(mark, null)) + " | `" + type + "` records: " + reply);
+        return clientEvents().awaitMatching(mark, type, holds, "matching this link", what,
+                budgetTicks);
     }
 
     /** The payload fragment that pins a sky record to one dimension. */

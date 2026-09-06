@@ -76,28 +76,10 @@ public class SpaceDimGuardE2ETest extends AbstractSharedClientE2ETest {
     // ── reading the two event logs ────────────────────────────────────────────
     //
     // The guard's contract is a CROSS-SIDE chain: the server hands the body to a teleporter bound
-    // for the overworld, and the player's own client is respawned into it. The base class offers
-    // {@link #events()} for the SERVER log only, and {@code ClientBot} speaks a different verb pair
-    // ({@code eventMark} / {@code eventsSince}), so the adapter below puts the CLIENT log behind the
-    // same {@link Events} reader: the same mark, the same "is anybody recording" assertion, the same
-    // failure narrative on both sides. It lives in this class because this migration owns only its
-    // own files; the moment a second class outside this group wants it, it belongs on the shared
-    // base instead of being copied again.
-
-    /** The CLIENT's ordered event log, read through the same helper as the server's. */
-    private Events clientEvents() {
-        return new Events(this::execClientEventCommand, bot()::waitTicks);
-    }
-
-    /** {@link Events}' {@code artest events …} grammar, spoken to the client bridge. */
-    private String execClientEventCommand(String command) throws Exception {
-        String[] parts = command.split(" ");
-        if (parts.length >= 3 && "mark".equals(parts[2])) {
-            return String.valueOf(bot().eventMark());
-        }
-        long seq = Long.parseLong(parts[3]);
-        return String.valueOf(bot().eventsSince(seq, parts.length > 4 ? parts[4] : null));
-    }
+    // for the overworld, and the player's own client is respawned into it. The base's
+    // {@link #events()} reads the SERVER log and {@link #clientEvents()} the client's, both behind
+    // the same reader — the same mark, the same "is anybody recording" assertion, the same failure
+    // narrative on both sides.
 
     /**
      * Wait for a record of {@code type} that CARRIES {@code needle}, and fail naming the whole chain

@@ -508,7 +508,7 @@ public class VSPreAssemblyBoardingPilotControlE2ETest extends AbstractSharedVsCl
         // that happened while the ship was settling.
         final double y0 = yBefore;
         long inputServerMark = events.markInstrumented();
-        long inputClientMark = bot().eventMark().get("seq").getAsLong();
+        long inputClientMark = clientEvents().mark();
         bot().holdKey(Keyboard.KEY_R); // flightVerticalUp
         ClientPoll.Result<Double> lift;
         try {

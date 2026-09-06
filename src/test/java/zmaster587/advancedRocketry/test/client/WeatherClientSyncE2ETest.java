@@ -271,25 +271,11 @@ public class WeatherClientSyncE2ETest {
     // ── the CLIENT's own event log ────────────────────────────────────────────
     //
     // The three crossings this test drives are observed on the CLIENT: the far side of a transfer is
-    // the respawn the player's own client performs. {@link Events} speaks the server probe's
-    // {@code artest events …} grammar and {@code ClientBot} a different verb pair, so the adapter
-    // below puts the client log behind the same reader — the same mark, the same "is anybody
-    // recording" assertion, the same failure narrative. Local to this class because this migration
-    // owns only its own files; the second class outside this group that wants it is the signal to
-    // lift it onto a shared base rather than copy it again.
+    // the respawn the player's own client performs. It runs its own harness rather than the shared
+    // base's, so it reaches {@link ClientEvents} directly instead of through {@code clientEvents()}.
 
     private Events clientEvents() {
-        return new Events(this::execClientEventCommand, clientHarness.bot()::waitTicks);
-    }
-
-    private String execClientEventCommand(String command) throws Exception {
-        String[] parts = command.split(" ");
-        if (parts.length >= 3 && "mark".equals(parts[2])) {
-            return String.valueOf(clientHarness.bot().eventMark());
-        }
-        long seq = Long.parseLong(parts[3]);
-        return String.valueOf(
-                clientHarness.bot().eventsSince(seq, parts.length > 4 ? parts[4] : null));
+        return ClientEvents.of(clientHarness.bot());
     }
 
     /**

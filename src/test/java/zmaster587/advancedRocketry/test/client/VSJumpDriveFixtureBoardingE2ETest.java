@@ -308,7 +308,7 @@ public class VSJumpDriveFixtureBoardingE2ETest extends AbstractSharedVsClientE2E
         // block is a libVulpes BlockTile and opens its GUI on the libVulpes mod instance, so the
         // request never reaches AR's own gui handler, which is the only one that seam observes.
         long navMark = events.markInstrumented();
-        long navClientMark = bot().eventMark().get("seq").getAsLong();
+        long navClientMark = clientEvents().mark();
         bot().setKey(KEY_USE_ITEM, true);
         bot().waitTicks(5);
         bot().setKey(KEY_USE_ITEM, false);
@@ -318,7 +318,7 @@ public class VSJumpDriveFixtureBoardingE2ETest extends AbstractSharedVsClientE2E
                         + "no click recorded, is a press discarded upstream of the block (reach, an "
                         + "unconfirmed teleport, a held stack)." + navAim.diagnosis,
                 5 * budget);
-        String opened = awaitClientEvent(navClientMark, "client_gui_opened",
+        String opened = clientEvents().await(navClientMark, "client_gui_opened",
                 "the console press reached the server, so the CLIENT must be asked to display a "
                         + "screen for it - nothing here is a console that swallowed the press."
                         + navAim.diagnosis,
@@ -574,21 +574,6 @@ public class VSJumpDriveFixtureBoardingE2ETest extends AbstractSharedVsClientE2E
      * recorded since the mark, the executed observation points included, so "nothing happened" and
      * "nobody was listening" cannot arrive as the same sentence.</p>
      */
-    private String awaitClientEvent(long mark, String type, String what, int tickBudget)
-            throws Exception {
-        String reply = "";
-        for (int waited = 0; waited <= tickBudget; waited += 5) {
-            reply = String.valueOf(bot().eventsSince(mark, type));
-            Matcher m = CLIENT_EVENT_COUNT.matcher(reply);
-            if (m.find() && Integer.parseInt(m.group(1)) > 0) {
-                return reply;
-            }
-            bot().waitTicks(5);
-        }
-        throw new AssertionError(what + " — no client `" + type + "` was recorded within "
-                + tickBudget + " ticks. What the CLIENT did record since the mark: "
-                + bot().eventsSince(mark, null));
-    }
 
     private String assembleFixture() throws Exception {
         int cx1 = (BX - 2) >> 4, cz1 = (BZ - 2) >> 4;

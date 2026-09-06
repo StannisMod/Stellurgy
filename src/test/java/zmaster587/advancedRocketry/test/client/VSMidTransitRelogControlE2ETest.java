@@ -162,7 +162,7 @@ public class VSMidTransitRelogControlE2ETest extends AbstractSharedVsClientE2ETe
         // client that never tried and a packet that was eaten on the way. The client's own gate
         // record separates them, and that is the difference between an ARRANGEMENT this test
         // failed to make and a control chain production broke.
-        long clientPilotMark = bot().eventMark().get("seq").getAsLong();
+        long clientPilotMark = clientEvents().mark();
         if (!climbedWithinAttempts(3)) {
             scenario().arrangementFailed("control leg: the pilot must be able to fly BEFORE the"
                     + " transit." + clientPilotAccount(clientPilotMark)
@@ -239,7 +239,7 @@ public class VSMidTransitRelogControlE2ETest extends AbstractSharedVsClientE2ETe
         // arrived ship. A restored seat with a dead key is a broken chain, and it is exactly what
         // a stale pre-relog crew reference would produce. Same bounded retry as the pre-leg: the
         // just-crossed ship settles asynchronously in its target cell.
-        long arrivedPilotMark = bot().eventMark().get("seq").getAsLong();
+        long arrivedPilotMark = clientEvents().mark();
         boolean flewAfterRelog = climbedWithinAttempts(3);
         assertTrue("after a mid-transit relog, held input must MOVE THE ARRIVED SHIP - control "
                 + "resumes on arrival." + (flewAfterRelog ? "" : clientPilotAccount(arrivedPilotMark))

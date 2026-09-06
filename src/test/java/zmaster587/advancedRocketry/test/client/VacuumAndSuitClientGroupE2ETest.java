@@ -365,7 +365,7 @@ public class VacuumAndSuitClientGroupE2ETest extends AbstractSharedClientE2ETest
             // happens between the flip and the mark and the chain starts mid-way.
             Events events = events();
             long mark = events.markInstrumented();
-            long clientMark = bot().eventMark().get("seq").getAsLong();
+            long clientMark = clientEvents().mark();
             setDensityAndConfirm(0, false);
 
             scenario().asserting("the tank drains to nothing and the damage then starts");
@@ -631,7 +631,7 @@ public class VacuumAndSuitClientGroupE2ETest extends AbstractSharedClientE2ETest
 
             Events events = events();
             long mark = events.markInstrumented();
-            long clientMark = bot().eventMark().get("seq").getAsLong();
+            long clientMark = clientEvents().mark();
             setDensityAndConfirm(0, false);
 
             scenario().asserting("vacuum damages the unprotected player, and drains no air");
@@ -686,7 +686,7 @@ public class VacuumAndSuitClientGroupE2ETest extends AbstractSharedClientE2ETest
 
             Events events = events();
             long mark = events.markInstrumented();
-            long clientMark = bot().eventMark().get("seq").getAsLong();
+            long clientMark = clientEvents().mark();
             setDensityAndConfirm(0, false);
 
             scenario().asserting("the damage tick reaches the client's rendered health");

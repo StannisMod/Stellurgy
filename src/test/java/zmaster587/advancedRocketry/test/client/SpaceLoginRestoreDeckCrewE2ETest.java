@@ -73,7 +73,7 @@ public class SpaceLoginRestoreDeckCrewE2ETest extends AbstractSpaceLoginRestoreC
         // would be the whole session rather than the relog.
         Events offlineLog = serverClockEvents();
         long logoutMark = offlineLog.mark();
-        long clientMark = bot().eventMark().get("seq").getAsLong();
+        long clientMark = clientEvents().mark();
         bot().disconnect();
         // Waited for as the LINK it is - the space subsystem's own logout handler running - on the
         // server's clock, because the client is the thing that went away. The record it leaves
@@ -195,7 +195,7 @@ public class SpaceLoginRestoreDeckCrewE2ETest extends AbstractSpaceLoginRestoreC
         // one and cannot start from zero.
         Events offlineLog = serverClockEvents();
         long logoutMark = offlineLog.mark();
-        long clientMark = bot().eventMark().get("seq").getAsLong();
+        long clientMark = clientEvents().mark();
         bot().disconnect();
         String loggedOut = offlineLog.await(logoutMark, "player_logged_out",
                 "a disconnect must reach the space subsystem's logout handler - everything below "

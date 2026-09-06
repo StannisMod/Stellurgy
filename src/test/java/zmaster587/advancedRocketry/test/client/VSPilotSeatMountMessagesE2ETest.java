@@ -101,7 +101,7 @@ public class VSPilotSeatMountMessagesE2ETest extends AbstractSharedVsClientE2ETe
         // ---- 1) Unassembled notice: the click seats him AND explains the dead controls. --------
         // Both marks BEFORE the click, so nothing between the stimulus and the reader can be missed.
         long noticeMark = events.markInstrumented();
-        long noticeClientMark = bot().eventMark().get("seq").getAsLong();
+        long noticeClientMark = clientEvents().mark();
         bot().interactBlock(SEAT_X, SEAT_Y, SEAT_Z);
         // The chain production commits, in ITS OWN source order: Forge fires the right-click before
         // the block sees it (PlayerInteractionManager fires RightClickBlock, then onBlockActivated),
@@ -177,7 +177,7 @@ public class VSPilotSeatMountMessagesE2ETest extends AbstractSharedVsClientE2ETe
                 occupancy.contains("\"passengers\":[{"));
 
         long refusalMark = events.markInstrumented();
-        long refusalClientMark = bot().eventMark().get("seq").getAsLong();
+        long refusalClientMark = clientEvents().mark();
         bot().interactBlock(SEAT_X, SEAT_Y, SEAT_Z);
         // The refusal is sent IMMEDIATELY (not deferred): the seat answers and returns without ever
         // reaching the mount. Two links, in production's own order.
@@ -241,7 +241,7 @@ public class VSPilotSeatMountMessagesE2ETest extends AbstractSharedVsClientE2ETe
 
         standBeside(LINKED_X, LINKED_Z);
         long linkedMark = events.markInstrumented();
-        long linkedClientMark = bot().eventMark().get("seq").getAsLong();
+        long linkedClientMark = clientEvents().mark();
         bot().interactBlock(LINKED_X, SEAT_Y, LINKED_Z);
         events.assertChain(linkedMark, "a right-click on a LINKED seat whose craft never became a"
                         + " ship must reach the server, seat the clicker, and STILL queue him the"
@@ -361,47 +361,6 @@ public class VSPilotSeatMountMessagesE2ETest extends AbstractSharedVsClientE2ETe
             bot().waitTicks(5);
         }
         return riding;
-    }
-
-    /**
-     * Wait for the client's HUD to be HANDED a line containing {@code needle}, and return its text.
-     *
-     * <p>The client half of a message, taken off {@code client_chat_received} — the harness records
-     * every line the in-game HUD is given, chat and action bar alike, so a record made three seconds
-     * ago is still there when this asks. The overlay string it replaces was a fading value: it is
-     * counted down by the client and gone, so a reader that arrived late could not tell a message
-     * that was shown from one that was never sent.</p>
-     *
-     * <p>Written here rather than on the shared base because this class does not own that base;
-     * three other classes in this family carry the same twenty lines for the same reason.</p>
-     */
-    private String awaitClientChat(long mark, String needle, int tickBudget, String what)
-            throws Exception {
-        String reply = "";
-        String lower = needle.toLowerCase(Locale.ROOT);
-        for (int waited = 0; waited <= tickBudget; waited += 5) {
-            reply = String.valueOf(bot().eventsSince(mark, "client_chat_received"));
-            String text = firstTextContaining(reply, lower);
-            if (text != null) {
-                return text;
-            }
-            bot().waitTicks(5);
-        }
-        Events.assertInstrumentRan(reply, "client_chat_events", what);
-        throw new AssertionError(what + " — no `client_chat_received` carrying \"" + needle
-                + "\" within " + tickBudget + " ticks. Everything the HUD WAS handed since the mark: "
-                + reply);
-    }
-
-    /** The {@code text} of the first record in a client reply that contains {@code lowerNeedle}. */
-    private static String firstTextContaining(String reply, String lowerNeedle) {
-        Matcher m = Pattern.compile("\"text\":\"([^\"]*)\"").matcher(String.valueOf(reply));
-        while (m.find()) {
-            if (m.group(1).toLowerCase(Locale.ROOT).contains(lowerNeedle)) {
-                return m.group(1);
-            }
-        }
-        return null;
     }
 
     private static boolean isRiding(JsonObject riding) {

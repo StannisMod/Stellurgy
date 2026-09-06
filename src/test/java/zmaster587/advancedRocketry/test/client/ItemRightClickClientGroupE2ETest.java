@@ -213,7 +213,7 @@ public class ItemRightClickClientGroupE2ETest extends AbstractSharedClientE2ETes
         scenario().measuring("mark both event logs immediately before the right-click");
         Events events = events();
         long mark = events.markInstrumented();
-        long clientMark = bot().eventMark().get("seq").getAsLong();
+        long clientMark = clientEvents().mark();
 
         scenario().asserting("the player reads both readout lines on his own chat");
         bot().useItem();
@@ -338,7 +338,7 @@ public class ItemRightClickClientGroupE2ETest extends AbstractSharedClientE2ETes
         scenario().asserting("no screen opens on the client");
         Events events = events();
         long mark = events.markInstrumented();
-        long clientMark = bot().eventMark().get("seq").getAsLong();
+        long clientMark = clientEvents().mark();
         bot().useItem();
         // A window for the absence: nothing is being waited FOR, so its expiry is not the failure.
         bot().waitTicks(20);
@@ -380,7 +380,7 @@ public class ItemRightClickClientGroupE2ETest extends AbstractSharedClientE2ETes
         scenario().asserting("the OreMapping GUI opens on the client");
         Events events = events();
         long mark = events.markInstrumented();
-        long clientMark = bot().eventMark().get("seq").getAsLong();
+        long clientMark = clientEvents().mark();
         bot().useItem();
 
         // Three links: the click arrived, AR's gui handler served a container for it, and the client
@@ -468,7 +468,7 @@ public class ItemRightClickClientGroupE2ETest extends AbstractSharedClientE2ETes
         scenario().asserting("the client sees exactly one spawned hovercraft, and loses the stack");
         Events events = events();
         long mark = events.markInstrumented();
-        long clientMark = bot().eventMark().get("seq").getAsLong();
+        long clientMark = clientEvents().mark();
         bot().useItem();
 
         // The craft's own arrival on each side, since the mark — not a radius query. A count taken

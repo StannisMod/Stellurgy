@@ -162,15 +162,16 @@ public class VSUnassembledCraftTakesNoOrdersE2ETest extends AbstractSharedVsClie
         // separately: the two logs are joined only by game tick, so their ORDER within one tick is
         // undefined and nothing here claims one.
         long inputMark = events.markInstrumented();
-        long inputClientMark = bot().eventMark().get("seq").getAsLong();
+        long inputClientMark = clientEvents().mark();
         bot().holdKey(Keyboard.KEY_R); // flightVerticalUp
         try {
             events.await(inputMark, "pilot_input_received",
                     "CONTROL: holding a flight key while piloting a REAL ship must deliver pilot"
                             + " input to the ship's seat on the server", LINK_BUDGET_TICKS);
-            String sentByClient = awaitClientEvent(inputClientMark, "pilot_input_sent", null,
-                    LINK_BUDGET_TICKS, "CONTROL: and the CLIENT must be the thing that sent it —"
-                            + " this is the send seam whose silence leg 2 reads as a refusal");
+            String sentByClient = clientEvents().await(inputClientMark, "pilot_input_sent",
+                    "CONTROL: and the CLIENT must be the thing that sent it —"
+                            + " this is the send seam whose silence leg 2 reads as a refusal",
+                    LINK_BUDGET_TICKS);
             assertTrue("CONTROL: the client's send must name the seat it resolved: " + sentByClient,
                     sentByClient.contains("\"seat\":\""));
         } finally {
@@ -215,7 +216,7 @@ public class VSUnassembledCraftTakesNoOrdersE2ETest extends AbstractSharedVsClie
 
         Events events = events();
         long sitMark = events.markInstrumented();
-        long sitClientMark = bot().eventMark().get("seq").getAsLong();
+        long sitClientMark = clientEvents().mark();
         bot().interactBlock(CRAFT_X, CRAFT_Y, CRAFT_Z);
         // The seat's own notice, as the chain production commits in its own source order: Forge
         // fires the right-click before the block sees it, the seat mounts him, it decides the craft
@@ -228,8 +229,8 @@ public class VSUnassembledCraftTakesNoOrdersE2ETest extends AbstractSharedVsClie
         String queued = events.since(sitMark, "action_bar_queued");
         assertTrue("the notice the seat queues must be keyed on " + KEY_NOT_ASSEMBLED + ": " + queued,
                 queued.contains("\"key\":\"" + KEY_NOT_ASSEMBLED + "\""));
-        String shown = awaitClientEvent(sitClientMark, "client_chat_received", "not assembled",
-                LINK_BUDGET_TICKS, "the \"not assembled\" notice must reach the pilot's own HUD");
+        String shown = awaitClientChat(sitClientMark, "not assembled", LINK_BUDGET_TICKS,
+                "the \"not assembled\" notice must reach the pilot's own HUD");
         assertTrue("the line the client was handed must say the ship is not assembled: " + shown,
                 shown.toLowerCase(Locale.ROOT).contains("not assembled"));
 
@@ -239,7 +240,7 @@ public class VSUnassembledCraftTakesNoOrdersE2ETest extends AbstractSharedVsClie
 
         // ---- The absences. One mark for all of them, taken before the first key. ---------------
         long deafMark = events.markInstrumented();
-        long deafClientMark = bot().eventMark().get("seq").getAsLong();
+        long deafClientMark = clientEvents().mark();
 
         // Command it: Flight Assist, auto-takeoff, jump — the three edge-triggered keys. Checked
         // FIRST so that a build where BOTH gates leak still reports the command leak (an assertion
@@ -330,44 +331,6 @@ public class VSUnassembledCraftTakesNoOrdersE2ETest extends AbstractSharedVsClie
         bot().waitTicks(4);
     }
 
-    /**
-     * Wait for a CLIENT-log record of {@code type}, optionally one whose text carries {@code needle},
-     * and return the matching record (or its {@code text}).
-     *
-     * <p>The client half of a chain has no {@link Events} of its own — that class reads the server's
-     * log through the probe — so this is the same shape against {@code ClientBot.eventsSince}: a mark
-     * taken before the stimulus, a bounded read afterwards, and a failure that prints everything the
-     * client DID record instead of one stale sample. Written here rather than on the shared base
-     * because this class does not own that base.</p>
-     */
-    private String awaitClientEvent(long mark, String type, String needle, int tickBudget,
-                                    String what) throws Exception {
-        String reply = "";
-        String lower = needle == null ? null : needle.toLowerCase(Locale.ROOT);
-        for (int waited = 0; waited <= tickBudget; waited += 5) {
-            reply = String.valueOf(bot().eventsSince(mark, type));
-            if (lower == null) {
-                Matcher count = COUNT.matcher(reply);
-                if (count.find() && Integer.parseInt(count.group(1)) > 0) {
-                    return reply;
-                }
-            } else {
-                Matcher m = Pattern.compile("\"text\":\"([^\"]*)\"").matcher(reply);
-                while (m.find()) {
-                    if (m.group(1).toLowerCase(Locale.ROOT).contains(lower)) {
-                        return m.group(1);
-                    }
-                }
-            }
-            bot().waitTicks(5);
-        }
-        // A POSITIVE wait that timed out says less than a negative one does, so the reply is printed
-        // whole: it carries `recording`, `droppedByType` and the instrument names, which between them
-        // separate "the client never did this" from "nobody on the client was looking".
-        throw new AssertionError(what + " — no client `" + type + "` "
-                + (needle == null ? "" : "carrying \"" + needle + "\" ") + "within " + tickBudget
-                + " ticks. What the client DID record since the mark: " + reply);
-    }
 
     // ---- Arrangement helpers ---------------------------------------------------------------------
 

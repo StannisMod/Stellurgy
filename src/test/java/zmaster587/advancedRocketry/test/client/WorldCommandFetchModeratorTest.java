@@ -129,12 +129,8 @@ public class WorldCommandFetchModeratorTest {
     //
     // A moderator fetch is a chain that crosses sides: the server hands the TARGET's body to a
     // teleporter, and the TARGET's own client is respawned and repositioned. There is one server log
-    // and one client log per JVM, so this class reads two of the three. {@link Events} speaks the
-    // server probe's {@code artest events …} grammar and {@code ClientBot} a different verb pair,
-    // hence the adapter below — the same mark, the same "is anybody recording" assertion, the same
-    // failure narrative on both sides. Local to this class because this migration owns only its own
-    // files; a second class outside this group wanting it is the signal to lift it onto a shared
-    // base rather than copy it again.
+    // and one client log per JVM, so this class reads two of the three. It runs its own harnesses
+    // rather than the shared base's, so the client side reaches {@link ClientEvents} directly.
 
     /** The SERVER's ordered event log; the step ticks the TARGET's client between reads. */
     private Events serverEvents() {
@@ -143,17 +139,7 @@ public class WorldCommandFetchModeratorTest {
 
     /** The TARGET client's own ordered event log — the side the contract is stated on. */
     private Events bot2Events() {
-        return new Events(this::execBot2EventCommand, bot2Harness.bot()::waitTicks);
-    }
-
-    private String execBot2EventCommand(String command) throws Exception {
-        String[] parts = command.split(" ");
-        if (parts.length >= 3 && "mark".equals(parts[2])) {
-            return String.valueOf(bot2Harness.bot().eventMark());
-        }
-        long seq = Long.parseLong(parts[3]);
-        return String.valueOf(
-                bot2Harness.bot().eventsSince(seq, parts.length > 4 ? parts[4] : null));
+        return ClientEvents.of(bot2Harness.bot());
     }
 
     /**

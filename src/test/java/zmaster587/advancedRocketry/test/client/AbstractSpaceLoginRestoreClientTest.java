@@ -602,7 +602,7 @@ public abstract class AbstractSpaceLoginRestoreClientTest {
         // unreadable instrument produced -1 - -1 == 0 and every zero-release pin below went green
         // on it. A release is an EVENT with production's own reason string on it, and an empty log
         // is only an answer once the recorder says it was listening.
-        long idleReleaseMark = bot().eventMark().get("seq").getAsLong();
+        long idleReleaseMark = clientEvents().mark();
         bot().waitTicks(OBSERVE_TICKS);
         String idleReleases = clientReleases(idleReleaseMark, "an idle window with no input at all");
         long dropsInIdle = guardReleases(idleReleases);
@@ -755,7 +755,7 @@ public abstract class AbstractSpaceLoginRestoreClientTest {
         long walkFrom = lastClientTick();
         // Two marks, one per window, on the CLIENT's own log - see the idle window above for why a
         // difference of two counter reads could not fail.
-        long walkReleaseMark = bot().eventMark().get("seq").getAsLong();
+        long walkReleaseMark = clientEvents().mark();
         bot().holdKey(Keyboard.KEY_W);
         // Six ticks, not twelve: the fixture's deck is small, and a walk long enough to carry him off
         // its edge ends the capture - which reads as a silent record rather than as a clean body.
@@ -765,7 +765,7 @@ public abstract class AbstractSpaceLoginRestoreClientTest {
         long dropsInWalk = guardReleases(clientReleases(walkReleaseMark, "a swept and committed walk"));
         bot().waitTicks(2);
         long idleFrom = lastClientTick();
-        long idleReleaseMark = bot().eventMark().get("seq").getAsLong();
+        long idleReleaseMark = clientEvents().mark();
         bot().waitTicks(OBSERVE_TICKS);
         String idleHistory = clientTickHistory();
         long dropsInIdle = guardReleases(clientReleases(idleReleaseMark,
@@ -1311,7 +1311,7 @@ public abstract class AbstractSpaceLoginRestoreClientTest {
         // Both marks BEFORE the lift: the entry is committed on the flight computer's own tick, so
         // there is no later moment at which a reader could still be sure it had not already run.
         long entryMark = events.mark();
-        long clientEntryMark = bot().eventMark().get("seq").getAsLong();
+        long clientEntryMark = clientEvents().mark();
         String climb = exec("artest vs teleport-ship " + LAUNCH_DIM + " " + sx + " " + sy + " " + sz
                 + " " + sx + " " + ABOVE_CEILING_Y + " " + sz);
         assertTrue("the climb past the orbit ceiling failed: " + climb, climb.contains("\"ok\":true"));
@@ -1809,26 +1809,28 @@ public abstract class AbstractSpaceLoginRestoreClientTest {
      * Wait for one record of {@code type} on the CLIENT's own log - optionally one carrying
      * {@code needle} - or fail naming everything the client DID record since {@code mark}.
      *
-     * <p>Written here rather than on a shared base because the two logs are separate instruments
-     * with separate sequences: {@link Events} reads the server's through the probe channel, and the
-     * client's own is reachable only through the bot. Cross-side ORDER within a tick is undefined,
-     * so a client link is always awaited BESIDE a server chain and never inside one.</p>
+     * <p>The two logs are separate instruments with separate sequences: {@link #events()} reads the
+     * server's through the probe channel, and the client's own is reachable only through the bot.
+     * Cross-side ORDER within a tick is undefined, so a client link is always awaited BESIDE a
+     * server chain and never inside one — which is why this family has a client wait of its own
+     * rather than adding links to {@link Events#assertChain}.</p>
      */
     protected String awaitClientEvent(long mark, String type, String needle, String what,
                                       int tickBudget) throws Exception {
-        String reply = "";
-        for (int waited = 0; waited <= tickBudget; waited += 5) {
-            JsonObject seen = bot().eventsSince(mark, type);
-            reply = String.valueOf(seen);
-            if (seen.get("count").getAsInt() > 0 && (needle == null || reply.contains(needle))) {
-                return reply;
-            }
-            bot().waitTicks(5);
-        }
-        throw new AssertionError(what + " - no client `" + type + "`"
-                + (needle == null ? "" : " carrying " + needle) + " was recorded within " + tickBudget
-                + " ticks. Records of that type since the mark: " + reply
-                + " | everything the client recorded since the mark: " + bot().eventsSince(mark, null));
+        return needle == null
+                ? clientEvents().await(mark, type, what, tickBudget)
+                : clientEvents().awaitCarrying(mark, type, needle, what, tickBudget);
+    }
+
+    /**
+     * The CLIENT's own ordered event log, behind the same verbs as {@link #events()}.
+     *
+     * <p>This family boots its own harness rather than extending the shared client base, so it
+     * reaches {@link ClientEvents} directly. {@link Events#markInstrumented} must never be called on
+     * it: the client reply carries no {@code mixins} flag.</p>
+     */
+    protected Events clientEvents() {
+        return ClientEvents.of(bot());
     }
 
     /**

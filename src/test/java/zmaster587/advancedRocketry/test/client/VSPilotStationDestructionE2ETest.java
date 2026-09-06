@@ -133,7 +133,7 @@ public class VSPilotStationDestructionE2ETest extends AbstractSharedVsClientE2ET
 
         Events events = events();
         long breakMark = events.markInstrumented();
-        long breakClientMark = bot().eventMark().get("seq").getAsLong();
+        long breakClientMark = clientEvents().mark();
         String broke = exec("artest fill 0 " + ship.afcX + " " + ship.afcY + " " + ship.afcZ
                 + " " + ship.afcX + " " + ship.afcY + " " + ship.afcZ + " minecraft:air");
         assertTrue("breaking the flight computer block failed: " + broke,
@@ -298,26 +298,6 @@ public class VSPilotStationDestructionE2ETest extends AbstractSharedVsClientE2ET
      * <p>Written here rather than on the shared base because this class does not own that base;
      * three other classes in this family carry the same lines for the same reason.</p>
      */
-    private String awaitClientChat(long mark, String needle, int tickBudget, String what)
-            throws Exception {
-        String reply = "";
-        String lower = needle.toLowerCase(Locale.ROOT);
-        for (int waited = 0; waited <= tickBudget; waited += 5) {
-            reply = String.valueOf(bot().eventsSince(mark, "client_chat_received"));
-            Matcher m = Pattern.compile("\"text\":\"([^\"]*)\"").matcher(reply);
-            while (m.find()) {
-                if (m.group(1).toLowerCase(Locale.ROOT).contains(lower)) {
-                    return m.group(1);
-                }
-            }
-            bot().waitTicks(5);
-        }
-        Events.assertInstrumentRan(reply, "client_chat_events", what);
-        throw new AssertionError(what + " — no `client_chat_received` carrying \"" + needle
-                + "\" within " + tickBudget + " ticks. Everything the HUD WAS handed since the mark: "
-                + reply);
-    }
-
     private int clientDummyCount() throws Exception {
         return bot().reportEntities("EntityDummy", 64.0).getAsJsonArray("entities").size();
     }

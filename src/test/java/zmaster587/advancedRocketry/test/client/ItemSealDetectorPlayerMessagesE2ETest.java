@@ -203,7 +203,7 @@ public class ItemSealDetectorPlayerMessagesE2ETest extends AbstractSharedClientE
         scenario().measuring("mark both event logs immediately before the right-click");
         Events events = events();
         long mark = events.markInstrumented();
-        long clientMark = bot().eventMark().get("seq").getAsLong();
+        long clientMark = clientEvents().mark();
 
         scenario().asserting("the player reads the " + expected + " reply on their own chat");
         bot().interactBlock(x, Y, z);
