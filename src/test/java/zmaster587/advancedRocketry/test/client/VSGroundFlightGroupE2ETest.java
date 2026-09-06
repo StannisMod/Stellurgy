@@ -31,8 +31,16 @@ import static org.junit.Assert.assertTrue;
  * the reply describes whichever neighbour happens to be closest; bounded by
  * {@link #SHIP_QUERY_RADIUS}, it describes nothing at all as soon as a scenario flies its ship
  * further than that — and {@link #seatedPilotFliesShipTravelsWithItAndCameraLocksToNose} holds the
- * lift key for sixty uninterrupted ticks on purpose. So each scenario captures its ship's id the
- * moment it loads and asks by id from then on.</p>
+ * lift key for sixty uninterrupted ticks on purpose.</p>
+ *
+ * <p>So no scenario here derives an identity from a position at all. A scenario that assembles its
+ * own fixture was already TOLD which ship that is: the assembly writes a {@code ship_spawned} record
+ * and {@link #awaitShipSpawned} reads the id straight off it, from a mark taken before the assembly
+ * was queued. What remains to wait for is a different fact — the physics object being LOADED, which
+ * the registry record does not prove — and that wait is not a positional question either
+ * ({@link #awaitShipUsable}, on production's own {@code ship_usable} event since that same
+ * pre-assembly mark), so it can neither lose a ship that climbed nor find a neighbour's that drifted
+ * in.</p>
  */
 @FixMethodOrder(MethodSorters.NAME_ASCENDING)
 public class VSGroundFlightGroupE2ETest extends AbstractSharedVsClientE2ETest {
@@ -80,12 +88,27 @@ public class VSGroundFlightGroupE2ETest extends AbstractSharedVsClientE2ETest {
         // Two ships, built 141 blocks apart — this tier's own fixture spacing.
         exec("tp @a " + (ax + 600) + " 120 " + (az + 600) + " 0 0");
         bot().waitTicks(10);
+
+        // Each ship's identity comes from ITS OWN creation record. Two ships in one scenario is
+        // exactly the case a single mark could not tell apart — `ship_spawned` since one mark would
+        // carry both records — so each assembly gets its own mark taken immediately before it, and
+        // the id read after it is that assembly's ship by construction. This is also the leg the
+        // control needs most: if the two ids came from a positional lookup, "the two fixtures are two
+        // different ships" would be a claim made by the very instrument under test.
+        Events events = events();
+        long spawnMarkA = events.markInstrumented();
         String assembleA = assembleFixture(ax, ay, az, AFC_VARIANT);
         scenario().requireArranged("ship A must assemble: " + assembleA,
                 assembleA.contains("\"rocketCount\":0"));
+        String idA = awaitShipSpawned(events, spawnMarkA,
+                "ship A's assembly must create a VS ship in the queryable registry (async spawn)");
+
+        long spawnMarkB = events.markInstrumented();
         String assembleB = assembleFixture(bx, by, bz, AFC_VARIANT);
         scenario().requireArranged("ship B must assemble: " + assembleB,
                 assembleB.contains("\"rocketCount\":0"));
+        String idB = awaitShipSpawned(events, spawnMarkB,
+                "ship B's assembly must create a VS ship in the queryable registry (async spawn)");
 
         // permaload so BOTH stay loaded with one client that cannot stand in two places. This is an
         // affordance, and it is scoped OFF the leg under test: the question here is which ship a
@@ -95,8 +118,15 @@ public class VSGroundFlightGroupE2ETest extends AbstractSharedVsClientE2ETest {
         exec("tp @a " + (ax + 0.5) + " " + (ay + 6) + " " + (az + 0.5) + " 0 0");
         bot().waitTicks(20);
 
-        String idA = captureShipIdAt(ax, ay, az);
-        String idB = captureShipIdAt(bx, by, bz);
+        // Readiness, awaited twice — both ships must be USABLE before either leg below means
+        // anything: LEG 2 needs B loaded for the nearest form to be able to answer with it, and
+        // LEG 3's managed:false is only evidence about the RADIUS if A is loaded somewhere else.
+        // Each wait carries that ship's OWN pre-assembly mark, the one its `awaitShipSpawned` above
+        // was given: `ship_usable` fires ONCE per load and is not a state to poll, so a mark taken
+        // here — after the approach that loaded both — would wait for an edge already gone by.
+        awaitShipUsable(events, spawnMarkA, idA);
+        awaitShipUsable(events, spawnMarkB, idB);
+
         scenario().record("idA", idA).record("idB", idB);
         scenario().requireArranged("the two fixtures must be two DIFFERENT ships, or this control has "
                 + "nothing to discriminate (idA=" + idA + " idB=" + idB + ")", !idA.equals(idB));
@@ -145,8 +175,8 @@ public class VSGroundFlightGroupE2ETest extends AbstractSharedVsClientE2ETest {
 
     /**
      * Migrated verbatim from {@code VSShipClientLoadE2ETest}. Every {@code ship-info} in the body
-     * was a positional nearest query about a ship this scenario had just built; each is now keyed
-     * on the id captured at load. Nothing else changed.
+     * was a positional nearest query about a ship this scenario had just built; each is now keyed on
+     * the id this scenario's own assembly recorded. Nothing else changed.
      */
     @Test
     public void assembledShipLoadsWithClientPresentAndFliesAndRotatesUnderForce() throws Exception {
@@ -169,7 +199,7 @@ public class VSGroundFlightGroupE2ETest extends AbstractSharedVsClientE2ETest {
         String assemble = assembleFixture(BX, BY, BZ, AFC_VARIANT);
         assertTrue("with VS, the AFC build must route to a ship (no rocket): " + assemble,
                 assemble.contains("\"rocketCount\":0"));
-        awaitShipSpawned(events, spawnMark,
+        final String shipId = awaitShipSpawned(events, spawnMark,
                 "assembly must create a VS ship in the queryable registry (async spawn)");
         bot().waitTicks(40); // settle before any observer approaches
 
@@ -178,9 +208,13 @@ public class VSGroundFlightGroupE2ETest extends AbstractSharedVsClientE2ETest {
         exec("tp @a " + (BX + 0.5) + " " + (BY + 6) + " " + (BZ + 0.5) + " 0 0");
         bot().waitTicks(20);
 
-        // Poll for the ship to become LOADED (the state testServer could never reach) and take its
-        // identity in the same step — every question below is about THIS ship.
-        final String shipId = captureShipIdAt(BX, BY, BZ);
+        // Wait for the ship to become USABLE (the state testServer could never reach). The identity
+        // is already held from the spawn record above, so this waits for the one fact that record
+        // does not carry, and every question below is about THIS ship. The mark is that same
+        // pre-assembly one: `ship_usable` fires once per load and cannot be polled for afterwards.
+        awaitShipUsable(events, spawnMark, shipId);
+        // The event record names the ship and its dimension but carries NO position, so the
+        // baseline coordinate still comes from an id-keyed ship-info.
         double zBefore = readDouble(shipInfoById(shipId), POS_Z);
         assertTrue("a VS ship must LOAD with a client present", !Double.isNaN(zBefore));
 
@@ -288,8 +322,8 @@ public class VSGroundFlightGroupE2ETest extends AbstractSharedVsClientE2ETest {
     /**
      * Migrated from {@code VSShipNearbyObserverNoCrashE2ETest}. Its two gates were whole-dimension
      * counts, which on a shared world are answered by a neighbour's ship before this scenario builds
-     * anything: "appeared in the registry" is now an increment, and "loaded" is this ship's own id
-     * resolving at its own base.
+     * anything: "appeared in the registry" is now this scenario's own {@code ship_spawned} record,
+     * and "loaded" is the id that record named resolving to a managed ship.
      */
     @Test
     public void assemblingWithAnObserverAtThePadDoesNotCrashVs() throws Exception {
@@ -307,15 +341,19 @@ public class VSGroundFlightGroupE2ETest extends AbstractSharedVsClientE2ETest {
         assertTrue("with VS, the AFC build must route to a ship (no rocket): " + assemble,
                 assemble.contains("\"rocketCount\":0"));
 
-        // The ship must appear in the queryable registry (async spawn did not fault) — its own record.
-        awaitShipSpawned(events, spawnMark, "assembly with an observer present must still create a VS"
-                + " ship — a fault in the double-load window would prevent it");
+        // The ship must appear in the queryable registry (async spawn did not fault) — its own
+        // record, which also NAMES it: the identity every question below is keyed on.
+        String shipId = awaitShipSpawned(events, spawnMark, "assembly with an observer present must"
+                + " still create a VS ship — a fault in the double-load window would prevent it");
 
         // ... and it must LOAD (the observer never left, so the proximity load runs in the same
         // window as the spawn load). Reaching LOADED with the observer present through spawn is
-        // the no-crash contract: the guard turned the illegal double-load into a no-op. Scoped to
-        // THIS ship, at THIS base — a neighbour's loaded ship is not evidence about this window.
-        String shipId = captureShipIdAt(BX, BY, BZ, 60);
+        // the no-crash contract: the guard turned the illegal double-load into a no-op. Awaited from
+        // THIS scenario's own pre-assembly mark — a load that happened before this assembly cannot
+        // answer it. The budget stays this site's own, longer than the tier's default, unchanged by
+        // this move: the old parameter was 60 five-tick polls, which is 300 ticks in the units the
+        // event wait takes.
+        awaitShipUsable(events, spawnMark, shipId, 300);
         assertTrue("a VS ship assembled under a nearby observer must load without VS faulting "
                         + "(id=" + shipId + ", registry: " + events.since(spawnMark, "ship_spawned") + ")",
                 shipInfoById(shipId).contains("\"managed\":true"));
@@ -341,13 +379,18 @@ public class VSGroundFlightGroupE2ETest extends AbstractSharedVsClientE2ETest {
         String assemble = assembleFixture(BX, BY, BZ, SEAT_VARIANT);
         assertTrue("a with-pilot-seat build must route to a ship (no rocket): " + assemble,
                 assemble.contains("\"rocketCount\":0"));
-        awaitShipSpawned(events, spawnMark, "assembly must create a VS ship");
+        // The identity, off this scenario's own creation record — not re-derived from the base below.
+        final String shipId = awaitShipSpawned(events, spawnMark, "assembly must create a VS ship");
         bot().waitTicks(40);
 
         exec("tp @a " + (BX + 0.5) + " " + (BY + 6) + " " + (BZ + 0.5) + " 0 0");
         bot().waitTicks(20);
 
-        final String shipId = captureShipIdAt(BX, BY, BZ);
+        // Readiness only: the approach above must have got the physics object loaded. Awaited on
+        // production's own event, from the pre-assembly mark — it fires once per load, so a later
+        // mark would wait for an edge that has already gone by.
+        awaitShipUsable(events, spawnMark, shipId);
+        // The event record carries no position; the baseline comes from an id-keyed ship-info.
         double yBefore = readDouble(shipInfoById(shipId), POS_Y);
 
         // Server-side seat drive: the seat must resolve its AFC, and a full-up throttle through
@@ -398,14 +441,22 @@ public class VSGroundFlightGroupE2ETest extends AbstractSharedVsClientE2ETest {
         String assemble = assembleFixture(BX, BY, BZ, SEAT_VARIANT);
         assertTrue("a with-pilot-seat build must route to a ship: " + assemble,
                 assemble.contains("\"rocketCount\":0"));
-        awaitShipSpawned(events, spawnMark, "assembly must create a VS ship");
+        // The identity, off this scenario's own creation record. It is fixed HERE, before the ship has
+        // moved a block, and it stays valid through the sixty-tick climb below — the flight that no
+        // positional bound survives.
+        final String shipId = awaitShipSpawned(events, spawnMark, "assembly must create a VS ship");
         bot().waitTicks(40);
 
         // Approach so the client loads the ship (and its seat/AFC tiles).
         exec("tp @a " + (BX + 0.5) + " " + (BY + 6) + " " + (BZ + 0.5) + " 0 0");
         bot().waitTicks(20);
 
-        final String shipId = captureShipIdAt(BX, BY, BZ);
+        // Readiness only: the approach must have got the physics object loaded. Awaited on
+        // production's own event, from the pre-assembly mark — it fires once per load, so a later
+        // mark would wait for an edge that has already gone by.
+        awaitShipUsable(events, spawnMark, shipId);
+        // The event record carries no position, so the at-rest pose — the climb's baseline, and what
+        // gets recorded for the report — still comes from an id-keyed ship-info.
         String atRest = shipInfoById(shipId);
         double yBefore = readDouble(atRest, POS_Y);
         scenario().record("shipAtRest", atRest);

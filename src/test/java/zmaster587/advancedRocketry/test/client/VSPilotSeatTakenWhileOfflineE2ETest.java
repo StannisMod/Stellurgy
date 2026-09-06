@@ -1,14 +1,15 @@
 package zmaster587.advancedRocketry.test.client;
 
+import zmaster587.advancedRocketry.test.Events;
 import zmaster587.advancedRocketry.test.GameTicks;
 
-import com.github.stannismod.forge.testing.TestTimeouts;
 import com.google.gson.JsonObject;
 
 import org.junit.FixMethodOrder;
 import org.junit.Test;
 import org.junit.runners.MethodSorters;
 
+import java.util.Locale;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -29,7 +30,10 @@ import static org.junit.Assert.assertTrue;
  * every lower tier fakes. The offline window is real: the client genuinely quits the server (his
  * player data, mount included, is written to disk), the seat is taken while the world runs without
  * him, and his return is a real fresh login that re-reads that data. The refusal message is read
- * off the returning client's own action bar, the not-seated outcome off its own riding report.</p>
+ * from BOTH ends — the server's record of what it sent and with which translation arguments, and
+ * the client's record of the line its HUD was handed — so "the chair was lost silently" is told
+ * apart from "he was told and the message had faded before anyone looked"; the not-seated outcome
+ * comes off the client's own riding report.</p>
  *
  * <p><b>Subject on the hard side:</b> a real ASSEMBLED ship (the seat block lives in ship
  * subspace, its dummy at the seat's live world position — the frame split that every seat-binding
@@ -53,10 +57,22 @@ public class VSPilotSeatTakenWhileOfflineE2ETest extends AbstractSharedVsClientE
      */
     private static final int LOGOUT_TICKS = 200;
 
+    /**
+     * How long one link of the login reconciliation may take, in the event clock's ticks. The
+     * refusal message is queued twenty server ticks past the login and delivered after that, and the
+     * whole round trip crosses a fresh world load — so this is deliberately generous. It is a
+     * DEADLINE for discrete events, not a guess at how long a value settles, and unlike the overlay
+     * poll it replaces, arriving late costs nothing: the records are buffered.
+     */
+    private static final int LOGIN_LINK_BUDGET_TICKS = 600;
+
+    /** The key the seat's "somebody took your chair" refusal is composed from. The key is the
+     *  message's identity — the lang file and any resource pack are keyed on it. */
+    private static final String KEY_TAKEN = "msg.pilotseat.taken";
+
     private static final Pattern BUILDER_POS =
             Pattern.compile("\"builderPos\":\\[(-?\\d+),(-?\\d+),(-?\\d+)]");
     private static final Pattern DUMMY_ID = Pattern.compile("\"dummyId\":(-?\\d+)");
-    private static final Pattern COUNT = Pattern.compile("\"count\":(-?\\d+)");
     private static final Pattern OCCUPANT_NAME = Pattern.compile("\"occupantName\":\"([^\"]+)\"");
     private static final Pattern OCCUPANT_UUID = Pattern.compile("\"occupantUuid\":\"([^\"]+)\"");
     private static final Pattern BOUND_COUNT = Pattern.compile("\"boundCount\":(-?\\d+)");
@@ -84,23 +100,17 @@ public class VSPilotSeatTakenWhileOfflineE2ETest extends AbstractSharedVsClientE
         // ---- ARRANGE: build + assemble a piloted ship, seat the client player on it. ------------
         exec("tp @a " + (BX + 600) + " 120 " + (BZ + 600) + " 0 0");
         bot().waitTicks(10);
-        int shipsBefore = count("ship-count-all");
+        // The registry's own record of the ship being added, since a mark taken before the assembly
+        // was queued: THIS scenario's ship by construction, where a count on a shared world is
+        // answered by every neighbour that ever assembled one. The fork multiplier that used to size
+        // this wait is gone with it — it was a machine-shaped number standing in for a deadline.
+        Events events = events();
+        long spawnMark = events.markInstrumented();
         String assemble = assembleFixture(BX, BY, BZ);
         scenario().requireArranged("a with-pilot-seat build must route to a ship: " + assemble,
                 assemble.contains("\"rocketCount\":0"));
-        // THE FORK MULTIPLIER SURVIVES HERE, and this is what it is waiting on: VS builds the ship on
-        // its OWN thread, off the game loop entirely. That work finishes in wall-clock time, so a busy
-        // box genuinely needs more game ticks to elapse before it is done — which is the one shape
-        // where scaling a tick ceiling by the fork count is measuring the right thing. Contrast the
-        // logout wait below, which is server-tick work and carries no multiplier at all.
-        int assemblyBudget = (int) (40 * TestTimeouts.factor());
-        int all = shipsBefore;
-        for (int i = 0; i < assemblyBudget && all <= shipsBefore; i++) {
-            bot().waitTicks(5);
-            all = count("ship-count-all");
-        }
-        scenario().requireArranged("assembly must create a NEW VS ship (was " + shipsBefore
-                + ", now " + all + ")", all > shipsBefore);
+        awaitShipSpawned(events, spawnMark,
+                "assembly must create a NEW VS ship in the queryable registry (async spawn)");
         // Keep the ship observable while nobody is online: the offline window below leaves the
         // server empty, and an unloaded ship would fail every probe the arrangement depends on.
         exec("artest vs permaload true");
@@ -124,20 +134,28 @@ public class VSPilotSeatTakenWhileOfflineE2ETest extends AbstractSharedVsClientE
                 + bot().reportRidingEntity(), isRiding(bot().reportRidingEntity()));
 
         // ---- ACT 1: a REAL logout that leaves the world running (disconnect half only). ---------
-        bot().disconnect();
         // The client is away, so it has no world of its own to wait in - but the SERVER is still
-        // ticking, and processing a disconnect is something it does on a tick. The budget is the
-        // server's ticks, and the fork multiplier that used to size it is gone with the wall clock.
-        final String[] offline = {""};
-        boolean gone = GameTicks.until(serverClient(), GameTicks.server(), LOGOUT_TICKS, () -> {
-            offline[0] = exec("artest player position-of " + BOT);
-            // "no such player" = others online, he is not; "no players connected" = the server is
-            // empty (this test's single-client case). Both mean he is gone.
-            return offline[0].contains("\"error\":\"no such player\"")
-                    || offline[0].contains("\"error\":\"no players connected\"");
-        });
-        scenario().requireArranged("the server must see the pilot GONE after the disconnect (his "
-                + "player data, mount included, written to disk): " + offline[0], gone);
+        // ticking, and processing a disconnect is something it does on a tick. So the log is read on
+        // the SERVER's clock: every poll advances the server's own tick counter and then asks again.
+        // The mark is taken before the disconnect, so the record cannot be missed between two reads.
+        Events offlineEvents = new Events(this::exec,
+                ticks -> GameTicks.advance(serverClient(), GameTicks.server(), ticks));
+        long logoutMark = offlineEvents.markInstrumented();
+        bot().disconnect();
+        String loggedOut = offlineEvents.await(logoutMark, "player_logged_out",
+                "the server must FINISH handling the pilot's disconnect (his player data, mount"
+                        + " included, written to disk) before the seat can be taken behind his back",
+                LOGOUT_TICKS);
+        scenario().requireArranged("the logout record must be the PILOT's: " + loggedOut,
+                loggedOut.contains("\"who\":\"" + BOT + "\""));
+        // The record says what he was riding as he left, which is exactly the premise the seat check
+        // below rests on: vanilla takes a SEATED player's mount with him into his own player data.
+        // Asserted here rather than inferred there, so a pilot who somehow left the seat first fails
+        // as an arrangement problem and not as "the seat kept a dummy it should not have".
+        scenario().requireArranged("the pilot must have gone OFFLINE STILL SEATED — his mount is what"
+                + " vanilla persists inside his player data and re-spawns at his return, and this"
+                + " whole scenario is about that duplicate: " + loggedOut,
+                loggedOut.contains("\"riding\":\"EntityDummy\""));
 
         // With no player near them the ship's chunks can drop out from under the probes below —
         // force them back in before acting on the seat.
@@ -172,30 +190,36 @@ public class VSPilotSeatTakenWhileOfflineE2ETest extends AbstractSharedVsClientE
                 occupancy.contains("\"uuid\":\"" + occupantUuid + "\""));
 
         // ---- ACT 3: the pilot comes back — a real fresh login over his saved data. --------------
+        // Both marks BEFORE the login, because everything this act asserts happens DURING it. The
+        // refusal message used to be hunted on the action bar, which the client counts down and
+        // discards about four seconds later: a reader that arrived after the fade could not tell a
+        // silently-lost chair from a message that was shown, and the fork multiplier on that loop was
+        // buying nothing but a bigger chance of watching an empty bar. A record waits.
+        long loginMark = events.markInstrumented();
+        long loginClientMark = bot().eventMark().get("seq").getAsLong();
         bot().connect();
         bot().waitForWorld();
 
-        // The refusal message rides the action bar (delayed past the join flood, gone ~4s later),
-        // so it is watched FOR while the login settles rather than sampled after. The loop exits
-        // early once seen; the end-state assertions below run either way.
-        String lastOverlay = "";
-        boolean sawMessage = false;
-        // THE MULTIPLIER STAYS. This waits for state the SERVER restores on login to arrive at the
-        // client and be applied - a round trip whose latency is the machine's, not the game's.
-        int settleBudget = (int) (80 * TestTimeouts.factor());
-        for (int i = 0; i < settleBudget && !sawMessage; i++) {
-            bot().waitTicks(5);
-            String ov = bot().reportChat(1).get("overlay").getAsString();
-            if (!ov.isEmpty()) {
-                lastOverlay = ov;
-            }
-            sawMessage = ov.contains(occupantName);
-        }
+        // The links DeckHold.reconcileSeatMount commits, in its own source order: it takes the
+        // returner off the duplicate mount vanilla re-spawned for him, and then — after the whole
+        // restore — queues him the notice naming the occupant, deliberately delayed past the join
+        // flood; the delivery cannot precede the queueing. The vanilla forced re-mount that PRECEDES
+        // all three is deliberately NOT on this chain: where the login event falls against
+        // PlayerList's own startRiding is a fact of a run, and this test has not measured it.
+        events.assertChain(loginMark, "a pilot whose seat was taken while he was offline must be"
+                        + " reconciled off the duplicate mount and TOLD who has his chair",
+                LOGIN_LINK_BUDGET_TICKS,
+                "dismount", "action_bar_queued", "status_message_sent");
+        String queued = events.since(loginMark, "action_bar_queued");
+        assertTrue("the notice queued for the returning pilot must be the seat-taken one, keyed on "
+                        + KEY_TAKEN + ": " + queued,
+                queued.contains("\"key\":\"" + KEY_TAKEN + "\""));
 
         String seatAfter = exec("artest vs seat-status 0 " + seatX + " " + seatY + " " + seatZ);
         JsonObject riding = bot().reportRidingEntity();
+        String sent = events.since(loginMark, "status_message_sent");
         String observed = "seatStatus=" + seatAfter + " riding=" + riding
-                + " overlay=\"" + lastOverlay + "\"";
+                + " statusMessages=" + sent;
 
         // ---- ASSERT 1: the occupant KEEPS the seat. ---------------------------------------------
         assertTrue("the occupant who took the seat while its pilot was offline must still hold it "
@@ -240,9 +264,52 @@ public class VSPilotSeatTakenWhileOfflineE2ETest extends AbstractSharedVsClientE
                 seatWorld[2], cz, ABOARD_EPSILON);
 
         // ---- ASSERT 5: he is TOLD, by name, who took his seat. ----------------------------------
-        assertTrue("the returning pilot must be told WHO took his seat (\"" + occupantName
-                + "\") on his action bar - a silently-lost chair reads as a broken relog: "
-                + observed, sawMessage);
+        // Two halves, because they fail for different reasons and a single overlay poll conflated
+        // them. The SERVER half pins the name exactly — it is a format argument of the translation,
+        // not a substring of a rendered sentence that a generic armour-stand name could satisfy by
+        // accident. The CLIENT half says it actually arrived at the HUD.
+        assertTrue("the returning pilot must be told WHO took his seat — the message the server sent"
+                        + " him must carry the occupant's name (\"" + occupantName + "\") as its own"
+                        + " format argument, and a silently-lost chair reads as a broken relog: "
+                        + observed,
+                Events.countRecords(sent, "\"" + occupantName + "\"") > 0);
+        String shown = awaitClientChat(loginClientMark, occupantName, LOGIN_LINK_BUDGET_TICKS,
+                "the seat-taken notice the server sent must reach the returning pilot's own HUD");
+        assertTrue("the line the client was handed must name the occupant: " + shown + " | "
+                + observed, shown.contains(occupantName));
+    }
+
+    /**
+     * Wait for the client's HUD to be HANDED a line containing {@code needle}, and return its text.
+     *
+     * <p>The client half of a message, taken off {@code client_chat_received} — the harness records
+     * every line the in-game HUD is given, chat and action bar alike, so a record made three seconds
+     * ago is still there when this asks. The overlay poll it replaces read a FADING value, which is
+     * why its budget had a fork multiplier on it: on a loaded box the reader was more likely to
+     * arrive after the message had gone, and a green then meant nothing while a red said "silently
+     * lost chair" about a chair that was announced.</p>
+     *
+     * <p>Written here rather than on the shared base because this class does not own that base;
+     * three other classes in this family carry the same lines for the same reason.</p>
+     */
+    private String awaitClientChat(long mark, String needle, int tickBudget, String what)
+            throws Exception {
+        String reply = "";
+        String lower = needle.toLowerCase(Locale.ROOT);
+        for (int waited = 0; waited <= tickBudget; waited += 5) {
+            reply = String.valueOf(bot().eventsSince(mark, "client_chat_received"));
+            Matcher m = Pattern.compile("\"text\":\"([^\"]*)\"").matcher(reply);
+            while (m.find()) {
+                if (m.group(1).toLowerCase(Locale.ROOT).contains(lower)) {
+                    return m.group(1);
+                }
+            }
+            bot().waitTicks(5);
+        }
+        Events.assertInstrumentRan(reply, "client_chat_events", what);
+        throw new AssertionError(what + " — no `client_chat_received` carrying \"" + needle
+                + "\" within " + tickBudget + " ticks. Everything the HUD WAS handed since the mark: "
+                + reply);
     }
 
     // ---- helpers -------------------------------------------------------------------------------
@@ -278,11 +345,6 @@ public class VSPilotSeatTakenWhileOfflineE2ETest extends AbstractSharedVsClientE
         Matcher bp = BUILDER_POS.matcher(fixture);
         scenario().requireArranged("fixture missing builderPos: " + fixture, bp.find());
         return exec("artest rocket assemble 0 " + bp.group(1) + " " + bp.group(2) + " " + bp.group(3));
-    }
-
-    private int count(String sub) throws Exception {
-        Matcher m = COUNT.matcher(exec("artest vs " + sub + " 0"));
-        return m.find() ? Integer.parseInt(m.group(1)) : -1;
     }
 
     private static boolean isRiding(JsonObject riding) {

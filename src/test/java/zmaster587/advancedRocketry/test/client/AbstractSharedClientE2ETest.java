@@ -432,6 +432,25 @@ public abstract class AbstractSharedClientE2ETest {
         markThePositionRecorder();
         serverClient().execute("tp @a " + (plot.centerX() + 0.5) + " " + (Plot.DEFAULT_Y + 1)
                 + " " + (plot.centerZ() + 0.5) + " 0 0");
+
+        // Health is restored HERE: after the teleport, and with the settle wait below still between
+        // it and the client reset. Both halves of that placement were paid for in a gate.
+        //
+        // AFTER THE TELEPORT, because the head's `set-health 20` heals the player where the PREVIOUS
+        // scenario left him and he is then carried through a dimension change and a teleport before
+        // anyone looks, so anything that hurts him on the way out silently undoes it. Measured
+        // 2026-09-06: the first FULL-suite gate (186 tests, where each fork's neighbours differ from
+        // the *VS* subset's) failed the health gate at 18.5.
+        //
+        // BEFORE THE SETTLE WAIT, because every `serverClient().execute` echoes a FORGE_TEST_DONE
+        // marker into the client's chat and the reset below is what clears it — but the marker
+        // arrives a tick or two after the command returns. Issued immediately before the reset,
+        // these two left one marker behind and every scenario in the tier failed its own
+        // backlog-is-empty guard; issued here, the ten ticks that already exist to let the teleport
+        // settle also cover the round trip. This is the mechanism the comment at the head of this
+        // method describes, and it is why the server work is grouped where a wait follows it.
+        long hurtMark = events().mark();
+        serverClient().execute("artest player set-health 20");
         bot().waitTicks(10);
 
         JsonObject cleared = bot().resetClientState();
@@ -494,8 +513,9 @@ public abstract class AbstractSharedClientE2ETest {
             scenario.record("plotSettle", settle.replace('\n', ' '));
         }
 
-        // Health is asserted on the CLIENT's own view, and polled rather than read once: the
-        // set-health above is a server write and the client learns it on the next update packet.
+        // Asserted on the CLIENT's own view, and polled rather than read once: the set-health above
+        // (issued before the client reset, so its harness marker is cleared with everything else) is
+        // a server write and the client learns it on the next update packet.
         double health = state.has("health") ? state.get("health").getAsDouble() : -1.0;
         for (int waited = 0; waited < 40 && health < 19.5; waited += 5) {
             bot().waitTicks(5);
@@ -506,9 +526,17 @@ public abstract class AbstractSharedClientE2ETest {
             health = polled != null && polled.has("health")
                     ? polled.get("health").getAsDouble() : -1.0;
         }
+        // And when it still fails, the message names WHAT hurt him rather than only how much is
+        // left: `living_hurt` carries the source and the amount per hit, so a scenario left dying in
+        // a vacuum, one taking fall damage off a deck and a client merely slow to render the heal
+        // are three different texts instead of one number. Read after the poll so the window covers
+        // it; an empty list with the health still short is itself the diagnosis — nothing hit him
+        // here, so the shortfall arrived before this reset and the previous scenario owns it.
+        String hurts = health >= 19.5 ? "" : "\n  damage taken during this reset: "
+                + events().since(hurtMark, "living_hurt");
         assertTrue("a scenario must start at full health as the CLIENT renders it, or a"
                 + " damage-observing scenario measures the previous one's leftovers; client"
-                + " reports " + health, health >= 19.5);
+                + " reports " + health + hurts, health >= 19.5);
 
         // The world the CLIENT actually renders, asserted rather than inferred from the teleport
         // having been issued: the plot check above reads X and Z only, so without this a scenario

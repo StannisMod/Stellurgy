@@ -4,8 +4,11 @@ import org.junit.FixMethodOrder;
 import org.junit.Test;
 import org.junit.runners.MethodSorters;
 
+import java.util.Locale;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+
+import zmaster587.advancedRocketry.test.Events;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
@@ -42,6 +45,14 @@ import static org.junit.Assert.assertTrue;
  * ({@code TestProbeCommand.handleSealDetector}) makes the cross-pin
  * fail loud — that's the whole point of running them side by side.</p>
  *
+ * <h2>The branch is read off production's OWN key, not off the mirror</h2>
+ *
+ * <p>The mirror is a second copy of the same if-chain, so a defect present in both is invisible to a
+ * comparison between them. What names the branch production actually took is the translation KEY it
+ * handed to {@code EntityPlayer.sendMessage} — {@code msg.sealdetector.&lt;branch&gt;} — recorded as
+ * {@code chat_message_sent}. That is the oracle now; the mirror cross-pin stays beside it, doing the
+ * job it was written for (telling the two implementations apart when they drift).</p>
+ *
  * <h2>Why this class is the shared-harness pilot</h2>
  *
  * <p>Six scenarios that used to cost six full server+client boots (~11 minutes of which ~99 % was
@@ -49,11 +60,15 @@ import static org.junit.Assert.assertTrue;
  * WRONG in the interesting way: <b>three of its six methods expect the identical chat line</b>
  * ("Material will not hold a seal"). In a shared world with no chat reset, the leaves scenario finds
  * the air scenario's leftover line the instant it looks, and passes without the production path
- * running at all — a silent false green in three places. The base class's per-scenario reset asserts
- * an EMPTY chat backlog for exactly this reason;
- * {@link #aaChatBacklogIsEmptyWhenAScenarioStarts()} pins it from this side too, and every branch
- * scenario re-reads the backlog immediately BEFORE its right-click, so a regression in the reset
- * reddens here rather than going quiet.</p>
+ * running at all — a silent false green in three places.</p>
+ *
+ * <p>That hazard is now closed by a MARK rather than by a clean backlog: each scenario takes the
+ * sequence of both event logs immediately before its right-click, and a record read after a mark
+ * cannot have been written before it. The leftover line is still in the overlay and no longer
+ * reachable by the assertion. The base class's per-scenario chat reset and
+ * {@link #aaChatBacklogIsEmptyWhenAScenarioStarts()} stay as they are — they pin the shared reset,
+ * which other classes do still read a backlog through — but no branch scenario rests on them any
+ * more.</p>
  *
  * <p>Gated by {@code forge.test.client.enabled=true}; auto-skips on
  * headless CI.</p>
@@ -69,6 +84,10 @@ public class ItemSealDetectorPlayerMessagesE2ETest extends AbstractSharedClientE
     private static final int PERCH_DZ = FIXTURE_DZ - 2;
 
     private static final Pattern BRANCH = Pattern.compile("\"branch\":\"([^\"]+)\"");
+
+    /** How long one link of the detector's answer may take. The old chat poll allowed 200 ticks for
+     *  the whole round trip; each link gets that budget, and a red now says which one is missing. */
+    private static final int LINK_BUDGET_TICKS = 200;
 
     @Override
     protected String subsystem() {
@@ -104,11 +123,42 @@ public class ItemSealDetectorPlayerMessagesE2ETest extends AbstractSharedClientE
                 + " — the detector was never in the player's hand, so no branch could dispatch");
     }
 
+    /**
+     * Wait until the CLIENT's own event log carries a record matching {@code needle}, or the budget
+     * ends; the reply comes back either way so the CALLER asserts and owns the failure message.
+     *
+     * <p>The server log has {@link Events} for this, offered by the shared base. The client log is a
+     * different transport ({@code bot().eventsSince}, no probe command behind it) and the base does
+     * not wrap it, so this class carries its own reader. Matching is case-insensitive: a chat line is
+     * prose, and its capitalisation belongs to the translation rather than to the contract.</p>
+     */
+    private String awaitClientRecord(long mark, String type, String needle, int tickBudget)
+            throws Exception {
+        String reply = "";
+        String wanted = needle.toLowerCase(Locale.ROOT);
+        for (int waited = 0; waited <= tickBudget; waited += 5) {
+            reply = String.valueOf(bot().eventsSince(mark, type));
+            if (reply.toLowerCase(Locale.ROOT).contains(wanted)) {
+                return reply;
+            }
+            bot().waitTicks(5);
+        }
+        return reply;
+    }
+
     /** Stages the fixture in this scenario's plot, stands the player on a stone perch one
      *  block away holding the seal detector, RIGHT-CLICKS the fixture through
      *  the real client ({@code interactBlock} &rarr; CPacketPlayerTryUseItemOnBlock),
      *  and asserts the i18n-RESOLVED reply lands on the player's chat.
-     *  Cross-pins the branch against the server-tier seal-detector mirror. */
+     *  Cross-pins the branch against the server-tier seal-detector mirror.
+     *
+     *  <p>Three links, one per thing that can be broken: the click REACHED the server
+     *  ({@code right_click_block} — its absence is the documented reach-check diagnosis and used to
+     *  be indistinguishable from a wrong branch), the detector chose and SENT a branch
+     *  ({@code chat_message_sent} carrying {@code msg.sealdetector.&lt;branch&gt;}), and the client's HUD
+     *  was handed the resolved line ({@code client_chat_received}). The resolved TEXT is asserted on
+     *  the client's record only: on the server a {@code TextComponentTranslation} still carries its
+     *  key, so matching text there would pin the key twice and the player's own reading never.</p> */
     private void assertSealDetectorBranch(String fixtureBlock, String expected,
                                           String expectedChatText) throws Exception {
         int dim = plot().dim;
@@ -144,33 +194,41 @@ public class ItemSealDetectorPlayerMessagesE2ETest extends AbstractSharedClientE
         exec("tp @a " + (x + 0.5) + " " + (Y + 1) + " " + (z - 1.5));
         waitForHeld("advancedrocketry:sealdetector");
 
-        // Arm the observation channel at the LAST moment before the stimulus. The arrangement above
-        // issues ~13 server commands and every one of them echoes a "[Server] FORGE_TEST_DONE
-        // <uuid>" line into the player's chat — measured, 13 lines in the backlog on this class's
-        // first shared run. Without this, a line matching the expected text proves nothing about
-        // THIS right-click. Nothing between here and interactBlock may be a server command.
-        scenario().measuring("arm the chat channel immediately before the right-click");
-        armChatObservation();
+        // Mark both logs at the LAST moment before the stimulus. The arrangement above issues ~13
+        // server commands and every one of them echoes a "[Server] FORGE_TEST_DONE <uuid>" line into
+        // the player's chat — measured, 13 lines in the backlog on this class's first shared run.
+        // The mark is what makes those harmless: a record read after it cannot be a line written
+        // before it, so the channel no longer has to be emptied and no server command between here
+        // and the click can spoil the reading.
+        scenario().measuring("mark both event logs immediately before the right-click");
+        Events events = events();
+        long mark = events.markInstrumented();
+        long clientMark = bot().eventMark().get("seq").getAsLong();
 
         scenario().asserting("the player reads the " + expected + " reply on their own chat");
         bot().interactBlock(x, Y, z);
 
-        boolean found = false;
-        String seen = "";
-        for (int waited = 0; waited < 200 && !found; waited += 10) {
-            bot().waitTicks(10);
-            com.google.gson.JsonArray lines = bot().reportChat(20).getAsJsonArray("lines");
-            seen = lines.toString();
-            for (int i = 0; i < lines.size(); i++) {
-                if (lines.get(i).getAsString().contains(expectedChatText)) {
-                    found = true;
-                    break;
-                }
-            }
-        }
+        events.assertChain(mark, "a right-click on the " + fixtureBlock + " fixture with the seal"
+                + " detector must reach the server and be answered", LINK_BUDGET_TICKS,
+                "right_click_block", "chat_message_sent");
+
+        // WHICH branch production took, from the key production itself composed — not from the
+        // mirror below, which is a second copy of the same if-chain and agrees with it by
+        // construction.
+        String key = "msg.sealdetector." + expected;
+        String sent = events.since(mark, "chat_message_sent");
+        assertTrue("the seal detector must answer the " + fixtureBlock + " fixture at " + x + ","
+                + Y + "," + z + " with " + key + "; what it actually sent since the click: " + sent,
+                sent.contains("\"key\":\"" + key + "\""));
+
+        String seen = awaitClientRecord(clientMark, "client_chat_received", expectedChatText,
+                LINK_BUDGET_TICKS);
+        Events.assertInstrumentRan(seen, "client_chat_received",
+                "the player was shown the seal detector's reply");
         assertTrue("client chat must show '" + expectedChatText + "' for " + fixtureBlock
-                + " at " + x + "," + Y + "," + z + "; backlog was empty before the click and now"
-                + " holds: " + seen, found);
+                + " at " + x + "," + Y + "," + z + "; the server sent " + sent
+                + " and the client's chat records since the click are: " + seen,
+                seen.toLowerCase(Locale.ROOT).contains(expectedChatText.toLowerCase(Locale.ROOT)));
 
         scenario().asserting("production dispatch and the server-tier mirror agree on the branch");
         String checkResp = exec("artest seal-detector check " + dim + " " + x + " " + Y + " " + z);
@@ -182,9 +240,17 @@ public class ItemSealDetectorPlayerMessagesE2ETest extends AbstractSharedClientE
 
     /**
      * Named to sort FIRST so it runs before any scenario has written to chat, and again meaningful
-     * on every later run of the class: it pins that a scenario is handed an empty backlog. If the
-     * shared-harness reset ever stops clearing chat, this reddens — instead of the three
-     * same-message scenarios below quietly passing on each other's leftovers.
+     * on every later run of the class: it pins that a scenario is handed an empty backlog by the
+     * shared-harness reset.
+     *
+     * <p><b>Read it for what it is.</b> Two things it is NOT. It is no longer the guard the branch
+     * scenarios below stand on — those read their verdict off a MARK on the client's event log, and
+     * a leftover line is unreachable to them whatever the backlog holds. And it is not an
+     * independent witness of the reset: the base class's own {@code @Before} asserts the identical
+     * condition a couple of statements earlier, so a regression in the reset fails there first and
+     * this method never reaches its assertion. It stays because the condition is a real contract of
+     * the shared harness that other classes DO read a backlog through, and a test naming it here is
+     * where a reader looks.</p>
      */
     @Test
     public void aaChatBacklogIsEmptyWhenAScenarioStarts() throws Exception {

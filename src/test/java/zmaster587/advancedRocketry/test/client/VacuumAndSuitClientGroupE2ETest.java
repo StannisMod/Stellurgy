@@ -8,6 +8,8 @@ import org.junit.runners.MethodSorters;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import zmaster587.advancedRocketry.test.Events;
+
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
@@ -48,6 +50,30 @@ import static org.junit.Assert.assertTrue;
  * why the pre-clear exists). Here each scenario builds its own stone platform in open air inside its
  * own plot, so there is no terrain to clear and no seed that can put a hill in it.</p>
  *
+ * <h2>What these scenarios WAIT for, and the one thing none of them can see</h2>
+ *
+ * <p>Every subject here is a link in one chain the atmosphere tick walks: the suit gate decided
+ * ({@code suit_immunity_decided}), the suit paid for the decision ({@code suit_air_drained}, carrying
+ * the {@code route} — {@code component} for the AR chest's pressure tank, {@code enchanted} for the
+ * vanilla-enchanted suit), the damage landed ({@code living_hurt} with source {@code Vacuum}), the
+ * client was told ({@code client_health_updated}). So the waits are event waits, taken from a mark
+ * set before the density is flipped. What stays a bounded poll is a persistent VALUE read back —
+ * the dimension's density, the client's rendered armour NBT — because those are states, not links.</p>
+ *
+ * <p><b>The breathable counter-tests have no positive precondition, and cannot be given one.</b>
+ * {@code AtmosphereType.AIR} is built with {@code canTick=false}, so in a breathable dimension the
+ * atmosphere tick never runs, the suit gate is never asked and NOTHING is recorded — which is
+ * precisely the contract, and also why no event can witness that the player was ticked and judged
+ * breathable. Their silences rest on the two honesty flags of {@code markInstrumented} (the recorder
+ * is subscribed, the test-only mixins were queued) and on the vacuum scenarios beside them, which
+ * show the same seams recording when they do fire.</p>
+ *
+ * <p><b>One path these scenarios deliberately never take.</b> The suit gate is also asked, without a
+ * side gate and every single tick, for any living entity that is IN WATER — so a suited swimmer
+ * drains air twice as fast as the atmosphere tick alone would explain, and fills a 256-deep event
+ * ring in about thirteen seconds. Every scenario here stands its player on a dry stone platform in
+ * open air, so every drain in these windows belongs to the atmosphere tick.</p>
+ *
  * <p>Source classes, merged verbatim (method names preserved so CI history greps):
  * {@code OxygenSuitClientStateE2ETest}, {@code ItemSpaceArmorUseFluidE2ETest},
  * {@code ItemSpaceChestSubInventoryDrainE2ETest}, {@code GasChargePadFillsPressureTankE2ETest}.</p>
@@ -64,6 +90,18 @@ public class VacuumAndSuitClientGroupE2ETest extends AbstractSharedClientE2ETest
 
     private static final Pattern DENSITY = Pattern.compile("\"atmosphereDensity\":(-?\\d+)");
     private static final Pattern CHEST_AIR = Pattern.compile("\"chestAir\":(-?\\d+)");
+    private static final Pattern CLIENT_HEALTH = Pattern.compile("\"health\":(-?[0-9.]+)");
+
+    /**
+     * How long one link of the atmosphere tick's chain may take. The vacuum damages on a shared
+     * {@code % 10} clock, so eight ticks of it is 80 game ticks; 200 is the budget the health poll
+     * this replaced already allowed, kept whole for every link.
+     */
+    private static final int LINK_BUDGET_TICKS = 200;
+
+    /** The window an ABSENCE is asserted over: eight atmosphere ticks, the same 80 the three
+     *  counter-tests always used. Its expiry is not a failure — nothing is being waited for. */
+    private static final int ABSENCE_WINDOW_TICKS = 80;
 
     @Override
     protected String subsystem() {
@@ -114,11 +152,16 @@ public class VacuumAndSuitClientGroupE2ETest extends AbstractSharedClientE2ETest
     }
 
     /**
-     * Sets the dimension's density and waits until it READS that way, rather than assuming the write
-     * has propagated. {@code set-density} lands on {@code DimensionProperties} a tick or two later,
-     * and a suit drains ~1 mB per atmosphere tick while {@code getAtmosphereType} still reports the
-     * old value — so a scenario that starts measuring immediately measures the tail of the previous
-     * setting.
+     * Sets the dimension's density and reads it back, as an ARRANGEMENT check.
+     *
+     * <p>It is a check and not a wait, and this javadoc used to claim otherwise ("lands a tick or two
+     * later … a scenario that starts measuring immediately measures the tail of the previous
+     * setting"). The probe assigns the field on the command thread and {@code planet info} reads the
+     * same field, with the atmosphere TYPE derived from it on every call — so the first read already
+     * satisfies the predicate and nothing here can wait for anything. What a scenario actually needs
+     * to know is when the new atmosphere first acted ON THIS PLAYER, and that is an event the
+     * scenarios below wait for by name ({@code suit_air_drained}, {@code suit_immunity_decided},
+     * {@code living_hurt}) after a mark taken before this call.</p>
      */
     private void setDensityAndConfirm(int density, boolean expectBreathable) throws Exception {
         String set = exec("artest atmosphere set-density " + plot().dim + " " + density);
@@ -185,14 +228,57 @@ public class VacuumAndSuitClientGroupE2ETest extends AbstractSharedClientE2ETest
         return state.has("health") ? state.get("health").getAsDouble() : -1.0;
     }
 
-    /** Polls the CLIENT's rendered health until it drops below {@code from}, or the budget ends. */
-    private double waitForHealthDrop(double from) throws Exception {
-        double current = from;
-        for (int waited = 0; waited < 200 && current >= from; waited += 20) {
-            bot().waitTicks(20);
-            current = health(bot().reportState());
+    // ── waiting on a log, either side ─────────────────────────────────────────
+
+    /**
+     * Wait until the SERVER log carries a record of {@code type} matching {@code needle}, or the
+     * budget ends; the reply comes back either way so the CALLER asserts.
+     *
+     * <p>{@link Events#await} waits on a bare TYPE, which is not enough for any of the three types
+     * this class means: {@code living_hurt} is recorded for every damage source a player can meet
+     * (fall, suffocation, the vacuum), and {@code suit_air_drained} is written by BOTH suit routes
+     * under one name. A wait on the type alone would be satisfied by the wrong record and read as
+     * the contract holding.</p>
+     */
+    private String awaitServerRecord(Events events, long mark, String type, String needle,
+                                     int tickBudget) throws Exception {
+        String reply = "";
+        for (int waited = 0; waited <= tickBudget; waited += 5) {
+            reply = events.since(mark, type);
+            if (reply.contains(needle)) {
+                return reply;
+            }
+            bot().waitTicks(5);
         }
-        return current;
+        return reply;
+    }
+
+    /**
+     * Wait until the CLIENT has been told a health BELOW {@code threshold} since {@code mark}, and
+     * answer the last health it was told ({@code NaN} when it was told none).
+     *
+     * <p>This is what the old {@code waitForHealthDrop} sampled. Two things change. The reading is
+     * mark-scoped, so a drop that was healed back between two samples can no longer be missed; and
+     * the number is what the SERVER SENT rather than what the client happens to render now, so a
+     * local prediction cannot stand in for a damage packet that never arrived.</p>
+     */
+    private double awaitClientHealthBelow(long clientMark, double threshold, int tickBudget)
+            throws Exception {
+        double last = Double.NaN;
+        for (int waited = 0; waited <= tickBudget; waited += 5) {
+            String reply = String.valueOf(bot().eventsSince(clientMark, "client_health_updated"));
+            Matcher m = CLIENT_HEALTH.matcher(reply);
+            boolean below = false;
+            while (m.find()) {
+                last = Double.parseDouble(m.group(1));
+                below = below || last < threshold;
+            }
+            if (below) {
+                return last;
+            }
+            bot().waitTicks(5);
+        }
+        return last;
     }
 
     // ── ItemSpaceChest (component route) ──────────────────────────────────────
@@ -224,8 +310,18 @@ public class VacuumAndSuitClientGroupE2ETest extends AbstractSharedClientE2ETest
                     baseline.satisfied);
 
             scenario().asserting("80 ticks of breathable atmosphere drain nothing");
-            bot().waitTicks(80);
+            // An absence, and the class javadoc says what stands behind it: AIR cannot tick, so no
+            // event can witness that the player was ticked and judged breathable. markInstrumented
+            // is what rules out the two silences that are not about the subject — an unsubscribed
+            // recorder and a mixin configuration that was never queued.
+            Events events = events();
+            long mark = events.markInstrumented();
+            bot().waitTicks(ABSENCE_WINDOW_TICKS);
 
+            String drains = events.since(mark, "suit_air_drained");
+            assertEquals("a breathable atmosphere must never reach the suit's tank at all; drains"
+                            + " recorded on the component route since the window opened: " + drains,
+                    0, Events.countRecords(drains, "\"route\":\"component\""));
             int chestAirAfter = readChestAirComponentRoute();
             assertEquals("chest air must hold steady when the atmosphere doesn't drain; before=1000"
                     + " after=" + chestAirAfter, 1000, chestAirAfter);
@@ -239,6 +335,14 @@ public class VacuumAndSuitClientGroupE2ETest extends AbstractSharedClientE2ETest
      * the player from suit-protected to suit-fails-{@code isImmune}: once the tank's last mB is
      * drained, {@code decrementAir(stack, 1)} returns 0 &rarr; {@code chest.protectsFromSubstance}
      * returns false &rarr; {@code isImmune} returns false &rarr; vacuum damage applies.
+     *
+     * <p>That transition IS the contract, and it is asserted as one: the tank pays
+     * ({@code suit_air_drained} on the component route), the damage lands afterwards
+     * ({@code living_hurt} from {@code Vacuum}), and somewhere between the two the gate flipped
+     * ({@code suit_immunity_decided} with {@code immune:false}). The flip is asserted as a COUNT
+     * rather than as a chain link because the gate's recorder is edge-only — a decision that repeats
+     * is not recorded — and only the flip itself is guaranteed to be an edge: the tank starts with
+     * oxygen, so the run of {@code true}s before it is what makes the {@code false} a change.</p>
      */
     @Test
     public void drainedChestTankTransitionsToVacuumDamage() throws Exception {
@@ -257,19 +361,44 @@ public class VacuumAndSuitClientGroupE2ETest extends AbstractSharedClientE2ETest
             scenario().requireArranged("player must start at full health: " + healthStart,
                     healthStart >= 20.0);
 
+            // Both marks BEFORE the vacuum exists, or the first drain of a three-millibucket tank
+            // happens between the flip and the mark and the chain starts mid-way.
+            Events events = events();
+            long mark = events.markInstrumented();
+            long clientMark = bot().eventMark().get("seq").getAsLong();
             setDensityAndConfirm(0, false);
 
             scenario().asserting("the tank drains to nothing and the damage then starts");
-            // 3 atmosphere ticks drain the tank to 0; subsequent ticks start firing the
-            // vacuum-damage path. Poll until damage is observed or the budget elapses.
-            double current = waitForHealthDrop(healthStart);
+            String drains = awaitServerRecord(events, mark, "suit_air_drained",
+                    "\"route\":\"component\"", LINK_BUDGET_TICKS);
+            assertTrue("the vacuum must reach the chest's pressure tank before anything else can be"
+                    + " concluded — without a drain the transition below never starts. Drains since"
+                    + " the flip: " + drains,
+                    drains.contains("\"route\":\"component\""));
+
+            String hurts = awaitServerRecord(events, mark, "living_hurt", "\"source\":\"Vacuum\"",
+                    LINK_BUDGET_TICKS);
+            assertTrue("vacuum damage must apply once the tank is drained; damage the player took"
+                    + " since the flip: " + hurts + " | drains: " + drains
+                    + " | suit gate decisions: " + events.since(mark, "suit_immunity_decided"),
+                    hurts.contains("\"source\":\"Vacuum\""));
+
+            String decisions = events.since(mark, "suit_immunity_decided");
+            assertTrue("the suit gate must be recorded turning the player DOWN — that flip is the"
+                    + " contract, and a damage record without it would mean he was hurt for some"
+                    + " other reason. Decisions since the flip: " + decisions,
+                    Events.countRecords(decisions, "\"immune\":false") >= 1);
+
+            double current = awaitClientHealthBelow(clientMark, healthStart, LINK_BUDGET_TICKS);
             int chestAirAfter = readChestAirComponentRoute();
             scenario().record("chestAirAfter", chestAirAfter).record("healthAfter", current);
 
             assertEquals("tank must be fully drained after the wait window; chestAir="
                     + chestAirAfter, 0, chestAirAfter);
-            assertTrue("vacuum damage must apply once the tank is drained; health held at "
-                    + current + " (started " + healthStart + ")", current < healthStart);
+            assertTrue("the client must be TOLD the damage, not only the server hold it; the last"
+                    + " health it was sent was " + current + " (started " + healthStart
+                    + "), server damage records: " + hurts,
+                    current < healthStart);
         } finally {
             restoreDim(originalDensity);
         }
@@ -318,17 +447,42 @@ public class VacuumAndSuitClientGroupE2ETest extends AbstractSharedClientE2ETest
                 + " tank); actual=" + airBefore + " equip=" + equip, airBefore > 0);
 
         scenario().asserting("standing on the powered pad raises the suit's air, on both sides");
+        Events events = events();
+        long mark = events.markInstrumented();
         exec("tp @p " + (px + 0.5) + " " + (py + 1) + " " + (pz + 0.5));
-        bot().waitTicks(5);
-        // ~5 seconds of natural pad ticking: the pad's parent libVulpes class polls
-        // canPerformFunction on a cadence, and 100 ticks covers multiple fill cycles.
-        bot().waitTicks(100);
+
+        // The pad's own transfer, rather than a fixed window and a bigger number afterwards. A fill
+        // that never happened used to be indistinguishable from three other things: a pad that never
+        // found the player in its 1x2x1 box, one that found him with no deficit to fill, and one that
+        // filled him while the client was never told.
+        String fills = "";
+        int filled = 0;
+        int refused = 0;
+        for (int waited = 0; waited <= LINK_BUDGET_TICKS; waited += 5) {
+            fills = events.since(mark, "suit_air_filled");
+            filled = Events.countRecords(fills, "\"type\":\"suit_air_filled\"");
+            refused = Events.countRecords(fills, "\"filled\":0");
+            if (filled - refused >= 1) {
+                break;
+            }
+            bot().waitTicks(5);
+        }
+        scenario().record("suitAirFills", fills);
+        assertTrue("the pad must actually transfer oxygen into the suit — a request the chest"
+                        + " answered with 0 is the pad finding nothing to fill, not a refill."
+                        + " Fill records since he stepped on: " + fills,
+                filled - refused >= 1);
 
         int airAfter = readChestAirComponentRoute();
-        int clientAfter = clientChestAir();
-        scenario().record("chestAirAfter", airAfter).record("clientChestAir", clientAfter);
+        // The armour slot's NBT reaches the client on its own packet, some ticks after the fill the
+        // event above reports. A persistent VALUE, so a bounded read-back rather than an event wait.
+        ClientPoll.Result<Integer> synced = ClientPoll.until(
+                bot()::waitTicks, this::clientChestAir, v -> v > airBefore, 2, 20);
+        int clientAfter = synced.value == null ? -1 : synced.value.intValue();
+        scenario().record("chestAirAfter", airAfter).record("clientChestAir", synced.toString());
         assertTrue("client-rendered chest tank must show the refill; client=" + clientAfter
-                + " serverBefore=" + airBefore, clientAfter > airBefore);
+                + " serverBefore=" + airBefore + " serverAfter=" + airAfter
+                + " fills=" + fills, clientAfter > airBefore);
         assertTrue("chest air must increase after standing on a powered, filled GasChargePad;"
                 + " before=" + airBefore + " after=" + airAfter, airAfter > airBefore);
     }
@@ -354,8 +508,17 @@ public class VacuumAndSuitClientGroupE2ETest extends AbstractSharedClientE2ETest
             assertEquals("baseline chest air", 1000, readChestAir());
 
             scenario().asserting("80 ticks of breathable atmosphere drain nothing");
-            bot().waitTicks(80);
+            // The same absence as the component-route counter-test, on the other route, and with the
+            // same limit: a breathable atmosphere does not tick, so nothing can witness that the
+            // player was judged. markInstrumented is what rules out an instrument that was not there.
+            Events events = events();
+            long mark = events.markInstrumented();
+            bot().waitTicks(ABSENCE_WINDOW_TICKS);
 
+            String drains = events.since(mark, "suit_air_drained");
+            assertEquals("a breathable atmosphere must never reach the enchanted suit's buffer;"
+                            + " drains recorded on that route since the window opened: " + drains,
+                    0, Events.countRecords(drains, "\"route\":\"enchanted\""));
             int chestAirAfter = readChestAir();
             scenario().record("chestAirAfter", chestAirAfter);
             assertEquals("client-rendered chest air must hold in breathable atmosphere",
@@ -372,6 +535,11 @@ public class VacuumAndSuitClientGroupE2ETest extends AbstractSharedClientE2ETest
      * {@code onTick} fires every 10 game ticks and each fire decrements the chest "air" NBT by 1 via
      * {@code ItemAirUtils.ItemAirWrapper}. Health holds, because the four enchanted slots make
      * {@code isImmune} return true and no {@code attackEntityFrom} ever runs.
+     *
+     * <p>"He was not hurt" is a negative, and the drain is its positive precondition: production
+     * checks the chest LAST, after the legs, the boots and the helmet, so a recorded drain means the
+     * whole suit was consulted and the chest was asked to pay. Only then does the silence in
+     * {@code living_hurt} say the suit held rather than that the atmosphere never looked at him.</p>
      */
     @Test
     public void suitedPlayerInVacuumLosesChestAirOverTime() throws Exception {
@@ -387,22 +555,45 @@ public class VacuumAndSuitClientGroupE2ETest extends AbstractSharedClientE2ETest
 
             double healthStart = health(bot().reportState());
             scenario().measuring("health before the vacuum window").record("healthStart", healthStart);
+            Events events = events();
+            long mark = events.markInstrumented();
             setDensityAndConfirm(0, false);
 
             scenario().asserting("the suit's air drains and the suit keeps the player unhurt");
-            // 80 game ticks ~ 8 atmosphere ticks (every 10), each decrementing chest air by 1.
-            bot().waitTicks(80);
+            String drains = awaitServerRecord(events, mark, "suit_air_drained",
+                    "\"route\":\"enchanted\"", LINK_BUDGET_TICKS);
+            assertTrue("the vacuum must reach the enchanted suit's buffer — the chest is the LAST"
+                    + " piece production consults, so a drain is the proof the whole suit was asked."
+                    + " Drains since the flip: " + drains,
+                    drains.contains("\"route\":\"enchanted\""));
+
+            // The suit HELD: the gate never recorded a refusal and no vacuum damage was applied.
+            // The decision recorder is edge-only, so a run of unchanged `true`s leaves no record at
+            // all — which is why the assertion is on the ABSENCE of `immune:false` rather than on
+            // the presence of `immune:true`, a record that is only written when the answer changes.
+            String decisions = events.since(mark, "suit_immunity_decided");
+            assertEquals("a full enchanted suit must never be judged unprotected in vacuum;"
+                    + " decisions since the flip: " + decisions,
+                    0, Events.countRecords(decisions, "\"immune\":false"));
+            String hurts = events.since(mark, "living_hurt");
+            assertEquals("a suited player must take no vacuum damage; what hurt him since the flip: "
+                    + hurts + " | suit-diag " + exec("artest player suit-diag"),
+                    0, Events.countRecords(hurts, "\"source\":\"Vacuum\""));
 
             int chestAirAfter = readChestAir();
-            int clientAir = clientChestAir();
+            // The armour NBT reaches the client on its own packet, after the drain the event above
+            // reports — a persistent VALUE, so a bounded read-back rather than an event wait.
+            ClientPoll.Result<Integer> synced = ClientPoll.until(
+                    bot()::waitTicks, this::clientChestAir, v -> v >= 0 && v < 1000, 2, 20);
+            int clientAir = synced.value == null ? -1 : synced.value.intValue();
             double healthAfter = health(bot().reportState());
-            scenario().record("chestAirAfter", chestAirAfter).record("clientChestAir", clientAir)
+            scenario().record("chestAirAfter", chestAirAfter).record("clientChestAir", synced.toString())
                     .record("healthAfter", healthAfter);
 
             assertTrue("chest air must decrease in vacuum with suit; before=1000 after="
-                    + chestAirAfter, chestAirAfter < 1000);
-            assertTrue("client-rendered chest air must reflect the drain; client=" + clientAir,
-                    clientAir >= 0 && clientAir < 1000);
+                    + chestAirAfter + " drains=" + drains, chestAirAfter < 1000);
+            assertTrue("client-rendered chest air must reflect the drain; client=" + clientAir
+                    + " server=" + chestAirAfter, clientAir >= 0 && clientAir < 1000);
             // Health lost to anything other than vacuum (suffocation, fall, …) is a fixture failure
             // rather than a suit failure, and the message must say which — so the damage SOURCE
             // goes in the text beside the delta.
@@ -419,6 +610,11 @@ public class VacuumAndSuitClientGroupE2ETest extends AbstractSharedClientE2ETest
      * HEALTH (the no-suit branch of {@code AtmosphereVacuum.onTick}) and the {@code chestAir} probe
      * reports -1 (no chest stack). Pins that drain is gated on having a chest with a valid air
      * container — no chest, no decrement, just damage.
+     *
+     * <p>Here the damage is the positive precondition for the absence beside it: production only
+     * reaches {@code attackEntityFrom} when the suit gate has turned the player down, so a
+     * {@code living_hurt} from {@code Vacuum} proves the atmosphere tick ran on THIS player, and the
+     * empty drain log then says the missing chest never entered a decrement path.</p>
      */
     @Test
     public void unsuitedPlayerInVacuumLosesNoAirAndTakesDamage() throws Exception {
@@ -433,13 +629,30 @@ public class VacuumAndSuitClientGroupE2ETest extends AbstractSharedClientE2ETest
             scenario().requireArranged("player must start at full health, got " + healthStart,
                     healthStart >= 20.0);
 
+            Events events = events();
+            long mark = events.markInstrumented();
+            long clientMark = bot().eventMark().get("seq").getAsLong();
             setDensityAndConfirm(0, false);
 
             scenario().asserting("vacuum damages the unprotected player, and drains no air");
-            double current = waitForHealthDrop(healthStart);
+            String hurts = awaitServerRecord(events, mark, "living_hurt", "\"source\":\"Vacuum\"",
+                    LINK_BUDGET_TICKS);
+            assertTrue("vacuum damage must apply to a bare-skinned player; what hurt him since the"
+                    + " flip: " + hurts + " | suit gate decisions: "
+                    + events.since(mark, "suit_immunity_decided"),
+                    hurts.contains("\"source\":\"Vacuum\""));
+
+            String drains = events.since(mark, "suit_air_drained");
+            assertEquals("a player with no chest must enter no decrement path at all — the damage"
+                            + " above proves the atmosphere DID tick him, so this silence is about"
+                            + " the missing chest. Drains since the flip: " + drains,
+                    0, Events.typesOf(drains).size());
+
+            double current = awaitClientHealthBelow(clientMark, healthStart, LINK_BUDGET_TICKS);
             scenario().record("healthAfter", current);
-            assertTrue("vacuum damage must apply to a bare-skinned player; health held at " + current
-                    + " (started " + healthStart + ")", current < healthStart);
+            assertTrue("the client must be told the damage; last health it was sent was " + current
+                    + " (started " + healthStart + "), server damage: " + hurts,
+                    current < healthStart);
             assertEquals("chestAir must remain -1 throughout — no chest = no decrement path",
                     -1, readChestAir());
         } finally {
@@ -471,16 +684,27 @@ public class VacuumAndSuitClientGroupE2ETest extends AbstractSharedClientE2ETest
             scenario().requireArranged("player should start at full health, got " + healthStart,
                     healthStart >= 20.0);
 
+            Events events = events();
+            long mark = events.markInstrumented();
+            long clientMark = bot().eventMark().get("seq").getAsLong();
             setDensityAndConfirm(0, false);
 
             scenario().asserting("the damage tick reaches the client's rendered health");
-            // AtmosphereVacuum damages every 10 world ticks. Polling stops as soon as damage
-            // registers — robust against slow ticking under parallel forks, and well clear of
-            // lethal exposure.
-            double current = waitForHealthDrop(healthStart);
+            // The narrow pin, as its two links. The server applied vacuum damage, and the client was
+            // TOLD a lower health: read off the client's own record of the health packet rather than
+            // sampled from what it renders now, so a drop cannot be missed between two samples and a
+            // local prediction cannot stand in for a packet that never came.
+            String hurts = awaitServerRecord(events, mark, "living_hurt", "\"source\":\"Vacuum\"",
+                    LINK_BUDGET_TICKS);
+            assertTrue("the vacuum must damage the player at all before the client can be shown it;"
+                    + " what hurt him since the flip: " + hurts,
+                    hurts.contains("\"source\":\"Vacuum\""));
+
+            double current = awaitClientHealthBelow(clientMark, healthStart, LINK_BUDGET_TICKS);
             scenario().record("healthAfter", current);
-            assertTrue("vacuum damage never reached the client: health held at " + current
-                    + " (started " + healthStart + ")", current < healthStart);
+            assertTrue("vacuum damage never reached the client: last health it was sent was " + current
+                    + " (started " + healthStart + "), server damage: " + hurts,
+                    current < healthStart);
         } finally {
             restoreDim(originalDensity);
         }
@@ -492,6 +716,11 @@ public class VacuumAndSuitClientGroupE2ETest extends AbstractSharedClientE2ETest
      * ticks and each fire drains 1 mB from the tank's FluidStack via
      * {@code ItemSpaceChest.decrementAir}. The player takes no damage — {@code isImmune} holds while
      * the chain does.
+     *
+     * <p>Same shape as the enchanted-route scenario: the drain is what proves the whole suit was
+     * consulted (the chest is checked last), and only then does the silence in {@code living_hurt}
+     * mean the suit held. The gate's own {@code immune:true} is not asserted, because that recorder
+     * writes only on a CHANGE and an unbroken run of protection may produce no record at all.</p>
      */
     @Test
     public void vacuumDrainsOxygenFromChestSubInventoryTank() throws Exception {
@@ -511,22 +740,43 @@ public class VacuumAndSuitClientGroupE2ETest extends AbstractSharedClientE2ETest
 
             double healthStart = health(bot().reportState());
             scenario().measuring("health before the vacuum window").record("healthStart", healthStart);
+            Events events = events();
+            long mark = events.markInstrumented();
             setDensityAndConfirm(0, false);
 
             scenario().asserting("the tank drains through the component route and the suit holds");
-            // 80 game ticks ~ 8 atmosphere ticks (every 10), each decrementing the FluidStack by 1.
-            bot().waitTicks(80);
+            String drains = awaitServerRecord(events, mark, "suit_air_drained",
+                    "\"route\":\"component\"", LINK_BUDGET_TICKS);
+            assertTrue("the vacuum must drain the chest's pressure tank through the COMPONENT route —"
+                    + " the chest is the last piece production consults, so this is also the proof"
+                    + " the whole suit was asked. Drains since the flip: " + drains,
+                    drains.contains("\"route\":\"component\""));
 
-            int clientAirAfter = clientChestAir();
+            String decisions = events.since(mark, "suit_immunity_decided");
+            assertEquals("a full suit must never be judged unprotected while its tank has oxygen;"
+                    + " decisions since the flip: " + decisions,
+                    0, Events.countRecords(decisions, "\"immune\":false"));
+            String hurts = events.since(mark, "living_hurt");
+            assertEquals("a suited player must take no vacuum damage; what hurt him since the flip: "
+                    + hurts, 0, Events.countRecords(hurts, "\"source\":\"Vacuum\""));
+
+            // The armour NBT reaches the client on its own packet — a persistent VALUE, read back
+            // with a bounded poll rather than waited for as a link.
+            ClientPoll.Result<Integer> synced = ClientPoll.until(
+                    bot()::waitTicks, this::clientChestAir, v -> v >= 0 && v < 1000, 2, 20);
+            int clientAirAfter = synced.value == null ? -1 : synced.value.intValue();
             int chestAirAfter = readChestAirComponentRoute();
             double healthAfter = health(bot().reportState());
-            scenario().record("chestAirAfter", chestAirAfter).record("clientChestAir", clientAirAfter)
+            scenario().record("chestAirAfter", chestAirAfter).record("clientChestAir", synced.toString())
                     .record("healthAfter", healthAfter);
 
-            assertTrue("client-rendered chest state must reflect the drain; client=" + clientAirAfter,
-                    clientAirAfter < 1000);
+            // >= 0 as well as < 1000: the -1 this reader answers for an armour slot the client has
+            // not been sent at all is below 1000 too, and would read as a drain it never saw.
+            assertTrue("client-rendered chest state must reflect the drain; client=" + clientAirAfter
+                    + " server=" + chestAirAfter, clientAirAfter >= 0 && clientAirAfter < 1000);
             assertTrue("chest air must decrease through the CHEST sub-inventory route in vacuum;"
-                    + " before=1000 after=" + chestAirAfter, chestAirAfter < 1000);
+                    + " before=1000 after=" + chestAirAfter + " drains=" + drains,
+                    chestAirAfter < 1000);
             assertTrue("a full suit must keep isImmune=true while the tank has oxygen; healthStart="
                     + healthStart + " healthAfter=" + healthAfter, healthAfter >= healthStart);
         } finally {

@@ -645,25 +645,37 @@ public class VSShipEntryClientGroupE2ETest extends AbstractSharedVsClientE2ETest
      * Build a with-pilot-seat craft at {@code (bx, BY, bz)}, wait for the physics mod to own it, seat
      * the bot on it, and return the ship's IDENTITY.
      *
-     * <p>The identity is captured at the one moment a positional lookup is defensible — freshly
-     * assembled, still at its own base. Both scenarios then fly the ship away from that base, after
-     * which a nearest-ship query answers about a neighbour or about nothing, in the same shape as a
-     * correct reply.</p>
+     * <p>The identity comes from the CREATION, not from a position: the event mark is taken before the
+     * assembly is queued, so the {@code ship_spawned} record it is read off is THIS scenario's own ship
+     * and can be nobody else's. Both scenarios then fly that ship away from its base — one clean
+     * through the atmosphere ceiling — after which a nearest-ship query at the base answers about a
+     * neighbour, or about nothing, in exactly the shape of a correct reply.</p>
      */
     private String boardAssembledCraftAt(int bx, int bz, int budget) throws Exception {
         // Stand the client well clear while the fixture is built, then beside it so it stays loaded.
         exec("tp @a " + (bx + 600) + " 120 " + (bz + 600) + " 0 0");
         bot().waitTicks(10);
+        Events events = events();
+        long spawnMark = events.markInstrumented();
         String assemble = assembleFixture(bx, BY, bz, VARIANT);
         scenario().requireArranged("a with-pilot-seat build must route to a ship: " + assemble,
                 assemble.contains("\"ok\":true"));
+        String shipUuid = awaitShipSpawned(events, spawnMark, "a with-pilot-seat assembly must create"
+                + " a VS ship in the physics registry — its record is where this scenario's ship"
+                + " identity comes from, and every later question about the craft is keyed on it");
         exec("tp @a " + (bx + 0.5) + " " + (BY + 6) + " " + (bz + 0.5) + " 0 0");
         bot().waitTicks(20);
 
+        // The spawn record above is the registry's account of an ADD; it does not say the physics
+        // object is LOADED, and an unloaded ship is not ticked and cannot be flown. So the load is
+        // still waited for — on production's own ship_usable event, which has no distance term to be
+        // wrong about. The mark is spawnMark, taken BEFORE the assembly: the event fires once per
+        // load and is not a state to poll, so a mark taken here would wait for something already past.
         // THE MULTIPLIER IS IN THE BUDGET the caller passed. What it waits on is VS building the ship
         // on its OWN thread, off the game loop: that work finishes in wall-clock time, so a busy box
-        // genuinely needs more game ticks to elapse before it is done.
-        String shipUuid = captureShipIdAt(bx, BY, bz, budget);
+        // genuinely needs more game ticks to elapse before it is done. The caller's budget counts
+        // 5-tick polls, so it is multiplied by 5 to keep the same wall-clock in Events.await's ticks.
+        awaitShipUsable(events, spawnMark, shipUuid, budget * 5);
 
         // The craft's attitude BEFORE anyone boards it. The pilot's throttle is a BODY-frame command
         // (FreeFlightPhysics.shipVelocityCommand maps it through the attitude), so a hull that is not

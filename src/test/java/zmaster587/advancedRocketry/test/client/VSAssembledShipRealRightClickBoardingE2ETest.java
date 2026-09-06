@@ -10,6 +10,8 @@ import org.junit.FixMethodOrder;
 import org.junit.Test;
 import org.junit.runners.MethodSorters;
 
+import zmaster587.advancedRocketry.test.Events;
+
 import static org.junit.Assert.assertTrue;
 import static zmaster587.advancedRocketry.test.AdvancedRocketryTestConstants.SHIP_CAPTURE_RADIUS_BLOCKS;
 
@@ -40,7 +42,9 @@ import static zmaster587.advancedRocketry.test.AdvancedRocketryTestConstants.SHI
  * mis-attributed. So the test asserts (1) the crosshair is on a block, (2) that block is the PILOT
  * SEAT in the client's own world, (3) at the seat's SUBSPACE position - the physics mod's raytrace
  * returning a subspace position is the whole reason a world-position shortcut could never work - and
- * only then presses, and finally asserts (4) the CLIENT reports itself riding the seat's mount, with
+ * only then presses, and finally asserts (4) the server's own ordered log carries the click and then
+ * the mount ({@code right_click_block} &rarr; {@code mount}, which tells a press the server never
+ * saw from one the seat refused), and (5) the CLIENT reports itself riding the seat's mount, with
  * the server's own view cross-checked.</p>
  *
  * <p><b>The recipe, for any test that wants to board an assembled ship for real.</b> Empty the hand
@@ -123,9 +127,19 @@ public class VSAssembledShipRealRightClickBoardingE2ETest extends AbstractShared
         // ---- ARRANGEMENT: build, assemble, and get the ship LOADED with the client present. ------
         exec("tp @a " + (BX + 600) + " 120 " + (BZ + 600) + " 0 0");
         bot().waitTicks(10);
+
+        // The mark is taken BEFORE the assembly is queued, so the registry record that follows is
+        // THIS scenario's ship by construction and never a neighbour's on a shared world. It also
+        // splits the wait below in two: the ship COMING INTO EXISTENCE is an event the registry
+        // itself records, and only what is left — the client-present LOAD — is a state worth polling
+        // for. A red now says which of the two never happened.
+        Events events = events();
+        long spawnMark = events.markInstrumented();
         String assemble = assembleFixture(BX, BY, BZ, VARIANT);
         scenario().requireArranged("a " + VARIANT + " build must route to a ship: " + assemble,
                 assemble.contains("\"ok\":true"));
+        awaitShipSpawned(events, spawnMark, "the assembly must create a VS ship in the queryable"
+                + " registry before anything can be aimed at it (the spawn is asynchronous)");
 
         exec("tp @a " + (BX + 0.5) + " " + (BY + 8) + " " + (BZ + 0.5) + " 0 0");
         bot().waitTicks(20);
@@ -262,9 +276,30 @@ public class VSAssembledShipRealRightClickBoardingE2ETest extends AbstractShared
                         && aim.get("blockZ").getAsInt() == seatSubZ);
 
         // ---- HOP 4: press the real use key, exactly as the human's right mouse button does. ------
+        // The mark goes BEFORE the press. A use press is over inside a tick, so a poll arriving
+        // afterwards cannot tell "the click never reached the server" from "it did and something
+        // undid it"; taken first, nothing between the two can be missed. markInstrumented, because
+        // the mount half is recorded by a test-only mixin, and an un-woven one answers with exactly
+        // the empty log a refused click does.
+        long pressMark = events.markInstrumented();
         bot().setKey(KEY_USE_ITEM, true);
         bot().waitTicks(5);
         bot().setKey(KEY_USE_ITEM, false);
+
+        // The two links a boarding IS, in the order the game commits them: Forge fires
+        // RightClickBlock inside processRightClickBlock BEFORE the block's own activation runs, and
+        // the seat's activation is what mounts the player. Their SEPARATION is the diagnosis this
+        // class exists to make and the one a riding poll can never report - NO right_click_block at
+        // all means the server dropped the press before the seat ever saw it (the reach check, an
+        // unconfirmed teleport, a held stack), while a right_click_block with no mount means the
+        // seat itself refused the boarding. The physics mod routes a ship click through the ordinary
+        // packet handler with the player transformed for the call, so the subspace address changes
+        // nothing about which links fire.
+        events.assertChain(pressMark, "a real use-key press aimed at an ASSEMBLED ship's pilot seat "
+                        + "must reach the server and board the player - the crosshair was proven to "
+                        + "be on that very seat block, so a break here is the interaction itself, "
+                        + "not a missed aim." + aimDiag,
+                5 * budget, "right_click_block", "mount");
 
         JsonObject riding = bot().reportRidingEntity();
         for (int attempt = 0; attempt < budget && !isRiding(riding); attempt++) {
@@ -276,9 +311,10 @@ public class VSAssembledShipRealRightClickBoardingE2ETest extends AbstractShared
         String boardDiag = " clientRiding=" + riding + " serverRiding=" + serverRiding
                 + " mouseOverAfter=" + bot().reportMouseOver() + aimDiag;
 
-        assertTrue("a real use-key press aimed at an ASSEMBLED ship's pilot seat must board the "
-                + "player - the crosshair was proven to be on that very seat block, so a failure "
-                + "here is the interaction itself being refused, not a missed aim." + boardDiag,
+        assertTrue("the CLIENT must render the player aboard after a boarding the SERVER has already "
+                + "recorded (the chain above), or the pilot sees himself standing on a deck he is in "
+                + "fact strapped into." + boardDiag
+                + " serverMountRecord=" + events.since(pressMark, "mount"),
                 isRiding(riding));
 
         assertTrue("the client must be riding the SEAT's mount, not some other entity it happened "

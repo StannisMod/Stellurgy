@@ -1,5 +1,6 @@
 package zmaster587.advancedRocketry.test.client;
 
+import com.github.stannismod.forge.testing.TestTimeouts;
 import com.google.gson.JsonObject;
 
 import org.junit.FixMethodOrder;
@@ -13,6 +14,8 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 import javax.imageio.ImageIO;
+
+import zmaster587.advancedRocketry.test.Events;
 
 import static org.junit.Assert.assertTrue;
 
@@ -46,7 +49,6 @@ public class VSShipFlightTelemetryE2ETest extends AbstractSharedVsClientE2ETest 
         return "vs-flight-telemetry";
     }
 
-    private static final Pattern COUNT = Pattern.compile("\"count\":(-?\\d+)");
     private static final Pattern BUILDER_POS =
             Pattern.compile("\"builderPos\":\\[(-?\\d+),(-?\\d+),(-?\\d+)]");
     private static final Pattern POS_X = Pattern.compile("\"posX\":(-?[0-9.E\\-]+)");
@@ -62,10 +64,9 @@ public class VSShipFlightTelemetryE2ETest extends AbstractSharedVsClientE2ETest 
     private static final Pattern LOCAL_Y = Pattern.compile("\"localY\":(-?[0-9.E\\-]+)");
     private static final Pattern LOCAL_Z = Pattern.compile("\"localZ\":(-?[0-9.E\\-]+)");
     private static final Pattern ENTITY_ID = Pattern.compile("\"entityId\":(-?\\d+)");
-    private static final Pattern RESOLVED = Pattern.compile("\"resolvedTicks\":(-?\\d+)");
-    private static final Pattern OBSTACLES = Pattern.compile("\"lastObstacleCount\":(-?\\d+)");
-    private static final Pattern SHIP_UP_Y = Pattern.compile("\"lastShipUpY\":(-?[0-9.E\\-]+)");
-    private static final Pattern DROPS = Pattern.compile("\"externalMoveDrops\":(-?\\d+)");
+
+    /** The deck-capture recorder's instrument name — what proves an EMPTY release log was listening. */
+    private static final String DECK_INSTRUMENT = "deck_capture_events";
 
     /** THIS scenario's ship, by identity — the address every question below is keyed on. */
     private String scenarioShipId;
@@ -91,9 +92,17 @@ public class VSShipFlightTelemetryE2ETest extends AbstractSharedVsClientE2ETest 
         assertTrue("a seated tier-2 pilot must get a Free Flight HUD at all: '" + hudBefore + "'",
                 !hudBefore.isEmpty());
 
+        Events events = events();
+        long throttleMark = events.markInstrumented();
         bot().holdKey(Keyboard.KEY_R); // flightVerticalUp
         ClientPoll.Result<Double> lift;
         try {
+            // The key REACHING the computer is a link, and it is waited for before the climb is
+            // measured: a red on the climb alone cannot tell a throttle that never arrived (a broken
+            // key binding, seat packet or dummy) from a ship that got it and did not rise.
+            awaitRecord(events, throttleMark, "pilot_input_set",
+                    "the real held throttle must reach a ship's flight computer at all", 100,
+                    "\"input\":\"set\"");
             // Event-gated hover-lift: hold vertical-up until the ship has climbed, with a load-scaled
             // ceiling + early exit. A fixed 100-iteration budget under-lifts a frame-starved client
             // under concurrent-fork load and reds a healthy climb.
@@ -137,6 +146,11 @@ public class VSShipFlightTelemetryE2ETest extends AbstractSharedVsClientE2ETest 
         assertTrue("a deflected flight cursor must actually spin the ship (omega=" + spinning + ")",
                 spinning > 0.05);
 
+        // Marked BEFORE the centring, because the packet that says "stop" is a CHANGE: the client
+        // sends an idle input on the tick the cursor enters its dead-zone and never repeats it (a
+        // held NON-idle input is re-asserted on a keep-alive; an idle one is exempt). The records
+        // this mark collects are therefore the whole of what the computer was ever told to stop for.
+        long centreMark = events.markInstrumented();
         double cursorCentred = centreFlightCursor();
         assertTrue("the client's flight cursor must return to centre (got " + cursorCentred + ")",
                 Math.abs(cursorCentred) < CURSOR_DEADZONE);
@@ -144,12 +158,45 @@ public class VSShipFlightTelemetryE2ETest extends AbstractSharedVsClientE2ETest 
         // With the cursor centred the controller must brake the ship to rest. Load-scaled, like the
         // spin-UP poll twenty lines above — this was the one fixed budget left in the pair, and a
         // brake that needs a few more ticks under fork load is not a ship that failed to stop.
+        //
+        // Sampled as a TRAJECTORY, not as one number at the end. A single residual rate cannot tell
+        // apart the three states production can be in here, and they are three different faults: a
+        // rate still FALLING steeply is a brake that wanted longer than the budget; a rate that
+        // PLATEAUS is a ship still EXECUTING a rotation command, because the computer holds the last
+        // input it was handed and a "stop" that never landed leaves it turning at whatever
+        // deflection did; a rate creeping down smoothly with no floor is no braking torque at all,
+        // only the substrate's own damping. The samples are what lets the reader of a red say which
+        // of the three he is looking at, and they cost one append per twenty-fifth poll.
+        StringBuilder omegaTrace = new StringBuilder();
+        int[] polls = {0};
         ClientPoll.Result<Double> braked = ClientPoll.until(bot()::waitTicks,
-                () -> readDouble(shipInfo(), OMEGA), o -> o <= 0.05, 2, 150);
+                () -> {
+                    double omegaNow = readDouble(shipInfo(), OMEGA);
+                    int poll = polls[0]++;
+                    if (poll % 25 == 0) {
+                        omegaTrace.append(poll == 0 ? "" : " ").append(poll).append(':')
+                                .append(Math.round(omegaNow * 1000.0) / 1000.0);
+                    }
+                    return omegaNow;
+                },
+                o -> o <= 0.05, 2, 150);
         double settled = braked.value;
         String controller = exec("artest vs afc-debug");
+        // Every control packet this computer ACCEPTED since before the centring began. The recorder
+        // sits on setPilotInput, which the seat calls only after its own pilot guard, so a record
+        // here is a packet the server took — and a stream that stops while the cursor was still
+        // deflected means the computer was never told to stop, whatever the client's cursor reads.
+        // What it cannot say is what an input CONTAINED (the payload is `set` / `null`), so it
+        // counts deliveries and claims nothing more.
+        String pilotInputs = events.since(centreMark, "pilot_input_set");
+        int accepted = matchingRecords(pilotInputs, "\"input\":\"set\"");
+        // NOT Events.lastField: that reads STRING fields ("k":"v") and a record's tick is a bare
+        // number, so it would answer null for a stream that is plainly there.
+        String lastAcceptedTick = lastNumericField(pilotInputs, "tick");
         System.out.println("[tier2] omega spinning=" + spinning + " settled=" + settled
-                + " poll=" + braked + " controller=" + controller);
+                + " poll=" + braked + " trace=[" + omegaTrace + "]"
+                + " pilotInputsAcceptedSinceCentring=" + accepted
+                + " lastAcceptedTick=" + lastAcceptedTick + " controller=" + controller);
         // THE TWO READINGS ARE NOT THE SAME SUBJECT, and this message used to print them side by side
         // as if they were. `ship-info` is asked about THIS ship. `afc-debug` reads
         // TileAdvancedFlightComputer.debugControllerState, a GLOBAL mutable static written by
@@ -159,11 +206,18 @@ public class VSShipFlightTelemetryE2ETest extends AbstractSharedVsClientE2ETest 
         assertTrue("with the flight cursor centred the ship must STOP turning, not coast: it was "
                 + "spinning at " + spinning + " rad/s and is still at " + settled
                 + " after " + braked
-                + ". The controller line below is a GLOBAL last-writer static and may describe"
+                + ". Its rate through the brake window, every 25th poll: [" + omegaTrace + "]"
+                + " — a rate that PLATEAUS is a ship still executing a rotation command, not one"
+                + " failing to coast to a stop. The computer accepted " + accepted + " pilot inputs"
+                + " since before the cursor was centred (the last at tick " + lastAcceptedTick
+                + "), and the idle that says 'stop' is sent ONCE, on the tick the cursor enters the"
+                + " dead-zone: a stream that ends before then never carried it."
+                + " The controller line below is a GLOBAL last-writer static and may describe"
                 + " another craft entirely — compare it for what it is: " + controller,
                 settled <= 0.05);
 
         exec("artest player dismount");
+        reportClientHealth("seatedPilotSeesLiveVelocityAndACentredCursorStopsTheShipTurning");
     }
 
     // ---- Test 2: the camera turns with the ship, and the eye stays out of the deck ------------
@@ -235,6 +289,7 @@ public class VSShipFlightTelemetryE2ETest extends AbstractSharedVsClientE2ETest 
                 + "the world (distinct colours=" + distinctColours(frame) + ")", distinctColours(frame) > 8);
 
         exec("artest player dismount");
+        reportClientHealth("anInvertedShipTurnsThePilotsCameraOverAndKeepsHisEyeOutOfTheDeck");
     }
 
     // ---- Test 3: a crew member stays on a steeply rolled deck ---------------------------------
@@ -247,21 +302,10 @@ public class VSShipFlightTelemetryE2ETest extends AbstractSharedVsClientE2ETest 
 
         // Stand a living body on the level deck and let it settle. An armour stand is a living entity
         // with a player's movement rules, and unlike a player it has no client sending positions - so
-        // what happens to it is purely what the server's movement frame does.
-        int crewId = readInt(exec("artest vs drop-stand 0 " + ship[0] + " " + (ship[1] + 3)
-                + " " + ship[2]), ENTITY_ID);
-        bot().waitTicks(70);
-
-        // The movement frame must actually be running, and its deck-frame sweep must be finding the
-        // deck. A hook that never applied and a hook that applied and declined look the same from here.
-        String stats = exec("artest vs shipframe-stats");
-        System.out.println("[tier2] ship-frame stats after settling: " + stats);
-        assertTrue("the ship-frame movement hook must run for an aboard crew member: " + stats,
-                readInt(stats, RESOLVED) > 0);
-        assertTrue("the deck-frame sweep must see the deck's blocks, or bodies fall through it: " + stats,
-                readInt(stats, OBSTACLES) > 0);
-        assertTrue("the crew member must come to rest ON the deck: " + stats,
-                stats.contains("\"lastOnDeck\":true"));
+        // what happens to it is purely what the server's movement frame does. The capture is awaited
+        // as an event carrying THIS body's id: a hook that never applied and one that applied and
+        // declined are then different answers, and neither can be given by another body.
+        int crewId = dropStandAndAwaitItsCapture(ship);
 
         double[] restingOnDeck = localOf(crewId);
 
@@ -273,6 +317,11 @@ public class VSShipFlightTelemetryE2ETest extends AbstractSharedVsClientE2ETest 
         assertTrue("attitude hold must accept the roll: " + point, point.contains("\"commanded\":true"));
         bot().waitTicks(200);
 
+        // An attitude SLEW is a value converging, so it stays a wait — but the value it converges to
+        // is recorded here, because "he barely moved across the deck" is vacuous on a deck that never
+        // rolled and nothing in this scenario said which of the two happened.
+        scenario().record("upYAfterRoll", upYOf(shipInfo()));
+
         double[] afterRoll = localOf(crewId);
 
         // Measured on a real client run - the frame ShipFrameTravel MOVES in (VS
@@ -283,6 +332,13 @@ public class VSShipFlightTelemetryE2ETest extends AbstractSharedVsClientE2ETest 
         double tcUp = readDouble(rolledStats, Pattern.compile("\"lastTcUpDisagreement\":(-?[0-9.E\\-]+)"));
         double tcFwd = readDouble(rolledStats, Pattern.compile("\"lastTcFwdDisagreement\":(-?[0-9.E\\-]+)"));
         System.out.println("[tier2][TC] rolled-deck frame disagreement up=" + tcUp + " fwd=" + tcFwd);
+        // ASKED FIRST, and as an arrangement. Production initialises both disagreements to -1.0 and
+        // leaves them there until the frame check first RUNS — and -1.0 satisfies the "< 1e-6"
+        // below, so without this the agreement assertion is green on an instrument that never
+        // measured anything. A check that did not run is not a statement about the frames.
+        scenario().requireArranged("the ship-frame check must have MEASURED the two frames before"
+                + " their agreement can mean anything; production leaves both disagreements at -1.0"
+                + " until it first runs: " + rolledStats, tcUp >= 0.0 && tcFwd >= 0.0);
         assertTrue("the movement frame and the camera frame must be ONE rotation on a 75-degree deck, so "
                 + "the keys/mouse inversion is the aim-frame (Path B), not a frame-source split "
                 + "(up=" + tcUp + " fwd=" + tcFwd + ")", tcUp < 1e-6 && tcFwd < 1e-6);
@@ -301,6 +357,7 @@ public class VSShipFlightTelemetryE2ETest extends AbstractSharedVsClientE2ETest 
         String data = exec("artest vs player-ship-data 0 " + crewId);
         assertTrue("the crew member must still be resting on the deck: " + data,
                 data.contains("\"playerOnGround\":true"));
+        reportClientHealth("crewStaysOnASteeplyRolledDeckInsteadOfBeingFlungIntoACorner");
     }
 
     // ---- Test 3b: a crew member rides a ROTATING deck without the capture thrashing ------------
@@ -315,17 +372,15 @@ public class VSShipFlightTelemetryE2ETest extends AbstractSharedVsClientE2ETest 
         final int bx = 3520, by = 64, bz = 3520;
 
         double[] ship = buildShip(bx, by, bz);
-        int crewId = readInt(exec("artest vs drop-stand 0 " + ship[0] + " " + (ship[1] + 3)
-                + " " + ship[2]), ENTITY_ID);
-        bot().waitTicks(70);
+        int crewId = dropStandAndAwaitItsCapture(ship);
 
-        String settled = exec("artest vs shipframe-stats");
-        System.out.println("[tier2][INV] settled stats: " + settled);
-        assertTrue("the ship-frame hook must run for the aboard body first: " + settled,
-                readInt(settled, RESOLVED) > 0);
-        assertTrue("the body must rest ON the level deck before we invert it: " + settled,
-                settled.contains("\"lastOnDeck\":true"));
-        int dropsBefore = readInt(settled, DROPS);
+        // Everything from here is counted off THIS body's own release records, since a mark taken
+        // before the spin: each external-move drop is a `deck_released` whose reason production
+        // itself writes ("externalMove(sub) gapTicks=…"), carrying the entity it dropped. The
+        // JVM-global counter it replaces summed every body's churn — the bot's included — and could
+        // not say whose deck was thrashing.
+        Events events = events();
+        long spinMark = events.markInstrumented();
 
         // Spin the ship about a horizontal axis via free VS physics - the deck ROTATES under the standing
         // body. A body that rides the rotation stays captured; a tight external-move guard mistakes the
@@ -337,18 +392,27 @@ public class VSShipFlightTelemetryE2ETest extends AbstractSharedVsClientE2ETest 
         bot().waitTicks(30);
         exec("artest vs spin-ship-by-id 0 " + scenarioShipId + " 0.0 0.0 0.0");
 
-        String spun = exec("artest vs shipframe-stats");
-        int dropsAfter = readInt(spun, DROPS);
-        int drops = dropsAfter - dropsBefore;
-        System.out.println("[tier2][SPIN] external-move drops during a 2 rad/s roll spin: " + drops
-                + " (before=" + dropsBefore + " after=" + dropsAfter + ")");
-        System.out.println("[tier2][SPIN] spun stats: " + spun);
+        String released = events.since(spinMark, "deck_released");
+        // A LOW count and a dead recorder produce the same number, so the recorder is asked first.
+        Events.assertInstrumentRan(released, DECK_INSTRUMENT,
+                "few external-move drops means the deck's own rotation was tolerated");
+        int drops = matchingRecords(released, "\"e\":" + crewId + ",", "\"reason\":\"externalMove");
+        System.out.println("[tier2][SPIN] external-move drops for entity " + crewId
+                + " during a 2 rad/s roll spin: " + drops);
+        System.out.println("[tier2][SPIN] releases since the spin began: " + released);
 
         // A rotating deck must NOT thrash the capture. Without the omega-aware guard this ratchets ~1 drop
         // per tick (tens over the window) and the body loses the deck; with it, the deck's own carry is
         // tolerated and the body rides the spin.
-        assertTrue("a rotating deck must not thrash the aboard-body capture (external-move drops=" + drops
-                + " during a 2 rad/s spin): " + spun, drops < 8);
+        assertTrue("a rotating deck must not thrash the aboard-body capture (external-move drops for"
+                + " entity " + crewId + "=" + drops + " during a 2 rad/s spin). Every release"
+                + " recorded for any body since the spin began, with production's own reason: "
+                + released, drops < 8);
+        // This scenario leaves the bot standing on a hull that was just spun at 2 rad/s and is left
+        // steeply tilted, and the scenario that follows it opens on the shared base's full-health
+        // gate. Read out what the client renders here, so a leftover is attributed to the window
+        // that produced it instead of to the reset that could not clear it.
+        reportClientHealth("aCrewMemberRidesARotatingDeckWithoutTheCaptureThrashing");
     }
 
     // ---- Test 4: a body on a GROUNDED ship's deck stays on the deck, not through it -----------
@@ -366,9 +430,7 @@ public class VSShipFlightTelemetryE2ETest extends AbstractSharedVsClientE2ETest 
         double[] ship = buildShip(bx, by, bz);
 
         // A body settled on the actual deck - the exact thing the pilot stands on.
-        int standId = readInt(exec("artest vs drop-stand 0 " + ship[0] + " " + (ship[1] + 3)
-                + " " + ship[2]), ENTITY_ID);
-        bot().waitTicks(70);
+        int standId = dropStandAndAwaitItsCapture(ship);
 
         String onDeck = exec("artest vs player-ship-data 0 " + standId);
         assertTrue("the body must have settled on the deck: " + onDeck,
@@ -384,10 +446,27 @@ public class VSShipFlightTelemetryE2ETest extends AbstractSharedVsClientE2ETest 
         int fy = (int) Math.floor(deckY) - 1;
         int sx = (int) Math.floor(ship[0]);
         int sz = (int) Math.floor(ship[2]);
+        // The regression is a RELEASE — the gate hands the body to vanilla the moment it sees world
+        // ground under its feet, and vanilla cannot see a subspace deck. So mark before the floor
+        // goes in and read the silence afterwards: production names its own reason at the release,
+        // and `steppedOntoTerrain` is that gate's word for exactly this.
+        Events events = events();
+        long floorMark = events.markInstrumented();
         assertTrue("must lay the world floor under the deck",
                 exec("artest fill 0 " + (sx - 3) + " " + fy + " " + (sz - 3) + " "
                         + (sx + 3) + " " + fy + " " + (sz + 3) + " minecraft:stone").contains("\"ok\":true"));
         bot().waitTicks(60);
+
+        String releases = events.since(floorMark, "deck_released");
+        // "Nothing was released" and "nobody was recording releases" are the same empty reply until
+        // the recorder is asked; and the body having been captured at all is asserted above, so this
+        // silence is about a gate that declined to fire rather than a body that was never held.
+        Events.assertInstrumentRan(releases, DECK_INSTRUMENT,
+                "no terrain release means the body kept its deck when the ground appeared");
+        assertTrue("laying world ground under the deck must not hand this body (entity " + standId
+                        + ") to vanilla: the ship-frame gate released it naming the terrain it now"
+                        + " stands over. Every release recorded since the floor went in: " + releases,
+                matchingRecords(releases, "\"e\":" + standId + ",", "steppedOntoTerrain") == 0);
 
         String afterFloor = exec("artest vs player-ship-data 0 " + standId);
         double yAfter = readDouble(afterFloor, Pattern.compile("\"playerY\":(-?[0-9.E\\-]+)"));
@@ -401,6 +480,7 @@ public class VSShipFlightTelemetryE2ETest extends AbstractSharedVsClientE2ETest 
                 + (fy + 1) + "): it is at y=" + yAfter, Math.abs(yAfter - deckY) < 1.0);
         assertTrue("and still on the ground (the deck), not falling: " + afterFloor,
                 afterFloor.contains("\"playerOnGround\":true"));
+        reportClientHealth("aBodyOnADeckWithWorldGroundBelowStaysOnTheDeck");
     }
 
     // ---- Test 5: a station-keeping ship holds altitude, it does not sink ----------------------
@@ -420,9 +500,17 @@ public class VSShipFlightTelemetryE2ETest extends AbstractSharedVsClientE2ETest 
 
         // Fly it a couple of blocks up so it is genuinely airborne (and mark it "flown", which arms the
         // unmanned station-keeping hold), then release the throttle.
+        Events events = events();
+        long throttleMark = events.markInstrumented();
         bot().holdKey(Keyboard.KEY_R); // flightVerticalUp
         ClientPoll.Result<Double> lift;
         try {
+            // As in test 1: the throttle's arrival at the computer is a link and is awaited as one,
+            // so a climb that never happens is not reported as a control failure when the control
+            // never got there.
+            awaitRecord(events, throttleMark, "pilot_input_set",
+                    "the real held throttle must reach a ship's flight computer at all", 100,
+                    "\"input\":\"set\"");
             // Event-gated hover-lift (load-scaled ceiling + early exit): a fixed 100-iteration budget
             // under-lifts a frame-starved client under concurrent-fork load and reds a healthy climb.
             lift = ClientPoll.until(bot()::waitTicks,
@@ -446,7 +534,28 @@ public class VSShipFlightTelemetryE2ETest extends AbstractSharedVsClientE2ETest 
 
         // Stand up. A parked ship that has been flown holds station while unmanned: the flight computer
         // commands a ZERO world velocity and holds the attitude - the exact path this bug lives on.
+        long dismountMark = events.markInstrumented();
         exec("artest player dismount");
+        // Two links the 60-tick wait used to hide, and both are premises for the measurement below:
+        // the computer is told the pilot has gone, and it then DECIDES to hold station. "It did not
+        // sink" says nothing about a station hold that was never armed — an inert computer does not
+        // sink either, it is simply not flying.
+        awaitRecord(events, dismountMark, "pilot_input_set",
+                "the flight computer must be told the pilot stood up", 120, "\"input\":\"null\"");
+        String hold;
+        try {
+            hold = events.await(dismountMark, "unmanned_hold_decided",
+                    "with nobody flying, the computer must reach its unmanned decision", 200);
+        } catch (AssertionError never) {
+            // Typed as arrangement: this seam is the one anchor in the flight computer's recorder
+            // that can go stale in silence (an INVOKE descriptor), and its own instrument name is
+            // what tells a dead seam from a ship that never went unmanned.
+            scenario().arrangementFailed(never.getMessage());
+            return;
+        }
+        scenario().requireArranged("the unmanned ship must decide to HOLD STATION before 'it did not"
+                + " sink' is a statement about the hold: " + hold,
+                matchingRecords(hold, "\"held\":true") > 0);
         bot().waitTicks(60); // let the controller brake the climb out and settle onto the hold
 
         double yStart = readDouble(shipInfo(), POS_Y);
@@ -470,6 +579,7 @@ public class VSShipFlightTelemetryE2ETest extends AbstractSharedVsClientE2ETest 
                 + " blocks over ~6 s (the bug sank ~1 block)", Math.abs(yEnd - yStart) < 0.3);
 
         exec("artest player dismount");
+        reportClientHealth("aStationKeepingShipHoldsAltitudeInsteadOfSinking");
     }
 
     // ---- helpers ------------------------------------------------------------------------------
@@ -479,36 +589,42 @@ public class VSShipFlightTelemetryE2ETest extends AbstractSharedVsClientE2ETest 
      * world position.
      *
      * <p>The harness server is shared by every test method, so "the ship near my base" is a question
-     * a neighbour can answer. The wait is for the ship COUNT to rise; then the ship's IDENTITY is
-     * captured once, and {@link #shipInfo()} carries it for the rest of the scenario.</p>
+     * a neighbour can answer. The ship's IDENTITY comes off the registry's own {@code ship_spawned}
+     * record, taken since a mark set before this assembly was queued, and {@link #shipInfo()}
+     * carries it for the rest of the scenario.</p>
      */
     private double[] buildShip(int bx, int by, int bz) throws Exception {
         exec("tp @a " + (bx + 600) + " 120 " + (bz + 600) + " 0 0");
         bot().waitTicks(10);
 
-        int shipsBefore = count("ship-count-all");
+        // The mark is taken BEFORE the assembly is queued, so the record it waits for is this
+        // scenario's own ship by construction — where the count increment it replaces asked a
+        // question every neighbour that ever assembled a ship also answers, and then had to recover
+        // the identity from a nearest-ship lookup at the build site.
+        Events events = events();
+        long spawnMark = events.markInstrumented();
         String assemble = assembleFixture(bx, by, bz);
         assertTrue("a with-pilot-seat build must route to a ship: " + assemble,
                 assemble.contains("\"rocketCount\":0"));
-
-        int all = shipsBefore;
-        for (int i = 0; i < 40 && all <= shipsBefore; i++) {
-            bot().waitTicks(5);
-            all = count("ship-count-all");
-        }
-        assertTrue("assembly must create a NEW VS ship (was " + shipsBefore + ", now " + all + ")",
-                all > shipsBefore);
+        scenarioShipId = awaitShipSpawned(events, spawnMark,
+                "a with-pilot-seat assembly must create a VS ship in the queryable registry");
         bot().waitTicks(40);
 
         exec("tp @a " + (bx + 0.5) + " " + (by + 6) + " " + (bz + 0.5) + " 0 0");
         bot().waitTicks(20);
 
-        // The scenario's ONE positional lookup, at the only moment it is defensible: this ship has
-        // just been assembled at this base and has not moved. What it yields is an IDENTITY, and
-        // every question below is asked by that id — which has no distance term to be wrong about,
-        // however far the scenario then flies, spins or drops the ship.
-        scenarioShipId = captureShipIdAt(bx, by, bz);
-        String info = shipInfo();
+        // The LOAD is the one gate here no event records: `managed:true` means the physics mod owns
+        // a loaded object for this ship. It stays a bounded poll — but asked BY IDENTITY, so it has
+        // no distance term to be wrong about however far this scenario then flies, spins or drops
+        // the ship, and `managed:false` means "not loaded" rather than "somebody else's ship".
+        String info = "";
+        for (int attempt = 0; attempt < 40 && !info.contains("\"managed\":true"); attempt++) {
+            bot().waitTicks(5);
+            info = shipInfo();
+        }
+        scenario().requireArranged("this scenario's ship (" + scenarioShipId + ") must LOAD with the"
+                + " client present before anything can be asked about it — last reply "
+                + info.replace('\n', ' '), info.contains("\"managed\":true"));
         double[] where = new double[]{
                 readDouble(info, POS_X), readDouble(info, POS_Y), readDouble(info, POS_Z)};
         System.out.println("[tier2] ship at base (" + bx + "," + by + "," + bz + ") -> "
@@ -603,6 +719,27 @@ public class VSShipFlightTelemetryE2ETest extends AbstractSharedVsClientE2ETest 
         return seen.size();
     }
 
+    /**
+     * Print what the CLIENT renders as the harness player's health, tagged with the scenario that
+     * has just finished.
+     *
+     * <p>The shared base opens every scenario by asserting full health as the client renders it, and
+     * that gate lives in its {@code @Before} — so a scenario that leaves the player short is not the
+     * one that goes red: the NEXT one is, before its own body has run and before anything it could
+     * record. Nothing then names the culprit. This goes to stdout and not to the scenario journal on
+     * purpose: the journal is printed only for a scenario that FAILS, and the scenario that leaves
+     * the leftover behind is by construction one that passed.</p>
+     *
+     * <p>It asserts nothing. The base's contract is "full health at the START, after a heal", which
+     * is weaker than "full health at the end of every scenario" — pinning the stronger one here
+     * would red a scenario the shared reset was always going to fix.</p>
+     */
+    private void reportClientHealth(String afterScenario) throws Exception {
+        JsonObject state = bot().reportState();
+        System.out.println("[tier2][HEALTH] after " + afterScenario + " the client renders health="
+                + (state != null && state.has("health") ? state.get("health").getAsString() : "?"));
+    }
+
     private String clientString(String className, String field) throws Exception {
         return bot().readStaticField(className, field).get("value").getAsString();
     }
@@ -637,9 +774,106 @@ public class VSShipFlightTelemetryE2ETest extends AbstractSharedVsClientE2ETest 
         return Math.sqrt(dx * dx + dy * dy + dz * dz);
     }
 
-    private int count(String sub) throws Exception {
-        Matcher m = COUNT.matcher(exec("artest vs " + sub + " 0"));
-        return m.find() ? Integer.parseInt(m.group(1)) : -1;
+    /**
+     * Wait for a record of {@code type} whose payload carries every one of {@code needles} — an
+     * {@link Events#await} that can say WHICH body it means.
+     *
+     * <p>Local to this class because {@code Events.await} matches on the TYPE alone, and every deck
+     * link this class waits for is about ONE body: the harness world holds the bot, this scenario's
+     * armour stand and every earlier scenario's, and all of them are captured and released by the
+     * same resolver. A wait that could be answered by any of them would be measuring the crowd.</p>
+     */
+    private String awaitRecord(Events events, long mark, String type, String what, int tickBudget,
+                               String... needles) throws Exception {
+        String reply = "";
+        // This budget is a DEADLINE for a discrete commit with an early exit — how patient the test
+        // is, never how far the world moves: the loop returns the moment the record appears, and
+        // reaching the end of it is a failure either way. Scaled like the ClientPoll ceilings beside
+        // it, because the pilot links are driven by the CLIENT and a frame-starved client under
+        // concurrent-fork load spends more of OUR ticks reaching the same commit.
+        tickBudget = (int) Math.ceil(tickBudget * TestTimeouts.factor());
+        for (int waited = 0; waited <= tickBudget; waited += 5) {
+            reply = events.since(mark, type);
+            if (matchingRecords(reply, needles) > 0) {
+                return reply;
+            }
+            bot().waitTicks(5);
+        }
+        throw new AssertionError(what + " — no `" + type + "` carrying "
+                + java.util.Arrays.toString(needles) + " was recorded within " + tickBudget
+                + " ticks. Records of that type since the mark: " + reply
+                + " | everything recorded since the mark, in order: "
+                + Events.typesOf(events.since(mark)));
+    }
+
+    /**
+     * The NUMERIC {@code field} of the last record in a {@code since} reply, or {@code "none"} when
+     * no record carries one — the counterpart of {@code Events.lastField}, which reads only the
+     * string-valued fields and answers {@code null} for a record's own tick.
+     */
+    private static String lastNumericField(String sinceReply, String field) {
+        Matcher m = Pattern.compile("\"" + field + "\":(-?[0-9.E\\-]+)")
+                .matcher(String.valueOf(sinceReply));
+        String last = null;
+        while (m.find()) {
+            last = m.group(1);
+        }
+        return last == null ? "none" : last;
+    }
+
+    /** How many records of a {@code since} reply carry EVERY one of {@code needles}. */
+    private static int matchingRecords(String sinceReply, String... needles) {
+        int n = 0;
+        for (String record : String.valueOf(sinceReply).split("\\{\"seq\":")) {
+            // The split's first chunk is the reply's ENVELOPE, which carries no `"type"` — without
+            // this guard an envelope field could be counted as a record.
+            if (!record.contains("\"type\":")) {
+                continue;
+            }
+            boolean all = true;
+            for (String needle : needles) {
+                if (!record.contains(needle)) {
+                    all = false;
+                    break;
+                }
+            }
+            if (all) {
+                n++;
+            }
+        }
+        return n;
+    }
+
+    /**
+     * Drop an armour stand over the deck and wait for the DECK to take it — the capture as a link,
+     * named for this body.
+     *
+     * <p>What it replaces read three JVM-global statics ({@code resolvedTicks},
+     * {@code lastObstacleCount}, {@code lastOnDeck}) after a blind 70-tick wait. Those are written
+     * for whichever entity resolved LAST, which on this shared world is as likely to be the bot —
+     * teleported onto the ship's footprint by {@code buildShip} — or a previous scenario's stand. A
+     * green there could be about a body this scenario never dropped.</p>
+     *
+     * @return the stand's entity id
+     */
+    private int dropStandAndAwaitItsCapture(double[] ship) throws Exception {
+        Events events = events();
+        long dropMark = events.markInstrumented();
+        int crewId = readInt(exec("artest vs drop-stand 0 " + ship[0] + " " + (ship[1] + 3)
+                + " " + ship[2]), ENTITY_ID);
+        awaitRecord(events, dropMark, "deck_captured",
+                "the deck must TAKE the dropped body (entity " + crewId + "): the ship-frame"
+                        + " resolver never captured it, so nothing below is about how a captured body"
+                        + " rides a deck", 200,
+                "\"e\":" + crewId + ",");
+        // The capture is the link; coming to REST on the deck is the body's own fall settling, which
+        // is a value and stays a wait.
+        bot().waitTicks(40);
+        String resting = exec("artest vs player-ship-data 0 " + crewId);
+        scenario().requireArranged("the dropped body must come to REST on the deck before its drift"
+                + " across that deck can mean anything: " + resting,
+                resting.contains("\"playerOnGround\":true"));
+        return crewId;
     }
 
     private double readDouble(String json, Pattern p) {

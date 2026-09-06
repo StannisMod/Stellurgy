@@ -9,6 +9,8 @@ import org.junit.Assume;
 import org.junit.Before;
 import org.junit.Test;
 
+import zmaster587.advancedRocketry.test.Events;
+
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -123,6 +125,62 @@ public class WorldCommandFetchModeratorTest {
         return String.join("\n", server.client().execute(cmd));
     }
 
+    // ── the three event logs ──────────────────────────────────────────────────
+    //
+    // A moderator fetch is a chain that crosses sides: the server hands the TARGET's body to a
+    // teleporter, and the TARGET's own client is respawned and repositioned. There is one server log
+    // and one client log per JVM, so this class reads two of the three. {@link Events} speaks the
+    // server probe's {@code artest events …} grammar and {@code ClientBot} a different verb pair,
+    // hence the adapter below — the same mark, the same "is anybody recording" assertion, the same
+    // failure narrative on both sides. Local to this class because this migration owns only its own
+    // files; a second class outside this group wanting it is the signal to lift it onto a shared
+    // base rather than copy it again.
+
+    /** The SERVER's ordered event log; the step ticks the TARGET's client between reads. */
+    private Events serverEvents() {
+        return new Events(this::exec, bot2Harness.bot()::waitTicks);
+    }
+
+    /** The TARGET client's own ordered event log — the side the contract is stated on. */
+    private Events bot2Events() {
+        return new Events(this::execBot2EventCommand, bot2Harness.bot()::waitTicks);
+    }
+
+    private String execBot2EventCommand(String command) throws Exception {
+        String[] parts = command.split(" ");
+        if (parts.length >= 3 && "mark".equals(parts[2])) {
+            return String.valueOf(bot2Harness.bot().eventMark());
+        }
+        long seq = Long.parseLong(parts[3]);
+        return String.valueOf(
+                bot2Harness.bot().eventsSince(seq, parts.length > 4 ? parts[4] : null));
+    }
+
+    /**
+     * Wait for a record of {@code type} that CARRIES {@code needle}, failing with the whole chain
+     * that DID happen.
+     */
+    private String awaitRecordCarrying(Events events, long mark, String type, String needle,
+                                       String what) throws Exception {
+        String reply = "";
+        for (int waited = 0; waited <= LINK_BUDGET_TICKS; waited += 10) {
+            reply = events.since(mark, type);
+            if (Events.countRecords(reply, needle) > 0) {
+                return reply;
+            }
+            bot2Harness.bot().waitTicks(10);
+        }
+        throw new AssertionError(what + " — no `" + type + "` carrying " + needle + " was recorded"
+                + " within " + LINK_BUDGET_TICKS + " ticks. What DID happen since the mark: "
+                + Events.typesOf(events.since(mark)) + " | raw: " + reply);
+    }
+
+    /**
+     * How long one link of the fetch may take — a deadline for a discrete event, the same 200 ticks
+     * the position poll it replaces was capped at.
+     */
+    private static final int LINK_BUDGET_TICKS = 200;
+
     /** Moderator (bot1, op) fetches bot2 from position B to position A. */
     @Test
     public void moderatorFetchTeleportsTargetToSenderPosition() throws Exception {
@@ -169,27 +227,42 @@ public class WorldCommandFetchModeratorTest {
         assertTrue("op-named must succeed for bot1: " + op,
                 op.contains("\"opped\":true"));
 
+        // BOTH marks before the stimulus: the fetch is one command and its two halves (the server
+        // placing the body, the target's client applying the move) are milliseconds apart, so a
+        // reader that marked afterwards could not tell "already done" from "never happened".
+        Events serverLog = serverEvents();
+        long serverMark = serverLog.markInstrumented();
+        Events targetLog = bot2Events();
+        long targetMark = targetLog.mark();
+
         // The moderator (bot1) TYPES /ar fetch bot2 in the real client chat —
         // CPacketChatMessage, real player sender, production command path.
         bot1Harness.bot().sendChat("/ar fetch " + BOT2_NAME);
 
+        // THE CHAIN, one link per side. On the server the command hands bot2's body to a
+        // BasicTeleporter, which is the single line that decides where in the destination world he
+        // lands; on bot2's own client the server's reposition is APPLIED. The old form re-read
+        // bot2's rendered position on a tick budget and reported "got NaN" for a command that was
+        // refused, a target the server could not resolve and a slow round trip alike.
+        String placed = awaitRecordCarrying(serverLog, serverMark, "teleporter_placed",
+                "\"who\":\"" + BOT2_NAME + "\"",
+                "a moderator's /ar fetch must run the transfer on the TARGET: the teleporter places"
+                        + " his body");
+        targetLog.await(targetMark, "client_pos_look_applied",
+                "the fetched player's OWN client must apply the move — that is what he sees on"
+                        + " screen, and it is the contract this test is named for",
+                LINK_BUDGET_TICKS);
+
         // The TARGET's client must end up rendering itself at the moderator's
-        // pre-fetch position — that's what bot2's player sees on screen.
-        // setPosition copies sender coords exactly; sub-block tolerance covers
-        // same-dim transferPlayerToDimension nudging. Poll: the chat packet +
-        // transfer land a few ticks after send.
-        double bot2PostX = Double.NaN, bot2PostZ = Double.NaN;
-        for (int waited = 0; waited < 200; waited += 10) {
-            bot2Harness.bot().waitTicks(10);
-            com.google.gson.JsonObject state = bot2Harness.bot().reportState();
-            bot2PostX = state.get("playerX").getAsDouble();
-            bot2PostZ = state.get("playerZ").getAsDouble();
-            if (Math.abs(bot2PostX - bot1PreX) < 1.5 && Math.abs(bot2PostZ - bot1PreZ) < 1.5) {
-                break;
-            }
-        }
+        // pre-fetch position — that's what bot2's player sees on screen. The teleporter places him
+        // on the CENTRE of bot1's block (moveToBlockPosAndAngles, i.e. floor + 0.5 on X/Z), so the
+        // tolerance is sub-block rather than exact.
+        com.google.gson.JsonObject state = bot2Harness.bot().reportState();
+        double bot2PostX = state.get("playerX").getAsDouble();
+        double bot2PostZ = state.get("playerZ").getAsDouble();
         assertTrue("post-fetch: bot2's CLIENT must render itself at bot1's pre-fetch X ("
-                        + bot1PreX + "), got " + bot2PostX,
+                        + bot1PreX + "), got " + bot2PostX
+                        + " — the server's own placement record: " + placed,
                 Math.abs(bot2PostX - bot1PreX) < 1.5);
         assertTrue("post-fetch: bot2's CLIENT must render itself at bot1's pre-fetch Z ("
                         + bot1PreZ + "), got " + bot2PostZ,

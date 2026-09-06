@@ -92,8 +92,57 @@ public abstract class AbstractSharedVsClientE2ETest extends AbstractSharedClient
     private static final Pattern Q_Z = Pattern.compile("\"qz\":(-?[0-9.E\\-]+)");
 
     /**
+     * Wait until the ship this scenario already NAMES is USABLE — the physics loop will step it.
+     *
+     * <p>This is the second half of what {@link #captureShipIdAt} used to do, separated from the
+     * first. A scenario that builds its own ship knows its identity — the assembly records
+     * {@code ship_spawned} and {@link #awaitShipSpawned} reads the id off it — so nothing afterwards
+     * has any business re-deriving that identity from a position. What a scenario legitimately still
+     * has to wait for is a different fact, and it is this one.</p>
+     *
+     * <p><b>It waits on production's own event, not on a probe reading.</b> The interim form of this
+     * helper polled {@code ship-info} for {@code managed:true}, which was measured on 2026-09-06 to
+     * be a literal {@code true} in the reply builder — it meant "the lookup found a ship and built a
+     * report" and nothing about readiness, so every wait on it was a wait on nothing. Real readiness
+     * is the conjunction the physics loop selects by, and it is now published as
+     * {@code ShipEvent.ShipLoadedEvent} and recorded off the bus as {@code ship_usable}.</p>
+     *
+     * <p>The {@code mark} is the one taken BEFORE the assembly — the same mark
+     * {@link #awaitShipSpawned} uses. Both facts happen after it, in that order, and a mark taken
+     * later can miss the edge entirely: the event fires once per load and is not a state to poll.</p>
+     *
+     * <p>An ARRANGEMENT failure, not a contract one: a fixture that never became a usable ship has
+     * disproved nothing about ships.</p>
+     */
+    protected final String awaitShipUsable(Events events, long mark, String shipId, int tickBudget)
+            throws Exception {
+        // Filtered on the SHIP, not merely on the type: on a shared world every neighbouring
+        // scenario's craft becomes usable in the same log, and a type-only wait is satisfied by the
+        // first of them. The substrate id is what `ship_usable` carries as `vsShip`, and it is the
+        // same value as the durable name (one ship, one identity), so either spelling of the id
+        // matches the record this scenario is waiting for.
+        String reply = events.awaitCarrying(mark, "ship_usable", "\"" + shipId + "\"",
+                "this scenario's ship " + shipId + " must become USABLE — the physics loop steps it —"
+                        + " before anything can be asked of it", tickBudget);
+        scenario().record("shipUsable_" + shipId, reply);
+        return reply;
+    }
+
+    /** {@link #awaitShipUsable(Events, long, String, int)} with this tier's usual budget. */
+    protected final String awaitShipUsable(Events events, long mark, String shipId) throws Exception {
+        return awaitShipUsable(events, mark, shipId, 200);
+    }
+
+    /**
      * Wait for this scenario's ship to LOAD at its own base and return its IDENTITY — the value
      * every later question about that ship is keyed on.
+     *
+     * <p><b>Prefer {@link #awaitShipSpawned} for the identity and {@link #awaitShipUsable} for the
+     * load.</b> This method bundles the two, and the identity half of it is a re-derivation: a
+     * scenario that assembled its own fixture was already told which ship that was. The bundling is
+     * also what makes it fragile — it finds whatever is loaded within {@code SHIP_QUERY_RADIUS} of a
+     * point, so a subject that has climbed out of that radius, or a neighbour's craft that has drifted
+     * into it, answers instead. Kept for a caller that genuinely has no creation record to key on.</p>
      *
      * <p>Fails as an ARRANGEMENT failure rather than a contract one: a scenario whose fixture never
      * became a loaded ship has not disproved anything about ships.</p>

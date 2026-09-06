@@ -13,6 +13,7 @@ import org.junit.runners.MethodSorters;
 import org.lwjgl.input.Keyboard;
 
 import zmaster587.advancedRocketry.hyperdrive.DriveTuning;
+import zmaster587.advancedRocketry.test.Events;
 
 import static org.junit.Assert.assertTrue;
 import static zmaster587.advancedRocketry.test.AdvancedRocketryTestConstants.SHIP_CAPTURE_RADIUS_BLOCKS;
@@ -41,7 +42,12 @@ import static zmaster587.advancedRocketry.test.AdvancedRocketryTestConstants.SHI
  *       flight computer.</li>
  *   <li><b>Both consoles answer a real key press</b> — the same aim-and-press the human performs,
  *       through the same code path, with the crosshair confirmed on the intended block before every
- *       press so a red names the hop that failed rather than merely the outcome.</li>
+ *       press so a red names the hop that failed rather than merely the outcome. Each press is
+ *       measured on the ordered logs either side of it rather than by polling for its result: the
+ *       seat as {@code right_click_block} &rarr; {@code mount} on the server, the console as the
+ *       server's {@code right_click_block} and the client's own {@code client_gui_opened} — which
+ *       is what separates a press the server never received from one the block declined to
+ *       answer.</li>
  * </ol>
  *
  * <p>Assembly here is ARRANGEMENT, not subject: it is driven by the probe.</p>
@@ -73,6 +79,9 @@ public class VSJumpDriveFixtureBoardingE2ETest extends AbstractSharedVsClientE2E
             "\"worldX\":(-?[0-9.E\\-]+),\"worldY\":(-?[0-9.E\\-]+),\"worldZ\":(-?[0-9.E\\-]+)");
     private static final Pattern BLOCK_ID = Pattern.compile("\"block\":\"([^\"]*)\"");
     private static final Pattern IS_AIR = Pattern.compile("\"isAir\":(true|false)");
+    /** The client event log's envelope count. It is emitted before the records, so the FIRST match
+     *  in a reply is always the envelope's and never a record's own field. */
+    private static final Pattern CLIENT_EVENT_COUNT = Pattern.compile("\"count\":(-?\\d+)");
 
     private static final String VARIANT = "with-jump-drive";
     private static final int BX = 2900, BY = 64, BZ = 2900;
@@ -126,9 +135,19 @@ public class VSJumpDriveFixtureBoardingE2ETest extends AbstractSharedVsClientE2E
         // ---- ARRANGEMENT: build the craft and let the assembler turn it into a ship. -------------
         exec("tp @a " + (BX + 600) + " 120 " + (BZ + 600) + " 0 0");
         bot().waitTicks(10);
+
+        // Marked BEFORE the assembly is queued, so the registry's own record of a ship being added
+        // is THIS craft's by construction. It also splits the wait below in two: the ship coming
+        // into EXISTENCE is an event, and only the client-present LOAD is left to poll for - where
+        // one loop reported "no altitude" for a spawn that faulted and for a chunk that never
+        // arrived alike.
+        Events events = events();
+        long spawnMark = events.markInstrumented();
         String assemble = assembleFixture();
         scenario().requireArranged("a " + VARIANT + " build must route to a ship: " + assemble,
                 assemble.contains("\"ok\":true"));
+        awaitShipSpawned(events, spawnMark, "the assembly must create a VS ship in the queryable"
+                + " registry before any of its consoles can be aimed at (the spawn is asynchronous)");
 
         exec("tp @a " + (BX + 0.5) + " " + (BY + 10) + " " + (BZ + 0.5) + " 0 0");
         bot().waitTicks(20);
@@ -245,19 +264,34 @@ public class VSJumpDriveFixtureBoardingE2ETest extends AbstractSharedVsClientE2E
         Aim seatAim = aimAt(afcSub, seatSub, OFF_STAND, 0.5, 0.2, 0.5, budget);
         assertAimed(seatAim, seatSub, "pilot seat", "pilotseat");
 
+        // The mark goes BEFORE the press: a use press is over inside a tick, and a poll that arrives
+        // after it cannot tell a click the server never saw from one it saw and refused.
+        long seatPressMark = events.markInstrumented();
         bot().setKey(KEY_USE_ITEM, true);
         bot().waitTicks(5);
         bot().setKey(KEY_USE_ITEM, false);
+
+        // The two links a boarding IS, in the order the game commits them: Forge fires
+        // RightClickBlock inside processRightClickBlock BEFORE the block's own activation runs, and
+        // the seat's activation is what mounts the pilot. NO right_click_block at all means the
+        // press was dropped before the seat ever saw it (reach, an unconfirmed teleport, a held
+        // stack); a right_click_block with no mount means the seat refused the boarding.
+        events.assertChain(seatPressMark, "a real use-key press aimed at the deck ship's PILOT SEAT "
+                        + "must reach the server and seat the pilot - the crosshair was proven to be "
+                        + "on that very block, so a break here is the interaction, not a missed aim."
+                        + seatAim.diagnosis,
+                5 * budget, "right_click_block", "mount");
 
         JsonObject riding = bot().reportRidingEntity();
         for (int attempt = 0; attempt < budget && !isRiding(riding); attempt++) {
             bot().waitTicks(5);
             riding = bot().reportRidingEntity();
         }
-        assertTrue("a real use-key press aimed at the deck ship's PILOT SEAT must seat the pilot — "
-                        + "the crosshair was proven to be on that very block, so a failure here is "
-                        + "the interaction being refused, not a missed aim. clientRiding=" + riding
-                        + " serverRiding=" + exec("artest player riding-entity") + seatAim.diagnosis,
+        assertTrue("the CLIENT must render the pilot aboard after a boarding the SERVER has already "
+                        + "recorded (the chain above). clientRiding=" + riding
+                        + " serverRiding=" + exec("artest player riding-entity")
+                        + " serverMountRecord=" + events.since(seatPressMark, "mount")
+                        + seatAim.diagnosis,
                 isRiding(riding));
 
         // ---- ARRANGEMENT: leave the seat again, the way a pilot does. ----------------------------
@@ -267,20 +301,43 @@ public class VSJumpDriveFixtureBoardingE2ETest extends AbstractSharedVsClientE2E
         Aim navAim = aimAt(afcSub, navSub, OFF_STAND, 0.5, 0.5, 0.5, budget);
         assertAimed(navAim, navSub, "navigation console", "navigationcomputer");
 
+        // BOTH logs are marked before the press, because opening a console is a two-sided link and a
+        // single "what screen is up" poll cannot say which half never happened: the click has to
+        // reach the SERVER (its own record), and the CLIENT has then to be told to display a screen
+        // (its record). The server's `gui_container_served` is deliberately NOT awaited here - this
+        // block is a libVulpes BlockTile and opens its GUI on the libVulpes mod instance, so the
+        // request never reaches AR's own gui handler, which is the only one that seam observes.
+        long navMark = events.markInstrumented();
+        long navClientMark = bot().eventMark().get("seq").getAsLong();
         bot().setKey(KEY_USE_ITEM, true);
         bot().waitTicks(5);
         bot().setKey(KEY_USE_ITEM, false);
 
+        events.await(navMark, "right_click_block", "the use press aimed at the NAVIGATION CONSOLE "
+                        + "must reach the server at all - an aim this test has already proven, with "
+                        + "no click recorded, is a press discarded upstream of the block (reach, an "
+                        + "unconfirmed teleport, a held stack)." + navAim.diagnosis,
+                5 * budget);
+        String opened = awaitClientEvent(navClientMark, "client_gui_opened",
+                "the console press reached the server, so the CLIENT must be asked to display a "
+                        + "screen for it - nothing here is a console that swallowed the press."
+                        + navAim.diagnosis,
+                5 * budget);
+
+        // WHICH screen is up is a state, read after the link above rather than waited for: the open
+        // has already been recorded, so this only lets the client finish putting it on screen.
         String screen = "";
-        for (int attempt = 0; attempt < budget && screen.isEmpty(); attempt++) {
-            bot().waitTicks(5);
+        for (int attempt = 0; attempt < 10 && screen.isEmpty(); attempt++) {
             screen = ClientGuiTestSupport.screenOf(bot().reportState());
+            if (screen.isEmpty()) {
+                bot().waitTicks(5);
+            }
         }
         assertTrue("a real use-key press aimed at the assembled ship's NAVIGATION CONSOLE must open "
                         + "its GUI on the client. This is the second block a jump-capable craft asks "
                         + "the pilot to touch, and unlike the seat its whole answer IS the screen — a "
                         + "console that swallows the press leaves the pilot with no way to aim the "
-                        + "ship at all. screen=\"" + screen + "\""
+                        + "ship at all. screen=\"" + screen + "\" clientGuiOpens=" + opened
                         + " serverSideModuleBuild=" + exec("artest nav modules 0 " + navSub[0] + " "
                                 + navSub[1] + " " + navSub[2])
                         + navAim.diagnosis,
@@ -477,7 +534,15 @@ public class VSJumpDriveFixtureBoardingE2ETest extends AbstractSharedVsClientE2E
                 heldId != null && heldId.isEmpty());
     }
 
-    /** Sneak off the seat the way a pilot does, falling back to the probe if the key path misses. */
+    /**
+     * Get the pilot out of the seat before he reaches for the console.
+     *
+     * <p><b>This ARRANGES a dismount; it does not test the sneak key.</b> The sneak route is tried
+     * first because it is what a player does, but when it misses the probe dismount takes over and
+     * the scenario continues — so a shipped regression in "shift leaves a pilot seat" would never
+     * red here. Which route actually worked is recorded, so a green run still says it; a test for
+     * the key itself would have to assert the first route and is not written.</p>
+     */
     private void leaveTheSeat(int budget) throws Exception {
         boolean off = false;
         bot().holdKey(Keyboard.KEY_LSHIFT);
@@ -486,14 +551,43 @@ public class VSJumpDriveFixtureBoardingE2ETest extends AbstractSharedVsClientE2E
             off = !isRiding(bot().reportRidingEntity());
         }
         bot().releaseKey(Keyboard.KEY_LSHIFT);
+        boolean bySneak = off;
         if (!off) {
             exec("artest player dismount");
             bot().waitTicks(5);
             off = !isRiding(bot().reportRidingEntity());
         }
+        scenario().record("leftSeatBy", bySneak ? "sneak-key" : (off ? "probe-fallback" : "nothing"));
         scenario().requireArranged("the pilot must leave the seat before reaching for the console — a "
-                + "seated player's use press goes to the ship, not to the block he is looking at.",
+                + "seated player's use press goes to the ship, not to the block he is looking at."
+                + " Neither the sneak key nor the probe dismount got him off it.",
                 off);
+    }
+
+    /**
+     * Wait for one CLIENT event of {@code type} recorded at or after {@code mark}, and answer the
+     * whole reply.
+     *
+     * <p>Written here rather than taken from a base class on purpose: {@link Events} reads the
+     * SERVER's ordered log through the probe, and the client's own log is reached through the bot's
+     * bridge instead — no shared base owns that shape yet. A failure prints everything the client
+     * recorded since the mark, the executed observation points included, so "nothing happened" and
+     * "nobody was listening" cannot arrive as the same sentence.</p>
+     */
+    private String awaitClientEvent(long mark, String type, String what, int tickBudget)
+            throws Exception {
+        String reply = "";
+        for (int waited = 0; waited <= tickBudget; waited += 5) {
+            reply = String.valueOf(bot().eventsSince(mark, type));
+            Matcher m = CLIENT_EVENT_COUNT.matcher(reply);
+            if (m.find() && Integer.parseInt(m.group(1)) > 0) {
+                return reply;
+            }
+            bot().waitTicks(5);
+        }
+        throw new AssertionError(what + " — no client `" + type + "` was recorded within "
+                + tickBudget + " ticks. What the CLIENT did record since the mark: "
+                + bot().eventsSince(mark, null));
     }
 
     private String assembleFixture() throws Exception {

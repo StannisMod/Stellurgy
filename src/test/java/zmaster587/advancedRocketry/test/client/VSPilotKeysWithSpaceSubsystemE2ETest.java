@@ -16,8 +16,9 @@ import org.junit.Before;
 import org.junit.Test;
 import org.lwjgl.input.Keyboard;
 
+import zmaster587.advancedRocketry.test.Events;
+
 import static org.junit.Assert.assertTrue;
-import static zmaster587.advancedRocketry.test.AdvancedRocketryTestConstants.SHIP_CAPTURE_RADIUS_BLOCKS;
 
 /**
  * A seated pilot must be able to fly his ship WHILE THE SPACE SUBSYSTEM IS LIVE.
@@ -47,7 +48,6 @@ public class VSPilotKeysWithSpaceSubsystemE2ETest {
     private static final Pattern BUILDER_POS =
             Pattern.compile("\"builderPos\":\\[(-?\\d+),(-?\\d+),(-?\\d+)]");
     private static final Pattern POS_Y = Pattern.compile("\"posY\":(-?[0-9.E\\-]+)");
-    private static final Pattern SHIP_ID = Pattern.compile("\"id\":\"([^\"]*)\"");
     private static final Pattern DUMMY_ID = Pattern.compile("\"dummyId\":(-?\\d+)");
 
     private static final String VARIANT = "with-pilot-seat";
@@ -123,40 +123,46 @@ public class VSPilotKeysWithSpaceSubsystemE2ETest {
         exec("tp @a " + (BX + 600) + " 120 " + (BZ + 600) + " 0 0");
         clientHarness.bot().waitTicks(10);
 
+        // The event log, built by hand because this class boots its own harness pair rather than
+        // sharing the tier's base: the probe channel is the server's, and the client supplies the
+        // clock the reader steps on. Nothing else about it differs.
+        Events events = new Events(this::exec, ticks -> clientHarness.bot().waitTicks(ticks));
+        long spawnMark = events.markInstrumented();
         String assemble = assembleFixture(BX, BY, BZ, VARIANT);
         assertTrue("a with-pilot-seat build must route to a ship: " + assemble,
                 assemble.contains("\"ok\":true"));
+
+        // The ship's IDENTITY comes off the registry's own record of it being added, since a mark
+        // taken before the assembly was queued — not off a nearest-ship lookup at the build site a
+        // tick later, which answers about whichever loaded ship is closest to a point.
+        String spawned = events.await(spawnMark, "ship_spawned",
+                "assembly must create a VS ship in the queryable registry (async spawn)", 400);
+        final String shipUuid = Events.lastField(spawned, "vsShip");
+        assertTrue("a ship_spawned record must name the ship: " + spawned, shipUuid != null);
 
         // Stand the client next to the ship so it stays loaded, then read its resting altitude.
         exec("tp @a " + (BX + 0.5) + " " + (BY + 6) + " " + (BZ + 0.5) + " 0 0");
         clientHarness.bot().waitTicks(20);
 
+        // A ship becoming LOADED has no event of its own, so this half stays a bounded probe read —
+        // but it is asked BY IDENTITY now, so a "managed":false is a statement about THIS ship and
+        // never a report about a neighbour that happens to be nearer.
         double yBefore = Double.NaN;
         String atBase = "";
         for (int attempt = 0; attempt < 40 && Double.isNaN(yBefore); attempt++) {
             clientHarness.bot().waitTicks(5);
-            // The one positional lookup this scenario spends: the ship is freshly assembled at its
-            // own base and the bound cannot admit anything else. Its answer is the identity below.
-            atBase = exec("artest vs ship-info 0 " + BX + " " + BY + " " + BZ
-                    + " " + SHIP_CAPTURE_RADIUS_BLOCKS);
+            atBase = exec("artest vs ship-info 0 id " + shipUuid);
             Matcher m = POS_Y.matcher(atBase);
             if (m.find()) {
                 yBefore = Double.parseDouble(m.group(1));
             }
         }
-        assertTrue("the ship must LOAD with the client present within 200 ticks. The lookup's own"
-                        + " answer IS the diagnosis and this message used to throw it away: an empty"
-                        + " reply means no ship near the base at all (assembly never routed to one),"
-                        + " while a reply carrying \"managed\":false means one is there and the"
-                        + " physics mod does not own it yet - a different wait, not a longer one."
-                        + " nearest=" + atBase.replace('\n', ' '),
+        assertTrue("the ship the registry named must LOAD with the client present within 200 ticks."
+                        + " The lookup's own answer IS the diagnosis and this message used to throw"
+                        + " it away: a reply carrying \"managed\":false means the physics mod does not"
+                        + " own it yet - a different wait, not a longer one. ship=" + shipUuid
+                        + " reply=" + atBase.replace('\n', ' '),
                 !Double.isNaN(yBefore));
-
-        // Keyed on IDENTITY from here on: the whole measurement below is the ship CLIMBING away
-        // from this base, which is the one place a nearest-ship query stops meaning it.
-        Matcher sid = SHIP_ID.matcher(atBase);
-        assertTrue("ship-info must name the ship: " + atBase, sid.find());
-        final String shipUuid = sid.group(1);
 
         String mountInfo = exec("artest vs seat-mount 0");
         Matcher dm = DUMMY_ID.matcher(mountInfo);
@@ -167,6 +173,7 @@ public class VSPilotKeysWithSpaceSubsystemE2ETest {
 
         // The real key, through the real client input path, exactly as a player holds it.
         final double y0 = yBefore;
+        long flightMark = events.markInstrumented();
         clientHarness.bot().holdKey(Keyboard.KEY_R); // flightVerticalUp
         ClientPoll.Result<Double> lift;
         try {
@@ -185,10 +192,22 @@ public class VSPilotKeysWithSpaceSubsystemE2ETest {
         }
         double yAfter = lift.value;
 
+        // The LINK before the number. The climb poll's probe deliberately answers with the baseline
+        // when a ship-info reply is unparseable, so a ship that unloaded and one that never moved
+        // produce the same red — and neither says whether the key ever reached the ship at all.
+        // Asserting the delivery first splits those apart: past this line the input demonstrably got
+        // to the flight computer, so a flat altitude is about the physics and nothing else.
+        events.await(flightMark, "pilot_input_delivered", "the held key must reach the ship's flight"
+                + " computer while the space subsystem is registered - until this link is on the"
+                + " record, an altitude that did not move says nothing about flight", 400);
+
         assertTrue("a seated pilot holding the vertical-up key must lift his ship even with the space "
                         + "subsystem registered - this is the configuration every real player runs, and "
-                        + "it is the ONLY tier-2 flight configuration no other test covers. "
-                        + "yBefore=" + yBefore + " yAfter=" + yAfter + " subsystem=" + status,
+                        + "it is the ONLY tier-2 flight configuration no other test covers. The input"
+                        + " demonstrably reached the computer (see the link above), so this red is"
+                        + " about the flight itself. "
+                        + "yBefore=" + yBefore + " yAfter=" + yAfter + " ship=" + shipUuid
+                        + " subsystem=" + status,
                 (yAfter - yBefore) >= MIN_CLIMB);
     }
 

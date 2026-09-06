@@ -8,6 +8,8 @@ import org.lwjgl.input.Keyboard;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import zmaster587.advancedRocketry.test.Events;
+
 import static org.junit.Assert.assertTrue;
 
 /**
@@ -50,7 +52,6 @@ public class VSDeckCaptureAndDismountE2ETest extends AbstractSharedVsClientE2ETe
         return "vs-deck-capture";
     }
 
-    private static final Pattern COUNT = Pattern.compile("\"count\":(-?\\d+)");
     private static final Pattern BUILDER_POS =
             Pattern.compile("\"builderPos\":\\[(-?\\d+),(-?\\d+),(-?\\d+)]");
     private static final Pattern POS_X = Pattern.compile("\"posX\":(-?[0-9.E\\-]+)");
@@ -66,12 +67,86 @@ public class VSDeckCaptureAndDismountE2ETest extends AbstractSharedVsClientE2ETe
 
     private static final String VARIANT = "with-pilot-deck";
 
-    /** Ships in dim 0's registry immediately after {@link #buildShip} created this scenario's. */
-    private int shipsInRegistryAfterBuild;
+    /**
+     * How long one link of a deck-capture or ship-lifecycle chain may take. A DEADLINE for a
+     * discrete event, not a guess at how long a value takes to settle: production either captures a
+     * body, releases it, loads a ship or unloads one — 240 ticks is generous against an eight-fork
+     * load and still fails a scenario that never gets there rather than waiting out a budget.
+     */
+    private static final int DECK_LINK_BUDGET_TICKS = 240;
 
     /**
-     * THIS scenario's ship, by identity — captured by {@link #buildShip} at the one moment the base
-     * provably holds no other, and the address every later question uses.
+     * The CLIENT's event log behind the same {@link Events} verbs the server log is read through.
+     *
+     * <p>The bugs this class exists for are all CLIENT facts — a player falls through a deck on his
+     * OWN client while the server holds him on it, which is exactly why an armour stand read through
+     * a server probe could never reproduce them. {@code Events} speaks one probe language
+     * ({@code artest events mark} / {@code artest events since <seq> [type]}) and the client bot
+     * answers the same two questions on its own channel; this is the translation, so a client-side
+     * contract gets {@code await}/{@code assertChain} and their failure narrative instead of a
+     * hand-rolled poll and a regex.</p>
+     *
+     * <p>Local to this class because the shared base owns the SERVER log's {@code events()} and this
+     * migration does not extend it. The client reply carries {@code recording} — so {@link
+     * Events#mark} means something — but no {@code mixins} flag, so {@link Events#markInstrumented}
+     * must never be called on it; anything concluded from a client SILENCE asserts
+     * {@link Events#assertInstrumentRan} on the reply instead, which is the stronger check anyway.</p>
+     */
+    private final class ClientEventProbe implements Events.Probe {
+        @Override
+        public String exec(String command) throws Exception {
+            if ("artest events mark".equals(command)) {
+                return String.valueOf(bot().eventMark());
+            }
+            if (command.startsWith("artest events since ")) {
+                String[] parts = command.substring("artest events since ".length()).trim().split(" ");
+                return String.valueOf(bot().eventsSince(Long.parseLong(parts[0]),
+                        parts.length > 1 ? parts[1] : null));
+            }
+            throw new IllegalArgumentException("the client event log answers `mark` and `since` only,"
+                    + " not: " + command);
+        }
+    }
+
+    /** The client's own ordered event log, read through {@link Events}. */
+    private Events clientEvents() {
+        return new Events(new ClientEventProbe(), bot()::waitTicks);
+    }
+
+    /**
+     * Wait for a ship-lifecycle record naming THIS scenario's ship, or fail printing every such
+     * record that DID arrive.
+     *
+     * <p>{@link Events#await} filters by type only, and on a shared world every neighbour's ship
+     * loads and unloads through the same seam — so a bare await would be answered by somebody else's
+     * craft. The physics uuid is the join: {@code ship_loaded} / {@code ship_unloaded} /
+     * {@code ship_removed} carry {@code vsShip} = {@code ShipData.getUuid()}, and the id this
+     * scenario holds is the {@code vsShip} of its own {@code ship_spawned} record — the same field,
+     * written from the same uuid at the registry's add.</p>
+     *
+     * <p>A payload filter belongs on {@link Events} itself; it is written here because this wave does
+     * not extend the shared base.</p>
+     */
+    private String awaitThisShip(Events events, long mark, String type, String what)
+            throws Exception {
+        String reply = "";
+        for (int waited = 0; waited <= DECK_LINK_BUDGET_TICKS; waited += 5) {
+            reply = events.since(mark, type);
+            if (Events.countRecords(reply, "\"vsShip\":\"" + scenarioShipId + "\"") > 0) {
+                return reply;
+            }
+            bot().waitTicks(5);
+        }
+        throw new AssertionError(what + " — no `" + type + "` naming this scenario's ship ("
+                + scenarioShipId + ") was recorded within " + DECK_LINK_BUDGET_TICKS + " ticks."
+                + " Records of that type in the window (they belong to other ships): " + reply);
+    }
+
+    /**
+     * THIS scenario's ship, by identity — read by {@link #buildShip} off the registry's own
+     * {@code ship_spawned} record for the assembly it just queued, and the address every later
+     * question uses. A scenario that builds its own ship is TOLD which ship that is; nothing here
+     * re-derives that from a position.
      *
      * <p>Every question here used to be "the ship nearest my base, within a radius". That radius is a
      * mitigation and not an identity: these scenarios deliberately tumble, invert and hover their
@@ -95,8 +170,23 @@ public class VSDeckCaptureAndDismountE2ETest extends AbstractSharedVsClientE2ETe
         // The subject is the REAL client player. Drop the bot onto the deck and let its OWN client
         // resolve the landing (this is the thing that breaks; an armour stand read via a server probe
         // is not). Mirrors the crew test's drop-and-settle.
+        // The landing is a LINK, not a duration: his own client's resolver either takes him onto the
+        // deck or it does not, and 80 ticks was a guess at how long that takes. The mark goes before
+        // the teleport, so nothing can happen between the stimulus and the read.
+        //
+        // `deck_captured` is a per-tick COMMIT, so a body the build step already left standing on
+        // this deck satisfies the await at once. That is deliberate and it is still the right link:
+        // what this scenario's bug looks like is NO capture on the client at all while the server
+        // holds him — and a capture that existed and was then lost shows up in the release absence
+        // over the sink window below, which is where "he kept sinking" would have to appear.
+        Events clientEvents = clientEvents();
+        long landingMark = clientEvents.mark();
         exec("tp @a " + ship[0] + " " + (ship[1] + 4) + " " + ship[2] + " 0 0");
-        bot().waitTicks(80);
+        String landing = clientEvents.await(landingMark, "deck_captured",
+                "the player's OWN client must resolve him on the deck of the grounded ship — a"
+                        + " fall-through leaves the client with no capture at all, which is the fault"
+                        + " this scenario exists for", DECK_LINK_BUDGET_TICKS);
+        System.out.println("[deckcap] grounded client capture=" + landing);
 
         // Server oracle: does the server capture the standing player on the deck at all, and is the deck
         // solid under his feet in the ship frame? deck-capture prints the whole handles() decision.
@@ -122,11 +212,22 @@ public class VSDeckCaptureAndDismountE2ETest extends AbstractSharedVsClientE2ETe
                 + "fallen through it: serverY=" + serverY + " clientY=" + clientY,
                 Math.abs(clientY - serverY) < 2.0);
 
-        // And he must not keep sinking through it over time.
+        // And he must not keep sinking through it over time. The window stays a window — expiry is
+        // not the failure — but the client's resolver records EVERY release with the gate that
+        // performed it, so "he was not dropped during it" is now an absence in the log rather than
+        // an inference from two Y samples. An absence only means something once the instrument has
+        // announced itself, which is what assertInstrumentRan is for.
+        long sinkMark = clientEvents.mark();
         bot().waitTicks(60);
         double clientYLater = bot().reportState().get("playerY").getAsDouble();
+        String sinkReleases = clientEvents.since(sinkMark, "deck_released");
+        Events.assertInstrumentRan(sinkReleases, "deck_capture_events",
+                "the client held the player on the deck for the whole window");
         assertTrue("the client player must stay on the deck, not sink through it: " + clientY + " -> "
                 + clientYLater, clientY - clientYLater < 1.5);
+        assertTrue("the client must not let go of a player standing still on a grounded deck; a"
+                + " release here names the gate that dropped him: " + sinkReleases,
+                Events.countRecords(sinkReleases, "\"reason\"") == 0);
     }
 
     // ---- Bug: dismounting mid-hover drops the ship and the pilot --------------------------------
@@ -161,12 +262,22 @@ public class VSDeckCaptureAndDismountE2ETest extends AbstractSharedVsClientE2ETe
         // Dismount exactly as the maintainer did: the real sneak key. (While seated it also feeds the
         // flight brake, but a held sneak still triggers vanilla's dismount.) Confirm on the CLIENT that
         // the player left the seat; fall back to the server dismount only if the key path did not fire.
+        // The un-seating is recorded where production performs it — at
+        // {@code Entity.dismountRidingEntity}, with the CALLER that performed it — so the wait is on
+        // that record rather than on the client's replicated riding flag, and the record's own
+        // caller trail says which of the two routes below actually got him out. (The client flag is
+        // the replication of a server write; polling it measured the round trip as much as the
+        // dismount.)
+        Events events = events();
+        long dismountMark = events.markInstrumented();
+        Events clientEvents = clientEvents();
+        long clientDismountMark = clientEvents.mark();
         boolean dismounted = false;
         String dismountPath = "sneak-key";
         bot().holdKey(Keyboard.KEY_LSHIFT);
         for (int i = 0; i < 40 && !dismounted; i++) {
             bot().waitTicks(2);
-            dismounted = !bot().reportRidingEntity().get("riding").getAsBoolean();
+            dismounted = Events.countRecords(events.since(dismountMark, "dismount"), "\"mount\"") > 0;
         }
         bot().releaseKey(Keyboard.KEY_LSHIFT);
         String serverDismount = "";
@@ -174,22 +285,38 @@ public class VSDeckCaptureAndDismountE2ETest extends AbstractSharedVsClientE2ETe
             System.out.println("[deckcap] sneak key did not dismount; using server dismount");
             dismountPath = "sneak-key-then-server-dismount";
             serverDismount = exec("artest player dismount").replace('\n', ' ');
-            bot().waitTicks(5);
-            dismounted = !bot().reportRidingEntity().get("riding").getAsBoolean();
         }
         // Which PATH was taken is the diagnosis, and this message used to be a bare sentence. Both
         // paths failing is a different fault from the key path alone failing: the first says the
         // player cannot be un-seated at all, the second says only the real key route is dead, which
-        // is the one a player actually uses and the one this scenario is about.
-        assertTrue("the pilot must actually leave the seat, and NEITHER route got him out."
-                        + " tried=" + dismountPath
-                        + (serverDismount.isEmpty() ? "" : " serverDismount=" + serverDismount)
-                        + " riding=" + bot().reportRidingEntity()
-                        + " capture=" + exec("artest vs deck-capture"),
-                dismounted);
+        // is the one a player actually uses and the one this scenario is about. The record's `by`
+        // trail names the un-seater — vanilla's own updateRidden for the sneak key, the probe verb
+        // for the fallback — so the two are now told apart by the log instead of by which branch the
+        // test happened to take.
+        String dismountRecord;
+        try {
+            dismountRecord = events.await(dismountMark, "dismount",
+                    "the pilot must actually leave the seat, and NEITHER route got him out. tried="
+                            + dismountPath
+                            + (serverDismount.isEmpty() ? "" : " serverDismount=" + serverDismount),
+                    DECK_LINK_BUDGET_TICKS);
+        } catch (AssertionError neverDismounted) {
+            throw new AssertionError(neverDismounted.getMessage()
+                    + " | riding=" + bot().reportRidingEntity()
+                    + " | capture=" + exec("artest vs deck-capture"), neverDismounted);
+        }
+        System.out.println("[deckcap] dismount route tried=" + dismountPath
+                + " unSeatedBy=" + Events.lastField(dismountRecord, "by"));
 
-        // Let the now-unmanned ship reveal whether it holds or falls.
-        bot().waitTicks(40);
+        // Let the now-unmanned ship reveal whether it holds or falls — waited on the flight
+        // computer's OWN decision rather than on 40 ticks. With no pilot input it either commands a
+        // hover or returns inert, and until that record existed a 2-block drop could not say
+        // "station-keeping was off" apart from "the hold engaged and under-thrust".
+        String hold = events.await(dismountMark, "unmanned_hold_decided",
+                "the flight computer must take an unmanned decision once the pilot stands up — with"
+                        + " no record of one, a ship that then falls cannot be told from a ship whose"
+                        + " computer never noticed it was unmanned", DECK_LINK_BUDGET_TICKS);
+        bot().waitTicks(40); // and then let a ship that is NOT holding visibly fall
         String info = shipInfo();
         double shipYPost = readDouble(info, POS_Y);
         double velYPost = readDouble(info, VEL_Y);
@@ -201,14 +328,22 @@ public class VSDeckCaptureAndDismountE2ETest extends AbstractSharedVsClientE2ETe
                 + velYPost + " serverY=" + serverY + " clientY=" + clientY);
         System.out.println("[deckcap] dismount capture=" + capture);
 
-        // The ship must keep hovering, not drop, when the pilot stands up.
+        // The ship must keep hovering, not drop, when the pilot stands up. The computer's own
+        // unmanned decision rides in the message: `held=false` says station-keeping was never on,
+        // which is a different defect from a hold that engaged and under-thrust.
         assertTrue("a hovering ship must not fall when the pilot dismounts: it dropped from " + shipYPre
-                + " to " + shipYPost, shipYPre - shipYPost < 2.0);
+                + " to " + shipYPost + ". The computer's unmanned decision was " + hold,
+                shipYPre - shipYPost < 2.0);
         assertTrue("a hovering ship must not start falling when the pilot dismounts (velY=" + velYPost
-                + ")", velYPost > -0.5);
+                + "). The computer's unmanned decision was " + hold, velYPost > -0.5);
 
         // The pilot must stay aboard: resolved on the deck in the ship frame, and rendered there by his
-        // own client - not dropped into the world.
+        // own client - not dropped into the world. The client's capture is a link and is awaited as
+        // one; a seat dismount seeds it, so a client with no `deck_captured` since the un-seating is
+        // the "left in the world" half of the report, named instead of inferred from two heights.
+        clientEvents.await(clientDismountMark, "deck_captured",
+                "the ex-pilot's OWN client must take him onto the deck when he stands up mid-hover",
+                DECK_LINK_BUDGET_TICKS);
         assertTrue("the dismounted pilot must be resolved on the deck, not handed to vanilla: " + capture,
                 capture.contains("\"verdict\":true") && readInt(capture, OBSTACLES) > 0);
         assertTrue("the client must render the dismounted pilot on the deck where the server holds him: "
@@ -229,11 +364,12 @@ public class VSDeckCaptureAndDismountE2ETest extends AbstractSharedVsClientE2ETe
         // player brings it back. This drives that path in-harness: build, walk away until the ship's
         // chunks unload (VS saves it to the registry), then return to its deck.
         double[] ship = buildShip(bx, by, bz);
-        int registryAfterBuild = shipsInRegistryAfterBuild;
-        assertTrue("the ship must be loaded before we unload it", shipLoadedAt(bx, by, bz));
+        assertTrue("the ship must be loaded before we unload it", shipIsLoaded());
 
         // Walk away far enough that nothing tickets the ship's chunks; the harness warmup holds no
         // ticket, so idle chunks unload. Belt and braces: drop any tickets a prior step left.
+        Events events = events();
+        long unloadMark = events.markInstrumented();
         exec("artest chunk release-all");
         exec("tp @a " + (bx + 4000) + " 120 " + (bz + 4000) + " 0 0");
         // Scoped to THIS ship: a whole-dimension "no ship is loaded" gate would wait on every
@@ -247,23 +383,39 @@ public class VSDeckCaptureAndDismountE2ETest extends AbstractSharedVsClientE2ETe
         // unload every tick for any ship with no player inside its unload distance, and the shared
         // base resets the one affordance that would override that. So the state below is REACHED,
         // not hoped for, and failing to reach it is news.
-        boolean stillLoaded = true;
-        for (int i = 0; i < 80 && stillLoaded; i++) {
-            bot().waitTicks(10);
-            stillLoaded = shipLoadedAt(bx, by, bz);
-        }
-        assertTrue("arrangement: the ship must actually unload before the RELOAD path can be"
-                + " exercised (still loaded at " + bx + "," + by + "," + bz + ")", !stillLoaded);
-        // The registry must not have LOST it. Compared against the count taken right after this
-        // scenario's own assembly, so it stays a statement about this ship on a shared world.
-        assertTrue("the unloaded ship must survive in the registry (a saved ship): "
-                        + exec("artest vs ship-count-all 0") + " after build it was "
-                        + registryAfterBuild,
-                count("ship-count-all") >= registryAfterBuild);
+        //
+        // The unload is a COMMIT — the substrate drops the physics object at one seam — so it is
+        // awaited as one, keyed on this scenario's own ship. The 80x10 poll it replaces read a
+        // by-id state and could only ever say "not yet".
+        String unloaded = awaitThisShip(events, unloadMark, "ship_unloaded",
+                "arrangement: the ship must actually unload before the RELOAD path can be exercised");
+        assertTrue("the by-id state must agree with the unload record " + unloaded, !shipIsLoaded());
+        // The registry must not have LOST it: an unloaded ship is a SAVED ship, and the registry
+        // removal is a different seam with its own record. This is an absence, so the instrument
+        // says out loud that it was listening.
+        String removals = events.since(unloadMark, "ship_removed");
+        Events.assertInstrumentRan(removals, "ship_registry_events",
+                "the unloaded ship survived in the registry rather than being removed from it");
+        assertTrue("the unloaded ship must survive in the registry (a saved ship is unloaded, never"
+                        + " removed): " + removals,
+                Events.countRecords(removals, "\"vsShip\":\"" + scenarioShipId + "\"") == 0);
 
-        // Return to the ship exactly as re-entering a docked ship from a saved world, and stand on it.
+        // Return to the ship exactly as re-entering a docked ship from a saved world, and stand on
+        // it. Two links, and each one names a different fault: the ship comes back
+        // (`ship_loaded` — a new physics object for THIS ship), and his own client then takes him
+        // onto its deck (`deck_captured`). 80 ticks used to cover both and could distinguish
+        // neither.
+        long reloadMark = events.markInstrumented();
+        Events clientEvents = clientEvents();
+        long landingMark = clientEvents.mark();
         exec("tp @a " + ship[0] + " " + (ship[1] + 4) + " " + ship[2] + " 0 0");
-        bot().waitTicks(80);
+        String reloaded = awaitThisShip(events, reloadMark, "ship_loaded",
+                "a saved ship must come back when the player returns to its deck");
+        String landing = clientEvents.await(landingMark, "deck_captured",
+                "the returning player's OWN client must resolve him on the RELOADED deck — the"
+                        + " playtest's \"old ships drop me through\" is exactly this link missing",
+                DECK_LINK_BUDGET_TICKS);
+        System.out.println("[deckcap] reloaded ship=" + reloaded + " clientCapture=" + landing);
 
         String server = exec("artest vs player-ship-data");
         String capture = exec("artest vs deck-capture");
@@ -272,7 +424,7 @@ public class VSDeckCaptureAndDismountE2ETest extends AbstractSharedVsClientE2ETe
         System.out.println("[deckcap] reloaded server=" + server);
         System.out.println("[deckcap] reloaded capture=" + capture);
         System.out.println("[deckcap] reloaded serverY=" + serverY + " clientY=" + clientY
-                + " loadedNow=" + shipLoadedAt(bx, by, bz));
+                + " loadedNow=" + shipIsLoaded());
 
         assertTrue("a reloaded ship must come back when the player returns to its deck: " + server,
                 server.contains("\"shipLoaded\":true"));
@@ -307,6 +459,8 @@ public class VSDeckCaptureAndDismountE2ETest extends AbstractSharedVsClientE2ETe
         // empty). His view must stay his own - not snap to the tilted deck's horizon.
         exec("tp @a " + (sx + 200) + " 120 " + (sz + 200) + " 0 0");
         bot().waitTicks(10);
+        Events clientEvents = clientEvents();
+        long flyInMark = clientEvents.mark();
         exec("tp @a " + sx + " " + (sy + 3) + " " + sz + " 0 0");
         bot().waitTicks(1); // one render pass at the off-deck point before he can fall onto the deck
         String flyInCap = exec("artest vs deck-capture");
@@ -319,9 +473,17 @@ public class VSDeckCaptureAndDismountE2ETest extends AbstractSharedVsClientE2ETe
                 + inAABB + " onShipBlock=" + onShipBlock + " tracked=" + tracked + " cap=" + flyInCap);
         assertTrue("setup: the fly-in point must be inside the ship's AABB, off any deck block, with the "
                 + "player not already resolved on it: " + flyInCap, inAABB && !onShipBlock && !tracked);
+        // The negative, as an ABSENCE in the log as well as a static read: the renderer records the
+        // camera's ENGAGE edge, so "it did not hijack his view" is "no `deck_camera_changed` with
+        // active:true since the mark" — and the instrument says out loud it was listening, or the
+        // silence would mean nothing.
+        String flyInCamEdges = clientEvents.since(flyInMark, "deck_camera_changed");
+        Events.assertInstrumentRan(flyInCamEdges, "deck_camera_events",
+                "the deck camera stayed out of a fly-in player's view");
         assertTrue("a player flying through a ship's airspace, not standing on its deck, must keep his "
                 + "own view; the deck camera must not hijack it (active=" + flyInCam + " roll="
-                + flyInRoll + ")", !flyInCam);
+                + flyInRoll + " edges=" + flyInCamEdges + ")",
+                !flyInCam && Events.countRecords(flyInCamEdges, "\"active\":true") == 0);
 
         // POSITIVE control: level the ship and land him ON the deck. Now the deck camera SHOULD engage -
         // so the negative above is a real on-deck/off-deck discrimination, not the camera never firing.
@@ -330,15 +492,32 @@ public class VSDeckCaptureAndDismountE2ETest extends AbstractSharedVsClientE2ETe
                         .contains("\"commanded\":true"));
         bot().waitTicks(120);
         String lvl = shipInfo();
+        // The control is the camera's STATE, and it may NOT be its engage edge — a fact about the
+        // recorder, not a preference. `deck_camera_changed` is written at
+        // {@code ShipFrameCamera.recordCamera} only when `active` differs from what the last frame
+        // left in the field, production's two release branches set `shipCamActive = false` directly
+        // without passing that seam, and every production caller of `recordCamera` passes `true`. So
+        // an engage edge exists only where the flag had actually DROPPED — and the negative leg
+        // above has already left the bot standing on this deck with the camera engaged, so
+        // levelling the ship and putting him down again produces no edge at all. Awaiting one reds a
+        // client whose camera is engaged, which is the opposite of what this control asserts.
+        //
+        // The discrimination the negative leg needs survives intact and is still made of two
+        // measurements of the same flag: OFF while he is in the airspace off the deck, ON while he
+        // stands on it. The edges since the mark stay in the message — one recorded HERE would say
+        // the camera had been released and came back, which is a different and interesting story
+        // from one that never dropped.
+        long onDeckMark = clientEvents.mark();
         exec("tp @a " + readDouble(lvl, POS_X) + " " + (readDouble(lvl, POS_Y) + 5) + " "
                 + readDouble(lvl, POS_Z) + " 0 0");
-        boolean onDeckCam = false;
-        for (int i = 0; i < 40 && !onDeckCam; i++) {
-            bot().waitTicks(5);
-            onDeckCam = Boolean.parseBoolean(clientString(SHIP_CAMERA, "shipCamActive"));
-        }
+        ClientPoll.Result<Boolean> camPoll = ClientPoll.<Boolean>until(bot()::waitTicks,
+                () -> Boolean.parseBoolean(clientString(SHIP_CAMERA, "shipCamActive")),
+                active -> active.booleanValue(), 5, 40);
+        String engaged = clientEvents.since(onDeckMark, "deck_camera_changed");
+        boolean onDeckCam = camPoll.value;
         String camCapture = exec("artest vs deck-capture");
-        System.out.println("[deckcap] cam on-deck active=" + onDeckCam + " cap=" + camCapture);
+        System.out.println("[deckcap] cam on-deck active=" + onDeckCam + " poll=" + camPoll
+                + " edgesSincePutDown=" + engaged + " cap=" + camCapture);
         // The camera is DOWNSTREAM of the capture, so a bare "no deck camera" blames the renderer
         // for something that usually happened one link earlier. The capture verdict is already read
         // for the stdout line above; putting it in the message is free and it splits the two: a
@@ -347,6 +526,7 @@ public class VSDeckCaptureAndDismountE2ETest extends AbstractSharedVsClientE2ETe
         assertTrue("a player actually standing on the deck must get the deck camera. If the capture"
                         + " below says the body is NOT on the deck then this is not a camera fault at"
                         + " all - the body never got there. capture=" + camCapture.replace('\n', ' ')
+                        + " poll=" + camPoll + " cameraEdgesSincePutDown=" + engaged
                         + " playerY=" + bot().reportState().get("playerY").getAsDouble(),
                 onDeckCam);
     }
@@ -377,52 +557,68 @@ public class VSDeckCaptureAndDismountE2ETest extends AbstractSharedVsClientE2ETe
         double liftedY = lift.value;
         assertTrue("the pilot must lift the ship into a hover: " + startY + " -> " + liftedY,
                 liftedY - startY > 2.0);
+        // The hold engaging is the computer's own decision, so the wait is on that record rather
+        // than on 40 ticks: the state this whole scenario saves and restores is the one it names.
+        Events events = events();
+        long standUpMark = events.markInstrumented();
         exec("artest player dismount");
-        bot().waitTicks(40);
+        String holdBefore = events.await(standUpMark, "unmanned_hold_decided",
+                "the flight computer must take an unmanned decision when the pilot stands up — the"
+                        + " hover this scenario then saves and reloads is that decision's result",
+                DECK_LINK_BUDGET_TICKS);
         double hoverY = readDouble(shipInfo(), POS_Y);
-        assertTrue("the unmanned ship must still be hovering off the ground: " + hoverY,
+        assertTrue("the unmanned ship must still be hovering off the ground: " + hoverY
+                + " (the computer's unmanned decision was " + holdBefore + ")",
                 hoverY - startY > 1.0);
 
         // Simulate a world reload: unload the ship (its flight-computer tile is written to NBT, its LIVE
         // attitudeReference lost) and load it again. The persisted station-keeping flag must bring the
         // hold back so the ship does NOT fall - the live playtest's "hovering ship survived a restart,
         // then fell and flipped".
+        long unloadMark = events.markInstrumented();
         exec("artest chunk release-all");
         exec("tp @a " + (bx + 4000) + " 120 " + (bz + 4000) + " 0 0");
         // Scoped to THIS ship, like the saved-ship scenario above: on a shared world a whole-dimension
-        // count answers about whichever neighbour's ship is loaded.
-        // Asked for, not waited on — see the saved-ship scenario above.
+        // count answers about whichever neighbour's ship is loaded — and the substrate's own
+        // unload/load commits are what is awaited, keyed on this ship's physics uuid.
         // Waiting for the unload is not waiting on chance, which is what the SKIP this replaced
         // assumed: with nothing holding the craft, the substrate's own loading controller queues an
         // unload every tick for any ship with no player inside its unload distance, and the shared
         // base resets the one affordance that would override that. So the state below is REACHED,
         // not hoped for, and failing to reach it is news.
-        boolean stillLoaded = true;
-        for (int i = 0; i < 80 && stillLoaded; i++) {
-            bot().waitTicks(10);
-            stillLoaded = shipLoadedAt(bx, by, bz);
-        }
-        assertTrue("arrangement: the ship must actually unload before the RELOAD path can be"
-                + " exercised (still loaded at " + bx + "," + by + "," + bz + ")", !stillLoaded);
+        String unloaded = awaitThisShip(events, unloadMark, "ship_unloaded",
+                "arrangement: the ship must actually unload before the RELOAD path can be exercised");
+        assertTrue("the by-id state must agree with the unload record " + unloaded, !shipIsLoaded());
 
+        long reloadMark = events.markInstrumented();
         exec("tp @a " + (bx + 0.5) + " " + (by + 6) + " " + (bz + 0.5) + " 0 0");
-        // Event-gated VS reload barrier (load-scaled ceiling + early exit): a fixed 40-iteration budget
-        // can miss a slow async reload under concurrent-fork load and hard-fail the downstream parse.
-        ClientPoll.until(bot()::waitTicks, () -> shipLoadedAt(bx, by, bz) ? 1 : 0, n -> n >= 1, 5, 40);
+        // The reload is a COMMIT — a fresh physics object for this ship — and the poll it replaces
+        // discarded its own `satisfied` flag, so a reload that never happened surfaced further down
+        // as a regex failure reading like the contract breaking.
+        String reloaded = awaitThisShip(events, reloadMark, "ship_loaded",
+                "arrangement: the saved ship must come back before its hold can be judged");
         bot().waitTicks(80); // give a ship that lost its hold time to visibly fall
 
+        // What the flight computer restored from NBT, and what it then decided unmanned. Read, not
+        // awaited: the contract below is the ALTITUDE, and these two records are what let its failure
+        // say "the persisted flag did not survive the save" apart from "it did and the hold
+        // under-thrust" — the question a 3-block drop on its own can never answer.
+        String restored = events.since(reloadMark, "station_keeping_restored");
+        String heldAfter = events.since(reloadMark, "unmanned_hold_decided");
         double afterY = readDouble(shipInfo(), POS_Y);
         System.out.println("[deckcap] reload-hover startY=" + startY + " hoverY=" + hoverY
-                + " afterReloadY=" + afterY);
+                + " afterReloadY=" + afterY + " loaded=" + reloaded + " restored=" + restored
+                + " unmanned=" + heldAfter);
         assertTrue("a hovering ship must KEEP hovering across a reload, not fall out of the sky: it was "
-                + "at " + hoverY + " and after reload is at " + afterY, hoverY - afterY < 3.0);
+                + "at " + hoverY + " and after reload is at " + afterY
+                + ". What the computer restored from NBT: " + restored
+                + " | what it then decided unmanned: " + heldAfter, hoverY - afterY < 3.0);
     }
 
     // ---- Bug: entering / leaving the seat on a truly INVERTED ship (the maintainer's live scenario) --
 
     private static final String KEY_BINDINGS = "zmaster587.advancedRocketry.client.KeyBindings";
     private static final Pattern OMEGA = Pattern.compile("\"omega\":(-?[0-9.E\\-]+)");
-    private static final Pattern RESOLVED_TICKS = Pattern.compile("\"resolvedTicks\":(-?[0-9]+)");
     private static final Pattern QX = Pattern.compile("\"qx\":(-?[0-9.E\\-]+)");
     private static final Pattern QZ = Pattern.compile("\"qz\":(-?[0-9.E\\-]+)");
 
@@ -468,8 +664,17 @@ public class VSDeckCaptureAndDismountE2ETest extends AbstractSharedVsClientE2ETe
                 + " subject is exercised (upY=" + tilted + ")", tilted >= 0.25 && tilted < 0.80);
 
         double[] seat = readShipInfoXYZ(shipInfo());
-        String statsBefore = exec("artest vs shipframe-stats");
+        // The seat dismount seeds the ex-pilot's capture on the CLIENT, and that is the link this
+        // scenario's report is about ("after leaving, I fall through"). Marked before the stimulus,
+        // awaited after it — the settle window below then measures a body that is provably captured
+        // rather than one that may never have been.
+        Events clientEvents = clientEvents();
+        long dismountMark = clientEvents.mark();
         exec("artest player dismount");
+        String seeded = clientEvents.await(dismountMark, "deck_captured",
+                "standing up on a tilted deck must leave the ex-pilot captured ON THE CLIENT — the"
+                        + " seed is what puts him there, and without it the heights below are"
+                        + " measuring a body vanilla owns", DECK_LINK_BUDGET_TICKS);
         StringBuilder traj = new StringBuilder();
         double settledMin = Double.MAX_VALUE;
         for (int i = 0; i < 22; i++) {
@@ -480,14 +685,15 @@ public class VSDeckCaptureAndDismountE2ETest extends AbstractSharedVsClientE2ETe
                 settledMin = Math.min(settledMin, y);
             }
         }
-        String statsAfter = exec("artest vs shipframe-stats");
+        // Every release in the window, each with the gate that performed it — production's own words
+        // for what the cumulative counters this replaced could only report as a number.
+        String releases = clientEvents.since(dismountMark, "deck_released");
         String capture = exec("artest vs deck-capture");
         double clientY = bot().reportState().get("playerY").getAsDouble();
         double serverY = readDouble(exec("artest vs player-ship-data"), PLAYER_Y);
         System.out.println("[deckcap] tilted-dismount upY=" + tilted + " shipPosY=" + seat[1]
                 + " settledMinY=" + settledMin + " Ytraj=" + traj);
-        System.out.println("[deckcap] tilted-dismount statsBefore=" + statsBefore + " statsAfter="
-                + statsAfter);
+        System.out.println("[deckcap] tilted-dismount seed=" + seeded + " releases=" + releases);
         System.out.println("[deckcap] tilted-dismount capture=" + capture + " clientY=" + clientY
                 + " serverY=" + serverY);
 
@@ -496,8 +702,9 @@ public class VSDeckCaptureAndDismountE2ETest extends AbstractSharedVsClientE2ETe
         // drop to ~65. A single-instant "aboard" read is unreliable (it can catch him mid-fall while still
         // nominally inside the AABB), so we assert the settled trajectory instead.
         assertTrue("standing up on a tilted ship must keep the pilot UP on it, not drop him to the ~65 "
-                + "ground: settledMinY=" + settledMin + " shipPosY=" + seat[1] + " Ytraj=" + traj,
-                settledMin > 66.0);
+                + "ground: settledMinY=" + settledMin + " shipPosY=" + seat[1] + " Ytraj=" + traj
+                + ". The client's releases in this window (each with the gate that performed it): "
+                + releases, settledMin > 66.0);
         assertTrue("the client and server must agree on the ex-pilot's height on the tilted ship: serverY="
                 + serverY + " clientY=" + clientY, Math.abs(clientY - serverY) < 3.0);
     }
@@ -537,11 +744,18 @@ public class VSDeckCaptureAndDismountE2ETest extends AbstractSharedVsClientE2ETe
         bot().waitTicks(20);
 
         // Stand up on the LEVEL deck: the dismount capture packet seeds the ex-pilot on the deck.
+        //
+        // Awaited on the CLIENT's own record of THIS dismount. What it replaces could not fail: the
+        // gate read `ShipFrameTravel.resolvedTicks`, a counter that is cumulative for the life of
+        // the side, and on a shared client an earlier scenario has already resolved somebody on a
+        // deck — so "> 0" was true before this dismount ever happened. A mark taken immediately
+        // before the stimulus is what turns the same question into one that can come back "no".
+        Events clientEvents = clientEvents();
+        long dismountMark = clientEvents.mark();
         exec("artest player dismount");
-        bot().waitTicks(30);
-        int resolvedAfterDismount = (int) readDouble(exec("artest vs shipframe-stats"), RESOLVED_TICKS);
-        assertTrue("the fresh dismount must engage the ship-frame capture on the level deck (resolvedTicks="
-                + resolvedAfterDismount + ")", resolvedAfterDismount > 0);
+        String seeded = clientEvents.await(dismountMark, "deck_captured",
+                "the fresh dismount must engage the ship-frame capture on the level deck",
+                DECK_LINK_BUDGET_TICKS);
 
         // Roll the now-UNMANNED ship (a mounted pilot would overwrite the target) to the commanded attitude.
         assertTrue("attitude hold must accept the " + label + " roll command",
@@ -554,6 +768,7 @@ public class VSDeckCaptureAndDismountE2ETest extends AbstractSharedVsClientE2ETe
                 + tilted + " expected [" + upYLo + "," + upYHi + "])", tilted >= upYLo && tilted <= upYHi);
 
         double shipPosY = readShipInfoXYZ(shipInfo())[1];
+        long rollMark = clientEvents.mark();
         StringBuilder traj = new StringBuilder();
         double settledMin = Double.MAX_VALUE, settledMax = -Double.MAX_VALUE;
         for (int i = 0; i < 22; i++) {
@@ -566,21 +781,31 @@ public class VSDeckCaptureAndDismountE2ETest extends AbstractSharedVsClientE2ETe
             }
         }
         double osc = settledMax - settledMin;
-        int resolvedOnRoll = (int) readDouble(exec("artest vs shipframe-stats"), RESOLVED_TICKS);
+        // What the client's resolver did across the settle, in its own records: how many ticks it
+        // committed a capture, and every release with the gate that performed it. This replaces a
+        // read of the cumulative `resolvedTicks` static, which counted every body this side ever
+        // resolved and so could not be scoped to this window at all.
+        String rollCaptures = clientEvents.since(rollMark, "deck_captured");
+        String rollReleases = clientEvents.since(rollMark, "deck_released");
         String capture = exec("artest vs deck-capture");
         double clientY = bot().reportState().get("playerY").getAsDouble();
         double serverY = readDouble(exec("artest vs player-ship-data"), PLAYER_Y);
         System.out.println("[deckcap] dismount-then-roll " + label + " upY=" + tilted + " shipPosY="
-                + shipPosY + " settledMin=" + settledMin + " osc=" + osc + " resolvedOnRoll=" + resolvedOnRoll
+                + shipPosY + " settledMin=" + settledMin + " osc=" + osc + " seed=" + seeded
+                + " capturesOnRoll=" + Events.countRecords(rollCaptures, "\"ship\"")
+                + " releasesOnRoll=" + rollReleases
                 + " capture=" + capture + " clientY=" + clientY + " serverY=" + serverY + " Ytraj=" + traj);
 
         // Still captured while the deck is steep/inverted - the ship frame keeps resolving him, not vanilla.
         assertTrue("the ex-pilot must stay resolved on the " + label + " deck, not be handed to vanilla: "
-                + capture, capture.contains("\"verdict\":true"));
+                + capture + ". The client's releases across the roll: " + rollReleases,
+                capture.contains("\"verdict\":true"));
         // Deck-relative hold: he must not slide down toward the ~" + (by + 1) + " ground - his settled
         // height stays within a body of the measured ship, not 2.5+ blocks below it.
         assertTrue("the ex-pilot must ride the " + label + " deck over, not drop to the ground: settledMin="
-                + settledMin + " shipPosY=" + shipPosY + " Ytraj=" + traj, settledMin > shipPosY - 2.5);
+                + settledMin + " shipPosY=" + shipPosY + " Ytraj=" + traj
+                + ". The client's releases across the roll: " + rollReleases,
+                settledMin > shipPosY - 2.5);
         // Held, not sliding: a captured body is stationary on the stationary rolled ship (small tail swing);
         // a body sliding off shows a large monotonic settle.
         assertTrue("the captured ex-pilot must be HELD on the " + label + " deck, not sliding (settled Y "
@@ -652,13 +877,19 @@ public class VSDeckCaptureAndDismountE2ETest extends AbstractSharedVsClientE2ETe
                 + clientDouble(KEY_BINDINGS, "flightCursorX") + " omegaAfter=" + omegaAfter);
 
         // SYMPTOM "after leaving, I fall through": dismount, the pilot must stay on the inverted deck.
+        // The client's own capture of THIS dismount is the link; a body that fell through has none.
+        Events clientEvents = clientEvents();
+        long dismountMark = clientEvents.mark();
         exec("artest player dismount");
-        bot().waitTicks(40);
+        String seeded = clientEvents.await(dismountMark, "deck_captured",
+                "leaving the seat on an INVERTED ship must leave the ex-pilot captured on his own"
+                        + " client, which is where the reported fall-through happens",
+                DECK_LINK_BUDGET_TICKS);
         String capture = exec("artest vs deck-capture");
         double clientY = bot().reportState().get("playerY").getAsDouble();
         double serverY = readDouble(exec("artest vs player-ship-data"), PLAYER_Y);
-        System.out.println("[deckcap] force-invert dismount capture=" + capture + " clientY=" + clientY
-                + " serverY=" + serverY);
+        System.out.println("[deckcap] force-invert dismount seed=" + seeded + " capture=" + capture
+                + " clientY=" + clientY + " serverY=" + serverY);
 
         assertTrue("after ENTERING an inverted ship, a turn command must move it, not leave it dead "
                 + "(omega=" + omegaAfter + ")", omegaAfter > 0.1);
@@ -742,9 +973,17 @@ public class VSDeckCaptureAndDismountE2ETest extends AbstractSharedVsClientE2ETe
         // and hold it. The player rides the deck; the camera and capture must stay STABLE while the ship
         // is stationary at a steep angle - not jitter frame-to-frame (RC-2 Euler pole) nor flicker the
         // capture (which alternates gravity and drags the body "back and forth through the deck").
+        Events clientEvents = clientEvents();
+        long landingMark = clientEvents.mark();
         exec("tp @a " + ship[0] + " " + (ship[1] + 4) + " " + ship[2] + " 0 0");
-        bot().waitTicks(80);
-        assertTrue("client must be captured on the upright deck first: " + exec("artest vs deck-capture"),
+        // The message says CLIENT, so the read is the client's: his own resolver's capture record,
+        // awaited rather than given 80 ticks. (The server probe beside it re-evaluates handles() for
+        // the SERVER player and reads the SERVER state map — a second opinion, not this one.)
+        clientEvents.await(landingMark, "deck_captured",
+                "the client must be captured on the upright deck before the ship is tilted under him",
+                DECK_LINK_BUDGET_TICKS);
+        assertTrue("server must agree the body is on the upright deck first: "
+                + exec("artest vs deck-capture"),
                 exec("artest vs deck-capture").contains("\"verdict\":true"));
 
         double h = Math.toRadians(90.0) / 2.0; // 90deg roll about the nose (+Z): deck on its side
@@ -754,6 +993,10 @@ public class VSDeckCaptureAndDismountE2ETest extends AbstractSharedVsClientE2ETe
         bot().waitTicks(160); // slew to the tilt and settle - the ship is now HELD stationary
 
         // Sample across frames while the ship is stationary. Any variation is instability, not motion.
+        // The mark opens BEFORE the sampling: "the capture did not flicker" is an absence, and five
+        // 4-tick samples of a server verdict cannot see a release that was recovered between two of
+        // them — the client's log records every one, with the gate that performed it.
+        long stabilityMark = clientEvents.mark();
         int n = 5;
         double rollMin = Double.MAX_VALUE, rollMax = -Double.MAX_VALUE;
         double yMin = Double.MAX_VALUE, yMax = -Double.MAX_VALUE;
@@ -772,11 +1015,21 @@ public class VSDeckCaptureAndDismountE2ETest extends AbstractSharedVsClientE2ETe
         }
         double rollJitter = camOn > 0 ? rollMax - rollMin : 0.0;
         double yOsc = yMax - yMin;
+        String flickers = clientEvents.since(stabilityMark, "deck_released");
+        Events.assertInstrumentRan(flickers, "deck_capture_events",
+                "the client's capture held for the whole stationary window");
         System.out.println("[deckcap] tilted-stability n=" + n + " captured=" + captured + " camOn=" + camOn
-                + " rollJitter=" + rollJitter + " yOsc=" + yOsc + " :: " + trace);
+                + " rollJitter=" + rollJitter + " yOsc=" + yOsc + " releases=" + flickers
+                + " :: " + trace);
 
+        assertTrue("capture must stay STABLE on a held tilted deck, not flicker - the client released"
+                + " it, and the record names the gate: " + flickers + " :: " + trace,
+                Events.countRecords(flickers, "\"reason\"") == 0);
         assertTrue("capture must stay STABLE on a held tilted deck, not flicker (captured " + captured
                 + "/" + n + "): " + trace, captured == n);
+        // The camera's DISENGAGE is not recordable — production drops `shipCamActive` directly in the
+        // two release branches without passing through the seam the engage edge is taken at, and the
+        // mixin says so — so "it stayed engaged" is still read off the client's render flag.
         assertTrue("the deck camera must stay engaged on a held tilted deck (camOn " + camOn + "/" + n
                 + "): " + trace, camOn == n);
         assertTrue("the levelled camera roll must be STABLE while the ship is stationary, not jitter at "
@@ -847,31 +1100,33 @@ public class VSDeckCaptureAndDismountE2ETest extends AbstractSharedVsClientE2ETe
         exec("tp @a " + (bx + 600) + " 120 " + (bz + 600) + " 0 0");
         bot().waitTicks(10);
 
-        int shipsBefore = count("ship-count-all");
+        // The registry's own addShip, awaited as a LINK since a mark taken BEFORE the assembly is
+        // queued — so the record is THIS scenario's ship and names it, where a whole-dimension count
+        // that merely went up is answered by any neighbour that assembled one in the same window.
+        Events events = events();
+        long spawnMark = events.markInstrumented();
         String assemble = assembleFixture(bx, by, bz);
         assertTrue("a with-pilot-seat build must route to a ship: " + assemble,
                 assemble.contains("\"rocketCount\":0"));
-
-        // Event-gated async-VS assembly barrier (load-scaled ceiling + early exit): AWAIT the SPAWNED
-        // stage instead of a fixed tick budget that reds a healthy spawn under concurrent-fork load.
-        ClientPoll.Result<Integer> spawned = ClientPoll.until(bot()::waitTicks,
-                () -> count("ship-count-all"), n -> n > shipsBefore, 5, 40);
-        int all = spawned.value;
-        assertTrue("assembly must create a NEW VS ship (was " + shipsBefore + ", now " + all + ")",
-                all > shipsBefore);
-        // Recorded so a later "is my ship still in the registry?" can be a statement about THIS
-        // scenario's ship on a world that also holds its neighbours'.
-        shipsInRegistryAfterBuild = all;
+        scenarioShipId = awaitShipSpawned(events, spawnMark,
+                "assembly must create a NEW VS ship in the queryable registry (async spawn)");
         bot().waitTicks(40);
 
         exec("tp @a " + (bx + 0.5) + " " + (by + 6) + " " + (bz + 0.5) + " 0 0");
         bot().waitTicks(20);
 
-        // Await the ship LOADING near this base and take its IDENTITY in the same step. This is the
-        // scenario's ONE positional lookup and the only one it can defend: the ship has just been
-        // built here and has not moved. Everything after this asks by id — these scenarios hover,
-        // tumble and invert their ship on purpose, and a distance bound cannot follow it there.
-        scenarioShipId = captureShipIdAt(bx, by, bz);
+        // The IDENTITY is already known: this scenario ASSEMBLED the ship, and the registry's own
+        // `ship_spawned` record above names it. What still has to be waited for is a different fact
+        // — the physics object being USABLE, which a registry add does not prove. That fact is
+        // production's own `ShipEvent.ShipLoadedEvent`, recorded off the bus as `ship_usable`: the
+        // conjunction the physics loop selects a ship by, where the old `managed:true` poll read a
+        // literal `true` in the probe's reply builder and so waited on nothing. The wait is still
+        // keyed BY ID: these scenarios hover, tumble and invert their ship on purpose, and a bounded
+        // nearest-ship lookup cannot follow it there — out of the radius it answers about nothing,
+        // inside it about a neighbour, and both replies read like a correct one. An id has no
+        // distance term to be wrong about. The mark is `spawnMark`, taken BEFORE the assembly above:
+        // `ship_usable` fires ONCE per load and is not a state to poll, so a later mark could miss it.
+        awaitShipUsable(events, spawnMark, scenarioShipId);
         String si = shipInfo();
         double[] where = {readDouble(si, POS_X), readDouble(si, POS_Y), readDouble(si, POS_Z)};
         System.out.println("[deckcap] ship at (" + bx + "," + by + "," + bz + ") -> "
@@ -931,17 +1186,15 @@ public class VSDeckCaptureAndDismountE2ETest extends AbstractSharedVsClientE2ETe
         return exec("artest vs ship-info 0 id " + scenarioShipId);
     }
 
-    private int count(String sub) throws Exception {
-        Matcher m = COUNT.matcher(exec("artest vs " + sub + " 0"));
-        return m.find() ? Integer.parseInt(m.group(1)) : -1;
-    }
-
     /**
-     * Is THIS scenario's ship loaded at its own base? The scoped replacement for a whole-dimension
-     * {@code vs ship-count}: with one boot per test that count had exactly one ship to report on,
-     * and on a shared client it answers with whichever neighbour's ship happens to be loaded.
+     * Is THIS scenario's ship loaded? Asked BY IDENTITY: with one boot per test a whole-dimension
+     * ship count had exactly one ship to report on, and on a shared client it answers with whichever
+     * neighbour's ship happens to be loaded.
+     *
+     * <p>It took three coordinates until today and used none of them, so every failure message built
+     * around it printed a position the check had never looked at.</p>
      */
-    private boolean shipLoadedAt(int bx, int by, int bz) throws Exception {
+    private boolean shipIsLoaded() throws Exception {
         return shipInfo().contains("\"managed\":true");
     }
 
@@ -955,10 +1208,5 @@ public class VSDeckCaptureAndDismountE2ETest extends AbstractSharedVsClientE2ETe
         Matcher m = p.matcher(json);
         assertTrue("expected an integer in: " + json, m.find());
         return Integer.parseInt(m.group(1));
-    }
-
-    private static double distance(double[] a, double[] b) {
-        double dx = a[0] - b[0], dy = a[1] - b[1], dz = a[2] - b[2];
-        return Math.sqrt(dx * dx + dy * dy + dz * dz);
     }
 }

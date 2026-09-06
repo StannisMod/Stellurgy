@@ -20,6 +20,9 @@ import java.util.regex.Pattern;
 
 import zmaster587.advancedRocketry.space.CellWorldMapper;
 import zmaster587.advancedRocketry.space.GalacticCoord;
+import zmaster587.advancedRocketry.test.Chains;
+import zmaster587.advancedRocketry.test.Events;
+import zmaster587.advancedRocketry.test.GameTicks;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
@@ -61,11 +64,15 @@ import static zmaster587.advancedRocketry.test.ArrangementFailure.requireArrange
  * would be testing a fixture instead of the subsystem.</p>
  *
  * <p><b>What the instrument actually delivers.</b> Acceptance is client-observed: the client's own
- * rendered dimension, its own riding entity, its own position. The limit has to be stated honestly -
- * "he never appeared in the overworld" is SAMPLED, not proven. There is no client-side
- * dimension-change transcript, so this test observes where the client IS when it looks, never every
- * frame it passed through on the way. A restore that flickered through an overworld frame and then
- * corrected itself would still read green here; what is proven is the end state.</p>
+ * rendered dimension, its own riding entity, its own position. The end STATE is still what the
+ * assertions pin, and "he never appeared in the overworld" is still not proven by them - they read
+ * where the client is when they look. What has changed is that the path is no longer invisible: the
+ * client now keeps an ordered transcript of the worlds it was put into ({@code
+ * client_dimension_changed}, one record per world the connection built), so a restore that flickered
+ * through an overworld frame leaves a record of it in the log every failure here prints, even though
+ * no assertion refuses it. The restore itself is read on the SERVER's log as the chain production
+ * commits - {@code login_restored}, {@code crew_transfer_reseated}, {@code mount} - where the poll
+ * this replaced could only report a client that was not seated, for any of four reasons.</p>
  *
  * <p><b>Exactly ONE ship in the cell.</b> The entry materializes a fresh cell for a single ship, and
  * that is load-bearing rather than incidental: the re-seating matches a seat by proximity to the
@@ -397,33 +404,72 @@ public abstract class AbstractSpaceLoginRestoreClientTest {
         // server has nobody standing near the ship to hold it loaded for the re-seating.
         exec("artest vs permaload true");
 
+        // AND THE MARK BEFORE THE CLIENT EXISTS, because the restore fires ON the connection: a
+        // reader that arrived after it would find an empty log and could not tell that from a
+        // restore that never ran. This boot's log is new - a sequence from boot 1 means nothing
+        // here - so the mark is taken on the boot-2 server, not remembered across the restart.
+        Events events = events();
+        long restoreMark = events.mark();
+
         startClient();
         bot().waitForWorld();
 
-        // The re-seating retries on a budget of a couple of hundred ticks and then gives up
-        // SILENTLY, leaving the player standing aboard, so this has to poll well past that budget
-        // rather than sample once.
-        JsonObject riding = null;
-        int dim = NO_CLIENT_WORLD;
-        boolean aboard = false;
-        for (int attempt = 0; attempt < 45 && !aboard; attempt++) {
-            bot().waitTicks(10);
-            dim = clientDim();
-            riding = bot().reportRidingEntity();
-            aboard = dim != NO_CLIENT_WORLD && dim != OVERWORLD_DIM
-                    && riding.get("riding").getAsBoolean();
-        }
+        // THE RESTORE, AS THE CHAIN PRODUCTION COMMITS IT, on the server that performs it: the
+        // login hook resolves where he belongs (login_restored, carrying its own reason - NO_TAG,
+        // SHIP_UNKNOWN, CELL_UNAVAILABLE, ABOARD_SETTLED - and the dimension it chose), the pending
+        // seat is drained onto his re-assembled ship (crew_transfer_reseated, carrying the caller
+        // trail that tells a login re-seat from a crossing one), and he is put on the mount.
+        //
+        // This is what the poll it replaces could not say. The re-seat retries for a couple of
+        // hundred server ticks and then gives up SILENTLY, leaving him standing aboard, so a client
+        // that came back un-seated used to be four different failures wearing one number: the
+        // restore never ran, it ran and sent him elsewhere, the seat never re-appeared, or the
+        // client was merely slow. Each is now a different link of this chain.
+        // TWO links, and the pair is deliberate: the restore DECIDED (a pure resolve, so this is the
+        // hook running rather than some other mechanism seating him) and he ENDED UP on a mount.
+        // `crew_transfer_reseated` is NOT in the chain, though it is printed below: it is taken at
+        // the RETURN of the very method that performs the mounting, so `mount` before it is
+        // guaranteed by nesting, not promised by anything. Asserting that order would pin the call
+        // structure — rewrite the re-seat to mount through another path and this reds while the
+        // player's experience is identical. The contract itself is asserted at the foot of this
+        // method, where it belongs: he is in a world, not the overworld, riding, and riding a seat.
+        events.assertChain(restoreMark, "a pilot who logged out seated must be RESTORED by the "
+                        + "login hook and end up on a mount",
+                RESTORE_LINK_BUDGET_TICKS, "login_restored", "mount");
+        String restored = events.since(restoreMark, "login_restored");
+        String reseats = events.since(restoreMark, "crew_transfer_reseated");
+        String chain = "\n  login_restored: " + restored + "\n  crew_transfer_reseated: " + reseats;
 
+        // And the CLIENT's own side of it, on the client's own log: its world became a dimension.
+        // Awaited separately rather than appended to the chain above - the two logs are joined only
+        // by game tick, and cross-side order within one tick is undefined. Zero is the mark because
+        // this client JVM is BRAND NEW: the fact wanted here is recorded at handleJoinGame, inside
+        // startClient, before any mark could have been taken.
+        String joined = awaitClientEvent(CLIENT_SESSION_START, "client_dimension_changed", null,
+                "the restored client must end up IN a world" + chain, RESTORE_LINK_BUDGET_TICKS);
+        // The server has put him back on the mount; the CLIENT still has to be told. That last step
+        // is a round trip and not a link this test owns, so it stays a short bounded poll of the
+        // client's own view - deliberately NOT the 450-tick wait it replaces, because everything
+        // that could take that long has already been asserted above. The client's own record of
+        // being told rides in the failure text either way.
+        JsonObject riding = bot().reportRidingEntity();
+        for (int waited = 0; waited < 40 && !riding.get("riding").getAsBoolean(); waited += 5) {
+            bot().waitTicks(5);
+            riding = bot().reportRidingEntity();
+        }
+        int dim = clientDim();
         JsonObject state = bot().reportState();
-        String observed = "clientDim=" + dim + " riding=" + riding + " state=" + state + pools;
+        String observed = "clientDim=" + dim + " riding=" + riding + " state=" + state + pools
+                + chain + "\n  client dimension changes: " + joined
+                + "\n  client mounts: " + bot().eventsSince(CLIENT_SESSION_START, "mount");
 
         assertTrue("the client must have a world at all before anything can be read from it: "
                 + observed, dim != NO_CLIENT_WORLD);
         assertNotEquals("he logged out aboard his ship, so he must NOT come back in the overworld. "
                 + "Note dim 0 is an AMBIGUOUS failure: it is produced both by the subsystem's own "
                 + "orphan fallback and by vanilla silently forcing dim 0 when the target world did "
-                + "not load, so attribute a red here from the server's login-restore log line rather "
-                + "than from this number alone. " + observed, OVERWORLD_DIM, dim);
+                + "not load - the login_restored record above is what separates them, and it names "
+                + "the reason and the dimension the hook chose. " + observed, OVERWORLD_DIM, dim);
         assertTrue("the pilot must come back SEATED on his ship rather than merely in its cell - "
                 + "being put back in the chair is what a player experiences as the restore working: "
                 + observed, riding.get("riding").getAsBoolean());
@@ -550,9 +596,16 @@ public abstract class AbstractSpaceLoginRestoreClientTest {
         double[] deckBefore = awaitShipPose(dim);
         assertNotNull("the ship must be live before the window opens", deckBefore);
         long fromTick = lastClientTick();
-        long dropsBeforeIdle = clientLong("externalMoveDrops");
+        // The mark BEFORE the window, on the CLIENT's log, because that is where this body's
+        // capture lives. What used to stand here was a difference of two reads of a production
+        // counter - and the reader answers -1 when the field cannot be read at all, so an
+        // unreadable instrument produced -1 - -1 == 0 and every zero-release pin below went green
+        // on it. A release is an EVENT with production's own reason string on it, and an empty log
+        // is only an answer once the recorder says it was listening.
+        long idleReleaseMark = bot().eventMark().get("seq").getAsLong();
         bot().waitTicks(OBSERVE_TICKS);
-        long dropsInIdle = clientLong("externalMoveDrops") - dropsBeforeIdle;
+        String idleReleases = clientReleases(idleReleaseMark, "an idle window with no input at all");
+        long dropsInIdle = guardReleases(idleReleases);
         double[] deckAfter = awaitShipPose(dim);
         assertNotNull("the ship must still be live after the window", deckAfter);
         double deckMoved = distance(deckBefore, deckAfter);
@@ -682,7 +735,8 @@ public abstract class AbstractSpaceLoginRestoreClientTest {
                         + "moving: it released him " + dropsInIdle + " time(s) across " + resolved
                         + " resolved ticks with NO input at all, and " + (int) restoredWalk[10]
                         + " time(s) during a " + (int) restoredWalk[6] + "-tick walk it swept and "
-                        + "committed. " + dropReasons() + walkTable,
+                        + "committed. Each release below carries production's own reason for it, in "
+                        + "order: " + idleReleases + " " + dropReasons() + walkTable,
                 0L, dropsInIdle + (long) restoredWalk[10]);
     }
 
@@ -699,20 +753,23 @@ public abstract class AbstractSpaceLoginRestoreClientTest {
         commandWindowCruise(dim);
         double[] deckBefore = awaitShipPose(dim);
         long walkFrom = lastClientTick();
-        long dropsBeforeWalk = clientLong("externalMoveDrops");
+        // Two marks, one per window, on the CLIENT's own log - see the idle window above for why a
+        // difference of two counter reads could not fail.
+        long walkReleaseMark = bot().eventMark().get("seq").getAsLong();
         bot().holdKey(Keyboard.KEY_W);
         // Six ticks, not twelve: the fixture's deck is small, and a walk long enough to carry him off
         // its edge ends the capture - which reads as a silent record rather than as a clean body.
         bot().waitTicks(6);
         bot().releaseKey(Keyboard.KEY_W);
         String walkHistory = clientTickHistory();
-        long dropsInWalk = clientLong("externalMoveDrops") - dropsBeforeWalk;
+        long dropsInWalk = guardReleases(clientReleases(walkReleaseMark, "a swept and committed walk"));
         bot().waitTicks(2);
         long idleFrom = lastClientTick();
-        long dropsBeforeIdle = clientLong("externalMoveDrops");
+        long idleReleaseMark = bot().eventMark().get("seq").getAsLong();
         bot().waitTicks(OBSERVE_TICKS);
         String idleHistory = clientTickHistory();
-        long dropsInIdle = clientLong("externalMoveDrops") - dropsBeforeIdle;
+        long dropsInIdle = guardReleases(clientReleases(idleReleaseMark,
+                "the idle window after the key was released"));
         double[] deckAfter = awaitShipPose(dim);
         // THE INSTRUMENT-OR-SUBJECT SPLIT, and it has to be measured, not argued. A restored body that
         // does not move under the key has two readings: the hold cancels the motion, or the key never
@@ -858,13 +915,30 @@ public abstract class AbstractSpaceLoginRestoreClientTest {
                 + " guardReleases=" + (int) w[10] + "walk/" + (int) w[11] + "idle";
     }
 
-    /** A client-side counter as a number, or {@code -1} when it cannot be read. */
-    protected long clientLong(String field) throws Exception {
-        try {
-            return Long.parseLong(clientString(SHIP_FRAME_TRAVEL, field).trim());
-        } catch (NumberFormatException notANumber) {
-            return -1L;
-        }
+    /**
+     * Every deck capture the CLIENT ended inside a window, in order, each with production's own
+     * reason for ending it - and the proof that anybody was recording at all.
+     *
+     * <p>{@link Events#assertInstrumentRan} is not decoration here: every pin built on this is a
+     * ZERO, and "the guard released him zero times" and "the observation point never wove" are the
+     * same empty reply. The counter these calls replace could not even say that much - its reader
+     * answers {@code -1} for an unreadable field and every count was a DIFFERENCE of two reads, so
+     * an instrument that was never there produced a clean {@code 0}.</p>
+     */
+    protected String clientReleases(long mark, String whatFor) throws Exception {
+        String releases = String.valueOf(bot().eventsSince(mark, "deck_released"));
+        Events.assertInstrumentRan(releases, "deck_capture_events",
+                "the client's deck capture was, or was not, cycled during " + whatFor);
+        return releases;
+    }
+
+    /**
+     * How many of those releases were the EXTERNAL-MOVE guard's - the mechanism these windows are
+     * about. A GEOMETRIC release (walked off the deck, no hull contact) is legitimate and is
+     * deliberately not counted here; it shows in the reply the caller prints.
+     */
+    protected static long guardReleases(String releases) {
+        return Events.countRecords(releases, "\"reason\":\"externalMove");
     }
 
     /**
@@ -981,6 +1055,9 @@ public abstract class AbstractSpaceLoginRestoreClientTest {
         String mountAt = exec("artest vs seat-mount-at " + slotDim
                 + " " + seatX + " " + seatY + " " + seatZ);
         assertTrue("the pilot seat's mount must exist: " + mountAt, readBool(mountAt, "ok"));
+        Events events = events();
+        // Before the mount, so the two links it produces cannot be missed between two reads.
+        long seatMark = events.mark();
         String mount = exec("artest player mount-entity " + readInt(mountAt, "dummyId"));
         assertTrue("the client must take the pilot seat: " + mount, readBool(mount, "mounted"));
         bot().waitTicks(10);
@@ -998,9 +1075,19 @@ public abstract class AbstractSpaceLoginRestoreClientTest {
                         + "start and nothing downstream is measuring the restore: " + serverAfterMount,
                 slotDim, readInt(serverAfterMount, "playerDim"));
 
-        String tag = awaitTagged();
+        // Sitting down aboard a ship in a cell is a CHAIN, and it is asserted as one: he takes the
+        // seat, and the reconciler's next pass stamps the durable record. The order is production's
+        // own - the record is DERIVED from where he is and what he is riding, so it cannot precede
+        // the mount - and a red now names which of the two did not happen, where the poll it
+        // replaces reported a tag that stayed false for either reason.
+        events.assertChain(seatMark, "sitting down on a ship's seat in a cell must put him on the "
+                        + "mount and then leave a durable aboard record - that record is the only "
+                        + "thing that carries the pilot's ship across the restart",
+                RESTORE_LINK_BUDGET_TICKS, "mount", "aboard_record_stamped");
+        String stamped = events.since(seatMark, "aboard_record_stamped");
+        String tag = exec("artest space aboard-tag " + BOT);
         assertTrue("sitting down must leave a durable aboard record - it is the only thing that "
-                + "carries the pilot's ship across the restart: " + tag,
+                + "carries the pilot's ship across the restart: " + tag + " | stamps: " + stamped,
                 tag.contains("\"tagged\":true"));
         assertTrue("and that record must name the ship the entry minted, not some other one: " + tag
                 + " (entered ship " + arrangedShipId + ")", tag.contains(arrangedShipId));
@@ -1045,13 +1132,17 @@ public abstract class AbstractSpaceLoginRestoreClientTest {
 
         // Build a PILOTED tier-2 ship on the ground and assemble it with the real assembler - which
         // is what mints the durable ship id the aboard record and the ledger are both keyed by.
+        Events events = events();
         clearArea(SRC_X, SRC_Z);
         String coords = placeFixture(SRC_X, SRC_Y, SRC_Z, VARIANT);
+        // The mark BEFORE the assembler is told, so the ship this arrangement is about cannot be
+        // missed between two counts and cannot be confused with one that already existed.
+        long assemblyMark = events.mark();
         String assembled = exec("artest rocket assemble " + LAUNCH_DIM + " " + coords);
         assertTrue("a build carrying a flight computer must become a ship, not a rocket: " + assembled,
                 assembled.contains("\"rocketCount\":0"));
         assertTrue("the ship never assembled in the launch dimension",
-                waitForLoadedShip(LAUNCH_DIM) >= 1);
+                waitForLoadedShip(events, assemblyMark, LAUNCH_DIM) >= 1);
 
         String srcInfo = exec("artest vs ship-info " + LAUNCH_DIM
                 + " " + SRC_X + " " + SRC_Y + " " + SRC_Z + " " + SHIP_CAPTURE_RADIUS_BLOCKS);
@@ -1067,6 +1158,7 @@ public abstract class AbstractSpaceLoginRestoreClientTest {
         // relic of a channel that also happened to be JVM-wide, and it cost this leg twice: it flew
         // every other ship on the server, and the all-zero input it left behind kept this ship's
         // computer in its PILOTED branch for the rest of the scenario.
+        long entryMark = events.mark();
         String climb = exec("artest vs teleport-ship " + LAUNCH_DIM + " " + sx + " " + sy + " " + sz
                 + " " + sx + " " + ABOVE_CEILING_Y + " " + sz);
         assertTrue("the climb past the orbit ceiling failed: " + climb, climb.contains("\"ok\":true"));
@@ -1074,15 +1166,22 @@ public abstract class AbstractSpaceLoginRestoreClientTest {
 
         // The flight computer's own tick now runs the entry: it crosses the ship into the launch
         // body's cell and, on completion, settles it in the ledger. Nothing here drives it.
-        String ledgerStatus = "";
-        boolean settled = false;
-        for (int attempt = 0; attempt < 160 && !settled; attempt++) {
-            bot().waitTicks(5);
-            ledgerStatus = exec("artest space subsystem-status");
-            settled = readIntOr(ledgerStatus, "ledger", 0) >= 1;
-        }
-        assertTrue("the ship never entered space through the flight computer's own tick; last "
-                + "subsystem status=" + ledgerStatus, settled);
+        //
+        // Awaited as the LINK the ledger count was standing in for. A count that never reaches one
+        // is the same reading whether the ceiling check never fired, the gate refused, the crossing
+        // stalled or the ledger write was lost; the record names the ship and the cell it settled
+        // in, and a red prints every link the on-ramp DID commit on the way. The entry's remaining
+        // links are deliberately not asserted as a chain here: this climb carries no crew, and
+        // whether an empty crossing commits its re-seat link is a fact of a run.
+        String settledRecord = events.await(entryMark, "ledger_settled",
+                "the ship must enter space through the flight computer's own tick and be settled in"
+                        + " the production ledger - the restore reads that very ledger, so an"
+                        + " arrangement that never wrote it tests nothing",
+                RESTORE_LINK_BUDGET_TICKS);
+        String ledgerStatus = exec("artest space subsystem-status");
+        assertTrue("the settled ship must be countable in the subsystem's own ledger, not only in"
+                + " the record of the write: " + ledgerStatus + " | " + settledRecord,
+                readIntOr(ledgerStatus, "ledger", 0) >= 1);
 
         // Find the slot the entry bound the cell to. Slot ids are minted per boot, so they are read
         // rather than known: the one slot dimension whose settled ship's flight computer resolves is
@@ -1154,13 +1253,15 @@ public abstract class AbstractSpaceLoginRestoreClientTest {
         assertTrue("the launch dimension must resolve to a galactic address: " + launch,
                 launch.contains("\"ok\":true") && !launch.contains("\"cellKey\":null"));
 
+        Events events = events();
         clearArea(SRC_X, SRC_Z);
         String coords = placeFixture(SRC_X, SRC_Y, SRC_Z, VARIANT);
+        long assemblyMark = events.mark();
         String assembled = exec("artest rocket assemble " + LAUNCH_DIM + " " + coords);
         assertTrue("a build carrying a flight computer must become a ship, not a rocket: " + assembled,
                 assembled.contains("\"rocketCount\":0"));
         assertTrue("the ship never assembled in the launch dimension",
-                waitForLoadedShip(LAUNCH_DIM) >= 1);
+                waitForLoadedShip(events, assemblyMark, LAUNCH_DIM) >= 1);
 
         String srcInfo = exec("artest vs ship-info " + LAUNCH_DIM
                 + " " + SRC_X + " " + SRC_Y + " " + SRC_Z + " " + SHIP_CAPTURE_RADIUS_BLOCKS);
@@ -1207,6 +1308,10 @@ public abstract class AbstractSpaceLoginRestoreClientTest {
                 + " " + HELD_CLIMB);
         requireArranged("the throttle must reach the seated pilot's own flight computer: "
                 + heldClimb, heldClimb.contains("\"afcResolved\":true"));
+        // Both marks BEFORE the lift: the entry is committed on the flight computer's own tick, so
+        // there is no later moment at which a reader could still be sure it had not already run.
+        long entryMark = events.mark();
+        long clientEntryMark = bot().eventMark().get("seq").getAsLong();
         String climb = exec("artest vs teleport-ship " + LAUNCH_DIM + " " + sx + " " + sy + " " + sz
                 + " " + sx + " " + ABOVE_CEILING_Y + " " + sz);
         assertTrue("the climb past the orbit ceiling failed: " + climb, climb.contains("\"ok\":true"));
@@ -1217,15 +1322,18 @@ public abstract class AbstractSpaceLoginRestoreClientTest {
                         + bot().reportRidingEntity(),
                 bot().reportRidingEntity().get("riding").getAsBoolean());
 
-        String ledgerStatus = "";
-        boolean settled = false;
-        for (int attempt = 0; attempt < 160 && !settled; attempt++) {
-            bot().waitTicks(5);
-            ledgerStatus = exec("artest space subsystem-status");
-            settled = readIntOr(ledgerStatus, "ledger", 0) >= 1;
-        }
-        assertTrue("the ship never entered space through the flight computer's own tick; last "
-                + "subsystem status=" + ledgerStatus, settled);
+        // The entry as the chain a GRANTED one IS - the ship is cut into the cell, the gate records
+        // its decision, the arrived hull's pose is written, the crew is put back on it and the
+        // ledger is told where the ship now is. This craft carries its pilot across, so the
+        // re-seat link is part of its contract rather than an empty formality, and a red now names
+        // the link the on-ramp stopped at where the ledger count could only say "still zero".
+        events.assertChain(entryMark, "a piloted craft flown past its planet's orbit ceiling must "
+                        + "cross into its launch body's cell and settle there, carrying its pilot",
+                RESTORE_LINK_BUDGET_TICKS, Chains.GRANTED_ENTRY);
+        String entryChain = events.since(entryMark);
+        String ledgerStatus = exec("artest space subsystem-status");
+        assertTrue("the entered ship must be countable in the subsystem's own ledger, not only in "
+                + "the record of the write: " + ledgerStatus, readIntOr(ledgerStatus, "ledger", 0) >= 1);
         // Hands off. Aimed at the ship he actually flew - the pre-crossing one - because that is the
         // computer his throttle went to; the craft on the far side is a different VS object with a
         // fresh tile.
@@ -1256,11 +1364,16 @@ public abstract class AbstractSpaceLoginRestoreClientTest {
 
         // He rode his own ship across the seam: no probe transferred him, so a wrong dimension here
         // is the crossing failing to carry its crew, not an arrangement that walked him somewhere.
-        int dim = NO_CLIENT_WORLD;
-        for (int attempt = 0; attempt < 40 && dim != slotDim; attempt++) {
-            bot().waitTicks(10);
-            dim = clientDim();
-        }
+        // The CLIENT's own record of being put in that world, from the mark taken before the lift -
+        // a world rebuilt twice between two samples shows one change to a poll, and none of the
+        // three failures the assertion below separates would be distinguishable then.
+        // The trailing comma is not decoration: `"dim":5` is a prefix of `"dim":51`, and the record
+        // always carries `via` after the dimension.
+        awaitClientEvent(clientEntryMark, "client_dimension_changed", "\"dim\":" + slotDim + ",",
+                "the pilot rode his ship across the seam, so his client must be put into the slot "
+                        + "dimension " + slotDim + " the entry chose. Server chain: " + entryChain,
+                RESTORE_LINK_BUDGET_TICKS);
+        int dim = clientDim();
         // WHERE he actually is, and whether he is still ON the thing that was supposed to carry
         // him. This used to be a bare sentence and a dimension mismatch, which is the same red
         // whether the crossing never happened, happened without him, or happened and dropped him -
@@ -1283,16 +1396,21 @@ public abstract class AbstractSpaceLoginRestoreClientTest {
         // THE SUBJECT: he never sat down in a cell, so if the record is written only by the mount
         // transition there is nothing here - and the restart leg that follows would then put him back
         // at his overworld build site, which is precisely the played-through report.
-        String tag = "";
-        for (int attempt = 0; attempt < 40 && !tag.contains("\"tagged\":true"); attempt++) {
-            tag = exec("artest space aboard-tag " + BOT);
-            if (!tag.contains("\"tagged\":true")) {
-                bot().waitTicks(5);
-            }
-        }
+        //
+        // Awaited on the WRITE rather than polled on the tag: the record is produced by the
+        // reconciler noticing he is now aboard a ship that is in a cell, and that write is the
+        // event. The ground-side control above (tagged:false) is what makes this one mean the
+        // FLIGHT produced it, and the mark it is read from was taken before the lift.
+        String stamped = events.await(entryMark, "aboard_record_stamped",
+                "a pilot who boarded on the ground and rode his ship into a cell must have a "
+                        + "durable aboard record WRITTEN for him - it is the only evidence the "
+                        + "restore has that he was ever aboard",
+                RESTORE_LINK_BUDGET_TICKS);
+        String tag = exec("artest space aboard-tag " + BOT);
         assertTrue("a pilot who boarded on the ground and rode his ship into a cell must carry the "
                         + "durable aboard record - it is the only evidence the restore has that he "
-                        + "was ever aboard: " + tag, tag.contains("\"tagged\":true"));
+                        + "was ever aboard: " + tag + " | stamps: " + stamped,
+                tag.contains("\"tagged\":true"));
         assertTrue("and that record must name the ship the entry minted: " + tag
                 + " (entered ship " + arrangedShipId + ")", tag.contains(arrangedShipId));
         return slotDim;
@@ -1423,18 +1541,32 @@ public abstract class AbstractSpaceLoginRestoreClientTest {
     }
 
     /**
-     * The player's aboard record once it exists, or the last reading if it never does. The record is
-     * refreshed on a one-second cadence rather than on the mount itself, so every arrangement that
-     * asserts "he is now aboard" has to give the writer its second - a single sample taken on the
-     * mount tick is a statement about the cadence, not about the record.
+     * Stand up through the production path and wait for the RECORD that says he is still aboard -
+     * then hand back the aboard tag, for the caller's own assertions.
+     *
+     * <p>Two links, in the order production commits them: he leaves the mount ({@code dismount}),
+     * and the reconciler's next pass re-derives his record and writes it ({@code
+     * aboard_record_stamped}). The record is refreshed on a one-second cadence rather than on the
+     * dismount itself, which is why this cannot be a single read; but it is a LINK and not a value,
+     * so it is not polled either. The historic defect this leg exists for shows as the other write
+     * appearing instead - {@code aboard_record_cleared} - and a red then says the record was
+     * DROPPED rather than merely that a tag came back false.</p>
      */
-    protected String awaitTagged() throws Exception {
-        String tag = "";
-        for (int attempt = 0; attempt < 40 && !tag.contains("\"tagged\":true"); attempt++) {
-            bot().waitTicks(5);
-            tag = exec("artest space aboard-tag " + BOT);
-        }
-        return tag;
+    protected String standUpAndAwaitTheStandingRecord(Events events) throws Exception {
+        long mark = events.mark();
+        String dismount = exec("artest player dismount");
+        assertTrue("the pilot must leave his seat: " + dismount, dismount.contains("\"ok\":true"));
+        events.assertChain(mark, "standing up on his own deck must keep him aboard: he leaves the "
+                        + "mount, and the reconciler's next pass re-stamps his durable record. A "
+                        + "record DROPPED here (an aboard_record_cleared in the chain below instead "
+                        + "of a stamp) is exactly what used to send him to an ordinary spawn",
+                RESTORE_LINK_BUDGET_TICKS, "dismount", "aboard_record_stamped");
+        String stamps = events.since(mark, "aboard_record_stamped");
+        String posture = Events.lastField(stamps, "posture");
+        assertTrue("the record written after he stood up must say he is STANDING, not still seated"
+                + " - it is the shape of the record, not its existence, that the restore reads:"
+                + " posture=" + posture + " | " + stamps, "STANDING".equals(posture));
+        return exec("artest space aboard-tag " + BOT);
     }
 
     /** The client's own rendered player altitude, or NaN while it has no world/player. */
@@ -1524,15 +1656,24 @@ public abstract class AbstractSpaceLoginRestoreClientTest {
         return null;
     }
 
-    /** Poll for a loaded VS ship in {@code dim} (assembly is async; a headless server forces the load). */
-    protected int waitForLoadedShip(int dim) throws Exception {
+    /**
+     * The assembly becoming a SHIP, then that ship being LOADED in {@code dim}.
+     *
+     * <p>The first half is a link and is awaited as one: {@code ship_spawned} is the physics mod's
+     * own registry taking the ship, so a red says the assembly never produced one rather than
+     * reporting a count that stayed where it was. The second half is not a link - "the shipyard is
+     * loaded" is live state on a headless server that nobody stands near, and force-loading it is
+     * what this poll is for - so it stays a bounded poll and returns the count it found.</p>
+     */
+    protected int waitForLoadedShip(Events events, long mark, int dim) throws Exception {
+        events.await(mark, "ship_spawned", "the build must become a ship in the physics mod's own"
+                + " registry - a ship count that never rises cannot tell an assembler that refused"
+                + " from a queue that never drained", RESTORE_LINK_BUDGET_TICKS);
         for (int attempt = 0; attempt < 40; attempt++) {
-            if (readIntOr(exec("artest vs ship-count-all " + dim), "count", -1) >= 1) {
-                exec("artest vs load-ships " + dim);
-                int loaded = readIntOr(exec("artest vs ship-count " + dim), "count", -1);
-                if (loaded >= 1) {
-                    return loaded;
-                }
+            exec("artest vs load-ships " + dim);
+            int loaded = readIntOr(exec("artest vs ship-count " + dim), "count", -1);
+            if (loaded >= 1) {
+                return loaded;
             }
             bot().waitTicks(5);
         }
@@ -1621,6 +1762,86 @@ public abstract class AbstractSpaceLoginRestoreClientTest {
     protected static boolean readBool(String json, String key) {
         return Pattern.compile("\"" + key + "\":true").matcher(json).find();
     }
+
+    // --- the ordered event log ---------------------------------------------------------------------
+
+    /**
+     * The SERVER's ordered event log, for the boot that is up RIGHT NOW.
+     *
+     * <p>A fresh object every call on purpose: this family stops one server and starts another over
+     * the same world root, and a sequence taken on boot 1 means nothing on boot 2 - both the log and
+     * the numbering are new. A mark is therefore always taken on the boot that will record the
+     * chain, never carried across {@link #closeBoth()}.</p>
+     *
+     * <p>{@link Events#mark()} asserts the recorder is subscribed before it answers, which is what
+     * makes an empty log below mean "it did not happen" rather than "nobody was listening". The
+     * recorder is registered when the probe command is (server start), so a mark taken before the
+     * client connects is already covered - and it has to be taken there, because the login restore
+     * fires ON the connection.</p>
+     */
+    protected Events events() {
+        return new Events(this::exec, ticks -> bot().waitTicks(ticks));
+    }
+
+    /**
+     * The same log, advanced on the SERVER's own clock instead of the client's.
+     *
+     * <p>For the one window this family has in which there is no client to wait in: between a
+     * disconnect and the reconnect. {@link #events()} steps by {@code bot().waitTicks}, and the bot
+     * is the thing that went away; the server is still ticking, and a logout is something it does on
+     * a tick. {@link GameTicks#advance} also fails loudly when that clock STOPS, so a hung server is
+     * reported as a stalled clock rather than as a link that never arrived.</p>
+     */
+    protected Events serverClockEvents() {
+        return new Events(this::exec,
+                ticks -> GameTicks.advance(serverHarness.client(), GameTicks.server(), ticks));
+    }
+
+    /**
+     * How long one link of a login chain may take, in ticks - the same 450 the polls it replaces
+     * spent (45 x 10). It is a deadline for a discrete event, not a guess at how long a value takes
+     * to settle: the re-seat retries for {@code MAX_SEAT_ATTEMPTS} server ticks and then gives up
+     * SILENTLY, so the budget has to outlive that silence rather than merely outlast a settle.
+     */
+    protected static final int RESTORE_LINK_BUDGET_TICKS = 450;
+
+    /**
+     * Wait for one record of {@code type} on the CLIENT's own log - optionally one carrying
+     * {@code needle} - or fail naming everything the client DID record since {@code mark}.
+     *
+     * <p>Written here rather than on a shared base because the two logs are separate instruments
+     * with separate sequences: {@link Events} reads the server's through the probe channel, and the
+     * client's own is reachable only through the bot. Cross-side ORDER within a tick is undefined,
+     * so a client link is always awaited BESIDE a server chain and never inside one.</p>
+     */
+    protected String awaitClientEvent(long mark, String type, String needle, String what,
+                                      int tickBudget) throws Exception {
+        String reply = "";
+        for (int waited = 0; waited <= tickBudget; waited += 5) {
+            JsonObject seen = bot().eventsSince(mark, type);
+            reply = String.valueOf(seen);
+            if (seen.get("count").getAsInt() > 0 && (needle == null || reply.contains(needle))) {
+                return reply;
+            }
+            bot().waitTicks(5);
+        }
+        throw new AssertionError(what + " - no client `" + type + "`"
+                + (needle == null ? "" : " carrying " + needle) + " was recorded within " + tickBudget
+                + " ticks. Records of that type since the mark: " + reply
+                + " | everything the client recorded since the mark: " + bot().eventsSince(mark, null));
+    }
+
+    /**
+     * The client's log from the very beginning of ITS session.
+     *
+     * <p>Every restart leg starts a BRAND NEW client JVM, and the fact a chain needs -
+     * {@code client_dimension_changed} at {@code handleJoinGame} - happens inside
+     * {@link #startClient()}, before a mark could be taken. The client's log is empty at that
+     * moment, so zero IS the mark, and nothing older than this session can be in it. A leg that
+     * reuses one client across a reconnect must NOT use this: there the pre-logout session is still
+     * in the ring, and a mark taken before the disconnect is the honest one.</p>
+     */
+    protected static final long CLIENT_SESSION_START = 0L;
 
     // --- the per-tick ship-frame record (client side) -----------------------------------------------
 

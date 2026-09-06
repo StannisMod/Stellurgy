@@ -2,6 +2,7 @@ package zmaster587.advancedRocketry.test.client;
 
 import com.google.gson.JsonObject;
 import zmaster587.advancedRocketry.client.render.planet.ApparentSize;
+import zmaster587.advancedRocketry.test.Events;
 import org.junit.After;
 import org.junit.FixMethodOrder;
 import org.junit.Test;
@@ -16,6 +17,7 @@ import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.function.Predicate;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -94,7 +96,8 @@ import static org.junit.Assert.assertTrue;
  *       the cell (chosen by geometry, not by hope) must NOT gain a billboard when the bodies are
  *       registered, and must not look like the aimed frames do.</li>
  *   <li><b>The atmosphere boundary, by exact count</b> — one per DESCEND TARGET and none for anything
- *       else, read off the renderer's own per-frame counter. The fixture is what makes it a real
+ *       else, read off the renderer's own record of one NAMED frame ({@code sky_frame_drawn}, whose
+ *       payload says what that frame drew and in which world). The fixture is what makes it a real
  *       measurement: six bodies of which five are descend targets, so "one per body" reads 6 and
  *       "none drawn" reads 0, and only the correct renderer reads 5.</li>
  *   <li><b>Starfield</b> — pixels differing from the background in the upper part of the empty-bearing
@@ -142,8 +145,6 @@ public class BoundarySkyRendersInSlotCellE2ETest extends AbstractSharedClientE2E
     private static final Pattern BOUND_DIM = Pattern.compile("\"slotDim\":(-?\\d+)");
     private static final String CLIENT_BODIES_CLASS =
             "zmaster587.advancedRocketry.network.PacketSystemBodiesSync";
-    private static final String SKY_CLASS =
-            "zmaster587.advancedRocketry.command.test.RenderDiag";
 
     /**
      * Cell the ship settles in — FOUND at run time, never written down. See {@link #findEmptyCell()}.
@@ -332,8 +333,24 @@ public class BoundarySkyRendersInSlotCellE2ETest extends AbstractSharedClientE2E
             // Night, so the cell's fog clear is dark and a white starfield can be seen against it.
             exec("time set 18000");
 
+            // ONE mark for this cell, taken BEFORE the transfer: the arrival and every sky frame are
+            // read from it. It has to precede the transfer for a second reason — the renderer records
+            // a frame only when what it drew CHANGED, or when it RESUMED in a different world, so the
+            // record this cell is guaranteed to produce is the resume on its first frame in the world
+            // the transfer builds. A mark taken after that would be waiting for a change a steady sky
+            // never makes.
+            long cellMark = clientMark();
             seat(slotDim, CELL_CAPTURE_Y);
-            bot().waitTicks(20);
+            // The LINK, not a tick budget: the respawn packet that rebuilds the client's world names
+            // the dimension it rebuilt it for, and its tail is the first instant "this client is in
+            // the slot the settle bound the cell to" is true. The fixed 20-tick wait this replaces
+            // was the only gate before the assertion below, so under load a slow respawn read as
+            // "the client renders the wrong world".
+            awaitClientLog(cellMark, "client_dimension_changed",
+                    reply -> anyRecord(reply, null, 0, "\"dim\":" + slotDim + ","),
+                    "the client must be carried into the slot world the settle bound this cell to"
+                            + " (dim " + slotDim + ") before any frame can be about that cell",
+                    DIM_CHANGE_BUDGET_TICKS);
 
             JsonObject clientWorld = bot().reportWeather();
             assertTrue("client must have a world after the transfer",
@@ -351,11 +368,20 @@ public class BoundarySkyRendersInSlotCellE2ETest extends AbstractSharedClientE2E
             // below a reading about THIS cell rather than about the overworld frame before it. It also
             // supplies the frame dimensions the size sanity check uses.
             slotFirstFrame = capture(slotDim, CELL_CAPTURE_Y, 90f, 0f, "slot_first_frame");
-            // How many body labels the client's LAST FRAME wrote, with no body in the cell yet. The
-            // control for the label leg: a counter that is non-zero here is counting something other
-            // than this cell's bodies.
-            labelsWithNoBodies = labelsDrawn();
-            boundariesWithNoBodies = boundariesDrawn();
+            // What that frame drew, off the renderer's own record of it. The wait is for the FRAME —
+            // a link — and the counts are read out of it, so "the sky labelled nothing" and "the sky
+            // never ran" can no longer produce the same zero: assertInstrumentRan is what separates
+            // them, and the dim needle is what makes it a statement about THIS cell.
+            String emptySky = awaitClientLog(cellMark, "sky_frame_drawn",
+                    reply -> anyRecord(reply, null, 0, dimNeedle(slotDim)),
+                    "the sky renderer must draw a frame in the slot world before its per-frame counts"
+                            + " can be read as a statement about this cell",
+                    SKY_FRAME_BUDGET_TICKS);
+            Events.assertInstrumentRan(emptySky, "sky_frame_events",
+                    "no body is registered yet, so the sky can have labelled nothing");
+            String emptyFrame = lastRecordWith(emptySky, dimNeedle(slotDim));
+            labelsWithNoBodies = lastInt(emptyFrame, "labels");
+            boundariesWithNoBodies = lastInt(emptyFrame, "boundaries");
             // A before-frame on each body's bearing, plus one on the empty bearing. Only the two aimed
             // bodies are measured, but capturing all of them costs one frame each and makes a later
             // "which body failed" question answerable from the artefacts.
@@ -365,6 +391,8 @@ public class BoundarySkyRendersInSlotCellE2ETest extends AbstractSharedClientE2E
             }
             emptyBefore = capture(slotDim, CELL_CAPTURE_Y, EMPTY_YAW, EMPTY_PITCH, "before_empty");
 
+            // Before the registrations, so the broadcast they cause cannot land between two reads.
+            long feedMark = clientMark();
             for (String[] body : SYSTEM) {
                 // The radius is stated, not implied: since 2026-08-16 the sky sizes a body by the
                 // ANGLE it subtends, so a fixture that named no radius would draw six identical
@@ -374,17 +402,23 @@ public class BoundarySkyRendersInSlotCellE2ETest extends AbstractSharedClientE2E
                 assertTrue("add-poi must register the body: " + poi, poi.contains("\"ok\":true"));
             }
 
-            // The whole set has to reach the client's own store before any frame can be blamed on the
-            // renderer. Gated on the COUNT, so a partially-arrived feed is not read as a drawing bug.
-            String bodies = null;
-            boolean got = false;
-            for (int i = 0; i < 24 && !got; i++) {
-                bot().waitTicks(5);
-                bodies = clientBodies();
-                got = countBodies(bodies, slotDim) == SYSTEM.length;
-            }
-            assertTrue("the client must have all " + SYSTEM.length + " bodies of the cell before it can"
-                    + " be asked to draw them, got: " + bodies, got);
+            // The whole set has to reach the client before any frame can be blamed on the renderer,
+            // and the ARRIVAL is what is waited for: the packet's own handler clears the client store
+            // and refills it with the payload, so its record IS the store. A size poll of that store
+            // could not tell a feed that never came from one that came empty, and could not say which
+            // broadcast filled it.
+            String feedArrived = awaitClientLog(feedMark, "system_bodies_received",
+                    reply -> anyRecord(reply, "bodies", SYSTEM.length),
+                    "the client must be SENT all " + SYSTEM.length + " bodies of the cell before it"
+                            + " can be asked to draw them", FEED_BUDGET_TICKS);
+            Events.assertInstrumentRan(feedArrived, "system_bodies_sync_events",
+                    "the client was sent the cell's bodies");
+            // And the arrival must have been for THIS slot: the record counts bodies across every dim
+            // it carries, so the store is asked which dim they landed under.
+            String bodies = clientBodies();
+            assertTrue("the client must hold all " + SYSTEM.length + " bodies UNDER THE SLOT the cell"
+                    + " is bound to (" + slotDim + "), got: " + bodies + " | arrival: " + feedArrived,
+                    countBodies(bodies, slotDim) == SYSTEM.length);
 
             // Cross-side oracle: the SERVER's own feed, for this slot dim, carries exactly these bodies
             // on exactly these bearings. Everything below aims with the server's numbers.
@@ -405,8 +439,18 @@ public class BoundarySkyRendersInSlotCellE2ETest extends AbstractSharedClientE2E
                 after[i] = capture(slotDim, CELL_CAPTURE_Y, aim[0], aim[1], "after_body" + i);
             }
             emptyAfter = capture(slotDim, CELL_CAPTURE_Y, EMPTY_YAW, EMPTY_PITCH, "after_empty");
-            labelsWithBodies = labelsDrawn();
-            boundariesWithBodies = boundariesDrawn();
+            // The frame the label / boundary legs are about: one drawn in this cell that attempted
+            // every body the feed carries. The counter this replaces was whatever the LAST frame
+            // happened to be, whichever world it was drawn in; here the frame is named.
+            String bodiedSky = awaitClientLog(cellMark, "sky_frame_drawn",
+                    reply -> anyRecord(reply, "bodies", SYSTEM.length, dimNeedle(slotDim)),
+                    "the sky must attempt every body the cell's feed carries before its label and"
+                            + " boundary counts can be read as a statement about them",
+                    SKY_FRAME_BUDGET_TICKS);
+            String bodiedFrame = lastRecordWith(bodiedSky, dimNeedle(slotDim),
+                    "\"bodies\":" + SYSTEM.length + ",");
+            labelsWithBodies = lastInt(bodiedFrame, "labels");
+            boundariesWithBodies = lastInt(bodiedFrame, "boundaries");
         } finally {
             bot().setHudHidden(previousHud);
             bot().setFramebuffer(previousFbo);
@@ -496,11 +540,13 @@ public class BoundarySkyRendersInSlotCellE2ETest extends AbstractSharedClientE2E
 
         // ------------------------------------------ Leg 5: every body says what it is - the sky
         // writes each body's name and its distance under the billboard, one label per body, on by
-        // default. Read off the CLIENT's own per-frame counter rather than off pixels, because
-        // "is that text or is it a star" is not a question a pixel count can answer - and because
-        // the rule is "one label per body", which a count states exactly. The before-sample is the
-        // control: with no body in the cell the counter must be zero, so a non-zero after-sample is
-        // attributable to the bodies and to nothing else.
+        // default. Read off the renderer's own record of a NAMED frame rather than off pixels,
+        // because "is that text or is it a star" is not a question a pixel count can answer - and
+        // because the rule is "one label per body", which a count states exactly. The before-sample
+        // is the control: with no body in the cell the frame must have labelled nothing, so a
+        // non-zero after-sample is attributable to the bodies and to nothing else. Both samples come
+        // from a frame the log says was drawn in THIS cell, with the instrument asserted to have run
+        // beside them - so neither zero can mean "nobody was looking".
         assertEquals("no body is registered yet, so the sky can have labelled nothing",
                 0, labelsWithNoBodies);
         assertEquals("the sky must label every body it draws, by default and with no configuration",
@@ -537,9 +583,15 @@ public class BoundarySkyRendersInSlotCellE2ETest extends AbstractSharedClientE2E
      * <p><b>Counted, not photographed, and that is deliberate.</b> A nebula is haze whose alpha falls to
      * zero at its rim; a pixel-difference test would be measuring the tuning of {@code NEBULA_MAX_ALPHA}
      * as much as the feed, and would go red the first time the haze was made subtler. The renderer's own
-     * per-frame counter answers "did a cloud reach the rasterizer" exactly. It is read BESIDE
-     * {@code skyFramesDrawn}, because a zero means "no cloud was drawn" only if the sky renderer ran at
-     * all — the two are different questions and one counter cannot tell them apart.</p>
+     * record of a frame ({@code sky_frame_drawn}) answers "did a cloud reach the rasterizer" exactly.</p>
+     *
+     * <p><b>Three questions, asked separately, because one number could not tell them apart.</b> Was
+     * the cell's sky SENT to this client ({@code system_bodies_received} carrying a cloud)? Did the
+     * renderer run in THIS cell at all (a {@code sky_frame_drawn} for the settled slot, since a mark
+     * this scenario took — where the cumulative frame counter it replaces was already non-zero from
+     * the scenario before on a shared client, and so could never come back "no")? And did a frame
+     * drawn there emit a cloud? The old form folded all three into one poll of two statics, so a
+     * broadcast that never came was reported as a renderer that draws nothing.</p>
      *
      * <p><b>Where the cloud is comes from the SERVER, not from this test.</b> A cloud's position is a
      * fact about the seed; a hard-coded cell would pin this test to one world's generation and would
@@ -588,24 +640,45 @@ public class BoundarySkyRendersInSlotCellE2ETest extends AbstractSharedClientE2E
                     serverClouds >= 1);
 
             exec("time set 18000");
+            long cloudMark = clientMark();
             seat(slotDim, CELL_CAPTURE_Y);
+            awaitClientLog(cloudMark, "client_dimension_changed",
+                    reply -> anyRecord(reply, null, 0, "\"dim\":" + slotDim + ","),
+                    "the client must be carried into the cell the finder chose (dim " + slotDim
+                            + ") before any frame can be about that cell", DIM_CHANGE_BUDGET_TICKS);
 
-            // Gate on the FEED reaching the client, then on a frame being drawn after it did. Waiting
-            // a fixed number of ticks would make a slow broadcast read as a renderer that draws nothing.
-            int drawn = 0;
-            long frames = 0L;
-            for (int attempt = 0; attempt < 30 && drawn == 0; attempt++) {
-                bot().waitTicks(10);
-                frames = Long.parseLong(bot().readStaticField(SKY_CLASS, "skyFramesDrawn")
-                        .get("value").getAsString().trim());
-                drawn = skyCounter("nebulaeDrawnLastFrame");
-            }
+            // Link 1, and this scenario never had it: the cell's sky REACHED this client. Without it
+            // the single loop below folded "the broadcast never came" into "the renderer drew
+            // nothing" — the very conflation the comment it replaces said it wanted to avoid.
+            String arrival = awaitClientLog(cloudMark, "system_bodies_received",
+                    reply -> anyRecord(reply, "nebulae", 1),
+                    "the server has " + serverClouds + " cloud(s) in this cell's sky, and the client"
+                            + " must be SENT them before a frame can be blamed for not drawing them",
+                    FEED_BUDGET_TICKS);
+            Events.assertInstrumentRan(arrival, "system_bodies_sync_events",
+                    "the cell's clouds reached this client");
 
-            assertTrue("HARNESS CONTROL: the sky renderer never ran, so nothing below could mean"
-                    + " anything (frames=" + frames + ")", frames > 0L);
-            assertTrue("the server had " + serverClouds + " cloud(s) in this cell's sky and the client"
-                    + " drew " + drawn + ": a landmark that reaches the feed and not the frame is a"
-                    + " landmark nobody can navigate by", drawn >= 1);
+            // CONTROL, and now a per-scenario one: a sky frame drawn in THIS cell since the mark. The
+            // counter it replaces (a cumulative frame total, never reset) was already non-zero from
+            // the scenario before on this shared client, so it could not come back "no" — which is
+            // not a control at all.
+            String frames = awaitClientLog(cloudMark, "sky_frame_drawn",
+                    reply -> anyRecord(reply, null, 0, dimNeedle(slotDim)),
+                    "CONTROL: the sky renderer never drew a frame in the cell this scenario settled"
+                            + " in (dim " + slotDim + "), so nothing below could mean anything",
+                    SKY_FRAME_BUDGET_TICKS);
+            Events.assertInstrumentRan(frames, "sky_frame_events",
+                    "the sky renderer ran in this cell");
+
+            // THE CONTRACT: a landmark that reaches the feed and not the frame is a landmark nobody
+            // can navigate by. Counted, not photographed — see the class note — and read off the
+            // renderer's own record of the frame rather than off a last-frame static, so the number
+            // belongs to a frame drawn in this cell after the clouds arrived.
+            awaitClientLog(cloudMark, "sky_frame_drawn",
+                    reply -> anyRecord(reply, "nebulae", 1, dimNeedle(slotDim)),
+                    "the server had " + serverClouds + " cloud(s) in this cell's sky and no frame the"
+                            + " client drew in dim " + slotDim + " emitted one",
+                    SKY_FRAME_BUDGET_TICKS);
         } finally {
             try {
                 exec("artest space gen-reset");
@@ -659,21 +732,125 @@ public class BoundarySkyRendersInSlotCellE2ETest extends AbstractSharedClientE2E
         return Integer.parseInt(m.group(1));
     }
 
-    /** How many body labels the client's last rendered frame wrote. */
-    private int labelsDrawn() throws Exception {
-        return skyCounter("labelsDrawnLastFrame");
+    // ------------------------------------------------- the CLIENT's own ordered event log ---------
+    //
+    // Every link this class waits for happens on the CLIENT — a world rebuilt, a sky packet applied,
+    // a frame drawn — so the log read here is the client's, reached through the harness bot rather
+    // than through the server probe the shared `events()` helper wraps. The three reads below are
+    // local on purpose: the shared client base is not this group's to edit.
+
+    /** How long a client dimension change is given. A world teardown + rebuild, not a value settling. */
+    private static final int DIM_CHANGE_BUDGET_TICKS = 400;
+    /** How long one sky broadcast is given to reach this client after the registration that causes it. */
+    private static final int FEED_BUDGET_TICKS = 400;
+    /** How long the renderer is given to draw a frame that differs from the one before it. */
+    private static final int SKY_FRAME_BUDGET_TICKS = 400;
+
+    /**
+     * The client event log's sequence, taken BEFORE the stimulus — and refused unless a recorder is
+     * actually subscribed, because an empty log afterwards would otherwise read as "it never
+     * happened" when the truth is "nobody was listening".
+     */
+    private long clientMark() throws Exception {
+        JsonObject mark = bot().eventMark();
+        assertTrue("the CLIENT event recorder is not subscribed, so an empty log below would mean"
+                + " nothing: " + mark, mark.get("recording").getAsBoolean());
+        return mark.get("seq").getAsLong();
     }
 
-    /** How many atmosphere boundaries the client's last rendered frame drew. */
-    private int boundariesDrawn() throws Exception {
-        return skyCounter("boundariesDrawnLastFrame");
+    /** Every client record of {@code type} at or after {@code mark}, in order, as the raw reply. */
+    private String clientEvents(long mark, String type) throws Exception {
+        return String.valueOf(bot().eventsSince(mark, type));
     }
 
-    private int skyCounter(String field) throws Exception {
-        JsonObject sf = bot().readStaticField(SKY_CLASS, field);
-        assertTrue("the sky renderer must expose its per-frame counter " + field + ": " + sf,
-                !sf.get("isNull").getAsBoolean());
-        return Integer.parseInt(sf.get("value").getAsString().trim());
+    /**
+     * Wait until the client log since {@code mark} satisfies {@code holds}, or fail naming the link
+     * and printing what the client DID record.
+     *
+     * @param what a player-facing sentence for what this link means, used in the failure
+     */
+    private String awaitClientLog(long mark, String type, Predicate<String> holds, String what,
+                                  int budgetTicks) throws Exception {
+        String reply = "";
+        for (int waited = 0; waited <= budgetTicks; waited += 5) {
+            reply = clientEvents(mark, type);
+            if (holds.test(reply)) {
+                return reply;
+            }
+            bot().waitTicks(5);
+        }
+        throw new AssertionError(what + " — no matching `" + type + "` was recorded on the CLIENT"
+                + " within " + budgetTicks + " ticks. What it DID record: "
+                + Events.typesOf(clientEvents(mark, null)) + " | `" + type + "` records: " + reply);
+    }
+
+    /** The payload fragment that pins a sky record to one dimension. */
+    private static String dimNeedle(int dim) {
+        return "\"dim\":" + dim + ",";
+    }
+
+    /**
+     * Whether any RECORD in a {@code since} reply carries every one of {@code needles} and, when
+     * {@code field} is non-null, an integer {@code field} at or above {@code atLeast}.
+     *
+     * <p>Records are split on the envelope's own {@code {"seq":} prefix and the leading chunk — the
+     * envelope — is skipped, so an envelope key ({@code count}, {@code from}, {@code dropped}) can
+     * never be mistaken for a payload one.</p>
+     */
+    private static boolean anyRecord(String sinceReply, String field, int atLeast,
+                                     String... needles) {
+        String[] records = String.valueOf(sinceReply).split("\\{\"seq\":");
+        for (int i = 1; i < records.length; i++) {
+            boolean all = true;
+            for (String needle : needles) {
+                if (!records[i].contains(needle)) {
+                    all = false;
+                    break;
+                }
+            }
+            if (!all) {
+                continue;
+            }
+            if (field == null) {
+                return true;
+            }
+            Matcher m = Pattern.compile("\"" + field + "\":(-?\\d+)").matcher(records[i]);
+            if (m.find() && Integer.parseInt(m.group(1)) >= atLeast) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /** The LAST record of a {@code since} reply carrying every one of {@code needles}, or "" when
+     *  none does. Records are in order, and a sky frame is recorded only when what it drew CHANGED,
+     *  so the last one is what the client is drawing now. */
+    private static String lastRecordWith(String sinceReply, String... needles) {
+        String[] records = String.valueOf(sinceReply).split("\\{\"seq\":");
+        String last = "";
+        for (int i = 1; i < records.length; i++) {
+            boolean all = true;
+            for (String needle : needles) {
+                if (!records[i].contains(needle)) {
+                    all = false;
+                    break;
+                }
+            }
+            if (all) {
+                last = records[i];
+            }
+        }
+        return last;
+    }
+
+    /** The integer {@code field} of one record, or -1 when it carries none. */
+    private static int lastInt(String record, String field) {
+        Matcher m = Pattern.compile("\"" + field + "\":(-?\\d+)").matcher(String.valueOf(record));
+        int last = -1;
+        while (m.find()) {
+            last = Integer.parseInt(m.group(1));
+        }
+        return last;
     }
 
     // ------------------------------------------------------------------------------------ helpers
@@ -834,6 +1011,9 @@ public class BoundarySkyRendersInSlotCellE2ETest extends AbstractSharedClientE2E
         JsonObject gate = bot().setRenderDistance(SKY_RENDER_DISTANCE);
         assertEquals("the sky pass gate must be open when the frame is captured: " + gate,
                 SKY_RENDER_DISTANCE, gate.get("renderDistance").getAsInt());
+        // Stays a bounded wait, deliberately. What is wanted is that at least one frame ran with the
+        // final settings, and the sky's own event is an EDGE — a steady sky draws frame after frame
+        // and records none of them, so awaiting one here would hang on exactly the case this is for.
         bot().waitTicks(6);
 
         JsonObject shot = bot().screenshot(name);

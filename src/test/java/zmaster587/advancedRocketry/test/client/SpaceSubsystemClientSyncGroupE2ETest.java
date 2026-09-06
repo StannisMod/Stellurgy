@@ -5,21 +5,23 @@ import org.junit.FixMethodOrder;
 import org.junit.Test;
 import org.junit.runners.MethodSorters;
 
+import zmaster587.advancedRocketry.test.Events;
+
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
 /**
  * What a REAL client is told about the space subsystem, and whether it believes the right thing.
  * Three scenarios, one client.
  *
- * <p>All three read a value that exists ONLY on the client — a static populated by a packet handler,
- * the dimension the client renders, a clock the client keeps for itself — and all three are
- * falsifiable in the same way: delete the client jar and there is nothing left to read, so none of
- * them can pass server-side.</p>
+ * <p>All three observe something that happens ONLY on the client — a world rebuilt for a slot dim, a
+ * sky feed applied by a packet handler, a clock baseline accepted — and all three are falsifiable in
+ * the same way: delete the client jar and there is nothing left to observe, so none of them can pass
+ * server-side. The waits read the CLIENT's own event log; the one remaining read of a production
+ * static is the sky feed's CONTENTS, which no event carries.</p>
  *
  * <h2>Why these three share one harness</h2>
  *
@@ -50,7 +52,8 @@ public class SpaceSubsystemClientSyncGroupE2ETest extends AbstractSharedClientE2
 
     /** How far the server's clock is jumped. Far past anything a sync period could account for. */
     private static final long JUMP_TICKS = 1_000_000L;
-    /** Two full sync periods plus slack, so a missed phase is not a failure. */
+    /** Two full sync periods plus slack, so a missed phase is not a failure — a DEADLINE for the
+     *  jumped baseline to arrive, no longer a window the test sat out in full. */
     private static final int SYNC_WAIT_TICKS = 520;
     /**
      * How far the two sides may stand apart. One sync period is 200 ticks and the client keeps
@@ -70,6 +73,114 @@ public class SpaceSubsystemClientSyncGroupE2ETest extends AbstractSharedClientE2
         scenario().requireArranged("player health must echo the player name: " + health, m.find());
         return m.group(1);
     }
+
+    // ── the CLIENT's own event log ────────────────────────────────────────────
+    //
+    // Every one of these three scenarios waits for something that happens ON THE CLIENT — a world
+    // rebuilt for a slot dim, a sky feed applied, a clock baseline accepted. The base class's
+    // {@link #events()} reads the SERVER log and {@code ClientBot} speaks a different verb pair, so
+    // the adapter below puts the client log behind the same {@link Events} reader: the same mark,
+    // the same "is anybody recording" assertion, the same failure narrative on both sides. Local to
+    // this class because this migration owns only its own files; the second class outside this group
+    // that wants it is the signal to lift it onto the shared base rather than copy it again.
+
+    private Events clientEvents() {
+        return new Events(this::execClientEventCommand, bot()::waitTicks);
+    }
+
+    private String execClientEventCommand(String command) throws Exception {
+        String[] parts = command.split(" ");
+        if (parts.length >= 3 && "mark".equals(parts[2])) {
+            return String.valueOf(bot().eventMark());
+        }
+        long seq = Long.parseLong(parts[3]);
+        return String.valueOf(bot().eventsSince(seq, parts.length > 4 ? parts[4] : null));
+    }
+
+    /**
+     * Wait for a record of {@code type} that CARRIES {@code needle}, failing with the whole chain
+     * that DID happen.
+     *
+     * <p>{@code needle} must end at a field boundary ({@code "dim":42,}): a payload's numbers are
+     * not delimited on the right, so a needle without the comma matches every value it is a prefix
+     * of.</p>
+     */
+    private String awaitRecordCarrying(Events events, long mark, String type, String needle,
+                                       String what, int tickBudget) throws Exception {
+        String reply = "";
+        for (int waited = 0; waited <= tickBudget; waited += 5) {
+            reply = events.since(mark, type);
+            if (Events.countRecords(reply, needle) > 0) {
+                return reply;
+            }
+            bot().waitTicks(5);
+        }
+        throw new AssertionError(what + " — no `" + type + "` carrying " + needle + " was recorded"
+                + " within " + tickBudget + " ticks. What DID happen since the mark: "
+                + Events.typesOf(events.since(mark)) + " | raw: " + reply);
+    }
+
+    /**
+     * Did any {@code system_bodies_received} record in this reply carry a feed for {@code slotDim}?
+     *
+     * <p>{@code slotDims} is a comma-separated list of the dims the packet's body half carries an
+     * entry for, so membership is asked of the list and never of a substring: dim 5 must not answer
+     * for dim 55.</p>
+     */
+    private static boolean carriesFeedFor(String sinceReply, int slotDim) {
+        Matcher m = Pattern.compile("\"slotDims\":\"([^\"]*)\"").matcher(String.valueOf(sinceReply));
+        while (m.find()) {
+            if (("," + m.group(1) + ",").contains("," + slotDim + ",")) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /** Wait for a sky feed naming {@code slotDim} to be APPLIED on this client. */
+    private String awaitBodiesFor(Events events, long mark, int slotDim, String what,
+                                  int tickBudget) throws Exception {
+        String reply = "";
+        for (int waited = 0; waited <= tickBudget; waited += 5) {
+            reply = events.since(mark, "system_bodies_received");
+            if (carriesFeedFor(reply, slotDim)) {
+                return reply;
+            }
+            bot().waitTicks(5);
+        }
+        throw new AssertionError(what + " — no `system_bodies_received` naming slot dim " + slotDim
+                + " was applied within " + tickBudget + " ticks. What DID happen since the mark: "
+                + Events.typesOf(events.since(mark)) + " | raw: " + reply);
+    }
+
+    /**
+     * Wait for a space-clock baseline of at least {@code min} to be ACCEPTED by this client — the
+     * value is the seam's own argument, so this is the arrival of the jumped clock and not a sample
+     * of what the client answers afterwards.
+     */
+    private String awaitClockBaselineAtLeast(Events events, long mark, long min, String what,
+                                             int tickBudget) throws Exception {
+        String reply = "";
+        for (int waited = 0; waited <= tickBudget; waited += 5) {
+            reply = events.since(mark, "space_clock_synced");
+            Matcher m = Pattern.compile("\"serverTick\":(-?\\d+)").matcher(reply);
+            while (m.find()) {
+                if (Long.parseLong(m.group(1)) >= min) {
+                    return reply;
+                }
+            }
+            bot().waitTicks(5);
+        }
+        throw new AssertionError(what + " — no `space_clock_synced` carrying a serverTick of at least"
+                + " " + min + " arrived within " + tickBudget + " ticks. Baselines since the mark: "
+                + reply);
+    }
+
+    /**
+     * How long one link may take here. Each of these is a packet's round trip plus the client's own
+     * handling of it — a deadline for a discrete event, never a guess at how long a value settles.
+     */
+    private static final int LINK_BUDGET_TICKS = 400;
 
     // ── slot-dim entry ────────────────────────────────────────────────────────
 
@@ -101,14 +212,41 @@ public class SpaceSubsystemClientSyncGroupE2ETest extends AbstractSharedClientE2
         // auto-unloaded by Forge at tick end and its unsaved edits are DISCARDED (the documented
         // slot lifecycle), so the floor can only be placed once a player holds the world loaded.
         scenario().arranging("transfer the player in high, place a floor, then step onto it");
+        Events clientLog = clientEvents();
+        long entryMark = clientLog.mark();
         String enter = exec("artest space enter " + botName + " " + slotDim + " 0.5 200 0.5");
         scenario().requireArranged("space enter must succeed: " + enter, enter.contains("\"ok\":true"));
-        bot().waitTicks(10);
+        // The client's own world is now the slot dim — the far side of the transfer, and the proof
+        // that the registration sync landed (a client that never registered the dim could not build
+        // a WorldClient for it). Waited for as a LINK: the respawn is a discrete event, and a client
+        // torn down and rebuilt between two samples shows one change or none.
+        awaitRecordCarrying(clientLog, entryMark, "client_dimension_changed", "\"dim\":" + slotDim + ",",
+                "a player transferred into a pool slot must be respawned into it on his own client",
+                LINK_BUDGET_TICKS);
+        // …and it has the platform's chunk. That is the second link the old ten ticks were paying
+        // for, and it is the one whose absence used to read as "he fell": movement is client-driven,
+        // so a client without the blocks simulates a fall whatever the server thinks. Raised as an
+        // ARRANGEMENT rather than as the subject — a chunk that never arrives (or whose record was
+        // evicted from its 256-deep ring by the rest of the world load) is a fixture that did not
+        // come up, not this scenario's contract failing.
+        try {
+            awaitRecordCarrying(clientLog, entryMark, "chunk_data_applied", "\"cx\":0,\"cz\":0,",
+                    "the client must actually HAVE the chunk the platform is built in",
+                    LINK_BUDGET_TICKS);
+        } catch (AssertionError arrangement) {
+            scenario().arrangementFailed(arrangement.getMessage());
+        }
         exec("artest space set-block " + slotDim + " 0 64 0");
+
+        long repositionMark = clientLog.mark();
         String reposition = exec("artest space enter " + botName + " " + slotDim + " 0.5 66 0.5");
         scenario().requireArranged("repositioning onto the platform must succeed: " + reposition,
                 reposition.contains("\"ok\":true"));
-        bot().waitTicks(40);
+        // A same-dim reposition is a server-side position write, and its far side is the client
+        // APPLYING the correction — the link the forty ticks were budgeting for.
+        clientLog.await(repositionMark, "client_pos_look_applied",
+                "the client must apply the server's reposition onto the platform before its own"
+                        + " rendered position is read", LINK_BUDGET_TICKS);
 
         scenario().asserting("the world the CLIENT renders is the slot dim, and it keeps running");
         JsonObject clientWorld = bot().reportWeather();
@@ -117,8 +255,11 @@ public class SpaceSubsystemClientSyncGroupE2ETest extends AbstractSharedClientE2
         assertEquals("the client's own world must be the slot dim (registration sync landed)",
                 slotDim, clientWorld.get("dim").getAsInt());
 
-        // …the client SETTLES standing on the platform (not void-falling / not frozen). Poll: the
-        // chunk send + the server's position correction can take a while on a loaded suite run.
+        // …the client SETTLES standing on the platform (not void-falling / not frozen). STILL A
+        // POLL, and it stays one: a body coming to rest is client-simulated physics converging on a
+        // height, not a link production commits — there is nothing to record. Its two gating links
+        // (the world, the chunk) were asserted above, so a red here now means "it had the chunk and
+        // still fell" rather than "something in the arrangement never arrived".
         double clientY = Double.NaN;
         boolean settled = false;
         for (int i = 0; i < 60 && !settled; i++) {
@@ -131,7 +272,18 @@ public class SpaceSubsystemClientSyncGroupE2ETest extends AbstractSharedClientE2
         assertTrue("client-rendered Y must settle at the platform (~65), got " + clientY
                 + "; client block(0,64,0)=" + clientBlock + "; server player: " + serverView, settled);
 
+        // "Keeps rendering" is a NEGATIVE over a window, so the window stays — expiry is the pass.
+        // What changes is the evidence: the end-state read below says where he IS, and the event log
+        // says he was never moved out and back in between the two reads, which a pair of samples
+        // cannot distinguish from a client that left the world and returned.
+        long holdMark = clientLog.mark();
         bot().waitTicks(40);
+        String changes = clientLog.since(holdMark, "client_dimension_changed");
+        Events.assertInstrumentRan(changes, "client_dimension_changed",
+                "the client was never respawned out of the slot dim during the hold");
+        assertEquals("a client that arrived in a slot dim must STAY there; a dimension change"
+                        + " during the hold is it being thrown out: " + changes,
+                0, Events.countRecords(changes, "\"via\":"));
         assertEquals("the client must still be in the slot dim two seconds later",
                 slotDim, bot().reportWeather().get("dim").getAsInt());
 
@@ -182,34 +334,48 @@ public class SpaceSubsystemClientSyncGroupE2ETest extends AbstractSharedClientE2
             // CONTROL, and it runs FIRST, while the player is still OUTSIDE the cell: a sky he is
             // not in is a sky he is not sent. Without this leg the assertion below is satisfied
             // just as well by a build that broadcasts every live cell to everybody.
+            //
+            // Read off the client's record of every sky feed it APPLIED, not off the store the last
+            // one left behind. The old form kept the last of eight samples and was a valid negative
+            // only because nothing ever clears that store for a player outside a slot world — a sky
+            // sent and then replaced inside the window was invisible to it. Each arrival is now its
+            // own record and an absence is over all of them.
             scenario().measuring("what a player OUTSIDE the cell is sent (the control)");
-            String outside = null;
-            for (int i = 0; i < 8; i++) {
-                bot().waitTicks(5);
-                JsonObject sf = bot().readStaticField(CLIENT_BODIES_CLASS, "CLIENT_BODIES");
-                outside = sf.get("isNull").getAsBoolean() ? "" : sf.get("value").getAsString();
-            }
-            scenario().record("clientBodiesOutside", outside);
-            assertFalse("a player who is not in the cell's world must not be sent its sky, got: "
-                    + outside, outside != null && outside.contains(slotDim + "=[RenderBody{"));
+            Events clientLog = clientEvents();
+            long controlMark = clientLog.mark();
+            bot().waitTicks(40);
+            String outside = clientLog.since(controlMark, "system_bodies_received");
+            scenario().record("skyFeedsWhileOutside", outside);
+            assertTrue("a player who is not in the cell's world must not be sent its sky; the client"
+                            + " applied a feed naming slot dim " + slotDim + ": " + outside
+                            + " — (this instrument's liveness is established by the positive leg"
+                            + " below, which waits for a record from the very same seam and reds by"
+                            + " name if it never wove)",
+                    !carriesFeedFor(outside, slotDim));
 
             scenario().arranging("put the player where a pilot in that cell would be");
+            long insideMark = clientLog.mark();
             String enter = exec("artest space enter " + botName() + " " + slotDim + " 0.5 200 0.5");
             scenario().requireArranged("space enter must succeed: " + enter,
                     enter.contains("\"ok\":true"));
 
-            scenario().asserting("the client's own CLIENT_BODIES carries the cell's bodies, intact");
-            String value = null;
-            boolean got = false;
-            for (int i = 0; i < 16 && !got; i++) {
-                bot().waitTicks(5);
-                JsonObject sf = bot().readStaticField(CLIENT_BODIES_CLASS, "CLIENT_BODIES");
-                if (!sf.get("isNull").getAsBoolean()) {
-                    value = sf.get("value").getAsString();
-                    got = value.contains(slotDim + "=[") && value.contains("RenderBody{");
-                }
-            }
-            assertTrue("client CLIENT_BODIES must carry the slot dim's bodies, got: " + value, got);
+            scenario().asserting("the client is sent the cell's sky, and its contents survive intact");
+            // THE LINK: the per-player broadcast reached this client and its handler applied the
+            // payload. A red here names the arrival that never happened instead of the shape of a
+            // private map's toString.
+            String received = awaitBodiesFor(clientLog, insideMark, slotDim,
+                    "a pilot standing in a cell must be sent that cell's sky", LINK_BUDGET_TICKS);
+            scenario().record("skyFeedInside", received);
+
+            // The CONTENTS are still read from the client's own store: `system_bodies_received`
+            // carries the counts and which slot dims arrived, not the bodies themselves, so the
+            // three pins below have no event to move onto. They are what says the descend target
+            // survived the wire — the reason this scenario exists — and they stay.
+            JsonObject sf = bot().readStaticField(CLIENT_BODIES_CLASS, "CLIENT_BODIES");
+            String value = sf.get("isNull").getAsBoolean() ? "" : sf.get("value").getAsString();
+            assertTrue("client CLIENT_BODIES must carry the slot dim's bodies, got: " + value
+                            + " (the arrival itself was recorded: " + received + ")",
+                    value.contains(slotDim + "=[") && value.contains("RenderBody{"));
             assertTrue("descend-target flag survived to the client: " + value,
                     value.contains("descend=true"));
             assertTrue("planet dim survived: " + value, value.contains("dim=0"));
@@ -259,11 +425,27 @@ public class SpaceSubsystemClientSyncGroupE2ETest extends AbstractSharedClientE2
         scenario().record("serverBefore", serverBefore).record("clientBefore", clientBefore);
 
         try {
+            // The mark is taken BEFORE the clock is moved: the periodic re-sync is phase-smeared per
+            // player, so a baseline can land at any tick, and a reader that marked afterwards could
+            // not tell "the jumped baseline already arrived" from "it never did".
+            Events clientLog = clientEvents();
+            long syncMark = clientLog.mark();
+
             String moved = exec("artest space set-clock " + (serverBefore + JUMP_TICKS));
             scenario().requireArranged("the server clock must move: " + moved,
                     moved.contains("\"ok\":true"));
 
-            bot().waitTicks(SYNC_WAIT_TICKS);
+            // The link, not a budget: the client ACCEPTED a baseline carrying the jumped value.
+            // The threshold is half the jump, the same discriminator the assertion below uses — a
+            // client that is merely counting its own ticks never records one. A baseline with the
+            // OLD value can still land between the mark and the server's write, which is why this
+            // waits for a record above the threshold rather than for the first record of the type.
+            String baselines = awaitClockBaselineAtLeast(clientLog, syncMark,
+                    serverBefore + JUMP_TICKS / 2L,
+                    "the server jumped its space clock, so the client must be sent a baseline that"
+                            + " carries the jump — the whole sync mechanism is that one packet",
+                    SYNC_WAIT_TICKS);
+            scenario().record("clockBaselines", baselines);
 
             scenario().asserting("the client's clock FOLLOWED the server's, and the two agree");
             long serverAfter = serverClock();

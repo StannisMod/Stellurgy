@@ -6,9 +6,11 @@ import org.junit.FixMethodOrder;
 import org.junit.Test;
 import org.junit.runners.MethodSorters;
 
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 
 /**
@@ -36,8 +38,11 @@ import static org.junit.Assert.assertTrue;
 @FixMethodOrder(MethodSorters.NAME_ASCENDING)
 public class ClientBootBaselineGroupE2ETest extends AbstractSharedClientE2ETest {
 
-    /** The harness-side readback store; the mute itself still lives on the client proxy. */
-    private static final String CLIENT_DIAG = "zmaster587.advancedRocketry.command.test.ClientDiag";
+    /** A deadline for the mute's own client tick, which is one of the first the client runs. Kept at
+     *  the 200 ticks the readback poll it replaces allowed. */
+    private static final int MUTE_BUDGET_TICKS = 200;
+
+    private static final Pattern MASTER = Pattern.compile("\"master\":(-?[0-9.eE+-]+)");
 
     @Override
     protected String subsystem() {
@@ -48,10 +53,16 @@ public class ClientBootBaselineGroupE2ETest extends AbstractSharedClientE2ETest 
     @Test
     public void clientReportsStateOverBridge() throws Exception {
         scenario().asserting("the client answers report_state over the bridge");
+        // ARRANGEMENT GATE (harness): the bridge answers before the world exists, so a report read
+        // without this would describe a client that has not joined anything yet.
         bot().waitForWorld();
         JsonObject state = bot().reportState();
-        assertNotNull("client reportState returned null", state);
         assertTrue("client reportState missing 'ok' key: " + state, state.has("ok"));
+        // The handshake must round-trip a PLAYER view, which is what the smoke test was named for.
+        // The old assertion here was assertNotNull on the reply, which cannot fail: ClientBot
+        // throws on a failed reply rather than returning null.
+        assertTrue("the bridge answered, but not about a client that is in a world: " + state,
+                state.has("worldReady") && state.get("worldReady").getAsBoolean());
     }
 
     /**
@@ -104,37 +115,63 @@ public class ClientBootBaselineGroupE2ETest extends AbstractSharedClientE2ETest 
      * where the sound handler is up, gated on the {@code -Dforge.test.client=true} marker that every
      * {@code RealClientHarness} client carries (and a manual {@code runClient} does not).</p>
      *
-     * <p>This observes the REAL client state: a test-only mixin asks {@code GameSettings} for the
-     * master level immediately after the mute runs, and this asserts that value is 0 — so it fails if
-     * the mute is removed, mis-gated, or clamped, not merely if the code path is skipped. The
-     * readback used to be published by the proxy itself; production no longer keeps a field for it.</p>
+     * <p>This observes the REAL client state as an EVENT: {@code test_client_muted} is recorded by a
+     * test-only mixin at the one return production reaches only after it has written the level, and
+     * its {@code master} payload is what {@code GameSettings} reports at that instant. So the mute
+     * RUNNING and the level it LEFT are one record, and this fails if the mute is removed, mis-gated
+     * or clamped — not merely if the code path is skipped. Production keeps no field for any of it.</p>
      */
     @Test
     public void harnessTestClientHasMasterSoundMuted() throws Exception {
         scenario().asserting("the harness client's master sound level is 0");
         bot().waitForWorld();
 
-        // The mute lands on the first client tick with the sound handler up; poll until the
-        // readback has landed (NaN until then).
-        String raw = "NaN";
-        for (int i = 0; i < 40 && "NaN".equalsIgnoreCase(raw); i++) {
-            bot().waitTicks(5);
-            raw = bot().readStaticField(CLIENT_DIAG, "testClientMasterVolume")
-                    .get("value").getAsString();
-        }
-        scenario().record("testClientMasterVolume", raw);
+        // Read from sequence 0, NOT from a mark: the mute lands on one of the client's first END
+        // ticks, before any scenario in this class can take a mark, so a since(mark) window would
+        // be empty however long it waited. Nothing can have evicted the record — the ring is 256
+        // deep PER TYPE and production reaches this seam at most once per client session.
+        String muted = awaitClientEvent(0L, "test_client_muted", "\"master\"",
+                "a harness-spawned client must mute its master sound level on the first client tick"
+                        + " with the sound handler up (instrument: client_proxy_events)",
+                MUTE_BUDGET_TICKS);
 
-        // "NaN" is the sentinel this loop polls OUT of, so the first thing to say about a red is
-        // whether it ever left that sentinel. This assertion comes FIRST for that reason: the mute
-        // never landing within 200 ticks and the field being absent are different faults, and
-        // assertNotNull can only ever catch the second.
-        assertTrue("the master-volume readback never left its NaN sentinel within 200 ticks, so the"
-                        + " mute never landed on a client tick - a NaN here is the ABSENCE of a"
-                        + " reading, not a reading of zero. raw=" + raw,
-                !"NaN".equalsIgnoreCase(raw));
-        assertNotNull("the readback must report an applied master volume", raw);
-        float master = Float.parseFloat(raw);
+        Matcher m = MASTER.matcher(muted);
+        assertTrue("a test_client_muted record must carry the level the mute left behind: " + muted,
+                m.find());
+        float master = Float.parseFloat(m.group(1));
+        scenario().record("testClientMasterVolume", master);
         assertEquals("a harness test client must have master sound muted to 0",
                 0.0f, master, 1e-6f);
+    }
+
+    // ---- the client event log, reached from a base that only offers the SERVER's ----------------
+
+    /**
+     * Wait for one record of {@code type} carrying {@code needle} on the CLIENT log, or fail naming
+     * everything that log DID record since {@code mark}.
+     *
+     * <p>{@code Events} (and this class's {@code events()}) speaks to the server probe; the client
+     * log is reached through the bot, and this class does not own the shared base a client-side
+     * counterpart would belong on — so the helper lives here. The reply it prints carries both
+     * honesty flags a silence needs: {@code recording} (the harness armed the log at all) and
+     * {@code instruments} (which observation points have actually executed).</p>
+     */
+    private String awaitClientEvent(long mark, String type, String needle, String what,
+                                    int tickBudget) throws Exception {
+        String reply = "";
+        for (int waited = 0; waited <= tickBudget; waited += 5) {
+            reply = String.valueOf(bot().eventsSince(mark, type));
+            if (reply.contains(needle)) {
+                return reply;
+            }
+            bot().waitTicks(5);
+        }
+        throw new AssertionError(what + " — no `" + type + "` carrying " + needle + " was recorded"
+                + " on the CLIENT log within " + tickBudget + " ticks. An empty log here has three"
+                + " causes and the reply tells them apart: `recording` false = the harness never"
+                + " armed the log, the instrument missing from `instruments` = the observation point"
+                + " never ran, and neither = it ran and saw nothing. Matching records: " + reply
+                + " | everything the client recorded since the mark: "
+                + bot().eventsSince(mark, null));
     }
 }

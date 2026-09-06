@@ -10,6 +10,8 @@ import org.junit.Assume;
 import org.junit.Before;
 import org.junit.Test;
 
+import zmaster587.advancedRocketry.test.Events;
+
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -174,8 +176,10 @@ public class WeatherClientSyncE2ETest {
         // the harness server console). /artest tp picks the connected player
         // and calls PlayerList.transferPlayerToDimension directly — same path
         // commandGoto uses internally, but driveable from the console.
+        Events clientLog = clientEvents();
+        long toA = clientLog.mark();
         serverHarness.client().execute("artest tp " + DIM_A);
-        waitForClientDim(DIM_A);
+        awaitClientDim(clientLog, toA, DIM_A);
 
         // The client now SEES dim A's wrapped weather. rainStrength is
         // server-driven via SPacketChangeGameState (begin/end raining +
@@ -194,8 +198,9 @@ public class WeatherClientSyncE2ETest {
         // pushing the new dim's weather via SPacketChangeGameState. The
         // explicit end-raining packet should drop client-visible rain
         // immediately.
+        long toB = clientLog.mark();
         serverHarness.client().execute("artest tp " + DIM_B);
-        waitForClientDim(DIM_B);
+        awaitClientDim(clientLog, toB, DIM_B);
 
         JsonObject onB = clientHarness.bot().reportWeather();
         assertTrue("client should be in dim B after goto: " + onB,
@@ -228,14 +233,20 @@ public class WeatherClientSyncE2ETest {
                 "artest weather set 0 rain 12000"));
         assertTrue("set rain on overworld failed: " + setOver, setOver.contains("\"ok\":true"));
 
+        long toC = clientLog.mark();
         serverHarness.client().execute("artest tp " + DIM_C);
-        waitForClientDim(DIM_C);
+        awaitClientDim(clientLog, toC, DIM_C);
 
         // Sample across the would-be fade window (~5 s = 100 ticks): the
         // client-visible strength must hold at exactly 0 the whole time. A
         // single non-zero sample means the seeded strength leaked to the
         // client (either via the transfer sync or the per-tick
         // SPacketChangeGameState(7) stream from the server lerp).
+        //
+        // STILL A SAMPLING WINDOW, and deliberately: what it guards against is a per-tick STREAM of
+        // strength packets, so the pass is the window expiring with every sample at zero. The
+        // vocabulary has no event for a vanilla game-state packet, so there is nothing here to
+        // convert — the arrival in dim C above is the link, and this is the observation.
         for (int sample = 0; sample < 6; sample++) {
             JsonObject onC = clientHarness.bot().reportWeather();
             assertTrue("client should be in dim C (sample " + sample + "): " + onC,
@@ -257,24 +268,62 @@ public class WeatherClientSyncE2ETest {
                 overAfter.contains("\"isRaining\":true"));
     }
 
+    // ── the CLIENT's own event log ────────────────────────────────────────────
+    //
+    // The three crossings this test drives are observed on the CLIENT: the far side of a transfer is
+    // the respawn the player's own client performs. {@link Events} speaks the server probe's
+    // {@code artest events …} grammar and {@code ClientBot} a different verb pair, so the adapter
+    // below puts the client log behind the same reader — the same mark, the same "is anybody
+    // recording" assertion, the same failure narrative. Local to this class because this migration
+    // owns only its own files; the second class outside this group that wants it is the signal to
+    // lift it onto a shared base rather than copy it again.
+
+    private Events clientEvents() {
+        return new Events(this::execClientEventCommand, clientHarness.bot()::waitTicks);
+    }
+
+    private String execClientEventCommand(String command) throws Exception {
+        String[] parts = command.split(" ");
+        if (parts.length >= 3 && "mark".equals(parts[2])) {
+            return String.valueOf(clientHarness.bot().eventMark());
+        }
+        long seq = Long.parseLong(parts[3]);
+        return String.valueOf(
+                clientHarness.bot().eventsSince(seq, parts.length > 4 ? parts[4] : null));
+    }
+
     /**
-     * Polls until {@code bot.reportWeather().dim} matches the expected dim,
-     * capped at ~10 seconds. On a successful goto the client briefly
-     * disconnects from the source dim and re-spawns into the target — once
-     * {@code mc.world.provider.getDimension()} == expected, the client is
-     * settled.
+     * Wait for the CLIENT to be respawned into {@code expectedDim} — the far side of the transfer,
+     * read off its own record rather than sampled.
+     *
+     * <p>{@code mark} is taken BEFORE the transfer is ordered, which is the whole point: a poll on
+     * {@code mc.world.provider.getDimension()} cannot tell "the client is already there" from "it
+     * never went", and a client torn down and rebuilt twice between two samples shows one change or
+     * none. The needle ends at a field boundary ({@code "dim":9301,}) because a payload's numbers
+     * are not delimited on the right.</p>
      */
-    private void waitForClientDim(int expectedDim) throws Exception {
-        for (int waited = 0; waited < 200; waited += 10) {
-            clientHarness.bot().waitTicks(10);
-            JsonObject w = clientHarness.bot().reportWeather();
-            if (w != null && w.has("dim") && w.get("dim").getAsInt() == expectedDim) {
+    private void awaitClientDim(Events events, long mark, int expectedDim) throws Exception {
+        String needle = "\"dim\":" + expectedDim + ",";
+        String reply = "";
+        for (int waited = 0; waited <= DIM_LINK_BUDGET_TICKS; waited += 10) {
+            reply = events.since(mark, "client_dimension_changed");
+            if (Events.countRecords(reply, needle) > 0) {
                 return;
             }
+            clientHarness.bot().waitTicks(10);
         }
         throw new AssertionError("client never reached dim " + expectedDim
-                + " (last weather report: " + clientHarness.bot().reportWeather() + ")");
+                + " — no `client_dimension_changed` carrying " + needle + " within "
+                + DIM_LINK_BUDGET_TICKS + " ticks. What DID happen since the mark: "
+                + Events.typesOf(events.since(mark)) + " | raw: " + reply
+                + " | last weather report: " + clientHarness.bot().reportWeather());
     }
+
+    /**
+     * How long a dimension transfer's far side may take to reach the client — a deadline for a
+     * discrete event, the same 200 ticks the poll it replaces was capped at.
+     */
+    private static final int DIM_LINK_BUDGET_TICKS = 200;
 
     /**
      * The client does NOT lerp weather itself in 1.12.2
@@ -284,6 +333,11 @@ public class WeatherClientSyncE2ETest {
      * briefly so the test isn't flaky on the exact tick of the snapshot —
      * settling above {@code minStrength} confirms the rain packets actually
      * reach and apply client-side.
+     *
+     * <p>This one stays a POLL: a strength climbing towards 1.0 is a physical quantity converging
+     * one server lerp step at a time, not a link production commits, and there is no event for a
+     * vanilla game-state packet. What it no longer has to absorb is the crossing itself — that is
+     * awaited as its own link above, so a red here can only be about the rain.</p>
      */
     private JsonObject waitForClientRainStrengthAtLeast(float minStrength) throws Exception {
         JsonObject latest = clientHarness.bot().reportWeather();

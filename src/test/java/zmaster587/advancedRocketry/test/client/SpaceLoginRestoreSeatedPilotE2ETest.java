@@ -7,6 +7,7 @@ import org.junit.Test;
 
 import zmaster587.advancedRocketry.space.CellWorldMapper;
 import zmaster587.advancedRocketry.space.GalacticCoord;
+import zmaster587.advancedRocketry.test.Events;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
@@ -94,15 +95,11 @@ public class SpaceLoginRestoreSeatedPilotE2ETest extends AbstractSpaceLoginResto
 
         // Stand up through the production path. The record must SURVIVE it and change SHAPE: he is
         // no longer in a seat, he is on the deck - which is a way of BEING aboard, not of leaving.
-        // Polled, because the record is refreshed on a one-second cadence: a single sample taken on
-        // the dismount tick reads the shape he had a moment ago and says nothing.
-        String dismount = exec("artest player dismount");
-        assertTrue("the pilot must leave his seat: " + dismount, dismount.contains("\"ok\":true"));
-        String tag = "";
-        for (int attempt = 0; attempt < 40 && !tag.contains("\"posture\":\"STANDING\""); attempt++) {
-            bot().waitTicks(5);
-            tag = exec("artest space aboard-tag " + BOT);
-        }
+        // Two LINKS, not a value that settles: he leaves the mount, and the reconciler's next pass
+        // writes the new shape. The record is refreshed on a one-second cadence, which is why a
+        // single sample says nothing - but the answer to that is to wait for the WRITE, not to
+        // sample the tag until it agrees.
+        String tag = standUpAndAwaitTheStandingRecord(events());
         assertTrue("standing up on his own deck must keep him aboard, as a STANDING record - a "
                 + "record dropped here is exactly what used to send him to an ordinary spawn: " + tag,
                 tag.contains("\"tagged\":true") && tag.contains("\"posture\":\"STANDING\""));
@@ -136,21 +133,43 @@ public class SpaceLoginRestoreSeatedPilotE2ETest extends AbstractSpaceLoginResto
                 + ledger, ledger.contains("\"found\":true"));
 
         exec("artest vs permaload true");
+
+        // The mark before the client exists, because the restore fires ON his connection: taken
+        // afterwards it could not tell "the hook never ran" from "the hook ran before I looked".
+        Events restore = events();
+        long restoreMark = restore.mark();
         startClient();
         bot().waitForWorld();
 
-        // Poll for the end state on the same budget the positive legs use: the deck hold waits for
-        // the ship to finish re-assembling before it can place him, and gives up silently after it.
-        int dim = NO_CLIENT_WORLD;
-        boolean placed = false;
-        for (int attempt = 0; attempt < 45 && !placed; attempt++) {
-            bot().waitTicks(10);
-            dim = clientDim();
-            placed = dim != NO_CLIENT_WORLD && dim != OVERWORLD_DIM;
-        }
+        // The restore's own verdict, on the server that took it. A crew member on his FEET queues
+        // no seat - the deck hold places him instead - so this is one link and not the seated
+        // legs' chain: `login_restored` carries the reason it decided on (ABOARD_SETTLED here, or
+        // NO_TAG / SHIP_UNKNOWN / CELL_UNAVAILABLE when it did not) and the dimension it chose.
+        // The poll it replaces waited for a client dimension and could not say which of those four
+        // it had been handed.
+        String restored = restore.await(restoreMark, "login_restored",
+                "a crew member who logged out standing on his own ship in a cell must be RESTORED "
+                        + "by the login hook - without that verdict he is an ordinary login and "
+                        + "wakes at his overworld spawn",
+                RESTORE_LINK_BUDGET_TICKS);
+        // And the client's own side of it. Zero is the mark: this client JVM is brand new, so its
+        // log starts empty and the join is recorded inside startClient, before a mark could exist.
+        String joined = awaitClientEvent(CLIENT_SESSION_START, "client_dimension_changed", null,
+                "the restored client must end up IN a world. Server verdict: " + restored,
+                RESTORE_LINK_BUDGET_TICKS);
+
+        int dim = clientDim();
         JsonObject riding = bot().reportRidingEntity();
         JsonObject state = bot().reportState();
-        String observed = "clientDim=" + dim + " riding=" + riding + " state=" + state;
+        // The client's own seed verdicts ride along in every message below. The deck hold sends the
+        // recorded deck point as a restore seed and the client decides what to do with it - APPLY,
+        // KEEP_PREEXISTING, ALREADY_SEEDED, EXPIRE or WAIT - and which of the five it chose is the
+        // difference between "he was put on his deck" and "the hold expired and vanilla had him".
+        String seeds = String.valueOf(bot().eventsSince(CLIENT_SESSION_START, "deck_seed_decided"));
+        String observed = "clientDim=" + dim + " riding=" + riding + " state=" + state
+                + "\n  login_restored: " + restored
+                + "\n  client dimension changes: " + joined
+                + "\n  client seed decisions: " + seeds;
 
         assertTrue("the client must have a world at all before anything can be read from it: "
                 + observed, dim != NO_CLIENT_WORLD);
@@ -158,8 +177,9 @@ public class SpaceLoginRestoreSeatedPilotE2ETest extends AbstractSpaceLoginResto
                 riding.get("riding").getAsBoolean());
         assertNotEquals("he stood up ON HIS OWN SHIP in orbit, which is a way of BEING aboard - so he "
                 + "must not come back at an ordinary spawn. Note dim 0 is an AMBIGUOUS failure: "
-                + "vanilla also forces it when the target world did not load, so attribute a red here "
-                + "from the server's login-restore log line. " + observed, OVERWORLD_DIM, dim);
+                + "vanilla also forces it when the target world did not load - the login_restored "
+                + "record above is what separates the two, and it names both the reason the hook "
+                + "decided on and the dimension it chose. " + observed, OVERWORLD_DIM, dim);
 
         // And he must be back ON his ship rather than merely in its cell: the deck hold puts the body
         // on the stored deck point, so his client-rendered position has to be at the ship.
@@ -183,8 +203,14 @@ public class SpaceLoginRestoreSeatedPilotE2ETest extends AbstractSpaceLoginResto
                 shipPose = livePose;
             }
         }
+        // Re-read at the END of the settle window, not at the start of it: the deck hold sends its
+        // restore seed once the ship is up, which can be several seconds after the client joined,
+        // so a verdict list taken on the join tick is routinely empty and says nothing.
         observed = "clientDim=" + dim + " state=" + state + " shipPose=[" + shipPose[0] + ","
-                + shipPose[1] + "," + shipPose[2] + "]";
+                + shipPose[1] + "," + shipPose[2] + "]"
+                + "\n  login_restored: " + restored
+                + "\n  client seed decisions: "
+                + bot().eventsSince(CLIENT_SESSION_START, "deck_seed_decided");
         assertEquals("he must come back at his ship on X: " + observed,
                 shipPose[0], clientX, POSE_EPSILON);
         assertEquals("he must come back at his ship on Y: " + observed,

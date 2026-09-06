@@ -2,12 +2,16 @@ package zmaster587.advancedRocketry.test.client;
 
 import com.github.stannismod.forge.testing.TestTimeouts;
 
+import com.google.gson.JsonObject;
+
 import org.junit.FixMethodOrder;
 import org.junit.Test;
 import org.junit.runners.MethodSorters;
 
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+
+import zmaster587.advancedRocketry.test.Events;
 
 import static org.junit.Assert.assertTrue;
 
@@ -67,6 +71,20 @@ import static org.junit.Assert.assertTrue;
  * the fiction is gone: one staging, and it must draw. The lesson worth keeping is about the
  * instrument rather than the subject - "no living model was drawn" was read as a statement about
  * rendering while it was silent on whether the body still existed and on where the camera was.</p>
+ *
+ * <p>The arrival gate is now the client's own RECORD of the body joining its world, taken from a
+ * mark older than the spawn, rather than a sample of what the client happens to be holding when it
+ * is asked. That is the difference the month was spent on: a snapshot cannot tell "it never
+ * arrived" from "it arrived and was gone again before I looked", and those are different bugs with
+ * the same empty answer. The record survives the removal, and it rides along in the render
+ * diagnostic so a red says which of the two happened.</p>
+ *
+ * <p>What is still POLLED, and why: the model-rotation decision itself has no event
+ * ({@code remote_model_decided} is not in the vocabulary yet), so both measurement windows and the
+ * "is this subject being drawn" precondition still difference cumulative statics on
+ * {@code ShipFrameCamera}. Those are the reads the counters at
+ * {@link #remoteCounters()} exist for, and they carry the limits the findings above name - chiefly
+ * that {@code remoteModelSamples} counts ANY non-local living body, not this one.</p>
  */
 @FixMethodOrder(MethodSorters.NAME_ASCENDING)
 public class VSRemoteBodyModelGateE2ETest extends AbstractSharedVsClientE2ETest {
@@ -76,7 +94,6 @@ public class VSRemoteBodyModelGateE2ETest extends AbstractSharedVsClientE2ETest 
         return "vs-remote-body-render";
     }
 
-    private static final Pattern COUNT = Pattern.compile("\"count\":(-?\\d+)");
     private static final Pattern BUILDER_POS =
             Pattern.compile("\"builderPos\":\\[(-?\\d+),(-?\\d+),(-?\\d+)]");
     private static final Pattern POS_X = Pattern.compile("\"posX\":(-?[0-9.E\\-]+)");
@@ -97,6 +114,16 @@ public class VSRemoteBodyModelGateE2ETest extends AbstractSharedVsClientE2ETest 
      */
     private String scenarioShipId;
     private static final String SHIP_CAMERA = "zmaster587.advancedRocketry.client.ShipFrameCamera";
+
+    /**
+     * The CLIENT log sequence taken immediately BEFORE the current subject was spawned — the mark its
+     * arrival on this side is read from. An instance field because the spawn and the arrival gate are
+     * different methods, and the mark has to be older than the spawn to be worth anything.
+     */
+    private long subjectSpawnMark;
+
+    /** How long the spawned subject is given to reach the client world. A packet, not a value. */
+    private static final int SUBJECT_ARRIVAL_BUDGET_TICKS = 200;
 
     /** A roll steep enough that a wrongly-rotated model is unmistakable (~160 deg): at a shallow
      *  tilt the identity and the ship attitude are nearly the same rotation, so a level ship
@@ -312,11 +339,31 @@ public class VSRemoteBodyModelGateE2ETest extends AbstractSharedVsClientE2ETest 
         // 94-98 while the client held no cow at all, so the gate passed every time and the miss was
         // then re-diagnosed downstream as a render cull. Entity ids are assigned server-side and
         // repeated verbatim in the spawn packet, so the id is one address on both sides.
-        ClientPoll.Result<String> arrived = ClientPoll.until(bot()::waitTicks,
-                () -> clientSighting(subjectId), s -> s.startsWith("client-has"), 10, 12);
-        if (!arrived.satisfied) {
-            return new Sampling(false, "[subject " + subjectId + " never reached the CLIENT world "
-                    + arrived + " server=" + serverEntity(subjectId) + "]");
+        //
+        // It now waits for the ARRIVAL ITSELF - the client's own record of the body joining its world,
+        // since a mark taken before the spawn - rather than sampling a list of what the client is
+        // currently holding. The difference is the one this class paid a month for: a snapshot poll
+        // cannot tell "it never arrived" from "it arrived and was gone again before I looked", and
+        // those are different bugs. The record survives the removal; the snapshot did not.
+        String arrivals = "";
+        boolean arrived = false;
+        for (int waited = 0; waited <= SUBJECT_ARRIVAL_BUDGET_TICKS && !arrived; waited += 10) {
+            arrivals = String.valueOf(bot().eventsSince(subjectSpawnMark, "entity_joined_world"));
+            arrived = Events.countRecords(arrivals, "\"e\":" + subjectId + ",") > 0;
+            if (!arrived) {
+                bot().waitTicks(10);
+            }
+        }
+        if (!arrived) {
+            // An empty log is an answer only once somebody was listening. This is an ASSERTION and
+            // not part of the returned diagnostic on purpose: a recorder that never ran is a harness
+            // fault, and re-staging at a fresh spot would not fix it.
+            Events.assertInstrumentRan(arrivals, "client_entity_join_events",
+                    "subject " + subjectId + " never reached the client world");
+            return new Sampling(false, "[subject " + subjectId + " never reached the CLIENT world:"
+                    + " nothing joined it under that id within " + SUBJECT_ARRIVAL_BUDGET_TICKS
+                    + " ticks. joins=" + arrivals + " server=" + serverEntity(subjectId)
+                    + " " + clientSighting(subjectId) + "]");
         }
 
         final long start = (long) clientDouble(SHIP_CAMERA, "remoteModelSamples");
@@ -338,7 +385,11 @@ public class VSRemoteBodyModelGateE2ETest extends AbstractSharedVsClientE2ETest 
         // it holds it at all.
         String subject = "server=" + serverEntity(subjectId) + " " + clientSighting(subjectId)
                 + " " + cameraBlocks() + " modelGateInstalled="
-                + clientString(SHIP_CAMERA, "modelGateInstalledFlag");
+                + clientString(SHIP_CAMERA, "modelGateInstalledFlag")
+                // The arrival record, kept alongside: a body that JOINED this client and is no
+                // longer in the sighting has been removed, and that is a different bug from a body
+                // the renderer declined to draw. The snapshot alone could not say which.
+                + " joined=" + arrivals;
         String verdict = frames == 0 ? "draw-stage-dead(no frames)"
                 : models == 0 ? "no-living-model-drawn(applyRotations unreached)"
                 : "subject-culled(models drawn, subject absent from render list)";
@@ -554,6 +605,10 @@ public class VSRemoteBodyModelGateE2ETest extends AbstractSharedVsClientE2ETest 
         // measured a flat zero on a client that was rendering perfectly well. RenderCow inherits
         // the method (as does RenderPlayer on its normal branch), so a cow exercises the same code
         // path a remote crew member does.
+        //
+        // The client mark goes BEFORE the spawn, so the body's arrival on this side cannot fall
+        // between two reads - see the arrival gate for why that matters here in particular.
+        subjectSpawnMark = clientMark();
         String spawned = exec("artest vs drop-living 0 minecraft:cow " + x + " " + y + " " + z);
         System.out.println("[modelgate] spawn raw: " + spawned.replace('\n', ' '));
         assertTrue("the subject mob must spawn: " + spawned, spawned.contains("\"ok\":true"));
@@ -620,51 +675,43 @@ public class VSRemoteBodyModelGateE2ETest extends AbstractSharedVsClientE2ETest 
         exec("tp @a " + (bx + 600) + " 120 " + (bz + 600) + " 0 0");
         bot().waitTicks(10);
 
-        int shipsBefore = count("ship-count-all");
+        // The registry's own record of the ship being ADDED, since a mark taken before the assembly
+        // was queued. Two things a count could not do: it is THIS scenario's ship by construction —
+        // where an incremented count on a shared world is answered by every neighbour that ever
+        // assembled one — and it NAMES the ship, so the identity comes out of the record instead of a
+        // nearest-ship lookup inside a radius bound. Both legs then roll that ship past vertical, so
+        // an identity is the only address that keeps working.
+        Events events = events();
+        long spawnMark = events.markInstrumented();
         String assemble = assembleFixture(bx, by, bz);
         assertTrue("a " + VARIANT + " build must route to a ship: " + assemble,
                 assemble.contains("\"rocketCount\":0"));
-
-        // Scale the assembly-convergence window by the fork factor (load-tail family): the VS assembly
-        // queue lags past a fixed 200-tick wait on a loaded machine (measured: "was 0, now 0" red at 8
-        // forks), and the early exit means an idle run still leaves at the same iteration it always did.
-        int assembleIters = (int) Math.ceil(40 * TestTimeouts.factor());
-        int all = shipsBefore;
-        for (int i = 0; i < assembleIters && all <= shipsBefore; i++) {
-            bot().waitTicks(5);
-            all = count("ship-count-all");
-        }
-        assertTrue("assembly must create a NEW VS ship (was " + shipsBefore + ", now " + all + ")",
-                all > shipsBefore);
+        scenarioShipId = awaitShipSpawned(events, spawnMark, "assembly must create a VS ship in the"
+                + " physics registry (the spawn is queued, so this is a deadline for a discrete event"
+                + " and not a guess at how long a value takes to settle)");
         bot().waitTicks(40);
 
         exec("tp @a " + (bx + 0.5) + " " + (by + 6) + " " + (bz + 0.5) + " 0 0");
         bot().waitTicks(20);
 
+        // Whether the physics object is LOADED stays a bounded poll: it is a state the substrate
+        // reaches, not a commit anything records, and VS pulls a ship LOADED off the game loop — so a
+        // busy box needs more ticks to elapse before it is resident, which is what the fork
+        // multiplier is for. It is asked BY IDENTITY now, so no distance term can answer about a
+        // neighbour.
         String info = "";
         double[] where = null;
-        // THE MULTIPLIER STAYS, for the same reason as the assembly window above: VS pulls a ship
-        // LOADED off the game loop, so a busy box needs more ticks to elapse before it is resident.
         int loadIters = (int) Math.ceil(40 * TestTimeouts.factor());
         for (int i = 0; i < loadIters && where == null; i++) {
             bot().waitTicks(5);
-            // The scenario's ONE positional lookup, at the only moment it is defensible: the ship
-            // was just assembled here and has not moved. It yields an IDENTITY, and everything
-            // afterwards is keyed on that.
-            info = exec("artest vs ship-info 0 " + bx + " " + by + " " + bz
-                    + " " + SHIP_QUERY_RADIUS);
-            if (!info.contains("\"managed\":true")) {
-                continue;
-            }
-            double[] candidate = {readDouble(info, POS_X), readDouble(info, POS_Y), readDouble(info, POS_Z)};
-            String foundId = readShipId(info);
-            if (distance(candidate, new double[]{bx, by, bz}) < 24.0 && foundId != null) {
-                where = candidate;
-                scenarioShipId = foundId;
+            info = shipInfo();
+            if (info.contains("\"managed\":true")) {
+                where = new double[]{
+                        readDouble(info, POS_X), readDouble(info, POS_Y), readDouble(info, POS_Z)};
             }
         }
-        assertTrue("the ship built at this base must LOAD with the client present; nearest was: " + info,
-                where != null);
+        scenario().requireArranged("the ship this scenario assembled (" + scenarioShipId + ") must"
+                + " LOAD with the client present; last reply was: " + info, where != null);
         System.out.println("[modelgate] ship at (" + bx + "," + by + "," + bz + ") -> "
                 + java.util.Arrays.toString(where));
         return where;
@@ -693,9 +740,17 @@ public class VSRemoteBodyModelGateE2ETest extends AbstractSharedVsClientE2ETest 
         return shipInfoById(scenarioShipId);
     }
 
-    private int count(String sub) throws Exception {
-        Matcher m = COUNT.matcher(exec("artest vs " + sub + " 0"));
-        return m.find() ? Integer.parseInt(m.group(1)) : -1;
+    /**
+     * The CLIENT event log's sequence, taken BEFORE the stimulus — and refused unless a recorder is
+     * actually subscribed, because an empty log afterwards would otherwise read as "it never
+     * happened" when the truth is "nobody was listening". The shared base wraps the SERVER probe's
+     * log ({@code events()}); this class's arrival link is a client one, so it is read here.
+     */
+    private long clientMark() throws Exception {
+        JsonObject mark = bot().eventMark();
+        assertTrue("the CLIENT event recorder is not subscribed, so an empty log below would mean"
+                + " nothing: " + mark, mark.get("recording").getAsBoolean());
+        return mark.get("seq").getAsLong();
     }
 
     private double readDouble(String json, Pattern p) {
@@ -710,8 +765,4 @@ public class VSRemoteBodyModelGateE2ETest extends AbstractSharedVsClientE2ETest 
         return Integer.parseInt(m.group(1));
     }
 
-    private static double distance(double[] a, double[] b) {
-        double dx = a[0] - b[0], dy = a[1] - b[1], dz = a[2] - b[2];
-        return Math.sqrt(dx * dx + dy * dy + dz * dz);
-    }
 }

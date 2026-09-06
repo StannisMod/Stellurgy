@@ -9,6 +9,8 @@ import org.junit.runners.MethodSorters;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import zmaster587.advancedRocketry.test.Events;
+
 import static org.junit.Assert.assertTrue;
 
 /**
@@ -33,7 +35,6 @@ public class VSCrewInteriorBoardingE2ETest extends AbstractSharedVsClientE2ETest
         return "vs-crew-boarding";
     }
 
-    private static final Pattern COUNT = Pattern.compile("\"count\":(-?\\d+)");
     private static final Pattern BUILDER_POS =
             Pattern.compile("\"builderPos\":\\[(-?\\d+),(-?\\d+),(-?\\d+)]");
     private static final Pattern POS_X = Pattern.compile("\"posX\":(-?[0-9.E\\-]+)");
@@ -57,6 +58,105 @@ public class VSCrewInteriorBoardingE2ETest extends AbstractSharedVsClientE2ETest
     private static final String SHIP_FRAME_TRAVEL =
             "zmaster587.advancedRocketry.integration.vs.ShipFrameTravel";
 
+    /**
+     * How long one link of a deck-capture chain may take. A DEADLINE for a discrete event, not a
+     * guess at how long a value takes to settle: production either releases, claims and captures a
+     * body or it does not, and 240 ticks is generous against an eight-fork load while still failing
+     * a scenario that never gets there rather than waiting out a budget.
+     */
+    private static final int DECK_LINK_BUDGET_TICKS = 240;
+
+    /**
+     * The CLIENT's event log behind the same {@link Events} verbs the server log is read through.
+     *
+     * <p>Every contract this class pins is a CLIENT fact — the resolver that releases and reclaims a
+     * body inside a hull is the client's, and for an {@code EntityPlayerMP} the server rebases the
+     * position instead of releasing at all, so a server probe can answer "still tracked" straight
+     * through a release the client really performed. {@code Events} speaks one probe language
+     * ({@code artest events mark} / {@code artest events since <seq> [type]}) and the client bot
+     * answers the same two questions on its own channel; this is the translation, so a client-side
+     * chain gets {@code await}/{@code assertChain} and their failure narrative instead of a
+     * hand-rolled poll and a regex.</p>
+     *
+     * <p>Local to this class because the shared base owns the SERVER log's {@code events()} and this
+     * migration does not extend it. The client reply carries {@code recording} — so {@link
+     * Events#mark} means something — but no {@code mixins} flag, so {@link Events#markInstrumented}
+     * must never be called on it; anything concluded from a client SILENCE asserts
+     * {@link Events#assertInstrumentRan} on the reply instead, which is the stronger check anyway.</p>
+     */
+    private final class ClientEventProbe implements Events.Probe {
+        @Override
+        public String exec(String command) throws Exception {
+            if ("artest events mark".equals(command)) {
+                return String.valueOf(bot().eventMark());
+            }
+            if (command.startsWith("artest events since ")) {
+                String[] parts = command.substring("artest events since ".length()).trim().split(" ");
+                return String.valueOf(bot().eventsSince(Long.parseLong(parts[0]),
+                        parts.length > 1 ? parts[1] : null));
+            }
+            throw new IllegalArgumentException("the client event log answers `mark` and `since` only,"
+                    + " not: " + command);
+        }
+    }
+
+    /** The client's own ordered event log, read through {@link Events}. */
+    private Events clientEvents() {
+        return new Events(new ClientEventProbe(), bot()::waitTicks);
+    }
+
+    /**
+     * {@link Events#await} for a link this scenario ARRANGES rather than pins — raised through
+     * {@code scenario().arrangementFailed} so the JUnit XML separates "the setup this test needed
+     * never happened" from "the contract under test broke".
+     */
+    private String requireLink(Events events, long mark, String type, String what) throws Exception {
+        try {
+            return events.await(mark, type, what, DECK_LINK_BUDGET_TICKS);
+        } catch (AssertionError notArranged) {
+            scenario().arrangementFailed(notArranged.getMessage());
+            return ""; // unreachable: arrangementFailed always throws
+        }
+    }
+
+    /**
+     * The MODE production last committed for a captured body, from its own record — {@code "aboard"}
+     * (deck semantics: deck gravity, deck camera) or {@code "hull"} (world semantics on the outer
+     * hull), or {@code null} when it committed none since {@code mark}.
+     *
+     * <p>Every mode transition goes through one private method and this is the record taken there, so
+     * the distinction all three scenarios assert is read from production's own commit rather than
+     * inferred from a probe's dump of the state map. Its one blind spot is named in the mixin: a
+     * re-capture taken on the hull-stand travel path restores {@code hullStand} after the record, and
+     * reads {@code "aboard"} for a body that finishes the tick in hull-stand — which is why the
+     * server's own end-of-window verdict is still read beside it.</p>
+     */
+    private static String lastCommittedMode(String modeReply) {
+        return Events.lastField(modeReply, "mode");
+    }
+
+    /**
+     * The {@code deck_mode_committed} records since {@code mark}, once the last of them says
+     * {@code wanted} — or once the budget is spent, so the caller's own assertion produces the
+     * failure and prints the whole sequence.
+     *
+     * <p>A bounded POLL and not an {@code await}, on purpose: the mode is a STATE production can
+     * reach in two commits — a body may be taken in hull-stand and PROMOTED to aboard on a later
+     * tick — so what is waited for is the settled answer rather than one edge, exactly as the
+     * probe-sampling loop this replaces did. What changed is the channel: the answer now comes from
+     * production's own commit record, so a failure prints every mode it committed and in which
+     * order instead of the last sample of a state dump.</p>
+     */
+    private String awaitCommittedMode(Events events, long mark, String wanted) throws Exception {
+        String reply = events.since(mark, "deck_mode_committed");
+        for (int waited = 0; waited < DECK_LINK_BUDGET_TICKS
+                && !wanted.equals(lastCommittedMode(reply)); waited += 4) {
+            bot().waitTicks(4);
+            reply = events.since(mark, "deck_mode_committed");
+        }
+        return reply;
+    }
+
     @Test
     public void aBodyReleasedInsideAnInvertedShipIsSeatedBackOnTheDeck()
             throws Exception {
@@ -71,15 +171,25 @@ public class VSCrewInteriorBoardingE2ETest extends AbstractSharedVsClientE2ETest
                 exec("artest vs point-by-id 0 " + scenarioShipId + " "
                         + Math.cos(h) + " " + Math.sin(h) + " 0.0 0.0").contains("\"commanded\":true"));
         bot().waitTicks(200);
+
+        // The arrangement as a CHAIN, not a budget: the probe un-seats him and the deck takes him.
+        // `dismount` is recorded at the un-seating and `deck_captured` at the capture production
+        // installs, so a failure names WHICH link never happened - where the 30x4 poll it replaces
+        // could only print the last sample of a server verdict.
+        Events events = events();
+        long dismountMark = events.markInstrumented();
         exec("artest player dismount");
-        boolean aboardBefore = false;
-        for (int i = 0; i < 30 && !aboardBefore; i++) {
-            bot().waitTicks(4);
-            String cap = exec("artest vs deck-capture");
-            aboardBefore = cap.contains("\"alreadyTracked\":true") && !cap.contains("\"hullStand\":true");
-        }
-        assertTrue("the dismounted pilot must be captured ABOARD inside the inverted ship: "
-                + exec("artest vs deck-capture"), aboardBefore);
+        requireChain(events, dismountMark, "the dismounted pilot must be taken by the deck inside the"
+                + " inverted ship", "dismount", "deck_captured");
+        // ...and ABOARD, not stood on the outer hull. Production commits the mode itself at every
+        // transition, so it is read from that commit instead of inferred from the probe's dump.
+        String modesBefore = awaitCommittedMode(events, dismountMark, "aboard");
+        Events.assertInstrumentRan(modesBefore, "deck_mode_events",
+                "the deck committed a capture MODE for the dismounted pilot");
+        assertTrue("the dismounted pilot must be captured ABOARD inside the inverted ship, not held"
+                + " with world semantics on the outer hull (last committed mode="
+                + lastCommittedMode(modesBefore) + "): " + modesBefore + " | server verdict "
+                + exec("artest vs deck-capture"), "aboard".equals(lastCommittedMode(modesBefore)));
         double preY = bot().reportState().get("playerY").getAsDouble();
 
         // Subspace census at the QUIET STANDING phase (the ledgered obst=0 already shows here):
@@ -116,6 +226,8 @@ public class VSCrewInteriorBoardingE2ETest extends AbstractSharedVsClientE2ETest
         // subspace-Z component that pushes it OUT through that face; an outside body is not
         // the interior gate's subject at all (it rightly refuses a body outside the region) and the
         // test then measured its own ejection, not the contract.
+        Events clientEvents = clientEvents();
+        long releaseMark = clientEvents.mark();
         exec("tp @a ~ ~0.6 ~");
 
         // Subject validity (fixture geometry by measurement): the released body must still BE
@@ -127,27 +239,39 @@ public class VSCrewInteriorBoardingE2ETest extends AbstractSharedVsClientE2ETest
                 + subAfterRelease + " region=" + regionStr + ")",
                 subInRegion(subAfterRelease, regionStr));
 
-        // Sample the settle: which mode holds the fallen body, and what camera does the client own?
-        long resolved0 = (long) Double.parseDouble(bot().readStaticField(
-                SHIP_FRAME_TRAVEL, "resolvedTicks").get("value").getAsString());
-        int aboardSeen = 0, hullSeen = 0, samples = 0;
+        // ARRANGEMENT, and it is a CLIENT fact: the guard must actually drop the client's capture.
+        // For an EntityPlayerMP the server REBASES the position instead of releasing, so the server
+        // probe can report "still tracked" straight through a release the client really performed -
+        // which is the hole the 30-sample server majority this replaces used to fall into.
+        String releases = requireLink(clientEvents, releaseMark, "deck_released",
+                "the world teleport must read as an external move and drop the CLIENT capture, or"
+                        + " nothing below is about a re-claim");
+        String releaseReason = Events.firstField(releases, "reason");
+        if (releaseReason == null || !releaseReason.startsWith("externalMove")) {
+            scenario().arrangementFailed("the release must be the EXTERNAL-MOVE guard - any other"
+                    + " gate (leftShipRegion, steppedOntoTerrain, an excluded state) means the body"
+                    + " left the subject's premise rather than being handed back to world gravity"
+                    + " inside the hull. reason=" + releaseReason + " :: " + releases);
+        }
+
+        // The subject: the deck reclaims the released body. The mark is taken AFTER the release on
+        // purpose - `deck_captured` is written on EVERY resolved tick, so a mark from before it is
+        // satisfied by the captures that preceded it and would prove nothing. From here the first
+        // record is the RE-capture; and because an ongoing capture keeps writing one every tick,
+        // this cannot miss a re-claim that landed between the two reads either.
+        long reclaimMark = clientEvents.mark();
+        String reclaimed = clientEvents.await(reclaimMark, "deck_captured",
+                "the deck must reclaim the body released inside the inverted ship, instead of leaving"
+                        + " it to world gravity through the world-down cockpit opening",
+                DECK_LINK_BUDGET_TICKS);
+
+        // Sample the settle: where does the body come to rest, and what camera does the client own?
         StringBuilder trace = new StringBuilder();
         for (int i = 0; i < 30; i++) {
             bot().waitTicks(3);
-            samples++;
-            String cap = exec("artest vs deck-capture");
-            boolean tracked = cap.contains("\"alreadyTracked\":true");
-            boolean hull = cap.contains("\"hullStand\":true");
-            if (tracked && !hull) aboardSeen++;
-            if (tracked && hull) hullSeen++;
             trace.append(String.format(java.util.Locale.ROOT,
-                    "[t%d y=%.2f cap=%b hull=%b cliRes=%s cliDrop=%s obst=%s onDeck=%s"
-                            + " cSub=%s cLoaded=%s cAir=%s cBox=%s cRegAir=%s] ",
-                    i * 3, bot().reportState().get("playerY").getAsDouble(), tracked, hull,
-                    bot().readStaticField(SHIP_FRAME_TRAVEL, "resolvedTicks").get("value")
-                            .getAsString(),
-                    bot().readStaticField(SHIP_FRAME_TRAVEL, "lastDropReason").get("value")
-                            .getAsString(),
+                    "[t%d y=%.2f obst=%s onDeck=%s cSub=%s cLoaded=%s cAir=%s cBox=%s cRegAir=%s] ",
+                    i * 3, bot().reportState().get("playerY").getAsDouble(),
                     bot().readStaticField(SHIP_FRAME_TRAVEL, "lastObstacleCount").get("value")
                             .getAsString(),
                     bot().readStaticField(SHIP_FRAME_TRAVEL, "lastOnDeck").get("value")
@@ -158,15 +282,27 @@ public class VSCrewInteriorBoardingE2ETest extends AbstractSharedVsClientE2ETest
                     censusStatic("censusCollisionBoxes"),
                     censusStatic("censusRegionNonAir")));
         }
-        long resolvedDelta = (long) Double.parseDouble(bot().readStaticField(
-                SHIP_FRAME_TRAVEL, "resolvedTicks").get("value").getAsString()) - resolved0;
-        System.out.println("[interior] client resolvedDelta=" + resolvedDelta + " over the window");
+        // The mode is read from the RELEASE mark, not from the re-claim mark, and the difference is
+        // the whole reason this read can answer at all. `deck_mode_committed` is an EDGE — it is
+        // written at `logCapture`, which production calls only when a capture is INSTALLED or its
+        // mode TRANSITIONS — while `deck_captured` is a per-tick commit. Production repairs an
+        // external-move release inside the same tick that performs it (the travel commit re-captures
+        // the body on the spot it moved to), so the one mode commit of this episode is already
+        // written by the time the release record has been read and a fresh mark taken: a window that
+        // opens at the re-claim contains the captures and never the commit, and the read came back
+        // null on a body the trace shows resolved on the deck. The window from the release covers
+        // the release AND the re-claim, and every commit in it is post-release by construction.
+        String modesAfter = awaitCommittedMode(clientEvents, releaseMark, "aboard");
+        Events.assertInstrumentRan(modesAfter, "deck_mode_events",
+                "the reclaimed body was committed ABOARD rather than onto the outer hull");
+        String releasesAfter = clientEvents.since(reclaimMark, "deck_released");
         boolean shipCam = Boolean.parseBoolean(
                 bot().readStaticField(SHIP_CAMERA, "shipCamActive").get("value").getAsString());
         double settledY = bot().reportState().get("playerY").getAsDouble();
         String capEnd = exec("artest vs deck-capture");
-        System.out.println("[interior] aboard=" + aboardSeen + " hull=" + hullSeen + "/" + samples
-                + " shipCamActive=" + shipCam + " preY=" + preY + " settledY=" + settledY
+        System.out.println("[interior] shipCamActive=" + shipCam + " preY=" + preY + " settledY="
+                + settledY + " reclaim=" + reclaimed + " modes=" + modesAfter
+                + " releasesSinceReclaim=" + releasesAfter
                 + " censusEnd(server)=" + exec("artest vs subspace-census")
                 + " :: " + trace);
 
@@ -174,9 +310,10 @@ public class VSCrewInteriorBoardingE2ETest extends AbstractSharedVsClientE2ETest
         // back by SHIP-frame gravity (never lost through the world-down cockpit opening to the
         // world below, never pinned by the outer-hull fallback), stays resolved ABOARD at its
         // deck spot, and the client's ship camera engages.
-        assertTrue("a body released inside the ship must be re-seated ABOARD (saw aboard "
-                + aboardSeen + "/" + samples + ", hull-stand " + hullSeen + "): " + trace,
-                aboardSeen > samples / 2);
+        assertTrue("a body released inside the ship must be re-seated ABOARD, not held with world"
+                + " semantics on the outer hull (last committed mode="
+                + lastCommittedMode(modesAfter) + ", releases since the re-claim: " + releasesAfter
+                + "): " + trace, "aboard".equals(lastCommittedMode(modesAfter)));
         assertTrue("the body must stay WITH the inverted ship at its deck spot, not fall out "
                 + "(preY=" + preY + " settledY=" + settledY + ", cap=" + capEnd + "): " + trace,
                 Math.abs(settledY - preY) < 2.5 && capEnd.contains("\"alreadyTracked\":true"));
@@ -206,15 +343,21 @@ public class VSCrewInteriorBoardingE2ETest extends AbstractSharedVsClientE2ETest
                 exec("artest vs point-by-id 0 " + scenarioShipId + " "
                         + Math.cos(h) + " " + Math.sin(h) + " 0.0 0.0").contains("\"commanded\":true"));
         bot().waitTicks(200);
+
+        // Same arrangement chain as the open-cockpit scenario: `dismount` then `deck_captured`, and
+        // the MODE off production's own commit.
+        Events events = events();
+        long dismountMark = events.markInstrumented();
         exec("artest player dismount");
-        boolean aboardBefore = false;
-        for (int i = 0; i < 30 && !aboardBefore; i++) {
-            bot().waitTicks(4);
-            String cap = exec("artest vs deck-capture");
-            aboardBefore = cap.contains("\"alreadyTracked\":true") && !cap.contains("\"hullStand\":true");
-        }
-        assertTrue("the dismounted pilot must be captured ABOARD inside the inverted ship: "
-                + exec("artest vs deck-capture"), aboardBefore);
+        requireChain(events, dismountMark, "the dismounted pilot must be taken by the deck inside the"
+                + " inverted roofed ship", "dismount", "deck_captured");
+        String modesBefore = awaitCommittedMode(events, dismountMark, "aboard");
+        Events.assertInstrumentRan(modesBefore, "deck_mode_events",
+                "the deck committed a capture MODE for the dismounted pilot");
+        assertTrue("the dismounted pilot must be captured ABOARD inside the inverted ship (last"
+                + " committed mode=" + lastCommittedMode(modesBefore) + "): " + modesBefore
+                + " | server verdict " + exec("artest vs deck-capture"),
+                "aboard".equals(lastCommittedMode(modesBefore)));
         double preY = bot().reportState().get("playerY").getAsDouble();
         double[] sub0 = parseSub(censusStatic("censusSubPos"));
 
@@ -243,11 +386,17 @@ public class VSCrewInteriorBoardingE2ETest extends AbstractSharedVsClientE2ETest
         // half-turned attitude maps mostly into the deck PLANE - the body never leaves the
         // stand. Re-step until the measured subspace position is actually mid-cavity (the ship
         // keeps turning between attempts), and only then judge the settle.
+        Events clientEvents = clientEvents();
         String subAfter = censusStatic("censusSubPos");
+        // The mark is re-taken INSIDE the loop so it belongs to the displacement that finally lands
+        // the body mid-cavity: each earlier attempt is its own release-and-reclaim, and a mark from
+        // before the first one would let an earlier round's records answer for the last.
+        long releaseMark = clientEvents.mark();
         for (int i = 0; i < 8 && parseSub(subAfter)[1] <= sub0[1] + 0.5; i++) {
             if (i > 0) {
                 bot().waitTicks(20); // reclaimed to the stand meanwhile; let the hold keep turning
             }
+            releaseMark = clientEvents.mark();
             exec("tp @a ~ ~-1.2 ~");
             bot().waitTicks(2);
             subAfter = censusStatic("censusSubPos");
@@ -262,39 +411,81 @@ public class VSCrewInteriorBoardingE2ETest extends AbstractSharedVsClientE2ETest
                 + " vs stand " + sub0[1] + "; is the attitude hold converged? ship-info="
                 + shipInfo() + ")", parseSub(subAfter)[1] > sub0[1] + 0.5);
 
-        // Sample the settle: which mode claims the unsupported interior body?
-        int aboardSeen = 0, hullSeen = 0, samples = 0;
+        // ARRANGEMENT: the displacement must have dropped the CLIENT's capture (the server rebases
+        // an EntityPlayerMP instead of releasing, so its probe cannot witness this).
+        String releases = requireLink(clientEvents, releaseMark, "deck_released",
+                "the mid-cavity displacement must read as an external move and drop the CLIENT"
+                        + " capture, or nothing below is about a re-claim");
+
+        // THE SUBJECT: the displaced body comes back under DECK semantics - carried by ship-frame
+        // gravity against world gravity, at its deck stand, with the ship camera - instead of being
+        // pinned to the cavity's world-floor by the outer-hull fallback (the reported "captured, but
+        // the camera never flips" desync).
+        //
+        // NOT the `interior_claimed` record, and that is a statement about which mechanism a
+        // teleport drives rather than a softening of the pin. `interiorCandidate` is consulted only
+        // for a body the gate finds UNTRACKED, and a world teleport never leaves one for a tick: the
+        // external-move guard releases inside the same tick's travel, and that tick's own commit
+        // re-captures the body on the spot it moved to - production says so where it does it
+        // ("reached only when heldShipFramePos released mid-tick (externalMove) and this commit
+        // re-captures on the same anchor"), and a run's own record chain says it too: released,
+        // captured and mode-committed with nothing in between. So the CLAIM gate is unreachable from
+        // this stimulus, and awaiting it fails a healthy client. What the enclosure term does on the
+        // path a teleport DOES drive is keep the re-captured body aboard - the anchored branch
+        // demotes an unsupported body to hull-stand (mode "hull") or lets it go for having no deck
+        // below unless it is inside the region under a ship-frame roof - and that is what the mode
+        // commit and the settle below discriminate.
+        //
+        // A run that wants the claim gate itself has to arrange a body that is untracked INSIDE the
+        // hull for at least one gate call: an entry through a hatch, a relog inside the cavity, or a
+        // flight-off, none of which is a teleport.
+        long reclaimMark = clientEvents.mark();
+        String reclaimed = clientEvents.await(reclaimMark, "deck_captured",
+                "the displaced body must be re-captured - a displacement that ends with no capture at"
+                        + " all leaves the body to world gravity in the cavity",
+                DECK_LINK_BUDGET_TICKS);
+
+        // Sample the settle: where does the claimed body come to rest?
         StringBuilder trace = new StringBuilder();
         for (int i = 0; i < 30; i++) {
             bot().waitTicks(3);
-            samples++;
-            String cap = exec("artest vs deck-capture");
-            boolean tracked = cap.contains("\"alreadyTracked\":true");
-            boolean hull = cap.contains("\"hullStand\":true");
-            if (tracked && !hull) aboardSeen++;
-            if (tracked && hull) hullSeen++;
             trace.append(String.format(java.util.Locale.ROOT,
-                    "[t%d y=%.2f cap=%b hull=%b cSub=%s obst=%s] ",
-                    i * 3, bot().reportState().get("playerY").getAsDouble(), tracked, hull,
+                    "[t%d y=%.2f cSub=%s obst=%s] ",
+                    i * 3, bot().reportState().get("playerY").getAsDouble(),
                     censusStatic("censusSubPos"),
                     bot().readStaticField(SHIP_FRAME_TRAVEL, "lastObstacleCount").get("value")
                             .getAsString()));
         }
+        // From the RELEASE mark for the same reason as the open-cockpit scenario above: the mode is
+        // an EDGE written where a capture is installed or its mode changes, and the one commit of
+        // this episode lands in the same tick as the release - before a mark taken at the re-claim
+        // could open. The window from the release holds it, and everything in that window is
+        // post-displacement.
+        String modesAfter = awaitCommittedMode(clientEvents, releaseMark, "aboard");
+        Events.assertInstrumentRan(modesAfter, "deck_mode_events",
+                "the claimed cavity body was committed ABOARD rather than onto the outer hull");
         boolean shipCam = Boolean.parseBoolean(
                 bot().readStaticField(SHIP_CAMERA, "shipCamActive").get("value").getAsString());
         double settledY = bot().reportState().get("playerY").getAsDouble();
         double[] subEnd = parseSub(censusStatic("censusSubPos"));
         String capEnd = exec("artest vs deck-capture");
-        System.out.println("[cavity] aboard=" + aboardSeen + " hull=" + hullSeen + "/" + samples
-                + " shipCamActive=" + shipCam + " preY=" + preY + " settledY=" + settledY
-                + " subEnd=" + subEnd[1] + " :: " + trace);
+        // Every release in the displacement window, each with the gate that performed it: a
+        // `noDeckBelow` or `noHullContact` here would say the enclosure term did NOT hold the body,
+        // which is the failure this scenario is about and is not visible in a height alone.
+        String releasesAfter = clientEvents.since(releaseMark, "deck_released");
+        System.out.println("[cavity] shipCamActive=" + shipCam + " preY=" + preY + " settledY="
+                + settledY + " subEnd=" + subEnd[1] + " release=" + releases
+                + " reclaim=" + reclaimed + " modes=" + modesAfter
+                + " releasesInWindow=" + releasesAfter + " :: " + trace);
 
         // The interior-boarding contract, positive half: the ENCLOSED unsupported body is the
         // deck's - claimed ABOARD (not pinned by the outer-hull fallback on the cavity's
         // world-floor), carried back against world gravity to its deck stand, ship camera on.
-        assertTrue("an unsupported body in an enclosed cavity must be claimed ABOARD (saw aboard "
-                + aboardSeen + "/" + samples + ", hull-stand " + hullSeen + "): " + trace,
-                aboardSeen > samples / 2);
+        assertTrue("an unsupported body in an enclosed cavity must be claimed ABOARD, not pinned by"
+                + " the outer-hull fallback (last committed mode=" + lastCommittedMode(modesAfter)
+                + "): " + modesAfter + " | the releases in this window, each with the gate that"
+                + " performed it: " + releasesAfter + " | server verdict " + capEnd + " :: " + trace,
+                "aboard".equals(lastCommittedMode(modesAfter)));
         assertTrue("deck gravity must carry the body BACK to the deck, not let it settle on the "
                 + "roof ~3 world blocks below (preY=" + preY + " settledY=" + settledY + "): " + trace,
                 Math.abs(settledY - preY) < 1.5 && capEnd.contains("\"alreadyTracked\":true"));
@@ -334,19 +525,28 @@ public class VSCrewInteriorBoardingE2ETest extends AbstractSharedVsClientE2ETest
                 exec("artest vs point-by-id 0 " + scenarioShipId + " "
                         + Math.cos(h) + " " + Math.sin(h) + " 0.0 0.0").contains("\"commanded\":true"));
         bot().waitTicks(150);
+
+        // Same arrangement chain as the two interior scenarios.
+        Events events = events();
+        long dismountMark = events.markInstrumented();
         exec("artest player dismount");
-        boolean aboard = false;
-        for (int i = 0; i < 30 && !aboard; i++) {
-            bot().waitTicks(4);
-            String cap = exec("artest vs deck-capture");
-            aboard = cap.contains("\"alreadyTracked\":true") && !cap.contains("\"hullStand\":true");
-        }
-        assertTrue("the dismounted pilot must be captured ABOARD on the rolled deck: "
-                + exec("artest vs deck-capture"), aboard);
+        requireChain(events, dismountMark, "the dismounted pilot must be taken by the rolled deck",
+                "dismount", "deck_captured");
+        String modesBefore = awaitCommittedMode(events, dismountMark, "aboard");
+        Events.assertInstrumentRan(modesBefore, "deck_mode_events",
+                "the deck committed a capture MODE for the dismounted pilot");
+        assertTrue("the dismounted pilot must be captured ABOARD on the rolled deck (last committed"
+                + " mode=" + lastCommittedMode(modesBefore) + "): " + modesBefore
+                + " | server verdict " + exec("artest vs deck-capture"),
+                "aboard".equals(lastCommittedMode(modesBefore)));
         double[] sub0 = parseSub(censusStatic("censusSubPos"));
 
         // Start creative flight: double-tap space (the first tap is a deck jump; the second,
-        // within the toggle window, flips flight).
+        // within the toggle window, flips flight). Marked FIRST: "flight must not release the
+        // capture" is an ABSENCE, and an absence is only an answer when it is read from a log whose
+        // window opened before the stimulus.
+        Events clientEvents = clientEvents();
+        long flightMark = clientEvents.mark();
         bot().holdKey(org.lwjgl.input.Keyboard.KEY_SPACE);
         bot().waitTicks(2);
         bot().releaseKey(org.lwjgl.input.Keyboard.KEY_SPACE);
@@ -401,7 +601,18 @@ public class VSCrewInteriorBoardingE2ETest extends AbstractSharedVsClientE2ETest
                 + dxzSub + " tracked=" + trackedSeen + "/" + samples + " cam=" + camSeen
                 + "/" + samples + " :: " + trace);
 
-        // The contract, in its three player-visible parts:
+        // The contract, in its three player-visible parts. The first is an ABSENCE and is read as
+        // one: the client's resolver records EVERY release with the gate that performed it, so
+        // "starting flight did not release the capture" is "no `deck_released` since the mark" -
+        // where the per-sample server probe could only miss a release that was recovered between
+        // two samples, and could not name `creativeFlight` if it caught one.
+        String releasesInFlight = clientEvents.since(flightMark, "deck_released");
+        Events.assertInstrumentRan(releasesInFlight, "deck_capture_events",
+                "starting creative flight on the deck did not release the client's capture");
+        assertTrue("starting flight on the deck must NOT release the capture - a flyer the deck"
+                + " already owns keeps deck semantics, and `creativeFlight` is the gate that would"
+                + " have taken it away: " + releasesInFlight + " :: " + trace,
+                Events.countRecords(releasesInFlight, "\"reason\"") == 0);
         assertTrue("starting flight on the deck must NOT release the capture (tracked "
                 + trackedSeen + "/" + samples + "): " + trace, trackedSeen == samples);
         assertTrue("the ship camera must stay engaged for a flying-aboard body (cam " + camSeen
@@ -441,6 +652,7 @@ public class VSCrewInteriorBoardingE2ETest extends AbstractSharedVsClientE2ETest
         boolean seated = false;
         String capEnd = "";
         double[] subSeated = subEnd;
+        long flightOffMark = clientEvents.mark();
         for (int round = 0; round < 4; round++) {
             bot().holdKey(org.lwjgl.input.Keyboard.KEY_SPACE);
             bot().waitTicks(2);
@@ -466,9 +678,19 @@ public class VSCrewInteriorBoardingE2ETest extends AbstractSharedVsClientE2ETest
                     && !capEnd.contains("\"hullStand\":true")
                     && subSeated[1] <= sub0[1] + 1.4;
         }
+        // The LANDING itself, as production's own edge: the deck resolver owned the tick and put the
+        // body on a surface it was not on before. That is the moment deck gravity finishes the job,
+        // and it is what separates "seated by the deck" from "happened to be near the stand" - which
+        // is all a floored census position and a boolean can say between them.
+        String contacts = clientEvents.since(flightOffMark, "deck_contact");
+        Events.assertInstrumentRan(contacts, "deck_contact_events",
+                "deck gravity seated the body on the ship's geometry when flight ended");
         exec("gamemode survival @a"); // leave the shared world as the other tests expect it
         assertTrue("turning flight off must hand the body to deck gravity and seat it back "
                 + "(sub=" + subSeated[1] + " vs start " + sub0[1] + "): " + capEnd, seated);
+        assertTrue("the body must actually make CONTACT with the ship's geometry when flight ends -"
+                + " a body merely hovering at the right height was never seated by deck gravity: "
+                + contacts, Events.countRecords(contacts, "\"ship\"") > 0);
     }
 
     /** "x,y,z" census position as doubles (block coords are integral; that is fine here). */
@@ -513,30 +735,38 @@ public class VSCrewInteriorBoardingE2ETest extends AbstractSharedVsClientE2ETest
         exec("tp @a " + (bx + 600) + " 120 " + (bz + 600) + " 0 0");
         bot().waitTicks(10);
 
-        int shipsBefore = count("ship-count-all");
+        // The mark is taken BEFORE the assembly is queued, so the record awaited below is THIS
+        // scenario's own ship and never a neighbour's - which is what a whole-dimension COUNT could
+        // never be on a shared world.
+        Events events = events();
+        long spawnMark = events.markInstrumented();
         exec("artest vs spawn-diag reset");
         String assemble = assembleFixture(bx, by, bz, variant);
         assertTrue("a with-pilot-seat build must route to a ship: " + assemble,
                 assemble.contains("\"rocketCount\":0"));
 
-        // NOT a latency budget: raising this from 200 to 600 ticks was measured and changed
-        // nothing (2/4 red either way, ledger #60) - VS logs the queued spawn by name and the ship
-        // still never enters the queryable registry. Left at the original budget so a failing run
-        // fails fast.
-        int all = shipsBefore;
-        for (int i = 0; i < 40 && all <= shipsBefore; i++) {
-            bot().waitTicks(5);
-            all = count("ship-count-all");
+        // The registry's own addShip, awaited as a LINK. The count poll this replaces could not see
+        // one: raising its budget from 200 to 600 ticks was measured and changed nothing (2/4 red
+        // either way, ledger #60) because the ship never entered the registry at all, and a count
+        // that never moves says only "not yet" however long it is given.
+        try {
+            awaitShipSpawned(events, spawnMark,
+                    "the tier-2 assembly must become a VS ship in the queryable registry");
+        } catch (AssertionError neverSpawned) {
+            throw new AssertionError(neverSpawned.getMessage()
+                    + " | spawn-diag: " + exec("artest vs spawn-diag").replace('\n', ' ')
+                    + " | assemble said: " + assemble.replace('\n', ' '), neverSpawned);
         }
-        assertTrue("assembly must create a NEW VS ship (was " + shipsBefore + ", now " + all
-                        + "). spawn-diag: " + exec("artest vs spawn-diag").replace('\n', ' ')
-                        + " assemble said: " + assemble.replace('\n', ' '),
-                all > shipsBefore);
         bot().waitTicks(40);
 
         exec("tp @a " + (bx + 0.5) + " " + (by + 6) + " " + (bz + 0.5) + " 0 0");
         bot().waitTicks(20);
 
+        // An ARRANGEMENT gate, and it stays a probe read: `ship_spawned` says the REGISTRY knows the
+        // ship, which is a different fact from "a physics object is loaded here with the client
+        // present" - the state everything below needs. It is also where the scenario takes its
+        // IDENTITY, and the record's `vsShip` is the same uuid this reply's `id` carries
+        // (VSBridge.nearestShipId returns getShipData().getUuid()), so the two agree.
         String info = "";
         double[] where = null;
         for (int i = 0; i < 40 && where == null; i++) {
@@ -645,11 +875,6 @@ public class VSCrewInteriorBoardingE2ETest extends AbstractSharedVsClientE2ETest
         } catch (RuntimeException malformed) {
             return false;
         }
-    }
-
-    private int count(String sub) throws Exception {
-        Matcher m = COUNT.matcher(exec("artest vs " + sub + " 0"));
-        return m.find() ? Integer.parseInt(m.group(1)) : -1;
     }
 
     private double readDouble(String json, Pattern p) {

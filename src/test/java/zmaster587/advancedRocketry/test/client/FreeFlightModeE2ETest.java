@@ -1,5 +1,6 @@
 package zmaster587.advancedRocketry.test.client;
 
+import com.github.stannismod.forge.testing.TestTimeouts;
 import com.github.stannismod.forge.testing.junit.AbstractClientE2ETest;
 import com.google.gson.JsonObject;
 import org.junit.FixMethodOrder;
@@ -9,6 +10,8 @@ import org.lwjgl.input.Keyboard;
 
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+
+import zmaster587.advancedRocketry.test.Events;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
@@ -87,6 +90,19 @@ public class FreeFlightModeE2ETest extends AbstractSharedClientE2ETest {
 
     /** Ground level for every fixture here; the pad is built on terrain, not in air. */
     private static final int BASE_Y = 64;
+
+    /**
+     * The observation point behind this class's engine-state links: the test-only mixin on
+     * {@code EntityRocket.setInFlight}, the one mutator every launch and every touchdown goes
+     * through. (The touchdown ANNOUNCEMENT is a second, independent recorder — the Forge-bus
+     * subscriber for AR's own {@code RocketLandedEvent} — and reports under its own name.)
+     *
+     * <p>Read by the one assertion here that concludes something from a SILENCE. The list it is
+     * checked against is JVM-wide rather than window-scoped, so what it rules out is a seam that
+     * never wove or never ran at all — which is the silence that would otherwise be read as
+     * "the engines stayed off".</p>
+     */
+    private static final String ROCKET_INSTRUMENT = "rocket_events";
 
     @Override
     protected String subsystem() {
@@ -199,6 +215,84 @@ public class FreeFlightModeE2ETest extends AbstractSharedClientE2ETest {
         return Double.parseDouble(m.group(1));
     }
 
+    // ---- the rocket's engine state as EVENTS -------------------------------------------------
+    //
+    // `EntityRocket.setInFlight` is the one mutator every launch and every touchdown goes through,
+    // and a test-only mixin records each write with the rocket it was made on. Waiting for that
+    // record is what a poll of `rocket info` cannot be: it cannot race its own start, it cannot miss
+    // a flip that happened and was undone between two samples, and its failure prints what the flag
+    // DID do instead of one stale reading.
+
+    /** Wait for THIS rocket's in-flight flag to be written {@code inFlight}. */
+    private void awaitFlightSet(Events events, long mark, int rocketId, boolean inFlight,
+                                String what) throws Exception {
+        awaitFlightSet(events, mark, rocketId, inFlight, what, 120);
+    }
+
+    /** {@link #awaitFlightSet(Events, long, int, boolean, String)} with an explicit tick budget. */
+    private void awaitFlightSet(Events events, long mark, int rocketId, boolean inFlight,
+                                String what, int tickBudget) throws Exception {
+        awaitRecord(events, mark, "rocket_flight_set", what, tickBudget,
+                "\"e\":" + rocketId + ",", "\"inFlight\":" + inFlight);
+    }
+
+    /**
+     * Wait for a record of {@code type} whose payload carries every one of {@code needles} — an
+     * {@link Events#await} that can say WHICH rocket it means.
+     *
+     * <p>Local to this class because {@code Events.await} matches on the TYPE alone, and this class
+     * is 27 scenarios on ONE shared world: every earlier scenario's rocket is still standing there,
+     * several of them left in flight, and each can write its own in-flight flag or land on its own
+     * while a later scenario is watching. A link that could not name the rocket would be answered by
+     * a neighbour — the same failure the plot-filtered {@link #rocketIdInThisPlot()} exists for.</p>
+     */
+    private String awaitRecord(Events events, long mark, String type, String what, int tickBudget,
+                               String... needles) throws Exception {
+        String reply = "";
+        // This budget is a DEADLINE for a discrete commit with an early exit — how patient the test
+        // is, never how far the world moves: the loop returns the moment the record appears, and
+        // reaching the end of it is a failure either way. So it is scaled like the ClientPoll
+        // ceilings beside it, because several of these links are driven by the CLIENT (a 60-tick key
+        // hold, a descent under a held key) and a frame-starved client under concurrent-fork load
+        // spends more of OUR ticks reaching the same commit.
+        tickBudget = (int) Math.ceil(tickBudget * TestTimeouts.factor());
+        for (int waited = 0; waited <= tickBudget; waited += 5) {
+            reply = events.since(mark, type);
+            if (matchingRecords(reply, needles) > 0) {
+                return reply;
+            }
+            bot().waitTicks(5);
+        }
+        throw new AssertionError(what + " — no `" + type + "` carrying "
+                + java.util.Arrays.toString(needles) + " was recorded within " + tickBudget
+                + " ticks. Records of that type since the mark: " + reply
+                + " | everything recorded since the mark, in order: "
+                + Events.typesOf(events.since(mark)));
+    }
+
+    /** How many records of a {@code since} reply carry EVERY one of {@code needles}. */
+    private static int matchingRecords(String sinceReply, String... needles) {
+        int n = 0;
+        for (String record : String.valueOf(sinceReply).split("\\{\"seq\":")) {
+            // The split's first chunk is the reply's ENVELOPE, which carries no `"type"` — without
+            // this guard an envelope field could be counted as a record.
+            if (!record.contains("\"type\":")) {
+                continue;
+            }
+            boolean all = true;
+            for (String needle : needles) {
+                if (!record.contains(needle)) {
+                    all = false;
+                    break;
+                }
+            }
+            if (all) {
+                n++;
+            }
+        }
+        return n;
+    }
+
     // ---------------------------------------------------------------------
 
     @Test
@@ -224,6 +318,8 @@ public class FreeFlightModeE2ETest extends AbstractSharedClientE2ETest {
                 setMode.contains("\"flightMode\":\"FREE_FLIGHT\""));
 
         // start-free-flight: bypass classic countdown.
+        Events events = events();
+        long launchMark = events.markInstrumented();
         String start = exec("artest rocket start-free-flight " + rocketId);
         assertTrue("start-free-flight must succeed: " + start,
                 start.contains("\"ok\":true"));
@@ -231,6 +327,13 @@ public class FreeFlightModeE2ETest extends AbstractSharedClientE2ETest {
         // (read in the same call as the mutation).
         assertTrue("start-free-flight must report isInFlight=true in response: " + start,
                 start.contains("\"isInFlight\":true"));
+        // And the flag was WRITTEN on the entity, which is what this scenario is named for. The
+        // probe reply above is the same call as the mutation and would echo an assignment nobody
+        // else can see; the record is taken at `EntityRocket.setInFlight`, the one mutator every
+        // launch path goes through, and it names WHICH rocket flipped — this class's world holds
+        // every earlier scenario's.
+        awaitFlightSet(events, launchMark, rocketId, true,
+                "start-free-flight must put THIS rocket in flight");
 
         // Snapshot info IMMEDIATELY (the real tick loop will drain motionY
         // on the test fixture's low-thrust rocket; what we pin here is that
@@ -338,11 +441,18 @@ public class FreeFlightModeE2ETest extends AbstractSharedClientE2ETest {
         bot().waitTicks(5);
         exec("artest player mount-entity " + rocketId);
         exec("artest rocket set-flight-mode " + rocketId + " FREE_FLIGHT");
+        Events events = events();
+        long launchMark = events.markInstrumented();
         exec("artest rocket start-free-flight " + rocketId);
+        // The launch is a COMMIT and the log records it, so it is waited for as one: the flag write
+        // cannot be missed between two samples, and a re-land inside the window is a SECOND record
+        // rather than an invisible flip.
+        awaitFlightSet(events, launchMark, rocketId, true,
+                "start-free-flight must put THIS rocket in flight");
         // The v1 takeoff is a decaying kick + grace window; on a slow/contended
         // harness the bot round-trips can outlast it and the rocket re-lands
         // before the test's input arrives, failing on "never moved" instead of
-        // the contract under test. Confirm we're airborne, retrying the start —
+        // the contract under test. Confirm we're STILL airborne, retrying the start —
         // same pattern as the assemble retry above. (The
         // engine-start hover removes the kick and this crutch with it.)
         for (int attempt = 0; attempt < 3; attempt++) {
@@ -352,9 +462,18 @@ public class FreeFlightModeE2ETest extends AbstractSharedClientE2ETest {
             exec("artest rocket start-free-flight " + rocketId);
             bot().waitTicks(2);
         }
-        assertTrue("rocket must be in flight after start-free-flight (retried)",
-                exec("artest rocket info " + rocketId).contains("\"isInFlight\":true"));
-        return rocketId;
+        String last = exec("artest rocket info " + rocketId);
+        if (last.contains("\"isInFlight\":true")) {
+            return rocketId;
+        }
+        // ARRANGEMENT, and typed as one: a scenario whose rocket re-landed before it began has not
+        // disproved anything about flight controls. The log says which of the two happened — a
+        // launch that never committed, or one that committed and was undone by the touchdown
+        // detector — where the state read alone could not.
+        scenario().arrangementFailed("this rocket must be in flight after start-free-flight (retried"
+                + " 3 times, last state " + last + "). What the in-flight flag DID do since the"
+                + " launch: " + events.since(launchMark, "rocket_flight_set"));
+        return rocketId; // unreachable: arrangementFailed always throws
     }
 
     @Test
@@ -841,10 +960,22 @@ public class FreeFlightModeE2ETest extends AbstractSharedClientE2ETest {
                 before.contains("\"isInFlight\":false"));
         double y0 = parseDouble(before, POS_Y, "posY");
 
+        // The start ritual ENDS in a commit — the client's 60-tick hold completes, the server's
+        // gate accepts it, and the engines are lit by writing the in-flight flag. Wait for that
+        // record with the key still held, instead of holding for a fixed 75 ticks and asking
+        // afterwards: the fixed wait cannot tell "the hold never completed on the client" from "it
+        // completed and the server refused" from "it started and re-landed", and all three arrive
+        // here as isInFlight=false.
+        Events events = events();
+        long holdMark = events.markInstrumented();
         bot().holdKey(Keyboard.KEY_SPACE);
-        bot().waitTicks(75);             // 60-tick hold + margin
-        bot().releaseKey(Keyboard.KEY_SPACE);
-        bot().waitTicks(40);             // let the liftoff hover settle
+        try {
+            awaitFlightSet(events, holdMark, rocketId, true,
+                    "a 3 s hold of the real Space key must start THIS rocket's engines", 200);
+        } finally {
+            bot().releaseKey(Keyboard.KEY_SPACE);
+        }
+        bot().waitTicks(40);             // let the liftoff hover settle — a value, not a link
 
         String info = exec("artest rocket info " + rocketId);
         assertTrue("3 s Space hold must start the engines (isInFlight=true): " + info,
@@ -870,6 +1001,8 @@ public class FreeFlightModeE2ETest extends AbstractSharedClientE2ETest {
     public void spaceEarlyReleaseCancelsEngineStart() throws Exception {
         int rocketId = mountColdFreeFlightRocket();
 
+        Events events = events();
+        long holdMark = events.markInstrumented();
         bot().holdKey(Keyboard.KEY_SPACE);
         bot().waitTicks(25);             // well under the 60-tick requirement
 
@@ -885,6 +1018,18 @@ public class FreeFlightModeE2ETest extends AbstractSharedClientE2ETest {
         String info = exec("artest rocket info " + rocketId);
         assertTrue("early release must cancel the start (still not in flight): " + info,
                 info.contains("\"isInFlight\":false"));
+        // The state read above is the end state; the CONTRACT is that the engines never lit at all,
+        // and only the log can say that — a start that lit and re-landed inside the window leaves
+        // exactly the same isInFlight=false behind. The silence means something because the HUD
+        // assertion above proves the hold was really under way (the subject COULD have started), and
+        // because the recorder is asked whether it was listening.
+        String flightWrites = events.since(holdMark, "rocket_flight_set");
+        Events.assertInstrumentRan(flightWrites, ROCKET_INSTRUMENT,
+                "an early-released hold never wrote this rocket's in-flight flag");
+        assertTrue("releasing the key early must mean the engines were never lit — not lit and then"
+                        + " shut off again. Writes to any rocket's in-flight flag since the hold"
+                        + " began: " + flightWrites,
+                matchingRecords(flightWrites, "\"e\":" + rocketId + ",") == 0);
         String hud = bot().readStaticField(ROCKET_EVENT_HANDLER, "lastFreeFlightHud")
                 .get("value").getAsString();
         assertTrue("HUD must be back to ENGINES OFF after the cancel: " + hud,
@@ -901,14 +1046,23 @@ public class FreeFlightModeE2ETest extends AbstractSharedClientE2ETest {
         int rocketId = mountFreshFreeFlightRocket();
         bot().waitTicks(30); // settle into the liftoff hover
 
+        Events events = events();
+        long descentMark = events.markInstrumented();
         bot().holdKey(Keyboard.KEY_F);
-        // Poll for landing rather than a fixed wait (descent into ground contact + landed-event latency
-        // varies with load): event-gated with a load-scaled ceiling + early exit.
-        ClientPoll.Result<Boolean> landing = ClientPoll.until(bot()::waitTicks,
-                () -> exec("artest rocket info " + rocketId).contains("\"isInFlight\":false"),
-                b -> b, 5, 40);
-        bot().releaseKey(Keyboard.KEY_F);
-        assertTrue("descending into the ground must shut the engines off", landing.satisfied);
+        try {
+            // A touchdown is two commits, not a state: the engines are shut off (the in-flight flag
+            // is written false) and the landing is ANNOUNCED on the bus for everything that reacts
+            // to a rocket arriving. The poll it replaces read the flag's end state, which a rocket
+            // that was never airborne satisfies just as well, and never saw the announcement at all.
+            awaitFlightSet(events, descentMark, rocketId, false,
+                    "descending into the ground must shut THIS rocket's engines off", 240);
+            awaitRecord(events, descentMark, "rocket_landed",
+                    "a touchdown must be announced on the bus, or nothing that reacts to a rocket"
+                            + " arriving ever hears about it", 120,
+                    "\"e\":" + rocketId + ",");
+        } finally {
+            bot().releaseKey(Keyboard.KEY_F);
+        }
 
         bot().waitTicks(5);
         String hud = bot().readStaticField(ROCKET_EVENT_HANDLER, "lastFreeFlightHud")

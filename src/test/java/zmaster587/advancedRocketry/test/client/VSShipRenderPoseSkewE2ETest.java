@@ -2,14 +2,17 @@ package zmaster587.advancedRocketry.test.client;
 
 import com.github.stannismod.forge.testing.junit.AbstractClientE2ETest;
 
+import com.google.gson.JsonObject;
+
 import org.junit.Test;
 
 import java.util.Locale;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import zmaster587.advancedRocketry.test.Events;
+
 import static org.junit.Assert.assertTrue;
-import static zmaster587.advancedRocketry.test.AdvancedRocketryTestConstants.SHIP_CAPTURE_RADIUS_BLOCKS;
 
 /**
  * Render-pose vs collision-pose consistency for a body standing on a ship.
@@ -20,6 +23,19 @@ import static zmaster587.advancedRocketry.test.AdvancedRocketryTestConstants.SHI
  * collides with sits visibly beside the surface he sees — the playtest report: "I walk not on the
  * blocks I see but about a block away from them; it seems to be the right surface, yet not quite".
  *
+ * <h2>Which waits are LINKS and which are values</h2>
+ * Everything this scenario needs to have HAPPENED is awaited on the ordered event logs: the
+ * assembly becoming a ship in the physics registry ({@code ship_spawned}, which also hands over the
+ * identity every later question is keyed on), the parked deck TAKING the body
+ * ({@code deck_captured}), the drop teleport being applied on the client
+ * ({@code client_pos_look_applied}) and the hull-stand mode being committed
+ * ({@code deck_mode_committed} with {@code mode=hull}). What stays a bounded poll is what a poll is
+ * for: an attitude slewing to a threshold, a body beginning to fall, a physics object becoming
+ * loaded, and the skew windows themselves — measurements of a value, with expiry as evidence rather
+ * than as a deadline. The skew SAMPLES are still read off client statics because the sampling seam
+ * has no event yet; a one-tick spike between two reads is therefore still invisible here, and that
+ * is a known limit of this instrument, not of the subject.
+ *
  * <p>The observable is {@code ShipFrameTravel.lastRenderSkew}: at every client-side commit, the
  * distance between the committed world position (tick pose) and where the renderer draws the same
  * subspace point (render pose). The contract under test: that gap stays imperceptible wherever a
@@ -29,7 +45,6 @@ import static zmaster587.advancedRocketry.test.AdvancedRocketryTestConstants.SHI
  */
 public class VSShipRenderPoseSkewE2ETest extends AbstractClientE2ETest {
 
-    private static final Pattern COUNT = Pattern.compile("\"count\":(-?\\d+)");
     private static final Pattern BUILDER_POS =
             Pattern.compile("\"builderPos\":\\[(-?\\d+),(-?\\d+),(-?\\d+)]");
     private static final Pattern POS_X = Pattern.compile("\"posX\":(-?[0-9.E\\-]+)");
@@ -41,9 +56,15 @@ public class VSShipRenderPoseSkewE2ETest extends AbstractClientE2ETest {
     private static final Pattern WORLD_Y = Pattern.compile("\"worldY\":(-?[0-9.E\\-]+)");
     private static final Pattern WORLD_Z = Pattern.compile("\"worldZ\":(-?[0-9.E\\-]+)");
 
-    private static final Pattern SHIP_ID = Pattern.compile("\"id\":\"([^\"]+)\"");
-
     private static final String VARIANT = "with-pilot-deck";
+
+    /** How long the physics registry is given to record the queued assembly as a ship. A deadline
+     *  for a discrete event, not a guess at how long a value takes to settle. */
+    private static final int SHIP_SPAWN_BUDGET_TICKS = 300;
+    /** How long one deck-capture commit is given after the stimulus that must produce it. */
+    private static final int DECK_LINK_BUDGET_TICKS = 300;
+    /** How long a teleport is given to reach the CLIENT and be applied there. */
+    private static final int POS_LOOK_BUDGET_TICKS = 300;
 
     /** THIS scenario's ship, by identity — captured once by {@link #buildShip}. */
     private String shipId;
@@ -61,9 +82,16 @@ public class VSShipRenderPoseSkewE2ETest extends AbstractClientE2ETest {
         // ---- Leg A (control): a PARKED ship's render transform converges onto its tick pose, so
         // the skew of a body standing on its deck bounds the instrument's noise floor. A large
         // reading here would indict the instrument (or a constant pose offset), not ship motion.
-        double[] ship = buildShip(bx, by, bz);
+        Events events = events();
+        double[] ship = buildShip(events, bx, by, bz);
+        // The mark goes before the teleport, so the capture cannot happen between two reads.
+        long captureMark = events.markInstrumented();
         exec("tp @a " + ship[0] + " " + (ship[1] + 4) + " " + ship[2] + " 0 0");
-        bot().waitTicks(80);
+        // The LINK, not eighty ticks: a deck TAKING a body is a commit production performs, and the
+        // control window below is only a control if it opens on a body already held. A fixed wait
+        // could only be too short (a red about the instrument) or needlessly long.
+        events.await(captureMark, "deck_captured", "the client player must be TAKEN by the parked"
+                + " deck before the control window opens", DECK_LINK_BUDGET_TICKS);
         assertTrue("the client player must be captured on the parked deck before sampling: "
                         + exec("artest vs deck-capture"),
                 exec("artest vs deck-capture").contains("\"verdict\":true"));
@@ -125,9 +153,18 @@ public class VSShipRenderPoseSkewE2ETest extends AbstractClientE2ETest {
                         + " than the hull: " + dropBlock + " ship=" + info,
                 dropBlock.contains("\"isAir\":true"));
 
-        // Drop the bot onto the world-top of the inverted hull; gate on the fall beginning (a
-        // freshly-teleported client may not tick until its chunks stream in).
+        // Drop the bot onto the world-top of the inverted hull. Two marks, one per side: the SERVER's
+        // for the mode commit the hull-stand hold IS, the CLIENT's for the teleport's arrival. Both
+        // precede the stimulus, so neither link can fall between two reads.
+        long hullMark = events.markInstrumented();
+        long dropMark = clientMark();
         exec("tp @a " + sx + " " + (sy + 7) + " " + sz + " 0 0");
+        // The teleport REACHING the client is a link — the pos-look packet it arrives as — and it is
+        // awaited before anything is sampled. preY used to be read straight after the command, so on
+        // a client that had not applied the teleport yet it was the OLD altitude and the "he began to
+        // fall" poll below was satisfied by the teleport itself.
+        awaitClientLog(dropMark, "client_pos_look_applied", "the drop teleport must be APPLIED on"
+                + " the client before its fall can be watched", POS_LOOK_BUDGET_TICKS);
         double preY = bot().reportState().get("playerY").getAsDouble();
         long preTicks = bot().reportState().get("ticks").getAsLong();
         // Event-gated fall detection (load-scaled ceiling + early exit): a fixed 60-iteration budget can
@@ -139,11 +176,11 @@ public class VSShipRenderPoseSkewE2ETest extends AbstractClientE2ETest {
         // (1) "client tick/chunk-stream stall": the poll advances through waitTicks, which ERRORS on
         // its own load-scaled timeout, so a completed poll is proof the client ticked - the delta is
         // printed rather than asserted so the proof travels with the red. (2) "the teleport never
-        // landed": target and preY are both printed, so the red says whether it did. (3) "the world's
-        // ground caught him": the column above the ship was filled with air and the drop point was
-        // asserted air a moment ago. What remains is something genuinely holding him up - the
-        // inverted hull's own collision, or the deck capture - and BOTH would be the PRODUCT WORKING.
-        // deck-capture is read-only and names which.
+        // landed": the client's own record of applying it was awaited above, and preY was read only
+        // afterwards. (3) "the world's ground caught him": the column above the ship was filled with
+        // air and the drop point was asserted air a moment ago. What remains is something genuinely
+        // holding him up - the inverted hull's own collision, or the deck capture - and BOTH would be
+        // the PRODUCT WORKING. deck-capture is read-only and names which.
         long tickDelta = bot().reportState().get("ticks").getAsLong() - preTicks;
         assertTrue("the teleported client must start falling before the hull leg."
                 + " target=" + (sy + 7) + " preY=" + preY + " poll=" + fall
@@ -151,20 +188,32 @@ public class VSShipRenderPoseSkewE2ETest extends AbstractClientE2ETest {
                 + " (so this is NOT a tick stall) capture=" + exec("artest vs deck-capture"),
                 fall.satisfied);
 
-        // Wait for the hull-stand hold to actually engage — the leg proves nothing otherwise.
-        boolean hullHeld = false;
-        String cap = "";
-        for (int i = 0; i < 40 && !hullHeld; i++) {
-            bot().waitTicks(3);
-            cap = exec("artest vs deck-capture");
-            hullHeld = cap.contains("\"alreadyTracked\":true") && cap.contains("\"hullStand\":true");
+        // The hull-stand hold ENGAGING is a decision production commits in one place — it sets the
+        // mode and then calls the one private method every mode transition goes through — so it is
+        // awaited as the link it is, instead of polled out of a probe dump on a tick budget. A poll
+        // could not see a hold that engaged and was lost between two samples; this can.
+        //
+        // Filtered on mode "hull" because the same commit names both modes. The recorder is blind in
+        // one direction and it does not bite here: a RE-capture taken on the hull-stand travel path
+        // reads "aboard" for a body that stays in hull-stand, so a hull commit can be followed by
+        // "aboard" records — what is waited for is that at least one "hull" commit happened, which
+        // first contact on the inverted hull is.
+        String hullCommit;
+        try {
+            hullCommit = awaitServerRecord(events, hullMark, "deck_mode_committed",
+                    "\"mode\":\"hull\"",
+                    "the encounter must engage the HULL-STAND hold before sampling",
+                    DECK_LINK_BUDGET_TICKS);
+        } catch (AssertionError missed) {
+            // The gate's own dump, read AT the failure rather than composed before the wait — the
+            // old message printed three counters cumulative since client start, which described the
+            // instrument and not this window.
+            throw new AssertionError(missed.getMessage() + " | the server gate says: "
+                    + exec("artest vs deck-capture") + " | client y="
+                    + bot().reportState().get("playerY").getAsDouble());
         }
-        assertTrue("the encounter must engage the HULL-STAND hold before sampling"
-                + " [client hullContact calls=" + (long) clientDouble(SHIP_FRAME_TRAVEL,
-                        "hullContactCalls")
-                + " maxObs=" + (int) clientDouble(SHIP_FRAME_TRAVEL, "hullContactMaxObstacles")
-                + " touches=" + (long) clientDouble(SHIP_FRAME_TRAVEL, "hullContactTouches")
-                + " y=" + bot().reportState().get("playerY").getAsDouble() + "]: " + cap, hullHeld);
+        System.out.println("[poseskew] hull-stand committed :: " + hullCommit
+                + " | probe :: " + exec("artest vs deck-capture"));
 
         // Sample the skew across the hull-stand window; keep only samples the hull mode produced.
         long hullSamples0 = (long) clientDouble(SHIP_FRAME_TRAVEL, "renderSkewSamples");
@@ -307,49 +356,46 @@ public class VSShipRenderPoseSkewE2ETest extends AbstractClientE2ETest {
     }
 
     /** Build a ship at this base and wait for it to load with the client present; returns its world pos. */
-    private double[] buildShip(int bx, int by, int bz) throws Exception {
+    private double[] buildShip(Events events, int bx, int by, int bz) throws Exception {
         exec("tp @a " + (bx + 600) + " 120 " + (bz + 600) + " 0 0");
         bot().waitTicks(10);
 
-        int shipsBefore = count("ship-count-all");
+        // The registry's own record of the ship being ADDED, since a mark taken before the assembly
+        // was queued. That makes it THIS scenario's ship by construction, and — the part a count
+        // could never do — it NAMES it: the identity every question below is keyed on comes out of
+        // the record instead of a nearest-ship lookup at the build spot a tick later. This test rolls
+        // its ship past vertical and then flies it upward on purpose, so a positional lookup would
+        // drift off its own subject.
+        long spawnMark = events.markInstrumented();
         String assemble = assembleFixture(bx, by, bz);
         assertTrue("a with-pilot-seat build must route to a ship: " + assemble,
                 assemble.contains("\"rocketCount\":0"));
-
-        int all = shipsBefore;
-        for (int i = 0; i < 40 && all <= shipsBefore; i++) {
-            bot().waitTicks(5);
-            all = count("ship-count-all");
-        }
-        assertTrue("assembly must create a NEW VS ship (was " + shipsBefore + ", now " + all + ")",
-                all > shipsBefore);
+        String spawned = events.await(spawnMark, "ship_spawned", "the assembly must become a ship in"
+                + " the physics registry (the spawn is queued, so this is a deadline for a discrete"
+                + " event and not a settling value)", SHIP_SPAWN_BUDGET_TICKS);
+        shipId = Events.lastField(spawned, "vsShip");
+        assertTrue("a ship_spawned record must name the ship: " + spawned, shipId != null);
         bot().waitTicks(40);
 
         exec("tp @a " + (bx + 0.5) + " " + (by + 6) + " " + (bz + 0.5) + " 0 0");
         bot().waitTicks(20);
 
-        // The ONE positional lookup of this scenario, and the only one it can defend: the ship has
-        // just been assembled here and has not moved. It yields an IDENTITY, and every question
-        // afterwards is keyed on that — this test rolls the ship past vertical and then flies it
-        // upward on purpose, so a lookup anchored to the build spot would drift off its subject.
+        // Whether the physics object is LOADED stays a bounded poll: nothing in the vocabulary
+        // records that transition, and it is a state the substrate reaches rather than a commit. What
+        // changed is that it is now asked BY IDENTITY, so no distance term can answer about a
+        // neighbouring ship.
         String info = "";
         double[] where = null;
         for (int i = 0; i < 40 && where == null; i++) {
             bot().waitTicks(5);
-            info = exec("artest vs ship-info 0 " + bx + " " + by + " " + bz
-                    + " " + SHIP_CAPTURE_RADIUS_BLOCKS);
-            if (!info.contains("\"managed\":true")) {
-                continue;
-            }
-            double[] candidate = {readDouble(info, POS_X), readDouble(info, POS_Y), readDouble(info, POS_Z)};
-            Matcher idM = SHIP_ID.matcher(info);
-            if (distance(candidate, new double[]{bx, by, bz}) < 24.0 && idM.find()) {
-                where = candidate;
-                shipId = idM.group(1);
+            info = shipInfo();
+            if (info.contains("\"managed\":true")) {
+                where = new double[]{
+                        readDouble(info, POS_X), readDouble(info, POS_Y), readDouble(info, POS_Z)};
             }
         }
-        assertTrue("the ship built at this base must LOAD with the client present; nearest was: " + info,
-                where != null);
+        assertTrue("the ship this scenario assembled (" + shipId + ") must LOAD with the client"
+                + " present; last reply was: " + info, where != null);
         System.out.println("[poseskew] ship at (" + bx + "," + by + "," + bz + ") -> "
                 + java.util.Arrays.toString(where));
         return where;
@@ -382,9 +428,60 @@ public class VSShipRenderPoseSkewE2ETest extends AbstractClientE2ETest {
         return String.join("\n", serverClient().execute(cmd));
     }
 
-    private int count(String sub) throws Exception {
-        Matcher m = COUNT.matcher(exec("artest vs " + sub + " 0"));
-        return m.find() ? Integer.parseInt(m.group(1)) : -1;
+    // ---- the two ordered event logs, one per side ----------------------------------------------
+    //
+    // This class's base is the harness's own per-method client pair, which offers neither the shared
+    // AR base's `events()` nor a client-log reader, so both live here. They are deliberately small:
+    // a mark taken before the stimulus, and a wait that fails naming the link.
+
+    /** The SERVER's ordered event log, stepped by the real client's own ticks. */
+    private Events events() {
+        return new Events(this::exec, bot()::waitTicks);
+    }
+
+    /** Wait for a server record of {@code type} carrying {@code needle}, or fail naming the link and
+     *  printing the chain that DID happen. {@link Events#await} filters by type alone, and every
+     *  wait here is about one particular verdict of a seam that answers more than one. */
+    private String awaitServerRecord(Events events, long mark, String type, String needle,
+                                     String what, int budgetTicks) throws Exception {
+        String reply = "";
+        for (int waited = 0; waited <= budgetTicks; waited += 5) {
+            reply = events.since(mark, type);
+            if (Events.countRecords(reply, needle) > 0) {
+                return reply;
+            }
+            bot().waitTicks(5);
+        }
+        throw new AssertionError(what + " — no `" + type + "` carrying " + needle + " was recorded"
+                + " within " + budgetTicks + " ticks. What DID happen since the mark: "
+                + Events.typesOf(events.since(mark)) + " | `" + type + "` records: " + reply);
+    }
+
+    /** The CLIENT event log's sequence, taken BEFORE the stimulus — refused unless a recorder is
+     *  actually subscribed, since an empty log afterwards would otherwise read as "it never
+     *  happened" when the truth is "nobody was listening". */
+    private long clientMark() throws Exception {
+        JsonObject mark = bot().eventMark();
+        assertTrue("the CLIENT event recorder is not subscribed, so an empty log below would mean"
+                + " nothing: " + mark, mark.get("recording").getAsBoolean());
+        return mark.get("seq").getAsLong();
+    }
+
+    /** Wait for any client record of {@code type} at or after {@code mark}. */
+    private String awaitClientLog(long mark, String type, String what, int budgetTicks)
+            throws Exception {
+        String reply = "";
+        for (int waited = 0; waited <= budgetTicks; waited += 5) {
+            reply = String.valueOf(bot().eventsSince(mark, type));
+            if (Events.countRecords(reply, "\"type\":\"" + type + "\"") > 0) {
+                return reply;
+            }
+            bot().waitTicks(5);
+        }
+        throw new AssertionError(what + " — no `" + type + "` was recorded on the CLIENT within "
+                + budgetTicks + " ticks. What it DID record: "
+                + Events.typesOf(String.valueOf(bot().eventsSince(mark, null)))
+                + " | `" + type + "` reply: " + reply);
     }
 
     private double readDouble(String json, Pattern p) {

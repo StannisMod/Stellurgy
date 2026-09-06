@@ -154,10 +154,21 @@ public class VSMidTransitRelogControlE2ETest extends AbstractSharedVsClientE2ETe
         // chain that never worked here at all. Retried on a bounded budget: right after the async
         // assembly the ship can still be settling (measured: the first climb window sometimes
         // catches it sinking), and the contract is a bounded window, not the first ten seconds.
-        scenario().requireArranged("control leg: the pilot must be able to fly BEFORE the transit."
-                + " delivery=" + exec("artest vs seat-delivery")
-                + " ship=" + shipInfoById(originDim, shipId),
-                climbedWithinAttempts(3));
+        //
+        // Marked on the CLIENT's log first. The chain from a held key to a moved ship has three
+        // links and only two of them are the server's: this client decides it is piloting a ship,
+        // it puts a packet on the wire, the seat receives it. `seat-delivery` is the third link's
+        // voice and it can only ever answer "nothing arrived" — which reads identically for a
+        // client that never tried and a packet that was eaten on the way. The client's own gate
+        // record separates them, and that is the difference between an ARRANGEMENT this test
+        // failed to make and a control chain production broke.
+        long clientPilotMark = bot().eventMark().get("seq").getAsLong();
+        if (!climbedWithinAttempts(3)) {
+            scenario().arrangementFailed("control leg: the pilot must be able to fly BEFORE the"
+                    + " transit." + clientPilotAccount(clientPilotMark)
+                    + " delivery=" + exec("artest vs seat-delivery")
+                    + " ship=" + shipInfoById(originDim, shipId));
+        }
         bot().waitTicks(30); // let the station-hold settle before the departure snapshot
 
         // The climb moved the ship: the departure anchor is its CURRENT pose, never the build pose.
@@ -228,9 +239,12 @@ public class VSMidTransitRelogControlE2ETest extends AbstractSharedVsClientE2ETe
         // arrived ship. A restored seat with a dead key is a broken chain, and it is exactly what
         // a stale pre-relog crew reference would produce. Same bounded retry as the pre-leg: the
         // just-crossed ship settles asynchronously in its target cell.
+        long arrivedPilotMark = bot().eventMark().get("seq").getAsLong();
+        boolean flewAfterRelog = climbedWithinAttempts(3);
         assertTrue("after a mid-transit relog, held input must MOVE THE ARRIVED SHIP - control "
-                + "resumes on arrival. delivery=" + exec("artest vs seat-delivery"),
-                climbedWithinAttempts(3));
+                + "resumes on arrival." + (flewAfterRelog ? "" : clientPilotAccount(arrivedPilotMark))
+                + " delivery=" + exec("artest vs seat-delivery"),
+                flewAfterRelog);
     }
 
     @After
@@ -278,6 +292,44 @@ public class VSMidTransitRelogControlE2ETest extends AbstractSharedVsClientE2ETe
             bot().waitTicks(40);
         }
         return false;
+    }
+
+    /**
+     * What THIS CLIENT did about piloting since {@code mark}, in its own words — the two links of the
+     * control chain that live on its side of the wire.
+     *
+     * <p>{@code ship_pilot_gate_decided} is the keybind handler's own return: {@code open} is true
+     * exactly on a tick where it resolved a linked, ship-managed pilot seat for the mount the player
+     * rides, and {@code ridingDummy} says he was on a seat mount at all. {@code pilot_input_sent} is
+     * recorded at the one call that puts a {@code PACKET_PILOT_INPUT} on the wire. Between them and
+     * the server's {@code received}, a dead key names its own link:</p>
+     *
+     * <ul>
+     *   <li>no {@code open:true} at all, with {@code ridingDummy:true} — the client rode the seat
+     *       mount and could NOT resolve its seat: the ship is not on this client (its subspace
+     *       chunks never arrived, or nothing manages them here). Nothing was ever sent, and the
+     *       scenario's subject was never exercised — an ARRANGEMENT this test did not make.</li>
+     *   <li>{@code open:true} and {@code pilot_input_sent} records, against a server {@code received}
+     *       of zero — the packet left and did not arrive, which is the wire, not the arrangement.</li>
+     *   <li>{@code open:true} and sends, and the server received and delivered them, and the ship
+     *       still did not carry him — the ship ignored its pilot, which is the contract.</li>
+     * </ul>
+     *
+     * <p>The instrument is asserted to have RUN before any of that is read: an empty client log is
+     * produced equally by a gate that never opened and by a mixin that never wove, and only the
+     * first is an answer.</p>
+     */
+    private String clientPilotAccount(long mark) throws Exception {
+        String gate = String.valueOf(bot().eventsSince(mark, "ship_pilot_gate_decided"));
+        Events.assertInstrumentRan(gate, "ship_pilot_gate_events",
+                "this client's ship-control gate did, or did not, open while the key was held");
+        String sent = String.valueOf(bot().eventsSince(mark, "pilot_input_sent"));
+        return " client: gateOpen=" + Events.countRecords(gate, "\"open\":true")
+                + " gateClosed=" + Events.countRecords(gate, "\"open\":false")
+                + " onSeatMount=" + Events.countRecords(gate, "\"ridingDummy\":true")
+                + " inputsSent=" + Events.countRecords(sent, "\"seat\":")
+                + " lastSentSeat=" + Events.lastField(sent, "seat")
+                + " (gate=" + gate + " sent=" + sent + ")";
     }
 
     /** The client's own rendered player altitude, or NaN while it has no world/player. */

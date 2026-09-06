@@ -8,6 +8,10 @@ import org.lwjgl.input.Keyboard;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import com.google.gson.JsonObject;
+
+import zmaster587.advancedRocketry.test.Events;
+
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
@@ -30,7 +34,6 @@ public class VSCrewRelogPersistenceE2ETest extends AbstractSharedVsClientE2ETest
         return "vs-crew-relog";
     }
 
-    private static final Pattern COUNT = Pattern.compile("\"count\":(-?\\d+)");
     private static final Pattern BUILDER_POS =
             Pattern.compile("\"builderPos\":\\[(-?\\d+),(-?\\d+),(-?\\d+)]");
     private static final Pattern POS_X = Pattern.compile("\"posX\":(-?[0-9.E\\-]+)");
@@ -40,10 +43,11 @@ public class VSCrewRelogPersistenceE2ETest extends AbstractSharedVsClientE2ETest
     private static final String VARIANT = "with-pilot-deck";
 
     /**
-     * THIS scenario's ship, by identity — captured by {@code buildShip} at the one moment its base
-     * provably holds no other, and the address every later question and command uses. A radius bound
-     * is a mitigation, not an identity: these scenarios roll, hover and drop the ship on purpose, and
-     * a shared client always has a neighbour in candidacy.
+     * THIS scenario's ship, by identity — read by {@code buildShip} off the assembly's own
+     * {@code ship_spawned} record, and the address every later question and command uses. A
+     * scenario that builds its own ship is told which ship that is; a radius bound would be a
+     * mitigation rather than an identity, and these scenarios roll, hover and drop the ship on
+     * purpose while a shared client always has a neighbour in candidacy.
      */
     private String scenarioShipId;
 
@@ -94,8 +98,16 @@ public class VSCrewRelogPersistenceE2ETest extends AbstractSharedVsClientE2ETest
         final int by = 64;
 
         double[] ship = buildShip(bx, by, bz);
+        // The mark BEFORE he is put on the deck. A capture is an EPISODE the resolver opens when a
+        // body meets a deck, and the 80-tick sleep this replaces could only ask whether it happened
+        // to be open when it finally looked - an episode that opened and closed inside the sleep,
+        // or one that never opened at all, are the same reading to it.
+        Events events = events();
+        long captureMark = events.markInstrumented();
         exec("tp @a " + ship[0] + " " + (ship[1] + 4) + " " + ship[2] + " 0 0");
-        bot().waitTicks(80);
+        events.await(captureMark, "deck_captured", "the crew member must be TAKEN by the ship's deck"
+                + " after being put on it - nothing below is about a deck capture until there is"
+                + " one", CAPTURE_BUDGET_TICKS);
         scenario().requireArranged("he must be captured on the deck before anything rotates: "
                         + exec("artest vs deck-capture"),
                 exec("artest vs deck-capture").contains("\"alreadyTracked\":true"));
@@ -103,11 +115,17 @@ public class VSCrewRelogPersistenceE2ETest extends AbstractSharedVsClientE2ETest
         // CONTROL: a still ship must produce no releases and no travel. Without it, a nonzero count
         // during the roll could belong to the arrangement (the walk onto the deck, the settle) rather
         // than to the rotation.
-        long dropsAtRest = clientLong("externalMoveDrops");
+        //
+        // Counted off the client's own RELEASE RECORDS, each carrying production's reason for it.
+        // What stood here was a difference of two reads of a production counter, and the reader
+        // answers -1 when the field cannot be read at all: an unreadable instrument produced
+        // -1 - -1 == 0 and every zero-release pin in this class went green on it, saying nothing.
+        long restReleaseMark = bot().eventMark().get("seq").getAsLong();
         long restMark = lastClientTick();
         bot().waitTicks(30);
         String restHistory = clientTickHistory();
-        long dropsDuringRest = clientLong("externalMoveDrops") - dropsAtRest;
+        String restReleases = clientReleases(restReleaseMark, "the still-ship control window");
+        long dropsDuringRest = guardReleases(restReleases);
         double restTravel = bodyPointTravel(restHistory, restMark);
 
         // THE DRIVER: roll the ship under him, and measure WHILE it turns - the release happens during
@@ -117,7 +135,7 @@ public class VSCrewRelogPersistenceE2ETest extends AbstractSharedVsClientE2ETest
                 exec("artest vs point-by-id 0 " + scenarioShipId + " "
                         + Math.cos(h) + " " + Math.sin(h) + " 0.0 0.0").contains("\"commanded\":true"));
         long rollMark = lastClientTick();
-        long dropsBeforeRoll = clientLong("externalMoveDrops");
+        long rollReleaseMark = bot().eventMark().get("seq").getAsLong();
         // The per-tick pose trace, armed on the axis this scenario turns on: a body sliding across a
         // rotating deck is an ANGLE going wrong, and a column of vertical positions cannot show it.
         long poseTraceMark = bot().eventMark().get("seq").getAsLong();
@@ -132,15 +150,18 @@ public class VSCrewRelogPersistenceE2ETest extends AbstractSharedVsClientE2ETest
         for (int attempt = 0; attempt < 25 && upY > -0.9; attempt++) {
             bot().waitTicks(10);
             deckStep = Math.max(deckStep, clientDouble(SHIP_FRAME_TRAVEL, "lastReseatStep"));
-            double qx = readDouble(shipInfo(), Pattern.compile("\"qx\":(-?[0-9.E\\-]+)"));
-            upY = 1.0 - 2.0 * qx * qx;
+            // The shared reading, which uses the full expression 1 - 2(qx^2 + qz^2). The
+            // single-axis shortcut this loop carried answers a confident 1.0 for a ship that rolled
+            // about a different axis, and would fail this ARRANGEMENT gate for the wrong reason.
+            upY = upYOf(shipInfo());
         }
         String rollHistory = clientTickHistory();
         double rollSeatMiss = seatMiss(rollHistory, rollMark);
         // A zero deckStep is ambiguous on its own — a pass that never ran and a pass that ran on a
         // still ship both leave it there. This is the number that separates them.
         long reseated = clientLong("reseatedBodies");
-        long dropsDuringRoll = clientLong("externalMoveDrops") - dropsBeforeRoll;
+        String rollReleases = clientReleases(rollReleaseMark, "the roll");
+        long dropsDuringRoll = guardReleases(rollReleases);
         double rollTravel = bodyPointTravel(rollHistory, rollMark);
         int resolvedDuringRoll = resolvedSince(rollHistory, rollMark);
 
@@ -150,7 +171,8 @@ public class VSCrewRelogPersistenceE2ETest extends AbstractSharedVsClientE2ETest
                 + " resolved=" + resolvedDuringRoll + " upY=" + upY
                 + "\n  seat:         miss=" + rollSeatMiss + " deckStep=" + deckStep
                 + " reseated=" + reseated
-                + "\n  lastDropReason=" + clientString(SHIP_FRAME_TRAVEL, "lastDropReason")
+                + "\n  releases at rest:     " + restReleases
+                + "\n  releases in the roll: " + rollReleases
                 + "\n" + mover();
         System.out.println("[roll-hold]" + observed
                 + "\n[roll-hold] pose trace :: " + bot().eventsSince(poseTraceMark, "client_deck_pose_tick"));
@@ -251,27 +273,34 @@ public class VSCrewRelogPersistenceE2ETest extends AbstractSharedVsClientE2ETest
         final int by = 64;
 
         double[] ship = buildShip(bx, by, bz);
+        Events events = events();
+        long captureMark = events.markInstrumented();
         exec("tp @a " + ship[0] + " " + (ship[1] + 4) + " " + ship[2] + " 0 0");
-        bot().waitTicks(80);
+        events.await(captureMark, "deck_captured", "the crew member must be TAKEN by the ship's deck"
+                + " before he walks on it (" + where + ")", CAPTURE_BUDGET_TICKS);
         scenario().requireArranged("he must be captured on the deck before he walks (" + where + "): "
                         + exec("artest vs deck-capture"),
                 exec("artest vs deck-capture").contains("\"alreadyTracked\":true"));
 
-        // CONTROL, same body, same deck, same window length, stimulus absent.
-        long dropsBeforeIdle = clientLong("externalMoveDrops");
+        // CONTROL, same body, same deck, same window length, stimulus absent. Counted off the
+        // client's own release records - see the roll leg for why a difference of two counter reads
+        // could not fail.
+        long idleReleaseMark = bot().eventMark().get("seq").getAsLong();
         long idleMark = lastClientTick();
         bot().waitTicks(40);
         String idleHistory = clientTickHistory();
-        long dropsIdle = clientLong("externalMoveDrops") - dropsBeforeIdle;
+        String idleReleases = clientReleases(idleReleaseMark, "the standing-still control window");
+        long dropsIdle = guardReleases(idleReleases);
         int resolvedIdle = resolvedSince(idleHistory, idleMark);
 
         // THE STIMULUS: a real key on the real client input surface, in bursts that keep him on a
         // 5x5 deck. The turn between bursts is a real look, so each burst walks the way he faces.
         long walkMark = lastClientTick();
-        long dropsBeforeWalk = clientLong("externalMoveDrops");
+        long walkReleaseMark = bot().eventMark().get("seq").getAsLong();
         double walked = walkInBursts();
         String walkHistory = clientTickHistory();
-        long dropsWalk = clientLong("externalMoveDrops") - dropsBeforeWalk;
+        String walkReleases = clientReleases(walkReleaseMark, "a walk the resolver swept and committed");
+        long dropsWalk = guardReleases(walkReleases);
         int resolvedWalk = resolvedSince(walkHistory, walkMark);
         int inputTicks = inputTicksSince(walkHistory, walkMark);
         int offDeckTicks = offDeckTicksSince(walkHistory, walkMark);
@@ -282,7 +311,8 @@ public class VSCrewRelogPersistenceE2ETest extends AbstractSharedVsClientE2ETest
                 + "\n  walking:        drops=" + dropsWalk + " resolved=" + resolvedWalk
                 + " inputTicks=" + inputTicks + " offDeckTicks=" + offDeckTicks
                 + " walked=" + walked
-                + "\n  lastDropReason=" + clientString(SHIP_FRAME_TRAVEL, "lastDropReason")
+                + "\n  releases while idle:    " + idleReleases
+                + "\n  releases while walking: " + walkReleases
                 + "\n  capture after=" + capAfter
                 + "\n" + mover()
                 + "\n  CLIENT per-tick record:\n" + walkHistory;
@@ -364,8 +394,11 @@ public class VSCrewRelogPersistenceE2ETest extends AbstractSharedVsClientE2ETest
         final int bx = 6760, by = 64, bz = 6760;
 
         double[] ship = buildShip(bx, by, bz);
+        Events events = events();
+        long captureMark = events.markInstrumented();
         exec("tp @a " + ship[0] + " " + (ship[1] + 4) + " " + ship[2] + " 0 0");
-        bot().waitTicks(80);
+        events.await(captureMark, "deck_captured", "the crew member must be TAKEN by the ship's deck"
+                + " before the server is made to stall under him", CAPTURE_BUDGET_TICKS);
         scenario().requireArranged("he must be captured on the deck before the server stalls: "
                         + exec("artest vs deck-capture"),
                 exec("artest vs deck-capture").contains("\"alreadyTracked\":true"));
@@ -373,22 +406,27 @@ public class VSCrewRelogPersistenceE2ETest extends AbstractSharedVsClientE2ETest
         // CONTROL: the same body, the same deck, the same walk - without the stall. The walking leg
         // measures this too, but it has to be in THIS run: a control from another boot has a
         // different ship pose and a different settle history.
-        long dropsBeforeControl = clientLong("externalMoveDrops");
+        // Counted off the client's own release records - see the roll leg for why a difference of
+        // two counter reads could not fail.
+        long controlReleaseMark = bot().eventMark().get("seq").getAsLong();
         long controlMark = lastClientTick();
         bot().waitTicks(20);
         double controlWalked = walkInBursts();
         String controlHistory = clientTickHistory();
-        long dropsControl = clientLong("externalMoveDrops") - dropsBeforeControl;
+        String controlReleases = clientReleases(controlReleaseMark, "the same walk WITHOUT a stall");
+        long dropsControl = guardReleases(controlReleases);
         int resolvedControl = resolvedSince(controlHistory, controlMark);
 
         // CONTROL B: the stall with the body STANDING STILL. Measured because it separates the two
         // halves of the driver - a frozen tick loop on its own, versus a frozen tick loop while the
         // client keeps resolving movement the server has not applied yet.
         long idleStallMark = lastClientTick();
-        long dropsBeforeIdleStall = clientLong("externalMoveDrops");
+        long idleStallReleaseMark = bot().eventMark().get("seq").getAsLong();
         String idleStall = exec("artest server stall " + STALL_MS);
         bot().waitTicks(20);
-        long dropsIdleStall = clientLong("externalMoveDrops") - dropsBeforeIdleStall;
+        String idleStallReleases = clientReleases(idleStallReleaseMark,
+                "the same freeze with him standing still");
+        long dropsIdleStall = guardReleases(idleStallReleases);
         int resolvedIdleStall = resolvedSince(clientTickHistory(), idleStallMark);
 
         // THE DRIVER: the key is HELD ACROSS the freeze. The client keeps ticking and keeps walking
@@ -407,7 +445,7 @@ public class VSCrewRelogPersistenceE2ETest extends AbstractSharedVsClientE2ETest
         bot().setLook(0f, 0f);
         bot().waitTicks(4);
         long stallMark = lastClientTick();
-        long dropsBeforeStall = clientLong("externalMoveDrops");
+        long stallReleaseMark = bot().eventMark().get("seq").getAsLong();
         double[] beforeStalledWalk = clientPos();
         bot().holdKey(Keyboard.KEY_W);
         String stall = exec("artest server stall " + WALK_STALL_MS);
@@ -424,7 +462,8 @@ public class VSCrewRelogPersistenceE2ETest extends AbstractSharedVsClientE2ETest
         // here, so the runway is not spent.
         bot().waitTicks(15);
         String stallHistory = clientTickHistory();
-        long dropsAfterStall = clientLong("externalMoveDrops") - dropsBeforeStall;
+        String stallReleases = clientReleases(stallReleaseMark, "a walk held ACROSS the freeze");
+        long dropsAfterStall = guardReleases(stallReleases);
         int resolvedAfterStall = resolvedSince(stallHistory, stallMark);
         int offDeckAfterStall = offDeckTicksSince(stallHistory, stallMark);
         String capAfter = exec("artest vs deck-capture");
@@ -437,7 +476,9 @@ public class VSCrewRelogPersistenceE2ETest extends AbstractSharedVsClientE2ETest
                 + resolvedAfterStall + " walked=" + stalledWalked
                 + " offDeckTicks=" + offDeckAfterStall
                 + "\n  stall probe: " + stall
-                + "\n  lastDropReason=" + clientString(SHIP_FRAME_TRAVEL, "lastDropReason")
+                + "\n  releases, control A:      " + controlReleases
+                + "\n  releases, control B:      " + idleStallReleases
+                + "\n  releases across the walk: " + stallReleases
                 + "\n  capture after=" + capAfter
                 + "\n" + mover();
         System.out.println("[tick-burst]" + observed);
@@ -450,8 +491,13 @@ public class VSCrewRelogPersistenceE2ETest extends AbstractSharedVsClientE2ETest
         scenario().requireArranged("the client must have resolved the body through every window"
                         + observed,
                 resolvedControl >= 20 && resolvedIdleStall >= 20 && resolvedAfterStall >= 20);
-        scenario().requireArranged("he must have covered ground both times he walked" + observed,
-                controlWalked > 1.0 && stalledWalked > 1.0);
+        scenario().requireArranged("he must have covered ground both times he walked - the walk"
+                        + " across the freeze has to drive the two sides at least "
+                        + STIMULUS_SLACK_MULTIPLE + "x the guard's own slack (" + GUARD_SLACK_BLOCKS
+                        + " blocks), i.e. more than " + STIMULUS_BLOCKS + ", or the resumed loop has"
+                        + " nothing to absorb and the pin below is arithmetic rather than a contract"
+                        + observed,
+                controlWalked > 1.0 && stalledWalked > STIMULUS_BLOCKS);
         scenario().requireArranged("he must have stayed ON the deck across the stall - a body that "
                 + "walked off the edge is measuring the edge, not the guard" + observed,
                 offDeckAfterStall == 0);
@@ -479,6 +525,32 @@ public class VSCrewRelogPersistenceE2ETest extends AbstractSharedVsClientE2ETest
      *  under parallel load. */
     private static final int WALK_STALL_MS = 500;
 
+    /**
+     * The slack the external-move guard allows before it calls a step a foreign teleport, in blocks
+     * — the quantity this leg's stimulus has to beat, and the only one it has to beat.
+     *
+     * <p>Named here because the arrangement gate below is DERIVED from it rather than guessed. What
+     * stood there was a flat "he must have walked more than one block", a number nothing in the
+     * mechanism asks for: it happened to sit just above what a 500 ms freeze buys a body starting
+     * from a standstill, so the leg rejected runs that had produced the stimulus perfectly well.
+     * Measured 2026-09-06 — {@code walked=0.978} across the freeze, against a control walk of 4.13
+     * over four times as many key-down ticks, with {@code offDeckTicks=0} and 27 resolved ticks in
+     * the window: a body that walked nearly five times the guard's slack and was called a body that
+     * did not walk.</p>
+     *
+     * <p>It is deliberately not read off production: the guard's epsilon is private, and a test that
+     * reached in for it would fail on the day the field is renamed rather than on the day the
+     * contract breaks. The number is the one the leg's own prose already quotes.</p>
+     */
+    private static final double GUARD_SLACK_BLOCKS = 0.2;
+
+    /** How many times the slack the walk must cover, so the divergence is unmistakably the walk's
+     *  and not a rounding of the deck's carry. */
+    private static final int STIMULUS_SLACK_MULTIPLE = 3;
+
+    /** The arrangement floor the two numbers above produce. */
+    private static final double STIMULUS_BLOCKS = STIMULUS_SLACK_MULTIPLE * GUARD_SLACK_BLOCKS;
+
     /** Ticks the world clock advanced across the stall probe's window - the witness that it really
      *  froze the loop rather than sleeping a command thread beside it. */
     private static long stalledTicks(String stallJson) {
@@ -494,8 +566,12 @@ public class VSCrewRelogPersistenceE2ETest extends AbstractSharedVsClientE2ETest
         // ship to inverted UNDER him - the capture carries his deck spot through the roll, leaving
         // him standing on the deck of an inverted ship (hanging under the hull in world terms).
         double[] ship = buildShip(bx, by, bz);
+        Events events = events();
+        long captureMark = events.markInstrumented();
         exec("tp @a " + ship[0] + " " + (ship[1] + 4) + " " + ship[2] + " 0 0");
-        bot().waitTicks(80);
+        events.await(captureMark, "deck_captured", "the player must be TAKEN by the deck while the"
+                + " ship is still upright - the capture is what carries his deck spot through the"
+                + " roll", CAPTURE_BUDGET_TICKS);
         assertTrue("the player must be captured on the deck before the roll: "
                 + exec("artest vs deck-capture"),
                 exec("artest vs deck-capture").contains("\"alreadyTracked\":true"));
@@ -504,10 +580,17 @@ public class VSCrewRelogPersistenceE2ETest extends AbstractSharedVsClientE2ETest
         assertTrue("attitude hold must accept the inversion",
                 exec("artest vs point-by-id 0 " + scenarioShipId + " "
                         + Math.cos(h) + " " + Math.sin(h) + " 0.0 0.0").contains("\"commanded\":true"));
-        bot().waitTicks(200);
-        double upY = readDouble(shipInfo(), Pattern.compile("\"qx\":(-?[0-9.E\\-]+)"));
-        // upY from the quat: for a roll about X, upY = 1 - 2*qx^2 (qy=qz=0). Read qx directly.
-        upY = 1.0 - 2.0 * upY * upY;
+        // An attitude CONVERGING under the hold is a physical value, not a link, so it stays a
+        // bounded poll - but a poll, not a sleep: the reading below used to be taken once, at a
+        // moment nothing had promised the roll was over. Read through the shared upYOf, which uses
+        // the full expression: the single-axis shortcut this leg carried (1 - 2*qx^2) answers a
+        // confident 1.0 for a ship that rolled about a different axis, and the sibling deck-crew
+        // leg records exactly that mistake.
+        double upY = 1.0;
+        for (int attempt = 0; attempt < 40 && upY > -0.9; attempt++) {
+            bot().waitTicks(10);
+            upY = upYOf(shipInfo());
+        }
         assertTrue("the ship must be (near-)inverted for the relog to be able to drop the player "
                 + "(upY=" + upY + ")", upY < -0.9);
         String capBefore = exec("artest vs deck-capture");
@@ -515,26 +598,45 @@ public class VSCrewRelogPersistenceE2ETest extends AbstractSharedVsClientE2ETest
                 + capBefore, capBefore.contains("\"alreadyTracked\":true"));
         double preY = bot().reportState().get("playerY").getAsDouble();
 
-        // The REAL relog: full server logout (player data saved) + fresh login.
+        // The REAL relog: full server logout (player data saved) + fresh login. Both marks first -
+        // the client JVM is REUSED across a reconnect, so its log still holds this session and zero
+        // would be the whole scenario rather than the relog.
+        long relogMark = events.markInstrumented();
+        long clientRelogMark = bot().eventMark().get("seq").getAsLong();
         bot().reconnect();
         bot().waitForWorld();
-        // Give the rejoined client time to stream chunks, load the ship and re-engage the
-        // capture; poll rather than sleep a fixed window so a working build passes fast.
+        // The rejoined client must be given a world, and the resolver must TAKE him again. The two
+        // are read off the two logs separately: cross-side order within a tick is undefined.
+        awaitClientEvent(clientRelogMark, "client_dimension_changed",
+                "the reconnected client must be given a world before anything can be asked about"
+                        + " where it put him", CAPTURE_BUDGET_TICKS);
+        events.await(relogMark, "deck_captured", "after the relog the deck must TAKE him again -"
+                + " a body nobody captured is one vanilla and the physics mod are holding, which"
+                + " under an inverted hull is a fall", CAPTURE_BUDGET_TICKS);
+        // ABOARD specifically, and that is a MODE the resolver picks per tick rather than a link:
+        // a hull-stand catch (falling under the inverted hull until the hull geometry stops the
+        // body somewhere) is exactly the captured-but-world-camera desync of the original report,
+        // and it must NOT satisfy this contract. So the capture above is awaited as the event it
+        // is, and the mode is read as the state it is.
         boolean aboard = false;
         String capNow = "";
         for (int i = 0; i < 40 && !aboard; i++) {
-            bot().waitTicks(5);
             capNow = exec("artest vs deck-capture");
-            // ABOARD specifically: a hull-stand catch (falling under the inverted hull until the
-            // hull geometry stops the body somewhere) is exactly the captured-but-world-camera
-            // desync of the original report - it must NOT satisfy this contract.
             aboard = capNow.contains("\"alreadyTracked\":true")
                     && !capNow.contains("\"hullStand\":true");
+            if (!aboard) {
+                bot().waitTicks(5);
+            }
         }
         double postY = bot().reportState().get("playerY").getAsDouble();
         System.out.println("[relog] preY=" + preY + " postY=" + postY + " aboard=" + aboard
                 + " dY=" + (postY - preY));
         System.out.println("[relog] cap=" + capNow);
+        // What the client DID with the deck hold's restore seed - APPLY, KEEP_PREEXISTING,
+        // ALREADY_SEEDED, EXPIRE or WAIT. The five-way verdict is the difference between "he was
+        // put back on his deck point" and "the hold expired and vanilla had him", and nothing else
+        // in this run distinguishes them.
+        System.out.println("[relog] client seed decisions :: " + clientSeedDecisions(clientRelogMark));
 
         // Relog persistence: still ABOARD (deck semantics, not a hull-stand catch), still AT the
         // deck spot he logged out on - never handed to world gravity for a visible fall.
@@ -568,8 +670,12 @@ public class VSCrewRelogPersistenceE2ETest extends AbstractSharedVsClientE2ETest
         final int bx = 6620, by = 64, bz = 6620;
 
         double[] ship = buildShip(bx, by, bz);
+        Events events = events();
+        long captureMark = events.markInstrumented();
         exec("tp @a " + ship[0] + " " + (ship[1] + 4) + " " + ship[2] + " 0 0");
-        bot().waitTicks(80);
+        events.await(captureMark, "deck_captured", "the player must be TAKEN by the deck before he"
+                + " walks on it - the walk he logs out carrying is only meaningful under a capture",
+                CAPTURE_BUDGET_TICKS);
         assertTrue("the player must be captured on the deck before he walks: "
                 + exec("artest vs deck-capture"),
                 exec("artest vs deck-capture").contains("\"alreadyTracked\":true"));
@@ -613,16 +719,30 @@ public class VSCrewRelogPersistenceE2ETest extends AbstractSharedVsClientE2ETest
         // was actually reported from play.
         double[] logoutOffset = deckPoint();
 
+        // Both marks before the reconnect - the client JVM is reused across it, so its own log
+        // still holds the walk and zero would be the whole scenario rather than the relog.
+        long relogMark = events.markInstrumented();
+        long clientRelogMark = bot().eventMark().get("seq").getAsLong();
         bot().reconnect();
         bot().waitForWorld();
+        awaitClientEvent(clientRelogMark, "client_dimension_changed",
+                "the reconnected client must be given a world before anything can be asked about"
+                        + " where it put him", CAPTURE_BUDGET_TICKS);
+        events.await(relogMark, "deck_captured", "after the relog the deck must TAKE him again -"
+                + " otherwise the drift windows below measure a body vanilla and the physics mod"
+                + " are holding, on something that is not this deck", CAPTURE_BUDGET_TICKS);
 
+        // ABOARD specifically: the capture above is the link, and this is the MODE the resolver
+        // picks per tick - a hull-stand catch is a capture too, and it is not this contract.
         boolean aboard = false;
         String capNow = "";
         for (int i = 0; i < 40 && !aboard; i++) {
-            bot().waitTicks(5);
             capNow = exec("artest vs deck-capture");
             aboard = capNow.contains("\"alreadyTracked\":true")
                     && !capNow.contains("\"hullStand\":true");
+            if (!aboard) {
+                bot().waitTicks(5);
+            }
         }
         assertTrue("after the relog he must be captured ABOARD the deck again, or 'he did not "
                 + "drift' would just mean he is standing on something else: " + capNow, aboard);
@@ -651,8 +771,14 @@ public class VSCrewRelogPersistenceE2ETest extends AbstractSharedVsClientE2ETest
             path.append(String.format(java.util.Locale.ROOT, "%nt=%-3d %s  step=%.4f  %s",
                     i * 5, fmt(trace[i]), i == 0 ? 0.0 : distance(trace[i - 1], trace[i]), who[i]));
         }
+        // What the client DID with the deck hold's restore seed, as its own five-way verdict -
+        // APPLY, KEEP_PREEXISTING, ALREADY_SEEDED, EXPIRE or WAIT - every decision it took since
+        // the reconnect, in order. This replaces a production static that kept only the last one
+        // and could not say when it was taken.
+        String seeds = clientSeedDecisions(clientRelogMark);
+        String seedOutcome = Events.lastField(seeds, "decision");
         System.out.println("[walk-relog] logoutDeckPoint=" + fmt(logoutOffset) + " seedOutcome="
-                + clientString(SHIP_FRAME_TRAVEL, "lastSeedOutcome") + " trace:" + path);
+                + seedOutcome + " decisions=" + seeds + " trace:" + path);
         System.out.println("[walk-relog] CLIENT per-tick history (B = the client body's own "
                 + "ship-frame point):\n" + clientTickHistory());
 
@@ -670,8 +796,8 @@ public class VSCrewRelogPersistenceE2ETest extends AbstractSharedVsClientE2ETest
         assertTrue("a crew member restored onto his deck must not SLIDE along it: he is given a "
                 + "recorded position, not re-acquired from the velocity vanilla handed his fresh "
                 + "entity (moved " + alongDeck(justAfter, oneSecondLater) + " blocks along the deck "
-                + "in 20 ticks with no input; seed outcome="
-                + clientString(SHIP_FRAME_TRAVEL, "lastSeedOutcome") + ")" + path,
+                + "in 20 ticks with no input; the client's own seed verdicts since the relog were "
+                + seeds + ", the last of them " + seedOutcome + ")" + path,
                 alongDeck(justAfter, oneSecondLater) < 0.35);
         assertTrue("and he must not sink through it either (moved "
                 + Math.abs(justAfter[1] - oneSecondLater[1]) + " blocks along the deck normal)" + path,
@@ -987,7 +1113,73 @@ public class VSCrewRelogPersistenceE2ETest extends AbstractSharedVsClientE2ETest
         return "[" + p[0] + "," + p[1] + "," + p[2] + "]";
     }
 
-    /** Class holding the client-side seed diagnostics this test quotes in its failure text. */
+    /**
+     * How long a deck may take to TAKE a body put on it, in ticks.
+     *
+     * <p>A deadline for a discrete event, where the 80-tick sleeps this replaces were a guess at
+     * how long it usually takes. Early-exit, so a healthy run pays what the capture actually costs
+     * and a broken one still gets past a chunk stream on a loaded box before it is called a red.</p>
+     */
+    private static final int CAPTURE_BUDGET_TICKS = 200;
+
+    /**
+     * Wait for one record of {@code type} on the CLIENT's own log, or fail naming everything the
+     * client DID record since {@code mark}.
+     *
+     * <p>Written here rather than on the shared VS base, which this migration does not own: the two
+     * logs are separate instruments with separate sequences, and {@link Events} reads the server's
+     * through the probe channel while the client's is reachable only through the bot. A client link
+     * is therefore always awaited BESIDE a server one and never inside the same chain - cross-side
+     * order within a tick is undefined.</p>
+     */
+    private String awaitClientEvent(long mark, String type, String what, int tickBudget)
+            throws Exception {
+        String reply = "";
+        for (int waited = 0; waited <= tickBudget; waited += 5) {
+            JsonObject seen = bot().eventsSince(mark, type);
+            reply = String.valueOf(seen);
+            if (seen.get("count").getAsInt() > 0) {
+                return reply;
+            }
+            bot().waitTicks(5);
+        }
+        throw new AssertionError(what + " - no client `" + type + "` was recorded within "
+                + tickBudget + " ticks. Everything the client recorded since the mark: "
+                + bot().eventsSince(mark, null));
+    }
+
+    /** Every verdict the client took on a pending deck seed since {@code mark}, in order. */
+    private String clientSeedDecisions(long mark) throws Exception {
+        return String.valueOf(bot().eventsSince(mark, "deck_seed_decided"));
+    }
+
+    /**
+     * Every deck capture the CLIENT ended inside a window, in order, each carrying production's own
+     * reason for ending it - and the proof that anybody was recording at all.
+     *
+     * <p>{@link Events#assertInstrumentRan} is the load-bearing half. Every guard pin in this class
+     * is a ZERO, and "the guard released him zero times" and "the observation point never wove" are
+     * the same empty reply. The counter these calls replace could not even say that much: its reader
+     * answers {@code -1} for a field it cannot read and every count was a DIFFERENCE of two reads,
+     * so an unreadable instrument produced a clean {@code 0} and the pin went green on it.</p>
+     */
+    private String clientReleases(long mark, String whatFor) throws Exception {
+        String releases = String.valueOf(bot().eventsSince(mark, "deck_released"));
+        Events.assertInstrumentRan(releases, "deck_capture_events",
+                "the client's deck capture was, or was not, cycled during " + whatFor);
+        return releases;
+    }
+
+    /**
+     * How many of those releases were the EXTERNAL-MOVE guard's - the mechanism every leg here is
+     * about. A GEOMETRIC release (walked off the deck, no hull contact) is legitimate and is
+     * deliberately not counted; it still shows in the reply the caller prints.
+     */
+    private static long guardReleases(String releases) {
+        return Events.countRecords(releases, "\"reason\":\"externalMove");
+    }
+
+    /** Class holding the client-side diagnostics this test quotes in its failure text. */
     private static final String SHIP_FRAME_TRAVEL =
             "zmaster587.advancedRocketry.integration.vs.ShipFrameTravel";
 
@@ -1005,44 +1197,43 @@ public class VSCrewRelogPersistenceE2ETest extends AbstractSharedVsClientE2ETest
         exec("tp @a " + (bx + 600) + " 120 " + (bz + 600) + " 0 0");
         bot().waitTicks(10);
 
-        int shipsBefore = count("ship-count-all");
+        // The registry's own record of the ship being ADDED, read from a mark taken BEFORE the
+        // assembler is told. What it replaces was a count of every ship on the world, differenced
+        // across the assembly: on a shared client that count is answered by every neighbour that
+        // ever assembled one, it cannot say WHICH ship arrived, and a spawn that happened between
+        // two of its samples is indistinguishable from one that never happened.
+        Events events = events();
+        long spawnMark = events.markInstrumented();
         String assemble = assembleFixture(bx, by, bz);
         assertTrue("a with-pilot-seat build must route to a ship: " + assemble,
                 assemble.contains("\"rocketCount\":0"));
-
-        int all = shipsBefore;
-        for (int i = 0; i < 40 && all <= shipsBefore; i++) {
-            bot().waitTicks(5);
-            all = count("ship-count-all");
-        }
-        assertTrue("assembly must create a NEW VS ship (was " + shipsBefore + ", now " + all + ")",
-                all > shipsBefore);
+        // The IDENTITY, off that same record: this scenario built the ship, so it is TOLD which
+        // ship that is, and nothing below re-derives it from a position.
+        scenarioShipId = awaitShipSpawned(events, spawnMark, "a with-pilot-seat build must become a"
+                + " ship in the physics mod's own registry - not a rocket, and not nothing");
         bot().waitTicks(40);
 
         exec("tp @a " + (bx + 0.5) + " " + (by + 6) + " " + (bz + 0.5) + " 0 0");
         bot().waitTicks(20);
 
-        String info = "";
-        double[] where = null;
-        for (int i = 0; i < 40 && where == null; i++) {
-            bot().waitTicks(5);
-            // The scenario's ONE positional lookup, at the only moment it is defensible: the ship
-            // was just assembled here and has not moved. It yields an IDENTITY, and everything
-            // afterwards is keyed on that.
-            info = exec("artest vs ship-info 0 " + bx + " " + by + " " + bz
-                    + " " + SHIP_QUERY_RADIUS);
-            if (!info.contains("\"managed\":true")) {
-                continue;
-            }
-            double[] candidate = {readDouble(info, POS_X), readDouble(info, POS_Y), readDouble(info, POS_Z)};
-            String foundId = readShipId(info);
-            if (distance(candidate, new double[]{bx, by, bz}) < 24.0 && foundId != null) {
-                where = candidate;
-                scenarioShipId = foundId;
-            }
-        }
-        assertTrue("the ship built at this base must LOAD with the client present; nearest was: " + info,
-                where != null);
+        // USABLE - and that is ALL that is waited for here. The SPAWN above was the link, and it
+        // gave the identity; what it does not give is the physics object being loaded and drivable,
+        // which is the fact the whole class's later readings rest on. That fact is production's own
+        // edge - it is published once per load and recorded as ship_usable - so it is AWAITED off
+        // the same mark taken before the assembly, not polled: what this replaces polled ship-info
+        // for managed:true, which is a literal true in the reply builder and meant only that the
+        // lookup found a ship, so the wait was a wait on nothing.
+        awaitShipUsable(events, spawnMark, scenarioShipId);
+        // The POSITION still has to be asked for - the event carries the ship and its dimension and
+        // no coordinate - and it is asked BY ID: a subject that has climbed out of a radius and a
+        // neighbour's craft that has drifted into one are both answers a by-identity question
+        // cannot give.
+        String info = shipInfoById(scenarioShipId);
+        double[] where = {readDouble(info, POS_X), readDouble(info, POS_Y), readDouble(info, POS_Z)};
+        assertTrue("the ship this scenario built must have loaded AT ITS OWN BASE - the identity is"
+                        + " the assembly's own record, so this pins where the fixture came up rather"
+                        + " than which ship answered: " + info,
+                distance(where, new double[]{bx, by, bz}) < 24.0);
         return where;
     }
 
@@ -1067,11 +1258,6 @@ public class VSCrewRelogPersistenceE2ETest extends AbstractSharedVsClientE2ETest
     private String shipInfo() throws Exception {
         assertTrue("shipInfo() before buildShip() captured an identity", scenarioShipId != null);
         return shipInfoById(scenarioShipId);
-    }
-
-    private int count(String sub) throws Exception {
-        Matcher m = COUNT.matcher(exec("artest vs " + sub + " 0"));
-        return m.find() ? Integer.parseInt(m.group(1)) : -1;
     }
 
     private double readDouble(String json, Pattern p) {

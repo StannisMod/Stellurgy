@@ -11,6 +11,8 @@ import org.junit.Test;
 import org.junit.runners.MethodSorters;
 import org.lwjgl.input.Keyboard;
 
+import zmaster587.advancedRocketry.test.Events;
+
 import static org.junit.Assert.assertTrue;
 
 /**
@@ -53,10 +55,13 @@ import static org.junit.Assert.assertTrue;
  * success to the client unconditionally while doing its real work server-side only, so the client's
  * own return value cannot distinguish "the player sat down" from "the server silently dropped the
  * right-click" (reach limit, an unconfirmed teleport, a held item preempting the click). The test
- * therefore confirms the boarding independently, from what the CLIENT reports it is riding - and
- * checks WHAT it is riding and WHERE that thing is, so "he took the pilot seat" cannot be satisfied
- * by riding something else. A failure there is reported as a BROKEN ARRANGEMENT, not as a broken
- * contract.</p>
+ * therefore confirms the boarding independently: on the SERVER's own ordered log, where the human's
+ * route must show a click reaching the server and then a mount ({@code right_click_block} &rarr;
+ * {@code mount}) while the probe's shows the mount alone - so the two failure families the class
+ * exists to separate arrive already separated - and then from what the CLIENT reports it is riding,
+ * checking WHAT it is riding and WHERE that thing is, so "he took the pilot seat" cannot be
+ * satisfied by riding something else. A failure there is reported as a BROKEN ARRANGEMENT, not as a
+ * broken contract.</p>
  *
  * <p><b>The climb is measured against a no-key control leg.</b> A freshly assembled physics object
  * that overlaps solid geometry can be resolved by displacing it UPWARD, and this craft is assembled
@@ -93,9 +98,14 @@ public class VSPreAssemblyBoardingPilotControlE2ETest extends AbstractSharedVsCl
             Pattern.compile("\"builderPos\":\\[(-?\\d+),(-?\\d+),(-?\\d+)]");
     private static final Pattern POS_Y = Pattern.compile("\"posY\":(-?[0-9.E\\-]+)");
 
-    /** This scenario's ship, by identity — see the base's {@code captureShipIdAt}. */
+    /**
+     * This scenario's ship, by identity — read off the assembly's own {@code ship_spawned} record
+     * (the base's {@code awaitShipSpawned}), never re-derived from a position.
+     */
     private String shipUuid;
     private static final Pattern DUMMY_ID = Pattern.compile("\"dummyId\":(-?\\d+)");
+    /** A record's own sequence in an {@code events since} reply; the envelope carries no {@code seq}. */
+    private static final Pattern RECORD_SEQ = Pattern.compile("\"seq\":(-?\\d+)");
     private static final Pattern SEAT_XYZ = Pattern.compile(
             "\"seatX\":(-?\\d+),\"seatY\":(-?\\d+),\"seatZ\":(-?\\d+)");
 
@@ -149,6 +159,14 @@ public class VSPreAssemblyBoardingPilotControlE2ETest extends AbstractSharedVsCl
     private static final int TICKS_PER_SAMPLE = 5;
     private static final int MEASURE_SAMPLES = 40;
     private static final int SETTLE_STABLE_SAMPLES = 20;
+    /**
+     * How long a dismount may stand UNANSWERED on the server's log before the pilot counts as
+     * thrown out. The rebind's dismount and its mount are two statements inside ONE method call, so
+     * what is being waited out here is only the gap between two probe reads, not any real latency -
+     * 60 ticks is three seconds of slack on a microsecond-wide event, and the loop exits on its
+     * first pass whenever no dismount is standing at all.
+     */
+    private static final int SEATED_CONFIRM_SAMPLES = 12;
     private static final int SETTLE_MAX_SAMPLES = 240;
     private static final double SETTLE_EPS = 0.05;
     private static final double MAX_CONTROL_DRIFT = MIN_CLIMB / 4.0;
@@ -231,17 +249,42 @@ public class VSPreAssemblyBoardingPilotControlE2ETest extends AbstractSharedVsCl
                         + "). measured=" + seatBlock,
                 seatName.toLowerCase(Locale.ROOT).contains("pilotseat"));
 
+        // The mark goes BEFORE the stimulus, so the mount recorded after it can only be this
+        // boarding's. markInstrumented, because the mount is a test-mixin record and a mixin that
+        // never wove answers with exactly the empty log a boarding that never happened does.
+        Events events = events();
+        long boardMark = events.markInstrumented();
+
         String boardingEvidence = (how == Boarding.RIGHT_CLICK)
                 ? boardByRightClick()
                 : boardByProbe();
 
+        // The links each route actually commits — which is the very variable this class exists to
+        // separate. The human's route must reach the server as a CLICK before the seat can answer
+        // it, so a red that stops at `right_click_block` names the reach / held-item / unconfirmed-
+        // teleport family and a red that stops at `mount` names the seat's own refusal. The probe
+        // route mounts him server-side and never touches the interaction path, so it has one link.
+        // Raised as an ARRANGEMENT failure: a boarding that never happened disproves nothing about
+        // flying a ship boarded before assembly.
+        String[] boardingChain = how == Boarding.RIGHT_CLICK
+                ? new String[]{"right_click_block", "mount"}
+                : new String[]{"mount"};
+        try {
+            events.assertChain(boardMark, "the bot never took the seat, so the scenario under test "
+                            + "never started. boarding=" + how + " evidence=" + boardingEvidence,
+                    100, boardingChain);
+        } catch (AssertionError e) {
+            scenario().arrangementFailed(e.getMessage());
+        }
+
         // The boarding's own return value cannot be trusted to mean "he sat down" - confirm it from
         // what the client reports it is riding, WHAT that thing is, and WHERE it is.
         JsonObject riding = awaitRiding(20);
-        scenario().requireArranged("the bot never took the seat, so the "
-                        + "scenario under test never started. Nothing can be concluded about flying a "
-                        + "ship boarded before assembly. boarding=" + how
-                        + " evidence=" + boardingEvidence + " riding=" + riding,
+        scenario().requireArranged("the CLIENT never caught up with a boarding the SERVER has already "
+                        + "recorded (the chain above), so nothing below would be measured on a pilot "
+                        + "this client believes is aboard. boarding=" + how
+                        + " evidence=" + boardingEvidence + " riding=" + riding
+                        + " serverMountRecord=" + events.since(boardMark, "mount"),
                 isRiding(riding));
         scenario().requireArranged("the bot is riding SOMETHING, but not "
                         + "the pilot seat's mount, so it is not piloting anything. boarding=" + how
@@ -254,30 +297,81 @@ public class VSPreAssemblyBoardingPilotControlE2ETest extends AbstractSharedVsCl
                         + " limit=" + MOUNT_AT_SEAT_DIST_SQ + " riding=" + riding,
                 mountDistSq < MOUNT_AT_SEAT_DIST_SQ);
 
-        // The rebind counters are CUMULATIVE for the server process, so they are read as a DELTA
-        // against a baseline taken here rather than as flags. Read as flags they answer for
-        // whichever scenario in this class ran FIRST: the second one's rebind lands, the counter
-        // reads 2, and `contains("rebindRebound":1)` stays false until the budget runs out — an
-        // arrangement failure reported against a rebind that demonstrably happened. Measured
-        // 2026-08-23, the first run after this class moved onto the shared client.
+        // The rebind's own DECISION is an event now, so the cumulative rebound counter this used to
+        // delta against is no longer read at all. What has no event yet is the pending QUEUE's own
+        // give-up bookkeeping — cancelled and expired — and those two are still counters, cumulative
+        // for the server process. A baseline is taken here so a red can at least say whether they
+        // moved DURING this scenario; what it cannot say is whose entry moved them (see the wait
+        // loop below), so the delta is diagnostic content and never a verdict.
         RebindCounts rebindBefore = rebindCounts();
 
-        // Now assemble the craft, with the pilot already aboard.
+        // Now assemble the craft, with the pilot already aboard. Marked first: everything the
+        // assembly does to this pilot — throwing him out of his seat, or swapping his stale mount
+        // for the relocated one — is recorded after this point and nowhere else.
+        long assemblyMark = events.markInstrumented();
         String assemble = assembleFixture();
         scenario().requireArranged("a with-pilot-seat build must route to a ship: " + assemble,
                 assemble.contains("\"ok\":true"));
         bot().waitTicks(20);
 
         // CONTRACT, first half: sitting still means sitting. Assembling the ship under a seated
-        // player must not throw him out of his seat. A single "riding" sample is not enough here -
-        // a server-side dismount whose packet has not yet reached the client still reads as seated -
-        // so require two consecutive positive samples with a wait between them.
-        JsonObject ridingAfter = awaitRidingTwiceInARow(20);
+        // player must not throw him out of his seat.
+        //
+        // The client's own view is half of it, and it used to be the whole of it: a server-side
+        // dismount whose packet has not yet arrived still reads as seated, so the old form asked for
+        // two consecutive positive samples and hoped the gap was long enough. The server's record
+        // answers that directly - a dismount either happened since the assembly or it did not - so
+        // the heuristic is gone. A dismount alone is NOT the defect: the crew rebind swaps a stale
+        // mount for the relocated one inside a single call, which is a dismount immediately followed
+        // by a mount. A dismount with nothing after it is the pilot standing in his own hold.
+        //
+        // The two halves of that record are one ordered log read through TWO probe round-trips, so
+        // they are two SNAPSHOTS taken milliseconds apart - and the swap they are judging happens
+        // inside a single method call. A rebind that lands BETWEEN the two reads shows its dismount
+        // to the later read and its mount to neither, and the pair then says "a dismount with
+        // nothing after it" about a swap that completed. Measured on the 2026-09-06 gate: the mount
+        // view was taken first and came back empty; the dismount view, taken a moment later, carried
+        // one dismount whose caller trail ends at the swap's own first line - and the two envelopes
+        // are not the same instant (one more dropped record, and `flight_computer_unmanned_events`
+        // announced in the second only, i.e. the ship went LIVE between the reads, which is exactly
+        // when the rebind becomes possible). Eviction is excluded as the cause: the log keeps one
+        // ring PER TYPE and `droppedByType` named only `entity_joined_world`.
+        //
+        // So the dismount is read FIRST and the mount SECOND - the mount view is then never the
+        // older of the two - and the pair is RE-READ while a dismount stands unanswered. The loop
+        // costs nothing on the ordinary path (no dismount at all is already "seated", which is the
+        // reading during the whole time the pilot waits on his stale mount) and spends ticks only in
+        // the one case that is about to be called a defect.
+        String dismounts = "";
+        String mounts = "";
+        boolean seatedOnTheRecord = false;
+        for (int sample = 0; sample < SEATED_CONFIRM_SAMPLES && !seatedOnTheRecord; sample++) {
+            if (sample > 0) {
+                bot().waitTicks(TICKS_PER_SAMPLE);
+            }
+            dismounts = events.since(assemblyMark, "dismount");
+            mounts = events.since(assemblyMark, "mount");
+            seatedOnTheRecord = seatedOnTheServersRecord(mounts, dismounts);
+        }
+        JsonObject ridingAfter = awaitRiding(20);
+        // Half of this claim is an ABSENCE, so the instrument that would have recorded a dismount is
+        // shown RUNNING first. `entity_position_writers` is announced by the same mixin that carries
+        // the mount and dismount hooks, and its injections are all required — it is woven whole or
+        // the game never starts.
+        Events.assertInstrumentRan(dismounts, "entity_position_writers",
+                "assembly left the pilot in his seat");
         assertTrue("a player who sat in the pilot seat before assembling his ship must STILL be "
                         + "seated once assembly finishes - he should never have to stand up and sit "
-                        + "down again to fly what he just built. boarding=" + how
-                        + " ridingBeforeAssembly=" + riding + " ridingAfterAssembly=" + ridingAfter,
-                isRiding(ridingAfter));
+                        + "down again to fly what he just built. The server's log kept a dismount "
+                        + "with no mount after it for "
+                        + (SEATED_CONFIRM_SAMPLES * TICKS_PER_SAMPLE) + " ticks, which is the shape "
+                        + "the crew rebind produces when it retires the stale mount and then finds "
+                        + "no seat mount to give him back (CrewTransfer's `dummy == null` exit) - "
+                        + "read the dismount's `by` trail below for the un-seater. boarding=" + how
+                        + " ridingBeforeAssembly=" + riding + " ridingAfterAssembly=" + ridingAfter
+                        + " | the SERVER's own record since the assembly: dismounts=" + dismounts
+                        + " mounts=" + mounts,
+                isRiding(ridingAfter) && seatedOnTheRecord);
         assertTrue("the mount a player is left riding after assembly must still be the pilot seat's, "
                         + "not some leftover entity. boarding=" + how + " riding=" + ridingAfter,
                 entityClassOf(ridingAfter).contains("EntityDummy"));
@@ -288,28 +382,67 @@ public class VSPreAssemblyBoardingPilotControlE2ETest extends AbstractSharedVsCl
         // seconds. The contract clock ("controls the ship immediately") starts at the physics
         // object going LIVE, so waiting for the rebind here measures the contract, not a softened
         // version of it; without the wait the measurement legs below just run out before the ship
-        // exists. Early exit the moment the rebind lands; a cancelled/expired rebind is a red.
+        // exists. Early exit the moment the rebind lands.
         // THE MULTIPLIER STAYS: what is being waited for is the VS ship OBJECT going live, which VS
         // does off the game loop, so a busy box needs more ticks to elapse before the rebind can land.
+        //
+        // The rebind is a DECISION production makes and now records as one: `crew_rebind_decided`
+        // carries the tri-state the pending queue retries on, edge-collapsed, so the loop waits for
+        // the decision itself instead of an increment in a cumulative counter — and a red names
+        // which decision it was stuck on. NOT_READY to the end means the relocated seat never became
+        // resolvable (the ship object never went live); NOT_ON_STALE_MOUNT means the pilot is not on
+        // the mount the queue recorded, which is a different defect entirely and used to arrive as
+        // the same "rebindRebound did not move" message.
+        //
+        // The queue's give-up counters are REPORTED here, not asserted on, and the difference is
+        // whose pilot they are about. `rebindCancelled` / `rebindExpired` count for the SERVER
+        // PROCESS and carry no identity: no player, no stale mount, no queue entry - so a delta
+        // across this window says only "the queue gave up on somebody", and on the shared server
+        // that somebody is routinely NOT this scenario's pilot. This class's own first method
+        // leaves its entry pending when it reds, and that entry's give-up budget is minutes long,
+        // so it expires INSIDE the second method's wait loop; `rebindLastOutcome` cannot separate
+        // them either, because the anchor it prints is the assembly anchor (the flight computer,
+        // one block above its build position) and both methods build the same fixture at the same
+        // coordinates, so both entries carry the SAME anchor. Measured on the 2026-09-06 gate: this
+        // was a hard assertion, and it red on `expired anchor=BlockPos{x=2802, y=69, z=2803}` - this
+        // fixture's own flight computer - about a minute after the FIRST method assembled, while
+        // this method's own entry had not yet been queued long enough to expire at all.
+        //
+        // What is left is the decision log, which IS scoped: `crew_rebind_decided` is read from this
+        // scenario's own assembly mark. Its blind spot, stated rather than hidden: the record
+        // carries the player's name and the anchor, and both methods share both, so a leftover entry
+        // from the other method rebinding inside this window would read here as this pilot's. Only a
+        // give-up record naming the queue entry (player + stale mount id) would let the counters
+        // become an assertion again; there is none, so they stay in the failure message.
         int rebindBudget = (int) (240 * com.github.stannismod.forge.testing.TestTimeouts.factor());
         String rebindState = "";
-        boolean rebound = false;
-        for (int i = 0; i < rebindBudget && !rebound; i++) {
+        String decisions = "";
+        String gaveUpOnSomebody = "no";
+        for (int i = 0; i < rebindBudget && !decisions.contains("\"outcome\":\"REBOUND\""); i++) {
             bot().waitTicks(TICKS_PER_SAMPLE);
             rebindState = exec("artest vs seat-delivery");
             RebindCounts now = RebindCounts.of(rebindState);
-            rebound = now.rebound > rebindBefore.rebound;
-            assertTrue("the pre-assembly boarding's rebind must never be CANCELLED or EXPIRED while "
-                            + "the pilot demonstrably sits on his stale mount: " + rebindState
-                            + " (baseline " + rebindBefore + ")",
-                    now.cancelled == rebindBefore.cancelled && now.expired == rebindBefore.expired);
+            if (now.cancelled != rebindBefore.cancelled || now.expired != rebindBefore.expired) {
+                gaveUpOnSomebody = "YES, during this window (" + now + " vs baseline "
+                        + rebindBefore + ") - attribution unknown, see above";
+            }
+            decisions = events.since(assemblyMark, "crew_rebind_decided");
         }
+        // An empty decision log has two readings and only one of them is about the product: the
+        // rebind seam ran and never reached REBOUND, or it never ran at all — the queue never asked
+        // for a rebind, which is a defect one step earlier and used to arrive as "the counter did
+        // not move". This separates them before anything is concluded from the silence.
+        Events.assertInstrumentRan(decisions, "crew_transfer_events",
+                "the assembly's crew rebind never completed");
         scenario().requireArranged("the assembly's crew rebind never completed within "
                         + (rebindBudget * TICKS_PER_SAMPLE) + " ticks (load-scaled) - the relocated "
                         + "ship/seat never became resolvable, so the control chain under test never "
-                        + "came up. boarding=" + how + " delivery=" + rebindState
-                        + " (baseline " + rebindBefore + ")",
-                rebound);
+                        + "came up. boarding=" + how
+                        + " lastDecision=" + Events.lastField(decisions, "outcome")
+                        + " decisions=" + decisions + " delivery=" + rebindState
+                        + " (baseline " + rebindBefore + ")"
+                        + " | the queue gave up on someone meanwhile: " + gaveUpOnSomebody,
+                decisions.contains("\"outcome\":\"REBOUND\""));
 
         // Paste-site census, printed unconditionally (visible in green runs too): assembly pastes
         // the craft one block above its build position before relocating it into the ship's
@@ -320,11 +453,30 @@ public class VSPreAssemblyBoardingPilotControlE2ETest extends AbstractSharedVsCl
                 + " seatBuild=" + bot().blockState(SEAT_X, SEAT_Y, SEAT_Z)
                 + " seatPaste=" + bot().blockState(SEAT_X, SEAT_Y + 1, SEAT_Z));
 
-        // The ship's IDENTITY, captured here — the rebind above proves the craft is live, and it
-        // has not yet been asked to move. Every altitude read below is keyed on it: the legs that
-        // follow settle, drift-check and CLIMB the ship, and a nearest-ship query about the build
-        // site cannot tell "my ship rose" from "a neighbour is now the closest thing to that point".
-        shipUuid = captureShipIdAt(BX, BY, BZ, SETTLE_MAX_SAMPLES);
+        // The ship's IDENTITY, taken from its CREATION. This scenario built the craft and assembled
+        // it, so it was already TOLD which ship that is: the assembly records `ship_spawned`, read
+        // here from this scenario's own assembly mark. Every altitude read below is keyed on that
+        // id — the legs that follow settle, drift-check and CLIMB the ship, and a nearest-ship query
+        // about the build site cannot tell "my ship rose" from "a neighbour is now the closest thing
+        // to that point".
+        shipUuid = awaitShipSpawned(events, assemblyMark, "the craft this scenario assembled must "
+                + "become a ship in the physics mod's registry before any altitude can be attributed "
+                + "to it. boarding=" + how);
+
+        // Identity is not readiness, and the second half is still owed: `ship_spawned` is the
+        // REGISTRY's record of an ADD and does not prove the physics object is loaded, which under a
+        // parallel-suite load lags by seconds. Readiness is waited for on PRODUCTION's own
+        // announcement of it — `ship_usable`, published when the physics loop can step this ship —
+        // and never on a `ship-info` poll: `managed` is a literal true in the reply builder, so it
+        // only ever said "the lookup found a ship and built a report". The wait is keyed on the id
+        // captured above, so it can never be satisfied by something else being nearer, which is what
+        // a bounded nearest-query cannot say once the subject climbs. It runs from this scenario's
+        // own ASSEMBLY mark — the same mark `ship_spawned` was read from, and the only one taken
+        // before the load — because the event fires once and is not a state to poll. The rebind
+        // above already proves the craft is live and it has not yet been asked to move, so this
+        // ordinarily returns on an event already in the log; the budget stays the settle budget this
+        // site was given, converted to Events.await's TICKS (240 five-tick polls = 1200 ticks).
+        awaitShipUsable(events, assemblyMark, shipUuid, SETTLE_MAX_SAMPLES * TICKS_PER_SAMPLE);
 
         // ---- CONTROL LEG ---------------------------------------------------------------------
         // Settle first: a freshly assembled physics object may be resolved upward out of the pad it
@@ -351,8 +503,12 @@ public class VSPreAssemblyBoardingPilotControlE2ETest extends AbstractSharedVsCl
         scenario().requireArranged("the ship must still report an altitude at the start of the "
                         + "key-held window", !Double.isNaN(yBefore));
 
-        // The real key, through the real client input path, exactly as a player holds it.
+        // The real key, through the real client input path, exactly as a player holds it. Both logs
+        // are marked FIRST, so the delivery chain read afterwards describes THIS window and nothing
+        // that happened while the ship was settling.
         final double y0 = yBefore;
+        long inputServerMark = events.markInstrumented();
+        long inputClientMark = bot().eventMark().get("seq").getAsLong();
         bot().holdKey(Keyboard.KEY_R); // flightVerticalUp
         ClientPoll.Result<Double> lift;
         try {
@@ -378,7 +534,7 @@ public class VSPreAssemblyBoardingPilotControlE2ETest extends AbstractSharedVsCl
         // attempt. Folded into the failure message: a red run must name the gate that ate the
         // input (client never sent / server dropped / delivered but no motion), not just report
         // "climb 0.0" and leave the chain to be guessed at.
-        String delivery = deliveryDiagnostics();
+        String delivery = deliveryDiagnostics(events, inputServerMark, inputClientMark);
 
         assertTrue("a player who took the pilot seat BEFORE assembling his ship must be able to FLY "
                         + "that ship right after assembly: holding the vertical-up key has to lift it, "
@@ -393,36 +549,42 @@ public class VSPreAssemblyBoardingPilotControlE2ETest extends AbstractSharedVsCl
     }
 
     /**
-     * Reads both halves of the pilot-input delivery chain: the CLIENT's gate/send counters and last
-     * seat resolution (reflectively, from the client JVM), and the SERVER's receive/deliver
-     * counters and its own last resolution (via the read-only {@code seat-delivery} probe). Never
-     * throws - a diagnostic that kills the run it is meant to explain would be worse than none -
-     * and reports read failures inline instead.
+     * Reads both halves of the pilot-input delivery chain over the key-held window: what the CLIENT
+     * decided and sent (its own event log — the gate's answer per seated tick, and every packet it
+     * actually put on the wire), and what the SERVER received and delivered to the flight computer
+     * (its log, plus the read-only {@code seat-delivery} probe). Never throws — a diagnostic that
+     * kills the run it is meant to explain would be worse than none — and reports read failures
+     * inline instead.
+     *
+     * <p>It replaces a reflective read of five client counters. The counters could say how MANY
+     * ticks the gate was closed; the records say what it decided and when, which packets left, which
+     * arrived and which reached the computer — so a red can be read as "the client never sent",
+     * "the server never received" or "it was delivered and the ship did not move" instead of being
+     * inferred from five numbers.</p>
+     *
+     * <p><b>What it is silent about.</b> Neither log says WHY a gate closed on a seated tick (no
+     * link, or a link whose ship is gone); that is still the seat resolver's own reading. And
+     * {@code ship_pilot_gate_decided} records once per seated tick against a 256-deep ring, so on a
+     * window longer than about thirteen seconds the reply is a TAIL — the {@code droppedByType} it
+     * carries says by how much.</p>
      */
-    private String deliveryDiagnostics() {
+    private String deliveryDiagnostics(Events events, long serverMark, long clientMark) {
         String client;
         try {
-            client = "gateClosedTicks=" + staticValue("zmaster587.advancedRocketry.command.test.SeatDiag", "shipGateClosedTicks")
-                    + " gateOpenTicks=" + staticValue("zmaster587.advancedRocketry.command.test.SeatDiag", "shipGateOpenTicks")
-                    + " sends=" + staticValue("zmaster587.advancedRocketry.command.test.SeatDiag", "shipInputSendCount")
-                    + " resolves=" + staticValue("zmaster587.advancedRocketry.command.test.SeatDiag", "riderResolveCount")
-                    + " lastResolve[" + staticValue("zmaster587.advancedRocketry.command.test.SeatDiag", "lastRiderResolve") + "]";
+            client = "gate=" + bot().eventsSince(clientMark, "ship_pilot_gate_decided")
+                    + " sent=" + bot().eventsSince(clientMark, "pilot_input_sent");
         } catch (Exception e) {
             client = "unreadable(" + e + ")";
         }
         String server;
         try {
-            server = exec("artest vs seat-delivery");
+            server = exec("artest vs seat-delivery")
+                    + " received=" + events.since(serverMark, "pilot_input_received")
+                    + " delivered=" + events.since(serverMark, "pilot_input_delivered");
         } catch (Exception e) {
             server = "unreadable(" + e + ")";
         }
         return "client{" + client + "} server{" + server + "}";
-    }
-
-    /** One client static field's value, via the harness's reflective read. */
-    private String staticValue(String className, String fieldName) throws Exception {
-        JsonObject read = bot().readStaticField(className, fieldName);
-        return read.has("value") ? read.get("value").getAsString() : String.valueOf(read);
     }
 
     // ---- Boarding variants -------------------------------------------------------------------
@@ -599,46 +761,65 @@ public class VSPreAssemblyBoardingPilotControlE2ETest extends AbstractSharedVsCl
     }
 
     /**
-     * Polls until the client reports riding on TWO consecutive samples separated by a wait. A
-     * dismount performed server-side does not reach the client instantly, so a single positive
-     * sample taken right after assembly can report a seat the player has already lost.
+     * Whether the SERVER's own record leaves the player SEATED: no dismount at all since the mark,
+     * or one that a later mount undid.
+     *
+     * <p>A dismount by itself is not the defect. The assembly's crew rebind swaps the stale mount
+     * for the relocated one inside a single call — a dismount immediately followed by a mount — and
+     * a scenario that forbade dismounts outright would red on the very mechanism it is here to
+     * prove. A dismount with nothing after it is the pilot left standing in his own hold, which is
+     * exactly the failure the rebind's own {@code dummy == null} exit produces.</p>
+     *
+     * <p>Compared by sequence rather than by count: the two replies are filtered views of one
+     * ordered log, and the log's {@code seq} is what still carries their order once they are split.</p>
+     *
+     * <p><b>The two replies must be read dismount-first.</b> Each is its own probe round-trip, so
+     * they are snapshots of the log at two different instants, and the swap being judged happens
+     * inside one method call. Read mount-first, a rebind landing between the two calls hands its
+     * dismount to the later reply and its mount to neither - and this returns "left standing" about
+     * a swap that completed. Read dismount-first, the mount view is never the older of the two.</p>
      */
-    private JsonObject awaitRidingTwiceInARow(int attempts) throws Exception {
-        JsonObject last = bot().reportRidingEntity();
-        boolean previousWasRiding = isRiding(last);
-        for (int attempt = 0; attempt < attempts; attempt++) {
-            bot().waitTicks(TICKS_PER_SAMPLE);
-            JsonObject now = bot().reportRidingEntity();
-            if (isRiding(now) && previousWasRiding) {
-                return now;
-            }
-            previousWasRiding = isRiding(now);
-            last = now;
+    private static boolean seatedOnTheServersRecord(String mounts, String dismounts) {
+        long off = lastSeq(dismounts);
+        return off < 0 || lastSeq(mounts) > off;
+    }
+
+    /** The {@code seq} of the LAST record in a {@code since} reply, or -1 when it carries none. The
+     *  envelope has no {@code seq} of its own, so every match here is a record's. */
+    private static long lastSeq(String sinceReply) {
+        Matcher m = RECORD_SEQ.matcher(String.valueOf(sinceReply));
+        long last = -1L;
+        while (m.find()) {
+            last = Long.parseLong(m.group(1));
         }
         return last;
     }
 
     /**
-     * The three rebind counters, as NUMBERS. They count for the life of the server process, so the
-     * only thing a scenario may ask of them is how they MOVED across its own stimulus.
+     * The rebind queue's give-up counters, as NUMBERS. They count for the life of the server
+     * process, so the most a scenario may ask of them is how they MOVED across its own stimulus —
+     * and even that is a question about the whole server, not about this pilot: the counters carry
+     * no player, no mount and no queue entry, and every scenario sharing this server writes them.
+     * They are therefore printed in failures and never asserted on.
+     *
+     * <p>The queue's REBOUND counter is deliberately absent: that link is
+     * {@code crew_rebind_decided} now, read off the ordered log with the decision it carries.
+     * Cancellation and expiry are the pending queue's own bookkeeping and have no event yet.</p>
      */
     private static final class RebindCounts {
-        private static final Pattern REBOUND = Pattern.compile("\"rebindRebound\":(-?\\d+)");
         private static final Pattern CANCELLED = Pattern.compile("\"rebindCancelled\":(-?\\d+)");
         private static final Pattern EXPIRED = Pattern.compile("\"rebindExpired\":(-?\\d+)");
 
-        final int rebound, cancelled, expired;
+        final int cancelled, expired;
 
-        private RebindCounts(int rebound, int cancelled, int expired) {
-            this.rebound = rebound;
+        private RebindCounts(int cancelled, int expired) {
             this.cancelled = cancelled;
             this.expired = expired;
         }
 
         /** A counter the probe did not report reads as -1, which can never equal a later baseline. */
         static RebindCounts of(String seatDeliveryJson) {
-            return new RebindCounts(read(REBOUND, seatDeliveryJson), read(CANCELLED, seatDeliveryJson),
-                    read(EXPIRED, seatDeliveryJson));
+            return new RebindCounts(read(CANCELLED, seatDeliveryJson), read(EXPIRED, seatDeliveryJson));
         }
 
         private static int read(Pattern p, String json) {
@@ -648,7 +829,7 @@ public class VSPreAssemblyBoardingPilotControlE2ETest extends AbstractSharedVsCl
 
         @Override
         public String toString() {
-            return "rebound=" + rebound + " cancelled=" + cancelled + " expired=" + expired;
+            return "cancelled=" + cancelled + " expired=" + expired;
         }
     }
 

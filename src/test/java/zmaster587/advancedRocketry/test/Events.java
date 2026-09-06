@@ -182,6 +182,37 @@ public final class Events {
     }
 
     /**
+     * Wait for one event of {@code type} whose payload CARRIES {@code needle}, or fail naming the
+     * whole chain that did happen.
+     *
+     * <p>{@link #await} matches on the type alone, which on a shared world is a wait any subject can
+     * satisfy: every neighbouring scenario's ship crosses the same seams and its records land in the
+     * same log. Where more than one body can produce the type, the wait has to name WHICH one, and
+     * this is that form — the needle is a fragment of the record's own payload, e.g.
+     * {@code "\"ship\":\"" + shipId + "\""}.</p>
+     *
+     * <p>Measured 2026-09-06: a readiness wait built on {@link #await} was described in three
+     * javadocs as "asked by id" while matching on type only, so a neighbour's ship satisfied it. The
+     * id was in the failure message and nowhere else.</p>
+     *
+     * @param needle a substring of the payload that identifies the subject
+     */
+    public String awaitCarrying(long mark, String type, String needle, String what, int tickBudget)
+            throws Exception {
+        String reply = "";
+        for (int waited = 0; waited <= tickBudget; waited += 5) {
+            reply = since(mark, type);
+            if (countRecords(reply, needle) > 0) {
+                return reply;
+            }
+            step.ticks(5);
+        }
+        throw new AssertionError(what + " — no `" + type + "` carrying " + needle + " was recorded"
+                + " within " + tickBudget + " ticks. What DID happen since the mark: "
+                + describe(since(mark)) + " | raw: " + reply);
+    }
+
+    /**
      * Assert an ordered chain: each type must appear, and in this order.
      *
      * <p>This is the verb a test should reach for. A contract in this project is nearly always a

@@ -3,9 +3,13 @@ package zmaster587.advancedRocketry.test.client;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
+import net.minecraft.util.EnumFacing;
+import net.minecraft.util.EnumHand;
 import org.junit.FixMethodOrder;
 import org.junit.Test;
 import org.junit.runners.MethodSorters;
+
+import zmaster587.advancedRocketry.test.Events;
 
 import java.util.Locale;
 import java.util.regex.Matcher;
@@ -15,9 +19,7 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 import static zmaster587.advancedRocketry.test.client.ClientGuiTestSupport.findSlotWithItem;
-import static zmaster587.advancedRocketry.test.client.ClientGuiTestSupport.openGuiByRightClick;
 import static zmaster587.advancedRocketry.test.client.ClientGuiTestSupport.screenOf;
-import static zmaster587.advancedRocketry.test.client.ClientGuiTestSupport.waitForNoScreen;
 
 /**
  * A machine stands in the world, the player right-clicks it open, and drives it with nothing but
@@ -47,9 +49,11 @@ import static zmaster587.advancedRocketry.test.client.ClientGuiTestSupport.waitF
  *       {@link #clickingScanThenBuildAssemblesRocket()} reads {@code artest rocket list}, which is
  *       world-wide, and narrows it to {@link Plot#contains}.</li>
  *   <li><b>Chat while a GUI is open.</b> {@link #thePilotCopiesPicksAndArmsAtTheConsoleWithNothingButClicks()}
- *       reads the console's replies off the chat overlay with the console still open, so it arms
- *       the channel with the chat-only clear — the full client reset would close the very screen
- *       it is about to click.</li>
+ *       reads the console's replies with the console still open — the full client reset would close
+ *       the very screen it is about to click. It no longer CLEARS the overlay first: a reply is read
+ *       off the client's own {@code client_chat_received} records taken from a mark that predates the
+ *       click, so a line from an earlier scenario cannot be mistaken for this one and there is
+ *       nothing to drain.</li>
  * </ul>
  *
  * <p>The lane is wide (128) because two members need more than a 64-block box: the railgun pair
@@ -158,25 +162,90 @@ public class MachineGuiClientGroupE2ETest extends AbstractSharedClientE2ETest {
 
         // Stand ON the machine's own column, one block up, looking down at its top face. The
         // source classes all used exactly this pose; in open air it needs no terrain at all.
+        //
+        // ARRANGEMENT settle, not a link: the teleport is a server write and this is the time the
+        // client is given to catch up with it. Deliberately NOT gated on `chunk_data_applied` —
+        // this class shares one world across seven scenarios and force-loads its plot, so a chunk
+        // the client already holds sends nothing and a wait for it would never return.
         exec("tp @a " + (x + 0.5) + " " + (Y + 2) + " " + (z + 0.5) + " 0 90");
         bot().waitTicks(40);
         return new int[]{x, Y, z};
     }
 
-    /** Opens the machine's GUI by right-clicking it, and says what the click did if it does not. */
+    /**
+     * Right-clicks the machine open, and asserts the open as the CHAIN it is: the click reached the
+     * server, the server opened a container for it, and the client displayed a screen.
+     *
+     * <p>The re-click stays, because it is a stimulus and not an observation: a single interaction
+     * is occasionally dropped (the packet lands a tick before the chunk and the player have settled)
+     * and no amount of waiting recovers a click that never registered. What changed is what the loop
+     * WATCHES — the client's own record of a GUI being displayed, read from a mark taken before the
+     * first click, instead of sampling {@code report_state} and hoping the sample lands while the
+     * screen is there.</p>
+     *
+     * <p><b>Silent about {@code gui_container_served}</b>, on purpose: every machine in this class
+     * opens its GUI on {@code LibVulpes.instance} (libVulpes' own {@code BlockTile} /
+     * {@code BlockMultiblockMachine} do the {@code openGui}), so AR's gui handler is never asked and
+     * never records. The server link available here is {@code container_opened}, which Forge posts
+     * only once SOME handler has answered with a container — a request a handler refused is an
+     * ABSENCE of that record beside a present {@code right_click_block}, which is exactly the
+     * distinction the old screen poll could not make.</p>
+     */
     private String openMachineGui(int[] at) throws Exception {
-        String screen = openGuiByRightClick(bot(), at[0], at[1], at[2]);
-        if (screen.startsWith(GUI_MODULAR)) {
-            return screen;
+        Events events = events();
+        long serverMark = events.mark();
+        long clientMark = bot().eventMark().get("seq").getAsLong();
+
+        String displayed = "";
+        for (int attempt = 0; attempt < 6 && !displayed.contains("\"gui\":\"Gui"); attempt++) {
+            bot().rightClickBlock(at[0], at[1], at[2], EnumFacing.UP, EnumHand.MAIN_HAND);
+            displayed = awaitClientRecords(clientMark, "client_gui_opened", "\"gui\":\"Gui", 60);
         }
-        JsonObject direct = bot().interactBlock(at[0], at[1], at[2]);
-        bot().waitTicks(20);
-        scenario().arrangementFailed("right-clicking the machine must open its GUI. screen=\""
-                + screen + "\" afterDirectClick=\"" + screenOf(bot().reportState())
-                + "\" clickResult=" + direct
-                + " blockAtMachine=" + bot().blockState(at[0], at[1], at[2])
-                + " playerState=" + bot().reportState());
+
+        String screen = screenOf(bot().reportState());
+        if (!screen.startsWith(GUI_MODULAR)) {
+            JsonObject direct = bot().interactBlock(at[0], at[1], at[2]);
+            bot().waitTicks(20);
+            scenario().arrangementFailed("right-clicking the machine must open its GUI, and the"
+                    + " chain says WHERE it stopped rather than that the screen was empty."
+                    + " screen=\"" + screen + "\""
+                    + " clicksThatReachedTheServer=" + events.since(serverMark, "right_click_block")
+                    + " containersTheServerOpened=" + events.since(serverMark, "container_opened")
+                    + " screensTheClientDisplayed=" + displayed
+                    + " afterDirectClick=\"" + screenOf(bot().reportState())
+                    + "\" clickResult=" + direct
+                    + " blockAtMachine=" + bot().blockState(at[0], at[1], at[2])
+                    + " playerState=" + bot().reportState());
+        }
+        // The ORDER is one server call stack — the interact event is posted before the block is
+        // activated, and the container is opened from inside that activation — so it is asserted as
+        // a chain rather than as two independent facts.
+        events.assertChain(serverMark, "a right-click that opens a machine's GUI must REACH the"
+                        + " server and make it open a container: the screen the player ends up"
+                        + " looking at is the end of that chain, not the whole of it", 60,
+                "right_click_block", "container_opened");
         return screen;
+    }
+
+    /**
+     * The CLIENT's own records of {@code type} since {@code mark}, waited for until one carries
+     * {@code needle} (case-insensitively) or the budget runs out — the client half of a chain, which
+     * the server's event log cannot see.
+     *
+     * <p>Returns the last reply either way, so a caller's failure prints what the client DID record
+     * instead of one stale sample. Local to this class: the shared base offers {@link Events} over
+     * the server probe only, and the client log is reached through the bot.</p>
+     */
+    private String awaitClientRecords(long mark, String type, String needle, int tickBudget)
+            throws Exception {
+        String wanted = needle.toLowerCase(Locale.ROOT);
+        String reply = String.valueOf(bot().eventsSince(mark, type));
+        for (int waited = 0; waited < tickBudget
+                && !reply.toLowerCase(Locale.ROOT).contains(wanted); waited += 5) {
+            bot().waitTicks(5);
+            reply = String.valueOf(bot().eventsSince(mark, type));
+        }
+        return reply;
     }
 
     private static int readInt(String json, Pattern p) {
@@ -238,37 +307,78 @@ public class MachineGuiClientGroupE2ETest extends AbstractSharedClientE2ETest {
         exec("tp @a " + (baseX + 2.5) + " " + (Y + 1) + " " + (baseZ + 2.5) + " 0 0");
         bot().waitTicks(40);
 
-        String screen = openGuiByRightClick(bot(), bx, by, bz);
+        String screen = openMachineGui(new int[]{bx, by, bz});
         scenario().requireArranged("expected the assembler GUI to open, got: " + screen,
                 screen.startsWith(GUI_MODULAR));
 
         scenario().asserting("Scan then Build, clicked on the real GUI, assemble a rocket");
+        Events events = events();
+        long buildMark = events.markInstrumented();
+        long clientMark = bot().eventMark().get("seq").getAsLong();
         exec("artest energy inject " + builder + " 100000000");
         bot().clickButtonById(0);
 
-        int rocketId = -1;
+        // Build is RE-PRESSED, and that stays a stimulus: production ignores a Build press while
+        // isScanning() and says nothing about it, so the press only "takes" once the scan pass has
+        // finished.
+        //
+        // What the loop WAITS ON is the rocket itself, standing in this scenario's own plot. The
+        // events are what the FAILURE is made of, not what it is measured by, and the reason is a
+        // property of the recorder rather than a preference: `rocket_assembled` is taken at
+        // assembleRocket's RETURN and carries the tile's status AS OF THAT RETURN, and the last
+        // thing a SUCCESSFUL ordinary build does before returning is re-scan its own pad "so the UI
+        // immediately reflects the post-build state" — which finds the rocket it has just spawned
+        // and overwrites FINISHED with ALREADY_ASSEMBLED. So on this path FINISHED is a status no
+        // reader at that seam can ever observe: waiting for it spins the full budget out on a
+        // machine that built the rocket on its first press. (Only the tier-2 fork returns straight
+        // after setting FINISHED, and every record here says tier2:false.) Measured 2026-09-06: 29
+        // assembly exits, all ALREADY_ASSEMBLED, the first of them the successful build.
+        //
+        // What the events still buy over the pre-migration form — which polled this same list and,
+        // after three minutes, printed it — is the failure: every press that reached the machine
+        // with the canScan/isScanning pair it was judged on, and every attempt at an assembly with
+        // the status it ended on. That tells a dropped packet from a refused build from a build
+        // that never ran, which the list alone cannot.
+        String assemblies = "";
         String list = "";
+        int rocketId = -1;
         for (int waited = 0; waited < 3600 && rocketId < 0; waited += 40) {
             exec("artest energy inject " + builder + " 100000000");
             bot().clickButtonById(1);
             bot().waitTicks(40);
+            assemblies = events.since(buildMark, "rocket_assembled");
             list = exec("artest rocket list " + dim);
             rocketId = rocketIdInThisPlot(list);
         }
-        assertTrue("clicking Scan then Build must assemble a rocket standing in " + plot()
-                + "; rocket list was " + list, rocketId >= 0);
+        String presses = events.since(buildMark, "assembler_command_received");
+        assertTrue("clicking Scan then Build on the real GUI must ASSEMBLE a rocket standing in "
+                        + plot() + "; rocket list was " + list
+                        + " | every exit of assembleRocket since the first click, with the status it"
+                        + " ended on: " + assemblies
+                        + " | every press that reached the machine, with the canScan/isScanning pair"
+                        + " that decides whether it was acted on or silently ignored: " + presses,
+                rocketId >= 0);
+        events.assertChain(buildMark, "a rocket assembled at this machine must have been COMMANDED"
+                + " through the GUI - an assembly with no press behind it would be some other"
+                + " scenario's machine answering", 40,
+                "assembler_command_received", "rocket_assembled");
         scenario().record("rocketId", rocketId);
 
-        // Player truth: the CLIENT world renders the assembled rocket entity — the spawn was
-        // synced to the player's screen, not just to the registry.
-        int seen = -1;
-        for (int waited = 0; waited < 100; waited += 10) {
-            bot().waitTicks(10);
-            seen = bot().reportEntities("EntityRocket", 64).get("count").getAsInt();
-            if (seen >= 1) break;
-        }
-        assertTrue("the client must see the assembled EntityRocket near the pad; count=" + seen,
-                seen >= 1);
+        // Player truth: the CLIENT world receives the assembled rocket entity — the spawn reached
+        // the player's own world, not just the server's registry. That is a LINK (the spawn packet
+        // applied), so it is the client's own record of the entity joining, not a proximity count
+        // that reads 0 both for "no rocket" and for "a rocket the client has not been told about".
+        //
+        // The record has to survive until this asks, and `entity_joined_world` is the chattiest type
+        // the client keeps — its ring holds the last 256 of them. That is what makes the loop's EARLY
+        // EXIT above load-bearing rather than merely tidy: it returns on the tick the rocket appears,
+        // so only a few hundred ticks of joins can sit between the spawn and this read.
+        String joined = awaitClientRecords(clientMark, "entity_joined_world", "\"cls\":\"EntityRocket\"",
+                200);
+        assertTrue("the assembled rocket must arrive in the CLIENT's world - a rocket only the"
+                        + " server knows about is not one the player can board. Entities the client"
+                        + " saw join since the first click: " + joined,
+                joined.contains("\"cls\":\"EntityRocket\""));
 
         bot().closeScreen();
     }
@@ -401,6 +511,12 @@ public class MachineGuiClientGroupE2ETest extends AbstractSharedClientE2ETest {
 
         scenario().asserting("a shift-click quick-moves the chip into the machine's own slot");
         bot().clickSlot(chipSlot, 0, "QUICK_MOVE");
+        // LEFT AS A SETTLE, and the reason is a gap rather than a choice: no event records a slot
+        // transfer. `report_slots` reads the CLIENT's copy of the container, and the client applies
+        // its own prediction of a quick-move before the packet is even sent, so what is pinned
+        // below is the move as the player sees it — a server that dropped the click would leave the
+        // prediction standing and this would still pass. The link that would close it is a record at
+        // ContainerModular.transferStackInSlot's return, routed by the player's world.
         bot().waitTicks(10);
 
         JsonObject after = bot().reportSlots();
@@ -526,6 +642,9 @@ public class MachineGuiClientGroupE2ETest extends AbstractSharedClientE2ETest {
         bot().waitTicks(20);
 
         scenario().asserting("the aim buttons reach the machine, and Observe starts the look");
+        // LEFT AS A SETTLE: nothing records a packet reaching TileObservatory.useNetworkData, so
+        // these two presses have no receipt of their own; the aim read back from the server below
+        // is the assertion, and a slow round trip would fail it as "the aim never moved".
         bot().clickButtonById(5);
         bot().waitTicks(15);
         bot().clickButtonById(5);
@@ -547,16 +666,33 @@ public class MachineGuiClientGroupE2ETest extends AbstractSharedClientE2ETest {
         scenario().requireArranged("could not place a system to be found: " + system,
                 system.contains("\"ok\":true"));
 
+        // Observe. The survey is a chain and is asserted as one: the aim ACCEPTED the region (it can
+        // refuse — no origin, or a region it will not look at, and production only logs that), and
+        // then the survey step actually MOVED (a completion pass that finds no crystal, no cell due
+        // or too little distance data returns changing nothing, and says nothing). A red used to be
+        // 400 ticks of telescope JSON that could not tell those apart.
+        Events events = events();
+        long scanMark = events.markInstrumented();
         bot().clickButtonById(6);
-        bot().waitTicks(20);
+        events.assertChain(scanMark, "pressing Observe must reach the instrument, be ACCEPTED as a"
+                        + " region to look at, and then advance the survey", 600,
+                "region_scan_begun", "region_scan_advanced");
+        String begun = events.since(scanMark, "region_scan_begun");
+        assertTrue("the instrument must ACCEPT the region the operator aimed it at - a refusal here"
+                + " is production's own verdict and the crystal below could never fill: " + begun,
+                begun.contains("\"accepted\":true"));
 
         scenario().measuring("the crystal in the machine, after a survey driven only by clicks");
+        // Left as a bounded read: the addresses are an ACCUMULATION over the cells the look
+        // resolved, not a link — and the links either side of it are now named above, so a red here
+        // means the survey ran and found nothing rather than "something did not happen".
         String done = exec("artest telescope info " + where);
         for (int attempt = 0; attempt < 20 && readInt(done, TELESCOPE_ADDRESSES) < 1; attempt++) {
             bot().waitTicks(20);
             done = exec("artest telescope info " + where);
         }
-        assertTrue("a survey driven entirely from the GUI left the crystal empty: " + done,
+        assertTrue("a survey driven entirely from the GUI left the crystal empty: " + done
+                        + " surveySteps=" + events.since(scanMark, "region_scan_advanced"),
                 readInt(done, TELESCOPE_ADDRESSES) >= 1);
 
         bot().closeScreen();
@@ -591,6 +727,9 @@ public class MachineGuiClientGroupE2ETest extends AbstractSharedClientE2ETest {
         scenario().record("planetButtonId", planetId);
 
         scenario().asserting("clicking it registers the selection server-side");
+        // LEFT AS A SETTLE for the same reason as the telescope's aim: nothing records a packet
+        // reaching TilePlanetSelector.useNetworkData, so the server-side selection read below is
+        // both the assertion and the only receipt this click has.
         bot().clickButtonById(planetId);
         bot().waitTicks(20);
 
@@ -614,8 +753,10 @@ public class MachineGuiClientGroupE2ETest extends AbstractSharedClientE2ETest {
      * <p>What is pinned, in the order the pilot does it:</p>
      * <ol>
      *   <li><b>Arming with nowhere to go is refused, and said out loud.</b> The negative comes first
-     *       because it doubles as the proof that a click on this GUI reaches the server at all — the
-     *       refusal in the pilot's own chat is the click's receipt.</li>
+     *       because it doubles as the proof that a click on this GUI reaches the server at all —
+     *       and that proof is now the console's own record of the command arriving, with the
+     *       refusal reaching the pilot's screen as the second half rather than as the whole of
+     *       it.</li>
      *   <li><b>Copying a brought crystal does not empty it.</b></li>
      *   <li><b>The console lists what the ship now knows</b>, read off the real GUI's buttons.</li>
      *   <li><b>Picking a listed address aims the ship at THAT address.</b></li>
@@ -653,17 +794,30 @@ public class MachineGuiClientGroupE2ETest extends AbstractSharedClientE2ETest {
         emptyTheHand();
         String screen = openMachineGui(at);
         scenario().record("screen", screen);
+        Events events = events();
 
         // ---- 1) Try to arm with nowhere to go. ------------------------------------------------
-        scenario().measuring("arm the chat channel with the console still open");
-        armChatObservation();
-
+        // The chat overlay is no longer drained first. A mark taken before the click is what makes a
+        // matching line belong to THIS stimulus, and it does it better than a clear: a clear leaves
+        // a line already in flight, and it cannot see a reply that arrived and scrolled away.
         scenario().asserting("arming with no destination is refused, and the pilot is told why");
+        long refusalMark = events.markInstrumented();
+        long refusalOnClient = bot().eventMark().get("seq").getAsLong();
         bot().clickButtonById(BUTTON_ARM);
-        String refusal = awaitChatContaining("no jump target", 30);
-        assertTrue("arming with no destination chosen must be REFUSED and the pilot told why "
-                + "(this is also the receipt proving a click on this GUI reaches the server). "
-                + "chat=\"" + refusal + "\"",
+        events.assertChain(refusalMark, "an ARM click with nowhere to go must REACH the console and"
+                        + " be ANSWERED - a click that never arrived and a console that answered"
+                        + " something else are different failures and the chat could not tell them"
+                        + " apart", 150,
+                "nav_command_received", "nav_console_told");
+        String told = events.since(refusalMark, "nav_console_told");
+        assertEquals("arming with no destination chosen must be REFUSED, with the reason production"
+                        + " itself chose - read at the console's own tell(), not off the overlay: "
+                        + told, "msg.jumpgate.notarget", Events.lastField(told, "key"));
+        String refusal = awaitClientRecords(refusalOnClient, "client_chat_received",
+                "no jump target", 150);
+        assertTrue("...and the pilot must actually be TOLD: the refusal has to reach his own screen,"
+                        + " which is the half the server's decision cannot show. client chat since"
+                        + " the click: " + refusal,
                 refusal.toLowerCase(Locale.ROOT).contains("no jump target"));
         String afterRefusal = exec("artest nav status " + where);
         assertFalse("and the console must not be armed: " + afterRefusal,
@@ -671,17 +825,31 @@ public class MachineGuiClientGroupE2ETest extends AbstractSharedClientE2ETest {
 
         // ---- 2) Copy the brought crystal into the ship's own. ---------------------------------
         scenario().asserting("COPY writes the addresses across and leaves the source holding them");
+        long copyMark = events.markInstrumented();
         bot().clickButtonById(BUTTON_COPY);
-        String copied = awaitStatusWhere(where, SHIP_COUNT, SEEDED, 30);
+        events.assertChain(copyMark, "a COPY click must reach the console and the console must"
+                        + " perform the copy - with no crystal in the ship slot the button is a"
+                        + " silent no-op, which is the one thing polling the count could not tell"
+                        + " from a slow round trip", 150,
+                "nav_command_received", "crystal_copied");
+        String copies = events.since(copyMark, "crystal_copied");
+        assertTrue("the console must have had a ship crystal to copy INTO, or the counts below are"
+                + " measuring the arrangement: " + copies, copies.contains("\"shipCrystal\":true"));
+        String copied = exec("artest nav status " + where);
         assertEquals("clicking COPY must write the brought crystal's addresses into the ship's own "
-                + "crystal: " + copied, SEEDED, readInt(copied, SHIP_COUNT));
+                + "crystal: " + copied + " copies=" + copies, SEEDED, readInt(copied, SHIP_COUNT));
         assertEquals("and the brought crystal must KEEP them — the console exchanges knowledge, it "
                 + "does not move it: " + copied, SEEDED, readInt(copied, SOURCE_COUNT));
 
         // ---- 3) The console lists what the ship now knows. -------------------------------------
-        // Reopened, because the address list is built when the screen is.
+        // Reopened, because the address list is built when the screen is. The close is waited for as
+        // the link it is — the server letting go of the container — rather than as a screen that
+        // has gone blank, because a screen that only LOOKS closed re-opens on a stale list.
+        long closeMark = events.mark();
         bot().closeScreen();
-        scenario().requireArranged("the console GUI must close", waitForNoScreen(bot(), 60).isEmpty());
+        events.await(closeMark, "container_closed", "closing the console must reach the SERVER: the"
+                + " address list is rebuilt when the screen is, so a re-open over a container the"
+                + " server still holds would list what the console knew before the copy", 60);
         openMachineGui(at);
 
         scenario().asserting("the console LISTS the addresses the ship now knows");
@@ -697,80 +865,57 @@ public class MachineGuiClientGroupE2ETest extends AbstractSharedClientE2ETest {
 
         // ---- 4) Pick one: the ship is aimed at THAT address. ------------------------------------
         scenario().asserting("picking the first listed address aims the ship at that address");
+        long pickMark = events.markInstrumented();
         bot().clickButtonById(BUTTON_PICK_FIRST);
-        String aimed = awaitStatusWhereNotNull(where, TARGET, 30);
+        events.assertChain(pickMark, "a PICK click must reach the console and the console must AIM:"
+                        + " an index it cannot resolve is a silent no-op, and a target that stays"
+                        + " null looks the same as a slow round trip", 150,
+                "nav_command_received", "nav_target_picked");
+        String picked = events.since(pickMark, "nav_target_picked");
+        String aimed = exec("artest nav status " + where);
         String expected = "\"" + FIRST_SECTOR + "_0_0\"";
         assertEquals("clicking the first listed address must aim the ship at THAT address — the "
                 + "list's order is what the pilot picks by, so aiming at some other entry is the "
-                + "same defect as not aiming at all: " + aimed, expected, readGroup(aimed, TARGET));
+                + "same defect as not aiming at all: " + aimed + " aims=" + picked,
+                expected, readGroup(aimed, TARGET));
 
         // ---- 5) Arm, and stand down again. Both answered. ---------------------------------------
-        scenario().measuring("re-arm the chat channel before the arming click");
-        armChatObservation();
-
         scenario().asserting("arming a chosen destination is accepted, confirmed, and real");
+        long armMark = events.markInstrumented();
+        long armOnClient = bot().eventMark().get("seq").getAsLong();
         bot().clickButtonById(BUTTON_ARM);
-        String armedChat = awaitChatContaining("jump armed", 30);
-        assertTrue("arming a chosen destination must be accepted and confirmed to the pilot. "
-                + "chat=\"" + armedChat + "\"",
-                armedChat.toLowerCase(Locale.ROOT).contains("jump armed"));
+        events.assertChain(armMark, "an ARM click on a chosen destination must reach the console and"
+                + " be answered", 150, "nav_command_received", "nav_console_told");
+        String armedTold = events.since(armMark, "nav_console_told");
+        assertEquals("arming a chosen destination must be ACCEPTED, and the acceptance is the"
+                        + " message production picked: " + armedTold,
+                "msg.jump.armed", Events.lastField(armedTold, "key"));
+        String armedChat = awaitClientRecords(armOnClient, "client_chat_received", "jump armed", 150);
+        assertTrue("...and the confirmation must reach the pilot's own screen. client chat since the"
+                + " click: " + armedChat, armedChat.toLowerCase(Locale.ROOT).contains("jump armed"));
         String armedStatus = exec("artest nav status " + where);
         assertTrue("and the console must actually BE armed — the message is not the state: "
                 + armedStatus, readBoolean(armedStatus, ARMED));
 
         scenario().asserting("pressing the same button again stands the jump down, and says so");
+        long disarmMark = events.markInstrumented();
+        long disarmOnClient = bot().eventMark().get("seq").getAsLong();
         bot().clickButtonById(BUTTON_ARM);
-        String disarmedChat = awaitChatContaining("jump disarmed", 30);
-        assertTrue("pressing the same button again must stand the jump down, and say so. chat=\""
-                + disarmedChat + "\"",
-                disarmedChat.toLowerCase(Locale.ROOT).contains("jump disarmed"));
+        events.assertChain(disarmMark, "a second ARM click must reach the console and be answered",
+                150, "nav_command_received", "nav_console_told");
+        String disarmedTold = events.since(disarmMark, "nav_console_told");
+        assertEquals("pressing the same button again must STAND THE JUMP DOWN, and say which of the"
+                        + " three answers it is: " + disarmedTold,
+                "msg.jump.disarmed", Events.lastField(disarmedTold, "key"));
+        String disarmedChat = awaitClientRecords(disarmOnClient, "client_chat_received",
+                "jump disarmed", 150);
+        assertTrue("...and the pilot must be told he is standing down. client chat since the click: "
+                + disarmedChat, disarmedChat.toLowerCase(Locale.ROOT).contains("jump disarmed"));
         String disarmedStatus = exec("artest nav status " + where);
         assertFalse("a disarmed console must not stay armed: " + disarmedStatus,
                 readBoolean(disarmedStatus, ARMED));
 
         bot().closeScreen();
-    }
-
-    /** Poll the client's chat until a line contains {@code needle} (bounded); returns the last hit. */
-    private String awaitChatContaining(String needle, int samples) throws Exception {
-        String seen = "";
-        for (int i = 0; i < samples; i++) {
-            JsonObject chat = bot().reportChat(8);
-            seen = chat.toString();
-            if (seen.toLowerCase(Locale.ROOT).contains(needle.toLowerCase(Locale.ROOT))) {
-                return seen;
-            }
-            bot().waitTicks(5);
-        }
-        return seen;
-    }
-
-    /** Poll {@code nav status} until the numeric group of {@code p} equals {@code want} (bounded). */
-    private String awaitStatusWhere(String where, Pattern p, int want, int samples) throws Exception {
-        String status = "";
-        for (int i = 0; i < samples; i++) {
-            status = exec("artest nav status " + where);
-            Matcher m = p.matcher(status);
-            if (m.find() && Integer.parseInt(m.group(1)) == want) {
-                return status;
-            }
-            bot().waitTicks(5);
-        }
-        return status;
-    }
-
-    /** Poll {@code nav status} until {@code p}'s group is no longer {@code null} (bounded). */
-    private String awaitStatusWhereNotNull(String where, Pattern p, int samples) throws Exception {
-        String status = "";
-        for (int i = 0; i < samples; i++) {
-            status = exec("artest nav status " + where);
-            Matcher m = p.matcher(status);
-            if (m.find() && !"null".equals(m.group(1))) {
-                return status;
-            }
-            bot().waitTicks(5);
-        }
-        return status;
     }
 
     /** How many address-pick buttons the open console shows. */
@@ -842,18 +987,28 @@ public class MachineGuiClientGroupE2ETest extends AbstractSharedClientE2ETest {
         // than by right-click: the right-click packet was dropped before the chunk/player settled
         // in the original class, a settle-timing race orthogonal to the mixin contract under test.
         // The S2C open-window packet makes the real client render GuiChest.
+        Events events = events();
+        long openMark = events.mark();
+        long openOnClient = bot().eventMark().get("seq").getAsLong();
         String open = exec("artest player open-chest " + dim + " " + x + " " + Y + " " + z);
         scenario().requireArranged("server-side open-chest must succeed: " + open,
                 open.contains("\"ok\":true"));
-        String screen = waitForScreen(GUI_CHEST, 100);
-        scenario().requireArranged("chest GUI must open after server-side displayGUIChest; "
-                + "openResp=" + open, GUI_CHEST.equals(screen));
+        events.await(openMark, "container_opened", "the server must actually OPEN a container: with"
+                + " none open there is nothing for vanilla's distance check to close and both legs"
+                + " below would be measuring an empty screen", 100);
+        String displayed = awaitClientRecords(openOnClient, "client_gui_opened",
+                "\"gui\":\"GuiChest\"", 200);
+        scenario().requireArranged("the real client must DISPLAY the chest GUI — this scenario is"
+                + " about a screen surviving a distance, so a screen that never arrived is an"
+                + " arrangement failure, not a verdict on the redirect. openResp=" + open
+                + " screensDisplayed=" + displayed, displayed.contains("\"gui\":\"GuiChest\""));
 
         scenario().asserting("with the bypass on, the GUI survives a 200-block teleport");
         String addResp = exec("artest player inv-bypass add");
         scenario().requireArranged("inv-bypass add must report inBypass:true: " + addResp,
                 addResp.contains("\"inBypass\":true"));
 
+        long farMark = events.markInstrumented();
         exec("tp @a " + (x + 200) + " " + (Y + 1) + " " + (z + 200) + " 0 0");
         bot().waitTicks(40);
 
@@ -862,6 +1017,20 @@ public class MachineGuiClientGroupE2ETest extends AbstractSharedClientE2ETest {
         // dropped from the set" from "the mixin redirect didn't fire". The bypass map uses
         // WeakReferences.
         String statusAfterTp = exec("artest player inv-bypass status");
+        // This half is an ABSENCE — "the server did not close it" — so the instrument has to prove
+        // it was listening, or the silence says nothing. The redirect's observation point runs on
+        // EVERY EntityPlayerMP.onUpdate tick whether or not its answer changed, so its presence in
+        // `instruments` is what makes the missing `container_closed` a statement about the DECISION.
+        // (The record itself is edge-only, by design: an answer that does not change says nothing,
+        // so there is deliberately no record to count here — only the absence of a close.)
+        String sinceFar = events.since(farMark);
+        Events.assertInstrumentRan(sinceFar, "container_interact_events",
+                "vanilla's reach check was consulted at all while the player stood 200 blocks away");
+        assertEquals("with inv-bypass active the server must not CLOSE the container: a close here"
+                        + " is the redirect having failed to answer true. events since the teleport: "
+                        + sinceFar, 0,
+                Events.countRecords(events.since(farMark, "container_closed"),
+                        "\"type\":\"container_closed\""));
         assertEquals("with inv-bypass active, the chest GUI must remain open across a 200-block "
                 + "teleport (the mixin redirect should force canInteractWith -> true on every "
                 + "EntityPlayerMP.onUpdate tick); reportState=" + afterTpWithBypass
@@ -869,22 +1038,30 @@ public class MachineGuiClientGroupE2ETest extends AbstractSharedClientE2ETest {
                 GUI_CHEST, screenOf(afterTpWithBypass));
 
         scenario().asserting("with the bypass off, vanilla's distance check closes it");
+        long closeMark = events.markInstrumented();
+        long closeOnClient = bot().eventMark().get("seq").getAsLong();
         String removeResp = exec("artest player inv-bypass remove");
         scenario().requireArranged("inv-bypass remove must report inBypass:false: " + removeResp,
                 removeResp.contains("\"inBypass\":false"));
 
-        String finalScreen = waitForNoScreen(bot(), 200);
+        // The close is a chain, and its ORDER is one server call stack: the redirect answers, and
+        // vanilla's own `if` closes the screen on that answer. Asserting it as a chain is what
+        // distinguishes "the redirect said no and the close followed" from "something else closed
+        // the chest", which an empty screen cannot.
+        events.assertChain(closeMark, "removing the bypass must let vanilla's reach check REFUSE the"
+                        + " interaction, and that refusal must be what closes the container", 200,
+                "container_interact_checked", "container_closed");
+        String checks = events.since(closeMark, "container_interact_checked");
+        assertTrue("the reach check must have come back FALSE — a close for any other reason pins"
+                + " nothing about the redirect: " + checks, checks.contains("\"allowed\":false"));
+        String closedOnClient = awaitClientRecords(closeOnClient, "client_gui_opened",
+                "\"gui\":\"none\"", 200);
+        assertTrue("...and the player's own screen must go away — the server letting go of the"
+                        + " container is not yet the player seeing it close. screens the client"
+                        + " displayed since: " + closedOnClient,
+                closedOnClient.contains("\"gui\":\"none\""));
         assertEquals("after removing inv-bypass, vanilla's distance check must close the chest "
-                + "GUI; final screen=" + finalScreen, "", finalScreen);
-    }
-
-    /** Polls the client for up to {@code maxTicks} until {@code wantScreen} is showing. */
-    private String waitForScreen(String wantScreen, int maxTicks) throws Exception {
-        String screen = screenOf(bot().reportState());
-        for (int i = 0; i < maxTicks && !wantScreen.equals(screen); i++) {
-            bot().waitTicks(2);
-            screen = screenOf(bot().reportState());
-        }
-        return screen;
+                + "GUI; final screen=" + screenOf(bot().reportState()), "",
+                screenOf(bot().reportState()));
     }
 }
