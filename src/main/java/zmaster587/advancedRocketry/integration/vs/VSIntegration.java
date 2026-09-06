@@ -74,6 +74,25 @@ public final class VSIntegration {
         // Forge fires no world tick event on that side; both are pure AR types, so this line loads
         // nothing VS-importing of its own.
         net.minecraftforge.common.MinecraftForge.EVENT_BUS.register(new DeckFollowsItsShip());
+        // Publish "a ship became usable" on the bus. Registered here for the same reason as the line
+        // above: it is a pure AR type and only runs where a substrate exists to have ships at all.
+        net.minecraftforge.common.MinecraftForge.EVENT_BUS.register(new ShipLoadedAnnouncer());
+    }
+
+    /**
+     * Every ship in {@code world} that is LOADED and past its settling delay, as
+     * {@code substrate uuid -> AR durable id}. Empty when the substrate is absent — never null, so a
+     * caller on a world without ships and a caller on a build without the substrate write the same
+     * loop.
+     *
+     * <p>A stronger fact than "registered" or "constructed" and a weaker one than "being flown":
+     * see {@link ShipLoadedAnnouncer}, which is the reason this exists.</p>
+     */
+    public static java.util.Map<String, java.util.UUID> shipsReadyForPhysics(World world) {
+        if (!isAvailable() || world == null) {
+            return java.util.Collections.emptyMap();
+        }
+        return VSBridge.shipsReadyForPhysics(world);
     }
 
     /**
@@ -137,7 +156,40 @@ public final class VSIntegration {
         // which is legitimate because it is carrying the SAME ship across.
         java.util.UUID durable = keepDurableId != null
                 ? keepDurableId : durableNameAtAnchor(world, anchorPos);
-        return VSBridge.assembleTier2Ship(world, anchorPos, LOGGER, keepUuid, durable);
+        // ONE SHIP, ONE IDENTITY. The substrate's uuid IS the craft's durable name, so nothing has to
+        // translate between two values and no lookup can be answered about the wrong craft. Before
+        // this, the substrate minted its own uuid per assembly — which is exactly why AR had to keep
+        // a second id at all (the assembler says so where it mints: "the physics mod's own UUID is
+        // re-minted per re-assembly and must never key durable state"). Handing the durable name down
+        // as the identity removes the re-minting instead of compensating for it.
+        //
+        // The one case where the name is not free is a DUPLICATED flight computer: a cloned tile
+        // carries the original's id, and the duplicate is a different craft with a name it has no
+        // claim to. It is re-minted here rather than assembled under a borrowed identity — the
+        // substrate would otherwise throw when the spawn is drained, and the alternative (letting it
+        // mint a fresh uuid of its own) is precisely the silent divergence this change abolishes.
+        if (durable != null && VSBridge.identityHeldByLiveShip(world, durable)) {
+            net.minecraft.tileentity.TileEntity te = world.getTileEntity(anchorPos);
+            if (te instanceof zmaster587.advancedRocketry.tile.TileAdvancedFlightComputer) {
+                java.util.UUID fresh = ((zmaster587.advancedRocketry.tile.TileAdvancedFlightComputer) te)
+                        .mintNewShipId();
+                LOGGER.warn("[SPACE] the durable name {} is held by a LIVE ship in dim {}; this craft's"
+                                + " flight computer was duplicated, so it is re-minted as {} and"
+                                + " assembles as its own ship.",
+                        durable, world.provider.getDimension(), fresh);
+                durable = fresh;
+            } else {
+                LOGGER.error("[SPACE] the durable name {} is held by a LIVE ship in dim {} and this"
+                                + " anchor is not a flight computer, so it cannot be re-minted; the"
+                                + " assembly falls back to a substrate-minted identity and this craft's"
+                                + " two ids will DIFFER.", durable, world.provider.getDimension());
+                durable = null;
+            }
+        }
+        // The identity IS the durable name wherever there is one; keepUuid survives only for a caller
+        // that has no name to give (a hull with no flight computer keeps whatever it had).
+        java.util.UUID identity = durable != null ? durable : keepUuid;
+        return VSBridge.assembleTier2Ship(world, anchorPos, LOGGER, identity, durable);
     }
 
     /**

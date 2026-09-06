@@ -467,6 +467,58 @@ final class VSBridge {
                 physo.getPhysicsControllersInShip().size()};
     }
 
+    /**
+     * Is {@code uuid} held in {@code world} by a ship that still has BLOCKS — i.e. a real craft
+     * rather than the blockless remnant of one that has left?
+     *
+     * <p>Read-only, and that is the point: {@link #adoptOwnRemnant} asks the same question but
+     * disposes of a remnant as it goes, which a caller deciding what to do BEFORE an assembly cannot
+     * afford. A {@code true} here means the identity is genuinely taken by something alive.</p>
+     */
+    static boolean identityHeldByLiveShip(World world, UUID uuid) {
+        if (world == null || uuid == null) {
+            return false;
+        }
+        ShipData existing = shipByUuid(world, uuid);
+        PhysicsObject loaded = ValkyrienUtils.getServerShipManager(world).getPhysObjectFromUUID(uuid);
+        if (existing == null && loaded == null) {
+            return false;
+        }
+        int blocks = existing == null || existing.getBlockPositions() == null
+                ? -1 : existing.getBlockPositions().size();
+        return blocks != 0;
+    }
+
+    /**
+     * Every ship in {@code world} that is LOADED and past its settling delay, as
+     * {@code substrate uuid -> AR durable id} (the durable id may be null for a craft that has never
+     * been given one).
+     *
+     * <p>Two of the three conjuncts {@link #shipPhysicsGatesById} reports, and the third is left out
+     * deliberately. {@code isPhysicsReady} is the substrate's own initial-ticks delay — it withholds
+     * physics briefly after a load so a freshly placed hull does not fall through the floor — and the
+     * chunk cache is what its resolver needs. Both describe a ship becoming ready to be flown.
+     * {@code isPhysicsEnabled} does not: it is an operational state somebody switches on, so a parked
+     * craft that nobody has commanded is fully loaded with it false. Including it would make this
+     * answer "is anyone flying this", and a caller waiting to BEGIN flying would wait for a state its
+     * own next action causes.</p>
+     *
+     * <p>Applied to the ships we already hold rather than re-looked-up one at a time — this runs on
+     * the server tick, and a lookup per ship per tick would be the expensive part of an otherwise
+     * cheap check. Both ids come straight off the ship's own record, so this asks the substrate
+     * nothing it does not already have in hand, and no substrate type escapes this class.</p>
+     */
+    static Map<String, UUID> shipsReadyForPhysics(World world) {
+        Map<String, UUID> out = new LinkedHashMap<>();
+        for (PhysicsObject physo : ValkyrienUtils.getServerShipManager(world).getAllLoadedThreadSafe()) {
+            if (physo.isPhysicsReady() && physo.getCachedSurroundingChunks() != null) {
+                ShipData data = physo.getShipData();
+                out.put(data.getUuid().toString(), data.getArDurableId());
+            }
+        }
+        return out;
+    }
+
     static int loadedShipCount(World world) {
         return ValkyrienUtils.getServerShipManager(world).getAllLoadedThreadSafe().size();
     }

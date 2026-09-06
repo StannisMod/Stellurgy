@@ -1069,6 +1069,27 @@ public class TileAdvancedFlightComputer extends TileEntity implements IModularIn
     }
 
     /**
+     * Give this computer a NEW durable id, abandoning the one it carried.
+     *
+     * <p>For one case only: this computer is about to assemble a craft while a LIVE ship already
+     * holds the id it carries. That happens when the tile itself was duplicated — a cloned or
+     * copied flight computer carries the original's id in its NBT — and the duplicate is a different
+     * craft that has inherited a name it has no claim to. Re-minting here is what lets the assembly
+     * proceed under the invariant that a ship's identity is one value: the duplicate becomes its own
+     * ship, which is what a player who copied a computer expects, and the original keeps everything
+     * keyed on its name.</p>
+     *
+     * <p>Not a general setter, and deliberately not one: everything durable about a craft — the
+     * ledger row, the transit, every aboard tag — is keyed on this value, so re-minting outside that
+     * one case orphans the craft's whole history.</p>
+     */
+    public java.util.UUID mintNewShipId() {
+        shipId = java.util.UUID.randomUUID();
+        markDirty();
+        return shipId;
+    }
+
+    /**
      * Whether this craft's ship record already carries our durable id. Not persisted on purpose: a
      * tile is re-created whenever its ship is re-assembled, and that is exactly when the binding has
      * to be made again, against a possibly NEW ship record.
