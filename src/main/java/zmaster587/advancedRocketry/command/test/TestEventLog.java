@@ -7,15 +7,27 @@ import java.util.Comparator;
 import java.util.Deque;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 
+import net.minecraft.entity.Entity;
+import net.minecraft.entity.item.EntityItem;
+import net.minecraft.entity.item.EntityXPOrb;
+import net.minecraft.entity.player.EntityPlayer;
+import net.minecraft.item.ItemStack;
 import net.minecraft.util.math.BlockPos;
+import net.minecraft.world.World;
 import net.minecraftforge.common.MinecraftForge;
+import net.minecraftforge.event.entity.EntityJoinWorldEvent;
+import net.minecraftforge.event.entity.living.LivingHurtEvent;
+import net.minecraftforge.event.entity.player.PlayerContainerEvent;
 import net.minecraftforge.event.entity.player.PlayerInteractEvent;
 import net.minecraftforge.event.entity.player.PlayerSleepInBedEvent;
 import net.minecraftforge.event.entity.player.PlayerWakeUpEvent;
 import net.minecraftforge.fml.common.eventhandler.EventPriority;
 import net.minecraftforge.fml.common.eventhandler.SubscribeEvent;
+
+import zmaster587.advancedRocketry.api.RocketEvent;
 
 /**
  * An ORDERED log of things that HAPPENED on this side, so a test can wait for an event instead of
@@ -379,6 +391,194 @@ public final class TestEventLog {
             record(event.getEntityPlayer().world.isRemote ? "client" : "server",
                     event.getEntityPlayer().world.getTotalWorldTime(), "player_wake_up",
                     "\"player\":\"" + event.getEntityPlayer().getName() + "\"");
+        }
+
+        // ------------------------------------------------------------------------------------
+        // The bus vocabulary below is recorded on whichever side the event's world belongs to,
+        // exactly like the three handlers above: this recorder is registered in every test-mode
+        // JVM, and on an integrated client the same bus carries both sides' events. A reader
+        // filters on the record's own side. Every handler announces its instrument FIRST, above
+        // any filter, so "nothing recorded" is distinguishable from "no handler ran".
+        //
+        // These are BUS subscribers, not mixins, so they are covered by `recording` ALONE and
+        // never by `mixinsInstalled`: the game posts every event below whether or not the
+        // test-only mixin configuration was accepted. A reader checking whether these records
+        // could have been taken asks `isRecording()`; `areMixinsInstalled()` says nothing about
+        // them in either direction, and a false there is not a reason to distrust a quiet log
+        // of these types.
+        // ------------------------------------------------------------------------------------
+
+        /**
+         * A container GUI was OPENED for a player — the server-side fact behind every machine
+         * GUI test ({@code PlayerContainerEvent.Open}, fired from
+         * {@code EntityPlayerMP.displayGUIChest/displayGui} after the open-window packet is sent,
+         * and for a modded GUI from {@code FMLNetworkHandler.openGui}). The client's
+         * {@code GuiScreen} is a separate fact this says nothing about.
+         *
+         * <p><b>Its blind spot is the whole reason it is paired with {@code gui_container_served}.</b>
+         * {@code FMLNetworkHandler.openGui} posts this event only INSIDE the branch where the mod's
+         * GUI handler returned a non-null container; a handler that answers null opens nothing and
+         * fires nothing, so an absence here cannot tell "the player never asked" from "the handler
+         * refused". {@code gui_container_served} is recorded at the handler's own return and
+         * separates the two.</p>
+         */
+        @SubscribeEvent
+        public void onContainerOpened(PlayerContainerEvent.Open event) {
+            noteInstrumentEntered("server_bus_container_opened");
+            recordContainer("container_opened", event);
+        }
+
+        /**
+         * The matching CLOSE ({@code PlayerContainerEvent.Close}, from {@code EntityPlayerMP.closeContainer}
+         * and {@code closeScreen}). A logout closes the open container too and lands here.
+         */
+        @SubscribeEvent
+        public void onContainerClosed(PlayerContainerEvent.Close event) {
+            noteInstrumentEntered("server_bus_container_closed");
+            recordContainer("container_closed", event);
+        }
+
+        private static void recordContainer(String type, PlayerContainerEvent event) {
+            EntityPlayer who = event.getEntityPlayer();
+            record(sideOf(who.world), who.world.getTotalWorldTime(), type,
+                    "\"who\":\"" + str(who.getName()) + "\""
+                            + ",\"container\":\"" + str(event.getContainer() == null ? "null"
+                                    : event.getContainer().getClass().getSimpleName()) + "\""
+                            + ",\"windowId\":" + (event.getContainer() == null
+                                    ? -1 : event.getContainer().windowId));
+        }
+
+        /**
+         * An entity was ADDED to a server world ({@code EntityJoinWorldEvent}) — the moment a spawn,
+         * a dimension arrival or a chunk load makes it exist there. Deliberately SERVER ONLY: the
+         * client's copy of the same entity joins its world on its own clock and would double every
+         * record on an integrated client. {@code EntityItem} and {@code EntityXPOrb} are skipped,
+         * because a block break or a mob death spawns dozens of them and the ring is 256; every
+         * other class is kept, so a reader filters on {@code cls}. Silent about WHY the entity
+         * joined (spawn vs. load vs. transfer) — the event does not carry that.
+         */
+        @SubscribeEvent
+        public void onEntityJoinedWorld(EntityJoinWorldEvent event) {
+            noteInstrumentEntered("server_bus_entity_joined_world");
+            World world = event.getWorld();
+            Entity e = event.getEntity();
+            if (world == null || world.isRemote || e == null
+                    || e instanceof EntityItem || e instanceof EntityXPOrb) {
+                return;
+            }
+            record("server", world.getTotalWorldTime(), "entity_joined_world",
+                    "\"e\":" + e.getEntityId()
+                            + ",\"cls\":\"" + str(e.getClass().getSimpleName()) + "\""
+                            + ",\"x\":" + num(e.posX) + ",\"y\":" + num(e.posY)
+                            + ",\"z\":" + num(e.posZ)
+                            + ",\"dim\":" + world.provider.getDimension());
+        }
+
+        /**
+         * A right-click WITH AN ITEM that reached this side ({@code PlayerInteractEvent.RightClickItem},
+         * fired from {@code PlayerInteractionManager.processRightClick} on the server and from the
+         * client's own use path) — the sibling of {@code right_click_block} above, for an item used
+         * in the air. Records the item's registry name, or {@code empty}. Silent about whether the
+         * item's use succeeded: that is the item's own result, which the event does not carry.
+         */
+        @SubscribeEvent
+        public void onRightClickItem(PlayerInteractEvent.RightClickItem event) {
+            noteInstrumentEntered("server_bus_right_click_item");
+            EntityPlayer who = event.getEntityPlayer();
+            ItemStack stack = event.getItemStack();
+            String item = stack == null || stack.isEmpty() || stack.getItem().getRegistryName() == null
+                    ? "empty" : stack.getItem().getRegistryName().toString();
+            record(sideOf(event.getWorld()), event.getWorld().getTotalWorldTime(), "right_click_item",
+                    "\"who\":\"" + str(who.getName()) + "\""
+                            + ",\"hand\":\"" + (event.getHand() == null ? "null" : event.getHand().name()) + "\""
+                            + ",\"item\":\"" + str(item) + "\"");
+        }
+
+        /**
+         * A PLAYER took damage ({@code LivingHurtEvent}, fired from {@code EntityLivingBase.damageEntity}
+         * after armour and before absorption) — the witness a fall-through or a vacuum test wants,
+         * with the damage type it came with ({@code fall}, {@code outOfWorld}, AR's own suit and
+         * atmosphere sources). Players only: mobs would turn this ring over on any surface with a
+         * cactus. Silent about the damage actually APPLIED — later handlers may still change
+         * {@code amount}, and this records it as it stood at default priority.
+         */
+        @SubscribeEvent
+        public void onLivingHurt(LivingHurtEvent event) {
+            noteInstrumentEntered("server_bus_living_hurt");
+            if (!(event.getEntityLiving() instanceof EntityPlayer)) {
+                return;
+            }
+            EntityPlayer who = (EntityPlayer) event.getEntityLiving();
+            String source = event.getSource() == null ? "null" : event.getSource().getDamageType();
+            record(sideOf(who.world), who.world.getTotalWorldTime(), "living_hurt",
+                    "\"who\":\"" + str(who.getName()) + "\""
+                            + ",\"source\":\"" + str(source) + "\""
+                            + ",\"amount\":" + num(event.getAmount()));
+        }
+
+        /**
+         * A rocket TOUCHED DOWN — AR's own {@code RocketEvent.RocketLandedEvent}, posted by
+         * {@code EntityRocket} on the server at the free-flight touchdown, at the classic descent's
+         * touchdown, and once after a load for a rocket that is already on the ground. The client
+         * re-posts it on receipt of the land packet, so on an integrated client the same landing
+         * appears twice with different sides; a reader filters on the side it means. Silent about
+         * WHICH of the three server sites posted it — the event carries only the entity.
+         */
+        @SubscribeEvent
+        public void onRocketLanded(RocketEvent.RocketLandedEvent event) {
+            noteInstrumentEntered("server_bus_rocket_landed");
+            Entity e = event.getEntity();
+            World world = e == null ? event.world : e.world;
+            if (world == null) {
+                return;
+            }
+            record(sideOf(world), world.getTotalWorldTime(), "rocket_landed",
+                    "\"e\":" + (e == null ? -1 : e.getEntityId())
+                            + ",\"y\":" + num(e == null ? Double.NaN : e.posY)
+                            + ",\"onGround\":" + (e != null && e.onGround));
+        }
+
+        /**
+         * A ship became USABLE — its physics will be stepped from now on.
+         *
+         * <p>Production's own event, subscribed to like any other consumer would rather than
+         * observed by a test mixin: this fact has a non-test audience and is published for it
+         * ({@code ShipEvent.ShipLoadedEvent}). That is why the recorded type is named for USABILITY
+         * and not "loaded" — {@code ship_loaded} is already taken by the test mixin on the physics
+         * object's CONSTRUCTOR, which is a weaker claim: a ship exists there and does not move yet.
+         * A test that means "I can fly this now" wants this one.</p>
+         *
+         * <p>Both ids are recorded even though they are the same value (one ship, one identity), so a
+         * reader can match on either spelling without knowing that.</p>
+         *
+         * <p>A bus subscription, so it is covered by the log's {@code recording} flag and never by
+         * {@code mixins}.</p>
+         */
+        @SubscribeEvent
+        public void onShipUsable(zmaster587.advancedRocketry.api.event.ShipEvent.ShipLoadedEvent event) {
+            noteInstrumentEntered("server_bus_ship_usable");
+            World world = event.world;
+            if (world == null) {
+                return;
+            }
+            record(sideOf(world), world.getTotalWorldTime(), "ship_usable",
+                    "\"ship\":\"" + str(event.shipId) + "\""
+                            + ",\"vsShip\":\"" + str(event.substrateId) + "\""
+                            + ",\"dim\":" + world.provider.getDimension());
+        }
+
+        private static String sideOf(World world) {
+            return world != null && world.isRemote ? "client" : "server";
+        }
+
+        /** Six significant figures — the same rendering the test-side trace uses for a double. */
+        private static String num(double v) {
+            return String.format(Locale.ROOT, "%.6g", v);
+        }
+
+        /** JSON-safe: a name that carries a quote must not break the record it sits in. */
+        private static String str(String raw) {
+            return raw == null ? "" : raw.replace('\\', '/').replace('"', '\'');
         }
     }
 }

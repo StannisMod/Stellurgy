@@ -29,7 +29,31 @@
     "MixinShipCrossingServiceEvents",
     "MixinVSShipCrossingOpsEvents",
     "MixinShipLedgerEvents",
-    "MixinQueryableShipDataEvents"
+    "MixinQueryableShipDataEvents",
+    "MixinTileAdvancedFlightComputerEvents",
+    "MixinPhysicsObjectEvents",
+    "MixinSpaceEventHandlerEvents",
+    "MixinCrewTransferEvents",
+    "MixinGuiHandlerEvents",
+    "MixinTileRocketAssemblingMachineEvents",
+    "MixinTileObservatoryEvents",
+    "MixinTileNavigationComputerEvents",
+    "MixinItemStationChipEvents",
+    "MixinRocketInventoryHelperEvents",
+    "MixinPlanetEventHandlerEvents",
+    "MixinSatelliteBiomeChangerEvents",
+    "MixinSatelliteRegistryEvents",
+    "MixinVSBridgeEvents",
+    "MixinBasicTeleporterEvents",
+    "MixinEntityRocketEvents",
+    "MixinItemAtmosphereAnalzerEvents",
+    "MixinAtmosphereNeedsSuitEvents",
+    "MixinItemSpaceChestEvents",
+    "MixinItemAirUtilsEvents",
+    "MixinDelayedActionBarEvents",
+    "MixinEntityPlayerMPEvents",
+    "MixinTileEntityFieldGeneratorEvents",
+    "MixinTilePilotSeatEvents"
   ],
   "client": [
     "MixinEntityVelocityWriters",
@@ -45,6 +69,13 @@
     "MixinHyperspaceTunnelDiag",
     "MixinKeyBindingsMotionSample",
     "MixinKeyBindingsSeatGate",
-    "MixinRocketEventHandlerMotionSample"
+    "MixinRocketEventHandlerMotionSample",
+    "MixinShipFrameCameraEvents",
+    "MixinPacketSystemBodiesSyncEvents",
+    "MixinBoundarySkyEvents",
+    "MixinDimensionManagerEvents",
+    "MixinSpaceClockSyncEvents",
+    "MixinKeyBindingsEvents",
+    "MixinClientProxyEvents"
   ]
 }
