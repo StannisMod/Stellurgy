@@ -103,6 +103,24 @@ public class WorldServerShipManager implements IPhysObjectWorld {
                 iterator.remove();
             }
         }
+        // ...and the ships nothing has loaded. The sweep above walks `loadedShips`, so a craft that
+        // was emptied or declared finished while unloaded was never asked the question and stayed in
+        // the registry for the life of the world — answering position lookups, owning a lane, and
+        // needing every caller that produced one to reach in and deregister it by hand. A record
+        // exists whether or not a physics object does, so this is where such a craft can be
+        // collected at all. Only DEAD ones: an unloaded ship is otherwise perfectly alive, and its
+        // block set is not readable here to be judged on.
+        // IN USE, not merely "in loadedShips": a ship queued for load, or loading in the background,
+        // is in this manager's hands without being in that map, and taking its record away in that
+        // window throws out of the world tick on the next chunk-provider pass and takes a dedicated
+        // server with it. A dead ship caught mid-load is left alone here and collected by the sweep
+        // above once it is loaded, which is one tick later and correct.
+        for (Iterator<ShipData> dead = QueryableShipData.get(world).iterator(); dead.hasNext();) {
+            ShipData data = dead.next();
+            if (data.isDead() && !isShipInUse(data.getUuid())) {
+                QueryableShipData.get(world).removeShip(data);
+            }
+        }
         // Then execute queued ship spawn operations
         spawnNewShips();
         // Then determine which ships to load and unload

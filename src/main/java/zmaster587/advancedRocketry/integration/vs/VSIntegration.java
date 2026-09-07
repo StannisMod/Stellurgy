@@ -494,9 +494,10 @@ public final class VSIntegration {
             // departure to a cell it never reached.
             ShipLoadedAnnouncer.abandonDeparture(srcShipId);
         }
-        // No-op whenever a physics object is still loaded for the source - there VS's destroy pass owns
-        // the collection and taking the ship out of the registry here would be the very bug this order
-        // exists to avoid.
+        // Declare the source FINISHED. It is collected on the next tick of this world whether or not
+        // anything had it loaded — which is the case that used to have no collector at all and left a
+        // blockless record answering position lookups for the life of the world. Nothing here decides
+        // WHEN or in what order; that stays the substrate's, which is the only place it is understood.
         VSBridge.releaseShipIfNothingLoaded(srcWorld, srcShipId);
         // The cut took the seat BLOCKS; the dummies bound to them are entities and survive it. On a
         // crossing they must not: the ship is re-assembled in ANOTHER world and its riders are re-seated
@@ -1263,6 +1264,21 @@ public final class VSIntegration {
      * Every ship the registry knows in {@code world}, as uuid -> world position; empty when the
      * physics mod is absent. Registry-keyed, so it answers for ships nobody is near.
      */
+    /**
+     * Every ship in {@code world}'s REGISTRY — loaded or not, with blocks or without — each as a flat
+     * map of primitives: {@code id}, {@code durableId}, {@code blocks}, {@code loaded}, {@code dead}.
+     *
+     * <p>The registry is the half no instrument could see: every other reading in the tree is about
+     * LOADED ships, so a blockless craft nothing had loaded was invisible while still answering
+     * position lookups and holding a lane. Only AR-core types cross the gate.</p>
+     */
+    public static java.util.List<java.util.Map<String, Object>> registeredShips(World world) {
+        if (!isAvailable() || world == null) {
+            return java.util.Collections.emptyList();
+        }
+        return VSBridge.registeredShips(world);
+    }
+
     public static java.util.Map<java.util.UUID, double[]> registeredShipPoses(World world) {
         if (!isAvailable() || world == null) {
             return java.util.Collections.emptyMap();

@@ -540,6 +540,37 @@ final class VSBridge {
     }
 
     /**
+     * Every ship in {@code world}'s REGISTRY, described one per entry: its substrate id, AR's durable
+     * name, how many blocks it owns, whether anything has it loaded, and whether it has been declared
+     * finished.
+     *
+     * <p><b>The registry is the half nothing could see.</b> Every existing reading is about LOADED
+     * ships — {@code ship-count}, {@code ships-loaded}, {@code shipIdsAt} — so a craft that owns no
+     * blocks and nothing has loaded was invisible to every instrument in the tree while still
+     * answering position lookups and holding a lane. "Blockless remnants do not accumulate" was
+     * therefore not a measured claim on either side; it could not be measured at all.</p>
+     *
+     * <p>Each entry is a flat map of primitives, so nothing of the substrate's crosses the gate. The
+     * fields that matter for a remnant are {@code blocks} (0 is one) and {@code loaded} (false means
+     * no destroy pass was ever going to ask about it).</p>
+     */
+    static java.util.List<java.util.Map<String, Object>> registeredShips(World world) {
+        java.util.List<java.util.Map<String, Object>> out = new java.util.ArrayList<>();
+        for (ShipData data : ValkyrienUtils.getQueryableData(world).getShips()) {
+            java.util.Map<String, Object> one = new LinkedHashMap<>();
+            one.put("id", data.getUuid().toString());
+            UUID durable = data.getArDurableId();
+            one.put("durableId", durable == null ? null : durable.toString());
+            one.put("blocks", data.getBlockPositions() == null ? -1 : data.getBlockPositions().size());
+            one.put("loaded", ValkyrienUtils.getServerShipManager(world)
+                    .getPhysObjectFromUUID(data.getUuid()) != null);
+            one.put("dead", data.isDead());
+            out.add(one);
+        }
+        return out;
+    }
+
+    /**
      * Total Valkyrien Skies ships known in {@code world}, loaded or not — the queryable
      * ship registry, which includes a freshly-spawned ship whose shipyard chunks are
      * not yet loaded. Distinguishes "ship created but not loaded" from "never created".
@@ -683,20 +714,29 @@ final class VSBridge {
     }
 
     /**
-     * Deregister {@code uuid} unless the physics mod is still holding it. "Holding" is asked of the
-     * MANAGER as one question, because a ship can be in its hands without being loaded: while its
-     * chunks stream in it has no physics object yet, and deregistering it in that window throws out of
-     * the world tick on the next chunk-provider pass and takes the dedicated server with it. Asking
-     * only "is a physics object loaded" is what leaves that window open.
+     * Declare the craft {@code uuid} FINISHED: it is collected on the next tick of {@code world},
+     * loaded or not.
+     *
+     * <p>This used to deregister by hand, guarded on the physics mod not holding the ship — and the
+     * guard was there because removing a record the substrate is still working with throws out of the
+     * world tick and takes a dedicated server with it. The guard was correct and the shape was not:
+     * it made AR responsible for knowing the substrate's own ordering, and it did nothing at all in
+     * the case it was guarding, so a craft the substrate was mid-way through kept its registry entry
+     * for the life of the world.</p>
+     *
+     * <p>Marking states the intent and leaves the disposal where the ordering is understood. Nothing
+     * here has to ask whether the ship is loaded, in use, or streaming: those are exactly the
+     * distinctions the collector already makes, and it now makes them for unloaded ships too.</p>
      */
     static boolean releaseShipIfNothingLoaded(World world, UUID uuid) {
         if (uuid == null) {
             return false;
         }
-        if (ValkyrienUtils.getServerShipManager(world).isShipInUse(uuid)) {
+        ShipData data = shipByUuid(world, uuid);
+        if (data == null) {
             return false;
         }
-        ValkyrienUtils.getQueryableData(world).removeShip(uuid);
+        data.markDead();
         return true;
     }
 

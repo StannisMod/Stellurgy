@@ -227,6 +227,9 @@ public class PhysicsObject implements IPhysicsEntity {
      * deconstruct back to the world.
      */
     boolean shouldShipBeDestroyed() {
+        if (getShipData().isDead()) {
+            return true; // somebody declared this craft finished; the record carries the decision
+        }
         if (getBlockPositions().isEmpty()) {
             return true;
         }
@@ -261,7 +264,15 @@ public class PhysicsObject implements IPhysicsEntity {
         }
         getWatchingPlayers().clear();
         // Finally, copy all the blocks from the ship to the world
-        if (!getBlockPositions().isEmpty()) {
+        //
+        // ...unless the ship is DEAD, which means DISCARD and not deconstruct. The two dispositions
+        // were never distinguished here because until the dead flag existed the only ships reaching
+        // this path with blocks were being deconstructed on purpose. They are opposites: a caller
+        // that retires a parked hull wants the record gone and the blocks left where they are, in a
+        // subspace shipyard nothing loads or can reach — copying them back would paste a whole craft
+        // into the world at the hull's position, which is the one outcome that call site exists to
+        // avoid.
+        if (!getBlockPositions().isEmpty() && !getShipData().isDead()) {
             if (deconstructState.copyBlocks) {
                 MutableBlockPos newPos = new MutableBlockPos();
                 ShipTransform currentTransform = getShipTransformationManager().getCurrentTickTransform();

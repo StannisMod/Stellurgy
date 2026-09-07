@@ -79,6 +79,23 @@ public class ShipData {
      */
     private String name;
     /**
+     * This ship is DEAD: it is to be collected on the next tick of the world that carries it,
+     * whether or not it is loaded.
+     *
+     * <p><b>Why the flag lives here and not on the physics object.</b> A ship's disposal was decided
+     * by {@code PhysicsObject.shouldShipBeDestroyed()}, and the destroy pass asks it only of the
+     * LOADED ships — so a craft nobody had loaded could not be collected by the substrate at all, and
+     * every caller that emptied one had to reach in and deregister it by hand. A record exists loaded
+     * or not, which is the only place a disposal decision can be made once and then honoured.</p>
+     *
+     * <p><b>Transient on purpose.</b> Death is a decision about the next tick, not a property of the
+     * craft worth persisting: a save taken between the mark and the collection restores a ship whose
+     * block set is empty, and an empty block set already answers {@code shouldShipBeDestroyed} on its
+     * own. Writing it out would also make a corrupted or hand-edited save able to delete a live
+     * ship.</p>
+     */
+    private transient boolean dead;
+    /**
      * Advanced Rocketry's DURABLE ship id for this craft, or {@code null} for a craft AR does not
      * own.
      *
@@ -256,6 +273,27 @@ public class ShipData {
     @java.lang.SuppressWarnings("all")
     public UUID getUuid() {
         return this.uuid;
+    }
+
+    /** Whether this ship has been marked for collection — see {@link #dead}. */
+    public boolean isDead() {
+        return this.dead;
+    }
+
+    /**
+     * Mark this ship for collection on the next tick of its world.
+     *
+     * <p>The caller says the craft is finished; WHEN and HOW it leaves the registry stays the
+     * substrate's business, which is the point — a caller that deregistered by hand had to know the
+     * substrate's own ordering (that a blockless ship is collected by a pass which copies nothing
+     * back, and that removing the record first makes the load/unload pass iterate a collection the
+     * entry is already out of, so it never sees it again). Marking states the intent and leaves the
+     * ordering where it is understood.</p>
+     *
+     * <p>Idempotent, and never un-set: nothing revives a ship somebody declared finished.</p>
+     */
+    public void markDead() {
+        this.dead = true;
     }
 
     /**

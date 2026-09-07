@@ -725,6 +725,40 @@ public class TestProbeCommand extends CommandBase {
             return;
         }
         // ship-count <dim> — number of loaded VS ships (poll for async assembly).
+        // ships-registered <dim> — every ship in the REGISTRY, loaded or not, each with its durable
+        // name, its block count, whether anything has it loaded and whether it has been declared
+        // finished.
+        //
+        // The half no instrument could see. `ship-count`, `ships-loaded` and `shipIdsAt` are all
+        // about LOADED ships, so a blockless craft nothing had loaded was invisible to the whole
+        // tree while still answering position lookups and holding a lane — which meant "remnants do
+        // not accumulate" was not a measured claim on either side. `blocks:0` is a remnant;
+        // `loaded:false` beside it means no destroy pass was ever going to ask about it.
+        if (args.length >= 2 && "ships-registered".equalsIgnoreCase(args[0])) {
+            net.minecraft.world.WorldServer world = vsWorld(sender, parseIntOr(args[1], Integer.MIN_VALUE));
+            if (world == null) {
+                send(sender, "{\"error\":\"world not loaded\"}");
+                return;
+            }
+            java.util.List<java.util.Map<String, Object>> ships =
+                    zmaster587.advancedRocketry.integration.vs.VSIntegration.registeredShips(world);
+            int blockless = 0;
+            StringBuilder out = new StringBuilder("{\"count\":").append(ships.size())
+                    .append(",\"ships\":[");
+            for (int i = 0; i < ships.size(); i++) {
+                if (i > 0) out.append(',');
+                java.util.Map<String, Object> one = ships.get(i);
+                if (Integer.valueOf(0).equals(one.get("blocks"))) {
+                    blockless++;
+                }
+                out.append(jsonMap(one));
+            }
+            // Counted here rather than left to the caller: the number a remnant question actually
+            // wants is "how many own nothing", and a caller deriving it from the list would be
+            // re-implementing the predicate at every call site.
+            send(sender, out.append("],\"blockless\":").append(blockless).append("}").toString());
+            return;
+        }
         if (args.length >= 2 && "ship-count".equalsIgnoreCase(args[0])) {
             net.minecraft.world.WorldServer world = vsWorld(sender, parseIntOr(args[1], Integer.MIN_VALUE));
             if (world == null) {
@@ -2493,7 +2527,7 @@ public class TestProbeCommand extends CommandBase {
             send(sender, "{\"entityId\":" + item.getEntityId() + ",\"armed\":" + armed + "}");
             return;
         }
-        send(sender, "{\"error\":\"usage: vs available|ship-count <dim>"
+        send(sender, "{\"error\":\"usage: vs available|ship-count <dim>|ships-registered <dim>"
                 + "|ship-info <dim> <x> <y> <z> [maxDist]|ship-info <dim> id <shipId>"
                 + "|push-ship-by-id <dim> <shipId> <vx> <vy> <vz>"
                 + "|spin-ship-by-id <dim> <shipId> <wx> <wy> <wz>"
