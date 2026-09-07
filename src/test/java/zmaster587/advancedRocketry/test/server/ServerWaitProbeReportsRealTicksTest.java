@@ -82,7 +82,7 @@ public class ServerWaitProbeReportsRealTicksTest extends AbstractSharedServerTes
                 clock.contains("\"onServerThread\":true"));
 
         long before = GameTicks.count(client(), 0);
-        long observed = GameTicks.await(client(), 0, TICKS);
+        long observed = GameTicks.advanceWorld(client(), 0, TICKS);
         long after = GameTicks.count(client(), 0);
 
         assertTrue("the wait reported " + observed + " ticks but was asked for " + TICKS

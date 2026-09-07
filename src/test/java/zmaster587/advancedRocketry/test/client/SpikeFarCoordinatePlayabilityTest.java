@@ -160,7 +160,7 @@ public class SpikeFarCoordinatePlayabilityTest extends AbstractClientE2ETest {
             }
             // Park him back near the origin so the next case starts from a known place.
             exec("artest player far-tp 0.5 200 0.5");
-            GameTicks.await(serverClient(), OVERWORLD, 20);
+            GameTicks.advanceWorld(serverClient(), OVERWORLD, 20);
         }
 
         StringBuilder out = new StringBuilder("[SPIKE far-coordinate delivery boundary]\n");
@@ -288,7 +288,7 @@ public class SpikeFarCoordinatePlayabilityTest extends AbstractClientE2ETest {
                 exec("artest chunk forceload " + OVERWORLD + " " + cx + " " + cz);
             }
         }
-        GameTicks.await(serverClient(), OVERWORLD, 60);
+        GameTicks.advanceWorld(serverClient(), OVERWORLD, 60);
 
         int x1 = x - 4;
         int x2 = x + WALL_OFFSET + 4;
@@ -297,7 +297,7 @@ public class SpikeFarCoordinatePlayabilityTest extends AbstractClientE2ETest {
         // Hollow out everything up to (but not including) the wall plane at x+WALL_OFFSET.
         exec("artest fill " + OVERWORLD + " " + (x1 + 1) + " " + STAND_Y + " " + (ARENA_Z - 5) + " "
                 + (x + WALL_OFFSET - 1) + " " + (FLOOR_Y + 5) + " " + (ARENA_Z + 5) + " minecraft:air");
-        GameTicks.await(serverClient(), OVERWORLD, 20);
+        GameTicks.advanceWorld(serverClient(), OVERWORLD, 20);
     }
 
     /**
@@ -353,7 +353,7 @@ public class SpikeFarCoordinatePlayabilityTest extends AbstractClientE2ETest {
         for (int attempt = 1; attempt <= DELIVERY_ATTEMPTS; attempt++) {
             lastReply = exec("artest player far-tp " + fmt(x + 0.5d) + " " + STAND_Y + " "
                     + fmt(ARENA_Z + 0.5d));
-            GameTicks.await(serverClient(), OVERWORLD, 40);
+            GameTicks.advanceWorld(serverClient(), OVERWORLD, 40);
             bot().waitTicks(30);
             lastX = serverX();
             lastY = serverY();

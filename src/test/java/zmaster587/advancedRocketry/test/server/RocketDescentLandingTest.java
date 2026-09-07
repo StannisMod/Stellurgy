@@ -136,7 +136,7 @@ public class RocketDescentLandingTest extends AbstractSharedServerTest {
                 + " orbit=true flight=false ticksExisted=" + (DESCENT_TIMER + 1)
                 + " posY=300 motionY=0"));
 
-        GameTicks.await(client(), 0, 5);
+        GameTicks.advanceWorld(client(), 0, 5);
 
         String info = ok(client().execute("artest rocket info " + id));
         assertTrue("descent gate must flip isInFlight under real ticking: " + info,
@@ -156,7 +156,7 @@ public class RocketDescentLandingTest extends AbstractSharedServerTest {
         ok(client().execute("artest rocket set-state " + id
                 + " orbit=true flight=false ticksExisted=5 posY=300 motionY=0"));
 
-        GameTicks.await(client(), 0, 5);
+        GameTicks.advanceWorld(client(), 0, 5);
 
         String info = ok(client().execute("artest rocket info " + id));
         // ticksExisted will have advanced by up to ~5 under real ticking;
@@ -184,7 +184,7 @@ public class RocketDescentLandingTest extends AbstractSharedServerTest {
                 + " orbit=true flight=true ticksExisted=" + (DESCENT_TIMER + 5)
                 + " posY=300 motionY=0"));
 
-        GameTicks.await(client(), 0, 5);
+        GameTicks.advanceWorld(client(), 0, 5);
 
         String info = ok(client().execute("artest rocket info " + id));
         Matcher m = POS_Y_FIELD.matcher(info);
@@ -218,7 +218,7 @@ public class RocketDescentLandingTest extends AbstractSharedServerTest {
                 + " orbit=true flight=true ticksExisted=" + (DESCENT_TIMER + 5)
                 + " posY=" + (baseY + 2) + " motionY=-10"));
 
-        GameTicks.await(client(), 0, 6);
+        GameTicks.advanceWorld(client(), 0, 6);
 
         String countsAfter = ok(client().execute("artest rocket event-counts-full"));
         int landedAfter = gi(LANDED_COUNT, countsAfter, "landed after");

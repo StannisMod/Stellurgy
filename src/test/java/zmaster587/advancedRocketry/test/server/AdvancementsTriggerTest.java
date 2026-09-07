@@ -106,7 +106,7 @@ public class AdvancementsTriggerTest {
         // Wait OFF the server thread: a console command runs ON the server thread, so a probe that
         // sleeps there blocks ticking entirely. The wait belongs in the test jvm — and it OBSERVES
         // the world's clock rather than hoping for it, so a world that is not ticking says so.
-        GameTicks.await(harness.client(), dim, ticks + 10);
+        GameTicks.advanceWorld(harness.client(), dim, ticks + 10);
     }
 
     private boolean isDone(String src) {

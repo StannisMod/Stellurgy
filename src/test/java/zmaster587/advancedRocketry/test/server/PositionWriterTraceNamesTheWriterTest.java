@@ -56,7 +56,7 @@ public class PositionWriterTraceNamesTheWriterTest {
                         AbstractHeadlessServerTest.PROP_HARNESS_ENABLED, "false")));
         workDir = Files.createTempDirectory("forge-server-poswriter-");
         harness = RealDedicatedServerHarness.startWith(workDir, /*cleanupOnClose=*/true);
-        events = new Events(this::exec, ticks -> GameTicks.await(harness.client(), 0, ticks));
+        events = new Events(this::exec, ticks -> GameTicks.advanceWorld(harness.client(), 0, ticks));
     }
 
     @After
@@ -86,7 +86,7 @@ public class PositionWriterTraceNamesTheWriterTest {
     @Test(timeout = 180000)
     public void aDeliberatePlacementIsRecordedWithItsCaller() throws Exception {
         station(120);
-        GameTicks.await(harness.client(), 0, 5);
+        GameTicks.advanceWorld(harness.client(), 0, 5);
 
         long mark = events.markInstrumented();
         station(260);
@@ -119,11 +119,11 @@ public class PositionWriterTraceNamesTheWriterTest {
     @Test(timeout = 180000)
     public void ordinaryMotionIsNotRecordedAsAJump() throws Exception {
         station(120);
-        GameTicks.await(harness.client(), 0, 5);
+        GameTicks.advanceWorld(harness.client(), 0, 5);
 
         long mark = events.markInstrumented();
         station(122);
-        GameTicks.await(harness.client(), 0, 20);
+        GameTicks.advanceWorld(harness.client(), 0, 20);
 
         String reply = exec("artest events since " + mark + " pos_jump");
         Matcher count = COUNT.matcher(reply);

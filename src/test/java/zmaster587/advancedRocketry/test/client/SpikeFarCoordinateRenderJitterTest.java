@@ -284,7 +284,7 @@ public class SpikeFarCoordinateRenderJitterTest extends AbstractClientE2ETest {
         double actualX = Double.NaN;
         for (int attempt = 1; attempt <= DELIVERY_ATTEMPTS; attempt++) {
             exec("artest player far-tp " + fmt(x + 0.5d) + " " + y + " " + fmt(ARENA_Z + 0.5d));
-            GameTicks.await(serverClient(), OVERWORLD, 60);
+            GameTicks.advanceWorld(serverClient(), OVERWORLD, 60);
             bot().waitTicks(20);
             actualX = posXOf(exec("artest player health"));
             if (Math.abs(actualX - (x + 0.5d)) < 2d) {

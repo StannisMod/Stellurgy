@@ -297,13 +297,23 @@ public final class GameTicks {
         return read(client, world(dim));
     }
 
-    /** Let dim {@code dim}'s clock run for {@code ticks}, returning how far it went. */
-    public static long await(TestClient client, int dim, int ticks) throws Exception {
+    /**
+     * Let dim {@code dim}'s clock run for {@code ticks}, returning how far it went.
+     *
+     * <p><b>This waits for NOTHING.</b> It is a fixed advance of one world's clock with a liveness
+     * net — no condition, no early exit, no subject. It was called {@code await} until 2026-09-07,
+     * which told all 25 of its call sites that something was being waited FOR; a reader who believed
+     * the name would look for the thing it waited on, and there is none. The name now says what the
+     * method does, so a site that wants a CONDITION has to reach for {@link #until} and be seen
+     * doing it.</p>
+     */
+    public static long advanceWorld(TestClient client, int dim, int ticks) throws Exception {
         return advanceObserved(client, world(dim), ticks);
     }
 
-    /** As {@link #await(TestClient, int, int)}, with a caller-chosen liveness net. */
-    public static long await(TestClient client, int dim, int ticks, Duration net) throws Exception {
+    /** As {@link #advanceWorld(TestClient, int, int)}, with a caller-chosen liveness net. */
+    public static long advanceWorld(TestClient client, int dim, int ticks, Duration net)
+            throws Exception {
         return advanceObserved(client, world(dim), ticks, net);
     }
 }

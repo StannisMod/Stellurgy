@@ -558,7 +558,7 @@ public class SpikeFarCoordinateShipTest extends AbstractClientE2ETest {
         for (int attempt = 1; attempt <= DELIVERY_ATTEMPTS; attempt++) {
             exec("artest player far-tp " + fmt(x + 0.5d) + " " + (BASE_Y + 6) + " "
                     + fmt(ARENA_Z + 0.5d));
-            GameTicks.await(serverClient(), 0, 40);
+            GameTicks.advanceWorld(serverClient(), 0, 40);
             bot().waitTicks(30);
             lastX = field(exec("artest player health"), "posX");
             if (Math.abs(lastX - (x + 0.5d)) < ARRIVAL_TOLERANCE) {

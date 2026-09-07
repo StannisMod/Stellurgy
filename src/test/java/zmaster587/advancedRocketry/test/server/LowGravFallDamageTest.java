@@ -86,7 +86,7 @@ public class LowGravFallDamageTest {
         assertTrue("ensure-fake must succeed: " + fake, fake.contains("\"ok\":true"));
         // Off-thread settle: the wait runs in the test jvm, because a command handler runs on the
         // server thread and would block the clock it is waiting for.
-        GameTicks.await(harness.client(), dim, 20);
+        GameTicks.advanceWorld(harness.client(), dim, 20);
     }
 
     /** Overworld: not an IPlanetaryProvider &rarr; distance untouched. */
