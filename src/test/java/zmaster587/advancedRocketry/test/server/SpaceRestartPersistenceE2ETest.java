@@ -91,11 +91,19 @@ public class SpaceRestartPersistenceE2ETest {
 
     /**
      * The production subsystem only registers when Valkyrien Skies is present — without tier-2 ships
-     * there is nothing for it to host, so it deliberately declines. That makes this an
-     * test even though nothing here touches physics: the wiring under test refuses to exist otherwise.
+     * there is nothing for it to host, so it deliberately declines. The wiring under test would not
+     * exist, hence a skip rather than a failure.
      */
     private void assumeProductionSubsystemAvailable() throws Exception {
         String vs = exec("artest vs available");
+        // The gate was MISSING: the reply was fetched into a dead local and nothing was ever decided
+        // from it, so the skip this javadoc promises had never once happened. A skip that cannot skip
+        // is worse than none — it is a claim, in a javadoc, that a whole class of environment is
+        // handled. The twin of this body in the login-restore client base was fixed first; this is
+        // the copy it left behind.
+        org.junit.Assume.assumeTrue("Valkyrien Skies is absent, so the production subsystem under"
+                + " test never registered and there is nothing here to exercise: " + vs,
+                vs.contains("\"available\":true"));
     }
 
     @Test

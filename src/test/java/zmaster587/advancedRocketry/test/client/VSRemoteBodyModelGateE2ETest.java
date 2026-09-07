@@ -13,6 +13,7 @@ import java.util.regex.Pattern;
 
 import zmaster587.advancedRocketry.test.Events;
 
+import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
 /**
@@ -273,6 +274,17 @@ public class VSRemoteBodyModelGateE2ETest extends AbstractSharedVsClientE2ETest 
         String contact = exec("artest vs deck-capture 0 " + subject);
         assertTrue("the subject must be CARRIED by the ship for the control to mean anything: " + contact,
                 readInt(contact, OBSTACLES) > 0);
+        // "The ship" — this one, and no other. The subject is a mob, so the probe answers on its
+        // GATED branch (`canPassengerSteer:false`), where the support count is resolved by
+        // containment-first-match and names nobody: `shipSupportObstacles:2` is a number about one of
+        // the hulls containing the body with nothing saying which. The containment LIST is what says
+        // so, and its size is the half that matters — one entry means the count above is
+        // unambiguous, two mean it is a coin toss reading as a clean number either way.
+        assertEquals("the hull carrying the subject must be the ship this leg rolled, and it must be"
+                        + " the ONLY hull containing it — the support count beside this names no ship"
+                        + " at all: " + contact,
+                "[\"" + scenarioShipId + "\"]",
+                zmaster587.advancedRocketry.test.ShipIdentity.containingShipsOf(contact));
 
         lookAt(ship[0], ship[1], ship[2]);
         Sampling s = awaitRemoteSampling(subject);

@@ -138,6 +138,12 @@ public class VSCrewRidesRollingDeckE2ETest extends AbstractSharedVsClientE2ETest
         // null even though the player is standing on the deck - the containment answer is the true one.
         assertTrue("a player standing on the ship must be recognised as aboard it: " + level,
                 level.contains("\"shipLoaded\":true"));
+        // ...and aboard THIS scenario's ship. Containment cannot be satisfied by a distant hull, but
+        // it can by an adjacent one, and every deck-frame number read below (localX/Y/Z) is expressed
+        // in the subspace of whichever hull answered — so a neighbour here does not mislabel the
+        // claim, it changes what the ride comparison at the foot of this method is measuring.
+        ShipIdentity.assertAboardShip(level, shipId,
+                "the crew member must be aboard the ship this scenario built");
         assertTrue("walking crew must NOT be reported as mounted (that is the seated pilot): " + level,
                 level.contains("\"mounted\":false"));
         assertTrue("a player standing on the deck must be on the ground: " + level,
@@ -172,6 +178,10 @@ public class VSCrewRidesRollingDeckE2ETest extends AbstractSharedVsClientE2ETest
                 + " || server stats=" + exec("artest vs shipframe-stats"));
         assertTrue("the crew member must still be aboard after the roll: " + rolled,
                 rolled.contains("\"shipLoaded\":true"));
+        // The roll is the moment a capture can be handed to the wrong hull, so "still aboard" is only
+        // the claim this test means if it is still aboard the SAME ship it started on.
+        ShipIdentity.assertAboardShip(rolled, shipId,
+                "the crew member must still be aboard the ship he started the roll on");
         assertTrue("the crew member must not fall off a rolled deck: " + rolled,
                 rolled.contains("\"playerOnGround\":true"));
 

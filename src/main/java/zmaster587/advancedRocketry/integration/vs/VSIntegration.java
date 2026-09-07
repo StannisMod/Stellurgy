@@ -475,11 +475,25 @@ public final class VSIntegration {
         // nearest" in a world that may hold several. Null propagates as null: a craft that was never
         // named crosses exactly as it did before.
         java.util.UUID srcDurableName = VSBridge.durableIdOf(srcWorld, srcShipId);
+        // DECLARE the departure before cutting. The cut is what makes this world's registry drop the
+        // craft, and that drop is indistinguishable from a destruction to anything merely watching -
+        // so the classification is made HERE, by the code that knows where the ship is going, and the
+        // announcer publishes "left for dim N" rather than "gone". Without this a crossing tells
+        // every consumer that the craft it is carrying, crew aboard, has ceased to exist.
+        ShipLoadedAnnouncer.declareDeparture(srcShipId,
+                dstWorld == null ? srcWorld.provider.getDimension()
+                        : dstWorld.provider.getDimension());
         // Cut a TIGHT box (not the 256-tall column) and paste into clear sky at dstY (above the
         // destination terrain), so FIND_ALL_BLOCKS grabs only the ship.
         AxisAlignedBB tight = new AxisAlignedBB(yMinX, minShipY, yMinZ, yMaxX, maxShipY + 1, yMaxZ);
         zmaster587.advancedRocketry.util.StorageChunk snap =
                 zmaster587.advancedRocketry.util.StorageChunk.cutWorldBB(srcWorld, tight);
+        if (snap == null) {
+            // Nothing was cut, so nothing will leave the registry on account of this crossing. Take
+            // the mark back, or a genuine later destruction of this craft would be reported as a
+            // departure to a cell it never reached.
+            ShipLoadedAnnouncer.abandonDeparture(srcShipId);
+        }
         // No-op whenever a physics object is still loaded for the source - there VS's destroy pass owns
         // the collection and taking the ship out of the registry here would be the very bug this order
         // exists to avoid.

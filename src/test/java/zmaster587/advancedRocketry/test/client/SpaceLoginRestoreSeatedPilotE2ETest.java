@@ -8,6 +8,7 @@ import org.junit.Test;
 import zmaster587.advancedRocketry.space.CellWorldMapper;
 import zmaster587.advancedRocketry.space.GalacticCoord;
 import zmaster587.advancedRocketry.test.Events;
+import zmaster587.advancedRocketry.test.ShipIdentity;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
@@ -112,6 +113,13 @@ public class SpaceLoginRestoreSeatedPilotE2ETest extends AbstractSpaceLoginResto
                 + "above describes something other than a crew member on his feet: " + capBefore,
                 capBefore.contains("\"alreadyTracked\":true")
                         && !capBefore.contains("\"hullStand\":true"));
+        // The record asserted above names `arrangedShipId`; this line makes the capture name it too.
+        // Without it the two claims are about possibly different craft and the sentence "the record
+        // describes this crew member on this deck" is not established by either of them.
+        ShipIdentity.assertCaptureAnchoredOn(capBefore,
+                ShipIdentity.awaitPhysicsIdOf(this::exec, slotDim, arrangedShipId,
+                        40, () -> bot().waitTicks(5)),
+                "the deck he is captured on must be the ship the STANDING record names");
 
         String serverBeforeLogout = exec("artest player position-of " + BOT);
         assertEquals("the SERVER must still have him in his ship's slot dimension when it writes him "

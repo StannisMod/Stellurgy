@@ -70,4 +70,61 @@ public class ShipEvent extends Event {
             super(world, shipId, substrateId);
         }
     }
+
+    /**
+     * A ship has LEFT this world alive: its blocks were cut out of here and re-assembled somewhere
+     * else. It is not gone — {@link #destinationDim} is where it went.
+     *
+     * <p><b>This event exists because its sibling is otherwise a lie on the commonest path there
+     * is.</b> Both a crossing and a destruction end with the substrate's registry dropping the craft
+     * in this world, so a falling edge on that registry cannot tell them apart — and a consumer told
+     * "gone" for a departure will conclude the craft no longer exists at the precise moment it is
+     * being carried, with its crew aboard, to the next cell. The two are published separately for
+     * that reason and a consumer must decide which of them it actually means.</p>
+     *
+     * <p>The crossing DECLARES the departure before it cuts, so the classification is made by the
+     * code that knows, not inferred from timing by the code that watches.</p>
+     */
+    public static class ShipLeftWorldEvent extends ShipEvent {
+        /** The dimension the craft was cut into. */
+        public final int destinationDim;
+
+        public ShipLeftWorldEvent(World world, String shipId, String substrateId, int destinationDim) {
+            super(world, shipId, substrateId);
+            this.destinationDim = destinationDim;
+        }
+    }
+
+    /**
+     * A ship is GONE from this world: the substrate no longer has a record of it at all.
+     *
+     * <p><b>This is the counterpart {@link ShipLoadedEvent} deliberately did not have, and the
+     * absence had a cost.</b> Every consumer waiting for a craft could learn that it had arrived and
+     * could never learn that it never would, so each one ended up with a clock standing in for the
+     * answer — a duration guessing at a fact, on the branch where the fact is least like the typical
+     * case. {@code DeckHold} is the one that made this concrete: a crew member pinned to a deck point
+     * for a ship that had been destroyed was held for a fixed window and then handed to gravity, and
+     * nothing anywhere said why.</p>
+     *
+     * <p><b>Gone is not unloaded.</b> A ship whose chunks stop being kept, or whose world stops
+     * ticking, is still a ship and will come back; this is posted only when the substrate's REGISTRY
+     * stops carrying it, which is what a destroy pass does. A consumer that wants "is it steppable
+     * right now" is asking {@link ShipLoadedEvent}'s question, not this one.</p>
+     *
+     * <p><b>Gone is not departed either.</b> A craft cut out of this world by a crossing leaves the
+     * registry exactly as a destroyed one does, and it is alive in another cell with its crew aboard.
+     * That case is {@link ShipLeftWorldEvent} and is never published here.</p>
+     *
+     * <p><b>One honest limit</b>, and it follows from the same place: this is an edge detected on a
+     * ticking world. If a world stops ticking altogether, nothing here observes its ships leaving —
+     * they were not destroyed, the observer stopped. A consumer must not read the ABSENCE of this
+     * event as proof a craft still exists.</p>
+     *
+     * <p>Not cancellable, for the same reason as its sibling: it reports something already true.</p>
+     */
+    public static class ShipGoneEvent extends ShipEvent {
+        public ShipGoneEvent(World world, String shipId, String substrateId) {
+            super(world, shipId, substrateId);
+        }
+    }
 }

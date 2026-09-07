@@ -9,7 +9,9 @@ import java.util.Locale;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import zmaster587.advancedRocketry.test.ArrangementFailure;
 import zmaster587.advancedRocketry.test.Events;
+import zmaster587.advancedRocketry.test.ShipIdentity;
 
 import static org.junit.Assert.assertTrue;
 
@@ -89,11 +91,20 @@ public class VSShipRenderPoseSkewE2ETest extends AbstractClientE2ETest {
         // The LINK, not eighty ticks: a deck TAKING a body is a commit production performs, and the
         // control window below is only a control if it opens on a body already held. A fixed wait
         // could only be too short (a red about the instrument) or needlessly long.
-        events.await(captureMark, "deck_captured", "the client player must be TAKEN by the parked"
+        // Carrying this scenario's ship: the record names the hull that took him, and the skew
+        // sampled below is a comparison between one body and one ship's render pose.
+        events.awaitCarrying(captureMark, "deck_captured", "\"ship\":\"" + shipId + "\"",
+                "the client player must be TAKEN by THIS parked"
                 + " deck before the control window opens", DECK_LINK_BUDGET_TICKS);
+        // One sample, and proved to be about this scenario's craft: the skew measured below is the
+        // render pose of the ANCHOR ship against the body it carries, so a capture taken by a
+        // neighbouring hull would still produce numbers — about the wrong pair.
+        String parkedCapture = exec("artest vs deck-capture");
         assertTrue("the client player must be captured on the parked deck before sampling: "
-                        + exec("artest vs deck-capture"),
-                exec("artest vs deck-capture").contains("\"verdict\":true"));
+                        + parkedCapture,
+                parkedCapture.contains("\"verdict\":true"));
+        ShipIdentity.assertCaptureAnchoredOn(parkedCapture, shipId,
+                "the client player must be captured on the parked deck this scenario built");
         long samples0 = (long) clientDouble(SHIP_FRAME_TRAVEL, "renderSkewSamples");
         double restMax = 0.0;
         StringBuilder restTrace = new StringBuilder();
@@ -376,6 +387,13 @@ public class VSShipRenderPoseSkewE2ETest extends AbstractClientE2ETest {
         String spawned = events.await(spawnMark, "ship_spawned", "the assembly must become a ship in"
                 + " the physics registry (the spawn is queued, so this is a deadline for a discrete"
                 + " event and not a settling value)", SHIP_SPAWN_BUDGET_TICKS);
+        // Exactly ONE record in the window, then its ship. `lastField` takes the LAST record, so a
+        // second assembly landing inside this mark would silently re-point every question below and
+        // the id would look exactly as legitimate as the right one.
+        int spawnedCount = Events.countRecords(spawned, "\"vsShip\":");
+        ArrangementFailure.requireArranged("exactly ONE ship may be spawned in this scenario's"
+                + " window, or nothing here can say which is its own — " + spawnedCount + " were: "
+                + spawned, spawnedCount == 1);
         shipId = Events.lastField(spawned, "vsShip");
         assertTrue("a ship_spawned record must name the ship: " + spawned, shipId != null);
         bot().waitTicks(40);

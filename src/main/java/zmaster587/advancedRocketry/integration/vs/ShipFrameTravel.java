@@ -594,6 +594,16 @@ public final class ShipFrameTravel {
      *  box contains it by testing deck support in each candidate's OWN frame - not by first-match
      *  containment, which flips between overlapping parked ships. Null when no candidate supports it. */
     private static String firstContactCandidate(EntityLivingBase entity) {
+        // A DECLARED ship outranks a spatial guess. An arrival, a relog or a displaced pilot has
+        // already established which craft this body belongs to and put it on that craft's deck
+        // point; the sweep below only knows where the body is STANDING, and where two hulls overlap
+        // that is not the same question. Testing support first keeps the two answers honest: a
+        // declaration for a ship with no deck under these feet is not a capture anyone wants, so it
+        // falls through to the sweep rather than forcing a hold onto geometry that cannot carry it.
+        String declared = DeckHold.heldShipId(entity);
+        if (declared != null && shipSupportObstacleCountFor(entity, declared) > 0) {
+            return declared;
+        }
         for (String shipId : VSIntegration.shipIdsAt(
                 entity.world, entity.posX, entity.posY, entity.posZ)) {
             if (shipSupportObstacleCountFor(entity, shipId) > 0) {
@@ -966,6 +976,24 @@ public final class ShipFrameTravel {
         return entity != null && STATE.containsKey(entity);
     }
 
+    /**
+     * WHICH ship holds {@code entity}'s capture, in either mode, or {@code null} when nothing holds
+     * it. The named twin of {@link #isResolving} — that one answers whether SOME ship has this body
+     * and can never say which, and a caller that needs to know it is the RIGHT ship cannot build the
+     * question out of it.
+     *
+     * <p>Unlike {@link #aboardShipId} this answers for a HULL-STAND capture too: a body clinging to
+     * a hull's outer surface keeps world-frame semantics, but it is still held by a particular
+     * craft, and a caller asking "is this my ship's capture" means both modes.</p>
+     */
+    public static String capturedShipId(Entity entity) {
+        if (entity == null) {
+            return null;
+        }
+        ShipFrameState state = STATE.get(entity);
+        return state == null ? null : state.shipId;
+    }
+
     /** The anchored ship's UP axis in world coordinates for an ABOARD body, or {@code null} when
      *  the body is not aboard (never captured, or held in HULL-STAND mode - whose semantics,
      *  including the eye, are the world's). This is the axis the aboard EYE sits along: the
@@ -1058,6 +1086,15 @@ public final class ShipFrameTravel {
         boolean aboard = VSIntegration.shipAttitudeAt(
                 entity.world, entity.posX, entity.posY, entity.posZ) != null;
         m.put("aboardByContainment", aboard);
+        // WHICH hulls, and how many. `aboardByContainment` is a boolean about "a ship", and every
+        // support reading below that is NOT taken against a named anchor - the gated branch's
+        // shipSupportObstacleCount, which resolves the frame by containment and takes the first
+        // match - is a number about one of these with nothing saying which. Two hulls may occupy the
+        // same space, so a list is the honest answer and its SIZE is the part a caller has to look
+        // at: one entry means the unnamed reading beside it is unambiguous, two mean it is a coin
+        // toss that will read as a clean number either way.
+        m.put("containingShipIds", VSIntegration.shipIdsAt(
+                entity.world, entity.posX, entity.posY, entity.posZ));
         ShipFrameState state = STATE.get(entity);
         boolean tracked = state != null;
         m.put("alreadyTracked", tracked);

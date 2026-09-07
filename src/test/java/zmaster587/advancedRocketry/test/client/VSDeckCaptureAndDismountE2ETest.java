@@ -9,6 +9,7 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 import zmaster587.advancedRocketry.test.Events;
+import zmaster587.advancedRocketry.test.ShipIdentity;
 
 import static org.junit.Assert.assertTrue;
 
@@ -149,8 +150,12 @@ public class VSDeckCaptureAndDismountE2ETest extends AbstractSharedVsClientE2ETe
         Events clientEvents = clientEvents();
         long landingMark = clientEvents.mark();
         exec("tp @a " + ship[0] + " " + (ship[1] + 4) + " " + ship[2] + " 0 0");
-        String landing = clientEvents.await(landingMark, "deck_captured",
-                "the player's OWN client must resolve him on the deck of the grounded ship — a"
+        // Carrying this scenario's ship: the record names the hull that took the body, and this class
+        // shares its world — a type-only wait returns on a sibling scenario's capture and calls the
+        // fall-through "resolved".
+        String landing = clientEvents.awaitCarrying(landingMark, "deck_captured",
+                "\"ship\":\"" + scenarioShipId + "\"",
+                "the player's OWN client must resolve him on the deck of THIS grounded ship — a"
                         + " fall-through leaves the client with no capture at all, which is the fault"
                         + " this scenario exists for", DECK_LINK_BUDGET_TICKS);
         System.out.println("[deckcap] grounded client capture=" + landing);
@@ -158,12 +163,15 @@ public class VSDeckCaptureAndDismountE2ETest extends AbstractSharedVsClientE2ETe
         // Server oracle: does the server capture the standing player on the deck at all, and is the deck
         // solid under his feet in the ship frame? deck-capture prints the whole handles() decision.
         String server = exec("artest vs player-ship-data");
-        String capture = exec("artest vs deck-capture");
+        String capture = deckCaptureOfThisShip(scenarioShipId,
+                "the server must resolve him on THIS scenario's grounded ship");
         double serverY = readDouble(server, PLAYER_Y);
         System.out.println("[deckcap] grounded server=" + server);
         System.out.println("[deckcap] grounded capture=" + capture);
         assertTrue("server must recognise the client player as aboard the grounded ship: " + server,
                 server.contains("\"shipLoaded\":true"));
+        ShipIdentity.assertAboardShip(server, scenarioShipId,
+                "the server must place him inside THIS scenario's grounded ship");
         assertTrue("server must resolve the player in the ship frame, not hand him to vanilla: " + capture,
                 capture.contains("\"verdict\":true"));
         assertTrue("the deck must be solid under his feet in the ship frame (>0), else he falls "
@@ -288,7 +296,8 @@ public class VSDeckCaptureAndDismountE2ETest extends AbstractSharedVsClientE2ETe
         double shipYPost = readDouble(info, POS_Y);
         double velYPost = readDouble(info, VEL_Y);
         String server = exec("artest vs player-ship-data");
-        String capture = exec("artest vs deck-capture");
+        String capture = deckCaptureOfThisShip(scenarioShipId,
+                "the dismounted pilot must be resolved on the deck of the ship he was flying");
         double serverY = readDouble(server, PLAYER_Y);
         double clientY = bot().reportState().get("playerY").getAsDouble();
         System.out.println("[deckcap] dismount shipY " + shipYPre + "->" + shipYPost + " velYPost="
@@ -308,9 +317,10 @@ public class VSDeckCaptureAndDismountE2ETest extends AbstractSharedVsClientE2ETe
         // own client - not dropped into the world. The client's capture is a link and is awaited as
         // one; a seat dismount seeds it, so a client with no `deck_captured` since the un-seating is
         // the "left in the world" half of the report, named instead of inferred from two heights.
-        clientEvents.await(clientDismountMark, "deck_captured",
-                "the ex-pilot's OWN client must take him onto the deck when he stands up mid-hover",
-                DECK_LINK_BUDGET_TICKS);
+        clientEvents.awaitCarrying(clientDismountMark, "deck_captured",
+                "\"ship\":\"" + scenarioShipId + "\"",
+                "the ex-pilot's OWN client must take him onto THIS ship's deck when he stands up"
+                        + " mid-hover", DECK_LINK_BUDGET_TICKS);
         assertTrue("the dismounted pilot must be resolved on the deck, not handed to vanilla: " + capture,
                 capture.contains("\"verdict\":true") && readInt(capture, OBSTACLES) > 0);
         assertTrue("the client must render the dismounted pilot on the deck where the server holds him: "
@@ -378,14 +388,17 @@ public class VSDeckCaptureAndDismountE2ETest extends AbstractSharedVsClientE2ETe
         exec("tp @a " + ship[0] + " " + (ship[1] + 4) + " " + ship[2] + " 0 0");
         String reloaded = awaitThisShip(events, reloadMark, "ship_loaded",
                 "a saved ship must come back when the player returns to its deck");
-        String landing = clientEvents.await(landingMark, "deck_captured",
-                "the returning player's OWN client must resolve him on the RELOADED deck — the"
+        String landing = clientEvents.awaitCarrying(landingMark, "deck_captured",
+                "\"ship\":\"" + scenarioShipId + "\"",
+                "the returning player's OWN client must resolve him on THIS RELOADED deck — the"
                         + " playtest's \"old ships drop me through\" is exactly this link missing",
                 DECK_LINK_BUDGET_TICKS);
         System.out.println("[deckcap] reloaded ship=" + reloaded + " clientCapture=" + landing);
 
         String server = exec("artest vs player-ship-data");
-        String capture = exec("artest vs deck-capture");
+        String capture = deckCaptureOfThisShip(scenarioShipId,
+                "the returning player must be resolved on the ship this scenario built, which is the"
+                        + " one that was saved and reloaded");
         double serverY = readDouble(server, PLAYER_Y);
         double clientY = bot().reportState().get("playerY").getAsDouble();
         System.out.println("[deckcap] reloaded server=" + server);
@@ -395,6 +408,10 @@ public class VSDeckCaptureAndDismountE2ETest extends AbstractSharedVsClientE2ETe
 
         assertTrue("a reloaded ship must come back when the player returns to its deck: " + server,
                 server.contains("\"shipLoaded\":true"));
+        // "A ship came back" is not the claim — THIS ship coming back is. A sibling scenario's hull
+        // standing in the same airspace satisfies `shipLoaded` byte-identically.
+        ShipIdentity.assertAboardShip(server, scenarioShipId,
+                "the ship that came back under him must be the one this scenario saved");
         assertTrue("the player must be resolved on the reloaded deck, not fall through it: " + capture,
                 capture.contains("\"verdict\":true") && readInt(capture, OBSTACLES) > 0);
         assertTrue("the client must render him ON the reloaded deck, not fallen through: serverY="
@@ -638,8 +655,9 @@ public class VSDeckCaptureAndDismountE2ETest extends AbstractSharedVsClientE2ETe
         Events clientEvents = clientEvents();
         long dismountMark = clientEvents.mark();
         exec("artest player dismount");
-        String seeded = clientEvents.await(dismountMark, "deck_captured",
-                "standing up on a tilted deck must leave the ex-pilot captured ON THE CLIENT — the"
+        String seeded = clientEvents.awaitCarrying(dismountMark, "deck_captured",
+                "\"ship\":\"" + scenarioShipId + "\"",
+                "standing up on THIS tilted deck must leave the ex-pilot captured ON THE CLIENT — the"
                         + " seed is what puts him there, and without it the heights below are"
                         + " measuring a body vanilla owns", DECK_LINK_BUDGET_TICKS);
         StringBuilder traj = new StringBuilder();
@@ -720,8 +738,9 @@ public class VSDeckCaptureAndDismountE2ETest extends AbstractSharedVsClientE2ETe
         Events clientEvents = clientEvents();
         long dismountMark = clientEvents.mark();
         exec("artest player dismount");
-        String seeded = clientEvents.await(dismountMark, "deck_captured",
-                "the fresh dismount must engage the ship-frame capture on the level deck",
+        String seeded = clientEvents.awaitCarrying(dismountMark, "deck_captured",
+                "\"ship\":\"" + scenarioShipId + "\"",
+                "the fresh dismount must engage the ship-frame capture on THIS ship's level deck",
                 DECK_LINK_BUDGET_TICKS);
 
         // Roll the now-UNMANNED ship (a mounted pilot would overwrite the target) to the commanded attitude.
@@ -754,7 +773,11 @@ public class VSDeckCaptureAndDismountE2ETest extends AbstractSharedVsClientE2ETe
         // resolved and so could not be scoped to this window at all.
         String rollCaptures = clientEvents.since(rollMark, "deck_captured");
         String rollReleases = clientEvents.since(rollMark, "deck_released");
-        String capture = exec("artest vs deck-capture");
+        // Read once and proved to be about this scenario's craft: the whole claim below is "the roll
+        // did not hand him away", and a capture re-anchored onto a neighbour's hull mid-roll is
+        // exactly that failure while reading `verdict:true`.
+        String capture = deckCaptureOfThisShip(scenarioShipId,
+                "the ex-pilot must stay resolved on the ship he was rolled with");
         double clientY = bot().reportState().get("playerY").getAsDouble();
         double serverY = readDouble(exec("artest vs player-ship-data"), PLAYER_Y);
         System.out.println("[deckcap] dismount-then-roll " + label + " upY=" + tilted + " shipPosY="
@@ -848,11 +871,14 @@ public class VSDeckCaptureAndDismountE2ETest extends AbstractSharedVsClientE2ETe
         Events clientEvents = clientEvents();
         long dismountMark = clientEvents.mark();
         exec("artest player dismount");
-        String seeded = clientEvents.await(dismountMark, "deck_captured",
-                "leaving the seat on an INVERTED ship must leave the ex-pilot captured on his own"
-                        + " client, which is where the reported fall-through happens",
+        String seeded = clientEvents.awaitCarrying(dismountMark, "deck_captured",
+                "\"ship\":\"" + scenarioShipId + "\"",
+                "leaving the seat on THIS INVERTED ship must leave the ex-pilot captured BY IT on his"
+                        + " own client, which is where the reported fall-through happens",
                 DECK_LINK_BUDGET_TICKS);
-        String capture = exec("artest vs deck-capture");
+        String capture = deckCaptureOfThisShip(scenarioShipId,
+                "after leaving the seat on an INVERTED ship the ex-pilot must stay resolved on THAT"
+                        + " ship, not on whatever else is in the airspace");
         double clientY = bot().reportState().get("playerY").getAsDouble();
         double serverY = readDouble(exec("artest vs player-ship-data"), PLAYER_Y);
         System.out.println("[deckcap] force-invert dismount seed=" + seeded + " capture=" + capture
@@ -946,8 +972,9 @@ public class VSDeckCaptureAndDismountE2ETest extends AbstractSharedVsClientE2ETe
         // The message says CLIENT, so the read is the client's: his own resolver's capture record,
         // awaited rather than given 80 ticks. (The server probe beside it re-evaluates handles() for
         // the SERVER player and reads the SERVER state map — a second opinion, not this one.)
-        clientEvents.await(landingMark, "deck_captured",
-                "the client must be captured on the upright deck before the ship is tilted under him",
+        clientEvents.awaitCarrying(landingMark, "deck_captured",
+                "\"ship\":\"" + scenarioShipId + "\"",
+                "the client must be captured on THIS upright deck before the ship is tilted under him",
                 DECK_LINK_BUDGET_TICKS);
         // Read ONCE, and proved to be about THIS ship: the two execs this replaces
         // printed one sample and asserted a second, and neither said which craft
@@ -978,7 +1005,12 @@ public class VSDeckCaptureAndDismountE2ETest extends AbstractSharedVsClientE2ETe
             bot().waitTicks(4);
             boolean active = Boolean.parseBoolean(clientString(SHIP_CAMERA, "shipCamActive"));
             double roll = clientDouble(SHIP_CAMERA, "shipCamRoll");
-            boolean verdict = exec("artest vs deck-capture").contains("\"verdict\":true");
+            // Counted as "captured" only while the capture is anchored on THIS scenario's ship: the
+            // claim below is that one capture held for the whole window, and a body handed from this
+            // hull to a neighbour's and back keeps `verdict:true` at every sample.
+            String sample = exec("artest vs deck-capture");
+            boolean verdict = sample.contains("\"verdict\":true")
+                    && scenarioShipId.equals(ShipIdentity.anchorOf(sample));
             double y = bot().reportState().get("playerY").getAsDouble();
             if (active) { camOn++; rollMin = Math.min(rollMin, roll); rollMax = Math.max(rollMax, roll); }
             if (verdict) captured++;

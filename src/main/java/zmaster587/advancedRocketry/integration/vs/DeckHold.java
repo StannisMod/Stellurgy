@@ -7,8 +7,12 @@ import net.minecraftforge.fml.common.gameevent.PlayerEvent;
 import net.minecraftforge.fml.common.gameevent.TickEvent;
 
 import java.util.HashMap;
+import java.util.Iterator;
 import java.util.Map;
 import java.util.UUID;
+
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 
 /**
  * Holds a body on the deck it belongs on while nothing else can: the server pins it every tick and
@@ -51,15 +55,24 @@ import java.util.UUID;
  */
 public final class DeckHold {
 
-    /** How long a returning player is held for his ship to load and his client to seed, in
-     *  server ticks. Ship chunk-load plus client world join comfortably fit; a missing ship
-     *  simply times the hold out into vanilla. */
-    private static final int HOLD_WINDOW_TICKS = 200;
+    private static final Logger LOGGER = LogManager.getLogger("advancedrocketry/space");
 
-    /** How often an unresolved hold re-tries to find its ship, in ticks. The lookup walks the
-     *  world's loaded tile entities, which is cheap but not free; the ship it waits for takes tens
-     *  of ticks to come up, so a quarter-second retry loses nothing. {@code tunable}. */
-    private static final int RESOLVE_RETRY_TICKS = 5;
+    /**
+     * How long a hold is kept when NOTHING ends it — not a wait, a GIVE-UP.
+     *
+     * <p>Every real end of a hold is now an event: the capture landing on the hold's own ship, the
+     * body entering a state that owns its own movement, or (for a hold that starts without a ship)
+     * {@link ShipEvent.ShipLoadedEvent} for the craft it names. What is left for a clock is the case
+     * where none of those ever happens — and the reason a clock is still the only answer to THAT is
+     * in {@link ShipLoadedAnnouncer}'s own javadoc: there is no disappearance event. A ship in a
+     * world that stops ticking is never reported as gone, so "the craft this body is waiting for will
+     * never come" is not observable, and a hold with no give-up would pin a player in place for the
+     * rest of the session.</p>
+     *
+     * <p>It is therefore a REFUSAL, and it says so — see {@link #giveUp}. The number is not a
+     * prediction of how long anything takes; nothing is being predicted any more.</p>
+     */
+    private static final int HOLD_WINDOW_TICKS = 200;
 
     /**
      * One returning player's hold. It starts as a DURABLE ship id plus a flight-computer-relative
@@ -70,7 +83,6 @@ public final class DeckHold {
         final UUID durableShipId;
         final double dx, dy, dz;
         int ticksLeft = HOLD_WINDOW_TICKS;
-        int untilRetry;
         /** Whether the returning client has been ASKED to capture yet. The hold may not conclude
          *  before it has: see the exit rule in {@link DeckHold#onPlayerTick}. */
         boolean seedSent;
@@ -153,6 +165,27 @@ public final class DeckHold {
         return player != null && HOLDS.containsKey(player.getUniqueID());
     }
 
+    /**
+     * The ship a live hold is holding {@code entity} FOR, or {@code null} when nothing holds it (or
+     * the hold has not yet found its ship).
+     *
+     * <p>This is a DECLARATION, and it is the reason the class exposes it: an arrival, a relog or a
+     * displaced pilot has already established which craft this body belongs to and put it on that
+     * craft's deck point. Anything that would otherwise GUESS the ship from where the body is
+     * standing must ask here first — where two hulls overlap, a spatial guess and a declaration can
+     * differ, and the declaration is the one that knows.</p>
+     *
+     * <p>The named twin of {@link #isHeld}, which answers whether a body is held and never for
+     * which craft. Both are read on the server; a hold has no client half.</p>
+     */
+    public static String heldShipId(net.minecraft.entity.Entity entity) {
+        if (entity == null) {
+            return null;
+        }
+        Hold hold = HOLDS.get(entity.getUniqueID());
+        return hold == null ? null : hold.shipId;
+    }
+
     @SubscribeEvent
     public void onPlayerLoggedIn(PlayerEvent.PlayerLoggedInEvent event) {
         if (!(event.player instanceof EntityPlayerMP) || event.player instanceof FakePlayer
@@ -165,8 +198,9 @@ public final class DeckHold {
                 zmaster587.advancedRocketry.space.ShipAboardTag.of(event.player);
         if (aboard != null
                 && aboard.posture == zmaster587.advancedRocketry.space.ShipAboardTag.Posture.STANDING) {
-            HOLDS.put(event.player.getUniqueID(),
-                    new Hold(aboard.shipId, aboard.standDx, aboard.standDy, aboard.standDz));
+            Hold hold = new Hold(aboard.shipId, aboard.standDx, aboard.standDy, aboard.standDz);
+            HOLDS.put(event.player.getUniqueID(), hold);
+            armDurable((EntityPlayerMP) event.player, hold);
         }
         // AFTER the anchor hold: a displaced pilot's hold below must win over the (older) anchor.
         reconcileSeatMount((EntityPlayerMP) event.player);
@@ -287,7 +321,14 @@ public final class DeckHold {
         // position AND VELOCITY vanilla restored, so a crew member who logged out walking skated on
         // across his own deck. The hold therefore may not end until at least one capture request has
         // gone out; the client's own pending slot then survives its ship streaming in.
-        if (ShipFrameTravel.isResolving(player) && hold.seedSent) {
+        // ...and it must be a follow onto THE SHIP THIS HOLD IS FOR. `isResolving` answers whether
+        // SOME craft holds this body and can never say which, so a first-contact capture taken by a
+        // neighbouring hull satisfied it and ended the hold on somebody else's deck: measured on the
+        // hyperspace arrival, where the crossing named one craft, put the body on its deck point,
+        // and the hold then let go with the capture anchored on a hull that merely overlapped it.
+        // Everything downstream — the deck frame, the carry, the camera — was then the wrong ship's.
+        if (hold.seedSent && hold.shipId != null
+                && hold.shipId.equals(ShipFrameTravel.capturedShipId(player))) {
             HOLDS.remove(player.getUniqueID());
             return;
         }
@@ -298,7 +339,7 @@ public final class DeckHold {
             return;
         }
         if (--hold.ticksLeft <= 0) {
-            HOLDS.remove(player.getUniqueID()); // ship never came back: clean vanilla handover
+            giveUp(player, hold);
             return;
         }
         // A returning body is a FRESH entity, and the physics mod arms its own per-entity drag
@@ -310,10 +351,6 @@ public final class DeckHold {
         // resolved commit disarms this every tick for a body it owns (the same call); a body still
         // being handed back needs it too, or the hold's own pin is what it fights.
         VSIntegration.suppressShipDrag(player);
-        if (!hold.resolved() && --hold.untilRetry <= 0) {
-            hold.untilRetry = RESOLVE_RETRY_TICKS;
-            resolve(player, hold);
-        }
         double[] world = hold.resolved() ? VSIntegration.toWorldFrameFor(
                 player.world, hold.shipId, hold.subX, hold.subY, hold.subZ) : null;
         if (world == null) {
@@ -346,19 +383,156 @@ public final class DeckHold {
     }
 
     /**
-     * Try to turn a durable hold into a live one: find the flight computer carrying the recorded
-     * ship id, and express the record's computer-relative deck point as a subspace triple on the
-     * ship that computer belongs to.
+     * End a hold that NOTHING ended — and say so, on both channels.
      *
-     * <p>The ships are queued for load first, the way the login re-seat does it: a headless server
-     * (or one whose returning player has not streamed the ship's chunks yet) keeps a ship in the
-     * registry without ticking it, and an unloaded ship carries no loaded tile entities to find.</p>
+     * <p>What this branch does is hand the body to vanilla gravity, on a deck that may be at any
+     * attitude. That is the exact fall the hold exists to prevent, so it is a DEGRADATION and it may
+     * not be indistinguishable from the hold having worked. It used to be a bare map removal with a
+     * comment: no log, no event, nothing the player could see, and a crew member who ended up in the
+     * air below his ship had no way to learn that anything had been decided about him.</p>
+     *
+     * <p>Both channels on purpose. The log names what was waited for so the failure is diagnosable
+     * from a server the player is not on; the action bar tells the person it happened to, because he
+     * is the one about to fall and "my ship vanished under me" is otherwise the whole report.</p>
+     */
+    private static void giveUp(EntityPlayerMP player, Hold hold) {
+        HOLDS.remove(player.getUniqueID());
+        LOGGER.error("[SPACE] gave up holding {} on a deck after {} ticks: {}. He is handed to "
+                        + "vanilla movement where he stands, which on a tilted or inverted deck is a "
+                        + "fall. Treat this as a bug report.",
+                player.getName(), HOLD_WINDOW_TICKS,
+                hold.durableShipId != null && !hold.resolved()
+                        ? "ship " + hold.durableShipId + " never became loaded and steppable, so no"
+                                + " load event for it ever arrived"
+                        : hold.resolved()
+                                ? "ship " + hold.shipId + " is loaded, but no capture on it ever took"
+                                        + " (the client was asked " + (hold.seedSent ? "and did not"
+                                        + " seed" : "for nothing yet") + ")"
+                                : "the hold was a bare pin with no ship, and the crossing that should"
+                                        + " have replaced it never boarded him");
+        zmaster587.advancedRocketry.util.DelayedActionBar.send(player,
+                new net.minecraft.util.text.TextComponentTranslation("msg.deckhold.lost"), 20);
+    }
+
+    /**
+     * Arm a hold that starts WITHOUT a ship: try once, and if the craft is not up yet, ask for it to
+     * be loaded and then WAIT FOR THE EVENT ({@link #onShipLoaded}).
+     *
+     * <p>This replaces a five-tick poll, and the distinction worth keeping is that the poll was not
+     * only observing — it also CAUSED, calling {@code loadAllShips} on every pass. So the honest
+     * event-driven shape is not "subscribe instead": it is <b>cause once, then observe</b>. The
+     * one-shot attempt before subscribing is not belt-and-braces either, it closes a real race:
+     * {@code ShipLoadedEvent} is an EDGE, so a hold armed after its craft was already loaded would
+     * wait for a transition that has been and gone.</p>
+     */
+    private static void armDurable(EntityPlayerMP player, Hold hold) {
+        if (hold.durableShipId == null) {
+            return;
+        }
+        resolve(player, hold);
+        if (!hold.resolved()) {
+            // A headless server (or one whose returning player has not streamed the ship's chunks
+            // yet) keeps a ship in the registry without ticking it, and an unloaded ship carries no
+            // loaded tile entities to find — and posts no load event either. Asking once is what
+            // makes the event we then wait for possible at all.
+            VSIntegration.loadAllShips(player.world);
+        }
+    }
+
+    /**
+     * A craft this world has been waiting for is now loaded and steppable: resolve every hold that
+     * names it.
+     *
+     * <p>The event carries the DURABLE id, which is exactly the key a hold starts life with — the
+     * substrate's own id is re-minted per assembly and could not be matched against a record written
+     * before the re-assembly. Holds are few (one per returning or carried crew member) and the event
+     * is rare (once per ship per load), so this walks them rather than keeping a second index whose
+     * only job would be to disagree with the first one.</p>
+     */
+    @SubscribeEvent
+    public void onShipLoaded(zmaster587.advancedRocketry.api.event.ShipEvent.ShipLoadedEvent event) {
+        if (event.world == null || event.world.isRemote || event.shipId == null || HOLDS.isEmpty()) {
+            return;
+        }
+        for (Map.Entry<UUID, Hold> entry : HOLDS.entrySet()) {
+            Hold hold = entry.getValue();
+            if (hold.resolved() || hold.durableShipId == null
+                    || !event.shipId.equals(hold.durableShipId.toString())) {
+                continue;
+            }
+            net.minecraft.entity.player.EntityPlayer player =
+                    event.world.getPlayerEntityByUUID(entry.getKey());
+            if (player instanceof EntityPlayerMP) {
+                resolve((EntityPlayerMP) player, hold);
+            }
+        }
+    }
+
+    /**
+     * The craft a hold is waiting for has been DESTROYED: end the hold now, saying so, instead of
+     * pinning the body for the rest of the window against a ship that is never coming.
+     *
+     * <p>This is the half {@link #onShipLoaded} could not cover and the reason the give-up clock used
+     * to be the only answer for it. It does not remove the clock — a world that stops ticking
+     * announces nothing, which {@link ShipLoadedAnnouncer} states on its own side — but it turns the
+     * common case from "waited ten seconds for no stated reason" into "the ship was destroyed", which
+     * is a sentence the player and the log can both act on.</p>
+     *
+     * <p><b>A DEPARTURE is deliberately not subscribed to here, and that is the whole point of the
+     * two events being separate.</b> A crossing cuts its source out of the world, which drops it from
+     * the registry exactly as a destruction does — and the crew holding onto that craft's deck are
+     * precisely the people the crossing is carrying. Ending their holds there, with "your ship was
+     * destroyed", would break the mechanic this class exists to serve, on its commonest path. The
+     * hold is SUPPOSED to survive a departure: the arrival re-arms it on the far side.</p>
+     */
+    @SubscribeEvent
+    public void onShipGone(zmaster587.advancedRocketry.api.event.ShipEvent.ShipGoneEvent event) {
+        if (event.world == null || event.world.isRemote || HOLDS.isEmpty()) {
+            return;
+        }
+        for (Iterator<Map.Entry<UUID, Hold>> it = HOLDS.entrySet().iterator(); it.hasNext();) {
+            Map.Entry<UUID, Hold> entry = it.next();
+            Hold hold = entry.getValue();
+            // Either identity may be the one this hold knows: a hold that never resolved is still
+            // holding a DURABLE name, a resolved one is pinned to the substrate's id, and the event
+            // carries both. Matching on only one of them would miss exactly half the holds.
+            boolean waitingForIt = event.shipId != null && hold.durableShipId != null
+                    && event.shipId.equals(hold.durableShipId.toString());
+            boolean pinnedToIt = event.substrateId != null
+                    && event.substrateId.equals(hold.shipId);
+            if (!waitingForIt && !pinnedToIt) {
+                continue;
+            }
+            it.remove();
+            net.minecraft.entity.player.EntityPlayer player =
+                    event.world.getPlayerEntityByUUID(entry.getKey());
+            if (player instanceof EntityPlayerMP) {
+                announceLostShip((EntityPlayerMP) player,
+                        event.shipId == null ? event.substrateId : event.shipId);
+            }
+        }
+    }
+
+    /** Tell the log and the person what happened, for a hold whose craft was destroyed under it. */
+    private static void announceLostShip(EntityPlayerMP player, String ship) {
+        LOGGER.error("[SPACE] the ship {} a deck hold was keeping {} on has been DESTROYED; he is "
+                        + "handed to vanilla movement where he stands. Treat this as a bug report if "
+                        + "nothing in this world was supposed to destroy it.", ship, player.getName());
+        zmaster587.advancedRocketry.util.DelayedActionBar.send(player,
+                new net.minecraft.util.text.TextComponentTranslation("msg.deckhold.shipgone"), 20);
+    }
+
+    /**
+     * Turn a durable hold into a live one: find the flight computer carrying the recorded ship id,
+     * and express the record's computer-relative deck point as a subspace triple on the ship that
+     * computer belongs to.
+     *
+     * <p>Called at arm time and again when the craft's load event arrives — never on a cadence.</p>
      */
     private static void resolve(EntityPlayerMP player, Hold hold) {
         if (hold.durableShipId == null) {
             return;
         }
-        VSIntegration.loadAllShips(player.world);
         net.minecraft.util.math.BlockPos afcPos = zmaster587.advancedRocketry.space
                 .ShipRelativePoint.flightComputerOfDurableShip(player.world, hold.durableShipId);
         if (afcPos == null) {

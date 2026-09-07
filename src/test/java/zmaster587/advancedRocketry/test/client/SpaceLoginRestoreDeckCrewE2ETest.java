@@ -68,6 +68,12 @@ public class SpaceLoginRestoreDeckCrewE2ETest extends AbstractSpaceLoginRestoreC
                         + "not about a restored deck capture at all: " + capBefore,
                 capBefore.contains("\"alreadyTracked\":true")
                         && !capBefore.contains("\"hullStand\":true"));
+        // On HIS deck. The capture's anchor is the PHYSICS id, and this scenario holds the durable
+        // one, so the two are bridged by name rather than by asking what is standing at his feet.
+        ShipIdentity.assertCaptureAnchoredOn(capBefore,
+                ShipIdentity.awaitPhysicsIdOf(this::exec, slotDim, arrangedShipId,
+                        40, () -> bot().waitTicks(5)),
+                "the capture the relog must restore is the one on THIS scenario's own deck");
 
         // A REAL logout that leaves the world running. Both marks BEFORE the disconnect: the client
         // JVM is REUSED across a plain relog, so its log still holds this session's records and zero
@@ -144,9 +150,16 @@ public class SpaceLoginRestoreDeckCrewE2ETest extends AbstractSpaceLoginRestoreC
         String tag = standUpAndAwaitTheStandingRecord(events());
         requireArranged("standing up must keep him aboard as a STANDING record: " + tag,
                 tag.contains("\"tagged\":true") && tag.contains("\"posture\":\"STANDING\""));
+        // Read ONCE: the two-exec idiom this replaces diagnosed from a different sample than the one
+        // that decided the line, and under load the two disagree.
+        String capUpright = exec("artest vs deck-capture");
         requireArranged("he must be captured on the deck while the ship is still upright: "
-                        + exec("artest vs deck-capture"),
-                exec("artest vs deck-capture").contains("\"alreadyTracked\":true"));
+                        + capUpright,
+                capUpright.contains("\"alreadyTracked\":true"));
+        ShipIdentity.assertCaptureAnchoredOn(capUpright,
+                ShipIdentity.awaitPhysicsIdOf(this::exec, slotDim, arrangedShipId,
+                        40, () -> bot().waitTicks(5)),
+                "the deck he stands on before the roll must be his own ship's");
 
         // Roll the ship to (near-)inverted UNDER him, by commanding the attitude his ship's computer
         // is to hold. Two things had to change before this verb could be used here at all, and both
@@ -192,6 +205,11 @@ public class SpaceLoginRestoreDeckCrewE2ETest extends AbstractSpaceLoginRestoreC
         String capInverted = exec("artest vs deck-capture");
         requireArranged("he must still be captured on the INVERTED deck: " + capInverted,
                 capInverted.contains("\"alreadyTracked\":true"));
+        // The INVERTED one — this ship, the one the roll above was addressed to. A capture that
+        // moved to any other hull in the slot is by construction on an upright deck, which is the
+        // arrangement this leg exists to leave behind.
+        ShipIdentity.assertCaptureAnchoredOn(capInverted, rolledShipId,
+                "the deck he is held on must be the ship this leg rolled");
 
         // Both marks before the disconnect - see the upright leg for why the client's own log needs
         // one and cannot start from zero.

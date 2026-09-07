@@ -435,6 +435,11 @@ public class VSShipFlightTelemetryE2ETest extends AbstractSharedVsClientE2ETest 
         String onDeck = exec("artest vs player-ship-data 0 " + standId);
         assertTrue("the body must have settled on the deck: " + onDeck,
                 onDeck.contains("\"playerOnGround\":true") && onDeck.contains("\"shipLoaded\":true"));
+        // On THIS scenario's deck. `deckY` below is taken out of this same reply and every later
+        // assertion is a comparison against it, so a neighbour's hull answering here does not merely
+        // mislabel the settle — it moves the baseline the grounded-deck claim is measured from.
+        zmaster587.advancedRocketry.test.ShipIdentity.assertAboardShip(onDeck, scenarioShipId,
+                "the body must have settled on the deck of the ship this scenario built");
         double deckY = readDouble(onDeck, Pattern.compile("\"playerY\":(-?[0-9.E\\-]+)"));
         assertTrue("a body on the deck must be resolved in the ship frame: "
                 + exec("artest vs would-take-over 0 " + standId),
@@ -865,11 +870,13 @@ public class VSShipFlightTelemetryE2ETest extends AbstractSharedVsClientE2ETest 
         long dropMark = events.markInstrumented();
         int crewId = readInt(exec("artest vs drop-stand 0 " + ship[0] + " " + (ship[1] + 3)
                 + " " + ship[2]), ENTITY_ID);
+        // Keyed on the body AND on the ship: the entity needle alone says a deck took him, never
+        // which deck, and every reading below is expressed in the taking ship's own frame.
         awaitRecord(events, dropMark, "deck_captured",
-                "the deck must TAKE the dropped body (entity " + crewId + "): the ship-frame"
-                        + " resolver never captured it, so nothing below is about how a captured body"
-                        + " rides a deck", 200,
-                "\"e\":" + crewId + ",");
+                "THIS ship's deck must TAKE the dropped body (entity " + crewId + "): the ship-frame"
+                        + " resolver never captured it for this craft, so nothing below is about how"
+                        + " a captured body rides THIS deck", 200,
+                "\"e\":" + crewId + ",", "\"ship\":\"" + scenarioShipId + "\"");
         // The capture is the link; coming to REST on the deck is the body's own fall settling, which
         // is a value and stays a wait.
         bot().waitTicks(40);

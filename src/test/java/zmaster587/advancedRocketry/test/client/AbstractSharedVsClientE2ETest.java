@@ -413,22 +413,6 @@ public abstract class AbstractSharedVsClientE2ETest extends AbstractSharedClient
     protected static final String[] PILOTED_JUMP_CHAIN = zmaster587.advancedRocketry.test.Chains.PILOTED_JUMP;
 
     /**
-     * Wait for THIS scenario's assembly to become a ship in the physics mod's registry, and return
-     * its physics id — read off the {@code ship_spawned} record rather than off a nearest-ship lookup
-     * at the build site a tick later. The mark is taken before the assembly is queued, so the record
-     * is this scenario's own ship and never a neighbour's.
-     *
-     * <p><b>Exactly ONE record, and that is the part the caller cannot check afterwards.</b>
-     * {@link Events#await} returns the moment the count goes above zero and {@link Events#lastField}
-     * then takes the LAST record in that reply — so a second assembly landing in the same window
-     * silently re-points every question the scenario asks from here on, and the id it returns looks
-     * exactly as legitimate as the right one. The window is the caller's own mark, so two records in
-     * it means the mark was taken too early or a neighbour assembled inside it; either way the
-     * scenario cannot be told which ship is its own, and a wrong answer here is worse than a refusal.
-     * ({@code VSGroundFlightGroupE2ETest} already sidesteps this by taking a separate mark per
-     * assembly — that is the shape a class with two builds wants.)</p>
-     */
-    /**
      * The deck-capture verdict for the player, read ONCE and proved to be about {@code shipId}.
      *
      * <p>Two defects it exists to remove, both measured 2026-09-06 across this family:</p>
@@ -455,6 +439,23 @@ public abstract class AbstractSharedVsClientE2ETest extends AbstractSharedClient
         return reply;
     }
 
+    /**
+     * Wait for THIS scenario's assembly to become a ship in the physics mod's registry, and return
+     * its physics id — read off the {@code ship_spawned} record rather than off a nearest-ship lookup
+     * at the build site a tick later. The mark is taken before the assembly is queued, so the record
+     * is this scenario's own ship and never a neighbour's.
+     *
+     * <p><b>Exactly ONE record, and the caller cannot check that afterwards — so it is checked
+     * here.</b> {@link Events#await} returns the moment the count goes above zero and
+     * {@link Events#lastField} then takes the LAST record in that reply, so a second assembly landing
+     * in the same window would silently re-point every question the scenario asks from here on, and
+     * the id it handed back would look exactly as legitimate as the right one. The window is the
+     * caller's own mark, so two records in it means the mark was taken too early or a neighbour
+     * assembled inside it; either way nothing here can say which ship is this scenario's, which is
+     * why a second record raises an ARRANGEMENT failure naming the count instead of picking one.
+     * ({@code VSGroundFlightGroupE2ETest} takes a separate mark per assembly — that is the shape a
+     * class with two builds wants, and it is what keeps this count at one.)</p>
+     */
     protected final String awaitShipSpawned(Events events, long mark, String what) throws Exception {
         String reply = events.await(mark, "ship_spawned", what, 200);
         int spawned = Events.countRecords(reply, "\"vsShip\":");

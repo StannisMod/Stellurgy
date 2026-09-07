@@ -88,6 +88,25 @@ public class VSTransitCrewGroupE2ETest extends AbstractSharedVsClientE2ETest {
         return m.group(1);
     }
 
+    private static final Pattern SETUP_DURABLE_ID = Pattern.compile("\"durableId\":\"([^\"]+)\"");
+
+    /**
+     * The craft's DURABLE NAME out of the same setup reply — a different identity from
+     * {@link #setupShipId}, and the only one that survives a crossing.
+     *
+     * <p>The setup mints this on the pad, onto the flight computer, and settles the ledger under it;
+     * the physics id beside it is the substrate's, and the crossing re-assembles the hull and mints a
+     * new one. So the origin cell is asked by the physics id and the far end by this name, through
+     * {@code vs ship-uuid}. Reading either one as the other answers {@code found:false} — that is not
+     * a missing ship, it is the wrong question.</p>
+     */
+    private static String setupDurableId(String setup) {
+        Matcher m = SETUP_DURABLE_ID.matcher(setup);
+        assertTrue("the piloted transit setup must name the craft it minted, or nothing can address"
+                + " it after a crossing re-mints its physics id: " + setup, m.find());
+        return m.group(1);
+    }
+
     /** {@code find-seat} keyed by identity — see {@link #setupShipId} for why never by the anchor. */
     private String findSeat(int originDim, String shipId) throws Exception {
         return exec("artest vs find-seat " + originDim + " id " + shipId);
@@ -1040,6 +1059,11 @@ private String chat() throws Exception {
                 aboardState.get("health").getAsFloat() > 0f);
         assertTrue("...and he must still be resolved on that deck after the whole budget: "
                 + aboardCapture, readBool(aboardCapture, "alreadyTracked"));
+        // On HIS parked hull. Every scenario in this class parks a craft in this same hyperspace
+        // world, and the negative leg below turns on him LEAVING the deck — so a capture held by a
+        // neighbouring hull would make both legs read the wrong body's relationship to the void.
+        ShipIdentity.assertCaptureAnchoredOn(aboardCapture, hyperShipId,
+                "the deck that keeps him out of the void must be his own ship's");
 
         // ── JUMP-8: the void is lethal ──────────────────────────────────────────────────────────
         // He walks off. Nothing prevents him — the danger is the mechanic, not a wall. The teleport
@@ -1141,6 +1165,15 @@ private String chat() throws Exception {
                 + " his feet' MEANS to the crossing, and without it this test would be about a"
                 + " player standing in a void cell: " + capture,
                 readBool(capture, "alreadyTracked") && !readBool(capture, "hullStand"));
+        // ...on the ship that is about to JUMP. The crossing enumerates the bodies aboard ONE hull,
+        // so a capture held by any other craft in the cell means the crew member is not in the set
+        // under test at all, and every reading downstream would be about somebody it never carried.
+        //
+        // `setupShipId` is ALREADY the physics id — the setup returns the assembler's own answer —
+        // and the capture's anchor is a physics id too, so the two compare directly. The durable name
+        // is a SEPARATE field of that reply and is what the far end needs; see the arrival below.
+        ShipIdentity.assertCaptureAnchoredOn(capture, setupShipId(setup),
+                "CONTROL: the deck he stands on must be the ship this jump is performed with");
         assertEquals("CONTROL: he must be in the origin cell before the jump", originDim,
                 bot().reportWeather().get("dim").getAsInt());
 
@@ -1219,6 +1252,26 @@ private String chat() throws Exception {
                     && readBool(exec("artest vs deck-capture"), "alreadyTracked");
         }
         String captureOnArrival = exec("artest vs deck-capture");
+        // The arrival cell may hold other craft — that is exactly why the second crossing is not the
+        // first one reached twice — so "back on the deck there" is only the clause's claim if it is
+        // HIS deck. The physics id is re-derived from the ship's durable name because a crossing
+        // mints a new one; the name is the handle that survives both crossings.
+        ShipIdentity.assertCaptureAnchoredOn(captureOnArrival,
+                ShipIdentity.awaitPhysicsIdOf(this::exec, targetDim, setupDurableId(setup),
+                        40, () -> bot().waitTicks(5)),
+                "the deck he is put back on at the far end must be his own ship's."
+                        + " What production SAID it did, so a red here separates a re-seat that named"
+                        + " the wrong craft from a capture that drifted off the right one afterwards"
+                        + " — `crew_reseated` carries the durable name, `hyperspace_arrival_cut` the"
+                        + " physics id of the hull that landed, and `deck_hold_ended` says on which"
+                        + " of its three branches the server's deck hold let go and what was holding"
+                        + " the body at that instant: "
+                        + events.since(mark, "crew_reseated")
+                        + " :: " + events.since(mark, "hyperspace_arrival_cut")
+                        + " :: " + events.since(mark, "deck_hold_ended")
+                        + " :: releases, with production's own reason for each — a capture that was"
+                        + " right when the hold let go and wrong when this was read went through one"
+                        + " of these: " + events.since(mark, "deck_released"));
         assertEquals("the arrival crossing must carry the crew member on his feet too — his own"
                 + " client must be in the TARGET cell: " + captureOnArrival
                 + "; the server's chain: " + events.since(mark),
@@ -1430,6 +1483,22 @@ private String chat() throws Exception {
                 !bot().reportRidingEntity().get("riding").getAsBoolean());
         assertTrue("...and he must be back ON THE DECK, not merely in the right world: "
                 + captureOnArrival, readBool(captureOnArrival, "alreadyTracked"));
+        // ...HIS deck. This class runs in a shared hyperspace world and arrives into a cell that may
+        // hold other craft, so "on a deck" and "on the deck he stood up from" are different claims
+        // and only the second is what a crossing is supposed to guarantee.
+        ShipIdentity.assertCaptureAnchoredOn(captureOnArrival,
+                ShipIdentity.awaitPhysicsIdOf(this::exec, targetDim, setupDurableId(setup),
+                        40, () -> bot().waitTicks(5)),
+                "the deck he stands on after the arrival must be his own ship's."
+                        + " What production SAID it did, so a red here separates a re-seat that named"
+                        + " the wrong craft from a capture that drifted off the right one afterwards,"
+                        + " and `deck_hold_ended` says which branch let the hold go: "
+                        + events.since(mark, "crew_reseated")
+                        + " :: " + events.since(mark, "hyperspace_arrival_cut")
+                        + " :: " + events.since(mark, "deck_hold_ended")
+                        + " :: releases, with production's own reason for each — a capture that was"
+                        + " right when the hold let go and wrong when this was read went through one"
+                        + " of these: " + events.since(mark, "deck_released"));
     }
 
 }

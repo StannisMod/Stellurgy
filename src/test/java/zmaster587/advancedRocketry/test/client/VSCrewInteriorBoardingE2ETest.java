@@ -228,9 +228,13 @@ public class VSCrewInteriorBoardingE2ETest extends AbstractSharedVsClientE2ETest
         // record is the RE-capture; and because an ongoing capture keeps writing one every tick,
         // this cannot miss a re-claim that landed between the two reads either.
         long reclaimMark = clientEvents.mark();
-        String reclaimed = clientEvents.await(reclaimMark, "deck_captured",
-                "the deck must reclaim the body released inside the inverted ship, instead of leaving"
-                        + " it to world gravity through the world-down cockpit opening",
+        // Carrying THIS ship: the record names the hull that re-took the body, and "the deck reclaimed
+        // him" is a claim about the ship he was released inside — a type-only wait cannot tell it
+        // from another hull picking him up on his way down.
+        String reclaimed = clientEvents.awaitCarrying(reclaimMark, "deck_captured",
+                "\"ship\":\"" + scenarioShipId + "\"",
+                "THIS ship's deck must reclaim the body released inside the inverted ship, instead of"
+                        + " leaving it to world gravity through the world-down cockpit opening",
                 DECK_LINK_BUDGET_TICKS);
 
         // Sample the settle: where does the body come to rest, and what camera does the client own?
@@ -413,9 +417,11 @@ public class VSCrewInteriorBoardingE2ETest extends AbstractSharedVsClientE2ETest
         // hull for at least one gate call: an entry through a hatch, a relog inside the cavity, or a
         // flight-off, none of which is a teleport.
         long reclaimMark = clientEvents.mark();
-        String reclaimed = clientEvents.await(reclaimMark, "deck_captured",
-                "the displaced body must be re-captured - a displacement that ends with no capture at"
-                        + " all leaves the body to world gravity in the cavity",
+        String reclaimed = clientEvents.awaitCarrying(reclaimMark, "deck_captured",
+                "\"ship\":\"" + scenarioShipId + "\"",
+                "the displaced body must be re-captured BY THIS SHIP - a displacement that ends with"
+                        + " no capture at all leaves the body to world gravity in the cavity, and one"
+                        + " that ends on another hull has left the cavity under test",
                 DECK_LINK_BUDGET_TICKS);
 
         // Sample the settle: where does the claimed body come to rest?
@@ -555,8 +561,12 @@ public class VSCrewInteriorBoardingE2ETest extends AbstractSharedVsClientE2ETest
                 bot().waitTicks(2);
                 samples++;
                 String cap = exec("artest vs deck-capture");
+                // Anchored on THIS scenario's craft, per sample: the count below is a claim about
+                // one body keeping one ship's interior frame through the climb, and a sample taken
+                // against another hull in the same airspace is not evidence for it.
                 boolean tracked = cap.contains("\"alreadyTracked\":true")
-                        && !cap.contains("\"hullStand\":true");
+                        && !cap.contains("\"hullStand\":true")
+                        && scenarioShipId.equals(ShipIdentity.anchorOf(cap));
                 if (tracked) trackedSeen++;
                 if (Boolean.parseBoolean(bot().readStaticField(SHIP_CAMERA, "shipCamActive")
                         .get("value").getAsString())) {
@@ -649,8 +659,13 @@ public class VSCrewInteriorBoardingE2ETest extends AbstractSharedVsClientE2ETest
             // the seat block's top - one block above the deck stand. Either landing is "seated on
             // the ship's geometry at the deck spot"; only staying airborne (or lost to the world)
             // fails.
+            // `subSeated` is a subspace coordinate of the ANCHOR ship and `sub0` was taken in this
+            // scenario's own — so without the anchor the height comparison below is between two
+            // frames rather than two moments, and it is that comparison, not the flag, that decides
+            // "he came back down onto the deck".
             seated = capEnd.contains("\"alreadyTracked\":true")
                     && !capEnd.contains("\"hullStand\":true")
+                    && scenarioShipId.equals(ShipIdentity.anchorOf(capEnd))
                     && subSeated[1] <= sub0[1] + 1.4;
         }
         // The LANDING itself, as production's own edge: the deck resolver owned the tick and put the
