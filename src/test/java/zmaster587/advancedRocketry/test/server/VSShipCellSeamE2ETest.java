@@ -1,5 +1,6 @@
 package zmaster587.advancedRocketry.test.server;
 
+import zmaster587.advancedRocketry.test.ShipReadiness;
 import zmaster587.advancedRocketry.space.CellSeam;
 import zmaster587.advancedRocketry.space.GalacticCoord;
 import zmaster587.advancedRocketry.test.GameTicks;
@@ -63,7 +64,6 @@ public class VSShipCellSeamE2ETest extends AbstractSharedServerTest {
     private static final int SETTLE_TICKS = 600;
 
     /** The same, for waiting on a ship to become loadable in its slot. */
-    private static final int LOAD_TICKS = 200;
 
     /** Ticks of the carried ship's own world between ping-pong readings. */
     private static final int PING_PONG_TICKS_BETWEEN = 5;
@@ -137,7 +137,7 @@ public class VSShipCellSeamE2ETest extends AbstractSharedServerTest {
         int carriedSlot = extractInt(afterMove[0], "slotDim");
         assertTrue("the carried ship has no bound slot: " + afterMove[0],
                 carriedSlot > Integer.MIN_VALUE);
-        assertTrue("the neighbour's cell world never came up", waitForLoadedShip(carriedSlot) >= 1);
+        assertTrue("the neighbour's cell world never came up", loadedShips(carriedSlot) >= 1);
         String arrived = arrivedShip(carriedSlot, arShipId);
         double ax = extractDouble(arrived, "posX");
         assertFalse("the arrived ship's pose could not be read: " + arrived, Double.isNaN(ax));
@@ -271,7 +271,7 @@ public class VSShipCellSeamE2ETest extends AbstractSharedServerTest {
         int carriedSlot = extractInt(afterMove[0], "slotDim");
         assertTrue("the carried ship has no bound slot: " + afterMove[0],
                 carriedSlot > Integer.MIN_VALUE);
-        assertTrue("the neighbour's cell world never came up", waitForLoadedShip(carriedSlot) >= 1);
+        assertTrue("the neighbour's cell world never came up", loadedShips(carriedSlot) >= 1);
 
         // The ARRIVED ship's VS id — a new body, so a new id, traded for the durable one. Asking with
         // the source's would answer "not aboard" for a body sitting perfectly on the deck.
@@ -398,7 +398,7 @@ public class VSShipCellSeamE2ETest extends AbstractSharedServerTest {
         String before = exec("artest space ledger-get " + arShipId);
         assertTrue("this ship is ledgered before it has flown: " + before,
                 before.contains("\"found\":false"));
-        assertTrue("the source VS ship never loaded", waitForLoadedShip(0) >= 1);
+        assertTrue("the source VS ship never loaded", loadedShips(0) >= 1);
 
         // TWO IDENTITIES, deliberately kept apart, and NEITHER of them is searched for. The DURABLE
         // id came from the assembler that built this craft. The PHYSICS id is minted asynchronously by
@@ -436,7 +436,7 @@ public class VSShipCellSeamE2ETest extends AbstractSharedServerTest {
         assertTrue("the settled ship names no cell: " + status[0], sourceCell != null);
         int sourceSlot = extractInt(status[0], "slotDim");
         assertTrue("settled ship has no bound slot: " + status[0], sourceSlot > Integer.MIN_VALUE);
-        assertTrue("the settled ship's cell world is not live", waitForLoadedShip(sourceSlot) >= 1);
+        assertTrue("the settled ship's cell world is not live", loadedShips(sourceSlot) >= 1);
 
         // LET GO OF THE STICK. The climb held full up to get past the entry ceiling, and the flight
         // computer RETAINS a cruise setpoint — so without this the craft is still under thrust for
@@ -542,11 +542,10 @@ public class VSShipCellSeamE2ETest extends AbstractSharedServerTest {
         EntrySlots.loadAll(this::exec, setup);
     }
 
-    private int waitForLoadedShip(int dim) throws Exception {
-        // Budgeted on the SERVER's clock, not on dim's: the world being asked about is precisely the
-        // one that may not have started ticking yet, and budgeting against it would measure the wait
-        // with the thing the wait is waiting for.
-        return awaitLoadedShips(this::exec, dim, LOAD_TICKS);
+    /** How many ships are LOADED in {@code dim} right now. A read, not a wait: measured across this
+     *  tier at one and at six forks, the ship is already loaded whenever a scenario asks. */
+    private int loadedShips(int dim) throws Exception {
+        return ShipReadiness.loadedCount(this::exec, dim);
     }
 
     private void clearArea(int baseX, int baseZ) throws Exception {

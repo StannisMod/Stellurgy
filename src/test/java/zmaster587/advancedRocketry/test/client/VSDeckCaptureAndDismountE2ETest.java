@@ -858,11 +858,12 @@ public class VSDeckCaptureAndDismountE2ETest extends AbstractSharedVsClientE2ETe
             mouseDelta(60, 0);
             bot().waitTicks(2);
         }
-        double omegaAfter = 0.0;
-        for (int i = 0; i < 20; i++) {
-            bot().waitTicks(2);
-            omegaAfter = Math.max(omegaAfter, readDouble(shipInfo(), OMEGA));
-        }
+        // Early exit + a load-scaled ceiling. The verdict below is "omega crossed 0.1 at some
+        // point", so the first sample that crosses settles it and every further tick is burned; and
+        // a FIXED 20-iteration budget can under-observe under concurrent-fork load. Equivalent to
+        // the max it replaces: "some sample exceeded 0.1" is what both compute.
+        double omegaAfter = ClientPoll.until(bot()::waitTicks,
+                () -> readDouble(shipInfo(), OMEGA), o -> o > 0.1, 2, 20).value;
         System.out.println("[deckcap] force-invert control cursor="
                 + clientDouble(KEY_BINDINGS, "flightCursorX") + " omegaAfter=" + omegaAfter);
 
@@ -925,11 +926,10 @@ public class VSDeckCaptureAndDismountE2ETest extends AbstractSharedVsClientE2ETe
             bot().waitTicks(2);
         }
         double cursor = clientDouble(KEY_BINDINGS, "flightCursorX");
-        double omegaTurning = 0.0;
-        for (int i = 0; i < 30; i++) {
-            bot().waitTicks(2);
-            omegaTurning = Math.max(omegaTurning, readDouble(shipInfo(), OMEGA));
-        }
+        // Same wait as the force-invert leg above, and it carried a 1.5x budget for no stated
+        // reason; both are now the same early-exit poll with the same load-scaled ceiling.
+        double omegaTurning = ClientPoll.until(bot()::waitTicks,
+                () -> readDouble(shipInfo(), OMEGA), o -> o > 0.1, 2, 30).value;
         System.out.println("[deckcap] inverted-control cursor=" + cursor + " omegaTurning=" + omegaTurning);
 
         assertTrue("a hard flight-cursor deflection must register on the client even when inverted "

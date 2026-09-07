@@ -3,43 +3,36 @@ package zmaster587.advancedRocketry.test;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import static org.junit.Assert.assertTrue;
+
 /**
- * Getting a dimension to the state where a ship is actually LOADED, and saying so from the event
- * log rather than from a count.
+ * How many ships are LOADED in a dimension — read once, asserted immediately, never waited for.
  *
- * <p>This is arrangement — what a scenario does BEFORE the thing it means to test. It is never the
- * subject of an assertion, which is exactly why it was allowed to rot: seventeen server-tier classes
- * carried a private {@code waitForLoadedShip}, and hashing their bodies gave SIX different ones. Six
- * experiments under one name, and nothing in any single file could show it. The budget, the floor,
- * the order of the two steps and what the failure prints are not properties of any one scenario.</p>
+ * <h2>Why there is no wait here, and how that was decided</h2>
  *
- * <h2>Registration and loading are two events, and the pump only bridges them</h2>
+ * <p>Seventeen server-tier scenarios used to carry a private {@code waitForLoadedShip}: poll until
+ * the registry knows a ship, pump {@code vs load-ships}, poll until one is loaded, up to 200 ticks.
+ * Hashing the seventeen bodies gave SIX different ones — six experiments under one name.</p>
  *
- * <p>A headless server has no player standing near a ship, so nothing auto-loads one;
- * {@code artest vs load-ships <dim>} is what asks. But it forces the ships the world already KNOWS,
- * so pumping before the physics mod has registered the craft does nothing whatsoever. Hence the
- * order here — wait for the registry to carry it, pump once, then wait for the load to commit.</p>
+ * <p>Before collapsing them, the question "what does this wait actually wait for" was measured
+ * rather than assumed, with a pair of plants: first the already-satisfied branch was made to throw,
+ * then the branch that waits was. <b>Every scenario failed on the first plant, at its FIRST call.
+ * None failed on the second — at one fork, and again at six.</b> Seventeen classes, twenty tests,
+ * zero executions of the wait under six-way concurrent load. By the time any of them asks, the ship
+ * is loaded. The old polls exited on their first iteration for the same reason, which is why nobody
+ * noticed in the years they stood there.</p>
  *
- * <h2>Why the commit is read from the log and not from the count</h2>
+ * <p><b>So the wait was not waiting for anything, and a wait that waits for nothing is a defect
+ * wearing a helper's clothes.</b> A wait exists because something is not true synchronously after
+ * the action; when it IS true, what remains is either a fossil of a fault since fixed or a habit
+ * adopted without measuring. Either way it costs the same thing: it converts a state that should
+ * fail LOUDLY into up to 200 ticks of absorbed ambiguity, and then returns a number that is zero for
+ * several different reasons.</p>
  *
- * <p>A count answers "how many are loaded right now". It cannot tell <em>it never loaded</em> from
- * <em>it loaded and was collected again before this read</em>, and those two send a reader to
- * different subsystems. The record log keeps the history, so the failure prints the chain that DID
- * happen instead of a number that is zero for four different reasons.</p>
- *
- * <h2>MEASURED 2026-09-07: no caller currently reaches the waiting half</h2>
- *
- * <p>Every one of the seventeen scenarios that used to carry a private copy of this was run with the
- * fast path planted to fail, and then with the event path planted to fail. The first plant failed all
- * of them on their FIRST call; the second failed none of them. Seventeen classes, twenty tests, zero
- * executions of the wait — <b>by the time any of them asks, the ship is already loaded</b>, so what
- * they carried was never a wait at all. The old copies short-circuited on their first poll iteration
- * for the same reason, which is why nobody noticed.</p>
- *
- * <p>The waiting half is kept deliberately, and this note is what stops it being taken for tested
- * ground: a caller that DOES need it will be the first, and until then it is unexercised code with a
- * green suite standing beside it. A green run of those scenarios is evidence about the fast path and
- * about nothing else.</p>
+ * <p>What replaces it is stronger, not weaker. A read and an assertion say "a ship is loaded here"
+ * as a postcondition, fail at once when it is not, and name what to look at next. If a genuinely
+ * asynchronous path ever appears, this is where it will surface — as a red with a discriminating
+ * message, rather than as a wait that silently makes it go away.</p>
  */
 public final class ShipReadiness {
 
@@ -49,76 +42,54 @@ public final class ShipReadiness {
     private static final Pattern COUNT = Pattern.compile("\"count\":(-?\\d+)");
 
     /**
-     * Which way {@link #awaitLoaded} reached the state it returns, so a caller's failure message can
-     * say it. A ship that was ALREADY loaded is a state, not a degraded answer: nothing had to
-     * happen, so no record could be waited for, and that is worth telling apart from a load this
-     * call actually drove.
+     * How many ships are LOADED in {@code dim} right now — a plain read, no pump and no wait.
+     *
+     * <p>The form to use inside somebody else's poll condition, where a failed read is an answer
+     * ("not yet") and must not throw.</p>
      */
-    public enum How {
-        /** The floor already held on entry; nothing was pumped and nothing was awaited. */
-        ALREADY_LOADED,
-        /** The registry already carried the craft; this call pumped and awaited the load. */
-        PUMPED,
-        /** This call waited for registration first, then pumped and awaited the load. */
-        REGISTERED_THEN_PUMPED,
+    public static int loadedCount(Events.Probe probe, int dim) throws Exception {
+        return countOf(probe.exec("artest vs ship-count " + dim));
     }
 
-    /** How many ships are loaded, and how that came to be true. */
-    public static final class Loaded {
-        public final int count;
-        public final How how;
-
-        Loaded(int count, How how) {
-            this.count = count;
-            this.how = how;
-        }
-
-        @Override
-        public String toString() {
-            return count + " loaded (" + how + ")";
-        }
+    /** How many ships the registry KNOWS in {@code dim}, loaded or not. Read for the same reason. */
+    public static int registeredCount(Events.Probe probe, int dim) throws Exception {
+        return countOf(probe.exec("artest vs ship-count-all " + dim));
     }
 
     /**
-     * Get {@code dim} to at least {@code want} loaded ships, and answer how many there are.
+     * Assert that at least {@code want} ships are loaded in {@code dim}, and answer how many.
      *
-     * @param probe  how to run one probe command
-     * @param events this tier's reader of the event log, already built against the same probe
-     * @param dim    the dimension to look in
-     * @param want   the floor the loaded count must reach
-     * @param budget tick budget for each of the two waits
-     * @throws AssertionError naming the whole recorded chain when either step never commits
+     * <p>The failure separates the two states a bare count cannot: a craft the registry never heard
+     * of, and one it knows but which is not loaded. Those send a reader to different subsystems, so
+     * the message carries both counts and says which it is.</p>
+     *
+     * @param what a scenario-facing sentence for what this ship being loaded MEANS here
      */
-    public static Loaded awaitLoaded(Events.Probe probe, Events events, int dim, int want, int budget)
+    public static int requireLoaded(Events.Probe probe, int dim, int want, String what)
             throws Exception {
-        int already = countOf(probe.exec("artest vs ship-count " + dim));
-        if (already >= want) {
-            return new Loaded(already, How.ALREADY_LOADED);
+        int loaded = loadedCount(probe, dim);
+        if (loaded >= want) {
+            return loaded;
         }
-
-        long mark = events.mark();
-        How how = How.PUMPED;
-        if (countOf(probe.exec("artest vs ship-count-all " + dim)) < want) {
-            how = How.REGISTERED_THEN_PUMPED;
-            events.await(mark, "ship_spawned",
-                    "the craft must reach the physics mod's registry in dimension " + dim
-                            + " before anything can load it — `vs load-ships` forces the ships the"
-                            + " world already knows, so pumping ahead of registration is a no-op",
-                    budget);
-        }
-
-        probe.exec("artest vs load-ships " + dim);
-        events.await(mark, "ship_loaded",
-                "the registered craft must actually load in dimension " + dim
-                        + "; a headless server has no player near it to do so on its own", budget);
-
-        return new Loaded(countOf(probe.exec("artest vs ship-count " + dim)), how);
+        int registered = registeredCount(probe, dim);
+        assertTrue(what + " — dimension " + dim + " holds " + loaded + " loaded ship(s), wanted "
+                        + want + ". The registry knows " + registered + " there, so this is "
+                        + (registered < want
+                                ? "a craft that never REGISTERED: look at what was supposed to create"
+                                        + " it, not at loading"
+                                : "a craft that registered and did not LOAD: a headless server has no"
+                                        + " player near it, so something was expected to ask —"
+                                        + " `artest vs load-ships " + dim + "` is that ask")
+                        + ". This is asserted rather than waited for: measured across this tier at"
+                        + " one and at six forks, the ship is always already loaded by the time a"
+                        + " scenario asks, so a delay here is a finding and not something to sit out",
+                loaded >= want);
+        return loaded;
     }
 
-    /** One loaded ship in {@code dim} — the floor every caller of the old private copies used. */
-    public static Loaded awaitLoaded(Events.Probe probe, Events events, int dim, int budget)
-            throws Exception {
-        return awaitLoaded(probe, events, dim, 1, budget);
+    /** One loaded ship in {@code dim} — the floor almost every scenario asks for. */
+    public static int requireLoaded(Events.Probe probe, int dim, String what) throws Exception {
+        return requireLoaded(probe, dim, 1, what);
     }
 
     /** The {@code count} of a probe reply, or {@link Integer#MIN_VALUE} when it carries none. */

@@ -1,5 +1,6 @@
 package zmaster587.advancedRocketry.test.server;
 
+import zmaster587.advancedRocketry.test.ShipReadiness;
 import org.junit.After;
 import zmaster587.advancedRocketry.test.ShipIdentity;
 
@@ -36,7 +37,6 @@ import static org.junit.Assert.assertTrue;
 public class ShipArrivalKeepsItsPilotSeatInASuperheatedAtmosphereTest extends AbstractSharedServerTest {
 
     /** World a ship is given to become loadable - the old 40 x 250 ms. */
-    private static final int LOAD_TICKS = 200;
 
     private static final Pattern BUILDER_POS =
             Pattern.compile("\"builderPos\":\\[(-?\\d+),(-?\\d+),(-?\\d+)]");
@@ -71,7 +71,7 @@ public class ShipArrivalKeepsItsPilotSeatInASuperheatedAtmosphereTest extends Ab
         String asm = exec("artest rocket assemble 0 " + coords);
         assertTrue("with VS an AFC-bearing build must route to a ship (no rocket): " + asm,
                 asm.contains("\"rocketCount\":0"));
-        assertTrue("the source VS ship never loaded", waitForLoadedShip() >= 1);
+        assertTrue("the source VS ship never loaded", loadedShips(0) >= 1);
 
         // The source ship, by the durable name its assembler minted — which is also what the ARRIVED
         // craft is found by, since a crossing carries the name and re-mints the physics id. Both seat
@@ -134,7 +134,7 @@ public class ShipArrivalKeepsItsPilotSeatInASuperheatedAtmosphereTest extends Ab
         assertTrue("the crossing itself failed, so the seat question was never asked: " + cross,
                 cross.contains("\"ok\":true"));
         assertTrue("the crossed ship never re-loaded at the destination: " + cross,
-                waitForLoadedShip() >= 1);
+                loadedShips(0) >= 1);
 
         // The crew's own question: is there a seat on the arrived ship, still linked to its computer?
         // Asked of the ARRIVED ship by its own id — the crossing re-assembles the craft and mints a
@@ -175,8 +175,10 @@ public class ShipArrivalKeepsItsPilotSeatInASuperheatedAtmosphereTest extends Ab
     }
 
     /** Poll for a loaded VS ship (assembly is asynchronous). Bounded ~10 s. Returns the loaded count. */
-    private int waitForLoadedShip() throws Exception {
-        return awaitLoadedShips(this::exec, 0, LOAD_TICKS);
+    /** How many ships are LOADED in {@code dim} right now. A read, not a wait: measured across this
+     *  tier at one and at six forks, the ship is already loaded whenever a scenario asks. */
+    private int loadedShips(int dim) throws Exception {
+        return ShipReadiness.loadedCount(this::exec, dim);
     }
 
     private void clearArea(int baseX, int baseZ) throws Exception {

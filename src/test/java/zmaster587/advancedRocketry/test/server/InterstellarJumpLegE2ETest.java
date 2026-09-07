@@ -1,5 +1,6 @@
 package zmaster587.advancedRocketry.test.server;
 
+import zmaster587.advancedRocketry.test.ShipReadiness;
 import com.github.stannismod.forge.testing.TestTimeouts;
 
 import org.junit.After;
@@ -72,7 +73,6 @@ public class InterstellarJumpLegE2ETest extends AbstractSharedServerTest {
     private static final int SETTLE_TICKS = 600;
 
     /** The same, for a ship becoming loadable in its slot - the old 40 x 250 ms. */
-    private static final int LOAD_TICKS = 200;
     /**
      * Poll iterations for an ARRIVAL, one second apart. The far leg is thousands of ticks of real
      * server time by design, so this budget is sized from the leg itself — 537 sectors x 4M blocks
@@ -93,7 +93,7 @@ public class InterstellarJumpLegE2ETest extends AbstractSharedServerTest {
         String asm = exec("artest rocket assemble 0 " + coords);
         assertTrue("an AFC-bearing build must route to a ship (no rocket): " + asm,
                 asm.contains("\"rocketCount\":0"));
-        assertTrue("the source VS ship never loaded", waitForLoadedShip(0) >= 1);
+        assertTrue("the source VS ship never loaded", loadedShips(0) >= 1);
 
         // The ship's own name, from the assembler that minted it, and the physics id it maps to. Every
         // call below is addressed to one of the two: the overworld this class builds in is shared, so
@@ -225,8 +225,10 @@ public class InterstellarJumpLegE2ETest extends AbstractSharedServerTest {
         EntrySlots.loadAll(this::exec, setup);
     }
 
-    private int waitForLoadedShip(int dim) throws Exception {
-        return awaitLoadedShips(this::exec, dim, LOAD_TICKS);
+    /** How many ships are LOADED in {@code dim} right now. A read, not a wait: measured across this
+     *  tier at one and at six forks, the ship is already loaded whenever a scenario asks. */
+    private int loadedShips(int dim) throws Exception {
+        return ShipReadiness.loadedCount(this::exec, dim);
     }
 
     private void clearArea(int baseX, int baseZ) throws Exception {

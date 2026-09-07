@@ -35,8 +35,16 @@ import static org.junit.Assert.assertTrue;
  */
 public class PlanetWeatherGateTest {
 
-    /** Ticks the weather cycle is given to apply a marker - the old 250 ms settle. */
-    private static final int WEATHER_SETTLE_TICKS = 5;
+    /**
+     * Ticks the weather cycle is given to apply a marker.
+     *
+     * <p>25 = the five rounds of five the previous helper spent unconditionally, kept so this
+     * change moves the FORM of the wait and not its size. It is a DEADLINE for the positive read
+     * and a WINDOW for the negative ones; neither is a measured figure for how long
+     * {@code updateWeather} actually needs after a mid-test {@code initDimension}, and nothing in
+     * this file has ever established that.</p>
+     */
+    private static final int SETTLE_BUDGET_TICKS = 25;
 
     private static final int DIM_THIN_RAIN   = 9111; // density 10, rainMarker 1   -> must stay clear
     private static final int DIM_THICK_RAIN  = 9112; // density 100, rainMarker 1  -> must rain
@@ -105,11 +113,12 @@ public class PlanetWeatherGateTest {
                     dimList.contains(String.valueOf(dim)));
         }
 
-        // Force a fresh weather evaluation on each planet, then read the live
-        // state. A few ticks let updateWeather run its marker + gate logic.
-        String thin   = weatherAfterSettle(DIM_THIN_RAIN);
-        String thick  = weatherAfterSettle(DIM_THICK_RAIN);
-        String dry    = weatherAfterSettle(DIM_DRY_THUNDER);
+        // Read the live state of each planet. The three claims are not the same SHAPE, so they are
+        // not read the same way: the thick planet MUST reach rain, which is a state to wait for and
+        // to stop waiting at; the other two must never reach it, which nothing can confirm early.
+        String thick  = weatherOnce(DIM_THICK_RAIN, "\"isRaining\":true");
+        String thin   = weatherAfterWindow(DIM_THIN_RAIN);
+        String dry    = weatherAfterWindow(DIM_DRY_THUNDER);
 
         // Contrast: same rainMarker=1, opposite atmosphere -> opposite rain state.
         assertTrue("thick-atmosphere planet with rainMarker=1 must rain (gate baseline): " + thick,
@@ -126,19 +135,41 @@ public class PlanetWeatherGateTest {
     }
 
     /**
-     * Reads {@code artest weather get <dim>} a few times so the dedicated server
-     * has ticked {@code updateWeather} at least once after the dims came online.
+     * The live weather of {@code dim}, once {@code wanted} appears in the reply or the budget runs
+     * out — the POSITIVE form, for a state the cycle is supposed to reach.
+     *
+     * <p>A single helper used to serve all three planets by reading five times with a fixed advance
+     * between reads, testing nothing. Its own javadoc named the condition — "so the server has
+     * ticked {@code updateWeather} at least once" — and the code never asked it, so a planet that
+     * had rained on the first read still paid the whole window.</p>
+     *
+     * <p><b>The first read comes before any advancing, and that order is load-bearing.</b>
+     * {@code artest weather get} is not a read: it pins the dimension and calls
+     * {@code initDimension} before answering, so it is what makes the world exist and tick. A
+     * version that advanced first would be ticking a world nobody had constructed.</p>
      */
-    private String weatherAfterSettle(int dim) throws Exception {
-        String last = "";
-        for (int i = 0; i < 5; i++) {
-            last = String.join("\n", harness.client().execute("artest weather get " + dim));
-            if (!last.contains("\"error\"")) {
-                // Let the weather cycle apply the marker/gate. In ticks: the cycle runs per tick, so
-                // a wall-clock settle bought it proportionally less on a busy box.
-                GameTicks.advance(harness.client(), GameTicks.server(), WEATHER_SETTLE_TICKS);
-            }
-        }
-        return last;
+    private String weatherOnce(int dim, String wanted) throws Exception {
+        String[] last = {String.join("\n", harness.client().execute("artest weather get " + dim))};
+        GameTicks.until(harness.client(), GameTicks.server(), SETTLE_BUDGET_TICKS, () -> {
+            last[0] = String.join("\n", harness.client().execute("artest weather get " + dim));
+            return last[0].contains(wanted);
+        });
+        return last[0];
+    }
+
+    /**
+     * The live weather of {@code dim} after the cycle has been given a full window to act — the
+     * NEGATIVE form, for a claim that something must NOT happen.
+     *
+     * <p>An absence has no event to wait for and no condition that can exit early: the only way to
+     * be wrong about "it never rained" is to look too soon, so this one spends its whole budget on
+     * purpose. That is the difference between the two helpers, and it is why there are two.</p>
+     */
+    private String weatherAfterWindow(int dim) throws Exception {
+        // The constructing read: its VALUE is discarded, its side effect is the point — this is
+        // what pins the dimension and calls initDimension, so the window below ticks a real world.
+        harness.client().execute("artest weather get " + dim);
+        GameTicks.advance(harness.client(), GameTicks.server(), SETTLE_BUDGET_TICKS);
+        return String.join("\n", harness.client().execute("artest weather get " + dim));
     }
 }

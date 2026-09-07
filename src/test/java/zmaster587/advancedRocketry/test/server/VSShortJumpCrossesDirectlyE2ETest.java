@@ -1,5 +1,6 @@
 package zmaster587.advancedRocketry.test.server;
 
+import zmaster587.advancedRocketry.test.ShipReadiness;
 import zmaster587.advancedRocketry.test.GameTicks;
 import zmaster587.advancedRocketry.test.ShipIdentity;
 
@@ -36,7 +37,6 @@ public class VSShortJumpCrossesDirectlyE2ETest extends AbstractSharedServerTest 
     private static final int ARRIVAL_TICKS = 400;
 
     /** The same, for a ship becoming loadable in its slot. */
-    private static final int LOAD_TICKS = 200;
 
     @Test
     public void aShortJumpArrivesWithoutEverBeingInFlight() throws Exception {
@@ -93,7 +93,7 @@ public class VSShortJumpCrossesDirectlyE2ETest extends AbstractSharedServerTest 
         int targetDim = arrived ? extractInt(lastTick[0], "targetDim") : -1;
         assertTrue("the ship never reached the target cell; last tick=" + lastTick[0], targetDim >= 0);
         assertTrue("the ship never (re)loaded in the target cell (dim " + targetDim + "); countAll="
-                + exec("artest vs ship-count-all " + targetDim), waitForLoadedShip(targetDim) >= 1);
+                + exec("artest vs ship-count-all " + targetDim), loadedShips(targetDim) >= 1);
         // The cell's ship count NAMES what it counted, so the arrived craft is identified rather
         // than approached: the premise "exactly one ship is here" and the answer "and this is it"
         // are one reading, instead of a count followed by a nearest-ship lookup that would answer
@@ -113,7 +113,7 @@ public class VSShortJumpCrossesDirectlyE2ETest extends AbstractSharedServerTest 
                 + "never by the anchor every transit fixture shares: " + setup,
                 setup.contains("\"durableId\":\"") && !setup.contains("\"durableId\":\"\""));
         assertTrue("origin ship never assembled/loaded in the pool-slot cell (dim " + originDim + ")",
-                waitForLoadedShip(originDim) >= 1);
+                loadedShips(originDim) >= 1);
         return setup;
     }
 
@@ -127,8 +127,10 @@ public class VSShortJumpCrossesDirectlyE2ETest extends AbstractSharedServerTest 
     }
 
     /** On the SERVER's clock: the world asked about is the one that may not be ticking yet. */
-    private int waitForLoadedShip(int dim) throws Exception {
-        return awaitLoadedShips(this::exec, dim, LOAD_TICKS);
+    /** How many ships are LOADED in {@code dim} right now. A read, not a wait: measured across this
+     *  tier at one and at six forks, the ship is already loaded whenever a scenario asks. */
+    private int loadedShips(int dim) throws Exception {
+        return ShipReadiness.loadedCount(this::exec, dim);
     }
 
     private static int extractInt(String json, String key) {

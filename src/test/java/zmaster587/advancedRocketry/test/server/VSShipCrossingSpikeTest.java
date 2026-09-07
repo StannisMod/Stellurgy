@@ -1,5 +1,6 @@
 package zmaster587.advancedRocketry.test.server;
 
+import zmaster587.advancedRocketry.test.ShipReadiness;
 import zmaster587.advancedRocketry.test.ShipIdentity;
 
 import org.junit.Test;
@@ -30,7 +31,6 @@ import static org.junit.Assert.assertTrue;
 public class VSShipCrossingSpikeTest extends AbstractSharedServerTest {
 
     /** World a ship is given to become loadable - the old 40 x 250 ms. */
-    private static final int LOAD_TICKS = 200;
 
     private static final Pattern BUILDER_POS =
             Pattern.compile("\"builderPos\":\\[(-?\\d+),(-?\\d+),(-?\\d+)]");
@@ -66,7 +66,7 @@ public class VSShipCrossingSpikeTest extends AbstractSharedServerTest {
         String asm = exec("artest rocket assemble 0 " + coords);
         assertTrue("with VS an AFC-bearing build must route to a ship (no rocket): " + asm,
                 asm.contains("\"rocketCount\":0"));
-        assertTrue("the source VS ship never loaded", waitForLoadedShip() >= 1);
+        assertTrue("the source VS ship never loaded", loadedShips(0) >= 1);
 
         // The SOURCE ship, by the durable name its assembler minted. The crossing below re-assembles
         // the craft at the destination, which mints a NEW PHYSICS id — so there are two physics
@@ -110,7 +110,7 @@ public class VSShipCrossingSpikeTest extends AbstractSharedServerTest {
                 extractInt(cross, "ridersCarried") >= 1);
 
         // The re-assembled ship must load again at the destination.
-        int loadedAfter = waitForLoadedShip();
+        int loadedAfter = loadedShips(0);
         assertTrue("the crossed VS ship never re-loaded at the destination; crossing=" + cross
                 + " countAll=" + exec("artest vs ship-count-all 0"), loadedAfter >= 1);
         // The ARRIVED ship, found by the durable name that crossed with it. The physics id is new —
@@ -151,8 +151,10 @@ public class VSShipCrossingSpikeTest extends AbstractSharedServerTest {
 
     /** Poll for a loaded VS ship (assembly is async on the physics thread; a headless server has no
      *  player near to auto-load it, so force a load each round). Bounded ~10 s. Returns the loaded count. */
-    private int waitForLoadedShip() throws Exception {
-        return awaitLoadedShips(this::exec, 0, LOAD_TICKS);
+    /** How many ships are LOADED in {@code dim} right now. A read, not a wait: measured across this
+     *  tier at one and at six forks, the ship is already loaded whenever a scenario asks. */
+    private int loadedShips(int dim) throws Exception {
+        return ShipReadiness.loadedCount(this::exec, dim);
     }
 
     private void clearArea(int baseX, int baseZ) throws Exception {

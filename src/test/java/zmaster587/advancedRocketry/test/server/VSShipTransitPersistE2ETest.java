@@ -1,5 +1,6 @@
 package zmaster587.advancedRocketry.test.server;
 
+import zmaster587.advancedRocketry.test.ShipReadiness;
 import zmaster587.advancedRocketry.test.GameTicks;
 import zmaster587.advancedRocketry.test.ShipIdentity;
 
@@ -44,7 +45,6 @@ public class VSShipTransitPersistE2ETest extends AbstractSharedServerTest {
      */
     private static final int REFRESH_TICKS = 200;
     private static final int ARRIVAL_TICKS = 400;
-    private static final int LOAD_TICKS = 200;
 
     @Test
     public void aRestoredInFlightJumpRebuildsItsShipByPastingItsSnapshotIntoTheTargetCell() throws Exception {
@@ -58,7 +58,7 @@ public class VSShipTransitPersistE2ETest extends AbstractSharedServerTest {
         int originDim = extractInt(setup, "originDim");
         int ax = extractInt(setup, "anchorX"), ay = extractInt(setup, "anchorY"), az = extractInt(setup, "anchorZ");
         assertTrue("origin ship never assembled/loaded in the pool-slot cell (dim " + originDim + ")",
-                waitForLoadedShip(originDim) >= 1);
+                loadedShips(originDim) >= 1);
 
         // Depart into hyperspace. We deliberately do NOT tick the transit yet: it stays parked in hyperspace
         // while we re-cut its snapshot (the save-point cut is of a PARKED ship).
@@ -109,7 +109,7 @@ public class VSShipTransitPersistE2ETest extends AbstractSharedServerTest {
         // the negative-X band (disjoint from live arrivals); the first lands near -64,200,0. This is reachable
         // ONLY through the persisted snapshot — the live ship was discarded.
         assertTrue("the snapshot-restored ship never (re)loaded in the target cell (dim " + targetDim
-                + "); countAll=" + exec("artest vs ship-count-all " + targetDim), waitForLoadedShip(targetDim) >= 1);
+                + "); countAll=" + exec("artest vs ship-count-all " + targetDim), loadedShips(targetDim) >= 1);
         // Named rather than approached: the cell's ship count now carries the ids it counted, so
         // "exactly one ship is here" and "and this is it" are one reading. The nearest-ship lookup
         // this replaced would answer in the same shape if the cell held two.
@@ -136,8 +136,10 @@ public class VSShipTransitPersistE2ETest extends AbstractSharedServerTest {
      * <p>On the SERVER's clock, not {@code dim}'s: the world asked about is the one that may not have
      * started ticking, and budgeting against it would measure the wait with what it waits for.</p>
      */
-    private int waitForLoadedShip(int dim) throws Exception {
-        return awaitLoadedShips(this::exec, dim, LOAD_TICKS);
+    /** How many ships are LOADED in {@code dim} right now. A read, not a wait: measured across this
+     *  tier at one and at six forks, the ship is already loaded whenever a scenario asks. */
+    private int loadedShips(int dim) throws Exception {
+        return ShipReadiness.loadedCount(this::exec, dim);
     }
 
     private static int extractInt(String json, String key) {

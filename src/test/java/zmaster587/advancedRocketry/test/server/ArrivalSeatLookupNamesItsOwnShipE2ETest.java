@@ -1,5 +1,6 @@
 package zmaster587.advancedRocketry.test.server;
 
+import zmaster587.advancedRocketry.test.ShipReadiness;
 import org.junit.After;
 
 import org.junit.Test;
@@ -31,7 +32,6 @@ import static org.junit.Assert.assertTrue;
 public class ArrivalSeatLookupNamesItsOwnShipE2ETest extends AbstractSharedServerTest {
 
     /** World a ship is given to become loadable - the old 40 x 250 ms. */
-    private static final int LOAD_TICKS = 200;
 
     /** The craft that HAS a pilot seat — the one an arrival would be asking about. */
     private static final int SEATED_X = 5800, SEATED_Y = 80, SEATED_Z = 5800;
@@ -57,7 +57,7 @@ public class ArrivalSeatLookupNamesItsOwnShipE2ETest extends AbstractSharedServe
                 + placeFixture(SEATLESS_X, SEATLESS_Y, SEATLESS_Z, "with-nav-computer"));
         assertTrue("the seatless craft did not become a ship either: " + seatlessAsm,
                 seatlessAsm.contains("\"rocketCount\":0"));
-        assertTrue("the ships never loaded", waitForLoadedShip(0) >= 2);
+        assertTrue("the ships never loaded", loadedShips(0) >= 2);
 
         // ARRANGEMENT CHECK, before either leg: the two crafts must be two REGISTERED ships, or the
         // whole question ("which one does the lookup answer for") does not exist in this world.
@@ -111,8 +111,10 @@ public class ArrivalSeatLookupNamesItsOwnShipE2ETest extends AbstractSharedServe
         return String.join("\n", client().execute(cmd));
     }
 
-    private int waitForLoadedShip(int dim) throws Exception {
-        return awaitLoadedShips(this::exec, dim, LOAD_TICKS);
+    /** How many ships are LOADED in {@code dim} right now. A read, not a wait: measured across this
+     *  tier at one and at six forks, the ship is already loaded whenever a scenario asks. */
+    private int loadedShips(int dim) throws Exception {
+        return ShipReadiness.loadedCount(this::exec, dim);
     }
 
     private void clearArea(int baseX, int baseZ) throws Exception {

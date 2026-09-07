@@ -1,5 +1,6 @@
 package zmaster587.advancedRocketry.test.server;
 
+import zmaster587.advancedRocketry.test.ShipReadiness;
 import zmaster587.advancedRocketry.test.GameTicks;
 import zmaster587.advancedRocketry.test.EntrySlots;
 import zmaster587.advancedRocketry.test.ShipIdentity;
@@ -46,7 +47,6 @@ public class VSShipAutoTakeoffE2ETest extends AbstractSharedServerTest {
      */
     private static final int DECLINE_TICKS = 100;
     private static final int CLIMB_TICKS = 800;
-    private static final int LOAD_TICKS = 200;
 
     @Test
     public void autoTakeoffDeclinesWhenBlockedAndClimbsIntoSpaceWhenClear() throws Exception {
@@ -60,7 +60,7 @@ public class VSShipAutoTakeoffE2ETest extends AbstractSharedServerTest {
         String coords = placeFixture(SRC_X, SRC_Y, SRC_Z, "with-pilot-seat");
         String asm = exec("artest rocket assemble 0 " + coords);
         assertTrue("AFC build must route to a ship: " + asm, asm.contains("\"rocketCount\":0"));
-        assertTrue("source ship never loaded", waitForLoadedShip(0) >= 1);
+        assertTrue("source ship never loaded", loadedShips(0) >= 1);
 
         // WHICH ship this scenario is about, taken from the moment that CREATED it: the assembler
         // mints the durable id on the pad and hands it back, and `vs ship-uuid` crosses from that
@@ -143,10 +143,10 @@ public class VSShipAutoTakeoffE2ETest extends AbstractSharedServerTest {
         EntrySlots.loadAll(this::exec, setup);
     }
 
-    private int waitForLoadedShip(int dim) throws Exception {
-        // Answers the real count. The private copy this replaced collapsed it to a 1-or-0,
-        // which was harmless only because every caller here compares against 1.
-        return awaitLoadedShips(this::exec, dim, LOAD_TICKS);
+    /** How many ships are LOADED in {@code dim} right now. A read, not a wait: measured across this
+     *  tier at one and at six forks, the ship is already loaded whenever a scenario asks. */
+    private int loadedShips(int dim) throws Exception {
+        return ShipReadiness.loadedCount(this::exec, dim);
     }
 
     private void clearArea(int baseX, int baseZ) throws Exception {

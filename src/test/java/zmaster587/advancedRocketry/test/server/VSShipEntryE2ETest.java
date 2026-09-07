@@ -1,5 +1,6 @@
 package zmaster587.advancedRocketry.test.server;
 
+import zmaster587.advancedRocketry.test.ShipReadiness;
 import zmaster587.advancedRocketry.space.GalacticCoord;
 import zmaster587.advancedRocketry.test.GameTicks;
 import zmaster587.advancedRocketry.test.EntrySlots;
@@ -49,7 +50,6 @@ public class VSShipEntryE2ETest extends AbstractSharedServerTest {
     private static final int SETTLE_TICKS = 600;
 
     /** The same, for waiting on a ship to become loadable in its slot. Ten seconds of game time. */
-    private static final int LOAD_TICKS = 200;
 
     /**
      * How long the arrived ship's address is watched for drift, and how far apart the readings are.
@@ -98,7 +98,7 @@ public class VSShipEntryE2ETest extends AbstractSharedServerTest {
         String asm = exec("artest rocket assemble 0 " + coords);
         assertTrue("with VS an AFC-bearing build must route to a ship (no rocket): " + asm,
                 asm.contains("\"rocketCount\":0"));
-        assertTrue("the source VS ship never loaded", waitForLoadedShip(0) >= 1);
+        assertTrue("the source VS ship never loaded", loadedShips(0) >= 1);
 
         // The cell the production resolver answers for the launch dimension — the entry MUST land here.
         String launch = exec("artest space launch-cell 0");
@@ -156,7 +156,7 @@ public class VSShipEntryE2ETest extends AbstractSharedServerTest {
         assertTrue("settled slot dim not reported: " + status, slotDim > Integer.MIN_VALUE);
         assertTrue("the settled ship's cell world is not live in a slot; status=" + status
                 + " countAll=" + exec("artest vs ship-count-all " + slotDim),
-                waitForLoadedShip(slotDim) >= 1);
+                loadedShips(slotDim) >= 1);
     }
 
     /**
@@ -185,7 +185,7 @@ public class VSShipEntryE2ETest extends AbstractSharedServerTest {
         String asm = exec("artest rocket assemble 0 " + coords);
         assertTrue("with VS an AFC-bearing build must route to a ship (no rocket): " + asm,
                 asm.contains("\"rocketCount\":0"));
-        assertTrue("the source VS ship never loaded", waitForLoadedShip(0) >= 1);
+        assertTrue("the source VS ship never loaded", loadedShips(0) >= 1);
 
         String durableId = ShipIdentity.nameFromAssembly(asm);
         String shipId = ShipIdentity.physicsIdOf(this::exec, 0, durableId);
@@ -214,7 +214,7 @@ public class VSShipEntryE2ETest extends AbstractSharedServerTest {
         int slotDim = extractInt(status, "slotDim");
         String originCell = extractString(status, "cellKey");
         assertTrue("the entered ship's cell world is not live in a slot; status=" + status,
-                waitForLoadedShip(slotDim) >= 1);
+                loadedShips(slotDim) >= 1);
 
         // Jump it ONE sector over. The slot dim is passed explicitly: the console sender's own world is
         // the overworld, and the default would read that instead of the cell the ship is in.
@@ -335,8 +335,10 @@ public class VSShipEntryE2ETest extends AbstractSharedServerTest {
       * loaded machine is given the same number of chunk-load ticks as an idle one rather than the
       * same number of seconds.
       */
-    private int waitForLoadedShip(int dim) throws Exception {
-        return awaitLoadedShips(this::exec, dim, LOAD_TICKS);
+    /** How many ships are LOADED in {@code dim} right now. A read, not a wait: measured across this
+     *  tier at one and at six forks, the ship is already loaded whenever a scenario asks. */
+    private int loadedShips(int dim) throws Exception {
+        return ShipReadiness.loadedCount(this::exec, dim);
     }
 
     private void clearArea(int baseX, int baseZ) throws Exception {

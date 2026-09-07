@@ -1,5 +1,6 @@
 package zmaster587.advancedRocketry.test.server;
 
+import zmaster587.advancedRocketry.test.ShipReadiness;
 import zmaster587.advancedRocketry.test.GameTicks;
 import zmaster587.advancedRocketry.test.EntrySlots;
 import zmaster587.advancedRocketry.test.ShipIdentity;
@@ -46,7 +47,6 @@ public class VSShipDescentE2ETest extends AbstractSharedServerTest {
      */
     private static final int SETTLE_TICKS = 600;
     private static final int FIND_AFC_TICKS = 200;
-    private static final int LOAD_TICKS = 200;
 
     @Test
     public void aSettledShipDescendsIntoAPlanetDimViaTheCrossing() throws Exception {
@@ -61,7 +61,7 @@ public class VSShipDescentE2ETest extends AbstractSharedServerTest {
         String asm = exec("artest rocket assemble 0 " + coords);
         assertTrue("with VS an AFC-bearing build must route to a ship (no rocket): " + asm,
                 asm.contains("\"rocketCount\":0"));
-        assertTrue("the source VS ship never loaded", waitForLoadedShip(0) >= 1);
+        assertTrue("the source VS ship never loaded", loadedShips(0) >= 1);
 
         // The ship's own name, from the assembler that minted it — and from there its physics id. The
         // pad sits in a world this class shares, so "the ship near (SRC_X,SRC_Y,SRC_Z)" is a question
@@ -109,7 +109,7 @@ public class VSShipDescentE2ETest extends AbstractSharedServerTest {
         // Ensure the settled ship is loaded in its slot, then locate its flight computer. The ship's
         // blocks (incl. the AFC tile entity) live in the slot world's far subspace shipyard; they enter
         // loadedTileEntityList only once VS loads the ship, so force-load + poll (async load).
-        assertTrue("the settled ship never loaded in its slot", waitForLoadedShip(slotDim) >= 1);
+        assertTrue("the settled ship never loaded in its slot", loadedShips(slotDim) >= 1);
         String afc = null;
         final String[] found = {null};
         // The load pump is inside the condition on purpose: the lookup is only answerable while the
@@ -139,7 +139,7 @@ public class VSShipDescentE2ETest extends AbstractSharedServerTest {
 
         // The crossing re-assembles the ship in the overworld (async); poll until it is loaded there.
         boolean landed = GameTicks.until(client(), GameTicks.server(), SETTLE_TICKS,
-                () -> waitForLoadedShip(TARGET_DIM) >= 1,
+                () -> loadedShips(TARGET_DIM) >= 1,
                 () -> exec("artest space descent-status"));
         assertTrue("the ship never crossed into the overworld via the descent; countAll="
                 + exec("artest vs ship-count-all " + TARGET_DIM), landed);
@@ -162,8 +162,10 @@ public class VSShipDescentE2ETest extends AbstractSharedServerTest {
         EntrySlots.loadAll(this::exec, setup);
     }
 
-    private int waitForLoadedShip(int dim) throws Exception {
-        return awaitLoadedShips(this::exec, dim, LOAD_TICKS);
+    /** How many ships are LOADED in {@code dim} right now. A read, not a wait: measured across this
+     *  tier at one and at six forks, the ship is already loaded whenever a scenario asks. */
+    private int loadedShips(int dim) throws Exception {
+        return ShipReadiness.loadedCount(this::exec, dim);
     }
 
     private void clearArea(int baseX, int baseZ) throws Exception {

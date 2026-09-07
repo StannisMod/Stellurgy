@@ -1,5 +1,6 @@
 package zmaster587.advancedRocketry.test.server;
 
+import zmaster587.advancedRocketry.test.ShipReadiness;
 import zmaster587.advancedRocketry.test.GameTicks;
 import zmaster587.advancedRocketry.test.ShipIdentity;
 
@@ -97,7 +98,7 @@ public class VSRelocatedBodyIsNotFlungByItsLastShipE2ETest extends AbstractShare
         String asm = exec("artest rocket assemble 0 " + coords);
         assertTrue("with VS an AFC-bearing build must route to a ship (no rocket): " + asm,
                 asm.contains("\"rocketCount\":0"));
-        assertTrue("the ship never loaded", waitForLoadedShip(0) >= 1);
+        assertTrue("the ship never loaded", loadedShips(0) >= 1);
 
         // WHICH ship, from the assembler that named it. What remains a POLL is the world transform
         // propagating — the ship is loaded before that happens — and that is a fact about time, not
@@ -212,8 +213,10 @@ public class VSRelocatedBodyIsNotFlungByItsLastShipE2ETest extends AbstractShare
         return String.join("\n", client().execute(cmd));
     }
 
-    private int waitForLoadedShip(int dim) throws Exception {
-        return awaitLoadedShips(this::exec, dim, LOAD_TICKS);
+    /** How many ships are LOADED in {@code dim} right now. A read, not a wait: measured across this
+     *  tier at one and at six forks, the ship is already loaded whenever a scenario asks. */
+    private int loadedShips(int dim) throws Exception {
+        return ShipReadiness.loadedCount(this::exec, dim);
     }
 
     private void clearArea(int baseX, int baseZ) throws Exception {

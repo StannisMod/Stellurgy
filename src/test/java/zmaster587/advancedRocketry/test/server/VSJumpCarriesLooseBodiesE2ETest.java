@@ -1,5 +1,6 @@
 package zmaster587.advancedRocketry.test.server;
 
+import zmaster587.advancedRocketry.test.ShipReadiness;
 import zmaster587.advancedRocketry.test.GameTicks;
 
 import org.junit.Test;
@@ -44,7 +45,6 @@ public class VSJumpCarriesLooseBodiesE2ETest extends AbstractSharedServerTest {
      */
     private static final int ARRIVAL_TICKS = 400;
     private static final int PLACEMENT_TICKS = 300;
-    private static final int LOAD_TICKS = 200;
 
     @Test
     public void aJumpCarriesTheBodiesLyingOnItsDeck() throws Exception {
@@ -55,7 +55,7 @@ public class VSJumpCarriesLooseBodiesE2ETest extends AbstractSharedServerTest {
         assertTrue("piloted transit setup failed: " + setup, setup.contains("\"ok\":true"));
         int originDim = extractInt(setup, "originDim");
         requireArranged("the origin ship never assembled/loaded (dim " + originDim + ")",
-                waitForLoadedShip(originDim) >= 1);
+                loadedShips(originDim) >= 1);
 
         // The ship the setup just assembled, by the name the setup reports. Every scenario in this
         // tier builds at the SAME anchor in the SAME pooled slot, so "the ship at (1,64,1)" is a
@@ -142,10 +142,10 @@ public class VSJumpCarriesLooseBodiesE2ETest extends AbstractSharedServerTest {
         return String.join("\n", client().execute(cmd));
     }
 
-    private int waitForLoadedShip(int dim) throws Exception {
-        // Answers the real count. The private copy this replaced collapsed it to a 1-or-0,
-        // which was harmless only because every caller here compares against 1.
-        return awaitLoadedShips(this::exec, dim, LOAD_TICKS);
+    /** How many ships are LOADED in {@code dim} right now. A read, not a wait: measured across this
+     *  tier at one and at six forks, the ship is already loaded whenever a scenario asks. */
+    private int loadedShips(int dim) throws Exception {
+        return ShipReadiness.loadedCount(this::exec, dim);
     }
 
     private static int extractInt(String json, String key) {

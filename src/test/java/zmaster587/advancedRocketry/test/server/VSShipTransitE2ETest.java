@@ -1,5 +1,6 @@
 package zmaster587.advancedRocketry.test.server;
 
+import zmaster587.advancedRocketry.test.ShipReadiness;
 import zmaster587.advancedRocketry.test.GameTicks;
 import zmaster587.advancedRocketry.test.ShipIdentity;
 
@@ -31,7 +32,6 @@ public class VSShipTransitE2ETest extends AbstractSharedServerTest {
      * the machine this test shares says nothing about how much world an arrival needs.
      */
     private static final int ARRIVAL_TICKS = 400;
-    private static final int LOAD_TICKS = 200;
 
     @Test
     public void aVsShipTransitsFromOneCellToAnotherThroughHyperspace() throws Exception {
@@ -47,7 +47,7 @@ public class VSShipTransitE2ETest extends AbstractSharedServerTest {
 
         // The origin ship must exist + load before we depart it (the departure crossing snapshots it).
         assertTrue("origin ship never assembled/loaded in the pool-slot cell (dim " + originDim + ")",
-                waitForLoadedShip(originDim) >= 1);
+                loadedShips(originDim) >= 1);
 
         // Depart: begin the jump. The ship leaves the origin cell for hyperspace — at a speed that
         // makes it a real flight, because a fast enough jump is performed as a single crossing instead
@@ -72,7 +72,7 @@ public class VSShipTransitE2ETest extends AbstractSharedServerTest {
 
         // The re-assembled ship must load + be VS-managed in the TARGET cell (arrival pastes near 0,200,0).
         assertTrue("transited ship never (re)loaded in the target cell (dim " + targetDim + "); countAll="
-                + exec("artest vs ship-count-all " + targetDim), waitForLoadedShip(targetDim) >= 1);
+                + exec("artest vs ship-count-all " + targetDim), loadedShips(targetDim) >= 1);
         // This fixture is a bare cube with no flight computer, so it has no durable name to be
         // followed by — the one craft in the suite that genuinely cannot be asked for by identity.
         // What can be done is to stop guessing: the cell's ship count now NAMES what it counted, so
@@ -102,8 +102,10 @@ public class VSShipTransitE2ETest extends AbstractSharedServerTest {
      * exactly the one that may not have started ticking, so budgeting against it would measure the
      * wait with the thing the wait is waiting for.</p>
      */
-    private int waitForLoadedShip(int dim) throws Exception {
-        return awaitLoadedShips(this::exec, dim, LOAD_TICKS);
+    /** How many ships are LOADED in {@code dim} right now. A read, not a wait: measured across this
+     *  tier at one and at six forks, the ship is already loaded whenever a scenario asks. */
+    private int loadedShips(int dim) throws Exception {
+        return ShipReadiness.loadedCount(this::exec, dim);
     }
 
     private static int extractInt(String json, String key) {

@@ -1,5 +1,6 @@
 package zmaster587.advancedRocketry.test.server;
 
+import zmaster587.advancedRocketry.test.ShipReadiness;
 import org.junit.After;
 import org.junit.Test;
 
@@ -37,7 +38,6 @@ import static zmaster587.advancedRocketry.test.ArrangementFailure.requireArrange
 public class NavLookupNamesItsOwnShipE2ETest extends AbstractSharedServerTest {
 
     /** World a ship is given to become loadable — the same budget the sibling two-ship test uses. */
-    private static final int LOAD_TICKS = 200;
 
     /**
      * Two craft, each carrying a flight computer and a navigation computer, far enough apart to be
@@ -64,7 +64,7 @@ public class NavLookupNamesItsOwnShipE2ETest extends AbstractSharedServerTest {
                 + placeFixture(SHIP_B_X, SHIP_B_Y, SHIP_B_Z, "with-nav-computer"));
         requireArranged("the second craft did not become a ship either: " + asmB,
                 asmB.contains("\"rocketCount\":0"));
-        requireArranged("the ships never loaded", waitForLoadedShips(0, 2) >= 2);
+        requireArranged("the ships never loaded", loadedShips(0) >= 2);
 
         // ARRANGEMENT CHECK, before anything is asked: there must be TWO registered ships, or the
         // question this test exists to ask ("which one does the lookup answer for") does not exist
@@ -131,8 +131,10 @@ public class NavLookupNamesItsOwnShipE2ETest extends AbstractSharedServerTest {
         return String.join("\n", client().execute(cmd));
     }
 
-    private int waitForLoadedShips(int dim, int want) throws Exception {
-        return awaitLoadedShips(this::exec, dim, want, LOAD_TICKS);
+    /** How many ships are LOADED in {@code dim} right now. A read, not a wait: measured across this
+     *  tier at one and at six forks, the ship is already loaded whenever a scenario asks. */
+    private int loadedShips(int dim) throws Exception {
+        return ShipReadiness.loadedCount(this::exec, dim);
     }
 
     private void clearArea(int baseX, int baseZ) throws Exception {

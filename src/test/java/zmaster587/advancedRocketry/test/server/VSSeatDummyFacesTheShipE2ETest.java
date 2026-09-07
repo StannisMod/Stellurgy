@@ -1,5 +1,6 @@
 package zmaster587.advancedRocketry.test.server;
 
+import zmaster587.advancedRocketry.test.ShipReadiness;
 import zmaster587.advancedRocketry.test.GameTicks;
 import zmaster587.advancedRocketry.test.ShipIdentity;
 
@@ -46,7 +47,6 @@ public class VSSeatDummyFacesTheShipE2ETest extends AbstractSharedServerTest {
      * becoming loadable.
      */
     private static final int SLEW_TICKS = 200;
-    private static final int LOAD_TICKS = 200;
 
     /** Degrees. Generous: what is under test is that the mount TURNS WITH the ship, not the controller's
      *  settling error, and a hovering attitude hold parks within a couple of degrees. */
@@ -61,7 +61,7 @@ public class VSSeatDummyFacesTheShipE2ETest extends AbstractSharedServerTest {
         String asm = exec("artest rocket assemble 0 " + coords);
         assertTrue("the pilot-seat build must route to a ship, not a rocket: " + asm,
                 asm.contains("\"rocketCount\":0"));
-        assertTrue("the source ship never assembled/loaded", waitForLoadedShip(0) >= 1);
+        assertTrue("the source ship never assembled/loaded", loadedShips(0) >= 1);
 
         // The craft this scenario built, by the name its assembler minted, and the physics id that
         // name maps to. The build site is in a world every server-tier class shares.
@@ -161,10 +161,10 @@ public class VSSeatDummyFacesTheShipE2ETest extends AbstractSharedServerTest {
         return String.join("\n", client().execute(cmd));
     }
 
-    private int waitForLoadedShip(int dim) throws Exception {
-        // Answers the real count. The private copy this replaced collapsed it to a 1-or-0,
-        // which was harmless only because every caller here compares against 1.
-        return awaitLoadedShips(this::exec, dim, LOAD_TICKS);
+    /** How many ships are LOADED in {@code dim} right now. A read, not a wait: measured across this
+     *  tier at one and at six forks, the ship is already loaded whenever a scenario asks. */
+    private int loadedShips(int dim) throws Exception {
+        return ShipReadiness.loadedCount(this::exec, dim);
     }
 
     private void clearArea(int baseX, int baseZ) throws Exception {

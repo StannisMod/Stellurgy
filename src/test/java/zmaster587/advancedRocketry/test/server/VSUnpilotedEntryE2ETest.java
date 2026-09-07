@@ -1,5 +1,6 @@
 package zmaster587.advancedRocketry.test.server;
 
+import zmaster587.advancedRocketry.test.ShipReadiness;
 import zmaster587.advancedRocketry.test.GameTicks;
 import zmaster587.advancedRocketry.test.EntrySlots;
 import zmaster587.advancedRocketry.test.ShipIdentity;
@@ -61,7 +62,6 @@ public class VSUnpilotedEntryE2ETest extends AbstractSharedServerTest {
      * much of the machine this test shares, and a crossing needs ticks, not a share of a box.
      */
     private static final int SETTLE_TICKS = 600;
-    private static final int LOAD_TICKS = 200;
 
     /** Where the ship is built — its own region, clear of every other server-tier fixture. */
     private static final int SRC_X = 6800, SRC_Y = 80, SRC_Z = 6800;
@@ -90,7 +90,7 @@ public class VSUnpilotedEntryE2ETest extends AbstractSharedServerTest {
         String asm = exec("artest rocket assemble 0 " + coords);
         assertTrue("with VS an AFC-bearing build must route to a ship (no rocket): " + asm,
                 asm.contains("\"rocketCount\":0"));
-        assertTrue("the source VS ship never loaded", waitForLoadedShip(0) >= 1);
+        assertTrue("the source VS ship never loaded", loadedShips(0) >= 1);
 
         String launch = exec("artest space launch-cell 0");
         assertTrue("launch-cell resolve failed: " + launch, launch.contains("\"ok\":true"));
@@ -145,8 +145,10 @@ public class VSUnpilotedEntryE2ETest extends AbstractSharedServerTest {
         EntrySlots.loadAll(this::exec, setup);
     }
 
-    private int waitForLoadedShip(int dim) throws Exception {
-        return awaitLoadedShips(this::exec, dim, LOAD_TICKS);
+    /** How many ships are LOADED in {@code dim} right now. A read, not a wait: measured across this
+     *  tier at one and at six forks, the ship is already loaded whenever a scenario asks. */
+    private int loadedShips(int dim) throws Exception {
+        return ShipReadiness.loadedCount(this::exec, dim);
     }
 
     private void clearArea(int baseX, int baseZ) throws Exception {
