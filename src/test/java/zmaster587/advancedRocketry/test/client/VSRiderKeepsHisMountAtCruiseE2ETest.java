@@ -195,12 +195,14 @@ public class VSRiderKeepsHisMountAtCruiseE2ETest extends AbstractSharedVsClientE
         int mountX = seatX + 1, mountY = seatY, mountZ = seatZ;
         String mount = "";
         boolean mounted = false;
+        int dummyId = -1;
         for (int attempt = 0; attempt < 5 && !mounted; attempt++) {
             String mountAt = exec("artest vs seat-mount-at " + dim
                     + " " + mountX + " " + mountY + " " + mountZ);
             scenario().requireArranged("seat-mount-at must spawn the seat dummy: " + mountAt,
                     readBool(mountAt, "ok"));
-            mount = exec("artest player mount-entity " + readInt(mountAt, "dummyId"));
+            dummyId = readInt(mountAt, "dummyId");
+            mount = exec("artest player mount-entity " + dummyId);
             mounted = mount.contains("\"mounted\":true");
             if (!mounted) {
                 bot().waitTicks(10);
@@ -208,8 +210,19 @@ public class VSRiderKeepsHisMountAtCruiseE2ETest extends AbstractSharedVsClientE
         }
         scenario().requireArranged("the bot must mount the pilot-seat dummy: " + mount, mounted);
         bot().waitTicks(10);
-        scenario().requireArranged("the client must report the bot seated before anything else",
-                riding());
+        // The same discriminator the mid-transit relog scenario carries, and for the same reason:
+        // "he is not seated" is produced BOTH by something removing the dummy under him and by
+        // something dismounting him from a dummy that is still there, and this class exists for
+        // precisely the contract those two break. `deck-capture <dim> <id>` answers "entity not
+        // found" for a removed entity; read only on the failing path.
+        if (!riding()) {
+            scenario().arrangementFailed("the client must report the bot seated before anything else"
+                    + " — the mount reported success and he is off ten ticks later. Whether the seat"
+                    + " dummy (entity " + dummyId + ") still EXISTS separates a removal under him"
+                    + " from a dismount: mountReply=" + mount
+                    + " dummyNow=" + exec("artest vs deck-capture " + dim + " " + dummyId)
+                    + " serverSaysRiding=" + exec("artest player riding-of " + botName));
+        }
 
         // The instrument's own proof: it must be able to say FALSE. Without this leg, the cruise
         // assertion below is green on a reporter that is simply stuck on true.

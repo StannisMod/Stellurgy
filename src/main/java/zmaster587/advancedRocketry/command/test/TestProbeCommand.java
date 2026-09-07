@@ -1760,7 +1760,14 @@ public class TestProbeCommand extends CommandBase {
                 dummy = new zmaster587.advancedRocketry.entity.EntityDummy(
                         world, sp.getX() + 0.5, sp.getY() + 0.2, sp.getZ() + 0.5);
                 dummy.setSeatPos(sp); // bind to the seat so the client resolves it despite VS subspace
-                world.spawnEntity(dummy);
+                // The third copy of the declined-spawn trap; see seat-mount-at. `spawnEntity` loads
+                // no chunk and answers false, and a seat block lives in the ship's subspace shipyard.
+                world.getChunkProvider().provideChunk(sp.getX() >> 4, sp.getZ() >> 4);
+                if (!world.spawnEntity(dummy)) {
+                    send(sender, "{\"error\":\"world declined the dummy spawn\",\"seat\":\""
+                            + sp.getX() + "," + sp.getY() + "," + sp.getZ() + "\"}");
+                    return;
+                }
             }
             send(sender, "{\"seatFound\":true,\"dummyId\":" + dummy.getEntityId()
                     + ",\"reused\":" + reused
@@ -1783,11 +1790,25 @@ public class TestProbeCommand extends CommandBase {
             zmaster587.advancedRocketry.entity.EntityDummy dummy =
                     zmaster587.advancedRocketry.block.BlockPilotSeat.boundDummyAt(world, sp);
             boolean reused = dummy != null;
+            boolean spawned = true;
             if (dummy == null) {
                 dummy = new zmaster587.advancedRocketry.entity.EntityDummy(
                         world, sp.getX() + 0.5, sp.getY() + 0.2, sp.getZ() + 0.5);
                 dummy.setSeatPos(sp); // EntityDummy.onUpdate glues it to the seat's live world position next tick
-                world.spawnEntity(dummy);
+                // LOAD THE CHUNK, then believe the world's answer. `World.spawnEntity` returns FALSE
+                // and adds NOTHING when the target chunk is not loaded - it does not load one - and a
+                // seat block lives in the ship's own SUBSPACE shipyard, which is exactly the region
+                // nothing keeps resident. Without this the probe answered ok:true holding an entity
+                // object the world had declined: it has an id, `mount-entity` will happily seat a
+                // player on it, and the client is never told about an entity that is not in the
+                // world. Same trap as the crossing's cargo spawn (fixed 2026-09-06).
+                world.getChunkProvider().provideChunk(sp.getX() >> 4, sp.getZ() >> 4);
+                spawned = world.spawnEntity(dummy);
+            }
+            if (!spawned) {
+                send(sender, "{\"error\":\"world declined the dummy spawn\",\"seat\":\""
+                        + sp.getX() + "," + sp.getY() + "," + sp.getZ() + "\"}");
+                return;
             }
             send(sender, "{\"ok\":true,\"dummyId\":" + dummy.getEntityId()
                     + ",\"reused\":" + reused + "}");
@@ -1812,7 +1833,17 @@ public class TestProbeCommand extends CommandBase {
                 dummy = new zmaster587.advancedRocketry.entity.EntityDummy(
                         world, sp.getX() + 0.5, sp.getY() + 0.2, sp.getZ() + 0.5);
                 dummy.setSeatPos(sp);
-                world.spawnEntity(dummy);
+                // The same declined-spawn trap as seat-mount-at above, in the copy that was made of
+                // it: `spawnEntity` loads no chunk and answers false, and a seat block is in the
+                // ship's own subspace shipyard. An occupant nobody can see is worse here than there,
+                // because this verb exists to make a REFUSAL happen and would report the refusal
+                // arranged while the seat stood empty.
+                world.getChunkProvider().provideChunk(sp.getX() >> 4, sp.getZ() >> 4);
+                if (!world.spawnEntity(dummy)) {
+                    send(sender, "{\"error\":\"world declined the dummy spawn\",\"seat\":\""
+                            + sp.getX() + "," + sp.getY() + "," + sp.getZ() + "\"}");
+                    return;
+                }
             }
             if (!dummy.getPassengers().isEmpty()) {
                 send(sender, "{\"error\":\"seat already occupied\"}");
@@ -20405,6 +20436,43 @@ public class TestProbeCommand extends CommandBase {
                     + ",\"playerPosX\":" + target.posX
                     + ",\"playerPosY\":" + target.posY
                     + ",\"playerPosZ\":" + target.posZ + "}");
+            return;
+        }
+        if ("riding-of".equals(sub) && args.length >= 2) {
+            // /artest player riding-of <playerName> — what the SERVER holds for this player's mount.
+            //
+            // The counterpart to the harness's `report_riding_entity`, which reads
+            // `Minecraft.getMinecraft().player.getRidingEntity()` — the CLIENT's view, and the only
+            // view any scenario here had. A client that says "not riding" is produced BOTH by a
+            // server that dismounted him and by a server that still has him seated on a mount the
+            // client never learned about, and those are different faults: one is a mechanic
+            // releasing a rider, the other is entity tracking. Measured 2026-09-07: the mount
+            // reports success, the client says not riding ten ticks later, and the dummy is alive on
+            // the server — which rules out every AR dismount path (they all kill the dummy) and
+            // leaves exactly this question unanswered.
+            //
+            // Reports the mount's own passenger list too, because "he is not riding it" and "it
+            // carries nobody" can disagree, and a one-sided answer would hide a half-broken ride.
+            String ridingName = args[1];
+            net.minecraft.entity.player.EntityPlayerMP who =
+                    server.getPlayerList().getPlayerByUsername(ridingName);
+            if (who == null) {
+                send(sender, "{\"error\":\"no such player\",\"name\":\""
+                        + escapeJson(ridingName) + "\"}");
+                return;
+            }
+            net.minecraft.entity.Entity ridden = who.getRidingEntity();
+            StringBuilder r = new StringBuilder("{\"ok\":true,\"riding\":")
+                    .append(ridden != null)
+                    .append(",\"playerDim\":").append(who.world.provider.getDimension());
+            if (ridden != null) {
+                r.append(",\"entityId\":").append(ridden.getEntityId())
+                        .append(",\"entityClass\":\"").append(escapeJson(ridden.getClass().getName()))
+                        .append("\",\"entityDead\":").append(ridden.isDead)
+                        .append(",\"entityDim\":").append(ridden.world.provider.getDimension())
+                        .append(",\"passengers\":").append(ridden.getPassengers().size());
+            }
+            send(sender, r.append("}").toString());
             return;
         }
         if ("position-of".equals(sub) && args.length >= 2) {

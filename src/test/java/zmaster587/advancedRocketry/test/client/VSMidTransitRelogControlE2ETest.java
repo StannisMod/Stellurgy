@@ -147,9 +147,25 @@ public class VSMidTransitRelogControlE2ETest extends AbstractSharedVsClientE2ETe
         }
         assertTrue("the bot must mount the pilot-seat dummy (5 spawn+mount attempts): " + mount,
                 mounted);
+        int dummyId = readInt(mountAt, "dummyId");
         bot().waitTicks(10);
-        assertTrue("the bot must be seated BEFORE the jump (control): " + bot().reportRidingEntity(),
-                bot().reportRidingEntity().get("riding").getAsBoolean());
+        // WHICH of the two happened, because "he is not riding" covers both and they are different
+        // faults. Measured 2026-09-07: the mount reports success and ten ticks later he is off — and
+        // nothing said whether the DUMMY was removed under him or he was dismounted from a dummy that
+        // is still there. `deck-capture <dim> <id>` answers "entity not found" for a removed entity
+        // and a full gate dump for a live one, which is the cheapest discriminator in the tree; it is
+        // read only on the failing path, so a green pays nothing for it.
+        if (!bot().reportRidingEntity().get("riding").getAsBoolean()) {
+            String dummyNow = exec("artest vs deck-capture " + originDim + " " + dummyId);
+            scenario().arrangementFailed("the bot must be seated BEFORE the jump (control) — the"
+                    + " mount reported success and he is off ten ticks later. Whether the seat dummy"
+                    + " (entity " + dummyId + ") still EXISTS is the difference between something"
+                    + " removing it under him and something dismounting him from a live one:"
+                    + " riding=" + bot().reportRidingEntity()
+                    + " mountReply=" + mount
+                    + " dummyNow=" + dummyNow
+                    + " serverSaysRiding=" + exec("artest player riding-of " + botName));
+        }
 
         // CONTROL LEG (pre-transit): the seated pilot's REAL key must fly the ship in the origin
         // cell BEFORE anything happens to him — a dead key after the arrival could otherwise be a
@@ -164,12 +180,25 @@ public class VSMidTransitRelogControlE2ETest extends AbstractSharedVsClientE2ETe
         // client that never tried and a packet that was eaten on the way. The client's own gate
         // record separates them, and that is the difference between an ARRANGEMENT this test
         // failed to make and a control chain production broke.
+        // The craft's ATTITUDE before the key is ever held. The failure message below reads the pose
+        // at the END, and a craft found on its side there could have been placed that way or rolled
+        // during the climb — two different faults with one symptom, and nothing in this scenario said
+        // which. Measured 2026-09-07: the control leg fails with the ship at ~92 degrees thrusting
+        // sideways at 40 b/s, every pilot input delivered and honoured, because up-thrust follows the
+        // SHIP's up axis and that axis is horizontal.
+        //
+        // Read, not asserted. An upright craft is not this scenario's subject and a tilted one is not
+        // yet known to be a fault; pinning a tolerance here would be inventing the contract at the
+        // moment of confusion. What it must do is be in the RED, beside the end pose, so the two can
+        // be compared.
+        String poseBeforeClimb = shipInfoById(originDim, shipId);
         long clientPilotMark = clientEvents().mark();
         if (!climbedWithinAttempts(3)) {
             scenario().arrangementFailed("control leg: the pilot must be able to fly BEFORE the"
                     + " transit." + clientPilotAccount(clientPilotMark)
                     + " delivery=" + exec("artest vs seat-delivery")
-                    + " ship=" + shipInfoById(originDim, shipId));
+                    + " shipBeforeClimb=" + poseBeforeClimb
+                    + " shipAfterClimb=" + shipInfoById(originDim, shipId));
         }
         bot().waitTicks(30); // let the station-hold settle before the departure snapshot
 
