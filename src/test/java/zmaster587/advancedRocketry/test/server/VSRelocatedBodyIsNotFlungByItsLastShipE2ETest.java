@@ -83,7 +83,6 @@ public class VSRelocatedBodyIsNotFlungByItsLastShipE2ETest extends AbstractShare
      *  air with no input, so anything past a block is something moving it. */
     private static final double ALLOWED_HORIZONTAL_DRIFT = 1.0;
 
-    private static final int LOAD_TICKS = 200;
     private static final int TOUCH_TICKS = 100;
 
     @Test
@@ -104,15 +103,21 @@ public class VSRelocatedBodyIsNotFlungByItsLastShipE2ETest extends AbstractShare
         // propagating — the ship is loaded before that happens — and that is a fact about time, not
         // about which craft is being waited for.
         String shipId = ShipIdentity.physicsIdOf(this::exec, 0, ShipIdentity.nameFromAssembly(asm));
-        final String[] look = {""};
-        boolean managed = GameTicks.until(client(), GameTicks.server(), LOAD_TICKS, () -> {
-            look[0] = exec("artest vs ship-info 0 id " + shipId);
-            return look[0].contains("\"managed\":true");
-        }, () -> exec("artest vs load-ships 0"));
-        assertTrue("ship not managed by VS at its own build site: " + look[0] + " countAll="
-                + exec("artest vs ship-count-all 0") + " loaded=" + exec("artest vs ship-count 0"),
-                managed);
-        String info = look[0];
+        // READ, not a poll. What `managed:true` reports is that the substrate resolved a STATE for
+        // this id — the probe answers `{"managed":false}` when it cannot — and that is true by the
+        // time this line runs: the spawn is drained on the world's tick, and every probe command is
+        // drained on the server thread behind the task queue's own monitor, so two consecutive
+        // commands are separated by a complete pass.
+        //
+        // The pump this replaces (`vs load-ships 0` on every unsatisfied check) never ran, because
+        // the check was never unsatisfied. And the comment above it claimed the poll was waiting for
+        // "the world transform to propagate"; the condition never tested that — it tested whether
+        // the ship could be resolved at all, which is what the message now says.
+        String info = exec("artest vs ship-info 0 id " + shipId);
+        assertTrue("VS could not resolve a state for this ship at its own build site: " + info
+                + " countAll=" + exec("artest vs ship-count-all 0")
+                + " loaded=" + exec("artest vs ship-count 0"),
+                info.contains("\"managed\":true"));
         double sx = extractDouble(info, "posX"), sy = extractDouble(info, "posY"),
                 sz = extractDouble(info, "posZ");
 

@@ -38,12 +38,6 @@ import static org.junit.Assert.assertEquals;
  */
 public class VSShipTransitPersistE2ETest extends AbstractSharedServerTest {
 
-    /**
-     * Budgets in SERVER TICKS — the ten and twenty seconds the old {@code 40}/{@code 80 x 250 ms}
-     * meant on an idle box, with no fork multiplier: a re-cut and an arrival need world, and how much
-     * of the machine this test is sharing does not change how much.
-     */
-    private static final int REFRESH_TICKS = 200;
     private static final int ARRIVAL_TICKS = 400;
 
     @Test
@@ -66,22 +60,24 @@ public class VSShipTransitPersistE2ETest extends AbstractSharedServerTest {
                 + " " + HYPERSPACE_JUMP_SPEED);
         assertTrue("transit did not begin (departure crossing failed): " + begin, begin.contains("\"began\":true"));
 
-        // Re-cut the parked ship's block snapshot; retry while the async hyperspace assembly completes
-        // (snapshotShipAt needs the ship's subspace shipyard to be up).
+        // Re-cut the parked ship's block snapshot, ONCE.
         //
-        // Poll the REFRESH's own count, not the export's hasSnapshot. Every transit carries a snapshot
-        // from the instant it departs — the floor cut of the source ship, taken before the departure
-        // crossing so that a save in the pre-assembly window is never snapshot-less — so hasSnapshot is
-        // true on the first iteration whether or not hyperspace was ever read. Waiting on it is waiting
-        // on a condition that is already met: it exits immediately and the assertion that the PARKED
-        // ship was re-cut becomes a statement about a cut that never happened.
-        final String[] lastRefresh = {""};
-        boolean snapshotCut = GameTicks.until(client(), GameTicks.server(), REFRESH_TICKS, () -> {
-            lastRefresh[0] = exec("artest space transit-refresh");
-            return extractInt(lastRefresh[0], "refreshed") >= 1;
-        });
+        // Read the REFRESH's own count, not the export's hasSnapshot. Every transit carries a
+        // snapshot from the instant it departs — the floor cut of the source ship, taken before the
+        // departure crossing so that a save in the pre-assembly window is never snapshot-less — so
+        // hasSnapshot is true whether or not hyperspace was ever read, and asserting on it would
+        // make the claim that the PARKED ship was re-cut a statement about a cut that never
+        // happened.
+        //
+        // This used to be a retry loop, described as waiting for "the async hyperspace assembly".
+        // It was not an observation: every iteration PERFORMED the refresh, so the loop retried an
+        // operation rather than waiting for one — and the operation succeeds on its first attempt
+        // (measured across this tier at one fork and at six). A retry around a synchronous command
+        // turns "it failed" into "it failed several times", which is the same verdict later and with
+        // less to say about why.
+        String lastRefresh = exec("artest space transit-refresh");
         assertTrue("the parked hyperspace ship was never re-cut into a persisted snapshot; last="
-                + lastRefresh[0], snapshotCut);
+                + lastRefresh, extractInt(lastRefresh, "refreshed") >= 1);
 
         String lastExport = exec("artest space transit-export");
         assertTrue("the durable record must carry a block snapshot, or the restore below has no ship to "

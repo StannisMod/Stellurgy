@@ -86,7 +86,7 @@ public class VSDoubleQueuedShipLoadDoesNotKillTheServerE2ETest extends AbstractH
                 client().isAlive());
 
         assertTrue("the server survived, but the ship was never loaded, so its survival says nothing "
-                        + "about serving two load requests at once: " + counters(), waitUntilLoaded());
+                        + "about serving two load requests at once: " + counters(), isLoaded());
     }
 
     // --- arrangement --------------------------------------------------------------------------------
@@ -99,7 +99,7 @@ public class VSDoubleQueuedShipLoadDoesNotKillTheServerE2ETest extends AbstractH
         assertTrue("with VS an AFC-bearing build must route to a ship (no rocket): " + asm,
                 asm.contains("\"rocketCount\":0"));
         assertTrue("the ship never entered the registry: " + counters(),
-                waitUntilRegistryExceeds(registryBefore));
+                registryExceeds(registryBefore));
     }
 
     // --- observation --------------------------------------------------------------------------------
@@ -125,9 +125,17 @@ public class VSDoubleQueuedShipLoadDoesNotKillTheServerE2ETest extends AbstractH
         return ShipIdentity.aLoadedShipIsAt(this::exec, 0, x, y, BASE_Z, POSE_TOLERANCE);
     }
 
-    private boolean waitUntilRegistryExceeds(int floor) throws Exception {
-        return GameTicks.until(client(), GameTicks.server(), WAIT_TICKS,
-                () -> queryableShips() > floor);
+    /**
+     * Has the registry grown past {@code floor}? A READ, not a wait.
+     *
+     * <p>The entry IS deferred — {@code queueShipSpawn} only adds to a spawn queue the world drains
+     * on its next tick — but nothing here can observe the pre-drain state: every probe command is
+     * drained on the server thread behind the task queue's own monitor, so two consecutive commands
+     * are separated by a complete pass. The poll this replaces could only ever spend its budget in
+     * runs where the answer was going to be no.</p>
+     */
+    private boolean registryExceeds(int floor) throws Exception {
+        return queryableShips() > floor;
     }
 
     /** Poll until no loaded ship sits at {@code (x,y,BASE_Z)}, deliberately without pumping any load. */
@@ -136,8 +144,13 @@ public class VSDoubleQueuedShipLoadDoesNotKillTheServerE2ETest extends AbstractH
     }
 
     /** Poll until the loaded set holds a ship. Permanent loading is already on, so nothing is re-pumped. */
-    private boolean waitUntilLoaded() throws Exception {
-        return GameTicks.until(client(), GameTicks.server(), WAIT_TICKS, () -> loadedShips() >= 1);
+    /**
+     * Is a ship loaded here? A READ. {@code spawnNewShips()} and {@code loadAndUnloadShips()} run in
+     * the SAME {@code tick()} invocation, so a freshly assembled craft is registered and loaded on
+     * one world tick — and permanent loading is already on, so nothing drops it again.
+     */
+    private boolean isLoaded() throws Exception {
+        return loadedShips() >= 1;
     }
 
     /**

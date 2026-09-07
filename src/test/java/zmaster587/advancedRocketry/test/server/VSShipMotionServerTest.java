@@ -50,7 +50,6 @@ public class VSShipMotionServerTest extends AbstractSharedServerTest {
      * fork multiplier, because how much of the machine this test shares says nothing about how many
      * ticks the work needs.
      */
-    private static final int REGISTER_TICKS = 400;
     private static final int LOAD_TICKS = 400;
 
     /** The commanded speed, in blocks/second, and how long it is given to move the craft. */
@@ -82,15 +81,20 @@ public class VSShipMotionServerTest extends AbstractSharedServerTest {
         assertTrue("with VS, the AFC build must route to a ship (no rocket): " + assemble,
                 assemble.contains("\"rocketCount\":0"));
 
-        // 1) Wait for the ship to appear in the queryable registry (VS relocates blocks
-        //    into a ship on its own thread).
-        final int[] all = {0};
-        GameTicks.until(client(), GameTicks.server(), REGISTER_TICKS, () -> {
-            all[0] = shipCount("ship-count-all");
-            return all[0] >= 1;
-        });
-        assertTrue("assembly must create a VS ship in the queryable registry (all=" + all[0] + ")",
-                all[0] >= 1);
+        // 1) The ship must be in the queryable registry — READ, not waited for.
+        //
+        // The registration IS deferred: `queueShipSpawn` only adds to a spawn queue, which the
+        // world drains on its next tick. But nothing here can observe the pre-drain state, because
+        // every probe command is itself drained on the server thread and the server holds the task
+        // queue's monitor across a whole drain — so two consecutive commands are separated by a
+        // complete pass by construction. The wait that used to stand here spent its budget only
+        // when the answer was going to be no anyway.
+        //
+        // (The comment this replaces said VS relocates the blocks "on its own thread". It does not:
+        // `queueShipSpawn` calls `enforceGameThread`.)
+        int all = shipCount("ship-count-all");
+        assertTrue("assembly must create a VS ship in the queryable registry (all=" + all + ")",
+                all >= 1);
 
         // 2) A headless server has no player near the ship to auto-load it, so it stays
         //    unloaded/dormant. Force it loaded + physics-enabled (a nearby client does
@@ -122,7 +126,7 @@ public class VSShipMotionServerTest extends AbstractSharedServerTest {
         });
         zBefore = z[0];
         assertTrue("ship must become loaded after force-load — loaded over time: ["
-                        + loadTrace.toString().trim() + "], all=" + all[0],
+                        + loadTrace.toString().trim() + "], all=" + all,
                 !Double.isNaN(zBefore));
 
         // CONTROL, and the reason this class was rewritten: a raw velocity SETPOINT does not move a

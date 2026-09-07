@@ -98,7 +98,7 @@ public class VSCrossingOutOfAnUnloadedSourceE2ETest extends AbstractHeadlessServ
         assertTrue("with VS an AFC-bearing build must route to a ship (no rocket): " + asm,
                 asm.contains("\"rocketCount\":0"));
         assertTrue("the ship never entered VS's registry: " + counters(),
-                waitUntilRegistryExceeds(registryBefore));
+                registryExceeds(registryBefore));
         // The identity is taken HERE, while the craft is still loaded, because the whole subject of
         // this class is what happens once it is not: the durable->physics bridge repairs its index by
         // reading flight computers, which force-loads the ship it is asked about. Resolving the id
@@ -145,9 +145,17 @@ public class VSCrossingOutOfAnUnloadedSourceE2ETest extends AbstractHeadlessServ
         return ShipIdentity.aLoadedShipIsAt(this::exec, 0, x, y, BASE_Z, POSE_TOLERANCE);
     }
 
-    private boolean waitUntilRegistryExceeds(int floor) throws Exception {
-        return GameTicks.until(client(), GameTicks.server(), WAIT_TICKS,
-                () -> queryableShips() > floor);
+    /**
+     * Has the registry grown past {@code floor}? A READ, not a wait.
+     *
+     * <p>The entry IS deferred — {@code queueShipSpawn} only adds to a spawn queue the world drains
+     * on its next tick — but nothing here can observe the pre-drain state: every probe command is
+     * drained on the server thread behind the task queue's own monitor, so two consecutive commands
+     * are separated by a complete pass. The poll this replaces could only ever spend its budget in
+     * runs where the answer was going to be no.</p>
+     */
+    private boolean registryExceeds(int floor) throws Exception {
+        return queryableShips() > floor;
     }
 
     /**
