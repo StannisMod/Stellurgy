@@ -617,19 +617,23 @@ public abstract class AbstractSharedClientE2ETest {
         // A ship where the BODY actually is means the opposite and is far worse: the body is being
         // carried, so a capture outlived the scenario that made it and the teleport is being undone
         // every tick by whatever re-projects him onto his deck point. The deck capture answers which.
-        String shipOnPlot = askServer("artest vs ship-info " + plot.dim
-                + " " + plot.centerX() + " " + Plot.DEFAULT_Y + " " + plot.centerZ() + " 64");
+        // Asked with `ships-at`, which is CONTAINMENT and a COUNT — the right shape for "is a hull
+        // here at all". The bounded nearest lookup this replaced answered with a winner and a
+        // distance, so "one ship, 60 blocks away" and "two ships, both containing the point" printed
+        // the same way, and a reader of the failure could not tell them apart.
+        String shipOnPlot = askServer("artest vs ships-at " + plot.dim
+                + " " + plot.centerX() + " " + Plot.DEFAULT_Y + " " + plot.centerZ());
         String shipOnBody = last != null && last.has("playerX")
-                ? askServer("artest vs ship-info " + plot.dim
+                ? askServer("artest vs ships-at " + plot.dim
                         + " " + (int) Math.round(last.get("playerX").getAsDouble())
                         + " " + (int) Math.round(last.get("playerY").getAsDouble())
-                        + " " + (int) Math.round(last.get("playerZ").getAsDouble()) + " 256")
+                        + " " + (int) Math.round(last.get("playerZ").getAsDouble()))
                 : "(no player point to ask about)";
         String capture = askServer("artest vs deck-capture");
         // AND THE CLIENT'S OWN RESOLVER, because the server's answer is only half the question. A body
         // travelling at a CONSTANT delta per tick with its own motion at zero is not being moved by its
         // physics — it is being carried by a rigid transform. When the server then reports no capture
-        // and no ship within 256 blocks, the only remaining carrier is the client's own ship-frame
+        // and no ship containing the body's point, the only remaining carrier is the client's own ship-frame
         // resolution continuing in a frame the server has already let go of. These counters say whether
         // it is resolving at all, which is the difference between that and a fourth explanation.
         String clientResolver = readClientCounters(
@@ -646,8 +650,8 @@ public abstract class AbstractSharedClientE2ETest {
                 + "\n  every POSITION WRITE since the teleport, with the caller that made it — this"
                 + " is the only line here that NAMES a writer instead of listing candidates: "
                 + positionWritesSinceTheTeleport()
-                + "\n  a ship within 64 blocks of the PLOT centre: " + shipOnPlot
-                + "\n  a ship within 256 blocks of where the BODY ended up: " + shipOnBody
+                + "\n  ships CONTAINING the PLOT centre: " + shipOnPlot
+                + "\n  ships CONTAINING where the BODY ended up: " + shipOnBody
                 + "\n  its deck capture, as the SERVER sees it: " + capture
                 + "\n  the CLIENT's own ship-frame resolver: " + clientResolver
                 + "\n  client world=" + bot().reportWeather()

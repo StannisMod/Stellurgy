@@ -13,7 +13,6 @@ import org.junit.runners.MethodSorters;
 import zmaster587.advancedRocketry.test.Events;
 
 import static org.junit.Assert.assertTrue;
-import static zmaster587.advancedRocketry.test.AdvancedRocketryTestConstants.SHIP_CAPTURE_RADIUS_BLOCKS;
 
 /**
  * A player can board an ALREADY ASSEMBLED physics ship by aiming at its pilot seat and pressing the
@@ -71,7 +70,6 @@ public class VSAssembledShipRealRightClickBoardingE2ETest extends AbstractShared
     private static final Pattern BUILDER_POS =
             Pattern.compile("\"builderPos\":\\[(-?\\d+),(-?\\d+),(-?\\d+)]");
     private static final Pattern POS_Y = Pattern.compile("\"posY\":(-?[0-9.E\\-]+)");
-    private static final Pattern SHIP_ID = Pattern.compile("\"id\":\"([^\"]*)\"");
 
     /** This scenario's ship, by identity — captured at its build site before anything moves. */
     private String shipUuid;
@@ -138,8 +136,8 @@ public class VSAssembledShipRealRightClickBoardingE2ETest extends AbstractShared
         String assemble = assembleFixture(BX, BY, BZ, VARIANT);
         scenario().requireArranged("a " + VARIANT + " build must route to a ship: " + assemble,
                 assemble.contains("\"ok\":true"));
-        awaitShipSpawned(events, spawnMark, "the assembly must create a VS ship in the queryable"
-                + " registry before anything can be aimed at it (the spawn is asynchronous)");
+        shipUuid = awaitShipSpawned(events, spawnMark, "the assembly must create a VS ship in the"
+                + " queryable registry before anything can be aimed at it (the spawn is asynchronous)");
 
         exec("tp @a " + (BX + 0.5) + " " + (BY + 8) + " " + (BZ + 0.5) + " 0 0");
         bot().waitTicks(20);
@@ -155,14 +153,6 @@ public class VSAssembledShipRealRightClickBoardingE2ETest extends AbstractShared
         }
         scenario().requireArranged("the ship must LOAD with the client present: " + atBase,
                 !Double.isNaN(yRest));
-
-        // The ship's IDENTITY, captured while it is still the only craft that can be at this base.
-        // The seat lookup below goes through it: `find-seat <dim> <x> <y> <z>` resolves the yard by
-        // "whichever craft is nearest that point", which is exact with one candidate and silently
-        // wrong with two — and this class is a re-home candidate onto a SHARED world.
-        Matcher sid = SHIP_ID.matcher(atBase);
-        scenario().requireArranged("ship-info must name the ship: " + atBase, sid.find());
-        shipUuid = sid.group(1);
 
         // The seat's SUBSPACE address (stationary, what the raytrace should report) and its live
         // WORLD position (what the bot has to aim at). Both come from the same probe reading.
@@ -331,12 +321,11 @@ public class VSAssembledShipRealRightClickBoardingE2ETest extends AbstractShared
     // ---- helpers -------------------------------------------------------------------------------
 
     /**
-     * The ship at its BUILD SITE — for the arrangement's load poll and the identity capture only,
-     * since that is the only moment the ship is known to be there.
+     * THIS scenario's ship, by name — used by the arrangement's load poll, which is a question about
+     * time and not about which craft is being waited for.
      */
     private String shipInfoAtBase() throws Exception {
-        return exec("artest vs ship-info 0 " + BX + " " + BY + " " + BZ
-                + " " + SHIP_CAPTURE_RADIUS_BLOCKS);
+        return exec("artest vs ship-info 0 id " + shipUuid);
     }
 
     /** The seat's subspace address + live world position, resolved from the craft's IDENTITY. */

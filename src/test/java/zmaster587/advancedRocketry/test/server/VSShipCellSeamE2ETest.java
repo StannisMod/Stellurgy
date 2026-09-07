@@ -3,6 +3,7 @@ package zmaster587.advancedRocketry.test.server;
 import zmaster587.advancedRocketry.space.CellSeam;
 import zmaster587.advancedRocketry.space.GalacticCoord;
 import zmaster587.advancedRocketry.test.GameTicks;
+import zmaster587.advancedRocketry.test.EntrySlots;
 
 import org.junit.After;
 import org.junit.Test;
@@ -98,11 +99,16 @@ public class VSShipCellSeamE2ETest extends AbstractSharedServerTest {
         // pinned deterministically by `CellSeamTest`, and what a carry DOES is pinned here, on a real
         // ship. `wouldCarry` is production's own reading of the live pose, so the arrangement is
         // witnessed by the code under test rather than only by this test's arithmetic.
-        String carry = exec("artest space seam-carry " + sourceSlot);
+        String carry = exec("artest space seam-carry " + sourceSlot + " id " + arShipId);
         assertTrue("production does not agree the ship has left its cell (its own predicate on the "
                 + "live pose): " + carry, carry.contains("\"wouldCarry\":true"));
         assertTrue("the carry did not start — the reason is in the reply: " + carry,
                 carry.contains("\"started\":true"));
+        // The carry moved THIS ship. Without the id the verb takes the slot's first SETTLED row, and
+        // a slot that has held two craft answers `started:true` for the wrong one — after which every
+        // assertion below reads a ledger row nobody moved.
+        assertEquals("the carry named a different ship: " + carry,
+                arShipId, extractString(carry, "shipId"));
 
         // --- Assert: carried into the neighbour ---------------------------------------------------
         final String[] afterMove = {""};
@@ -216,11 +222,15 @@ public class VSShipCellSeamE2ETest extends AbstractSharedServerTest {
         assertTrue("before the carry the body must be ABOARD the source ship, or what follows is not "
                 + "about a carry at all: " + beforeCarry, beforeCarry.contains("\"aboard\":true"));
 
-        String carry = exec("artest space seam-carry " + arranged.sourceSlot);
+        String carry = exec("artest space seam-carry " + arranged.sourceSlot + " id "
+                + arranged.arShipId);
         assertTrue("production does not agree the ship has left its cell: " + carry,
                 carry.contains("\"wouldCarry\":true"));
         assertTrue("the carry did not start — the reason is in the reply: " + carry,
                 carry.contains("\"started\":true"));
+        // The carry moved the ship this body was dropped on, and not the slot's first settled row.
+        assertEquals("the carry named a different ship: " + carry,
+                arranged.arShipId, extractString(carry, "shipId"));
 
         // HOLD THE ARRIVAL DECK NOW, before the ship gets there. The crossing puts back what it
         // carried the moment the ship is rebuilt on the far side, and an unheld chunk is swept with
@@ -233,6 +243,12 @@ public class VSShipCellSeamE2ETest extends AbstractSharedServerTest {
         int destSlot = extractInt(destSlotReply, "slotDim");
         assertTrue("the carry did not bind the neighbour cell to a slot, so there is nowhere to hold "
                 + "the arrival deck: " + destSlotReply, destSlot > Integer.MIN_VALUE);
+        // The hold protects the READING, not the landing, and the difference was measured rather than
+        // assumed: with this line removed the scenario still PASSES, because the carry now loads the
+        // chunk it is about to spawn into. Before that fix it passed only WITH the hold — the test was
+        // supplying the one thing production could not do, which is a green about the arrangement.
+        // What the hold still buys is the window: nothing pins the arrival chunk afterwards, so an
+        // unheld body can be swept between landing and the read below.
         String heldDst = exec("artest chunk hold " + destSlot + " "
                 + (long) (-(double) GalacticCoord.HALF_CELL + CellSeam.REENTRY_DEPTH) + " "
                 + (long) arranged.y + " " + (long) arranged.z + " 2");
@@ -284,9 +300,22 @@ public class VSShipCellSeamE2ETest extends AbstractSharedServerTest {
         // The two failure modes are separated on the way out, because they mean different things: a
         // body that never arrived is a crossing that dropped its cargo; a body that arrived and is not
         // aboard is a crossing that put it down beside the deck.
+        //
+        // And a THIRD, which the message could not tell from the first: the carry stows a body by
+        // taking it OUT of the source world and puts it back on the far side, so "not in the
+        // neighbour" covers both "it was never picked up" (still in the source) and "it was picked up
+        // and never put down" (in no world at all). Those are different defects in different halves of
+        // the mechanism, so the source is read on the way out and the message says which.
+        String leftBehind = exec("artest space loose-body-find " + bodyId + " "
+                + arranged.sourceSlot + " " + settledVsId);
+        String stash = exec("artest space cargo-stash");
         assertTrue("the ship crossed the seam and left its cargo behind: the body was aboard in slot "
                         + arranged.sourceSlot + " and never appeared in the neighbour's slot "
-                        + carriedSlot + "; last find=" + found[0],
+                        + carriedSlot + "; last find=" + found[0]
+                        + " | in the SOURCE slot it is now: " + leftBehind
+                        + " | the carry is still holding: " + stash
+                        + " (found in the source = never stowed; held in the stash = stowed and"
+                        + " never released; neither = lost outright)",
                 carried || found[0].contains("\"found\":true"));
         // The SHIP's pose is read again HERE, beside the body's, because "not aboard" has two very
         // different causes and one number cannot separate them: the body was put down away from the
@@ -387,10 +416,10 @@ public class VSShipCellSeamE2ETest extends AbstractSharedServerTest {
         assertTrue("the held input must reach this ship's flight computer: " + heldInput,
                 heldInput.contains("\"afcResolved\":true"));
         assertTrue("climb teleport failed",
-                exec("artest vs teleport-ship 0 " + (int) sx + " " + (int) sy + " " + (int) sz
-                        + " " + (int) sx + " " + ABOVE_CEILING_Y + " " + (int) sz)
+                exec("artest vs teleport-ship-by-id 0 " + srcVsId + " "
+                        + (int) sx + " " + ABOVE_CEILING_Y + " " + (int) sz)
                         .contains("\"ok\":true"));
-        exec("artest vs unpark 0 " + (int) sx + " " + ABOVE_CEILING_Y + " " + (int) sz);
+        exec("artest vs unpark-by-id 0 " + srcVsId);
 
         // Waited on BY ID: the ledger is asked about this craft, not about how many ships it holds.
         final String[] status = {""};
@@ -432,11 +461,10 @@ public class VSShipCellSeamE2ETest extends AbstractSharedServerTest {
         assertFalse("the ship's in-cell pose could not be read: " + inCell,
                 Double.isNaN(cx) || Double.isNaN(cy) || Double.isNaN(cz));
 
-        String outward = exec("artest vs teleport-ship " + sourceSlot + " "
-                + (long) cx + " " + (long) cy + " " + (long) cz + " "
+        String outward = exec("artest vs teleport-ship-by-id " + sourceSlot + " " + settledVsId + " "
                 + PAST_THE_FACE + " " + (long) cy + " " + (long) cz);
         assertTrue("the move past the cell face failed: " + outward, outward.contains("\"ok\":true"));
-        exec("artest vs unpark " + sourceSlot + " " + PAST_THE_FACE + " " + (long) cy + " " + (long) cz);
+        exec("artest vs unpark-by-id " + sourceSlot + " " + settledVsId);
 
         // THE ARRANGEMENT IS ASSERTED, not assumed. "the probe returned ok" is not "the ship is past
         // the face": a clamp, a refused transform or a Y-limit would all report ok and leave the ship
@@ -509,12 +537,9 @@ public class VSShipCellSeamE2ETest extends AbstractSharedServerTest {
         return vsId;
     }
 
+    /** Keep every slot world's ships load-queued while a wait runs. See {@link EntrySlots}. */
     private void loadAllEntrySlots(String setup) throws Exception {
-        Matcher m = Pattern.compile("\"dims\":\\[(-?\\d+),(-?\\d+)]").matcher(setup);
-        if (m.find()) {
-            exec("artest vs load-ships " + m.group(1));
-            exec("artest vs load-ships " + m.group(2));
-        }
+        EntrySlots.loadAll(this::exec, setup);
     }
 
     private int waitForLoadedShip(int dim) throws Exception {

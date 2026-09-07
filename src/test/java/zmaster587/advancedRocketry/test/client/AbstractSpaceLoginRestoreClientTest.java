@@ -23,6 +23,7 @@ import zmaster587.advancedRocketry.space.GalacticCoord;
 import zmaster587.advancedRocketry.test.Chains;
 import zmaster587.advancedRocketry.test.Events;
 import zmaster587.advancedRocketry.test.GameTicks;
+import zmaster587.advancedRocketry.test.ShipIdentity;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
@@ -259,6 +260,8 @@ public abstract class AbstractSpaceLoginRestoreClientTest {
                     + "\\|s=(\\d)(\\d)/(-?\\d+)");
 
     protected static final Pattern SHIP_ID = Pattern.compile("\"shipId\":\"([^\"]+)\"");
+    /** The PHYSICS id in a {@code vs ship-uuid} reply — the other half of a tier-2 craft's identity. */
+    protected static final Pattern SHIP_UUID = Pattern.compile("\"id\":\"([^\"]+)\"");
     protected static final Pattern BUILDER_POS =
             Pattern.compile("\"builderPos\":\\[(-?\\d+),(-?\\d+),(-?\\d+)]");
     protected static final Pattern FORGE_DIMS = Pattern.compile("\"forgeDimensions\":\\[([^\\]]*)]");
@@ -948,7 +951,12 @@ public abstract class AbstractSpaceLoginRestoreClientTest {
      */
     protected String measureAfterReCapture(int dim) {
         try {
-            String seat = exec("artest vs seat-mount " + dim);
+            // On THIS pilot's own ship. The bare form mounts the first pilot seat in the world's
+            // loaded-tile list, and this method does not merely observe — it seats the bot — so an
+            // unaddressed mount would put him on a neighbour's craft and then measure that.
+            String seat = exec("artest vs seat-mount " + dim + " id "
+                    + ShipIdentity.awaitPhysicsIdOf(this::exec, dim, arrangedShipId, 20,
+                            () -> bot().waitTicks(5)));
             if (!readBool(seat, "seatFound")) {
                 return "<no seat to re-capture through: " + seat + ">";
             }
@@ -1019,20 +1027,19 @@ public abstract class AbstractSpaceLoginRestoreClientTest {
         // it SETTLED - so both the anchor and the shipyard's queryability lag by a few ticks. A single
         // shot here fails intermittently, and it fails in the ARRANGEMENT, which is the most expensive
         // kind of red: it looks like the subject broke.
+        // Searched inside the ship the ledger NAMES, not around the pose it happens to be at. The
+        // crossing re-assembles the hull, so the physics id is a new one on this side and is
+        // translated from the durable name the ledger kept. What is still awaited is the shipyard
+        // becoming queryable — a fact about time, not about which craft answers.
+        String arrivedShipId = ShipIdentity.awaitPhysicsIdOf(this::exec, slotDim, arrangedShipId,
+                30, () -> bot().waitTicks(10));
         String seat = null;
         for (int attempt = 0; attempt < 30; attempt++) {
-            seat = exec("artest vs find-seat " + slotDim
-                    + " " + (int) Math.round(shipPose[0])
-                    + " " + (int) Math.round(shipPose[1])
-                    + " " + (int) Math.round(shipPose[2]));
+            seat = exec("artest vs find-seat " + slotDim + " id " + arrivedShipId);
             if (readBool(seat, "seatFound")) {
                 break;
             }
             bot().waitTicks(10);
-            double[] livePose = awaitShipPose(slotDim);
-            if (livePose != null) {
-                shipPose = livePose;
-            }
         }
         assertTrue("the pilot seat must survive the crossing and be locatable in the settled ship - "
                 + "without a seat there is nothing to be restored into: " + seat,
@@ -1144,8 +1151,12 @@ public abstract class AbstractSpaceLoginRestoreClientTest {
         assertTrue("the ship never assembled in the launch dimension",
                 waitForLoadedShip(events, assemblyMark, LAUNCH_DIM) >= 1);
 
-        String srcInfo = exec("artest vs ship-info " + LAUNCH_DIM
-                + " " + SRC_X + " " + SRC_Y + " " + SRC_Z + " " + SHIP_CAPTURE_RADIUS_BLOCKS);
+        // The ship BY NAME, from the assembler that minted the durable id — then the physics id it
+        // maps to. The pad lookup this replaced was a proximity query on a world the whole family
+        // shares, and a neighbour's craft answers it in the same shape.
+        String durableShipId = ShipIdentity.nameFromAssembly(assembled);
+        String srcVsId = ShipIdentity.physicsIdOf(this::exec, LAUNCH_DIM, durableShipId);
+        String srcInfo = exec("artest vs ship-info " + LAUNCH_DIM + " id " + srcVsId);
         assertTrue("the assembled build is not a physics ship: " + srcInfo,
                 srcInfo.contains("\"managed\":true"));
         int sx = (int) Math.round(readDouble(srcInfo, "posX"));
@@ -1159,10 +1170,10 @@ public abstract class AbstractSpaceLoginRestoreClientTest {
         // every other ship on the server, and the all-zero input it left behind kept this ship's
         // computer in its PILOTED branch for the rest of the scenario.
         long entryMark = events.mark();
-        String climb = exec("artest vs teleport-ship " + LAUNCH_DIM + " " + sx + " " + sy + " " + sz
+        String climb = exec("artest vs teleport-ship-by-id " + LAUNCH_DIM + " " + srcVsId
                 + " " + sx + " " + ABOVE_CEILING_Y + " " + sz);
         assertTrue("the climb past the orbit ceiling failed: " + climb, climb.contains("\"ok\":true"));
-        exec("artest vs unpark " + LAUNCH_DIM + " " + sx + " " + ABOVE_CEILING_Y + " " + sz);
+        exec("artest vs unpark-by-id " + LAUNCH_DIM + " " + srcVsId);
 
         // The flight computer's own tick now runs the entry: it crosses the ship into the launch
         // body's cell and, on completion, settles it in the ledger. Nothing here drives it.
@@ -1263,27 +1274,30 @@ public abstract class AbstractSpaceLoginRestoreClientTest {
         assertTrue("the ship never assembled in the launch dimension",
                 waitForLoadedShip(events, assemblyMark, LAUNCH_DIM) >= 1);
 
-        String srcInfo = exec("artest vs ship-info " + LAUNCH_DIM
-                + " " + SRC_X + " " + SRC_Y + " " + SRC_Z + " " + SHIP_CAPTURE_RADIUS_BLOCKS);
+        // The ship's identity on the GROUND, TRANSLATED from the name the assembler minted rather than
+        // captured from a lookup at the fixture's spot: the family shares this world, so "the ship at
+        // (SRC_X,SRC_Y,SRC_Z)" is a question a sibling scenario's craft can answer, in the same shape.
+        // It is not the id the ledger reports after the entry: the crossing cuts the ship's blocks and
+        // re-assembles them, so the craft that flies is a different VS object. This one addresses the
+        // pilot's throttle before the crossing; `arrangedShipId` addresses everything after it.
+        String durableShipId = ShipIdentity.nameFromAssembly(assembled);
+        String groundShipId = ShipIdentity.physicsIdOf(this::exec, LAUNCH_DIM, durableShipId);
+
+        String srcInfo = exec("artest vs ship-info " + LAUNCH_DIM + " id " + groundShipId);
         assertTrue("the assembled build is not a physics ship: " + srcInfo,
                 srcInfo.contains("\"managed\":true"));
         int sx = (int) Math.round(readDouble(srcInfo, "posX"));
         int sy = (int) Math.round(readDouble(srcInfo, "posY"));
         int sz = (int) Math.round(readDouble(srcInfo, "posZ"));
 
-        // The ship's identity on the GROUND, captured at the one moment it is unambiguous - freshly
-        // assembled at this fixture's own spot. It is not the same id the ledger reports after the
-        // entry: the crossing cuts the ship's blocks and re-assembles them, so the craft that flies
-        // is a different VS object. This one addresses the pilot's throttle before the crossing;
-        // `arrangedShipId` addresses everything after it.
-        String groundShipId = readString(srcInfo, "id");
-        assertNotNull("ship-info must name WHICH ship answered: " + srcInfo, groundShipId);
-
         // Board on the ground. The client has to be standing at the ship for its seat to be a loaded
         // tile at all, which is what the mount probe searches.
         exec("tp @a " + (SRC_X + 0.5) + " " + (SRC_Y + 6) + " " + (SRC_Z + 0.5) + " 0 0");
         bot().waitTicks(20);
-        String seatMount = exec("artest vs seat-mount " + LAUNCH_DIM);
+        // On the ship this scenario built, by the id resolved from its own name. The bare form takes
+        // the first pilot seat in the world's loaded-tile list — an arrival order — and this mounts
+        // the bot on whatever it finds.
+        String seatMount = exec("artest vs seat-mount " + LAUNCH_DIM + " id " + groundShipId);
         assertTrue("the ground-side pilot seat must offer a mount: " + seatMount,
                 readBool(seatMount, "seatFound"));
         String mount = exec("artest player mount-entity " + readInt(seatMount, "dummyId"));
@@ -1312,10 +1326,10 @@ public abstract class AbstractSpaceLoginRestoreClientTest {
         // there is no later moment at which a reader could still be sure it had not already run.
         long entryMark = events.mark();
         long clientEntryMark = clientEvents().mark();
-        String climb = exec("artest vs teleport-ship " + LAUNCH_DIM + " " + sx + " " + sy + " " + sz
+        String climb = exec("artest vs teleport-ship-by-id " + LAUNCH_DIM + " " + groundShipId
                 + " " + sx + " " + ABOVE_CEILING_Y + " " + sz);
         assertTrue("the climb past the orbit ceiling failed: " + climb, climb.contains("\"ok\":true"));
-        exec("artest vs unpark " + LAUNCH_DIM + " " + sx + " " + ABOVE_CEILING_Y + " " + sz);
+        exec("artest vs unpark-by-id " + LAUNCH_DIM + " " + groundShipId);
         bot().waitTicks(20);
         requireArranged("the pilot must still be in his seat as the ship reaches the ceiling "
                         + "- if the lift alone unseats him this leg never tests the crossing: "
@@ -1615,7 +1629,15 @@ public abstract class AbstractSpaceLoginRestoreClientTest {
                 if (trimmed.isEmpty()) {
                     continue;
                 }
-                String found = exec("artest space find-afc " + trimmed);
+                // WHICH ship is asked for by name where the caller has one. This method is also the
+                // path that DISCOVERS the arranged ship in the first place — the scenario has just
+                // flown a craft up and does not yet know which slot took it — so on that first pass
+                // there is no id to give and the slot's own settled row answers. Once
+                // `arrangedShipId` is set (a relog, a second reading) the search is about that craft
+                // and nothing else, which is what a dimension list holding several slots needs.
+                String found = arrangedShipId == null
+                        ? exec("artest space find-afc " + trimmed)
+                        : exec("artest space find-afc " + trimmed + " " + arrangedShipId);
                 if (found.contains("\"found\":true")) {
                     // Its flight computer's own block position rides along. The ledger's id and the
                     // VS ship uuid are DIFFERENT identities, and the by-id command verbs resolve the
@@ -1649,13 +1671,22 @@ public abstract class AbstractSpaceLoginRestoreClientTest {
      * cell would make the reply indistinguishable from a correct one.</p>
      */
     protected double[] awaitShipPose(int dim) throws Exception {
+        assertNotNull("awaitShipPose is about THIS pilot's ship, and the arrangement has not named"
+                + " one yet", arrangedShipId);
         for (int attempt = 0; attempt < 40; attempt++) {
-            String info = exec("artest vs ship-info " + dim + " 0 0 0");
-            if (info.contains("\"managed\":true")) {
-                assertEquals("a slot cell must hold exactly ONE loaded ship for a positional read"
-                        + " to name it", 1, readInt(exec("artest vs ship-count " + dim), "count"));
-                return new double[]{
-                        readDouble(info, "posX"), readDouble(info, "posY"), readDouble(info, "posZ")};
+            // ASKED BY NAME. This was `ship-info <dim> 0 0 0` — an unbounded nearest lookup —
+            // defended by asserting the cell held exactly one loaded ship. That defence answers a
+            // different question than the one being asked: one loaded ship is not evidence that the
+            // one loaded ship is HIS, and the case where it is not is precisely the case where his
+            // has failed to load and a neighbour's has. A name has no such gap.
+            String hull = exec("artest vs ship-uuid " + dim + " " + arrangedShipId);
+            Matcher named = SHIP_UUID.matcher(hull);
+            if (hull.contains("\"found\":true") && named.find()) {
+                String info = exec("artest vs ship-info " + dim + " id " + named.group(1));
+                if (info.contains("\"managed\":true")) {
+                    return new double[]{readDouble(info, "posX"), readDouble(info, "posY"),
+                            readDouble(info, "posZ")};
+                }
             }
             exec("artest vs load-ships " + dim);
             bot().waitTicks(5);

@@ -26,6 +26,7 @@ import zmaster587.advancedRocketry.test.Chains;
 import zmaster587.advancedRocketry.test.Events;
 import zmaster587.advancedRocketry.test.client.ClientEvents;
 
+import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 import static zmaster587.advancedRocketry.test.ArrangementFailure.requireArranged;
 
@@ -310,6 +311,17 @@ public class M1PlanetToPlanetMilestoneE2ETest {
                         + "that computer: " + found,
                 seatSub != null && afcSub != null);
 
+        // The craft's DURABLE name, read off its own flight computer while that computer is still
+        // here to ask. The physics id captured at assembly dies at the first crossing, and this run
+        // crosses three times; the durable name rides in the tile's NBT through every one of them,
+        // so it is what leg 6 and the arrival-side seat lookups are keyed on. Without it those two
+        // fell back to "the first settled row in the cell" and "whatever is nearest the pilot".
+        String nameReply = exec("artest vs ship-name 0 " + describeArgs(afcSub));
+        requireArranged("the built ship's flight computer must carry a durable name, or nothing"
+                + " after the first crossing can be addressed to this craft: " + nameReply,
+                nameReply.contains("\"found\":true"));
+        builtShipName = readString(nameReply, SHIP_ID);
+
         // The subspace copy is a RIGID relocation of the pad build, so the seat must sit at exactly
         // the offset it was built at. Without this control the deck square the pilot is placed on
         // below is a guess, and a failed press could just as easily be a bot standing nowhere.
@@ -436,7 +448,10 @@ public class M1PlanetToPlanetMilestoneE2ETest {
         // The ship as the ledger knows it, and the cell it is about to leave. The default galaxy is
         // generated from a wall-clock seed, so NOTHING about the destination may be assumed: every
         // cell and dimension this leg and the next work with is READ from the world the pilot is in.
-        String afcProbe = exec("artest space find-afc " + slotDim);
+        // NAMED. Without the id this asked for "the first settled row bound to this slot", which is
+        // an iteration order over every ship the ledger holds — and the answer to a question about
+        // somebody else's craft is indistinguishable from the answer to this one.
+        String afcProbe = exec("artest space find-afc " + slotDim + " " + builtShipName);
         requireArranged("the ship the pilot flew up must be findable in the space cell he "
                         + "arrived in — the ledger says he is here, so a ship that cannot be located "
                         + "means the arrival left no body behind: " + afcProbe,
@@ -1156,32 +1171,43 @@ public class M1PlanetToPlanetMilestoneE2ETest {
     /** The last find-seat answer, verbatim, so a failed aim can name the probe that went quiet. */
     private String lastSeatProbe = "";
 
-    /** The ship the client is aboard, found from his own position, or from where it last was. */
+    /** The PHYSICS id of the craft this run assembled, from the registry record of its own spawn. */
+    private String builtShipVsId;
+
+    /**
+     * The DURABLE name of that same craft, read off its flight computer's NBT on the pad. Every
+     * crossing re-mints the physics id and carries this one through verbatim, so this is the handle
+     * that still works three crossings later.
+     */
+    private String builtShipName;
+
+    /**
+     * The seat of the ship the client is aboard — resolved from that ship's NAME, in whichever world
+     * it is now in.
+     *
+     * <p>This used to probe from the pilot's own position and then, failing that, from {@link
+     * #shipAnchorHint} — a REMEMBERED earlier pose. That second probe asks "what craft is nearest a
+     * place this one has left", which the yard lookup always answers with something; and the aim loop
+     * re-ran it every attempt, so the ship under the crosshair could change identity mid-aim. What is
+     * still retried is the crossing finishing, which is a fact about time.</p>
+     */
     private String findSeatAboard(int dim, int budget) throws Exception {
+        assertNotNull("the build must have named its ship before the arrival side can ask about it",
+                builtShipName);
         for (int attempt = 0; attempt < budget; attempt++) {
-            JsonObject state = bot().reportState();
-            if (isWorldReady(state)) {
-                lastSeatProbe = findSeatFrom(dim, state.get("playerX").getAsDouble(),
-                        state.get("playerY").getAsDouble(), state.get("playerZ").getAsDouble());
+            String hull = exec("artest vs ship-uuid " + dim + " " + builtShipName);
+            Matcher named = Pattern.compile("\"id\":\"([^\"]+)\"").matcher(hull);
+            if (hull.contains("\"found\":true") && named.find()) {
+                lastSeatProbe = exec("artest vs find-seat " + dim + " id " + named.group(1));
                 if (rememberAnchor(lastSeatProbe)) {
                     return lastSeatProbe;
                 }
-            }
-            if (shipAnchorHint != null) {
-                lastSeatProbe = findSeatFrom(dim, shipAnchorHint[0], shipAnchorHint[1],
-                        shipAnchorHint[2]);
-                if (rememberAnchor(lastSeatProbe)) {
-                    return lastSeatProbe;
-                }
+            } else {
+                lastSeatProbe = hull;
             }
             bot().waitTicks(5);
         }
         return lastSeatProbe;
-    }
-
-    private String findSeatFrom(int dim, double x, double y, double z) throws Exception {
-        return exec("artest vs find-seat " + dim + " " + (int) Math.floor(x)
-                + " " + (int) Math.floor(y) + " " + (int) Math.floor(z));
     }
 
     /** Keep the ship's live world position from a successful probe; false when it found nothing. */
@@ -1386,7 +1412,15 @@ public class M1PlanetToPlanetMilestoneE2ETest {
             }
             bot().clickButtonById(BUTTON_BUILD);
             bot().waitTicks(40);
-            ships = Events.countRecords(spawnEvents.since(spawnMark, "ship_spawned"), "\"vsShip\":");
+            String spawned = spawnEvents.since(spawnMark, "ship_spawned");
+            ships = Events.countRecords(spawned, "\"vsShip\":");
+            // WHICH ship. The record names it and this loop was counting the records and throwing the
+            // name away — after which every later question about "the ship" went back to a position
+            // or to "the first settled row in the cell". It is kept from the moment of creation now.
+            Matcher spawnedShip = Pattern.compile("\"vsShip\":\"([^\"]+)\"").matcher(spawned);
+            if (spawnedShip.find()) {
+                builtShipVsId = spawnedShip.group(1);
+            }
         }
         bot().closeScreen();
         return ships;
@@ -1634,23 +1668,38 @@ public class M1PlanetToPlanetMilestoneE2ETest {
         return exec("artest energy stored 0 " + pos[0] + " " + pos[1] + " " + pos[2]);
     }
 
-    /** The seat's subspace address, its flight computer's, and the ship's live world position. */
+    /**
+     * The seat's subspace address, its flight computer's, and the ship's live world position — of
+     * the craft this run BUILT, named by the registry record its assembly wrote.
+     */
     private String findSeat() throws Exception {
-        return exec("artest vs find-seat 0 " + BX + " " + (BY + 5) + " " + BZ);
+        assertNotNull("the build must have named its ship before anything asks about that ship's"
+                + " seat", builtShipVsId);
+        return exec("artest vs find-seat 0 id " + builtShipVsId);
     }
 
     /**
-     * A subspace point mapped into the world through the ship's own transform. {@code shipAnchor} is
-     * any world point aboard that ship — the seat's live position serves.
+     * A subspace point mapped into the world through the ship's own transform.
+     *
+     * <p>Mapped through the craft this run BUILT, translated into {@code dim}'s physics id from the
+     * durable name — every crossing re-mints that id, and this method is called on both sides of
+     * three of them. {@code shipAnchor} no longer selects the ship: it is kept as the proof that the
+     * craft's live pose was resolved at all, since mapping points for a ship nobody could find would
+     * answer with numbers about nothing.</p>
      */
     private double[] toWorld(int dim, double[] shipAnchor, int[] sub, double dx, double dy, double dz)
             throws Exception {
         if (shipAnchor == null) {
             return null;
         }
-        lastToWorldProbe = exec("artest vs to-world " + dim + " " + shipAnchor[0] + " "
-                + shipAnchor[1] + " " + shipAnchor[2] + " " + (sub[0] + dx) + " " + (sub[1] + dy)
-                + " " + (sub[2] + dz));
+        String hull = exec("artest vs ship-uuid " + dim + " " + builtShipName);
+        Matcher named = Pattern.compile("\"id\":\"([^\"]+)\"").matcher(hull);
+        if (!hull.contains("\"found\":true") || !named.find()) {
+            lastToWorldProbe = hull;
+            return null;
+        }
+        lastToWorldProbe = exec("artest vs to-world " + dim + " id " + named.group(1)
+                + " " + (sub[0] + dx) + " " + (sub[1] + dy) + " " + (sub[2] + dz));
         return readTripleD(lastToWorldProbe, TO_WORLD);
     }
 

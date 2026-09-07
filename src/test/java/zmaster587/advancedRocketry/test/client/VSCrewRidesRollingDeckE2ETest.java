@@ -8,7 +8,7 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 import static org.junit.Assert.assertTrue;
-import static zmaster587.advancedRocketry.test.AdvancedRocketryTestConstants.SHIP_CAPTURE_RADIUS_BLOCKS;
+import zmaster587.advancedRocketry.test.ShipIdentity;
 
 /**
  * A crew member who is NOT seated rides a tier-2 ship's deck.
@@ -110,6 +110,12 @@ public class VSCrewRidesRollingDeckE2ETest extends AbstractSharedVsClientE2ETest
         assertTrue("assembly must create a ship (all=" + all + ")", all >= 1);
         bot().waitTicks(40);
 
+        // WHICH ship, from the assembler that minted its name. The base was the handle before, and a
+        // base is a place: this class shares its world, and the lookup answered for the nearest hull
+        // whether or not that hull was the one this scenario had just built.
+        String shipId = ShipIdentity.awaitPhysicsIdOf(this::exec, 0,
+                ShipIdentity.nameFromAssembly(assemble), 40, () -> bot().waitTicks(5));
+
         exec("tp @a " + (BX + 0.5) + " " + (BY + 8) + " " + (BZ + 0.5) + " 0 0");
         // Await the ship LOADING near the client (same event-gated barrier, load-scaled + early exit).
         ClientPoll.Result<Integer> loadedShips = ClientPoll.until(bot()::waitTicks,
@@ -117,16 +123,9 @@ public class VSCrewRidesRollingDeckE2ETest extends AbstractSharedVsClientE2ETest
         int loaded = loadedShips.value;
         assertTrue("the ship must LOAD with the client present", loaded >= 1);
 
-        // The ship does not stay at the pad base. Find it, then drop the bot ONTO it: standing next
-        // to a ship would prove nothing.
-        // The scenario's ONE positional lookup, at the only moment it is defensible: the ship was
-        // just assembled here and has not moved. Its IDENTITY is taken with it, and the roll command
-        // below names THIS ship rather than whichever hull happens to be nearest the build spot.
-        String where = exec("artest vs ship-info 0 " + BX + " " + BY + " " + BZ
-                + " " + SHIP_CAPTURE_RADIUS_BLOCKS);
-        Matcher shipIdM = Pattern.compile("\"id\":\"([^\"]+)\"").matcher(where);
-        scenario().requireArranged("ship-info must name WHICH ship answered: " + where, shipIdM.find());
-        String shipId = shipIdM.group(1);
+        // The ship does not stay at the pad base — which is exactly why it is asked for by NAME.
+        // Find it, then drop the bot ONTO it: standing next to a ship would prove nothing.
+        String where = exec("artest vs ship-info 0 id " + shipId);
         assertTrue("ship must be managed: " + where, where.contains("\"managed\":true"));
         exec("tp @a " + readDouble(where, POS_X) + " " + (readDouble(where, POS_Y) + 4)
                 + " " + readDouble(where, POS_Z) + " 0 0");

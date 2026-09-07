@@ -84,6 +84,18 @@ public final class CellCrossingController {
     private final SpaceManager space;
     private final ShipLedger ledger;
     private final ShipCrossingService crossing;
+
+    /**
+     * The crossing seam this controller drives — for reading its state, never for driving it.
+     *
+     * <p>A carry takes a ship's loose cargo OUT of the source world and puts it back on the far side,
+     * so between those two moments the cargo is in neither world. From outside, that interval and a
+     * carry that never picked the cargo up look identical, and they are faults in different halves of
+     * the mechanism. This is how an observer tells them apart.</p>
+     */
+    public ShipCrossingService crossings() {
+        return crossing;
+    }
     private final LongSupplier clock;
     private final Map<UUID, Long> retryAfter = new HashMap<>();
     private int laneCounter;

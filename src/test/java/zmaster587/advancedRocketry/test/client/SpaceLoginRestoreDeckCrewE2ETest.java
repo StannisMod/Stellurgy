@@ -1,6 +1,7 @@
 package zmaster587.advancedRocketry.test.client;
 
 import zmaster587.advancedRocketry.test.Events;
+import zmaster587.advancedRocketry.test.ShipIdentity;
 
 import com.google.gson.JsonObject;
 
@@ -173,18 +174,19 @@ public class SpaceLoginRestoreDeckCrewE2ETest extends AbstractSpaceLoginRestoreC
                 + " " + Math.cos(half) + " " + Math.sin(half) + " 0.0 0.0");
         requireArranged("the roll must reach THIS ship's own flight computer: " + rolled,
                 rolled.contains("\"commanded\":true"));
-        // The premise of the two positional reads below, CHECKED: a slot cell holds exactly one
-        // ship, so "nearest to any point" IS this scenario's ship. With a second craft in the cell
-        // the inversion could be read off a stranger and the leg would pass or fail about it.
-        assertEquals("a slot cell must hold exactly ONE loaded ship for a positional read to name it",
-                1, readInt(jsonOf(exec("artest vs ship-count " + slotDim)), "count"));
+        // Read BY NAME, both times. This used to be "the ship nearest (0,0,0) in the slot", with a
+        // one-ship count asserted first as its premise — but a count of one is not evidence that the
+        // one is THIS craft, and the case where it is not is exactly the case where this scenario's
+        // ship failed to load and something else did.
+        String rolledShipId = ShipIdentity.awaitPhysicsIdOf(this::exec, slotDim, arrangedShipId,
+                40, () -> bot().waitTicks(5));
         double upY = 1.0;
         for (int attempt = 0; attempt < 40 && upY > -0.9; attempt++) {
             bot().waitTicks(10);
-            upY = shipUpY(jsonOf(exec("artest vs ship-info " + slotDim + " 0 0 0")));
+            upY = shipUpY(jsonOf(exec("artest vs ship-info " + slotDim + " id " + rolledShipId)));
         }
         bot().waitTicks(20);
-        String info = jsonOf(exec("artest vs ship-info " + slotDim + " 0 0 0"));
+        String info = jsonOf(exec("artest vs ship-info " + slotDim + " id " + rolledShipId));
         requireArranged("the ship must be (near-)inverted before the relog, or this leg is "
                 + "silently the upright one again (upY=" + upY + "): " + info, upY < -0.9);
         String capInverted = exec("artest vs deck-capture");

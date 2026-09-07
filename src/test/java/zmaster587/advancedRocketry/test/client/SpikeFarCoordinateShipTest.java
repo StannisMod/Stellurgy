@@ -5,6 +5,7 @@ import com.github.stannismod.forge.testing.junit.AbstractClientE2ETest;
 import org.junit.Test;
 import org.lwjgl.input.Keyboard;
 import zmaster587.advancedRocketry.test.GameTicks;
+import zmaster587.advancedRocketry.test.ShipIdentity;
 
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -64,15 +65,6 @@ public class SpikeFarCoordinateShipTest extends AbstractClientE2ETest {
     private static final Pattern POS_Y = Pattern.compile("\"posY\":(-?[0-9.E\\-]+)");
     private static final Pattern COUNT = Pattern.compile("\"count\":(-?\\d+)");
     private static final Pattern DUMMY_ID = Pattern.compile("\"dummyId\":(-?\\d+)");
-    private static final Pattern SHIP_ID = Pattern.compile("\"id\"\\s*:\\s*\"([^\"]+)\"");
-
-    /**
-     * Bounds the ONE nearest-ship lookup this leg makes. The rungs are millions of blocks apart, so a
-     * radius this size cannot reach a neighbour — and if this rung's own ship is missing, the lookup
-     * says so instead of describing the other rung's.
-     */
-    private static final int SHIP_LOOKUP_RADIUS = 512;
-
     private static final Pattern POS_X = Pattern.compile("\"posX\":(-?[0-9.E\\-]+)");
     private static final Pattern POS_Z = Pattern.compile("\"posZ\":(-?[0-9.E\\-]+)");
 
@@ -163,20 +155,19 @@ public class SpikeFarCoordinateShipTest extends AbstractClientE2ETest {
                     continue;
                 }
 
-                // Capture the ship's IDENTITY once, here — the one moment this lookup is defensible,
-                // with this rung's ship freshly assembled at this spot. Every later reading goes by
-                // that id, which has no distance term to be wrong about.
+                // This rung's ship, by the name its assembler minted. The identity used to be read
+                // back out of a bounded lookup at the rung's own spot — defensible only as long as
+                // that spot held one hull, which is a premise about the arrangement rather than
+                // about the lookup. Every later reading goes by the id, which has no distance term.
+                String shipId = ShipIdentity.awaitPhysicsIdOf(this::exec, 0,
+                        ShipIdentity.nameFromAssembly(assemble), 40, () -> bot().waitTicks(5));
                 double y0 = Double.NaN;
-                String shipId = null;
                 String lastInfo = "";
                 for (int i = 0; i < 40 && Double.isNaN(y0); i++) {
                     bot().waitTicks(5);
-                    lastInfo = exec("artest vs ship-info 0 " + x + " " + BASE_Y + " " + ARENA_Z
-                            + " " + SHIP_LOOKUP_RADIUS);
+                    lastInfo = exec("artest vs ship-info 0 id " + shipId);
                     if (lastInfo.contains("\"managed\":true")) {
                         y0 = readDouble(lastInfo);
-                        Matcher im = SHIP_ID.matcher(lastInfo);
-                        shipId = im.find() ? im.group(1) : null;
                     }
                 }
                 if (Double.isNaN(y0)) {
@@ -351,17 +342,9 @@ public class SpikeFarCoordinateShipTest extends AbstractClientE2ETest {
             String delivery = deliver(0);
             assertTrue("the pilot was not delivered: " + delivery, delivery == null);
 
-            String shipId = null;
-            for (int i = 0; i < 40 && shipId == null; i++) {
-                bot().waitTicks(5);
-                String info = exec("artest vs ship-info 0 0 " + BASE_Y + " " + ARENA_Z + " "
-                        + SHIP_LOOKUP_RADIUS);
-                if (info.contains("\"managed\":true")) {
-                    Matcher im = SHIP_ID.matcher(info);
-                    shipId = im.find() ? im.group(1) : null;
-                }
-            }
-            assertTrue("the ship never loaded", shipId != null);
+            // By name, from the assembler that minted it — not by a bounded read at the arena origin.
+            String shipId = ShipIdentity.awaitPhysicsIdOf(this::exec, 0,
+                    ShipIdentity.nameFromAssembly(assemble), 40, () -> bot().waitTicks(5));
 
             String mountInfo = exec("artest vs seat-mount 0 near 0 " + BASE_Y + " " + ARENA_Z + " 512");
             assertTrue("no seat: " + oneLine(mountInfo), mountInfo.contains("\"seatFound\":true"));

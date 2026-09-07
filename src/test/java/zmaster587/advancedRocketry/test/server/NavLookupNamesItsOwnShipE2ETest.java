@@ -4,10 +4,10 @@ import org.junit.After;
 import org.junit.Test;
 
 import zmaster587.advancedRocketry.test.GameTicks;
+import zmaster587.advancedRocketry.test.ShipIdentity;
 
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
-import static zmaster587.advancedRocketry.test.AdvancedRocketryTestConstants.SHIP_CAPTURE_RADIUS_BLOCKS;
 import static zmaster587.advancedRocketry.test.ArrangementFailure.requireArranged;
 
 /**
@@ -47,9 +47,6 @@ public class NavLookupNamesItsOwnShipE2ETest extends AbstractSharedServerTest {
     private static final int SHIP_A_X = 6100, SHIP_A_Y = 80, SHIP_A_Z = 6100;
     private static final int SHIP_B_X = 6164, SHIP_B_Y = 80, SHIP_B_Z = 6100;
 
-    /** How far a ship-info answer may be from a freshly assembled craft's own base, in blocks. */
-    private static final int SHIP_QUERY_RADIUS = SHIP_CAPTURE_RADIUS_BLOCKS;
-
     @Test
     public void eachShipsNavigationLookupAnswersForItsOwnShip() throws Exception {
 
@@ -78,10 +75,13 @@ public class NavLookupNamesItsOwnShipE2ETest extends AbstractSharedServerTest {
                 + "wrong one and this run cannot exhibit the defect: " + all,
                 extractInt(all, "count") >= 2);
 
-        String shipA = shipIdAt(SHIP_A_X, SHIP_A_Y, SHIP_A_Z);
-        String shipB = shipIdAt(SHIP_B_X, SHIP_B_Y, SHIP_B_Z);
-        requireArranged("craft A never named itself at its own base", shipA != null);
-        requireArranged("craft B never named itself at its own base", shipB != null);
+        // Each craft asked for by the name ITS OWN assembler minted. This test is about a lookup
+        // picking the wrong ship of two, so deriving the two ids from a lookup at two points was the
+        // defect used to arrange its own demonstration: the bound was defended by "the other craft is
+        // 64 blocks away", which is a statement about distance and not about how many hulls a box
+        // holds.
+        String shipA = ShipIdentity.physicsIdOf(this::exec, 0, ShipIdentity.nameFromAssembly(asmA));
+        String shipB = ShipIdentity.physicsIdOf(this::exec, 0, ShipIdentity.nameFromAssembly(asmB));
         requireArranged("both bases resolved to the SAME ship (" + shipA + "), so the two "
                 + "craft did not become two ships and there is nothing to confuse",
                 !shipA.equals(shipB));
@@ -119,21 +119,6 @@ public class NavLookupNamesItsOwnShipE2ETest extends AbstractSharedServerTest {
         }
         return new int[]{extractInt(reply, "afcX"), extractInt(reply, "afcY"),
                 extractInt(reply, "afcZ")};
-    }
-
-    /**
-     * The identity of the ship freshly assembled at {@code (x,y,z)}. The one positional lookup this
-     * test spends, at the only moment it is defensible: nothing has moved yet and the bound cannot
-     * admit the other craft, which is 64 blocks away.
-     */
-    private String shipIdAt(int x, int y, int z) throws Exception {
-        String info = exec("artest vs ship-info 0 " + x + " " + y + " " + z
-                + " " + SHIP_QUERY_RADIUS);
-        if (!info.contains("\"managed\":true")) {
-            return null;
-        }
-        String id = extractString(info, "id");
-        return id == null || id.isEmpty() ? null : id;
     }
 
     @After

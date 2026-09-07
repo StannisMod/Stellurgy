@@ -1,6 +1,7 @@
 package zmaster587.advancedRocketry.test.server;
 
 import zmaster587.advancedRocketry.test.GameTicks;
+import zmaster587.advancedRocketry.test.ShipIdentity;
 
 import org.junit.Test;
 
@@ -145,10 +146,22 @@ public class VSCrossingLeavesNoShipBehindE2ETest extends AbstractSharedServerTes
                 asm.contains("\"rocketCount\":0"));
         assertTrue("the ship never entered VS's registry at " + baseX + "," + BUILD_Y + "," + BASE_Z
                         + ": " + counters(), waitUntilRegistryExceeds(registryBefore));
+        durableShipId = ShipIdentity.nameFromAssembly(asm);
     }
 
+    /**
+     * This craft's DURABLE name. Not its physics id: this class crosses the same ship three times in
+     * a row and every crossing mints a new physics id, so the name is the only handle that spans the
+     * run — which is also why the cut is aimed with a freshly translated id each time.
+     */
+    private String durableShipId;
+
     private String repack(int sx, int sy, int dx, int dy) throws Exception {
-        return exec("artest vs ship-repack 0 " + sx + " " + sy + " " + BASE_Z
+        // The crossing CUTS a ship, so it is told which one. The positional form resolves the yard as
+        // "whatever craft is nearest", and this class exists to prove no ship is LEFT BEHIND — so the
+        // leftovers it hunts for are precisely what such a lookup would reach for.
+        String shipId = ShipIdentity.physicsIdOf(this::exec, 0, durableShipId);
+        return exec("artest vs ship-repack 0 id " + shipId + " " + sx + " " + sy + " " + BASE_Z
                 + " " + dx + " " + dy + " " + BASE_Z);
     }
 
@@ -168,19 +181,15 @@ public class VSCrossingLeavesNoShipBehindE2ETest extends AbstractSharedServerTes
     }
 
     /**
-     * Is there a loaded ship whose own pose is at {@code (x,y,BASE_Z)}? The probe's lookup is unbounded,
-     * so it answers with the nearest loaded ship however far away it is; the pose comparison is what turns
-     * that answer into a statement about THIS position.
+     * Is there a loaded ship whose own pose is at {@code (x,y,BASE_Z)}?
+     *
+     * <p>Answered by asking EVERY loaded ship where it is. The previous form asked the world which
+     * ship was nearest the spot and then compared that one ship's pose — an unbounded lookup with a
+     * filter on its single answer, so a hull sitting exactly here was invisible whenever the lookup
+     * preferred another. Same claim, no lookup that can pick the wrong craft to test.</p>
      */
     private boolean shipIsAt(int x, int y) throws Exception {
-        String info = exec("artest vs ship-info 0 " + x + " " + y + " " + BASE_Z);
-        if (!info.contains("\"managed\":true")) {
-            return false;
-        }
-        double dx = extractDouble(info, "posX") - x;
-        double dy = extractDouble(info, "posY") - y;
-        double dz = extractDouble(info, "posZ") - BASE_Z;
-        return Math.sqrt(dx * dx + dy * dy + dz * dz) <= POSE_TOLERANCE;
+        return ShipIdentity.aLoadedShipIsAt(this::exec, 0, x, y, BASE_Z, POSE_TOLERANCE);
     }
 
     /** Assembly is queued on the physics thread; the registry is where a new ship lands first. Bounded. */

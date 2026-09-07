@@ -10,7 +10,6 @@ import java.util.regex.Pattern;
 import static zmaster587.advancedRocketry.test.AdvancedRocketryTestConstants.HYPERSPACE_JUMP_SPEED;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
-import static zmaster587.advancedRocketry.test.AdvancedRocketryTestConstants.SHIP_CAPTURE_RADIUS_BLOCKS;
 import static zmaster587.advancedRocketry.test.ArrangementFailure.requireArranged;
 
 /**
@@ -58,8 +57,16 @@ public class VSJumpCarriesLooseBodiesE2ETest extends AbstractSharedServerTest {
         requireArranged("the origin ship never assembled/loaded (dim " + originDim + ")",
                 waitForLoadedShip(originDim) >= 1);
 
+        // The ship the setup just assembled, by the name the setup reports. Every scenario in this
+        // tier builds at the SAME anchor in the SAME pooled slot, so "the ship at (1,64,1)" is a
+        // question with several right answers and the yard lookup takes the first — measured
+        // elsewhere as seatFound:false on a craft that had just been built.
+        String shipId = extractString(setup, "shipId");
+        requireArranged("the piloted transit setup must name the ship it assembled: " + setup,
+                shipId != null && !shipId.isEmpty());
+
         // Where the ship actually is in its cell — the deck the body is dropped onto.
-        String seat = exec("artest vs find-seat " + originDim + " 1 64 1");
+        String seat = exec("artest vs find-seat " + originDim + " id " + shipId);
         requireArranged("the ship must resolve a world position: " + seat,
                 seat.contains("\"shipWorldX\""));
         double shipX = extractDouble(seat, "shipWorldX");
@@ -70,8 +77,6 @@ public class VSJumpCarriesLooseBodiesE2ETest extends AbstractSharedServerTest {
         // fixture sits in a void cell: by the time the cut runs it can be well past the ship, which
         // makes "it was not carried" indistinguishable from "it was not there". The ship's own
         // identity is handed in so the probe can answer production's question rather than a proxy.
-        String shipId = extractString(exec("artest vs ship-info " + originDim + " " + (int) shipX + " "
-                + (int) shipY + " " + (int) shipZ + " " + SHIP_CAPTURE_RADIUS_BLOCKS), "id");
         String dropped = exec("artest space loose-body " + originDim + " " + shipX + " " + shipY + " "
                 + shipZ + " " + shipId);
         requireArranged("the body must be dropped: " + dropped, dropped.contains("\"ok\":true"));
@@ -95,16 +100,18 @@ public class VSJumpCarriesLooseBodiesE2ETest extends AbstractSharedServerTest {
         assertTrue("the jump never completed; last tick=" + lastTick[0], targetDim >= 0);
 
         // The placement is retry-based like the crew's, so drive the same retries the crew leg drives.
-        // The positional read inside this loop rests on the target cell holding exactly one ship.
-        // It is checked ON EVERY ITERATION rather than once up front: the ship is still arriving, so
-        // "how many are in there" is precisely what changes while the loop runs.
+        // The cell's ship count NAMES what it counted, so the arrived hull is identified rather than
+        // approached; the count is still read on every iteration, because the ship is still arriving
+        // and "how many are in there" is precisely what changes while the loop runs.
         final String[] arrived = {""};
         boolean carried = GameTicks.until(client(), GameTicks.server(), PLACEMENT_TICKS, () -> {
             exec("artest space transit-tick 10");
-            if (extractInt(exec("artest vs ship-count " + targetDim), "count") != 1) {
+            String counted = exec("artest vs ship-count " + targetDim);
+            Matcher onlyShip = Pattern.compile("\"ships\":\\[\"([^\"]+)\"]").matcher(counted);
+            if (extractInt(counted, "count") != 1 || !onlyShip.find()) {
                 return false; // not arrived yet, or not alone — either way not a nameable answer
             }
-            arrived[0] = exec("artest vs ship-info " + targetDim + " 0 200 0");
+            arrived[0] = exec("artest vs ship-info " + targetDim + " id " + onlyShip.group(1));
             if (!arrived[0].contains("\"posX\"")) {
                 return false;
             }

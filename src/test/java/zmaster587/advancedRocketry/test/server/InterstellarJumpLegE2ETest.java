@@ -4,6 +4,8 @@ import com.github.stannismod.forge.testing.TestTimeouts;
 
 import org.junit.After;
 import zmaster587.advancedRocketry.test.GameTicks;
+import zmaster587.advancedRocketry.test.EntrySlots;
+import zmaster587.advancedRocketry.test.ShipIdentity;
 
 import org.junit.Test;
 
@@ -12,7 +14,6 @@ import java.util.regex.Pattern;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
-import static zmaster587.advancedRocketry.test.AdvancedRocketryTestConstants.SHIP_CAPTURE_RADIUS_BLOCKS;
 import static zmaster587.advancedRocketry.test.ArrangementFailure.requireArranged;
 
 /**
@@ -94,20 +95,25 @@ public class InterstellarJumpLegE2ETest extends AbstractSharedServerTest {
                 asm.contains("\"rocketCount\":0"));
         assertTrue("the source VS ship never loaded", waitForLoadedShip(0) >= 1);
 
-        String srcInfo = exec("artest vs ship-info 0 " + SRC_X + " " + SRC_Y + " " + SRC_Z
-                + " " + SHIP_CAPTURE_RADIUS_BLOCKS);
+        // The ship's own name, from the assembler that minted it, and the physics id it maps to. Every
+        // call below is addressed to one of the two: the overworld this class builds in is shared, so
+        // "the ship near the pad" is a question with more than one true answer.
+        String durableId = ShipIdentity.nameFromAssembly(asm);
+        String shipId = ShipIdentity.physicsIdOf(this::exec, 0, durableId);
+
+        String srcInfo = exec("artest vs ship-info 0 id " + shipId);
         assertTrue("source ship not managed by VS: " + srcInfo, srcInfo.contains("\"managed\":true"));
         int sx = (int) extractDouble(srcInfo, "posX");
         int sy = (int) extractDouble(srcInfo, "posY");
         int sz = (int) extractDouble(srcInfo, "posZ");
-        String held = exec("artest vs ff-input-by-id 0 " + extractString(srcInfo, "id") + " 0 1 0 0 0 0");
+        String held = exec("artest vs ff-input-by-id 0 " + shipId + " 0 1 0 0 0 0");
         assertTrue("the held input must reach this ship's flight computer: " + held,
                 held.contains("\"afcResolved\":true"));
-        assertTrue("climb teleport failed", exec("artest vs teleport-ship 0 " + sx + " " + sy + " " + sz
-                + " " + sx + " " + ABOVE_CEILING_Y + " " + sz).contains("\"ok\":true"));
-        exec("artest vs unpark 0 " + sx + " " + ABOVE_CEILING_Y + " " + sz);
+        assertTrue("climb teleport failed", exec("artest vs teleport-ship-by-id 0 " + shipId + " "
+                + sx + " " + ABOVE_CEILING_Y + " " + sz).contains("\"ok\":true"));
+        exec("artest vs unpark-by-id 0 " + shipId);
 
-        String status = waitForState("SETTLED", null, setup, SETTLE_TICKS);
+        String status = waitForState("SETTLED", null, setup, SETTLE_TICKS, durableId);
         assertTrue("precondition: the ship never entered space, so there is nothing to jump; last="
                 + status, "SETTLED".equals(extractString(status, "state")));
         int slotDim = extractInt(status, "slotDim");
@@ -118,11 +124,11 @@ public class InterstellarJumpLegE2ETest extends AbstractSharedServerTest {
         String osy = origin.group(2), osz = origin.group(3);
 
         // ---- CONTROL LEG: one sector over. Four ticks of flight; it proves the arrangement. -------
-        long hopTicks = flyTo(osx + 1, osy, osz, slotDim, originCell, setup, "hop");
+        long hopTicks = flyTo(osx + 1, osy, osz, slotDim, originCell, setup, "hop", durableId);
         requireArranged("a one-sector hop must arrive, or nothing below is about distance."
                 + " Fix the scaffolding before reading the far leg.", hopTicks >= 0);
 
-        String afterHop = exec("artest space entry-status");
+        String afterHop = exec("artest space entry-status id " + durableId);
         String hopCell = extractString(afterHop, "cellKey");
         int hopSlot = extractInt(afterHop, "slotDim");
         Matcher hopOrigin = CELL_KEY.matcher(hopCell == null ? "" : hopCell);
@@ -130,7 +136,8 @@ public class InterstellarJumpLegE2ETest extends AbstractSharedServerTest {
 
         // ---- THE SUBJECT: the same ship, the same stack, 537 sectors instead of one. ---------------
         long farTicks = flyTo(Long.parseLong(hopOrigin.group(1)) + INTERSTELLAR_SECTORS,
-                hopOrigin.group(2), hopOrigin.group(3), hopSlot, hopCell, setup, "interstellar");
+                hopOrigin.group(2), hopOrigin.group(3), hopSlot, hopCell, setup, "interstellar",
+                durableId);
 
         System.out.println("[interstellar-leg] hop=" + hopTicks + " ticks, interstellar(" + INTERSTELLAR_SECTORS
                 + " sectors)=" + farTicks + " ticks = " + (farTicks / 20.0D) + " s"
@@ -151,18 +158,20 @@ public class InterstellarJumpLegE2ETest extends AbstractSharedServerTest {
      * number the flight's own duration rather than the poll loop's.
      */
     private long flyTo(long tsx, String tsy, String tsz, int slotDim, String fromCell,
-                       String setup, String label) throws Exception {
-        String jump = exec("artest space jump " + tsx + " " + tsy + " " + tsz + " " + slotDim
-                + " " + FLIGHT_SPEED);
+                       String setup, String label, String durableId) throws Exception {
+        String jump = exec("artest space jump id " + durableId + " "
+                + tsx + " " + tsy + " " + tsz + " " + slotDim + " " + FLIGHT_SPEED);
         assertTrue("[" + label + "] the jump probe found no settled ship to move: " + jump,
                 jump.contains("\"began\":true"));
+        assertEquals("[" + label + "] the jump named a different ship than this scenario's: " + jump,
+                durableId, extractString(jump, "shipId"));
         String targetCell = extractString(jump, "toCell");
         assertTrue("[" + label + "] jump reported no target cell: " + jump, targetCell != null);
         assertTrue("[" + label + "] CONTROL: target must differ from origin, else arrival proves"
                 + " nothing: " + fromCell + " -> " + targetCell, !targetCell.equals(fromCell));
 
         long departed = clock();
-        String arrived = waitForState("SETTLED", targetCell, setup, ARRIVAL_TICKS);
+        String arrived = waitForState("SETTLED", targetCell, setup, ARRIVAL_TICKS, durableId);
         long elapsed = clock() - departed;
         if (!targetCell.equals(extractString(arrived, "cellKey"))) {
             System.out.println("[interstellar-leg] " + label + " NEVER ARRIVED after " + elapsed
@@ -180,13 +189,18 @@ public class InterstellarJumpLegE2ETest extends AbstractSharedServerTest {
         return m.find() ? Long.parseLong(m.group(1)) : -1L;
     }
 
-    /** Poll entry-status until the ledger reports {@code state} (and {@code cell}, when given). */
-    private String waitForState(String state, String cell, String setup, int budgetTicks)
-            throws Exception {
+    /**
+     * Poll THIS ship's ledger row until it reports {@code state} (and {@code cell}, when given).
+     * Keyed on the durable id: the bare {@code entry-status} answers with whichever row the ledger
+     * iterates first, so on a stack holding two craft the wait can be satisfied by a ship that never
+     * left, and the leg's measured duration would then be somebody else's.
+     */
+    private String waitForState(String state, String cell, String setup, int budgetTicks,
+                                String durableId) throws Exception {
         final String[] status = {""};
         GameTicks.until(client(), GameTicks.server(), budgetTicks,
                 () -> {
-                    status[0] = exec("artest space entry-status");
+                    status[0] = exec("artest space entry-status id " + durableId);
                     return state.equals(extractString(status[0], "state"))
                             && (cell == null || cell.equals(extractString(status[0], "cellKey")));
                 },
@@ -206,12 +220,9 @@ public class InterstellarJumpLegE2ETest extends AbstractSharedServerTest {
         return String.join("\n", client().execute(cmd));
     }
 
+    /** Keep every slot world's ships load-queued while a wait runs. See {@link EntrySlots}. */
     private void loadAllEntrySlots(String setup) throws Exception {
-        Matcher m = Pattern.compile("\"dims\":\\[(-?\\d+),(-?\\d+)]").matcher(setup);
-        if (m.find()) {
-            exec("artest vs load-ships " + m.group(1));
-            exec("artest vs load-ships " + m.group(2));
-        }
+        EntrySlots.loadAll(this::exec, setup);
     }
 
     private int waitForLoadedShip(int dim) throws Exception {

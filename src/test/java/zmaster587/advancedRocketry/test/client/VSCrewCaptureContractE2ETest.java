@@ -2180,12 +2180,14 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
     /** Build the ship and sit the bot on its pilot seat; returns the ship's world position. */
     private double[] buildAndBoardShip(int bx, int by, int bz) throws Exception {
         double[] ship = buildShip(bx, by, bz);
-        // Located INSIDE this scenario's own ship: `vs seat-mount <dim>` takes the first pilot seat
-        // in the world's loaded-tile list with no position filter, which is unambiguous only while
-        // the world holds exactly one ship. On a shared client it would mount a neighbour's.
-        String seat = exec("artest vs find-seat 0 " + bx + " " + by + " " + bz);
-        assertTrue("find-seat must locate the pilot seat INSIDE the ship built at this base ("
-                + bx + "," + by + "," + bz + "): " + seat, seat.contains("\"seatFound\":true"));
+        // Located inside the ship this scenario NAMES. `vs seat-mount <dim>` takes the first pilot
+        // seat in the world's loaded-tile list with no filter at all; the positional form of
+        // find-seat narrows that to "the yard nearest a point", which on a world holding two craft
+        // is still a stranger's yard as readily as this one's. The id is in hand from the assembly.
+        String seat = exec("artest vs find-seat 0 id " + scenarioShipId);
+        assertTrue("find-seat must locate the pilot seat inside THIS scenario's ship ("
+                + scenarioShipId + ", built at " + bx + "," + by + "," + bz + "): " + seat,
+                seat.contains("\"seatFound\":true"));
         String mountInfo = exec("artest vs seat-mount-at 0 " + readInt(seat, SEAT_X) + " "
                 + readInt(seat, SEAT_Y) + " " + readInt(seat, SEAT_Z));
         Matcher dm = DUMMY_ID.matcher(mountInfo);

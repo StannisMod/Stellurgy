@@ -9,6 +9,7 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 import zmaster587.advancedRocketry.test.Events;
+import zmaster587.advancedRocketry.test.ShipIdentity;
 
 import static zmaster587.advancedRocketry.test.AdvancedRocketryTestConstants.HYPERSPACE_JUMP_SPEED;
 import static org.junit.Assert.assertEquals;
@@ -92,6 +93,13 @@ public class VSTransitCrewGroupE2ETest extends AbstractSharedVsClientE2ETest {
         return exec("artest vs find-seat " + originDim + " id " + shipId);
     }
 
+    /**
+     * The DURABLE name of the hull parked in the hyperspace lane, taken from production's own
+     * boarding record. The physics id changes at every crossing; this does not, so it is what a
+     * corridor-side lookup translates through.
+     */
+    private String parkedHullName;
+
     /** Poll for a loaded VS ship in {@code dim} (assembly is async; a headless server forces the load). */
 private int waitForLoadedShip(int dim) throws Exception {
         for (int i = 0; i < 40; i++) {
@@ -124,8 +132,17 @@ private int waitForLoadedShip(int dim) throws Exception {
      * twice between two samples.</p>
      */
     private int driveIntoCorridor(Events events, long serverMark, long clientMark) throws Exception {
-        events.await(serverMark, "crew_boarded_parked_hull", "the crew must be seated on the hull"
-                + " parked in the lane before anyone can be in the corridor", JUMP_LINK_BUDGET_TICKS);
+        String boarded = events.await(serverMark, "crew_boarded_parked_hull", "the crew must be"
+                + " seated on the hull parked in the lane before anyone can be in the corridor",
+                JUMP_LINK_BUDGET_TICKS);
+        // The hull in the lane, BY NAME. Production names it in the record it just wrote: the
+        // crossing re-assembles the ship, so the physics id from the origin cell is dead here, and
+        // the durable name is the only thing that crossed with it.
+        Matcher boardedShip = Pattern.compile("\"ship\":\"([^\"]+)\"").matcher(boarded);
+        scenario().requireArranged("the boarding record must name the ship it seated the crew on,"
+                + " or nothing in the corridor can be addressed to this craft: " + boarded,
+                boardedShip.find());
+        parkedHullName = boardedShip.group(1);
         int corridorDim = readInt(exec("artest space transit-tick 1"), "hyperDim");
         String seen = "";
         for (int waited = 0; waited <= JUMP_LINK_BUDGET_TICKS; waited += 5) {
@@ -907,7 +924,7 @@ private String chat() throws Exception {
         // same channel and the same way of deriving the key, asked of a ship that is plainly alive
         // in an ordinary cell. Without it, silence in hyperspace cannot be told from a key nobody
         // ever writes under - and the two ask for opposite investigations.
-        String cellSeat = exec("artest vs find-seat " + originDim + " 1 64 1");
+        String cellSeat = findSeat(originDim, setupShipId(setup));
         String cellAfcKey = originDim + " " + readInt(cellSeat, "afcX")
                 + " " + readInt(cellSeat, "afcY") + " " + readInt(cellSeat, "afcZ");
         long cellTileTicks = gameSeen(exec("artest vs motion-trace " + cellAfcKey));
@@ -980,8 +997,13 @@ private String chat() throws Exception {
         // is the tile to ask, because its per-tick recorder is keyed on dimension AND subspace
         // position — so the answer is about THIS ship in THIS world and cannot be a global counter
         // answering for whatever else the server is doing.
-        String hyperSeat = exec("artest vs find-seat " + hyperDim
-                + " " + (long) deckX + " " + (long) deckY + " " + (long) deckZ);
+        // Asked of THIS hull by name. The deck coordinates the client renders are a point in a
+        // SHARED world — every scenario in this class parks its craft in the same hyperspace — so a
+        // lookup from them resolves the yard nearest that point, which is a different lane's ship
+        // whenever the lanes are closer than the caller assumed.
+        String hyperShipId = ShipIdentity.awaitPhysicsIdOf(this::exec, hyperDim, parkedHullName,
+                20, () -> bot().waitTicks(5));
+        String hyperSeat = findSeat(hyperDim, hyperShipId);
         int afcX = readInt(hyperSeat, "afcX");
         int afcY = readInt(hyperSeat, "afcY");
         int afcZ = readInt(hyperSeat, "afcZ");

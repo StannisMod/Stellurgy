@@ -705,7 +705,27 @@ public final class VSIntegration {
         if (!isAvailable()) {
             return null;
         }
-        AxisAlignedBB yard = shipyardBoundsAt(world, x, y, z);
+        return shipBlockInYard(world, shipyardBoundsAt(world, x, y, z));
+    }
+
+    /**
+     * A single subspace block position of the ship NAMED by {@code shipUuid} — the identity-keyed twin
+     * of {@link #shipBlockAt}, and the one to reach for whenever the caller knows which ship it means.
+     *
+     * <p>{@link #shipBlockAt} resolves its shipyard through {@link #shipyardBoundsAt}, which answers
+     * for whatever craft is nearest with no distance bound; the block it then returns is a real block
+     * of a real ship, and nothing in it says the ship is the caller's. A controller handed that block
+     * addresses a stranger's craft and reports success.</p>
+     */
+    public static net.minecraft.util.math.BlockPos shipBlockOf(World world, java.util.UUID shipUuid) {
+        if (!isAvailable() || shipUuid == null) {
+            return null;
+        }
+        return shipBlockInYard(world, shipyardBoundsOf(world, shipUuid));
+    }
+
+    /** The first non-air block inside {@code yard}, force-loading its subspace chunks first. */
+    private static net.minecraft.util.math.BlockPos shipBlockInYard(World world, AxisAlignedBB yard) {
         if (yard == null) {
             return null;
         }
@@ -1382,6 +1402,18 @@ public final class VSIntegration {
             return -1;
         }
         return VSBridge.loadedShipCount(world);
+    }
+
+    /**
+     * The identities of the loaded ships {@link #loadedShipCount} counts, or an empty list when VS
+     * is absent. A caller that has established "this world holds exactly one ship" needs this to say
+     * WHICH — the count alone leaves it reaching for a positional lookup to find out.
+     */
+    public static java.util.List<String> loadedShipIds(World world) {
+        if (!isAvailable()) {
+            return java.util.Collections.emptyList();
+        }
+        return VSBridge.loadedShipIds(world);
     }
 
     /** Total ships in {@code world} loaded or not (queryable registry), or -1 when VS absent. */

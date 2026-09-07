@@ -47,7 +47,10 @@ public class VSUnmannedTransitSettlesOnItsPoseE2ETest extends AbstractSharedServ
     @Test
     public void anUnmannedJumpEndsOnItsPoseNotInThePasteBand() throws Exception {
 
-        String setup = exec("artest space transit-setup");
+        // A real craft — a deck, a flight computer, a pilot seat linked to it and a durable id. UNMANNED
+        // is about who is ABOARD, not about what the hull is: a craft nobody can sit in could not be
+        // flown manned either, so it cannot carry the contrast this test is named for.
+        String setup = exec("artest space transit-setup-piloted");
         assertTrue("transit setup failed: " + setup, setup.contains("\"ok\":true"));
         int originDim = extractInt(setup, "originDim");
         int ax = extractInt(setup, "anchorX"), ay = extractInt(setup, "anchorY"), az = extractInt(setup, "anchorZ");

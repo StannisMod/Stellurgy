@@ -16,7 +16,6 @@ import zmaster587.advancedRocketry.hyperdrive.DriveTuning;
 import zmaster587.advancedRocketry.test.Events;
 
 import static org.junit.Assert.assertTrue;
-import static zmaster587.advancedRocketry.test.AdvancedRocketryTestConstants.SHIP_CAPTURE_RADIUS_BLOCKS;
 
 /**
  * A jump-capable craft assembles WHOLE, and a pilot standing on its deck can reach both of the
@@ -84,6 +83,12 @@ public class VSJumpDriveFixtureBoardingE2ETest extends AbstractSharedVsClientE2E
     private static final Pattern CLIENT_EVENT_COUNT = Pattern.compile("\"count\":(-?\\d+)");
 
     private static final String VARIANT = "with-jump-drive";
+
+    /**
+     * The craft THIS scenario assembled, from the registry's own record of the add. Every lookup in
+     * the class is addressed to it: the base coordinates locate the fixture, never the ship.
+     */
+    private String scenarioShipId;
     private static final int BX = 2900, BY = 64, BZ = 2900;
 
     /** The craft's own centre column on the pad, and the deck level the pilot walks on. */
@@ -146,8 +151,12 @@ public class VSJumpDriveFixtureBoardingE2ETest extends AbstractSharedVsClientE2E
         String assemble = assembleFixture();
         scenario().requireArranged("a " + VARIANT + " build must route to a ship: " + assemble,
                 assemble.contains("\"ok\":true"));
-        awaitShipSpawned(events, spawnMark, "the assembly must create a VS ship in the queryable"
-                + " registry before any of its consoles can be aimed at (the spawn is asynchronous)");
+        // The id is KEPT. It was being discarded, and every lookup below then went back to the base
+        // coordinates to find the craft again — a question a neighbour's ship answers in the same
+        // shape on a world this class shares.
+        scenarioShipId = awaitShipSpawned(events, spawnMark, "the assembly must create a VS ship in"
+                + " the queryable registry before any of its consoles can be aimed at (the spawn is"
+                + " asynchronous)");
 
         exec("tp @a " + (BX + 0.5) + " " + (BY + 10) + " " + (BZ + 0.5) + " 0 0");
         bot().waitTicks(20);
@@ -490,27 +499,33 @@ public class VSJumpDriveFixtureBoardingE2ETest extends AbstractSharedVsClientE2E
 
     // ---- helpers --------------------------------------------------------------------------------
 
+    /** This scenario's own craft, reported by name rather than by what stands near its base. */
     private String shipInfoAtBase() throws Exception {
-        return exec("artest vs ship-info 0 " + BX + " " + BY + " " + BZ
-                + " " + SHIP_CAPTURE_RADIUS_BLOCKS);
+        return exec("artest vs ship-info 0 id " + scenarioShipId);
     }
 
     /** The seat's subspace address, its flight computer's, and the ship's live world position. */
     private String findSeat() throws Exception {
-        return exec("artest vs find-seat 0 " + BX + " " + (BY + 5) + " " + BZ);
+        return exec("artest vs find-seat 0 id " + scenarioShipId);
     }
 
     /**
-     * A subspace point mapped into the world through the ship's own transform. {@code shipAnchor} is
-     * any world point aboard that ship — the seat's live position serves.
+     * A subspace point mapped into the world through the ship's own transform.
+     *
+     * <p>{@code shipAnchor} no longer selects the ship — the id does — but it is still required: a
+     * null anchor means the caller never resolved the craft's live pose, and mapping a subspace point
+     * for a craft whose seat lookup failed would answer with numbers about nothing.</p>
      */
     private double[] toWorld(double[] shipAnchor, int[] sub, double dx, double dy, double dz)
             throws Exception {
         if (shipAnchor == null) {
             return null;
         }
-        String mapped = exec("artest vs to-world 0 " + shipAnchor[0] + " " + shipAnchor[1] + " "
-                + shipAnchor[2] + " " + (sub[0] + dx) + " " + (sub[1] + dy) + " " + (sub[2] + dz));
+        // Mapped through THIS ship's transform. The positional form asks which hulls contain the
+        // anchor and maps through the first of them, and ships do not collide — so a point inside two
+        // craft produces a plausible world position through the wrong one.
+        String mapped = exec("artest vs to-world 0 id " + scenarioShipId
+                + " " + (sub[0] + dx) + " " + (sub[1] + dy) + " " + (sub[2] + dz));
         return readTripleD(mapped, TO_WORLD);
     }
 

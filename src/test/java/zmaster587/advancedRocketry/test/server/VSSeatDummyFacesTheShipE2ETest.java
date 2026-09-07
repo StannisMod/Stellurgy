@@ -1,6 +1,7 @@
 package zmaster587.advancedRocketry.test.server;
 
 import zmaster587.advancedRocketry.test.GameTicks;
+import zmaster587.advancedRocketry.test.ShipIdentity;
 
 import org.junit.After;
 import org.junit.Test;
@@ -11,7 +12,6 @@ import java.util.regex.Pattern;
 import zmaster587.advancedRocketry.api.FreeFlightPhysics;
 
 import static org.junit.Assert.assertTrue;
-import static zmaster587.advancedRocketry.test.AdvancedRocketryTestConstants.SHIP_CAPTURE_RADIUS_BLOCKS;
 
 /**
  * A pilot seat's mount faces where its SHIP faces.
@@ -63,7 +63,12 @@ public class VSSeatDummyFacesTheShipE2ETest extends AbstractSharedServerTest {
                 asm.contains("\"rocketCount\":0"));
         assertTrue("the source ship never assembled/loaded", waitForLoadedShip(0) >= 1);
 
-        String seat = exec("artest vs find-seat 0 " + SRC_X + " " + SRC_Y + " " + SRC_Z);
+        // The craft this scenario built, by the name its assembler minted, and the physics id that
+        // name maps to. The build site is in a world every server-tier class shares.
+        String durableId = ShipIdentity.nameFromAssembly(asm);
+        String shipId = ShipIdentity.physicsIdOf(this::exec, 0, durableId);
+
+        String seat = exec("artest vs find-seat 0 id " + shipId);
         assertTrue("the pilot seat must be found in the assembled ship (else nothing below is measured): "
                 + seat, seat.contains("\"seatFound\":true"));
         int seatX = extractInt(seat, "seatX"), seatY = extractInt(seat, "seatY"), seatZ = extractInt(seat, "seatZ");
@@ -71,17 +76,13 @@ public class VSSeatDummyFacesTheShipE2ETest extends AbstractSharedServerTest {
         String mountAt = exec("artest vs seat-mount-at 0 " + seatX + " " + seatY + " " + seatZ);
         assertTrue("the seat's mount dummy must spawn: " + mountAt, mountAt.contains("\"ok\":true"));
 
-        // Where the ship points BEFORE the turn, and where its mount thinks it points.
-        // The one positional lookup this scenario can defend — the ship is freshly assembled here and
-        // has not moved. It yields the ship's IDENTITY, and the turn command plus every yaw sample
-        // below name THAT ship: the craft is about to slew, and the harness server is shared.
-        String infoBefore = exec("artest vs ship-info 0 " + SRC_X + " " + SRC_Y + " " + SRC_Z
-                + " " + SHIP_CAPTURE_RADIUS_BLOCKS);
+        // Where the ship points BEFORE the turn, and where its mount thinks it points. Asked by the
+        // id resolved above: a lookup at the build site was defended as "the one positional lookup
+        // this scenario can defend — the ship has not moved", but not having moved is a fact about
+        // THIS craft and says nothing about how many others are standing there.
+        String infoBefore = exec("artest vs ship-info 0 id " + shipId);
         assertTrue("the ship must be managed for its attitude to be readable: " + infoBefore,
                 infoBefore.contains("\"managed\":true"));
-        String shipId = extractString(infoBefore, "id");
-        assertTrue("ship-info must name WHICH ship answered: " + infoBefore,
-                shipId != null && !shipId.isEmpty());
         double shipYawBefore = shipYawOf(infoBefore);
         double mountYawBefore = mountYaw(seatX, seatY, seatZ);
 

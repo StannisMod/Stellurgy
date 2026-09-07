@@ -2,6 +2,7 @@ package zmaster587.advancedRocketry.test.server;
 
 import com.github.stannismod.forge.testing.junit.AbstractHeadlessServerTest;
 import zmaster587.advancedRocketry.test.GameTicks;
+import zmaster587.advancedRocketry.test.ShipIdentity;
 
 import org.junit.Test;
 
@@ -98,10 +99,22 @@ public class VSCrossingOutOfAnUnloadedSourceE2ETest extends AbstractHeadlessServ
                 asm.contains("\"rocketCount\":0"));
         assertTrue("the ship never entered VS's registry: " + counters(),
                 waitUntilRegistryExceeds(registryBefore));
+        // The identity is taken HERE, while the craft is still loaded, because the whole subject of
+        // this class is what happens once it is not: the durable->physics bridge repairs its index by
+        // reading flight computers, which force-loads the ship it is asked about. Resolving the id
+        // later would therefore undo the arrangement it was needed for. The physics id survives the
+        // unload — the registry keeps the entry, which is the fact under test.
+        shipId = ShipIdentity.physicsIdOf(this::exec, 0, ShipIdentity.nameFromAssembly(asm));
     }
 
+    /** The craft this test built — captured while loaded, used to cut it once it is not. */
+    private String shipId;
+
     private String repack(int sx, int sy, int dx, int dy) throws Exception {
-        return exec("artest vs ship-repack 0 " + sx + " " + sy + " " + BASE_Z
+        // The crossing CUTS a ship, so it is told WHICH: the positional form resolves the yard as
+        // "whatever craft is nearest", and this test deliberately leaves an unloaded registry entry
+        // behind — exactly the candidate such a lookup should never be allowed to reach for.
+        return exec("artest vs ship-repack 0 id " + shipId + " " + sx + " " + sy + " " + BASE_Z
                 + " " + dx + " " + dy + " " + BASE_Z);
     }
 
@@ -119,16 +132,17 @@ public class VSCrossingOutOfAnUnloadedSourceE2ETest extends AbstractHeadlessServ
         return "[loaded=" + loadedShips() + " registry=" + queryableShips() + "]";
     }
 
-    /** The probe's ship lookup is unbounded, so the pose comparison is what makes this about THIS spot. */
+    /**
+     * Is any loaded ship's own pose at {@code (x,y,BASE_Z)}? Every loaded ship and its pose in ONE
+     * probe call — the nearest-ship lookup this replaced answered with a single craft however far
+     * away it was, so the pose filter that followed only ever tested the one the lookup chose.
+     *
+     * <p>One call is not an optimisation here: nothing holds ships loaded in this class, so the
+     * caller's pump leaves a hull resident for about a tick, and a second round-trip inside that gap
+     * reads a world where it has already gone (measured).</p>
+     */
     private boolean shipIsAt(int x, int y) throws Exception {
-        String info = exec("artest vs ship-info 0 " + x + " " + y + " " + BASE_Z);
-        if (!info.contains("\"managed\":true")) {
-            return false;
-        }
-        double dx = extractDouble(info, "posX") - x;
-        double dy = extractDouble(info, "posY") - y;
-        double dz = extractDouble(info, "posZ") - BASE_Z;
-        return Math.sqrt(dx * dx + dy * dy + dz * dz) <= POSE_TOLERANCE;
+        return ShipIdentity.aLoadedShipIsAt(this::exec, 0, x, y, BASE_Z, POSE_TOLERANCE);
     }
 
     private boolean waitUntilRegistryExceeds(int floor) throws Exception {

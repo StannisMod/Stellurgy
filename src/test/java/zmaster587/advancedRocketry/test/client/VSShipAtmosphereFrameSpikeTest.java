@@ -7,6 +7,8 @@ import org.junit.runners.MethodSorters;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import zmaster587.advancedRocketry.test.ShipIdentity;
+
 import static org.junit.Assert.assertTrue;
 
 /**
@@ -123,7 +125,12 @@ public class VSShipAtmosphereFrameSpikeTest extends AbstractSharedVsClientE2ETes
         scenario().requireArranged("the ship must LOAD with the client present (loaded=" + loaded
                 + ", all=" + all + ")", loaded >= 1);
 
-        String found = exec("artest vs find-seat 0 " + BX + " " + (BY + 5) + " " + BZ);
+        // The craft this spike built, by the name the assembler minted — so every lookup below is
+        // about it and not about whichever hull is nearest the pad on a world the tier shares.
+        scenarioShipId = ShipIdentity.awaitPhysicsIdOf(this::exec, 0,
+                ShipIdentity.nameFromAssembly(assemble), 40, () -> bot().waitTicks(5));
+
+        String found = exec("artest vs find-seat 0 id " + scenarioShipId);
         Matcher sm = SEAT_SUB.matcher(found);
         scenario().requireArranged("find-seat must resolve the ship's subspace seat: " + found,
                 sm.find());
@@ -256,25 +263,31 @@ public class VSShipAtmosphereFrameSpikeTest extends AbstractSharedVsClientE2ETes
      */
     private int[] anchor = {BX, BY + 5, BZ};
 
+    /** The craft this spike assembled — the subject of every lookup, and never re-derived from a pose. */
+    private String scenarioShipId;
+
     private int[] refreshAnchor() throws Exception {
-        int[][] candidates = {anchor, {BX, BY + 5, BZ}, {BX, BY + 3, BZ}, {BX, BY + 8, BZ}};
-        for (int[] c : candidates) {
-            String found = exec("artest vs find-seat 0 " + c[0] + " " + c[1] + " " + c[2]);
-            Matcher m = SHIP_WORLD.matcher(found);
-            if (m.find()) {
-                anchor = new int[]{(int) Math.floor(Double.parseDouble(m.group(1))),
-                        (int) Math.floor(Double.parseDouble(m.group(2))),
-                        (int) Math.floor(Double.parseDouble(m.group(3)))};
-                return anchor;
-            }
+        // ONE lookup, by name. This used to try four build-site coordinates in turn and take the
+        // first that answered — a search whose success condition was "some ship's yard was reachable
+        // from one of these points", which a neighbour's craft satisfies as readily as this one's.
+        String found = exec("artest vs find-seat 0 id " + scenarioShipId);
+        Matcher m = SHIP_WORLD.matcher(found);
+        if (m.find()) {
+            anchor = new int[]{(int) Math.floor(Double.parseDouble(m.group(1))),
+                    (int) Math.floor(Double.parseDouble(m.group(2))),
+                    (int) Math.floor(Double.parseDouble(m.group(3)))};
+            return anchor;
         }
-        throw new AssertionError("ARRANGEMENT: no world anchor inside the ship could be resolved "
-                + "from the build site — the ship is gone or was never loaded");
+        throw new AssertionError("ARRANGEMENT: the ship " + scenarioShipId + " reports no world "
+                + "position for its seat — it is gone or was never loaded: " + found);
     }
 
     private double[] toWorld(int sx, int sy, int sz) throws Exception {
+        // The anchor is still refreshed — it proves the craft is live and locatable — but the mapping
+        // goes through the ship this spike NAMES. The positional form maps through the first hull
+        // containing the anchor, and a point can be inside more than one.
         int[] a = refreshAnchor();
-        String resp = exec("artest vs to-world 0 " + a[0] + " " + a[1] + " " + a[2]
+        String resp = exec("artest vs to-world 0 id " + scenarioShipId
                 + " " + sx + " " + sy + " " + sz);
         Matcher m = WORLD_XYZ.matcher(resp);
         scenario().requireArranged("subspace->world mapping failed (anchor=" + a[0] + "," + a[1] + ","

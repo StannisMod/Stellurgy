@@ -133,44 +133,12 @@ public abstract class AbstractSharedVsClientE2ETest extends AbstractSharedClient
         return awaitShipUsable(events, mark, shipId, 200);
     }
 
-    /**
-     * Wait for this scenario's ship to LOAD at its own base and return its IDENTITY — the value
-     * every later question about that ship is keyed on.
-     *
-     * <p><b>Prefer {@link #awaitShipSpawned} for the identity and {@link #awaitShipUsable} for the
-     * load.</b> This method bundles the two, and the identity half of it is a re-derivation: a
-     * scenario that assembled its own fixture was already told which ship that was. The bundling is
-     * also what makes it fragile — it finds whatever is loaded within {@code SHIP_QUERY_RADIUS} of a
-     * point, so a subject that has climbed out of that radius, or a neighbour's craft that has drifted
-     * into it, answers instead. Kept for a caller that genuinely has no creation record to key on.</p>
-     *
-     * <p>Fails as an ARRANGEMENT failure rather than a contract one: a scenario whose fixture never
-     * became a loaded ship has not disproved anything about ships.</p>
-     *
-     * @param samples how many 5-tick polls to spend waiting for the load.
-     */
-    protected final String captureShipIdAt(int bx, int by, int bz, int samples) throws Exception {
-        String info = "";
-        String id = null;
-        for (int attempt = 0; attempt < samples && id == null; attempt++) {
-            bot().waitTicks(5);
-            info = exec("artest vs ship-info 0 " + bx + " " + by + " " + bz
-                    + " " + SHIP_QUERY_RADIUS);
-            if (info.contains("\"managed\":true")) {
-                id = readShipId(info);
-            }
-        }
-        scenario().record("shipIdAt_" + bx + "_" + bz, id == null ? info : id);
-        scenario().requireArranged("this scenario's ship must LOAD at its own base ("
-                + bx + "," + by + "," + bz + ") within " + SHIP_QUERY_RADIUS + " blocks before"
-                + " anything can be asked about it — last reply " + info, id != null);
-        return id;
-    }
-
-    /** {@link #captureShipIdAt(int, int, int, int)} with this tier's usual load budget. */
-    protected final String captureShipIdAt(int bx, int by, int bz) throws Exception {
-        return captureShipIdAt(bx, by, bz, 40);
-    }
+    // `captureShipIdAt(bx, by, bz[, samples])` lived here: it polled a bounded `ship-info` at a
+    // scenario's base and took whatever answered as that scenario's identity. It had NO callers by
+    // the time the suite was swept, and it is not coming back — a base is a place, and a place does
+    // not name a ship. The identity comes from the creation record (`awaitShipSpawned`) or from the
+    // assembler's own reply (`ShipIdentity.nameFromAssembly`); the LOAD is a separate fact and
+    // `awaitShipUsable` is what waits for it.
 
     /**
      * The ship report for {@code shipId}, wherever that ship now is. A {@code managed:false} here

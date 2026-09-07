@@ -9,6 +9,8 @@ import org.lwjgl.input.Keyboard;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import zmaster587.advancedRocketry.test.ShipIdentity;
+
 import static org.junit.Assert.assertTrue;
 
 /**
@@ -126,22 +128,19 @@ public class VSShipExtremeCoordinatesE2ETest extends AbstractSharedVsClientE2ETe
         bot().waitTicks(40);
         exec("tp @a " + (BX + 0.5) + " " + (BY + 6) + " " + (BZ + 0.5) + " 0 0");
         bot().waitTicks(20);
+        // The identity comes from the assembler that minted this craft's name, not from a bounded
+        // read at the base: a bound limits DISTANCE, and two hulls can stand at one point.
+        shipId = ShipIdentity.awaitPhysicsIdOf(this::exec, 0,
+                ShipIdentity.nameFromAssembly(assemble), 40, () -> bot().waitTicks(5));
         double y0 = Double.NaN;
         for (int i = 0; i < 40 && Double.isNaN(y0); i++) {
             bot().waitTicks(5);
-            if (count("ship-count") >= 1) {
-                // The one defensible positional query in this test: the ship is freshly assembled,
-                // has not moved, and the bound cannot admit anything else. Its ANSWER is the id.
-                String info = exec("artest vs ship-info 0 " + BX + " " + BY + " " + BZ
-                        + " " + SHIP_QUERY_RADIUS);
-                if (info.contains("\"managed\":true")) {
-                    shipId = readShipId(info);
-                    y0 = readDouble(info, POS_Y);
-                }
+            String info = exec("artest vs ship-info 0 id " + shipId);
+            if (info.contains("\"managed\":true")) {
+                y0 = readDouble(info, POS_Y);
             }
         }
         assertTrue("the ship must LOAD with the client present", !Double.isNaN(y0));
-        assertTrue("the loaded ship must report an identity to key the scenario on", shipId != null);
 
         String mountInfo = exec("artest vs seat-mount 0 id " + shipId);
         assertTrue("seat-mount must find the pilot seat: " + mountInfo,

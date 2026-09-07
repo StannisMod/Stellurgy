@@ -1,6 +1,7 @@
 package zmaster587.advancedRocketry.test.server;
 
 import zmaster587.advancedRocketry.test.GameTicks;
+import zmaster587.advancedRocketry.test.ShipIdentity;
 
 import org.junit.Test;
 
@@ -51,8 +52,8 @@ public class VSShipTransitPersistE2ETest extends AbstractSharedServerTest {
         // Headless: pin ships loaded so a freshly assembled ship does not auto-unload between probe calls.
         exec("artest vs permaload true");
 
-        // Build a VS ship in a fresh origin cell (a pool slot world) + the whole transit stack.
-        String setup = exec("artest space transit-setup");
+        // Build a real craft in a fresh origin cell (a pool slot world) + the whole transit stack.
+        String setup = exec("artest space transit-setup-piloted");
         assertTrue("transit setup failed: " + setup, setup.contains("\"ok\":true"));
         int originDim = extractInt(setup, "originDim");
         int ax = extractInt(setup, "anchorX"), ay = extractInt(setup, "anchorY"), az = extractInt(setup, "anchorZ");
@@ -109,12 +110,11 @@ public class VSShipTransitPersistE2ETest extends AbstractSharedServerTest {
         // ONLY through the persisted snapshot — the live ship was discarded.
         assertTrue("the snapshot-restored ship never (re)loaded in the target cell (dim " + targetDim
                 + "); countAll=" + exec("artest vs ship-count-all " + targetDim), waitForLoadedShip(targetDim) >= 1);
-        // The assumption this positional read rests on, CHECKED rather than stated: a slot cell
-        // holds exactly one ship, so "nearest to any point" IS that ship. A second craft here would
-        // make the reply below indistinguishable from a correct one.
-        assertEquals("a slot cell must hold exactly ONE loaded ship for a positional read to name it",
-                1, extractInt(exec("artest vs ship-count " + targetDim), "count"));
-        String dstInfo = exec("artest vs ship-info " + targetDim + " -64 200 0");
+        // Named rather than approached: the cell's ship count now carries the ids it counted, so
+        // "exactly one ship is here" and "and this is it" are one reading. The nearest-ship lookup
+        // this replaced would answer in the same shape if the cell held two.
+        String arrivedId = ShipIdentity.theOnlyLoadedShipIn(this::exec, targetDim);
+        String dstInfo = exec("artest vs ship-info " + targetDim + " id " + arrivedId);
         assertTrue("the restored ship is not VS-managed in the target cell (snapshot paste/assembly failed): "
                 + dstInfo, dstInfo.contains("\"managed\":true"));
     }

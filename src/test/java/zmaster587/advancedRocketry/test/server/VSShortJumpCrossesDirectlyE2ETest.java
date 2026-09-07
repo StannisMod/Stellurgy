@@ -1,6 +1,7 @@
 package zmaster587.advancedRocketry.test.server;
 
 import zmaster587.advancedRocketry.test.GameTicks;
+import zmaster587.advancedRocketry.test.ShipIdentity;
 
 import org.junit.Test;
 
@@ -93,12 +94,12 @@ public class VSShortJumpCrossesDirectlyE2ETest extends AbstractSharedServerTest 
         assertTrue("the ship never reached the target cell; last tick=" + lastTick[0], targetDim >= 0);
         assertTrue("the ship never (re)loaded in the target cell (dim " + targetDim + "); countAll="
                 + exec("artest vs ship-count-all " + targetDim), waitForLoadedShip(targetDim) >= 1);
-        // The assumption this positional read rests on, CHECKED rather than stated: a slot cell
-        // holds exactly one ship, so "nearest to any point" IS that ship. A second craft here would
-        // make the reply below indistinguishable from a correct one.
-        assertEquals("a slot cell must hold exactly ONE loaded ship for a positional read to name it",
-                1, extractInt(exec("artest vs ship-count " + targetDim), "count"));
-        String dstInfo = exec("artest vs ship-info " + targetDim + " 0 200 0");
+        // The cell's ship count NAMES what it counted, so the arrived craft is identified rather
+        // than approached: the premise "exactly one ship is here" and the answer "and this is it"
+        // are one reading, instead of a count followed by a nearest-ship lookup that would answer
+        // just as confidently if the cell held two.
+        String arrivedId = ShipIdentity.theOnlyLoadedShipIn(this::exec, targetDim);
+        String dstInfo = exec("artest vs ship-info " + targetDim + " id " + arrivedId);
         assertTrue("the arrived ship is not VS-managed in the target cell: " + dstInfo,
                 dstInfo.contains("\"managed\":true"));
         return lastTick[0];

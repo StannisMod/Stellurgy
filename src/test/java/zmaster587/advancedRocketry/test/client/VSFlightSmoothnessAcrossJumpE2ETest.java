@@ -13,10 +13,10 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 import zmaster587.advancedRocketry.test.Events;
+import zmaster587.advancedRocketry.test.ShipIdentity;
 
 import static zmaster587.advancedRocketry.test.AdvancedRocketryTestConstants.HYPERSPACE_JUMP_SPEED;
 import static org.junit.Assert.assertTrue;
-import static zmaster587.advancedRocketry.test.AdvancedRocketryTestConstants.SHIP_CAPTURE_RADIUS_BLOCKS;
 
 /**
  * Does a ship fly as SMOOTHLY after a jump as it did before one?
@@ -170,16 +170,19 @@ public class VSFlightSmoothnessAcrossJumpE2ETest extends AbstractSharedVsClientE
                 fixture.contains("\"ok\":true"));
         Matcher bp = Pattern.compile("\"builderPos\":\\[(-?\\d+),(-?\\d+),(-?\\d+)]").matcher(fixture);
         scenario().requireArranged("fixture missing builderPos: " + fixture, bp.find());
-        scenario().requireArranged("a with-pilot-seat build must route to a ship: ",
-                exec("artest rocket assemble " + originDim + " " + bp.group(1) + " " + bp.group(2)
-                        + " " + bp.group(3)).contains("\"rocketCount\":0"));
+        String assembled = exec("artest rocket assemble " + originDim + " " + bp.group(1) + " "
+                + bp.group(2) + " " + bp.group(3));
+        scenario().requireArranged("a with-pilot-seat build must route to a ship: " + assembled,
+                assembled.contains("\"rocketCount\":0"));
         scenario().requireArranged("the origin ship never assembled/loaded in dim " + originDim,
                 waitForLoadedShip(originDim) >= 1);
 
-        // The ship's IDENTITY, at the one moment a positional lookup is defensible: freshly
-        // assembled at its own base, before the pilot lifts it. The seat lookup goes through it too
-        // — the positional form of find-seat resolves the yard as "whichever craft is nearest".
-        String shipId = captureShipIdAtBase(originDim, bx + 3, by + 3, bz + 3);
+        // The ship's IDENTITY, from the assembler that minted its durable name. This used to be a
+        // bounded lookup at the build site, defended as "the one moment a positional lookup is
+        // defensible" — but a bound is a statement about DISTANCE and ships do not collide, so it
+        // says nothing about how many hulls are in the box. The name is not a distance.
+        String durableShipId = ShipIdentity.nameFromAssembly(assembled);
+        String shipId = awaitPhysicsId(originDim, durableShipId);
         // Name the craft to the transit stack, by its durable id: a jump begun for a ship the stack
         // cannot name captures nobody (measured 2026-09-05 — the pilot arrived in nothing).
         String named = exec("artest space transit-name " + originDim + " " + shipId);
@@ -244,10 +247,14 @@ public class VSFlightSmoothnessAcrossJumpE2ETest extends AbstractSharedVsClientE
         // The crossing re-pastes the ship, so its flight computer is at a NEW subspace block: read
         // the arrived one rather than reusing the departure's, which would key the recorder to a
         // ring nothing writes and report a silent, perfectly smooth nothing.
+        // BY NAME on the far side too. The crossing re-assembles the hull, so the physics id changes
+        // — but the durable name crosses with it, and `(0,200,0)` in the target cell was never an
+        // address of this craft at all: it named whatever the yard lookup reached from there.
+        String arrivedShipId = awaitPhysicsId(targetDim, durableShipId);
         String arrivedSeat = "";
         int[] afcArrived = null;
         for (int i = 0; i < 20 && afcArrived == null; i++) {
-            arrivedSeat = exec("artest vs find-seat " + targetDim + " 0 200 0");
+            arrivedSeat = exec("artest vs find-seat " + targetDim + " id " + arrivedShipId);
             if (readBool(arrivedSeat, "seatFound") && arrivedSeat.contains("\"afcX\"")) {
                 afcArrived = new int[]{readInt(arrivedSeat, "afcX"), readInt(arrivedSeat, "afcY"),
                         readInt(arrivedSeat, "afcZ")};
@@ -418,24 +425,13 @@ public class VSFlightSmoothnessAcrossJumpE2ETest extends AbstractSharedVsClientE
      * build site, so there is nothing to measure the jump against.</p>
      */
     /**
-     * The identity of the ship freshly assembled near {@code (x,y,z)} — the single positional lookup
-     * this scenario is entitled to, spent before anything moves it.
+     * The PHYSICS id of the craft named {@code durableShipId}, once the physics mod has finished
+     * assembling it. Retried because that assembly is asynchronous — not because the answer is
+     * uncertain: the ship is named, so the only question is whether it exists yet.
      */
-    private String captureShipIdAtBase(int dim, int x, int y, int z) throws Exception {
-        String info = "";
-        for (int attempt = 0; attempt < 40; attempt++) {
-            info = exec("artest vs ship-info " + dim + " " + x + " " + y + " " + z
-                    + " " + SHIP_CAPTURE_RADIUS_BLOCKS);
-            if (info.contains("\"managed\":true")) {
-                Matcher m = Pattern.compile("\"id\":\"([^\"]+)\"").matcher(info);
-                if (m.find()) {
-                    return m.group(1);
-                }
-            }
-            bot().waitTicks(5);
-        }
-        throw new AssertionError("ARRANGEMENT: the assembled ship never named itself at its own base"
-                + " (" + x + "," + y + "," + z + ") in dim " + dim + "; last reply: " + info);
+    private String awaitPhysicsId(int dim, String durableShipId) throws Exception {
+        return ShipIdentity.awaitPhysicsIdOf(this::exec, dim, durableShipId, 40,
+                () -> bot().waitTicks(5));
     }
 
     private void liftClear(int dim, int[] afc) throws Exception {

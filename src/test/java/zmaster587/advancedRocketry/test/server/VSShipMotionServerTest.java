@@ -1,6 +1,7 @@
 package zmaster587.advancedRocketry.test.server;
 
 import zmaster587.advancedRocketry.test.GameTicks;
+import zmaster587.advancedRocketry.test.ShipIdentity;
 
 import org.junit.After;
 import org.junit.Test;
@@ -9,7 +10,6 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 import static org.junit.Assert.assertTrue;
-import static zmaster587.advancedRocketry.test.AdvancedRocketryTestConstants.SHIP_CAPTURE_RADIUS_BLOCKS;
 
 /**
  * Substrate checkpoint — proves Valkyrien Skies physics is LIVE at the SERVER tier: a bare
@@ -98,12 +98,13 @@ public class VSShipMotionServerTest extends AbstractSharedServerTest {
         String load = exec("artest vs load-ships 0");
         assertTrue("load-ships must request the ship: " + load, load.contains("\"requested\":1"));
 
-        // 3) Wait for it to become loaded, then take its IDENTITY and snapshot its position. The
-        //    positional lookup is used exactly once, here, while this ship is provably the only one
-        //    at the build spot; everything below asks by id, which cannot start answering for a
-        //    neighbour once this one has been pushed ten blocks away.
+        // 3) The ship's NAME, from the assembler that minted it, and then its position asked BY that
+        //    name. The identity used to be re-derived here from a bounded lookup at the build spot,
+        //    defended as "provably the only one there" — a premise about this fixture rather than
+        //    about the lookup, and the build site is in a world every server-tier class shares.
+        final String[] shipId = {ShipIdentity.physicsIdOf(this::exec, 0,
+                ShipIdentity.nameFromAssembly(assemble))};
         double zBefore = Double.NaN;
-        final String[] shipId = {null};
         final StringBuilder loadTrace = new StringBuilder();
         final double[] z = {Double.NaN};
         GameTicks.until(client(), GameTicks.server(), LOAD_TICKS, () -> {
@@ -112,13 +113,11 @@ public class VSShipMotionServerTest extends AbstractSharedServerTest {
             if (loaded < 1) {
                 return false;
             }
-            String info = exec("artest vs ship-info 0 " + BX + " " + BY + " " + BZ
-                    + " " + SHIP_CAPTURE_RADIUS_BLOCKS);
+            String info = exec("artest vs ship-info 0 id " + shipId[0]);
             if (!info.contains("\"managed\":true")) {
                 return false;
             }
             z[0] = shipPosZ(info);
-            shipId[0] = shipIdOf(info);
             return !Double.isNaN(z[0]);
         });
         zBefore = z[0];
@@ -171,13 +170,6 @@ public class VSShipMotionServerTest extends AbstractSharedServerTest {
         Matcher m = POS_Z.matcher(shipInfoJson);
         assertTrue("ship-info must carry posZ: " + shipInfoJson, m.find());
         return Double.parseDouble(m.group(1));
-    }
-
-    /** The ship's own identity out of a {@code ship-info} reply — captured once, used thereafter. */
-    private String shipIdOf(String shipInfoJson) {
-        Matcher m = Pattern.compile("\"id\":\"([^\"]+)\"").matcher(shipInfoJson);
-        assertTrue("ship-info must name WHICH ship answered: " + shipInfoJson, m.find());
-        return m.group(1);
     }
 
     /** Place the fixture on a pad and run scan+assemble; returns the raw assemble JSON. */

@@ -133,10 +133,14 @@ public class VSGroundFlightGroupE2ETest extends AbstractSharedVsClientE2ETest {
 
         // Move A far from its build site — the situation a bounded query cannot survive and an
         // unbounded one answers wrongly. It is put NEXT TO B so "nearest to A's base" is B.
-        String moved = exec("artest vs teleport-ship 0 " + ax + " " + ay + " " + az
+        // Both calls address A BY NAME. The positional forms were the very defect this scenario
+        // exists to expose, used to arrange it: the move resolved "nearest to A's base" and the
+        // unpark "nearest to A's new pose" — which is 8 blocks from B, so the unpark had two
+        // candidates and no way to say which it took.
+        String moved = exec("artest vs teleport-ship-by-id 0 " + idA
                 + " " + (bx + 8) + " " + (by + 40) + " " + (bz + 8));
         scenario().record("teleportA", moved);
-        exec("artest vs unpark 0 " + (bx + 8) + " " + (by + 40) + " " + (bz + 8));
+        exec("artest vs unpark-by-id 0 " + idA);
         bot().waitTicks(20);
 
         // LEG 1 — the id still names A, and the position it reports is A's NEW one.
@@ -464,9 +468,10 @@ public class VSGroundFlightGroupE2ETest extends AbstractSharedVsClientE2ETest {
         double yBefore = readDouble(atRest, POS_Y);
         scenario().record("shipAtRest", atRest);
 
-        // Sit the bot on THIS ship's pilot seat: resolve the seat inside the ship at this
-        // scenario's own anchor, then mount that subspace block.
-        String found = exec("artest vs find-seat 0 " + BX + " " + (BY + 5) + " " + BZ);
+        // Sit the bot on THIS ship's pilot seat: resolve the seat inside the ship this scenario
+        // NAMES — the anchored form resolved the yard nearest a point, which is a different ship
+        // whenever a neighbour's is nearer — then mount that subspace block.
+        String found = exec("artest vs find-seat 0 id " + shipId);
         Matcher sm = Pattern.compile("\"seatX\":(-?\\d+),\"seatY\":(-?\\d+),\"seatZ\":(-?\\d+)")
                 .matcher(found);
         assertTrue("find-seat must resolve THIS ship's subspace seat: " + found, sm.find());

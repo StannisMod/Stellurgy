@@ -2,6 +2,7 @@ package zmaster587.advancedRocketry.test.server;
 
 import com.github.stannismod.forge.testing.junit.AbstractHeadlessServerTest;
 import zmaster587.advancedRocketry.test.GameTicks;
+import zmaster587.advancedRocketry.test.ShipIdentity;
 
 import org.junit.Test;
 
@@ -115,16 +116,13 @@ public class VSDoubleQueuedShipLoadDoesNotKillTheServerE2ETest extends AbstractH
         return "[loaded=" + loadedShips() + " registry=" + queryableShips() + "]";
     }
 
-    /** The probe's ship lookup is unbounded, so the pose comparison is what makes this about THIS spot. */
+    /**
+     * Is any loaded ship's own pose at {@code (x,y,BASE_Z)}? Asked of EVERY loaded ship in turn: the
+     * nearest-ship lookup this replaced answered with one craft however far away it was, so the pose
+     * filter that followed only ever tested the one the lookup happened to choose.
+     */
     private boolean shipIsAt(int x, int y) throws Exception {
-        String info = exec("artest vs ship-info 0 " + x + " " + y + " " + BASE_Z);
-        if (!info.contains("\"managed\":true")) {
-            return false;
-        }
-        double dx = extractDouble(info, "posX") - x;
-        double dy = extractDouble(info, "posY") - y;
-        double dz = extractDouble(info, "posZ") - BASE_Z;
-        return Math.sqrt(dx * dx + dy * dy + dz * dz) <= POSE_TOLERANCE;
+        return ShipIdentity.aLoadedShipIsAt(this::exec, 0, x, y, BASE_Z, POSE_TOLERANCE);
     }
 
     private boolean waitUntilRegistryExceeds(int floor) throws Exception {

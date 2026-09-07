@@ -693,9 +693,13 @@ public class VSCrewInteriorBoardingE2ETest extends AbstractSharedVsClientE2ETest
         // The seat is located INSIDE this scenario's own ship: `vs seat-mount <dim>` takes the first
         // pilot seat in the world's loaded-tile list with no position filter, which is unambiguous
         // only while the world holds one ship, and mounts a neighbour's once scenarios share one.
-        String seat = exec("artest vs find-seat 0 " + bx + " " + by + " " + bz);
-        assertTrue("find-seat must locate the pilot seat INSIDE the ship built at this base ("
-                + bx + "," + by + "," + bz + "): " + seat, seat.contains("\"seatFound\":true"));
+        // By identity. The positional form resolves the yard through the ship NEAREST the base — no
+        // containment test and no distance bound — so on this shared world it can seat the bot on a
+        // neighbour's craft and say seatFound:true doing it.
+        String seat = exec("artest vs find-seat 0 id " + scenarioShipId);
+        assertTrue("find-seat must locate the pilot seat inside THIS scenario's ship ("
+                + scenarioShipId + ", built at " + bx + "," + by + "," + bz + "): " + seat,
+                seat.contains("\"seatFound\":true"));
         String mountInfo = exec("artest vs seat-mount-at 0 " + readIntFrom(seat, SEAT_X) + " "
                 + readIntFrom(seat, SEAT_Y) + " " + readIntFrom(seat, SEAT_Z));
         Matcher dm = DUMMY_ID.matcher(mountInfo);
@@ -725,7 +729,9 @@ public class VSCrewInteriorBoardingE2ETest extends AbstractSharedVsClientE2ETest
         // either way, ledger #60) because the ship never entered the registry at all, and a count
         // that never moves says only "not yet" however long it is given.
         try {
-            awaitShipSpawned(events, spawnMark,
+            // The identity comes from HERE — the registry's record of this assembly's own add — and
+            // not from a lookup at the base afterwards.
+            scenarioShipId = awaitShipSpawned(events, spawnMark,
                     "the tier-2 assembly must become a VS ship in the queryable registry");
         } catch (AssertionError neverSpawned) {
             throw new AssertionError(neverSpawned.getMessage()
@@ -739,30 +745,22 @@ public class VSCrewInteriorBoardingE2ETest extends AbstractSharedVsClientE2ETest
 
         // An ARRANGEMENT gate, and it stays a probe read: `ship_spawned` says the REGISTRY knows the
         // ship, which is a different fact from "a physics object is loaded here with the client
-        // present" - the state everything below needs. It is also where the scenario takes its
-        // IDENTITY, and the record's `vsShip` is the same uuid this reply's `id` carries
-        // (VSBridge.nearestShipId returns getShipData().getUuid()), so the two agree.
+        // present" - the state everything below needs. What is polled is that LOAD, of the craft
+        // already named above; the previous form re-derived the identity here from a bounded lookup
+        // at the base and accepted whatever answered within 24 blocks of it.
         String info = "";
         double[] where = null;
         for (int i = 0; i < 40 && where == null; i++) {
             bot().waitTicks(5);
-            // The scenario's ONE positional lookup, at the only moment it is defensible: the ship
-            // was just assembled here and has not moved. It yields an IDENTITY, and everything
-            // afterwards is keyed on that.
-            info = exec("artest vs ship-info 0 " + bx + " " + by + " " + bz
-                    + " " + SHIP_QUERY_RADIUS);
+            info = exec("artest vs ship-info 0 id " + scenarioShipId);
             if (!info.contains("\"managed\":true")) {
                 continue;
             }
-            double[] candidate = {readDouble(info, POS_X), readDouble(info, POS_Y), readDouble(info, POS_Z)};
-            String foundId = readShipId(info);
-            if (distance(candidate, new double[]{bx, by, bz}) < 24.0 && foundId != null) {
-                where = candidate;
-                scenarioShipId = foundId;
-            }
+            where = new double[]{readDouble(info, POS_X), readDouble(info, POS_Y),
+                    readDouble(info, POS_Z)};
         }
-        assertTrue("the ship built at this base must LOAD with the client present; nearest was: " + info,
-                where != null);
+        assertTrue("this scenario's ship (" + scenarioShipId + ") must LOAD with the client present;"
+                + " last reply was: " + info, where != null);
 
         // Fixture completeness by measurement: how many blocks did the assembled ship actually
         // get (region census + the ship's own blockPositions count + iron in the grown

@@ -1,6 +1,7 @@
 package zmaster587.advancedRocketry.test.server;
 
 import zmaster587.advancedRocketry.test.GameTicks;
+import zmaster587.advancedRocketry.test.ShipIdentity;
 
 import org.junit.After;
 import org.junit.Test;
@@ -9,7 +10,6 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 import static org.junit.Assert.assertTrue;
-import static zmaster587.advancedRocketry.test.AdvancedRocketryTestConstants.SHIP_CAPTURE_RADIUS_BLOCKS;
 
 /**
  * E2E: a body that is CARRIED AWAY from a craft is not thrown by the hull it left behind.
@@ -99,19 +99,19 @@ public class VSRelocatedBodyIsNotFlungByItsLastShipE2ETest extends AbstractShare
                 asm.contains("\"rocketCount\":0"));
         assertTrue("the ship never loaded", waitForLoadedShip(0) >= 1);
 
-        // The ship is loaded before its world transform has propagated, so "is a ship here yet?" is a
-        // POLL, not a question with an answer the moment the count goes up.
+        // WHICH ship, from the assembler that named it. What remains a POLL is the world transform
+        // propagating — the ship is loaded before that happens — and that is a fact about time, not
+        // about which craft is being waited for.
+        String shipId = ShipIdentity.physicsIdOf(this::exec, 0, ShipIdentity.nameFromAssembly(asm));
         final String[] look = {""};
         boolean managed = GameTicks.until(client(), GameTicks.server(), LOAD_TICKS, () -> {
-            look[0] = exec("artest vs ship-info 0 " + SRC_X + " " + SRC_Y + " " + SRC_Z
-                    + " " + SHIP_CAPTURE_RADIUS_BLOCKS);
+            look[0] = exec("artest vs ship-info 0 id " + shipId);
             return look[0].contains("\"managed\":true");
         }, () -> exec("artest vs load-ships 0"));
         assertTrue("ship not managed by VS at its own build site: " + look[0] + " countAll="
                 + exec("artest vs ship-count-all 0") + " loaded=" + exec("artest vs ship-count 0"),
                 managed);
         String info = look[0];
-        String shipId = extractString(info, "id");
         double sx = extractDouble(info, "posX"), sy = extractDouble(info, "posY"),
                 sz = extractDouble(info, "posZ");
 

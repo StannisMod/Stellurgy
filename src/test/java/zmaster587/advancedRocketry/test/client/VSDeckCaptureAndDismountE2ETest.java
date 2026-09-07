@@ -1115,24 +1115,27 @@ public class VSDeckCaptureAndDismountE2ETest extends AbstractSharedVsClientE2ETe
     }
 
     /**
-     * Sit the bot on the pilot seat of the ship built AT THIS BASE.
+     * Sit the bot on the pilot seat of the ship this scenario BUILT — the one it holds the id of,
+     * not the one nearest a coordinate.
      *
      * <p>{@code artest vs seat-mount <dim>} takes the first {@code TilePilotSeat} in the world's
      * loaded-tile list, with no position filter — unambiguous when the world holds exactly one ship,
-     * and a scenario mounting a NEIGHBOUR's ship once several scenarios share a world. The
-     * positional {@code find-seat} below is narrower but is NOT the cure this javadoc used to claim
-     * it was: it said the seat was "located by identity rather than by being first", and the
-     * anchored form resolves through {@code VSBridge.shipyardBoundsAt}, which answers for the ship
-     * NEAREST the anchor — no containment test, no distance bound, over the registry, so an unloaded
-     * craft or a blockless crossing remnant is a candidate. Twelve scenarios share dim 0 here.</p>
+     * and a scenario mounting a NEIGHBOUR's ship once several scenarios share a world. The positional
+     * {@code find-seat} was narrower and no cure: it resolves through {@code
+     * VSBridge.shipyardBoundsAt}, which answers for the ship NEAREST the anchor — no containment
+     * test, no distance bound, over the registry, so an unloaded craft or a blockless crossing
+     * remnant is a candidate. Twelve scenarios share dim 0 here.</p>
      *
-     * <p>The identity-keyed form is {@code find-seat <dim> id <shipUuid>} and this class holds
-     * {@code scenarioShipId}; converting these sites is tracked separately rather than done inline.</p>
+     * <p>{@code find-seat <dim> id <shipUuid>} resolves the yard from the ship's own name instead, so
+     * a wrong craft is unreachable rather than merely unlikely. The base coordinates stay in the
+     * signature because the failure message needs them: a reader diagnosing a miss wants to know
+     * where the scenario thought its ship was.</p>
      */
     private void mountPilotSeatOfShipAt(int bx, int by, int bz) throws Exception {
-        String seat = exec("artest vs find-seat 0 " + bx + " " + by + " " + bz);
-        assertTrue("find-seat must locate the pilot seat INSIDE the ship built at this base ("
-                + bx + "," + by + "," + bz + "): " + seat, seat.contains("\"seatFound\":true"));
+        String seat = exec("artest vs find-seat 0 id " + scenarioShipId);
+        assertTrue("find-seat must locate the pilot seat inside THIS scenario's ship ("
+                + scenarioShipId + ", built at " + bx + "," + by + "," + bz + "): " + seat,
+                seat.contains("\"seatFound\":true"));
         String mountInfo = exec("artest vs seat-mount-at 0 " + readInt(seat, SEAT_X) + " "
                 + readInt(seat, SEAT_Y) + " " + readInt(seat, SEAT_Z));
         Matcher dm = DUMMY_ID.matcher(mountInfo);

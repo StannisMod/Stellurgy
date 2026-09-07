@@ -1,6 +1,8 @@
 package zmaster587.advancedRocketry.test.server;
 
 import zmaster587.advancedRocketry.test.GameTicks;
+import zmaster587.advancedRocketry.test.EntrySlots;
+import zmaster587.advancedRocketry.test.ShipIdentity;
 
 import org.junit.After;
 import org.junit.Test;
@@ -10,7 +12,6 @@ import java.util.regex.Pattern;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
-import static zmaster587.advancedRocketry.test.AdvancedRocketryTestConstants.SHIP_CAPTURE_RADIUS_BLOCKS;
 
 /**
  * E2E: crossing OUT of an atmosphere is a PHYSICAL event, so it does not ask who is holding a key.
@@ -96,8 +97,10 @@ public class VSUnpilotedEntryE2ETest extends AbstractSharedServerTest {
         String expectedCell = extractString(launch, "cellKey");
         assertTrue("launch dim resolved to no cell: " + launch, expectedCell != null);
 
-        String srcInfo = exec("artest vs ship-info 0 " + SRC_X + " " + SRC_Y + " " + SRC_Z
-                + " " + SHIP_CAPTURE_RADIUS_BLOCKS);
+        String durableId = ShipIdentity.nameFromAssembly(asm);
+        String vsId = ShipIdentity.physicsIdOf(this::exec, 0, durableId);
+
+        String srcInfo = exec("artest vs ship-info 0 id " + vsId);
         assertTrue("source ship not managed by VS: " + srcInfo, srcInfo.contains("\"managed\":true"));
         double sx = extractDouble(srcInfo, "posX"), sy = extractDouble(srcInfo, "posY"),
                 sz = extractDouble(srcInfo, "posZ");
@@ -106,21 +109,21 @@ public class VSUnpilotedEntryE2ETest extends AbstractSharedServerTest {
         // own flight computer holds no pilot input. The probe reports the state it left behind, so
         // "nobody is at the controls" is a reading rather than a hope — the earlier form of this line
         // scrubbed a world-wide static, which said nothing about THIS ship.
-        String hands = exec("artest vs ff-input-by-id 0 " + extractString(srcInfo, "id"));
+        String hands = exec("artest vs ff-input-by-id 0 " + vsId);
         assertTrue("this ship's flight computer must resolve, and hold NO pilot input, or the climb"
                 + " below is the piloted leg again: " + hands,
                 hands.contains("\"afcResolved\":true") && hands.contains("\"input\":\"null\""));
 
-        String tp = exec("artest vs teleport-ship 0 " + (int) sx + " " + (int) sy + " " + (int) sz
-                + " " + (int) sx + " " + ABOVE_CEILING_Y + " " + (int) sz);
+        String tp = exec("artest vs teleport-ship-by-id 0 " + vsId + " "
+                + (int) sx + " " + ABOVE_CEILING_Y + " " + (int) sz);
         assertTrue("climb teleport failed: " + tp, tp.contains("\"ok\":true"));
-        exec("artest vs unpark 0 " + (int) sx + " " + ABOVE_CEILING_Y + " " + (int) sz);
+        exec("artest vs unpark-by-id 0 " + vsId);
 
         final String[] status = {""};
         boolean settled = GameTicks.until(client(), GameTicks.server(), SETTLE_TICKS,
                 () -> {
-                    status[0] = exec("artest space entry-status");
-                    return extractInt(status[0], "ships") >= 1
+                    status[0] = exec("artest space entry-status id " + durableId);
+                    return status[0].contains("\"found\":true")
                             && "SETTLED".equals(extractString(status[0], "state"));
                 },
                 () -> loadAllEntrySlots(setup));
@@ -137,12 +140,9 @@ public class VSUnpilotedEntryE2ETest extends AbstractSharedServerTest {
         return String.join("\n", client().execute(cmd));
     }
 
+    /** Keep every slot world's ships load-queued while a wait runs. See {@link EntrySlots}. */
     private void loadAllEntrySlots(String setup) throws Exception {
-        Matcher m = Pattern.compile("\"dims\":\\[(-?\\d+),(-?\\d+)]").matcher(setup);
-        if (m.find()) {
-            exec("artest vs load-ships " + m.group(1));
-            exec("artest vs load-ships " + m.group(2));
-        }
+        EntrySlots.loadAll(this::exec, setup);
     }
 
     private int waitForLoadedShip(int dim) throws Exception {

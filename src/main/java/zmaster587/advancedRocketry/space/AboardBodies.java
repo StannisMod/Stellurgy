@@ -167,12 +167,23 @@ public final class AboardBodies {
             if (restored == null) {
                 continue; // an entity type this world cannot build; its record is dropped, not retried
             }
-            restored.setPosition(world[0], world[1], world[2]);
             restored.motionX = 0.0D;
             restored.motionY = 0.0D;
             restored.motionZ = 0.0D;
             restored.fallDistance = 0.0f;
-            dstWorld.spawnEntity(restored);
+            // Through the shared arrival spawn: it loads the chunk the body lands in, which
+            // `spawnEntity` needs and does not do, and it hands back what the WORLD said. This
+            // counted a placement either way before, so a carry that put its cargo nowhere reported
+            // the same number as one that put it down.
+            boolean accepted = ArrivalSpawn.at(dstWorld, restored, world[0], world[1], world[2]);
+            // The identity is logged because the body is followed by uuid afterwards, and a re-spawn
+            // that minted a new one would be invisible from every later reading.
+            LOGGER.info("[SPACE] released a carried body into dim {} at ({},{},{}): accepted={} "
+                            + "uuid={}", dstWorld.provider.getDimension(), world[0], world[1],
+                    world[2], accepted, restored.getUniqueID());
+            if (!accepted) {
+                continue;
+            }
             placed++;
         }
         return placed;

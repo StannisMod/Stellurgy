@@ -10,7 +10,6 @@ import java.util.regex.Pattern;
 import zmaster587.advancedRocketry.test.Events;
 
 import static org.junit.Assert.assertTrue;
-import static zmaster587.advancedRocketry.test.AdvancedRocketryTestConstants.SHIP_CAPTURE_RADIUS_BLOCKS;
 
 /**
  * P3 (§4.3): the shield must ride an assembled Valkyrien Skies ship. A ship's blocks live in a
@@ -74,7 +73,8 @@ public class VSShipFrameShieldE2ETest extends AbstractSharedVsClientE2ETest {
         String assemble = assembleFixture(BX, BY, BZ);
         assertTrue("a with-shield-emitter build must route to a ship: " + assemble,
                 assemble.contains("\"rocketCount\":0"));
-        awaitShipSpawned(events, spawnMark,
+        // The identity, from the registry's record of THIS assembly's own add.
+        final String shipId = awaitShipSpawned(events, spawnMark,
                 "a with-shield-emitter assembly must create a VS ship in the queryable registry");
 
         // Sit the client on the ship so the hull (and the emitter's chunk) loads server-side.
@@ -88,11 +88,6 @@ public class VSShipFrameShieldE2ETest extends AbstractSharedVsClientE2ETest {
         events.await(spawnMark, "ship_loaded",
                 "the assembled ship must get a physics object before anything can ride it",
                 FRAME_BUDGET_TICKS);
-
-        // Take its identity now, while nothing else is at the build spot. Every later question and
-        // every push below names THIS ship: the hull ends up 20+ blocks up, and a nearest-ship lookup
-        // at the build spot would quietly start answering for a neighbour on a shared client.
-        final String shipId = captureShipId();
 
         // The emitter's frame is a DECISION production makes and re-makes: it resolves whatever
         // FieldFrames.forBlock answers for its block, and that frame is only usable once it reports
@@ -243,15 +238,6 @@ public class VSShipFrameShieldE2ETest extends AbstractSharedVsClientE2ETest {
         Matcher m = ENTITY_ID.matcher(json);
         assertTrue("no entityId in: " + json, m.find());
         return Integer.parseInt(m.group(1));
-    }
-
-    /** The ship's identity, captured once while it is provably the only one at the build spot. */
-    private String captureShipId() throws Exception {
-        String si = exec("artest vs ship-info 0 " + BX + " " + BY + " " + BZ
-                + " " + SHIP_CAPTURE_RADIUS_BLOCKS);
-        Matcher m = Pattern.compile("\"id\":\"([^\"]+)\"").matcher(si);
-        assertTrue("ship-info must name WHICH ship answered: " + si, m.find());
-        return m.group(1);
     }
 
     /** Where THIS ship is — asked by identity, so it keeps answering about the same hull once the

@@ -638,9 +638,13 @@ public class VSShipFlightTelemetryE2ETest extends AbstractSharedVsClientE2ETest 
         // The seat is located INSIDE this scenario's own ship: `vs seat-mount <dim>` takes the first
         // pilot seat in the world's loaded-tile list with no position filter, which is unambiguous
         // only while the world holds one ship, and mounts a neighbour's once scenarios share one.
-        String seat = exec("artest vs find-seat 0 " + bx + " " + by + " " + bz);
-        assertTrue("find-seat must locate the pilot seat INSIDE the ship built at this base ("
-                + bx + "," + by + "," + bz + "): " + seat, seat.contains("\"seatFound\":true"));
+        // By identity: the positional form resolves the yard of the ship NEAREST the base, over the
+        // whole registry and with no distance bound, so a neighbour's craft answers it in the same
+        // shape. This scenario was told which ship it built.
+        String seat = exec("artest vs find-seat 0 id " + scenarioShipId);
+        assertTrue("find-seat must locate the pilot seat inside THIS scenario's ship ("
+                + scenarioShipId + ", built at " + bx + "," + by + "," + bz + "): " + seat,
+                seat.contains("\"seatFound\":true"));
         String mountInfo = exec("artest vs seat-mount-at 0 " + readInt(seat, SEAT_X) + " "
                 + readInt(seat, SEAT_Y) + " " + readInt(seat, SEAT_Z));
         Matcher dm = DUMMY_ID.matcher(mountInfo);

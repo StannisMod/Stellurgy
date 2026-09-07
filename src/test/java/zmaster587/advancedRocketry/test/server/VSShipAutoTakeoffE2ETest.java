@@ -1,6 +1,8 @@
 package zmaster587.advancedRocketry.test.server;
 
 import zmaster587.advancedRocketry.test.GameTicks;
+import zmaster587.advancedRocketry.test.EntrySlots;
+import zmaster587.advancedRocketry.test.ShipIdentity;
 
 import org.junit.After;
 import org.junit.Test;
@@ -9,7 +11,6 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 import static org.junit.Assert.assertTrue;
-import static zmaster587.advancedRocketry.test.AdvancedRocketryTestConstants.SHIP_CAPTURE_RADIUS_BLOCKS;
 
 /**
  * E2E: the tier-2 AUTO-TAKEOFF autopilot — the AUTOMATED half of the entry on-ramp. Two legs on one
@@ -61,12 +62,15 @@ public class VSShipAutoTakeoffE2ETest extends AbstractSharedServerTest {
         assertTrue("AFC build must route to a ship: " + asm, asm.contains("\"rocketCount\":0"));
         assertTrue("source ship never loaded", waitForLoadedShip(0) >= 1);
 
-        String srcInfo = exec("artest vs ship-info 0 " + SRC_X + " " + SRC_Y + " " + SRC_Z
-                + " " + SHIP_CAPTURE_RADIUS_BLOCKS);
-        // The lookup must have FOUND the craft, which every sibling in this tier asserts and this
-        // one did not. `extractDouble` answers 0.0 on a miss, so a `managed:false` reply silently
-        // pointed the rest of the scenario at the WORLD ORIGIN of the shared overworld: the stone
-        // pad below would be filled there and the teleport would move whatever craft is nearest it.
+        // WHICH ship this scenario is about, taken from the moment that CREATED it: the assembler
+        // mints the durable id on the pad and hands it back, and `vs ship-uuid` crosses from that
+        // name to the physics id every `vs` verb is keyed on. Nothing here asks the world what is
+        // standing at a coordinate — the shared overworld holds every other scenario's craft too,
+        // and a proximity answer is indistinguishable from the right one.
+        String durableId = ShipIdentity.nameFromAssembly(asm);
+        String shipId = ShipIdentity.physicsIdOf(this::exec, 0, durableId);
+
+        String srcInfo = exec("artest vs ship-info 0 id " + shipId);
         assertTrue("the source ship must be managed before its pose is read: " + srcInfo,
                 srcInfo.contains("\"managed\":true"));
         double sx = extractDouble(srcInfo, "posX"), sy = extractDouble(srcInfo, "posY"),
@@ -81,14 +85,14 @@ public class VSShipAutoTakeoffE2ETest extends AbstractSharedServerTest {
                 .contains("\"ok\":true"));
         // No manual FF input: the autopilot alone drives (its branch requires in == null). entry-setup
         // cleared any stale static input channel.
-        String engaged = exec("artest space auto-takeoff 0");
+        String engaged = exec("artest space auto-takeoff 0 id " + shipId);
         assertTrue("auto-takeoff did not engage: " + engaged, engaged.contains("\"engaged\":true"));
 
         // The raycast runs on the AFC's OWN tick, so this is a wait for that tick to happen a few
         // times - which is a number of ticks, not a number of seconds.
         final String[] status = {""};
         boolean declined = GameTicks.until(client(), GameTicks.server(), DECLINE_TICKS, () -> {
-            status[0] = exec("artest space auto-takeoff 0 status");
+            status[0] = exec("artest space auto-takeoff 0 id " + shipId + " status");
             return status[0].contains("\"engaged\":false");
         });
         assertTrue("auto-takeoff did not decline a blocked corridor (still engaged): " + status[0],
@@ -98,11 +102,11 @@ public class VSShipAutoTakeoffE2ETest extends AbstractSharedServerTest {
         assertTrue("slab clear failed", exec("artest fill 0 " + ((int) sx - 20) + " " + slabY + " " + ((int) sz - 20)
                 + " " + ((int) sx + 20) + " " + (slabY + 2) + " " + ((int) sz + 20) + " minecraft:air")
                 .contains("\"ok\":true"));
-        String tp = exec("artest vs teleport-ship 0 " + (int) sx + " " + (int) sy + " " + (int) sz
-                + " " + (int) sx + " " + NEAR_CEILING_Y + " " + (int) sz);
+        String tp = exec("artest vs teleport-ship-by-id 0 " + shipId + " "
+                + (int) sx + " " + NEAR_CEILING_Y + " " + (int) sz);
         assertTrue("hop teleport failed: " + tp, tp.contains("\"ok\":true"));
-        exec("artest vs unpark 0 " + (int) sx + " " + NEAR_CEILING_Y + " " + (int) sz);
-        String reEngage = exec("artest space auto-takeoff 0");
+        exec("artest vs unpark-by-id 0 " + shipId);
+        String reEngage = exec("artest space auto-takeoff 0 id " + shipId);
         assertTrue("auto-takeoff did not re-engage over a clear corridor: " + reEngage,
                 reEngage.contains("\"engaged\":true"));
 
@@ -110,8 +114,11 @@ public class VSShipAutoTakeoffE2ETest extends AbstractSharedServerTest {
         final String[] entry = {""};
         settled = GameTicks.until(client(), GameTicks.server(), CLIMB_TICKS,
                 () -> {
-                    entry[0] = exec("artest space entry-status");
-                    return extractInt(entry[0], "ships") >= 1
+                    // THIS ship's ledger row, not "somebody settled": the bare form reports whichever
+                    // row the ledger's iterator hands over first, and a slot the entry stack has
+                    // ledgered twice satisfies `ships >= 1` with a neighbour's SETTLED state.
+                    entry[0] = exec("artest space entry-status id " + durableId);
+                    return entry[0].contains("\"found\":true")
                             && "SETTLED".equals(extractString(entry[0], "state"));
                 },
                 () -> loadAllEntrySlots(setup));
@@ -131,12 +138,9 @@ public class VSShipAutoTakeoffE2ETest extends AbstractSharedServerTest {
         return String.join("\n", client().execute(cmd));
     }
 
+    /** Keep every slot world's ships load-queued while a wait runs. See {@link EntrySlots}. */
     private void loadAllEntrySlots(String setup) throws Exception {
-        Matcher m = Pattern.compile("\"dims\":\\[(-?\\d+),(-?\\d+)]").matcher(setup);
-        if (m.find()) {
-            exec("artest vs load-ships " + m.group(1));
-            exec("artest vs load-ships " + m.group(2));
-        }
+        EntrySlots.loadAll(this::exec, setup);
     }
 
     private int waitForLoadedShip(int dim) throws Exception {

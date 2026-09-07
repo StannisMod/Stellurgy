@@ -1,6 +1,8 @@
 package zmaster587.advancedRocketry.test.server;
 
 import zmaster587.advancedRocketry.test.GameTicks;
+import zmaster587.advancedRocketry.test.EntrySlots;
+import zmaster587.advancedRocketry.test.ShipIdentity;
 
 import org.junit.After;
 import org.junit.Test;
@@ -10,7 +12,6 @@ import java.util.regex.Pattern;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
-import static zmaster587.advancedRocketry.test.AdvancedRocketryTestConstants.SHIP_CAPTURE_RADIUS_BLOCKS;
 
 /**
  * E2E: does the tier-2 PLANET DESCENT take a ship in space across into a real planet dimension through the
@@ -62,34 +63,38 @@ public class VSShipDescentE2ETest extends AbstractSharedServerTest {
                 asm.contains("\"rocketCount\":0"));
         assertTrue("the source VS ship never loaded", waitForLoadedShip(0) >= 1);
 
-        String srcInfo = exec("artest vs ship-info 0 " + SRC_X + " " + SRC_Y + " " + SRC_Z
-                + " " + SHIP_CAPTURE_RADIUS_BLOCKS);
+        // The ship's own name, from the assembler that minted it — and from there its physics id. The
+        // pad sits in a world this class shares, so "the ship near (SRC_X,SRC_Y,SRC_Z)" is a question
+        // a neighbour's craft can answer.
+        String shipId = ShipIdentity.nameFromAssembly(asm);
+        String vsId = ShipIdentity.physicsIdOf(this::exec, 0, shipId);
+
+        String srcInfo = exec("artest vs ship-info 0 id " + vsId);
         assertTrue("source ship not managed by VS: " + srcInfo, srcInfo.contains("\"managed\":true"));
         double sx = extractDouble(srcInfo, "posX"), sy = extractDouble(srcInfo, "posY"),
                 sz = extractDouble(srcInfo, "posZ");
 
         // A held throttle on THIS ship's own flight computer => a pilot is flying.
-        String held = exec("artest vs ff-input-by-id 0 " + extractString(srcInfo, "id") + " 0 1 0 0 0 0");
+        String held = exec("artest vs ff-input-by-id 0 " + vsId + " 0 1 0 0 0 0");
         assertTrue("the held input must reach this ship's flight computer: " + held,
                 held.contains("\"afcResolved\":true"));
-        String tp = exec("artest vs teleport-ship 0 " + (int) sx + " " + (int) sy + " " + (int) sz
-                + " " + (int) sx + " " + ABOVE_CEILING_Y + " " + (int) sz);
+        String tp = exec("artest vs teleport-ship-by-id 0 " + vsId + " "
+                + (int) sx + " " + ABOVE_CEILING_Y + " " + (int) sz);
         assertTrue("climb teleport failed: " + tp, tp.contains("\"ok\":true"));
-        exec("artest vs unpark 0 " + (int) sx + " " + ABOVE_CEILING_Y + " " + (int) sz);
+        exec("artest vs unpark-by-id 0 " + vsId);
 
         String status = "";
         final String[] entryStatus = {""};
         boolean settled = GameTicks.until(client(), GameTicks.server(), SETTLE_TICKS,
                 () -> {
-                    entryStatus[0] = exec("artest space entry-status");
-                    return extractInt(entryStatus[0], "ships") >= 1
+                    entryStatus[0] = exec("artest space entry-status id " + shipId);
+                    return entryStatus[0].contains("\"found\":true")
                             && "SETTLED".equals(extractString(entryStatus[0], "state"));
                 },
                 () -> loadAllEntrySlots(setup));
         assertTrue("precondition: ship never entered space to descend from; last status="
                 + entryStatus[0], settled);
         int slotDim = extractInt(entryStatus[0], "slotDim");
-        String shipId = extractString(entryStatus[0], "shipId");
         assertTrue("settled slot dim not reported: " + entryStatus[0], slotDim > Integer.MIN_VALUE);
 
         // --- Phase 2: DESCEND that settled ship into the overworld. ---
@@ -152,12 +157,9 @@ public class VSShipDescentE2ETest extends AbstractSharedServerTest {
         return String.join("\n", client().execute(cmd));
     }
 
+    /** Keep every slot world's ships load-queued while a wait runs. See {@link EntrySlots}. */
     private void loadAllEntrySlots(String setup) throws Exception {
-        Matcher m = Pattern.compile("\"dims\":\\[(-?\\d+),(-?\\d+)]").matcher(setup);
-        if (m.find()) {
-            exec("artest vs load-ships " + m.group(1));
-            exec("artest vs load-ships " + m.group(2));
-        }
+        EntrySlots.loadAll(this::exec, setup);
     }
 
     private int waitForLoadedShip(int dim) throws Exception {

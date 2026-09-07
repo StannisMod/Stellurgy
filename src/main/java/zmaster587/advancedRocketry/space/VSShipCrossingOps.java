@@ -193,11 +193,51 @@ public final class VSShipCrossingOps implements ShipCrossingService.Ops {
         // exactly there — and this used to hand it the newcomer's cargo.
         BlockPos afcPos = VSIntegration.flightComputerOfNamedShip(world, vsShipUuid, shipId,
                 anchor.getX() + 0.5, anchor.getY() + 0.5, anchor.getZ() + 0.5);
-        if (afcPos == null || AboardBodies.release(world, afcPos, bodies) == 0) {
+        // BOTH REFUSALS SPEAK, and they are different failures. This returned a bare `false` for
+        // either, which is the caller's "come back next tick" — indistinguishable from progress right
+        // up to the moment the crossing gives up, at which point the bodies are in this map and in no
+        // world at all. A carry that loses cargo must say which half could not place it.
+        if (afcPos == null) {
+            LOGGER.warn("[SPACE] cargo NOT released yet for ship {} arriving at {} in dim {}: its "
+                            + "flight computer does not resolve here (physics id {}). {} body(ies) "
+                            + "are held out of the world until it does.",
+                    shipId, anchor, world.provider.getDimension(), vsShipUuid, bodies.size());
+            return false;
+        }
+        int placed = AboardBodies.release(world, afcPos, bodies);
+        lastRelease = "ship=" + shipId + " dim=" + world.provider.getDimension()
+                + " afc=" + afcPos + " stowed=" + bodies.size() + " placed=" + placed;
+        if (placed == 0) {
+            LOGGER.warn("[SPACE] cargo NOT released yet for ship {} at computer {} in dim {}: the "
+                            + "ship's transform is not registered here, so no ship-relative point can "
+                            + "be mapped. {} body(ies) are held out of the world until it is.",
+                    shipId, afcPos, world.provider.getDimension(), bodies.size());
             return false;
         }
         bodyStash.remove(shipId);
         return true;
+    }
+
+    /**
+     * The bodies this crossing has taken out of a world and not yet put back, per ship — read-only,
+     * for a test that needs to tell "the carry never picked the cargo up" from "it picked it up and
+     * never put it down". The two are one symptom from outside (the body is in neither world) and
+     * they are faults in different halves of the mechanism.
+     */
+    /** What the last cargo release did, for a reader who cannot see this server's log. */
+    private String lastRelease = "never";
+
+    /** @see #lastRelease */
+    public String lastCargoRelease() {
+        return lastRelease;
+    }
+
+    public java.util.Map<java.util.UUID, Integer> stowedCargo() {
+        java.util.Map<java.util.UUID, Integer> held = new java.util.LinkedHashMap<>();
+        for (java.util.Map.Entry<java.util.UUID, List<AboardBodies.Stowed>> e : bodyStash.entrySet()) {
+            held.put(e.getKey(), e.getValue() == null ? 0 : e.getValue().size());
+        }
+        return held;
     }
 
     @Override

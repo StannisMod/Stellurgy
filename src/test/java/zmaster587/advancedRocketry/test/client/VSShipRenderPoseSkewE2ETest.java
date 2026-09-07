@@ -323,7 +323,10 @@ public class VSShipRenderPoseSkewE2ETest extends AbstractClientE2ETest {
         if (subX == 0.0 && subY == 0.0 && subZ == 0.0) {
             return Double.NaN; // no client sample yet
         }
-        String tw = exec("artest vs to-world 0 " + x + " " + y + " " + z + " "
+        // Through THIS ship's transform. The positional form maps through the first hull whose box
+        // contains (x,y,z), and this measurement is a comparison of two sides' transforms of the
+        // SAME craft — mapping through another one produces a plausible skew about nothing.
+        String tw = exec("artest vs to-world 0 id " + shipId + " "
                 + subX + " " + subY + " " + subZ);
         if (!tw.contains("\"ok\":true")) {
             return Double.NaN;

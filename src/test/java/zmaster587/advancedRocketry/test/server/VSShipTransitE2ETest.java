@@ -1,6 +1,7 @@
 package zmaster587.advancedRocketry.test.server;
 
 import zmaster587.advancedRocketry.test.GameTicks;
+import zmaster587.advancedRocketry.test.ShipIdentity;
 
 import org.junit.Test;
 
@@ -38,8 +39,8 @@ public class VSShipTransitE2ETest extends AbstractSharedServerTest {
         // Headless: pin ships loaded so a freshly assembled ship does not auto-unload between probe calls.
         exec("artest vs permaload true");
 
-        // Build a VS ship in a fresh origin cell (a pool slot world) + the whole transit stack.
-        String setup = exec("artest space transit-setup");
+        // Build a real craft in a fresh origin cell (a pool slot world) + the whole transit stack.
+        String setup = exec("artest space transit-setup-piloted");
         assertTrue("transit setup failed: " + setup, setup.contains("\"ok\":true"));
         int originDim = extractInt(setup, "originDim");
         int ax = extractInt(setup, "anchorX"), ay = extractInt(setup, "anchorY"), az = extractInt(setup, "anchorZ");
@@ -50,8 +51,8 @@ public class VSShipTransitE2ETest extends AbstractSharedServerTest {
 
         // Depart: begin the jump. The ship leaves the origin cell for hyperspace — at a speed that
         // makes it a real flight, because a fast enough jump is performed as a single crossing instead
-        // and this test is about the hyperspace path. (This fixture could not take the other path
-        // anyway: its bare cube has no flight computer, so it has no durable id to be crossed under.)
+        // and this test is about the hyperspace path. The speed is what chooses between them; the
+        // fixture is a real craft and could take either.
         String begin = exec("artest space transit-begin " + originDim + " " + ax + " " + ay + " " + az
                 + " " + HYPERSPACE_JUMP_SPEED);
         assertTrue("transit did not begin (departure crossing failed): " + begin, begin.contains("\"began\":true"));
@@ -72,12 +73,13 @@ public class VSShipTransitE2ETest extends AbstractSharedServerTest {
         // The re-assembled ship must load + be VS-managed in the TARGET cell (arrival pastes near 0,200,0).
         assertTrue("transited ship never (re)loaded in the target cell (dim " + targetDim + "); countAll="
                 + exec("artest vs ship-count-all " + targetDim), waitForLoadedShip(targetDim) >= 1);
-        // The assumption this positional read rests on, CHECKED rather than stated: a slot cell
-        // holds exactly one ship, so "nearest to any point" IS that ship. A second craft here would
-        // make the reply below indistinguishable from a correct one.
-        assertEquals("a slot cell must hold exactly ONE loaded ship for a positional read to name it",
-                1, extractInt(exec("artest vs ship-count " + targetDim), "count"));
-        String dstInfo = exec("artest vs ship-info " + targetDim + " 0 200 0");
+        // This fixture is a bare cube with no flight computer, so it has no durable name to be
+        // followed by — the one craft in the suite that genuinely cannot be asked for by identity.
+        // What can be done is to stop guessing: the cell's ship count now NAMES what it counted, so
+        // "exactly one ship here" and "and this is it" are one reading instead of a count followed by
+        // a nearest-ship lookup that could answer about the other one.
+        String arrivedId = ShipIdentity.theOnlyLoadedShipIn(this::exec, targetDim);
+        String dstInfo = exec("artest vs ship-info " + targetDim + " id " + arrivedId);
         assertTrue("arrived ship is not VS-managed in the target cell (transit did not re-VS): " + dstInfo,
                 dstInfo.contains("\"managed\":true"));
     }

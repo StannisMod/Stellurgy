@@ -14,11 +14,11 @@ import java.util.regex.Pattern;
 
 import zmaster587.advancedRocketry.space.GalacticCoord;
 import zmaster587.advancedRocketry.test.Events;
+import zmaster587.advancedRocketry.test.ShipIdentity;
 
 import static zmaster587.advancedRocketry.test.AdvancedRocketryTestConstants.HYPERSPACE_JUMP_SPEED;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
-import static zmaster587.advancedRocketry.test.AdvancedRocketryTestConstants.SHIP_CAPTURE_RADIUS_BLOCKS;
 
 /**
  * A pilot who RELOGS in the middle of a hyperspace transit regains control ON ARRIVAL: after the
@@ -87,13 +87,15 @@ public class VSMidTransitRelogControlE2ETest extends AbstractSharedVsClientE2ETe
         assertTrue("the piloted origin ship never assembled/loaded in the pool cell (dim "
                 + originDim + ")", waitForLoadedShip(originDim) >= 1);
 
-        // The scenario's ship, by IDENTITY, captured at the ONE moment a positional lookup is
-        // defensible: freshly assembled, still at its own build site, inside a bound no other
-        // craft could satisfy. Every question afterwards is keyed on this — the ship is about to
-        // be flown, departed and re-materialised in another cell, and a query point left behind at
-        // the build site would answer about a neighbour (a transit cell is a POOL slot and routinely
-        // holds an earlier scenario's leavings) or about nothing, in the shape of a correct reply.
-        String shipId = captureShipIdNear(originDim, bx + 3, by + 3, bz + 3);
+        // The scenario's ship, by IDENTITY, from the assembler that minted its durable name. This
+        // was a bounded lookup at the build site, defended as the one place "no other craft could
+        // satisfy" the bound — but a bound limits DISTANCE, and two hulls can sit at one point, so
+        // that premise was about today's fixture rather than about the lookup. Every question
+        // afterwards is keyed on this: the ship is about to be flown, departed and re-materialised
+        // in another cell, and a transit cell is a POOL slot that routinely holds an earlier
+        // scenario's leavings.
+        String shipId = ShipIdentity.awaitPhysicsIdOf(this::exec, originDim,
+                ShipIdentity.nameFromAssembly(assembled), 40, () -> bot().waitTicks(5));
         // The transit stack must know WHICH craft the jump is about, by its durable name: a jump
         // begun for a ship the stack cannot name captures nobody and never reaches the ledger, so a
         // relogging pilot is sent to spawn as SHIP_UNKNOWN (measured 2026-09-05, this very class).
@@ -339,32 +341,6 @@ public class VSMidTransitRelogControlE2ETest extends AbstractSharedVsClientE2ETe
     }
 
     /** Poll for a loaded VS ship in {@code dim} (assembly is async; a headless server forces the load). */
-    /**
-     * The IDENTITY of the ship freshly assembled near {@code (x,y,z)} — the value every later
-     * question about it is keyed on.
-     *
-     * <p>The bound is spent HERE and nowhere else: the positional form of {@code ship-info} reports
-     * whichever loaded ship is nearest a point, and 48 blocks around a build site that has just
-     * produced one ship is the only place in this scenario where that cannot mean somebody else.</p>
-     */
-    private String captureShipIdNear(int dim, int x, int y, int z) throws Exception {
-        String info = "";
-        for (int attempt = 0; attempt < 40; attempt++) {
-            info = exec("artest vs ship-info " + dim + " " + x + " " + y + " " + z
-                    + " " + SHIP_CAPTURE_RADIUS_BLOCKS);
-            if (info.contains("\"managed\":true")) {
-                Matcher m = SHIP_ID.matcher(info);
-                if (m.find() && !m.group(1).isEmpty()) {
-                    return m.group(1);
-                }
-            }
-            bot().waitTicks(5);
-        }
-        throw new AssertionError("ARRANGEMENT: the assembled ship never reported an identity at its"
-                + " own build site (" + x + "," + y + "," + z + ") in dim " + dim
-                + "; last reply: " + info);
-    }
-
     /**
      * The report for the NAMED ship, wherever it now is. {@code managed:false} here means that ship
      * is not loaded — never "it is somewhere else", which is the point of asking this way.

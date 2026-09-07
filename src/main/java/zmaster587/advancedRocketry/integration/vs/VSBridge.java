@@ -524,6 +524,22 @@ final class VSBridge {
     }
 
     /**
+     * The identities of every LOADED ship in {@code world} — what {@link #loadedShipCount} counted,
+     * named.
+     *
+     * <p>A count says how many; a caller that has established "exactly one" still cannot say WHICH
+     * without this, and "the only one" plus a nearest-lookup is how a cell that briefly held two
+     * ships produced a confident answer about the wrong one.</p>
+     */
+    static java.util.List<String> loadedShipIds(World world) {
+        java.util.List<String> out = new java.util.ArrayList<>();
+        for (PhysicsObject physo : ValkyrienUtils.getServerShipManager(world).getAllLoadedThreadSafe()) {
+            out.add(physo.getShipData().getUuid().toString());
+        }
+        return out;
+    }
+
+    /**
      * Total Valkyrien Skies ships known in {@code world}, loaded or not — the queryable
      * ship registry, which includes a freshly-spawned ship whose shipyard chunks are
      * not yet loaded. Distinguishes "ship created but not loaded" from "never created".

@@ -8,10 +8,11 @@ import org.junit.runners.MethodSorters;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import zmaster587.advancedRocketry.test.ShipIdentity;
+
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
-import static zmaster587.advancedRocketry.test.AdvancedRocketryTestConstants.SHIP_CAPTURE_RADIUS_BLOCKS;
 
 /**
  * A player riding a mount aboard a CRUISING ship never loses that mount.
@@ -157,8 +158,13 @@ public class VSRiderKeepsHisMountAtCruiseE2ETest extends AbstractSharedVsClientE
         scenario().requireArranged("the ship never assembled/loaded in the cell (dim " + dim + ")",
                 waitForLoadedShip(dim) >= 1);
 
-        String seat = exec("artest vs find-seat " + dim
-                + " " + (bx + 3) + " " + (by + 3) + " " + (bz + 3));
+        // The seat inside the craft this scenario BUILT, named by the assembler that minted it. The
+        // anchored form resolved the yard nearest a point over the whole registry, so it could reach
+        // a neighbour's craft — or a blockless crossing remnant — and report seatFound for it.
+        String durableShipId = ShipIdentity.nameFromAssembly(assembled);
+        String scenarioShipId = ShipIdentity.awaitPhysicsIdOf(this::exec, dim, durableShipId, 40,
+                () -> bot().waitTicks(5));
+        String seat = exec("artest vs find-seat " + dim + " id " + scenarioShipId);
         scenario().requireArranged("the pilot seat must be found (else the test is vacuous): " + seat,
                 readBool(seat, "seatFound"));
         int seatX = readInt(seat, "seatX"), seatY = readInt(seat, "seatY"), seatZ = readInt(seat, "seatZ");
@@ -253,16 +259,13 @@ public class VSRiderKeepsHisMountAtCruiseE2ETest extends AbstractSharedVsClientE
         // computer fight the commanded velocity and the ship falls to ~0.11 blocks/tick, well under
         // the speed this leg needs. A coasting ship at a commanded constant is both faster and
         // quieter, which is the state the report was flown in.
-        // Take the ship's IDENTITY first, while it still rests at the spot the seat reported, and
-        // command it by that id from here on. This leg deliberately flies the ship several hundred
-        // blocks; a lookup keyed on where it STARTED stops describing it almost immediately, and on a
-        // shared client the ship it starts describing instead is a neighbour's.
-        String atSeat = exec("artest vs ship-info " + dim + " " + sx + " " + sy + " " + sz
-                + " " + SHIP_CAPTURE_RADIUS_BLOCKS);
-        Matcher idM = Pattern.compile("\"id\":\"([^\"]+)\"").matcher(atSeat);
-        scenario().requireArranged("the ship must name itself before it is commanded: " + atSeat,
-                idM.find());
-        String shipId = idM.group(1);
+        // Commanded by the name this scenario has held since the assembly. The identity used to be
+        // re-derived here from a bounded read at the seat's reported spot — a second answer to a
+        // question already answered, and one a neighbour's craft can give.
+        String shipId = scenarioShipId;
+        String atSeat = exec("artest vs ship-info " + dim + " id " + shipId);
+        scenario().requireArranged("this scenario's ship must be managed before it is commanded: "
+                + atSeat, atSeat.contains("\"managed\":true"));
 
         String commanded = exec("artest vs force-vel-by-id " + dim + " " + shipId
                 + " " + COMMANDED_SPEED_BLOCKS_PER_SECOND + " 0 0");

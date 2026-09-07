@@ -51,6 +51,9 @@ import zmaster587.advancedRocketry.tile.TilePilotSeat;
  */
 public final class CrewTransfer {
 
+    private static final org.apache.logging.log4j.Logger LOGGER =
+            org.apache.logging.log4j.LogManager.getLogger("advancedrocketry/space");
+
     /** How far (blocks) around the ship's world position riders are enumerated — the proven
      *  rider-carry box of the ship-move probes. */
     private static final double RIDER_RANGE = 8.0;
@@ -897,8 +900,12 @@ public final class CrewTransfer {
     /**
      * The seat's single mount dummy, ready to be ridden: reuse the one already bound to
      * {@code seatPos} (moved to the seat's live world position), or spawn a fresh bound one there.
-     * Returns {@code null} when the existing dummy is occupied — the caller must never mount a
-     * second rider onto a taken seat, and must never spawn a second dummy beside it.
+     *
+     * <p>Returns {@code null} for two different reasons, and both are "cannot mount him now" — the
+     * existing dummy is occupied (never double-mount a seat, never spawn a second dummy beside it),
+     * or the world would not take a fresh one. The callers act the same way on either; the LOG is
+     * where they differ, because a caller telling a pilot who holds his chair must not say that when
+     * the chair was never placed.</p>
      */
     private static EntityDummy boundDummyForMount(WorldServer world, BlockPos seatPos,
             double x, double y, double z) {
@@ -913,7 +920,17 @@ public final class CrewTransfer {
         }
         EntityDummy dummy = new EntityDummy(world, x, y, z);
         dummy.setSeatPos(seatPos);
-        world.spawnEntity(dummy);
+        // Through the shared arrival spawn, and the answer is READ. This dropped it: an arriving
+        // ship's world has nobody in it, so the seat's own chunk is exactly the one nothing has
+        // asked for, and `spawnEntity` answers false there without loading it. The dummy was then
+        // handed back as though it were in the world and a crew member was mounted onto a body no
+        // world held. Same hazard the cargo release had, one call away from it.
+        if (!ArrivalSpawn.at(world, dummy, x, y, z)) {
+            LOGGER.error("[SPACE] the seat at {} in dim {} could not be given a mount: the world "
+                            + "refused the dummy. Nobody is seated there this tick.",
+                    seatPos, world.provider.getDimension());
+            return null;
+        }
         return dummy;
     }
 }
