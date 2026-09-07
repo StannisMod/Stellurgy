@@ -6,6 +6,9 @@ import com.github.stannismod.forge.testing.server.TestClient;
 import org.junit.AfterClass;
 import org.junit.Assume;
 import org.junit.BeforeClass;
+import zmaster587.advancedRocketry.test.Events;
+import zmaster587.advancedRocketry.test.GameTicks;
+import zmaster587.advancedRocketry.test.ShipReadiness;
 
 /**
  * class-scoped harness lifecycle base class.
@@ -106,5 +109,26 @@ public abstract class AbstractSharedServerTest {
      *  RealDedicatedServerHarness API beyond `client()`. */
     protected static RealDedicatedServerHarness harness() {
         return shared;
+    }
+
+    /**
+     * Get {@code dim} to at least {@code want} LOADED ships, waiting on the recorded events rather
+     * than on a count, and answer how many there are.
+     *
+     * <p>The tier's binding of {@link ShipReadiness}: it supplies the tick step, which is the same
+     * for every class under this base, and takes the probe from the subclass, which is not — each
+     * carries its own {@code exec} and a static method here could not override an instance one.</p>
+     *
+     * @param probe the subclass's own probe, e.g. {@code this::exec}
+     */
+    protected static int awaitLoadedShips(Events.Probe probe, int dim, int want, int budget)
+            throws Exception {
+        Events events = new Events(probe, ticks -> GameTicks.await(client(), 0, ticks));
+        return ShipReadiness.awaitLoaded(probe, events, dim, want, budget).count;
+    }
+
+    /** One loaded ship in {@code dim} — the floor every scenario under this base asks for. */
+    protected static int awaitLoadedShips(Events.Probe probe, int dim, int budget) throws Exception {
+        return awaitLoadedShips(probe, dim, 1, budget);
     }
 }

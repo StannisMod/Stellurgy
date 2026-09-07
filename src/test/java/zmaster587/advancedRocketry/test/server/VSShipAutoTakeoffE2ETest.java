@@ -144,13 +144,9 @@ public class VSShipAutoTakeoffE2ETest extends AbstractSharedServerTest {
     }
 
     private int waitForLoadedShip(int dim) throws Exception {
-        return GameTicks.until(client(), GameTicks.server(), LOAD_TICKS, () -> {
-            if (extractInt(exec("artest vs ship-count-all " + dim), "count") < 1) {
-                return false;
-            }
-            exec("artest vs load-ships " + dim);
-            return extractInt(exec("artest vs ship-count " + dim), "count") >= 1;
-        }) ? 1 : 0;
+        // Answers the real count. The private copy this replaced collapsed it to a 1-or-0,
+        // which was harmless only because every caller here compares against 1.
+        return awaitLoadedShips(this::exec, dim, LOAD_TICKS);
     }
 
     private void clearArea(int baseX, int baseZ) throws Exception {

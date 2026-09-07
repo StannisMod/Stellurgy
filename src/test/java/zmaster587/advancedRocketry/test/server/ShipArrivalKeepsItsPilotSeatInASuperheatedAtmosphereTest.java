@@ -1,7 +1,6 @@
 package zmaster587.advancedRocketry.test.server;
 
 import org.junit.After;
-import zmaster587.advancedRocketry.test.GameTicks;
 import zmaster587.advancedRocketry.test.ShipIdentity;
 
 import org.junit.Test;
@@ -177,16 +176,7 @@ public class ShipArrivalKeepsItsPilotSeatInASuperheatedAtmosphereTest extends Ab
 
     /** Poll for a loaded VS ship (assembly is asynchronous). Bounded ~10 s. Returns the loaded count. */
     private int waitForLoadedShip() throws Exception {
-        final int[] loaded = {0};
-        GameTicks.until(client(), GameTicks.server(), LOAD_TICKS, () -> {
-            if (extractInt(exec("artest vs ship-count-all 0"), "count") < 1) {
-                return false;
-            }
-            exec("artest vs load-ships 0");
-            loaded[0] = extractInt(exec("artest vs ship-count 0"), "count");
-            return loaded[0] >= 1;
-        });
-        return loaded[0];
+        return awaitLoadedShips(this::exec, 0, LOAD_TICKS);
     }
 
     private void clearArea(int baseX, int baseZ) throws Exception {

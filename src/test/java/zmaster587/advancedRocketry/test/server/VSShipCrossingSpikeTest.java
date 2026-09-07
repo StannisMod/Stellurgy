@@ -1,6 +1,5 @@
 package zmaster587.advancedRocketry.test.server;
 
-import zmaster587.advancedRocketry.test.GameTicks;
 import zmaster587.advancedRocketry.test.ShipIdentity;
 
 import org.junit.Test;
@@ -153,16 +152,7 @@ public class VSShipCrossingSpikeTest extends AbstractSharedServerTest {
     /** Poll for a loaded VS ship (assembly is async on the physics thread; a headless server has no
      *  player near to auto-load it, so force a load each round). Bounded ~10 s. Returns the loaded count. */
     private int waitForLoadedShip() throws Exception {
-        final int[] loaded = {0};
-        GameTicks.until(client(), GameTicks.server(), LOAD_TICKS, () -> {
-            if (extractInt(exec("artest vs ship-count-all 0"), "count") < 1) {
-                return false;
-            }
-            exec("artest vs load-ships 0");
-            loaded[0] = extractInt(exec("artest vs ship-count 0"), "count");
-            return loaded[0] >= 1;
-        });
-        return loaded[0];
+        return awaitLoadedShips(this::exec, 0, LOAD_TICKS);
     }
 
     private void clearArea(int baseX, int baseZ) throws Exception {

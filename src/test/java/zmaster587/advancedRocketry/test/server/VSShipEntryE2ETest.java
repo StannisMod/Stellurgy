@@ -336,16 +336,7 @@ public class VSShipEntryE2ETest extends AbstractSharedServerTest {
       * same number of seconds.
       */
     private int waitForLoadedShip(int dim) throws Exception {
-        boolean loaded = awaitWithinTicks(LOAD_TICKS,
-                () -> {
-                    if (extractInt(exec("artest vs ship-count-all " + dim), "count") < 1) {
-                        return false;
-                    }
-                    exec("artest vs load-ships " + dim);
-                    return extractInt(exec("artest vs ship-count " + dim), "count") >= 1;
-                },
-                null);
-        return loaded ? extractInt(exec("artest vs ship-count " + dim), "count") : 0;
+        return awaitLoadedShips(this::exec, dim, LOAD_TICKS);
     }
 
     private void clearArea(int baseX, int baseZ) throws Exception {

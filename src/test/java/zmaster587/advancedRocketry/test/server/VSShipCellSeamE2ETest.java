@@ -543,19 +543,10 @@ public class VSShipCellSeamE2ETest extends AbstractSharedServerTest {
     }
 
     private int waitForLoadedShip(int dim) throws Exception {
-        final int[] loaded = {0};
         // Budgeted on the SERVER's clock, not on dim's: the world being asked about is precisely the
         // one that may not have started ticking yet, and budgeting against it would measure the wait
         // with the thing the wait is waiting for.
-        GameTicks.until(client(), GameTicks.server(), LOAD_TICKS, () -> {
-            if (extractInt(exec("artest vs ship-count-all " + dim), "count") < 1) {
-                return false;
-            }
-            exec("artest vs load-ships " + dim);
-            loaded[0] = extractInt(exec("artest vs ship-count " + dim), "count");
-            return loaded[0] >= 1;
-        });
-        return loaded[0];
+        return awaitLoadedShips(this::exec, dim, LOAD_TICKS);
     }
 
     private void clearArea(int baseX, int baseZ) throws Exception {
