@@ -1,5 +1,6 @@
 package zmaster587.advancedRocketry.test.server;
 
+import zmaster587.advancedRocketry.test.Events;
 import zmaster587.advancedRocketry.test.ShipReadiness;
 import zmaster587.advancedRocketry.space.CellSeam;
 import zmaster587.advancedRocketry.space.GalacticCoord;
@@ -99,6 +100,8 @@ public class VSShipCellSeamE2ETest extends AbstractSharedServerTest {
         // pinned deterministically by `CellSeamTest`, and what a carry DOES is pinned here, on a real
         // ship. `wouldCarry` is production's own reading of the live pose, so the arrangement is
         // witnessed by the code under test rather than only by this test's arithmetic.
+        // Marked BEFORE the carry: a mark taken afterwards can miss the record it is about.
+        long carryMark = events.mark();
         String carry = exec("artest space seam-carry " + sourceSlot + " id " + arShipId);
         assertTrue("production does not agree the ship has left its cell (its own predicate on the "
                 + "live pose): " + carry, carry.contains("\"wouldCarry\":true"));
@@ -111,20 +114,20 @@ public class VSShipCellSeamE2ETest extends AbstractSharedServerTest {
                 arShipId, extractString(carry, "shipId"));
 
         // --- Assert: carried into the neighbour ---------------------------------------------------
-        final String[] afterMove = {""};
-        final String source = sourceCell;
-        boolean carriedOver = GameTicks.until(client(), GameTicks.server(), SETTLE_TICKS,
-                () -> {
-                    afterMove[0] = exec("artest space ledger-get " + arShipId);
-                    String cell = extractString(afterMove[0], "cell");
-                    return cell != null && !source.equals(cell)
-                            && "SETTLED".equals(extractString(afterMove[0], "state"));
-                },
-                () -> loadAllEntrySlots(setup));
-        assertTrue("the carry started but the ship never settled in the neighbour; source="
-                + sourceCell + " shipX=" + mx + " carry=" + carry + " last ledger=" + afterMove[0],
-                carriedOver);
-        String carriedCell = extractString(afterMove[0], "cell");
+        // Waited for as the EVENT production publishes when the carry completes, not by sampling the
+        // ledger until it happens to read SETTLED. A sample cannot tell "it never settled" from "it
+        // settled and something moved it again"; the record can, and on failure it prints the chain
+        // instead of one last blob. `awaitCarrying` names THIS ship: a shared server carries other
+        // scenarios' craft across the same seams, and a wait on the type alone is one any of them
+        // satisfies.
+        events.awaitCarrying(carryMark, "ship_entered_cell", "\"ship\":\"" + arShipId + "\"",
+                "the carry started (" + carry + "), so THIS ship must settle in the neighbouring"
+                        + " cell it left through; source=" + sourceCell + " shipX=" + mx,
+                SETTLE_TICKS);
+        String afterMove = exec("artest space ledger-get " + arShipId);
+        String carriedCell = extractString(afterMove, "cell");
+        assertTrue("the ship settled but the ledger does not name a cell for it: " + afterMove,
+                carriedCell != null && !sourceCell.equals(carriedCell));
 
         long[] from = cellSectors(sourceCell);
         long[] to = cellSectors(carriedCell);
@@ -134,8 +137,8 @@ public class VSShipCellSeamE2ETest extends AbstractSharedServerTest {
 
         // It arrived INSIDE the neighbour's opposite face, not on it. This is the hysteresis as the
         // world sees it: the expected world X is the local offset itself (XZ realize directly).
-        int carriedSlot = extractInt(afterMove[0], "slotDim");
-        assertTrue("the carried ship has no bound slot: " + afterMove[0],
+        int carriedSlot = extractInt(afterMove, "slotDim");
+        assertTrue("the carried ship has no bound slot: " + afterMove,
                 carriedSlot > Integer.MIN_VALUE);
         assertTrue("the neighbour's cell world never came up", loadedShips(carriedSlot) >= 1);
         String arrived = arrivedShip(carriedSlot, arShipId);
@@ -222,6 +225,8 @@ public class VSShipCellSeamE2ETest extends AbstractSharedServerTest {
         assertTrue("before the carry the body must be ABOARD the source ship, or what follows is not "
                 + "about a carry at all: " + beforeCarry, beforeCarry.contains("\"aboard\":true"));
 
+        // Marked BEFORE the carry: a mark taken afterwards can miss the record it is about.
+        long carryMark = events.mark();
         String carry = exec("artest space seam-carry " + arranged.sourceSlot + " id "
                 + arranged.arShipId);
         assertTrue("production does not agree the ship has left its cell: " + carry,
@@ -255,21 +260,17 @@ public class VSShipCellSeamE2ETest extends AbstractSharedServerTest {
         assertTrue("the arrival deck's chunks could not be held: " + heldDst,
                 heldDst.contains("\"ok\":true"));
 
-        final String[] afterMove = {""};
-        final String source = arranged.sourceCell;
-        final String setup = arranged.setup;
-        boolean carriedOver = GameTicks.until(client(), GameTicks.server(), SETTLE_TICKS,
-                () -> {
-                    afterMove[0] = exec("artest space ledger-get " + arranged.arShipId);
-                    String cell = extractString(afterMove[0], "cell");
-                    return cell != null && !source.equals(cell)
-                            && "SETTLED".equals(extractString(afterMove[0], "state"));
-                },
-                () -> loadAllEntrySlots(setup));
-        assertTrue("the ship itself never settled in the neighbour, so nothing can be concluded about "
-                + "what it was carrying; last ledger=" + afterMove[0], carriedOver);
-        int carriedSlot = extractInt(afterMove[0], "slotDim");
-        assertTrue("the carried ship has no bound slot: " + afterMove[0],
+        // The event production publishes when the carry completes -- see the sibling scenario.
+        events.awaitCarrying(carryMark, "ship_entered_cell",
+                "\"ship\":\"" + arranged.arShipId + "\"",
+                "the ship itself never settled in the neighbour, so nothing can be concluded about"
+                        + " what it was carrying", SETTLE_TICKS);
+        String afterMove = exec("artest space ledger-get " + arranged.arShipId);
+        assertTrue("the ship settled but the ledger does not name a new cell for it: " + afterMove,
+                extractString(afterMove, "cell") != null
+                        && !arranged.sourceCell.equals(extractString(afterMove, "cell")));
+        int carriedSlot = extractInt(afterMove, "slotDim");
+        assertTrue("the carried ship has no bound slot: " + afterMove,
                 carriedSlot > Integer.MIN_VALUE);
         assertTrue("the neighbour's cell world never came up", loadedShips(carriedSlot) >= 1);
 
@@ -496,6 +497,10 @@ public class VSShipCellSeamE2ETest extends AbstractSharedServerTest {
         return new long[]{Long.parseLong(m.group(1)), Long.parseLong(m.group(2)),
                 Long.parseLong(m.group(3))};
     }
+
+    /** This tier's reader of the server's ordered event log. */
+    private final Events events =
+            new Events(this::exec, ticks -> GameTicks.advanceWorld(client(), 0, ticks));
 
     private String exec(String cmd) throws Exception {
         return String.join("\n", client().execute(cmd));

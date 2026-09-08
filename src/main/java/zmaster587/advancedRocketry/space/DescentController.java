@@ -188,6 +188,21 @@ public final class DescentController {
                     public void settled(UUID id) {
                         crossing.ops().messageCrew(settledCrew, "msg.shipdescent.arrived");
                         LOGGER.info("[SPACE] descent settled: ship {} on dim {}", id, targetPlanetDim);
+                        // ENTERED, not landed: the craft is in the planet's world at its arrival
+                        // pose. Whether it ever touches down is a later question this moment does
+                        // not witness, and the event is named for what it saw.
+                        net.minecraft.world.World arrivedIn = net.minecraftforge.common
+                                .DimensionManager.getWorld(targetPlanetDim);
+                        if (arrivedIn == null) {
+                            LOGGER.warn("[SPACE] descent of ship {} not announced: dim {} is not"
+                                    + " loaded", id, targetPlanetDim);
+                            return;
+                        }
+                        net.minecraftforge.common.MinecraftForge.EVENT_BUS.post(
+                                new zmaster587.advancedRocketry.api.event.ShipCrossingEvent
+                                        .EnteredPlanet(arrivedIn, id == null ? null : id.toString(),
+                                        CellCrossingController.playersOf(settledCrew),
+                                        targetPlanetDim, slotDim, sourceCell));
                     }
 
                     @Override

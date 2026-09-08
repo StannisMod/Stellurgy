@@ -205,6 +205,10 @@ public final class CellCrossingController {
         double[] pose = CellWorldMapper.poseWorldOf(destCoord);
         final GalacticCoord arrivalCoord = destCoord;
         final Kind arrivalKind = kind;
+
+        // Announced BEFORE the cut, so a subscriber can still read the world the craft is leaving.
+        // The crew is captured by the line above, which is why this sits after it and not earlier.
+        announceDeparture(shipId, kind, sourceCell, destCoord, slotDim, crew);
         BlockPos anchor = crossing.begin(shipId, slotDim, shipPos, destSlotDim,
                 lane * SEAM_LANE_STRIDE, SEAM_PASTE_Y, SEAM_PASTE_Z, crew, pose,
                 new ShipCrossingService.Completion() {
@@ -214,6 +218,12 @@ public final class CellCrossingController {
                         crossing.ops().messageCrew(crew, arrivalKind.arrivedKey);
                         LOGGER.info("[SPACE] {} settled: ship {} now in cell {} (slot {})",
                                 arrivalKind.label, id, arrivalCoord.cellKey(), destSlotDim);
+                        // Announced AFTER the ledger settles, so a subscriber that asks the ledger
+                        // where this craft is gets the answer this event is about. A JUMP is not a
+                        // mechanic of its own — the transit manager routes the short case here — so
+                        // it is published as a transit and only the SEAM carry is a cell crossing.
+                        announceArrival(id, arrivalKind, sourceCell, arrivalCoord, destSlotDim,
+                                crew);
                     }
 
                     @Override
@@ -274,5 +284,76 @@ public final class CellCrossingController {
     /** Whether {@code shipId} is being moved between cells right now — by either entry point. */
     public boolean isCarrying(UUID shipId) {
         return crossing.isCrossing(shipId);
+    }
+
+    /**
+     * Publish the arrival this controller has just finished, as the mechanic it actually was.
+     *
+     * <p>{@link Kind#SEAM} is a cell-boundary crossing: nothing was commanded, the craft flew past a
+     * face. {@link Kind#JUMP} is not a mechanic of this controller at all — the transit manager
+     * decides from distance and speed that a jump is short enough to skip the hyperspace parking and
+     * routes it here to be executed, so it is announced as a transit that took the DIRECT route.</p>
+     */
+    private static void announceArrival(UUID shipId, Kind kind, GalacticCoord origin,
+                                        GalacticCoord destination, int destDim,
+                                        List<CrewTransfer.Crew> crew) {
+        net.minecraft.world.World world = net.minecraftforge.common.DimensionManager
+                .getWorld(destDim);
+        if (world == null) {
+            // The destination world went away between the settle and this line. Say nothing rather
+            // than post an event whose `world` is null: a subscriber cannot act on that, and an
+            // event that lies about where a ship is is worse than one that never arrives.
+            LOGGER.warn("[SPACE] arrival of ship {} not announced: dim {} is not loaded",
+                    shipId, destDim);
+            return;
+        }
+        List<net.minecraft.entity.player.EntityPlayerMP> aboard = playersOf(crew);
+        String durable = shipId == null ? null : shipId.toString();
+        net.minecraftforge.common.MinecraftForge.EVENT_BUS.post(kind == Kind.SEAM
+                ? new zmaster587.advancedRocketry.api.event.ShipCrossingEvent.EnteredCell(
+                        world, durable, aboard, origin, destination)
+                : new zmaster587.advancedRocketry.api.event.ShipCrossingEvent.TransitEnded(
+                        world, durable, aboard, origin, destination,
+                        zmaster587.advancedRocketry.api.event.ShipCrossingEvent.Route.DIRECT));
+    }
+
+    /**
+     * Publish the departure this controller is about to perform, as the mechanic it actually is.
+     *
+     * <p>The mirror of {@link #announceArrival}, and it makes the same distinction for the same
+     * reason: a {@link Kind#SEAM} carry is a cell-boundary crossing, a {@link Kind#JUMP} is the short
+     * route of a transit the manager decided to send here.</p>
+     */
+    private static void announceDeparture(UUID shipId, Kind kind, GalacticCoord origin,
+                                          GalacticCoord destination, int originDim,
+                                          List<CrewTransfer.Crew> crew) {
+        net.minecraft.world.World world = net.minecraftforge.common.DimensionManager
+                .getWorld(originDim);
+        if (world == null) {
+            LOGGER.warn("[SPACE] departure of ship {} not announced: dim {} is not loaded",
+                    shipId, originDim);
+            return;
+        }
+        List<net.minecraft.entity.player.EntityPlayerMP> aboard = playersOf(crew);
+        String durable = shipId == null ? null : shipId.toString();
+        net.minecraftforge.common.MinecraftForge.EVENT_BUS.post(kind == Kind.SEAM
+                ? new zmaster587.advancedRocketry.api.event.ShipCrossingEvent.LeftCell(
+                        world, durable, aboard, origin, destination)
+                : new zmaster587.advancedRocketry.api.event.ShipCrossingEvent.TransitBegan(
+                        world, durable, aboard, origin, destination,
+                        zmaster587.advancedRocketry.api.event.ShipCrossingEvent.Route.DIRECT));
+    }
+
+    /** The players a captured crew names, in the order it names them. */
+    static List<net.minecraft.entity.player.EntityPlayerMP> playersOf(List<CrewTransfer.Crew> crew) {
+        List<net.minecraft.entity.player.EntityPlayerMP> players = new java.util.ArrayList<>();
+        if (crew != null) {
+            for (CrewTransfer.Crew member : crew) {
+                if (member != null && member.player != null) {
+                    players.add(member.player);
+                }
+            }
+        }
+        return players;
     }
 }

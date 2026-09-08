@@ -567,6 +567,117 @@ public final class TestEventLog {
                             + ",\"dim\":" + world.provider.getDimension());
         }
 
+        /**
+         * A ship changed WHERE IT IS — the crossing's own account of it.
+         *
+         * <p>One subscription for all six crossing events, on their common base, which Forge's event
+         * hierarchy makes possible and which is the reason they have one. The recorded TYPE is the
+         * event's own simple name lower-cased, so a test awaits {@code ship_entered_cell} or
+         * {@code ship_transit_ended} and gets exactly the moment production published, not a
+         * mixin's reading of an internal step on the way there.</p>
+         *
+         * <p>Every payload field here is one the event carries. A cell coordinate is recorded by its
+         * cell key rather than its full address because that is what a test asserts on; the address
+         * is in the log line the crossing itself writes.</p>
+         */
+        @SubscribeEvent
+        public void onShipCrossing(
+                zmaster587.advancedRocketry.api.event.ShipCrossingEvent event) {
+            noteInstrumentEntered("server_bus_ship_crossing");
+            World world = event.world;
+            if (world == null) {
+                return;
+            }
+            StringBuilder payload = new StringBuilder();
+            payload.append("\"ship\":\"").append(str(event.shipId)).append('"')
+                    .append(",\"dim\":").append(world.provider.getDimension())
+                    .append(",\"crew\":").append(event.crew.size());
+            if (event instanceof zmaster587.advancedRocketry.api.event.ShipCrossingEvent.PlanetTrip) {
+                zmaster587.advancedRocketry.api.event.ShipCrossingEvent.PlanetTrip trip =
+                        (zmaster587.advancedRocketry.api.event.ShipCrossingEvent.PlanetTrip) event;
+                payload.append(",\"planetDim\":").append(trip.planetDim)
+                        .append(",\"cellDim\":").append(trip.cellDim)
+                        .append(",\"cell\":\"").append(cellKeyOf(trip.cell)).append('"');
+            } else {
+                payload.append(",\"origin\":\"").append(cellKeyOf(originOf(event))).append('"')
+                        .append(",\"destination\":\"")
+                        .append(cellKeyOf(destinationOf(event))).append('"');
+                String route = routeOf(event);
+                if (route != null) {
+                    payload.append(",\"route\":\"").append(route).append('"');
+                }
+            }
+            record(sideOf(world), world.getTotalWorldTime(),
+                    typeNameOf(event), payload.toString());
+        }
+
+        /** {@code LeftCell} → {@code ship_left_cell}: the event's own name, as a recorded type. */
+        private static String typeNameOf(
+                zmaster587.advancedRocketry.api.event.ShipCrossingEvent event) {
+            String simple = event.getClass().getSimpleName();
+            StringBuilder out = new StringBuilder("ship");
+            for (int i = 0; i < simple.length(); i++) {
+                char c = simple.charAt(i);
+                if (Character.isUpperCase(c)) {
+                    out.append('_').append(Character.toLowerCase(c));
+                } else {
+                    out.append(c);
+                }
+            }
+            return out.toString();
+        }
+
+        private static String cellKeyOf(zmaster587.advancedRocketry.space.GalacticCoord coord) {
+            return coord == null ? "" : coord.cellKey();
+        }
+
+        private static zmaster587.advancedRocketry.space.GalacticCoord originOf(
+                zmaster587.advancedRocketry.api.event.ShipCrossingEvent e) {
+            if (e instanceof zmaster587.advancedRocketry.api.event.ShipCrossingEvent.LeftCell) {
+                return ((zmaster587.advancedRocketry.api.event.ShipCrossingEvent.LeftCell) e).origin;
+            }
+            if (e instanceof zmaster587.advancedRocketry.api.event.ShipCrossingEvent.EnteredCell) {
+                return ((zmaster587.advancedRocketry.api.event.ShipCrossingEvent.EnteredCell) e).origin;
+            }
+            if (e instanceof zmaster587.advancedRocketry.api.event.ShipCrossingEvent.TransitBegan) {
+                return ((zmaster587.advancedRocketry.api.event.ShipCrossingEvent.TransitBegan) e).origin;
+            }
+            if (e instanceof zmaster587.advancedRocketry.api.event.ShipCrossingEvent.TransitEnded) {
+                return ((zmaster587.advancedRocketry.api.event.ShipCrossingEvent.TransitEnded) e).origin;
+            }
+            return null;
+        }
+
+        private static zmaster587.advancedRocketry.space.GalacticCoord destinationOf(
+                zmaster587.advancedRocketry.api.event.ShipCrossingEvent e) {
+            if (e instanceof zmaster587.advancedRocketry.api.event.ShipCrossingEvent.LeftCell) {
+                return ((zmaster587.advancedRocketry.api.event.ShipCrossingEvent.LeftCell) e).destination;
+            }
+            if (e instanceof zmaster587.advancedRocketry.api.event.ShipCrossingEvent.EnteredCell) {
+                return ((zmaster587.advancedRocketry.api.event.ShipCrossingEvent.EnteredCell) e).destination;
+            }
+            if (e instanceof zmaster587.advancedRocketry.api.event.ShipCrossingEvent.TransitBegan) {
+                return ((zmaster587.advancedRocketry.api.event.ShipCrossingEvent.TransitBegan) e).destination;
+            }
+            if (e instanceof zmaster587.advancedRocketry.api.event.ShipCrossingEvent.TransitEnded) {
+                return ((zmaster587.advancedRocketry.api.event.ShipCrossingEvent.TransitEnded) e).destination;
+            }
+            return null;
+        }
+
+        private static String routeOf(
+                zmaster587.advancedRocketry.api.event.ShipCrossingEvent e) {
+            if (e instanceof zmaster587.advancedRocketry.api.event.ShipCrossingEvent.TransitBegan) {
+                return String.valueOf(
+                        ((zmaster587.advancedRocketry.api.event.ShipCrossingEvent.TransitBegan) e).route);
+            }
+            if (e instanceof zmaster587.advancedRocketry.api.event.ShipCrossingEvent.TransitEnded) {
+                return String.valueOf(
+                        ((zmaster587.advancedRocketry.api.event.ShipCrossingEvent.TransitEnded) e).route);
+            }
+            return null;
+        }
+
         private static String sideOf(World world) {
             return world != null && world.isRemote ? "client" : "server";
         }

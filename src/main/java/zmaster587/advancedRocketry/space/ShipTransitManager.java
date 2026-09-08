@@ -499,6 +499,13 @@ public final class ShipTransitManager {
         // was shown is the flight he gets.
         long arrivalTick = now + zmaster587.advancedRocketry.hyperdrive.JumpSpeed
                 .transitTicks(distance, speed);
+        // The jump is under way and will take a real journey. Announced here rather than beside the
+        // direct route's own announcement because THIS is where the route was chosen: the short case
+        // never reaches this line (it returned above, and the controller it was handed to announces
+        // it as a DIRECT transit). The origin world is still readable — the cut has happened, but the
+        // slot is not released until the arrival.
+        announceTransitBegan(shipId, origin, target, originSlotDim, crew);
+
         Transit t = new Transit(origin, target, tile, hyperAnchor, speed, arrivalTick, now,
                 new ShipTransit(origin, target, distanceBlocks));
         t.snapshot = initialSnapshot;
@@ -669,6 +676,11 @@ public final class ShipTransitManager {
                 LOGGER.info("[SPACE] transit settled: ship {} at {} (slot {}, crew {})",
                         entry.getKey(), t.arrivalCoord.cellKey(), t.targetSlotDim, t.crew.size());
                 crosser.messageCrew(t.crew, "msg.shiptransit.arrived");
+                // Announced after the ledger settle above, so a subscriber that asks the ledger
+                // where this craft is gets the answer this event is about. The coordinate is the
+                // PLACED one, not the aimed one, for the same reason the ledger takes that one.
+                announceTransitEnded(entry.getKey(), t.origin, t.arrivalCoord, t.targetSlotDim,
+                        t.crew);
             } else if (++t.arrivalAttempts >= MAX_ARRIVAL_ATTEMPTS) {
                 // ── THIS BLOCK MUST NEVER RUN. ──────────────────────────────────────────────────────
                 // An arrival is a block paste into a cell; it has no right to fail, and every branch
@@ -1236,5 +1248,72 @@ public final class ShipTransitManager {
         } catch (IllegalArgumentException notAUuid) {
             return null;
         }
+    }
+
+    /**
+     * Announce a hyperspace transit BEGINNING. The short route never reaches here: the transit
+     * manager decides it above and hands it to the cell controller, which announces it as a transit
+     * with {@code Route.DIRECT}. So the route is not a parameter — the call site IS the route.
+     */
+    private static void announceTransitBegan(String shipId, GalacticCoord origin,
+                                             GalacticCoord target, int originSlotDim,
+                                             List<UUID> crew) {
+        net.minecraft.world.World world = net.minecraftforge.common.DimensionManager
+                .getWorld(originSlotDim);
+        if (world == null) {
+            LOGGER.warn("[SPACE] departure of ship {} not announced: origin slot {} is not loaded",
+                    shipId, originSlotDim);
+            return;
+        }
+        net.minecraftforge.common.MinecraftForge.EVENT_BUS.post(
+                new zmaster587.advancedRocketry.api.event.ShipCrossingEvent.TransitBegan(
+                        world, shipId, playersOf(crew), origin, target,
+                        zmaster587.advancedRocketry.api.event.ShipCrossingEvent.Route.HYPERSPACE));
+    }
+
+    /** Announce a hyperspace transit COMPLETING, with the coordinate the ship was actually put at. */
+    private static void announceTransitEnded(String shipId, GalacticCoord origin,
+                                             GalacticCoord placed, int targetSlotDim,
+                                             List<UUID> crew) {
+        net.minecraft.world.World world = net.minecraftforge.common.DimensionManager
+                .getWorld(targetSlotDim);
+        if (world == null) {
+            LOGGER.warn("[SPACE] arrival of ship {} not announced: target slot {} is not loaded",
+                    shipId, targetSlotDim);
+            return;
+        }
+        net.minecraftforge.common.MinecraftForge.EVENT_BUS.post(
+                new zmaster587.advancedRocketry.api.event.ShipCrossingEvent.TransitEnded(
+                        world, shipId, playersOf(crew), origin, placed,
+                        zmaster587.advancedRocketry.api.event.ShipCrossingEvent.Route.HYPERSPACE));
+    }
+
+    /**
+     * The crew, as the players who are actually here to be told about it.
+     *
+     * <p>A transit captures its crew as ids, and a jump is long enough that somebody can log out
+     * during it. Whoever is offline is left out rather than represented by a null: a subscriber
+     * acting on this list acts on players, and one that is not connected is not aboard anything.
+     * The list is therefore who was aboard AND is still here — which is what an event fired now can
+     * honestly claim.</p>
+     */
+    private static List<net.minecraft.entity.player.EntityPlayerMP> playersOf(List<UUID> crew) {
+        List<net.minecraft.entity.player.EntityPlayerMP> players = new ArrayList<>();
+        if (crew == null || crew.isEmpty()) {
+            return players;
+        }
+        net.minecraft.server.MinecraftServer server = net.minecraftforge.fml.common
+                .FMLCommonHandler.instance().getMinecraftServerInstance();
+        if (server == null) {
+            return players;
+        }
+        for (UUID id : crew) {
+            net.minecraft.entity.player.EntityPlayerMP p =
+                    id == null ? null : server.getPlayerList().getPlayerByUUID(id);
+            if (p != null) {
+                players.add(p);
+            }
+        }
+        return players;
     }
 }

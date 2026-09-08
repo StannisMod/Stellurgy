@@ -288,6 +288,20 @@ public final class ShipEntryController {
                         crossing.ops().messageCrew(crew, "msg.shipentry.arrived");
                         LOGGER.info("[SPACE] entry settled: ship {} at {} (slot {})",
                                 id, entryCoord, slotDim);
+                        // The trip is announced once, on completion, and named for its planet side:
+                        // the craft LEFT a planet and is now in space. `world` is where it ended up.
+                        net.minecraft.world.World arrivedIn = net.minecraftforge.common
+                                .DimensionManager.getWorld(slotDim);
+                        if (arrivedIn == null) {
+                            LOGGER.warn("[SPACE] entry of ship {} not announced: slot dim {} is not"
+                                    + " loaded", id, slotDim);
+                            return;
+                        }
+                        net.minecraftforge.common.MinecraftForge.EVENT_BUS.post(
+                                new zmaster587.advancedRocketry.api.event.ShipCrossingEvent
+                                        .LeftPlanet(arrivedIn, id == null ? null : id.toString(),
+                                        CellCrossingController.playersOf(crew),
+                                        launchDimId, slotDim, entryCoord));
                     }
 
                     @Override
