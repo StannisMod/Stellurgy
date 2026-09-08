@@ -81,8 +81,12 @@ public final class ShipFrameTravel {
      *  still does not travel has exactly two candidate writers: the sweep zeroing the horizontal
      *  motion against geometry it is standing in, or something re-applying a committed point over the
      *  swept result. These flags separate them; without them both readings fit the same numbers. */
-    public static volatile boolean lastSweepCollidedX = false;
-    public static volatile boolean lastSweepCollidedZ = false;
+    // PRIVATE on purpose: nothing outside this file names them. Their values do reach a reader —
+    // both are stamped into `tickHistory`'s per-tick line, which the tests DO read — so they are
+    // carriers, not dead code, and the census that reads them as unread is measuring the FIELD's
+    // callers while the VALUE leaves by another door.
+    private static volatile boolean lastSweepCollidedX = false;
+    private static volatile boolean lastSweepCollidedZ = false;
     /** Whether the last resolved entity ended the tick standing on its deck. */
     public static volatile boolean lastOnDeck = false;
     /** Diagnostic: the last measured disagreement between the MOVEMENT frame (VS
@@ -175,8 +179,9 @@ public final class ShipFrameTravel {
      *  ticks ago and the comparison is against the budget of a single tick. {@code -1} when it could
      *  not be read. */
     public static volatile long lastDropGapTicks = -1L;
-    /** World time of the most recent commit, stamped onto each per-tick record line. */
-    public static volatile long lastCommitWorldTime = -1L;
+    /** World time of the most recent commit, stamped onto each per-tick record line. Private: the
+     *  line is the reader, not the field. */
+    private static volatile long lastCommitWorldTime = -1L;
     /** What the physics mod was holding for this body at the last release: its added linear/yaw
      *  velocity, its last-touched ship and its ground counters. A VELOCITY writer and a POSITION
      *  writer produce the same released delta, and only this tells them apart. */

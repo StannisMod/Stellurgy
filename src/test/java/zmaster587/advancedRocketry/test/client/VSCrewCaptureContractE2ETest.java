@@ -353,8 +353,6 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
         double upY = 1.0 - 2.0 * (qx * qx + qz * qz);
         assertTrue("the ship must be steeply rolled for this test to mean anything (upY=" + upY + ")",
                 upY < -0.3);
-        long resolvedBefore = (long) clientDouble(SHIP_FRAME_TRAVEL, "resolvedTicks");
-
         // Stillness window: NO input at all. Sample the client's own drift and the walk
         // discriminators (CLIENT-JVM statics — the client owns this body's movement); the CHURN half
         // is not a static any more but the client's own `deck_released` records since this mark,
@@ -379,24 +377,35 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
             }
         }
         String releases = client.since(churnMark, "deck_released");
-        long resolvedAfter = (long) clientDouble(SHIP_FRAME_TRAVEL, "resolvedTicks");
+        String gate = client.since(churnMark, "deck_gate_decided");
         double x1 = bot().reportState().get("playerX").getAsDouble();
         double z1 = bot().reportState().get("playerZ").getAsDouble();
         double drift = Math.sqrt((x1 - x0) * (x1 - x0) + (z1 - z0) * (z1 - z0));
         long churn = Events.countRecords(releases, "\"reason\":\"externalMove");
         System.out.println("[crewcap] still-drift upY=" + upY + " drift=" + drift
-                + " clientDropChurn=" + churn + " clientResolved=" + resolvedBefore + "->"
-                + resolvedAfter + " maxLateralShipMotion=" + maxLateral + " inputsSeen=("
+                + " clientDropChurn=" + churn + " gateSaysHandled="
+                + Events.countRecords(gate, "\"handled\":true")
+                + " maxLateralShipMotion=" + maxLateral + " inputsSeen=("
                 + strafeSeen + "," + forwardSeen + ") :: " + trace
                 + "\n[crewcap] still-drift releases in window :: " + releases);
         Events.assertInstrumentRan(releases, "deck_capture_events",
                 "the capture was or was not cycled through the stillness window");
 
-        // Instrument-fires guard: the CLIENT must have been resolving this body through the window,
+        // Instrument-fires guard: the CLIENT must have been resolving THIS body through the window,
         // or every zero above is vacuous.
-        assertTrue("the client must be resolving the crew member through the stillness window "
-                + "(resolvedTicks " + resolvedBefore + " -> " + resolvedAfter + ")",
-                resolvedAfter > resolvedBefore + 50);
+        //
+        // Asked of the frame's own per-body verdict rather than of `resolvedTicks`. That static is
+        // JVM-global and cumulative, so on a shared client it counted every body this side ever
+        // resolved: a delta proved "something was resolved", never "this crew member was", and an
+        // earlier scenario's traffic could satisfy it on its own. `deck_gate_decided` is recorded
+        // per body at the RETURN of `handles`, so a record carrying `handled:true` in this window
+        // is the frame saying it owns THIS body's movement. It is a heartbeat, not a counter — the
+        // mixin dedupes to a verdict change or one record per five seconds — so the claim is
+        // presence, not a rate, and this window is longer than the heartbeat.
+        assertTrue("the client must be resolving the crew member through the stillness window —"
+                + " the ship frame's own gate never answered that it handles this body. Gate"
+                + " records since the mark: " + gate,
+                Events.countRecords(gate, "\"handled\":true") > 0);
         // Setup sanity: the window really was input-free (the discriminator data is only meaningful
         // for a still body).
         assertTrue("the stillness window must be input-free (saw strafe=" + strafeSeen + " forward="
