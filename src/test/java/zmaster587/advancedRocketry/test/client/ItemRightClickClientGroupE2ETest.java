@@ -36,9 +36,10 @@ import static org.junit.Assert.assertTrue;
  * <ul>
  *   <li><b>Chat.</b> {@link #rightClickInVanillaDimDispatchesAirReadoutToPlayerChat} proved "the
  *       player was told X" by searching the last N chat lines, which is why it had to re-arm the
- *       channel against the harness's own {@code FORGE_TEST_DONE} markers, one per server command.
- *       It now reads {@code client_chat_received} since a client mark, so a marker in the backlog is
- *       simply another record with different text and the arming is no longer needed.</li>
+ *       channel against the harness's own completion sentinel, one broadcast per server command.
+ *       It now reads {@code client_chat_received} since a client mark, so any line in the backlog is
+ *       simply another record with different text and the arming is no longer needed. The sentinel
+ *       itself is gone besides: the server answers over its own control socket.</li>
  *   <li><b>Entities.</b> {@code reportEntities} counts what the CLIENT can see within a radius, and
  *       a craft spawned by one scenario is still in the world when the next one asks. Both
  *       hovercraft scenarios therefore work at the SAME offset inside their own plots, so the
@@ -208,8 +209,9 @@ public class ItemRightClickClientGroupE2ETest extends AbstractSharedClientE2ETes
 
         // Both marks BEFORE the click, so nothing that happens afterwards can be missed between two
         // reads and nothing that happened before it can be mistaken for the answer. This is what
-        // replaced armChatObservation(): the harness's own FORGE_TEST_DONE markers still land in the
-        // chat channel, and they are now simply other records with other text.
+        // replaced armChatObservation(): whatever else is in the chat channel is simply another
+        // record with other text. The harness no longer adds to it — the completion sentinel that
+        // used to be broadcast per server command is gone with the server's control socket.
         scenario().measuring("mark both event logs immediately before the right-click");
         Events events = events();
         long mark = events.markInstrumented();

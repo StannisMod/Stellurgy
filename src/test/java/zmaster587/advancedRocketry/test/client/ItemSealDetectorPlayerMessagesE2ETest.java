@@ -194,12 +194,13 @@ public class ItemSealDetectorPlayerMessagesE2ETest extends AbstractSharedClientE
         exec("tp @a " + (x + 0.5) + " " + (Y + 1) + " " + (z - 1.5));
         waitForHeld("advancedrocketry:sealdetector");
 
-        // Mark both logs at the LAST moment before the stimulus. The arrangement above issues ~13
-        // server commands and every one of them echoes a "[Server] FORGE_TEST_DONE <uuid>" line into
-        // the player's chat — measured, 13 lines in the backlog on this class's first shared run.
-        // The mark is what makes those harmless: a record read after it cannot be a line written
-        // before it, so the channel no longer has to be emptied and no server command between here
-        // and the click can spoil the reading.
+        // Mark both logs at the LAST moment before the stimulus. The mark is what makes a dirty
+        // backlog harmless: a record read after it cannot be a line written before it, so the
+        // channel never has to be emptied and nothing issued between here and the click can spoil
+        // the reading. (It also used to be load-bearing against the harness itself, which completed
+        // every server command with a sentinel broadcast into the player's chat — 13 lines from this
+        // arrangement alone, measured. The server answers over its own control socket now, so that
+        // source is gone; the mark is kept because a SHARED client's backlog is dirty anyway.)
         scenario().measuring("mark both event logs immediately before the right-click");
         Events events = events();
         long mark = events.markInstrumented();

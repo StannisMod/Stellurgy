@@ -39,8 +39,8 @@ import static org.junit.Assert.assertTrue;
  *
  * <ul>
  *   <li><b>Chat is both the stimulus channel and the observation channel here.</b> Four scenarios
- *       prove "the command answered the player" by reading the last N lines, and the harness writes
- *       a {@code FORGE_TEST_DONE} marker into that same channel on every server command. They used
+ *       prove "the command answered the player" by reading the last N lines of a channel a SHARED
+ *       client leaves dirty. They used
  *       to drain that backlog and prove it empty before typing ({@code armChatObservation}), because
  *       searching the last N lines searches a window the test does not control. They now take a MARK
  *       on the client's event log instead and await a {@code client_chat_received} carrying the
@@ -157,10 +157,11 @@ public class WorldCommandClientGroupE2ETest extends AbstractSharedClientE2ETest 
      * before the command was typed.
      *
      * <p>This is what makes {@code armChatObservation} unnecessary for these scenarios. The old form
-     * searched the last N lines of the overlay, a window it did not control — the harness writes a
-     * {@code FORGE_TEST_DONE} marker into that same channel on every server command, so the backlog
-     * had to be drained and proved empty before the stimulus. A mark is immune to a backlog by
-     * construction: everything before it is invisible, and the marker lines carry their own text.</p>
+     * searched the last N lines of the overlay, a window it did not control — this tier shares one
+     * client, and the harness used to add a broadcast completion sentinel per server command on top
+     * of that, so the backlog had to be drained and proved empty before the stimulus. The sentinel
+     * is gone with the server's control socket; a mark handles the rest by construction, since
+     * everything before it is invisible.</p>
      */
     private void awaitChatContaining(Events events, long mark, String needle) throws Exception {
         String lowered = needle.toLowerCase(Locale.ROOT);

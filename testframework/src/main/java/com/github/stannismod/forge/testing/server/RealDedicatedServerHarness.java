@@ -107,7 +107,16 @@ public final class RealDedicatedServerHarness implements AutoCloseable {
                 throw failure;
             }
             if (outcome == BootOutcome.READY) {
-                awaitBridge(client);
+                try {
+                    awaitBridge(client);
+                } catch (IOException | RuntimeException | InterruptedException bridgeFailure) {
+                    // The server booted; only its control channel did not. Tear the child down here
+                    // rather than letting the throw leak a live server process and a bound port —
+                    // an orphaned dedicated server outlives the fork and holds the world directory.
+                    destroyAndJoin(process, readerThread);
+                    closeQuietly(controlSocket);
+                    throw bridgeFailure;
+                }
                 return new RealDedicatedServerHarness(root, port, client, readerThread, cleanupOnClose,
                         controlSocket);
             }
@@ -441,12 +450,26 @@ public final class RealDedicatedServerHarness implements AutoCloseable {
      * <p>Announces the outcome either way: a channel this different is not something a reader of a
      * failing log should have to infer.</p>
      */
-    private static void awaitBridge(TestClient client) throws InterruptedException {
+    /**
+     * Wait for the child's bridge, and FAIL if it does not come.
+     *
+     * <p>This used to print a warning and carry on over the console. That is the shape of a silent
+     * degradation: the console channel works, so a bridge that never attached produced green runs
+     * on a channel whose replies are log slices, whose concurrent callers can take each other's
+     * lines, and whose completion sentinel is broadcast into every player's chat — the four defects
+     * the bridge exists to remove. A warning in a thirty-thousand-line build log is not an
+     * announcement; nobody reads it, and every measurement taken afterwards is about the fallback.
+     *
+     * <p>Waiting zero milliseconds stays the way to run a server that genuinely has no bridge, and
+     * it is an explicit choice rather than a default the harness slides into.
+     */
+    private static void awaitBridge(TestClient client) throws InterruptedException, IOException {
         long budgetMillis = com.github.stannismod.forge.testing.TestTimeouts
                 .scaledMillis(Long.getLong(PROP_BRIDGE_WAIT_MILLIS, 15_000L).longValue());
         if (budgetMillis <= 0L) {
             return;
         }
+        client.requireBridge();
         long deadline = System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(budgetMillis);
         while (System.nanoTime() < deadline) {
             if (client.hasBridge()) {
@@ -454,10 +477,11 @@ public final class RealDedicatedServerHarness implements AutoCloseable {
             }
             Thread.sleep(50L);
         }
-        System.out.println("[forge-test] no server control bridge after " + budgetMillis
-                + " ms — commands use the console channel, whose replies are log slices and whose"
-                + " completion sentinel is broadcast to chat (set -D" + PROP_BRIDGE_WAIT_MILLIS
-                + "=0 if this server never has one)");
+        throw new IOException("the server control bridge never dialled back within " + budgetMillis
+                + " ms. The console channel would still work, which is why this is thrown rather"
+                + " than warned about: a run on it is evidence about the fallback and not about the"
+                + " server under test. Set -D" + PROP_BRIDGE_WAIT_MILLIS + "=0 for a server that"
+                + " genuinely carries no bridge.");
     }
 
     private static void closeQuietly(java.net.ServerSocket socket) {

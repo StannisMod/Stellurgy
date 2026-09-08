@@ -445,13 +445,14 @@ public abstract class AbstractSharedClientE2ETest {
         // 2026-09-06: the first FULL-suite gate (186 tests, where each fork's neighbours differ from
         // the *VS* subset's) failed the health gate at 18.5.
         //
-        // BEFORE THE SETTLE WAIT, because every `serverClient().execute` echoes a FORGE_TEST_DONE
-        // marker into the client's chat and the reset below is what clears it — but the marker
-        // arrives a tick or two after the command returns. Issued immediately before the reset,
-        // these two left one marker behind and every scenario in the tier failed its own
-        // backlog-is-empty guard; issued here, the ten ticks that already exist to let the teleport
-        // settle also cover the round trip. This is the mechanism the comment at the head of this
-        // method describes, and it is why the server work is grouped where a wait follows it.
+        // BEFORE THE SETTLE WAIT, and the ordering is kept even though the reason that forced it is
+        // gone. `serverClient().execute` used to complete each command with a sentinel BROADCAST
+        // into the client's chat, arriving a tick or two after the command returned: issued
+        // immediately before the reset, these two left one marker behind and every scenario in the
+        // tier failed its own backlog-is-empty guard. The server answers over its own control socket
+        // now and the harness refuses to start without one, so no such line exists. Grouping server
+        // work where a wait follows it is still the right shape — anything the server does needs a
+        // round trip before the client can be asked about it — so the placement stays.
         long hurtMark = events().mark();
         serverClient().execute("artest player set-health 20");
         bot().waitTicks(10);
@@ -755,15 +756,16 @@ public abstract class AbstractSharedClientE2ETest {
      * Clear the CLIENT's chat/overlay immediately before a stimulus, and prove it is clear.
      *
      * <p>The per-scenario reset in {@link #resetBetweenScenarios} is not enough for a scenario that
-     * OBSERVES chat, and the reason is the harness itself: every server command the arrangement
-     * issues echoes a {@code [Server] FORGE_TEST_DONE &lt;uuid&gt;} line into the player's chat.
-     * Measured on this class's first shared run — a six-command arrangement left <b>13 lines</b> in
-     * the backlog by the time the right-click happened. A "the player was told X" assertion that
-     * searches the last N lines is then searching a window it does not control.</p>
+     * OBSERVES chat: this tier shares one client, so an earlier scenario's messages are still in the
+     * backlog, and a "the player was told X" assertion that searches the last N lines is searching a
+     * window it does not control.</p>
      *
-     * <p><b>Issue no SERVER command between this call and the stimulus.</b> Client-side bridge
-     * calls ({@code interactBlock}, {@code setKey}, {@code waitTicks}, every {@code report*}) are
-     * safe — they produce no marker.</p>
+     * <p><b>The harness itself no longer contributes to that backlog.</b> It used to: each server
+     * command was completed by a {@code FORGE_TEST_DONE} sentinel BROADCAST to every player, and a
+     * six-command arrangement measurably left 13 lines in the chat before the stimulus. The server
+     * now answers over its own control socket, and the harness REFUSES to start without one, so a
+     * run that got this far produced no sentinel at all. What is left to clear is the game's own
+     * output, which is reason enough on its own.</p>
      *
      * <p>This clears the chat channel ONLY. It deliberately does not use the full client reset,
      * which closes the open screen: a GUI scenario's stimulus is a click on that screen, so arming

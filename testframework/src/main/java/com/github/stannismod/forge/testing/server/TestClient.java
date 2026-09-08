@@ -32,6 +32,29 @@ public final class TestClient implements Closeable {
     private BufferedWriter bridgeWriter;
     private final Object bridgeLock = new Object();
 
+    /**
+     * Whether this client was promised a bridge — i.e. the harness opened a control port and waited
+     * for the child to dial back.
+     *
+     * <p>When it is true the console channel is NOT a fallback, it is a failure. The two channels
+     * are not equivalent: the console's reply is a slice of the server log, two concurrent calls can
+     * steal each other's lines, and its completion sentinel is broadcast into every player's chat.
+     * Degrading onto it silently means a broken bridge produces green runs, and every measurement
+     * taken afterwards describes the channel nobody chose. Measured 2026-09-08: a run taken to
+     * decide whether the bridge was live could not answer, because both states look the same from
+     * outside.</p>
+     */
+    private volatile boolean bridgeRequired;
+
+    /**
+     * Declare that a bridge is expected, so its absence becomes an error instead of a quiet
+     * downgrade. Called by the harness when — and only when — it has handed the child a control
+     * port and intends to wait for it.
+     */
+    void requireBridge() {
+        this.bridgeRequired = true;
+    }
+
     TestClient(Process process, Writer stdin, List<String> transcript) {
         this.process = process;
         this.stdin = stdin;
@@ -91,6 +114,19 @@ public final class TestClient implements Closeable {
         List<String> overBridge = executeOverBridge(command);
         if (overBridge != null) {
             return overBridge;
+        }
+        if (bridgeRequired) {
+            // A bridge was ASKED FOR and is not here. The console path below would work — that is
+            // exactly the problem: it would work, quietly, on a degraded channel, and every run
+            // afterwards would be evidence about the fallback rather than about the bridge. A
+            // harness that requested a bridge and did not get one has failed to start, and says so
+            // here rather than passing on a channel nobody chose.
+            throw new IOException("the server control bridge was required and is not connected;"
+                    + " refusing to fall back to the console channel, whose replies are log slices"
+                    + " and whose completion sentinel is broadcast to chat. Set -D"
+                    + com.github.stannismod.forge.testing.server.RealDedicatedServerHarness
+                            .PROP_BRIDGE_WAIT_MILLIS
+                    + "=0 to run a server that genuinely has no bridge.");
         }
         String marker = "FORGE_TEST_DONE " + UUID.randomUUID();
         int startIndex = snapshotSize();
