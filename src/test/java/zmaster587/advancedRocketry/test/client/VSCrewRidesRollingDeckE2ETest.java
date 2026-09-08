@@ -163,18 +163,17 @@ public class VSCrewRidesRollingDeckE2ETest extends AbstractSharedVsClientE2ETest
         // Client-observed resolution state (the CLIENT owns a player's movement, so ITS ShipFrameTravel
         // statics are the honest half; the server's are the competing resolution). Diagnostic printout
         // for any failure below - which side captured, which side thrashed.
-        System.out.println("[rollingdeck] client resolvedTicks="
-                + bot().readStaticField("zmaster587.advancedRocketry.integration.vs.ShipFrameTravel",
-                        "resolvedTicks").get("value").getAsString()
+        // The resolver's own capture records rather than a lifetime counter: `resolvedTicks` was
+        // cumulative and JVM-global, so it had already been advanced by whatever ran before this
+        // scenario and could not be read as "it resolved HIM". Each record names body and ship.
+        System.out.println("[rollingdeck] client deckCommits="
+                + clientEvents().since(0, "deck_captured")
                 + " externalMoveDrops="
                 + bot().readStaticField("zmaster587.advancedRocketry.integration.vs.ShipFrameTravel",
                         "externalMoveDrops").get("value").getAsString()
                 + " lastOnDeck="
                 + bot().readStaticField("zmaster587.advancedRocketry.integration.vs.ShipFrameTravel",
                         "lastOnDeck").get("value").getAsString()
-                + " declinedTicks="
-                + bot().readStaticField("zmaster587.advancedRocketry.integration.vs.ShipFrameTravel",
-                        "declinedTicks").get("value").getAsString()
                 + " || server stats=" + exec("artest vs shipframe-stats"));
         assertTrue("the crew member must still be aboard after the roll: " + rolled,
                 rolled.contains("\"shipLoaded\":true"));

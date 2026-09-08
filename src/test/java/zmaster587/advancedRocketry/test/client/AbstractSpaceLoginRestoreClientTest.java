@@ -902,8 +902,11 @@ public abstract class AbstractSpaceLoginRestoreClientTest {
      * silent record reads as "he did not move", which is the one reading it must never be able to fake.
      */
     protected String dropReasons() throws Exception {
-        return "CLIENT[resolvedTicks=" + clientString(SHIP_FRAME_TRAVEL, "resolvedTicks")
-                + " declinedTicks=" + clientString(SHIP_FRAME_TRAVEL, "declinedTicks")
+        // "The resolver never ran" is asked of its own RECORDS, not of `resolvedTicks`. That counter
+        // was cumulative and JVM-global: on a shared client it had already been advanced by whatever
+        // ran before this scenario, so a non-zero could not mean "it ran for HIM". Each capture
+        // record names the body and the ship, which is the reading this message was after.
+        return "CLIENT[deckCommits=" + clientEvents().since(0, "deck_captured")
                 + " externalMoveDrops=" + clientString(SHIP_FRAME_TRAVEL, "externalMoveDrops")
                 + " lastDropReason=" + clientString(SHIP_FRAME_TRAVEL, "lastDropReason")
                 + " worldMoveApplies=" + clientString(SHIP_FRAME_TRAVEL, "worldMoveApplies") + "]";

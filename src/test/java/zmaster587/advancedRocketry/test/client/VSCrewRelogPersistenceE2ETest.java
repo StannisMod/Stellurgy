@@ -943,9 +943,10 @@ public class VSCrewRelogPersistenceE2ETest extends AbstractSharedVsClientE2ETest
      */
     private String mover() throws Exception {
         String st = exec("artest vs shipframe-stats");
-        return "SRV[resolved=" + readLong(st, "resolvedTicks")
-                + " declined=" + readLong(st, "declinedTicks")
-                + " worldMoves=" + readLong(st, "worldMoveApplies")
+        // No `resolved`/`declined` columns: both were lifetime, JVM-global counters, so on a side
+        // that has resolved anything at all they are non-zero regardless of this body, and a
+        // reader comparing two samples was reading every body at once.
+        return "SRV[worldMoves=" + readLong(st, "worldMoveApplies")
                 + " in=" + readString2(st, "lastInStrafe") + "/" + readString2(st, "lastInForward")
                 + " mShip=(" + readString2(st, "lastMotionShipX") + ","
                 + readString2(st, "lastMotionShipY") + "," + readString2(st, "lastMotionShipZ") + ")"
@@ -955,9 +956,7 @@ public class VSCrewRelogPersistenceE2ETest extends AbstractSharedVsClientE2ETest
                 // The client side is deliberately THIN here — every field costs a round trip, and
                 // the round trips stretch the very timeline this trace is sampling. The client's
                 // own per-tick record is read once, at the end (clientTickHistory).
-                + " CLI[resolved=" + clientString(SHIP_FRAME_TRAVEL, "resolvedTicks")
-                + " declined=" + clientString(SHIP_FRAME_TRAVEL, "declinedTicks")
-                + " worldMoves=" + clientString(SHIP_FRAME_TRAVEL, "worldMoveApplies")
+                + " CLI[worldMoves=" + clientString(SHIP_FRAME_TRAVEL, "worldMoveApplies")
                 + " extDrops=" + clientString(SHIP_FRAME_TRAVEL, "externalMoveDrops")
                 + " lastDrop=" + clientString(SHIP_FRAME_TRAVEL, "lastDropReason") + "]"
                 + " srvLastMove=" + readString(st, "lastWorldMove");

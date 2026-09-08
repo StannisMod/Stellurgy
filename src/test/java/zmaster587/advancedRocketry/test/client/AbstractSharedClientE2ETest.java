@@ -635,12 +635,19 @@ public abstract class AbstractSharedClientE2ETest {
         // travelling at a CONSTANT delta per tick with its own motion at zero is not being moved by its
         // physics — it is being carried by a rigid transform. When the server then reports no capture
         // and no ship containing the body's point, the only remaining carrier is the client's own ship-frame
-        // resolution continuing in a frame the server has already let go of. These counters say whether
-        // it is resolving at all, which is the difference between that and a fourth explanation.
+        // resolution continuing in a frame the server has already let go of. What is dumped below says
+        // whether it is resolving at all, which is the difference between that and a fourth explanation.
+        //
+        // The resolver's half is its own RECORDS rather than its lifetime counters. `resolvedTicks`
+        // and `declinedTicks` were cumulative and JVM-global, so on a shared client they carried
+        // every body this side ever touched and a reader could not tell this one's story out of
+        // them. The whole ring is asked for (`since(0)`), because a diagnostic wants the tail it can
+        // get and each record names its body, its ship and where on the deck it landed.
         String clientResolver = readClientCounters(
                 "zmaster587.advancedRocketry.integration.vs.ShipFrameTravel",
-                "resolvedTicks", "declinedTicks", "externalMoveDrops",
-                "lastBodyLocalX", "lastBodyLocalY", "lastBodyLocalZ");
+                "externalMoveDrops", "lastBodyLocalX", "lastBodyLocalY", "lastBodyLocalZ")
+                + "\n  client deck commits (whole ring): " + clientEvents().since(0, "deck_captured")
+                + "\n  client deck releases (whole ring): " + clientEvents().since(0, "deck_released");
         return "\n  readings taken AFTER the verdict, oldest first:" + trail
                 + "\n  reached its plot while being watched: " + arrived
                 + (arrived

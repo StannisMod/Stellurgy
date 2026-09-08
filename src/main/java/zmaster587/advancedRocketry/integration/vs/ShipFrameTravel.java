@@ -65,10 +65,15 @@ public final class ShipFrameTravel {
     // ---- Diagnostics. A mixin that silently fails to apply looks exactly like a mixin that applied
     // and decided to do nothing, so the two must be told apart from outside the JVM.
 
-    /** Ticks resolved in a ship frame since the game started. */
-    public static volatile long resolvedTicks = 0L;
-    /** Ticks where the hook ran, an entity was aboard, but the frame could not be resolved. */
-    public static volatile long declinedTicks = 0L;
+    /** Ticks resolved in a ship frame since the game started. PRIVATE: it is the leading number of
+     *  every {@code tickHistory} line — where a gap between two consecutive commits is exactly what
+     *  a reader is looking for — and nothing outside this file has a use for the raw total, which
+     *  is cumulative and JVM-global and so describes no body in particular. */
+    private static volatile long resolvedTicks = 0L;
+    /** Ticks where the hook ran, an entity was aboard, but the frame could not be resolved.
+     *  PRIVATE for the same reason as its sibling: a lifetime, JVM-global total describes no body
+     *  in particular, and the per-body facts are the deck records the test mixins write. */
+    private static volatile long declinedTicks = 0L;
     /** How many times the external-move guard has dropped a capture. On a ROTATING ship the deck carries an
      *  aboard body faster than a tight guard tolerates, so it drops the capture every tick and the body
      *  loses the deck (the tier-2 fall-through). A rotating ship that does NOT thrash keeps this ~flat. */

@@ -2465,10 +2465,9 @@ public class TestProbeCommand extends CommandBase {
         }
         if (args.length >= 1 && "shipframe-stats".equalsIgnoreCase(args[0])) {
             Map<String, Object> m = new LinkedHashMap<>();
-            m.put("resolvedTicks",
-                    zmaster587.advancedRocketry.integration.vs.ShipFrameTravel.resolvedTicks);
-            m.put("declinedTicks",
-                    zmaster587.advancedRocketry.integration.vs.ShipFrameTravel.declinedTicks);
+            // No resolvedTicks/declinedTicks: both are lifetime, JVM-global counters, so a reader
+            // could not tell one body's story out of them, and nothing consumed them from here.
+            // The per-body facts are the deck records the test mixins write.
             m.put("lastObstacleCount",
                     zmaster587.advancedRocketry.integration.vs.ShipFrameTravel.lastObstacleCount);
             m.put("lastOnDeck",
