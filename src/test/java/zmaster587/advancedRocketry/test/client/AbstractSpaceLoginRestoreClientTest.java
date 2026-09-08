@@ -906,9 +906,12 @@ public abstract class AbstractSpaceLoginRestoreClientTest {
         // was cumulative and JVM-global: on a shared client it had already been advanced by whatever
         // ran before this scenario, so a non-zero could not mean "it ran for HIM". Each capture
         // record names the body and the ship, which is the reading this message was after.
+        // And the releases are asked of their own records for the same reason: `externalMoveDrops`
+        // was a lifetime count over every body, and `lastDropReason` was the reason of whichever
+        // drop this JVM made last — on a shared client, routinely another scenario's. Each release
+        // record names the body, the mode and the gate's whole reason.
         return "CLIENT[deckCommits=" + clientEvents().since(0, "deck_captured")
-                + " externalMoveDrops=" + clientString(SHIP_FRAME_TRAVEL, "externalMoveDrops")
-                + " lastDropReason=" + clientString(SHIP_FRAME_TRAVEL, "lastDropReason")
+                + " deckReleases=" + clientEvents().since(0, "deck_released")
                 + " worldMoveApplies=" + clientString(SHIP_FRAME_TRAVEL, "worldMoveApplies") + "]";
     }
 

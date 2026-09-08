@@ -2477,34 +2477,19 @@ public class TestProbeCommand extends CommandBase {
                     zmaster587.advancedRocketry.integration.vs.ShipFrameTravel.lastTcFwdDisagreement);
             m.put("lastShipUpY",
                     zmaster587.advancedRocketry.integration.vs.ShipFrameTravel.lastShipUpY);
-            m.put("externalMoveDrops",
-                    zmaster587.advancedRocketry.integration.vs.ShipFrameTravel.externalMoveDrops);
-            m.put("lastDropReason",
-                    zmaster587.advancedRocketry.integration.vs.ShipFrameTravel.lastDropReason);
-            m.put("lastDropGapTicks",
-                    zmaster587.advancedRocketry.integration.vs.ShipFrameTravel.lastDropGapTicks);
-            m.put("declinedNoLocalOrMotion",
-                    zmaster587.advancedRocketry.integration.vs.ShipFrameTravel.declinedNoLocalOrMotion);
-            m.put("declinedTransformGone",
-                    zmaster587.advancedRocketry.integration.vs.ShipFrameTravel.declinedTransformGone);
+            // No drop columns and no decline counters. A release is a `deck_released` record that
+            // carries the gate's whole reason — the gap in ticks, the two discriminator vectors, the
+            // allowance and what the physics mod was holding — for ONE body, at the moment it
+            // happened; the counters beside them were lifetime totals over every body this side has
+            // ever resolved, which is a number no window can be taken out of.
             m.put("worldMoveApplies",
                     zmaster587.advancedRocketry.integration.vs.ShipFrameTravel.worldMoveApplies);
             m.put("lastWorldMove",
                     zmaster587.advancedRocketry.integration.vs.ShipFrameTravel.lastWorldMove);
-            m.put("lastGuardFrameStep",
-                    zmaster587.advancedRocketry.integration.vs.ShipFrameTravel.lastGuardFrameStep);
-            m.put("lastGuardAllowed",
-                    zmaster587.advancedRocketry.integration.vs.ShipFrameTravel.lastGuardAllowed);
-            m.put("lastGuardCarry",
-                    zmaster587.advancedRocketry.integration.vs.ShipFrameTravel.lastGuardCarry);
-            m.put("lastDropFrameMovedY",
-                    zmaster587.advancedRocketry.integration.vs.ShipFrameTravel.lastDropFrameMovedY);
-            m.put("lastDropEntityMovedY",
-                    zmaster587.advancedRocketry.integration.vs.ShipFrameTravel.lastDropEntityMovedY);
-            m.put("lastDropAllowed",
-                    zmaster587.advancedRocketry.integration.vs.ShipFrameTravel.lastDropAllowed);
-            m.put("dragSuppressions",
-                    zmaster587.advancedRocketry.integration.vs.ShipFrameTravel.dragSuppressions);
+            // The guard's own measurements are no longer served from here either: a step and the
+            // allowance it was judged against only mean something read as a PAIR, off one pass of
+            // one body, which is what the `deck_guard_pass` record is and what three statics polled
+            // from another JVM never were.
             // What the server REFUSED to ratify is no longer a counter here: every judgement of the
             // deck movement bound is a `deck_movement_bound` record in the event log (a test-only
             // mixin on its RETURN), with both endpoints and the verdict, so a test reads the

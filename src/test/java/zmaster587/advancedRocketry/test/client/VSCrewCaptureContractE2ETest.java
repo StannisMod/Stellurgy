@@ -977,6 +977,7 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
         // this loop runs for hundreds of client ticks. Advancing the mark past the last record read
         // covers EVERY resolved tick at the same one round trip per sample.
         long carryMark = clientEvents().mark();
+        long guardMark = carryMark;
         double yPrev = shipY0;
         StringBuilder samples = new StringBuilder();
         // The drive's thrust duty-cycle is cadence-bound: the pilot input decays between re-sends,
@@ -1008,8 +1009,19 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
                 maxRate = Math.max(maxRate, rate);
                 travelled = Math.max(travelled, Math.abs(yNow - shipY0));
                 yPrev = yNow;
-                double step = clientDouble(SHIP_FRAME_TRAVEL, "lastGuardFrameStep");
-                double carry = clientDouble(SHIP_FRAME_TRAVEL, "lastGuardCarry");
+                // Every guard pass since the previous sample, not the one this sample landed on:
+                // the step and the allowance it was judged against travel together on each record,
+                // where the two statics this replaces were read a round trip apart and could belong
+                // to different passes — and to a different body.
+                double step = Double.NaN, carry = Double.NaN;
+                for (String pass : Events.records(
+                        clientEvents().since(guardMark, "deck_guard_pass"))) {
+                    step = Events.number(pass, "frameStep");
+                    carry = Events.number(pass, "carrySeen");
+                    maxFrameStep = Math.max(maxFrameStep, step);
+                    maxCarry = Math.max(maxCarry, carry);
+                    guardMark = (long) Events.number(pass, "seq") + 1L;
+                }
                 // CROSS-SIDE, on ONE axis and one quantity: the craft's declared VERTICAL velocity
                 // (server, blocks/second) against the VERTICAL carry the client installs for the
                 // body (blocks/tick). Vertical because that is the axis this drive moves on, and
@@ -1027,8 +1039,6 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
                             Math.abs(Events.number(tick, "carryY")));
                     carryMark = (long) Events.number(tick, "seq") + 1L;
                 }
-                maxFrameStep = Math.max(maxFrameStep, step);
-                maxCarry = Math.max(maxCarry, carry);
                 if (i % 20 == 19) {
                     // No churn column here any more: a release is a RECORD carrying its own sequence
                     // and the gate that made it, so WHEN it happened is read off the log below
@@ -1057,18 +1067,14 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
         // empty), gapTicks=N says the displacement accumulated over N ticks and is being compared
         // against a one-tick budget - a defect in the comparison, not in the feed. Without it the
         // red names a number and no cause.
-        String dropShape = String.format(java.util.Locale.ROOT,
-                "lastDrop gapTicks=%d frameMoved=(%.3f,%.3f,%.3f) entityMoved=(%.3f,%.3f,%.3f)"
-                        + " allowed=%.3f vsAdded=%s",
-                (long) clientDouble(SHIP_FRAME_TRAVEL, "lastDropGapTicks"),
-                clientDouble(SHIP_FRAME_TRAVEL, "lastDropFrameMovedX"),
-                clientDouble(SHIP_FRAME_TRAVEL, "lastDropFrameMovedY"),
-                clientDouble(SHIP_FRAME_TRAVEL, "lastDropFrameMovedZ"),
-                clientDouble(SHIP_FRAME_TRAVEL, "lastDropEntityMovedX"),
-                clientDouble(SHIP_FRAME_TRAVEL, "lastDropEntityMovedY"),
-                clientDouble(SHIP_FRAME_TRAVEL, "lastDropEntityMovedZ"),
-                clientDouble(SHIP_FRAME_TRAVEL, "lastDropAllowed"),
-                clientString(SHIP_FRAME_TRAVEL, "lastDropVsAdded"));
+        // The whole shape, from the release record of THIS window rather than from eight statics
+        // holding whichever drop this JVM made last — which on a shared client is routinely another
+        // scenario's, and was never guaranteed to be the drop the numbers above are about. The gate
+        // composes all of it into the reason it releases with, so the record already carries it.
+        String lastRelease = Events.lastRecord(driveReleases);
+        String dropShape = lastRelease == null
+                ? "lastDrop (no release in the drive window)"
+                : "lastDrop " + Events.text(lastRelease, "reason");
         System.out.println("[crewcap] climb-churn shipY=" + shipY0 + "->" + shipY1 + " travelled="
                 + travelled + " maxRate=" + maxRate + " churn=" + churn
                 + " control=" + controlChurn + " maxFrameStep=" + maxFrameStep + " maxCarry="

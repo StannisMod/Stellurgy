@@ -643,9 +643,11 @@ public abstract class AbstractSharedClientE2ETest {
         // every body this side ever touched and a reader could not tell this one's story out of
         // them. The whole ring is asked for (`since(0)`), because a diagnostic wants the tail it can
         // get and each record names its body, its ship and where on the deck it landed.
-        String clientResolver = readClientCounters(
-                "zmaster587.advancedRocketry.integration.vs.ShipFrameTravel", "externalMoveDrops")
-                + "\n  client deck commits (whole ring): " + clientEvents().since(0, "deck_captured")
+        // No externalMoveDrops column either, and for the same reason plus one: it was a lifetime
+        // count of guard drops over every body, and the releases it was counting are printed in full
+        // on the next line — each naming its body and the gate's whole reason.
+        String clientResolver =
+                "client deck commits (whole ring): " + clientEvents().since(0, "deck_captured")
                 + "\n  client deck releases (whole ring): " + clientEvents().since(0, "deck_released")
                 // The body's own ship-frame point, per tick, instead of the three statics that used
                 // to be sampled here: those held whatever the LAST resolved body left in them, which
@@ -710,21 +712,6 @@ public abstract class AbstractSharedClientE2ETest {
                     + ")";
         }
         return askServer("artest events since " + plotMark + " pos_jump");
-    }
-
-    /** Client statics read from a diagnostic: a field that is absent says so and costs nothing else. */
-    private String readClientCounters(String className, String... fields) {
-        StringBuilder out = new StringBuilder();
-        for (String field : fields) {
-            out.append(out.length() == 0 ? "" : " ").append(field).append('=');
-            try {
-                JsonObject read = bot().readStaticField(className, field);
-                out.append(read != null && read.has("value") ? read.get("value").getAsString() : read);
-            } catch (Exception unreadable) {
-                out.append("(unreadable)");
-            }
-        }
-        return out.toString();
     }
 
     /** A server probe asked from a diagnostic: its own failure must never replace the one being told. */

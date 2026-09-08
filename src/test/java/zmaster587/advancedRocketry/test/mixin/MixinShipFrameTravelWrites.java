@@ -1,5 +1,6 @@
 package zmaster587.advancedRocketry.test.mixin;
 
+import net.minecraft.entity.Entity;
 import net.minecraft.entity.EntityLivingBase;
 import net.minecraft.world.World;
 
@@ -12,6 +13,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 import zmaster587.advancedRocketry.integration.vs.ShipFrameTravel;
 import zmaster587.advancedRocketry.integration.vs.VSIntegration;
+import zmaster587.advancedRocketry.test.trace.ShipFrameGuardState;
 import zmaster587.advancedRocketry.test.trace.TestTrace;
 
 /**
@@ -222,6 +224,46 @@ public abstract class MixinShipFrameTravelWrites {
                         + ",\"commitX\":" + worldPos[0]
                         + ",\"commitY\":" + worldPos[1]
                         + ",\"commitZ\":" + worldPos[2]);
+    }
+
+    /**
+     * What the external-move guard measured, per pass, on the body it was judging.
+     *
+     * <p>The pair is the point. A frame step means nothing without the allowance it was compared
+     * against, and production used to publish the two as separate statics that a reader sampled one
+     * field at a time from another JVM — so the step could be one body's and the allowance another's,
+     * and neither could be tied to the pass that dropped a capture. One record carries both, plus the
+     * two discriminator vectors that name WHICH writer moved the body: {@code frameMoved} is the deck
+     * stepping under an unmoved body, {@code entityMoved} is something moving the body itself.</p>
+     *
+     * <p>Recorded on every pass, which is the same per-tick cadence as the tick line and turns its
+     * own 256-deep ring over in about thirteen seconds — a reader takes a mark and asks for the
+     * window it cares about.</p>
+     */
+    @Inject(method = "noteGuardPass", at = @At("HEAD"))
+    private static void arTest$guardPass(Entity entity, double frameStep, double allowed,
+                                         double carrySeen, double frameMovedX, double frameMovedY,
+                                         double frameMovedZ, double entityMovedX,
+                                         double entityMovedY, double entityMovedZ,
+                                         CallbackInfo ci) {
+        if (entity == null || entity.world == null) {
+            return;
+        }
+        TestTrace.instrument(entity, "deck_guard_pass_events");
+        // Held for the per-tick deck-pose trace, which needs the step and its allowance in the SAME
+        // row as the craft's pose; see ShipFrameGuardState for why that is not the record's job.
+        ShipFrameGuardState.note(entity.world.isRemote, frameStep, allowed, carrySeen);
+        TestTrace.record(entity, "deck_guard_pass",
+                "\"e\":" + entity.getEntityId()
+                        + ",\"frameStep\":" + frameStep
+                        + ",\"allowed\":" + allowed
+                        + ",\"carrySeen\":" + carrySeen
+                        + ",\"frameMovedX\":" + frameMovedX
+                        + ",\"frameMovedY\":" + frameMovedY
+                        + ",\"frameMovedZ\":" + frameMovedZ
+                        + ",\"entityMovedX\":" + entityMovedX
+                        + ",\"entityMovedY\":" + entityMovedY
+                        + ",\"entityMovedZ\":" + entityMovedZ);
     }
 
     /**

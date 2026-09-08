@@ -961,17 +961,19 @@ public class VSCrewRelogPersistenceE2ETest extends AbstractSharedVsClientE2ETest
         // had left in a static, so on a world with a second body aboard anything the loop below
         // compared across two samples could be two different subjects.
         String srvTick = Events.lastRecord(events().since(0, "ship_frame_tick"));
+        String srvGuard = Events.lastRecord(events().since(0, "deck_guard_pass"));
         return "SRV[worldMoves=" + readLong(st, "worldMoveApplies")
-                + " guardCarry=" + readString2(st, "lastGuardCarry")
+                + " guard=" + (srvGuard == null ? "(no pass)" : srvGuard)
                 + " tick=" + (srvTick == null
                         ? "(the server has resolved no tick at all)" : Events.text(srvTick, "line"))
                 + "]"
                 // The client side is deliberately THIN here — every field costs a round trip, and
-                // the round trips stretch the very timeline this trace is sampling. The client's
-                // own per-tick record is read once, at the end (clientTickHistory).
-                + " CLI[worldMoves=" + clientString(SHIP_FRAME_TRAVEL, "worldMoveApplies")
-                + " extDrops=" + clientString(SHIP_FRAME_TRAVEL, "externalMoveDrops")
-                + " lastDrop=" + clientString(SHIP_FRAME_TRAVEL, "lastDropReason") + "]"
+                // the round trips stretch the very timeline this trace is sampling. The client's own
+                // per-tick record and its releases are read once, at the end (clientTickHistory and
+                // the release window), which is also why the drop counter and the last drop reason
+                // are no longer sampled per iteration: both were lifetime, JVM-global, and on a
+                // shared client neither described this body.
+                + " CLI[worldMoves=" + clientString(SHIP_FRAME_TRAVEL, "worldMoveApplies") + "]"
                 + " srvLastMove=" + readString(st, "lastWorldMove");
     }
 

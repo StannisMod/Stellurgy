@@ -166,11 +166,12 @@ public class VSCrewRidesRollingDeckE2ETest extends AbstractSharedVsClientE2ETest
         // The resolver's own capture records rather than a lifetime counter: `resolvedTicks` was
         // cumulative and JVM-global, so it had already been advanced by whatever ran before this
         // scenario and could not be read as "it resolved HIM". Each record names body and ship.
+        // The drops, likewise, as the releases they are: the counter that used to be read here was a
+        // lifetime total over every body this JVM has resolved, so on a shared client it said nothing
+        // about this roll. Each record names its body and the gate's whole reason.
         System.out.println("[rollingdeck] client deckCommits="
                 + clientEvents().since(0, "deck_captured")
-                + " externalMoveDrops="
-                + bot().readStaticField("zmaster587.advancedRocketry.integration.vs.ShipFrameTravel",
-                        "externalMoveDrops").get("value").getAsString()
+                + " deckReleases=" + clientEvents().since(0, "deck_released")
                 + " || server stats=" + exec("artest vs shipframe-stats"));
         assertTrue("the crew member must still be aboard after the roll: " + rolled,
                 rolled.contains("\"shipLoaded\":true"));
