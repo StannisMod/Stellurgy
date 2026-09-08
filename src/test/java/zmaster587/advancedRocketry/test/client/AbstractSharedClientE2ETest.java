@@ -644,10 +644,15 @@ public abstract class AbstractSharedClientE2ETest {
         // them. The whole ring is asked for (`since(0)`), because a diagnostic wants the tail it can
         // get and each record names its body, its ship and where on the deck it landed.
         String clientResolver = readClientCounters(
-                "zmaster587.advancedRocketry.integration.vs.ShipFrameTravel",
-                "externalMoveDrops", "lastBodyLocalX", "lastBodyLocalY", "lastBodyLocalZ")
+                "zmaster587.advancedRocketry.integration.vs.ShipFrameTravel", "externalMoveDrops")
                 + "\n  client deck commits (whole ring): " + clientEvents().since(0, "deck_captured")
-                + "\n  client deck releases (whole ring): " + clientEvents().since(0, "deck_released");
+                + "\n  client deck releases (whole ring): " + clientEvents().since(0, "deck_released")
+                // The body's own ship-frame point, per tick, instead of the three statics that used
+                // to be sampled here: those held whatever the LAST resolved body left in them, which
+                // on a shared client is not necessarily the body this diagnostic is about. The `B=`
+                // column of each line is the same number, attributed.
+                + "\n  client per-tick resolution: "
+                + Events.fieldLines(clientEvents().since(0, "ship_frame_tick"), "line");
         return "\n  readings taken AFTER the verdict, oldest first:" + trail
                 + "\n  reached its plot while being watched: " + arrived
                 + (arrived

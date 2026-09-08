@@ -128,9 +128,9 @@ public final class ShipFrameTravel {
      *  This is the field to read when the question is "did the body move ALONG THE DECK", and it is
      *  the only such field a CLIENT e2e can reach: the {@code deck-capture} probe runs on the server
      *  and answers about the SERVER's copy of the body. */
-    public static volatile double lastBodyLocalX = 0.0;
-    public static volatile double lastBodyLocalY = 0.0;
-    public static volatile double lastBodyLocalZ = 0.0;
+    private static volatile double lastBodyLocalX = 0.0;
+    private static volatile double lastBodyLocalY = 0.0;
+    private static volatile double lastBodyLocalZ = 0.0;
     /** Throttle for the [FF-TRACE/WALK] line (test mode only). */
     private static int walkTraceTicks = 0;
     /** The reason of the most recent capture release on THIS side, or "" — lets a probe/e2e name

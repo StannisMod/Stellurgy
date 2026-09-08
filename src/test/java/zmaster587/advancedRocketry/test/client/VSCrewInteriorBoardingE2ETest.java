@@ -241,19 +241,20 @@ public class VSCrewInteriorBoardingE2ETest extends AbstractSharedVsClientE2ETest
         StringBuilder trace = new StringBuilder();
         for (int i = 0; i < 30; i++) {
             bot().waitTicks(3);
+            // No obst=/onDeck= columns: both are in the per-tick line appended after this loop
+            // (its `s=` tail and its `d=` flag), written on every resolved tick where this sampled
+            // every third, and fetched once where this paid a round trip per field per iteration.
             trace.append(String.format(java.util.Locale.ROOT,
-                    "[t%d y=%.2f obst=%s onDeck=%s cSub=%s cLoaded=%s cAir=%s cBox=%s cRegAir=%s] ",
+                    "[t%d y=%.2f cSub=%s cLoaded=%s cAir=%s cBox=%s cRegAir=%s] ",
                     i * 3, bot().reportState().get("playerY").getAsDouble(),
-                    bot().readStaticField(SHIP_FRAME_TRAVEL, "lastObstacleCount").get("value")
-                            .getAsString(),
-                    bot().readStaticField(SHIP_FRAME_TRAVEL, "lastOnDeck").get("value")
-                            .getAsString(),
                     censusStatic("censusSubPos"),
                     censusStatic("censusChunkLoaded"),
                     censusStatic("censusNonAir"),
                     censusStatic("censusCollisionBoxes"),
                     censusStatic("censusRegionNonAir")));
         }
+        trace.append(System.lineSeparator()).append("  per-tick resolution: ")
+                .append(Events.fieldLines(clientEvents().since(0, "ship_frame_tick"), "line"));
         // The mode is read from the RELEASE mark, not from the re-claim mark, and the difference is
         // the whole reason this read can answer at all. `deck_mode_committed` is an EDGE — it is
         // written at `logCapture`, which production calls only when a capture is INSTALLED or its
@@ -429,11 +430,9 @@ public class VSCrewInteriorBoardingE2ETest extends AbstractSharedVsClientE2ETest
         for (int i = 0; i < 30; i++) {
             bot().waitTicks(3);
             trace.append(String.format(java.util.Locale.ROOT,
-                    "[t%d y=%.2f cSub=%s obst=%s] ",
+                    "[t%d y=%.2f cSub=%s] ",
                     i * 3, bot().reportState().get("playerY").getAsDouble(),
-                    censusStatic("censusSubPos"),
-                    bot().readStaticField(SHIP_FRAME_TRAVEL, "lastObstacleCount").get("value")
-                            .getAsString()));
+                    censusStatic("censusSubPos")));
         }
         // From the RELEASE mark for the same reason as the open-cockpit scenario above: the mode is
         // an EDGE written where a capture is installed or its mode changes, and the one commit of

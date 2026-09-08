@@ -171,9 +171,6 @@ public class VSCrewRidesRollingDeckE2ETest extends AbstractSharedVsClientE2ETest
                 + " externalMoveDrops="
                 + bot().readStaticField("zmaster587.advancedRocketry.integration.vs.ShipFrameTravel",
                         "externalMoveDrops").get("value").getAsString()
-                + " lastOnDeck="
-                + bot().readStaticField("zmaster587.advancedRocketry.integration.vs.ShipFrameTravel",
-                        "lastOnDeck").get("value").getAsString()
                 + " || server stats=" + exec("artest vs shipframe-stats"));
         assertTrue("the crew member must still be aboard after the roll: " + rolled,
                 rolled.contains("\"shipLoaded\":true"));

@@ -361,19 +361,16 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
         double maxLateral = 0.0;
         float strafeSeen = 0f, forwardSeen = 0f;
         StringBuilder trace = new StringBuilder();
-        for (int i = 0; i < 20; i++) {
-            bot().waitTicks(5);
-            double mx = clientDouble(SHIP_FRAME_TRAVEL, "lastMotionShipX");
-            double mz = clientDouble(SHIP_FRAME_TRAVEL, "lastMotionShipZ");
-            float st = (float) clientDouble(SHIP_FRAME_TRAVEL, "lastInStrafe");
-            float fw = (float) clientDouble(SHIP_FRAME_TRAVEL, "lastInForward");
-            strafeSeen = Math.max(strafeSeen, Math.abs(st));
-            forwardSeen = Math.max(forwardSeen, Math.abs(fw));
-            maxLateral = Math.max(maxLateral, Math.max(Math.abs(mx), Math.abs(mz)));
-            if (i % 4 == 0) {
-                trace.append(String.format("[%d mShip=(%.3f,%.3f) in=(%.2f,%.2f)] ", i, mx, mz, st, fw));
-            }
-        }
+        bot().waitTicks(100);
+        // Read ONCE, from the client's own per-tick record, instead of polling four statics every
+        // fifth tick. The poll saw one tick in five and paid a round trip per field for it; the
+        // record carries every resolved tick of the window, and each line is attributed to the body
+        // it describes rather than holding whatever the last resolved body left in a static.
+        String tickLines = Events.fieldLines(client.since(churnMark, "ship_frame_tick"), "line");
+        maxLateral = maxLateralShipMotion(tickLines);
+        strafeSeen = maxInput(tickLines, 0);
+        forwardSeen = maxInput(tickLines, 1);
+        trace.append(tickLines);
         String releases = client.since(churnMark, "deck_released");
         String gate = client.since(churnMark, "deck_captured");
         double x1 = bot().reportState().get("playerX").getAsDouble();
@@ -468,17 +465,14 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
         double maxLateral = 0.0;
         float strafeSeen = 0f, forwardSeen = 0f;
         StringBuilder trace = new StringBuilder();
-        for (int i = 0; i < 20; i++) {
-            bot().waitTicks(5);
-            double mx = clientDouble(SHIP_FRAME_TRAVEL, "lastMotionShipX");
-            double mz = clientDouble(SHIP_FRAME_TRAVEL, "lastMotionShipZ");
-            strafeSeen = Math.max(strafeSeen, Math.abs((float) clientDouble(SHIP_FRAME_TRAVEL, "lastInStrafe")));
-            forwardSeen = Math.max(forwardSeen, Math.abs((float) clientDouble(SHIP_FRAME_TRAVEL, "lastInForward")));
-            maxLateral = Math.max(maxLateral, Math.max(Math.abs(mx), Math.abs(mz)));
-            if (i % 4 == 0) {
-                trace.append(String.format(java.util.Locale.ROOT, "[%d mShip=(%.3f,%.3f)] ", i, mx, mz));
-            }
-        }
+        bot().waitTicks(100);
+        // Read once from the per-tick record; see the sibling leg above for why a five-tick poll of
+        // four statics was both blinder and dearer than this.
+        String tickLines = Events.fieldLines(client.since(churnMark, "ship_frame_tick"), "line");
+        maxLateral = maxLateralShipMotion(tickLines);
+        strafeSeen = maxInput(tickLines, 0);
+        forwardSeen = maxInput(tickLines, 1);
+        trace.append(tickLines);
         // The churn, as the client's own releases in THIS window with the gate that fired on each —
         // where a cumulative counter delta could only say that something, some time, had happened.
         String releases = client.since(churnMark, "deck_released");
@@ -573,18 +567,14 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
         StringBuilder arc = new StringBuilder();
         for (int t = 0; t < 3; t++) {
             bot().waitTicks(2);
-            arc.append(String.format(java.util.Locale.ROOT, "[t%d y=%.2f mShipY=%s] ",
-                    t * 2,
-                    bot().reportState().get("playerY").getAsDouble(),
-                    clientString(SHIP_FRAME_TRAVEL, "lastMotionShipY")));
+            arc.append(String.format(java.util.Locale.ROOT, "[t%d y=%.2f] ",
+                    t * 2, bot().reportState().get("playerY").getAsDouble()));
         }
         bot().releaseKey(Keyboard.KEY_SPACE);
         for (int t = 3; t < 10; t++) {
             bot().waitTicks(2);
-            arc.append(String.format(java.util.Locale.ROOT, "[t%d y=%.2f mShipY=%s] ",
-                    t * 2,
-                    bot().reportState().get("playerY").getAsDouble(),
-                    clientString(SHIP_FRAME_TRAVEL, "lastMotionShipY")));
+            arc.append(String.format(java.util.Locale.ROOT, "[t%d y=%.2f] ",
+                    t * 2, bot().reportState().get("playerY").getAsDouble()));
         }
         String jumpReleases = client.since(jumpMark, "deck_released");
         String jumpHeld = client.since(jumpMark, "deck_captured");
@@ -2407,4 +2397,37 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
         double dx = a[0] - b[0], dy = a[1] - b[1], dz = a[2] - b[2];
         return Math.sqrt(dx * dx + dy * dy + dz * dz);
     }
+
+    /**
+     * The largest |x| or |z| of the {@code m=} column across a window's per-tick lines — the ship's
+     * own motion under the body, which a still body must not be dragged by.
+     *
+     * <p>Parsed out of the line rather than sampled off a static: the line is written on every
+     * resolved tick, so a transient that lived and died between two five-tick polls is here.</p>
+     */
+    private static double maxLateralShipMotion(String tickLines) {
+        Matcher m = SHIP_MOTION_COLUMN.matcher(String.valueOf(tickLines));
+        double most = 0.0;
+        while (m.find()) {
+            most = Math.max(most, Math.max(Math.abs(Double.parseDouble(m.group(1))),
+                    Math.abs(Double.parseDouble(m.group(3)))));
+        }
+        return most;
+    }
+
+    /** The largest |value| of one half of the {@code in=} column: 0 is strafe, 1 is forward. */
+    private static float maxInput(String tickLines, int half) {
+        Matcher m = INPUT_COLUMN.matcher(String.valueOf(tickLines));
+        float most = 0f;
+        while (m.find()) {
+            most = Math.max(most, Math.abs(Float.parseFloat(m.group(half + 1))));
+        }
+        return most;
+    }
+
+    private static final Pattern SHIP_MOTION_COLUMN = Pattern.compile(
+            "\\|m=(-?[0-9.]+),(-?[0-9.]+),(-?[0-9.]+)\\|");
+
+    private static final Pattern INPUT_COLUMN =
+            Pattern.compile("\\|in=(-?[0-9.]+)/(-?[0-9.]+)\\|");
 }
