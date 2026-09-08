@@ -22,9 +22,15 @@ import static zmaster587.advancedRocketry.test.ArrangementFailure.requireArrange
  *
  * <p>Every jump ever flown here has been a hop of one sector. The distance between two real systems
  * is three orders of magnitude larger — the generator partitions space into 512-cell super-cells and
- * a cell is 4M blocks — so the interstellar leg has never been exercised: not the integrator over
- * thousands of ticks, not the arrival into a cell that far out, not the ledger address it settles at.
- * Nothing in the gate refuses it; nobody had flown it.</p>
+ * a cell is {@link zmaster587.advancedRocketry.space.GalacticCoord#CELL} blocks — so the interstellar
+ * leg has never been exercised: not the integrator over thousands of ticks, not the arrival into a
+ * cell that far out, not the ledger address it settles at. Nothing in the gate refuses it; nobody
+ * had flown it.</p>
+ *
+ * <p><i>This said "a cell is 4M blocks" until 2026-09-08, by which time the constant was 32M. The
+ * number is linked rather than quoted now: a size written out in prose is one that will be wrong
+ * again, and this one had already made the test cost eight times what its own speed constant
+ * claimed.</i></p>
  *
  * <p><b>The control is in the run.</b> The same ship jumps one sector first. That leg must arrive
  * almost immediately — a hop is four ticks at the baseline speed — and it establishes that the
@@ -59,12 +65,26 @@ public class InterstellarJumpLegE2ETest extends AbstractSharedServerTest {
      * while the speed a jump is flown at is supplied by the caller here, never derived, so flying
      * slowly would buy realism the probe path cannot deliver anyway.
      *
-     * <p>The duration MEASUREMENT was taken separately, at the baseline drive's own
-     * {@code 1_000_000} blocks/tick: 537 sectors took 2 167 ticks (108 s), against 2 148 predicted
-     * from distance/speed. Set this back to 1 000 000 to re-measure; at 5x it costs the suite ~20 s
-     * instead of ~2 min, which is the only reason it is not the baseline here.</p>
+     * <p><b>Re-derived 2026-09-08, because the old figure had gone stale by 8x with nothing saying
+     * so.</b> This was {@code 5_000_000} under a note promising the suite ~20 s. The leg actually
+     * cost <b>3 452 ticks (172.6 s)</b> — the largest single wait in the whole server tier. The
+     * speed was not the problem: {@link zmaster587.advancedRocketry.space.GalacticCoord#CELL} is
+     * 32 000 000 blocks and this class's own prose still said 4M, so the DISTANCE grew eightfold
+     * under a constant tuned before it did.
+     *
+     * <p>At 40 000 000 the far leg is 537 × 32M / 40M = <b>430 ticks (~21 s)</b> — what the old note
+     * promised. Two bounds keep the test meaning what it means, and both hold with room: the far leg
+     * must stay longer than {@code ShipTransitManager.DIRECT_CROSSING_MAX_TICKS} (160) or it stops
+     * being a FLIGHT and becomes a single crossing (430 clears it), and it must stay longer than the
+     * hop, which at this speed is under one tick.
+     *
+     * <p>The original MEASUREMENT was taken at the baseline drive's own {@code 1_000_000}
+     * blocks/tick, when a cell was 4M: 537 sectors took 2 167 ticks (108 s) against 2 148 predicted.
+     * <b>That prediction still holds</b> — 3 452 observed against 3 437 predicted at 5M with a 32M
+     * cell — so the arithmetic was never wrong, only the number it was being applied to. Set this
+     * back to the drive's own speed to re-measure.</p>
      */
-    private static final long FLIGHT_SPEED = 5_000_000L;
+    private static final long FLIGHT_SPEED = 40_000_000L;
 
     private static final Pattern BUILDER_POS = Pattern.compile("\"builderPos\":\\[(-?\\d+),(-?\\d+),(-?\\d+)]");
     private static final Pattern CELL_KEY = Pattern.compile("^(-?\\d+)_(-?\\d+)_(-?\\d+)$");

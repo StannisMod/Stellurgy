@@ -1,5 +1,6 @@
 package zmaster587.advancedRocketry.test.server;
 
+import zmaster587.advancedRocketry.test.Events;
 import zmaster587.advancedRocketry.test.ShipReadiness;
 import zmaster587.advancedRocketry.test.GameTicks;
 import zmaster587.advancedRocketry.test.ShipIdentity;
@@ -45,6 +46,8 @@ public class VSShortJumpCrossesDirectlyE2ETest extends AbstractSharedServerTest 
         String setup = setUpPilotedShip();
         int originDim = extractInt(setup, "originDim");
 
+        // Marked BEFORE the command whose effect is awaited.
+        long jumpMark = events.mark();
         String begin = exec("artest space transit-begin " + originDim + " 1 64 1 "
                 + DIRECT_JUMP_SPEED);
         assertTrue("the short jump must begin: " + begin, begin.contains("\"began\":true"));
@@ -52,9 +55,12 @@ public class VSShortJumpCrossesDirectlyE2ETest extends AbstractSharedServerTest 
                         + "starts, because there is no flight to be in the middle of: " + begin,
                 0, extractInt(begin, "inTransit"));
 
-        String lastTick = arrivesInTheTargetCell();
-        assertEquals("and nothing was ever in transit while it settled: " + lastTick,
-                0, extractInt(lastTick, "inTransit"));
+        // The arrival names the route it was flown by, so this leg asserts the MECHANISM rather
+        // than inferring it from an in-transit count that happens to read zero. A jump that went
+        // through hyperspace no longer satisfies it.
+        String arrived = arrivesInTheTargetCell(jumpMark, "DIRECT");
+        assertEquals("and nothing was ever in transit while it settled: " + arrived,
+                0, extractInt(begin, "inTransit"));
     }
 
     /**
@@ -69,29 +75,38 @@ public class VSShortJumpCrossesDirectlyE2ETest extends AbstractSharedServerTest 
         String setup = setUpPilotedShip();
         int originDim = extractInt(setup, "originDim");
 
+        // Marked BEFORE the command whose effect is awaited.
+        long jumpMark = events.mark();
         String begin = exec("artest space transit-begin " + originDim + " 1 64 1 "
                 + HYPERSPACE_JUMP_SPEED);
         assertTrue("the jump must begin: " + begin, begin.contains("\"began\":true"));
         assertEquals("a slow jump IS a flight, and reports one: " + begin,
                 1, extractInt(begin, "inTransit"));
 
-        arrivesInTheTargetCell();
+        arrivesInTheTargetCell(jumpMark, "HYPERSPACE");
     }
 
     /**
-     * The shared acceptance: tick until the jump is over, then require the ship to be VS-managed at the
-     * target cell's pose. Returns the last tick reply so a caller can assert on the mechanism too.
+     * The shared acceptance: wait for the arrival production announces, then require the ship to be
+     * VS-managed at the target cell's pose. Returns the arrival record so a caller can assert on the
+     * mechanism too.
+     *
+     * <p><b>The route is a parameter because it is the subject.</b> This class exists to show that
+     * the SPEED chooses the route, and the arrival event carries which one was taken — so the
+     * acceptance now asserts the mechanism directly instead of inferring it from an in-transit count
+     * that happens to be zero. A jump that went the other way no longer satisfies the other leg.</p>
+     *
+     * <p>No pump. The fixture runs on the server's own subsystem, so the jump is advanced by the
+     * server tick like any other — and if it stops being, this fails.</p>
      */
-    private String arrivesInTheTargetCell() throws Exception {
-        final String[] lastTick = {""};
-        boolean arrived = GameTicks.until(client(), GameTicks.server(), ARRIVAL_TICKS, () -> {
-            lastTick[0] = exec("artest space transit-tick 10");
-            return extractInt(lastTick[0], "inTransit") == 0
-                    && extractInt(lastTick[0], "crossing") == 0
-                    && extractInt(lastTick[0], "targetDim") >= 0;
-        });
-        int targetDim = arrived ? extractInt(lastTick[0], "targetDim") : -1;
-        assertTrue("the ship never reached the target cell; last tick=" + lastTick[0], targetDim >= 0);
+    private String arrivesInTheTargetCell(long mark, String route) throws Exception {
+        String arrived = events.awaitCarrying(mark, "ship_transit_ended",
+                "\"route\":\"" + route + "\"",
+                "the ship never reached the target cell by the " + route + " route; the durable"
+                        + " record now reads " + exec("artest space transit-export"),
+                ARRIVAL_TICKS);
+        int targetDim = extractInt(arrived, "dim");
+        assertTrue("the arrival was announced but names no dimension: " + arrived, targetDim >= 0);
         assertTrue("the ship never (re)loaded in the target cell (dim " + targetDim + "); countAll="
                 + exec("artest vs ship-count-all " + targetDim), loadedShips(targetDim) >= 1);
         // The cell's ship count NAMES what it counted, so the arrived craft is identified rather
@@ -102,7 +117,7 @@ public class VSShortJumpCrossesDirectlyE2ETest extends AbstractSharedServerTest 
         String dstInfo = exec("artest vs ship-info " + targetDim + " id " + arrivedId);
         assertTrue("the arrived ship is not VS-managed in the target cell: " + dstInfo,
                 dstInfo.contains("\"managed\":true"));
-        return lastTick[0];
+        return arrived;
     }
 
     private String setUpPilotedShip() throws Exception {
@@ -121,6 +136,10 @@ public class VSShortJumpCrossesDirectlyE2ETest extends AbstractSharedServerTest 
     public void resetPermaload() throws Exception {
         exec("artest vs permaload false");
     }
+
+    /** This tier's reader of the server's ordered event log. */
+    private final Events events =
+            new Events(this::exec, ticks -> GameTicks.advanceWorld(client(), 0, ticks));
 
     private String exec(String cmd) throws Exception {
         return String.join("\n", client().execute(cmd));

@@ -1,5 +1,6 @@
 package zmaster587.advancedRocketry.test.server;
 
+import zmaster587.advancedRocketry.test.Events;
 import zmaster587.advancedRocketry.test.ShipReadiness;
 import zmaster587.advancedRocketry.test.GameTicks;
 import zmaster587.advancedRocketry.test.ShipIdentity;
@@ -56,6 +57,8 @@ public class VSShipTransitPersistE2ETest extends AbstractSharedServerTest {
 
         // Depart into hyperspace. We deliberately do NOT tick the transit yet: it stays parked in hyperspace
         // while we re-cut its snapshot (the save-point cut is of a PARKED ship).
+        // Marked BEFORE the command whose effect is awaited.
+        long transitMark = events.mark();
         String begin = exec("artest space transit-begin " + originDim + " " + ax + " " + ay + " " + az
                 + " " + HYPERSPACE_JUMP_SPEED);
         assertTrue("transit did not begin (departure crossing failed): " + begin, begin.contains("\"began\":true"));
@@ -90,16 +93,16 @@ public class VSShipTransitPersistE2ETest extends AbstractSharedServerTest {
         assertTrue("restore did not recreate the in-flight transit: " + restore,
                 restore.contains("\"inTransit\":1"));
 
-        // Advance the RESTORED transit. With no live hyperspace ship it can only arrive by pasting its
-        // snapshot into the target cell.
-        final String[] lastTick = {""};
-        boolean arrived = GameTicks.until(client(), GameTicks.server(), ARRIVAL_TICKS, () -> {
-            lastTick[0] = exec("artest space transit-tick 10");
-            return extractInt(lastTick[0], "inTransit") == 0;
-        });
-        int targetDim = arrived ? extractInt(lastTick[0], "targetDim") : -1;
-        assertTrue("the restored jump never completed (still in transit after " + ARRIVAL_TICKS
-                + " ticks of world); last tick=" + lastTick[0], targetDim >= 0);
+        // The RESTORED transit arrives on the server's own tick, like any other -- no pump. With no
+        // live hyperspace ship it can only get there by pasting its snapshot into the target cell,
+        // so the arrival production announces IS the proof that path ran.
+        String arrived = events.awaitCarrying(transitMark, "ship_transit_ended",
+                "\"route\":\"HYPERSPACE\"",
+                "the restored jump never completed; the durable record now reads "
+                        + exec("artest space transit-export"),
+                ARRIVAL_TICKS);
+        int targetDim = extractInt(arrived, "dim");
+        assertTrue("the arrival was announced but names no dimension: " + arrived, targetDim >= 0);
 
         // The snapshot-restored ship must load + be VS-managed in the TARGET cell. Restored arrivals paste in
         // the negative-X band (disjoint from live arrivals); the first lands near -64,200,0. This is reachable
@@ -121,6 +124,10 @@ public class VSShipTransitPersistE2ETest extends AbstractSharedServerTest {
     }
 
     // --- helpers (mirror VSShipTransitE2ETest) ------------------------------------------------------
+
+    /** This tier's reader of the server's ordered event log. */
+    private final Events events =
+            new Events(this::exec, ticks -> GameTicks.advanceWorld(client(), 0, ticks));
 
     private String exec(String cmd) throws Exception {
         return String.join("\n", client().execute(cmd));
