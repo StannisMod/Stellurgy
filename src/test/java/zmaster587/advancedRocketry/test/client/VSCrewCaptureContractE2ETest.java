@@ -141,8 +141,10 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
         // mode the sampler was written to catch. The mark is taken BEFORE the key is held.
         // Smoothness diagnostics (print-only): frames whose interpolated camera position repeats
         // name a dead prev->pos interpolation; PosLook applies name the server echo as its writer.
-        long frames0 = (long) clientDouble(SHIP_CAMERA_CLASS, "aboardFramesRendered");
-        long same0 = (long) clientDouble(SHIP_CAMERA_CLASS, "aboardFramesSamePos");
+        // The frame half is a window OPENED here and closed after the arc, so the numbers describe
+        // this jump rather than everything the client has drawn since it booted.
+        long jumpStepMark = clientEvents().mark();
+        bot().invokeStaticInt(FRAME_STEP_WINDOW, "open");
         long posLook0 = (long) clientDouble(SHIP_CAMERA_CLASS, "posLookApplies");
         long jumpMark = client.mark();
         int samples = 0;
@@ -173,12 +175,13 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
         // nobody is not an answer about the capture.
         String releases = client.since(jumpMark, "deck_released");
         String held = client.since(jumpMark, "deck_captured");
-        long framesD = (long) clientDouble(SHIP_CAMERA_CLASS, "aboardFramesRendered") - frames0;
-        long sameD = (long) clientDouble(SHIP_CAMERA_CLASS, "aboardFramesSamePos") - same0;
+        bot().invokeStaticInt(FRAME_STEP_WINDOW, "close");
+        String jumpSteps = Events.lastRecord(
+                clientEvents().since(jumpStepMark, "frame_step_window"));
         long posLookD = (long) clientDouble(SHIP_CAMERA_CLASS, "posLookApplies") - posLook0;
-        System.out.println("[crewcap] jump smoothness frames=" + framesD + " samePos=" + sameD
-                + " (" + (framesD > 0 ? (100L * sameD / framesD) : -1) + "%) posLookApplies="
-                + posLookD
+        System.out.println("[crewcap] jump smoothness "
+                + (jumpSteps == null ? "(the render seam sampled no aboard frame)" : jumpSteps)
+                + " posLookApplies=" + posLookD
                 + " capturesForThisShip=" + Events.countRecords(
                         client.since(jumpMark, "deck_captured"), "\"ship\":\"" + scenarioShipId + "\"")
                 + " windowTicks=60");
@@ -2170,7 +2173,13 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
         // has max >> mean. Feeds the open jump-stutter residual; no contract asserted here.
         exec("tp @a " + anchor[0] + " " + anchor[1] + " " + anchor[2] + " 0 0");
         bot().waitTicks(15);
-        bot().invokeStaticInt(SHIP_CAMERA_CLASS, "resetStepWindow");
+        // OPEN the window, jump, CLOSE it: the statistics are accumulated on the test side (the
+        // render seam fires per frame, which no event log can carry) and the window's summary is one
+        // record, in this scenario's own window. The six production statics this replaces were
+        // JVM-wide, so on a shared client they carried whatever the previous scenario had left in
+        // them whenever the reset was forgotten — and nothing said so.
+        long stepMark = clientEvents().mark();
+        bot().invokeStaticInt(FRAME_STEP_WINDOW, "open");
         try {
             for (int i = 0; i < 20; i++) {
                 bot().holdKey(Keyboard.KEY_SPACE);
@@ -2180,23 +2189,17 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
             bot().releaseKey(Keyboard.KEY_SPACE);
         }
         bot().waitTicks(5);
-        double absMax = clientDouble(SHIP_CAMERA_CLASS, "absStepMax");
-        double absSum = clientDouble(SHIP_CAMERA_CLASS, "absStepSum");
-        long absN = (long) clientDouble(SHIP_CAMERA_CLASS, "absStepCount");
-        double relMax = clientDouble(SHIP_CAMERA_CLASS, "relStepMax");
-        double relSum = clientDouble(SHIP_CAMERA_CLASS, "relStepSum");
-        long relN = (long) clientDouble(SHIP_CAMERA_CLASS, "relStepCount");
-        System.out.println(String.format(java.util.Locale.ROOT,
-                "[crewcap] jump-steps abs(max=%.4f mean=%.4f n=%d ratio=%.1f) rel(max=%.4f "
-                        + "mean=%.4f n=%d ratio=%.1f)",
-                absMax, absN > 0 ? absSum / absN : -1, absN,
-                absN > 0 && absSum > 0 ? absMax / (absSum / absN) : -1,
-                relMax, relN > 0 ? relSum / relN : -1, relN,
-                relN > 0 && relSum > 0 ? relMax / (relSum / relN) : -1));
+        bot().invokeStaticInt(FRAME_STEP_WINDOW, "close");
+        String stepWindow = Events.lastRecord(clientEvents().since(stepMark, "frame_step_window"));
+        System.out.println("[crewcap] jump-steps "
+                + (stepWindow == null ? "(the render seam sampled no aboard frame)" : stepWindow));
     }
 
     private static final String DECK_LOOK = "zmaster587.advancedRocketry.client.DeckLook";
     private static final String SHIP_CAMERA_CLASS = "zmaster587.advancedRocketry.client.ShipFrameCamera";
+    /** The TEST-side accumulator behind the smoothness window — production keeps none. */
+    private static final String FRAME_STEP_WINDOW =
+            "zmaster587.advancedRocketry.test.trace.FrameStepWindow";
 
     /** The client's own world look direction, from the rotation it reports. */
     private double[] clientLook() throws Exception {

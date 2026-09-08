@@ -74,6 +74,9 @@ public class VSShipFlightTelemetryE2ETest extends AbstractSharedVsClientE2ETest 
     private static final String VARIANT = "with-pilot-seat";
     private static final String KEY_BINDINGS = "zmaster587.advancedRocketry.client.KeyBindings";
     private static final String SHIP_CAMERA = "zmaster587.advancedRocketry.client.ShipFrameCamera";
+    /** The TEST-side holder of the client's own last camera setup — production keeps no such field. */
+    private static final String DECK_CAMERA_STATE =
+            "zmaster587.advancedRocketry.test.trace.DeckCameraState";
     private static final String ROCKET_EVENTS = "zmaster587.advancedRocketry.event.RocketEventHandler";
     /** The client's own flight-cursor dead-zone: inside it the ship is commanded no rotation at all. */
     private static final double CURSOR_DEADZONE = 0.05;
@@ -239,7 +242,7 @@ public class VSShipFlightTelemetryE2ETest extends AbstractSharedVsClientE2ETest 
 
         // Where exactly a rigid body coasts to is not the contract; that it went over, and that the
         // camera went with it, is. Read the pair adjacently so they describe the same instant.
-        double shipUpY = clientDouble(SHIP_CAMERA, "shipUpY");
+        double shipUpY = clientDouble(DECK_CAMERA_STATE, "shipUpY");
         double rollInverted = clientDouble(SHIP_CAMERA, "shipCamRoll");
         assertTrue("the ship must actually have rolled past vertical (its up points " + shipUpY + ")",
                 shipUpY < -0.3);
@@ -671,7 +674,7 @@ public class VSShipFlightTelemetryE2ETest extends AbstractSharedVsClientE2ETest 
         for (int i = 0; i < 240; i++) {
             // Stop asking for roll BEFORE the ship is over: it is a rigid body turning at more than a
             // radian a second, and it coasts on into the brake. Aiming early lands it near inverted.
-            if (clientDouble(SHIP_CAMERA, "shipUpY") < -0.45) {
+            if (clientDouble(DECK_CAMERA_STATE, "shipUpY") < -0.45) {
                 break;
             }
             if (Math.abs(clientDouble(KEY_BINDINGS, "flightCursorX")) < 0.9) {

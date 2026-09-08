@@ -27,10 +27,13 @@ import static org.junit.Assert.assertTrue;
  * body is drawn ship-aligned when the SHIP CARRIES IT, not when it happens to be inside the
  * ship's box.
  *
- * <p>The observable is client-side and cumulative ({@code ShipFrameCamera.remoteModel*}): over a
- * window, how many model-rotation decisions were taken for remote bodies and how many of those
- * pushed a rotation. A per-frame decision for an arbitrary body is a transient - a first/last-call
- * snapshot would land on an arbitrary moment and say nothing.
+ * <p>The observable is a client-side WINDOW ({@code remote_model_window}, accumulated by the test
+ * side at {@code ShipFrameCamera.modelRotationFor} and recorded when the window closes): over that
+ * window, how many model-rotation decisions were taken at all, how many concerned remote bodies, and
+ * how many of those pushed a rotation. A per-frame decision for an arbitrary body is a transient - a
+ * first/last-call snapshot would land on an arbitrary moment and say nothing - and a record per
+ * decision would turn its own ring over in a second, which is why this is an accumulator with an
+ * explicit open and close rather than an event chain.
  *
  * <p>The two legs are each other's control, and the pairing is what makes either meaningful:
  * leg A (body on terrain) asserts NO remote body is rotated; leg B (body on the deck) asserts the
@@ -80,12 +83,13 @@ import static org.junit.Assert.assertTrue;
  * the same empty answer. The record survives the removal, and it rides along in the render
  * diagnostic so a red says which of the two happened.</p>
  *
- * <p>What is still POLLED, and why: the model-rotation decision itself has no event
- * ({@code remote_model_decided} is not in the vocabulary yet), so both measurement windows and the
- * "is this subject being drawn" precondition still difference cumulative statics on
- * {@code ShipFrameCamera}. Those are the reads the counters at
- * {@link #remoteCounters()} exist for, and they carry the limits the findings above name - chiefly
- * that {@code remoteModelSamples} counts ANY non-local living body, not this one.</p>
+ * <p>What is still POLLED, and why: the model-rotation decision itself has no per-occurrence event —
+ * it is consulted once per drawn body per frame, which no 256-deep ring can carry — so the "is this
+ * subject being drawn" precondition watches the open window's live sample count. What is no longer
+ * true is that the numbers are differences against per-JVM totals: each measurement is a window that
+ * this leg opened, so a forgotten subtraction can no longer read as a rich sample. The limit the
+ * findings above name still stands, and it is a property of the SUBJECT rather than of the
+ * instrument: {@code samples} counts ANY non-local living body the client drew, not this one.</p>
  */
 @FixMethodOrder(MethodSorters.NAME_ASCENDING)
 public class VSRemoteBodyModelGateE2ETest extends AbstractSharedVsClientE2ETest {
@@ -115,6 +119,9 @@ public class VSRemoteBodyModelGateE2ETest extends AbstractSharedVsClientE2ETest 
      */
     private String scenarioShipId;
     private static final String SHIP_CAMERA = "zmaster587.advancedRocketry.client.ShipFrameCamera";
+    /** The TEST-side accumulator behind every model-gate window — production keeps no counters. */
+    private static final String REMOTE_MODEL_WINDOW =
+            "zmaster587.advancedRocketry.test.trace.RemoteModelWindow";
 
     /**
      * The CLIENT log sequence taken immediately BEFORE the current subject was spawned — the mark its
@@ -189,7 +196,7 @@ public class VSRemoteBodyModelGateE2ETest extends AbstractSharedVsClientE2ETest 
         // camera settles (a teleport re-streams entities; spawning in front of a settled camera removes
         // that race at its source) and aims at the SUBJECT (the decision under test is about THIS body's
         // model, off to one side of a steeply rolled hull).
-        long[] before = null, after = null;
+        String legWindow = null;
         StringBuilder staging = new StringBuilder();
         int drawAttempts = 0;
         for (double[] spot : valid) {
@@ -229,14 +236,12 @@ public class VSRemoteBodyModelGateE2ETest extends AbstractSharedVsClientE2ETest 
             staging.append(String.format(java.util.Locale.ROOT, "[attempt %d %s]",
                     drawAttempts, s.drawn ? "DRAWN" : s.diagnostic));
             if (s.drawn) {
-                before = remoteCounters();
-                bot().waitTicks(60);
-                after = remoteCounters();
+                legWindow = watchModelGate(60);
             }
             break;
         }
         System.out.println("[modelgate] legA staging summary: "
-                + (after != null ? "DREW after " + drawAttempts + " draw-attempt(s)" : "NEVER DREW")
+                + (legWindow != null ? "DREW after " + drawAttempts + " draw-attempt(s)" : "NEVER DREW")
                 + " | " + staging);
         assertTrue("the staged body was never DRAWN by the client within the load-scaled window, so "
                         + "nothing below can be concluded about the model gate's DECISION. The "
@@ -244,17 +249,17 @@ public class VSRemoteBodyModelGateE2ETest extends AbstractSharedVsClientE2ETest 
                         + "(alive on the server? held by the client?) and what the camera is standing "
                         + "in. Staged " + drawAttempts + " time(s): " + staging
                         + " | client cows=" + safeReportCows(),
-                after != null);
+                legWindow != null);
 
-        long samples = after[1] - before[1];
-        long rotated = after[2] - before[2];
+        long samples = (long) Events.number(legWindow, "samples");
+        long rotated = (long) Events.number(legWindow, "rotated");
+        System.out.println("[modelgate] legA window :: " + legWindow);
         // Instrument-fires check FIRST, and split by cause: a zero here would otherwise make the
         // rotated==0 assertion below true for the wrong reason — prove the instrument fires before
         // believing the zero it reports.
-        assertInstrumentFired(before, after);
+        assertInstrumentFired(legWindow);
         assertTrue("a body on world terrain beside a rolled ship must NOT be drawn ship-aligned: "
-                        + rotated + "/" + samples + " decisions pushed a rotation; trace="
-                        + clientString(SHIP_CAMERA, "remoteModelTrace"),
+                        + rotated + "/" + samples + " decisions pushed a rotation :: " + legWindow,
                 rotated == 0);
     }
 
@@ -291,19 +296,18 @@ public class VSRemoteBodyModelGateE2ETest extends AbstractSharedVsClientE2ETest 
         assertTrue("the carried subject was never drawn by the client, so this control proves nothing: "
                         + s.diagnostic + " | client cows=" + safeReportCows(),
                 s.drawn);
-        long[] before = remoteCounters();
-        bot().waitTicks(60);
-        long[] after = remoteCounters();
+        String legWindow = watchModelGate(60);
 
-        long samples = after[1] - before[1];
-        long rotated = after[2] - before[2];
-        assertInstrumentFired(before, after);
+        long samples = (long) Events.number(legWindow, "samples");
+        long rotated = (long) Events.number(legWindow, "rotated");
+        System.out.println("[modelgate] legB window :: " + legWindow);
+        assertInstrumentFired(legWindow);
         assertTrue("a body carried by a steeply rolled deck must still be drawn ship-aligned: "
-                        + rotated + "/" + samples + " decisions pushed a rotation",
+                        + rotated + "/" + samples + " decisions pushed a rotation :: " + legWindow,
                 rotated > 0);
-        assertTrue("the pushed rotation must be the ship's real attitude, not a token tilt: max="
-                        + clientDouble(SHIP_CAMERA, "maxRemoteModelRotationDeg"),
-                clientDouble(SHIP_CAMERA, "maxRemoteModelRotationDeg") > 90.0);
+        assertTrue("the pushed rotation must be the ship's real attitude, not a token tilt :: "
+                        + legWindow,
+                Events.number(legWindow, "maxDeg") > 90.0);
     }
 
     // ---- helpers (self-contained, mirroring the other tier-2 e2e classes) ----------------------
@@ -329,15 +333,15 @@ public class VSRemoteBodyModelGateE2ETest extends AbstractSharedVsClientE2ETest 
      *  <p>Returns {@link Sampling#drawn}=false rather than asserting, so the caller can RE-STAGE at a
      *  fresh spot (a world body inside a ship box is intermittently not drawn under load).
      *  When it returns false the diagnostic classifies the miss over the polled window from the two
-     *  render-stage controls — {@code cameraHookCalls} (frames) and {@code modelRotationCalls} (every
-     *  living model, player included) — so a red run names its own failure stage:
+     *  render-stage controls — {@code cameraHookCalls} (frames) and the window's own {@code calls}
+     *  (every living model, player included) — so a red run names its own failure stage:
      *  frames==0 → the draw stage is dead; frames&gt;0,models==0 → frames ran but no living model was
      *  drawn (applyRotations unreached); frames&gt;0,models&gt;0 → models ARE drawn but this subject is
      *  not (culled / absent from the render list).
      *
      *  <p>Only the precondition is polled — the measurement window the caller opens afterwards stays a
-     *  FIXED wait, deliberately. The value polled here ({@code remoteModelSamples}) is NOT what either
-     *  leg asserts on: {@code remoteModelRotatedSamples} is, read from that later window. Ending it
+     *  FIXED wait, deliberately. The value polled here (the open window's {@code samples}) is NOT what
+     *  either leg asserts on: its {@code rotated} is, read from that later window. Ending it
      *  early on a samples predicate would move what the assertion sees — leg A's {@code rotated == 0}
      *  gets easier the fewer samples it saw, and leg B's {@code rotated > 0} can exit before the first
      *  ROTATED frame lands. That is exactly the case in which the fixed wait must stay.</p> */
@@ -378,17 +382,23 @@ public class VSRemoteBodyModelGateE2ETest extends AbstractSharedVsClientE2ETest 
                     + " " + clientSighting(subjectId) + "]");
         }
 
-        final long start = (long) clientDouble(SHIP_CAMERA, "remoteModelSamples");
+        // Its OWN window, so the predicate is "a remote body was drawn SINCE THIS WAIT BEGAN" — a
+        // zero-based count rather than a difference against a per-JVM total another scenario had
+        // already advanced. The live field is the only one read while a window is open; everything
+        // the failure branch needs comes off the closing record.
+        final long windowMark = clientEvents().mark();
         final long framesBefore = (long) clientDouble(SHIP_CAMERA, "cameraHookCalls");
-        final long modelsBefore = (long) clientDouble(SHIP_CAMERA, "modelRotationCalls");
+        bot().invokeStaticInt(REMOTE_MODEL_WINDOW, "open");
         ClientPoll.Result<Long> r = ClientPoll.until(bot()::waitTicks,
-                () -> (long) clientDouble(SHIP_CAMERA, "remoteModelSamples"),
-                v -> v > start, 15, 8);
+                () -> (long) clientDouble(REMOTE_MODEL_WINDOW, "samples"),
+                v -> v > 0, 15, 8);
         if (r.satisfied) {
             return new Sampling(true, "");
         }
         long frames = (long) clientDouble(SHIP_CAMERA, "cameraHookCalls") - framesBefore;
-        long models = (long) clientDouble(SHIP_CAMERA, "modelRotationCalls") - modelsBefore;
+        bot().invokeStaticInt(REMOTE_MODEL_WINDOW, "close");
+        String window = Events.lastRecord(clientEvents().since(windowMark, "remote_model_window"));
+        long models = window == null ? -1L : (long) Events.number(window, "calls");
         long loaded = (long) clientDouble(SHIP_CAMERA, "clientLoadedEntities");
         // The subject may have LEFT between the arrival gate and here, and "it is gone" and "it is
         // drawn wrong" are different bugs with the same zero. Read BOTH sides at the end of the
@@ -472,27 +482,38 @@ public class VSRemoteBodyModelGateE2ETest extends AbstractSharedVsClientE2ETest 
         }
     }
 
-    /** {@code {modelRotationCalls, remoteModelSamples, remoteModelRotatedSamples}} as the client
-     *  holds them now. The first element is the mixin-applied discriminator. */
-    private long[] remoteCounters() throws Exception {
-        return new long[]{
-                (long) clientDouble(SHIP_CAMERA, "modelRotationCalls"),
-                (long) clientDouble(SHIP_CAMERA, "remoteModelSamples"),
-                (long) clientDouble(SHIP_CAMERA, "remoteModelRotatedSamples")};
+    /**
+     * Watch the model gate for {@code ticks} and return the window's summary record.
+     *
+     * <p>A WINDOW, opened and closed, where this used to be two reads of cumulative statics with a
+     * subtraction between them. The three counts, the maximum angle and the trace all come off one
+     * record, so they describe one stretch of one run — where the statics were per-JVM totals that a
+     * shared client had already been advancing before this scenario began, and a forgotten
+     * subtraction read as a rich sample.</p>
+     */
+    private String watchModelGate(int ticks) throws Exception {
+        long mark = clientEvents().mark();
+        bot().invokeStaticInt(REMOTE_MODEL_WINDOW, "open");
+        bot().waitTicks(ticks);
+        bot().invokeStaticInt(REMOTE_MODEL_WINDOW, "close");
+        String summary = Events.lastRecord(clientEvents().since(mark, "remote_model_window"));
+        assertTrue("the model-gate window recorded nothing at all, so the harness — not the gate — "
+                + "is what this leg would be measuring", summary != null);
+        return summary;
     }
 
     /** Fail with the RIGHT diagnosis when nothing was sampled: a silent {@code require = 0} mixin
      *  miss and "the body was never rendered" both present as zero remote samples, and they are
      *  different bugs. */
-    private void assertInstrumentFired(long[] before, long[] after) {
-        long calls = after[0] - before[0];
-        long samples = after[1] - before[1];
+    private void assertInstrumentFired(String window) {
+        long calls = (long) Events.number(window, "calls");
+        long samples = (long) Events.number(window, "samples");
         assertTrue("the applyRotations hook never ran in this window (calls=0) - the model gate is "
                         + "not installed at all (require = 0 mixin miss), so nothing here can be "
-                        + "concluded about the gate's DECISION",
+                        + "concluded about the gate's DECISION: " + window,
                 calls > 0);
         assertTrue("the hook ran (" + calls + " calls) but decided about no REMOTE body - the "
-                        + "subject was never drawn, so this leg proves nothing",
+                        + "subject was never drawn, so this leg proves nothing: " + window,
                 samples > 0);
     }
 

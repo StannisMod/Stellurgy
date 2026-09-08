@@ -54,40 +54,26 @@ public final class ShipFrameCamera {
     public static volatile double shipCamEyeX = 0.0;
     public static volatile double shipCamEyeY = 0.0;
     public static volatile double shipCamEyeZ = 0.0;
-    /** The world Y of the ship's local up, last frame: +1 upright, 0 on its side, -1 inverted.
-     *  Identity (1.0) when not aboard. */
-    public static volatile double shipUpY = 1.0;
-
     // ---- Remote-body model-gate telemetry. The decision is taken per entity per FRAME and is a
     // transient: a first/last-call snapshot lands on an arbitrary body at an arbitrary moment and
     // says nothing. Cumulative counters plus a bounded trace with coordinates are what a test can
     // actually reason about - "over this window, how many remote bodies were drawn rotated, and
     // where were they". Ungated (no test-mode check): the harness's child JVMs have no test mode.
-    /** Frames on which the camera-stage render hook ran. The control for {@link #modelRotationCalls}:
-     *  if this advances and that does not, the render stage IS running and the model stage is the
-     *  thing not reaching us; if neither advances, nothing is being drawn at all. */
+    /** Frames on which the camera-stage render hook ran. The control for the model stage: if this
+     *  advances while {@link #modelRotationFor} is not being called, the render stage IS running and
+     *  the model stage is the thing not reaching us; if neither advances, nothing is being drawn. */
     public static volatile long cameraHookCalls = 0L;
     /** Entities in the CLIENT world, sampled on the same frame as {@link #cameraHookCalls}. The
      *  other control: a draw-stage counter of zero means nothing when the subject never reached
      *  this side. {@code -1} = no client world. */
     public static volatile int clientLoadedEntities = -1;
-    /** EVERY model-rotation decision, local player included. The discriminator against a silent
-     *  mixin miss: {@code MixinRenderLivingBaseShipRoll} is {@code require = 0}, so a render mod
-     *  that rewrites {@code applyRotations} (or an ordinal drift) disables the whole gate without
-     *  a word. Zero calls here means the hook never ran; calls without remote samples means it ran
-     *  but nothing but the local player was drawn. Those are different bugs and a bare
-     *  "remoteModelSamples == 0" cannot tell them apart. */
-    public static volatile long modelRotationCalls = 0L;
-    /** Model-rotation decisions taken for a body that is NOT this client's own player. */
-    public static volatile long remoteModelSamples = 0L;
-    /** Of those, the ones that pushed a non-identity rotation (the body was drawn ship-aligned). */
-    public static volatile long remoteModelRotatedSamples = 0L;
-    /** The largest rotation angle (degrees) ever pushed for a remote body. */
-    public static volatile double maxRemoteModelRotationDeg = 0.0;
-    /** The most recent few remote decisions as "name@x,y,z=deg", bounded. Coordinates included so
-     *  a red run names WHICH body was rotated and where it stood - the diagnosis, not just the
-     *  count. */
-    public static volatile String remoteModelTrace = "";
+    // The model-rotation counters that used to sit here are gone (2026-09-08). Every decision this
+    // class makes about a body's model rotation is `modelRotationFor`, which takes the body and
+    // returns the rotation, so a watcher on that method sees the same decisions with the same
+    // numbers — and can attribute them, window them and reset them, which five cumulative statics
+    // could not. `modelRotationCalls` is that method being CALLED, which is the discriminator
+    // against a silent `require = 0` mixin miss; the rest were derived from its argument and its
+    // return value.
 
     // ---- Smoothness discriminators (ledger: "6-8 discrete points per jump"). A dead prev->pos
     // interpolation shows as consecutive frames sharing one interpolated camera position: at
@@ -95,71 +81,27 @@ public final class ShipFrameCamera {
     // stepping at tick rate. posLookApplies names the classic prev-collapsing writer (a server
     // PosLook echo per tick). Ungated statics - harness child JVMs have no test mode. ----
 
-    /** Frames rendered with the aboard camera engaged. */
-    public static volatile long aboardFramesRendered = 0;
-    /** Of those, frames whose interpolated camera position equalled the previous frame's. */
-    public static volatile long aboardFramesSamePos = 0;
     /** Server PosLook packets actually applied on the client main thread. */
     public static volatile long posLookApplies = 0;
-    private static double lastFrameX = Double.NaN, lastFrameY = Double.NaN, lastFrameZ = Double.NaN;
 
-    // Per-frame STEP statistics over a resettable window, for the ABSOLUTE body position and for
-    // the body position RELATIVE to a fixed deck point (DeckLook's episode reference, itself
-    // frame-lerped). Discriminates where a felt stutter lives: a smooth path has near-uniform
-    // per-frame steps (max ~ mean); a tick-stepped path has zero steps within a tick and spikes
-    // at tick boundaries (max >> mean). Relative-vs-absolute splits "the body jitters in the
-    // world" from "the body jitters against the deck it rides".
-    public static volatile double absStepMax = 0.0, absStepSum = 0.0;
-    public static volatile long absStepCount = 0;
-    public static volatile double relStepMax = 0.0, relStepSum = 0.0;
-    public static volatile long relStepCount = 0;
-    private static double lastRelX = Double.NaN, lastRelY = Double.NaN, lastRelZ = Double.NaN;
-
-    /** Reset the step-statistics window (invoked reflectively by the smoothness e2e). */
-    public static int resetStepWindow() {
-        absStepMax = 0.0;
-        absStepSum = 0.0;
-        absStepCount = 0;
-        relStepMax = 0.0;
-        relStepSum = 0.0;
-        relStepCount = 0;
-        lastFrameX = Double.NaN;
-        lastRelX = Double.NaN;
-        return 0;
-    }
-
-    /** Called once per aboard frame with the camera's interpolated base position. */
+    /**
+     * Seam: one ABOARD frame was drawn, with the camera's interpolated base position.
+     *
+     * <p>A SEAM, and nothing else — and this one used to do real arithmetic on every rendered
+     * frame. It kept eight statics: how many aboard frames had been drawn, how many of them repeated
+     * the previous frame's interpolated position, and per-frame STEP statistics (max, sum, count)
+     * for the ABSOLUTE camera path and for the path RELATIVE to a fixed deck point. Those numbers
+     * discriminate where a felt stutter lives — a smooth path has max ~ mean, a tick-stepped one has
+     * max >> mean, and relative-vs-absolute splits "the body jitters in the world" from "it jitters
+     * against the deck it rides" — but they are a TEST's question, accumulated at 120 Hz inside a
+     * class that ships to players, and their only readers printed them.</p>
+     *
+     * <p>Kept as a call rather than deleted because this call site is the only place that holds the
+     * interpolated camera position and the partial tick it was drawn at. The deck reference the
+     * relative half needs is {@code DeckLook.refWorldAt(partialTicks)}, which is public, so the
+     * whole accumulation is reachable from the test side.</p>
+     */
     public static void recordFrameInterp(double x, double y, double z, float partialTicks) {
-        aboardFramesRendered++;
-        if (x == lastFrameX && y == lastFrameY && z == lastFrameZ) {
-            aboardFramesSamePos++;
-        }
-        if (!Double.isNaN(lastFrameX)) {
-            double step = Math.sqrt((x - lastFrameX) * (x - lastFrameX)
-                    + (y - lastFrameY) * (y - lastFrameY) + (z - lastFrameZ) * (z - lastFrameZ));
-            if (step > absStepMax) absStepMax = step;
-            absStepSum += step;
-            absStepCount++;
-        }
-        lastFrameX = x;
-        lastFrameY = y;
-        lastFrameZ = z;
-        double[] ref = DeckLook.refWorldAt(partialTicks);
-        if (ref != null) {
-            double rx = x - ref[0], ry = y - ref[1], rz = z - ref[2];
-            if (!Double.isNaN(lastRelX)) {
-                double step = Math.sqrt((rx - lastRelX) * (rx - lastRelX)
-                        + (ry - lastRelY) * (ry - lastRelY) + (rz - lastRelZ) * (rz - lastRelZ));
-                if (step > relStepMax) relStepMax = step;
-                relStepSum += step;
-                relStepCount++;
-            }
-            lastRelX = rx;
-            lastRelY = ry;
-            lastRelZ = rz;
-        } else {
-            lastRelX = Double.NaN;
-        }
     }
 
     /**
@@ -288,11 +230,8 @@ public final class ShipFrameCamera {
      * where the rotation is the identity and pushing it would be pure cost).
      */
     public static double[] modelRotationFor(EntityLivingBase entity, float partialTicks) {
-        modelRotationCalls++;
         FreeFlightPhysics.Quat q = viewShipQuat(entity, partialTicks);
-        double[] rotation = axisAngleOf(q);
-        recordRemoteModelDecision(entity, rotation);
-        return rotation;
+        return axisAngleOf(q);
     }
 
     /** {@code q} as {@code {degrees, ax, ay, az}}, or {@code null} for no/identity rotation
@@ -341,30 +280,6 @@ public final class ShipFrameCamera {
         }
     }
 
-    /** Telemetry only - see the {@code remoteModel*} fields. Never influences the decision. */
-    private static void recordRemoteModelDecision(EntityLivingBase entity, double[] rotation) {
-        if (entity == null || entity == Minecraft.getMinecraft().player) {
-            return;
-        }
-        remoteModelSamples++;
-        if (rotation == null) {
-            return; // the common (and correct) case: no allocation on the render path
-        }
-        remoteModelRotatedSamples++;
-        if (rotation[0] > maxRemoteModelRotationDeg) {
-            maxRemoteModelRotationDeg = rotation[0];
-        }
-        // Only rotated decisions are traced, and only until the bound: this is the FAILING case,
-        // and its first few occurrences carry the diagnosis (which body, standing where). A green
-        // run never allocates here; a red one names its subject without unbounded churn.
-        String trace = remoteModelTrace;
-        if (trace.length() < 400) {
-            remoteModelTrace = trace + String.format(java.util.Locale.ROOT,
-                    "[%s@%.1f,%.1f,%.1f=%.0fdeg]",
-                    entity.getName(), entity.posX, entity.posY, entity.posZ, rotation[0]);
-        }
-    }
-
     /**
      * A world yaw, re-expressed in the ship's frame. The model's own yaw is a world heading; once the
      * ship rotation is applied around it, the yaw vanilla adds must be the deck-plane heading instead,
@@ -404,9 +319,10 @@ public final class ShipFrameCamera {
         shipCamEyeX = eyeX;
         shipCamEyeY = eyeY;
         shipCamEyeZ = eyeZ;
-        if (shipUp != null) {
-            shipUpY = shipUp[1];
-        }
+        // No shipUpY store: the ship's up arrives here as a PARAMETER on every frame, and the only
+        // readers of the field it used to be kept in were tests on the other side of the socket.
+        // A watcher on this method sees the same vector, at the same moment, and can hold it where
+        // its readers live.
     }
 
     // ---- Render-dispatch stage probe ----------------------------------------------------------

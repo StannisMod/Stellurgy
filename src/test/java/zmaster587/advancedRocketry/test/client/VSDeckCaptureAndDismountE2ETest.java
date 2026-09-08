@@ -421,6 +421,9 @@ public class VSDeckCaptureAndDismountE2ETest extends AbstractSharedVsClientE2ETe
     // ---- Bug: flying into a ship's airspace hijacks a walking player's camera ------------------
 
     private static final String SHIP_CAMERA = "zmaster587.advancedRocketry.client.ShipFrameCamera";
+    /** The TEST-side holder of the client's own last camera setup — production keeps no such field. */
+    private static final String DECK_CAMERA_STATE =
+            "zmaster587.advancedRocketry.test.trace.DeckCameraState";
 
     @Test
     public void flyingIntoAShipsAirspaceWithoutStandingOnItDoesNotHijackTheCamera() throws Exception {
@@ -904,14 +907,14 @@ public class VSDeckCaptureAndDismountE2ETest extends AbstractSharedVsClientE2ETe
         // over by mouse also demonstrated that the controls work on the way, but it arrived at a
         // variable attitude and SKIPPED whenever it undershot, which bought that side observation at
         // the price of the scenario running at all.
-        for (int i = 0; i < 40 && clientDouble(SHIP_CAMERA, "shipUpY") > -0.9; i++) {
+        for (int i = 0; i < 40 && clientDouble(DECK_CAMERA_STATE, "shipUpY") > -0.9; i++) {
             exec("artest vs point-by-id 0 " + scenarioShipId + " 0 1 0 0");
             bot().waitTicks(4);
         }
         exec("artest vs force-clear-by-id 0 " + scenarioShipId);
         centreFlightCursor();
         bot().waitTicks(40); // let it settle inverted, omega -> ~0
-        double shipUpY = clientDouble(SHIP_CAMERA, "shipUpY");
+        double shipUpY = clientDouble(DECK_CAMERA_STATE, "shipUpY");
         // An ASSERT: the attitude is commanded, so not being there is news, not a dice roll. And it
         // is read from the CLIENT's own camera state, which is what the pilot below is looking at.
         assertTrue("arrangement: the craft must be inverted ON THE CLIENT before its controls are"
