@@ -83,17 +83,6 @@ public final class ShipFrameTravel {
     // nowhere else, which is why they are private.
     private static volatile boolean lastSweepCollidedX = false;
     private static volatile boolean lastSweepCollidedZ = false;
-    /** Diagnostic: the last measured disagreement between the MOVEMENT frame (VS
-     *  {@code ShipTransform.rotate}, what this class uses) and the CAMERA frame (the attitude quaternion) for
-     *  the ship the last-resolved body is aboard. ~0 => movement and camera are one rotation (so "keys
-     *  inverted" is NOT a frame-source split); a non-trivial value at a rolled attitude => they diverge.
-     *  {@code -1} until first measured. */
-    public static volatile double lastTcUpDisagreement = -1.0;
-    public static volatile double lastTcFwdDisagreement = -1.0;
-    /** Diagnostic: the WORLD Y of the last-resolved body's ship up-vector - i.e. how
-     *  inverted its deck is (+1 upright, 0 on its side, -1 fully inverted). Lets a spin-to-inversion repro
-     *  poll the attitude server-side and stop the spin at a target roll. {@code 2} until first measured. */
-    public static volatile double lastShipUpY = 2.0;
     /** The LIVE body position in the ship frame, as of the last guard pass on this side — the body's
      *  own coordinates mapped through its anchor ship's transform, one snapshot. Distinct from the
      *  capture's committed point ({@code shipFrameX/Y/Z} on the probe), which only changes when the
@@ -106,11 +95,6 @@ public final class ShipFrameTravel {
     private static volatile double lastBodyLocalZ = 0.0;
     /** Throttle for the [FF-TRACE/WALK] line (test mode only). */
     private static int walkTraceTicks = 0;
-    /** World-frame {@code Entity.move} requests applied raw to a resolved body on THIS side (the
-     *  move-suppression path), and the shape of the most recent one ("type dx,dy,dz") — names who
-     *  still pushes a resolved body through the world pipeline. */
-    public static volatile long worldMoveApplies = 0L;
-    public static volatile String lastWorldMove = "";
     /** World time of the most recent commit, stamped onto each per-tick record line. Private: the
      *  line is the reader, not the field. */
     private static volatile long lastCommitWorldTime = -1L;
@@ -181,12 +165,19 @@ public final class ShipFrameTravel {
                                           double[] worldPos, String mode) {
     }
 
-    /** Called by the move-suppression hook: a world-frame mover asked to displace a resolved body. */
-    public static void noteWorldMove(String type, double x, double y, double z) {
-        worldMoveApplies++;
-        if (x * x + y * y + z * z > 1.0E-6) {
-            lastWorldMove = type + " " + x + "," + y + "," + z;
-        }
+    /**
+     * Seam: the move-suppression hook caught a world-frame mover asking to displace a resolved body.
+     *
+     * <p>Who still pushes a resolved body through the world pipeline — the discriminator for a
+     * crew member being dragged around in small jerks while the ship-frame resolution holds him.</p>
+     *
+     * <p>A SEAM, and nothing else. It used to keep a lifetime count and the shape of the most recent
+     * request in two statics, which answered "has this ever happened on this side" and nothing about
+     * a window, a body or an order. The entity is a parameter because the hook has it and the count
+     * never did: every reading taken from those two fields on a shared client was a total over every
+     * body the JVM had ever resolved.</p>
+     */
+    public static void noteWorldMove(Entity entity, String type, double x, double y, double z) {
     }
 
     /**
@@ -1780,22 +1771,6 @@ public final class ShipFrameTravel {
         worldMotion[0] += carryX;
         worldMotion[1] += carryY;
         worldMotion[2] += carryZ;
-        // Frame-consistency measurement: is the frame this class MOVES in (VS ShipTransform.rotate) the same rotation
-        // the camera LEVELS to (the attitude quaternion)? Recorded from a body that is genuinely resolved on
-        // the deck, so it is not confounded by "aboard by containment" edge cases. Diagnostic only.
-        java.util.Map<String, Object> tc = VSIntegration.transformConsistency(entity);
-        if (tc != null) {
-            Object up = tc.get("upDisagreement");
-            Object fw = tc.get("fwdDisagreement");
-            if (up instanceof Number) lastTcUpDisagreement = ((Number) up).doubleValue();
-            if (fw instanceof Number) lastTcFwdDisagreement = ((Number) fw).doubleValue();
-            Object qw = tc.get("qw"), qx = tc.get("qx"), qy = tc.get("qy"), qz = tc.get("qz");
-            if (qw instanceof Number && qx instanceof Number && qy instanceof Number && qz instanceof Number) {
-                lastShipUpY = new FreeFlightPhysics.Quat(((Number) qw).doubleValue(),
-                        ((Number) qx).doubleValue(), ((Number) qy).doubleValue(),
-                        ((Number) qz).doubleValue()).rotate(0.0, 1.0, 0.0)[1];
-            }
-        }
         remember(entity, shipId, sweep.x, sweep.y, sweep.z,
                 worldPos[0], worldPos[1], worldPos[2], carryX, carryY, carryZ);
         noteCommittedPose(world, shipId, sweep.x, sweep.y, sweep.z, worldPos, "aboard");

@@ -328,17 +328,20 @@ public class VSShipFlightTelemetryE2ETest extends AbstractSharedVsClientE2ETest 
         // ShipTransform.rotate) and the frame the camera LEVELS to (the attitude quaternion) are ONE
         // rotation, so "keys/mouse feel inverted" is NOT a frame-source split - it is the world-frame aim
         // under a deck-levelled camera. Pin it: at 75 degrees the disagreement is ~0.
-        String rolledStats = exec("artest vs shipframe-stats");
-        double tcUp = readDouble(rolledStats, Pattern.compile("\"lastTcUpDisagreement\":(-?[0-9.E\\-]+)"));
-        double tcFwd = readDouble(rolledStats, Pattern.compile("\"lastTcFwdDisagreement\":(-?[0-9.E\\-]+)"));
+        // Asked of THIS crew member, and computed on demand. The two numbers used to be read out of
+        // a pair of production statics that were written by whichever body the resolver had last
+        // handled and left at a -1.0 sentinel until it first ran — and -1.0 satisfies the "< 1e-6"
+        // assertion below, so the pin could go green on an instrument that had never measured
+        // anything. `ship-frame-check` takes the subject and answers about it or says it cannot.
+        String rolledStats = exec("artest vs ship-frame-check 0 " + crewId);
+        // The stronger arrangement gate the on-demand form allows: not "the number is not the
+        // sentinel" but "the measurement ran, for this body".
+        scenario().requireArranged("the ship-frame check must MEASURE the two frames for this crew"
+                + " member before their agreement can mean anything: " + rolledStats,
+                !rolledStats.contains("\"available\":false"));
+        double tcUp = readDouble(rolledStats, Pattern.compile("\"upDisagreement\":(-?[0-9.E\\-]+)"));
+        double tcFwd = readDouble(rolledStats, Pattern.compile("\"fwdDisagreement\":(-?[0-9.E\\-]+)"));
         System.out.println("[tier2][TC] rolled-deck frame disagreement up=" + tcUp + " fwd=" + tcFwd);
-        // ASKED FIRST, and as an arrangement. Production initialises both disagreements to -1.0 and
-        // leaves them there until the frame check first RUNS — and -1.0 satisfies the "< 1e-6"
-        // below, so without this the agreement assertion is green on an instrument that never
-        // measured anything. A check that did not run is not a statement about the frames.
-        scenario().requireArranged("the ship-frame check must have MEASURED the two frames before"
-                + " their agreement can mean anything; production leaves both disagreements at -1.0"
-                + " until it first runs: " + rolledStats, tcUp >= 0.0 && tcFwd >= 0.0);
         assertTrue("the movement frame and the camera frame must be ONE rotation on a 75-degree deck, so "
                 + "the keys/mouse inversion is the aim-frame (Path B), not a frame-source split "
                 + "(up=" + tcUp + " fwd=" + tcFwd + ")", tcUp < 1e-6 && tcFwd < 1e-6);

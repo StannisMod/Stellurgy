@@ -591,6 +591,7 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
         // that says nothing about churn.
         int[] keys = {Keyboard.KEY_W, Keyboard.KEY_D, Keyboard.KEY_S, Keyboard.KEY_A};
         StringBuilder legs = new StringBuilder();
+        long walkMoveMark = clientEvents().mark();
         for (int leg = 0; leg < 4; leg++) {
             bot().holdKey(keys[leg]);
             try {
@@ -602,13 +603,22 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
             // No dropReason column: the releases are records now, each with its gate AND its
             // sequence, so which leg one fell in is read off the log rather than guessed from which
             // sample first showed a changed last-write.
+            // The world-frame movers of THIS leg, not the shape of the last one this JVM saw: every
+            // request against a resolved body is its own record, so a leg that was pushed and a leg
+            // that merely followed a push from the previous one are different readings now.
+            String legMoves = clientEvents().since(walkMoveMark, "ship_frame_world_move");
+            for (String move : Events.records(legMoves)) {
+                walkMoveMark = (long) Events.number(move, "seq") + 1L;
+            }
             legs.append(String.format(java.util.Locale.ROOT,
-                    "[leg%d pos=(%.1f,%.1f,%.1f) worldMove='%s'] ",
+                    "[leg%d pos=(%.1f,%.1f,%.1f) worldMoves=%d last='%s'] ",
                     leg,
                     bot().reportState().get("playerX").getAsDouble(),
                     bot().reportState().get("playerY").getAsDouble(),
                     bot().reportState().get("playerZ").getAsDouble(),
-                    clientString(SHIP_FRAME_TRAVEL, "lastWorldMove")));
+                    Events.records(legMoves).size(),
+                    Events.lastRecord(legMoves) == null
+                            ? "(none)" : Events.text(Events.lastRecord(legMoves), "mover")));
         }
         bot().waitTicks(20);
         System.out.println("[crewcap] active-legs " + legs);

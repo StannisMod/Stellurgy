@@ -227,6 +227,32 @@ public abstract class MixinShipFrameTravelWrites {
     }
 
     /**
+     * A world-frame mover asking to displace a body the ship-frame resolver holds.
+     *
+     * <p>The discriminator for a crew member dragged around in small jerks while the resolution
+     * holds him: something is still pushing him through the world pipeline, and this names what
+     * ({@code type}) and by how much. Recorded per REQUEST, where production kept a lifetime count
+     * and the shape of the most recent one — so "did anything push this body during my window, and
+     * how often" could not be asked at all.</p>
+     *
+     * <p>Every request is recorded, including a zero-length one: production's own trace line
+     * suppressed those below an epsilon, and a mover that asks for nothing on every tick is a
+     * different finding from one that never asks.</p>
+     */
+    @Inject(method = "noteWorldMove", at = @At("HEAD"))
+    private static void arTest$worldMove(Entity entity, String type, double x, double y, double z,
+                                         CallbackInfo ci) {
+        if (entity == null || entity.world == null) {
+            return;
+        }
+        TestTrace.instrument(entity, "ship_frame_world_move_events");
+        TestTrace.record(entity, "ship_frame_world_move",
+                "\"e\":" + entity.getEntityId()
+                        + ",\"mover\":\"" + TestTrace.json(String.valueOf(type)) + "\""
+                        + ",\"dx\":" + x + ",\"dy\":" + y + ",\"dz\":" + z);
+    }
+
+    /**
      * What the external-move guard measured, per pass, on the body it was judging.
      *
      * <p>The pair is the point. A frame step means nothing without the allowance it was compared

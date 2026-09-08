@@ -953,28 +953,25 @@ public class VSCrewRelogPersistenceE2ETest extends AbstractSharedVsClientE2ETest
      * something else pulling the body.
      */
     private String mover() throws Exception {
-        String st = exec("artest vs shipframe-stats");
-        // The SERVER's most recent resolved tick, as its own record. Everything this used to read
-        // out of the probe reply one field at a time — the walk inputs, the ship-frame motion, the
-        // carry — is on that record's line, and it arrives NAMING the body and the tick it belongs
-        // to. The probe could offer neither: it published whatever the last resolution on the server
-        // had left in a static, so on a world with a second body aboard anything the loop below
-        // compared across two samples could be two different subjects.
+        // The SERVER's most recent resolved tick, its most recent guard pass and its most recent
+        // world-frame mover, each as its own record. Everything this used to read out of a probe
+        // reply one field at a time is on those records, and each arrives NAMING the body and the
+        // tick it belongs to. The reply could offer neither: it published whatever the last
+        // resolution on the server had left in a static, so on a world with a second body aboard
+        // anything the loop below compared across two samples could be two different subjects. The
+        // probe verb it came from no longer exists.
         String srvTick = Events.lastRecord(events().since(0, "ship_frame_tick"));
         String srvGuard = Events.lastRecord(events().since(0, "deck_guard_pass"));
-        return "SRV[worldMoves=" + readLong(st, "worldMoveApplies")
-                + " guard=" + (srvGuard == null ? "(no pass)" : srvGuard)
+        String srvMove = Events.lastRecord(events().since(0, "ship_frame_world_move"));
+        return "SRV[guard=" + (srvGuard == null ? "(no pass)" : srvGuard)
                 + " tick=" + (srvTick == null
                         ? "(the server has resolved no tick at all)" : Events.text(srvTick, "line"))
-                + "]"
-                // The client side is deliberately THIN here — every field costs a round trip, and
-                // the round trips stretch the very timeline this trace is sampling. The client's own
-                // per-tick record and its releases are read once, at the end (clientTickHistory and
-                // the release window), which is also why the drop counter and the last drop reason
-                // are no longer sampled per iteration: both were lifetime, JVM-global, and on a
-                // shared client neither described this body.
-                + " CLI[worldMoves=" + clientString(SHIP_FRAME_TRAVEL, "worldMoveApplies") + "]"
-                + " srvLastMove=" + readString(st, "lastWorldMove");
+                + " lastWorldMove=" + (srvMove == null ? "(none)" : srvMove)
+                + "]";
+                // No client half sampled per iteration any more. It was three lifetime, JVM-global
+                // counters, and on a shared client none of them described this body; the client's
+                // own per-tick record and its releases are read once, at the end, where a round trip
+                // does not stretch the timeline being sampled (clientTickHistory).
     }
 
     /**
@@ -1159,17 +1156,6 @@ public class VSCrewRelogPersistenceE2ETest extends AbstractSharedVsClientE2ETest
             }
         }
         return n;
-    }
-
-    /** A numeric JSON field as text (the probe writes doubles unquoted). */
-    private static String readString2(String json, String key) {
-        Matcher m = Pattern.compile("\"" + key + "\":(-?[0-9.EN\\-]+)").matcher(json);
-        return m.find() ? m.group(1) : "?";
-    }
-
-    private static long readLong(String json, String key) {
-        Matcher m = Pattern.compile("\"" + key + "\":(-?\\d+)").matcher(json);
-        return m.find() ? Long.parseLong(m.group(1)) : -1L;
     }
 
     private static String readString(String json, String key) {

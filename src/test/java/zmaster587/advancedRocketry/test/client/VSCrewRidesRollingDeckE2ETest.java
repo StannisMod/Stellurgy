@@ -8,6 +8,7 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 import static org.junit.Assert.assertTrue;
+import zmaster587.advancedRocketry.test.Events;
 import zmaster587.advancedRocketry.test.ShipIdentity;
 
 /**
@@ -172,7 +173,11 @@ public class VSCrewRidesRollingDeckE2ETest extends AbstractSharedVsClientE2ETest
         System.out.println("[rollingdeck] client deckCommits="
                 + clientEvents().since(0, "deck_captured")
                 + " deckReleases=" + clientEvents().since(0, "deck_released")
-                + " || server stats=" + exec("artest vs shipframe-stats"));
+                // The server's half as ITS records, not a probe reply of statics: the verb that
+                // served them is gone, and each record here names the body it is about.
+                + " || server ticks=" + Events.fieldLines(
+                        events().since(0, "ship_frame_tick"), "line")
+                + " || server releases=" + events().since(0, "deck_released"));
         assertTrue("the crew member must still be aboard after the roll: " + rolled,
                 rolled.contains("\"shipLoaded\":true"));
         // The roll is the moment a capture can be handed to the wrong hull, so "still aboard" is only

@@ -2383,10 +2383,6 @@ public class TestProbeCommand extends CommandBase {
             send(sender, jsonMap(m));
             return;
         }
-        // shipframe-stats - READ-ONLY. Whether the ship-frame movement hook is actually running, and
-        // whether its deck-frame sweep is finding the deck. A mixin that failed to apply and a mixin
-        // that applied and declined every entity look identical from outside the JVM; these counters
-        // tell them apart, and a resolved tick that saw zero obstacles means bodies fall through decks.
         // afc-clear - release every per-tile PROBE command channel on the server (`force-vel-by-id`,
         // `force-rot-by-id`, `point-by-id` and their `-at` twins).
         //
@@ -2463,45 +2459,14 @@ public class TestProbeCommand extends CommandBase {
             send(sender, jsonMap(tc));
             return;
         }
-        if (args.length >= 1 && "shipframe-stats".equalsIgnoreCase(args[0])) {
-            Map<String, Object> m = new LinkedHashMap<>();
-            // No resolvedTicks/declinedTicks: both are lifetime, JVM-global counters, so a reader
-            // could not tell one body's story out of them, and nothing consumed them from here.
-            // The per-body facts are the deck records the test mixins write.
-            // No lastObstacleCount/lastOnDeck: both are per-tick facts of ONE resolution, and this
-            // reply names no body — the ship_frame_tick record carries them as `obstacles`/`onDeck`
-            // beside the tick they belong to.
-            m.put("lastTcUpDisagreement",
-                    zmaster587.advancedRocketry.integration.vs.ShipFrameTravel.lastTcUpDisagreement);
-            m.put("lastTcFwdDisagreement",
-                    zmaster587.advancedRocketry.integration.vs.ShipFrameTravel.lastTcFwdDisagreement);
-            m.put("lastShipUpY",
-                    zmaster587.advancedRocketry.integration.vs.ShipFrameTravel.lastShipUpY);
-            // No drop columns and no decline counters. A release is a `deck_released` record that
-            // carries the gate's whole reason — the gap in ticks, the two discriminator vectors, the
-            // allowance and what the physics mod was holding — for ONE body, at the moment it
-            // happened; the counters beside them were lifetime totals over every body this side has
-            // ever resolved, which is a number no window can be taken out of.
-            m.put("worldMoveApplies",
-                    zmaster587.advancedRocketry.integration.vs.ShipFrameTravel.worldMoveApplies);
-            m.put("lastWorldMove",
-                    zmaster587.advancedRocketry.integration.vs.ShipFrameTravel.lastWorldMove);
-            // The guard's own measurements are no longer served from here either: a step and the
-            // allowance it was judged against only mean something read as a PAIR, off one pass of
-            // one body, which is what the `deck_guard_pass` record is and what three statics polled
-            // from another JVM never were.
-            // What the server REFUSED to ratify is no longer a counter here: every judgement of the
-            // deck movement bound is a `deck_movement_bound` record in the event log (a test-only
-            // mixin on its RETURN), with both endpoints and the verdict, so a test reads the
-            // refusals of ITS window rather than a total for the life of the server.
-            // The no-input-drift discriminator is no longer served from here. Its two halves — the
-            // walk inputs and the ship-frame motion they arrived with — only discriminate anything
-            // while they are read from the SAME tick of the SAME body, and this reply could offer
-            // neither: it published whatever the last resolution on this side had left behind. They
-            // are `ship_frame_walk` records now, and the carry rides `ship_frame_tick`.
-            send(sender, jsonMap(m));
-            return;
-        }
+        // The `shipframe-stats` verb is GONE (2026-09-08). It published up to twenty-eight statics
+        // of the ship-frame resolver, and its defect was structural rather than a matter of which
+        // fields it carried: the reply named no body and no tick, so every number in it described
+        // whichever resolution this side had performed last. On a shared client that is routinely
+        // another scenario's body. Each of its columns is now a record that names its subject —
+        // `ship_frame_tick`, `ship_frame_walk`, `deck_guard_pass`, `deck_released`,
+        // `ship_frame_world_move` — and the live frame-consistency question the last three columns
+        // answered is `ship-frame-check`, which computes it on demand for a NAMED subject.
         if (args.length >= 1 && "player-ship-data".equalsIgnoreCase(args[0])) {
             net.minecraft.server.MinecraftServer server = sender.getServer();
             // Optional "<dim> <entityId>" reports any entity instead of the first player, so a
@@ -2586,7 +2551,7 @@ public class TestProbeCommand extends CommandBase {
                 + "|teleport-ship-by-id <dim> <shipId> <dstX> <dstY> <dstZ>"
                 + "|unpark-by-id <dim> <shipId>"
                 + "|seat-mount <dim>|seat-occupy <dim> <x> <y> <z>|seat-delivery|arrival-trace"
-                + "|player-ship-data|shipframe-stats|would-take-over|deck-capture [<dim> <id>]"
+                + "|player-ship-data|would-take-over|deck-capture [<dim> <id>]"
                 + "|subspace-census [<dim> <id>]\"}");
     }
 

@@ -912,7 +912,10 @@ public abstract class AbstractSpaceLoginRestoreClientTest {
         // record names the body, the mode and the gate's whole reason.
         return "CLIENT[deckCommits=" + clientEvents().since(0, "deck_captured")
                 + " deckReleases=" + clientEvents().since(0, "deck_released")
-                + " worldMoveApplies=" + clientString(SHIP_FRAME_TRAVEL, "worldMoveApplies") + "]";
+                // And the world-frame movers as their own records, for the same reason: the counter
+                // that stood here said how many such requests this JVM had ever suppressed, not
+                // whether anything pushed HIM.
+                + " worldMoves=" + clientEvents().since(0, "ship_frame_world_move") + "]";
     }
 
     protected static String describeWalk(double[] w) {

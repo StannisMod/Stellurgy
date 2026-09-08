@@ -22,12 +22,13 @@ import zmaster587.advancedRocketry.test.trace.TestTrace;
  *
  * <h2>Why it looked excluded and was not</h2>
  *
- * <p>`carryY` was read as `0.00` and the carry dismissed. That reading came from
- * {@code artest vs shipframe-stats}, a SERVER probe returning a SERVER static, while the launch happens
- * on the CLIENT — a different process with its own copy of that field. It is the same mistake that had
- * already been made once with the substrate's added velocity: a server reading used to exclude a
- * client-side writer. The number was never measured on the side that matters, and this measures it
- * there.</p>
+ * <p>`carryY` was read as `0.00` and the carry dismissed. That reading came from a since-deleted
+ * {@code artest vs shipframe-stats} verb — a SERVER probe returning a SERVER static, while the launch
+ * happens on the CLIENT, a different process with its own copy of that field. It is the same mistake
+ * that had already been made once with the substrate's added velocity: a server reading used to
+ * exclude a client-side writer. The number was never measured on the side that matters, and this
+ * measures it there. (The whole verb is gone as of 2026-09-08 for precisely this defect: it named no
+ * body and no side, so every number in it described whichever resolution had happened last.)</p>
  *
  * <p>Announced on entry, so a silence is readable. Test-only: test source set, queued by the harness
  * coremod, absent from a released jar.</p>
