@@ -411,7 +411,7 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
                 churn < 5);
     }
 
-    // ---- #47 on the LIVE configuration: a station-keeping hover (never fully still, ledger #41) --
+    // ---- The LIVE configuration: a station-keeping hover, never fully still --
 
     @Test
     public void aStillCrewMemberOnAHoveringShipIsNotDraggedSideways() throws Exception {

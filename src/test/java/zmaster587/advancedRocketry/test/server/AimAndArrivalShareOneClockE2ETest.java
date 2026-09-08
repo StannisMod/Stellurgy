@@ -10,7 +10,7 @@ import static org.junit.Assert.assertTrue;
 import static zmaster587.advancedRocketry.test.ArrangementFailure.requireArranged;
 
 /**
- * Ledger #164's contract, at the server tier: <b>a jump's aim moves with the SPACE clock and with
+ * A recorded defect's contract, at the server tier: <b>a jump's aim moves with the SPACE clock and with
  * nothing else.</b>
  *
  * <p>The measured defect was a jump that arrived about 8&nbsp;000 blocks from the moon it was aimed
@@ -131,7 +131,7 @@ public class AimAndArrivalShareOneClockE2ETest extends AbstractSharedServerTest 
             double drift = distance(aimAfterSpaceMove, aimAfterLag);
             double allowed = Math.max(ALLOWED_DRIFT_FLOOR_BLOCKS,
                     controlMove * ALLOWED_DRIFT_FRACTION_OF_CONTROL);
-            assertTrue("THE CONTRACT (ledger #164): an aim is evaluated on the SPACE clock, so a clock"
+            assertTrue("THE CONTRACT: an aim is evaluated on the SPACE clock, so a clock"
                             + " that is not the space clock may not move it. A proxy answering "
                             + SPLIT_TICKS + " ticks behind moved the aim " + drift + " blocks —"
                             + " that is " + (drift / controlMove * 100d) + "% of the " + controlMove

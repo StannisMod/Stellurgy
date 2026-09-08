@@ -94,7 +94,7 @@ public class VSShipEntryClientGroupE2ETest extends AbstractSharedVsClientE2ETest
     private static final Pattern AFC_Y = Pattern.compile("\"afcY\":(-?\\d+)");
     private static final Pattern AFC_Z = Pattern.compile("\"afcZ\":(-?\\d+)");
     private static final Pattern VEL_Y = Pattern.compile("\"velY\":(-?[0-9.E\\-]+)");
-    /** Ledger #264 discriminator: the seat's own delivery counters, sampled across the climb. */
+    /** The discriminator: the seat's own delivery counters, sampled across the climb. */
     private static final Pattern RECEIVED = Pattern.compile("\"received\":(\\d+)");
     private static final Pattern DELIVERED = Pattern.compile("\"delivered\":(\\d+)");
     /** The ship's own attitude, so a climb that goes nowhere can be told from one that goes SIDEWAYS. */
@@ -467,7 +467,7 @@ public class VSShipEntryClientGroupE2ETest extends AbstractSharedVsClientE2ETest
                     // force-loads the ship's subspace yard nor touches a chunk, so the climb it is
                     // watching gets exactly the resources it would have got unwatched.
                     String s = shipInfoById(shipUuid);
-                    // THE DISCRIMINATOR for ledger #264, sampled ACROSS the dying climb rather than
+                    // THE DISCRIMINATOR, sampled ACROSS the dying climb rather than
                     // after it. Three candidate causes, and the climb trace alone cannot separate
                     // them: the tile instance is being replaced under the ship (afcIdentity changes),
                     // the computer is not ticking at all (controllerTicks flat), or the packet

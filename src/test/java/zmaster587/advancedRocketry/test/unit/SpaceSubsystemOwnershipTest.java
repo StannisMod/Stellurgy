@@ -26,7 +26,7 @@ import static org.junit.Assert.fail;
  *
  * <p><b>Why this is checked by reflection rather than by driving something.</b> The contract is now
  * carried by the SHAPE of the code: there is no seam to exercise, because a seam is exactly what it
- * forbids. Ledger #235 was a setter that took five services, kept no copy of them, and offered a
+ * forbids. The recorded defect was a setter that took five services, kept no copy of them, and offered a
  * "clear" that assigned five nulls — the production subsystem then answered {@code null} for the rest
  * of the boot, since the hook that builds it runs once per server start. Its replacement was a single
  * static {@code current} plus an install/restore handle, which kept that particular accident from

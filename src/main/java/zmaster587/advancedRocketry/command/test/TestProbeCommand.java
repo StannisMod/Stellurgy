@@ -1570,8 +1570,8 @@ public class TestProbeCommand extends CommandBase {
         // by POSITION — which inherits `shipyardBoundsAt`'s own documented hazard: the position-keyed
         // box answers for whatever craft is nearest with no distance bound, so on a shared harness the
         // scan finds a stranger's flight computer and writes to it. That returns success and moves the
-        // wrong ship, which is a FLAKE GENERATOR rather than a bug you can see. Same ruling as ledger
-        // #190 for the production crossing path: resolve the ship you mean, never the nearest one.
+        // wrong ship, which is a FLAKE GENERATOR rather than a bug you can see. Same ruling the
+        // production crossing path got: resolve the ship you mean, never the nearest one.
         //
         // Reports `afcResolved` and the resulting `input` state, both load-bearing: a miss must not read
         // as an arrangement that happened. A ship whose blocks are cut (a crossing) loses this input
@@ -2273,7 +2273,7 @@ public class TestProbeCommand extends CommandBase {
         // floor into the ship's empty subspace.
         // spawn-diag [reset] — READ-ONLY snapshot (or reset) of the VS spawn diagnostics
         // (VSIntegration.spawn* statics, written by MixinWorldServerShipManager). Localises where a
-        // queued+named tier-2 ship dies (ledger #60): spawnNewShipsRuns=0 -> never processed;
+        // queued+named tier-2 ship dies: spawnNewShipsRuns=0 -> never processed;
         // runs>0 & maxShips=0 -> processed but addShip skipped/threw; maxShips>=1 -> registered then destroyed.
         if (args.length >= 1 && "spawn-diag".equalsIgnoreCase(args[0])) {
             if (args.length >= 2 && "reset".equalsIgnoreCase(args[1])) {

@@ -214,7 +214,7 @@ public abstract class AbstractSpaceLoginRestoreClientTest {
 
     /**
      * And the ceiling of that band. The reported symptom is a ship that is ALMOST STATIONARY -
-     * settling - which is also the regime ledger #108's mechanism lives in (~0.15 blocks/tick).
+     * settling - which is also the regime the capture-mode flip lives in (~0.15 blocks/tick).
      * Holding the throttle through the window instead let the ship reach its cruise cap, two blocks
      * per tick, and there the client's record simply went silent: a different regime with its own
      * suspected defect, tracked separately. Expressed as a RATE, in blocks per tick: nothing damps a
@@ -591,8 +591,8 @@ public abstract class AbstractSpaceLoginRestoreClientTest {
 
         // THE DRIVER, not the condition. The previous cut of this pin measured a body on a deck that
         // was standing perfectly still - every field came back exactly 0.0, carry included - and a
-        // held body on a motionless deck cannot drift no matter what is wrong with the hold. Ledger
-        // #108's own retraction says it outright: the relog was never the variable, the SHIP'S MOTION
+        // held body on a motionless deck cannot drift no matter what is wrong with the hold. That
+        // defect's own retraction says it outright: the relog was never the variable, the SHIP'S MOTION
         // was. So the deck is put in motion for the window, and the ship's own displacement is
         // WITNESSED afterwards: without that witness a still ship reads as a clean pass again.
         commandWindowCruise(dim);
@@ -1963,7 +1963,7 @@ public abstract class AbstractSpaceLoginRestoreClientTest {
     /**
      * WHO moved the body, as numbers rather than inference. A nonzero incoming ship-relative motion
      * names a VELOCITY writer; a carry that does not match what the deck is doing names the held
-     * carry; ticks on the hull path name the capture-mode flip that ledger #108 was; input ticks say
+     * carry; ticks on the hull path name the capture-mode flip itself; input ticks say
      * the body was not actually idle and the whole window is void.
      */
     protected String writerSummary(String history, long fromTick) {

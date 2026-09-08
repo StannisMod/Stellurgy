@@ -327,7 +327,7 @@ public class VSRemoteBodyModelGateE2ETest extends AbstractSharedVsClientE2ETest 
      *  opened before that reads zero samples on a client that draws models perfectly well.
      *
      *  <p>Returns {@link Sampling#drawn}=false rather than asserting, so the caller can RE-STAGE at a
-     *  fresh spot (ledger #101: a world body inside a ship box is intermittently not drawn under load).
+     *  fresh spot (a world body inside a ship box is intermittently not drawn under load).
      *  When it returns false the diagnostic classifies the miss over the polled window from the two
      *  render-stage controls — {@code cameraHookCalls} (frames) and {@code modelRotationCalls} (every
      *  living model, player included) — so a red run names its own failure stage:

@@ -741,7 +741,7 @@ public class VSCrewInteriorBoardingE2ETest extends AbstractSharedVsClientE2ETest
 
         // The registry's own addShip, awaited as a LINK. The count poll this replaces could not see
         // one: raising its budget from 200 to 600 ticks was measured and changed nothing (2/4 red
-        // either way, ledger #60) because the ship never entered the registry at all, and a count
+        // either way) because the ship never entered the registry at all, and a count
         // that never moves says only "not yet" however long it is given.
         try {
             // The identity comes from HERE — the registry's record of this assembly's own add — and

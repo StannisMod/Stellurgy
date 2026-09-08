@@ -1373,7 +1373,7 @@ final class VSBridge {
     // ---- Anchored (by-ship-id) frame access -------------------------------------------------
     // A capture EPISODE must keep talking to the ship it was captured on. Resolving the ship by
     // world-AABB containment every call re-picks it, and with several loaded ships whose grown
-    // boxes overlap, first-match can flip mid-episode (ledger #36/#45). These variants take the
+    // boxes overlap, first-match can flip mid-episode — measured twice. These variants take the
     // ship's UUID string (its ShipData identity) and answer for THAT ship or not at all.
 
     /** The loaded ship whose {@code ShipData} UUID string equals {@code shipId}, or null. */
@@ -1555,7 +1555,7 @@ final class VSBridge {
      *  transform, inertia and the physics flag but never the velocities — while the ship's
      *  transform visibly stepped between ticks. Everything built on the value was blind client-side
      *  and the capture thrashed on any fast-moving ship (drop + re-capture every tick once the step
-     *  crossed the bare 0.2 epsilon; ledger #47). The client then DERIVED a rate by differencing
+     *  crossed the bare 0.2 epsilon). The client then DERIVED a rate by differencing
      *  observations, which is a guess wearing a measurement's clothes: it was divided by a count of
      *  calls rather than by time, and a 0.279 rad/s roll came back as 55.5 rad/s and threw a body a
      *  kilometre into the sky (#390). A body is not moved by a number only its own client invented;
