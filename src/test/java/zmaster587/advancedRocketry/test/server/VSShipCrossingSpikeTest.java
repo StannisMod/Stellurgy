@@ -149,8 +149,9 @@ public class VSShipCrossingSpikeTest extends AbstractSharedServerTest {
         return String.join("\n", client().execute(cmd));
     }
 
-    /** Poll for a loaded VS ship (assembly is async on the physics thread; a headless server has no
-     *  player near to auto-load it, so force a load each round). Bounded ~10 s. Returns the loaded count. */
+    /** Poll for a loaded VS ship (the assembly is deferred to the ship manager's own tick, which
+     *  drains the spawn queue; a headless server also has no player near to auto-load it, so force a
+     *  load each round). Bounded ~10 s. Returns the loaded count. */
     /** How many ships are LOADED in {@code dim} right now. A read, not a wait: measured across this
      *  tier at one and at six forks, the ship is already loaded whenever a scenario asks. */
     private int loadedShips(int dim) throws Exception {

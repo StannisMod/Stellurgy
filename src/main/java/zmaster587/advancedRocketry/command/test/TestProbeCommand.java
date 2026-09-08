@@ -4597,7 +4597,8 @@ public class TestProbeCommand extends CommandBase {
             if (transitDurableId != null) {
                 transitStack.ledger.settle(transitDurableId, transitOrigin);
             }
-            // Assembly is ASYNC (queued on the physics thread), so the seat + ship world pos are NOT queryable
+            // Assembly is DEFERRED, not threaded: `queueShipSpawn` only enqueues, and the manager's
+            // own tick drains that queue. So the seat + ship world pos are NOT queryable
             // yet. The caller polls `vs ship-count-all`/`load-ships`/`ship-count` for the ship, then reads the
             // post-assembly pilot-seat subspace pos + ship world pos via `vs find-seat <dim> id <shipId>`.
             send(sender, "{\"ok\":true,\"originDim\":" + originDim

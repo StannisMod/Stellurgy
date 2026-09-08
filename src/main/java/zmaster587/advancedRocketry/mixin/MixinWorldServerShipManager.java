@@ -19,11 +19,14 @@ import org.valkyrienskies.mod.common.ships.ship_world.WorldServerShipManager;
  * <p>VS's {@code loadAndUnloadShips} iterates {@code loadQueue} and, for each UUID, throws
  * {@code IllegalStateException("Tried loading a ShipData that was already loaded?")} if that
  * ship is already in {@code loadedShips}. AR's tier-2 assembly spawns a ship in place
- * ({@code queueShipSpawn}), which loads it immediately; if a player is standing near the pad
- * when it spawns, VS's proximity loader also queues the very same ship for a load, so next
- * physics tick the load loop finds it already loaded and crashes the whole server thread.
- * The automated client e2e dodges this by keeping its observer far during spawn — a human who
- * builds and assembles in place cannot.</p>
+ * ({@code queueShipSpawn}), which does NOT load it immediately: it only adds the record to a
+ * spawn queue, and the ship becomes loaded when the manager's own tick drains that queue in
+ * {@code spawnNewShips()} — followed by {@code loadAndUnloadShips()} in the SAME invocation,
+ * which is what makes the collision reachable at all. If a player is standing near the pad when
+ * it spawns, VS's proximity loader queues the very same ship for a load, so the load loop
+ * running a few lines later finds it already loaded and crashes the whole server thread. The
+ * automated client e2e dodges this by keeping its observer far during spawn — a human who builds
+ * and assembles in place cannot.</p>
  *
  * <p>Fix: at the head of the load loop, drop from {@code loadQueue} every ship that is already
  * loaded. This is exactly the pre-condition VS asserts on; enforcing it before the loop turns

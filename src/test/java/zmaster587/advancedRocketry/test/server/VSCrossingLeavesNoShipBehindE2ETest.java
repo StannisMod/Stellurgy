@@ -63,8 +63,8 @@ public class VSCrossingLeavesNoShipBehindE2ETest extends AbstractSharedServerTes
     /**
      * How much WORLD a bounded wait is allowed: 200 server ticks, the ten seconds the old
      * {@code 40 x 250 ms} meant on an idle box. On the SERVER's clock, because what these wait for —
-     * an assembly queued on the physics thread, a queued load being served — is driven by the server
-     * tick loop, and the worlds involved are often the ones that have not started ticking yet.
+     * a queued assembly being drained, a queued load being served — is driven by the server tick
+     * loop itself, and the worlds involved are often the ones that have not started ticking yet.
      */
     private static final int WAIT_TICKS = 200;
 

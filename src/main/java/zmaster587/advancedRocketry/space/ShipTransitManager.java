@@ -40,9 +40,11 @@ public final class ShipTransitManager {
     private static final Logger LOGGER = LogManager.getLogger("advancedrocketry/space");
 
     /**
-     * Max ticks to retry a stalled arrival crossing before giving up. VS assembles a crossed ship
-     * asynchronously (physics thread), so the ship is not registered in the hyperspace world for a few
-     * ticks after departure; the arrival crossing retries until it is. ~10 s at 20 tps.
+     * Max ticks to retry a stalled arrival crossing before giving up. A crossed ship is assembled
+     * with a DELAY rather than on another thread: {@code queueShipSpawn} only adds the record to a
+     * spawn queue, which the ship manager drains inside its own tick, so the ship is not registered
+     * in the hyperspace world for a tick or more after departure and the arrival crossing retries
+     * until it is. ~10 s at 20 tps.
      */
     private static final int MAX_ARRIVAL_ATTEMPTS = 200;
 

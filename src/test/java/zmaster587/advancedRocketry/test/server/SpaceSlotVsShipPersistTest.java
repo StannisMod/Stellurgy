@@ -32,8 +32,8 @@ public class SpaceSlotVsShipPersistTest extends AbstractSharedServerTest {
         return String.join("\n", client().execute(cmd));
     }
 
-    /** VS assembly is queued on the physics thread; the dedicated server ticks in its own JVM, so a
-     *  short test-JVM sleep lets VS process the spawn queue. */
+    /** VS assembly is queued and drained by the ship manager's own tick, not run on another thread;
+     *  the dedicated server ticks in its own JVM, so a short test-JVM sleep lets that drain happen. */
     private int pollCount(int dim, int want, int tries) throws Exception {
         final int[] c = {-1};
         // VS drains its spawn queue on the server tick, so the budget is ticks of it: tries x the old

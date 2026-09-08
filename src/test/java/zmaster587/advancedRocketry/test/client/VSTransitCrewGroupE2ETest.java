@@ -261,8 +261,9 @@ private int waitForLoadedShip(int dim) throws Exception {
         // Headless: pin ships loaded so a freshly assembled ship does not auto-unload between probe calls.
         exec("artest vs permaload true");
 
-        // Build a PILOTED tier-2 ship in a fresh transit ORIGIN pool cell. The VS assembly is ASYNC (queued on
-        // the physics thread), so the ship + its seat are not queryable synchronously - poll for them below.
+        // Build a PILOTED tier-2 ship in a fresh transit ORIGIN pool cell. The assembly is DEFERRED
+        // rather than threaded — the spawn is queued and the ship manager drains that queue in its
+        // own tick — so the ship + its seat are not queryable synchronously; poll for them below.
         String setup = exec("artest space transit-setup-piloted");
         assertTrue("piloted transit setup must succeed: " + setup, readBool(setup, "ok"));
         int originDim = readInt(setup, "originDim");
