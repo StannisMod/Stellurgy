@@ -809,9 +809,6 @@ public final class ShipFrameTravel {
     /** The (single) pending seed. Client main thread only. */
     private static PendingSeed pendingSeed = null;
 
-    /** What the pending-seed pipeline decided on its last pass, in its own words. */
-    public static volatile String lastSeedOutcome = "";
-
     /** What a pending seed should do this tick. Pure - pinned by unit tests. */
     public enum PendingSeedDecision { WAIT, EXPIRE, ALREADY_SEEDED, KEEP_PREEXISTING, APPLY }
 
@@ -881,7 +878,6 @@ public final class ShipFrameTravel {
         seedAttempts++;
         ShipFrameState st = STATE.get(entity);
         if (st != null && st.seedAnchored && shipId.equals(st.shipId)) {
-            lastSeedOutcome = "alreadySeeded";
             return; // the seed already took; a re-send must not teleport the body again
         }
         PendingSeed slot = pendingSeed;
@@ -931,15 +927,12 @@ public final class ShipFrameTravel {
             case WAIT:
                 return;
             case EXPIRE:
-                lastSeedOutcome = "expired";
                 pendingSeed = null;
                 return;
             case ALREADY_SEEDED:
-                lastSeedOutcome = "alreadySeeded";
                 pendingSeed = null;
                 return;
             case KEEP_PREEXISTING:
-                lastSeedOutcome = "keptPreexisting";
                 pendingSeed = null;
                 return;
             case APPLY:
@@ -957,7 +950,6 @@ public final class ShipFrameTravel {
                 }
                 applySeedCapture(body, slot.shipId, slot.subX, slot.subY, slot.subZ, world);
                 seedOks++;
-                lastSeedOutcome = "applied";
                 pendingSeed = null;
         }
     }
@@ -1449,12 +1441,6 @@ public final class ShipFrameTravel {
      *  exactly who must be caught (the sweep then resolves the contact instead of the physics
      *  mod's bounce-and-tunnel). Must agree with {@code hullStandTravel}'s collision solid, or
      *  hold and collision fight each other. */
-    /** Diagnostics of {@code hullContactFor} on THIS side: cumulative calls, the maximum obstacle
-     *  count ever seen, and how many calls answered "touch". */
-    public static volatile long hullContactCalls = 0L;
-    public static volatile int hullContactMaxObstacles = -99;
-    public static volatile long hullContactTouches = 0L;
-
     /** How far from the hull's true geometry the contact gate still reads "about to stand on
      *  this hull". This is a CAPTURE gate, not a collision test: before the capture takes over,
      *  the physics mod's own world collision parks a faller a few tenths of a block OFF the face
@@ -1466,7 +1452,6 @@ public final class ShipFrameTravel {
     private static final double HULL_CONTACT_MARGIN = 0.5;
 
     private static boolean hullContactFor(Entity entity, String shipId) {
-        hullContactCalls++;
         double[][] axes = shipAxesFor(entity.world, shipId);
         if (axes == null) {
             return false;
@@ -1481,11 +1466,7 @@ public final class ShipFrameTravel {
             return false;
         }
         boolean touch = HullSweep.touchesAny(box, obstacles, axes);
-        if (obstacles.size() > hullContactMaxObstacles) {
-            hullContactMaxObstacles = obstacles.size();
-        }
         if (touch) {
-            hullContactTouches++;
         }
         return touch;
     }
