@@ -367,6 +367,10 @@ public final class SpaceManager {
                 }
             }
             for (String key : aged) {
+                if (vetoed(key, zmaster587.advancedRocketry.api.event.SpaceCellEvent.Reason.AGE,
+                        now - metaOf(key).lastVisitTick)) {
+                    continue;
+                }
                 deleteFromStore(key);
                 deleted.add(key);
             }
@@ -383,11 +387,34 @@ public final class SpaceManager {
                 if (victim == null || !attempted.add(victim)) {
                     break; // nothing collectable left, or the store is refusing to shrink
                 }
+                if (vetoed(victim, zmaster587.advancedRocketry.api.event.SpaceCellEvent.Reason.COUNT,
+                        Long.MIN_VALUE)) {
+                    // Marked attempted above, so the next turn of the loop picks the NEXT oldest
+                    // rather than offering this one again forever. A listener that vetoes every
+                    // candidate holds the store over its ceiling, which is its choice to make.
+                    continue;
+                }
                 deleteFromStore(victim);
                 deleted.add(victim);
             }
         }
         return deleted;
+    }
+
+
+    /**
+     * Offer a cell to anything that would rather keep it, and answer whether it was kept.
+     *
+     * <p>The collector refuses loaded and claimed cells before it gets here, so what it is about to
+     * delete is a cell it believes nobody is using. This is where something that knows better says
+     * so.</p>
+     */
+    private static boolean vetoed(String cellKey,
+                                  zmaster587.advancedRocketry.api.event.SpaceCellEvent.Reason reason,
+                                  long ticksSinceVisit) {
+        return net.minecraftforge.common.MinecraftForge.EVENT_BUS.post(
+                new zmaster587.advancedRocketry.api.event.SpaceCellEvent.CollectPre(
+                        cellKey, reason, ticksSinceVisit));
     }
 
     /**

@@ -1,5 +1,6 @@
 package zmaster587.advancedRocketry.test.server;
 
+import zmaster587.advancedRocketry.test.Events;
 import zmaster587.advancedRocketry.test.ShipReadiness;
 import zmaster587.advancedRocketry.test.GameTicks;
 import zmaster587.advancedRocketry.test.ShipIdentity;
@@ -53,22 +54,26 @@ public class VSShipTransitE2ETest extends AbstractSharedServerTest {
         // makes it a real flight, because a fast enough jump is performed as a single crossing instead
         // and this test is about the hyperspace path. The speed is what chooses between them; the
         // fixture is a real craft and could take either.
+        // Marked BEFORE the command whose effect is awaited.
+        long transitMark = events.mark();
         String begin = exec("artest space transit-begin " + originDim + " " + ax + " " + ay + " " + az
                 + " " + HYPERSPACE_JUMP_SPEED);
         assertTrue("transit did not begin (departure crossing failed): " + begin, begin.contains("\"began\":true"));
 
-        // Advance the transit until it arrives (arrival retries while the async hyperspace ship assembles).
-        // The pump and the reading are one call, so both live in the condition; what the budget buys is
-        // the WORLD in which the async assembly the arrival retries against can finish.
-        final String[] lastTick = {""};
-        GameTicks.until(client(), GameTicks.server(), ARRIVAL_TICKS, () -> {
-            lastTick[0] = exec("artest space transit-tick 10");
-            return extractInt(lastTick[0], "inTransit") == 0;
-        });
-        int targetDim = extractInt(lastTick[0], "inTransit") == 0
-                ? extractInt(lastTick[0], "targetDim") : -1;
-        assertTrue("ship never arrived (still in transit after " + ARRIVAL_TICKS + " ticks of world);"
-                + " last tick=" + lastTick[0], targetDim >= 0);
+        // NO PUMP. The fixture now runs on the server's own subsystem, so the jump is advanced by
+        // SpaceSubsystemEvents like any other -- and what this waits for is the arrival production
+        // announces, not a counter sampled until it reads zero. Both halves matter: the wait proves
+        // the server drives a transit (the old loop drove it by hand and could not have noticed if
+        // production stopped), and the record proves the arrival happened rather than that a sample
+        // caught a moment.
+        String arrived = events.awaitCarrying(transitMark, "ship_transit_ended",
+                "\"route\":\"HYPERSPACE\"",
+                "the jump never completed; the durable record now reads "
+                        + exec("artest space transit-export"),
+                ARRIVAL_TICKS);
+        // The dimension the arrival event was posted IN, which is the slot holding the target cell.
+        int targetDim = extractInt(arrived, "dim");
+        assertTrue("the arrival was announced but names no dimension: " + arrived, targetDim >= 0);
 
         // The re-assembled ship must load + be VS-managed in the TARGET cell (arrival pastes near 0,200,0).
         assertTrue("transited ship never (re)loaded in the target cell (dim " + targetDim + "); countAll="
@@ -90,6 +95,10 @@ public class VSShipTransitE2ETest extends AbstractSharedServerTest {
     }
 
     // --- helpers (mirror VSShipCrossingSpikeTest) ---------------------------------------------------
+
+    /** This tier's reader of the server's ordered event log. */
+    private final Events events =
+            new Events(this::exec, ticks -> GameTicks.advanceWorld(client(), 0, ticks));
 
     private String exec(String cmd) throws Exception {
         return String.join("\n", client().execute(cmd));

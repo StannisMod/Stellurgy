@@ -4436,20 +4436,23 @@ public class TestProbeCommand extends CommandBase {
         if (args.length >= 1 && "transit-setup-empty".equalsIgnoreCase(args[0])) {
             int[] transitSlots = zmaster587.advancedRocketry.space.SpaceSlotPool.registerAdditionalSlots(2);
             zmaster587.advancedRocketry.space.HyperspaceWorld.register();
-            // Through the PRODUCTION factory, overriding only the two knobs this fixture needs: its
-            // own clock and a manager that never collects. Everything else — the ledger, the arrival
-            // standoff, the offline-progress policy and the world's shared lane allocator — arrives
-            // by construction. Built by hand, this stack diverged from production on four axes at
-            // once, and the fresh lane allocator among them is what parked two ships in one lane.
-            transitStack = new zmaster587.advancedRocketry.space.SpaceSubsystem(
-                    // NARROWED to the two slots just appended — see ownSlotsOnly. This stack is the
-                    // one subsystem in the JVM that is not the server's, and it binds out of the same
-                    // pool the server's does; an unnarrowed binder would let it take a slot the
-                    // server's manager considers free and hand the same world to two owners.
-                    ownSlotsOnly(transitSlots),
-                    () -> (long) server.getTickCounter(),
-                    new zmaster587.advancedRocketry.space.SpaceManager.Config(
-                            zmaster587.advancedRocketry.space.SpaceManager.GcPolicy.NEVER, 0L, 0));
+            // THE SERVER'S OWN SUBSYSTEM. This fixture used to construct a second one — its own
+            // clock, its own manager, a binder narrowed so the two could not fight over the pool —
+            // and the server never ticked it, so every transit e2e had to drive the jump by hand
+            // through `transit-tick`. Those tests then proved what ShipTransitManager DOES and
+            // nothing about production driving it: a jump the server stopped ticking would have left
+            // them green.
+            //
+            // The four reasons that stack argued for itself do not survive being asked. A manager
+            // that never collects is a config (`spaceCellGcPolicy`). The narrowed binder and the
+            // shared lane allocator were treatments for two stacks sharing one pool — with one owner
+            // there is nothing to narrow against. And its own clock is unnecessary because the knob
+            // for time already exists and touches no world: `artest space set-clock`.
+            transitStack = liveStack();
+            if (transitStack == null) {
+                send(sender, "{\"error\":\"space subsystem not registered\"}");
+                return;
+            }
             transitMgr = transitStack.manager;
             transitTm = transitStack.transit;
             transitOrigin = zmaster587.advancedRocketry.space.GalacticCoord.ofSectorLocal(7000, 0, 0, 0, 0, 0);
@@ -4472,20 +4475,23 @@ public class TestProbeCommand extends CommandBase {
         if (args.length >= 1 && "transit-setup-piloted".equalsIgnoreCase(args[0])) {
             int[] transitSlots = zmaster587.advancedRocketry.space.SpaceSlotPool.registerAdditionalSlots(2);
             zmaster587.advancedRocketry.space.HyperspaceWorld.register();
-            // Through the PRODUCTION factory, overriding only the two knobs this fixture needs: its
-            // own clock and a manager that never collects. Everything else — the ledger, the arrival
-            // standoff, the offline-progress policy and the world's shared lane allocator — arrives
-            // by construction. Built by hand, this stack diverged from production on four axes at
-            // once, and the fresh lane allocator among them is what parked two ships in one lane.
-            transitStack = new zmaster587.advancedRocketry.space.SpaceSubsystem(
-                    // NARROWED to the two slots just appended — see ownSlotsOnly. This stack is the
-                    // one subsystem in the JVM that is not the server's, and it binds out of the same
-                    // pool the server's does; an unnarrowed binder would let it take a slot the
-                    // server's manager considers free and hand the same world to two owners.
-                    ownSlotsOnly(transitSlots),
-                    () -> (long) server.getTickCounter(),
-                    new zmaster587.advancedRocketry.space.SpaceManager.Config(
-                            zmaster587.advancedRocketry.space.SpaceManager.GcPolicy.NEVER, 0L, 0));
+            // THE SERVER'S OWN SUBSYSTEM. This fixture used to construct a second one — its own
+            // clock, its own manager, a binder narrowed so the two could not fight over the pool —
+            // and the server never ticked it, so every transit e2e had to drive the jump by hand
+            // through `transit-tick`. Those tests then proved what ShipTransitManager DOES and
+            // nothing about production driving it: a jump the server stopped ticking would have left
+            // them green.
+            //
+            // The four reasons that stack argued for itself do not survive being asked. A manager
+            // that never collects is a config (`spaceCellGcPolicy`). The narrowed binder and the
+            // shared lane allocator were treatments for two stacks sharing one pool — with one owner
+            // there is nothing to narrow against. And its own clock is unnecessary because the knob
+            // for time already exists and touches no world: `artest space set-clock`.
+            transitStack = liveStack();
+            if (transitStack == null) {
+                send(sender, "{\"error\":\"space subsystem not registered\"}");
+                return;
+            }
             transitMgr = transitStack.manager;
             transitTm = transitStack.transit;
             transitOrigin = zmaster587.advancedRocketry.space.GalacticCoord.ofSectorLocal(7000, 0, 0, 0, 0, 0);
