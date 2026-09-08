@@ -1455,6 +1455,35 @@ public final class VSIntegration {
     }
 
     /**
+     * TEST-ONLY FAULT INJECTION: register a blockless, unloaded ship record in {@code world}.
+     *
+     * <p>Answers {@code [uuid, registrySizeRightAfterTheAdd]}, or {@code null} when VS is absent —
+     * absence rather than a fabricated pair, because a caller that got {@code ["", "0"]} could not
+     * tell "no physics mod" from "the plant did nothing".</p>
+     */
+    public static String[] strandBlocklessRecord(World world, net.minecraft.util.math.BlockPos anchor) {
+        if (!isAvailable()) {
+            return null;
+        }
+        return VSBridge.strandBlocklessRecord(world, anchor);
+    }
+
+    /**
+     * TEST-ONLY FAULT INJECTION: empty the nearest LOADED ship's block set and ask the nearest-ship
+     * lookup, in one call, what it answers at the same point.
+     *
+     * <p>Answers {@code [emptiedShipUuid, whatTheLookupSaid]}, or {@code null} when VS is absent or
+     * no loaded ship was there — absence rather than a fabricated pair, so "nothing to empty" cannot
+     * be read as "the lookup behaved".</p>
+     */
+    public static String[] emptyNearestShipAndLookAgain(World world, double x, double y, double z) {
+        if (!isAvailable()) {
+            return null;
+        }
+        return VSBridge.emptyNearestShipAndLookAgain(world, x, y, z);
+    }
+
+    /**
      * DIAGNOSTIC: identity of the ship registry {@code world} answers with, matching the hex the
      * physics mod prints when it serialises that world. {@code "?"} when VS is absent.
      */

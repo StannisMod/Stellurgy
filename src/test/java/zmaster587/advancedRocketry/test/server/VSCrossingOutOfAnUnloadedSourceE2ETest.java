@@ -87,6 +87,50 @@ public class VSCrossingOutOfAnUnloadedSourceE2ETest extends AbstractHeadlessServ
                 registryBefore, registryAfter);
     }
 
+    /**
+     * A blockless record nobody deregisters is COLLECTED, not merely avoided.
+     *
+     * <p>The leg above measures a crossing that cleans up after itself, and it passes because the
+     * crossing's own path deregisters by hand. That proves the hand call works; it says nothing about
+     * what happens on a path that has no hand call — and every such path leaves a record that owns no
+     * blocks, answers position lookups in its world, and is written to disk with it. The manager's
+     * registry sweep is what has to collect those, and this is the leg that can fail if it does not.
+     *
+     * <p><b>The garbage is PLANTED, and the plant is measured on its own call.</b> Provoking it means
+     * winning a race — cutting a loaded ship and unloading it inside one tick — and a collector's
+     * test should be able to state its arrangement rather than hope for it. The registry size taken
+     * inside the planting call is what proves a record really was added, because two probe commands
+     * are separated by a full world pass: a count read afterwards is already post-collection and
+     * cannot tell a working sweep from a plant that never happened.
+     *
+     * <p><b>Nothing here loads a ship.</b> Loading a leftover entry is itself one of the things that
+     * collects it, so a leg that pumped a load would be measuring its own instrument.
+     */
+    @Test
+    public void aBlocklessRecordNobodyDeregisteredIsSweptFromTheRegistry() throws Exception {
+
+        int registryBefore = queryableShips();
+
+        String planted = exec("artest vs strand-blockless-record 0 "
+                + BASE_X + " " + BUILD_Y + " " + BASE_Z);
+        assertTrue("the fault injection itself failed, so this leg measures nothing: " + planted,
+                planted.contains("\"ok\":true"));
+        assertEquals("the plant must actually have put a record in the registry — read on the "
+                        + "planting call itself, before any tick could collect it. Without this the "
+                        + "assertion below is satisfied by a plant that never happened: " + planted,
+                registryBefore + 1, extractInt(planted, "countAfterAdd"));
+
+        assertTrue("a registered ship owning NO blocks, with nothing loaded behind it and no queue "
+                        + "holding it, must be collected by the manager's own registry sweep — no "
+                        + "caller deregistered this one, which is the whole point: a path that forgets "
+                        + "to, or a hull cut while nothing was loaded to be walked, leaves exactly "
+                        + "this. It answers position lookups and it is persisted with the world. "
+                        + "Registry went " + registryBefore + " -> " + queryableShips()
+                        + " over " + WAIT_TICKS + " ticks; planted=" + planted,
+                GameTicks.until(client(), GameTicks.server(), WAIT_TICKS,
+                        () -> queryableShips() == registryBefore));
+    }
+
     // --- arrangement --------------------------------------------------------------------------------
 
     private void buildShip() throws Exception {

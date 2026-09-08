@@ -11,6 +11,7 @@ import java.util.regex.Pattern;
 import zmaster587.advancedRocketry.test.Events;
 import zmaster587.advancedRocketry.test.ShipIdentity;
 
+import static zmaster587.advancedRocketry.test.AdvancedRocketryTestConstants.FIXTURE_CELL_SPACING_BLOCKS;
 import static zmaster587.advancedRocketry.test.AdvancedRocketryTestConstants.HYPERSPACE_JUMP_SPEED;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
@@ -61,6 +62,38 @@ public class VSTransitCrewGroupE2ETest extends AbstractSharedVsClientE2ETest {
             bot().setRenderDistance(previousRenderDistance);
             previousRenderDistance = -1;
         }
+        flyOutAnyJumpLeftInTheAir();
+    }
+
+    /**
+     * No jump may still be in the air when a scenario in this family starts.
+     *
+     * <p><b>Why this is a family reset and not each scenario's own housekeeping.</b> Several
+     * scenarios here deliberately stop at a reading taken mid-flight — that IS their subject — and
+     * every transit in the server's live stack is now advanced once per server tick. So a jump left
+     * running does not sit where it was left: it FLIES, it arrives inside whatever scenario happens
+     * to be running by then, and its arrival re-seats its crew — the same bot — into the destination
+     * cell. Measured 2026-09-08: the seat mount in the next scenario failed five times over with the
+     * dummy alive in the origin dim and the player already delivered to the target dim, which read
+     * for a month as a flaky mount.</p>
+     *
+     * <p>This speaks the product's own language rather than undoing a transition: the jump is
+     * COMPLETED, not evicted, which is the only way to remove it that leaves the subsystem in a
+     * state a player could also reach. And it is asserted — a reset nobody checks cannot be told
+     * from no reset — with the bound taken from the longest flight this class ever starts.</p>
+     */
+    private void flyOutAnyJumpLeftInTheAir() throws Exception {
+        String status = exec("artest space transit-status");
+        if (readIntOr(status, "inTransit", 0) == 0) {
+            return;
+        }
+        boolean flownOut = false;
+        for (int i = 0; i < LIVABLE_FLIGHT_TICKS / 10L && !flownOut; i++) {
+            flownOut = readInt(exec("artest space transit-tick 10"), "inTransit") == 0;
+        }
+        assertTrue("a jump left in the air by an earlier scenario must be flown out before this one"
+                + " starts, or its arrival lands INSIDE this scenario and re-seats the bot into the"
+                + " destination cell: " + exec("artest space transit-status"), flownOut);
     }
 
     // ---- shared arrangement helpers (byte-identical in all four sources) ----
@@ -218,7 +251,7 @@ private int waitForLoadedShip(int dim) throws Exception {
     }
 
     /** Blocks per tick for the jump. Slow enough that the ship stays parked for tens of ticks. */
-private static final long PARK_SPEED = HYPERSPACE_JUMP_SPEED;
+    private static final long PARK_SPEED = HYPERSPACE_JUMP_SPEED;
 
     // ---- migrated: VSShipTransitCrewE2ETest ----
 
@@ -629,13 +662,25 @@ private void seatTheBot(int originDim, String shipId) throws Exception {
         bot().waitTicks(20);
         assertEquals("the client must have followed into the transit origin cell",
                 originDim, bot().reportWeather().get("dim").getAsInt());
+        // The SERVER's own view of the same player, because the mount below is a server-side
+        // operation while the line above reads the CLIENT. They can disagree, and when they do the
+        // mount fails as "entity not found": the dummy is spawned in the dim this method was GIVEN
+        // and then looked up in whatever world the server has the player in. Measured 2026-09-08 —
+        // dummy alive in dim 3, player in dim 4, five retries against a lookup that could never
+        // succeed. Read here so an arrangement that did not build says so as an arrangement.
+        String serverSide = exec("artest player health");
+        scenario().requireArranged("the SERVER must have the player in the transit origin cell too —"
+                + " the client says " + originDim + " and the seat dummy is spawned there, so a"
+                + " server-side dim that differs makes the mount below unreachable rather than"
+                + " flaky: " + serverSide, readInt(serverSide, "dim") == originDim);
 
         // Retried with a FRESH dummy spawn: the dummy is glued to the ship's world position only on
         // its first tick, and on a loaded machine its spawn chunk can unload before that tick.
         String mount = "";
+        String mountAt = "";
         boolean mounted = false;
         for (int attempt = 0; attempt < 5 && !mounted; attempt++) {
-            String mountAt = exec("artest vs seat-mount-at " + originDim + " " + seatX + " " + seatY + " " + seatZ);
+            mountAt = exec("artest vs seat-mount-at " + originDim + " " + seatX + " " + seatY + " " + seatZ);
             assertTrue("seat-mount-at must spawn the seat dummy: " + mountAt, readBool(mountAt, "ok"));
             mount = exec("artest player mount-entity " + readInt(mountAt, "dummyId"));
             mounted = mount.contains("\"mounted\":true");
@@ -643,7 +688,14 @@ private void seatTheBot(int originDim, String shipId) throws Exception {
                 bot().waitTicks(10);
             }
         }
-        assertTrue("the bot must mount the pilot-seat dummy (5 spawn+mount attempts): " + mount, mounted);
+        // BOTH replies, because a failed mount has two unrelated causes and the second command's
+        // answer cannot separate them alone: the spawn says whether a dummy was made and whether it
+        // was reused, and the mount says whether the player's own world held it — `playerDim`
+        // against `foundInDim`, and `gone` when no loaded world has it at all. Retrying five times
+        // against the wrong world otherwise learns the same nothing five times.
+        assertTrue("the bot must mount the pilot-seat dummy (5 spawn+mount attempts) at the seat "
+                + seatX + "," + seatY + "," + seatZ + " in dim " + originDim
+                + " — spawn=" + mountAt + " mount=" + mount, mounted);
         bot().waitTicks(10);
         assertTrue("the bot must be seated on the ship BEFORE the jump (control): "
                 + bot().reportRidingEntity(), bot().reportRidingEntity().get("riding").getAsBoolean());
@@ -766,6 +818,15 @@ private String chat() throws Exception {
                 tunnelAtStart = tunnelFrames();
                 scenario().record("tunnelAtStart", tunnelAtStart);
             }
+            // Re-read before this sample is allowed to COUNT. The status at the top of the
+            // iteration predates the two-tick wait, the HUD read and — on the first pass — the
+            // corridor settle poll, and the server flies every transit on its own tick, so the jump
+            // can have arrived in between. A HUD read after the arrival is the arrived craft's own
+            // overlay ("FREE FLIGHT ... SPD 0.0 m/s"), and it is the LAST sample that the assertion
+            // below reads: one straddling iteration was enough to turn this red, 3 runs in 4.
+            if (readInt(exec("artest space transit-status"), "inTransit") == 0) {
+                break;
+            }
             samples++;
             hudInFlight = hudNow;
             tunnelInFlight = tunnelFrames();
@@ -885,6 +946,35 @@ private String chat() throws Exception {
     private static final int VOID_GRACE_TICKS = 200;
 
     /**
+     * How long the flight must LAST, in server ticks, for the scenario that stands a crew member up
+     * in hyperspace and waits the void out on him.
+     *
+     * <p><b>A different quantity from {@link #PARK_SPEED}'s flight, and deliberately not merged with
+     * it.</b> Every transit in the server's live stack is advanced once per server tick
+     * ({@code SpaceSubsystemEvents.onServerTick}), so a flight is a DURATION this scenario has to
+     * fit inside rather than a backdrop it can ignore. The ordinary fixture speed buys 170 ticks and
+     * that scenario deliberately spends more than that standing still: the arrival then lands
+     * mid-scenario and takes the deck out from under the man, which reads at {@code deck-capture} as
+     * exactly the "not tracked" the void itself produces — two opposite findings behind one
+     * message. Measured 2026-09-08, {@code inTransit:0} at the gate.</p>
+     *
+     * <p>Derived from the budgets the scenario actually spends, never chosen: the worst-case drive
+     * into the corridor ({@link #JUMP_LINK_BUDGET_TICKS}), the void's grace budget twice — once
+     * aboard and once after he has stepped off — and the bounded readings between them; then
+     * doubled, so a loaded machine's slower probe round-trips cannot make the flight the shorter of
+     * the two.</p>
+     */
+    private static final long LIVABLE_FLIGHT_TICKS =
+            2L * (JUMP_LINK_BUDGET_TICKS + 2L * (VOID_GRACE_TICKS + 60L) + 260L);
+
+    /**
+     * The speed that buys {@link #LIVABLE_FLIGHT_TICKS} over the distance this fixture jumps —
+     * blocks per tick, the unit {@code transit-begin} takes.
+     */
+    private static final long LIVABLE_FLIGHT_SPEED =
+            FIXTURE_CELL_SPACING_BLOCKS / LIVABLE_FLIGHT_TICKS;
+
+    /**
      * JUMP-2 and JUMP-8, in one flight, because the first is the honest control for the second:
      * <b>hyperspace is a place you live in, and stepping off your ship there kills you.</b>
      *
@@ -957,11 +1047,15 @@ private String chat() throws Exception {
         Events events = transitEvents(this::exec);
         long mark = events.markInstrumented();
         long clientMark = clientEvents().mark();
-        String begin = exec("artest space transit-begin " + originDim + " 1 64 1 " + PARK_SPEED);
+        String begin = exec("artest space transit-begin " + originDim + " 1 64 1 "
+                + LIVABLE_FLIGHT_SPEED);
         assertTrue("the transit must begin (departure crossing): " + begin, readBool(begin, "began"));
 
-        // Fly only as far as hyperspace and then STOP driving the transit: an un-ticked jump parks
-        // its ship in its lane indefinitely, which is the interval this scenario is about.
+        // Fly as far as hyperspace and then stop TOUCHING the transit — the server flies it from
+        // here, which is why this leg is given a jump long enough to hold everything below inside
+        // it. The interval this scenario is about is a long flight, not a halted one: a jump that
+        // never advances is not a state production can reach, so measuring "hyperspace is livable"
+        // against one would be measuring an artefact of the harness.
         int hyperDim = driveIntoCorridor(events, mark, clientMark);
 
         // The seat's own world position, as the CLIENT renders it — the deck reference for the
@@ -1050,6 +1144,17 @@ private String chat() throws Exception {
         // statement about the countdown having had every chance to fire rather than about a window
         // too short to reach it.
         bot().waitTicks(VOID_GRACE_TICKS + 60);
+        // The PREMISE, gated before the subject is read: this leg is about a man standing in a
+        // FLIGHT, so the flight has to still be happening. The server advances every transit in the
+        // live stack on its own tick, so a window measured against the void's budget is also a
+        // window the jump can finish inside — and an arrival that lands here takes the deck out from
+        // under him, which reads at `deck-capture` as exactly the same "not tracked" the void would
+        // produce. Two opposite investigations behind one message; this line separates them.
+        String stillFlying = exec("artest space transit-status");
+        scenario().requireArranged("the jump must still be IN FLIGHT after the void's whole budget,"
+                + " or this leg is reading an ARRIVAL rather than the void — the ship left with the"
+                + " deck he was standing on. transit-status=" + stillFlying,
+                readInt(stillFlying, "inTransit") >= 1);
         JsonObject aboardState = bot().reportState();
         String aboardCapture = exec("artest vs deck-capture");
         assertTrue("a crew member standing on his own deck in hyperspace must not be taken by the"
@@ -1120,12 +1225,26 @@ private String chat() throws Exception {
         // is being observed. This scenario shares its world, and it ends the jump to put that world
         // back the way it found it -- fast-forwarding past a flight nobody is watching is exactly
         // what the verb is for now that the server drives transits on its own.
-        for (int i = 0; i < 200; i++) {
-            if (readInt(exec("artest space transit-tick 10"), "inTransit") == 0) {
-                break;
+        // Kept even though this family's reset flies out any leftover jump before the NEXT scenario:
+        // that net cannot cover the last scenario in the class, whose leftover would leave the class
+        // with a jump still in the air for whoever shares this client next. Not a duplicate — a
+        // different boundary.
+        // The bound comes from the flight this scenario ASKED FOR rather than from a round number:
+        // ten accelerated ticks an iteration, over the whole jump, with the same doubling the
+        // duration itself carries. A cleanup budget shorter than the flight leaves a hull parked in
+        // the world every later scenario in this class shares — which is a red somewhere else,
+        // blamed on something else.
+        boolean flownOut = false;
+        for (int i = 0; i < LIVABLE_FLIGHT_TICKS / 10L && !flownOut; i++) {
+            flownOut = readInt(exec("artest space transit-tick 10"), "inTransit") == 0;
+            if (!flownOut) {
+                bot().waitTicks(2);
             }
-            bot().waitTicks(2);
         }
+        assertTrue("the jump must be flown out before this scenario returns: it shares its"
+                + " hyperspace with every other scenario in this class, and a transit left running"
+                + " parks a hull there with a crew record for a player who is no longer alive to be"
+                + " re-seated. transit-status=" + exec("artest space transit-status"), flownOut);
     }
 
     /**

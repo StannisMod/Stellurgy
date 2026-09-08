@@ -798,6 +798,52 @@ public class TestProbeCommand extends CommandBase {
                     + "\"}");
             return;
         }
+        // strand-blockless-record <dim> <x> <y> <z> — TEST-ONLY fault injection: register a
+        // blockless, unloaded ship record, the garbage a hull cut out of a world leaves behind when
+        // nothing loaded remains for the destroy pass to walk. `countAfterAdd` is measured on this
+        // call, before any tick: a second probe command is separated from this one by a whole world
+        // pass, so a count read there would already be post-collection and could not tell a working
+        // sweep from a plant that never happened.
+        if (args.length >= 5 && "strand-blockless-record".equalsIgnoreCase(args[0])) {
+            net.minecraft.world.WorldServer world = vsWorld(sender, parseIntOr(args[1], Integer.MIN_VALUE));
+            if (world == null) {
+                send(sender, "{\"error\":\"world not loaded\"}");
+                return;
+            }
+            String[] planted = zmaster587.advancedRocketry.integration.vs.VSIntegration
+                    .strandBlocklessRecord(world, new net.minecraft.util.math.BlockPos(
+                            parseIntOr(args[2], 0), parseIntOr(args[3], 0), parseIntOr(args[4], 0)));
+            if (planted == null) {
+                send(sender, "{\"error\":\"valkyrien skies not available\"}");
+                return;
+            }
+            send(sender, "{\"ok\":true,\"uuid\":\"" + planted[0] + "\""
+                    + ",\"countAfterAdd\":" + planted[1] + "}");
+            return;
+        }
+        // empty-nearest-and-look <dim> <x> <y> <z> — TEST-ONLY fault injection for the ONE-TICK
+        // window: empty the nearest LOADED ship's block set and, in this same call, ask the
+        // nearest-ship lookup what it answers there. Both halves must be one call — the window lasts
+        // until the destroy pass runs on the next tick, and two probe commands are separated by a
+        // whole world pass, so asking in a second command would ask after the collector and go green
+        // on a build with no filter at all.
+        if (args.length >= 5 && "empty-nearest-and-look".equalsIgnoreCase(args[0])) {
+            net.minecraft.world.WorldServer world = vsWorld(sender, parseIntOr(args[1], Integer.MIN_VALUE));
+            if (world == null) {
+                send(sender, "{\"error\":\"world not loaded\"}");
+                return;
+            }
+            String[] looked = zmaster587.advancedRocketry.integration.vs.VSIntegration
+                    .emptyNearestShipAndLookAgain(world, parseDoubleOr(args[2], 0),
+                            parseDoubleOr(args[3], 0), parseDoubleOr(args[4], 0));
+            if (looked == null) {
+                send(sender, "{\"error\":\"no loaded ship to empty\"}");
+                return;
+            }
+            send(sender, "{\"ok\":true,\"emptied\":\"" + looked[0] + "\""
+                    + ",\"lookupAnswered\":\"" + looked[1] + "\"}");
+            return;
+        }
         // load-ships <dim> — force all known ships loaded + physics-enabled (a headless
         // server has no player near a ship to auto-load it).
         if (args.length >= 2 && "load-ships".equalsIgnoreCase(args[0])) {
@@ -20380,7 +20426,26 @@ public class TestProbeCommand extends CommandBase {
             int entityId = parseIntOr(args[1], Integer.MIN_VALUE);
             net.minecraft.entity.Entity entity = player.world.getEntityByID(entityId);
             if (entity == null) {
-                send(sender, "{\"error\":\"entity not found\",\"entityId\":" + entityId + "}");
+                // WHICH absence, because they ask for opposite investigations: an entity that is
+                // alive in a DIFFERENT world means the caller and the spawn disagree about where the
+                // player is, while one that is in no world at all means it was removed after it was
+                // spawned. "entity not found" plus an id answered neither, and a caller that retries
+                // five times against the wrong world learns nothing five times.
+                int foundInDim = Integer.MIN_VALUE;
+                MinecraftServer srv = net.minecraftforge.fml.common.FMLCommonHandler.instance()
+                        .getMinecraftServerInstance();
+                if (srv != null) {
+                    for (net.minecraft.world.WorldServer w : srv.worlds) {
+                        if (w != null && w.getEntityByID(entityId) != null) {
+                            foundInDim = w.provider.getDimension();
+                            break;
+                        }
+                    }
+                }
+                send(sender, "{\"error\":\"entity not found\",\"entityId\":" + entityId
+                        + ",\"playerDim\":" + player.world.provider.getDimension()
+                        + ",\"foundInDim\":" + foundInDim
+                        + ",\"gone\":" + (foundInDim == Integer.MIN_VALUE) + "}");
                 return;
             }
             boolean mounted = player.startRiding(entity);

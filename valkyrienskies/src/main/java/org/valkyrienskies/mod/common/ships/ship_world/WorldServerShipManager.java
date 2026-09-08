@@ -108,16 +108,50 @@ public class WorldServerShipManager implements IPhysObjectWorld {
         // the registry for the life of the world — answering position lookups, owning a lane, and
         // needing every caller that produced one to reach in and deregister it by hand. A record
         // exists whether or not a physics object does, so this is where such a craft can be
-        // collected at all. Only DEAD ones: an unloaded ship is otherwise perfectly alive, and its
-        // block set is not readable here to be judged on.
+        // collected at all.
+        //
+        // TWO ways a record can be finished, and the second was missed here for as long as this
+        // sweep existed. DEAD is a decision somebody recorded. BLOCKLESS is a fact about the record:
+        // a hull cut out of this world leaves its entry behind owning nothing, and nobody declares
+        // it dead — the blocks are simply gone. The sweep above already treats loaded-and-blockless
+        // as finished (`shouldShipBeDestroyed`), so this is the same judgement applied to the
+        // records that pass never reaches. This comment previously said the block set "is not
+        // readable here to be judged on"; that was wrong — `blockPositions` is serialized onto
+        // `ShipData` itself and survives with the record, so it is readable in exactly this loop.
+        //
+        // NULL IS NOT EMPTY. A null block set means the record does not say, and a record that does
+        // not say is left alone: absence of an answer is not an answer, and collecting on it would
+        // delete craft on the strength of a field nobody filled in.
+        //
         // IN USE, not merely "in loadedShips": a ship queued for load, or loading in the background,
         // is in this manager's hands without being in that map, and taking its record away in that
         // window throws out of the world tick on the next chunk-provider pass and takes a dedicated
         // server with it. A dead ship caught mid-load is left alone here and collected by the sweep
         // above once it is loaded, which is one tick later and correct.
-        for (Iterator<ShipData> dead = QueryableShipData.get(world).iterator(); dead.hasNext();) {
-            ShipData data = dead.next();
-            if (data.isDead() && !isShipInUse(data.getUuid())) {
+        //
+        // A ship being SPAWNED is not at risk despite `isShipInUse` not covering the spawn queue:
+        // `queueShipSpawn` only queues the record, and `addShip` runs inside `spawnNewShips()` below
+        // — after the detector and the chunk injection, so the record enters the registry already
+        // owning its blocks, and it does so AFTER this loop within the same tick.
+        List<ShipData> finished = null;
+        for (Iterator<ShipData> records = QueryableShipData.get(world).iterator(); records.hasNext();) {
+            ShipData data = records.next();
+            if (isShipInUse(data.getUuid())) {
+                continue;
+            }
+            org.valkyrienskies.mod.common.util.datastructures.IBlockPosSetAABB blocks =
+                data.getBlockPositions();
+            if (data.isDead() || (blocks != null && blocks.isEmpty())) {
+                if (finished == null) {
+                    finished = new ArrayList<>();
+                }
+                finished.add(data);
+            }
+        }
+        // Removed after the walk rather than during it: the registry's iterator is its own, and this
+        // loop does not need to know what it promises about removal underneath itself.
+        if (finished != null) {
+            for (ShipData data : finished) {
                 QueryableShipData.get(world).removeShip(data);
             }
         }

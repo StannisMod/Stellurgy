@@ -580,6 +580,58 @@ final class VSBridge {
     }
 
     /**
+     * TEST-ONLY FAULT INJECTION: empty the block set of the LOADED ship nearest {@code (x,y,z)} and,
+     * in this same call, ask the nearest-ship lookup what it answers there.
+     *
+     * <p>Answers {@code [emptiedShipUuid, whatTheLookupSaid]}, with {@code ""} for a lookup that
+     * answered nothing, or {@code null} when no loaded ship was there to empty.</p>
+     *
+     * <p><b>Both halves must happen inside one call, and that is the whole design.</b> The window
+     * this reproduces — a hull whose blocks are gone while its physics object is still loaded — lasts
+     * until the manager's destroy pass runs, which is the next tick. Two probe commands are separated
+     * by a complete world pass, so a test that emptied a ship in one command and asked in the next
+     * would be asking after the collector had already run, and would go green on a build with no
+     * filter at all.</p>
+     *
+     * <p>Nothing needs cleaning up afterwards: the destroy pass collects an emptied ship on its next
+     * tick, which is the same path production uses for a cut hull.</p>
+     */
+    static String[] emptyNearestShipAndLookAgain(World world, double x, double y, double z) {
+        PhysicsObject victim = nearestShip(world, x, y, z, Double.POSITIVE_INFINITY);
+        if (victim == null) {
+            return null;
+        }
+        String emptied = victim.getShipData().getUuid().toString();
+        victim.getShipData().getBlockPositions().clear();
+        String answered = nearestShipId(world, x, y, z, Double.POSITIVE_INFINITY);
+        return new String[] {emptied, answered == null ? "" : answered};
+    }
+
+    /**
+     * TEST-ONLY FAULT INJECTION: put a registered, blockless, unloaded ship record into {@code world}
+     * and answer with its uuid and the registry size measured immediately after, on this same call.
+     *
+     * <p>This plants exactly the garbage the manager's registry sweep exists to collect: a record in
+     * the registry, owning no blocks, with no physics object and no queue holding it. Production
+     * makes one whenever a hull is cut out of a world and nothing loaded is left for the destroy
+     * pass to walk. It is planted rather than provoked because provoking it means winning a race —
+     * cutting a ship and unloading it inside the same tick — and a garbage collector's test should
+     * be able to state its arrangement rather than hope for it.</p>
+     *
+     * <p><b>The count is taken here, not by a later probe call.</b> Two probe commands are separated
+     * by a complete world pass, so the sweep can have run in between: a test that planted garbage and
+     * then asked a second command how many ships there are would read the state AFTER collection and
+     * could not tell a working sweep from a plant that never happened. The number returned here is
+     * the one that proves the arrangement.</p>
+     */
+    static String[] strandBlocklessRecord(World world, BlockPos anchor) {
+        ShipData stranded = ValkyrienUtils.createNewShip(world, anchor);
+        ValkyrienUtils.getQueryableData(world).addShip(stranded);
+        return new String[] {stranded.getUuid().toString(),
+                Integer.toString(ValkyrienUtils.getQueryableData(world).getShips().size())};
+    }
+
+    /**
      * DIAGNOSTIC: the identity of the ship-registry object {@code world} answers with, as the same
      * hex the physics mod's own save/load log lines print. A count says how many ships a registry
      * holds; only the identity says whether the registry a reader is being answered from is the one
@@ -1759,6 +1811,25 @@ final class VSBridge {
         return new double[]{w.x(), w.y(), w.z()};
     }
 
+    /**
+     * Is this record a REMNANT — a ship that owns no blocks — rather than a craft?
+     *
+     * <p>A hull cut out of a world leaves its record behind owning nothing. The manager's registry
+     * sweep collects such a record, but only on its next tick, so between the cut and that tick a
+     * remnant is still in the loaded set and still has a position. It is not a ship, and nothing that
+     * asks "which ship is here" wants it.</p>
+     *
+     * <p><b>A null block set is NOT empty, and the difference decides the answer.</b> Null means the
+     * record does not say. Here that leaves the craft a CANDIDATE — the opposite of what the same
+     * unknown means to the collector, and for the same reason: pick the less self-assured action. A
+     * loaded {@code PhysicsObject} exists because the manager built one, which is better evidence of
+     * a real craft than an unfilled field is of a fake one, so an unreadable set must not hide a ship
+     * that is really there.</p>
+     */
+    private static boolean isBlocklessRemnant(ShipData data) {
+        return data.getBlockPositions() != null && data.getBlockPositions().isEmpty();
+    }
+
     private static PhysicsObject nearestShip(World world, double x, double y, double z) {
         return nearestShip(world, x, y, z, Double.POSITIVE_INFINITY);
     }
@@ -1770,6 +1841,9 @@ final class VSBridge {
         ImmutableList<PhysicsObject> ships =
                 ValkyrienUtils.getServerShipManager(world).getAllLoadedThreadSafe();
         for (PhysicsObject physo : ships) {
+            if (isBlocklessRemnant(physo.getShipData())) {
+                continue;
+            }
             Vec3d pos = physo.getShipData().getShipTransform().getShipPositionVec3d();
             double distSq = pos.squareDistanceTo(x, y, z);
             if (distSq < bestDistSq) {
