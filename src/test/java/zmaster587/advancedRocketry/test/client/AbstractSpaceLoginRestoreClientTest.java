@@ -1903,8 +1903,10 @@ public abstract class AbstractSpaceLoginRestoreClientTest {
      * between the samples.
      */
     protected String clientTickHistory() throws Exception {
-        return clientString(SHIP_FRAME_TRAVEL, "tickHistory");
+        return Events.fieldLines(clientEvents().since(0, "ship_frame_tick"), "line");
     }
+
+
 
     /** The newest resolved-tick number on record - the mark a window starts from. The record survives
      *  the reconnect, so without this mark the pins would read ticks from before the restart. */

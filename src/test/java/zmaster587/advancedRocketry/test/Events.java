@@ -114,6 +114,24 @@ public final class Events {
         return n;
     }
 
+    /**
+     * Every record's string {@code field} in a {@code since} reply, oldest first, one per line.
+     *
+     * <p>For a record type that carries a whole preformatted line — a per-tick trace, say — this
+     * hands the reader the same text a production-side buffer used to publish as one field, while
+     * the records themselves stay attributable to the body each describes and windowable by a mark.
+     * An empty reply gives an empty string, not null: "nothing happened" is a reading.</p>
+     */
+    public static String fieldLines(String sinceReply, String field) {
+        StringBuilder out = new StringBuilder();
+        Matcher m = Pattern.compile("\"" + Pattern.quote(field) + "\":\"([^\"]*)\"")
+                .matcher(String.valueOf(sinceReply));
+        while (m.find()) {
+            out.append(m.group(1)).append(System.lineSeparator());
+        }
+        return out.toString();
+    }
+
     /** The string {@code field} of the FIRST record in a {@code since} reply, or {@code null} when no
      *  record carries it — the first thing that happened after the mark, which for a gate that goes
      *  on answering every tick (a refusal, then COOLDOWN, COOLDOWN, …) is the decision itself. */

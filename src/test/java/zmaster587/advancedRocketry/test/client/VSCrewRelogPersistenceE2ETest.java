@@ -199,9 +199,9 @@ public class VSCrewRelogPersistenceE2ETest extends AbstractSharedVsClientE2ETest
                         + "player feels as being dragged along his own deck." + observed,
                 0L, dropsDuringRoll);
         assertTrue("and he must not travel along the deck while it rotates under him (moved "
-                        + rollTravel + " blocks in the ship frame, bar " + ROLL_DRIFT_TOLERANCE + ")"
+                        + rollTravel + " blocks in the ship frame, bar " + SHIP_FRAME_DRIFT_TOLERANCE + ")"
                         + observed,
-                rollTravel < ROLL_DRIFT_TOLERANCE);
+                rollTravel < SHIP_FRAME_DRIFT_TOLERANCE);
 
         // SENSITIVITY, stated before the verdict: the leg below is only worth reading if the deck
         // genuinely stepped out from under him by more than the bar it is judged against. On this
@@ -226,8 +226,18 @@ public class VSCrewRelogPersistenceE2ETest extends AbstractSharedVsClientE2ETest
                 rollSeatMiss < SEAT_MISS_TOLERANCE);
     }
 
-    /** How far a carried body may travel in the ship frame while the ship rotates, in blocks. */
-    private static final double ROLL_DRIFT_TOLERANCE = 0.35D;
+    /**
+     * How far a carried body's own ship-frame point may travel across an observation window in which
+     * the body itself gave no input, in blocks.
+     *
+     * <p>Named for the QUANTITY and not for an occasion, because two legs measure it: a ship rotating
+     * under a standing body, and a body that relogged and stands still. The second used to compare
+     * against a bare {@code 0.2} written at its assertion — the same digits as
+     * {@link #GUARD_SLACK_BLOCKS}, which is a PER-TICK slack and therefore a different kind of
+     * quantity. A path across a window and a rate per tick are not interchangeable however well the
+     * numbers agree.</p>
+     */
+    private static final double SHIP_FRAME_DRIFT_TOLERANCE = 0.35D;
 
     /**
      * How far a body may be found from the deck point committed for it, in blocks.
@@ -892,7 +902,8 @@ public class VSCrewRelogPersistenceE2ETest extends AbstractSharedVsClientE2ETest
                 + "two pins below cannot fail (" + covered + " ticks recorded)\n" + history,
                 covered > 20);
         assertTrue("the deck point the client holds him at must not travel along the deck with no "
-                + "input (moved " + heldTravel + " blocks)\n" + history, heldTravel < 0.2);
+                + "input (moved " + heldTravel + " blocks, bar " + SHIP_FRAME_DRIFT_TOLERANCE + ")\n"
+                + history, heldTravel < SHIP_FRAME_DRIFT_TOLERANCE);
         assertTrue("a crew member standing on a deck must stay in ABOARD capture semantics - "
                 + "flipping to the world-frame hull mode re-bases his deck point onto wherever the "
                 + "world thinks he is (" + hullTicks + " hull-stand ticks)\n" + history,
@@ -969,7 +980,7 @@ public class VSCrewRelogPersistenceE2ETest extends AbstractSharedVsClientE2ETest
      * invisible. This is the client body's ship-frame point every tick it was resolved.
      */
     private String clientTickHistory() throws Exception {
-        return clientString(SHIP_FRAME_TRAVEL, "tickHistory");
+        return Events.fieldLines(clientEvents().since(0, "ship_frame_tick"), "line");
     }
 
     /** One line of that record: the resolved-tick number, which capture path produced it, and the

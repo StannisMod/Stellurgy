@@ -66,8 +66,7 @@ public final class ShipFrameTravel {
     // and decided to do nothing, so the two must be told apart from outside the JVM.
 
     /** Ticks resolved in a ship frame since the game started. PRIVATE: it is the leading number of
-     *  every {@code tickHistory} line — where a gap between two consecutive commits is exactly what
-     *  a reader is looking for — and nothing outside this file has a use for the raw total, which
+     *  the resolver's own progress. Nothing outside this file has a use for the raw total, which
      *  is cumulative and JVM-global and so describes no body in particular. */
     private static volatile long resolvedTicks = 0L;
     /** Ticks where the hook ran, an entity was aboard, but the frame could not be resolved.
@@ -87,9 +86,8 @@ public final class ShipFrameTravel {
      *  motion against geometry it is standing in, or something re-applying a committed point over the
      *  swept result. These flags separate them; without them both readings fit the same numbers. */
     // PRIVATE on purpose: nothing outside this file names them. Their values do reach a reader —
-    // both are stamped into `tickHistory`'s per-tick line, which the tests DO read — so they are
-    // carriers, not dead code, and the census that reads them as unread is measuring the FIELD's
-    // callers while the VALUE leaves by another door.
+    // both separate two readings that otherwise fit the same numbers; they are read here and
+    // nowhere else, which is why they are private.
     private static volatile boolean lastSweepCollidedX = false;
     private static volatile boolean lastSweepCollidedZ = false;
     /** Whether the last resolved entity ended the tick standing on its deck. */
@@ -133,25 +131,6 @@ public final class ShipFrameTravel {
     public static volatile double lastBodyLocalX = 0.0;
     public static volatile double lastBodyLocalY = 0.0;
     public static volatile double lastBodyLocalZ = 0.0;
-    /**
-     * A bounded per-tick history of this side's ship-frame resolution, oldest first, as one string
-     * (test mode only; empty otherwise). Each resolved tick appends
-     * {@code <n><path>|B=x,y,z|H=x,y,z|m=x,y,z|c=<carry>|in=<strafe>/<forward>|d=<onDeck>}: the
-     * resolved-tick number, which capture path produced it ({@code a} aboard / {@code f} flying /
-     * {@code h} hull-stand), the live BODY point, the HELD (committed) point, the ship-relative
-     * motion the tick was handed, the carry it held, the walk input, and deck contact.
-     *
-     * <p>Read as ONE field at the end of an observation. Sampling the individual {@code last*}
-     * statics once per N ticks costs a network round trip per field, which both stretches the
-     * timeline being measured and hides everything between the samples — a transient that settles
-     * inside one sampling gap is invisible, and a settling transient read at two points is
-     * indistinguishable from a steady drift.</p>
-     */
-    public static volatile String tickHistory = "";
-    /** Cap on {@link #tickHistory}, in characters — the oldest lines are dropped past it. Sized for
-     *  a few hundred ticks of the format above; the whole buffer crosses the wire in one read. */
-    private static final int TICK_HISTORY_CHARS = 20000;
-    private static final StringBuilder TICK_HISTORY = new StringBuilder();
     /** Throttle for the [FF-TRACE/WALK] line (test mode only). */
     private static int walkTraceTicks = 0;
     /** The reason of the most recent capture release on THIS side, or "" — lets a probe/e2e name
@@ -1665,42 +1644,18 @@ public final class ShipFrameTravel {
     }
 
     /**
-     * Append one resolved tick to {@link #tickHistory}. Test-gated: the buffer and the string it
-     * publishes exist only under {@code -Dadvancedrocketry.tests=true}.
+     * The per-resolved-tick observation point. Empty in production: what it reports is
+     * recorded by the test mixin that injects here, so none of it ships.
      */
     private static void noteTickHistory(char path, double heldX, double heldY, double heldZ,
                                         double carryX, double carryY, double carryZ,
                                         boolean onDeck) {
-        if (!zmaster587.advancedRocketry.command.test.TestProbeCommandRegistration.isTestMode()) {
-            return;
-        }
-        // The motion recorded is the INCOMING ship-relative velocity (before this tick's input and
-        // gravity): that is what a no-input body arrives carrying, and a nonzero value there is the
-        // signature of a velocity writer rather than a position writer.
-        // The trailing |w= is the WORLD TIME of the commit, and it is appended (like |s= before it)
-        // so the existing readers' patterns keep matching. The leading number counts RESOLVED ticks,
-        // so consecutive lines cannot show a tick on which the resolver did NOT commit - and a gap
-        // between two commits is precisely what makes a per-tick guard budget meaningless. With the
-        // world time on every line, a gap is visible in the record itself rather than only inferable.
-        String line = String.format(java.util.Locale.ROOT,
-                "%d%c|B=%.3f,%.3f,%.3f|H=%.3f,%.3f,%.3f|m=%.4f,%.4f,%.4f|c=%.4f|in=%.1f/%.1f|d=%d"
-                        + "|s=%d%d/%d|w=%d%n",
-                resolvedTicks, path,
-                lastBodyLocalX, lastBodyLocalY, lastBodyLocalZ, heldX, heldY, heldZ,
-                lastMotionShipX, lastMotionShipY, lastMotionShipZ,
-                Math.sqrt(carryX * carryX + carryY * carryY + carryZ * carryZ),
-                lastInStrafe, lastInForward, onDeck ? 1 : 0,
-                lastSweepCollidedX ? 1 : 0, lastSweepCollidedZ ? 1 : 0, lastObstacleCount,
-                lastCommitWorldTime);
-        synchronized (TICK_HISTORY) {
-            TICK_HISTORY.append(line);
-            int over = TICK_HISTORY.length() - TICK_HISTORY_CHARS;
-            if (over > 0) {
-                int cut = TICK_HISTORY.indexOf("\n", over);
-                TICK_HISTORY.delete(0, cut < 0 ? over : cut + 1);
-            }
-            tickHistory = TICK_HISTORY.toString();
-        }
+        // A SEAM, and nothing else. Production used to format a line here and append it to a
+        // JVM-global ring, which is why no reader could tell one body's tick from another's:
+        // this method has no entity. The test mixin injects at this HEAD, where every value the
+        // line carried is already a parameter, and attributes the record to the body whose
+        // travel call is on this thread. Kept as a call rather than deleted because these three
+        // call sites are the only places that know the committed point, the carry and the path.
     }
 
     /**
