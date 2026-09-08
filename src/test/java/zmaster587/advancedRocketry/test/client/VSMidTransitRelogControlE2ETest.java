@@ -40,8 +40,17 @@ import static org.junit.Assert.assertTrue;
  * ship's berth (the departure cuts the deck out from under the standing-by crew, and a pilot
  * mid-relog must not be falling into the void while the test drives the jump), a real
  * {@code reconnect} between departure and arrival, and the planet-side relog pin's held-key climb
- * as the load-bearing acceptance. The transit only advances when the probe ticks it, so the park
- * deterministically outlasts the relog.</p>
+ * as the load-bearing acceptance.</p>
+ *
+ * <p><b>The park is no longer deterministic, and that is worth saying out loud.</b> This class used
+ * to argue that "the transit only advances when the probe ticks it, so the park deterministically
+ * outlasts the relog" — true while the fixture drove its own subsystem, and false since 2026-09-08:
+ * the server advances a transit on its own tick, so the relog now RACES the flight instead of
+ * being guaranteed to fit inside it. The flight is {@code DIRECT_CROSSING_MAX_TICKS + 10} ticks and
+ * a reconnect is far shorter, so the margin is large — but it is a margin now, not a guarantee, and
+ * a red here that says the ship had already arrived is this and not the control chain. If that ever
+ * happens, the fix is to make the fixture's flight longer for this scenario, not to give the test
+ * back its own clock.</p>
  *
  */
 @FixMethodOrder(MethodSorters.NAME_ASCENDING)
@@ -222,7 +231,10 @@ public class VSMidTransitRelogControlE2ETest extends AbstractSharedVsClientE2ETe
         assertTrue("the transit must begin (departure crossing): " + begin, readBool(begin, "began"));
         scenario().requireArranged("the jump must depart under the craft's own name, never the synthetic"
                 + " id a nameless fixture gets: " + begin, !begin.contains("\"shipId\":\"t\""));
-        String firstTick = exec("artest space transit-tick 10");
+        // READ, not driven. This scenario's whole subject is a relog that happens WHILE the ship is
+        // in transit, so a pump here would be advancing the jump towards the exit for the sake of
+        // one field — and the server is advancing it on its own tick anyway.
+        String firstTick = exec("artest space transit-status");
         assertTrue("the ship must actually be IN TRANSIT when the pilot relogs — otherwise this "
                 + "pins an ordinary relog, not the mid-transit one: " + firstTick,
                 readInt(firstTick, "inTransit") >= 1);

@@ -162,7 +162,7 @@ private int waitForLoadedShip(int dim) throws Exception {
                 + " or nothing in the corridor can be addressed to this craft: " + boarded,
                 boardedShip.find());
         parkedHullName = boardedShip.group(1);
-        int corridorDim = readInt(exec("artest space transit-tick 1"), "hyperDim");
+        int corridorDim = readInt(exec("artest space transit-status"), "hyperDim");
         String seen = "";
         for (int waited = 0; waited <= JUMP_LINK_BUDGET_TICKS; waited += 5) {
             seen = bot().eventsSince(clientMark, "client_dimension_changed").toString();
@@ -170,7 +170,6 @@ private int waitForLoadedShip(int dim) throws Exception {
                     || seen.contains("\"dim\":" + corridorDim + "}")) {
                 return corridorDim;
             }
-            exec("artest space transit-tick 10");
             bot().waitTicks(5);
         }
         scenario().arrangementFailed("the client was never carried into the corridor (dim "
@@ -437,7 +436,7 @@ private static final long PARK_SPEED = HYPERSPACE_JUMP_SPEED;
         boolean ridingInFlight = false;
         String lastTick = "";
         for (int i = 0; i < 120; i++) {
-            lastTick = exec("artest space transit-tick 10");
+            lastTick = exec("artest space transit-status");
             if (readInt(lastTick, "inTransit") == 0) {
                 break; // arrived - everything after this point is the far end, which is another test's
             }
@@ -739,7 +738,7 @@ private String chat() throws Exception {
         long tunnelInFlight = -1L;
         String lastTick = "";
         for (int i = 0; i < 120; i++) {
-            lastTick = exec("artest space transit-tick 10");
+            lastTick = exec("artest space transit-status");
             if (readInt(lastTick, "inTransit") == 0) {
                 break;
             }
@@ -1117,6 +1116,10 @@ private String chat() throws Exception {
         // deliberately stopped ticking mid-flight — leaving a hull parked in the world every later
         // scenario shares, with a crew record for a player who is no longer alive to be re-seated.
         // Ending the transit puts the shared world back the way this scenario found it.
+        // The one pump left in this class, and it is an ACCELERATOR rather than a wait: nothing here
+        // is being observed. This scenario shares its world, and it ends the jump to put that world
+        // back the way it found it -- fast-forwarding past a flight nobody is watching is exactly
+        // what the verb is for now that the server drives transits on its own.
         for (int i = 0; i < 200; i++) {
             if (readInt(exec("artest space transit-tick 10"), "inTransit") == 0) {
                 break;
@@ -1189,7 +1192,7 @@ private String chat() throws Exception {
         String captureInFlight = "";
         String lastTick = "";
         for (int i = 0; i < 120; i++) {
-            lastTick = exec("artest space transit-tick 10");
+            lastTick = exec("artest space transit-status");
             if (readInt(lastTick, "inTransit") == 0) {
                 break; // arrived — the far end is another scenario's subject
             }

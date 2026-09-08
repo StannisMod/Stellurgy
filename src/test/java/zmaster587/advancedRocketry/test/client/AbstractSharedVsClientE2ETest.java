@@ -477,16 +477,17 @@ public abstract class AbstractSharedVsClientE2ETest extends AbstractSharedClient
     protected static final int JUMP_LINK_BUDGET_TICKS = 600;
 
     /**
-     * The event log read on the transit's own clock. The transit manager these scenarios drive is the
-     * probe's, and it moves only on {@code transit-tick}; a reader that let the game run without
-     * ticking it would wait on a flight that is standing still. So every step the log takes between
-     * two reads advances the jump ten ticks and then lets the client breathe.
+     * The event log, read against a caller-supplied probe.
+     *
+     * <p>Its step used to PUMP — {@code transit-tick 10} between every pair of reads — because the
+     * transit manager these scenarios drove was the probe's own and nothing ticked it. That stopped
+     * being true on 2026-09-08: the fixture runs on the server's subsystem now, so a jump advances
+     * on the server tick like everything else, and a wait that drove it was a wait moving its own
+     * subject. What is left is the reason this exists at all — it takes the PROBE, which
+     * {@code events()} hard-codes, and one scenario reads through an envelope-aware one.</p>
      */
     protected final Events transitEvents(Events.Probe probe) {
-        return new Events(probe, ticks -> {
-            probe.exec("artest space transit-tick 10");
-            bot().waitTicks(ticks);
-        });
+        return new Events(probe, bot()::waitTicks);
     }
 
     /**
@@ -508,7 +509,9 @@ public abstract class AbstractSharedVsClientE2ETest extends AbstractSharedClient
      * settled — the field the old arrival loops read from their last tick.
      */
     protected static int arrivedTargetDim(Events.Probe probe) throws Exception {
-        String tick = probe.exec("artest space transit-tick 1");
+        // READ, not a tick: this runs once the chain says the jump has settled, so advancing
+        // anything here would drive a mechanism whose completion has already been asserted.
+        String tick = probe.exec("artest space transit-status");
         Matcher inTransit = Pattern.compile("\"inTransit\":(-?\\d+)").matcher(tick);
         assertTrue("the transit probe must report inTransit: " + tick, inTransit.find());
         assertEquals("the chain said the transit settled, so the probe must agree it is over: " + tick,
