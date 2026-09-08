@@ -213,8 +213,14 @@ public final class Events {
      */
     public String awaitCarrying(long mark, String type, String needle, String what, int tickBudget)
             throws Exception {
+        return awaitCarrying(mark, type, needle, what, tickBudget, null);
+    }
+
+    /** As above, driving {@code stimulus} between reads — see {@link Stimulus}. */
+    public String awaitCarrying(long mark, String type, String needle, String what, int tickBudget,
+                                Stimulus stimulus) throws Exception {
         return awaitMatching(mark, type, reply -> countRecords(reply, needle) > 0,
-                "carrying " + needle, what, tickBudget);
+                "carrying " + needle, what, tickBudget, stimulus);
     }
 
     /**
@@ -238,11 +244,42 @@ public final class Events {
      */
     public String awaitMatching(long mark, String type, java.util.function.Predicate<String> holds,
                                 String matching, String what, int tickBudget) throws Exception {
+        return awaitMatching(mark, type, holds, matching, what, tickBudget, null);
+    }
+
+    /**
+     * Work a headless test has to keep doing WHILE it waits — arrangement a player would provide.
+     *
+     * <p>Its own parameter rather than folded into the wait, for the reason {@code GameTicks.until}
+     * gives for the same split: a condition is ASKED and must change nothing, a stimulus is
+     * PERFORMED and answers nothing. Folding the two together is how "this only passes when the
+     * assertion runs" gets written.</p>
+     */
+    public interface Stimulus {
+        void run() throws Exception;
+    }
+
+    /**
+     * As {@link #awaitMatching(long, String, java.util.function.Predicate, String, String, int)},
+     * driving {@code stimulus} between reads.
+     *
+     * <p>For the case a headless server creates: a mechanic that advances on a tick nobody is
+     * running. A hyperspace transit is the example — its flight is stepped by a probe the test must
+     * keep calling, and without that the wait is watching a jump that will never move. The stimulus
+     * is NOT the observation: what decides is still the record, so the verdict remains "the thing
+     * production announced happened" rather than "a sample eventually read the way I wanted".</p>
+     */
+    public String awaitMatching(long mark, String type, java.util.function.Predicate<String> holds,
+                                String matching, String what, int tickBudget, Stimulus stimulus)
+            throws Exception {
         String reply = "";
         for (int waited = 0; waited <= tickBudget; waited += 5) {
             reply = since(mark, type);
             if (holds.test(reply)) {
                 return reply;
+            }
+            if (stimulus != null) {
+                stimulus.run();
             }
             step.ticks(5);
         }

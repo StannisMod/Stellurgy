@@ -1,5 +1,6 @@
 package zmaster587.advancedRocketry.test.server;
 
+import zmaster587.advancedRocketry.test.Events;
 import zmaster587.advancedRocketry.test.ShipReadiness;
 import zmaster587.advancedRocketry.test.GameTicks;
 import zmaster587.advancedRocketry.test.EntrySlots;
@@ -129,6 +130,8 @@ public class VSShipDescentE2ETest extends AbstractSharedServerTest {
         assertTrue("could not locate the ship's flight computer in the slot", afc != null);
         int ax = extractInt(afc, "x"), ay = extractInt(afc, "y"), az = extractInt(afc, "z");
 
+        // Marked BEFORE the command whose effect is awaited.
+        long descentMark = events.mark();
         String begin = exec("artest space descent-begin " + slotDim + " " + ax + " " + ay + " " + az
                 + " " + shipId + " " + TARGET_DIM);
         assertTrue("descent did not start: " + begin, begin.contains("\"started\":true"));
@@ -137,12 +140,16 @@ public class VSShipDescentE2ETest extends AbstractSharedServerTest {
         assertEquals("the descending ship leaves the ledger on the cut", 0,
                 extractInt(exec("artest space entry-status"), "ships"));
 
-        // The crossing re-assembles the ship in the overworld (async); poll until it is loaded there.
-        boolean landed = GameTicks.until(client(), GameTicks.server(), SETTLE_TICKS,
-                () -> loadedShips(TARGET_DIM) >= 1,
-                () -> exec("artest space descent-status"));
-        assertTrue("the ship never crossed into the overworld via the descent; countAll="
-                + exec("artest vs ship-count-all " + TARGET_DIM), landed);
+        // The crossing re-assembles the ship in the planet's world asynchronously, and production
+        // announces when it has: this waits for THAT, by id, instead of sampling the loaded count
+        // until it happens to be non-zero. A count cannot tell "it never arrived" from "it arrived
+        // and was unloaded again before this read"; the record can, and on failure it prints the
+        // chain instead of a number. The `descent-status` poll this replaces was a pure read of a
+        // counter -- diagnostic only, so nothing is lost by dropping it.
+        events.awaitCarrying(descentMark, "ship_entered_planet", "\"ship\":\"" + shipId + "\"",
+                "the ship never crossed into the planet's dimension via the descent; countAll="
+                        + exec("artest vs ship-count-all " + TARGET_DIM),
+                SETTLE_TICKS);
     }
 
     @After
@@ -152,6 +159,10 @@ public class VSShipDescentE2ETest extends AbstractSharedServerTest {
     }
 
     // --- helpers (mirror VSShipEntryE2ETest) --------------------------------------------------------
+
+    /** This tier's reader of the server's ordered event log. */
+    private final Events events =
+            new Events(this::exec, ticks -> GameTicks.advanceWorld(client(), 0, ticks));
 
     private String exec(String cmd) throws Exception {
         return String.join("\n", client().execute(cmd));
