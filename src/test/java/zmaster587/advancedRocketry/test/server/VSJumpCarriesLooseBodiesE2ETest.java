@@ -1,5 +1,6 @@
 package zmaster587.advancedRocketry.test.server;
 
+import zmaster587.advancedRocketry.test.Events;
 import zmaster587.advancedRocketry.test.ShipReadiness;
 import zmaster587.advancedRocketry.test.GameTicks;
 
@@ -88,24 +89,31 @@ public class VSJumpCarriesLooseBodiesE2ETest extends AbstractSharedServerTest {
         requireArranged("the dropped body must be ABOARD by the definition the crossing uses,"
                 + " not merely near the ship: " + dropped, dropped.contains("\"aboard\":true"));
 
+        // Marked BEFORE the command whose effect is awaited.
+        long transitMark = events.mark();
         String begin = exec("artest space transit-begin " + originDim + " 1 64 1 " + HYPERSPACE_JUMP_SPEED);
         assertTrue("the transit must begin: " + begin, begin.contains("\"began\":true"));
 
-        final String[] lastTick = {""};
-        boolean done = GameTicks.until(client(), GameTicks.server(), ARRIVAL_TICKS, () -> {
-            lastTick[0] = exec("artest space transit-tick 10");
-            return extractInt(lastTick[0], "inTransit") == 0;
-        });
-        int targetDim = done ? extractInt(lastTick[0], "targetDim") : -1;
-        assertTrue("the jump never completed; last tick=" + lastTick[0], targetDim >= 0);
+        // No pump: the server advances the jump. Waited for as the arrival production announces.
+        String arrivedRecord = events.awaitCarrying(transitMark, "ship_transit_ended",
+                "\"route\":\"HYPERSPACE\"",
+                "the jump never completed; the transit now reads "
+                        + exec("artest space transit-status"),
+                ARRIVAL_TICKS);
+        int targetDim = extractInt(arrivedRecord, "dim");
+        assertTrue("the arrival was announced but names no dimension: " + arrivedRecord,
+                targetDim >= 0);
 
-        // The placement is retry-based like the crew's, so drive the same retries the crew leg drives.
+        // Still a POLL, and legitimately: the placement retries until the body is put down, which is
+        // a converging state and not an event -- nothing announces it. What is gone is the pump that
+        // used to sit INSIDE this predicate: a condition is asked and must change nothing, and the
+        // arrival it was driving is advanced by the server anyway.
+        //
         // The cell's ship count NAMES what it counted, so the arrived hull is identified rather than
         // approached; the count is still read on every iteration, because the ship is still arriving
         // and "how many are in there" is precisely what changes while the loop runs.
         final String[] arrived = {""};
         boolean carried = GameTicks.until(client(), GameTicks.server(), PLACEMENT_TICKS, () -> {
-            exec("artest space transit-tick 10");
             String counted = exec("artest vs ship-count " + targetDim);
             Matcher onlyShip = Pattern.compile("\"ships\":\\[\"([^\"]+)\"]").matcher(counted);
             if (extractInt(counted, "count") != 1 || !onlyShip.find()) {
@@ -137,6 +145,10 @@ public class VSJumpCarriesLooseBodiesE2ETest extends AbstractSharedServerTest {
     public void resetPermaload() throws Exception {
         exec("artest vs permaload false");
     }
+
+    /** This tier's reader of the server's ordered event log. */
+    private final Events events =
+            new Events(this::exec, ticks -> GameTicks.advanceWorld(client(), 0, ticks));
 
     private String exec(String cmd) throws Exception {
         return String.join("\n", client().execute(cmd));

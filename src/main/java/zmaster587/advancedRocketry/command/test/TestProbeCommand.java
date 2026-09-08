@@ -4657,8 +4657,26 @@ public class TestProbeCommand extends CommandBase {
                     + ",\"inTransit\":" + transitTm.inTransitCount() + "}");
             return;
         }
-        // transit-tick: advance the transit one tick; report in-transit count and (once arrived) the
-        // target cell's slot dim so the test can confirm the ship is VS-managed there.
+        // transit-status: the same report `transit-tick` produces, WITHOUT advancing anything.
+        //
+        // The two were one verb until 2026-09-08, and that conflation was the defect: a caller who
+        // only wanted to read `hyperDim` or `inTransit` had to drive the jump to get it, which for a
+        // test whose subject is a jump still being IN FLIGHT pushes its own subject towards the exit.
+        // Since the fixture runs on the server's own subsystem the jump advances on the server tick
+        // anyway, so reading and driving had no reason left to be the same call.
+        if (args.length >= 1 && "transit-status".equalsIgnoreCase(args[0])) {
+            if (transitTm == null) {
+                send(sender, "{\"error\":\"transit not set up\"}");
+                return;
+            }
+            sendTransitReport(sender);
+            return;
+        }
+        // transit-tick: advance the transit, then report exactly what `transit-status` reports.
+        //
+        // An ACCELERATOR, no longer the thing that moves a jump: the server ticks the transit like
+        // any other subsystem. It stays because a long leg is still faster to compress than to wait
+        // out, and it repeats the SAME tick -- it does not change what a tick does.
         if (args.length >= 1 && "transit-tick".equalsIgnoreCase(args[0])) {
             if (transitTm == null) {
                 send(sender, "{\"error\":\"transit not set up\"}");
@@ -4682,72 +4700,7 @@ public class TestProbeCommand extends CommandBase {
             // controller, not by the transit map. Ticking only one of them would make "advance the
             // jump" mean different things depending on which mechanism the speed selected — and the
             // arrival acceptance is meant to be SHARED between them, not written twice.
-            int crossing = transitStack != null && transitDurableId != null
-                    && transitStack.cellCrossings.isCarrying(transitDurableId) ? 1 : 0;
-            int inTransit = transitTm.inTransitCount();
-            int targetDim = -1;
-            if (inTransit == 0 && transitMgr.isLoaded(transitTarget)) {
-                targetDim = transitMgr.materialize(transitTarget);
-                transitMgr.dematerialize(transitTarget);
-            }
-            // Where the arrived ship ACTUALLY is, as the two answers that can disagree. An arrival is
-            // only complete when the ship sits on the world pose realizing its target coordinate; if it
-            // is still in the paste band, its address inverts through the pose mapping into a
-            // NEIGHBOURING cell. Both are asked through the queryable registry (shipBlockAt), which
-            // answers for an UNLOADED ship too - so a test can observe this without force-loading
-            // anything, and therefore without supplying the very state the arrival is supposed to
-            // establish for itself.
-            double[] pose = zmaster587.advancedRocketry.space.CellWorldMapper.poseWorldOf(transitTarget);
-            long shipY = Long.MIN_VALUE, poseDist = -1L;
-            net.minecraft.world.WorldServer tw = targetDim < 0 ? null
-                    : net.minecraftforge.common.DimensionManager.getWorld(targetDim);
-            if (tw != null) {
-                // Ask for the ship's OWN transform position, not "is a ship near this point": the
-                // nearest-ship lookup underneath shipBlockAt is UNBOUNDED, so asking it about two
-                // different points in a world that holds one ship answers yes to both. A pair of such
-                // questions looks like a discriminator and is not one.
-                net.minecraft.util.math.BlockPos sub = zmaster587.advancedRocketry.integration.vs
-                        .VSIntegration.shipBlockAt(tw, pose[0], pose[1], pose[2]);
-                double[] sp = sub == null ? null : zmaster587.advancedRocketry.integration.vs
-                        .VSIntegration.getShipWorldPosition(tw, sub);
-                if (sp != null) {
-                    shipY = (long) sp[1];
-                    double dx = sp[0] - pose[0], dy = sp[1] - pose[1], dz = sp[2] - pose[2];
-                    poseDist = (long) Math.sqrt(dx * dx + dy * dy + dz * dz);
-                }
-            }
-            // Point-free witness: where the ships in this world actually ARE. Without it, a null from the
-            // point-keyed lookup above cannot be told from "the ship is not where I asked".
-            String ships = tw == null ? "" : zmaster587.advancedRocketry.integration.vs.VSIntegration
-                    .queryableShipPositions(tw);
-            // Where the crew of the in-flight ship BELONGS while it is parked, and the world that holds
-            // it. `crewDim` is the subsystem's own answer (-1 once the jump is over, or for a transit
-            // restored from a snapshot, which has no physical ship anywhere); `hyperDim` is the raw id of
-            // the shared parking world. A crew-side test compares the CLIENT's dimension against these
-            // rather than hardcoding an id that is minted per boot.
-            send(sender, "{\"ok\":true,\"inTransit\":" + inTransit + ",\"targetDim\":" + targetDim
-                    // Which mechanism is actually running, emitted in every state so "neither" is a
-                    // pair of zeros rather than a missing field: `inTransit` is the hyperspace flight,
-                    // `crossing` is the direct cell-to-cell settle. A test that wants to know WHICH
-                    // one its speed selected reads these instead of inferring it from timing.
-                    + ",\"crossing\":" + crossing
-                    + ",\"poseX\":" + (long) pose[0] + ",\"poseY\":" + (long) pose[1]
-                    + ",\"poseZ\":" + (long) pose[2]
-                    + ",\"shipY\":" + shipY + ",\"poseDist\":" + poseDist
-                    // Asked under the SAME name the departure used. This read was hard-coded to the
-                    // synthetic "t" and answered -1 for every jump the moment departures started
-                    // naming their ship, which reads as "the crew belongs nowhere" rather than as a
-                    // probe asking about a transit that does not exist under that key.
-                    + ",\"crewDim\":" + transitTm.crewDimensionOf(
-                            transitDurableId == null ? "t" : transitDurableId.toString())
-                    + ",\"hyperDim\":" + zmaster587.advancedRocketry.space.HyperspaceWorld.dimId()
-                    // How many arrived ships are still retrying their crew re-seat. This tells a
-                    // never-seated crew apart from a re-seat that RAN OUT of retries: >0 means the
-                    // loop is still trying (the caller simply stopped ticking), 0 with an unseated
-                    // crew means it either succeeded or gave up - and the arrival leg gives up
-                    // without a word, so nothing else distinguishes the two.
-                    + ",\"reseating\":" + transitTm.reseatingCount()
-                    + ",\"ships\":\"" + ships + "\"}");
+            sendTransitReport(sender);
             return;
         }
         // loose-body <dim> <x> <y> <z>: drop ONE item entity at a world point, and
@@ -16837,6 +16790,83 @@ public class TestProbeCommand extends CommandBase {
      * as the cause. The mod owns the subsystem now and a fixture ARRANGES that one rather than
      * substituting for it, so this answers with the same object for every verb here.</p>
      */
+
+    /**
+     * The transit report both {@code transit-status} and {@code transit-tick} answer with.
+     *
+     * <p>ONE builder on purpose. The two verbs differ in whether they advance the jump first
+     * and in nothing else, and two copies of a reply this wide would drift in exactly the way
+     * a reader cannot see: a field present in one and stale in the other.</p>
+     */
+    private static void sendTransitReport(net.minecraft.command.ICommandSender sender) {
+        int crossing = transitStack != null && transitDurableId != null
+                && transitStack.cellCrossings.isCarrying(transitDurableId) ? 1 : 0;
+        int inTransit = transitTm.inTransitCount();
+        int targetDim = -1;
+        if (inTransit == 0 && transitMgr.isLoaded(transitTarget)) {
+            targetDim = transitMgr.materialize(transitTarget);
+            transitMgr.dematerialize(transitTarget);
+        }
+        // Where the arrived ship ACTUALLY is, as the two answers that can disagree. An arrival is
+        // only complete when the ship sits on the world pose realizing its target coordinate; if it
+        // is still in the paste band, its address inverts through the pose mapping into a
+        // NEIGHBOURING cell. Both are asked through the queryable registry (shipBlockAt), which
+        // answers for an UNLOADED ship too - so a test can observe this without force-loading
+        // anything, and therefore without supplying the very state the arrival is supposed to
+        // establish for itself.
+        double[] pose = zmaster587.advancedRocketry.space.CellWorldMapper.poseWorldOf(transitTarget);
+        long shipY = Long.MIN_VALUE, poseDist = -1L;
+        net.minecraft.world.WorldServer tw = targetDim < 0 ? null
+                : net.minecraftforge.common.DimensionManager.getWorld(targetDim);
+        if (tw != null) {
+            // Ask for the ship's OWN transform position, not "is a ship near this point": the
+            // nearest-ship lookup underneath shipBlockAt is UNBOUNDED, so asking it about two
+            // different points in a world that holds one ship answers yes to both. A pair of such
+            // questions looks like a discriminator and is not one.
+            net.minecraft.util.math.BlockPos sub = zmaster587.advancedRocketry.integration.vs
+                    .VSIntegration.shipBlockAt(tw, pose[0], pose[1], pose[2]);
+            double[] sp = sub == null ? null : zmaster587.advancedRocketry.integration.vs
+                    .VSIntegration.getShipWorldPosition(tw, sub);
+            if (sp != null) {
+                shipY = (long) sp[1];
+                double dx = sp[0] - pose[0], dy = sp[1] - pose[1], dz = sp[2] - pose[2];
+                poseDist = (long) Math.sqrt(dx * dx + dy * dy + dz * dz);
+            }
+        }
+        // Point-free witness: where the ships in this world actually ARE. Without it, a null from the
+        // point-keyed lookup above cannot be told from "the ship is not where I asked".
+        String ships = tw == null ? "" : zmaster587.advancedRocketry.integration.vs.VSIntegration
+                .queryableShipPositions(tw);
+        // Where the crew of the in-flight ship BELONGS while it is parked, and the world that holds
+        // it. `crewDim` is the subsystem's own answer (-1 once the jump is over, or for a transit
+        // restored from a snapshot, which has no physical ship anywhere); `hyperDim` is the raw id of
+        // the shared parking world. A crew-side test compares the CLIENT's dimension against these
+        // rather than hardcoding an id that is minted per boot.
+        send(sender, "{\"ok\":true,\"inTransit\":" + inTransit + ",\"targetDim\":" + targetDim
+                // Which mechanism is actually running, emitted in every state so "neither" is a
+                // pair of zeros rather than a missing field: `inTransit` is the hyperspace flight,
+                // `crossing` is the direct cell-to-cell settle. A test that wants to know WHICH
+                // one its speed selected reads these instead of inferring it from timing.
+                + ",\"crossing\":" + crossing
+                + ",\"poseX\":" + (long) pose[0] + ",\"poseY\":" + (long) pose[1]
+                + ",\"poseZ\":" + (long) pose[2]
+                + ",\"shipY\":" + shipY + ",\"poseDist\":" + poseDist
+                // Asked under the SAME name the departure used. This read was hard-coded to the
+                // synthetic "t" and answered -1 for every jump the moment departures started
+                // naming their ship, which reads as "the crew belongs nowhere" rather than as a
+                // probe asking about a transit that does not exist under that key.
+                + ",\"crewDim\":" + transitTm.crewDimensionOf(
+                        transitDurableId == null ? "t" : transitDurableId.toString())
+                + ",\"hyperDim\":" + zmaster587.advancedRocketry.space.HyperspaceWorld.dimId()
+                // How many arrived ships are still retrying their crew re-seat. This tells a
+                // never-seated crew apart from a re-seat that RAN OUT of retries: >0 means the
+                // loop is still trying (the caller simply stopped ticking), 0 with an unseated
+                // crew means it either succeeded or gave up - and the arrival leg gives up
+                // without a word, so nothing else distinguishes the two.
+                + ",\"reseating\":" + transitTm.reseatingCount()
+                + ",\"ships\":\"" + ships + "\"}");
+    }
+
     private static zmaster587.advancedRocketry.space.SpaceSubsystem liveStack() {
         return zmaster587.advancedRocketry.AdvancedRocketry.spaceSubsystem();
     }

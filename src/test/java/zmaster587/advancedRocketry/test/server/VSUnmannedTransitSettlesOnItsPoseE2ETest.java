@@ -1,5 +1,6 @@
 package zmaster587.advancedRocketry.test.server;
 
+import zmaster587.advancedRocketry.test.Events;
 import zmaster587.advancedRocketry.test.GameTicks;
 
 import org.junit.Test;
@@ -60,28 +61,30 @@ public class VSUnmannedTransitSettlesOnItsPoseE2ETest extends AbstractSharedServ
         assertTrue("origin ship never registered in the pool-slot cell (dim " + originDim + ")",
                 waitForRegisteredShip(originDim));
 
+        // Marked BEFORE the command whose effect is awaited.
+        long transitMark = events.mark();
         String begin = exec("artest space transit-begin " + originDim + " " + ax + " " + ay + " " + az
                 + " " + HYPERSPACE_JUMP_SPEED);
         assertTrue("transit did not begin (departure crossing failed): " + begin,
                 begin.contains("\"began\":true"));
 
-        final String[] lastTick = {""};
-        boolean arrived = GameTicks.until(client(), GameTicks.server(), ARRIVAL_TICKS, () -> {
-            lastTick[0] = exec("artest space transit-tick 10");
-            return extractInt(lastTick[0], "inTransit") == 0
-                    && extractInt(lastTick[0], "targetDim") >= 0;
-        });
-        assertTrue("the ship never arrived at all; last tick=" + lastTick[0], arrived);
+        // No pump: the server advances the jump. Waited for as the arrival production announces.
+        String arrivedRecord = events.awaitCarrying(transitMark, "ship_transit_ended",
+                "\"route\":\"HYPERSPACE\"",
+                "the ship never arrived at all; the transit now reads "
+                        + exec("artest space transit-status"),
+                ARRIVAL_TICKS);
+        String lastTick = exec("artest space transit-status");
 
         // Positive control for the instrument: the probe must have RESOLVED the arrived ship at all.
         // Without this, an assertion about where the ship is would also pass on a run where the registry
         // answered nothing — which is the opposite of what we mean to assert.
         // Control first: the target world must actually hold a ship, or "its position is not X" below
         // would pass on a run where the ship had vanished — the opposite of what this asserts.
-        Matcher ships = Pattern.compile("\"ships\":\"([^\"]*)\"").matcher(lastTick[0]);
-        assertTrue("the probe reported no ships field at all: " + lastTick[0], ships.find());
+        Matcher ships = Pattern.compile("\"ships\":\"([^\"]*)\"").matcher(lastTick);
+        assertTrue("the probe reported no ships field at all: " + lastTick, ships.find());
         String positions = ships.group(1);
-        assertTrue("the target world holds no ship, so nothing below measures the arrival: " + lastTick[0],
+        assertTrue("the target world holds no ship, so nothing below measures the arrival: " + lastTick,
                 !positions.isEmpty());
 
         // The whole assertion, asked WITHOUT a position-keyed lookup: the ship's own transform position
@@ -90,10 +93,10 @@ public class VSUnmannedTransitSettlesOnItsPoseE2ETest extends AbstractSharedServ
         // off" — it is a different world region, and its address inverts through the pose mapping into a
         // neighbouring cell. Compared as text on purpose: these are exact integers, and a tolerance here
         // would quietly accept the paste band on some future cell whose pose happens to be low.
-        String expected = extractInt(lastTick[0], "poseX") + "," + extractInt(lastTick[0], "poseY") + ","
-                + extractInt(lastTick[0], "poseZ");
+        String expected = extractInt(lastTick, "poseX") + "," + extractInt(lastTick, "poseY") + ","
+                + extractInt(lastTick, "poseZ");
         assertTrue("an unmanned arrival must settle ON the pose realizing its target coordinate; expected "
-                + "a ship at " + expected + " but the world holds " + positions + ": " + lastTick[0],
+                + "a ship at " + expected + " but the world holds " + positions + ": " + lastTick,
                 positions.contains(expected));
     }
 
@@ -103,6 +106,10 @@ public class VSUnmannedTransitSettlesOnItsPoseE2ETest extends AbstractSharedServ
      * land in the window — a failure message quoting a shield-network rebuild is how this was found, and
      * a PASS read off such a line would have been just as wrong and just as silent.
      */
+    /** This tier's reader of the server's ordered event log. */
+    private final Events events =
+            new Events(this::exec, ticks -> GameTicks.advanceWorld(client(), 0, ticks));
+
     private String exec(String cmd) throws Exception {
         String envelope = "";
         for (String line : client().execute(cmd)) {

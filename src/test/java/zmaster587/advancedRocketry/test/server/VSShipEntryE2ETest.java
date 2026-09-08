@@ -163,10 +163,15 @@ public class VSShipEntryE2ETest extends AbstractSharedServerTest {
      * The leg AFTER the on-ramp: a ship that reached space through the production entry path can then JUMP
      * to another cell on the SAME live stack, driven only by the server tick.
      *
-     * <p>Why this is not already covered: {@code VSShipTransitE2ETest} proves the transit state machine on
-     * an ISOLATED stack — its own {@code SpaceManager}, its own hard-coded origin/target, advanced by manual
-     * {@code transit-tick} calls. Nothing joined the two halves, so a ship that actually FLEW into space had
-     * never been jumped. The join is exactly where the previous hands-on tier-2 session found its blockers.</p>
+     * <p>Why this is not already covered: {@code VSShipTransitE2ETest} proves the transit state machine
+     * on a FIXTURE cell pair of its own — hard-coded origin and target it never flew to by entering
+     * space. Nothing joined the two halves, so a ship that actually FLEW into space had never been
+     * jumped. The join is exactly where the previous hands-on tier-2 session found its blockers.</p>
+     *
+     * <p><i>This said that stack was ISOLATED — "its own {@code SpaceManager}", "advanced by manual
+     * {@code transit-tick} calls" — until 2026-09-08, when the fixture moved onto the server's own
+     * subsystem and the manual driving went with it. Both halves of that sentence had become false,
+     * and a reason a test exists is the worst place to leave a stale one.</i></p>
      *
      * <p>The contract asserted here is the join, not the transit internals: a ship SETTLED by the entry path
      * departs its cell when a jump begins, and settles in the requested target cell without anything pumping
