@@ -385,9 +385,11 @@ public final class RealDedicatedServerHarness implements AutoCloseable {
 
     /**
      * System property (milliseconds) bounding how long {@code start} waits after the ready marker
-     * for the child's bridge to dial back. Default 15 s, load-scaled. {@code 0} skips the wait
-     * entirely — the right setting for a consumer whose server carries no bridge, which otherwise
-     * pays this once per boot for a connection that will never arrive.
+     * for the child's bridge to dial back. Default 15 s, load-scaled.
+     *
+     * <p>It bounds the wait; it cannot WAIVE it. There is no server this harness starts that has no
+     * bridge — the child opens it from its own test-mode registration — so an escape hatch here
+     * would only ever be used to keep running on a channel that no longer exists.</p>
      */
     public static final String PROP_BRIDGE_WAIT_MILLIS = "forge.test.server.bridge.waitMillis";
 
@@ -460,16 +462,13 @@ public final class RealDedicatedServerHarness implements AutoCloseable {
      * the bridge exists to remove. A warning in a thirty-thousand-line build log is not an
      * announcement; nobody reads it, and every measurement taken afterwards is about the fallback.
      *
-     * <p>Waiting zero milliseconds stays the way to run a server that genuinely has no bridge, and
-     * it is an explicit choice rather than a default the harness slides into.
+     * <p>There is no opt-out. A "server with no bridge" was the justification for keeping the
+     * console channel, and no such server exists in this tree: every child this harness launches
+     * carries the mod that opens one. A branch no caller reaches is not a fallback.
      */
     private static void awaitBridge(TestClient client) throws InterruptedException, IOException {
-        long budgetMillis = com.github.stannismod.forge.testing.TestTimeouts
-                .scaledMillis(Long.getLong(PROP_BRIDGE_WAIT_MILLIS, 15_000L).longValue());
-        if (budgetMillis <= 0L) {
-            return;
-        }
-        client.requireBridge();
+        long budgetMillis = Math.max(1_000L, com.github.stannismod.forge.testing.TestTimeouts
+                .scaledMillis(Long.getLong(PROP_BRIDGE_WAIT_MILLIS, 15_000L).longValue()));
         long deadline = System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(budgetMillis);
         while (System.nanoTime() < deadline) {
             if (client.hasBridge()) {
@@ -479,9 +478,9 @@ public final class RealDedicatedServerHarness implements AutoCloseable {
         }
         throw new IOException("the server control bridge never dialled back within " + budgetMillis
                 + " ms. The console channel would still work, which is why this is thrown rather"
-                + " than warned about: a run on it is evidence about the fallback and not about the"
-                + " server under test. Set -D" + PROP_BRIDGE_WAIT_MILLIS + "=0 for a server that"
-                + " genuinely carries no bridge.");
+                + " than warned about: it is the only command channel, so a run without it is not a"
+                + " degraded run, it is no run at all. The child opens the bridge from its own"
+                + " test-mode registration - check that the child reached that point.");
     }
 
     private static void closeQuietly(java.net.ServerSocket socket) {

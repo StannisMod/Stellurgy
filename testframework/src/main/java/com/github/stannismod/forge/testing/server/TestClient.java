@@ -8,11 +8,9 @@ import com.google.gson.JsonParser;
 import java.io.*;
 import java.net.Socket;
 import java.nio.charset.StandardCharsets;
-import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
-import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 
 public final class TestClient implements Closeable {
@@ -31,29 +29,6 @@ public final class TestClient implements Closeable {
     private BufferedReader bridgeReader;
     private BufferedWriter bridgeWriter;
     private final Object bridgeLock = new Object();
-
-    /**
-     * Whether this client was promised a bridge — i.e. the harness opened a control port and waited
-     * for the child to dial back.
-     *
-     * <p>When it is true the console channel is NOT a fallback, it is a failure. The two channels
-     * are not equivalent: the console's reply is a slice of the server log, two concurrent calls can
-     * steal each other's lines, and its completion sentinel is broadcast into every player's chat.
-     * Degrading onto it silently means a broken bridge produces green runs, and every measurement
-     * taken afterwards describes the channel nobody chose. Measured 2026-09-08: a run taken to
-     * decide whether the bridge was live could not answer, because both states look the same from
-     * outside.</p>
-     */
-    private volatile boolean bridgeRequired;
-
-    /**
-     * Declare that a bridge is expected, so its absence becomes an error instead of a quiet
-     * downgrade. Called by the harness when — and only when — it has handed the child a control
-     * port and intends to wait for it.
-     */
-    void requireBridge() {
-        this.bridgeRequired = true;
-    }
 
     TestClient(Process process, Writer stdin, List<String> transcript) {
         this.process = process;
@@ -91,59 +66,38 @@ public final class TestClient implements Closeable {
     }
 
     /**
-     * Run a server command and return its reply.
+     * Run a server command and return its reply — over the control bridge, which is the only channel.
      *
-     * <p>Two channels, and which one is used is a property of the SERVER, not of the caller:</p>
-     * <ul>
-     *   <li><b>the bridge</b>, when the server JVM carries a mod that started
-     *       {@code ForgeTestServerBootstrap}. The reply is exactly the messages the command
-     *       addressed to its sender — nothing is broadcast to chat, nothing is sliced out of the
-     *       log, and concurrent calls cannot take each other's lines.</li>
-     *   <li><b>the console</b> otherwise, unchanged: the command and a {@code say} sentinel go into
-     *       the child's stdin and the reply is every transcript line in between. That sentinel IS
-     *       broadcast to every connected player, which is why the bridge exists — but it is also the
-     *       only completion signal available without one, so it stays.</li>
-     * </ul>
+     * <p>The reply is exactly the messages the command addressed to its sender: nothing is broadcast
+     * to chat, nothing is sliced out of the log, and two concurrent calls cannot take each other's
+     * lines.</p>
      *
-     * <p>The two replies are not identical: console lines carry the log's own
-     * {@code [HH:MM:SS] [Server thread/INFO]:} prefix and include anything else the server printed
-     * in the window, while bridge lines are the bare message text. A caller matching with
-     * {@code contains} sees no difference; one matching whole lines does.</p>
+     * <p><b>There is deliberately no second channel.</b> There used to be: the command and a
+     * {@code say} sentinel went into the child's stdin and the reply was every transcript line in
+     * between — a sentinel broadcast to every connected player, a reply that was a time slice of the
+     * whole server log, and two callers able to steal each other's lines. It was kept as a fallback
+     * "for a server with no bridge", and no such server exists: every server this harness starts
+     * carries the mod that opens the bridge, and nothing in the tree ever selected the other path.
+     * A branch no caller reaches is not a fallback, and keeping it kept all four defects alive
+     * behind a flag nobody set.</p>
      */
     public List<String> execute(String command) throws IOException, InterruptedException {
         List<String> overBridge = executeOverBridge(command);
         if (overBridge != null) {
             return overBridge;
         }
-        if (bridgeRequired) {
-            // A bridge was ASKED FOR and is not here. The console path below would work — that is
-            // exactly the problem: it would work, quietly, on a degraded channel, and every run
-            // afterwards would be evidence about the fallback rather than about the bridge. A
-            // harness that requested a bridge and did not get one has failed to start, and says so
-            // here rather than passing on a channel nobody chose.
-            throw new IOException("the server control bridge was required and is not connected;"
-                    + " refusing to fall back to the console channel, whose replies are log slices"
-                    + " and whose completion sentinel is broadcast to chat. Set -D"
-                    + com.github.stannismod.forge.testing.server.RealDedicatedServerHarness
-                            .PROP_BRIDGE_WAIT_MILLIS
-                    + "=0 to run a server that genuinely has no bridge.");
-        }
-        String marker = "FORGE_TEST_DONE " + UUID.randomUUID();
-        int startIndex = snapshotSize();
-        sendRaw(command);
-        sendRaw("say " + marker);
-        // Load-scaled: under concurrent forks a starved server thread stretches command latency.
-        return awaitMarker(startIndex, marker,
-                com.github.stannismod.forge.testing.TestTimeouts.scaled(Duration.ofSeconds(30)));
+        throw new IOException("the server control bridge is not connected, and it is the only command"
+                + " channel. The server child starts it from its own test-mode registration, so its"
+                + " absence means the child never reached that point or the connection was lost -"
+                + " both of which are failures to report, not conditions to work around.");
     }
 
     /**
-     * One request/response exchange over the bridge, or {@code null} when no bridge is connected —
-     * which is the ONLY silent path here, and it means the caller falls back to the console.
+     * One request/response exchange over the bridge, or {@code null} when none is connected — which
+     * {@link #execute(String)} turns into a failure, since there is no other channel to fall to.
      *
-     * <p>A bridge that is connected but fails mid-exchange is never downgraded silently: the socket
-     * is torn down, the demotion is printed, and this call fails. Returning console lines from a
-     * broken bridge would make a degraded channel indistinguishable from a healthy one.</p>
+     * <p>A bridge that is connected but fails mid-exchange is torn down and the call fails: a broken
+     * channel must not be indistinguishable from a healthy one.</p>
      */
     private List<String> executeOverBridge(String command) {
         Objects.requireNonNull(command, "command");
@@ -205,11 +159,6 @@ public final class TestClient implements Closeable {
         }
     }
 
-    public List<String> awaitOutputContaining(String token, Duration timeout) throws InterruptedException {
-        int startIndex = snapshotSize();
-        return awaitMarker(startIndex, token, timeout);
-    }
-
     public void sendRaw(String command) throws IOException {
         Objects.requireNonNull(command, "command");
         synchronized (stdin) {
@@ -256,46 +205,6 @@ public final class TestClient implements Closeable {
         synchronized (transcript) {
             return new ArrayList<>(transcript);
         }
-    }
-
-    private int snapshotSize() {
-        synchronized (transcript) {
-            return transcript.size();
-        }
-    }
-
-    private List<String> awaitMarker(int startIndex, String token, Duration timeout) throws InterruptedException {
-        long deadlineNanos = System.nanoTime() + timeout.toNanos();
-        int index = startIndex;
-        List<String> captured = new ArrayList<>();
-
-        while (System.nanoTime() < deadlineNanos) {
-            String line = null;
-            synchronized (transcript) {
-                if (index < transcript.size()) {
-                    line = transcript.get(index++);
-                    captured.add(line);
-                    if (line.contains(token)) {
-                        captured.remove(captured.size() - 1);
-                        return captured;
-                    }
-                } else {
-                    // Short-circuit: if the underlying process died before printing the
-                    // marker, no amount of waiting will help. Return the captured tail
-                    // immediately so callers see the actual crash instead of a timeout.
-                    if (!process.isAlive()) {
-                        throw new AssertionError("Server process exited (code=" + process.exitValue()
-                                + ") before marker '" + token + "' appeared. Recent output: " + tail());
-                    }
-                    long remainingNanos = deadlineNanos - System.nanoTime();
-                    long waitMillis = Math.max(1L, TimeUnit.NANOSECONDS.toMillis(remainingNanos));
-                    transcript.wait(Math.min(waitMillis, 250L));
-                    continue;
-                }
-            }
-        }
-
-        throw new AssertionError("Timed out waiting for marker '" + token + "'. Recent output: " + tail());
     }
 
     private String tail() {
