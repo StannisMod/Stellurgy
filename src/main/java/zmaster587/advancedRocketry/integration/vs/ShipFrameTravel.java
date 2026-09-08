@@ -567,6 +567,24 @@ public final class ShipFrameTravel {
         STATE.put(entity, state);
     }
 
+    /**
+     * Seam: how a seed attempt ended, for the body it was for.
+     *
+     * <p>A dismount whose seed never lands — refused for the whole hold window, or the anchor ship
+     * missing on this side — hands the body to vanilla's world-frame dismount spot, which on a
+     * non-upright ship maps OFF the deck. So the OUTCOME is the fact worth keeping, and the body it
+     * concerns is the half that decides whether it is this scenario's.</p>
+     *
+     * <p>A SEAM, and nothing else. Production kept four counters and the text of the most recent
+     * refusal, all lifetime and JVM-global: they could say that some seed somewhere had been refused,
+     * never which body, when, or whether it was the one under test.</p>
+     *
+     * @param outcome {@code ok}, {@code not-loaded}, {@code refused:<excluded state>}, or the
+     *                {@code pending-} forms of the first two for a seed applied out of the queue
+     */
+    private static void noteSeedOutcome(Entity entity, String shipId, String outcome) {
+    }
+
     /** Remove the capture with an explicit, logged reason: an episode never ends implicitly, it
      *  ends by naming the gate that ended it. Every path that stops resolving a tracked body goes
      *  through here - a silent gate leaves stale STATE behind and the camera/HUD keep acting on
@@ -619,7 +637,6 @@ public final class ShipFrameTravel {
         if (entity == null || shipId == null) {
             return false;
         }
-        seedAttempts++;
         // NEVER force-capture a body in a state that keeps world-frame semantics - riding, elytra,
         // creative flight it is not claimable in, water, lava, a ladder, levitation. handles()
         // would release it right back next tick, and the re-sent seed then snaps it to the deck
@@ -629,8 +646,7 @@ public final class ShipFrameTravel {
         if (entity instanceof EntityLivingBase) {
             String excluded = excludedStateOf((EntityLivingBase) entity);
             if (excluded != null) {
-                seedRefusals++;
-                lastSeedRefusal = excluded;
+                noteSeedOutcome(entity, shipId, "refused:" + excluded);
                 if (zmaster587.advancedRocketry.command.test.TestProbeCommandRegistration.isTestMode()) {
                     zmaster587.advancedRocketry.AdvancedRocketry.logger.info("[FF-TRACE/CAP] seed "
                             + "REFUSED (" + excluded + ") remote=" + entity.world.isRemote
@@ -645,7 +661,7 @@ public final class ShipFrameTravel {
         // boxes.
         double[] world = VSIntegration.toWorldFrameFor(entity.world, shipId, subX, subY, subZ);
         if (world == null) {
-            seedNotLoaded++;
+            noteSeedOutcome(entity, shipId, "not-loaded");
             // Playtest trace ([FF-TRACE/CAP], -Dadvancedrocketry.tests=true): the anchor ship is not
             // loaded on this side (yet). No-op; the dismount window re-sends.
             if (zmaster587.advancedRocketry.command.test.TestProbeCommandRegistration.isTestMode()) {
@@ -655,7 +671,7 @@ public final class ShipFrameTravel {
             }
             return false;
         }
-        seedOks++;
+        noteSeedOutcome(entity, shipId, "ok");
         if (zmaster587.advancedRocketry.command.test.TestProbeCommandRegistration.isTestMode()) {
             zmaster587.advancedRocketry.AdvancedRocketry.logger.info("[FF-TRACE/CAP] seed OK ship="
                     + shipId + " world=(" + world[0] + "," + world[1] + "," + world[2] + ")");
@@ -799,7 +815,6 @@ public final class ShipFrameTravel {
         if (entity == null || shipId == null || entity.world == null || !entity.world.isRemote) {
             return;
         }
-        seedAttempts++;
         ShipFrameState st = STATE.get(entity);
         if (st != null && st.seedAnchored && shipId.equals(st.shipId)) {
             return; // the seed already took; a re-send must not teleport the body again
@@ -864,7 +879,7 @@ public final class ShipFrameTravel {
                 double[] world = VSIntegration.toWorldFrameFor(
                         body.world, slot.shipId, slot.subX, slot.subY, slot.subZ);
                 if (world == null) {
-                    seedNotLoaded++;
+                    noteSeedOutcome(body, slot.shipId, "pending-not-loaded");
                     return; // the ship is not on this side yet: stay pending, retry next tick
                 }
                 if (zmaster587.advancedRocketry.command.test.TestProbeCommandRegistration.isTestMode()) {
@@ -873,7 +888,7 @@ public final class ShipFrameTravel {
                             + " world=(" + world[0] + "," + world[1] + "," + world[2] + ")");
                 }
                 applySeedCapture(body, slot.shipId, slot.subX, slot.subY, slot.subZ, world);
-                seedOks++;
+                noteSeedOutcome(body, slot.shipId, "pending-ok");
                 pendingSeed = null;
         }
     }
@@ -1089,58 +1104,26 @@ public final class ShipFrameTravel {
     // received those chunks answers every one of those reads with "air": sweeps see zero obstacles,
     // resolved bodies tunnel through their own deck, and crew mechanics silently degrade to the
     // server-held fallback. The census tells that WORLD-CONTENT failure (chunkLoaded=false / nonAir=0)
-    // apart from a sweep defect (blocks present, collision boxes still not found). The client updates
-    // the statics every tick near a ship (a test reads them in the client JVM); the server answers the
-    // same census on demand through the `/artest vs subspace-census` probe as the control side.
+    // apart from a sweep defect (blocks present, collision boxes still not found). The CLIENT takes
+    // it at the seam below (the measurement itself is on the test side); the server answers the same
+    // census on demand through the `/artest vs subspace-census` probe as the control side.
 
-    /** Census samples taken on this side since the game started (proves the sampler itself runs). */
-    public static volatile long censusTicks = 0L;
-    /** The ship the last census resolved against ("" until first sample). */
-    public static volatile String censusShipId = "";
-    /** Whether that census subject had a live capture state on this side. */
-    public static volatile boolean censusTracked = false;
-    /** The subject's feet block position in the ship's subspace, "x,y,z". */
-    public static volatile String censusSubPos = "";
-    /** Whether this side's world has the chunk at that subspace position loaded. */
-    public static volatile boolean censusChunkLoaded = false;
-    /** Non-air block states in the 7x7x7 cube around the subspace feet position; -1 until sampled. */
-    public static volatile int censusNonAir = -1;
-    /** Collision boxes this side's world returns for the subject's subspace feet box grown one block
-     *  down - the exact instrument class the travel sweep uses; -1 until sampled. */
-    public static volatile int censusCollisionBoxes = -1;
-    /** Seed outcomes on this side ({@link #seedShipFrameCapture}): a dismount whose seed never
-     *  lands (refused for the whole hold window, or the ship missing on this side) hands the body
-     *  to vanilla's world-frame dismount spot - which on a non-upright ship maps OFF the deck. */
-    public static volatile long seedAttempts = 0L;
-    public static volatile long seedOks = 0L;
-    public static volatile long seedRefusals = 0L;
-    public static volatile long seedNotLoaded = 0L;
-    public static volatile String lastSeedRefusal = "";
-    /** The ship's own subspace block region (margin 0), "minX,minY,minZ..maxX,maxY,maxZ". */
-    public static volatile String censusRegion = "";
-    /** Non-air block states in the WHOLE ship region - a body-position-INDEPENDENT sample, so a
-     *  drop to zero at a fixed region means the blocks themselves vanished from this side's world
-     *  (not that the body wandered into air); -1 until sampled or when the region is too large. */
-    public static volatile int censusRegionNonAir = -1;
-
-    /** Per-client-tick census update; a no-op away from ships and on the server side. */
+    /**
+     * Seam: a client tick at which the subspace census COULD be taken for {@code entity}.
+     *
+     * <p>A SEAM, and nothing else — and this one used to do real work. It ran
+     * {@link #subspaceCensusFor} on EVERY client tick near a ship (a 7x7x7 block scan plus a
+     * collision-box query) purely to refresh nine statics that only tests read, in a class that
+     * ships to players. The census is read-only and public, so the test side takes it here instead:
+     * the same measurement, at the same cadence, in the runs that ask for it.</p>
+     *
+     * <p>The statics went with it. Their defect was the usual one — no body, no tick, one set per
+     * JVM — and it bit hardest here, because the question the census answers ("does THIS side's
+     * world hold the ship's blocks at these coordinates?") is about one side's world and one
+     * position, and nine fields shared by every scenario in a client could answer it for the wrong
+     * one without ever looking wrong.</p>
+     */
     public static void clientCensusTick(EntityLivingBase entity) {
-        if (entity == null || entity.world == null || !entity.world.isRemote) {
-            return;
-        }
-        Map<String, Object> m = subspaceCensusFor(entity);
-        if (m == null) {
-            return;
-        }
-        censusTicks++;
-        censusShipId = String.valueOf(m.get("shipId"));
-        censusTracked = Boolean.TRUE.equals(m.get("tracked"));
-        censusSubPos = String.valueOf(m.get("subPos"));
-        censusChunkLoaded = Boolean.TRUE.equals(m.get("chunkLoaded"));
-        censusNonAir = ((Number) m.get("nonAir")).intValue();
-        censusCollisionBoxes = ((Number) m.get("collisionBoxes")).intValue();
-        censusRegion = String.valueOf(m.get("region"));
-        censusRegionNonAir = ((Number) m.get("regionNonAir")).intValue();
     }
 
     /**
@@ -2332,13 +2315,6 @@ public final class ShipFrameTravel {
         }
     }
 
-    /** Bodies re-seated by {@link #followShipPoses} since this side started.
-     *
-     *  <p>It exists because {@link #lastReseatStep} alone cannot say what a zero means: a pass that
-     *  never ran and a pass that ran on a still ship both leave it at 0.0. This counter separates
-     *  them, and a scenario that reads the step as a sensitivity witness has to read this too or
-     *  its witness can be satisfied by an absent mechanism.</p> */
-    public static volatile long reseatedBodies = 0L;
     /** How far the last re-seat moved a body, in blocks: the deck's own step out from under it.
      *  Zero on a still ship, one tick of ship motion at the body's radius on a moving one. */
     public static volatile double lastReseatStep = 0.0;
@@ -2411,7 +2387,6 @@ public final class ShipFrameTravel {
             lastReseatStep = Math.sqrt(dx * dx + dy * dy + dz * dz);
             reseated++;
         }
-        reseatedBodies += reseated;
         return reseated;
     }
 

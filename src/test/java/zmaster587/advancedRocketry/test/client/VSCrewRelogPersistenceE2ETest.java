@@ -166,7 +166,15 @@ public class VSCrewRelogPersistenceE2ETest extends AbstractSharedVsClientE2ETest
         double rollSeatMiss = seatMiss(rollHistory, rollMark);
         // A zero deckStep is ambiguous on its own — a pass that never ran and a pass that ran on a
         // still ship both leave it there. This is the number that separates them.
-        long reseated = clientLong("reseatedBodies");
+        // Bodies re-seated DURING THIS ROLL, from the pass's own records. The counter this replaces
+        // was a lifetime total, so on a shared client the sensitivity gate below — "the mechanism
+        // must have run at all" — was satisfied by any earlier scenario's re-seat, which is a
+        // statement about the JVM and not about this roll.
+        long reseated = 0L;
+        for (String pass : Events.records(
+                clientEvents().since(rollReleaseMark, "deck_reseat_pass"))) {
+            reseated += (long) Events.number(pass, "bodies");
+        }
         String rollReleases = clientReleases(rollReleaseMark, "the roll");
         long dropsDuringRoll = guardReleases(rollReleases);
         double rollTravel = bodyPointTravel(rollHistory, rollMark);
@@ -1088,16 +1096,6 @@ public class VSCrewRelogPersistenceE2ETest extends AbstractSharedVsClientE2ETest
             }
         }
         return n;
-    }
-
-    /** A client-side counter as a number, or {@code -1} when it cannot be read. */
-    private long clientLong(String field) throws Exception {
-        String value = clientString(SHIP_FRAME_TRAVEL, field);
-        try {
-            return Long.parseLong(value.trim());
-        } catch (NumberFormatException notANumber) {
-            return -1L;
-        }
     }
 
     /** The most recent resolved-tick number in the client's record — the mark an observation starts

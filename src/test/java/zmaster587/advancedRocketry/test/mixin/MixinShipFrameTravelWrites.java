@@ -227,6 +227,90 @@ public abstract class MixinShipFrameTravelWrites {
     }
 
     /**
+     * The subspace census, TAKEN here rather than read from production.
+     *
+     * <p>Does this side's world actually hold the ship's blocks at the subspace coordinates every
+     * deck probe, sweep and interior gate reads? A side whose world never received those chunks
+     * answers every one of those reads with "air", and the mechanics degrade silently. The census
+     * separates that world-content failure ({@code chunkLoaded:false} / {@code nonAir:0}) from a
+     * sweep defect (blocks present, collision boxes still not found).</p>
+     *
+     * <p>Production ran this measurement itself, on every client tick near a ship, to keep nine
+     * statics fresh for tests — a block scan per tick in shipped code. It is read-only and public,
+     * so it happens here now: the same call, at the same cadence, in the runs that ask for it.</p>
+     *
+     * <p>One record per sample, so a reader takes the LATEST rather than a static that every
+     * scenario in a shared client wrote over. Its own 256-deep ring turns over in about thirteen
+     * seconds, which is far longer than the "what does the client hold right now" question needs.</p>
+     */
+    @Inject(method = "clientCensusTick", at = @At("HEAD"))
+    private static void arTest$census(EntityLivingBase entity, CallbackInfo ci) {
+        if (entity == null || entity.world == null || !entity.world.isRemote) {
+            return;
+        }
+        TestTrace.instrument(entity, "subspace_census_events");
+        java.util.Map<String, Object> m = ShipFrameTravel.subspaceCensusFor(entity);
+        if (m == null) {
+            return; // no ship claims this position on this side — not a reading, an absence
+        }
+        TestTrace.record(entity, "subspace_census",
+                "\"e\":" + entity.getEntityId()
+                        + ",\"ship\":\"" + TestTrace.json(String.valueOf(m.get("shipId"))) + "\""
+                        + ",\"tracked\":" + Boolean.TRUE.equals(m.get("tracked"))
+                        + ",\"subPos\":\"" + TestTrace.json(String.valueOf(m.get("subPos"))) + "\""
+                        + ",\"chunkLoaded\":" + Boolean.TRUE.equals(m.get("chunkLoaded"))
+                        + ",\"nonAir\":" + m.get("nonAir")
+                        + ",\"collisionBoxes\":" + m.get("collisionBoxes")
+                        + ",\"region\":\"" + TestTrace.json(String.valueOf(m.get("region"))) + "\""
+                        + ",\"regionNonAir\":" + m.get("regionNonAir"));
+    }
+
+    /**
+     * How a seed attempt ended, for the body it was for.
+     *
+     * <p>A dismount whose seed never lands hands the body to vanilla's world-frame dismount spot,
+     * which on a non-upright ship maps off the deck — so the outcome is the fact, and WHICH body it
+     * was for is what makes it this scenario's. Production kept four lifetime counters and the text
+     * of the most recent refusal: they could say that some seed somewhere had been refused, never
+     * whose, when, or whether it was the one under test.</p>
+     */
+    @Inject(method = "noteSeedOutcome", at = @At("HEAD"))
+    private static void arTest$seedOutcome(Entity entity, String shipId, String outcome,
+                                           CallbackInfo ci) {
+        if (entity == null || entity.world == null) {
+            return;
+        }
+        TestTrace.instrument(entity, "ship_frame_seed_events");
+        TestTrace.record(entity, "ship_frame_seed",
+                "\"e\":" + entity.getEntityId()
+                        + ",\"ship\":\"" + TestTrace.json(String.valueOf(shipId)) + "\""
+                        + ",\"outcome\":\"" + TestTrace.json(String.valueOf(outcome)) + "\"");
+    }
+
+    /**
+     * A pass of the re-seat that puts aboard bodies back on their deck points after the ships move.
+     *
+     * <p>Recorded only when it MOVED something, and the instrument announces the pass either way —
+     * so "the pass never ran", "it ran and the ship was still" and "it re-seated N bodies" are three
+     * different readings. The counter this replaces was a lifetime total, which made the sensitivity
+     * gate that reads it satisfiable by any earlier scenario in a shared client: it said "this
+     * mechanism exists in this JVM", where the gate's own prose claims "it ran during this roll".</p>
+     */
+    @Inject(method = "followShipPoses", at = @At("RETURN"))
+    private static void arTest$reseatPass(World world, CallbackInfoReturnable<Integer> cir) {
+        if (world == null) {
+            return;
+        }
+        TestTrace.instrumentHere("deck_reseat_pass_events");
+        int bodies = cir.getReturnValue() == null ? 0 : cir.getReturnValue();
+        if (bodies <= 0) {
+            return;
+        }
+        TestTrace.recordHere("deck_reseat_pass",
+                "\"remote\":" + world.isRemote + ",\"bodies\":" + bodies);
+    }
+
+    /**
      * A world-frame mover asking to displace a body the ship-frame resolver holds.
      *
      * <p>The discriminator for a crew member dragged around in small jerks while the resolution

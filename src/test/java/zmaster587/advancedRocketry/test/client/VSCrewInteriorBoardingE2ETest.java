@@ -163,21 +163,23 @@ public class VSCrewInteriorBoardingE2ETest extends AbstractSharedVsClientE2ETest
         // Subspace census at the QUIET STANDING phase (the ledgered obst=0 already shows here):
         // server = control (must be rich), client statics = the side under suspicion. Server rich +
         // client empty ==> the client never received the ship's subspace chunks.
+        // The client's own latest census RECORD, and every seed outcome recorded in this scenario's
+        // window. Both used to be statics: nine census fields and five seed counters, one set per
+        // JVM, so on a shared client they carried whatever body ran last — and the seed counters were
+        // lifetime totals, which cannot say whether THIS dismount's seed landed.
         System.out.println("[interior] census standing: server=" + exec("artest vs subspace-census")
-                + " client={ticks=" + censusStatic("censusTicks")
-                + " ship=" + censusStatic("censusShipId")
-                + " tracked=" + censusStatic("censusTracked")
-                + " subPos=" + censusStatic("censusSubPos")
-                + " chunkLoaded=" + censusStatic("censusChunkLoaded")
-                + " nonAir=" + censusStatic("censusNonAir")
-                + " boxes=" + censusStatic("censusCollisionBoxes")
-                + " region=" + censusStatic("censusRegion")
-                + " regionNonAir=" + censusStatic("censusRegionNonAir") + "}"
-                + " seed={attempts=" + censusStatic("seedAttempts")
-                + " oks=" + censusStatic("seedOks")
-                + " refusals=" + censusStatic("seedRefusals")
-                + " lastRefusal=" + censusStatic("lastSeedRefusal")
-                + " notLoaded=" + censusStatic("seedNotLoaded") + "}");
+                + " client={ship=" + censusField("ship")
+                + " tracked=" + censusField("tracked")
+                + " subPos=" + censusField("subPos")
+                + " chunkLoaded=" + censusField("chunkLoaded")
+                + " nonAir=" + censusField("nonAir")
+                + " boxes=" + censusField("collisionBoxes")
+                + " region=" + censusField("region")
+                + " regionNonAir=" + censusField("regionNonAir") + "}"
+                // The whole client ring, deliberately: `dismountMark` is a SERVER sequence and the
+                // seeds under suspicion are the CLIENT's, so windowing this by it would silently
+                // read one log's mark against the other's numbering. Each record names its body.
+                + " seeds=" + clientEvents().since(0, "ship_frame_seed"));
 
         // Release the capture DETERMINISTICALLY, with the body still inside the hull: a small
         // world teleport reads as an external move, the guard drops the capture, and the body is
@@ -201,8 +203,8 @@ public class VSCrewInteriorBoardingE2ETest extends AbstractSharedVsClientE2ETest
         // Subject validity (fixture geometry by measurement): the released body must still BE
         // inside the ship's block region, or the run is measuring a doorway ejection.
         bot().waitTicks(2);
-        String subAfterRelease = censusStatic("censusSubPos");
-        String regionStr = censusStatic("censusRegion");
+        String subAfterRelease = censusField("subPos");
+        String regionStr = censusField("region");
         assertTrue("the released body must remain INSIDE the ship's block region (sub="
                 + subAfterRelease + " region=" + regionStr + ")",
                 subInRegion(subAfterRelease, regionStr));
@@ -247,11 +249,11 @@ public class VSCrewInteriorBoardingE2ETest extends AbstractSharedVsClientE2ETest
             trace.append(String.format(java.util.Locale.ROOT,
                     "[t%d y=%.2f cSub=%s cLoaded=%s cAir=%s cBox=%s cRegAir=%s] ",
                     i * 3, bot().reportState().get("playerY").getAsDouble(),
-                    censusStatic("censusSubPos"),
-                    censusStatic("censusChunkLoaded"),
-                    censusStatic("censusNonAir"),
-                    censusStatic("censusCollisionBoxes"),
-                    censusStatic("censusRegionNonAir")));
+                    censusField("subPos"),
+                    censusField("chunkLoaded"),
+                    censusField("nonAir"),
+                    censusField("collisionBoxes"),
+                    censusField("regionNonAir")));
         }
         trace.append(System.lineSeparator()).append("  per-tick resolution: ")
                 .append(Events.fieldLines(clientEvents().since(0, "ship_frame_tick"), "line"));
@@ -337,16 +339,16 @@ public class VSCrewInteriorBoardingE2ETest extends AbstractSharedVsClientE2ETest
                 + " | server verdict " + exec("artest vs deck-capture"),
                 "aboard".equals(lastCommittedMode(modesBefore)));
         double preY = bot().reportState().get("playerY").getAsDouble();
-        double[] sub0 = parseSub(censusStatic("censusSubPos"));
+        double[] sub0 = parseSub(censusField("subPos"));
 
         // Fixture enclosure by measurement: the ROOF must have entered the assembled ship - the
         // subspace block region reaches at least four blocks above the stand (roofless deck
         // variant: one). An open-topped build here would silently turn this test into the
         // supported-first-contact one above.
-        String regionStr = censusStatic("censusRegion");
+        String regionStr = censusField("region");
         double regionMaxY = parseRegionMaxY(regionStr);
-        System.out.println("[cavity] stand sub0=" + censusStatic("censusSubPos")
-                + " region=" + regionStr + " regionNonAir=" + censusStatic("censusRegionNonAir")
+        System.out.println("[cavity] stand sub0=" + censusField("subPos")
+                + " region=" + regionStr + " regionNonAir=" + censusField("regionNonAir")
                 + " server=" + exec("artest vs subspace-census"));
         assertTrue("the assembled ship must include the roof (region " + regionStr
                 + " must reach >= 4 blocks above the stand at subY=" + sub0[1] + ")",
@@ -365,7 +367,7 @@ public class VSCrewInteriorBoardingE2ETest extends AbstractSharedVsClientE2ETest
         // stand. Re-step until the measured subspace position is actually mid-cavity (the ship
         // keeps turning between attempts), and only then judge the settle.
         Events clientEvents = clientEvents();
-        String subAfter = censusStatic("censusSubPos");
+        String subAfter = censusField("subPos");
         // The mark is re-taken INSIDE the loop so it belongs to the displacement that finally lands
         // the body mid-cavity: each earlier attempt is its own release-and-reclaim, and a mark from
         // before the first one would let an earlier round's records answer for the last.
@@ -377,7 +379,7 @@ public class VSCrewInteriorBoardingE2ETest extends AbstractSharedVsClientE2ETest
             releaseMark = clientEvents.mark();
             exec("tp @a ~ ~-1.2 ~");
             bot().waitTicks(2);
-            subAfter = censusStatic("censusSubPos");
+            subAfter = censusField("subPos");
         }
 
         // Subject validity (geometry by measurement): the displaced body must still be INSIDE
@@ -432,7 +434,7 @@ public class VSCrewInteriorBoardingE2ETest extends AbstractSharedVsClientE2ETest
             trace.append(String.format(java.util.Locale.ROOT,
                     "[t%d y=%.2f cSub=%s] ",
                     i * 3, bot().reportState().get("playerY").getAsDouble(),
-                    censusStatic("censusSubPos")));
+                    censusField("subPos")));
         }
         // From the RELEASE mark for the same reason as the open-cockpit scenario above: the mode is
         // an EDGE written where a capture is installed or its mode changes, and the one commit of
@@ -445,7 +447,7 @@ public class VSCrewInteriorBoardingE2ETest extends AbstractSharedVsClientE2ETest
         boolean shipCam = Boolean.parseBoolean(
                 bot().readStaticField(SHIP_CAMERA, "shipCamActive").get("value").getAsString());
         double settledY = bot().reportState().get("playerY").getAsDouble();
-        double[] subEnd = parseSub(censusStatic("censusSubPos"));
+        double[] subEnd = parseSub(censusField("subPos"));
         String capEnd = exec("artest vs deck-capture");
         // Every release in the displacement window, each with the gate that performed it: a
         // `noDeckBelow` or `noHullContact` here would say the enclosure term did NOT hold the body,
@@ -519,7 +521,7 @@ public class VSCrewInteriorBoardingE2ETest extends AbstractSharedVsClientE2ETest
                 + " mode=" + lastCommittedMode(modesBefore) + "): " + modesBefore
                 + " | server verdict " + exec("artest vs deck-capture"),
                 "aboard".equals(lastCommittedMode(modesBefore)));
-        double[] sub0 = parseSub(censusStatic("censusSubPos"));
+        double[] sub0 = parseSub(censusField("subPos"));
 
         // Start creative flight: double-tap space (the first tap is a deck jump; the second,
         // within the toggle window, flips flight). Marked FIRST: "flight must not release the
@@ -541,7 +543,7 @@ public class VSCrewInteriorBoardingE2ETest extends AbstractSharedVsClientE2ETest
         // is SHORT deliberately - the stay region ends ~4 blocks above the hull top, and a climb
         // that exits it is a legitimate release (leaving the region ends the capture), not this
         // pin's subject.
-        double[] subFly = parseSub(censusStatic("censusSubPos"));
+        double[] subFly = parseSub(censusField("subPos"));
         StringBuilder trace = new StringBuilder();
         int trackedSeen = 0, camSeen = 0, samples = 0;
         double[] subEnd = subFly;
@@ -571,7 +573,7 @@ public class VSCrewInteriorBoardingE2ETest extends AbstractSharedVsClientE2ETest
                         .get("value").getAsString())) {
                     camSeen++;
                 }
-                subEnd = parseSub(censusStatic("censusSubPos"));
+                subEnd = parseSub(censusField("subPos"));
                 trace.append(String.format(java.util.Locale.ROOT, "[t%d sub=%.1f,%.1f,%.1f cap=%b] ",
                         i * 2, subEnd[0], subEnd[1], subEnd[2], tracked));
             }
@@ -619,12 +621,12 @@ public class VSCrewInteriorBoardingE2ETest extends AbstractSharedVsClientE2ETest
         bot().holdKey(org.lwjgl.input.Keyboard.KEY_LSHIFT);
         try {
             ClientPoll.until(bot()::waitTicks,
-                    () -> parseSub(censusStatic("censusSubPos"))[1],
+                    () -> parseSub(censusField("subPos"))[1],
                     y -> y < subHigh[1], 2, 7);
         } finally {
             bot().releaseKey(org.lwjgl.input.Keyboard.KEY_LSHIFT);
         }
-        double[] subDown = parseSub(censusStatic("censusSubPos"));
+        double[] subDown = parseSub(censusField("subPos"));
         assertTrue("holding descend must sink along the DECK NORMAL (subspace -Y): "
                 + subHigh[1] + " -> " + subDown[1], subDown[1] < subHigh[1]);
 
@@ -653,7 +655,7 @@ public class VSCrewInteriorBoardingE2ETest extends AbstractSharedVsClientE2ETest
         for (int i = 0; i < 40 && !seated; i++) {
             bot().waitTicks(3);
             capEnd = exec("artest vs deck-capture");
-            subSeated = parseSub(censusStatic("censusSubPos"));
+            subSeated = parseSub(censusField("subPos"));
             // The descend leg parks the body over the SEAT column, so deck gravity may seat it on
             // the seat block's top - one block above the deck stand. Either landing is "seated on
             // the ship's geometry at the deck spot"; only staying airborne (or lost to the world)
@@ -841,8 +843,40 @@ public class VSCrewInteriorBoardingE2ETest extends AbstractSharedVsClientE2ETest
     }
 
     /** One CLIENT-side subspace-census static (ShipFrameTravel.census*), as a plain string. */
-    private String censusStatic(String field) throws Exception {
-        return bot().readStaticField(SHIP_FRAME_TRAVEL, field).get("value").getAsString();
+    /**
+     * One field of the CLIENT's most recent subspace census, as text.
+     *
+     * <p>Read from the census RECORD, not from the nine statics production used to refresh every
+     * client tick. The statics were one set per JVM, so on a shared client every scenario wrote over
+     * every other's, and this class's central question — "does this side's world hold the ship's
+     * blocks where the body is standing?" — could be answered about somebody else's body without
+     * looking any different.</p>
+     *
+     * <p>The mark ROLLS: each call reads only what was recorded since the last one and keeps the
+     * newest, so the twenty-odd reads below cost one small reply each instead of the whole ring.
+     * Returns "" until the client has taken a census at all, which is what a body near no ship
+     * produces — an absence, not a zero.</p>
+     */
+    private long censusMark = 0L;
+    private String latestCensus = null;
+
+    private String censusField(String field) throws Exception {
+        for (String record : Events.records(clientEvents().since(censusMark, "subspace_census"))) {
+            latestCensus = record;
+            censusMark = (long) Events.number(record, "seq") + 1L;
+        }
+        if (latestCensus == null) {
+            return "";
+        }
+        // One accessor for all three shapes the census carries — quoted text, a JSON number and a
+        // bare boolean — because the caller asks for a column, not for a type.
+        Matcher m = Pattern.compile("\"" + Pattern.quote(field) + "\":(\"[^\"]*\"|[^,}]+)")
+                .matcher(latestCensus);
+        if (!m.find()) {
+            return "";
+        }
+        String raw = m.group(1).trim();
+        return raw.startsWith("\"") ? raw.substring(1, raw.length() - 1) : raw;
     }
 
     /** Whether a census "x,y,z" block position lies inside a census "x,y,z..x,y,z" region. */
