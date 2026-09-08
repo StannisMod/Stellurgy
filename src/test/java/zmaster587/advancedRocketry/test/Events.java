@@ -132,6 +132,57 @@ public final class Events {
         return out.toString();
     }
 
+    /**
+     * The records of a {@code since} reply, oldest first, one raw record per entry.
+     *
+     * <p>For a scenario measuring a QUANTITY over a window rather than waiting for a link: it reads
+     * every sample production produced between the mark and now, instead of polling a static every
+     * few ticks and taking the best of whatever the polls landed on — a spike between two polls is
+     * invisible, a spike in the log is not.</p>
+     *
+     * <p>Per RECORD and not per field on purpose. A reply's {@code "skew"} values and its
+     * {@code "mode"} values are two lists that only line up while every record carries both, so a
+     * caller filtering one measurement by another's value must keep them together; handing out
+     * parallel arrays would make the day they diverge look like a shift of one.</p>
+     *
+     * <p>An empty reply gives an empty list — "nothing happened" is a reading, and
+     * {@link #assertInstrumentRan} is what separates it from "nobody was looking".</p>
+     */
+    public static List<String> records(String sinceReply) {
+        List<String> out = new ArrayList<>();
+        String[] split = String.valueOf(sinceReply).split("\\{\"seq\":");
+        for (int i = 1; i < split.length; i++) { // [0] is the envelope before the first record
+            // The split eats the delimiter, and a record printed into a failure without its own
+            // opening reads as a fragment starting mid-number. Put it back, and drop the separator
+            // the next record left behind (or, on the last one, the reply's own closing).
+            String record = ("{\"seq\":" + split[i]).trim();
+            if (record.endsWith("]}")) {
+                record = record.substring(0, record.length() - 2).trim();
+            }
+            if (record.endsWith(",")) {
+                record = record.substring(0, record.length() - 1);
+            }
+            out.add(record);
+        }
+        return out;
+    }
+
+    /** One record's numeric {@code field}, or {@code NaN} when this record does not carry it — an
+     *  absent measurement, which a caller must be able to tell from a measured zero. Matched as a
+     *  JSON number, so a value recorded as a quoted string is deliberately not found. */
+    public static double number(String record, String field) {
+        Matcher m = Pattern.compile("\"" + Pattern.quote(field) + "\":(-?[0-9][0-9.eE+-]*)")
+                .matcher(String.valueOf(record));
+        return m.find() ? Double.parseDouble(m.group(1)) : Double.NaN;
+    }
+
+    /** One record's string {@code field}, or {@code null} when this record does not carry it. */
+    public static String text(String record, String field) {
+        Matcher m = Pattern.compile("\"" + Pattern.quote(field) + "\":\"([^\"]*)\"")
+                .matcher(String.valueOf(record));
+        return m.find() ? m.group(1) : null;
+    }
+
     /** The string {@code field} of the FIRST record in a {@code since} reply, or {@code null} when no
      *  record carries it — the first thing that happened after the mark, which for a gate that goes
      *  on answering every tick (a refusal, then COOLDOWN, COOLDOWN, …) is the decision itself. */

@@ -1,6 +1,7 @@
 package zmaster587.advancedRocketry.test.mixin;
 
 import net.minecraft.entity.EntityLivingBase;
+import net.minecraft.world.World;
 
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
@@ -10,6 +11,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 import zmaster587.advancedRocketry.integration.vs.ShipFrameTravel;
+import zmaster587.advancedRocketry.integration.vs.VSIntegration;
 import zmaster587.advancedRocketry.test.trace.TestTrace;
 
 /**
@@ -100,6 +102,108 @@ public abstract class MixinShipFrameTravelWrites {
                 "\"e\":" + entity.getEntityId()
                         + ",\"who\":\"" + TestTrace.json(entity.getName()) + "\""
                         + ",\"line\":\"" + TestTrace.json(line) + "\"");
+    }
+
+    /**
+     * Render-vs-collision pose skew, measured where production commits a subspace point to a world
+     * position.
+     *
+     * <p>A ship is DRAWN through the client's interpolated render transform; every collision and
+     * standing computation for a resolved body maps through the GAME-TICK transform. The distance
+     * between the two is the gap between the surface the player sees and the surface he stands on.
+     * Production used to compute it and publish it through nine statics that held whatever body was
+     * resolved last; the arithmetic is three subtractions and the render transform is a public query,
+     * so the whole observation belongs on this side.</p>
+     *
+     * <p><b>What the record buys over the statics it replaces.</b> The reader used to poll
+     * a since-deleted {@code lastRenderSkew} static every few ticks and take the maximum, so a spike
+     * that rose and fell between two reads was invisible — the test class said so in its own
+     * javadoc, as a known limit of the instrument. One record per commit means
+     * the maximum is taken over every sample production produced in the window, not over the ones a
+     * poll happened to land on.</p>
+     *
+     * <p>Client-side only: the render transform never advances on a dedicated server, so a
+     * server-side comparison would measure the tick pose against itself.</p>
+     */
+    @Inject(method = "noteCommittedPose", at = @At("HEAD"))
+    private static void arTest$committedPose(World world, String shipId,
+                                             double subX, double subY, double subZ,
+                                             double[] worldPos, String mode, CallbackInfo ci) {
+        EntityLivingBase entity = ARTEST$RESOLVING.get();
+        if (entity == null) {
+            return;
+        }
+        TestTrace.instrument(entity, "render_pose_skew_events");
+        if (!world.isRemote) {
+            return;
+        }
+        // The PAIR is recorded whatever the renderer is doing — the held subspace point and the world
+        // position this side committed for it are what the commit IS, and a reader on the other side
+        // maps the same point through its own transform to get the cross-side divergence. Only the
+        // skew itself depends on a render pose existing this frame, and its absence is recorded as
+        // `drawn:false` rather than as no record at all: "the commit happened and the renderer had no
+        // pose" and "the commit never happened" are different answers.
+        double[] drawn = VSIntegration.renderToWorldFrameFor(world, shipId, subX, subY, subZ);
+        String skew = "";
+        if (drawn != null) {
+            double dx = worldPos[0] - drawn[0];
+            double dy = worldPos[1] - drawn[1];
+            double dz = worldPos[2] - drawn[2];
+            skew = ",\"skew\":" + Math.sqrt(dx * dx + dy * dy + dz * dz);
+        }
+        TestTrace.record(entity, "render_pose_skew",
+                "\"e\":" + entity.getEntityId()
+                        + ",\"ship\":\"" + TestTrace.json(shipId) + "\""
+                        + ",\"mode\":\"" + TestTrace.json(mode) + "\""
+                        + ",\"drawn\":" + (drawn != null)
+                        + skew
+                        + ",\"subX\":" + subX + ",\"subY\":" + subY + ",\"subZ\":" + subZ
+                        + ",\"commitX\":" + worldPos[0]
+                        + ",\"commitY\":" + worldPos[1]
+                        + ",\"commitZ\":" + worldPos[2]);
+    }
+
+    /**
+     * Whether the solid the hull-stand sweep consumes IS the body's own world volume.
+     *
+     * <p>A hull-stand body is a WORLD-upright capsule standing on the ship's outer surface. Sweeping
+     * a box that is axis-aligned in SUBSPACE instead puts every contact {@code h·sin(tilt/2)} from
+     * where the body visibly is — at the reported ~160° attitude, about 1.8 blocks, which is the
+     * "I walk about a block beside the blocks I see" report.</p>
+     *
+     * <p>Measured against {@code entity.getEntityBoundingBox()} — the body's own world volume,
+     * maintained by vanilla from its position — because that is a value with a DIFFERENT writer.
+     * Production's own numbers cannot check this: the box is built from the mapped feet and the
+     * body's width and height, so a comparison against those three is arithmetic that comes out zero
+     * however the box was constructed. That is precisely what the {@code lastHullBoxMismatch} static
+     * this replaces had become — production wrote a literal {@code 0.0} into it, and the assertion
+     * reading it could not fail.</p>
+     *
+     * <p>What the offset legitimately contains in a healthy tick: the body's position is where the
+     * previous tick's commit left it, while the box is anchored at the feet mapped THIS tick, so the
+     * two differ by about one tick of deck motion — hundredths of a block. The defect it must
+     * separate that from is two orders larger.</p>
+     */
+    @Inject(method = "noteHullCollisionSolid", at = @At("HEAD"))
+    private static void arTest$hullSolid(EntityLivingBase entity, double[] box, CallbackInfo ci) {
+        if (entity == null || box == null || box.length < 6) {
+            return;
+        }
+        TestTrace.instrument(entity, "hull_collision_solid_events");
+        net.minecraft.util.math.AxisAlignedBB real = entity.getEntityBoundingBox();
+        double dx = (box[0] + box[3]) / 2.0 - (real.minX + real.maxX) / 2.0;
+        double dy = (box[1] + box[4]) / 2.0 - (real.minY + real.maxY) / 2.0;
+        double dz = (box[2] + box[5]) / 2.0 - (real.minZ + real.maxZ) / 2.0;
+        TestTrace.record(entity, "hull_collision_solid",
+                "\"e\":" + entity.getEntityId()
+                        + ",\"offset\":" + Math.sqrt(dx * dx + dy * dy + dz * dz)
+                        // The extents travel too: an offset alone cannot tell a solid that sits in
+                        // the right place from one that is the wrong SIZE there, and a failure is
+                        // read by whoever arrives months later.
+                        + ",\"sweptW\":" + (box[3] - box[0])
+                        + ",\"sweptH\":" + (box[4] - box[1])
+                        + ",\"bodyW\":" + (real.maxX - real.minX)
+                        + ",\"bodyH\":" + (real.maxY - real.minY));
     }
 
     // The values the line carries that are not parameters of this seam. SHADOWED rather than read

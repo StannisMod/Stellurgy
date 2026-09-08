@@ -181,54 +181,47 @@ public final class ShipFrameTravel {
      *  i.e. the mod HAD armed its own mover on a body AR resolves (a boarding fall, a flight
      *  contact) and it was disarmed before it could fight the resolution. */
     public static volatile long dragSuppressions = 0L;
-    /** Render-vs-collision pose skew, sampled at each CLIENT-side commit: the distance between the
-     *  world position this class committed (mapped through the game-tick transform — the pose the
-     *  body collides and stands against) and where the ship RENDERER draws the same subspace point
-     *  this frame (the render transform). A non-zero value is the visible gap between the body's
-     *  feet and the surface the player sees; {@code lastRenderSkewMode} names the resolution mode
-     *  ("aboard"/"hull") of the most recent sample. Side-local statics, client-only in practice. */
-    public static volatile long renderSkewSamples = 0L;
-    public static volatile double lastRenderSkew = -1.0;
-    public static volatile String lastRenderSkewMode = "";
-    /** The raw ingredients of the most recent skew sample: the held SUBSPACE point and the world
-     *  position THIS side committed for it. A prober on the other side can map the same subspace
-     *  point through its own transform and compare — the cross-side pose divergence the in-client
-     *  skew above cannot see. */
-    public static volatile double lastSkewSubX, lastSkewSubY, lastSkewSubZ;
-    public static volatile double lastSkewCommitX, lastSkewCommitY, lastSkewCommitZ;
-    /** HULL-STAND box misalignment: the sweep collides a box that is axis-aligned in SUBSPACE
-     *  (feet + height along subspace-up), but a hull-stand body is a WORLD-upright capsule. The
-     *  distance between the two volumes' centres — {@code h/2 · |shipFrame(world-up) − (0,1,0)|}
-     *  = {@code h·sin(tilt/2)} — is the phantom displacement of every contact this mode computes:
-     *  at a steep attitude the body collides with hull geometry that far from where it visibly
-     *  stands. Zero on a level ship. */
-    public static volatile double lastHullBoxMismatch = -1.0;
+    /**
+     * The collision solid the hull-stand sweep is about to consume, announced with the body it
+     * belongs to.
+     *
+     * <p>A SEAM, and nothing else. The contract this exists to expose: a hull-stand body is a
+     * WORLD-upright capsule, so the volume swept against the ship's geometry must be the body's own
+     * volume. Sweeping a box that is axis-aligned in SUBSPACE instead displaces every contact by
+     * {@code h·sin(tilt/2)} — at a steep attitude, the "I walk about a block beside the blocks I see"
+     * report.</p>
+     *
+     * <p>Production used to publish a {@code lastHullBoxMismatch} static for this, and once the
+     * sweep began taking the body's own box it wrote a literal {@code 0.0} into it — so the one
+     * assertion reading it could not fail, whatever production did. The comparison a test needs is
+     * between the solid passed here and {@code entity}'s own world bounding box, which is a
+     * different value with a different writer; it is made on the test side, where a green means the
+     * two agreed rather than that a constant was read back.</p>
+     *
+     * <p>Kept as a call rather than deleted because this call site is the only place that holds the
+     * swept solid and the body at once.</p>
+     */
+    private static void noteHullCollisionSolid(EntityLivingBase entity, double[] box) {
+    }
 
-    /** Measure how far the committed world position sits from where the renderer draws the same
-     *  subspace point. Client-side only: the render transform never advances on a dedicated
-     *  server, and the skew is a per-frame render observable. */
-    private static void sampleRenderSkew(World world, String shipId,
-                                         double subX, double subY, double subZ,
-                                         double[] worldPos, String mode) {
-        if (!world.isRemote) {
-            return;
-        }
-        double[] drawn = VSIntegration.renderToWorldFrameFor(world, shipId, subX, subY, subZ);
-        if (drawn == null) {
-            return;
-        }
-        double dx = worldPos[0] - drawn[0];
-        double dy = worldPos[1] - drawn[1];
-        double dz = worldPos[2] - drawn[2];
-        lastRenderSkew = Math.sqrt(dx * dx + dy * dy + dz * dz);
-        lastRenderSkewMode = mode;
-        lastSkewSubX = subX;
-        lastSkewSubY = subY;
-        lastSkewSubZ = subZ;
-        lastSkewCommitX = worldPos[0];
-        lastSkewCommitY = worldPos[1];
-        lastSkewCommitZ = worldPos[2];
-        renderSkewSamples++;
+    /**
+     * The commit itself, announced: this class has just decided that {@code (subX,subY,subZ)} in
+     * {@code shipId}'s subspace is {@code worldPos} in the world, resolving the body in {@code mode}.
+     *
+     * <p>A SEAM, and nothing else. Production used to compare that world position against where the
+     * RENDERER draws the same subspace point and publish the distance — a render-vs-collision pose
+     * skew — through nine JVM-global statics that no reader could attribute to a body or window to a
+     * stretch of time. The comparison is a test's question, and the render transform is reachable
+     * from the test side ({@code VSIntegration.renderToWorldFrameFor}), so it is asked there; what
+     * production owes is the moment and the numbers that define it, which are these parameters.</p>
+     *
+     * <p>Kept as a call rather than deleted because these two call sites are the only places that
+     * know both halves of the pair at once — the held subspace point and the world position committed
+     * for it — and which of the two resolution modes produced them.</p>
+     */
+    private static void noteCommittedPose(World world, String shipId,
+                                          double subX, double subY, double subZ,
+                                          double[] worldPos, String mode) {
     }
 
     /** Called by the move-suppression hook: a world-frame mover asked to displace a resolved body. */
@@ -1848,7 +1841,7 @@ public final class ShipFrameTravel {
         }
         remember(entity, shipId, sweep.x, sweep.y, sweep.z,
                 worldPos[0], worldPos[1], worldPos[2], carryX, carryY, carryZ);
-        sampleRenderSkew(world, shipId, sweep.x, sweep.y, sweep.z, worldPos, "aboard");
+        noteCommittedPose(world, shipId, sweep.x, sweep.y, sweep.z, worldPos, "aboard");
         double fallenAlongDeck = sweep.wantY < 0.0 ? -(sweep.y - (sweep.startY)) : 0.0;
         entity.setPosition(worldPos[0], worldPos[1], worldPos[2]);
         entity.motionX = worldMotion[0];
@@ -2059,6 +2052,7 @@ public final class ShipFrameTravel {
             declinedTicks++;
             return false;
         }
+        noteHullCollisionSolid(entity, box);
         HullSweep.Result r = HullSweep.sweep(box, vWorld[0], vWorld[1], vWorld[2],
                 obstacles, axes, WORLD_UP, entity.stepHeight, wasGrounded);
         double dx = r.liftX + r.dx, dy = r.liftY + r.dy, dz = r.liftZ + r.dz;
@@ -2102,10 +2096,6 @@ public final class ShipFrameTravel {
         resolvedTicks++;
         lastObstacleCount = obstacles.size();
         lastOnDeck = grounded;
-        // The sweep now consumes the body's OWN world box: the collision solid and the real
-        // volume coincide by construction. Anyone re-introducing a different solid must bring
-        // back a real measurement here.
-        lastHullBoxMismatch = 0.0;
         double[] shipVel = VSIntegration.shipVelocityAtPointFor(
                 world, shipId, worldPos[0], worldPos[1], worldPos[2]);
         double carryX = shipVel == null ? 0.0 : shipVel[0] * TICK_SECONDS;
@@ -2117,7 +2107,7 @@ public final class ShipFrameTravel {
         if (refreshed != null) {
             refreshed.hullStand = true; // remember() rebuilds the state; keep the mode
         }
-        sampleRenderSkew(world, shipId, sub[0], sub[1], sub[2], worldPos, "hull");
+        noteCommittedPose(world, shipId, sub[0], sub[1], sub[2], worldPos, "hull");
         entity.setPosition(worldPos[0], worldPos[1], worldPos[2]);
         entity.motionX = worldMotion[0] + carryX;
         entity.motionY = worldMotion[1] + carryY;
