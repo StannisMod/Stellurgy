@@ -364,10 +364,7 @@ public class VSShipRenderPoseSkewE2ETest extends AbstractClientE2ETest {
     private double crossSideDelta() throws Exception {
         long mark = clientMark();
         bot().waitTicks(2);
-        String latest = null;
-        for (String record : Events.records(clientEvents().since(mark, "render_pose_skew"))) {
-            latest = record;
-        }
+        String latest = Events.lastRecord(clientEvents().since(mark, "render_pose_skew"));
         if (latest == null) {
             return Double.NaN; // this client committed nothing in the window
         }

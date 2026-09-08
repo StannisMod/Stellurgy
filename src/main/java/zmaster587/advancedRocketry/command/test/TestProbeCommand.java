@@ -2468,10 +2468,9 @@ public class TestProbeCommand extends CommandBase {
             // No resolvedTicks/declinedTicks: both are lifetime, JVM-global counters, so a reader
             // could not tell one body's story out of them, and nothing consumed them from here.
             // The per-body facts are the deck records the test mixins write.
-            m.put("lastObstacleCount",
-                    zmaster587.advancedRocketry.integration.vs.ShipFrameTravel.lastObstacleCount);
-            m.put("lastOnDeck",
-                    zmaster587.advancedRocketry.integration.vs.ShipFrameTravel.lastOnDeck);
+            // No lastObstacleCount/lastOnDeck: both are per-tick facts of ONE resolution, and this
+            // reply names no body — the ship_frame_tick record carries them as `obstacles`/`onDeck`
+            // beside the tick they belong to.
             m.put("lastTcUpDisagreement",
                     zmaster587.advancedRocketry.integration.vs.ShipFrameTravel.lastTcUpDisagreement);
             m.put("lastTcFwdDisagreement",
@@ -2510,26 +2509,11 @@ public class TestProbeCommand extends CommandBase {
             // deck movement bound is a `deck_movement_bound` record in the event log (a test-only
             // mixin on its RETURN), with both endpoints and the verdict, so a test reads the
             // refusals of ITS window rather than a total for the life of the server.
-            // The no-input-drift discriminator: the ship-RELATIVE motion the last resolved tick was
-            // handed, the walk inputs that came with it, and the carry that tick held. A body that
-            // creeps along a deck with lastInStrafe/lastInForward at 0 is being moved by one of
-            // these two, and which one is nonzero names the writer.
-            m.put("lastInStrafe",
-                    zmaster587.advancedRocketry.integration.vs.ShipFrameTravel.lastInStrafe);
-            m.put("lastInForward",
-                    zmaster587.advancedRocketry.integration.vs.ShipFrameTravel.lastInForward);
-            m.put("lastMotionShipX",
-                    zmaster587.advancedRocketry.integration.vs.ShipFrameTravel.lastMotionShipX);
-            m.put("lastMotionShipY",
-                    zmaster587.advancedRocketry.integration.vs.ShipFrameTravel.lastMotionShipY);
-            m.put("lastMotionShipZ",
-                    zmaster587.advancedRocketry.integration.vs.ShipFrameTravel.lastMotionShipZ);
-            m.put("lastCarryX",
-                    zmaster587.advancedRocketry.integration.vs.ShipFrameTravel.lastCarryX);
-            m.put("lastCarryY",
-                    zmaster587.advancedRocketry.integration.vs.ShipFrameTravel.lastCarryY);
-            m.put("lastCarryZ",
-                    zmaster587.advancedRocketry.integration.vs.ShipFrameTravel.lastCarryZ);
+            // The no-input-drift discriminator is no longer served from here. Its two halves — the
+            // walk inputs and the ship-frame motion they arrived with — only discriminate anything
+            // while they are read from the SAME tick of the SAME body, and this reply could offer
+            // neither: it published whatever the last resolution on this side had left behind. They
+            // are `ship_frame_walk` records now, and the carry rides `ship_frame_tick`.
             send(sender, jsonMap(m));
             return;
         }

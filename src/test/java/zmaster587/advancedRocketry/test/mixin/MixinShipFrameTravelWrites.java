@@ -77,12 +77,13 @@ public abstract class MixinShipFrameTravelWrites {
     @Inject(method = "noteTickHistory", at = @At("HEAD"))
     private static void arTest$tickLine(char path, double heldX, double heldY, double heldZ,
                                         double carryX, double carryY, double carryZ,
-                                        boolean onDeck, CallbackInfo ci) {
+                                        boolean onDeck, int obstacleCount, CallbackInfo ci) {
         EntityLivingBase entity = ARTEST$RESOLVING.get();
         if (entity == null) {
             return;
         }
         TestTrace.instrument(entity, "ship_frame_tick_events");
+        double[] walk = ARTEST$WALK.get();
         // The SAME line production used to append to its ring, byte for byte: eighteen readers across
         // two test classes parse this format, and changing it and them in one step would have been a
         // rewrite of the parsing layer on top of a move. What changed is WHO builds it and where it
@@ -93,15 +94,75 @@ public abstract class MixinShipFrameTravelWrites {
                         + "|s=%d%d/%d|w=%d",
                 resolvedTicks, path,
                 lastBodyLocalX, lastBodyLocalY, lastBodyLocalZ, heldX, heldY, heldZ,
-                lastMotionShipX, lastMotionShipY, lastMotionShipZ,
+                walk[2], walk[3], walk[4],
                 Math.sqrt(carryX * carryX + carryY * carryY + carryZ * carryZ),
-                lastInStrafe, lastInForward, onDeck ? 1 : 0,
-                lastSweepCollidedX ? 1 : 0, lastSweepCollidedZ ? 1 : 0, lastObstacleCount,
+                walk[0], walk[1], onDeck ? 1 : 0,
+                lastSweepCollidedX ? 1 : 0, lastSweepCollidedZ ? 1 : 0, obstacleCount,
                 lastCommitWorldTime);
+        // The line, and the same numbers as NUMBERS. The line is what eighteen existing readers
+        // parse; the fields beside it are what a reader asking one question reads without a format
+        // to reverse-engineer, and they are what replaced the probe verb that used to publish ten
+        // statics from whichever side happened to be asked.
         TestTrace.record(entity, "ship_frame_tick",
                 "\"e\":" + entity.getEntityId()
                         + ",\"who\":\"" + TestTrace.json(entity.getName()) + "\""
+                        + ",\"path\":\"" + path + "\""
+                        + ",\"onDeck\":" + onDeck
+                        + ",\"obstacles\":" + obstacleCount
+                        + ",\"carryX\":" + carryX + ",\"carryY\":" + carryY + ",\"carryZ\":" + carryZ
+                        + ",\"inStrafe\":" + walk[0] + ",\"inForward\":" + walk[1]
+                        + ",\"motionShipX\":" + walk[2] + ",\"motionShipY\":" + walk[3]
+                        + ",\"motionShipZ\":" + walk[4]
                         + ",\"line\":\"" + TestTrace.json(line) + "\"");
+    }
+
+    /**
+     * The walk inputs and the ship-frame motion of the tick being resolved, per thread.
+     *
+     * <p>Production hands these over at {@code noteWalkInputs}, a few frames before the seam that
+     * has the committed point — the same relay {@link #ARTEST$RESOLVING} performs for the body, and
+     * for the same reason: the two facts are computed in different places and belong in one record.
+     * Per THREAD because this class resolves on the client and the server both, in one JVM.</p>
+     *
+     * <p><b>Its staleness is the production behaviour it replaces, not a new one.</b> Only the
+     * ABOARD path computes a ship-frame motion; the two flying paths work in the world frame, so on
+     * an {@code 'f'} or {@code 'h'} tick these five numbers are the last aboard tick's. That was
+     * equally true of the five statics this holder replaces — the difference is that it is written
+     * down here instead of being inferred from a probe reply months later. Zeroes until the first
+     * aboard tick, which is a body that has not walked yet.</p>
+     */
+    private static final ThreadLocal<double[]> ARTEST$WALK = new ThreadLocal<double[]>() {
+        @Override
+        protected double[] initialValue() {
+            return new double[]{0.0, 0.0, 0.0, 0.0, 0.0};
+        }
+    };
+
+    /**
+     * The sideways-drag discriminator, recorded where production computes it.
+     *
+     * <p>A constant lateral ship-frame motion at ZERO input names an external motion writer; a
+     * correct-magnitude motion at NONZERO input pointing off the look direction names a wrong walk
+     * basis. Both halves have to be read from the SAME tick for that to discriminate anything, which
+     * is what a record gives and what five statics polled from another JVM could not: the reader got
+     * whichever body was resolved last, on whichever side it happened to ask.</p>
+     */
+    @Inject(method = "noteWalkInputs", at = @At("HEAD"))
+    private static void arTest$walkInputs(EntityLivingBase entity, float strafe, float forward,
+                                          float deckYaw, double motionShipX, double motionShipY,
+                                          double motionShipZ, CallbackInfo ci) {
+        if (entity == null) {
+            return;
+        }
+        TestTrace.instrument(entity, "ship_frame_walk_events");
+        ARTEST$WALK.set(new double[]{strafe, forward, motionShipX, motionShipY, motionShipZ});
+        TestTrace.record(entity, "ship_frame_walk",
+                "\"e\":" + entity.getEntityId()
+                        + ",\"inStrafe\":" + strafe + ",\"inForward\":" + forward
+                        + ",\"deckYaw\":" + deckYaw
+                        + ",\"motionShipX\":" + motionShipX
+                        + ",\"motionShipY\":" + motionShipY
+                        + ",\"motionShipZ\":" + motionShipZ);
     }
 
     /**
@@ -215,14 +276,8 @@ public abstract class MixinShipFrameTravelWrites {
     @Shadow private static volatile double lastBodyLocalX;
     @Shadow private static volatile double lastBodyLocalY;
     @Shadow private static volatile double lastBodyLocalZ;
-    @Shadow private static volatile double lastMotionShipX;
-    @Shadow private static volatile double lastMotionShipY;
-    @Shadow private static volatile double lastMotionShipZ;
-    @Shadow private static volatile float lastInStrafe;
-    @Shadow private static volatile float lastInForward;
     @Shadow private static volatile boolean lastSweepCollidedX;
     @Shadow private static volatile boolean lastSweepCollidedZ;
-    @Shadow private static volatile int lastObstacleCount;
     @Shadow private static volatile long lastCommitWorldTime;
 
     @Inject(method = "travel", at = @At("RETURN"))

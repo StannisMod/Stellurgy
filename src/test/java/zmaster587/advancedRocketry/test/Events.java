@@ -167,6 +167,14 @@ public final class Events {
         return out;
     }
 
+    /** The most recent record in a {@code since} reply, or {@code null} when it holds none — the
+     *  "what is the latest" question a reader used to answer by reading a {@code last*} static, now
+     *  answered by a record that names its body and its tick. */
+    public static String lastRecord(String sinceReply) {
+        List<String> all = records(sinceReply);
+        return all.isEmpty() ? null : all.get(all.size() - 1);
+    }
+
     /** One record's numeric {@code field}, or {@code NaN} when this record does not carry it — an
      *  absent measurement, which a caller must be able to tell from a measured zero. Matched as a
      *  JSON number, so a value recorded as a quoted string is deliberately not found. */

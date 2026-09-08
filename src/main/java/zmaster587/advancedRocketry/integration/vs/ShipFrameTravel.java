@@ -77,9 +77,6 @@ public final class ShipFrameTravel {
      *  aboard body faster than a tight guard tolerates, so it drops the capture every tick and the body
      *  loses the deck (the tier-2 fall-through). A rotating ship that does NOT thrash keeps this ~flat. */
     public static volatile long externalMoveDrops = 0L;
-    /** Ship-frame obstacles the last resolved sweep saw. Zero on every tick means the deck's blocks
-     *  are not being found, and an aboard body falls straight through it. */
-    public static volatile int lastObstacleCount = -1;
     /** The sweep's horizontal collision flags on the last resolved tick, and how many obstacles it
      *  saw (test diagnostics). A body that is ON the deck, whose input the resolver SEES, and which
      *  still does not travel has exactly two candidate writers: the sweep zeroing the horizontal
@@ -90,8 +87,6 @@ public final class ShipFrameTravel {
     // nowhere else, which is why they are private.
     private static volatile boolean lastSweepCollidedX = false;
     private static volatile boolean lastSweepCollidedZ = false;
-    /** Whether the last resolved entity ended the tick standing on its deck. */
-    public static volatile boolean lastOnDeck = false;
     /** Diagnostic: the last measured disagreement between the MOVEMENT frame (VS
      *  {@code ShipTransform.rotate}, what this class uses) and the CAMERA frame (the attitude quaternion) for
      *  the ship the last-resolved body is aboard. ~0 => movement and camera are one rotation (so "keys
@@ -103,24 +98,6 @@ public final class ShipFrameTravel {
      *  inverted its deck is (+1 upright, 0 on its side, -1 fully inverted). Lets a spin-to-inversion repro
      *  poll the attitude server-side and stop the spin at a target roll. {@code 2} until first measured. */
     public static volatile double lastShipUpY = 2.0;
-    /** Diagnostics for the sideways-drag discriminator: what the last resolved tick received - the
-     *  walk inputs and the ship-frame lateral motion BEFORE the
-     *  input was added. Lateral motion at zero input = an external motion writer; correct-magnitude
-     *  motion at nonzero input off the look direction = a wrong walk basis. Read on either side's
-     *  own JVM (a client e2e reads the CLIENT's values via the bot). */
-    public static volatile float lastInStrafe = 0f;
-    public static volatile float lastInForward = 0f;
-    public static volatile double lastMotionShipX = 0.0;
-    public static volatile double lastMotionShipY = 0.0;
-    public static volatile double lastMotionShipZ = 0.0;
-    /** The HELD carry of the most recent capture install on this side (world frame, per tick) — the
-     *  value the next tick subtracts to recover the ship-relative motion. Paired with
-     *  {@code lastMotionShip*} it separates the two ways a no-input body can still be moving: a
-     *  ship-relative motion the resolver is carrying (motion nonzero) from a held carry that no
-     *  longer matches what the deck is doing (carry stale against {@code lastGuardCarry}). */
-    public static volatile double lastCarryX = 0.0;
-    public static volatile double lastCarryY = 0.0;
-    public static volatile double lastCarryZ = 0.0;
     /** The LIVE body position in the ship frame, as of the last guard pass on this side — the body's
      *  own coordinates mapped through its anchor ship's transform, one snapshot. Distinct from the
      *  capture's committed point ({@code shipFrameX/Y/Z} on the probe), which only changes when the
@@ -612,9 +589,6 @@ public final class ShipFrameTravel {
         state.carryX = carryX;
         state.carryY = carryY;
         state.carryZ = carryZ;
-        lastCarryX = carryX;
-        lastCarryY = carryY;
-        lastCarryZ = carryZ;
         state.installEpoch = CAPTURE_EPOCH.incrementAndGet();
         state.commitWorldTime = entity == null || entity.world == null
                 ? -1L : entity.world.getTotalWorldTime();
@@ -1642,13 +1616,33 @@ public final class ShipFrameTravel {
      */
     private static void noteTickHistory(char path, double heldX, double heldY, double heldZ,
                                         double carryX, double carryY, double carryZ,
-                                        boolean onDeck) {
+                                        boolean onDeck, int obstacleCount) {
         // A SEAM, and nothing else. Production used to format a line here and append it to a
         // JVM-global ring, which is why no reader could tell one body's tick from another's:
         // this method has no entity. The test mixin injects at this HEAD, where every value the
         // line carried is already a parameter, and attributes the record to the body whose
         // travel call is on this thread. Kept as a call rather than deleted because these three
         // call sites are the only places that know the committed point, the carry and the path.
+    }
+
+    /**
+     * Seam: the walk inputs an ABOARD tick received, and the ship-frame motion it received them
+     * with — sampled before the input is added to that motion.
+     *
+     * <p>The sideways-drag discriminator. A constant lateral ship-frame motion at ZERO input names
+     * an external motion writer; a correct-magnitude motion at NONZERO input pointing off the look
+     * direction names a wrong walk basis. Nothing else in the tick separates those two readings.</p>
+     *
+     * <p>A SEAM, and nothing else. These five numbers used to be five statics, written here and
+     * read from another JVM through a probe — which meant the reader got whatever body had been
+     * resolved last, on a side it had not chosen, with no way to say which tick it belonged to.
+     * Only this path computes them; the two flying paths work in the world frame and never had a
+     * ship-frame motion to write, so the statics they left standing were the previous aboard tick's.
+     * The trace line below is production's own voice at a throttled cadence and stays.</p>
+     */
+    private static void noteWalkInputs(EntityLivingBase entity, float strafe, float forward,
+                                       float deckYaw, double motionShipX, double motionShipY,
+                                       double motionShipZ) {
     }
 
     /**
@@ -1735,17 +1729,7 @@ public final class ShipFrameTravel {
         // Walking input, in the deck plane. The entity's yaw is a WORLD yaw; the direction he is
         // actually facing along the deck is his world look mapped into the ship frame.
         float deckYaw = deckYawDeg(entity, shipId);
-        // The sideways-drag discriminator: record what came INTO this tick (the walk inputs, the
-        // deck yaw the walk basis uses, and the ship-frame motion BEFORE the input is added). A
-        // constant lateral ship-frame motion at ZERO input names an external motion writer; a
-        // correct-magnitude motion at NONZERO input pointing off the look direction names a wrong
-        // walk basis. Statics so a client e2e reads them on the CLIENT JVM; the trace line
-        // self-records a live playtest (test-gated, throttled).
-        lastInStrafe = strafe;
-        lastInForward = forward;
-        lastMotionShipX = motion[0];
-        lastMotionShipY = motion[1];
-        lastMotionShipZ = motion[2];
+        noteWalkInputs(entity, strafe, forward, deckYaw, motion[0], motion[1], motion[2]);
         if (zmaster587.advancedRocketry.command.test.TestProbeCommandRegistration.isTestMode()
                 && (walkTraceTicks++ % 10) == 0
                 && (strafe != 0f || forward != 0f
@@ -1810,8 +1794,6 @@ public final class ShipFrameTravel {
             return false; // the ship went away mid-tick; leave the entity untouched for vanilla
         }
         resolvedTicks++;
-        lastObstacleCount = sweep.obstacleCount;
-        lastOnDeck = onDeck;
         // Re-add the deck's carry (freshly sampled for THIS commit; the value is remembered so the
         // next tick can subtract exactly it): entity.motion is a WORLD velocity, and the ship-frame
         // value above was ship-RELATIVE.
@@ -1862,7 +1844,8 @@ public final class ShipFrameTravel {
         if (VSIntegration.suppressShipDrag(entity)) {
             dragSuppressions++;
         }
-        noteTickHistory('a', sweep.x, sweep.y, sweep.z, carryX, carryY, carryZ, onDeck);
+        noteTickHistory('a', sweep.x, sweep.y, sweep.z, carryX, carryY, carryZ, onDeck,
+                sweep.obstacleCount);
         return true;
     }
 
@@ -1953,8 +1936,6 @@ public final class ShipFrameTravel {
             return false;
         }
         resolvedTicks++;
-        lastObstacleCount = sweep.obstacleCount;
-        lastOnDeck = onDeck;
         double[] shipVel = VSIntegration.shipVelocityAtPointFor(
                 world, shipId, worldPos[0], worldPos[1], worldPos[2]);
         double carryX = shipVel == null ? 0.0 : shipVel[0] * TICK_SECONDS;
@@ -1978,7 +1959,8 @@ public final class ShipFrameTravel {
         if (VSIntegration.suppressShipDrag(entity)) {
             dragSuppressions++;
         }
-        noteTickHistory('f', sweep.x, sweep.y, sweep.z, carryX, carryY, carryZ, onDeck);
+        noteTickHistory('f', sweep.x, sweep.y, sweep.z, carryX, carryY, carryZ, onDeck,
+                sweep.obstacleCount);
         return true;
     }
 
@@ -2094,8 +2076,6 @@ public final class ShipFrameTravel {
         worldMotion[2] *= friction;
 
         resolvedTicks++;
-        lastObstacleCount = obstacles.size();
-        lastOnDeck = grounded;
         double[] shipVel = VSIntegration.shipVelocityAtPointFor(
                 world, shipId, worldPos[0], worldPos[1], worldPos[2]);
         double carryX = shipVel == null ? 0.0 : shipVel[0] * TICK_SECONDS;
@@ -2137,7 +2117,8 @@ public final class ShipFrameTravel {
         if (VSIntegration.suppressShipDrag(entity)) {
             dragSuppressions++;
         }
-        noteTickHistory('h', sub[0], sub[1], sub[2], carryX, carryY, carryZ, grounded);
+        noteTickHistory('h', sub[0], sub[1], sub[2], carryX, carryY, carryZ, grounded,
+                obstacles.size());
         return true;
     }
 
@@ -2392,8 +2373,10 @@ public final class ShipFrameTravel {
                     + " frameMoved=(" + fmx + "," + fmy + "," + fmz + ")"
                     + " entityMoved=(" + emx + "," + emy + "," + emz + ")"
                     + " allowed=" + allowed + " carrySeen=" + carrySeen
-                    + " motionShip=(" + lastMotionShipX + "," + lastMotionShipY + ","
-                    + lastMotionShipZ + ") in=" + lastInStrafe + "/" + lastInForward
+                    // No motionShip/in columns: this method never computes them — they were the
+                    // last ABOARD tick's, on whichever body was resolved last, pasted into a drop
+                    // that may belong to a different body entirely. The per-tick walk record
+                    // carries both, stamped and attributed.
                     + " dragSuppressions=" + dragSuppressions
                     + " vsAdded=" + lastDropVsAdded);
             return null;

@@ -954,16 +954,18 @@ public class VSCrewRelogPersistenceE2ETest extends AbstractSharedVsClientE2ETest
      */
     private String mover() throws Exception {
         String st = exec("artest vs shipframe-stats");
-        // No `resolved`/`declined` columns: both were lifetime, JVM-global counters, so on a side
-        // that has resolved anything at all they are non-zero regardless of this body, and a
-        // reader comparing two samples was reading every body at once.
+        // The SERVER's most recent resolved tick, as its own record. Everything this used to read
+        // out of the probe reply one field at a time — the walk inputs, the ship-frame motion, the
+        // carry — is on that record's line, and it arrives NAMING the body and the tick it belongs
+        // to. The probe could offer neither: it published whatever the last resolution on the server
+        // had left in a static, so on a world with a second body aboard anything the loop below
+        // compared across two samples could be two different subjects.
+        String srvTick = Events.lastRecord(events().since(0, "ship_frame_tick"));
         return "SRV[worldMoves=" + readLong(st, "worldMoveApplies")
-                + " in=" + readString2(st, "lastInStrafe") + "/" + readString2(st, "lastInForward")
-                + " mShip=(" + readString2(st, "lastMotionShipX") + ","
-                + readString2(st, "lastMotionShipY") + "," + readString2(st, "lastMotionShipZ") + ")"
-                + " carry=(" + readString2(st, "lastCarryX") + "," + readString2(st, "lastCarryY")
-                + "," + readString2(st, "lastCarryZ") + ")"
-                + " guardCarry=" + readString2(st, "lastGuardCarry") + "]"
+                + " guardCarry=" + readString2(st, "lastGuardCarry")
+                + " tick=" + (srvTick == null
+                        ? "(the server has resolved no tick at all)" : Events.text(srvTick, "line"))
+                + "]"
                 // The client side is deliberately THIN here — every field costs a round trip, and
                 // the round trips stretch the very timeline this trace is sampling. The client's
                 // own per-tick record is read once, at the end (clientTickHistory).

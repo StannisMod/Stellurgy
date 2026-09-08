@@ -73,12 +73,6 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
     private static final Pattern TICKS_SINCE_TOUCHED =
             Pattern.compile("\"ticksSinceTouchedShip\":(-?[0-9]+)");
 
-    /** The two terms the hull-stand arm sums into the body's vertical velocity: the ship's own
-     *  velocity at the body's point, and what is left of the body's after drag and clipping. */
-    private static final Pattern CARRY_Y = Pattern.compile("\"lastCarryY\":(-?[0-9.E\\-]+)");
-    private static final Pattern MOTION_SHIP_Y =
-            Pattern.compile("\"lastMotionShipY\":(-?[0-9.E\\-]+)");
-
     private static final Pattern POS_X = Pattern.compile("\"posX\":(-?[0-9.E\\-]+)");
     private static final Pattern POS_Y = Pattern.compile("\"posY\":(-?[0-9.E\\-]+)");
     private static final Pattern POS_Z = Pattern.compile("\"posZ\":(-?[0-9.E\\-]+)");
@@ -977,6 +971,12 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
                 "arTest$armPoseTrace", 160);
         double maxFrameStep = 0.0, maxCarry = -1.0, maxRate = 0.0, travelled = 0.0;
         double maxDeclaredCarry = 0.0, maxClientCarryY = 0.0;
+        // A ROLLING mark over the client's own per-tick records. The carry below used to be read off
+        // a static, so it showed only the tick each fifth-iteration sample happened to land on; and a
+        // single window over the whole drive would outrun the log's 256-deep per-type ring, since
+        // this loop runs for hundreds of client ticks. Advancing the mark past the last record read
+        // covers EVERY resolved tick at the same one round trip per sample.
+        long carryMark = clientEvents().mark();
         double yPrev = shipY0;
         StringBuilder samples = new StringBuilder();
         // The drive's thrust duty-cycle is cadence-bound: the pilot input decays between re-sends,
@@ -1021,8 +1021,12 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
                 // read 1.0667 against 0.7474 on a run where the extrema were within a tenth.
                 double declaredCarry = Math.abs(readDouble(shipInfo(), VEL_Y)) * SECONDS_PER_TICK;
                 maxDeclaredCarry = Math.max(maxDeclaredCarry, declaredCarry);
-                maxClientCarryY = Math.max(maxClientCarryY,
-                        Math.abs(clientDouble(SHIP_FRAME_TRAVEL, "lastCarryY")));
+                for (String tick : Events.records(
+                        clientEvents().since(carryMark, "ship_frame_tick"))) {
+                    maxClientCarryY = Math.max(maxClientCarryY,
+                            Math.abs(Events.number(tick, "carryY")));
+                    carryMark = (long) Events.number(tick, "seq") + 1L;
+                }
                 maxFrameStep = Math.max(maxFrameStep, step);
                 maxCarry = Math.max(maxCarry, carry);
                 if (i % 20 == 19) {
@@ -1410,6 +1414,8 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
         // had happened.
         Events client = clientEvents();
         long encounterMark = client.mark();
+        // The SERVER's per-tick resolution log, read as a rolling window inside the fine trace below.
+        long srvTickMark = events().mark();
         int aboardSeen = 0, hullSeen = 0, samples = 0;
         double settledY = Double.NaN;
         StringBuilder enc = new StringBuilder();
@@ -1437,7 +1443,15 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
                 // The two terms the hull-stand arm adds together — `worldMotion[1] + carryY`. The
                 // carry is the ship's own velocity at the body's point; the rest is the body's. One
                 // of them is the +30, and this is what says which without a new instrument.
-                String frame = exec("artest vs shipframe-stats");
+                //
+                // The SERVER's own last resolved tick, as a record: a rolling window rather than a
+                // probe reply, so the two numbers below come from one tick of one named body instead
+                // of from whatever the server's resolver last left in a pair of statics.
+                String srvTick = null;
+                for (String tick : Events.records(events().since(srvTickMark, "ship_frame_tick"))) {
+                    srvTick = tick;
+                    srvTickMark = (long) Events.number(tick, "seq") + 1L;
+                }
                 fine.append(String.format(java.util.Locale.ROOT,
                         // `touched` is the field that decides the branch, not just a label: the
                         // packet path rebuilds a player's world position from the ship-subspace
@@ -1452,7 +1466,8 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
                         readDouble(psd, ADDED_X), readDouble(psd, ADDED_Y), readDouble(psd, ADDED_Z),
                         readDouble(psd, TICKS_SINCE_TOUCHED),
                         psd.contains("\"lastTouchedShip\":null") ? "null" : "a-ship",
-                        readDouble(frame, CARRY_Y), readDouble(frame, MOTION_SHIP_Y)));
+                        srvTick == null ? Double.NaN : Events.number(srvTick, "carryY"),
+                        srvTick == null ? Double.NaN : Events.number(srvTick, "motionShipY")));
             }
             if (i % 5 == 0) {
                 // The hull's own angular rate, sampled beside the body rather than assumed: this
