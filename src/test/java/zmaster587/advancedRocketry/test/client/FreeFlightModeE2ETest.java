@@ -16,6 +16,7 @@ import zmaster587.advancedRocketry.test.Events;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotEquals;
+import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 
 /**
@@ -642,7 +643,7 @@ public class FreeFlightModeE2ETest extends AbstractSharedClientE2ETest {
     /** The TEST-side holder of what the pilot's own view last did — the HUD line, the
      *  camera-vs-craft divergence and the client attitude readback. Production keeps none of
      *  them: they were written on the render thread purely for these reads. */
-    private static final String ROCKET_EVENT_HANDLER =
+    private static final String FLIGHT_CAMERA =
             "zmaster587.advancedRocketry.test.trace.FlightCameraState";
 
     @Test
@@ -654,8 +655,7 @@ public class FreeFlightModeE2ETest extends AbstractSharedClientE2ETest {
         int rocketId = mountFreshFreeFlightRocket();
         bot().waitTicks(10); // let the overlay render a few frames
 
-        String hud = bot().readStaticField(ROCKET_EVENT_HANDLER, "lastFreeFlightHud")
-                .get("value").getAsString();
+        String hud = freeFlightHud();
 
         assertTrue("FF HUD must show the active-mode indicator: " + hud,
                 hud.contains("FREE FLIGHT"));
@@ -679,8 +679,7 @@ public class FreeFlightModeE2ETest extends AbstractSharedClientE2ETest {
         exec("artest rocket set-flight-mode " + rocketId + " FREE_FLIGHT");
         bot().waitTicks(10);
 
-        String hud = bot().readStaticField(ROCKET_EVENT_HANDLER, "lastFreeFlightHud")
-                .get("value").getAsString();
+        String hud = freeFlightHud();
 
         assertTrue("pre-launch FF HUD must show the mode title: " + hud,
                 hud.contains("Free Flight Mode"));
@@ -989,8 +988,7 @@ public class FreeFlightModeE2ETest extends AbstractSharedClientE2ETest {
 
         // The pilot SEES the engine state: the rendered HUD reports ENGINES ON
         // (or the transient "Engines started" flash right after the start).
-        String hud = bot().readStaticField(ROCKET_EVENT_HANDLER, "lastFreeFlightHud")
-                .get("value").getAsString();
+        String hud = freeFlightHud();
         assertTrue("HUD must show the engines running: " + hud,
                 hud.contains("ENGINES ON") || hud.contains("Engines started"));
 
@@ -1007,8 +1005,7 @@ public class FreeFlightModeE2ETest extends AbstractSharedClientE2ETest {
         bot().waitTicks(25);             // well under the 60-tick requirement
 
         // Mid-hold the pilot must SEE the start progress.
-        String hudMidHold = bot().readStaticField(ROCKET_EVENT_HANDLER, "lastFreeFlightHud")
-                .get("value").getAsString();
+        String hudMidHold = freeFlightHud();
         assertTrue("HUD must show engine-start progress while holding: " + hudMidHold,
                 hudMidHold.contains("STARTING ENGINES"));
 
@@ -1030,8 +1027,7 @@ public class FreeFlightModeE2ETest extends AbstractSharedClientE2ETest {
                         + " shut off again. Writes to any rocket's in-flight flag since the hold"
                         + " began: " + flightWrites,
                 matchingRecords(flightWrites, "\"e\":" + rocketId + ",") == 0);
-        String hud = bot().readStaticField(ROCKET_EVENT_HANDLER, "lastFreeFlightHud")
-                .get("value").getAsString();
+        String hud = freeFlightHud();
         assertTrue("HUD must be back to ENGINES OFF after the cancel: " + hud,
                 hud.contains("ENGINES OFF"));
 
@@ -1065,8 +1061,7 @@ public class FreeFlightModeE2ETest extends AbstractSharedClientE2ETest {
         }
 
         bot().waitTicks(5);
-        String hud = bot().readStaticField(ROCKET_EVENT_HANDLER, "lastFreeFlightHud")
-                .get("value").getAsString();
+        String hud = freeFlightHud();
         assertTrue("HUD must reflect the shutdown (stopped flash or ENGINES OFF): " + hud,
                 hud.contains("Engines stopped") || hud.contains("ENGINES OFF"));
 
@@ -1089,8 +1084,7 @@ public class FreeFlightModeE2ETest extends AbstractSharedClientE2ETest {
         // Event-gated: hold R until the rendered HUD VRT setpoint has ramped and the actual velocity is
         // chasing it (load-scaled ceiling + early exit; a fixed 25-tick budget can under-ramp under load).
         ClientPoll.Result<String> climbHud = ClientPoll.until(bot()::waitTicks,
-                () -> bot().readStaticField(ROCKET_EVENT_HANDLER, "lastFreeFlightHud")
-                        .get("value").getAsString(),
+                this::freeFlightHud,
                 h -> {
                     Matcher mm = HUD_VRT.matcher(h);
                     return mm.find() && Double.parseDouble(mm.group(1)) > 0.4
@@ -1115,8 +1109,7 @@ public class FreeFlightModeE2ETest extends AbstractSharedClientE2ETest {
         // Event-gated: hold cut until the rendered VRT setpoint has returned to zero (load-scaled ceiling
         // + early exit; a fixed 15-tick budget can leave the setpoint mid-decay under load).
         ClientPoll.Result<String> cutHud = ClientPoll.until(bot()::waitTicks,
-                () -> bot().readStaticField(ROCKET_EVENT_HANDLER, "lastFreeFlightHud")
-                        .get("value").getAsString(),
+                this::freeFlightHud,
                 h -> {
                     Matcher mm = HUD_VRT.matcher(h);
                     return mm.find() && Math.abs(Double.parseDouble(mm.group(1))) <= 0.01;
@@ -1142,15 +1135,13 @@ public class FreeFlightModeE2ETest extends AbstractSharedClientE2ETest {
 
         exec("artest rocket set-flight-assist " + rocketId + " off");
         bot().waitTicks(5);
-        String hud = bot().readStaticField(ROCKET_EVENT_HANDLER, "lastFreeFlightHud")
-                .get("value").getAsString();
+        String hud = freeFlightHud();
         assertTrue("HUD must label the Newtonian mode when FA is off: " + hud,
                 hud.contains("Newtonian"));
 
         exec("artest rocket set-flight-assist " + rocketId + " on");
         bot().waitTicks(5);
-        String hudOn = bot().readStaticField(ROCKET_EVENT_HANDLER, "lastFreeFlightHud")
-                .get("value").getAsString();
+        String hudOn = freeFlightHud();
         assertFalse("HUD must drop the Newtonian label when FA is back on: " + hudOn,
                 hudOn.contains("Newtonian"));
 
@@ -1177,6 +1168,12 @@ public class FreeFlightModeE2ETest extends AbstractSharedClientE2ETest {
         // between them — max craft turn is 6°/tick). Then, with all input
         // released and corrections bled out, the lock must be exact.
         int rocketId = mountFreshFreeFlightRocket();
+
+        // The extrema below belong to THIS leg. Opened here rather than inherited: the accumulator
+        // is one per client JVM, and a scenario that reads it without opening is reading whatever
+        // the previous one left — which is the whole reason these numbers moved off a static field
+        // and behind a window.
+        long camMark = openFlightCameraWindow();
 
         bot().holdKey(Keyboard.KEY_R);   // stay airborne
         bot().holdKey(Keyboard.KEY_D);   // yaw the nose
@@ -1208,9 +1205,9 @@ public class FreeFlightModeE2ETest extends AbstractSharedClientE2ETest {
         // a slow tick or two of craft turn (6°/tick) ≈ up to ~18°, consumed by
         // the very next pin. What this pins is "no runaway": v1's broken look
         // detached by tens of degrees and STAYED detached.
-        double maxErr = Double.parseDouble(bot()
-                .readStaticField(ROCKET_EVENT_HANDLER, "maxCameraLockErrorDeg")
-                .get("value").getAsString());
+        // One record carries both readings of this leg, taken from the same frames.
+        String camWindow = closeFlightCameraWindow(camMark, "the manoeuvring leg");
+        double maxErr = Events.number(camWindow, "maxErrDeg");
         assertTrue("camera must never detach from the craft on any rendered frame "
                 + "(worst frame divergence " + maxErr + "°)", maxErr < 20.0);
 
@@ -1218,9 +1215,7 @@ public class FreeFlightModeE2ETest extends AbstractSharedClientE2ETest {
         // reading camera and craft in two calls can straddle a tracker
         // quantisation-bleed tick and see a phantom 1-2° gap): the CURRENT
         // frame divergence must be sub-degree once input stops.
-        double restErr = Double.parseDouble(bot()
-                .readStaticField(ROCKET_EVENT_HANDLER, "lastCameraLockErrorDeg")
-                .get("value").getAsString());
+        double restErr = Events.number(camWindow, "lastErrDeg");
         assertTrue("at rest the camera lock must be exact on the rendered frame "
                 + "(current divergence " + restErr + "°)", restErr < 1.0);
         JsonObject cam = bot().reportState();
@@ -1255,6 +1250,7 @@ public class FreeFlightModeE2ETest extends AbstractSharedClientE2ETest {
         // server nose pitch must integrate the swipes through the real
         // key->packet path.
         int rocketId = mountFreshFreeFlightRocket();
+        long camMark = openFlightCameraWindow(); // this drag's own extrema, not the last leg's
         bot().holdKey(Keyboard.KEY_R); // keep airborne so tickFreeFlight integrates pitch
 
         // A real mouse drag: repeated +6° swipes (above MAX_PITCH_RATE=4, so
@@ -1270,9 +1266,8 @@ public class FreeFlightModeE2ETest extends AbstractSharedClientE2ETest {
             nosePitch = parseDouble(exec("artest rocket info " + rocketId),
                     FF_PITCH, "freeFlightPitch");
         }
-        double maxErr = Double.parseDouble(bot()
-                .readStaticField(ROCKET_EVENT_HANDLER, "maxCameraLockErrorDeg")
-                .get("value").getAsString());
+        double maxErr = Events.number(
+                closeFlightCameraWindow(camMark, "the mouse-drag leg"), "maxErrDeg");
         bot().releaseKey(Keyboard.KEY_R);
 
         assertTrue("mouse drag must pitch the nose down through the real "
@@ -1292,6 +1287,7 @@ public class FreeFlightModeE2ETest extends AbstractSharedClientE2ETest {
         // the heading (client yaw) stays put. Supersedes the pre-deflection
         // "fast mouse swipe yaws the craft" test, whose premise no longer holds.
         int rocketId = mountFreshFreeFlightRocket();
+        openFlightCameraWindow(); // this bank's own numbers, not the previous scenario's
         bot().holdKey(Keyboard.KEY_R);   // climb clear of the pad while banking
         bot().waitTicks(5);
 
@@ -1306,7 +1302,7 @@ public class FreeFlightModeE2ETest extends AbstractSharedClientE2ETest {
         // Event-gated: let the held bank integrate until the client camera roll has grown (load-scaled
         // ceiling + early exit; a fixed 15-tick budget can under-integrate under concurrent-fork load).
         ClientPoll.Result<Double> bank = ClientPoll.until(bot()::waitTicks,
-                () -> readClientDouble("ffClientCamRoll"),
+                () -> flightCameraNow("camRoll"),
                 r -> Math.abs(r) > 15.0, 3, 5);
         double camRoll = bank.value;
         double yaw1 = bot().reportRidingEntity().get("rotationYaw").getAsDouble();
@@ -1333,6 +1329,7 @@ public class FreeFlightModeE2ETest extends AbstractSharedClientE2ETest {
     @Test
     public void sustainedPitchLoopsPastVerticalWithNoClamp() throws Exception {
         int rocketId = mountFreshFreeFlightRocket();
+        openFlightCameraWindow(); // this loop's own min-forward-Z witness
         // Climb well clear of the pad, then CUT to a gravity-cancelled hover: with
         // a zero velocity setpoint FA holds position regardless of attitude, so the
         // craft can loop in place without body-up thrust flying it into the ground.
@@ -1353,7 +1350,7 @@ public class FreeFlightModeE2ETest extends AbstractSharedClientE2ETest {
         // accumulator until it has gone negative (load-scaled ceiling + early exit) instead of a fixed
         // 60-tick budget that can under-integrate under concurrent-fork load.
         ClientPoll.Result<Double> loop = ClientPoll.until(bot()::waitTicks,
-                () -> readClientDouble("ffClientMinForwardZ"),
+                () -> flightCameraNow("minForwardZ"),
                 z -> z < -0.5, 5, 12);
         double minFwdZ = loop.value;
         // `riding`, not `!= null`: reportRidingEntity throws on a failed reply and otherwise
@@ -1371,10 +1368,56 @@ public class FreeFlightModeE2ETest extends AbstractSharedClientE2ETest {
         exec("artest player dismount");
     }
 
-    /** Read a client-side double static from {@link #ROCKET_EVENT_HANDLER}. */
-    private double readClientDouble(String field) throws Exception {
-        return Double.parseDouble(
-                bot().readStaticField(ROCKET_EVENT_HANDLER, field).get("value").getAsString());
+    /**
+     * The Free Flight HUD as the client last DREW it, or {@code ""} when it has never drawn one.
+     *
+     * <p>The recorder writes only when the line CHANGES, so the latest record is the current text —
+     * asking "since 0" is therefore the right window, not a leak: an unchanged HUD is one whose last
+     * change is still what the pilot sees. What the record adds over the field it replaces is a
+     * sequence number, so a reader can tell an old line from one that appeared during its own leg.</p>
+     */
+    private String freeFlightHud() throws Exception {
+        String rec = Events.lastRecord(clientEvents().since(0, "ff_hud"));
+        return rec == null ? "" : Events.text(rec, "text");
+    }
+
+    /**
+     * One field of the flight-camera window AS IT STANDS, for a value that is still integrating —
+     * the bank growing under a held mouse, the nose coming over the top.
+     *
+     * <p>A peek writes the window's numbers as a record without ending it, so a poll reads a record
+     * like everything else rather than reaching for a field. Two round trips per poll instead of
+     * one, which is what the reading costs when it must be attributable.</p>
+     */
+    private double flightCameraNow(String field) throws Exception {
+        long mark = clientEvents().mark();
+        bot().invokeStaticInt(FLIGHT_CAMERA, "peek");
+        String rec = Events.lastRecord(clientEvents().since(mark, "flight_camera_window"));
+        assertNotNull("no flight_camera_window record after a peek — the client did not answer, so "
+                + field + " has no reading", rec);
+        return Events.number(rec, field);
+    }
+
+    /** Start a flight-camera window on the client and take the mark its summary will land after. */
+    private long openFlightCameraWindow() throws Exception {
+        long mark = clientEvents().mark();
+        bot().invokeStaticInt(FLIGHT_CAMERA, "open");
+        return mark;
+    }
+
+    /**
+     * Close the window and return its summary record, failing by name when none arrived.
+     *
+     * <p>A missing record means the close never ran or the log never received it — which is a
+     * finding, not a zero divergence. The frame count inside separates a leg the renderer never
+     * sampled from one it sampled and found still.</p>
+     */
+    private String closeFlightCameraWindow(long mark, String what) throws Exception {
+        bot().invokeStaticInt(FLIGHT_CAMERA, "close");
+        String rec = Events.lastRecord(clientEvents().since(mark, "flight_camera_window"));
+        assertNotNull("no flight_camera_window record for " + what
+                + " — the window did not close, so there is no camera reading for it", rec);
+        return rec;
     }
 
     /**
