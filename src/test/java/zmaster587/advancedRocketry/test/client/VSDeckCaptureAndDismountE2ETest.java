@@ -455,8 +455,8 @@ public class VSDeckCaptureAndDismountE2ETest extends AbstractSharedVsClientE2ETe
         boolean inAABB = flyInCap.contains("\"aboardByContainment\":true");
         boolean onShipBlock = flyInCap.contains("\"supportedByShip\":true");
         boolean tracked = flyInCap.contains("\"alreadyTracked\":true");
-        boolean flyInCam = Boolean.parseBoolean(clientString(SHIP_CAMERA, "active"));
-        double flyInRoll = clientDouble(SHIP_CAMERA, "roll");
+        boolean flyInCam = Boolean.parseBoolean(deckCameraText("active"));
+        double flyInRoll = deckCamera("roll");
         System.out.println("[deckcap] cam fly-in active=" + flyInCam + " roll=" + flyInRoll + " inAABB="
                 + inAABB + " onShipBlock=" + onShipBlock + " tracked=" + tracked + " cap=" + flyInCap);
         assertTrue("setup: the fly-in point must be inside the ship's AABB, off any deck block, with the "
@@ -499,7 +499,7 @@ public class VSDeckCaptureAndDismountE2ETest extends AbstractSharedVsClientE2ETe
         exec("tp @a " + readDouble(lvl, POS_X) + " " + (readDouble(lvl, POS_Y) + 5) + " "
                 + readDouble(lvl, POS_Z) + " 0 0");
         ClientPoll.Result<Boolean> camPoll = ClientPoll.<Boolean>until(bot()::waitTicks,
-                () -> Boolean.parseBoolean(clientString(SHIP_CAMERA, "active")),
+                () -> Boolean.parseBoolean(deckCameraText("active")),
                 active -> active.booleanValue(), 5, 40);
         String engaged = clientEvents.since(onDeckMark, "deck_camera_changed");
         boolean onDeckCam = camPoll.value;
@@ -908,14 +908,14 @@ public class VSDeckCaptureAndDismountE2ETest extends AbstractSharedVsClientE2ETe
         // over by mouse also demonstrated that the controls work on the way, but it arrived at a
         // variable attitude and SKIPPED whenever it undershot, which bought that side observation at
         // the price of the scenario running at all.
-        for (int i = 0; i < 40 && clientDouble(DECK_CAMERA_STATE, "shipUpY") > -0.9; i++) {
+        for (int i = 0; i < 40 && deckCamera("shipUpY") > -0.9; i++) {
             exec("artest vs point-by-id 0 " + scenarioShipId + " 0 1 0 0");
             bot().waitTicks(4);
         }
         exec("artest vs force-clear-by-id 0 " + scenarioShipId);
         centreFlightCursor();
         bot().waitTicks(40); // let it settle inverted, omega -> ~0
-        double shipUpY = clientDouble(DECK_CAMERA_STATE, "shipUpY");
+        double shipUpY = deckCamera("shipUpY");
         // An ASSERT: the attitude is commanded, so not being there is news, not a dice roll. And it
         // is read from the CLIENT's own camera state, which is what the pilot below is looking at.
         assertTrue("arrangement: the craft must be inverted ON THE CLIENT before its controls are"
@@ -1024,8 +1024,8 @@ public class VSDeckCaptureAndDismountE2ETest extends AbstractSharedVsClientE2ETe
         StringBuilder trace = new StringBuilder();
         for (int i = 0; i < n; i++) {
             bot().waitTicks(4);
-            boolean active = Boolean.parseBoolean(clientString(SHIP_CAMERA, "active"));
-            double roll = clientDouble(SHIP_CAMERA, "roll");
+            boolean active = Boolean.parseBoolean(deckCameraText("active"));
+            double roll = deckCamera("roll");
             // Counted as "captured" only while the capture is anchored on THIS scenario's ship: the
             // claim below is that one capture held for the whole window, and a body handed from this
             // hull to a neighbour's and back keeps `verdict:true` at every sample.

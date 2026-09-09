@@ -271,8 +271,7 @@ public class VSCrewInteriorBoardingE2ETest extends AbstractSharedVsClientE2ETest
         Events.assertInstrumentRan(modesAfter, "deck_mode_events",
                 "the reclaimed body was committed ABOARD rather than onto the outer hull");
         String releasesAfter = clientEvents.since(reclaimMark, "deck_released");
-        boolean shipCam = Boolean.parseBoolean(
-                bot().readStaticField(SHIP_CAMERA, "active").get("value").getAsString());
+        boolean shipCam = Boolean.parseBoolean(deckCameraText("active"));
         double settledY = bot().reportState().get("playerY").getAsDouble();
         String capEnd = exec("artest vs deck-capture");
         System.out.println("[interior] shipCamActive=" + shipCam + " preY=" + preY + " settledY="
@@ -444,8 +443,7 @@ public class VSCrewInteriorBoardingE2ETest extends AbstractSharedVsClientE2ETest
         String modesAfter = awaitCommittedMode(clientEvents, releaseMark, "aboard");
         Events.assertInstrumentRan(modesAfter, "deck_mode_events",
                 "the claimed cavity body was committed ABOARD rather than onto the outer hull");
-        boolean shipCam = Boolean.parseBoolean(
-                bot().readStaticField(SHIP_CAMERA, "active").get("value").getAsString());
+        boolean shipCam = Boolean.parseBoolean(deckCameraText("active"));
         double settledY = bot().reportState().get("playerY").getAsDouble();
         double[] subEnd = parseSub(censusField("subPos"));
         String capEnd = exec("artest vs deck-capture");
@@ -569,8 +567,7 @@ public class VSCrewInteriorBoardingE2ETest extends AbstractSharedVsClientE2ETest
                         && !cap.contains("\"hullStand\":true")
                         && scenarioShipId.equals(ShipIdentity.anchorOf(cap));
                 if (tracked) trackedSeen++;
-                if (Boolean.parseBoolean(bot().readStaticField(SHIP_CAMERA, "active")
-                        .get("value").getAsString())) {
+                if (Boolean.parseBoolean(deckCameraText("active"))) {
                     camSeen++;
                 }
                 subEnd = parseSub(censusField("subPos"));

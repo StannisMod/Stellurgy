@@ -9,6 +9,7 @@ import zmaster587.advancedRocketry.test.Events;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 import static zmaster587.advancedRocketry.test.AdvancedRocketryTestConstants.SHIP_CAPTURE_RADIUS_BLOCKS;
 
@@ -520,6 +521,43 @@ public abstract class AbstractSharedVsClientE2ETest extends AbstractSharedClient
         int targetDim = Integer.parseInt(target.group(1));
         assertTrue("a settled transit must name the target cell's slot dimension: " + tick, targetDim >= 0);
         return targetDim;
+    }
+
+    /** The client-side deck-camera window: poses, the eye, and the two per-client counters. */
+    private static final String DECK_CAMERA_WINDOW =
+            "zmaster587.advancedRocketry.test.trace.DeckCameraState";
+
+    /**
+     * One field of the deck camera AS IT STANDS, taken as a record.
+     *
+     * <p>A peek writes the window's numbers and this reads the one that just landed, so every
+     * camera reading a scenario makes is attributable to a moment rather than to whenever the
+     * socket happened to ask. Replaces reflective reads of a static field: those could not say when
+     * the value was true, and for the two counters they could not say whose ticks they counted.</p>
+     */
+    protected final double deckCamera(String field) throws Exception {
+        return Events.number(deckCameraRecord(field), field);
+    }
+
+    /** The same reading for a non-numeric field ({@code active} comes back as "true"/"false"). */
+    protected final String deckCameraText(String field) throws Exception {
+        return Events.text(deckCameraRecord(field), field);
+    }
+
+    /** Zero this scenario's deck-camera counters. Without it, {@code cameraHookCalls} and
+     *  {@code posLookApplies} are the whole client's, and a threshold on either is satisfied by
+     *  whatever ran before — the shared-harness trap this window exists to close. */
+    protected final void openDeckCameraWindow() throws Exception {
+        bot().invokeStaticInt(DECK_CAMERA_WINDOW, "open");
+    }
+
+    private String deckCameraRecord(String field) throws Exception {
+        long mark = clientEvents().mark();
+        bot().invokeStaticInt(DECK_CAMERA_WINDOW, "peek");
+        String rec = Events.lastRecord(clientEvents().since(mark, "deck_camera"));
+        assertNotNull("no deck_camera record after a peek — the client did not answer, so " + field
+                + " has no reading", rec);
+        return rec;
     }
 
 }

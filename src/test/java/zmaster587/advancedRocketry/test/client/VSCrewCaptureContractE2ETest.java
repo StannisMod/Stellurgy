@@ -148,7 +148,7 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
         // this jump rather than everything the client has drawn since it booted.
         long jumpStepMark = clientEvents().mark();
         bot().invokeStaticInt(FRAME_STEP_WINDOW, "open");
-        long posLook0 = (long) clientDouble(DECK_CAMERA, "posLookApplies");
+        long posLook0 = (long) deckCamera("posLookApplies");
         long jumpMark = client.mark();
         int samples = 0;
         double apex = deckY;
@@ -181,7 +181,7 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
         bot().invokeStaticInt(FRAME_STEP_WINDOW, "close");
         String jumpSteps = Events.lastRecord(
                 clientEvents().since(jumpStepMark, "frame_step_window"));
-        long posLookD = (long) clientDouble(DECK_CAMERA, "posLookApplies") - posLook0;
+        long posLookD = (long) deckCamera("posLookApplies") - posLook0;
         System.out.println("[crewcap] jump smoothness "
                 + (jumpSteps == null ? "(the render seam sampled no aboard frame)" : jumpSteps)
                 + " posLookApplies=" + posLookD
@@ -779,8 +779,13 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
 
         // Drive it, so the pose has something to say: a still craft's every tick looks alike whether
         // a pose arrived or not, which is exactly the case this cannot learn anything from.
-        double loadFactor = com.github.stannismod.forge.testing.TestTimeouts.factor();
-        for (int i = 0; i < (int) (60 * loadFactor); i++) {
+        // SIXTY TICKS, unscaled. This is how long the stick is held, not how long the test is
+        // willing to wait: `waitTicks(1)` advances one game tick whatever the wall clock is doing,
+        // so sixty of them produce sixty per-tick records on an idle box and on a loaded one alike.
+        // It used to be multiplied by the harness load factor, which drove the craft three times as
+        // far at eight forks — a different experiment on every machine, for no gain: the only
+        // assertion below is that the trace has per-tick content.
+        for (int i = 0; i < 60; i++) {
             exec("artest vs seat-input-by-id 0 " + scenarioShipId + " 0 1 0 0 0 0");
             bot().waitTicks(1);
         }
@@ -1335,7 +1340,7 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
         }
         // (c) His camera stays his own - the deck-levelled view never engages for a hull stander.
         boolean camActive = Boolean.parseBoolean(
-                clientString(DECK_CAMERA, "active"));
+                deckCameraText("active"));
         assertTrue("the deck camera must never engage for a hull-top stander (the outer hull keeps "
                 + "world-frame semantics)", !camActive);
         // (d) And the capture machinery must not churn against him — the client's own external-move
@@ -1680,8 +1685,7 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
         long lookMarkLevel = clientEvents().mark();
         exec("tp @a ~ ~ ~ 0 90"); // look straight down at the deck underfoot
         bot().waitTicks(10);
-        String level = clientString(
-                DECK_CAMERA, "mouseOverBlock");
+        String level = crosshairBlock("looking down at the level deck");
         // The body's own SUBSPACE feet, read in the same breath. The header's claim is about the
         // deck UNDER HIS FEET, and nothing in this scenario pins him to one deck spot across a
         // 150-tick roll - so the invariant is the block's offset FROM HIM, not its absolute
@@ -1699,7 +1703,7 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
         String lookLevel = deckLookIn(lookMarkLevel, "while looking down at the level deck");
         double deckPitchLevel = Events.number(lookLevel, "deckPitchDeg");
         double worldPitchLevel = bot().reportState().get("playerPitch").getAsDouble();
-        long echoesLevel = (long) clientDouble(DECK_CAMERA, "posLookApplies");
+        long echoesLevel = (long) deckCamera("posLookApplies");
         String deckActiveLevel = Events.text(lookLevel, "active");
         assertTrue("looking straight down on the LEVEL deck must resolve a block (got '" + level
                 + "')", !level.isEmpty());
@@ -1731,13 +1735,12 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
         long lookMarkRolled = clientEvents().mark();
         exec("tp @a ~ ~ ~ 0 90");
         bot().waitTicks(10);
-        String rolled = clientString(
-                DECK_CAMERA, "mouseOverBlock");
+        String rolled = crosshairBlock("looking down on the rolled deck");
         String feetRolled = readSubPos(exec("artest vs subspace-census"));
         String lookRolled = deckLookIn(lookMarkRolled, "while looking down on the rolled deck");
         double deckPitchRolled = Events.number(lookRolled, "deckPitchDeg");
         double worldPitchRolled = bot().reportState().get("playerPitch").getAsDouble();
-        long echoesRolled = (long) clientDouble(DECK_CAMERA, "posLookApplies");
+        long echoesRolled = (long) deckCamera("posLookApplies");
         String deckActiveRolled = Events.text(lookRolled, "active");
         String cam = DECK_CAMERA;
         double rx = clientDouble(cam, "rayEyeX");
@@ -2178,8 +2181,8 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
         // stored camera attitude (a transform applied after this record, a shader, a third-person
         // offset). A red here is real; a green is "the two numbers agree", not "the picture is
         // right".
-        double camYaw = clientDouble(DECK_CAMERA, "yaw");
-        double camPitch = clientDouble(DECK_CAMERA, "pitch");
+        double camYaw = deckCamera("yaw");
+        double camPitch = deckCamera("pitch");
         double playerYaw = bot().reportState().get("playerYaw").getAsDouble();
         double playerPitch = bot().reportState().get("playerPitch").getAsDouble();
         double yawDiff = Math.abs(wrap180(camYaw - playerYaw));
@@ -2303,6 +2306,20 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
      * every client tick, engaged or not, so an empty window means the tick path did not run — which
      * is a finding, not a zero.</p>
      */
+    /**
+     * The block the crosshair last resolved, as the client recorded it.
+     *
+     * <p>The recorder writes when the block CHANGES, so the latest record is what the crosshair is
+     * on now; an empty string is a real answer (the ray hit nothing) and arrives as a record like
+     * any other. Replaces a reflective read whose value could not say when it became true.</p>
+     */
+    private String crosshairBlock(String what) throws Exception {
+        String rec = Events.lastRecord(clientEvents().since(0, "deck_crosshair"));
+        assertNotNull("no deck_crosshair record while " + what + " — the crosshair recorder never "
+                + "ran on this client, so there is nothing to read", rec);
+        return Events.text(rec, "block");
+    }
+
     private String deckLookIn(long mark, String what) throws Exception {
         String rec = Events.lastRecord(clientEvents().since(mark, "deck_look"));
         assertNotNull("no deck_look record " + what + " — the client's deck-look tick never ran in "

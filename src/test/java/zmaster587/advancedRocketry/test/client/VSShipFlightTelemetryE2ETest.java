@@ -78,10 +78,17 @@ public class VSShipFlightTelemetryE2ETest extends AbstractSharedVsClientE2ETest 
     /** The TEST-side holder of the client's own last camera setup — production keeps no such field. */
     private static final String DECK_CAMERA_STATE =
             "zmaster587.advancedRocketry.test.trace.DeckCameraState";
-    /** The TEST-side holder of the last drawn Free Flight HUD line — production no longer
-     *  stores it; the watcher composes it from the same snapshot the HUD renders. */
-    private static final String ROCKET_EVENTS =
-            "zmaster587.advancedRocketry.test.trace.FlightCameraState";
+    /**
+     * The Free Flight HUD as the client last DREW it, or {@code ""} when it has drawn none.
+     *
+     * <p>The recorder writes only when the line CHANGES, so the latest record is the current text.
+     * Replaces a reflective read of a field that is now private — a read the compiler cannot check,
+     * which is why it had to be found by scanning the channel rather than by building.</p>
+     */
+    private String freeFlightHud() throws Exception {
+        String rec = Events.lastRecord(clientEvents().since(0, "ff_hud"));
+        return rec == null ? "" : Events.text(rec, "text");
+    }
     /** The client's own flight-cursor dead-zone: inside it the ship is commanded no rotation at all. */
     private static final double CURSOR_DEADZONE = 0.05;
 
@@ -95,7 +102,7 @@ public class VSShipFlightTelemetryE2ETest extends AbstractSharedVsClientE2ETest 
 
         // --- The HUD panel. Climb, then read the text the CLIENT actually rendered. Before the ship's
         // velocity reached the client the panel had no speed line at all, and no bars.
-        String hudBefore = clientString(ROCKET_EVENTS, "lastFreeFlightHud");
+        String hudBefore = freeFlightHud();
         assertTrue("a seated tier-2 pilot must get a Free Flight HUD at all: '" + hudBefore + "'",
                 !hudBefore.isEmpty());
 
@@ -128,7 +135,7 @@ public class VSShipFlightTelemetryE2ETest extends AbstractSharedVsClientE2ETest 
         // Event-gated: poll the rendered HUD until it shows a non-zero speed (load-scaled ceiling +
         // early exit; a fixed 30-iteration budget can miss a slow client under concurrent-fork load).
         ClientPoll.Result<String> hud = ClientPoll.until(bot()::waitTicks,
-                () -> clientString(ROCKET_EVENTS, "lastFreeFlightHud"),
+                this::freeFlightHud,
                 VSShipFlightTelemetryE2ETest::hasNonZeroSpeedReadout, 2, 30);
         String hudMoving = hud.value;
         assertTrue("the tier-2 flight HUD must show the ship's real speed while it is moving; "
@@ -233,7 +240,7 @@ public class VSShipFlightTelemetryE2ETest extends AbstractSharedVsClientE2ETest 
         buildAndBoardShip(bx, by, bz);
         bot().waitTicks(20);
 
-        double rollUpright = clientDouble(SHIP_CAMERA, "roll");
+        double rollUpright = deckCamera("roll");
         assertTrue("an upright ship must leave the camera level (roll=" + rollUpright + ")",
                 Math.abs(rollUpright) < 15.0);
 
@@ -243,8 +250,8 @@ public class VSShipFlightTelemetryE2ETest extends AbstractSharedVsClientE2ETest 
 
         // Where exactly a rigid body coasts to is not the contract; that it went over, and that the
         // camera went with it, is. Read the pair adjacently so they describe the same instant.
-        double shipUpY = clientDouble(DECK_CAMERA_STATE, "shipUpY");
-        double rollInverted = clientDouble(SHIP_CAMERA, "roll");
+        double shipUpY = deckCamera("shipUpY");
+        double rollInverted = deckCamera("roll");
         assertTrue("the ship must actually have rolled past vertical (its up points " + shipUpY + ")",
                 shipUpY < -0.3);
 
@@ -261,7 +268,7 @@ public class VSShipFlightTelemetryE2ETest extends AbstractSharedVsClientE2ETest 
         // 2. The eye follows the SHIP's up, not the world's. This is the "camera sinks into the floor"
         //    bug: with the eye pinned to world +Y, an inverted pilot's eye is a metre and a half INSIDE
         //    the deck above his seat. The contract: the eye is displaced along the ship's up.
-        double eyeY = clientDouble(SHIP_CAMERA, "eyeY");
+        double eyeY = deckCamera("eyeY");
         double playerY = bot().reportState().get("playerY").getAsDouble();
         System.out.println("[tier2] shipUpY=" + shipUpY + " playerY=" + playerY + " eyeY=" + eyeY);
         assertTrue("the eye must be offset along the SHIP's up, not the world's: shipUpY=" + shipUpY
@@ -680,7 +687,7 @@ public class VSShipFlightTelemetryE2ETest extends AbstractSharedVsClientE2ETest 
         for (int i = 0; i < 240; i++) {
             // Stop asking for roll BEFORE the ship is over: it is a rigid body turning at more than a
             // radian a second, and it coasts on into the brake. Aiming early lands it near inverted.
-            if (clientDouble(DECK_CAMERA_STATE, "shipUpY") < -0.45) {
+            if (deckCamera("shipUpY") < -0.45) {
                 break;
             }
             if (Math.abs(cursorXSince(cursorMark, "while rolling the ship over, pass " + i)) < 0.9) {

@@ -161,12 +161,12 @@ public abstract class MixinRocketEventHandlerCameraFrame {
             remap = false)
     private void arTest$cameraReleased(EntityViewRenderEvent.CameraSetup event, CallbackInfo ci) {
         TestTrace.instrumentHere(INSTRUMENT);
-        boolean wasActive = DeckCameraState.active;
+        boolean wasActive = DeckCameraState.isActive();
         DeckCameraState.noteDisengaged();
         if (wasActive) {
             TestTrace.recordHere("deck_camera_changed", "\"active\":false"
-                    + ",\"roll\":" + TestTrace.fmt(DeckCameraState.roll)
-                    + ",\"upY\":" + TestTrace.fmt(DeckCameraState.shipUpY)
+                    + ",\"roll\":" + TestTrace.fmt(DeckCameraState.roll())
+                    + ",\"upY\":" + TestTrace.fmt(DeckCameraState.shipUpY())
                     + ",\"caller\":\"" + TestTrace.json(TestTrace.callerTrail()) + "\"");
         }
     }
@@ -211,13 +211,13 @@ public abstract class MixinRocketEventHandlerCameraFrame {
     private static void arTest$engaged(EntityViewRenderEvent.CameraSetup event, double[] shipUp,
                                        String branch) {
         TestTrace.instrumentHere(INSTRUMENT);
-        boolean wasActive = DeckCameraState.active;
+        boolean wasActive = DeckCameraState.isActive();
         double roll = event.getRoll();
         DeckCameraState.noteEngaged(event.getYaw() - 180.0F, event.getPitch(), roll, shipUp);
         if (!wasActive) {
             TestTrace.recordHere("deck_camera_changed", "\"active\":true"
                     + ",\"roll\":" + TestTrace.fmt(roll)
-                    + ",\"upY\":" + TestTrace.fmt(DeckCameraState.shipUpY)
+                    + ",\"upY\":" + TestTrace.fmt(DeckCameraState.shipUpY())
                     + ",\"caller\":\"" + branch + "\"");
         }
     }

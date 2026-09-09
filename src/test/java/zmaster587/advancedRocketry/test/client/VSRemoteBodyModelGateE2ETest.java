@@ -388,7 +388,7 @@ public class VSRemoteBodyModelGateE2ETest extends AbstractSharedVsClientE2ETest 
         // already advanced. The live field is the only one read while a window is open; everything
         // the failure branch needs comes off the closing record.
         final long windowMark = clientEvents().mark();
-        final long framesBefore = (long) clientDouble(DECK_CAMERA, "cameraHookCalls");
+        final long framesBefore = (long) deckCamera("cameraHookCalls");
         bot().invokeStaticInt(REMOTE_MODEL_WINDOW, "open");
         ClientPoll.Result<Long> r = ClientPoll.until(bot()::waitTicks,
                 () -> (long) clientDouble(REMOTE_MODEL_WINDOW, "samples"),
@@ -396,11 +396,11 @@ public class VSRemoteBodyModelGateE2ETest extends AbstractSharedVsClientE2ETest 
         if (r.satisfied) {
             return new Sampling(true, "");
         }
-        long frames = (long) clientDouble(DECK_CAMERA, "cameraHookCalls") - framesBefore;
+        long frames = (long) deckCamera("cameraHookCalls") - framesBefore;
         bot().invokeStaticInt(REMOTE_MODEL_WINDOW, "close");
         String window = Events.lastRecord(clientEvents().since(windowMark, "remote_model_window"));
         long models = window == null ? -1L : (long) Events.number(window, "calls");
-        long loaded = (long) clientDouble(DECK_CAMERA, "loadedEntities");
+        long loaded = (long) deckCamera("loadedEntities");
         // The subject may have LEFT between the arrival gate and here, and "it is gone" and "it is
         // drawn wrong" are different bugs with the same zero. Read BOTH sides at the end of the
         // window so the verdict below is a claim about rendering only when the body is still there
