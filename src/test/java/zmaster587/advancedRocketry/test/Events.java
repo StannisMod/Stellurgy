@@ -2,8 +2,11 @@ package zmaster587.advancedRocketry.test;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
+
+import com.google.gson.JsonArray;
+import com.google.gson.JsonElement;
+import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
 
 import static org.junit.Assert.assertTrue;
 
@@ -21,22 +24,73 @@ import static org.junit.Assert.assertTrue;
  * deadlock by construction — the tick that must advance for the event to happen is the tick being
  * blocked.</p>
  *
- * <p><b>The reply is read by regex, so the envelope's keys are reserved.</b> {@code count},
- * {@code seq}, {@code type}, {@code tick}, {@code side}, {@code recording}, {@code mixins} are taken
- * as the FIRST occurrence in the reply; both probes emit every envelope key before the records, so a
- * record's payload can never be mistaken for the envelope — provided no payload reuses one of those
- * names. Measured 2026-09-05: a {@code crew_captured} payload carrying {@code "count":0} for an empty
- * crew, in a reply whose envelope count then trailed the records, made {@link #await} report a link
- * as "never recorded" while it sat in the very list the message printed. A recorder names its fields
- * for what they are ({@code crew}), never for the envelope's vocabulary.</p>
+ * <p><b>The reply is PARSED, not scraped.</b> Both probes answer one well-formed JSON object — an
+ * envelope of {@code recording} / {@code mixins} / {@code instruments} / {@code droppedByType} /
+ * {@code count} around an {@code events} array — and every accessor here reads that structure. This
+ * file scraped it with regexes until 2026-09-09, and three defects it cost were one root:</p>
+ *
+ * <ul>
+ *   <li>a record's payload could be mistaken for the ENVELOPE. *Measured 2026-09-05: a
+ *       {@code crew_captured} payload carrying {@code "count":0} for an empty crew made
+ *       {@link #await} report a link as "never recorded" while it sat in the very list the failure
+ *       message printed.*</li>
+ *   <li>{@link #countRecords} counted the envelope prefix, and that prefix carries the
+ *       {@code instruments} array — so a needle naming an observation point counted a record that did
+ *       not exist.</li>
+ *   <li>a field written as a NUMBER read back as {@code null} through a quoted-string matcher, which
+ *       is indistinguishable from ABSENT. *Measured 2026-09-08: that emptied half of an identity key,
+ *       so two records naming different things compared EQUAL, and two green runs hid it.*</li>
+ * </ul>
+ *
+ * <p>None of the three is representable now. The one rule that survives the parse, because it is
+ * about the RECORDER and not the reader: a payload names its fields for what they are ({@code crew}),
+ * never for the envelope's vocabulary — a record carrying its own {@code count} is legal here and
+ * still confusing to read.</p>
  */
 public final class Events {
 
-    private static final Pattern SEQ = Pattern.compile("\"seq\":(-?\\d+)");
-    private static final Pattern COUNT = Pattern.compile("\"count\":(-?\\d+)");
-    private static final Pattern TYPE = Pattern.compile("\"type\":\"([^\"]*)\"");
-    private static final Pattern RECORDING = Pattern.compile("\"recording\":(true|false)");
-    private static final Pattern MIXINS = Pattern.compile("\"mixins\":(true|false)");
+    /**
+     * One probe reply as the object it is.
+     *
+     * <p>Fails loudly on anything that is not a JSON object, naming the reply: a probe that answered
+     * an error string, a truncated line, or a verb that does not exist would otherwise read as an
+     * EMPTY LOG, which is the one thing an instrument must never be able to fake.</p>
+     */
+    private static JsonObject envelope(String reply) {
+        JsonElement parsed;
+        try {
+            parsed = new JsonParser().parse(String.valueOf(reply));
+        } catch (RuntimeException notJson) {
+            throw new AssertionError("an events reply must be one JSON object; this could not be"
+                    + " parsed (" + notJson + "): " + reply);
+        }
+        assertTrue("an events reply must be one JSON object, not " + parsed + ": " + reply,
+                parsed != null && parsed.isJsonObject());
+        return parsed.getAsJsonObject();
+    }
+
+    /** The {@code events} array of a {@code since} reply, or an empty array when it carries none. */
+    private static JsonArray eventsOf(String sinceReply) {
+        JsonObject env = envelope(sinceReply);
+        return env.has("events") && env.get("events").isJsonArray()
+                ? env.getAsJsonArray("events") : new JsonArray();
+    }
+
+    /** One record as the object it is. Records are handed to callers as their own JSON TEXT — so that
+     *  a failure message can print one — and a reader holding one re-enters here to read a field. */
+    private static JsonObject recordOf(String record) {
+        return envelope(record);
+    }
+
+    /** A primitive field as text, whatever type it was written as: a caller asking for a field cannot
+     *  be wrong about its SHAPE, which is the recorder's business. Null when absent or null. */
+    private static String primitive(JsonObject obj, String field) {
+        if (obj == null || !obj.has(field) || obj.get(field).isJsonNull()) {
+            return null;
+        }
+        JsonElement value = obj.get(field);
+        return value.isJsonPrimitive() ? value.getAsString() : value.toString();
+    }
 
     /** How a caller runs one probe command and gets the raw reply. */
     public interface Probe {
@@ -65,12 +119,11 @@ public final class Events {
      */
     public long mark() throws Exception {
         String reply = probe.exec("artest events mark");
-        Matcher rec = RECORDING.matcher(reply);
+        JsonObject env = envelope(reply);
         assertTrue("the event recorder is not subscribed, so an empty log below would mean nothing:"
-                + " " + reply, rec.find() && "true".equals(rec.group(1)));
-        Matcher m = SEQ.matcher(reply);
-        assertTrue("events mark must report a sequence: " + reply, m.find());
-        return Long.parseLong(m.group(1));
+                + " " + reply, env.has("recording") && env.get("recording").getAsBoolean());
+        assertTrue("events mark must report a sequence: " + reply, env.has("seq"));
+        return env.get("seq").getAsLong();
     }
 
     /**
@@ -85,10 +138,10 @@ public final class Events {
     public long markInstrumented() throws Exception {
         long seq = mark();
         String reply = probe.exec("artest events mark");
-        Matcher m = MIXINS.matcher(reply);
+        JsonObject env = envelope(reply);
         assertTrue("the test-only mixins were never installed, so an absent position write below"
                 + " would mean nothing (is -Dfml.coreMods.load set on this JVM?): " + reply,
-                m.find() && "true".equals(m.group(1)));
+                env.has("mixins") && env.get("mixins").getAsBoolean());
         return seq;
     }
 
@@ -102,12 +155,19 @@ public final class Events {
         return probe.exec("artest events since " + mark + " " + type);
     }
 
-    /** How many records in a {@code since} reply carry {@code needle} — a payload fragment such as
-     *  {@code "accepted":false}. Records are split on the envelope's own {@code {"seq":} prefix. */
+    /**
+     * How many RECORDS in a {@code since} reply carry {@code needle} — a payload fragment such as
+     * {@code "accepted":false}.
+     *
+     * <p>Matched against each record's own JSON and nothing else. It used to be matched against the
+     * reply split on the {@code seq} prefix, which included the ENVELOPE — and the envelope carries
+     * the {@code instruments} array, so a needle naming an observation point counted a record that
+     * did not exist.</p>
+     */
     public static int countRecords(String sinceReply, String needle) {
         int n = 0;
-        for (String record : String.valueOf(sinceReply).split("\\{\"seq\":")) {
-            if (record.contains(needle)) {
+        for (JsonElement record : eventsOf(sinceReply)) {
+            if (record.toString().contains(needle)) {
                 n++;
             }
         }
@@ -124,10 +184,11 @@ public final class Events {
      */
     public static String fieldLines(String sinceReply, String field) {
         StringBuilder out = new StringBuilder();
-        Matcher m = Pattern.compile("\"" + Pattern.quote(field) + "\":\"([^\"]*)\"")
-                .matcher(String.valueOf(sinceReply));
-        while (m.find()) {
-            out.append(m.group(1)).append(System.lineSeparator());
+        for (JsonElement record : eventsOf(sinceReply)) {
+            String value = primitive(record.getAsJsonObject(), field);
+            if (value != null) {
+                out.append(value).append(System.lineSeparator());
+            }
         }
         return out.toString();
     }
@@ -150,19 +211,8 @@ public final class Events {
      */
     public static List<String> records(String sinceReply) {
         List<String> out = new ArrayList<>();
-        String[] split = String.valueOf(sinceReply).split("\\{\"seq\":");
-        for (int i = 1; i < split.length; i++) { // [0] is the envelope before the first record
-            // The split eats the delimiter, and a record printed into a failure without its own
-            // opening reads as a fragment starting mid-number. Put it back, and drop the separator
-            // the next record left behind (or, on the last one, the reply's own closing).
-            String record = ("{\"seq\":" + split[i]).trim();
-            if (record.endsWith("]}")) {
-                record = record.substring(0, record.length() - 2).trim();
-            }
-            if (record.endsWith(",")) {
-                record = record.substring(0, record.length() - 1);
-            }
-            out.add(record);
+        for (JsonElement record : eventsOf(sinceReply)) {
+            out.add(record.toString());
         }
         return out;
     }
@@ -179,42 +229,49 @@ public final class Events {
      *  absent measurement, which a caller must be able to tell from a measured zero. Matched as a
      *  JSON number, so a value recorded as a quoted string is deliberately not found. */
     public static double number(String record, String field) {
-        Matcher m = Pattern.compile("\"" + Pattern.quote(field) + "\":(-?[0-9][0-9.eE+-]*)")
-                .matcher(String.valueOf(record));
-        return m.find() ? Double.parseDouble(m.group(1)) : Double.NaN;
+        String value = primitive(recordOf(record), field);
+        if (value == null) {
+            return Double.NaN;
+        }
+        try {
+            return Double.parseDouble(value);
+        } catch (NumberFormatException notANumber) {
+            return Double.NaN; // present, but not a measurement; the caller's NaN check covers it
+        }
     }
 
     /** One record's string {@code field}, or {@code null} when this record does not carry it. */
     public static String text(String record, String field) {
-        // Quoted OR bare, and that is not a convenience: a caller asking for a field "as text" gets
-        // the field, whatever the recorder chose to write it as. Matching quotes only made a NUMBER
-        // read back as null — indistinguishable from absent — and on 2026-09-08 that silently emptied
-        // half of an identity key, so two records that named different things compared EQUAL and two
-        // green runs hid it. The reader could not have been wrong about the field; only about its
-        // shape, which is the recorder's business.
-        Matcher m = Pattern.compile("\"" + Pattern.quote(field) + "\":(?:\"([^\"]*)\"|([^,}\\]]+))")
-                .matcher(String.valueOf(record));
-        if (!m.find()) {
-            return null;
-        }
-        return m.group(1) != null ? m.group(1) : m.group(2).trim();
+        // Any primitive, as text. A caller asking for a field cannot be wrong about its SHAPE — that
+        // is the recorder's business — and a matcher that took quoted values only made a NUMBER read
+        // back as null, indistinguishable from absent. On 2026-09-08 that emptied half of an identity
+        // key, so two records naming different things compared EQUAL and two green runs hid it. With
+        // the reply parsed the distinction is structural: a JsonPrimitive knows its own type.
+        return primitive(recordOf(record), field);
     }
 
     /** The string {@code field} of the FIRST record in a {@code since} reply, or {@code null} when no
      *  record carries it — the first thing that happened after the mark, which for a gate that goes
      *  on answering every tick (a refusal, then COOLDOWN, COOLDOWN, …) is the decision itself. */
     public static String firstField(String sinceReply, String field) {
-        Matcher m = Pattern.compile("\"" + field + "\":\"([^\"]*)\"").matcher(String.valueOf(sinceReply));
-        return m.find() ? m.group(1) : null;
+        for (JsonElement record : eventsOf(sinceReply)) {
+            String value = primitive(record.getAsJsonObject(), field);
+            if (value != null) {
+                return value;
+            }
+        }
+        return null;
     }
 
     /** The string {@code field} of the LAST record in a {@code since} reply, or {@code null} when no
      *  record carries it. Records are in order, so the last one is the most recent. */
     public static String lastField(String sinceReply, String field) {
-        Matcher m = Pattern.compile("\"" + field + "\":\"([^\"]*)\"").matcher(String.valueOf(sinceReply));
         String last = null;
-        while (m.find()) {
-            last = m.group(1);
+        for (JsonElement record : eventsOf(sinceReply)) {
+            String value = primitive(record.getAsJsonObject(), field);
+            if (value != null) {
+                last = value;
+            }
         }
         return last;
     }
@@ -239,11 +296,24 @@ public final class Events {
      * @param whatFor  what this test was about to conclude from the log, for the failure message
      */
     public static void assertInstrumentRan(String reply, String name, String whatFor) {
+        // The envelope's `instruments` ARRAY, not the text of the reply. A substring search also
+        // matched the name inside a record's PAYLOAD, so a recorder that merely mentioned an
+        // observation point satisfied the assertion that the point had run.
+        boolean ran = false;
+        JsonObject env = envelope(reply);
+        if (env.has("instruments") && env.get("instruments").isJsonArray()) {
+            for (JsonElement entered : env.getAsJsonArray("instruments")) {
+                if (entered.isJsonPrimitive() && name.equals(entered.getAsString())) {
+                    ran = true;
+                    break;
+                }
+            }
+        }
         assertTrue("the observation point \"" + name + "\" never executed, so the log below cannot"
                 + " support \"" + whatFor + "\" — an empty log here means nobody was looking, not that"
                 + " nothing happened. Check the mixin wove (-PmixinDebug=true, then the preserved"
                 + " client log) and that its method is on a path this scenario reaches. Reply: "
-                + reply, reply != null && reply.contains("\"" + name + "\""));
+                + reply, ran);
     }
 
     /**
@@ -256,8 +326,7 @@ public final class Events {
         String reply = "";
         for (int waited = 0; waited <= tickBudget; waited += 5) {
             reply = probe.exec("artest events since " + mark + " " + type);
-            Matcher m = COUNT.matcher(reply);
-            if (m.find() && Integer.parseInt(m.group(1)) > 0) {
+            if (eventsOf(reply).size() > 0) {
                 return reply;
             }
             step.ticks(5);
@@ -406,9 +475,11 @@ public final class Events {
     /** The recorded types, in order — the compact form a failure leads with. */
     public static List<String> typesOf(String sinceReply) {
         List<String> out = new ArrayList<>();
-        Matcher m = TYPE.matcher(sinceReply);
-        while (m.find()) {
-            out.add(m.group(1));
+        for (JsonElement record : eventsOf(sinceReply)) {
+            String type = primitive(record.getAsJsonObject(), "type");
+            if (type != null) {
+                out.add(type);
+            }
         }
         return out;
     }
