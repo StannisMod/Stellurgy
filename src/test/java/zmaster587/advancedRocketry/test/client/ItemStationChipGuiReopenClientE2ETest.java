@@ -87,10 +87,10 @@ public class ItemStationChipGuiReopenClientE2ETest extends AbstractClientE2ETest
      */
     private String awaitClientRecords(long mark, String type, String needle, int tickBudget)
             throws Exception {
-        String reply = String.valueOf(bot().eventsSince(mark, type));
+        String reply = clientEvents().since(mark, type);
         for (int waited = 0; waited < tickBudget && !reply.contains(needle); waited += 5) {
             bot().waitTicks(5);
-            reply = String.valueOf(bot().eventsSince(mark, type));
+            reply = clientEvents().since(mark, type);
         }
         return reply;
     }

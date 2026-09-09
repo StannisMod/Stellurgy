@@ -175,11 +175,10 @@ public abstract class AbstractSharedVsClientE2ETest extends AbstractSharedClient
      * list, which is the one answer that could mislead.
      */
     protected final JsonObject ridingOnceTheClientHasCaughtUp(int iterations) throws Exception {
-        String mark = exec("artest events mark");
-        boolean usable = mark.contains("\"recording\":true") && mark.contains("\"mixins\":true");
-        java.util.regex.Matcher seqM =
-                java.util.regex.Pattern.compile("\"seq\":(-?\\d+)").matcher(mark);
-        long seq = seqM.find() ? Long.parseLong(seqM.group(1)) : -1L;
+        // The REFUSING mark: it reads both honesty flags and hands back the reason instead of
+        // asserting, because a recorder that is not subscribed is a HARNESS gap and this method's
+        // whole job is to keep such a gap out of the scenario's verdict.
+        Events.MarkOrWhyNot mark = events().markIfInstrumented();
 
         JsonObject mount = bot().reportRidingEntity();
         for (int i = 0; i < iterations && !mount.get("riding").getAsBoolean(); i++) {
@@ -189,10 +188,10 @@ public abstract class AbstractSharedVsClientE2ETest extends AbstractSharedClient
         if (mount.get("riding").getAsBoolean()) {
             return mount;
         }
-        String chain = usable && seq >= 0
-                ? exec("artest events since " + seq + " mount") + " | "
-                        + exec("artest events since " + seq + " dismount")
-                : "NO CHAIN: the position-writer recorder was not usable at the mark (" + mark + ")";
+        String chain = mark.usable()
+                ? events().since(mark.seq, "mount") + " | " + events().since(mark.seq, "dismount")
+                : "NO CHAIN: the position-writer recorder was not usable at the mark ("
+                        + mark.refusal + ")";
         scenario().arrangementFailed("the client never reported the remount within "
                 + (iterations * 2) + " ticks of the crossing. Client says " + mount
                 + "; the SERVER's mount/dismount record across the same window says " + chain

@@ -363,10 +363,10 @@ public class VSMidTransitRelogControlE2ETest extends AbstractSharedVsClientE2ETe
      * first is an answer.</p>
      */
     private String clientPilotAccount(long mark) throws Exception {
-        String gate = String.valueOf(bot().eventsSince(mark, "ship_pilot_gate_decided"));
+        String gate = clientEvents().since(mark, "ship_pilot_gate_decided");
         Events.assertInstrumentRan(gate, "ship_pilot_gate_events",
                 "this client's ship-control gate did, or did not, open while the key was held");
-        String sent = String.valueOf(bot().eventsSince(mark, "pilot_input_sent"));
+        String sent = clientEvents().since(mark, "pilot_input_sent");
         return " client: gateOpen=" + Events.countRecords(gate, "\"open\":true")
                 + " gateClosed=" + Events.countRecords(gate, "\"open\":false")
                 + " onSeatMount=" + Events.countRecords(gate, "\"ridingDummy\":true")

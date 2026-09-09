@@ -198,7 +198,7 @@ private int waitForLoadedShip(int dim) throws Exception {
         int corridorDim = readInt(exec("artest space transit-status"), "hyperDim");
         String seen = "";
         for (int waited = 0; waited <= JUMP_LINK_BUDGET_TICKS; waited += 5) {
-            seen = bot().eventsSince(clientMark, "client_dimension_changed").toString();
+            seen = clientEvents().since(clientMark, "client_dimension_changed");
             if (seen.contains("\"dim\":" + corridorDim + ",")
                     || seen.contains("\"dim\":" + corridorDim + "}")) {
                 return corridorDim;

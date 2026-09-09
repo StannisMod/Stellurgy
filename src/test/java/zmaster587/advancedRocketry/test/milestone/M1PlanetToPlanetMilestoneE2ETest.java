@@ -410,7 +410,7 @@ public class M1PlanetToPlanetMilestoneE2ETest {
         int clientDim = Integer.MIN_VALUE;
         for (int attempt = 0; attempt < budget && !slotDims.contains("," + clientDim + ","); attempt++) {
             bot().waitTicks(5);
-            dimChanges = String.valueOf(bot().eventsSince(entryClientMark, "client_dimension_changed"));
+            dimChanges = clientEvents().since(entryClientMark, "client_dimension_changed");
             Matcher dm = Pattern.compile("\"dim\":(-?\\d+)").matcher(dimChanges);
             while (dm.find()) {
                 clientDim = Integer.parseInt(dm.group(1)); // the LAST change is where he is now
@@ -669,12 +669,10 @@ public class M1PlanetToPlanetMilestoneE2ETest {
         String settled = events.await(jumpMark, "ledger_settled", "a jump the pilot armed and fired"
                 + " must end with the ledger told where the ship now is — the arrival's own commit",
                 2000);
-        for (String record : settled.split("\\{\"seq\":")) {
-            if (record.contains("\"ship\":\"" + shipId + "\"")) {
-                String cell = Events.lastField(record, "cell");
-                if (cell != null && !cell.isEmpty()) {
-                    arrivedCell = cell;
-                }
+        for (String record : Events.recordsWithAll(settled, "\"ship\":\"" + shipId + "\"")) {
+            String cell = Events.text(record, "cell");
+            if (cell != null && !cell.isEmpty()) {
+                arrivedCell = cell;
             }
         }
         String ledgerAfterJump = exec("artest space ledger-get " + shipId);

@@ -297,16 +297,21 @@ public class PlanetBedSleepClientGroupE2ETest extends AbstractSharedClientE2ETes
         // He is teleported INSIDE the wait because chunks stream around where the player IS: waiting
         // before putting him there waits for nothing, and once he is there he falls out of range of
         // the very chunk he is waiting for.
-        JsonObject markReply = bot().eventMark();
-        long chunkMark = markReply.get("seq").getAsLong();
-        scenario().requireArranged("the client event recorder is not running, so an empty log below"
-                        + " would mean nothing: " + markReply,
-                markReply.get("recording").getAsBoolean());
+        // The adapter's mark makes the recorder check itself; it is caught and RE-TYPED here,
+        // because a recorder that is not running is this scenario's ARRANGEMENT failing and must not
+        // read as the contract under test breaking.
+        long chunkMark;
+        try {
+            chunkMark = clientEvents().mark();
+        } catch (AssertionError notArranged) {
+            scenario().arrangementFailed(notArranged.getMessage());
+            return; // unreachable: arrangementFailed always throws
+        }
         String chunkSeen = "";
         for (int attempt = 0; attempt < 60; attempt++) {
             exec("tp " + PLAYER + " 8.5 " + BED_Y + " 7.5");
             bot().waitTicks(5);
-            chunkSeen = bot().eventsSince(chunkMark, "chunk_data_applied").toString();
+            chunkSeen = clientEvents().since(chunkMark, "chunk_data_applied");
             if (chunkSeen.contains("\"cx\":0") && chunkSeen.contains("\"cz\":0")) {
                 break;
             }

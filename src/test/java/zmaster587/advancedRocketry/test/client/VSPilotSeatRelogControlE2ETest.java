@@ -185,7 +185,7 @@ public class VSPilotSeatRelogControlE2ETest extends AbstractSharedVsClientE2ETes
         long flyMark = events.markInstrumented();
         long flyClientMark = clientEvents().mark();
         Climb after = climbWith(Keyboard.KEY_R, clientPlayerY(), budget);
-        String clientSends = String.valueOf(bot().eventsSince(flyClientMark, "pilot_input_sent"));
+        String clientSends = clientEvents().since(flyClientMark, "pilot_input_sent");
         assertTrue("after the relog the CLIENT's own pilot gate must re-open against the restored"
                         + " mount and put input on the wire - a gate that stayed shut is the first"
                         + " way this chain breaks, and it looks exactly like a dead key from the"

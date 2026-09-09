@@ -239,11 +239,11 @@ public class MachineGuiClientGroupE2ETest extends AbstractSharedClientE2ETest {
     private String awaitClientRecords(long mark, String type, String needle, int tickBudget)
             throws Exception {
         String wanted = needle.toLowerCase(Locale.ROOT);
-        String reply = String.valueOf(bot().eventsSince(mark, type));
+        String reply = clientEvents().since(mark, type);
         for (int waited = 0; waited < tickBudget
                 && !reply.toLowerCase(Locale.ROOT).contains(wanted); waited += 5) {
             bot().waitTicks(5);
-            reply = String.valueOf(bot().eventsSince(mark, type));
+            reply = clientEvents().since(mark, type);
         }
         return reply;
     }

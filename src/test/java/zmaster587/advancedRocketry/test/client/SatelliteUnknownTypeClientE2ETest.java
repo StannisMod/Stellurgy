@@ -103,12 +103,14 @@ public class SatelliteUnknownTypeClientE2ETest extends AbstractClientE2ETest {
         // disconnected. The log was proved to be listening twice over — its `recording` flag at the
         // mark, and the mixin-recorded lookup above landing in this very log inside this very
         // window — so an empty result here is the client's answer and not the instrument's.
-        JsonObject disconnects = bot().eventsSince(clientMark, "client_disconnected");
+        String disconnects = clientEvents().since(clientMark, "client_disconnected");
         assertEquals("an unknown satellite type on the wire must NOT disconnect the client after the"
                         + " fix — PacketSatellite.readClient's createFromNBT returns null for the"
                         + " unresolved type and readClient skips it instead of NPEing. The client"
                         + " recorded a disconnection: " + disconnects,
-                0, disconnects.get("count").getAsInt());
+                // The RECORDS, not the envelope's `count`: a reader counts what the log holds, and
+                // the envelope is the transport's own bookkeeping.
+                0, Events.records(disconnects).size());
 
         // And the state the player would see agrees: still in a world, no disconnect screen.
         JsonObject end = bot().reportState();

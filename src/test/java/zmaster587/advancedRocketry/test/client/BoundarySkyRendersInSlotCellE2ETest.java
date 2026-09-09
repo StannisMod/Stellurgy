@@ -786,29 +786,19 @@ public class BoundarySkyRendersInSlotCellE2ETest extends AbstractSharedClientE2E
      * Whether any RECORD in a {@code since} reply carries every one of {@code needles} and, when
      * {@code field} is non-null, an integer {@code field} at or above {@code atLeast}.
      *
-     * <p>Records are split on the envelope's own {@code {"seq":} prefix and the leading chunk — the
-     * envelope — is skipped, so an envelope key ({@code count}, {@code from}, {@code dropped}) can
-     * never be mistaken for a payload one.</p>
+     * <p>The records come from {@link Events#recordsWithAll}, which reads the reply's parsed
+     * {@code events} array — so an envelope key ({@code count}, {@code from}, {@code dropped}) can
+     * never be mistaken for a payload one. This class used to split the reply itself and skip the
+     * leading chunk by hand; six other copies of that loop had no such guard.</p>
      */
     private static boolean anyRecord(String sinceReply, String field, int atLeast,
                                      String... needles) {
-        String[] records = String.valueOf(sinceReply).split("\\{\"seq\":");
-        for (int i = 1; i < records.length; i++) {
-            boolean all = true;
-            for (String needle : needles) {
-                if (!records[i].contains(needle)) {
-                    all = false;
-                    break;
-                }
-            }
-            if (!all) {
-                continue;
-            }
+        for (String record : Events.recordsWithAll(sinceReply, needles)) {
             if (field == null) {
                 return true;
             }
-            Matcher m = Pattern.compile("\"" + field + "\":(-?\\d+)").matcher(records[i]);
-            if (m.find() && Integer.parseInt(m.group(1)) >= atLeast) {
+            double value = Events.number(record, field);
+            if (!Double.isNaN(value) && value >= atLeast) {
                 return true;
             }
         }
@@ -819,21 +809,8 @@ public class BoundarySkyRendersInSlotCellE2ETest extends AbstractSharedClientE2E
      *  none does. Records are in order, and a sky frame is recorded only when what it drew CHANGED,
      *  so the last one is what the client is drawing now. */
     private static String lastRecordWith(String sinceReply, String... needles) {
-        String[] records = String.valueOf(sinceReply).split("\\{\"seq\":");
-        String last = "";
-        for (int i = 1; i < records.length; i++) {
-            boolean all = true;
-            for (String needle : needles) {
-                if (!records[i].contains(needle)) {
-                    all = false;
-                    break;
-                }
-            }
-            if (all) {
-                last = records[i];
-            }
-        }
-        return last;
+        java.util.List<String> matching = Events.recordsWithAll(sinceReply, needles);
+        return matching.isEmpty() ? "" : matching.get(matching.size() - 1);
     }
 
     /** The integer {@code field} of one record, or -1 when it carries none. */

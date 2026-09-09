@@ -691,10 +691,7 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
     private static String framesOfRefusals(String judgedReply) {
         StringBuilder sb = new StringBuilder();
         int n = 0;
-        for (String record : String.valueOf(judgedReply).split("\\{\"seq\":")) {
-            if (!record.contains("\"accepted\":false")) {
-                continue;
-            }
+        for (String record : Events.recordsWithAll(judgedReply, "\"accepted\":false")) {
             double[] from = xyzField(record, "from");
             double[] to = xyzField(record, "to");
             if (from == null || to == null) {
@@ -787,7 +784,7 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
         exec("artest vs seat-input-by-id 0 " + scenarioShipId + " 0 0 0 0 0 0");
         bot().waitTicks(20);
 
-        String trace = String.valueOf(bot().eventsSince(mark, "client_deck_pose_tick"));
+        String trace = clientEvents().since(mark, "client_deck_pose_tick");
         System.out.println("[crewcap] deck-pose per-tick trace ::\n" + trace);
         Events.assertInstrumentRan(trace, "client_deck_pose_tick",
                 "the per-tick pose trace did or did not run");
@@ -1098,7 +1095,7 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
                 + "\n[crewcap] climb releases in the control window :: " + controlReleases
                 + "\n[crewcap] climb releases in the drive window :: " + driveReleases
                 + "\n[crewcap] climb pose trace :: "
-                + bot().eventsSince(poseTraceMark, "client_deck_pose_tick"));
+                + clientEvents().since(poseTraceMark, "client_deck_pose_tick"));
 
         // Instrument-fires guards: the ship really moved, fast enough to matter to the guard, the
         // client really resolved the body, the release recorder was listening, and the control window
@@ -1502,14 +1499,14 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
         }
         // Read once and held, because each is asserted on below as well as printed: a diagnostic read
         // twice can disagree with itself, and the assertion must be about the text the reader sees.
-        String clientVelocity = String.valueOf(bot().eventsSince(clientDropMark, "vel_jump"));
+        String clientVelocity = clientEvents().since(clientDropMark, "vel_jump");
         String clientTransform = String.valueOf(
-                bot().eventsSince(clientDropMark, "ship_transform_motion"));
+                clientEvents().since(clientDropMark, "ship_transform_motion"));
         String clientShipFrame = String.valueOf(
-                bot().eventsSince(clientDropMark, "ship_frame_motion"));
-        String clientSweep = String.valueOf(bot().eventsSince(clientDropMark, "hull_sweep_big"));
+                clientEvents().since(clientDropMark, "ship_frame_motion"));
+        String clientSweep = clientEvents().since(clientDropMark, "hull_sweep_big");
         String clientCarry = String.valueOf(
-                bot().eventsSince(clientDropMark, "ship_velocity_big"));
+                clientEvents().since(clientDropMark, "ship_velocity_big"));
         String releases = client.since(encounterMark, "deck_released");
         String modes = client.since(encounterMark, "deck_mode_committed");
         long churn = Events.countRecords(releases, "\"reason\":\"externalMove");

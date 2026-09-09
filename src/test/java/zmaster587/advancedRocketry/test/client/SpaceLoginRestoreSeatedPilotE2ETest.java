@@ -173,7 +173,7 @@ public class SpaceLoginRestoreSeatedPilotE2ETest extends AbstractSpaceLoginResto
         // recorded deck point as a restore seed and the client decides what to do with it - APPLY,
         // KEEP_PREEXISTING, ALREADY_SEEDED, EXPIRE or WAIT - and which of the five it chose is the
         // difference between "he was put on his deck" and "the hold expired and vanilla had him".
-        String seeds = String.valueOf(bot().eventsSince(CLIENT_SESSION_START, "deck_seed_decided"));
+        String seeds = clientEvents().since(CLIENT_SESSION_START, "deck_seed_decided");
         String observed = "clientDim=" + dim + " riding=" + riding + " state=" + state
                 + "\n  login_restored: " + restored
                 + "\n  client dimension changes: " + joined
@@ -218,7 +218,7 @@ public class SpaceLoginRestoreSeatedPilotE2ETest extends AbstractSpaceLoginResto
                 + shipPose[1] + "," + shipPose[2] + "]"
                 + "\n  login_restored: " + restored
                 + "\n  client seed decisions: "
-                + bot().eventsSince(CLIENT_SESSION_START, "deck_seed_decided");
+                + clientEvents().since(CLIENT_SESSION_START, "deck_seed_decided");
         assertEquals("he must come back at his ship on X: " + observed,
                 shipPose[0], clientX, POSE_EPSILON);
         assertEquals("he must come back at his ship on Y: " + observed,

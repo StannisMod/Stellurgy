@@ -137,7 +137,7 @@ public class ItemSealDetectorPlayerMessagesE2ETest extends AbstractSharedClientE
         String reply = "";
         String wanted = needle.toLowerCase(Locale.ROOT);
         for (int waited = 0; waited <= tickBudget; waited += 5) {
-            reply = String.valueOf(bot().eventsSince(mark, type));
+            reply = clientEvents().since(mark, type);
             if (reply.toLowerCase(Locale.ROOT).contains(wanted)) {
                 return reply;
             }

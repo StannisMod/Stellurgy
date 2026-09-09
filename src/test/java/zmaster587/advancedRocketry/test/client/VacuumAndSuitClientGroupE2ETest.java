@@ -266,7 +266,7 @@ public class VacuumAndSuitClientGroupE2ETest extends AbstractSharedClientE2ETest
             throws Exception {
         double last = Double.NaN;
         for (int waited = 0; waited <= tickBudget; waited += 5) {
-            String reply = String.valueOf(bot().eventsSince(clientMark, "client_health_updated"));
+            String reply = clientEvents().since(clientMark, "client_health_updated");
             Matcher m = CLIENT_HEALTH.matcher(reply);
             boolean below = false;
             while (m.find()) {

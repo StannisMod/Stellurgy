@@ -684,23 +684,22 @@ public abstract class AbstractSharedClientE2ETest {
     private void markThePositionRecorder() {
         plotMark = -1L;
         plotMarkFailure = "";
-        String reply = askServer("artest events mark");
-        java.util.regex.Matcher seq =
-                java.util.regex.Pattern.compile("\"seq\":(-?\\d+)").matcher(reply);
-        java.util.regex.Matcher recording =
-                java.util.regex.Pattern.compile("\"recording\":(true|false)").matcher(reply);
-        java.util.regex.Matcher mixins =
-                java.util.regex.Pattern.compile("\"mixins\":(true|false)").matcher(reply);
-        // BOTH honesty flags, and they fail independently: the bus recorder may be unsubscribed, or
-        // the launch-time coremod may never have queued the test-only mixin that records a position
-        // write. Their silences are identical and only one of them is about this scenario.
-        boolean live = recording.find() && "true".equals(recording.group(1));
-        boolean woven = mixins.find() && "true".equals(mixins.group(1));
-        if (seq.find() && live && woven) {
-            plotMark = Long.parseLong(seq.group(1));
+        // The REFUSING mark: both honesty flags are read there, because they fail independently —
+        // the bus recorder may be unsubscribed, or the launch-time coremod may never have queued the
+        // test-only mixin that records a position write, and their silences are identical. It
+        // refuses rather than asserts because a harness-side gap must not present as this
+        // scenario's failure, which is the whole reason this method existed in longhand.
+        Events.MarkOrWhyNot mark;
+        try {
+            mark = events().markIfInstrumented();
+        } catch (Exception unreachable) {
+            plotMarkFailure = "the event log could not be marked: " + unreachable;
+            return;
+        }
+        if (mark.usable()) {
+            plotMark = mark.seq;
         } else {
-            plotMarkFailure = "position-write recorder unusable at the mark (recording=" + live
-                    + " mixins=" + woven + "): " + reply;
+            plotMarkFailure = "position-write recorder unusable at the mark: " + mark.refusal;
         }
     }
 

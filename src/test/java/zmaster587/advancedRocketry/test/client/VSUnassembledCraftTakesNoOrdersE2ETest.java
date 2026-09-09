@@ -277,7 +277,7 @@ public class VSUnassembledCraftTakesNoOrdersE2ETest extends AbstractSharedVsClie
         // must have been CONSULTED and answered CLOSED while he sat on this seat. Without it, the
         // server's silence below is equally satisfied by a client whose sampler never ran at all —
         // which is the same green on a completely broken build.
-        String gate = String.valueOf(bot().eventsSince(deafClientMark, "ship_pilot_gate_decided"));
+        String gate = clientEvents().since(deafClientMark, "ship_pilot_gate_decided");
         Events.assertInstrumentRan(gate, "ship_pilot_gate_events",
                 "the client's pilot gate REFUSED this craft every tick");
         assertTrue("the client's own pilot gate must have been consulted while he sat on this craft"
@@ -286,7 +286,7 @@ public class VSUnassembledCraftTakesNoOrdersE2ETest extends AbstractSharedVsClie
                 Events.countRecords(gate, "\"open\":false") > 0
                         && gate.contains("\"ridingDummy\":true"));
 
-        String clientSends = String.valueOf(bot().eventsSince(deafClientMark, "pilot_input_sent"));
+        String clientSends = clientEvents().since(deafClientMark, "pilot_input_sent");
         Events.assertInstrumentRan(clientSends, "pilot_input_sent_events",
                 "the client sent NO pilot input for a craft that is not a ship");
         assertTrue("a craft that never became a ship must not be STEERED: the CLIENT put pilot input"

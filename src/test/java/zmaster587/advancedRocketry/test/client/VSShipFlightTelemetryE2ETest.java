@@ -842,12 +842,9 @@ public class VSShipFlightTelemetryE2ETest extends AbstractSharedVsClientE2ETest 
     /** How many records of a {@code since} reply carry EVERY one of {@code needles}. */
     private static int matchingRecords(String sinceReply, String... needles) {
         int n = 0;
-        for (String record : String.valueOf(sinceReply).split("\\{\"seq\":")) {
-            // The split's first chunk is the reply's ENVELOPE, which carries no `"type"` — without
-            // this guard an envelope field could be counted as a record.
-            if (!record.contains("\"type\":")) {
-                continue;
-            }
+        // Events.records is the one definition of "a record": it reads the parsed `events` array, so
+        // the envelope cannot be counted as one and no local guard is needed.
+        for (String record : Events.records(sinceReply)) {
             boolean all = true;
             for (String needle : needles) {
                 if (!record.contains(needle)) {

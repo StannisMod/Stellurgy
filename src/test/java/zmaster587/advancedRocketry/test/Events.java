@@ -69,11 +69,25 @@ public final class Events {
         return parsed.getAsJsonObject();
     }
 
-    /** The {@code events} array of a {@code since} reply, or an empty array when it carries none. */
+    /**
+     * The {@code events} array of a {@code since} reply.
+     *
+     * <p>Both probes always emit the key, so an object WITHOUT it is not a reply at all — it is one
+     * RECORD, handed to a reply-level accessor by mistake. That is said out loud rather than
+     * answered with an empty array: the mistake is invisible otherwise (a record and a reply are
+     * both {@code String}, so the compiler cannot see it) and it returns {@code null} from a field
+     * read, which is indistinguishable from "the field is absent". *Measured 2026-09-09:
+     * {@code firstField(oneRecord, "pos")} silently answered null and the assertion below it failed
+     * saying the record did not name a position — while printing the record, which did.*</p>
+     */
     private static JsonArray eventsOf(String sinceReply) {
         JsonObject env = envelope(sinceReply);
-        return env.has("events") && env.get("events").isJsonArray()
-                ? env.getAsJsonArray("events") : new JsonArray();
+        if (!env.has("events")) {
+            throw new AssertionError("this is one RECORD, not an `events since` reply, and a"
+                    + " reply-level accessor cannot read it — use Events.text / Events.number for a"
+                    + " record's own field: " + sinceReply);
+        }
+        return env.get("events").isJsonArray() ? env.getAsJsonArray("events") : new JsonArray();
     }
 
     /** One record as the object it is. Records are handed to callers as their own JSON TEXT — so that
@@ -215,6 +229,94 @@ public final class Events {
             out.add(record.toString());
         }
         return out;
+    }
+
+    /**
+     * The records carrying EVERY one of {@code needles}, oldest first.
+     *
+     * <p>The verb seven classes had grown a private copy of, each splitting the reply on the
+     * envelope's own prefix. Two of the copies carried a hand-rolled guard against counting the
+     * ENVELOPE as a record — someone had hit that defect and patched around it locally — and one
+     * explained itself with "written locally: Events is not this class's to edit". It is: a reader
+     * of the log belongs in the reader of the log, and six of the seven copies had no guard.</p>
+     *
+     * <p>Several needles rather than one because that is what the copies wanted: a record must carry
+     * this ship AND this verdict, and a whole-reply {@code contains} is satisfied by two different
+     * records, or by one record's two different moments.</p>
+     */
+    public static List<String> recordsWithAll(String sinceReply, String... needles) {
+        List<String> out = new ArrayList<>();
+        for (String record : records(sinceReply)) {
+            boolean all = true;
+            for (String needle : needles) {
+                all &= record.contains(needle);
+            }
+            if (all) {
+                out.add(record);
+            }
+        }
+        return out;
+    }
+
+    /** As above, matched without case — for prose. A chat line's capitalisation belongs to the
+     *  translation, never to the contract, so a test that pinned it would fail on a language file
+     *  edit that broke nothing. */
+    public static List<String> recordsWithAllIgnoringCase(String sinceReply, String... needles) {
+        List<String> out = new ArrayList<>();
+        for (String record : records(sinceReply)) {
+            String lower = record.toLowerCase(java.util.Locale.ROOT);
+            boolean all = true;
+            for (String needle : needles) {
+                all &= lower.contains(needle.toLowerCase(java.util.Locale.ROOT));
+            }
+            if (all) {
+                out.add(record);
+            }
+        }
+        return out;
+    }
+
+    /**
+     * A mark, or the reason there is none — for a reader that must NOT fail its scenario when the
+     * HARNESS is the thing that is broken.
+     *
+     * <p>{@link #mark} and {@link #markInstrumented} assert, which is right where an empty log would
+     * otherwise be read as a finding. But a shared base taking a mark for a DIAGNOSTIC has the
+     * opposite duty: a recorder that is not subscribed is a harness gap, and a harness gap must not
+     * present as this scenario's contract breaking. Two base classes hand-rolled exactly this, each
+     * with its own regexes over the reply and its own sentinel.</p>
+     */
+    public static final class MarkOrWhyNot {
+        /** The sequence, or {@code -1} when the log is not usable. */
+        public final long seq;
+        /** Empty when the mark is usable; otherwise what was wrong, ready to print. */
+        public final String refusal;
+
+        private MarkOrWhyNot(long seq, String refusal) {
+            this.seq = seq;
+            this.refusal = refusal;
+        }
+
+        public boolean usable() {
+            return seq >= 0;
+        }
+    }
+
+    /** A mark that REFUSES rather than throws — see {@link MarkOrWhyNot}. Both honesty flags are
+     *  read, because they fail independently: the bus recorder may be unsubscribed, or the
+     *  launch-time coremod may never have queued the test-only mixins, and the two silences are
+     *  identical from a test. */
+    public MarkOrWhyNot markIfInstrumented() throws Exception {
+        String reply = probe.exec("artest events mark");
+        JsonObject env = envelope(reply);
+        boolean live = env.has("recording") && env.get("recording").getAsBoolean();
+        boolean woven = env.has("mixins") && env.get("mixins").getAsBoolean();
+        if (!live || !woven || !env.has("seq")) {
+            return new MarkOrWhyNot(-1L, (live ? "" : "the event recorder is not subscribed; ")
+                    + (woven ? "" : "the test-only mixins were never installed; ")
+                    + "reply: " + reply);
+        }
+        return new MarkOrWhyNot(env.get("seq").getAsLong(), "");
     }
 
     /** The most recent record in a {@code since} reply, or {@code null} when it holds none — the

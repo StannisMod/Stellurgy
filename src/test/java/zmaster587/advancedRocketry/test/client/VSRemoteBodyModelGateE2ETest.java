@@ -364,7 +364,7 @@ public class VSRemoteBodyModelGateE2ETest extends AbstractSharedVsClientE2ETest 
         String arrivals = "";
         boolean arrived = false;
         for (int waited = 0; waited <= SUBJECT_ARRIVAL_BUDGET_TICKS && !arrived; waited += 10) {
-            arrivals = String.valueOf(bot().eventsSince(subjectSpawnMark, "entity_joined_world"));
+            arrivals = clientEvents().since(subjectSpawnMark, "entity_joined_world");
             arrived = Events.countRecords(arrivals, "\"e\":" + subjectId + ",") > 0;
             if (!arrived) {
                 bot().waitTicks(10);
@@ -780,10 +780,9 @@ public class VSRemoteBodyModelGateE2ETest extends AbstractSharedVsClientE2ETest 
      * log ({@code events()}); this class's arrival link is a client one, so it is read here.
      */
     private long clientMark() throws Exception {
-        JsonObject mark = bot().eventMark();
-        assertTrue("the CLIENT event recorder is not subscribed, so an empty log below would mean"
-                + " nothing: " + mark, mark.get("recording").getAsBoolean());
-        return mark.get("seq").getAsLong();
+        // The adapter's own mark, which makes exactly this check — a private copy of it here was a
+        // second place for the assertion's wording to drift from the shared one.
+        return clientEvents().mark();
     }
 
     private double readDouble(String json, Pattern p) {

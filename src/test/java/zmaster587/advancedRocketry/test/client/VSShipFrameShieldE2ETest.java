@@ -113,7 +113,9 @@ public class VSShipFrameShieldE2ETest extends AbstractSharedVsClientE2ETest {
 
         // The emitter's own subspace position, off the record whose frame we just awaited — so every
         // read below is about THAT emitter and not about whichever one a list happens to lead with.
-        String[] pos = String.valueOf(Events.firstField(frame, "pos")).split(",");
+        // `text`, not `firstField`: `frame` is one RECORD (the one awaited above), and the
+        // reply-level accessors read a reply's `events` array.
+        String[] pos = String.valueOf(Events.text(frame, "pos")).split(",");
         assertTrue("a field_frame_resolved record must name the emitter's block pos: " + frame,
                 pos.length == 3);
         int spX = Integer.parseInt(pos[0]), spY = Integer.parseInt(pos[1]), spZ = Integer.parseInt(pos[2]);
@@ -214,19 +216,16 @@ public class VSShipFrameShieldE2ETest extends AbstractSharedVsClientE2ETest {
      * {@link Events#countRecords} does — needed here because the fact this class waits for is a
      * CONJUNCTION within one record ({@code shipFramed} and {@code ready} of the same resolution),
      * and a whole-reply {@code contains} would be satisfied by two different emitters, or by one
-     * emitter's two different moments. Written locally: {@link Events} is not this class's to edit.
+     * emitter's two different moments.
+     *
+     * <p>It WAS written locally, under "{@link Events} is not this class's to edit" — and that
+     * belief produced seven copies of this loop across the corpus, six of them without the guard
+     * that keeps the reply's envelope from being counted as a record. A reader of the log belongs in
+     * the reader of the log.</p>
      */
     private static String recordWithAll(String sinceReply, String... needles) {
-        for (String record : String.valueOf(sinceReply).split("\\{\"seq\":")) {
-            boolean all = true;
-            for (String needle : needles) {
-                all &= record.contains(needle);
-            }
-            if (all) {
-                return record;
-            }
-        }
-        return null;
+        java.util.List<String> matching = Events.recordsWithAll(sinceReply, needles);
+        return matching.isEmpty() ? null : matching.get(0);
     }
 
     private int emitterCount(String json) {

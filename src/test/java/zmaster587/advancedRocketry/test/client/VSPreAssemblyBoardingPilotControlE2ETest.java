@@ -104,8 +104,6 @@ public class VSPreAssemblyBoardingPilotControlE2ETest extends AbstractSharedVsCl
      */
     private String shipUuid;
     private static final Pattern DUMMY_ID = Pattern.compile("\"dummyId\":(-?\\d+)");
-    /** A record's own sequence in an {@code events since} reply; the envelope carries no {@code seq}. */
-    private static final Pattern RECORD_SEQ = Pattern.compile("\"seq\":(-?\\d+)");
     private static final Pattern SEAT_XYZ = Pattern.compile(
             "\"seatX\":(-?\\d+),\"seatY\":(-?\\d+),\"seatZ\":(-?\\d+)");
 
@@ -569,8 +567,8 @@ public class VSPreAssemblyBoardingPilotControlE2ETest extends AbstractSharedVsCl
     private String deliveryDiagnostics(Events events, long serverMark, long clientMark) {
         String client;
         try {
-            client = "gate=" + bot().eventsSince(clientMark, "ship_pilot_gate_decided")
-                    + " sent=" + bot().eventsSince(clientMark, "pilot_input_sent");
+            client = "gate=" + clientEvents().since(clientMark, "ship_pilot_gate_decided")
+                    + " sent=" + clientEvents().since(clientMark, "pilot_input_sent");
         } catch (Exception e) {
             client = "unreadable(" + e + ")";
         }
@@ -782,15 +780,19 @@ public class VSPreAssemblyBoardingPilotControlE2ETest extends AbstractSharedVsCl
         return off < 0 || lastSeq(mounts) > off;
     }
 
-    /** The {@code seq} of the LAST record in a {@code since} reply, or -1 when it carries none. The
-     *  envelope has no {@code seq} of its own, so every match here is a record's. */
+    /** The {@code seq} of the LAST record in a {@code since} reply, or -1 when it carries none.
+     *
+     *  <p>Asked of the parsed record rather than of the reply's text. The regex this replaces was
+     *  defended with "the envelope has no {@code seq} of its own" — true of a {@code since} reply
+     *  and false of a {@code mark} one, which is the kind of claim that holds until someone passes
+     *  the other reply in. */
     private static long lastSeq(String sinceReply) {
-        Matcher m = RECORD_SEQ.matcher(String.valueOf(sinceReply));
-        long last = -1L;
-        while (m.find()) {
-            last = Long.parseLong(m.group(1));
+        String last = Events.lastRecord(sinceReply);
+        if (last == null) {
+            return -1L;
         }
-        return last;
+        double seq = Events.number(last, "seq");
+        return Double.isNaN(seq) ? -1L : (long) seq;
     }
 
     /**

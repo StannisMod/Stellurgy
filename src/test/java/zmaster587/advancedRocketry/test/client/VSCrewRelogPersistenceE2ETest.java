@@ -190,7 +190,7 @@ public class VSCrewRelogPersistenceE2ETest extends AbstractSharedVsClientE2ETest
                 + "\n  releases in the roll: " + rollReleases
                 + "\n" + mover();
         System.out.println("[roll-hold]" + observed
-                + "\n[roll-hold] pose trace :: " + bot().eventsSince(poseTraceMark, "client_deck_pose_tick"));
+                + "\n[roll-hold] pose trace :: " + clientEvents().since(poseTraceMark, "client_deck_pose_tick"));
 
         scenario().requireArranged("the ship must actually have rotated, or nothing was driven (upY="
                 + upY + ")" + observed, upY < -0.9);
@@ -1188,7 +1188,7 @@ public class VSCrewRelogPersistenceE2ETest extends AbstractSharedVsClientE2ETest
 
     /** Every verdict the client took on a pending deck seed since {@code mark}, in order. */
     private String clientSeedDecisions(long mark) throws Exception {
-        return String.valueOf(bot().eventsSince(mark, "deck_seed_decided"));
+        return clientEvents().since(mark, "deck_seed_decided");
     }
 
     /**
@@ -1202,7 +1202,7 @@ public class VSCrewRelogPersistenceE2ETest extends AbstractSharedVsClientE2ETest
      * so an unreadable instrument produced a clean {@code 0} and the pin went green on it.</p>
      */
     private String clientReleases(long mark, String whatFor) throws Exception {
-        String releases = String.valueOf(bot().eventsSince(mark, "deck_released"));
+        String releases = clientEvents().since(mark, "deck_released");
         Events.assertInstrumentRan(releases, "deck_capture_events",
                 "the client's deck capture was, or was not, cycled during " + whatFor);
         return releases;

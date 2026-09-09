@@ -464,7 +464,7 @@ public abstract class AbstractSpaceLoginRestoreClientTest {
         JsonObject state = bot().reportState();
         String observed = "clientDim=" + dim + " riding=" + riding + " state=" + state + pools
                 + chain + "\n  client dimension changes: " + joined
-                + "\n  client mounts: " + bot().eventsSince(CLIENT_SESSION_START, "mount");
+                + "\n  client mounts: " + clientEvents().since(CLIENT_SESSION_START, "mount");
 
         assertTrue("the client must have a world at all before anything can be read from it: "
                 + observed, dim != NO_CLIENT_WORLD);
@@ -938,7 +938,7 @@ public abstract class AbstractSpaceLoginRestoreClientTest {
      * an instrument that was never there produced a clean {@code 0}.</p>
      */
     protected String clientReleases(long mark, String whatFor) throws Exception {
-        String releases = String.valueOf(bot().eventsSince(mark, "deck_released"));
+        String releases = clientEvents().since(mark, "deck_released");
         Events.assertInstrumentRan(releases, "deck_capture_events",
                 "the client's deck capture was, or was not, cycled during " + whatFor);
         return releases;

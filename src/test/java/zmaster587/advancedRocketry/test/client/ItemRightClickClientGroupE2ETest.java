@@ -169,15 +169,7 @@ public class ItemRightClickClientGroupE2ETest extends AbstractSharedClientE2ETes
     /** How many records of a {@code since} reply carry BOTH needles — case-insensitively, because a
      *  chat line is prose and its capitalisation is the translation's business, not the contract's. */
     private static int recordsWithBoth(String sinceReply, String first, String second) {
-        int n = 0;
-        String lower = String.valueOf(sinceReply).toLowerCase(Locale.ROOT);
-        for (String record : lower.split("\\{\"seq\":")) {
-            if (record.contains(first.toLowerCase(Locale.ROOT))
-                    && record.contains(second.toLowerCase(Locale.ROOT))) {
-                n++;
-            }
-        }
-        return n;
+        return Events.recordsWithAllIgnoringCase(sinceReply, first, second).size();
     }
 
     // ── atmosphere analyser: the answer is two lines of chat ──────────────────
@@ -233,7 +225,7 @@ public class ItemRightClickClientGroupE2ETest extends AbstractSharedClientE2ETes
         // The client's own record of what its HUD was told — the two lines the player reads, with
         // the translation already applied.
         String chat = awaitRecord(
-                () -> String.valueOf(bot().eventsSince(clientMark, "client_chat_received")),
+                () -> clientEvents().since(clientMark, "client_chat_received"),
                 "breathable", LINK_BUDGET_TICKS);
         Events.assertInstrumentRan(chat, "client_chat_received",
                 "the player was shown the analyser's readout");
@@ -355,7 +347,7 @@ public class ItemRightClickClientGroupE2ETest extends AbstractSharedClientE2ETes
         String served = events.since(mark, "gui_container_served");
         assertEquals("an unbound ore scanner must never ask the server for a GUI; containers served"
                 + " since the click: " + served, 0, Events.typesOf(served).size());
-        String opened = String.valueOf(bot().eventsSince(clientMark, "client_gui_opened"));
+        String opened = clientEvents().since(clientMark, "client_gui_opened");
         assertEquals("empty-satellite right-click must open no screen on the client; screens the"
                         + " client was asked to display since the click: " + opened,
                 0, Events.countRecords(opened, "OreMapping"));
@@ -397,7 +389,7 @@ public class ItemRightClickClientGroupE2ETest extends AbstractSharedClientE2ETes
                 + served, served.contains("OreMapping"));
 
         String opened = awaitRecord(
-                () -> String.valueOf(bot().eventsSince(clientMark, "client_gui_opened")),
+                () -> clientEvents().since(clientMark, "client_gui_opened"),
                 "oremapping", LINK_BUDGET_TICKS);
         Events.assertInstrumentRan(opened, "client_gui_events",
                 "the client was asked to display the ore-mapping screen");
@@ -486,7 +478,7 @@ public class ItemRightClickClientGroupE2ETest extends AbstractSharedClientE2ETes
                 1, Events.countRecords(spawnedOnServer, "EntityHoverCraft"));
 
         String spawnedOnClient = awaitRecord(
-                () -> String.valueOf(bot().eventsSince(clientMark, "entity_joined_world")),
+                () -> clientEvents().since(clientMark, "entity_joined_world"),
                 "entityhovercraft", LINK_BUDGET_TICKS);
         Events.assertInstrumentRan(spawnedOnClient, "client_entity_join_events",
                 "the client received the spawned hovercraft");

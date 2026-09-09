@@ -255,7 +255,7 @@ public class VSShipEntryClientGroupE2ETest extends AbstractSharedVsClientE2ETest
         int clientDim = Integer.MIN_VALUE;
         for (int attempt = 0; attempt < arrivalBudget && !slotDims.contains("," + clientDim + ","); attempt++) {
             bot().waitTicks(5);
-            dimChanges = String.valueOf(bot().eventsSince(clientMark, "client_dimension_changed"));
+            dimChanges = clientEvents().since(clientMark, "client_dimension_changed");
             Matcher dm = Pattern.compile("\"dim\":(-?\\d+)").matcher(dimChanges);
             while (dm.find()) {
                 clientDim = Integer.parseInt(dm.group(1)); // the LAST change is where he is now
@@ -283,7 +283,7 @@ public class VSShipEntryClientGroupE2ETest extends AbstractSharedVsClientE2ETest
         // test's own stdout. Both halves come from their side's event log, which test-only mixins
         // feed — the client half used to be a static-field read of a ring that production carried.
         System.out.println("[ARRIVAL-TRACE server] " + exec("artest vs arrival-trace"));
-        System.out.println("[ARRIVAL-TRACE client] " + bot().eventsSince(0, null));
+        System.out.println("[ARRIVAL-TRACE client] " + clientEvents().since(0));
         assertTrue("the pilot who FLEW his ship into space must still be in his seat on arrival - "
                         + "a crossing must never stand him up. riding=" + riding
                         + " delivery=" + exec("artest vs seat-delivery"),
