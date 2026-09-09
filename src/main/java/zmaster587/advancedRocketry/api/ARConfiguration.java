@@ -52,7 +52,10 @@ public class ARConfiguration {
     private final static String PERFORMANCE = "Performance";
     private final static String CLIENT = "Client";
     private final static String COMPAT = "Compatibility";
-    private static Logger logger = LogManager.getLogger(Constants.modId);
+    /** OWNER: the LOADER — log4j hands out one object per name for the launch, and this class asks
+     *  for it by name like every other class here does. Nothing releases it because nothing may.
+     *  Not to be confused with the configuration below, which is the SERVER's while one is joined. */
+    private static final Logger logger = LogManager.getLogger(Constants.modId);
 
     private static String[] sealableBlockWhiteList, sealableBlockBlackList, breakableTorches, blackListRocketBlocksStr, harvestableGasses, spawnableGasses, entityList, geodeOres, blackHoleGeneratorTiming, orbitalLaserOres, liquidMonopropellant, liquidBipropellantFuel, liquidBipropellantOxidizer, liquidNuclearWorkingFluid;
     private static ARConfiguration currentConfig = new ARConfiguration();

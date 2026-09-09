@@ -24,7 +24,10 @@ import java.util.Objects;
 @SuppressWarnings("unchecked")
 public class NBTHelper {
 
-    private static NBTBase NBT_NULL = new NBTTagString("null");
+    /** The sentinel this helper writes where a value is absent, and compares against on the way
+     *  back. A CONSTANT, not state: one immutable tag, equal to every other tag of the same text,
+     *  so it belongs to no lifetime and nothing releases it. */
+    private static final NBTBase NBT_NULL = new NBTTagString("null");
 
     public static void writeCollection(String name, NBTTagCompound compound, Collection<? extends INBTSerializable<? extends NBTBase>> collection) {
         compound.setTag(name, collectionToNBT(collection));

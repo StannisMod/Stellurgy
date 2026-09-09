@@ -99,6 +99,15 @@ public class ARPlugin implements IModPlugin {
     public static final String orbitalLaserDrillUUID = "zmaster587.AR.orbitalLaserDrill";
     public static final String asteroidsUUID = "zmaster587.AR.asteroids";
     public static final String gasGiantsUUID = GasGiantCategory.UID;
+    /**
+     * JEI's own helper facade, as handed to {@link #register}. OWNER: the CLIENT — JEI loads its
+     * plugins once per client and this object is JEI's, for as long as JEI is there; nothing here
+     * releases it because nothing here may.
+     *
+     * <p>Static rather than an instance field because the recipe-refresh entry points on this class
+     * are static: they are called from outside a JEI callback, where the plugin instance JEI built
+     * is not in reach.</p>
+     */
     private static IJeiHelpers jeiHelpers;
 
     private static IJeiRuntime jeiRuntime;

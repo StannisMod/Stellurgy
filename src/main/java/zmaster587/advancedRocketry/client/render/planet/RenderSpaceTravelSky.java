@@ -39,8 +39,6 @@ public class RenderSpaceTravelSky extends RenderPlanetarySky {
 
 
     private final static double SIZE_SCALE = 0.01;
-    private static ResourceLocation planetUIBG = new ResourceLocation("advancedrocketry:textures/gui/planetUIOverlay.png");
-    private static ResourceLocation planetUIFG = new ResourceLocation("advancedrocketry:textures/gui/planetUIOverlayFG.png");
     private static WavefrontObject sphere;
 
     static {

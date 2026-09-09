@@ -8,7 +8,6 @@ import java.util.Random;
 
 public class Asteroid {
     private static final int precision = 1000;
-    private static Random rand = new Random();
     public String ID;
     public int distance;                    //distance from the star, impacts fuelcost
     public int mass;                        //factor of the amount of material total
@@ -61,7 +60,12 @@ public class Asteroid {
     public List<StackEntry> getHarvest(long seed, float uncertainty) {
 
         List<StackEntry> entries = new LinkedList<>();
-        rand.setSeed(seed);
+        // The harvest is a pure function of (seed, uncertainty) and the asteroid's own numbers, so
+        // the generator is a LOCAL. It used to be one shared static reseeded at this line: two
+        // callers overlapping — the two logical sides of an integrated game, or a scan and a
+        // harvest — interleaved draws from one sequence, and each then got a roll from the other's
+        // stream. A private generator per call cannot be reached by anyone else.
+        Random rand = new Random(seed);
 
         int myMass = (int) (mass + ((rand.nextFloat() * massVariability) * mass) - massVariability * mass / 2f);
         int numOres = (int) (myMass * (richness + rand.nextFloat() * richnessVariability - richnessVariability / 2f));

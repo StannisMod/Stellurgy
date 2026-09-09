@@ -17,8 +17,6 @@ import zmaster587.libVulpes.network.PacketHandler;
 public class AtmosphereVacuum extends AtmosphereNeedsSuit {
 
     public static int damageValue;
-    private static boolean enableNausea = ARConfiguration.getCurrentConfig().enableNausea;
-
     public AtmosphereVacuum() {
         super(true, false, false, "vacuum");
     }
@@ -29,7 +27,8 @@ public class AtmosphereVacuum extends AtmosphereNeedsSuit {
             player.attackEntityFrom(AtmosphereHandler.vacuumDamage, damageValue);
             player.addPotionEffect(new PotionEffect(Potion.getPotionById(2), 40, 4));
             player.addPotionEffect(new PotionEffect(Potion.getPotionById(4), 40, 4));
-            if (enableNausea) {
+            // The config IN FORCE, not the one this JVM booted with; see AtmosphereNoOxygen.
+            if (ARConfiguration.getCurrentConfig().enableNausea) {
                 player.addPotionEffect(new PotionEffect(Potion.getPotionById(9), 400, 1));
             }
             if (player instanceof EntityPlayer)

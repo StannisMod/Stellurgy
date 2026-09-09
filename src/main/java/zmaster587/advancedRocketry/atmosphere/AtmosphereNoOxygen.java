@@ -11,8 +11,6 @@ import zmaster587.libVulpes.network.PacketHandler;
 
 public class AtmosphereNoOxygen extends AtmosphereNeedsSuit {
 
-    private static boolean enableNausea = ARConfiguration.getCurrentConfig().enableNausea;
-
     public AtmosphereNoOxygen(boolean canTick, boolean isBreathable, boolean allowsCombustion,
                               String name) {
         super(canTick, isBreathable, allowsCombustion, name);
@@ -29,7 +27,10 @@ public class AtmosphereNoOxygen extends AtmosphereNeedsSuit {
             player.attackEntityFrom(AtmosphereHandler.lowOxygenDamage, 1);
             player.addPotionEffect(new PotionEffect(Potion.getPotionById(2), 40, 4));
             player.addPotionEffect(new PotionEffect(Potion.getPotionById(4), 40, 4));
-            if (enableNausea) {
+            // Asked of the config IN FORCE, every time. A static cached at class-load answered with
+            // the value this JVM booted with: the server's config arrives later and replaces the
+            // one in force, so a server that turned nausea off could not turn it off here.
+            if (ARConfiguration.getCurrentConfig().enableNausea) {
                 player.addPotionEffect(new PotionEffect(Potion.getPotionById(9), 400, 1));
             }
             if (player instanceof EntityPlayer)

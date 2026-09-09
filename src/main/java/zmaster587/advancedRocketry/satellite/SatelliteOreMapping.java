@@ -20,8 +20,6 @@ import java.util.List;
 
 public class SatelliteOreMapping extends SatelliteBase {
 
-    private static ArrayList<Integer> oreList = new ArrayList<>();
-
     private int selectedSlot = -1;
 
     public SatelliteOreMapping() {
@@ -145,13 +143,17 @@ public class SatelliteOreMapping extends SatelliteBase {
         blocksPerPixel = Math.max(blocksPerPixel, 1);
         int[][] ret = new int[(radius * 2) / blocksPerPixel][(radius * 2) / blocksPerPixel];
 
-        //Get all the ores we want to look for
-        if (oreList.isEmpty()) {
-            String[] strings = OreDictionary.getOreNames();
-            for (String str : strings) {
-                if (str.startsWith("ore") || str.startsWith("dust") || str.startsWith("gem"))
-                    oreList.add(OreDictionary.getOreID(str));
-            }
+        // Get all the ores we want to look for. Built per scan, from the ore dictionary as it
+        // stands NOW: it used to be a JVM-wide list filled on the first scan ever and never again,
+        // so an ore registered after that first scan — a registry sync on joining a server, a
+        // dictionary entry another mod adds late — was invisible to every later scan for the life
+        // of the process, with no way to tell that from an ore that is genuinely not in the world.
+        // The cost is one pass over the dictionary's names against a scan that reads every block in
+        // a radius and asks the dictionary about each of them; it is not the expensive half.
+        List<Integer> oreList = new ArrayList<>();
+        for (String str : OreDictionary.getOreNames()) {
+            if (str.startsWith("ore") || str.startsWith("dust") || str.startsWith("gem"))
+                oreList.add(OreDictionary.getOreID(str));
         }
         if (canBeginScan() && battery.extractEnergy(250 * zoomLevel, false) == 250 * zoomLevel) {
             //Base cost is 1000 per scan

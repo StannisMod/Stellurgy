@@ -77,12 +77,40 @@ import java.util.*;
 public class PlanetEventHandler {
 
     private static final ItemStack component = new ItemStack(AdvancedRocketryItems.itemUpgrade, 1, 4);
+    /**
+     * Server ticks this handler has seen. OWNER: the SERVER; LIFETIME: one server, released by
+     * {@link #onServerStopped()}.
+     *
+     * <p>It exists to be READ from outside — it is the cheapest evidence that the
+     * {@code ServerTickEvent} subscription is alive, since a lost subscription leaves it frozen
+     * where the last tick put it. That is only true of a counter that STARTS somewhere known: until
+     * the release below, a second world in the same launch inherited the first world's total, so
+     * "frozen at N" and "counting from N" were the same reading.</p>
+     */
     public static long time = 0;
+    /** The warp-transition flash. OWNER: the CLIENT — {@code runBurst} is client-only and the read
+     *  at the bottom of this file goes through {@code Minecraft}. NOT released by the server hook
+     *  below, which belongs to a different owner. */
     private static long endTime, duration;
-    private static List<TransitionEntity> transitionMap = new LinkedList<>();
+    /** Entity moves this server owes at a future world time. OWNER: the SERVER; LIFETIME: one
+     *  server. Holds live {@code Entity} references, so it is emptied by the release below rather
+     *  than carried into the next world. */
+    private static final List<TransitionEntity> transitionMap = new LinkedList<>();
 
     public static void addDelayedTransition(TransitionEntity entity) {
         transitionMap.add(entity);
+    }
+
+    /**
+     * Released here, by the owner: both of these belonged to the server that has just stopped.
+     *
+     * <p>The queue is emptied rather than left to be overwritten — its entries hold entities of a
+     * world that no longer exists, and a transition scheduled against the old world's total time
+     * would fire against the new one's.</p>
+     */
+    public static void onServerStopped() {
+        time = 0;
+        transitionMap.clear();
     }
 
     /**

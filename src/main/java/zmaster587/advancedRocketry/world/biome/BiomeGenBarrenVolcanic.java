@@ -3,13 +3,9 @@ package zmaster587.advancedRocketry.world.biome;
 import net.minecraft.entity.monster.EntityCreeper;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.world.biome.Biome;
-import net.minecraft.world.gen.MapGenBase;
 import zmaster587.advancedRocketry.api.AdvancedRocketryBlocks;
-import zmaster587.advancedRocketry.world.decoration.MapGenVolcano;
 
 public class BiomeGenBarrenVolcanic extends Biome {
-
-    private static MapGenBase volcano;
 
     public BiomeGenBarrenVolcanic(BiomeProperties properties) {
 
@@ -24,7 +20,6 @@ public class BiomeGenBarrenVolcanic extends Biome {
         this.decorator.treesPerChunk = 0;
         this.decorator.mushroomsPerChunk = 0;
         this.fillerBlock = this.topBlock = AdvancedRocketryBlocks.blockBasalt.getDefaultState();
-        volcano = new MapGenVolcano(15);
     }
 
     @Override

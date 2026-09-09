@@ -10,7 +10,6 @@ import net.minecraft.world.WorldProvider;
 import net.minecraftforge.fml.common.FMLCommonHandler;
 import net.minecraftforge.fml.common.Loader;
 import org.apache.commons.io.FileUtils;
-import org.apache.logging.log4j.Logger;
 import zmaster587.advancedRocketry.AdvancedRocketry;
 import zmaster587.advancedRocketry.api.*;
 import zmaster587.advancedRocketry.api.dimension.IDimensionProperties;
@@ -44,6 +43,7 @@ import java.util.zip.GZIPOutputStream;
 
 import static java.nio.file.StandardCopyOption.ATOMIC_MOVE;
 import static java.nio.file.StandardCopyOption.REPLACE_EXISTING;
+import static zmaster587.advancedRocketry.AdvancedRocketry.logger;
 import static zmaster587.advancedRocketry.dimension.DimensionProperties.proxylists;
 
 
@@ -56,9 +56,7 @@ public class DimensionManager implements IGalaxy {
     public static final DimensionType spaceDimensionType = DimensionType.register("space", "space", 3, WorldProviderSpace.class, false);
     public static final DimensionType AsteroidDimensionType = DimensionType.register("asteroid", "asteroid", 4, WorldProviderAsteroid.class, false);
     public static final int GASGIANT_DIMID_OFFSET = 0x100; //Offset by 256
-    private static Logger logger = AdvancedRocketry.logger;
     public static int dimOffset = 0;
-    private static String prevBuild;
     //Stat tracking
     public static boolean hasReachedMoon;
     public static boolean hasReachedWarp;
@@ -940,10 +938,11 @@ public class DimensionManager implements IGalaxy {
 
             }
         }
-        //Maybe add this back one day when we have a version of AR that needs it
-		/*else {
-			VersionCompat.upgradeDimensionManagerPostLoad(DimensionManager.prevBuild);
-		}*/
+        // The save's previous version string is written on every save and read by nobody. A
+        // commented-out legacy-upgrade call used to be the reason it was kept in a field; 3.0.0
+        // does not load pre-3.0.0 saves at all, so that call has no version to migrate from and the
+        // field is gone. The stamp itself stays: a save that says which build wrote it is worth
+        // having whether or not this code ever reads it back.
 
         //Attempt to load ore config from adv planet XML
         if (dimCouplingList != null) {
@@ -1170,7 +1169,6 @@ public class DimensionManager implements IGalaxy {
             SpaceObjectManager.getSpaceManager().readFromNBT(nbtTag);
         }
 
-        prevBuild = nbt.getString("prevVersion");
         nbt.setString("prevVersion", AdvancedRocketry.version);
 
         return loadedDimProps;

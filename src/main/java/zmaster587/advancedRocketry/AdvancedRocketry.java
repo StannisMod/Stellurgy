@@ -261,9 +261,12 @@ public class AdvancedRocketry {
     }
     public static WorldType planetWorldType;
     public static WorldType spaceWorldType;
-    private static CompatibilityMgr compat = new CompatibilityMgr();
     public static MaterialRegistry materialRegistry = new MaterialRegistry();
-    private static HashMap<AllowedProducts, HashSet<String>> modProducts = new HashMap<>();
+    /** Products other mods may have auto-generated recipes for, accumulated from registry events
+     *  during load and consumed once by {@code createAutoGennedRecipes} at init. OWNER: the LOADER
+     *  — FML fires those events once per launch and the recipes are built once from what they left
+     *  here. Final: the map is filled, never replaced. */
+    private static final HashMap<AllowedProducts, HashSet<String>> modProducts = new HashMap<>();
     private static Configuration config;
 
     /**
@@ -1324,6 +1327,10 @@ public class AdvancedRocketry {
                 FMLCommonHandler.instance().bus().register(eventHandler);
         }
         CompatibilityMgr.isSpongeInstalled = Loader.isModLoaded("sponge");
+        // Asked here, beside the other one, because this is where the loader's answer becomes
+        // available and because two "is that mod here" questions asked in two places drift apart.
+        // Nothing reads it yet — see the field, which says why it is kept anyway.
+        CompatibilityMgr.isGregtechInstalled = Loader.isModLoaded("gregtech");
         VSIntegration.init();
         // End compat stuff
 
@@ -1526,6 +1533,7 @@ public class AdvancedRocketry {
         zmaster587.advancedRocketry.dimension.DimensionManager.getInstance().onServerStopped();
         SpaceObjectManager.getSpaceManager().onServerStopped();
         zmaster587.advancedRocketry.space.SpaceSubsystem.onServerStopped();
+        zmaster587.advancedRocketry.event.PlanetEventHandler.onServerStopped();
         // Released here, by the owner: the subsystem belonged to the server that has just stopped.
         spaceSubsystem = null;
         detachServerServices();
