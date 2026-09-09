@@ -348,6 +348,7 @@ public class ClientProxy extends CommonProxy {
             net.minecraftforge.fml.common.network.FMLNetworkEvent.ClientDisconnectionFromServerEvent event) {
         zmaster587.advancedRocketry.space.SpaceClockSync.reset();
         zmaster587.advancedRocketry.space.HyperspaceWorld.forgetServerId();
+        ClientAtmosphere.reset();
     }
 
     /**

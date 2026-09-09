@@ -2481,11 +2481,11 @@ public class EntityRocket extends EntityRocketBase implements INetworkEntity, IM
                     for (Entity player : this.getPassengers()) {
                         if (player instanceof EntityPlayer) {
                             ARAdvancements.MOON_LANDING.trigger((EntityPlayerMP) player);
-                            if (!DimensionManager.hasReachedMoon)
+                            if (!DimensionManager.getInstance().hasReachedMoon())
                                 ARAdvancements.ONE_SMALL_STEP.trigger((EntityPlayerMP) player);
                         }
                     }
-                    DimensionManager.hasReachedMoon = true;
+                    DimensionManager.getInstance().setReachedMoon(true);
                 }
             }
             destPos.y = (float) getEntryHeight(destinationDimId);

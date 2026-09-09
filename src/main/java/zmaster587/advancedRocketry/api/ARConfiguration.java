@@ -115,6 +115,12 @@ public class ARConfiguration {
     public boolean nuclearRocketsRequireArtifactForGatedStations = false;
     @ConfigProperty
     public boolean enableNausea = true;
+    /** Damage taken per second in a vacuum. A configured NUMBER, so it lives with the other
+     *  configured numbers: it used to be a public static on {@code AtmosphereVacuum} that the config
+     *  loader reached over and wrote, which put a value the server owns in a class that only spends
+     *  it. */
+    @ConfigProperty
+    public int vacuumDamage = 1;
     @ConfigProperty
     public boolean enableOxygen = true;
     @ConfigProperty(needsSync = true)
@@ -532,7 +538,7 @@ public class ARConfiguration {
 
         //Oxygen
         arConfig.enableOxygen = config.get(OXYGEN, "EnableAtmosphericEffects", true, "Enable damage from lack of oxygen and effects from non-standard atmospheres.").getBoolean();
-        AtmosphereVacuum.damageValue = config.get(OXYGEN, "vacuumDamage", 1, "Damage taken per second in a vacuum.").getInt();
+        arConfig.vacuumDamage = config.get(OXYGEN, "vacuumDamage", 1, "Damage taken per second in a vacuum.").getInt();
         arConfig.overrideGCAir = config.get(OXYGEN, "OverrideGCAir", true, "Disable Galacticraft air and use AR oxygen on GC planets.").getBoolean();
         arConfig.oxygenVentConsumptionMult = config.get(OXYGEN, "oxygenVentConsumptionMultiplier", 1f, "Multiplier for oxygen vent O2 use per tick.").getDouble();
         arConfig.oxygenVentPowerMultiplier = config.get(OXYGEN, "OxygenVentPowerMultiplier", 1.0f, "Multiplier for oxygen vent power use.", 0, Float.MAX_VALUE).getDouble();
@@ -586,7 +592,7 @@ public class ARConfiguration {
         arConfig.telescopeSurveyDataPerStep = config.get(PLANET, "telescopeSurveyDataPerStep", 0, "Distance data one step of a survey consumes, drawn from the observatory's data buses the same way its asteroid scan draws. A step with too little data waits rather than resolving, so an unfed instrument stalls instead of working for free. Zero (the default) means a survey costs nothing - what it should cost is a balance question, not a mechanic one.", 0, Integer.MAX_VALUE).getInt();
         arConfig.telescopeObscuredAtMagnitudes = config.get(PLANET, "telescopeObscuredAtMagnitudes", 5d, "How much dust a survey can see THROUGH, in magnitudes of visual extinction - the unit astronomy measures interstellar dust in. A nebula between the instrument and what it is looking at dims it; past this much, the survey can still tell that a system is there but can no longer make out its bodies, and writes the bare coordinate instead. The default is the real boundary at which faint objects behind a cloud disappear: ~1 magnitude is noticeable dimming, ~5 is where things start vanishing, ~10 is an opaque dark cloud. Raise it to see through thicker clouds; set it to 0 to turn concealment off entirely.", 0d, Double.MAX_VALUE).getDouble();
         arConfig.telescopePassiveRadiusSteps = config.get(PLANET, "telescopePassiveRadiusSteps", 1, "How far, in STAR TERRITORIES, the passive local radar reaches around the observatory's own. 0 is the system you are standing in and nothing else; 1 (the default) adds the twenty-six territories around it. Territories and not cells: one look already yields every body of the system that owns it, so a radius counted in cells never reached a neighbour at all - two cells was a fifth of the way to the innermost planet of the system the instrument was already standing in. Passive costs nothing; the pointing is what looks far away.", 0, Integer.MAX_VALUE).getInt();
-        DimensionManager.dimOffset = config.getInt("minDimension", PLANET, 2, -127, 8000, "Lowest dimension ID that can be used for planets.");
+        DimensionManager.getInstance().setDimOffset(config.getInt("minDimension", PLANET, 2, -127, 8000, "Lowest dimension ID that can be used for planets."));
         arConfig.canPlayerRespawnInSpace = config.get(PLANET, "allowPlanetRespawn", false, "Allow bed respawn on planets with breathable air.").getBoolean();
         arConfig.forcePlayerRespawnInSpace = config.get(PLANET, "forcePlanetRespawn", false, "Allow bed respawn on planets even without breathable air. Requires 'allowPlanetRespawn=true'.").getBoolean();
         arConfig.perDimWorldInfo = config.get(PLANET, Constants.CONFIG_KEY_PER_DIM_WORLD_INFO, true, "Master switch for AR's per-dimension WorldInfo overrides on planets: per-planet weather AND per-planet time-of-day / working beds. When false, planets use the vanilla shared-overworld WorldInfo and NONE of the weather/time mixins are woven — fully classic behaviour. The sub-toggles below (enableCustomPlanetWeather) only take effect when this is true.").getBoolean();

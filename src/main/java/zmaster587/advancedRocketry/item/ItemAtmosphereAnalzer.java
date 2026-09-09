@@ -57,7 +57,22 @@ public class ItemAtmosphereAnalzer extends Item implements IArmorComponent {
 
     }
 
-    private List<ITextComponent> getAtmosphereReadout(@Nonnull ItemStack stack, @Nullable AtmosphereType atm, @Nonnull World world) {
+    /**
+     * The readout, for a pressure the CALLER supplies.
+     *
+     * <p>The pressure is a parameter because the two callers know different things and are on
+     * different sides. The client has the server's report for the player's own position and passes
+     * it; a server-side use has no such report — it has the world — and passes
+     * {@link zmaster587.advancedRocketry.client.ClientAtmosphere#NO_READING} so that the dimension's
+     * own density answers.</p>
+     *
+     * <p>It used to read the client's synced pressure directly, from both sides. On a dedicated
+     * server that field is never written, so the right-click readout reported the field's default
+     * for every planet; in single-player the client's value sat in the same JVM and made it look
+     * right.</p>
+     */
+    private List<ITextComponent> getAtmosphereReadout(@Nonnull ItemStack stack, @Nullable AtmosphereType atm,
+                                                      @Nonnull World world, int pressure) {
         if (atm == null)
             atm = AtmosphereType.AIR;
 
@@ -67,7 +82,7 @@ public class ItemAtmosphereAnalzer extends Item implements IArmorComponent {
         str.add(new TextComponentTranslation("%s %s %s",
                 new TextComponentTranslation("msg.atmanal.atmtype"),
                 new TextComponentTranslation(atm.getUnlocalizedName()),
-                new TextComponentString((AtmosphereHandler.currentPressure == -1 ? (DimensionManager.getInstance().isDimensionCreated(world.provider.getDimension()) ? DimensionManager.getInstance().getDimensionProperties(world.provider.getDimension()).getAtmosphereDensity() / 100f : 1) : AtmosphereHandler.currentPressure / 100f) + " atm")
+                new TextComponentString((pressure == zmaster587.advancedRocketry.client.ClientAtmosphere.NO_READING ? (DimensionManager.getInstance().isDimensionCreated(world.provider.getDimension()) ? DimensionManager.getInstance().getDimensionProperties(world.provider.getDimension()).getAtmosphereDensity() / 100f : 1) : pressure / 100f) + " atm")
         ));
         str.add(new TextComponentTranslation("%s %s",
                 new TextComponentTranslation("msg.atmanal.canbreathe"),
@@ -82,7 +97,10 @@ public class ItemAtmosphereAnalzer extends Item implements IArmorComponent {
         ItemStack stack = playerIn.getHeldItem(hand);
         if (!worldIn.isRemote) {
             AtmosphereHandler atmhandler = AtmosphereHandler.getOxygenHandler(worldIn.provider.getDimension());
-            List<ITextComponent> str = getAtmosphereReadout(stack, atmhandler == null ? null : (AtmosphereType) atmhandler.getAtmosphereType(playerIn), worldIn);
+            // Server side: no client report exists here, and the dimension is the authority anyway.
+            List<ITextComponent> str = getAtmosphereReadout(stack,
+                    atmhandler == null ? null : (AtmosphereType) atmhandler.getAtmosphereType(playerIn),
+                    worldIn, zmaster587.advancedRocketry.client.ClientAtmosphere.NO_READING);
             for (ITextComponent str1 : str)
                 playerIn.sendMessage(str1);
         }
@@ -127,7 +145,10 @@ public class ItemAtmosphereAnalzer extends Item implements IArmorComponent {
         int screenX = RocketEventHandler.atmBar.getRenderX();//8;
         int screenY = RocketEventHandler.atmBar.getRenderY();//event.getResolution().getScaledHeight() - fontRenderer.FONT_HEIGHT*3;
 
-        List<ITextComponent> str = getAtmosphereReadout(componentStack, (AtmosphereType) AtmosphereHandler.currentAtm, Minecraft.getMinecraft().world);
+        List<ITextComponent> str = getAtmosphereReadout(componentStack,
+                (AtmosphereType) zmaster587.advancedRocketry.client.ClientAtmosphere.atmosphere(),
+                Minecraft.getMinecraft().world,
+                zmaster587.advancedRocketry.client.ClientAtmosphere.pressure());
         //Draw BG
         gui.drawString(fontRenderer, str.get(0).getFormattedText(), screenX, screenY, 0xaaffff);
         gui.drawString(fontRenderer, str.get(1).getFormattedText(), screenX, screenY + fontRenderer.FONT_HEIGHT * 4 / 3, 0xaaffff);

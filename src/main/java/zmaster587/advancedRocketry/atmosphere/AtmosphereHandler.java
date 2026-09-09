@@ -39,10 +39,9 @@ public class AtmosphereHandler {
     public static final DamageSource heatDamage = new DamageSource("Heat").setDamageBypassesArmor().setDamageIsAbsolute();
     public static final DamageSource oxygenToxicityDamage = new DamageSource("OxygenToxicity").setDamageBypassesArmor().setDamageIsAbsolute();
     private static final int MAX_BLOB_RADIUS = ((ARConfiguration.getCurrentConfig().atmosphereHandleBitMask & 1) == 1) ? 256 : ARConfiguration.getCurrentConfig().oxygenVentSize;
-    public static long lastSuffocationTime = Integer.MIN_VALUE;
-    //Stores current Atm on the CLIENT
-    public static IAtmosphere currentAtm;
-    public static int currentPressure;
+    // What the CLIENT was last told about the air around its player used to live here, as three
+    // public statics with a comment saying they were the client's. They are `ClientAtmosphere` now:
+    // a comment cannot stop a server-side path from reading them, and one did.
     private static HashMap<Integer, AtmosphereHandler> dimensionOxygen = new HashMap<>();
     private static HashMap<EntityPlayer, IAtmosphere> prevAtmosphere = new HashMap<>();
     private HashMap<IBlobHandler, AreaBlob> blobs;
@@ -104,9 +103,10 @@ public class AtmosphereHandler {
         }
         dimensionOxygen.clear();
         prevAtmosphere.clear();
-        currentAtm = null;
-        currentPressure = 0;
-        lastSuffocationTime = Integer.MIN_VALUE;
+        // The client's copy is NOT cleared here any more. This runs when the SERVER stops, which is
+        // the wrong owner for it — and it used to put `currentPressure` back to 0, a value every
+        // reader treats as a real reading of zero pressure rather than as "nothing received yet".
+        // `ClientAtmosphere.reset()` on disconnect owns that now, and its absent value says absent.
     }
 
     /**

@@ -29,7 +29,19 @@ public final class SpaceSlotPool {
 
     private SpaceSlotPool() {}
 
-    /** The shared slot {@link DimensionType} (provider = {@link WorldProviderSpaceSlot}). */
+    /**
+     * The shared slot {@link DimensionType} (provider = {@link WorldProviderSpaceSlot}).
+     *
+     * <p>OWNER: the LOADER; LIFETIME: the launch. A {@code DimensionType} registration is permanent
+     * in 1.12 — Forge has no way to withdraw one — so once this JVM has registered the type, the
+     * type exists whether we hold a reference or not, and the reference is the same object for every
+     * server the launch runs. That is why nothing clears it at server stop: forgetting it would only
+     * make the next server-start try to register a name Forge already has.</p>
+     *
+     * <p>Two writers, and both are the same registration seen from one side each: the server mints
+     * it at server-start, and a client adopts the server's id from the sync packet — which is also
+     * where the "already registered in this JVM" and id-mismatch cases are decided.</p>
+     */
     public static DimensionType slotType;
 
     /**

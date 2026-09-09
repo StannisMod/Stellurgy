@@ -30,6 +30,7 @@ import org.lwjgl.opengl.GL11;
 import zmaster587.advancedRocketry.api.ARConfiguration;
 import zmaster587.advancedRocketry.api.armor.IFillableArmor;
 import zmaster587.advancedRocketry.atmosphere.AtmosphereHandler;
+import zmaster587.advancedRocketry.client.ClientAtmosphere;
 import zmaster587.advancedRocketry.client.FreeFlightHudState;
 import zmaster587.advancedRocketry.client.KeyBindings;
 import zmaster587.advancedRocketry.client.render.ClientDynamicTexture;
@@ -443,22 +444,22 @@ public class RocketEventHandler extends Gui {
 
             if (mc.player.dimension != lastSuffocationWarningDim) {
                 lastSuffocationWarningDim = mc.player.dimension;
-                AtmosphereHandler.lastSuffocationTime = worldTime - numTicksToDisplay - 1;
+                ClientAtmosphere.suffocatedAt(worldTime - numTicksToDisplay - 1);
                 suppressSuffocationWarningUntil = worldTime + 40;
             }
 
             // In event of world change make sure the warning isn't displayed
-            if (worldTime - AtmosphereHandler.lastSuffocationTime < 0) {
-                AtmosphereHandler.lastSuffocationTime = worldTime - numTicksToDisplay - 1;
+            if (worldTime - ClientAtmosphere.lastSuffocationTime() < 0) {
+                ClientAtmosphere.suffocatedAt(worldTime - numTicksToDisplay - 1);
             }
 
             // Tell the player he's suffocating if needed
             if (worldTime >= suppressSuffocationWarningUntil &&
-                    worldTime - AtmosphereHandler.lastSuffocationTime < numTicksToDisplay) {
+                    worldTime - ClientAtmosphere.lastSuffocationTime() < numTicksToDisplay) {
                 FontRenderer fontRenderer = mc.fontRenderer;
                 String str = "";
-                if (AtmosphereHandler.currentAtm != null) {
-                    str = AtmosphereHandler.currentAtm.getDisplayMessage();
+                if (ClientAtmosphere.atmosphere() != null) {
+                    str = ClientAtmosphere.atmosphere().getDisplayMessage();
                 }
 
                 int screenX = event.getResolution().getScaledWidth() / 6 - fontRenderer.getStringWidth(str) / 2;

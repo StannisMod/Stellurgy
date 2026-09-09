@@ -56,10 +56,29 @@ public class DimensionManager implements IGalaxy {
     public static final DimensionType spaceDimensionType = DimensionType.register("space", "space", 3, WorldProviderSpace.class, false);
     public static final DimensionType AsteroidDimensionType = DimensionType.register("asteroid", "asteroid", 4, WorldProviderAsteroid.class, false);
     public static final int GASGIANT_DIMID_OFFSET = 0x100; //Offset by 256
-    public static int dimOffset = 0;
-    //Stat tracking
-    public static boolean hasReachedMoon;
-    public static boolean hasReachedWarp;
+    /**
+     * Lowest dimension id a planet may take, and the cursor the planet loader advances past the
+     * dimensions it has just claimed.
+     *
+     * <p>OWNER: the SERVER; LIFETIME: one server. Seeded from the configured {@code minDimension}
+     * when the configuration loads and again when a server stops, and moved during a load — which is
+     * why it is state and not a constant. On the INSTANCE because that is what it describes: the
+     * dimensions of the save this manager is managing, not something true of the process.</p>
+     */
+    private int dimOffset = 0;
+    /**
+     * Progression the SAVE records: whether this world's players have reached the moon, and warp.
+     *
+     * <p>OWNER: the SERVER; LIFETIME: one server. Written to the save's stat NBT, read back on load,
+     * and reset in {@link #onServerStopped()} — a freshly created world early-returns before the stat
+     * read, so without that reset it would inherit the previous world's progression in the same JVM
+     * (single-player, where client and integrated server share one process).</p>
+     *
+     * <p>On the INSTANCE for the same reason as the cursor above: these are facts about one save.
+     * They were public statics, which is what made the JVM-inheritance defect representable.</p>
+     */
+    private boolean hasReachedMoon;
+    private boolean hasReachedWarp;
     //Reference to the worldProvider for any dimension created through this system, normally WorldProviderPlanet, set in AdvancedRocketry.java in preinit
     public static Class<? extends WorldProvider> planetWorldProvider;
     //The default properties belonging to the overworld
@@ -438,6 +457,41 @@ public class DimensionManager implements IGalaxy {
         return hasBeenInitialized;
     }
 
+    /** The lowest dimension id a planet may take right now. */
+    public int getDimOffset() {
+        return dimOffset;
+    }
+
+    /** Seed the cursor: from the configured minimum, or back to where a load found it. */
+    public void setDimOffset(int dimOffset) {
+        this.dimOffset = dimOffset;
+    }
+
+    /** Move the cursor past dimensions a planet load has just claimed. */
+    public void advanceDimOffset(int claimed) {
+        this.dimOffset += claimed;
+    }
+
+    /** Whether this save's players have reached the moon. */
+    public boolean hasReachedMoon() {
+        return hasReachedMoon;
+    }
+
+    /** Whether this save's players have reached warp. */
+    public boolean hasReachedWarp() {
+        return hasReachedWarp;
+    }
+
+    /** Record moon progression for this save. */
+    public void setReachedMoon(boolean reached) {
+        hasReachedMoon = reached;
+    }
+
+    /** Record warp progression for this save. */
+    public void setReachedWarp(boolean reached) {
+        hasReachedWarp = reached;
+    }
+
     public void onServerStopped() {
         unregisterAllDimensions();
         knownPlanets.clear();
@@ -735,7 +789,7 @@ public class DimensionManager implements IGalaxy {
     public void createAndLoadDimensions(boolean resetFromXml) {
         //Load planet files
         //Note: loading this modifies dimOffset
-        int dimOffset = DimensionManager.dimOffset;
+        int savedDimOffset = this.dimOffset;
         DimensionPropertyCoupling dimCouplingList = null;
         XMLPlanetLoader loader = null;
         boolean loadedFromXML = false;
@@ -779,7 +833,7 @@ public class DimensionManager implements IGalaxy {
             // report (diagnosable) instead of the old silent FMLCommonHandler.exitJava.
             // Recoverable per-planet config mistakes are skipped inside readAllPlanets.
             dimCouplingList = loader.loadPlanetsOrThrow(file);
-            DimensionManager.dimOffset += dimCouplingList.dims.size();
+            this.dimOffset += dimCouplingList.dims.size();
         }
         //End load planet files
 
@@ -828,7 +882,7 @@ public class DimensionManager implements IGalaxy {
                 sol.addPlanet(DimensionManager.overworldProperties);
 
                 if (zmaster587.advancedRocketry.api.ARConfiguration.getCurrentConfig().MoonId == Constants.INVALID_PLANET)
-                    zmaster587.advancedRocketry.api.ARConfiguration.getCurrentConfig().MoonId = DimensionManager.getInstance().getNextFreeDim(dimOffset);
+                    zmaster587.advancedRocketry.api.ARConfiguration.getCurrentConfig().MoonId = DimensionManager.getInstance().getNextFreeDim(savedDimOffset);
 
 
                 //Register the moon
@@ -1063,7 +1117,7 @@ public class DimensionManager implements IGalaxy {
                 dimCouplingList == null ? null : dimCouplingList.planetTypes);
 
         // make sure to set dim offset back to original to make things consistant
-        DimensionManager.dimOffset = dimOffset;
+        this.dimOffset = savedDimOffset;
 
         DimensionManager.getInstance().knownPlanets.addAll(zmaster587.advancedRocketry.api.ARConfiguration.getCurrentConfig().initiallyKnownPlanets);
 

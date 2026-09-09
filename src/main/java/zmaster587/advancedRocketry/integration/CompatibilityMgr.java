@@ -13,6 +13,14 @@ package zmaster587.advancedRocketry.integration;
  */
 public class CompatibilityMgr {
 
+    /**
+     * Whether Sponge is on this launch's mod list.
+     *
+     * <p>Written once at init. **Its only reader is commented out** — a disabled workaround in
+     * {@code WorldProviderPlanet} — so today nothing consults it either; it is kept on the same
+     * terms as the GregTech flag below rather than deleted, because both answer the same question
+     * for code that is not written yet.</p>
+     */
     public static boolean isSpongeInstalled;
 
     /**

@@ -89,8 +89,8 @@ public class PlanetEventHandler {
      */
     public static long time = 0;
     /** The warp-transition flash. OWNER: the CLIENT — {@code runBurst} is client-only and the read
-     *  at the bottom of this file goes through {@code Minecraft}. NOT released by the server hook
-     *  below, which belongs to a different owner. */
+     *  at the bottom of this file goes through {@code Minecraft}; LIFETIME: one connection, released
+     *  in {@link #disconnected}. NOT released by the server hook below, which is a different owner. */
     private static long endTime, duration;
     /** Entity moves this server owes at a future world time. OWNER: the SERVER; LIFETIME: one
      *  server. Holds live {@code Entity} references, so it is emptied by the release below rather
@@ -335,6 +335,14 @@ public class PlanetEventHandler {
         if (net.minecraftforge.fml.common.FMLCommonHandler.instance().getMinecraftServerInstance() == null) {
             DimensionManager.getInstance().unregisterAllDimensions();
         }
+        // Released here, by the owner: the warp flash is this CLIENT's, and its end time is a moment
+        // on the world it was started in. Carried across the gap it is compared against the NEXT
+        // world's clock, which knows nothing about it — so the overlay either draws for no reason or
+        // is already expired, and which one you get depends on where that world's day count happens
+        // to stand. Unconditional, unlike the dimension sweep above: nothing but this client writes
+        // these two, so there is no integrated server whose shutdown could be raced.
+        endTime = 0;
+        duration = 0;
     }
 
     //Tick dimensions, needed for satellites, and GUIs
@@ -569,8 +577,10 @@ public class PlanetEventHandler {
             }
 
             //Check environment
-            if (AtmosphereHandler.currentPressure != -1) {
-                atmosphere = Math.min(AtmosphereHandler.currentPressure, 200);
+            if (zmaster587.advancedRocketry.client.ClientAtmosphere.pressure()
+                    != zmaster587.advancedRocketry.client.ClientAtmosphere.NO_READING) {
+                atmosphere = Math.min(
+                        zmaster587.advancedRocketry.client.ClientAtmosphere.pressure(), 200);
             }
 
             if (atmosphere > 100) {

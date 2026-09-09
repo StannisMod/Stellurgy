@@ -212,7 +212,7 @@ public final class PlanetRealizer {
             star = DimensionManager.getInstance().getStar(star.getId());
         }
 
-        int dimId = DimensionManager.getInstance().getNextFreeDim(DimensionManager.dimOffset);
+        int dimId = DimensionManager.getInstance().getNextFreeDim(DimensionManager.getInstance().getDimOffset());
         if (dimId == Constants.INVALID_PLANET) {
             LOGGER.error("[UNIVERSE] no free dimension id left to realize the body at {}", bodyCell.cellKey());
             return Constants.INVALID_PLANET;

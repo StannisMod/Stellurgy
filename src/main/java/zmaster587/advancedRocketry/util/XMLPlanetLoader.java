@@ -1773,7 +1773,7 @@ public class XMLPlanetLoader {
         //readPlanetFromNode changes value
         //Yes it's hacky but that's another reason why it's private
 
-        offset = DimensionManager.dimOffset;
+        offset = DimensionManager.getInstance().getDimOffset();
         while (masterNode != null) {
             if (masterNode.getNodeName().equalsIgnoreCase(ELEMENT_GALAXYGEN)) {
                 coupling.galaxyGenConfig = readGalaxyGen(masterNode);

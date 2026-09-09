@@ -50,8 +50,8 @@ public class OverworldDefaultsSurviveTeardownTest {
             sol.setTemperature(100);
             DimensionManager.getInstance().addStar(sol);
         }
-        DimensionManager.hasReachedMoon = false;
-        DimensionManager.hasReachedWarp = false;
+        DimensionManager.getInstance().setReachedMoon(false);
+        DimensionManager.getInstance().setReachedWarp(false);
     }
 
     @Test

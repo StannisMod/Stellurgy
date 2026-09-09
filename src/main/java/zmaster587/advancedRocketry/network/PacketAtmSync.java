@@ -56,8 +56,8 @@ public class PacketAtmSync extends BasePacket {
 
     @Override
     public void executeClient(EntityPlayer thePlayer) {
-        AtmosphereHandler.currentAtm = AtmosphereRegister.getInstance().getAtmosphere(type);
-        AtmosphereHandler.currentPressure = pressure;
+        zmaster587.advancedRocketry.client.ClientAtmosphere.accept(
+                AtmosphereRegister.getInstance().getAtmosphere(type), pressure);
     }
 
     @Override

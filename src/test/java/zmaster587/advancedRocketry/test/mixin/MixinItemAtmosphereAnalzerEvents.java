@@ -75,6 +75,7 @@ public abstract class MixinItemAtmosphereAnalzerEvents {
 
     @Inject(method = "getAtmosphereReadout", at = @At("RETURN"))
     private void arTest$readoutComposed(ItemStack stack, AtmosphereType atm, World world,
+                                        int pressure,
                                         CallbackInfoReturnable<List<ITextComponent>> cir) {
         TestTrace.instrumentHere(INSTRUMENT);
         List<ITextComponent> lines = cir.getReturnValue();
@@ -82,7 +83,12 @@ public abstract class MixinItemAtmosphereAnalzerEvents {
                 ? lines.get(0).getUnformattedText() : "";
         String line1 = lines != null && lines.size() > 1 && lines.get(1) != null
                 ? lines.get(1).getUnformattedText() : "";
-        String payload = "\"atmosphere\":\"" + (atm == null ? "null" : TestTrace.json(atm.getUnlocalizedName()))
+        // The pressure the readout was BUILT from, which is what separates the two callers: a client
+        // passes the server's report for its own position, a server-side use passes NO_READING and
+        // the dimension's own density answers. Production used to read one client-side static from
+        // both sides, so a server-side readout reported that field's default for every planet.
+        String payload = "\"pressure\":" + pressure
+                + ",\"atmosphere\":\"" + (atm == null ? "null" : TestTrace.json(atm.getUnlocalizedName()))
                 + "\",\"line0\":\"" + TestTrace.json(line0)
                 + "\",\"line1\":\"" + TestTrace.json(line1) + "\"";
         // A null world can only be a client caller: the server's caller is an item right-click,

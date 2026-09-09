@@ -51,7 +51,20 @@ public class AdvancedRocketryAPI {
         return AdvancedRocketry.instance == null ? null : AdvancedRocketry.instance.gravity();
     }
 
-    /** Left as a field deliberately: it is a registry object Forge fills, not a service, and it
-     *  belongs to the same family as the block and item holders. */
+    /**
+     * The space-breathing enchantment. A REGISTRY HOLDER, not a service — the same family as the
+     * block and item holders, which this project's rule leaves alone.
+     *
+     * <p>OWNER: the LOADER; LIFETIME: the launch. Filled during the {@code Register<Enchantment>}
+     * event and read from wherever the enchantment is applied or tested for. (An earlier note here
+     * said Forge fills it. It does not: this mod constructs it in that event and registers it. The
+     * distinction matters, because a field Forge fills may not be reassigned by us and this one is
+     * ours to write — once.)</p>
+     *
+     * <p>Not {@code final}, because the object is built inside the event rather than at class-init;
+     * and not {@code @ObjectHolder}, which would allow both — this tree uses that annotation nowhere
+     * at all, and a lone instance of it fails by leaving a silent {@code null} if the registry name
+     * ever drifts from the string in the annotation.</p>
+     */
     public static Enchantment enchantmentSpaceProtection;
 }
