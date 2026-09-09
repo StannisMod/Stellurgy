@@ -71,6 +71,7 @@
     "MixinHyperspaceTunnelDiag",
     "MixinKeyBindingsMotionSample",
     "MixinKeyBindingsSeatGate",
+    "MixinKeyBindingsFlightCursor",
     "MixinRocketEventHandlerMotionSample",
     "MixinRocketEventHandlerViewState",
     "MixinShipFrameCameraEvents",

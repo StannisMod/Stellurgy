@@ -17,6 +17,7 @@ import javax.imageio.ImageIO;
 
 import zmaster587.advancedRocketry.test.Events;
 
+import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 
 /**
@@ -139,7 +140,7 @@ public class VSShipFlightTelemetryE2ETest extends AbstractSharedVsClientE2ETest 
             mouseDelta(60, 0);
             bot().waitTicks(2);
         }
-        double cursorDeflected = clientDouble(KEY_BINDINGS, "flightCursorX");
+        double cursorDeflected = flightCursorX("after twelve raw mouse deltas");
         assertTrue("a raw mouse delta must deflect the client's flight cursor (got "
                 + cursorDeflected + ")", Math.abs(cursorDeflected) > 0.2);
 
@@ -671,15 +672,21 @@ public class VSShipFlightTelemetryE2ETest extends AbstractSharedVsClientE2ETest 
      * side until the ship's up points down, then centre it so the controller stops the roll there.
      */
     private void rollShipUpsideDownWithTheMouse(int bx, int by, int bz) throws Exception {
+        // The window each pass reads is the two ticks the pass itself waits, so this loop keeps its
+        // own pacing: no extra wait is added to take a reading, and the reading is never older than
+        // the pass before it.
+        long cursorMark = clientEvents().mark();
+        bot().waitTicks(2);
         for (int i = 0; i < 240; i++) {
             // Stop asking for roll BEFORE the ship is over: it is a rigid body turning at more than a
             // radian a second, and it coasts on into the brake. Aiming early lands it near inverted.
             if (clientDouble(DECK_CAMERA_STATE, "shipUpY") < -0.45) {
                 break;
             }
-            if (Math.abs(clientDouble(KEY_BINDINGS, "flightCursorX")) < 0.9) {
+            if (Math.abs(cursorXSince(cursorMark, "while rolling the ship over, pass " + i)) < 0.9) {
                 mouseDelta(60, 0);
             }
+            cursorMark = clientEvents().mark();
             bot().waitTicks(2);
         }
         centreFlightCursor();
@@ -692,14 +699,39 @@ public class VSShipFlightTelemetryE2ETest extends AbstractSharedVsClientE2ETest 
      * Inside the dead-zone the ship is commanded zero rotation, which is what "centred" means to it.
      */
     private double centreFlightCursor() throws Exception {
-        double cursor = clientDouble(KEY_BINDINGS, "flightCursorX");
+        double cursor = flightCursorX("before centring");
         for (int i = 0; i < 200 && Math.abs(cursor) >= CURSOR_DEADZONE * 0.5; i++) {
             int step = Math.abs(cursor) > 0.2 ? 30 : 2;
             mouseDelta(cursor > 0 ? -step : step, 0);
             bot().waitTicks(1);
-            cursor = clientDouble(KEY_BINDINGS, "flightCursorX");
+            cursor = flightCursorX("while centring, nudge " + i);
         }
         return cursor;
+    }
+
+    /**
+     * The flight cursor as the client last RECORDED it, or a failure that says the input path did not
+     * run in that window.
+     *
+     * <p>Replaces a reflective read of a private production static. The cursor keeps its last value
+     * when the input path stops running, so a poll cannot tell "it is where I left it" from "nothing
+     * has updated it since" — and the loop above, against a dead input path, would nudge two hundred
+     * times and return a stale number that looks like a measurement. A record exists only if
+     * production ran this tick; a fresh mark each call keeps the window to that.</p>
+     */
+    private double flightCursorX(String what) throws Exception {
+        long mark = clientEvents().mark();
+        bot().waitTicks(1);
+        return cursorXSince(mark, what);
+    }
+
+    /** The same reading, for a window the caller already owns — used by loops whose own pacing
+     *  supplies the ticks, so that taking a reading never adds one. */
+    private double cursorXSince(long mark, String what) throws Exception {
+        String rec = Events.lastRecord(clientEvents().since(mark, "flight_cursor"));
+        assertNotNull("no flight_cursor record " + what + " — the client's flight-input path did not "
+                + "run in that window, so there is no cursor reading to act on", rec);
+        return Events.number(rec, "x");
     }
 
     /** Feed a raw mouse delta to the client's own ship-pilot handler, as the window's mouse would. */

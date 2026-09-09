@@ -11,6 +11,7 @@ import java.util.regex.Pattern;
 import zmaster587.advancedRocketry.test.Events;
 import zmaster587.advancedRocketry.test.ShipIdentity;
 
+import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 
 /**
@@ -868,7 +869,7 @@ public class VSDeckCaptureAndDismountE2ETest extends AbstractSharedVsClientE2ETe
         double omegaAfter = ClientPoll.until(bot()::waitTicks,
                 () -> readDouble(shipInfo(), OMEGA), o -> o > 0.1, 2, 20).value;
         System.out.println("[deckcap] force-invert control cursor="
-                + clientDouble(KEY_BINDINGS, "flightCursorX") + " omegaAfter=" + omegaAfter);
+                + flightCursorX("at the force-invert leg") + " omegaAfter=" + omegaAfter);
 
         // SYMPTOM "after leaving, I fall through": dismount, the pilot must stay on the inverted deck.
         // The client's own capture of THIS dismount is the link; a body that fell through has none.
@@ -928,7 +929,7 @@ public class VSDeckCaptureAndDismountE2ETest extends AbstractSharedVsClientE2ETe
             mouseDelta(60, 0);
             bot().waitTicks(2);
         }
-        double cursor = clientDouble(KEY_BINDINGS, "flightCursorX");
+        double cursor = flightCursorX("after twenty raw mouse deltas while inverted");
         // Same wait as the force-invert leg above, and it carried a 1.5x budget for no stated
         // reason; both are now the same early-exit poll with the same load-scaled ceiling.
         double omegaTurning = ClientPoll.until(bot()::waitTicks,
@@ -948,13 +949,30 @@ public class VSDeckCaptureAndDismountE2ETest extends AbstractSharedVsClientE2ETe
 
     /** Bring the client's flight cursor back inside its centre dead-zone. */
     private void centreFlightCursor() throws Exception {
-        double cursor = clientDouble(KEY_BINDINGS, "flightCursorX");
+        double cursor = flightCursorX("before centring");
         for (int i = 0; i < 200 && Math.abs(cursor) >= 0.03; i++) {
             int step = Math.abs(cursor) > 0.2 ? 30 : 2;
             mouseDelta(cursor > 0 ? -step : step, 0);
             bot().waitTicks(1);
-            cursor = clientDouble(KEY_BINDINGS, "flightCursorX");
+            cursor = flightCursorX("while centring, nudge " + i);
         }
+    }
+
+    /**
+     * The flight cursor as the client last RECORDED it, or a failure naming the empty window.
+     *
+     * <p>Replaces a reflective read of a private production static. The field keeps its last value
+     * when the input path stops running, so a poll cannot separate "the cursor is where I left it"
+     * from "nothing has updated it since" — and the centring loop above, against a dead input path,
+     * would nudge two hundred times and hand back a stale number that reads like a measurement.</p>
+     */
+    private double flightCursorX(String what) throws Exception {
+        long mark = clientEvents().mark();
+        bot().waitTicks(1);
+        String rec = Events.lastRecord(clientEvents().since(mark, "flight_cursor"));
+        assertNotNull("no flight_cursor record " + what + " — the client's flight-input path did not "
+                + "run in that tick, so there is no cursor reading to act on", rec);
+        return Events.number(rec, "x");
     }
 
     // ---- Bug: camera/capture instability on a steeply tilted, HELD deck ------------------------
