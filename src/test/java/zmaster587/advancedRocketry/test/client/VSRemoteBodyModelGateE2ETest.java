@@ -14,6 +14,7 @@ import java.util.regex.Pattern;
 import zmaster587.advancedRocketry.test.Events;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 
 /**
@@ -123,6 +124,23 @@ public class VSRemoteBodyModelGateE2ETest extends AbstractSharedVsClientE2ETest 
     /** The TEST-side accumulator behind every model-gate window — production keeps no counters. */
     private static final String REMOTE_MODEL_WINDOW =
             "zmaster587.advancedRocketry.test.trace.RemoteModelWindow";
+
+    /**
+     * How many remote-body model decisions the open window has seen, as a record.
+     *
+     * <p>A peek writes the window's numbers without ending it, so the poll below waits on a reading
+     * that is attributable to a moment instead of on a field read across the socket. An empty window
+     * fails by name: "the client did not answer" and "the gate has decided nothing yet" are
+     * different findings and the poll must not merge them into a zero.</p>
+     */
+    private long remoteModelSamples() throws Exception {
+        long mark = clientEvents().mark();
+        bot().invokeStaticInt(REMOTE_MODEL_WINDOW, "peek");
+        String rec = Events.lastRecord(clientEvents().since(mark, "remote_model_window"));
+        assertNotNull("no remote_model_window record after a peek — the client did not answer, so "
+                + "the sample count has no reading", rec);
+        return (long) Events.number(rec, "samples");
+    }
 
     /**
      * The CLIENT log sequence taken immediately BEFORE the current subject was spawned — the mark its
@@ -391,7 +409,7 @@ public class VSRemoteBodyModelGateE2ETest extends AbstractSharedVsClientE2ETest 
         final long framesBefore = (long) deckCamera("cameraHookCalls");
         bot().invokeStaticInt(REMOTE_MODEL_WINDOW, "open");
         ClientPoll.Result<Long> r = ClientPoll.until(bot()::waitTicks,
-                () -> (long) clientDouble(REMOTE_MODEL_WINDOW, "samples"),
+                this::remoteModelSamples,
                 v -> v > 0, 15, 8);
         if (r.satisfied) {
             return new Sampling(true, "");
@@ -408,7 +426,7 @@ public class VSRemoteBodyModelGateE2ETest extends AbstractSharedVsClientE2ETest 
         // it holds it at all.
         String subject = "server=" + serverEntity(subjectId) + " " + clientSighting(subjectId)
                 + " " + cameraBlocks() + " modelGateInstalled="
-                + clientString(REMOTE_MODEL_WINDOW, "modelGateInstalledFlag")
+                + (window == null ? "?" : Events.text(window, "modelGateInstalled"))
                 // The arrival record, kept alongside: a body that JOINED this client and is no
                 // longer in the sighting has been removed, and that is a different bug from a body
                 // the renderer declined to draw. The snapshot alone could not say which.

@@ -58,7 +58,7 @@ public final class RemoteModelWindow {
      * a read and not a re-derivation — and it is evaluated once, on first touch, rather than on
      * every client's class-init.</p>
      */
-    public static final int modelGateInstalledFlag = probeModelGate();
+    private static final int modelGateInstalledFlag = probeModelGate();
 
     private static int probeModelGate() {
         try {
@@ -81,7 +81,7 @@ public final class RemoteModelWindow {
 
     /** Decisions about a remote body since {@link #open()} — public because it is POLLED while the
      *  window is open; see the class note. */
-    public static volatile long samples;
+    private static long samples;
 
     private static long calls;
     private static long rotated;
@@ -101,9 +101,22 @@ public final class RemoteModelWindow {
     /** End the window and record its summary as {@code remote_model_window}; returns the decisions
      *  it saw about remote bodies. */
     public static int close() {
+        return record();
+    }
+
+    /** Write the window's numbers as they stand, without ending it — for a reader polling for the
+     *  first sample. Same record type as {@link #close()}: the reader asks for the last one in its
+     *  own window either way, and a different type would make "the last reading" depend on which
+     *  call produced it. */
+    public static int peek() {
+        return record();
+    }
+
+    private static int record() {
         TestTrace.recordHere("remote_model_window", String.format(Locale.ROOT,
-                "\"calls\":%d,\"samples\":%d,\"rotated\":%d,\"maxDeg\":%.2f,\"trace\":\"%s\"",
-                calls, samples, rotated, maxDeg, TestTrace.json(trace)));
+                "\"calls\":%d,\"samples\":%d,\"rotated\":%d,\"maxDeg\":%.2f"
+                        + ",\"modelGateInstalled\":%d,\"trace\":\"%s\"",
+                calls, samples, rotated, maxDeg, modelGateInstalledFlag, TestTrace.json(trace)));
         return (int) samples;
     }
 
