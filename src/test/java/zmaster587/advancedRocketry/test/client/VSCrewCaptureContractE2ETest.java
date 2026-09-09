@@ -14,6 +14,7 @@ import zmaster587.advancedRocketry.test.Events;
 import zmaster587.advancedRocketry.test.ShipIdentity;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 
 /**
@@ -1676,6 +1677,7 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
                 + deckCapture5,
                 deckCapture5.contains("\"alreadyTracked\":true"));
 
+        long lookMarkLevel = clientEvents().mark();
         exec("tp @a ~ ~ ~ 0 90"); // look straight down at the deck underfoot
         bot().waitTicks(10);
         String level = clientString(
@@ -1690,10 +1692,15 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
         // PosLook echo RE-SEEDS it, the world pitch stays at 90 (down) and the deck pitch is what
         // moves. Those are the two accounts of why the crosshair lands where it does, and one
         // pair of numbers before and after separates them.
-        double deckPitchLevel = clientDouble(DECK_LOOK, "deckPitchDeg");
+        // Read off the RECORD the client wrote while looking down, not polled out of a static: the
+        // three deck-look numbers are one tick's triple, and the window says WHICH ten ticks they
+        // came from. A poll answered with whatever the socket caught, so a pitch that moved and came
+        // back between two asks had never happened.
+        String lookLevel = deckLookIn(lookMarkLevel, "while looking down at the level deck");
+        double deckPitchLevel = Events.number(lookLevel, "deckPitchDeg");
         double worldPitchLevel = bot().reportState().get("playerPitch").getAsDouble();
         long echoesLevel = (long) clientDouble(DECK_CAMERA, "posLookApplies");
-        String deckActiveLevel = clientString(DECK_LOOK, "active");
+        String deckActiveLevel = Events.text(lookLevel, "active");
         assertTrue("looking straight down on the LEVEL deck must resolve a block (got '" + level
                 + "')", !level.isEmpty());
 
@@ -1721,15 +1728,17 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
         assertTrue("the crew member must still be captured after the roll: " + capNow,
                 capNow.contains("\"alreadyTracked\":true"));
 
+        long lookMarkRolled = clientEvents().mark();
         exec("tp @a ~ ~ ~ 0 90");
         bot().waitTicks(10);
         String rolled = clientString(
                 DECK_CAMERA, "mouseOverBlock");
         String feetRolled = readSubPos(exec("artest vs subspace-census"));
-        double deckPitchRolled = clientDouble(DECK_LOOK, "deckPitchDeg");
+        String lookRolled = deckLookIn(lookMarkRolled, "while looking down on the rolled deck");
+        double deckPitchRolled = Events.number(lookRolled, "deckPitchDeg");
         double worldPitchRolled = bot().reportState().get("playerPitch").getAsDouble();
         long echoesRolled = (long) clientDouble(DECK_CAMERA, "posLookApplies");
-        String deckActiveRolled = clientString(DECK_LOOK, "active");
+        String deckActiveRolled = Events.text(lookRolled, "active");
         String cam = DECK_CAMERA;
         double rx = clientDouble(cam, "rayEyeX");
         double ry = clientDouble(cam, "rayEyeY");
@@ -2082,11 +2091,13 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
                 deckCapture8.contains("\"alreadyTracked\":true"));
 
         // Baseline aim (a server re-aim, which must RE-SEED the deck look, not fight it).
+        long lookMarkAim = clientEvents().mark();
         exec("tp @a ~ ~ ~ 20 10");
         bot().waitTicks(10);
         assertTrue("the deck-frame look must be engaged for a captured walking crew member "
                         + "(deckActive=false would make every assertion below vacuous)",
-                Boolean.parseBoolean(clientString(DECK_LOOK, "active")));
+                Boolean.parseBoolean(Events.text(
+                        deckLookIn(lookMarkAim, "after the server re-aim"), "active")));
         double[] look0 = clientLook();
         double cone0 = dot(up, look0);
 
@@ -2204,7 +2215,10 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
                 bot().turnLook(600f * dir, 0f); // dir * 90 degrees of deck yaw
                 bot().waitTicks(2);
             }
-            double heldDeckYaw = clientDouble(DECK_LOOK, "deckYawDeg");
+            long lookMarkLeg = clientEvents().mark();
+            bot().waitTicks(1); // one tick, so the window below cannot be empty by construction
+            double heldDeckYaw = Events.number(
+                    deckLookIn(lookMarkLeg, "before walking leg " + dir), "deckYawDeg");
             String infoW0 = shipInfo();
             double[] p0 = clientPos();
             double[] s0 = {readDouble(infoW0, POS_X), readDouble(infoW0, POS_Y),
@@ -2222,7 +2236,8 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
             String infoW1 = shipInfo();
             double[] s1 = {readDouble(infoW1, POS_X), readDouble(infoW1, POS_Y),
                     readDouble(infoW1, POS_Z)};
-            boolean stillAboard = Boolean.parseBoolean(clientString(DECK_LOOK, "active"));
+            boolean stillAboard = Boolean.parseBoolean(Events.text(
+                    deckLookIn(lookMarkLeg, "at the end of walking leg " + dir), "active"));
             // The walk displacement, with the ship's own drift removed, in the DECK frame.
             double[] walkWorld = {p1[0] - p0[0] - (s1[0] - s0[0]), p1[1] - p0[1] - (s1[1] - s0[1]),
                     p1[2] - p0[2] - (s1[2] - s0[2])};
@@ -2277,7 +2292,24 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
                 + (stepWindow == null ? "(the render seam sampled no aboard frame)" : stepWindow));
     }
 
-    private static final String DECK_LOOK = "zmaster587.advancedRocketry.client.DeckLook";
+    /**
+     * The last deck look this client RECORDED since {@code mark}, or a failure that says which
+     * window was empty.
+     *
+     * <p>Replaces {@code clientDouble("…client.DeckLook", …)} — a reflective read of a private
+     * production static across the socket. Two things changed and only one is the static: this
+     * answers about a WINDOW rather than about the instant the socket happened to ask, and an empty
+     * window is a named failure instead of a value that looks like a reading. The recorder writes
+     * every client tick, engaged or not, so an empty window means the tick path did not run — which
+     * is a finding, not a zero.</p>
+     */
+    private String deckLookIn(long mark, String what) throws Exception {
+        String rec = Events.lastRecord(clientEvents().since(mark, "deck_look"));
+        assertNotNull("no deck_look record " + what + " — the client's deck-look tick never ran in "
+                + "that window, so nothing below is a reading of it", rec);
+        return rec;
+    }
+
     private static final String SHIP_CAMERA_CLASS = "zmaster587.advancedRocketry.client.ShipFrameCamera";
     /** The camera telemetry the render mixins hold test-side; production keeps none of it. */
     private static final String DECK_CAMERA = "zmaster587.advancedRocketry.test.trace.DeckCameraState";

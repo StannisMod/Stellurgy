@@ -74,6 +74,7 @@
     "MixinRocketEventHandlerMotionSample",
     "MixinRocketEventHandlerViewState",
     "MixinShipFrameCameraEvents",
+    "MixinDeckLookEvents",
     "MixinRocketEventHandlerCameraFrame",
     "MixinEntityRendererEyeProbe",
     "MixinNetHandlerPosLookCount",
