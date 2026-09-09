@@ -118,7 +118,8 @@ public class VSRemoteBodyModelGateE2ETest extends AbstractSharedVsClientE2ETest 
      * a shared client always has a neighbour in candidacy.
      */
     private String scenarioShipId;
-    private static final String SHIP_CAMERA = "zmaster587.advancedRocketry.client.ShipFrameCamera";
+    /** The render-stage counters, held test-side; production keeps none of them. */
+    private static final String DECK_CAMERA = "zmaster587.advancedRocketry.test.trace.DeckCameraState";
     /** The TEST-side accumulator behind every model-gate window — production keeps no counters. */
     private static final String REMOTE_MODEL_WINDOW =
             "zmaster587.advancedRocketry.test.trace.RemoteModelWindow";
@@ -387,7 +388,7 @@ public class VSRemoteBodyModelGateE2ETest extends AbstractSharedVsClientE2ETest 
         // already advanced. The live field is the only one read while a window is open; everything
         // the failure branch needs comes off the closing record.
         final long windowMark = clientEvents().mark();
-        final long framesBefore = (long) clientDouble(SHIP_CAMERA, "cameraHookCalls");
+        final long framesBefore = (long) clientDouble(DECK_CAMERA, "cameraHookCalls");
         bot().invokeStaticInt(REMOTE_MODEL_WINDOW, "open");
         ClientPoll.Result<Long> r = ClientPoll.until(bot()::waitTicks,
                 () -> (long) clientDouble(REMOTE_MODEL_WINDOW, "samples"),
@@ -395,11 +396,11 @@ public class VSRemoteBodyModelGateE2ETest extends AbstractSharedVsClientE2ETest 
         if (r.satisfied) {
             return new Sampling(true, "");
         }
-        long frames = (long) clientDouble(SHIP_CAMERA, "cameraHookCalls") - framesBefore;
+        long frames = (long) clientDouble(DECK_CAMERA, "cameraHookCalls") - framesBefore;
         bot().invokeStaticInt(REMOTE_MODEL_WINDOW, "close");
         String window = Events.lastRecord(clientEvents().since(windowMark, "remote_model_window"));
         long models = window == null ? -1L : (long) Events.number(window, "calls");
-        long loaded = (long) clientDouble(SHIP_CAMERA, "clientLoadedEntities");
+        long loaded = (long) clientDouble(DECK_CAMERA, "loadedEntities");
         // The subject may have LEFT between the arrival gate and here, and "it is gone" and "it is
         // drawn wrong" are different bugs with the same zero. Read BOTH sides at the end of the
         // window so the verdict below is a claim about rendering only when the body is still there
@@ -407,7 +408,7 @@ public class VSRemoteBodyModelGateE2ETest extends AbstractSharedVsClientE2ETest 
         // it holds it at all.
         String subject = "server=" + serverEntity(subjectId) + " " + clientSighting(subjectId)
                 + " " + cameraBlocks() + " modelGateInstalled="
-                + clientString(SHIP_CAMERA, "modelGateInstalledFlag")
+                + clientString(REMOTE_MODEL_WINDOW, "modelGateInstalledFlag")
                 // The arrival record, kept alongside: a body that JOINED this client and is no
                 // longer in the sighting has been removed, and that is a different bug from a body
                 // the renderer declined to draw. The snapshot alone could not say which.

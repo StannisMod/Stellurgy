@@ -2414,28 +2414,6 @@ public class TestProbeCommand extends CommandBase {
             send(sender, "{\"ok\":true,\"clearedComputers\":" + clearedComputers + "}");
             return;
         }
-        // afc-debug - READ-ONLY. What the flight controller last commanded, from the physics thread.
-        if (args.length >= 1 && "afc-debug".equalsIgnoreCase(args[0])) {
-            double[] s = zmaster587.advancedRocketry.tile.TileAdvancedFlightComputer.debugControllerState;
-            if (s == null || s.length < 8) {
-                send(sender, "{\"ran\":false}");
-                return;
-            }
-            Map<String, Object> m = new LinkedHashMap<>();
-            m.put("ran", true);
-            m.put("dt", s[0]);
-            m.put("alphaX", s[1]);
-            m.put("alphaY", s[2]);
-            m.put("alphaZ", s[3]);
-            m.put("alpha", Math.sqrt(s[1] * s[1] + s[2] * s[2] + s[3] * s[3]));
-            m.put("omegaX", s[4]);
-            m.put("omegaY", s[5]);
-            m.put("omegaZ", s[6]);
-            m.put("omega", Math.sqrt(s[4] * s[4] + s[5] * s[5] + s[6] * s[6]));
-            m.put("angularEngaged", s[7] > 0.0);
-            send(sender, jsonMap(m));
-            return;
-        }
         // ship-frame-check [<dim> <entityId>] - READ-ONLY. For the ship the subject (default: first
         // player) is aboard, whether the MOVEMENT vector-rotate and the CAMERA attitude quaternion
         // describe the SAME rotation (upDisagreement/fwdDisagreement ~0 = consistent), plus the world<->

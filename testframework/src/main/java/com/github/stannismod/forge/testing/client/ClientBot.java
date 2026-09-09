@@ -465,6 +465,26 @@ public final class ClientBot implements Closeable {
      * player. Returns the client-side {@code EnumActionResult} name under
      * {@code result}.
      */
+    /**
+     * Right-clicks whatever the CROSSHAIR is on, letting vanilla decide what that is.
+     *
+     * <p>The difference from {@link #interactBlock} is the whole point of it. That one is TOLD which
+     * block to hit, so it can answer "does interacting with this position work" and can never answer
+     * "is the block the player interacts with the one his crosshair outlines" — the caller supplies
+     * the position under test. This calls {@code Minecraft.rightClickMouse}, which reads
+     * {@code mc.objectMouseOver} itself, so the dispatch under test is vanilla's own rather than a
+     * copy of it living in the harness.</p>
+     *
+     * <p>Reports what the crosshair was on AT THE MOMENT OF THE CLICK — {@code aimedAtBlock},
+     * {@code blockX}/{@code blockY}/{@code blockZ} and {@code blockBefore} (the registry id there
+     * before the click) — because reading that in a separate call is a second frame, and the
+     * question is what the outline and the click saw on ONE frame. On a physics-mod ship the
+     * position is the ship's own subspace one, as with {@link #reportMouseOver}.</p>
+     */
+    public JsonObject useMouseOver() throws IOException {
+        return assertOk(execute(command("use_mouse_over")));
+    }
+
     public JsonObject interactBlock(int x, int y, int z) throws IOException {
         JsonObject command = command("interact_block");
         command.addProperty("x", x);

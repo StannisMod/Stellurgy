@@ -41,6 +41,40 @@ public final class RemoteModelWindow {
 
     private RemoteModelWindow() {}
 
+    /**
+     * Whether the model-roll hook is actually WOVEN into {@code RenderLivingBase} right now:
+     * {@code 1} installed, {@code 0} absent.
+     *
+     * <p>{@code MixinRenderLivingBaseShipRoll} is declared {@code require = 0} so that a render mod
+     * rewriting {@code applyRotations} cannot abort the whole mixin config. The price is that a miss
+     * — an ordinal drift, a competing transformer, a mapping change — is completely SILENT: the
+     * feature is simply gone and every symptom looks like "nothing was drawn". This asks the
+     * TRANSFORMED CLASS ITSELF, so the answer survives a deleted harness log and a scenario can
+     * separate "the gate decided not to rotate" from "there is no gate".</p>
+     *
+     * <p>It used to be a {@code public static final int} on {@code ShipFrameCamera}, computed at
+     * class-init and read by exactly one scenario over the socket. Nothing in production called it.
+     * It is a question about the woven bytecode, not about production's logic, so asking it here is
+     * a read and not a re-derivation — and it is evaluated once, on first touch, rather than on
+     * every client's class-init.</p>
+     */
+    public static final int modelGateInstalledFlag = probeModelGate();
+
+    private static int probeModelGate() {
+        try {
+            for (java.lang.reflect.Method m
+                    : net.minecraft.client.renderer.entity.RenderLivingBase.class
+                            .getDeclaredMethods()) {
+                if (m.getName().contains("rollWithShip")) {
+                    return 1;
+                }
+            }
+            return 0;
+        } catch (Throwable t) {
+            return 0;
+        }
+    }
+
     /** Trace budget in characters — the FAILING case names its first few subjects and then stops.
      *  A green run never appends at all; a red one diagnoses without unbounded churn. */
     private static final int TRACE_BUDGET = 400;

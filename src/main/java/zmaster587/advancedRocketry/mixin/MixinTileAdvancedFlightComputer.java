@@ -154,14 +154,6 @@ public abstract class MixinTileAdvancedFlightComputer implements IPhysicsBlockCo
             tx = torque.x; ty = torque.y; tz = torque.z;
         }
 
-        TileAdvancedFlightComputer.debugControllerState = new double[]{
-                dt,
-                angAccel == null ? 0.0 : angAccel[0],
-                angAccel == null ? 0.0 : angAccel[1],
-                angAccel == null ? 0.0 : angAccel[2],
-                w.x, w.y, w.z,
-                angAccel == null ? -1.0 : 1.0};
-
         // Flight recorder, physics-thread channel: one sample per physics step. This is the clock
         // the ship's velocity actually integrates on, and it is NOT the game tick — an interval
         // that wanders here is the physics loop failing to hold its rate, which no server-side tick

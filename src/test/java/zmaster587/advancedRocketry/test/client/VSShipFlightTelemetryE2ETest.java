@@ -73,7 +73,7 @@ public class VSShipFlightTelemetryE2ETest extends AbstractSharedVsClientE2ETest 
 
     private static final String VARIANT = "with-pilot-seat";
     private static final String KEY_BINDINGS = "zmaster587.advancedRocketry.client.KeyBindings";
-    private static final String SHIP_CAMERA = "zmaster587.advancedRocketry.client.ShipFrameCamera";
+    private static final String SHIP_CAMERA = "zmaster587.advancedRocketry.test.trace.DeckCameraState";
     /** The TEST-side holder of the client's own last camera setup — production keeps no such field. */
     private static final String DECK_CAMERA_STATE =
             "zmaster587.advancedRocketry.test.trace.DeckCameraState";
@@ -187,7 +187,6 @@ public class VSShipFlightTelemetryE2ETest extends AbstractSharedVsClientE2ETest 
                 },
                 o -> o <= 0.05, 2, 150);
         double settled = braked.value;
-        String controller = exec("artest vs afc-debug");
         // Every control packet this computer ACCEPTED since before the centring began. The recorder
         // sits on setPilotInput, which the seat calls only after its own pilot guard, so a record
         // here is a packet the server took — and a stream that stops while the cursor was still
@@ -202,13 +201,13 @@ public class VSShipFlightTelemetryE2ETest extends AbstractSharedVsClientE2ETest 
         System.out.println("[tier2] omega spinning=" + spinning + " settled=" + settled
                 + " poll=" + braked + " trace=[" + omegaTrace + "]"
                 + " pilotInputsAcceptedSinceCentring=" + accepted
-                + " lastAcceptedTick=" + lastAcceptedTick + " controller=" + controller);
-        // THE TWO READINGS ARE NOT THE SAME SUBJECT, and this message used to print them side by side
-        // as if they were. `ship-info` is asked about THIS ship. `afc-debug` reads
-        // TileAdvancedFlightComputer.debugControllerState, a GLOBAL mutable static written by
-        // whichever flight computer's controller ran last — on a shared client that is frequently a
-        // different craft. A near-zero omega there beside a large one here means the readings
-        // disagree about WHICH SHIP, not that the ship stopped.
+                + " lastAcceptedTick=" + lastAcceptedTick);
+        // The controller read-back that used to be printed here is GONE, and its absence is the
+        // point. It came from `artest vs afc-debug`, which read a global last-writer static on
+        // TileAdvancedFlightComputer — written by whichever flight computer ran last, on a shared
+        // client that is frequently a different craft. It answered a different question from the
+        // one this scenario asks, it was never asserted on, and production allocated an array on
+        // every physics step to keep it fed. `ship-info` below is asked about THIS ship.
         assertTrue("with the flight cursor centred the ship must STOP turning, not coast: it was "
                 + "spinning at " + spinning + " rad/s and is still at " + settled
                 + " after " + braked
@@ -217,9 +216,7 @@ public class VSShipFlightTelemetryE2ETest extends AbstractSharedVsClientE2ETest 
                 + " failing to coast to a stop. The computer accepted " + accepted + " pilot inputs"
                 + " since before the cursor was centred (the last at tick " + lastAcceptedTick
                 + "), and the idle that says 'stop' is sent ONCE, on the tick the cursor enters the"
-                + " dead-zone: a stream that ends before then never carried it."
-                + " The controller line below is a GLOBAL last-writer static and may describe"
-                + " another craft entirely — compare it for what it is: " + controller,
+                + " dead-zone: a stream that ends before then never carried it.",
                 settled <= 0.05);
 
         exec("artest player dismount");
@@ -235,7 +232,7 @@ public class VSShipFlightTelemetryE2ETest extends AbstractSharedVsClientE2ETest 
         buildAndBoardShip(bx, by, bz);
         bot().waitTicks(20);
 
-        double rollUpright = clientDouble(SHIP_CAMERA, "shipCamRoll");
+        double rollUpright = clientDouble(SHIP_CAMERA, "roll");
         assertTrue("an upright ship must leave the camera level (roll=" + rollUpright + ")",
                 Math.abs(rollUpright) < 15.0);
 
@@ -246,7 +243,7 @@ public class VSShipFlightTelemetryE2ETest extends AbstractSharedVsClientE2ETest 
         // Where exactly a rigid body coasts to is not the contract; that it went over, and that the
         // camera went with it, is. Read the pair adjacently so they describe the same instant.
         double shipUpY = clientDouble(DECK_CAMERA_STATE, "shipUpY");
-        double rollInverted = clientDouble(SHIP_CAMERA, "shipCamRoll");
+        double rollInverted = clientDouble(SHIP_CAMERA, "roll");
         assertTrue("the ship must actually have rolled past vertical (its up points " + shipUpY + ")",
                 shipUpY < -0.3);
 
@@ -263,7 +260,7 @@ public class VSShipFlightTelemetryE2ETest extends AbstractSharedVsClientE2ETest 
         // 2. The eye follows the SHIP's up, not the world's. This is the "camera sinks into the floor"
         //    bug: with the eye pinned to world +Y, an inverted pilot's eye is a metre and a half INSIDE
         //    the deck above his seat. The contract: the eye is displaced along the ship's up.
-        double eyeY = clientDouble(SHIP_CAMERA, "shipCamEyeY");
+        double eyeY = clientDouble(SHIP_CAMERA, "eyeY");
         double playerY = bot().reportState().get("playerY").getAsDouble();
         System.out.println("[tier2] shipUpY=" + shipUpY + " playerY=" + playerY + " eyeY=" + eyeY);
         assertTrue("the eye must be offset along the SHIP's up, not the world's: shipUpY=" + shipUpY

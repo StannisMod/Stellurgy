@@ -420,7 +420,7 @@ public class VSDeckCaptureAndDismountE2ETest extends AbstractSharedVsClientE2ETe
 
     // ---- Bug: flying into a ship's airspace hijacks a walking player's camera ------------------
 
-    private static final String SHIP_CAMERA = "zmaster587.advancedRocketry.client.ShipFrameCamera";
+    private static final String SHIP_CAMERA = "zmaster587.advancedRocketry.test.trace.DeckCameraState";
     /** The TEST-side holder of the client's own last camera setup — production keeps no such field. */
     private static final String DECK_CAMERA_STATE =
             "zmaster587.advancedRocketry.test.trace.DeckCameraState";
@@ -454,8 +454,8 @@ public class VSDeckCaptureAndDismountE2ETest extends AbstractSharedVsClientE2ETe
         boolean inAABB = flyInCap.contains("\"aboardByContainment\":true");
         boolean onShipBlock = flyInCap.contains("\"supportedByShip\":true");
         boolean tracked = flyInCap.contains("\"alreadyTracked\":true");
-        boolean flyInCam = Boolean.parseBoolean(clientString(SHIP_CAMERA, "shipCamActive"));
-        double flyInRoll = clientDouble(SHIP_CAMERA, "shipCamRoll");
+        boolean flyInCam = Boolean.parseBoolean(clientString(SHIP_CAMERA, "active"));
+        double flyInRoll = clientDouble(SHIP_CAMERA, "roll");
         System.out.println("[deckcap] cam fly-in active=" + flyInCam + " roll=" + flyInRoll + " inAABB="
                 + inAABB + " onShipBlock=" + onShipBlock + " tracked=" + tracked + " cap=" + flyInCap);
         assertTrue("setup: the fly-in point must be inside the ship's AABB, off any deck block, with the "
@@ -498,7 +498,7 @@ public class VSDeckCaptureAndDismountE2ETest extends AbstractSharedVsClientE2ETe
         exec("tp @a " + readDouble(lvl, POS_X) + " " + (readDouble(lvl, POS_Y) + 5) + " "
                 + readDouble(lvl, POS_Z) + " 0 0");
         ClientPoll.Result<Boolean> camPoll = ClientPoll.<Boolean>until(bot()::waitTicks,
-                () -> Boolean.parseBoolean(clientString(SHIP_CAMERA, "shipCamActive")),
+                () -> Boolean.parseBoolean(clientString(SHIP_CAMERA, "active")),
                 active -> active.booleanValue(), 5, 40);
         String engaged = clientEvents.since(onDeckMark, "deck_camera_changed");
         boolean onDeckCam = camPoll.value;
@@ -1006,8 +1006,8 @@ public class VSDeckCaptureAndDismountE2ETest extends AbstractSharedVsClientE2ETe
         StringBuilder trace = new StringBuilder();
         for (int i = 0; i < n; i++) {
             bot().waitTicks(4);
-            boolean active = Boolean.parseBoolean(clientString(SHIP_CAMERA, "shipCamActive"));
-            double roll = clientDouble(SHIP_CAMERA, "shipCamRoll");
+            boolean active = Boolean.parseBoolean(clientString(SHIP_CAMERA, "active"));
+            double roll = clientDouble(SHIP_CAMERA, "roll");
             // Counted as "captured" only while the capture is anchored on THIS scenario's ship: the
             // claim below is that one capture held for the whole window, and a body handed from this
             // hull to a neighbour's and back keeps `verdict:true` at every sample.

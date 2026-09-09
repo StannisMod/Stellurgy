@@ -1075,6 +1075,48 @@ public final class ForgeTestClientBootstrap {
                     }
                     return response;
                 });
+            case "use_mouse_over":
+                // Right-click WHATEVER THE CROSSHAIR IS ON, by calling vanilla's own dispatch.
+                //
+                // `interact_block` is told which block to hit; that answers "does interacting with
+                // THIS position work". It cannot answer "is the block the player interacts with the
+                // one his crosshair outlines", because the caller supplies the very position under
+                // test. Vanilla decides that itself in Minecraft.rightClickMouse, which reads
+                // mc.objectMouseOver — so this INVOKES that method rather than reproducing what it
+                // does. Reproducing it would put a copy of the dispatch in the harness, and a copy
+                // agrees with production until the day production changes.
+                //
+                // Private, hence reflection: the dev runtime carries MCP names, and the harness runs
+                // nowhere else. A rename shows up as a loud NoSuchMethodException, not a silent miss.
+                //
+                // The crosshair is reported as it stood AT THE MOMENT OF THE CLICK, in this same
+                // response: reading it in a separate socket call is a second frame, and the whole
+                // question is what the click and the outline saw on ONE frame.
+                return runOnClientThread(() -> {
+                    Minecraft mc = Minecraft.getMinecraft();
+                    if (mc.player == null || mc.world == null) {
+                        throw new IllegalStateException("use_mouse_over: client world/player not ready");
+                    }
+                    JsonObject response = ok();
+                    net.minecraft.util.math.RayTraceResult hit = mc.objectMouseOver;
+                    response.addProperty("aimedAtBlock", hit != null
+                            && hit.typeOfHit == net.minecraft.util.math.RayTraceResult.Type.BLOCK);
+                    BlockPos aimed = hit == null ? null : hit.getBlockPos();
+                    response.addProperty("blockX", aimed == null ? Integer.MIN_VALUE : aimed.getX());
+                    response.addProperty("blockY", aimed == null ? Integer.MIN_VALUE : aimed.getY());
+                    response.addProperty("blockZ", aimed == null ? Integer.MIN_VALUE : aimed.getZ());
+                    response.addProperty("blockBefore", aimed == null ? ""
+                            : String.valueOf(mc.world.getBlockState(aimed).getBlock().getRegistryName()));
+                    try {
+                        java.lang.reflect.Method dispatch =
+                                Minecraft.class.getDeclaredMethod("rightClickMouse");
+                        dispatch.setAccessible(true);
+                        dispatch.invoke(mc);
+                    } catch (Exception e) {
+                        throw new IllegalStateException("use_mouse_over: rightClickMouse failed: " + e, e);
+                    }
+                    return response;
+                });
             case "interact_block":
                 // Real right-click: PlayerControllerMP.processRightClickBlock
                 // sends CPacketPlayerTryUseItemOnBlock, so the server's

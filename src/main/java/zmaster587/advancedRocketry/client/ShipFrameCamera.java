@@ -30,79 +30,18 @@ public final class ShipFrameCamera {
 
     private ShipFrameCamera() {}
 
-    // ---- Client-observable telemetry (read by the flight e2e; never by production logic) -------
-
-    /** Whether the ship-frame camera was engaged on the last rendered frame. */
-    public static volatile boolean shipCamActive = false;
-    /** The block position the client's crosshair raytrace resolved this frame, as "x,y,z" (ship
-     *  blocks come back in SUBSPACE coordinates), or "" when it hit no block. Written
-     *  UNCONDITIONALLY - deliberately NOT gated on test mode, because the harness child JVMs run
-     *  without it and this static is their only window onto what the crosshair resolves. Lets a
-     *  client e2e assert WHAT the crosshair actually picks - the block outlined under the crosshair
-     *  must be the block interacted with, at any ship attitude - through {@code readStaticField},
-     *  with no live objectMouseOver access. */
-    public static volatile String lastMouseOverBlock = "";
-    /** Where the crosshair RAY actually originates ({@code getPositionEyes}) this frame — compared
-     *  by the crosshair-picking e2e against {@code shipCamEye*} (what the RENDERER recorded): the
-     *  two must be one point, or the crosshair picks a block the camera is not looking at. */
-    public static volatile double lastRayEyeX, lastRayEyeY, lastRayEyeZ;
-    /** The camera attitude actually pushed to the renderer last frame (degrees). */
-    public static volatile double shipCamYaw = 0.0;
-    public static volatile double shipCamPitch = 0.0;
-    public static volatile double shipCamRoll = 0.0;
-    /** The world-frame eye position the camera was placed at last frame. */
-    public static volatile double shipCamEyeX = 0.0;
-    public static volatile double shipCamEyeY = 0.0;
-    public static volatile double shipCamEyeZ = 0.0;
-    // ---- Remote-body model-gate telemetry. The decision is taken per entity per FRAME and is a
-    // transient: a first/last-call snapshot lands on an arbitrary body at an arbitrary moment and
-    // says nothing. Cumulative counters plus a bounded trace with coordinates are what a test can
-    // actually reason about - "over this window, how many remote bodies were drawn rotated, and
-    // where were they". Ungated (no test-mode check): the harness's child JVMs have no test mode.
-    /** Frames on which the camera-stage render hook ran. The control for the model stage: if this
-     *  advances while {@link #modelRotationFor} is not being called, the render stage IS running and
-     *  the model stage is the thing not reaching us; if neither advances, nothing is being drawn. */
-    public static volatile long cameraHookCalls = 0L;
-    /** Entities in the CLIENT world, sampled on the same frame as {@link #cameraHookCalls}. The
-     *  other control: a draw-stage counter of zero means nothing when the subject never reached
-     *  this side. {@code -1} = no client world. */
-    public static volatile int clientLoadedEntities = -1;
-    // The model-rotation counters that used to sit here are gone (2026-09-08). Every decision this
-    // class makes about a body's model rotation is `modelRotationFor`, which takes the body and
-    // returns the rotation, so a watcher on that method sees the same decisions with the same
-    // numbers — and can attribute them, window them and reset them, which five cumulative statics
-    // could not. `modelRotationCalls` is that method being CALLED, which is the discriminator
-    // against a silent `require = 0` mixin miss; the rest were derived from its argument and its
-    // return value.
-
-    // ---- Smoothness discriminators (ledger: "6-8 discrete points per jump"). A dead prev->pos
-    // interpolation shows as consecutive frames sharing one interpolated camera position: at
-    // 120 FPS / 20 TPS a healthy ratio is ~0 same-pos frames; ~5/6 of them means the camera is
-    // stepping at tick rate. posLookApplies names the classic prev-collapsing writer (a server
-    // PosLook echo per tick). Ungated statics - harness child JVMs have no test mode. ----
-
-    /** Server PosLook packets actually applied on the client main thread. */
-    public static volatile long posLookApplies = 0;
-
-    /**
-     * Seam: one ABOARD frame was drawn, with the camera's interpolated base position.
-     *
-     * <p>A SEAM, and nothing else — and this one used to do real arithmetic on every rendered
-     * frame. It kept eight statics: how many aboard frames had been drawn, how many of them repeated
-     * the previous frame's interpolated position, and per-frame STEP statistics (max, sum, count)
-     * for the ABSOLUTE camera path and for the path RELATIVE to a fixed deck point. Those numbers
-     * discriminate where a felt stutter lives — a smooth path has max ~ mean, a tick-stepped one has
-     * max >> mean, and relative-vs-absolute splits "the body jitters in the world" from "it jitters
-     * against the deck it rides" — but they are a TEST's question, accumulated at 120 Hz inside a
-     * class that ships to players, and their only readers printed them.</p>
-     *
-     * <p>Kept as a call rather than deleted because this call site is the only place that holds the
-     * interpolated camera position and the partial tick it was drawn at. The deck reference the
-     * relative half needs is {@code DeckLook.refWorldAt(partialTicks)}, which is public, so the
-     * whole accumulation is reachable from the test side.</p>
-     */
-    public static void recordFrameInterp(double x, double y, double z, float partialTicks) {
-    }
+    // ---- No telemetry statics here, and no seam that exists only to be watched ----------------
+    //
+    // This class used to keep fourteen `public static volatile` fields describing what the camera
+    // had been handed, plus a `recordFrameInterp` whose body was EMPTY - a method kept in shipping
+    // code purely as an injection point. Nothing in production read any of it: every reader was a
+    // client e2e on the far side of the harness socket.
+    //
+    // All of it is observed where it HAPPENS now. Those values were never this class's to hold -
+    // they are locals and arguments of the render paths that compute them, and a test mixin
+    // injected into those paths sees the same numbers at the same instant, holds them in the test
+    // source set, and can window and reset them, which a cumulative static could not. What remains
+    // below is the camera arithmetic itself, which production calls and which is therefore real.
 
     /**
      * The attitude of the ship {@code view} is aboard, smoothed across the frame, or {@code null} when
@@ -251,34 +190,6 @@ public final class ShipFrameCamera {
         return new double[]{Math.toDegrees(angle), q.x / s, q.y / s, q.z / s};
     }
 
-    /**
-     * Whether the model-roll hook is actually WOVEN into {@code RenderLivingBase} right now:
-     * {@code 1} installed, {@code 0} absent.
-     *
-     * <p>{@code MixinRenderLivingBaseShipRoll} is declared {@code require = 0} so that a render mod
-     * which rewrites {@code applyRotations} cannot abort the whole mixin config. The price is that
-     * a miss - an ordinal drift, a competing transformer, a mapping change - is completely SILENT:
-     * the feature is simply gone and every symptom looks like "nothing was drawn". This asks the
-     * transformed class itself, so the answer survives a deleted harness log (a client log is not
-     * available post-run) and a test can separate "the gate decided not to rotate" from "there is
-     * no gate".</p>
-     */
-    public static final int modelGateInstalledFlag = modelGateInstalled();
-
-    /** @see #modelGateInstalledFlag */
-    public static int modelGateInstalled() {
-        try {
-            for (java.lang.reflect.Method m
-                    : net.minecraft.client.renderer.entity.RenderLivingBase.class.getDeclaredMethods()) {
-                if (m.getName().contains("rollWithShip")) {
-                    return 1;
-                }
-            }
-            return 0;
-        } catch (Throwable t) {
-            return 0;
-        }
-    }
 
     /**
      * A world yaw, re-expressed in the ship's frame. The model's own yaw is a world heading; once the
@@ -307,141 +218,5 @@ public final class ShipFrameCamera {
                 -MathHelper.sin(pitch),
                 MathHelper.cos(yaw) * cosPitch
         };
-    }
-
-    /** Record what the renderer was actually handed this frame, for the flight e2e to read back. */
-    public static void recordCamera(boolean active, double yaw, double pitch, double roll,
-                                    double[] shipUp, double eyeX, double eyeY, double eyeZ) {
-        shipCamActive = active;
-        shipCamYaw = yaw;
-        shipCamPitch = pitch;
-        shipCamRoll = roll;
-        shipCamEyeX = eyeX;
-        shipCamEyeY = eyeY;
-        shipCamEyeZ = eyeZ;
-        // No shipUpY store: the ship's up arrives here as a PARAMETER on every frame, and the only
-        // readers of the field it used to be kept in were tests on the other side of the socket.
-        // A watcher on this method sees the same vector, at the same moment, and can hold it where
-        // its readers live.
-    }
-
-    // ---- Render-dispatch stage probe ----------------------------------------------------------
-    //
-    // Vanilla does NOT walk the loaded-entity list to draw entities: RenderGlobal.renderEntities
-    // iterates the VISIBLE render-chunk set built by setupTerrain and pulls each section's entities
-    // out of that chunk's own per-section list. So "the entity exists on the client but its model was
-    // never drawn" has three distinct causes - the section is not in the visible set, the entity is
-    // not in its chunk's list, or the frustum/range test rejected it - and a counter of models drawn
-    // cannot tell them apart. This reports which one applies, for ONE entity, on demand.
-    //
-    // Costs nothing when nobody asks: it is not a per-frame hook, it runs only when called (the test
-    // harness invokes it on the client thread). Both lookups find their field BY TYPE rather than by
-    // name, so no mapping name is hard-coded.
-
-    private static java.lang.reflect.Field renderInfosField;
-    private static java.lang.reflect.Field renderChunkField;
-
-    /**
-     * Which stage of the vanilla entity-render dispatch the given entity currently passes on this
-     * client: whether the client holds it at all, whether its chunk section is in the visible render
-     * set, and whether the chunk's own entity list contains it.
-     *
-     * <p>Diagnostic only - nothing in production reads it. Returns a flat {@code key=value} string so
-     * a caller gets the whole picture in one round trip.</p>
-     */
-    public static String renderStageReport(int entityId) {
-        Minecraft mc = Minecraft.getMinecraft();
-        if (mc.world == null) {
-            return "clientWorld=none";
-        }
-        Entity subject = mc.world.getEntityByID(entityId);
-        if (subject == null) {
-            return "entityId=" + entityId + " present=false loadedEntities=" + mc.world.loadedEntityList.size();
-        }
-        int chunkX = MathHelper.floor(subject.posX / 16.0);
-        int chunkZ = MathHelper.floor(subject.posZ / 16.0);
-        int section = MathHelper.clamp(MathHelper.floor(subject.posY / 16.0), 0, 15);
-        net.minecraft.world.chunk.Chunk chunk = mc.world.getChunkFromChunkCoords(chunkX, chunkZ);
-        boolean inChunkList = chunk.getEntityLists()[section].contains(subject);
-        boolean blockLoaded = mc.world.isBlockLoaded(new net.minecraft.util.math.BlockPos(subject));
-
-        int visibleSections = -1;
-        String sectionVisible = "unavailable";
-        java.util.List<?> infos = visibleRenderSections(mc.renderGlobal);
-        if (infos != null) {
-            visibleSections = infos.size();
-            sectionVisible = "false";
-            for (Object info : infos) {
-                net.minecraft.util.math.BlockPos at = renderChunkPosition(info);
-                if (at != null && at.getX() >> 4 == chunkX && at.getZ() >> 4 == chunkZ
-                        && at.getY() >> 4 == section) {
-                    sectionVisible = "true";
-                    break;
-                }
-            }
-        }
-        return String.format(java.util.Locale.ROOT,
-                "entityId=%d present=true pos=%.2f,%.2f,%.2f chunk=%d,%d section=%d "
-                        + "sectionVisible=%s visibleSections=%d inChunkEntityList=%s addedToChunk=%s "
-                        + "chunkCoord=%d,%d,%d blockLoaded=%s chunkLoaded=%s",
-                entityId, subject.posX, subject.posY, subject.posZ, chunkX, chunkZ, section,
-                sectionVisible, visibleSections, inChunkList, subject.addedToChunk,
-                subject.chunkCoordX, subject.chunkCoordY, subject.chunkCoordZ, blockLoaded,
-                chunk.isLoaded());
-    }
-
-    /** The renderer's visible render-chunk list, or {@code null} when it cannot be reached. */
-    private static java.util.List<?> visibleRenderSections(net.minecraft.client.renderer.RenderGlobal global) {
-        if (global == null) {
-            return null;
-        }
-        try {
-            if (renderInfosField == null) {
-                for (java.lang.reflect.Field field
-                        : net.minecraft.client.renderer.RenderGlobal.class.getDeclaredFields()) {
-                    if (!java.util.List.class.isAssignableFrom(field.getType())) {
-                        continue;
-                    }
-                    field.setAccessible(true);
-                    Object value = field.get(global);
-                    if (value instanceof java.util.List && !((java.util.List<?>) value).isEmpty()
-                            && renderChunkPosition(((java.util.List<?>) value).get(0)) != null) {
-                        renderInfosField = field;
-                        break;
-                    }
-                }
-            }
-            return renderInfosField == null ? null : (java.util.List<?>) renderInfosField.get(global);
-        } catch (Exception e) {
-            return null;
-        }
-    }
-
-    /** The section position of a visible-render-chunk entry, or {@code null} if it is not one. */
-    private static net.minecraft.util.math.BlockPos renderChunkPosition(Object info) {
-        if (info == null) {
-            return null;
-        }
-        try {
-            if (renderChunkField == null || renderChunkField.getDeclaringClass() != info.getClass()) {
-                renderChunkField = null;
-                for (java.lang.reflect.Field field : info.getClass().getDeclaredFields()) {
-                    if (net.minecraft.client.renderer.chunk.RenderChunk.class
-                            .isAssignableFrom(field.getType())) {
-                        field.setAccessible(true);
-                        renderChunkField = field;
-                        break;
-                    }
-                }
-            }
-            if (renderChunkField == null) {
-                return null;
-            }
-            net.minecraft.client.renderer.chunk.RenderChunk renderChunk =
-                    (net.minecraft.client.renderer.chunk.RenderChunk) renderChunkField.get(info);
-            return renderChunk == null ? null : renderChunk.getPosition();
-        } catch (Exception e) {
-            return null;
-        }
     }
 }

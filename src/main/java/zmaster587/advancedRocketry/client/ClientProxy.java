@@ -269,6 +269,12 @@ public class ClientProxy extends CommonProxy {
     public void preinit() {
         OBJLoader.INSTANCE.addDomain("advancedrocketry");
         registerRenderers();
+        // Hand the aboard-movement resolution this side's look/input answers. Here, and not from a
+        // static initialiser of the class that answers them: the port must exist before the first
+        // aboard tick, and a port that appears when something happens to class-load its implementor
+        // is absent exactly when nothing has needed it yet.
+        zmaster587.advancedRocketry.integration.vs.ShipFrameTravel.installClientLookSource(
+                new zmaster587.advancedRocketry.client.DeckLook.Port());
         bootstrapTestClientBridge();
     }
 

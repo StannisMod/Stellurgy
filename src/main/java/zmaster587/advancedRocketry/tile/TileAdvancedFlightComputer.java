@@ -376,14 +376,6 @@ public class TileAdvancedFlightComputer extends TileEntity implements IModularIn
     private static final double TICKS_PER_SECOND = 20.0;
 
     /**
-     * What the force controller last did, written from the PHYSICS thread and read by a test probe.
-     * The controller runs where no breakpoint and no log line is welcome, so without this the only way
-     * to tell an under-powered brake from a mis-framed torque is to guess.
-     * {@code {dt, alphaX, alphaY, alphaZ, omegaX, omegaY, omegaZ, errorAngle}}
-     */
-    public static volatile double[] debugControllerState = null;
-
-    /**
      * Set (or clear) the seated pilot's Free Flight input for this computer. Server-side; called
      * by the pilot seat when a control packet arrives, and with {@code null} when the pilot
      * leaves. A {@code null} pilotInput lets {@link #update()} fall back to the static bring-up

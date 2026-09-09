@@ -53,14 +53,5 @@ public abstract class MixinEntityRendererShipEye {
                 (float) (-eyeHeight * up[0]),
                 (float) (-eyeHeight * up[1]),
                 (float) (-eyeHeight * up[2]));
-
-        double px = view.prevPosX + (view.posX - view.prevPosX) * partialTicks;
-        double py = view.prevPosY + (view.posY - view.prevPosY) * partialTicks;
-        double pz = view.prevPosZ + (view.posZ - view.prevPosZ) * partialTicks;
-        ShipFrameCamera.recordFrameInterp(px, py, pz, partialTicks);
-        ShipFrameCamera.recordCamera(true,
-                ShipFrameCamera.shipCamYaw, ShipFrameCamera.shipCamPitch, ShipFrameCamera.shipCamRoll,
-                up,
-                px + eyeHeight * up[0], py + eyeHeight * up[1], pz + eyeHeight * up[2]);
     }
 }

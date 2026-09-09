@@ -144,8 +144,19 @@ public class KeyBindings {
     /** Guards the one-shot ENGINE_START send per hold. */
     private boolean engineStartSent = false;
     /** Commanded turn rates of the current tick, [-1,1] — drawn as the HUD
-     *  turn-rate dot (Phase 4). */
-    public static volatile float hudYawRate = 0f, hudPitchRate = 0f;
+     *  turn-rate dot (Phase 4). Written only by this class's two input paths, which publish the
+     *  same deflection at the same step; the HUD reads them through the accessors below. */
+    private static volatile float hudYawRate = 0f, hudPitchRate = 0f;
+
+    /** @see #hudYawRate */
+    public static float hudYawRate() {
+        return hudYawRate;
+    }
+
+    /** @see #hudPitchRate */
+    public static float hudPitchRate() {
+        return hudPitchRate;
+    }
 
     /** Mouse motion accumulated since the last pin, captured at the HEAD of
      *  a PosLook teleport so the vanilla handler can't destroy it (the echo

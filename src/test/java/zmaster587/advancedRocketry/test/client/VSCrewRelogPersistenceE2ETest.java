@@ -156,7 +156,7 @@ public class VSCrewRelogPersistenceE2ETest extends AbstractSharedVsClientE2ETest
         double deckStep = 0.0;
         for (int attempt = 0; attempt < 25 && upY > -0.9; attempt++) {
             bot().waitTicks(10);
-            deckStep = Math.max(deckStep, clientDouble(SHIP_FRAME_TRAVEL, "lastReseatStep"));
+            deckStep = Math.max(deckStep, clientDouble("zmaster587.advancedRocketry.test.trace.DeckReseatState", "lastReseatStep"));
             // The shared reading, which uses the full expression 1 - 2(qx^2 + qz^2). The
             // single-axis shortcut this loop carried answers a confident 1.0 for a ship that rolled
             // about a different axis, and would fail this ARRANGEMENT gate for the wrong reason.

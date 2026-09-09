@@ -1787,11 +1787,61 @@ public final class ShipFrameTravel {
      *  EntityPlayerSP.onLivingUpdate}); the factor is re-applied on deck axes. */
     private static final double FLY_IMPULSE_FACTOR = 3.0D;
 
-    /** The local player's vertical fly intent (+1 ascend / -1 descend / 0), read at CALL time so
-     *  it is exactly the input state vanilla's own impulse used THIS tick. Installed once from the
-     *  client (the deck-look class); stays {@code null} on a dedicated server, where a player's
-     *  flight is client-authoritative anyway. */
-    public static volatile java.util.function.Function<EntityLivingBase, Integer> clientFlyIntent = null;
+    /**
+     * The client's answers about a body whose LOOK and INPUT this side owns - the two questions
+     * aboard movement must ask the client and cannot answer itself.
+     *
+     * <p>The boundary is real: this class resolves movement on both sides, while the deck look is
+     * client-only state that a dedicated server never has. So the client hands its answers DOWN
+     * through this port; nothing here reaches up into a client class.</p>
+     *
+     * <p>Both methods answer {@code null} for a body this client does not own (a mob, a remote
+     * player), which is the caller's signal to fall back to what the world frame can tell it. That
+     * is a per-BODY answer, and it is the only meaning {@code null} carries once the port itself is
+     * installed - see {@link #installClientLookSource}.</p>
+     */
+    public interface ClientLookSource {
+
+        /** The held DECK-frame heading (degrees) for {@code entity}, or {@code null} when this
+         *  client does not hold that body's look. */
+        Float deckYaw(EntityLivingBase entity);
+
+        /** The vertical fly intent (+1 ascend / -1 descend / 0) for {@code entity} at CALL time -
+         *  so it is exactly the input state vanilla's own impulse used THIS tick - or {@code null}
+         *  when this client does not own that body's movement. */
+        Integer flyIntent(EntityLivingBase entity);
+    }
+
+    /** The installed client port, or {@code null} on a dedicated server, which has no client look
+     *  and where a player's flight is client-authoritative anyway. Written only by
+     *  {@link #installClientLookSource}. */
+    private static volatile ClientLookSource clientLookSource = null;
+
+    /**
+     * Install the client's look/input port. Called once, from the client's own init - NOT from a
+     * static initialiser of the class that implements it.
+     *
+     * <p>The distinction is the whole point of the method. Under a static initialiser the port
+     * appeared whenever something happened to class-load the implementor, so a {@code null} port on
+     * a CLIENT meant "nobody has touched that class yet" and the aboard-movement branches silently
+     * fell back to the world-frame projection - a degradation indistinguishable from success, at
+     * exactly the moment (the first aboard tick after login) it was most likely. Installed from a
+     * lifecycle hook that runs before any world exists, {@code null} means "dedicated server" and
+     * nothing else.</p>
+     *
+     * @throws IllegalStateException if a port is already installed - a second install over a live
+     *         one is a lifecycle bug, and overwriting silently would hide it
+     */
+    public static void installClientLookSource(ClientLookSource source) {
+        if (source == null) {
+            throw new IllegalArgumentException("client look source must not be null");
+        }
+        if (clientLookSource != null) {
+            throw new IllegalStateException("a client look source is already installed ("
+                    + clientLookSource.getClass().getName() + "); a second install is a lifecycle bug");
+        }
+        clientLookSource = source;
+    }
 
     /**
      * One tick of FLYING-ABOARD movement - a creative flyer the deck owns keeps flying, in the
@@ -1816,9 +1866,9 @@ public final class ShipFrameTravel {
             local = VSIntegration.toShipFrameFor(world, shipId, entity.posX, entity.posY, entity.posZ);
         }
         int fly = 0;
-        java.util.function.Function<EntityLivingBase, Integer> intent = clientFlyIntent;
-        if (intent != null) {
-            Integer j = intent.apply(entity);
+        ClientLookSource client = clientLookSource;
+        if (client != null) {
+            Integer j = client.flyIntent(entity);
             if (j != null) {
                 fly = j;
             }
@@ -2315,10 +2365,6 @@ public final class ShipFrameTravel {
         }
     }
 
-    /** How far the last re-seat moved a body, in blocks: the deck's own step out from under it.
-     *  Zero on a still ship, one tick of ship motion at the body's radius on a moving one. */
-    public static volatile double lastReseatStep = 0.0;
-
     /**
      * Put every body this side carries back on its deck point, at the ship's pose as it stands NOW.
      *
@@ -2374,9 +2420,6 @@ public final class ShipFrameTravel {
                 // own movement left it, exactly as a declined travel tick does.
                 continue;
             }
-            double dx = seat[0] - entity.posX;
-            double dy = seat[1] - entity.posY;
-            double dz = seat[2] - entity.posZ;
             entity.setPosition(seat[0], seat[1], seat[2]);
             // The committed world point moves WITH the body: it is what the guard's external-move
             // discriminator measures a foreign mover against, and leaving it at the pre-pose value
@@ -2384,19 +2427,10 @@ public final class ShipFrameTravel {
             state.worldX = seat[0];
             state.worldY = seat[1];
             state.worldZ = seat[2];
-            lastReseatStep = Math.sqrt(dx * dx + dy * dy + dz * dz);
             reseated++;
         }
         return reseated;
     }
-
-    /** Client-installed provider of the LOCAL player's held deck-frame heading (degrees), or
-     *  {@code null} for a body whose look this client does not hold. A real player's aboard
-     *  movement is client-authoritative, so the walk basis may consume the client's deck look
-     *  directly; everything else (mobs, a missing deck look) falls back to the world->deck
-     *  mapping below. Installed once from the client (the deck-look class); stays {@code null}
-     *  on a dedicated server. */
-    public static volatile java.util.function.Function<EntityLivingBase, Float> clientDeckLookYaw = null;
 
     /** The entity's facing, as a yaw in the ship frame: the held deck heading when this client
      *  owns the look, else his world heading rotated into that frame.
@@ -2412,9 +2446,9 @@ public final class ShipFrameTravel {
         // world yaw is only a projection of it - skewed on a rolled ship, and DEGENERATE when
         // the deck goes vertical (the world look is near the pole, its yaw frozen or swinging),
         // where mapping it back decoupled walking from the keys entirely.
-        java.util.function.Function<EntityLivingBase, Float> held = clientDeckLookYaw;
-        if (held != null) {
-            Float deckYaw = held.apply(entity);
+        ClientLookSource client = clientLookSource;
+        if (client != null) {
+            Float deckYaw = client.deckYaw(entity);
             if (deckYaw != null) {
                 return deckYaw;
             }

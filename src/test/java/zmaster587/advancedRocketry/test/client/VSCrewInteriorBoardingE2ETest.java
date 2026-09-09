@@ -55,7 +55,7 @@ public class VSCrewInteriorBoardingE2ETest extends AbstractSharedVsClientE2ETest
      * a shared client always has a neighbour in candidacy.
      */
     private String scenarioShipId;
-    private static final String SHIP_CAMERA = "zmaster587.advancedRocketry.client.ShipFrameCamera";
+    private static final String SHIP_CAMERA = "zmaster587.advancedRocketry.test.trace.DeckCameraState";
     private static final String SHIP_FRAME_TRAVEL =
             "zmaster587.advancedRocketry.integration.vs.ShipFrameTravel";
 
@@ -272,7 +272,7 @@ public class VSCrewInteriorBoardingE2ETest extends AbstractSharedVsClientE2ETest
                 "the reclaimed body was committed ABOARD rather than onto the outer hull");
         String releasesAfter = clientEvents.since(reclaimMark, "deck_released");
         boolean shipCam = Boolean.parseBoolean(
-                bot().readStaticField(SHIP_CAMERA, "shipCamActive").get("value").getAsString());
+                bot().readStaticField(SHIP_CAMERA, "active").get("value").getAsString());
         double settledY = bot().reportState().get("playerY").getAsDouble();
         String capEnd = exec("artest vs deck-capture");
         System.out.println("[interior] shipCamActive=" + shipCam + " preY=" + preY + " settledY="
@@ -445,7 +445,7 @@ public class VSCrewInteriorBoardingE2ETest extends AbstractSharedVsClientE2ETest
         Events.assertInstrumentRan(modesAfter, "deck_mode_events",
                 "the claimed cavity body was committed ABOARD rather than onto the outer hull");
         boolean shipCam = Boolean.parseBoolean(
-                bot().readStaticField(SHIP_CAMERA, "shipCamActive").get("value").getAsString());
+                bot().readStaticField(SHIP_CAMERA, "active").get("value").getAsString());
         double settledY = bot().reportState().get("playerY").getAsDouble();
         double[] subEnd = parseSub(censusField("subPos"));
         String capEnd = exec("artest vs deck-capture");
@@ -569,7 +569,7 @@ public class VSCrewInteriorBoardingE2ETest extends AbstractSharedVsClientE2ETest
                         && !cap.contains("\"hullStand\":true")
                         && scenarioShipId.equals(ShipIdentity.anchorOf(cap));
                 if (tracked) trackedSeen++;
-                if (Boolean.parseBoolean(bot().readStaticField(SHIP_CAMERA, "shipCamActive")
+                if (Boolean.parseBoolean(bot().readStaticField(SHIP_CAMERA, "active")
                         .get("value").getAsString())) {
                     camSeen++;
                 }
