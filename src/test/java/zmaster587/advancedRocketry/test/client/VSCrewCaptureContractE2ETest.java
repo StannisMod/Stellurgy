@@ -1685,6 +1685,15 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
         // 150-tick roll - so the invariant is the block's offset FROM HIM, not its absolute
         // address. Measured 2026-09-09: he moves, and an absolute comparison reds on that alone.
         String feetLevel = readSubPos(exec("artest vs subspace-census"));
+        // THE DISCRIMINATOR for the reading below. If the deck look is HELD across the roll, the
+        // stored deck pitch stays put while the world pitch swings by the roll; if every server
+        // PosLook echo RE-SEEDS it, the world pitch stays at 90 (down) and the deck pitch is what
+        // moves. Those are the two accounts of why the crosshair lands where it does, and one
+        // pair of numbers before and after separates them.
+        double deckPitchLevel = clientDouble(DECK_LOOK, "deckPitchDeg");
+        double worldPitchLevel = bot().reportState().get("playerPitch").getAsDouble();
+        long echoesLevel = (long) clientDouble(DECK_CAMERA, "posLookApplies");
+        String deckActiveLevel = clientString(DECK_LOOK, "active");
         assertTrue("looking straight down on the LEVEL deck must resolve a block (got '" + level
                 + "')", !level.isEmpty());
 
@@ -1717,6 +1726,10 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
         String rolled = clientString(
                 DECK_CAMERA, "mouseOverBlock");
         String feetRolled = readSubPos(exec("artest vs subspace-census"));
+        double deckPitchRolled = clientDouble(DECK_LOOK, "deckPitchDeg");
+        double worldPitchRolled = bot().reportState().get("playerPitch").getAsDouble();
+        long echoesRolled = (long) clientDouble(DECK_CAMERA, "posLookApplies");
+        String deckActiveRolled = clientString(DECK_LOOK, "active");
         String cam = DECK_CAMERA;
         double rx = clientDouble(cam, "rayEyeX");
         double ry = clientDouble(cam, "rayEyeY");
@@ -1768,6 +1781,11 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
         System.out.println("[crewcap] crosshair-vs-body level block='" + level + "' feet='"
                 + feetLevel + "' offset=" + offLevel + "; rolled block='" + rolled + "' feet='"
                 + feetRolled + "' offset=" + offRolled + " at upY=" + upY);
+        System.out.println("[crewcap] look-frame deckPitch " + deckPitchLevel + " -> "
+                + deckPitchRolled + " worldPitch " + worldPitchLevel + " -> " + worldPitchRolled
+                + " posLookApplies +" + (echoesRolled - echoesLevel)
+                + " deckActive " + deckActiveLevel + " -> " + deckActiveRolled
+                + " | measured: the WORLD pitch holds and the DECK pitch swings by the roll, so the aim does not ride the deck. With only one PosLook applied across the slew, a per-tick echo is not the writer; deckActive is the remaining question - false means sync() re-seeds every tick from an unchanged world aim through a rotating transform, which is exactly this reading");
 
         // THE INTERACTION CONTRACT, EXECUTED rather than reasoned to. What used to stand here was a
         // comparison of two internal coordinates - the crosshair ray origin against the recorded

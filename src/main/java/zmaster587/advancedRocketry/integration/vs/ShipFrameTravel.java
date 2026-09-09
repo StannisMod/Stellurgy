@@ -568,19 +568,28 @@ public final class ShipFrameTravel {
     }
 
     /**
-     * Seam: how a seed attempt ended, for the body it was for.
+     * Seam: a queued seed found its anchor ship absent on this side.
      *
-     * <p>A dismount whose seed never lands — refused for the whole hold window, or the anchor ship
-     * missing on this side — hands the body to vanilla's world-frame dismount spot, which on a
-     * non-upright ship maps OFF the deck. So the OUTCOME is the fact worth keeping, and the body it
-     * concerns is the half that decides whether it is this scenario's.</p>
+     * <p>A dismount whose seed never lands hands the body to vanilla's world-frame dismount spot,
+     * which on a non-upright ship maps OFF the deck. So the outcome is the fact worth keeping, and
+     * the body it concerns is the half that decides whose it was.</p>
      *
-     * <p>A SEAM, and nothing else. Production kept four counters and the text of the most recent
-     * refusal, all lifetime and JVM-global: they could say that some seed somewhere had been refused,
-     * never which body, when, or whether it was the one under test.</p>
+     * <p><b>This is the ONE seed outcome that still needs a method here, and the reason is written
+     * down so it can be argued with.</b> Four others were reported through this same call and are
+     * gone: the refusal, the missing ship and the success in {@code seedShipFrameCapture} all take
+     * the body and the ship id as that method's own ARGUMENTS, with its four returns naming the
+     * branches; and the applied queued seed is carried by the {@code applySeedCapture} call itself.
+     * None of those needed anything to exist here.</p>
      *
-     * @param outcome {@code ok}, {@code not-loaded}, {@code refused:<excluded state>}, or the
-     *                {@code pending-} forms of the first two for a seed applied out of the queue
+     * <p>This one does, on all four counts. It happens inside a NO-ARGUMENT method, so there is
+     * nothing to read; the body and the queue slot are LOCALS; the slot's type is a private nested
+     * class, so no local capture can name it, and widening that type so a test could would move the
+     * defect down a level rather than remove it; and the only call at this point carries the world
+     * and the ship id but NOT the body, which is the half that says whose seed this was. The body is
+     * empty and its parameters are exactly those locals: it computes nothing, allocates nothing and
+     * stores nothing.</p>
+     *
+     * @param outcome {@code pending-not-loaded} — the only value that reaches here
      */
     private static void noteSeedOutcome(Entity entity, String shipId, String outcome) {
     }
@@ -646,7 +655,6 @@ public final class ShipFrameTravel {
         if (entity instanceof EntityLivingBase) {
             String excluded = excludedStateOf((EntityLivingBase) entity);
             if (excluded != null) {
-                noteSeedOutcome(entity, shipId, "refused:" + excluded);
                 if (zmaster587.advancedRocketry.command.test.TestProbeCommandRegistration.isTestMode()) {
                     zmaster587.advancedRocketry.AdvancedRocketry.logger.info("[FF-TRACE/CAP] seed "
                             + "REFUSED (" + excluded + ") remote=" + entity.world.isRemote
@@ -661,7 +669,6 @@ public final class ShipFrameTravel {
         // boxes.
         double[] world = VSIntegration.toWorldFrameFor(entity.world, shipId, subX, subY, subZ);
         if (world == null) {
-            noteSeedOutcome(entity, shipId, "not-loaded");
             // Playtest trace ([FF-TRACE/CAP], -Dadvancedrocketry.tests=true): the anchor ship is not
             // loaded on this side (yet). No-op; the dismount window re-sends.
             if (zmaster587.advancedRocketry.command.test.TestProbeCommandRegistration.isTestMode()) {
@@ -671,7 +678,6 @@ public final class ShipFrameTravel {
             }
             return false;
         }
-        noteSeedOutcome(entity, shipId, "ok");
         if (zmaster587.advancedRocketry.command.test.TestProbeCommandRegistration.isTestMode()) {
             zmaster587.advancedRocketry.AdvancedRocketry.logger.info("[FF-TRACE/CAP] seed OK ship="
                     + shipId + " world=(" + world[0] + "," + world[1] + "," + world[2] + ")");
@@ -888,7 +894,6 @@ public final class ShipFrameTravel {
                             + " world=(" + world[0] + "," + world[1] + "," + world[2] + ")");
                 }
                 applySeedCapture(body, slot.shipId, slot.subX, slot.subY, slot.subZ, world);
-                noteSeedOutcome(body, slot.shipId, "pending-ok");
                 pendingSeed = null;
         }
     }
