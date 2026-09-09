@@ -1688,11 +1688,12 @@ public class TestProbeCommand extends CommandBase {
                     + ",\"lastVerdict\":\"" + SeatDiag.lastPilotInputVerdict + "\""
                     + ",\"riderResolveCount\":" + SeatDiag.riderResolveCount
                     + ",\"lastRiderResolve\":\"" + SeatDiag.lastRiderResolve + "\""
-                    + ",\"rebindEnqueued\":" + zmaster587.advancedRocketry.space.AssemblyCrewRebind.enqueuedCount
-                    + ",\"rebindRebound\":" + zmaster587.advancedRocketry.space.AssemblyCrewRebind.reboundCount
-                    + ",\"rebindExpired\":" + zmaster587.advancedRocketry.space.AssemblyCrewRebind.expiredCount
-                    + ",\"rebindCancelled\":" + zmaster587.advancedRocketry.space.AssemblyCrewRebind.cancelledCount
-                    + ",\"rebindLastOutcome\":\"" + zmaster587.advancedRocketry.space.AssemblyCrewRebind.lastOutcome + "\""
+                    // No rebind columns. Four counters and a last-outcome string used to ride along
+                    // here, and they named no queue entry: on a shared server a delta across one
+                    // stimulus said "the queue gave up on somebody", and two entries built at the
+                    // same fixture coordinates carried the same anchor. The queue records each entry
+                    // it takes and each one it lets go, naming the player and the stale mount —
+                    // `crew_rebind_queue`, beside the `crew_rebind_decided` decisions.
                     + "}");
             return;
         }

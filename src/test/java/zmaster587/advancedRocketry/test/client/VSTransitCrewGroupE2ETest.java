@@ -704,7 +704,9 @@ private void seatTheBot(int originDim, String shipId) throws Exception {
 
     /** The Free Flight HUD text as the client last rendered it. */
 private String hud() throws Exception {
-        return bot().readStaticField("zmaster587.advancedRocketry.event.RocketEventHandler",
+        // The test-side holder: production stopped storing the joined line, and the watcher on
+        // the HUD render composes it from the same snapshot the frame drew.
+        return bot().readStaticField("zmaster587.advancedRocketry.test.trace.FlightCameraState",
                 "lastFreeFlightHud").get("value").getAsString();
     }
 

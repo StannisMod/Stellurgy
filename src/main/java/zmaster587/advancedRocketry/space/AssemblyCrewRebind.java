@@ -45,25 +45,27 @@ public final class AssemblyCrewRebind {
 
     private static final List<Pending> PENDING = new ArrayList<>();
 
-    // ---- Outcome diagnostics (ungated statics, e2e/probe-readable) ---------------------------
-    /** Rebinds queued by the assembler in this JVM. */
-    public static volatile int enqueuedCount;
-    /** Rebinds that completed (the pilot got a fresh mount on the relocated seat). */
-    public static volatile int reboundCount;
-    /** Entries dropped because the retry budget expired (the WARN path - a stranded pilot). */
-    public static volatile int expiredCount;
-    /** Entries dropped because the pilot was observed off his stale mount (debounced). */
-    public static volatile int cancelledCount;
-    /** The last entry's outcome, for post-mortems. */
-    public static volatile String lastOutcome = "";
-
-    /** Owned by {@link SpaceDiagnostics#reset()} — see there for why a diagnostic needs an owner. */
-    static void resetDiagnostics() {
-        enqueuedCount = 0;
-        reboundCount = 0;
-        expiredCount = 0;
-        cancelledCount = 0;
-        lastOutcome = "";
+    /**
+     * Seam: this queue took an entry, or let one go, and why.
+     *
+     * <p>A SEAM, and nothing else. Four counters and the text of the most recent outcome used to be
+     * published here for a probe to read, and their defect was that <b>they named no entry</b> — no
+     * player, no stale mount, no anchor of their own. On a shared server every scenario writes them,
+     * so a delta across one stimulus says only "the queue gave up on somebody", and a post-mortem
+     * string cannot separate two entries whose anchor is the same fixture built twice. Measured on
+     * the 2026-09-06 gate: a hard assertion red on {@code expired anchor=BlockPos{2802,69,2803}}
+     * belonging to an earlier scenario's pilot, about a minute after that scenario assembled, while
+     * the entry the assertion was about had not been queued long enough to expire at all.</p>
+     *
+     * <p>Every parameter here is the part the counters lacked. The queue runs on the server tick and
+     * nowhere else, so a watcher records against the server's clock.</p>
+     *
+     * @param outcome {@code queued}, {@code rebound}, {@code expired},
+     *                {@code cancelled(playerGone)} or {@code cancelled(offMount)}
+     * @param attempts ticks this entry had been retried when it ended; {@code 0} at {@code queued}
+     */
+    private static void noteRebindQueue(String outcome, UUID playerId, int staleDummyId,
+                                        BlockPos anchor, int attempts) {
     }
 
     /** One seated pilot owed a rebind: who, off which stale mount, onto which ship's seat. */
@@ -101,7 +103,7 @@ public final class AssemblyCrewRebind {
      */
     public static void enqueue(WorldServer world, EntityPlayerMP player, int staleDummyId,
             BlockPos anchor, int afcDx, int afcDy, int afcDz, UUID shipId) {
-        enqueuedCount++;
+        noteRebindQueue("queued", player.getUniqueID(), staleDummyId, anchor, 0);
         PENDING.add(new Pending(world.provider.getDimension(), player.getUniqueID(),
                 staleDummyId, anchor, afcDx, afcDy, afcDz, shipId));
     }
@@ -125,8 +127,8 @@ public final class AssemblyCrewRebind {
                 // Debounced like the mount check: a transient lookup miss must not strand a
                 // still-connected pilot on a dead binding.
                 if (++pending.notOnMountStreak >= NOT_ON_MOUNT_DEBOUNCE) {
-                    cancelledCount++;
-                    lastOutcome = "cancelled(playerGone) anchor=" + pending.anchor;
+                    noteRebindQueue("cancelled(playerGone)", pending.playerId,
+                            pending.staleDummyId, pending.anchor, pending.attempts);
                     it.remove(); // logged out mid-assembly; the login-restore path owns him now
                 }
                 continue;
@@ -135,24 +137,23 @@ public final class AssemblyCrewRebind {
                     pending.anchor, player, pending.staleDummyId,
                     pending.afcDx, pending.afcDy, pending.afcDz, pending.shipId);
             if (outcome == CrewTransfer.RebindOutcome.REBOUND) {
-                reboundCount++;
-                lastOutcome = "rebound anchor=" + pending.anchor + " after=" + pending.attempts;
+                noteRebindQueue("rebound", pending.playerId, pending.staleDummyId,
+                        pending.anchor, pending.attempts);
                 it.remove();
                 continue;
             }
             if (outcome == CrewTransfer.RebindOutcome.NOT_ON_STALE_MOUNT) {
                 if (++pending.notOnMountStreak >= NOT_ON_MOUNT_DEBOUNCE) {
-                    cancelledCount++;
-                    lastOutcome = "cancelled(offMount) anchor=" + pending.anchor
-                            + " after=" + pending.attempts;
+                    noteRebindQueue("cancelled(offMount)", pending.playerId,
+                            pending.staleDummyId, pending.anchor, pending.attempts);
                     it.remove(); // genuinely stood up / re-seated - never force him back
                 }
                 continue;
             }
             pending.notOnMountStreak = 0; // still on the stale mount, ship just not up yet
             if (++pending.attempts > MAX_ATTEMPTS) {
-                expiredCount++;
-                lastOutcome = "expired anchor=" + pending.anchor;
+                noteRebindQueue("expired", pending.playerId, pending.staleDummyId,
+                        pending.anchor, pending.attempts);
                 LOGGER.warn("gave up rebinding {} onto the ship assembled at {} after {} ticks - "
                         + "the relocated seat never resolved; he keeps the stale mount",
                         player.getName(), pending.anchor, MAX_ATTEMPTS);

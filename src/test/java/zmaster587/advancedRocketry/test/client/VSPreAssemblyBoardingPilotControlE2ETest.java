@@ -297,13 +297,10 @@ public class VSPreAssemblyBoardingPilotControlE2ETest extends AbstractSharedVsCl
                         + " limit=" + MOUNT_AT_SEAT_DIST_SQ + " riding=" + riding,
                 mountDistSq < MOUNT_AT_SEAT_DIST_SQ);
 
-        // The rebind's own DECISION is an event now, so the cumulative rebound counter this used to
-        // delta against is no longer read at all. What has no event yet is the pending QUEUE's own
-        // give-up bookkeeping — cancelled and expired — and those two are still counters, cumulative
-        // for the server process. A baseline is taken here so a red can at least say whether they
-        // moved DURING this scenario; what it cannot say is whose entry moved them (see the wait
-        // loop below), so the delta is diagnostic content and never a verdict.
-        RebindCounts rebindBefore = rebindCounts();
+        // No rebind baseline is taken any more, and none is needed: the queue's give-up bookkeeping
+        // is a RECORD naming the entry it is about, so the mark below scopes it the same way it
+        // scopes the decisions. What used to stand here was a pair of cumulative counters for the
+        // whole server process, read before and after in the hope that a delta meant something.
 
         // Now assemble the craft, with the pilot already aboard. Marked first: everything the
         // assembly does to this pilot — throwing him out of his seat, or swapping his stale mount
@@ -417,17 +414,18 @@ public class VSPreAssemblyBoardingPilotControlE2ETest extends AbstractSharedVsCl
         int rebindBudget = (int) (240 * com.github.stannismod.forge.testing.TestTimeouts.factor());
         String rebindState = "";
         String decisions = "";
-        String gaveUpOnSomebody = "no";
+        String queue = "";
         for (int i = 0; i < rebindBudget && !decisions.contains("\"outcome\":\"REBOUND\""); i++) {
             bot().waitTicks(TICKS_PER_SAMPLE);
             rebindState = exec("artest vs seat-delivery");
-            RebindCounts now = RebindCounts.of(rebindState);
-            if (now.cancelled != rebindBefore.cancelled || now.expired != rebindBefore.expired) {
-                gaveUpOnSomebody = "YES, during this window (" + now + " vs baseline "
-                        + rebindBefore + ") - attribution unknown, see above";
-            }
             decisions = events.since(assemblyMark, "crew_rebind_decided");
+            queue = events.since(assemblyMark, "crew_rebind_queue");
         }
+        String gaveUp = describeGiveUps(queue);
+        // Printed on a GREEN run too, not only into the failure: this is the queue's own account of
+        // whose entry it took and whose it dropped, and a reader who only ever sees it on a red has
+        // no idea what the healthy shape looks like.
+        System.out.println("[preassembly] rebind queue :: " + gaveUp + " :: " + queue);
         // An empty decision log has two readings and only one of them is about the product: the
         // rebind seam ran and never reached REBOUND, or it never ran at all — the queue never asked
         // for a rebind, which is a defect one step earlier and used to arrive as "the counter did
@@ -440,8 +438,8 @@ public class VSPreAssemblyBoardingPilotControlE2ETest extends AbstractSharedVsCl
                         + "came up. boarding=" + how
                         + " lastDecision=" + Events.lastField(decisions, "outcome")
                         + " decisions=" + decisions + " delivery=" + rebindState
-                        + " (baseline " + rebindBefore + ")"
-                        + " | the queue gave up on someone meanwhile: " + gaveUpOnSomebody,
+                        + " | the queue's own entries in this window: " + gaveUp
+                        + " :: " + queue,
                 decisions.contains("\"outcome\":\"REBOUND\""));
 
         // Paste-site census, printed unconditionally (visible in green runs too): assembly pastes
@@ -796,45 +794,53 @@ public class VSPreAssemblyBoardingPilotControlE2ETest extends AbstractSharedVsCl
     }
 
     /**
-     * The rebind queue's give-up counters, as NUMBERS. They count for the life of the server
-     * process, so the most a scenario may ask of them is how they MOVED across its own stimulus —
-     * and even that is a question about the whole server, not about this pilot: the counters carry
-     * no player, no mount and no queue entry, and every scenario sharing this server writes them.
-     * They are therefore printed in failures and never asserted on.
+     * The queue's own entries in a window, and WHOSE they are.
      *
-     * <p>The queue's REBOUND counter is deliberately absent: that link is
-     * {@code crew_rebind_decided} now, read off the ordered log with the decision it carries.
-     * Cancellation and expiry are the pending queue's own bookkeeping and have no event yet.</p>
+     * <p>Each {@code crew_rebind_queue} record names the entry it is about — the pilot's uuid and the
+     * stale mount id — so a give-up can be attributed instead of merely counted. This scenario's
+     * entry is the one its own {@code queued} record identifies, and the assembly that produced it
+     * happened inside the window, so no probe and no baseline is needed to find it.</p>
+     *
+     * <p>What this replaces was a pair of counters cumulative for the server PROCESS, carrying no
+     * player and no mount, read before and after in the hope a delta meant something. It could not:
+     * on a shared server every scenario writes them, and two entries built at the same fixture
+     * coordinates print the same anchor. Measured on the 2026-09-06 gate — a hard assertion red on
+     * an earlier method's pilot expiring inside this method's wait loop.</p>
+     *
+     * <p>Still not asserted on, and now for an honest reason: whether the QUEUE gave up is a fact
+     * about the queue, while the contract under test is whether the rebind completed — which the
+     * decision log answers. This makes the failure message name the right pilot.</p>
      */
-    private static final class RebindCounts {
-        private static final Pattern CANCELLED = Pattern.compile("\"rebindCancelled\":(-?\\d+)");
-        private static final Pattern EXPIRED = Pattern.compile("\"rebindExpired\":(-?\\d+)");
-
-        final int cancelled, expired;
-
-        private RebindCounts(int cancelled, int expired) {
-            this.cancelled = cancelled;
-            this.expired = expired;
+    private static String describeGiveUps(String queueReply) {
+        String mine = null;
+        StringBuilder out = new StringBuilder();
+        for (String record : Events.records(queueReply)) {
+            // `staleMount` and `attempts` are recorded as JSON NUMBERS, so they are read with
+            // `number` and not `text` — which matches quoted values only and answers null. That
+            // slip printed "after null ticks" and left the stale-mount half of the identity dead,
+            // so two entries of the SAME pilot compared equal: precisely the confusion this record
+            // exists to remove. Caught by printing the healthy case, not by a red.
+            String entry = Events.text(record, "who") + ":"
+                    + (long) Events.number(record, "staleMount");
+            String outcome = Events.text(record, "outcome");
+            if ("queued".equals(outcome)) {
+                if (mine != null) {
+                    out.append("[a SECOND entry was queued in this window: ").append(entry)
+                            .append(" - anything below may be about either] ");
+                }
+                mine = entry;
+                continue;
+            }
+            out.append('[').append(outcome).append(' ')
+                    .append(entry.equals(mine) ? "THIS pilot's entry" : "somebody else's entry")
+                    .append(" after ").append((long) Events.number(record, "attempts"))
+                    .append(" ticks] ");
         }
-
-        /** A counter the probe did not report reads as -1, which can never equal a later baseline. */
-        static RebindCounts of(String seatDeliveryJson) {
-            return new RebindCounts(read(CANCELLED, seatDeliveryJson), read(EXPIRED, seatDeliveryJson));
+        if (mine == null) {
+            return "the queue took NO entry in this window - the assembler never asked for a rebind";
         }
-
-        private static int read(Pattern p, String json) {
-            Matcher m = p.matcher(json);
-            return m.find() ? Integer.parseInt(m.group(1)) : -1;
-        }
-
-        @Override
-        public String toString() {
-            return "cancelled=" + cancelled + " expired=" + expired;
-        }
-    }
-
-    private RebindCounts rebindCounts() throws Exception {
-        return RebindCounts.of(exec("artest vs seat-delivery"));
+        return out.length() == 0
+                ? "one entry queued (" + mine + ") and the queue gave up on nobody" : out.toString();
     }
 
     private static boolean isRiding(JsonObject riding) {

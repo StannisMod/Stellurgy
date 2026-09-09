@@ -77,7 +77,10 @@ public class VSShipFlightTelemetryE2ETest extends AbstractSharedVsClientE2ETest 
     /** The TEST-side holder of the client's own last camera setup — production keeps no such field. */
     private static final String DECK_CAMERA_STATE =
             "zmaster587.advancedRocketry.test.trace.DeckCameraState";
-    private static final String ROCKET_EVENTS = "zmaster587.advancedRocketry.event.RocketEventHandler";
+    /** The TEST-side holder of the last drawn Free Flight HUD line — production no longer
+     *  stores it; the watcher composes it from the same snapshot the HUD renders. */
+    private static final String ROCKET_EVENTS =
+            "zmaster587.advancedRocketry.test.trace.FlightCameraState";
     /** The client's own flight-cursor dead-zone: inside it the ship is commanded no rotation at all. */
     private static final double CURSOR_DEADZONE = 0.05;
 

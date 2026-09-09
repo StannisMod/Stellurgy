@@ -642,8 +642,11 @@ public class FreeFlightModeE2ETest extends AbstractSharedClientE2ETest {
 
     // ===== HUD =========================================================
 
+    /** The TEST-side holder of what the pilot's own view last did — the HUD line, the
+     *  camera-vs-craft divergence and the client attitude readback. Production keeps none of
+     *  them: they were written on the render thread purely for these reads. */
     private static final String ROCKET_EVENT_HANDLER =
-            "zmaster587.advancedRocketry.event.RocketEventHandler";
+            "zmaster587.advancedRocketry.test.trace.FlightCameraState";
 
     @Test
     public void freeFlightHudInFlightShowsIndicatorAndControlLegend() throws Exception {

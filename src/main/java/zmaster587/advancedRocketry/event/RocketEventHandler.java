@@ -56,30 +56,39 @@ public class RocketEventHandler extends Gui {
     public static GuiBox atmBar = new GuiBox(8, 27, 200, 48);
     private static String displayString = "";
     private static long lastDisplayTime = -1000;
-    /** Last rendered Free Flight HUD text (joined with " | "), for client e2e
-     *  assertions. Empty when not riding a FF rocket. Updated each HUD frame. */
-    public static volatile String lastFreeFlightHud = "";
-    /** Frame-time camera-lock telemetry: worst divergence (deg)
-     *  between the player camera and the craft axes seen on any rendered HUD
-     *  frame of the current FF flight — i.e. what the pilot literally saw,
-     *  sampled atomically on the render thread. Bounded small while flying
-     *  (intra-tick mouse deflection only); a runaway means the lock broke.
-     *  Reset when the flight ends. Read reflectively by client e2e. */
-    public static volatile double maxCameraLockErrorDeg = 0.0;
-    /** Same divergence for the MOST RECENT rendered frame (not the running
-     *  max) — at rest this is what the pilot currently sees, readable in one
-     *  atomic reflective call (a bot reading camera and craft separately can
-     *  straddle a tracker-quantisation bleed tick and see a phantom gap). */
-    public static volatile double lastCameraLockErrorDeg = 0.0;
-    /** Client-rendered FF attitude readback, sampled on the
-     *  render thread from the interpolated attitude quaternion the camera used —
-     *  the pilot's actual view. For perception-contract client e2e:
-     *  {@link #ffClientCamRoll} pins mouse-horizontal &rarr; bank; {@link #ffClientMinForwardZ}
-     *  (most-negative nose Z over the flight) pins a pitch LOOP past vertical with
-     *  no ±85° clamp (a clamped nose can never point backwards &rarr; Z stays ≳ 0).
-     *  Reset when the flight ends. */
-    public static volatile double ffClientCamRoll  = 0.0;
-    public static volatile double ffClientMinForwardZ = 1.0;
+    /**
+     * Seam: the attitude the Free Flight camera was actually set to on this rendered frame.
+     *
+     * <p>A SEAM, and nothing else. The pilot's PERCEPTION is a contract — mouse-horizontal must
+     * bank the craft, and a pitch input must be able to loop past vertical rather than stop at a
+     * ±85° clamp — and the only honest witness is what the camera was pointed at, sampled on the
+     * render thread from the same interpolated quaternion the view used. That witness used to be
+     * two statics on this class; the values arrive here as parameters instead.</p>
+     *
+     * @param roll  the camera roll this frame, degrees — the bank the pilot sees
+     * @param noseZ the world Z of the craft's nose this frame; a clamped nose can never point
+     *              backwards, so the most negative value over a flight is what pins a real loop
+     */
+    private static void noteFlightCamera(float roll, double noseZ) {
+    }
+
+    /**
+     * Seam: where the pilot's camera and his craft were pointing on this rendered frame.
+     *
+     * <p>A SEAM, and nothing else. While the camera is pinned to the craft the two must agree to
+     * within intra-tick mouse deflection, and a runaway divergence means the lock broke — so the
+     * pair has to be sampled on the RENDER thread and as one reading. A bot that read the camera
+     * and the craft in two reflective calls can straddle a tracker-quantisation bleed tick and see
+     * a phantom gap, which is why production ever computed this at all; what it no longer does is
+     * keep the answer, in a running maximum and a last-frame value that lived here.</p>
+     *
+     * <p>Called on every rendered frame, pinned or not: {@code inFlight} false is what ENDS a
+     * flight's window, and a watcher that never heard it would carry one flight's worst frame into
+     * the next.</p>
+     */
+    private static void noteCameraLock(boolean pinned, boolean inFlight, float cameraYaw,
+                                       float cameraPitch, float craftYaw, float craftPitch) {
+    }
     /** Frame counter that throttles the [FF-TRACE/CAM] deck-walking camera probe (test mode only). */
     private static int ffCamTraceFrames = 0;
     private ResourceLocation background = TextureResources.rocketHud;
@@ -103,8 +112,8 @@ public class RocketEventHandler extends Gui {
                                             FreeFlightHudState state) {
         FontRenderer fr = mc.fontRenderer;
         List<String> ffLines = KeyBindings.freeFlightHudLines(state);
-        // Expose the rendered text for client-side e2e assertions (read reflectively by the bridge).
-        lastFreeFlightHud = String.join(" | ", ffLines);
+        // No store of the joined text: `KeyBindings.freeFlightHudLines` is public and this method is
+        // where the HUD is drawn, so a watcher on it composes the same line from the same snapshot.
         int lineH = fr.FONT_HEIGHT + 1;
         int scaledH2 = event.getResolution().getScaledHeight();
         // Bottom-left, to the right of the instrument panel, stacked up.
@@ -229,10 +238,8 @@ public class RocketEventHandler extends Gui {
             event.setYaw(e[0] + 180f);
             event.setPitch(e[1]);
             event.setRoll(e[2]);
-            // Client-attitude readback for perception-contract e2e (see the fields).
-            ffClientCamRoll  = e[2];
-            double fz = cq.rotate(0, 0, 1)[2]; // client nose Z (world)
-            if (fz < ffClientMinForwardZ) ffClientMinForwardZ = fz;
+            // Client-attitude readback for the perception contract (see the seam).
+            noteFlightCamera(e[2], cq.rotate(0, 0, 1)[2]);
             return;
         }
 
@@ -454,24 +461,13 @@ public class RocketEventHandler extends Gui {
                 // Free Flight Mode HUD is rendered below (backend-agnostic — it also serves the
                 // tier-2 ship), driven by a FreeFlightHudState snapshot rather than this rocket.
 
-                // Camera-nose lock telemetry: on every rendered
-                // frame of an FF flight, record the worst player-camera vs
-                // craft-axes divergence. Small values = intra-tick mouse
-                // deflection (by design); a runaway means the lock broke.
-                if (rocket.isFreeFlight() && rocket.isInFlight()
-                        && KeyBindings.isCameraPinnedThisFlight()) {
-                    double yawErr = Math.abs(MathHelper.wrapDegrees(
-                            mc.player.rotationYaw - rocket.rotationYaw));
-                    double pitchErr = Math.abs(
-                            mc.player.rotationPitch - rocket.rotationPitch);
-                    double err = Math.max(yawErr, pitchErr);
-                    lastCameraLockErrorDeg = err;
-                    if (err > maxCameraLockErrorDeg) maxCameraLockErrorDeg = err;
-                } else if (!rocket.isInFlight()) {
-                    maxCameraLockErrorDeg = 0.0;
-                    lastCameraLockErrorDeg = 0.0;
-                    ffClientMinForwardZ = 1.0; // fresh loop witness per flight
-                }
+                // Camera-nose lock: on every rendered frame, hand over where the pilot's camera and
+                // his craft are pointing. While the camera is pinned the two agree to within
+                // intra-tick mouse deflection by design, and a runaway divergence means the lock
+                // broke; the comparison and the flight's own window belong to whoever is asking.
+                noteCameraLock(rocket.isFreeFlight() && KeyBindings.isCameraPinnedThisFlight(),
+                        rocket.isInFlight(), mc.player.rotationYaw, mc.player.rotationPitch,
+                        rocket.rotationYaw, rocket.rotationPitch);
 
             }
 
