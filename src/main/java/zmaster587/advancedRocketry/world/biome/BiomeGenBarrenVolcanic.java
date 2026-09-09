@@ -9,7 +9,7 @@ import zmaster587.advancedRocketry.world.decoration.MapGenVolcano;
 
 public class BiomeGenBarrenVolcanic extends Biome {
 
-    public static MapGenBase volcano;
+    private static MapGenBase volcano;
 
     public BiomeGenBarrenVolcanic(BiomeProperties properties) {
 

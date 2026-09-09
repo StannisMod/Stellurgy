@@ -24,7 +24,7 @@ import java.util.Objects;
 @SuppressWarnings("unchecked")
 public class NBTHelper {
 
-    public static NBTBase NBT_NULL = new NBTTagString("null");
+    private static NBTBase NBT_NULL = new NBTTagString("null");
 
     public static void writeCollection(String name, NBTTagCompound compound, Collection<? extends INBTSerializable<? extends NBTBase>> collection) {
         compound.setTag(name, collectionToNBT(collection));

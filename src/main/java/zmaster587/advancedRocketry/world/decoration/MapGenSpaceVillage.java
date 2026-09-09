@@ -10,7 +10,7 @@ import java.util.Random;
 
 public class MapGenSpaceVillage extends MapGenVillage {
 
-    public static List<Biome> BLACKLIST_VILLAGE_SPAWN_BIOMES = Arrays.asList(Biomes.OCEAN, Biomes.DEEP_OCEAN);
+    private static List<Biome> BLACKLIST_VILLAGE_SPAWN_BIOMES = Arrays.asList(Biomes.OCEAN, Biomes.DEEP_OCEAN);
     private final int minTownSeparation;
     private int size;
     private int distance;

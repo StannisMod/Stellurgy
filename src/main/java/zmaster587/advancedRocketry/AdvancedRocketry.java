@@ -1,5 +1,9 @@
 package zmaster587.advancedRocketry;
 
+import zmaster587.advancedRocketry.api.atmosphere.IAtmosphereSealHandler;
+import zmaster587.advancedRocketry.api.ISpaceObjectManager;
+import zmaster587.advancedRocketry.api.dimension.solar.IGalaxy;
+import zmaster587.advancedRocketry.api.IGravityManager;
 import net.minecraft.block.Block;
 import net.minecraft.block.material.MapColor;
 import net.minecraft.block.material.Material;
@@ -171,11 +175,95 @@ public class AdvancedRocketry {
     public static String version;
     @Instance(value = Constants.modId)
     public static AdvancedRocketry instance;
+
+    // ---- The four API services, owned here ---------------------------------------------------
+    //
+    // They used to be public mutable statics on AdvancedRocketryAPI, assigned from wherever each
+    // service happened to be constructed. That is a mutable static holding a COLLABORATOR, and it
+    // had already produced the defect it always produces: `gravityManager` was written from TWO
+    // places, one of them a static initialiser on GravityHandler that fires when the class loads —
+    // which is what `new GravityHandler()` at the other site does. Two handlers were built, the
+    // first published and then immediately replaced, and anything that read the field in between
+    // held the orphan.
+    //
+    // The owner is this mod object: its singleton-ness is guaranteed by Forge's @Instance rather
+    // than by convention, which is the property that makes it an owner at all. Each keeps the lifecycle
+    // point it already had — moving init order is a separate change with separate risk — but now
+    // has ONE writer, and a second install is a loud error instead of a silent overwrite.
+
+    private IAtmosphereSealHandler apiSealHandler;
+    private ISpaceObjectManager apiSpaceObjects;
+    private IGalaxy apiGalaxy;
+    private IGravityManager apiGravity;
+
+    private static <T> T installOnce(T current, T next, String what) {
+        if (next == null) {
+            throw new IllegalArgumentException(what + " must not be null");
+        }
+        if (current != null) {
+            throw new IllegalStateException(what + " is already installed ("
+                    + current.getClass().getName() + "); a second install is a lifecycle bug");
+        }
+        return next;
+    }
+
+    /** @see AdvancedRocketryAPI#atmosphereSealHandler() */
+    public void installSealHandler(IAtmosphereSealHandler handler) {
+        apiSealHandler = installOnce(apiSealHandler, handler, "the atmosphere seal handler");
+    }
+
+    /**
+    * The two services above belong to the JVM. These two belong to the SERVER, and the difference is
+    * in their names because it is a difference in lifetime, not in style.
+    *
+    * <p>Both objects happen to be process-wide singletons, but their STATE is the running server's —
+    * station locations, orbits, temporary dimensions, the initialised flag, the save's planets — and
+    * each already has an {@code onServerStopped()} that empties it. So the reference this mod object
+    * publishes is attached when a server starts and RELEASED when it stops, exactly as
+    * {@code spaceSubsystem} beside it is: an API caller between servers is told there is no galaxy,
+    * rather than handed the last one's emptied object.</p>
+    *
+    * <p>This is not the end state. The right owner for state that belongs to a server is the server,
+    * and a process-wide singleton whose maps are cleared rather than replaced keeps a stale reference
+    * alive across saves. Attaching and releasing here makes the LIFETIME honest and is a strictly
+    * smaller change than moving the objects; the ownership question is recorded, not answered.</p>
+    */
+    public void attachServerServices(ISpaceObjectManager manager, IGalaxy galaxy) {
+        apiSpaceObjects = installOnce(apiSpaceObjects, manager, "the space object manager");
+        apiGalaxy = installOnce(apiGalaxy, galaxy, "the galaxy");
+    }
+
+    /** Released by the owner: these belonged to the server that has just stopped. */
+    public void detachServerServices() {
+        apiSpaceObjects = null;
+        apiGalaxy = null;
+    }
+
+    /** @see AdvancedRocketryAPI#gravityManager() */
+    public void installGravityManager(IGravityManager manager) {
+        apiGravity = installOnce(apiGravity, manager, "the gravity manager");
+    }
+
+    public IAtmosphereSealHandler sealHandler() {
+        return apiSealHandler;
+    }
+
+    public ISpaceObjectManager spaceObjects() {
+        return apiSpaceObjects;
+    }
+
+    public IGalaxy galaxy() {
+        return apiGalaxy;
+    }
+
+    public IGravityManager gravity() {
+        return apiGravity;
+    }
     public static WorldType planetWorldType;
     public static WorldType spaceWorldType;
-    public static CompatibilityMgr compat = new CompatibilityMgr();
+    private static CompatibilityMgr compat = new CompatibilityMgr();
     public static MaterialRegistry materialRegistry = new MaterialRegistry();
-    public static HashMap<AllowedProducts, HashSet<String>> modProducts = new HashMap<>();
+    private static HashMap<AllowedProducts, HashSet<String>> modProducts = new HashMap<>();
     private static Configuration config;
 
     /**
@@ -323,8 +411,8 @@ public class AdvancedRocketry {
 
         //Init API
         DimensionManager.planetWorldProvider = WorldProviderPlanet.class;
-        AdvancedRocketryAPI.atomsphereSealHandler = SealableBlockHandler.INSTANCE;
-        ((SealableBlockHandler) AdvancedRocketryAPI.atomsphereSealHandler).loadDefaultData();
+        instance.installSealHandler(SealableBlockHandler.INSTANCE);
+        SealableBlockHandler.INSTANCE.loadDefaultData();
 
         // Integrations
         // The One Probe integration
@@ -1226,7 +1314,7 @@ public class AdvancedRocketry {
         MinecraftForge.EVENT_BUS.register(inputSync);
 
         MinecraftForge.EVENT_BUS.register(new MapGenLander());
-        AdvancedRocketryAPI.gravityManager = new GravityHandler();
+        instance.installGravityManager(new GravityHandler());
 
         // Compat stuff
         if (Loader.isModLoaded("galacticraftcore") && zmaster587.advancedRocketry.api.ARConfiguration.getCurrentConfig().overrideGCAir) {
@@ -1301,6 +1389,12 @@ public class AdvancedRocketry {
         // Layer-2: restore the persisted ship ledger (settled positions survive a restart) now that the
         // overworld MapStorage is reachable, before any player logs in.
         zmaster587.advancedRocketry.space.SpaceSubsystem.onServerStarted(spaceSubsystem);
+        // The two API services whose STATE belongs to this server, published together and released
+        // together in serverStopped. Here rather than in either object's constructor: a constructor
+        // runs from its class's own static initialiser, at whatever moment something first touches
+        // the class, which may be before Forge has assigned this mod instance at all.
+        attachServerServices(SpaceObjectManager.getSpaceManager(),
+                zmaster587.advancedRocketry.dimension.DimensionManager.getInstance());
     }
 
     @EventHandler
@@ -1434,6 +1528,7 @@ public class AdvancedRocketry {
         zmaster587.advancedRocketry.space.SpaceSubsystem.onServerStopped();
         // Released here, by the owner: the subsystem belonged to the server that has just stopped.
         spaceSubsystem = null;
+        detachServerServices();
         zmaster587.advancedRocketry.atmosphere.AtmosphereHandler.clear();
         zmaster587.advancedRocketry.api.ARConfiguration.getCurrentConfig().MoonId = Constants.INVALID_PLANET;
         ((BlockSeal) AdvancedRocketryBlocks.blockPipeSealer).clearMap();

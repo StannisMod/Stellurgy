@@ -33,9 +33,6 @@ public class GravityHandler implements IGravityManager {
     private static WeakHashMap<Entity, Double> entityMap = new WeakHashMap<>();
 
     static {
-        AdvancedRocketryAPI.gravityManager = new GravityHandler();
-
-
         try {
             gcWorldProvider = Class.forName("micdoodle8.mods.galacticraft.api.world.IGalacticraftWorldProvider");
             AdvancedRocketry.logger.info("GC IGalacticraftWorldProvider  found");

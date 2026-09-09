@@ -13,7 +13,6 @@ import java.util.Random;
 
 public class BiomeGenVolcanic extends Biome {
 
-    public static MapGenBase volcano;
     WorldGenAbstractTree charTree = new WorldGenCharredTree(false, 6);
 
     public BiomeGenVolcanic(BiomeProperties properties) {

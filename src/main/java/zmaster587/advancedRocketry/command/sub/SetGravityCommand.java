@@ -43,9 +43,9 @@ public class SetGravityCommand extends ARCommand {
         }
         double multiplier = parseDouble(args[0]);
         if (multiplier == 0.0D) {
-            AdvancedRocketryAPI.gravityManager.clearGravityEffect(entity);
+            AdvancedRocketryAPI.gravityManager().clearGravityEffect(entity);
         } else {
-            AdvancedRocketryAPI.gravityManager.setGravityMultiplier(entity, multiplier);
+            AdvancedRocketryAPI.gravityManager().setGravityMultiplier(entity, multiplier);
         }
     }
 

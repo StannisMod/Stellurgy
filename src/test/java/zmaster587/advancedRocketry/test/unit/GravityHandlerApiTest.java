@@ -99,23 +99,24 @@ public class GravityHandlerApiTest {
         return (Entity) UNSAFE.allocateInstance(EntityItem.class);
     }
 
-    @Test
-    public void gravityManagerIsRegisteredOnTheAPI() {
-        // The static initializer in GravityHandler installs itself as
-        // AdvancedRocketryAPI.gravityManager. Companion mods reach the
-        // implementation through this singleton — if it's null, all
-        // external callers NPE.
-        assertNotNull("AdvancedRocketryAPI.gravityManager must be installed "
-                        + "by GravityHandler's static init",
-                AdvancedRocketryAPI.gravityManager);
-        assertTrue("registered manager must be an instance of GravityHandler",
-                AdvancedRocketryAPI.gravityManager instanceof GravityHandler);
-    }
+    // The test that used to sit here asserted that GravityHandler's STATIC INITIALISER installs
+    // itself onto the API — and said so in its own comment. That was a pin on a mechanism, not on a
+    // contract, and the mechanism was a defect: the field was also written by the mod's init, so two
+    // handlers were built and whichever ran last won. The initialiser is gone; the mod object owns
+    // the service and a second install is now a loud error.
+    //
+    // "A gravity manager is reachable through the API" is still worth pinning, but it is a claim
+    // about a LOADED MOD and cannot be made at unit tier, where no mod object exists — the accessor
+    // correctly answers null here. It needs a server-tier home; asserting it from this file would
+    // only re-pin whatever mechanism happened to populate a static.
+    //
+    // The behaviour tests below are about GravityHandler itself, so they build one directly. That is
+    // also what they always meant: none of them is about the API wiring.
 
     @Test
     public void setGravityMultiplierRegistersEntityInMap() throws Exception {
         Entity e = fakeEntity();
-        IGravityManager mgr = AdvancedRocketryAPI.gravityManager;
+        IGravityManager mgr = new GravityHandler();
 
         mgr.setGravityMultiplier(e, 0.25);
         WeakHashMap<Entity, Double> map = accessEntityMap();
@@ -129,7 +130,7 @@ public class GravityHandlerApiTest {
     @Test
     public void setGravityMultiplierOverwritesPreviousValue() throws Exception {
         Entity e = fakeEntity();
-        IGravityManager mgr = AdvancedRocketryAPI.gravityManager;
+        IGravityManager mgr = new GravityHandler();
 
         mgr.setGravityMultiplier(e, 0.25);
         mgr.setGravityMultiplier(e, 1.5);  // overwrite
@@ -142,7 +143,7 @@ public class GravityHandlerApiTest {
     @Test
     public void clearGravityEffectRemovesEntry() throws Exception {
         Entity e = fakeEntity();
-        IGravityManager mgr = AdvancedRocketryAPI.gravityManager;
+        IGravityManager mgr = new GravityHandler();
 
         mgr.setGravityMultiplier(e, 0.5);
         assertTrue("precondition: entity is in map",
@@ -160,7 +161,7 @@ public class GravityHandlerApiTest {
         // checking. WeakHashMap.remove on missing keys is a no-op, so
         // the contract is "doesn't throw".
         Entity e = fakeEntity();
-        IGravityManager mgr = AdvancedRocketryAPI.gravityManager;
+        IGravityManager mgr = new GravityHandler();
 
         mgr.clearGravityEffect(e);
         assertFalse("untracked entity stays absent after clear",

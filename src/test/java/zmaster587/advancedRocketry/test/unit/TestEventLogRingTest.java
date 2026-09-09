@@ -95,12 +95,24 @@ public class TestEventLogRingTest {
                 zmaster587.advancedRocketry.test.Events.typesOf(typesReply(all)).toString());
     }
 
-    /** Render the records the way the probe does, so the shared type extractor can read them. */
+    /**
+     * Render the records the way the probe does, so the shared type extractor can read them.
+     *
+     * <p>It renders an ENVELOPE, because that is what the probe answers. This method used to
+     * concatenate bare objects and its comment claimed the same thing it claims now — a fixture that
+     * had drifted from the reply it imitates. Nothing noticed until {@code Events} stopped scraping
+     * the reply and started parsing it; then this test went red and stayed red, because no run in
+     * between had executed the unit tier.</p>
+     */
     private static String typesReply(List<TestEventLog.Record> records) {
-        StringBuilder sb = new StringBuilder();
-        for (TestEventLog.Record r : records) {
-            sb.append("{\"type\":\"").append(r.type).append("\"}");
+        StringBuilder sb = new StringBuilder("{\"ok\":true,\"count\":");
+        sb.append(records.size()).append(",\"events\":[");
+        for (int i = 0; i < records.size(); i++) {
+            if (i > 0) {
+                sb.append(',');
+            }
+            sb.append("{\"type\":\"").append(records.get(i).type).append("\"}");
         }
-        return sb.toString();
+        return sb.append("]}").toString();
     }
 }

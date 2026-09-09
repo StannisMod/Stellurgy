@@ -20,7 +20,7 @@ import java.util.List;
 
 public class SatelliteOreMapping extends SatelliteBase {
 
-    public static ArrayList<Integer> oreList = new ArrayList<>();
+    private static ArrayList<Integer> oreList = new ArrayList<>();
 
     private int selectedSlot = -1;
 

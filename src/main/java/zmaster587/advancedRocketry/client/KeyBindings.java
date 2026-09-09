@@ -59,7 +59,7 @@ public class KeyBindings {
     static KeyBinding autoTakeoffToggle   = new KeyBinding(LibVulpes.proxy.getLocalizedString("key.autoTakeoffToggle"),   Keyboard.KEY_K, LibVulpes.proxy.getLocalizedString("key.controls." + Constants.modId));
     /** The helm's jump key: commits the destination armed at the navigation computer, and aborts a
      *  wind-up already running. Both directions on one key, because they are the same decision. */
-    public static KeyBinding jumpTrigger  = new KeyBinding(LibVulpes.proxy.getLocalizedString("key.jumpTrigger"),         Keyboard.KEY_J, LibVulpes.proxy.getLocalizedString("key.controls." + Constants.modId));
+    private static KeyBinding jumpTrigger  = new KeyBinding(LibVulpes.proxy.getLocalizedString("key.jumpTrigger"),         Keyboard.KEY_J, LibVulpes.proxy.getLocalizedString("key.controls." + Constants.modId));
     boolean prevState;
     /** Last FF input dispatched to the server. We only resend when the intent actually changes (saves bandwidth). */
     private FreeFlightInput lastSentInput = FreeFlightInput.zero();

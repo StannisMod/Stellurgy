@@ -8,7 +8,7 @@ import java.util.Random;
 
 public class Asteroid {
     private static final int precision = 1000;
-    public static Random rand = new Random();
+    private static Random rand = new Random();
     public String ID;
     public int distance;                    //distance from the star, impacts fuelcost
     public int mass;                        //factor of the amount of material total

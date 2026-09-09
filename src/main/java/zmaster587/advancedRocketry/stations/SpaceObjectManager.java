@@ -45,7 +45,6 @@ public class SpaceObjectManager implements ISpaceObjectManager {
         nameToClass = new HashMap<>();
         classToString = new HashMap<>();
         temporaryDimensions = new HashMap<>();
-        AdvancedRocketryAPI.spaceObjectManager = this;
     }
 
     /**

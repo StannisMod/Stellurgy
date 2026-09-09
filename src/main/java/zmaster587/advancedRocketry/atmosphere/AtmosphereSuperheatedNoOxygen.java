@@ -11,7 +11,7 @@ import zmaster587.libVulpes.network.PacketHandler;
 
 public class AtmosphereSuperheatedNoOxygen extends AtmosphereNeedsSuit {
 
-    public static boolean enableNausea = ARConfiguration.getCurrentConfig().enableNausea;
+    private static boolean enableNausea = ARConfiguration.getCurrentConfig().enableNausea;
 
     public AtmosphereSuperheatedNoOxygen(boolean canTick, boolean isBreathable, boolean allowsCombustion,
                                          String name) {

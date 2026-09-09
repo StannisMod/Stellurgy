@@ -21,7 +21,6 @@ import java.util.Random;
 @SideOnly(Side.CLIENT)
 public class RendererItem extends Render<EntityItemAbducted> implements IRenderFactory<EntityItemAbducted> {
     private static final ResourceLocation RES_ITEM_GLINT = new ResourceLocation("textures/misc/enchanted_item_glint.png");
-    public static boolean renderInFrame;
     public boolean renderWithColor = true;
     /**
      * Defines the zLevel of rendering of item on GUI.

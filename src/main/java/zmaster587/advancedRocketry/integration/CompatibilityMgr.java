@@ -5,8 +5,8 @@ import zmaster587.advancedRocketry.integration.jei.ARPlugin;
 
 public class CompatibilityMgr {
 
-    public static boolean gregtechLoaded;
-    public static boolean thermalExpansionLoaded;
+    private static boolean gregtechLoaded;
+    private static boolean thermalExpansionLoaded;
     public static boolean isSpongeInstalled;
 
     public CompatibilityMgr() {

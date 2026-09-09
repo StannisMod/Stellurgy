@@ -99,7 +99,7 @@ public class ARPlugin implements IModPlugin {
     public static final String orbitalLaserDrillUUID = "zmaster587.AR.orbitalLaserDrill";
     public static final String asteroidsUUID = "zmaster587.AR.asteroids";
     public static final String gasGiantsUUID = GasGiantCategory.UID;
-    public static IJeiHelpers jeiHelpers;
+    private static IJeiHelpers jeiHelpers;
 
     private static IJeiRuntime jeiRuntime;
     private static final List<GasGiantWrapper> currentGasGiantRecipes = new ArrayList<>();

@@ -56,9 +56,9 @@ public class DimensionManager implements IGalaxy {
     public static final DimensionType spaceDimensionType = DimensionType.register("space", "space", 3, WorldProviderSpace.class, false);
     public static final DimensionType AsteroidDimensionType = DimensionType.register("asteroid", "asteroid", 4, WorldProviderAsteroid.class, false);
     public static final int GASGIANT_DIMID_OFFSET = 0x100; //Offset by 256
-    public static Logger logger = AdvancedRocketry.logger;
+    private static Logger logger = AdvancedRocketry.logger;
     public static int dimOffset = 0;
-    public static String prevBuild;
+    private static String prevBuild;
     //Stat tracking
     public static boolean hasReachedMoon;
     public static boolean hasReachedWarp;
@@ -68,7 +68,7 @@ public class DimensionManager implements IGalaxy {
     public static DimensionProperties overworldProperties;
     //the default property for any dimension created in space, normally, space over earth
     public static DimensionProperties defaultSpaceDimensionProperties;
-    private static DimensionManager instance = (DimensionManager) (AdvancedRocketryAPI.dimensionManager = new DimensionManager());
+    private static DimensionManager instance = new DimensionManager();
     private static long nextSatelliteId;
     public Set<Integer> knownPlanets;
     private Random random;

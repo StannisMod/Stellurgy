@@ -52,7 +52,7 @@ public class ARConfiguration {
     private final static String PERFORMANCE = "Performance";
     private final static String CLIENT = "Client";
     private final static String COMPAT = "Compatibility";
-    public static Logger logger = LogManager.getLogger(Constants.modId);
+    private static Logger logger = LogManager.getLogger(Constants.modId);
 
     private static String[] sealableBlockWhiteList, sealableBlockBlackList, breakableTorches, blackListRocketBlocksStr, harvestableGasses, spawnableGasses, entityList, geodeOres, blackHoleGeneratorTiming, orbitalLaserOres, liquidMonopropellant, liquidBipropellantFuel, liquidBipropellantOxidizer, liquidNuclearWorkingFluid;
     private static ARConfiguration currentConfig = new ARConfiguration();
