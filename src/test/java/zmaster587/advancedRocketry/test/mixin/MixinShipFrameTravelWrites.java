@@ -59,6 +59,53 @@ public abstract class MixinShipFrameTravelWrites {
      */
     private static final ThreadLocal<EntityLivingBase> ARTEST$RESOLVING = new ThreadLocal<>();
 
+    /**
+     * Resolved ticks THIS side has produced, counted where production resolves one.
+     *
+     * <p>The leading number of the tick line, and it replaces a production counter that production
+     * itself never read. Counted at the per-tick seam rather than at {@code travel}'s return, which
+     * is a different event: {@code travel} returns on declined and unhandled bodies too, and
+     * substituting that number would have counted something else under the same name. The seam
+     * fires exactly where the counter used to be incremented, on all three resolve paths.</p>
+     *
+     * <p>Per THREAD, so an integrated game's two sides count their own. The static was JVM-global,
+     * so a client line and a server line drew from one sequence and neither described its own side's
+     * progress — which is the number a reader of a per-side record wanted in the first place.</p>
+     */
+    private static final ThreadLocal<long[]> ARTEST$TICKS = new ThreadLocal<long[]>() {
+        @Override
+        protected long[] initialValue() {
+            return new long[]{0L};
+        }
+    };
+
+    /**
+     * The LIVE body point in the ship frame, from the guard pass a few frames earlier in the tick.
+     *
+     * <p>Distinct from the committed point the tick line carries as {@code H=}: the commit only
+     * changes when the resolver commits, so it reads "perfectly still" for a body something else is
+     * holding, while this is where the body actually IS on the deck right now. Production computes
+     * it in {@code heldShipFramePos} and hands it to {@code noteGuardPass}, which is the pass that
+     * compares it against the committed point — the same relay {@link #ARTEST$WALK} performs, and
+     * for the same reason.</p>
+     *
+     * <p><b>Per BODY, not per thread, and keyed by IDENTITY.</b> Several bodies resolve on one
+     * thread within a tick, so a thread-wide holder would hand a body that got no guard pass — one
+     * whose capture was installed this very tick — the point of whichever body passed the guard
+     * before it, with nothing in the record saying so. Weak keys, which also switch key comparison
+     * to {@code ==}: vanilla {@code Entity} equality is the network id alone, so an integrated
+     * game's two copies of one body would otherwise share one slot and overwrite each other, which
+     * is the defect this slice exists to remove.</p>
+     *
+     * <p>Absent until that body's own first guard pass, and the line then carries the committed
+     * point in its place with {@code B?} in place of {@code B=} — "this body has not been judged
+     * yet" and "it was judged, at these coordinates" are different answers, and a zero triple would
+     * read as the second.</p>
+     */
+    private static final java.util.Map<Entity, double[]> ARTEST$BODY =
+            new com.google.common.collect.MapMaker().weakKeys()
+                    .<Entity, double[]>makeMap();
+
     @Inject(method = "travel", at = @At("HEAD"))
     private static void arTest$enterTravel(EntityLivingBase entity, float strafe, float vertical,
                                            float forward, float jumpMovementFactor, CallbackInfoReturnable<Boolean> cir) {
@@ -80,28 +127,45 @@ public abstract class MixinShipFrameTravelWrites {
     @Inject(method = "noteTickHistory", at = @At("HEAD"))
     private static void arTest$tickLine(char path, double heldX, double heldY, double heldZ,
                                         double carryX, double carryY, double carryZ,
-                                        boolean onDeck, int obstacleCount, CallbackInfo ci) {
+                                        boolean onDeck, int obstacleCount,
+                                        boolean collidedX, boolean collidedZ, CallbackInfo ci) {
+        long ticks = ++ARTEST$TICKS.get()[0];
         EntityLivingBase entity = ARTEST$RESOLVING.get();
         if (entity == null) {
             return;
         }
         TestTrace.instrument(entity, "ship_frame_tick_events");
         double[] walk = ARTEST$WALK.get();
+        // This body's own live deck point, or nothing when the guard has not judged it yet. The
+        // segment says which: `B=` carries a measurement, `B?` says there is none. A zero triple
+        // would have read as a body sitting on its ship's origin.
+        double[] body = ARTEST$BODY.get(entity);
+        String bodySeg = body == null ? "B?"
+                : String.format(java.util.Locale.ROOT, "B=%.3f,%.3f,%.3f",
+                        body[0], body[1], body[2]);
+        // The world time of the commit this line reports, taken from the body's own world.
+        //
+        // Every resolve path commits through `remember` a few frames above this seam, and that
+        // stamps the capture with exactly this number — so the value production kept in a static
+        // for the line to read was the reading available AT the line all along, for whichever body
+        // the JVM's two sides had committed last. Asked of the resolving body's world instead: same
+        // number, and it cannot be another body's or another side's.
+        long commitWorldTime = entity.world == null ? -1L : entity.world.getTotalWorldTime();
         // The SAME line production used to append to its ring, byte for byte: eighteen readers across
         // two test classes parse this format, and changing it and them in one step would have been a
         // rewrite of the parsing layer on top of a move. What changed is WHO builds it and where it
         // goes — a record attributed to this body, in the ring the reader can take a mark in, instead
         // of one JVM-global string that held every body at once.
         String line = String.format(java.util.Locale.ROOT,
-                "%d%c|B=%.3f,%.3f,%.3f|H=%.3f,%.3f,%.3f|m=%.4f,%.4f,%.4f|c=%.4f|in=%.1f/%.1f|d=%d"
+                "%d%c|%s|H=%.3f,%.3f,%.3f|m=%.4f,%.4f,%.4f|c=%.4f|in=%.1f/%.1f|d=%d"
                         + "|s=%d%d/%d|w=%d",
-                resolvedTicks, path,
-                lastBodyLocalX, lastBodyLocalY, lastBodyLocalZ, heldX, heldY, heldZ,
+                ticks, path,
+                bodySeg, heldX, heldY, heldZ,
                 walk[2], walk[3], walk[4],
                 Math.sqrt(carryX * carryX + carryY * carryY + carryZ * carryZ),
                 walk[0], walk[1], onDeck ? 1 : 0,
-                lastSweepCollidedX ? 1 : 0, lastSweepCollidedZ ? 1 : 0, obstacleCount,
-                lastCommitWorldTime);
+                collidedX ? 1 : 0, collidedZ ? 1 : 0, obstacleCount,
+                commitWorldTime);
         // The line, and the same numbers as NUMBERS. The line is what eighteen existing readers
         // parse; the fields beside it are what a reader asking one question reads without a format
         // to reverse-engineer, and they are what replaced the probe verb that used to publish ten
@@ -112,6 +176,19 @@ public abstract class MixinShipFrameTravelWrites {
                         + ",\"path\":\"" + path + "\""
                         + ",\"onDeck\":" + onDeck
                         + ",\"obstacles\":" + obstacleCount
+                        // This tick's own horizontal clip, per path. The two statics it replaces
+                        // were written by the deck paths only, so a hull tick carried whatever a
+                        // deck tick had left behind — on either side of an integrated game.
+                        + ",\"collidedX\":" + collidedX + ",\"collidedZ\":" + collidedZ
+                        // Where the body IS on the deck, against `heldX/Y/Z` — where the resolver
+                        // committed it. A body something else is holding shows a still commit and a
+                        // moving live point; that pair is the whole discriminator. Null, not a
+                        // borrowed triple, before this body's own first guard pass.
+                        + (body == null ? ",\"bodyLocal\":null"
+                                : ",\"bodyLocalX\":" + body[0] + ",\"bodyLocalY\":" + body[1]
+                                        + ",\"bodyLocalZ\":" + body[2])
+                        + ",\"heldX\":" + heldX + ",\"heldY\":" + heldY + ",\"heldZ\":" + heldZ
+                        + ",\"commitWorldTime\":" + commitWorldTime
                         + ",\"carryX\":" + carryX + ",\"carryY\":" + carryY + ",\"carryZ\":" + carryZ
                         + ",\"inStrafe\":" + walk[0] + ",\"inForward\":" + walk[1]
                         + ",\"motionShipX\":" + walk[2] + ",\"motionShipY\":" + walk[3]
@@ -421,8 +498,17 @@ public abstract class MixinShipFrameTravelWrites {
                                          double carrySeen, double frameMovedX, double frameMovedY,
                                          double frameMovedZ, double entityMovedX,
                                          double entityMovedY, double entityMovedZ,
+                                         double bodyLocalX, double bodyLocalY, double bodyLocalZ,
                                          CallbackInfo ci) {
-        if (entity == null || entity.world == null) {
+        if (entity == null) {
+            return;
+        }
+        // Held for the tick line, which needs the live point and the committed one in the same row.
+        // Kept ahead of the world guard below: a pass on a world-less body still measured the point,
+        // and skipping it would leave the body's next line reporting an older pass as if it were
+        // this one.
+        ARTEST$BODY.put(entity, new double[]{bodyLocalX, bodyLocalY, bodyLocalZ});
+        if (entity.world == null) {
             return;
         }
         TestTrace.instrument(entity, "deck_guard_pass_events");
@@ -439,7 +525,13 @@ public abstract class MixinShipFrameTravelWrites {
                         + ",\"frameMovedZ\":" + frameMovedZ
                         + ",\"entityMovedX\":" + entityMovedX
                         + ",\"entityMovedY\":" + entityMovedY
-                        + ",\"entityMovedZ\":" + entityMovedZ);
+                        + ",\"entityMovedZ\":" + entityMovedZ
+                        // The live ship-frame point this pass judged. It was three statics that
+                        // nothing in production read, and a reader polling them from another JVM
+                        // got whichever body either side had last passed through the guard.
+                        + ",\"bodyLocalX\":" + bodyLocalX
+                        + ",\"bodyLocalY\":" + bodyLocalY
+                        + ",\"bodyLocalZ\":" + bodyLocalZ);
     }
 
     /**
@@ -484,19 +576,6 @@ public abstract class MixinShipFrameTravelWrites {
                         + ",\"bodyW\":" + (real.maxX - real.minX)
                         + ",\"bodyH\":" + (real.maxY - real.minY));
     }
-
-    // The values the line carries that are not parameters of this seam. SHADOWED rather than read
-    // through an accessor: they are production's own intermediate state for one tick, and the
-    // appendix names a shadowed field as a legitimate source for a record. Production no longer
-    // publishes any of them — the public ones that remain are read by other tests and go with their
-    // own slices.
-    @Shadow private static volatile long resolvedTicks;
-    @Shadow private static volatile double lastBodyLocalX;
-    @Shadow private static volatile double lastBodyLocalY;
-    @Shadow private static volatile double lastBodyLocalZ;
-    @Shadow private static volatile boolean lastSweepCollidedX;
-    @Shadow private static volatile boolean lastSweepCollidedZ;
-    @Shadow private static volatile long lastCommitWorldTime;
 
     @Inject(method = "travel", at = @At("RETURN"))
     private static void arTest$afterTravel(EntityLivingBase entity, float strafe, float vertical,
