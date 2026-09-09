@@ -118,7 +118,7 @@ public class NebulaConcealmentTest {
     public void restoreSeams() {
         zmaster587.advancedRocketry.api.ARConfiguration.getCurrentConfig()
                 .telescopeObscuredAtMagnitudes = previousThreshold;
-        UniverseRegistry.setGenerator(null);
+        UniverseRegistry.detachGenerator();
         UniverseRegistry.setStarLookup(null);
     }
 
@@ -126,7 +126,7 @@ public class NebulaConcealmentTest {
     public void aClearSightLineNamesTheBodies() {
         // The control. Without it "the dusty case names nothing" would be a statement about a
         // fixture that never named anything.
-        UniverseRegistry.setGenerator(new EmptyGalaxyGenerator());
+        UniverseRegistry.attachGenerator(new EmptyGalaxyGenerator());
         UniverseRegistry registry = oneSystem();
         CrystalMemory crystal = new CrystalMemory();
 
@@ -139,7 +139,7 @@ public class NebulaConcealmentTest {
     public void aLookThroughThickDustLearnsTheADDRESSAndNotTheBODIES() {
         // THE mechanic. The operator is left knowing there is something out there and having to go
         // and see what — which is the reason to fly rather than survey.
-        UniverseRegistry.setGenerator(dustyBy(columnAtThreshold() * 2d));
+        UniverseRegistry.attachGenerator(dustyBy(columnAtThreshold() * 2d));
         UniverseRegistry registry = oneSystem();
         CrystalMemory crystal = new CrystalMemory();
 
@@ -157,7 +157,7 @@ public class NebulaConcealmentTest {
     public void thinDustDoesNotHideAnything() {
         // The other side of the threshold, so "obscured" is a property of how much dust there is and
         // not of there being any.
-        UniverseRegistry.setGenerator(dustyBy(columnAtThreshold() * 0.5d));
+        UniverseRegistry.attachGenerator(dustyBy(columnAtThreshold() * 0.5d));
         UniverseRegistry registry = oneSystem();
         CrystalMemory crystal = new CrystalMemory();
 
@@ -171,7 +171,7 @@ public class NebulaConcealmentTest {
     public void theThresholdIsReadInMagnitudes() {
         // The unit is the contract: the config states extinction, and the calibration from this
         // model's density to magnitudes lives in one place.
-        UniverseRegistry.setGenerator(dustyBy(columnAtThreshold()));
+        UniverseRegistry.attachGenerator(dustyBy(columnAtThreshold()));
         UniverseRegistry registry = oneSystem();
 
         double magnitudes = registry.extinctionBetween(HOME, TARGET);
@@ -187,7 +187,7 @@ public class NebulaConcealmentTest {
     public void turningTheThresholdOffRestoresTheClearSky() {
         // A config flag has to REMOVE its mechanic, not soften it. Zero is the off switch, because
         // "obscured at zero magnitudes" would otherwise mean everything is always hidden.
-        UniverseRegistry.setGenerator(dustyBy(columnAtThreshold() * 100d));
+        UniverseRegistry.attachGenerator(dustyBy(columnAtThreshold() * 100d));
         UniverseRegistry registry = oneSystem();
         zmaster587.advancedRocketry.api.ARConfiguration.getCurrentConfig()
                 .telescopeObscuredAtMagnitudes = 0d;
@@ -204,7 +204,7 @@ public class NebulaConcealmentTest {
     public void aLookWithNoStatedObserverIsNeverObscured() {
         // A caller that cannot say where it is standing cannot claim a sight line either. This is
         // what keeps every pre-existing call site behaving exactly as it did.
-        UniverseRegistry.setGenerator(dustyBy(columnAtThreshold() * 100d));
+        UniverseRegistry.attachGenerator(dustyBy(columnAtThreshold() * 100d));
         UniverseRegistry registry = oneSystem();
         CrystalMemory crystal = new CrystalMemory();
 
@@ -217,7 +217,7 @@ public class NebulaConcealmentTest {
     public void extinctionIsZeroInAUniverseWithNoClouds() {
         // The negative leg for the physics itself: no clusters, no gas, no dimming — and no
         // fabricated column from a generator that has none.
-        UniverseRegistry.setGenerator(new EmptyGalaxyGenerator());
+        UniverseRegistry.attachGenerator(new EmptyGalaxyGenerator());
         UniverseRegistry registry = oneSystem();
 
         assertEquals("clear space dims nothing", 0d, registry.extinctionBetween(HOME, TARGET),

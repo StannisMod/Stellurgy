@@ -1529,6 +1529,7 @@ public class AdvancedRocketry {
         // Released here, by the owner: the subsystem belonged to the server that has just stopped.
         spaceSubsystem = null;
         detachServerServices();
+        zmaster587.advancedRocketry.universe.UniverseRegistry.onServerStopped();
         zmaster587.advancedRocketry.atmosphere.AtmosphereHandler.clear();
         zmaster587.advancedRocketry.api.ARConfiguration.getCurrentConfig().MoonId = Constants.INVALID_PLANET;
         ((BlockSeal) AdvancedRocketryBlocks.blockPipeSealer).clearMap();

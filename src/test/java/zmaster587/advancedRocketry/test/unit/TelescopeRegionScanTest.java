@@ -107,7 +107,7 @@ public class TelescopeRegionScanTest {
 
     @After
     public void resetSeams() {
-        UniverseRegistry.setGenerator(null);
+        UniverseRegistry.detachGenerator();
         UniverseRegistry.setStarLookup(null);
     }
 
@@ -335,7 +335,7 @@ public class TelescopeRegionScanTest {
      * find it, by a distance that is inside its own neighbourhood and nowhere near the next.</p>
      */
     private UniverseRegistry threeSystems() {
-        UniverseRegistry.setGenerator(new EmptyGalaxyGenerator());
+        UniverseRegistry.attachGenerator(new EmptyGalaxyGenerator());
         UniverseRegistry.setStarLookup(TelescopeRegionScanTest::star);
 
         UniverseRegistry registry = new UniverseRegistry();
@@ -481,7 +481,7 @@ public class TelescopeRegionScanTest {
         // orders, and this test would not merely fail: it would never return.
         GalaxyGenConfig config = GalaxyGenConfig.defaults();
         CountingGenerator counting = new CountingGenerator(config);
-        UniverseRegistry.setGenerator(counting);
+        UniverseRegistry.attachGenerator(counting);
         UniverseRegistry.setStarLookup(TelescopeRegionScanTest::star);
 
         UniverseRegistry registry = new UniverseRegistry();
@@ -547,7 +547,7 @@ public class TelescopeRegionScanTest {
         // re-derives everything by construction, so the discriminator below cannot quietly stop
         // discriminating.
         GalaxyGenConfig config = GalaxyGenConfig.defaults();
-        UniverseRegistry.setGenerator(new ClusteredGalaxyGenerator(config));
+        UniverseRegistry.attachGenerator(new ClusteredGalaxyGenerator(config));
         UniverseRegistry.setStarLookup(TelescopeRegionScanTest::star);
         UniverseRegistry registry = new UniverseRegistry();
         registry.bindWorldSeed(0xC0FFEEL);
@@ -606,7 +606,7 @@ public class TelescopeRegionScanTest {
         // NUMBER rather than asserted to be small: the bound below is a tripwire against an order of
         // magnitude, and the printed figures are what a decision about survey width is made from.
         GalaxyGenConfig config = GalaxyGenConfig.defaults();
-        UniverseRegistry.setGenerator(new ClusteredGalaxyGenerator(config));
+        UniverseRegistry.attachGenerator(new ClusteredGalaxyGenerator(config));
         UniverseRegistry.setStarLookup(TelescopeRegionScanTest::star);
         UniverseRegistry registry = new UniverseRegistry();
         registry.bindWorldSeed(0xC0FFEEL);

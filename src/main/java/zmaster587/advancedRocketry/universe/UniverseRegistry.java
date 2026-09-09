@@ -150,7 +150,14 @@ public final class UniverseRegistry extends WorldSavedData implements CellFrames
     private transient Map<String, GalacticCoord> anchorsBySuper = null;
     private transient int anchorsBySuperSpacing = -1;
 
-    // ─── JVM-global seams / staging ───────────────────────────────────────────
+    // ─── The SERVER's model state, and the seams that carry it ───────────────
+    //
+    // These were labelled "JVM-global seams" and behaved like it: every one of them belongs to the
+    // running server - the schema is the SAVE's, the seed is the SAVE's, the staged config is the
+    // pack this world loaded with - and none was ever released, so the load path compensated by
+    // overwriting them (the comment at the DimensionManager install site says so in as many words).
+    // They are released in onServerStopped now, so the next world starts from the ship default
+    // rather than from the last one's leftovers.
     private static volatile IGalaxyGenerator generator = new EmptyGalaxyGenerator();
     // How a stored star-id resolves to its content object. Defaults to the legacy catalogue; overridable so
     // the forward coord->system path is unit-testable without booting DimensionManager, and so an addon can
@@ -1481,7 +1488,7 @@ public final class UniverseRegistry extends WorldSavedData implements CellFrames
         // wrong model would be placed wrongly and then persisted.
         UniverseSchema schema = reg.reconcileSchema(packGalaxyConfig);
         activeSchema = schema;
-        setGenerator(schema.generator(packGalaxyConfig));
+        attachSchemaGenerator(schema.generator(packGalaxyConfig));
         LOGGER.info("Universe schema {} ({}) in force, configuration {}", schema.version(),
                 schema.label(), reg.configFingerprint());
         if (!schema.isStable()) {
@@ -1505,8 +1512,68 @@ public final class UniverseRegistry extends WorldSavedData implements CellFrames
         return generator;
     }
 
-    public static void setGenerator(IGalaxyGenerator g) {
-        generator = (g == null) ? new EmptyGalaxyGenerator() : g;
+    /**
+     * Put a generator in force for the running server.
+     *
+     * <p>Replacing is legitimate and happens up to three times per load — a provisional install while
+     * dimensions load, the save's own schema at {@link #populate}, and an upgrade command — so this is
+     * deliberately NOT a once-only install. What it refuses is {@code null}: that used to substitute
+     * {@link EmptyGalaxyGenerator} silently, which made "no generator could be resolved" and "this
+     * galaxy really is empty" the same answer to every caller. No production path ever passed null;
+     * only tests and the probe's reset verb did, and they say {@link #detachGenerator()} now.</p>
+     */
+    public static void attachGenerator(IGalaxyGenerator g) {
+        if (g == null) {
+            throw new IllegalArgumentException(
+                    "a generator must be supplied; use detachGenerator() to return to the ship default");
+        }
+        generator = g;
+    }
+
+    /**
+     * As {@link #attachGenerator}, and additionally refuses to run before the world model is
+     * resolved.
+     *
+     * <p>The two sanctioned installs both know their schema: {@link #populate} puts one in force and
+     * installs its generator on the next line, and the upgrade command adopts one first. Anything
+     * installing before either has happened is deriving a universe from a model this save has not
+     * been shown to be owed — which is exactly what the deleted provisional install did, in the
+     * window between {@code serverAboutToStart} and {@code serverStarting}.</p>
+     */
+    public static void attachSchemaGenerator(IGalaxyGenerator g) {
+        if (activeSchema == null) {
+            throw new IllegalStateException("no world model is in force yet; a generator installed now"
+                    + " would not be the one this save is owed");
+        }
+        attachGenerator(g);
+    }
+
+    /**
+     * Release the running server's generator, leaving the shipped default: void space between
+     * authored anchors.
+     *
+     * <p>That default is a DESIGNED answer, not a fallback — it is what a pack with no
+     * {@code <galaxyGen>} is owed — which is why returning to it is spelled out here rather than
+     * reached by passing null to the setter.</p>
+     */
+    public static void detachGenerator() {
+        generator = new EmptyGalaxyGenerator();
+    }
+
+    /**
+     * Release everything in this section that belonged to the server that has just stopped.
+     *
+     * <p>Called from the mod's {@code serverStopped}, beside the other subsystems that do the same.
+     * Without it the next world inherits the previous one's schema, staged pack configuration and
+     * generator until something happens to overwrite each — which is what the load path has been
+     * quietly relying on.</p>
+     */
+    public static void onServerStopped() {
+        detachGenerator();
+        activeSchema = null;
+        packGalaxyConfig = null;
+        pendingAnchors = new HashMap<>();
+        pendingReset = false;
     }
 
     /**

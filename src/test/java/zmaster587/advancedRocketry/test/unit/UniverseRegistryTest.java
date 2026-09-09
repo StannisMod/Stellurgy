@@ -66,7 +66,7 @@ public class UniverseRegistryTest {
     /** Restore the JVM-global seams after any test that swapped them. */
     @After
     public void resetSeams() {
-        UniverseRegistry.setGenerator(null);
+        UniverseRegistry.detachGenerator();
         UniverseRegistry.setStarLookup(null);
     }
 
@@ -259,7 +259,7 @@ public class UniverseRegistryTest {
         StellarBody stored = star(42);
         UniverseRegistry.setStarLookup(id -> id == 42 ? stored : null);
         // A generator that would claim EVERY cell — the stored placement must still win at its cell.
-        UniverseRegistry.setGenerator(new AllClaimingGenerator(star(777)));
+        UniverseRegistry.attachGenerator(new AllClaimingGenerator(star(777)));
 
         UniverseRegistry reg = new UniverseRegistry();
         GalacticCoord placedCell = GalacticCoord.ofSectorLocal(5, 5, 5, 0, 0, 0);
@@ -292,7 +292,7 @@ public class UniverseRegistryTest {
         reg.bindWorldSeed(0xBEEF);
         GalaxyGenConfig cfg = new GalaxyGenConfig(16, 0.9d, GalaxyGenConfig.DEFAULT_GALAXY_SPACING,
                 GalaxyGenConfig.DEFAULT_GALAXY_DENSITY, null, null);
-        UniverseRegistry.setGenerator(new ClusteredGalaxyGenerator(cfg));
+        UniverseRegistry.attachGenerator(new ClusteredGalaxyGenerator(cfg));
 
         // Find an occupied super-cell and a non-star body of its system.
         GalacticCoord anchor = null;
@@ -344,7 +344,7 @@ public class UniverseRegistryTest {
         reg.bindWorldSeed(1234L);
         GalaxyGenConfig cfg = new GalaxyGenConfig(8, 0.9d, GalaxyGenConfig.DEFAULT_GALAXY_SPACING,
                 GalaxyGenConfig.DEFAULT_GALAXY_DENSITY, null, null);
-        UniverseRegistry.setGenerator(new ClusteredGalaxyGenerator(cfg));
+        UniverseRegistry.attachGenerator(new ClusteredGalaxyGenerator(cfg));
 
         GalacticCoord anchor = null;
         for (long sup = 0; sup < 8 && anchor == null; sup++) {
@@ -516,7 +516,7 @@ public class UniverseRegistryTest {
     public void bodiesAtMergesProceduralBodiesAndPois() {
         UniverseRegistry reg = new UniverseRegistry();
         reg.bindWorldSeed(0xABCDEFL);
-        UniverseRegistry.setGenerator(new ClusteredGalaxyGenerator(new GalaxyGenConfig(1, 0.9d,
+        UniverseRegistry.attachGenerator(new ClusteredGalaxyGenerator(new GalaxyGenConfig(1, 0.9d,
                 GalaxyGenConfig.DEFAULT_GALAXY_SPACING, GalaxyGenConfig.DEFAULT_GALAXY_DENSITY,
                 null, null)));
 

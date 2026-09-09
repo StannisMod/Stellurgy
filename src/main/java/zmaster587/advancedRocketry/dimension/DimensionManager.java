@@ -1029,15 +1029,18 @@ public class DimensionManager implements IGalaxy {
         // property of the SAVE (its schema stamp) and the save is not reachable here — worlds are not
         // loaded yet. The pack states the parameters; the world states the version.
         //
-        // The provisional install below keeps this window behaving exactly as it did before the stamp
-        // existed: the generator is a JVM-global, so it is reset every load and a world without
-        // <galaxyGen> never inherits a previous world's generator. populate() then replaces it with the
-        // generator the save is actually owed, before anything derives.
+        // Stage the pack's <galaxyGen> for populate() to pair with the save's schema stamp. NO
+        // generator is installed here: this runs at serverAboutToStart, and the save's model is not
+        // resolved until populate() at serverStarting, so anything installed in that window would be
+        // the CURRENT model rather than the one this world is owed. A provisional install used to sit
+        // here, justified by a comment saying nothing derives before populate replaces it - and if
+        // that is true it did nothing, while if it is false it answered an old save with the newest
+        // model. Where the save carries no stamp, reconcileSchema adopts the current schema at the
+        // one install point, loudly and with a stamp written; that is the same outcome without the
+        // window.
         zmaster587.advancedRocketry.universe.GalaxyGenConfig galaxyGenConfig =
                 (dimCouplingList != null) ? dimCouplingList.galaxyGenConfig : null;
         zmaster587.advancedRocketry.universe.UniverseRegistry.stageGalaxyConfig(galaxyGenConfig);
-        zmaster587.advancedRocketry.universe.UniverseRegistry.setGenerator(
-                zmaster587.advancedRocketry.universe.UniverseSchemas.current().generator(galaxyGenConfig));
         // C129: registration authority on load was planetDefs.xml only (the loop
         // above), while per-dim persisted state lives in temp.dat (loadedPlanets).
         // A dim present in temp.dat but absent from a hand-edited / restored /

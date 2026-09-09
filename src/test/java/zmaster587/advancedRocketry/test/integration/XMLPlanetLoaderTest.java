@@ -596,7 +596,7 @@ public class XMLPlanetLoaderTest {
                         + " weight=\"11\"/>\n"
                         + "</galaxyGen>\n")).galaxyGenConfig;
         try {
-            UniverseRegistry.setGenerator(new ClusteredGalaxyGenerator(parsed));
+            UniverseRegistry.attachGenerator(new ClusteredGalaxyGenerator(parsed));
             String written = XMLPlanetLoader.writeXML(DimensionManager.getInstance());
             File f = tempFolder.newFile();
             Files.write(f.toPath(), written.getBytes(StandardCharsets.UTF_8));
@@ -611,7 +611,7 @@ public class XMLPlanetLoaderTest {
             assertEquals(GalaxyGenConfig.GalaxyProfile.SPHEROID, round.galaxyTypes.get(1).profile);
             assertEquals(11, round.galaxyTypes.get(1).weight);
         } finally {
-            UniverseRegistry.setGenerator(null);
+            UniverseRegistry.detachGenerator();
         }
     }
 
@@ -676,7 +676,7 @@ public class XMLPlanetLoaderTest {
                         + "</galaxyGen>\n")).galaxyGenConfig;
 
         try {
-            UniverseRegistry.setGenerator(new ClusteredGalaxyGenerator(parsed));
+            UniverseRegistry.attachGenerator(new ClusteredGalaxyGenerator(parsed));
             String written = XMLPlanetLoader.writeXML(DimensionManager.getInstance());
 
             File f = tempFolder.newFile();
@@ -693,7 +693,7 @@ public class XMLPlanetLoaderTest {
             assertEquals(60, round.starTypes.get(0).temperature);
             assertEquals(9, round.starTypes.get(0).weight);
         } finally {
-            UniverseRegistry.setGenerator(null); // restore the authored-only default
+            UniverseRegistry.detachGenerator(); // restore the authored-only default
         }
     }
 

@@ -37,7 +37,7 @@ public class PlanetRealizationTest {
 
     @After
     public void resetSeams() {
-        UniverseRegistry.setGenerator(null);
+        UniverseRegistry.detachGenerator();
         UniverseRegistry.setStarLookup(null);
     }
 
@@ -47,7 +47,7 @@ public class PlanetRealizationTest {
     /** A dense, void-free galaxy, so the first super-cell probed holds a system. */
     private static UniverseRegistry registryWithProceduralGalaxy() {
         UniverseRegistry reg = new UniverseRegistry();
-        UniverseRegistry.setGenerator(new ClusteredGalaxyGenerator(
+        UniverseRegistry.attachGenerator(new ClusteredGalaxyGenerator(
                 new GalaxyGenConfig(SPACING, 1.0d, GalaxyGenConfig.DEFAULT_GALAXY_SPACING,
                         GalaxyGenConfig.DEFAULT_GALAXY_DENSITY, null, null)));
         reg.bindWorldSeed(SEED);
@@ -393,7 +393,7 @@ public class PlanetRealizationTest {
         assertTrue("a pinned system must have a star", before.isPresent());
 
         // A pack edit: a different spacing, a different density, a whole different galaxy.
-        UniverseRegistry.setGenerator(new ClusteredGalaxyGenerator(
+        UniverseRegistry.attachGenerator(new ClusteredGalaxyGenerator(
                 new GalaxyGenConfig(SPACING / 2, 0.2d, GalaxyGenConfig.DEFAULT_GALAXY_SPACING,
                         GalaxyGenConfig.DEFAULT_GALAXY_DENSITY, null, null)));
 

@@ -64,7 +64,7 @@ public class TelescopeConeSurveyTest {
     @After
     public void resetSeams() {
         ARConfiguration.getCurrentConfig().telescopeResolveMarginMagnitudes = previousMargin;
-        UniverseRegistry.setGenerator(null);
+        UniverseRegistry.detachGenerator();
         UniverseRegistry.setStarLookup(null);
     }
 
@@ -236,7 +236,7 @@ public class TelescopeConeSurveyTest {
 
     /** A registry holding one star of a stated bulk, seated {@code lightYears} away along +X. */
     private static UniverseRegistry oneStarAt(double lightYears, float sizeSuns, int temperature) {
-        UniverseRegistry.setGenerator(new EmptyGalaxyGenerator());
+        UniverseRegistry.attachGenerator(new EmptyGalaxyGenerator());
         UniverseRegistry.setStarLookup(id -> starOf(id, sizeSuns, temperature));
 
         UniverseRegistry registry = new UniverseRegistry();
@@ -307,7 +307,7 @@ public class TelescopeConeSurveyTest {
         // Physics the mechanic inherits rather than a rule someone wrote: an unbound world emits
         // nothing, so no aperture registers one. Finding a rogue planet is a thing you do by GOING
         // there, and that is what makes the void worth flying into rather than surveying from home.
-        UniverseRegistry.setGenerator(new EmptyGalaxyGenerator());
+        UniverseRegistry.attachGenerator(new EmptyGalaxyGenerator());
         UniverseRegistry.setStarLookup(id -> null);
         UniverseRegistry registry = new UniverseRegistry();
         GalacticCoord seat = cell(UniverseScale.cellsForLightYears(20d), 0, 0);
@@ -475,7 +475,7 @@ public class TelescopeConeSurveyTest {
         // the second — and the only way to state that is to count.
         GalaxyGenConfig config = GalaxyGenConfig.defaults();
         SplitCountingGenerator counting = new SplitCountingGenerator(config);
-        UniverseRegistry.setGenerator(counting);
+        UniverseRegistry.attachGenerator(counting);
         UniverseRegistry.setStarLookup(id -> starOf(id, 1f, 100));
         UniverseRegistry registry = new UniverseRegistry();
         registry.bindWorldSeed(SEED);
@@ -527,7 +527,7 @@ public class TelescopeConeSurveyTest {
         // aperture must hold under 200 000 looks, register a number of systems a crystal can carry,
         // and cost well under a second of CPU spread over its steps.
         GalaxyGenConfig config = GalaxyGenConfig.defaults();
-        UniverseRegistry.setGenerator(new ClusteredGalaxyGenerator(config));
+        UniverseRegistry.attachGenerator(new ClusteredGalaxyGenerator(config));
         UniverseRegistry.setStarLookup(id -> starOf(id, 1f, 100));
         UniverseRegistry registry = new UniverseRegistry();
         registry.bindWorldSeed(SEED);

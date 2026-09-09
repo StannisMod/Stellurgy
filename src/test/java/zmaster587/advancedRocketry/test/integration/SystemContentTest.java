@@ -45,7 +45,7 @@ public class SystemContentTest {
     @After
     public void resetSeams() {
         UniverseRegistry.setStarLookup(null);
-        UniverseRegistry.setGenerator(null);
+        UniverseRegistry.detachGenerator();
     }
 
     /**

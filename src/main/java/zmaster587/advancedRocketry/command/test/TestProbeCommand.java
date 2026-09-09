@@ -5878,7 +5878,7 @@ public class TestProbeCommand extends CommandBase {
             long seed = args.length >= 4 ? parseLongOr(args[3], 0L) : reg.worldSeed();
             zmaster587.advancedRocketry.universe.GalaxyGenConfig genDefaults =
                     zmaster587.advancedRocketry.universe.GalaxyGenConfig.defaults();
-            zmaster587.advancedRocketry.universe.UniverseRegistry.setGenerator(
+            zmaster587.advancedRocketry.universe.UniverseRegistry.attachGenerator(
                     new zmaster587.advancedRocketry.universe.ClusteredGalaxyGenerator(
                             new zmaster587.advancedRocketry.universe.GalaxyGenConfig(minSpacing, density,
                                     genDefaults.galaxySpacing, genDefaults.galaxyDensity, null, null)));
@@ -5887,7 +5887,7 @@ public class TestProbeCommand extends CommandBase {
             return;
         }
         if (args.length >= 1 && "gen-reset".equalsIgnoreCase(args[0])) {
-            zmaster587.advancedRocketry.universe.UniverseRegistry.setGenerator(null);
+            zmaster587.advancedRocketry.universe.UniverseRegistry.detachGenerator();
             send(sender, "{\"ok\":true}");
             return;
         }
