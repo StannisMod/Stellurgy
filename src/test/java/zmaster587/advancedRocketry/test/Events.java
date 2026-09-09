@@ -186,9 +186,18 @@ public final class Events {
 
     /** One record's string {@code field}, or {@code null} when this record does not carry it. */
     public static String text(String record, String field) {
-        Matcher m = Pattern.compile("\"" + Pattern.quote(field) + "\":\"([^\"]*)\"")
+        // Quoted OR bare, and that is not a convenience: a caller asking for a field "as text" gets
+        // the field, whatever the recorder chose to write it as. Matching quotes only made a NUMBER
+        // read back as null — indistinguishable from absent — and on 2026-09-08 that silently emptied
+        // half of an identity key, so two records that named different things compared EQUAL and two
+        // green runs hid it. The reader could not have been wrong about the field; only about its
+        // shape, which is the recorder's business.
+        Matcher m = Pattern.compile("\"" + Pattern.quote(field) + "\":(?:\"([^\"]*)\"|([^,}\\]]+))")
                 .matcher(String.valueOf(record));
-        return m.find() ? m.group(1) : null;
+        if (!m.find()) {
+            return null;
+        }
+        return m.group(1) != null ? m.group(1) : m.group(2).trim();
     }
 
     /** The string {@code field} of the FIRST record in a {@code since} reply, or {@code null} when no
