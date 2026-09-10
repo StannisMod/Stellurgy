@@ -8,6 +8,7 @@ import org.junit.runners.MethodSorters;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import zmaster587.advancedRocketry.test.ArrangementFailure;
 import zmaster587.advancedRocketry.test.Events;
 import zmaster587.advancedRocketry.test.ShipIdentity;
 
@@ -91,9 +92,12 @@ public class VSTransitCrewGroupE2ETest extends AbstractSharedVsClientE2ETest {
         for (int i = 0; i < LIVABLE_FLIGHT_TICKS / 10L && !flownOut; i++) {
             flownOut = readInt(exec("artest space transit-tick 10"), "inTransit") == 0;
         }
-        assertTrue("a jump left in the air by an earlier scenario must be flown out before this one"
-                + " starts, or its arrival lands INSIDE this scenario and re-seats the bot into the"
-                + " destination cell: " + exec("artest space transit-status"), flownOut);
+        // An ARRANGEMENT failure: a leftover jump this reset could not fly out has disproved nothing
+        // about transits — it is the world the next scenario needs not having been put back.
+        scenario().requireArranged("a jump left in the air by an earlier scenario must be flown out"
+                + " before this one starts, or its arrival lands INSIDE this scenario and re-seats"
+                + " the bot into the destination cell: " + exec("artest space transit-status"),
+                flownOut);
     }
 
     // ---- shared arrangement helpers (byte-identical in all four sources) ----
@@ -140,6 +144,20 @@ public class VSTransitCrewGroupE2ETest extends AbstractSharedVsClientE2ETest {
         return m.group(1);
     }
 
+    /**
+     * The bot's own username, off the server's own answer.
+     *
+     * <p>Needed for more than the {@code space enter} it was first read for: every record this class
+     * waits on carries {@code who}, and on a log that any body's mount can write to, the name is what
+     * makes a wait about THIS crew member.</p>
+     */
+    private static String botName(Events.Probe probe) throws Exception {
+        String health = probe.exec("artest player health");
+        Matcher nameM = PLAYER_NAME.matcher(health);
+        assertTrue("player health must echo the player name: " + health, nameM.find());
+        return nameM.group(1);
+    }
+
     /** {@code find-seat} keyed by identity — see {@link #setupShipId} for why never by the anchor. */
     private String findSeat(int originDim, String shipId) throws Exception {
         return exec("artest vs find-seat " + originDim + " id " + shipId);
@@ -184,6 +202,33 @@ private int waitForLoadedShip(int dim) throws Exception {
      * twice between two samples.</p>
      */
     private int driveIntoCorridor(Events events, long serverMark, long clientMark) throws Exception {
+        try {
+            return assertCarriedIntoCorridor(events, serverMark, clientMark);
+        } catch (ArrangementFailure alreadyTyped) {
+            throw alreadyTyped;
+        } catch (AssertionError contract) {
+            scenario().arrangementFailed(contract.getMessage());
+            return -1; // unreachable: arrangementFailed always throws
+        }
+    }
+
+    /**
+     * The same two links, raised as a CONTRACT failure — for the scenarios whose whole subject is
+     * that the crew member goes WITH his ship. {@link #driveIntoCorridor} is this call under an
+     * arrangement typing, exactly as {@code requireChain} is {@code assertChain} under one.
+     *
+     * <p><b>This wait IS the assertion, and that is the point of it.</b> The form it replaces flew
+     * the jump on a 120-iteration budget, sampled {@code reportWeather} once per two ticks and then
+     * compared the sample against {@code hyperDim} — so a client that was carried a moment after the
+     * sample was taken, and a client that was left behind for good, produced the same red, and a
+     * jump that arrived inside the budget produced a green with nothing observed at all. A record of
+     * the client's own dimension change cannot be missed between two samples and cannot be faked by
+     * a fast arrival: it is written when the world is rebuilt, at the tail of the respawn packet.</p>
+     *
+     * @return the corridor's dimension, as the transit subsystem itself names it
+     */
+    private int assertCarriedIntoCorridor(Events events, long serverMark, long clientMark)
+            throws Exception {
         String boarded = events.await(serverMark, "crew_boarded_parked_hull", "the crew must be"
                 + " seated on the hull parked in the lane before anyone can be in the corridor",
                 JUMP_LINK_BUDGET_TICKS);
@@ -196,21 +241,22 @@ private int waitForLoadedShip(int dim) throws Exception {
                 boardedShip.find());
         parkedHullName = boardedShip.group(1);
         int corridorDim = readInt(exec("artest space transit-status"), "hyperDim");
-        String seen = "";
-        for (int waited = 0; waited <= JUMP_LINK_BUDGET_TICKS; waited += 5) {
-            seen = clientEvents().since(clientMark, "client_dimension_changed");
-            if (seen.contains("\"dim\":" + corridorDim + ",")
-                    || seen.contains("\"dim\":" + corridorDim + "}")) {
-                return corridorDim;
-            }
-            bot().waitTicks(5);
+        try {
+            clientEvents().awaitMatching(clientMark, "client_dimension_changed",
+                    seen -> seen.contains("\"dim\":" + corridorDim + ",")
+                            || seen.contains("\"dim\":" + corridorDim + "}"),
+                    "for the corridor's own world (dim " + corridorDim + ")",
+                    "the crew member must be carried into the corridor with his ship, as HIS OWN"
+                            + " CLIENT sees it — the server has already seated him on the hull"
+                            + " parked in the lane", JUMP_LINK_BUDGET_TICKS);
+        } catch (AssertionError never) {
+            // The server's half beside the client's, because the two answer different questions and
+            // the client log alone cannot say whether the jump got as far as the lane. Appended on
+            // the failure path only: on the happy path this would be a probe call per wait.
+            throw new AssertionError(never.getMessage() + " | server chain since the mark: "
+                    + events.since(serverMark));
         }
-        scenario().arrangementFailed("the client was never carried into the corridor (dim "
-                + corridorDim + "): the server seated the crew on the parked hull, but no"
-                + " client_dimension_changed for that world was recorded within " + JUMP_LINK_BUDGET_TICKS
-                + " ticks. Client dimension changes since the mark: " + seen
-                + " | server chain since the mark: " + events.since(serverMark));
-        return corridorDim; // unreachable: arrangementFailed always throws
+        return corridorDim;
     }
 
     private static int readInt(String json, String key) {
@@ -272,57 +318,11 @@ private int waitForLoadedShip(int dim) throws Exception {
         assertTrue("the piloted origin ship never assembled/loaded in the pool cell (dim " + originDim + ")",
                 waitForLoadedShip(originDim) >= 1);
 
-        // Now the ship is up: locate the pilot seat's subspace pos + the ship's world pos, keyed by the
-        // identity the setup handed back rather than by the anchor every scenario here shares.
-        String seat = findSeat(originDim, setupShipId(setup));
-        // CONTROL (witness sensitivity): the seat must actually have been built and located, or the whole
-        // "still riding after the jump" observation is vacuous.
-        assertTrue("the pilot seat must be found in the assembled ship (else the test is vacuous): " + seat,
-                readBool(seat, "seatFound"));
-        int seatX = readInt(seat, "seatX"), seatY = readInt(seat, "seatY"), seatZ = readInt(seat, "seatZ");
-        double shipWorldX = readDouble(seat, "shipWorldX");
-        double shipWorldY = readDouble(seat, "shipWorldY");
-        double shipWorldZ = readDouble(seat, "shipWorldZ");
-
-        // The bot's username (server read, arrange-only).
-        String health = exec("artest player health");
-        Matcher nameM = PLAYER_NAME.matcher(health);
-        assertTrue("player health must echo the player name: " + health, nameM.find());
-        String botName = nameM.group(1);
-
-        // Move the REAL client into the origin cell, at the ship's world position (round the doubles to the
-        // ints the command takes). The client must FOLLOW into the origin dim.
-        int sx = (int) Math.round(shipWorldX), sy = (int) Math.round(shipWorldY), sz = (int) Math.round(shipWorldZ);
-        String enter = exec("artest space enter " + botName + " " + originDim + " " + sx + " " + sy + " " + sz);
-        assertTrue("space enter into the origin cell must succeed: " + enter, readBool(enter, "ok"));
-        bot().waitTicks(20);
-        assertEquals("the client must have followed into the transit origin cell",
-                originDim, bot().reportWeather().get("dim").getAsInt());
-
-        // Seat the bot on the ship's pilot-seat dummy (bound to the seat's subspace pos located at
-        // setup). Retried with a FRESH spawn on failure: the dummy is spawned at the shipyard's
-        // subspace coordinates and glued to the ship's world position only on its first tick - on
-        // a loaded machine the spawn chunk can unload before that tick and the returned entity id
-        // resolves to nothing ("entity not found"). A fresh spawn each retry is what recovers.
-        String mountAt = "", mount = "";
-        boolean mounted = false;
-        for (int attempt = 0; attempt < 5 && !mounted; attempt++) {
-            mountAt = exec("artest vs seat-mount-at " + originDim + " " + seatX + " " + seatY + " " + seatZ);
-            assertTrue("seat-mount-at must spawn the seat dummy: " + mountAt, readBool(mountAt, "ok"));
-            int dummyId = readInt(mountAt, "dummyId");
-            mount = exec("artest player mount-entity " + dummyId);
-            mounted = mount.contains("\"mounted\":true");
-            if (!mounted) {
-                bot().waitTicks(10);
-            }
-        }
-        assertTrue("the bot must mount the pilot-seat dummy (5 spawn+mount attempts): " + mount,
-                mounted);
-        bot().waitTicks(10);
-
-        // CONTROL: the client must confirm it IS riding BEFORE the transit — so "riding after" is meaningful.
-        assertTrue("the bot must be seated on the ship BEFORE the jump (control): "
-                + bot().reportRidingEntity(), bot().reportRidingEntity().get("riding").getAsBoolean());
+        // Now the ship is up: put the bot in the origin cell and on the ship's pilot seat, keyed by
+        // the identity the setup handed back rather than by the anchor every scenario here shares.
+        // The helper locates the seat, carries the client in, mounts the dummy and asserts the
+        // control that makes "still riding after the jump" mean anything.
+        seatTheBot(originDim, setupShipId(setup));
 
         // The mark is taken BEFORE the departure, so nothing the jump does can fall between two reads.
         Events events = transitEvents(this::exec);
@@ -415,98 +415,74 @@ private int waitForLoadedShip(int dim) throws Exception {
         assertTrue("the piloted origin ship never assembled/loaded in the pool cell (dim " + originDim + ")",
                 waitForLoadedShip(originDim) >= 1);
 
-        String seat = findSeat(originDim, setupShipId(setup));
-        // CONTROL (witness sensitivity): without a located seat there is nothing to sit on and every
-        // later "he is aboard" reading is vacuous.
-        assertTrue("the pilot seat must be found in the assembled ship (else the test is vacuous): " + seat,
-                readBool(seat, "seatFound"));
-        int seatX = readInt(seat, "seatX"), seatY = readInt(seat, "seatY"), seatZ = readInt(seat, "seatZ");
-        double shipWorldX = readDouble(seat, "shipWorldX");
-        double shipWorldY = readDouble(seat, "shipWorldY");
-        double shipWorldZ = readDouble(seat, "shipWorldZ");
+        seatTheBot(originDim, setupShipId(setup));
 
-        String health = exec("artest player health");
-        Matcher nameM = PLAYER_NAME.matcher(health);
-        assertTrue("player health must echo the player name: " + health, nameM.find());
-        String botName = nameM.group(1);
-
-        int sx = (int) Math.round(shipWorldX), sy = (int) Math.round(shipWorldY), sz = (int) Math.round(shipWorldZ);
-        String enter = exec("artest space enter " + botName + " " + originDim + " " + sx + " " + sy + " " + sz);
-        assertTrue("space enter into the origin cell must succeed: " + enter, readBool(enter, "ok"));
-        bot().waitTicks(20);
-        assertEquals("the client must have followed into the transit origin cell",
-                originDim, bot().reportWeather().get("dim").getAsInt());
-
-        // Seat the bot. Retried with a FRESH dummy spawn: the dummy is glued to the ship's world
-        // position only on its first tick, and on a loaded machine its spawn chunk can unload before
-        // that tick, leaving the returned entity id resolving to nothing.
-        String mount = "";
-        boolean mounted = false;
-        for (int attempt = 0; attempt < 5 && !mounted; attempt++) {
-            String mountAt = exec("artest vs seat-mount-at " + originDim + " " + seatX + " " + seatY + " " + seatZ);
-            assertTrue("seat-mount-at must spawn the seat dummy: " + mountAt, readBool(mountAt, "ok"));
-            mount = exec("artest player mount-entity " + readInt(mountAt, "dummyId"));
-            mounted = mount.contains("\"mounted\":true");
-            if (!mounted) {
-                bot().waitTicks(10);
-            }
-        }
-        assertTrue("the bot must mount the pilot-seat dummy (5 spawn+mount attempts): " + mount, mounted);
-        bot().waitTicks(10);
-
-        // CONTROL: the client says it IS riding, in the ORIGIN cell, before the jump — so both of the
-        // mid-flight readings below can move.
-        assertTrue("the bot must be seated on the ship BEFORE the jump (control): "
-                + bot().reportRidingEntity(), bot().reportRidingEntity().get("riding").getAsBoolean());
+        // CONTROL: he is in the ORIGIN cell before the jump — so the mid-flight reading below can
+        // move. (That he is RIDING is the last thing seatTheBot asserts.)
         assertEquals("the bot must be in the origin cell before the jump (control)",
                 originDim, bot().reportWeather().get("dim").getAsInt());
+
+        // Both marks BEFORE the departure, one per log: the crossing is the server's fact and the
+        // world rebuild and the re-seat are the client's, and the two logs number independently.
+        String botName = botName(this::exec);
+        Events events = transitEvents(this::exec);
+        long mark = events.markInstrumented();
+        long clientMark = clientEvents().mark();
 
         String begin = exec("artest space transit-begin " + originDim + " 1 64 1 " + PARK_SPEED);
         assertTrue("the transit must begin (departure crossing): " + begin, readBool(begin, "began"));
 
-        // Fly it, sampling the CLIENT while the ship is still en route.
-        int samples = 0, hyperDim = -1, crewDim = -1;
-        int clientDimInFlight = Integer.MIN_VALUE;
-        boolean ridingInFlight = false;
-        String lastTick = "";
-        for (int i = 0; i < 120; i++) {
-            lastTick = exec("artest space transit-status");
-            if (readInt(lastTick, "inTransit") == 0) {
-                break; // arrived - everything after this point is the far end, which is another test's
-            }
-            bot().waitTicks(2);
-            samples++;
-            if (samples == 1) {
-                // The FIRST in-flight sample is the one that matters: it is the earliest moment the
-                // crew could have been left behind, and later samples would let a late-arriving fix
-                // hide an initial ejection.
-                hyperDim = readInt(lastTick, "hyperDim");
-                crewDim = readInt(lastTick, "crewDim");
-                clientDimInFlight = bot().reportWeather().get("dim").getAsInt();
-                ridingInFlight = bot().reportRidingEntity().get("riding").getAsBoolean();
-            }
+        // THE CONTRACT: the crew travels with its ship. Both halves are production's own records —
+        // the server seating him on the hull parked in the lane, and his client's own world becoming
+        // that lane — so a crew member left behind names the link that did not happen, where the
+        // sampling loop this replaces reported one dimension number and could not tell "left behind"
+        // from "carried a tick after I looked".
+        int hyperDim = assertCarriedIntoCorridor(events, mark, clientMark);
+
+        // ...and a jump does not take the pilot out of his seat for the duration of the flight. That
+        // is a LINK, not a reading: the carry takes him off the seat in the origin cell and puts him
+        // on the hull parked in the lane, and his own client PERFORMS that mount when the server
+        // tells it who is riding what. With the mark taken before the departure the record cannot be
+        // missed, however the two sides interleave — where a read taken at the world change samples
+        // the gap between the tear-down and the rebuild and answers `riding:false` for a pilot who is
+        // about to be seated (measured 2026-09-10: green on one run of this build, red on the next).
+        try {
+            clientEvents().awaitMatching(clientMark, "mount",
+                    seen -> !Events.recordsWithAll(seen, "\"who\":\"" + botName + "\"",
+                            "\"ok\":true").isEmpty(),
+                    "seating " + botName + " (ok:true)",
+                    "a jump must not take the pilot out of his seat: his own client must re-seat him"
+                            + " on the hull parked in the lane", JUMP_LINK_BUDGET_TICKS);
+        } catch (AssertionError never) {
+            // Which silence: a client that never mounted him and a mixin that never wove are the
+            // same empty window, and they need opposite investigations. The mount hook announces
+            // itself under its own name, so the roster answers about THIS observation point.
+            Events.assertInstrumentRan(clientEvents().since(clientMark, "mount"),
+                    "entity_mount_writes", "the client's own mounts must be observed at all before"
+                            + " an absent one can be read as a pilot left on his feet");
+            throw new AssertionError(never.getMessage() + " | the SERVER's chain: "
+                    + events.since(mark));
         }
 
-        // The instrument must have fired: a jump that arrived instantly proves nothing about the
-        // interval, and a green with zero samples would be exactly that.
-        assertTrue("the jump was never observed mid-flight (0 in-flight samples); last tick=" + lastTick,
-                samples > 0);
+        // Read ONCE, as the contract pin the link cannot make for itself: what he is riding is the
+        // ship's own seat dummy and not something he came to rest on.
+        JsonObject ridingInFlight = bot().reportRidingEntity();
+        assertTrue("the crew member must be back on the SHIP'S SEAT in flight, not merely riding"
+                + " something: " + ridingInFlight,
+                ridingInFlight.get("entityClass").getAsString().endsWith("EntityDummy"));
 
-        // Arrangement oracle: the subsystem's own answer for where this crew belongs is the shared
-        // hyperspace world. If these two disagree the fixture, not production, is what failed.
+        // The far end is another scenario's subject, so everything above was read WHILE the jump was
+        // in the air — and that is stated rather than assumed, after the last of those readings. One
+        // status reply, read once: the premise and the subsystem's own oracle for where this crew
+        // belongs are two fields of the SAME record, so nothing can drift between them.
+        String inFlight = exec("artest space transit-status");
+        scenario().requireArranged("the jump must still be IN FLIGHT when the seat is read, or this"
+                + " reads the ARRIVAL — where the crew is re-seated for a different reason entirely."
+                + " transit-status=" + inFlight, readInt(inFlight, "inTransit") >= 1);
         assertEquals("mid-flight the subsystem must place this crew in the hyperspace world"
-                + " (crewDim vs hyperDim); tick=" + lastTick, hyperDim, crewDim);
-
-        // THE CONTRACT: the crew travels with its ship. The client's own dimension, in flight, is the
-        // world the ship is parked in - not the cell it departed from.
-        assertEquals("the crew member must be in the hyperspace world while his ship is flying, as HIS"
-                + " OWN CLIENT sees it - he was in dim " + clientDimInFlight + " (origin cell was "
-                + originDim + ", hyperspace is " + hyperDim + "), after " + samples + " in-flight samples",
-                hyperDim, clientDimInFlight);
-
-        // ...and a jump does not take the pilot out of his seat for the duration of the flight.
-        assertTrue("the crew member must still be riding his seat in flight, on the CLIENT: "
-                + bot().reportRidingEntity(), ridingInFlight);
+                + " (crewDim vs hyperDim); the client was carried into dim " + hyperDim
+                + "; tick=" + inFlight,
+                readInt(inFlight, "hyperDim"), readInt(inFlight, "crewDim"));
     }
 
     // ---- migrated: VSCrewedArrivalReseatsWithNobodyToLoadTheShipE2ETest ----
@@ -572,7 +548,9 @@ private boolean waitForRegisteredShip(int dim) throws Exception {
                 originDim, bot().reportWeather().get("dim").getAsInt());
 
         // Now locate the seat. Retried, because the ship's world position resolves only once VS has
-        // actually loaded it for the nearby bot, a tick or two after the dimension transfer.
+        // actually loaded it for the nearby bot, a tick or two after the dimension transfer — and
+        // raised as an ARRANGEMENT failure, because a seat this scenario could not find has said
+        // nothing about what happens to a crew member on arrival.
         String seat = "";
         for (int i = 0; i < 40 && !hasKey(seat, "shipWorldX"); i++) {
             seat = execEnvelope("artest vs find-seat " + originDim + " id " + setupShipId(setup));
@@ -581,29 +559,15 @@ private boolean waitForRegisteredShip(int dim) throws Exception {
             }
         }
         // Witness sensitivity: without a located seat the whole "still riding on the far side" observation
-        // is vacuous, so this is asserted before anything is done to the ship.
-        assertTrue("the pilot seat must be found in the assembled ship (else the test is vacuous): " + seat,
-                readBool(seat, "seatFound"));
-        assertTrue("the origin ship must resolve a world position with the bot beside it: " + seat,
-                hasKey(seat, "shipWorldX"));
+        // is vacuous, so this is checked before anything is done to the ship.
+        scenario().requireArranged("the pilot seat must be found in the assembled ship (else the test"
+                + " is vacuous): " + seat, readBool(seat, "seatFound"));
+        scenario().requireArranged("the origin ship must resolve a world position with the bot beside"
+                + " it — nothing here force-loads it, so this is the proximity load having taken: "
+                + seat, hasKey(seat, "shipWorldX"));
         int seatX = readInt(seat, "seatX"), seatY = readInt(seat, "seatY"), seatZ = readInt(seat, "seatZ");
 
-        // Seat the bot. Retried with a FRESH dummy each attempt: the dummy is spawned at the shipyard's
-        // subspace coordinates and glued to the ship's world position only on its first tick, so a spawn
-        // chunk that unloads before that tick leaves the returned id resolving to nothing.
-        String mount = "";
-        boolean mounted = false;
-        for (int attempt = 0; attempt < 5 && !mounted; attempt++) {
-            String mountAt = execEnvelope("artest vs seat-mount-at " + originDim + " " + seatX + " " + seatY + " " + seatZ);
-            assertTrue("seat-mount-at must spawn the seat dummy: " + mountAt, readBool(mountAt, "ok"));
-            mount = execEnvelope("artest player mount-entity " + readInt(mountAt, "dummyId"));
-            mounted = mount.contains("\"mounted\":true");
-            if (!mounted) {
-                bot().waitTicks(10);
-            }
-        }
-        assertTrue("the bot must mount the pilot-seat dummy (5 spawn+mount attempts): " + mount, mounted);
-        bot().waitTicks(10);
+        mountTheSeatDummy(this::execEnvelope, originDim, seatX, seatY, seatZ);
 
         // CONTROL: the client confirms it IS riding before the jump, so "riding after" carries information.
         assertTrue("the bot must be seated on the ship BEFORE the jump (control): "
@@ -643,6 +607,66 @@ private boolean waitForRegisteredShip(int dim) throws Exception {
     /** Above vanilla's sky-pass floor of 4 chunks; the harness otherwise pins the client at 2. */
 private static final int SKY_RENDER_DISTANCE = 8;
 
+    /**
+     * How long a render counter is watched for growth, in CLIENT ticks. A window, not a deadline:
+     * what is read across it is a frame counter, and a frame counter growing is not an event — so a
+     * longer window samples more frames and cannot change whether the assertion holds. The control
+     * window in an ordinary cell and the corridor window in flight use the same number, which is
+     * what makes the two readings comparable.
+     */
+    private static final int RENDER_WINDOW_TICKS = 20;
+
+    /**
+     * How many times a seat dummy is spawned afresh before the arrangement gives up. The number is
+     * the count of SPAWNS, not a tick budget — see {@link #mountTheSeatDummy}.
+     */
+    private static final int SEAT_MOUNT_ATTEMPTS = 5;
+
+    /**
+     * Spawn the ship's pilot-seat dummy and put the bot on it, retried with a FRESH spawn each
+     * attempt. Four scenarios in this class carried a copy of these ten lines.
+     *
+     * <p><b>A retry, not a wait.</b> {@code mount-entity} answers synchronously and completely: it
+     * says whether the player's own world held the dummy and, when it did not, whether any loaded
+     * world does ({@code playerDim} / {@code foundInDim} / {@code gone}). So there is no event to
+     * await here and nothing that arrives later — what another pass buys is a NEW dummy, because the
+     * one it asked about is glued to the ship's world position only on its first tick, and a spawn
+     * chunk that unloads before that tick leaves the returned id resolving to nothing.</p>
+     *
+     * <p><b>Raised as an ARRANGEMENT failure.</b> A seat dummy that could not be mounted has
+     * disproved nothing about hyperspace transits: it is the fixture that did not come up, and the
+     * JUnit XML separates that from a broken product by TYPE rather than by prose.</p>
+     *
+     * @param probe this scenario's own probe — one scenario reads through an envelope-aware one, and
+     *              mixing the two inside a single arrangement is how a server log line ends up
+     *              answering a question the JSON envelope was asked
+     */
+    private void mountTheSeatDummy(Events.Probe probe, int originDim, int seatX, int seatY, int seatZ)
+            throws Exception {
+        String mountAt = "", mount = "";
+        boolean mounted = false;
+        for (int attempt = 0; attempt < SEAT_MOUNT_ATTEMPTS && !mounted; attempt++) {
+            mountAt = probe.exec("artest vs seat-mount-at " + originDim + " " + seatX + " " + seatY
+                    + " " + seatZ);
+            scenario().requireArranged("seat-mount-at must spawn the seat dummy: " + mountAt,
+                    readBool(mountAt, "ok"));
+            mount = probe.exec("artest player mount-entity " + readInt(mountAt, "dummyId"));
+            mounted = mount.contains("\"mounted\":true");
+            if (!mounted) {
+                bot().waitTicks(10);
+            }
+        }
+        // BOTH replies, because a failed mount has two unrelated causes and the second command's
+        // answer cannot separate them alone: the spawn says whether a dummy was made and whether it
+        // was reused, and the mount says whether the player's own world held it — `playerDim`
+        // against `foundInDim`, and `gone` when no loaded world has it at all. Retrying against the
+        // wrong world otherwise learns the same nothing five times.
+        scenario().requireArranged("the bot must mount the pilot-seat dummy (" + SEAT_MOUNT_ATTEMPTS
+                + " spawn+mount attempts) at the seat " + seatX + "," + seatY + "," + seatZ
+                + " in dim " + originDim + " — spawn=" + mountAt + " mount=" + mount, mounted);
+        bot().waitTicks(10);
+    }
+
     /** Put the bot in the origin cell and on the ship's pilot seat. */
 private void seatTheBot(int originDim, String shipId) throws Exception {
         String seat = findSeat(originDim, shipId);
@@ -650,10 +674,7 @@ private void seatTheBot(int originDim, String shipId) throws Exception {
                 readBool(seat, "seatFound"));
         int seatX = readInt(seat, "seatX"), seatY = readInt(seat, "seatY"), seatZ = readInt(seat, "seatZ");
 
-        String health = exec("artest player health");
-        Matcher nameM = PLAYER_NAME.matcher(health);
-        assertTrue("player health must echo the player name: " + health, nameM.find());
-        String botName = nameM.group(1);
+        String botName = botName(this::exec);
 
         int sx = (int) Math.round(readDouble(seat, "shipWorldX"));
         int sy = (int) Math.round(readDouble(seat, "shipWorldY"));
@@ -675,39 +696,22 @@ private void seatTheBot(int originDim, String shipId) throws Exception {
                 + " server-side dim that differs makes the mount below unreachable rather than"
                 + " flaky: " + serverSide, readInt(serverSide, "dim") == originDim);
 
-        // Retried with a FRESH dummy spawn: the dummy is glued to the ship's world position only on
-        // its first tick, and on a loaded machine its spawn chunk can unload before that tick.
-        String mount = "";
-        String mountAt = "";
-        boolean mounted = false;
-        for (int attempt = 0; attempt < 5 && !mounted; attempt++) {
-            mountAt = exec("artest vs seat-mount-at " + originDim + " " + seatX + " " + seatY + " " + seatZ);
-            assertTrue("seat-mount-at must spawn the seat dummy: " + mountAt, readBool(mountAt, "ok"));
-            mount = exec("artest player mount-entity " + readInt(mountAt, "dummyId"));
-            mounted = mount.contains("\"mounted\":true");
-            if (!mounted) {
-                bot().waitTicks(10);
-            }
-        }
-        // BOTH replies, because a failed mount has two unrelated causes and the second command's
-        // answer cannot separate them alone: the spawn says whether a dummy was made and whether it
-        // was reused, and the mount says whether the player's own world held it — `playerDim`
-        // against `foundInDim`, and `gone` when no loaded world has it at all. Retrying five times
-        // against the wrong world otherwise learns the same nothing five times.
-        assertTrue("the bot must mount the pilot-seat dummy (5 spawn+mount attempts) at the seat "
-                + seatX + "," + seatY + "," + seatZ + " in dim " + originDim
-                + " — spawn=" + mountAt + " mount=" + mount, mounted);
-        bot().waitTicks(10);
+        mountTheSeatDummy(this::exec, originDim, seatX, seatY, seatZ);
         assertTrue("the bot must be seated on the ship BEFORE the jump (control): "
                 + bot().reportRidingEntity(), bot().reportRidingEntity().get("riding").getAsBoolean());
     }
 
-    /** The Free Flight HUD text as the client last rendered it. */
+    /**
+     * The Free Flight HUD as the client last DREW it, or {@code ""} when it has never drawn one.
+     *
+     * <p>The recorder writes only when the line CHANGES, so the latest record is the current text —
+     * asking "since 0" is therefore the right window, not a leak: an unchanged HUD is one whose last
+     * change is still what the pilot sees. What the record adds over the field it replaces is a
+     * sequence number, so a reader can tell an old line from one that appeared during its own leg.</p>
+     */
 private String hud() throws Exception {
-        // The test-side holder: production stopped storing the joined line, and the watcher on
-        // the HUD render composes it from the same snapshot the frame drew.
-        return bot().readStaticField("zmaster587.advancedRocketry.test.trace.FlightCameraState",
-                "lastFreeFlightHud").get("value").getAsString();
+        String rec = Events.lastRecord(clientEvents().since(0, "ff_hud"));
+        return rec == null ? "" : Events.text(rec, "text");
     }
 
     /** Frames on which this sky renderer ran at all, whatever it decided to draw. */
@@ -727,11 +731,12 @@ private long readCounter(String className, String field) throws Exception {
         return readCounter(TUNNEL, "tunnelFramesDrawn");
     }
 
-    /** The client's recent chat history, as one string. Deep enough to survive the harness's own
-     *  per-command marker lines, which are themselves chat. */
-private String chat() throws Exception {
-        return bot().reportChat(200).toString();
-    }
+    // The class read the client's chat here — `chat()`, a 200-line dump matched for "Jump engaged"
+    // and "Arrived", plus the void leg's obituary. All three are gone: a chat line is a RENDERING of
+    // a game event, so what they were really asking about is `transit_departed`, `transit_settled`
+    // and `player_died`, and those are what the scenarios wait on now. Asserting the sentence
+    // instead put the language file, the depth of the client's ring and the harness's own command
+    // echoes between the test and its subject.
 
     @Test
     public void aJumpAnnouncesItselfInChatOnTheHudAndInTheSky() throws Exception {
@@ -758,7 +763,7 @@ private String chat() throws Exception {
         // ── CONTROL, in an ordinary cell ────────────────────────────────────────────────────────
         long skyBefore = skyFrames();
         long tunnelBefore = tunnelFrames();
-        bot().waitTicks(20);
+        bot().waitTicks(RENDER_WINDOW_TICKS);
         // The sky renderer must run here at all. Without it "the corridor is drawn in hyperspace"
         // answers two questions with one number, and "the corridor came up" is indistinguishable
         // from "the sky pass never ran".
@@ -771,95 +776,67 @@ private String chat() throws Exception {
                 !hud().contains("HYPERSPACE"));
 
         // ── THE JUMP ────────────────────────────────────────────────────────────────────────────
+        // Both marks before the departure, one per log: the crossing is the server's fact, the world
+        // rebuild that opens the sky window is the client's, and the two logs number independently.
         Events events = transitEvents(this::exec);
         long mark = events.markInstrumented();
+        long clientMark = clientEvents().mark();
         String begin = exec("artest space transit-begin " + originDim + " 1 64 1 " + PARK_SPEED);
         assertTrue("the transit must begin (departure crossing): " + begin, readBool(begin, "began"));
-        bot().waitTicks(10);
 
-        assertTrue("departing must be said in the pilot's own chat - a jump that starts in silence is "
-                        + "indistinguishable from a key that did nothing: " + chat(),
-                chat().contains("Jump engaged"));
+        // The jump HAS STARTED, as the GAME's own event: `transit_departed`. What stood here was a
+        // chat assertion ("Jump engaged", somewhere in the last two hundred lines) — a statement
+        // about the messaging plumbing rather than about the game, and one a language-file edit
+        // moved. The departure is the fact; the sentence is a rendering of it.
+        events.await(mark, "transit_departed", "a jump that starts in silence is indistinguishable"
+                + " from a key that did nothing", JUMP_LINK_BUDGET_TICKS);
 
-        // Fly it, reading the client WHILE the ship is still en route.
-        //
-        // The sky window opens on the first sample where the CLIENT is observably in hyperspace, not
-        // on the tick the server was told to depart. Between those two the client is still standing
-        // in the cell it left and drawing that cell's sky, so a baseline taken there would count the
-        // crossing rather than the corridor.
-        long tunnelAtStart = -1L;
-        int samples = 0;
-        String hudInFlight = "";
-        long tunnelInFlight = -1L;
-        String lastTick = "";
-        for (int i = 0; i < 120; i++) {
-            lastTick = exec("artest space transit-status");
-            if (readInt(lastTick, "inTransit") == 0) {
-                break;
-            }
-            bot().waitTicks(2);
-            String hudNow = hud();
-            if (tunnelAtStart < 0) {
-                if (!hudNow.contains("HYPERSPACE")) {
-                    continue; // not across yet: nothing sampled here is about hyperspace
-                }
-                // Baseline once the CLIENT'S OWN dimension is the corridor, not a fixed number of
-                // ticks after the HUD flips. The HUD is server-driven state; the sky is drawn by the
-                // client's own renderer off the client's own dimension, so that dimension is the
-                // condition to wait on. A tick count is only a guess at how long the handover takes,
-                // and the guess scales with load.
-                int hyperDimNow = readInt(lastTick, "hyperDim");
-                for (int settle = 0; settle < 40
-                        && bot().reportWeather().get("dim").getAsInt() != hyperDimNow; settle++) {
-                    bot().waitTicks(1);
-                }
-                int clientDimNow = bot().reportWeather().get("dim").getAsInt();
-                scenario().requireArranged("the client never reached the corridor's own dimension, so "
-                                + "the baseline below would be taken in the cell it left — corridor "
-                                + hyperDimNow + ", client " + clientDimNow,
-                        clientDimNow == hyperDimNow);
-                tunnelAtStart = tunnelFrames();
-                scenario().record("tunnelAtStart", tunnelAtStart);
-            }
-            // Re-read before this sample is allowed to COUNT. The status at the top of the
-            // iteration predates the two-tick wait, the HUD read and — on the first pass — the
-            // corridor settle poll, and the server flies every transit on its own tick, so the jump
-            // can have arrived in between. A HUD read after the arrival is the arrived craft's own
-            // overlay ("FREE FLIGHT ... SPD 0.0 m/s"), and it is the LAST sample that the assertion
-            // below reads: one straddling iteration was enough to turn this red, 3 runs in 4.
-            if (readInt(exec("artest space transit-status"), "inTransit") == 0) {
-                break;
-            }
-            samples++;
-            hudInFlight = hudNow;
-            tunnelInFlight = tunnelFrames();
-        }
+        // The sky window opens when the CLIENT'S OWN world becomes the corridor — production's own
+        // record of the rebuild — and not on the tick the server was told to depart. Between those
+        // two he is still standing in the cell he left, drawing that cell's sky, so a baseline taken
+        // there would count the crossing rather than the corridor. ARRANGEMENT: being in the
+        // corridor is where this leg's three subjects are READ, not one of them.
+        driveIntoCorridor(events, mark, clientMark);
+        long tunnelAtStart = tunnelFrames();
+        scenario().record("tunnelAtStart", tunnelAtStart);
 
-        // The instrument must have fired: a jump that arrived instantly proves nothing about the
-        // interval, and a green with zero samples would be exactly that.
-        // Zero samples now means one of two things and both are fatal to everything below: the jump
-        // arrived without ever being observed in flight, or the client never crossed into hyperspace
-        // at all. Either way nothing after this line would be measuring the corridor.
-        assertTrue("the client was never observed in hyperspace during the flight (0 samples); "
-                        + "last tick=" + lastTick + ", last HUD=" + hud(),
-                samples > 0);
+        // The window itself stays a bounded wait, and that is not a lapse: what is measured across it
+        // is a frame COUNTER growing, which is not an event — a longer window samples more frames and
+        // changes nothing about whether the assertion can hold. Same length as the control window
+        // above, so the two readings are comparable.
+        bot().waitTicks(RENDER_WINDOW_TICKS);
+        String hudInFlight = hud();
+        long tunnelInFlight = tunnelFrames();
+
+        // The premise, read AFTER the window and before anything measured in it is believed: the jump
+        // must still be in the air. An arrival inside the window swaps the corridor's backdrop for
+        // the arrived craft's own overlay ("FREE FLIGHT ... SPD 0.0 m/s") and stops the corridor
+        // being drawn at all, so both readings above would be about the far end. The loop this
+        // replaces guarded the same straddle by re-reading the status mid-iteration, and it was a red
+        // 3 runs in 4 before that guard existed.
+        String stillFlying = exec("artest space transit-status");
+        scenario().requireArranged("the jump must still be IN FLIGHT after the render window, or the"
+                        + " HUD and corridor readings above belong to the ARRIVED craft rather than"
+                        + " to the flight: transit-status=" + stillFlying,
+                readInt(stillFlying, "inTransit") >= 1);
 
         assertTrue("the HUD must name the jump phase while the ship is in flight, so a pilot with no "
                         + "controls can tell a flight from a hang - HUD read: " + hudInFlight,
                 hudInFlight.contains("HYPERSPACE"));
 
         assertTrue("the corridor must be drawn in hyperspace (corridor frames " + tunnelAtStart
-                        + " -> " + tunnelInFlight + " over " + samples + " samples)",
+                        + " -> " + tunnelInFlight + " over " + RENDER_WINDOW_TICKS + " ticks)",
                 tunnelInFlight > tunnelAtStart);
 
         // ── ARRIVAL ─────────────────────────────────────────────────────────────────────────────
         // The arrival message is owed once the transit has SETTLED — the commit that follows the crew
         // being back aboard — and the chain names which link is missing if it never does.
-        events.assertChain(mark, "the transit must finish for the arrival message to be owed",
-                JUMP_LINK_BUDGET_TICKS, PILOTED_JUMP_CHAIN);
-        bot().waitTicks(20);
-        assertTrue("arriving must be said in the pilot's own chat: " + chat(),
-                chat().contains("Arrived"));
+        // The arrival is the last link of the chain itself (`transit_settled`), so the jump ending is
+        // asserted here and nowhere else. The chat assertion that used to follow this line said the
+        // same thing one layer down, in the language file's words.
+        events.assertChain(mark, "the jump this leg watched must FINISH, or its whole flight was"
+                + " measured on a transit that never arrived", JUMP_LINK_BUDGET_TICKS,
+                PILOTED_JUMP_CHAIN);
     }
 
     // ---- a crew member on his FEET crosses too ----
@@ -949,6 +926,23 @@ private String chat() throws Exception {
     private static final int VOID_GRACE_TICKS = 200;
 
     /**
+     * The name production gives the void's own {@code DamageSource} — the field {@code player_died}
+     * carries as {@code source}, and the only thing that tells this mechanic's kill from the fall
+     * that would happen anyway. Mirrors {@code HyperspaceVoid.VOID_OF_HYPERSPACE}.
+     */
+    private static final String VOID_DAMAGE_TYPE = "arHyperspaceVoid";
+
+    /**
+     * How much longer than the void's own grace this class waits before calling a verdict, in ticks.
+     *
+     * <p>One quantity, named once, because all three uses are the same claim: "the countdown has had
+     * every chance to fire". It was written out as a bare {@code 60} in three places — the livable
+     * leg's span, the lethal leg's deadline, and the flight duration derived from both — where the
+     * three could drift apart and only the last of them would notice.</p>
+     */
+    private static final int VOID_GRACE_MARGIN_TICKS = 60;
+
+    /**
      * How long the flight must LAST, in server ticks, for the scenario that stands a crew member up
      * in hyperspace and waits the void out on him.
      *
@@ -968,7 +962,7 @@ private String chat() throws Exception {
      * the two.</p>
      */
     private static final long LIVABLE_FLIGHT_TICKS =
-            2L * (JUMP_LINK_BUDGET_TICKS + 2L * (VOID_GRACE_TICKS + 60L) + 260L);
+            2L * (JUMP_LINK_BUDGET_TICKS + 2L * (VOID_GRACE_TICKS + VOID_GRACE_MARGIN_TICKS) + 260L);
 
     /**
      * The speed that buys {@link #LIVABLE_FLIGHT_TICKS} over the distance this fixture jumps —
@@ -1146,7 +1140,7 @@ private String chat() throws Exception {
         // ...and stay there. The span is the void's OWN budget plus a margin, so "he is alive" is a
         // statement about the countdown having had every chance to fire rather than about a window
         // too short to reach it.
-        bot().waitTicks(VOID_GRACE_TICKS + 60);
+        bot().waitTicks(VOID_GRACE_TICKS + VOID_GRACE_MARGIN_TICKS);
         // The PREMISE, gated before the subject is read: this leg is about a man standing in a
         // FLIGHT, so the flight has to still be happening. The server advances every transit in the
         // live stack on its own tick, so a window measured against the void's budget is also a
@@ -1193,32 +1187,30 @@ private String chat() throws Exception {
         // Arm the channel the verdict is read out of, immediately before the wait and with no server
         // command after it: the harness echoes a marker line into this same chat for every command
         // it runs.
-        armChatObservation();
+        long deathMark = events.mark();
 
-        // The countdown, plus the same margin the livable leg was given.
-        boolean dead = false;
-        for (int i = 0; i < (VOID_GRACE_TICKS + 60) / 10 && !dead; i++) {
-            bot().waitTicks(10);
-            dead = bot().reportState().get("health").getAsFloat() <= 0f;
-        }
-        JsonObject afterState = bot().reportState();
-        assertTrue("leaving your ship in hyperspace must kill you, and the client is what has to show"
-                + " it — health " + afterState.get("health") + ", screen "
-                + afterState.get("screen") + "; the same body survived the same span aboard, so this"
-                + " is the step off the hull and not the flight", dead);
+        // THE VERDICT, and it is production's own record of the kill: WHO died and OF WHAT.
+        //
+        // The cause is the whole claim. A body that steps off a lane at Y=128 in an all-air world
+        // FALLS, and vanilla's own out-of-world damage kills it inside this same window — so "he is
+        // dead" is satisfied by a build in which this mechanic does nothing at all, and the countdown
+        // loop this replaces reached its verdict on exactly that reading. `player_died` carries the
+        // damage type production named the source with, so the discriminating fact is IN the wait
+        // rather than checked afterwards against prose in a chat ring.
+        //
+        // The deadline is the void's own grace plus the same margin the livable leg was given.
+        String death = events.awaitCarrying(deathMark, "player_died",
+                "\"source\":\"" + VOID_DAMAGE_TYPE + "\"",
+                "leaving your ship in hyperspace must kill you, and the VOID must be what took him —"
+                        + " the same body survived the same span aboard, so this is the step off the"
+                        + " hull and not the flight",
+                VOID_GRACE_TICKS + VOID_GRACE_MARGIN_TICKS);
 
-        // WHICH death, and this is not a detail. A body that steps off a lane at Y=128 in an all-air
-        // world FALLS, and vanilla's own out-of-world damage below Y=-64 kills it inside this same
-        // window — so "he is dead" is satisfied by a build in which this mechanic does nothing at
-        // all. The message the player is shown is what tells the two apart.
-        String obituary = bot().reportChat(200).toString();
-        assertTrue("the void of hyperspace must be what took him, not the drop out of the world —"
-                + " otherwise this scenario is green on a build where the mechanic is absent."
-                + " Chat: " + obituary,
-                obituary.contains("void of hyperspace"));
-        assertTrue("...and it must be a SENTENCE, not a raw translation key: a death nobody can read"
-                + " is a death the player cannot attribute. Chat: " + obituary,
-                !obituary.contains("death.attack.arHyperspaceVoid"));
+        // ...and it happened IN hyperspace, read off that same record: a man killed by this source
+        // anywhere else would be a different finding wearing the right name.
+        assertEquals("the void must have taken him in the hyperspace world, not somewhere that"
+                        + " happens to share its damage source: " + death,
+                hyperDim, (int) Events.number(Events.lastRecord(death), "dim"));
 
         // Fly the jump out. Every other scenario here ends with its ship delivered, and this one
         // deliberately stopped ticking mid-flight — leaving a hull parked in the world every later
@@ -1244,10 +1236,13 @@ private String chat() throws Exception {
                 bot().waitTicks(2);
             }
         }
-        assertTrue("the jump must be flown out before this scenario returns: it shares its"
-                + " hyperspace with every other scenario in this class, and a transit left running"
-                + " parks a hull there with a crew record for a player who is no longer alive to be"
-                + " re-seated. transit-status=" + exec("artest space transit-status"), flownOut);
+        // ARRANGEMENT, like the family reset that does the same job before the NEXT scenario: this
+        // scenario's own verdict was reached above, and a world it failed to put back is a statement
+        // about the fixture rather than about the void.
+        scenario().requireArranged("the jump must be flown out before this scenario returns: it"
+                + " shares its hyperspace with every other scenario in this class, and a transit left"
+                + " running parks a hull there with a crew record for a player who is no longer alive"
+                + " to be re-seated. transit-status=" + exec("artest space transit-status"), flownOut);
     }
 
     /**
@@ -1303,55 +1298,48 @@ private String chat() throws Exception {
                 bot().reportWeather().get("dim").getAsInt());
 
         // ── THE JUMP ────────────────────────────────────────────────────────────────────────────
+        // Both marks before the departure, one per log — the crossing is the server's fact, the
+        // world rebuild is the client's, and the two logs number independently.
         Events events = transitEvents(this::exec);
         long mark = events.markInstrumented();
+        long clientMark = clientEvents().mark();
         String begin = exec("artest space transit-begin " + originDim + " 1 64 1 " + PARK_SPEED);
         assertTrue("the transit must begin (departure crossing): " + begin, readBool(begin, "began"));
 
-        int samples = 0, hyperDim = -1, crewDim = -1;
-        int clientDimInFlight = Integer.MIN_VALUE;
-        boolean ridingInFlight = true;
-        String captureInFlight = "";
-        String lastTick = "";
-        for (int i = 0; i < 120; i++) {
-            lastTick = exec("artest space transit-status");
-            if (readInt(lastTick, "inTransit") == 0) {
-                break; // arrived — the far end is another scenario's subject
-            }
-            bot().waitTicks(2);
-            samples++;
-            if (samples == 1) {
-                // The FIRST in-flight sample: the earliest moment the crew could have been left
-                // behind, and the one a late-arriving fix cannot hide behind.
-                hyperDim = readInt(lastTick, "hyperDim");
-                crewDim = readInt(lastTick, "crewDim");
-                clientDimInFlight = bot().reportWeather().get("dim").getAsInt();
-                ridingInFlight = bot().reportRidingEntity().get("riding").getAsBoolean();
-                captureInFlight = exec("artest vs deck-capture");
-            }
-        }
+        // THE CONTRACT: a crossing carries whoever is aboard, standing included — both halves off
+        // production's own records, the server seating him on the hull parked in the lane and his
+        // own client's world becoming that lane.
+        int hyperDim = assertCarriedIntoCorridor(events, mark, clientMark);
 
-        // The instrument must have fired: a jump that arrived instantly says nothing about the
-        // interval, and a green with zero samples would be exactly that.
-        assertTrue("the jump was never observed mid-flight (0 in-flight samples); last tick=" + lastTick,
-                samples > 0);
-
-        // Arrangement oracle: the subsystem's own answer for where this crew belongs. If these two
-        // disagree the fixture, not production, is what failed.
+        // Everything below is read WHILE the jump is in the air — stated, not assumed, because the
+        // far end is the second crossing's subject and it re-establishes him for entirely different
+        // reasons. One status reply, read once: the premise and the subsystem's own oracle for where
+        // this crew belongs are two fields of the SAME record.
+        String inFlight = exec("artest space transit-status");
+        scenario().requireArranged("the jump must still be IN FLIGHT when his posture is read, or"
+                + " this reads the ARRIVAL rather than the carry: transit-status=" + inFlight,
+                readInt(inFlight, "inTransit") >= 1);
         assertEquals("mid-flight the subsystem must place this crew in the hyperspace world"
-                + " (crewDim vs hyperDim); tick=" + lastTick, hyperDim, crewDim);
-
-        // THE CONTRACT: a crossing carries whoever is aboard, standing included. The client's own
-        // dimension in flight is the world its ship is parked in, not the cell it departed from.
-        assertEquals("a crew member on his FEET must travel with his ship, as HIS OWN CLIENT sees it"
-                + " — he was in dim " + clientDimInFlight + " (origin cell " + originDim
-                + ", hyperspace " + hyperDim + ") after " + samples + " in-flight samples;"
-                + " deck capture in flight=" + captureInFlight,
-                hyperDim, clientDimInFlight);
+                + " (crewDim vs hyperDim); the client was carried into dim " + hyperDim
+                + "; tick=" + inFlight,
+                readInt(inFlight, "hyperDim"), readInt(inFlight, "crewDim"));
 
         // ...and he arrives in the posture he left in: carried, not quietly seated on the way.
+        //
+        // The POSITIVE half first, and it is not decoration. "He is not riding anything" is also what
+        // a client whose mount has not been rebuilt after the world change answers — the seated
+        // sibling of this scenario reds on exactly that gap — so on its own this clause would be
+        // satisfied by the one thing it must not be satisfied by. The server holding a deck capture
+        // for him says he is aboard on his FEET, which is the state the crossing enumerates on.
+        String captureInFlight = exec("artest vs deck-capture");
+        assertTrue("a crew member carried on his feet must be resolved on a deck in the corridor —"
+                + " without that, 'he is not riding' is his client not having a mount yet rather than"
+                + " a man standing on a hull: " + captureInFlight,
+                readBool(captureInFlight, "alreadyTracked"));
+        JsonObject ridingInFlight = bot().reportRidingEntity();
         assertTrue("a crew member who was standing must still be standing in flight, not folded into"
-                + " a seat by the carry: " + captureInFlight, !ridingInFlight);
+                + " a seat by the carry: " + ridingInFlight + "; deck capture in flight="
+                + captureInFlight, !ridingInFlight.get("riding").getAsBoolean());
 
         // ── THE SECOND CROSSING ─────────────────────────────────────────────────────────────────
         // The clause is about BOTH crossings, and the two are not the same code path reached twice:
@@ -1369,13 +1357,23 @@ private String chat() throws Exception {
         int targetDim = arrivedTargetDim(this::exec);
 
         // The CLIENT's half of the arrival: the server's placement is a link above; whether his own
-        // client followed it into the target cell is a separate link, read here.
-        boolean carriedOn = false;
-        for (int i = 0; i < 60 && !carriedOn; i++) {
-            bot().waitTicks(2);
-            carriedOn = bot().reportWeather().get("dim").getAsInt() == targetDim
-                    && readBool(exec("artest vs deck-capture"), "alreadyTracked");
+        // client followed it into the target cell is a separate link, and it is a RECORD — the world
+        // rebuild at the tail of the respawn packet — not a dimension number to sample. The poll this
+        // replaces then re-read the capture for its assertions, so the reply a reader diagnosed from
+        // was never the reply that decided the test.
+        try {
+            clientEvents().awaitMatching(clientMark, "client_dimension_changed",
+                    seen -> seen.contains("\"dim\":" + targetDim + ",")
+                            || seen.contains("\"dim\":" + targetDim + "}"),
+                    "for the target cell (dim " + targetDim + ")",
+                    "the arrival crossing must carry the crew member on his feet too — his own client"
+                            + " must be moved into the TARGET cell", JUMP_LINK_BUDGET_TICKS);
+        } catch (AssertionError never) {
+            throw new AssertionError(never.getMessage() + " | the server's chain: " + events.since(mark));
         }
+        // ONE reply, for both the verdict and the diagnosis. The chain above ended at the settle,
+        // which the server commits only once everyone is back aboard, so this is a read of a state
+        // production has already announced rather than a sample of one still converging.
         String captureOnArrival = exec("artest vs deck-capture");
         // The arrival cell may hold other craft — that is exactly why the second crossing is not the
         // first one reached twice — so "back on the deck there" is only the clause's claim if it is

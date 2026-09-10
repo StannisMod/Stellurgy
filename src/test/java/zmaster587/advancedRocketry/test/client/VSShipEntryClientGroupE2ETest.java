@@ -5,7 +5,6 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 import com.github.stannismod.forge.testing.TestTimeouts;
-import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 
 import org.junit.FixMethodOrder;
@@ -26,8 +25,8 @@ import static org.junit.Assert.assertTrue;
  *       carrying the durable aboard record a logout in space is restored from. A play-tested failure
  *       of this seam reported exactly the inverse: the pilot off his ship, falling, in a black
  *       cell.</li>
- *   <li><b>Refused.</b> A refusal costs him nothing but a message: he stays in his seat, in the
- *       launch world, and is told why. The historical defect was an order-of-operations one — the
+ *   <li><b>Refused.</b> A refusal costs him nothing: the gate decides {@code REFUSED_POOL_FULL} and
+ *       he stays in his seat, in the launch world. The historical defect was an order-of-operations one — the
  *       crew was captured (dismounted, mounts retired) BEFORE the pool was asked, so a refusal left
  *       the pilot standing beside a ship that never went anywhere.</li>
  * </ul>
@@ -125,7 +124,23 @@ public class VSShipEntryClientGroupE2ETest extends AbstractSharedVsClientE2ETest
 
     /** The refusal message's stable needle (en_US: "Space is saturated - the ship cannot enter
      *  orbit right now. Descend and try again later."). */
-    private static final String REFUSAL_NEEDLE = "space is saturated";
+    /**
+     * Client ticks between two reads of the arrival's own records — the step {@link Events}'s waits
+     * advance by, so a budget expressed in ITERATIONS (as the loops here were) converts by
+     * multiplying. Named because the conversion is otherwise a bare {@code * 5} whose meaning has to
+     * be re-derived at every site.
+     */
+    private static final int ARRIVAL_STEP_TICKS = 5;
+
+    /** Client ticks between two altitude readings while a control climb is being watched. */
+    private static final int CLIMB_STEP_TICKS = 5;
+
+    /**
+     * How many of those readings a control climb gets on an UNLOADED box, before
+     * {@code TestTimeouts.factor()} stretches it — the shared poll scales this itself, which is half
+     * the reason the hand-rolled loops became calls to it.
+     */
+    private static final int CONTROL_CLIMB_POLLS = 40;
 
     /**
      * The cells this family's PROBE occupants are parked on — a fixed, family-owned list, so the
@@ -197,21 +212,23 @@ public class VSShipEntryClientGroupE2ETest extends AbstractSharedVsClientE2ETest
                 + shipInfoById(shipUuid), !Double.isNaN(yRest));
 
         // ---- CONTROL LEG: plain flight works far below the line, or the entry leg is void. ----
-        double yControl = yRest;
+        //
+        // A POLL and not a wait for a record, deliberately: an altitude climbing is a physical value
+        // converging, not a link production announces, and a longer budget samples it more without
+        // changing whether the assertion can hold. What it is NOT is a hand-rolled one — the shared
+        // helper scales its own ceiling by the fork factor and reports the iterations it took beside
+        // the value it ended on, which is the diagnosis a red on a loaded box needs.
         long entryMark;
         long clientMark;
         bot().holdKey(Keyboard.KEY_R);
         try {
-            for (int attempt = 0; attempt < budget && (yControl - yRest) < MIN_CONTROL_CLIMB; attempt++) {
-                bot().waitTicks(5);
-                double y = shipY(shipUuid);
-                if (!Double.isNaN(y)) {
-                    yControl = y;
-                }
-            }
+            ClientPoll.Result<Double> control = ClientPoll.until(bot()::waitTicks,
+                    () -> shipY(shipUuid),
+                    y -> !Double.isNaN(y) && (y - yRest) >= MIN_CONTROL_CLIMB,
+                    CLIMB_STEP_TICKS, CONTROL_CLIMB_POLLS);
             scenario().requireArranged("control leg: the pilot must be able to fly AT ALL before the "
-                            + "entry leg can indict the crossing. yRest=" + yRest + " yControl="
-                            + yControl, (yControl - yRest) >= MIN_CONTROL_CLIMB);
+                            + "entry leg can indict the crossing. yRest=" + yRest + " " + control,
+                    control.satisfied);
             System.out.println("[GATE-STATS after control leg] " + clientGateStats());
 
             // ---- ENTRY LEG: keep climbing until the entry is COMMITTED, as the server's own chain
@@ -251,32 +268,45 @@ public class VSShipEntryClientGroupE2ETest extends AbstractSharedVsClientE2ETest
         // THE MULTIPLIER STAYS. This waits for state the SERVER restores on login to arrive at the
         // client and be applied - a round trip whose latency is the machine's, not the game's.
         int arrivalBudget = (int) (40 * TestTimeouts.factor());
-        String dimChanges = "";
-        int clientDim = Integer.MIN_VALUE;
-        for (int attempt = 0; attempt < arrivalBudget && !slotDims.contains("," + clientDim + ","); attempt++) {
-            bot().waitTicks(5);
-            dimChanges = clientEvents().since(clientMark, "client_dimension_changed");
-            Matcher dm = Pattern.compile("\"dim\":(-?\\d+)").matcher(dimChanges);
-            while (dm.find()) {
-                clientDim = Integer.parseInt(dm.group(1)); // the LAST change is where he is now
-            }
+        String dimChanges;
+        try {
+            dimChanges = clientEvents().awaitMatching(clientMark, "client_dimension_changed",
+                    seen -> slotDims.contains("," + lastDimOf(seen) + ","),
+                    "ending in one of the subsystem's slot dims [" + sd.group(1) + "]",
+                    "after a granted entry the CLIENT itself must be in a space-cell dimension -"
+                            + " the pilot follows his ship through the seam",
+                    arrivalBudget * ARRIVAL_STEP_TICKS);
+        } catch (AssertionError never) {
+            throw new AssertionError(never.getMessage() + " | subsystem status: " + statusAfter);
         }
-        assertTrue("after a granted entry the CLIENT itself must be in a space-cell dimension - "
-                        + "the pilot follows his ship through the seam. clientDim=" + clientDim
-                        + " slotDims=[" + sd.group(1) + "] client dimension changes since the climb: "
-                        + dimChanges + " status=" + statusAfter,
-                slotDims.contains("," + clientDim + ","));
+        int clientDim = lastDimOf(dimChanges);
 
-        // (2) Still seated: two consecutive positive samples (a lost seat reads riding=true for a
-        // packet-lag moment, never twice with a wait between).
-        JsonObject riding = bot().reportRidingEntity();
-        boolean prev = isRiding(riding);
-        boolean seatedTwice = false;
-        for (int attempt = 0; attempt < arrivalBudget && !seatedTwice; attempt++) {
-            bot().waitTicks(5);
-            riding = bot().reportRidingEntity();
-            seatedTwice = prev && isRiding(riding);
-            prev = isRiding(riding);
+        // (2) Still seated. A LINK, not a pair of samples: the crossing re-assembles the ship, the
+        // server tells his client who is riding what, and his client PERFORMS that mount — so the
+        // seat coming back is a record, and with the mark taken before the climb it cannot be missed.
+        // The form this replaces read `riding` twice with a wait between, reasoning that a lost seat
+        // reads true for a packet-lag moment but never twice; that is guessing at an EDGE from two
+        // samples of a level, and it says nothing about when, or how often, the seat changed hands
+        // in between.
+        //
+        // Matched on the mount having SUCCEEDED rather than on who performed it: this log is one
+        // client's, the recorder writes only for players, and the harness runs a single bot on it. A
+        // scenario with a second player on the same client would have to name him (`who`).
+        try {
+            clientEvents().awaitMatching(clientMark, "mount",
+                    seen -> Events.countRecords(seen, "\"ok\":true") > 0,
+                    "seating him (ok:true)",
+                    "the pilot who FLEW his ship into space must still be in his seat on arrival -"
+                            + " a crossing must never stand him up",
+                    arrivalBudget * ARRIVAL_STEP_TICKS);
+        } catch (AssertionError never) {
+            // Which silence: a crossing that never re-seated him and a recorder that never wove are
+            // the same empty window, and they ask for opposite investigations.
+            Events.assertInstrumentRan(clientEvents().since(clientMark, "mount"),
+                    "entity_mount_writes", "the client's own mounts must be observed at all before an"
+                            + " absent one can be read as a pilot the crossing stood up");
+            throw new AssertionError(never.getMessage() + " | seat delivery: "
+                    + exec("artest vs seat-delivery"));
         }
         // Position-writer timeline for the arrival, printed win-or-lose: the harness deletes its
         // child workdirs on close, so the only way to read the writers post-run is through the
@@ -284,10 +314,12 @@ public class VSShipEntryClientGroupE2ETest extends AbstractSharedVsClientE2ETest
         // feed — the client half used to be a static-field read of a ring that production carried.
         System.out.println("[ARRIVAL-TRACE server] " + exec("artest vs arrival-trace"));
         System.out.println("[ARRIVAL-TRACE client] " + clientEvents().since(0));
-        assertTrue("the pilot who FLEW his ship into space must still be in his seat on arrival - "
-                        + "a crossing must never stand him up. riding=" + riding
+        // ...and the end state, read ONCE now that the link has established it happened.
+        JsonObject riding = bot().reportRidingEntity();
+        assertTrue("the pilot must still be ON the seat his client was given, and not have been"
+                        + " taken off it again: " + riding
                         + " delivery=" + exec("artest vs seat-delivery"),
-                seatedTwice);
+                isRiding(riding));
 
         // (3) Not falling: over a two-second window the client-rendered altitude must not sink
         // like a body in free fall.
@@ -300,22 +332,23 @@ public class VSShipEntryClientGroupE2ETest extends AbstractSharedVsClientE2ETest
 
         // (4) Still in control: the key lifts the ARRIVED ship - measured from the rider's own
         // client-rendered altitude (the pilot rides what the key moves).
-        double before = clientPlayerY();
-        double after = before;
+        final double before = clientPlayerY();
+        ClientPoll.Result<Double> lift;
         bot().holdKey(Keyboard.KEY_R);
         try {
-            for (int attempt = 0; attempt < budget && (after - before) < MIN_CONTROL_CLIMB; attempt++) {
-                bot().waitTicks(5);
-                after = clientPlayerY();
-            }
+            // A physical value converging again, through the shared poll: a rendered altitude
+            // climbing is not a link, and its ceiling is what has to scale with load.
+            lift = ClientPoll.until(bot()::waitTicks, this::clientPlayerY,
+                    y -> !Double.isNaN(y) && (y - before) >= MIN_CONTROL_CLIMB,
+                    CLIMB_STEP_TICKS, CONTROL_CLIMB_POLLS);
         } finally {
             bot().releaseKey(Keyboard.KEY_R);
         }
         assertTrue("the pilot must still CONTROL his ship after the crossing - the fresh seat "
                         + "binding on the re-assembled ship must carry his input. clientY " + before
-                        + " -> " + after + " (need +" + MIN_CONTROL_CLIMB + ")"
+                        + " -> " + lift + " (need +" + MIN_CONTROL_CLIMB + ")"
                         + " delivery=" + exec("artest vs seat-delivery"),
-                (after - before) >= MIN_CONTROL_CLIMB);
+                lift.satisfied);
 
         // (5) He carries the durable aboard record. That record - not his dimension id, which is a
         // per-boot slot number - is what a logout in space is restored from; without it the login
@@ -333,7 +366,13 @@ public class VSShipEntryClientGroupE2ETest extends AbstractSharedVsClientE2ETest
                 tag.contains("\"tagged\":true"));
     }
 
-    // ── refused: he stays in his seat, in the launch world, and is told why ──────────────────────
+    // ── refused: the gate says REFUSED_POOL_FULL, and he stays in his seat in the launch world ───
+    //
+    // The name lost "…WithAMessage" when the chat assertion went: what this leg pins is the gate's
+    // own decision and the pilot keeping his seat, and a name promising a message the body no longer
+    // checks is a name that lies to whoever reads the gate's output. The sort key is unchanged —
+    // `aFullPool…` still orders before `aPilot…` under NAME_ASCENDING, which the paragraph below
+    // depends on.
     //
     // IT RUNS FIRST, and that is not a style choice. A refusal needs a pool that cannot be MADE room
     // in, and the manager frees a slot by evicting the least-recently-visited bound cell with no
@@ -349,7 +388,7 @@ public class VSShipEntryClientGroupE2ETest extends AbstractSharedVsClientE2ETest
     // true at that instant, and forty ticks into the climb the entry evicted slot 3 and was granted.
 
     @Test
-    public void aFullPoolRefusesTheEntryAndLeavesThePilotSeatedWithAMessage() throws Exception {
+    public void aFullPoolRefusesTheEntryAndLeavesThePilotSeated() throws Exception {
 
         String status = exec("artest space subsystem-status");
         scenario().requireArranged("the production space subsystem must be REGISTERED - the seeded "
@@ -408,8 +447,6 @@ public class VSShipEntryClientGroupE2ETest extends AbstractSharedVsClientE2ETest
                 + shipInfoById(shipUuid), !Double.isNaN(yRest));
 
         // ---- CONTROL LEG: plain flight works far below the line, or the refusal leg is void. ----
-        double yControl = yRest;
-        String refusalLine = null;
         double maxShipY = yRest;
         StringBuilder climb = new StringBuilder(64);
         StringBuilder diag = new StringBuilder(64);
@@ -420,21 +457,25 @@ public class VSShipEntryClientGroupE2ETest extends AbstractSharedVsClientE2ETest
         // altitude) could not tell them apart.
         Events events = events();
         long refusalMark = events.markInstrumented();
+        // The CLIENT's own mark beside it, and taken here for the same reason: the message he reads
+        // and the seat he keeps are both facts of HIS log, and the two logs number independently —
+        // asking the client's log about a server sequence compiles, runs, and answers about the
+        // wrong numbering.
+        long refusalChatMark = clientEvents().mark();
         String decided = null;
         bot().holdKey(Keyboard.KEY_R);
         try {
-            for (int attempt = 0; attempt < budget && (yControl - yRest) < MIN_CONTROL_CLIMB; attempt++) {
-                bot().waitTicks(5);
-                // BY IDENTITY: this loop's whole subject is a ship LEAVING the base, so the base is
-                // the one point it is guaranteed not to be at by the end.
-                double y = shipY(shipUuid);
-                if (!Double.isNaN(y)) {
-                    yControl = y;
-                }
-            }
+            // Same shape as the granted leg's control: an altitude converging is a physical value,
+            // so it stays a poll — through the shared, load-scaled, self-reporting one. BY IDENTITY,
+            // because this leg's whole subject is a ship LEAVING the base, so the base is the one
+            // point it is guaranteed not to be at by the end.
+            ClientPoll.Result<Double> control = ClientPoll.until(bot()::waitTicks,
+                    () -> shipY(shipUuid),
+                    y -> !Double.isNaN(y) && (y - yRest) >= MIN_CONTROL_CLIMB,
+                    CLIMB_STEP_TICKS, CONTROL_CLIMB_POLLS);
             scenario().requireArranged("control leg: the pilot must be able to fly AT ALL before the "
-                            + "refusal leg can indict the entry. yRest=" + yRest + " yControl="
-                            + yControl, (yControl - yRest) >= MIN_CONTROL_CLIMB);
+                            + "refusal leg can indict the entry. yRest=" + yRest + " " + control,
+                    control.satisfied);
 
             // ---- REFUSAL LEG: keep climbing until the refusal message lands in the CLIENT chat.
             // The exhausted pool refuses the entry the moment the ship crosses the line; the
@@ -449,7 +490,6 @@ public class VSShipEntryClientGroupE2ETest extends AbstractSharedVsClientE2ETest
             int climbBudget = (int) (800 * TestTimeouts.factor());
             for (int attempt = 0; attempt < climbBudget && decided == null; attempt++) {
                 bot().waitTicks(5);
-                refusalLine = chatLineContaining(REFUSAL_NEEDLE);
                 // The FIRST decision, not the last: a refusal arms a cooldown, and the gate then answers
                 // COOLDOWN on every later tick the craft is still above the line.
                 decided = Events.firstField(events.since(refusalMark, "entry_decided"), "decision");
@@ -590,39 +630,34 @@ public class VSShipEntryClientGroupE2ETest extends AbstractSharedVsClientE2ETest
                         + decisions + " gate=" + gate,
                 "REFUSED_POOL_FULL".equals(decided));
 
-        // The message rides the action bar a moment after the decision; give it that moment.
-        for (int waited = 0; waited < 40 && refusalLine == null; waited += 5) {
-            bot().waitTicks(5);
-            refusalLine = chatLineContaining(REFUSAL_NEEDLE);
-        }
-        assertTrue("a pilot whose entry is refused (pool exhausted) must be TOLD so in his own "
-                        + "chat - a silent refusal reads as a dead ship. The gate DID refuse ("
-                        + decided + "), so this is the message failing to reach him. chat="
-                        + bot().reportChat(8) + " subsystem=" + exec("artest space subsystem-status")
-                        + " maxShipY=" + maxShipY
-                        + " delivery(attempt:recv/deliv)=[" + diag.toString().trim() + "]"
-                        + " climb(attempt:y/velY)=[" + climb.toString().trim()
-                        + "] gate=" + gate
-                        + " physics=" + physDiag(gate, shipUuid),
-                refusalLine != null);
+        // A chat assertion stood here — the pilot's own chat scraped for "space is saturated". It is
+        // gone, and not replaced: a chat line is a RENDERING of a game event, and the game event is
+        // the verdict asserted immediately above (`entry_decided` = REFUSED_POOL_FULL). Asserting
+        // the sentence put the language file, the depth of the client's ring and the harness's own
+        // command echoes between this test and its subject, and it said nothing the gate's own
+        // decision does not say first.
 
-        // Still seated: two consecutive positive samples (a lost seat can read riding=true for a
-        // packet-lag moment, never twice with a wait between).
+        // Still seated — and this is an ABSENCE claim, which is the honest shape for it: the crossing
+        // may unseat NOBODY until it is granted, so what must be true is that production never took
+        // him off his seat, not that two samples happened to catch him on it. An absence needs three
+        // things and here they are: the recorder proving it was listening, a positive fact on the
+        // SAME side (his client mounted him when he boarded, in this same log), and a window that
+        // covers the whole climb — `refusalMark` was taken before it.
+        String dismounts = clientEvents().since(refusalChatMark, "dismount");
+        Events.assertInstrumentRan(dismounts, "entity_mount_writes",
+                "the client's own dismounts must be observed at all before their absence can be read"
+                        + " as a pilot who kept his seat");
+        assertTrue("the pilot must have been seated on this client at all before 'he was never"
+                        + " unseated' says anything: no successful mount was ever recorded here",
+                Events.countRecords(clientEvents().since(0, "mount"), "\"ok\":true") > 0);
+        assertTrue("a REFUSED entry must leave the pilot IN HIS SEAT - the crossing may unseat"
+                        + " nobody until it is granted, and his client was told to take him off it: "
+                        + dismounts + " delivery=" + exec("artest vs seat-delivery"),
+                Events.countRecords(dismounts, "\"who\":") == 0);
+        // ...and he is still on it now, read ONCE.
         JsonObject riding = bot().reportRidingEntity();
-        boolean prev = isRiding(riding);
-        boolean seatedTwice = false;
-        // THE MULTIPLIER STAYS. This waits for state the SERVER restores on login to arrive at the
-        // client and be applied - a round trip whose latency is the machine's, not the game's.
-        int settleBudget = (int) (20 * TestTimeouts.factor());
-        for (int attempt = 0; attempt < settleBudget && !seatedTwice; attempt++) {
-            bot().waitTicks(5);
-            riding = bot().reportRidingEntity();
-            seatedTwice = prev && isRiding(riding);
-            prev = isRiding(riding);
-        }
-        assertTrue("a REFUSED entry must leave the pilot IN HIS SEAT - the crossing may unseat "
-                        + "nobody until it is granted. riding=" + riding
-                        + " delivery=" + exec("artest vs seat-delivery"), seatedTwice);
+        assertTrue("a REFUSED entry must leave the pilot IN HIS SEAT. riding=" + riding
+                        + " delivery=" + exec("artest vs seat-delivery"), isRiding(riding));
 
         // Still in the launch world: the ship never crossed, and neither did the pilot.
         JsonObject weather = bot().reportWeather();
@@ -787,20 +822,10 @@ public class VSShipEntryClientGroupE2ETest extends AbstractSharedVsClientE2ETest
         return state.has("playerY") ? state.get("playerY").getAsDouble() : Double.NaN;
     }
 
-    /** The newest client chat line containing {@code needle} (case-insensitive), or null. */
-    private String chatLineContaining(String needle) throws Exception {
-        JsonArray lines = bot().reportChat(8).getAsJsonArray("lines");
-        if (lines == null) {
-            return null;
-        }
-        for (int i = 0; i < lines.size(); i++) {
-            String line = lines.get(i).getAsString();
-            if (line.toLowerCase(Locale.ROOT).contains(needle.toLowerCase(Locale.ROOT))) {
-                return line;
-            }
-        }
-        return null;
-    }
+    // `chatLineContaining` lived here: it scraped the last eight chat lines for a rendered sentence.
+    // Both of its callers now await production's own `chat_message_sent` record by translation KEY —
+    // which sees a message the ring has already dropped, does not move when the language file does,
+    // and says the server SENT it rather than that a scrape happened to catch it.
 
     /** The client-side pilot-input gate discriminators (the delivery chain's CLIENT half). */
     private String clientGateStats() throws Exception {
@@ -853,5 +878,23 @@ public class VSShipEntryClientGroupE2ETest extends AbstractSharedVsClientE2ETest
 
     private static boolean isRiding(JsonObject riding) {
         return riding != null && riding.has("riding") && riding.get("riding").getAsBoolean();
+    }
+
+    /**
+     * The dimension of the LAST {@code client_dimension_changed} record in a reply — where the client
+     * is now — or {@link Integer#MIN_VALUE} when it holds none.
+     *
+     * <p>The last one, because the records are a sequence and a crossing can rebuild the world more
+     * than once: a reader taking the first would answer with the world he passed through.
+     * {@link Integer#MIN_VALUE} rather than a dimension id for "no record", so an unanswered window
+     * can never be mistaken for a world.</p>
+     */
+    private static int lastDimOf(String dimChangeReply) {
+        int dim = Integer.MIN_VALUE;
+        Matcher dm = Pattern.compile("\"dim\":(-?\\d+)").matcher(String.valueOf(dimChangeReply));
+        while (dm.find()) {
+            dim = Integer.parseInt(dm.group(1));
+        }
+        return dim;
     }
 }

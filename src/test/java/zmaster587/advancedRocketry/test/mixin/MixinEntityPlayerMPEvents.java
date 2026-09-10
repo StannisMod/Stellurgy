@@ -1,6 +1,7 @@
 package zmaster587.advancedRocketry.test.mixin;
 
 import net.minecraft.entity.player.EntityPlayerMP;
+import net.minecraft.util.DamageSource;
 import net.minecraft.util.text.ITextComponent;
 import net.minecraft.util.text.TextComponentTranslation;
 
@@ -68,6 +69,8 @@ public abstract class MixinEntityPlayerMPEvents {
     private static final String INSTRUMENT_STATUS = "status_message_events";
     private static final String INSTRUMENT_CHAT = "chat_message_events";
 
+    private static final String INSTRUMENT_DEATH = "player_death_events";
+
     @Inject(method = "sendStatusMessage", at = @At("HEAD"))
     private void arTest$statusMessageSent(ITextComponent chatComponent, boolean actionBar,
                                           CallbackInfo ci) {
@@ -92,6 +95,39 @@ public abstract class MixinEntityPlayerMPEvents {
                 "\"who\":\"" + TestTrace.json(self.getName()) + "\""
                         + ",\"key\":\"" + TestTrace.json(arTest$key(component)) + "\""
                         + ",\"text\":\"" + TestTrace.json(arTest$text(component)) + "\"");
+    }
+
+    /**
+     * A player's death, WITH WHAT KILLED HIM — so a test can ask which mechanic took him instead of
+     * reading the obituary out of his chat and matching prose.
+     *
+     * <p>{@code source} is the damage type, the name production gives the cause when it builds the
+     * {@link DamageSource} ({@code arHyperspaceVoid}, {@code outOfWorld}, {@code fall}). That is the
+     * discriminating fact for every "this mechanic is what killed him" claim in the suite: a body
+     * that stepped off a hull at Y=128 in an all-air world also DIES, of the drop, inside the same
+     * window — so "he is dead" is satisfied by a build in which the mechanic under test does nothing
+     * at all, and only the cause tells the two apart. It also survives what a chat assertion cannot:
+     * a language-file edit, a death message pushed out of the client's ring, and the client not
+     * having been shown it yet.</p>
+     *
+     * <p><b>On {@code EntityPlayerMP} and not on {@code EntityLivingBase}, because the override does
+     * not chain.</b> {@code EntityPlayerMP.onDeath} is a complete replacement — it never calls
+     * {@code super.onDeath} (read at {@code EntityPlayerMP:512} in the decompiled source on disk) —
+     * so a hook on the base class would be woven, would be listed as an instrument, and would never
+     * fire for a player. HEAD, so the record exists whatever the Forge hook below it decides.</p>
+     */
+    @Inject(method = "onDeath", at = @At("HEAD"))
+    private void arTest$playerDied(DamageSource cause, CallbackInfo ci) {
+        EntityPlayerMP self = (EntityPlayerMP) (Object) this;
+        TestTrace.instrument(self, INSTRUMENT_DEATH);
+        TestTrace.recordServer("player_died",
+                "\"who\":\"" + TestTrace.json(self.getName()) + "\""
+                        + ",\"e\":" + self.getEntityId()
+                        + ",\"source\":\"" + TestTrace.json(
+                                cause == null ? "" : cause.getDamageType()) + "\""
+                        + ",\"dim\":" + (self.world == null
+                                ? Integer.MIN_VALUE : self.world.provider.getDimension())
+                        + ",\"y\":" + TestTrace.fmt(self.posY));
     }
 
     /** The translation key when the component is one, else empty — never a guess from the text. */

@@ -112,6 +112,11 @@ public abstract class MixinEntityPositionWriters {
         if (!(self instanceof EntityPlayer)) {
             return;
         }
+        // Its OWN instrument name, not the position writers'. A scenario whose claim is that NOBODY
+        // was re-seated needs to prove somebody was listening, and the roster is keyed by the name
+        // rather than by the injection — so an absence checked against `entity_position_writers`
+        // would be answered by the position hook having run and say nothing about this one.
+        TestTrace.instrument(self, "entity_mount_writes");
         TestTrace.record(self, "mount",
                 "\"e\":" + self.getEntityId()
                         + ",\"who\":\"" + TestTrace.json(self.getName()) + "\""
@@ -137,6 +142,10 @@ public abstract class MixinEntityPositionWriters {
         if (mount == null) {
             return;
         }
+        // Same roster entry as the mount hook above: the two are one observation — "who was put on
+        // what, and who was taken off it" — and a scenario asking about either is asking whether
+        // this pair ran.
+        TestTrace.instrument(self, "entity_mount_writes");
         TestTrace.record(self, "dismount",
                 "\"e\":" + self.getEntityId()
                         + ",\"who\":\"" + TestTrace.json(self.getName()) + "\""
