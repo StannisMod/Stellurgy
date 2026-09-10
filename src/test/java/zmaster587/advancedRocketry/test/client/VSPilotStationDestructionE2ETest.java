@@ -139,9 +139,14 @@ public class VSPilotStationDestructionE2ETest extends AbstractSharedVsClientE2ET
 
         // What the computer's breakBlock commits per seated rider: it throws him off. A
         // `status_message_sent` link stood ahead of this one on the chain, and a chat check for the
-        // rendered word "destroyed" stood after it; both were about the NOTICE. The game facts are
-        // the dismount here, the dead thrust below, and the seat's dummy being removed — and each of
-        // those fails on its own terms rather than on a sentence.
+        // rendered word "destroyed" stood after it; both were about the NOTICE.
+        //
+        // ONE link, and not a chain, deliberately. `breakBlock` does three things per rider — send
+        // the message, dismount him, kill the dummy — and after the message is struck out only ONE
+        // of them is recorded: nothing publishes an entity's REMOVAL (the log's only entity
+        // lifecycle event is `entity_joined_world`). So the order this contract has is not
+        // assertable, and the dummy's disappearance is read as the settled state it is, at the end
+        // of the leg. Restoring an ordered chain here means recording the removal first.
         events.await(breakMark, "dismount", "destroying the linked flight computer must throw its"
                 + " pilot out of the seat", RELEASE_BUDGET_TICKS);
 

@@ -198,14 +198,24 @@ public class VSPilotSeatTakenWhileOfflineE2ETest extends AbstractSharedVsClientE
         bot().waitForWorld();
 
         // The link {@code DeckHold.reconcileSeatMount} commits: it takes the returner off the
-        // duplicate mount vanilla re-spawned for him. The vanilla forced re-mount that PRECEDES it is
-        // deliberately NOT on this chain — where the login event falls against PlayerList's own
-        // startRiding is a fact of a run, and this test has not measured it.
+        // duplicate mount vanilla re-spawned for him. Two links that WERE here — `action_bar_queued`
+        // and `status_message_sent` — are gone: both were about the NOTICE, which is a rendering of
+        // what the reconciliation did. What they were read for, who has the chair, is asserted below
+        // off the seat itself, by uuid.
         //
-        // Two further links stood here, `action_bar_queued` and `status_message_sent`, and both were
-        // about the NOTICE. A notice is a rendering of what the reconciliation did, not a fact about
-        // the game; what it was being read for — who has the chair — is asserted below off the seat
-        // itself, by uuid, which no sentence could establish.
+        // ONE link, and the obvious second one was TRIED and does not exist here. The login restore
+        // publishes `login_restored`, and both it and the reconcile hang off the player-login event,
+        // so an ordered pair looked available. It is not: `SpaceEventHandler` reaches
+        // `LoginRestore.resolve` only for a SPACEBORNE player — his aboard record says so, or he is
+        // in a subsystem world — and this pilot sits on a seat in dim 0, so the early return fires
+        // and nothing is recorded. Measured 2026-09-10: the chain red named `login_restored` as
+        // never recorded, with `login_restore_events` absent from the instrument roster, which is
+        // the difference between "it did not run" and "it ran and did not happen".
+        //
+        // The vanilla forced re-mount is still not a link either, for the reason it never was: where
+        // the login event falls against PlayerList's own startRiding has not been measured. That
+        // same red printed `… mount, chat_message_sent, dismount …`, so on THAT run it preceded the
+        // reconcile — one observation, which is not yet an order to assert.
         events.await(loginMark, "dismount", "a pilot whose seat was taken while he was offline must"
                 + " be reconciled off the duplicate mount vanilla re-spawned for him",
                 LOGIN_LINK_BUDGET_TICKS);

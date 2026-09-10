@@ -807,6 +807,15 @@ public class MachineGuiClientGroupE2ETest extends AbstractSharedClientE2ETest {
         // in the client's chat — are gone: what they said is that a refusal was announced, and what
         // this leg is about is that nothing was armed. Distinguishing "the click never arrived" from
         // "it arrived and was refused" is still done, by the link below.
+        //
+        // ONE link, and not a chain — here and at the ARM/disarm pair below, for the same reason.
+        // The console records four things (`nav_command_received`, `nav_target_picked`,
+        // `crystal_copied`, `nav_console_told`), and of those only the first is a game fact about an
+        // ARM click: picking a body and copying a crystal are other buttons, and the tell is the
+        // message. ARMING ITSELF publishes nothing — it is a state on the tile — so the ordered pair
+        // this used to assert existed only because its second half was the announcement. The state
+        // is read once, after the link, which is what a settled value is for. (The COPY click below
+        // keeps its chain: `crystal_copied` is a game fact and follows the command.)
         events.await(refusalMark, "nav_command_received", "an ARM click with nowhere to go must"
                         + " REACH the console — a click that never arrived and a console that"
                         + " refused are different failures", 150);
