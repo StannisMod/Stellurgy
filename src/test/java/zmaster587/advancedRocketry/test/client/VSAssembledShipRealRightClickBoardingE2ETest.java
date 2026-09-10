@@ -272,6 +272,10 @@ public class VSAssembledShipRealRightClickBoardingE2ETest extends AbstractShared
         // the mount half is recorded by a test-only mixin, and an un-woven one answers with exactly
         // the empty log a refused click does.
         long pressMark = events.markInstrumented();
+        // The CLIENT's own mark beside it. His client PERFORMS the mount when the server tells it
+        // who is riding what, so the replication half below is a record on this log — and with the
+        // mark taken here it cannot be missed however the two sides interleave.
+        long pressOnClient = clientEvents().mark();
         bot().setKey(KEY_USE_ITEM, true);
         bot().waitTicks(5);
         bot().setKey(KEY_USE_ITEM, false);
@@ -291,20 +295,33 @@ public class VSAssembledShipRealRightClickBoardingE2ETest extends AbstractShared
                         + "not a missed aim." + aimDiag,
                 5 * budget, "right_click_block", "mount");
 
-        JsonObject riding = bot().reportRidingEntity();
-        for (int attempt = 0; attempt < budget && !isRiding(riding); attempt++) {
-            bot().waitTicks(5);
-            riding = bot().reportRidingEntity();
+        // The replication, as the LINK it is: his client performing the mount. A poll of
+        // `reportRidingEntity` stood here, and it could only ever sample the state the record
+        // announces — a read that lands in the gap between the tear-down and the rebuild answers
+        // `riding:false` for a pilot who is about to be seated.
+        try {
+            clientEvents().awaitMatching(pressOnClient, "mount",
+                    seen -> Events.countRecords(seen, "\"ok\":true") > 0,
+                    "seating him (ok:true)",
+                    "the CLIENT must mount the player after a boarding the SERVER has already"
+                            + " recorded (the chain above), or the pilot sees himself standing on a"
+                            + " deck he is in fact strapped into", 5 * budget);
+        } catch (AssertionError never) {
+            Events.assertInstrumentRan(clientEvents().since(pressOnClient, "mount"),
+                    "entity_mount_writes", "the client's own mounts must be observed at all before"
+                            + " an absent one can be read as a boarding the client did not follow");
+            throw new AssertionError(never.getMessage() + " serverMountRecord="
+                    + events.since(pressMark, "mount") + aimDiag);
         }
 
+        JsonObject riding = bot().reportRidingEntity();
         String serverRiding = exec("artest player riding-entity");
         String boardDiag = " clientRiding=" + riding + " serverRiding=" + serverRiding
                 + " mouseOverAfter=" + bot().reportMouseOver() + aimDiag;
 
-        assertTrue("the CLIENT must render the player aboard after a boarding the SERVER has already "
-                + "recorded (the chain above), or the pilot sees himself standing on a deck he is in "
-                + "fact strapped into." + boardDiag
-                + " serverMountRecord=" + events.since(pressMark, "mount"),
+        // ...and he is still on it, read ONCE now that the link above has established the mount.
+        assertTrue("the pilot must still be aboard when the seat is read — his client mounted him"
+                + " (the link above) and must not have taken him off again." + boardDiag,
                 isRiding(riding));
 
         assertTrue("the client must be riding the SEAT's mount, not some other entity it happened "

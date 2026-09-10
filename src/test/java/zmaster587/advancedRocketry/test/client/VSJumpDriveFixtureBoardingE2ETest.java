@@ -276,6 +276,9 @@ public class VSJumpDriveFixtureBoardingE2ETest extends AbstractSharedVsClientE2E
         // The mark goes BEFORE the press: a use press is over inside a tick, and a poll that arrives
         // after it cannot tell a click the server never saw from one it saw and refused.
         long seatPressMark = events.markInstrumented();
+        // The CLIENT's own mark beside it: his client PERFORMS the mount when the server tells it
+        // who is riding what, so the replication half below is a record on this log.
+        long seatPressOnClient = clientEvents().mark();
         bot().setKey(KEY_USE_ITEM, true);
         bot().waitTicks(5);
         bot().setKey(KEY_USE_ITEM, false);
@@ -291,16 +294,28 @@ public class VSJumpDriveFixtureBoardingE2ETest extends AbstractSharedVsClientE2E
                         + seatAim.diagnosis,
                 5 * budget, "right_click_block", "mount");
 
-        JsonObject riding = bot().reportRidingEntity();
-        for (int attempt = 0; attempt < budget && !isRiding(riding); attempt++) {
-            bot().waitTicks(5);
-            riding = bot().reportRidingEntity();
+        // The replication, as the LINK it is: his client performing the mount. The poll that stood
+        // here could only sample the state this record announces, and a read landing between the
+        // tear-down and the rebuild answers `riding:false` for a pilot who is about to be seated.
+        try {
+            clientEvents().awaitMatching(seatPressOnClient, "mount",
+                    seen -> Events.countRecords(seen, "\"ok\":true") > 0,
+                    "seating him (ok:true)",
+                    "the CLIENT must mount the pilot after a boarding the SERVER has already"
+                            + " recorded (the chain above)", 5 * budget);
+        } catch (AssertionError never) {
+            Events.assertInstrumentRan(clientEvents().since(seatPressOnClient, "mount"),
+                    "entity_mount_writes", "the client's own mounts must be observed at all before"
+                            + " an absent one can be read as a boarding the client did not follow");
+            throw new AssertionError(never.getMessage()
+                    + " serverRiding=" + exec("artest player riding-entity")
+                    + " serverMountRecord=" + events.since(seatPressMark, "mount")
+                    + seatAim.diagnosis);
         }
-        assertTrue("the CLIENT must render the pilot aboard after a boarding the SERVER has already "
-                        + "recorded (the chain above). clientRiding=" + riding
-                        + " serverRiding=" + exec("artest player riding-entity")
-                        + " serverMountRecord=" + events.since(seatPressMark, "mount")
-                        + seatAim.diagnosis,
+        JsonObject riding = bot().reportRidingEntity();
+        assertTrue("the pilot must still be aboard when the seat is read — his client mounted him"
+                        + " (the link above) and must not have taken him off again. clientRiding="
+                        + riding + seatAim.diagnosis,
                 isRiding(riding));
 
         // ---- ARRANGEMENT: leave the seat again, the way a pilot does. ----------------------------

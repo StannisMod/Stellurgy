@@ -632,18 +632,15 @@ public class VSShipFlightTelemetryE2ETest extends AbstractSharedVsClientE2ETest 
         exec("tp @a " + (bx + 0.5) + " " + (by + 6) + " " + (bz + 0.5) + " 0 0");
         bot().waitTicks(20);
 
-        // The LOAD is the one gate here no event records: `managed:true` means the physics mod owns
-        // a loaded object for this ship. It stays a bounded poll — but asked BY IDENTITY, so it has
-        // no distance term to be wrong about however far this scenario then flies, spins or drops
-        // the ship, and `managed:false` means "not loaded" rather than "somebody else's ship".
-        String info = "";
-        for (int attempt = 0; attempt < 40 && !info.contains("\"managed\":true"); attempt++) {
-            bot().waitTicks(5);
-            info = shipInfo();
-        }
-        scenario().requireArranged("this scenario's ship (" + scenarioShipId + ") must LOAD with the"
-                + " client present before anything can be asked about it — last reply "
-                + info.replace('\n', ' '), info.contains("\"managed\":true"));
+        // The LOAD, as production's own event. This was a bounded poll of `ship-info` for
+        // `managed:true`, under a comment calling that the one gate no event records — which stopped
+        // being true: `ShipEvent.ShipLoadedEvent` is recorded as `ship_usable` and the VS base waits
+        // on it. And `managed` was never the fact it was read as: it is a literal `true` in the
+        // report builder, so it meant "the lookup found a ship and built a report" and the wait was
+        // on nothing. The mark is `spawnMark`, taken before the assembly — the load fires ONCE and is
+        // an edge, so a mark taken here could miss it entirely.
+        awaitShipUsable(events, spawnMark, scenarioShipId);
+        String info = shipInfo();
         double[] where = new double[]{
                 readDouble(info, POS_X), readDouble(info, POS_Y), readDouble(info, POS_Z)};
         System.out.println("[tier2] ship at base (" + bx + "," + by + "," + bz + ") -> "

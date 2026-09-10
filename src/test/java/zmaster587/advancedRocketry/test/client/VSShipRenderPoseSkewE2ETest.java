@@ -483,22 +483,23 @@ public class VSShipRenderPoseSkewE2ETest extends AbstractClientE2ETest {
         exec("tp @a " + (bx + 0.5) + " " + (by + 6) + " " + (bz + 0.5) + " 0 0");
         bot().waitTicks(20);
 
-        // Whether the physics object is LOADED stays a bounded poll: nothing in the vocabulary
-        // records that transition, and it is a state the substrate reaches rather than a commit. What
-        // changed is that it is now asked BY IDENTITY, so no distance term can answer about a
-        // neighbouring ship.
-        String info = "";
-        double[] where = null;
-        for (int i = 0; i < 40 && where == null; i++) {
-            bot().waitTicks(5);
-            info = shipInfo();
-            if (info.contains("\"managed\":true")) {
-                where = new double[]{
-                        readDouble(info, POS_X), readDouble(info, POS_Y), readDouble(info, POS_Z)};
-            }
-        }
-        assertTrue("the ship this scenario assembled (" + shipId + ") must LOAD with the client"
-                + " present; last reply was: " + info, where != null);
+        // The LOAD, as production's own event. This was a bounded poll of `ship-info` for
+        // `managed:true`, under a comment saying nothing in the vocabulary records that transition —
+        // which stopped being true: `ShipEvent.ShipLoadedEvent` is recorded as `ship_usable` and the
+        // VS base waits on it. And `managed` was never the fact it was read as: it is a literal
+        // `true` in the report builder, so it meant "the lookup found a ship" and the wait was on
+        // nothing. The mark is `spawnMark`, taken before the assembly — the load fires ONCE and is an
+        // edge, so a mark taken here could miss it entirely.
+        // Written out rather than called: this class pays its own harness and does not extend the VS
+        // base that offers `awaitShipUsable`. Filtered on the SHIP, because on a shared world every
+        // neighbour's craft becomes usable in the same log.
+        events.awaitCarrying(spawnMark, "ship_usable", "\"" + shipId + "\"",
+                "the ship this scenario assembled (" + shipId + ") must become USABLE — the physics"
+                        + " loop steps it — before its pose can be asked about",
+                SHIP_SPAWN_BUDGET_TICKS);
+        String info = shipInfo();
+        double[] where = new double[]{
+                readDouble(info, POS_X), readDouble(info, POS_Y), readDouble(info, POS_Z)};
         System.out.println("[poseskew] ship at (" + bx + "," + by + "," + bz + ") -> "
                 + java.util.Arrays.toString(where));
         return where;

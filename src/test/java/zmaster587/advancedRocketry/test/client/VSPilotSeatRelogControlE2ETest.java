@@ -70,6 +70,13 @@ public class VSPilotSeatRelogControlE2ETest extends AbstractSharedVsClientE2ETes
      */
     private static final int LINK_BUDGET_TICKS = 400;
 
+    /**
+     * Client ticks between two reads of the login's own records — the step {@link Events}'s waits
+     * advance by, so a budget expressed in ITERATIONS (as the poll here was) converts by
+     * multiplying. Named because the conversion is otherwise a bare {@code * 5}.
+     */
+    private static final int RELOG_STEP_TICKS = 5;
+
     /** This scenario's ship, by identity — read off the registry's own record of ITS assembly, and
      *  used for every question afterwards. Never re-derived from a position. */
     private String shipId;
@@ -144,6 +151,10 @@ public class VSPilotSeatRelogControlE2ETest extends AbstractSharedVsClientE2ETes
         // The mark is taken before the reconnect: the re-seating happens DURING the login, and a
         // reader that arrives afterwards would be asking whether it can still see it.
         long relogMark = events.markInstrumented();
+        // The CLIENT's own mark beside it: the login puts him back on his mount, and his client
+        // PERFORMS that mount when it is told who is riding what. The replication below is a record
+        // on this log, not a state to sample.
+        long relogOnClient = clientEvents().mark();
         bot().reconnect();
         bot().waitForWorld();
 
@@ -153,20 +164,30 @@ public class VSPilotSeatRelogControlE2ETest extends AbstractSharedVsClientE2ETes
         // follows is the replication of it, and can now only fail as replication.
         events.await(relogMark, "mount", "a pilot who logged out SEATED must be put back on his mount"
                 + " by the login itself - no re-board, no re-click", LINK_BUDGET_TICKS);
-        JsonObject riding = bot().reportRidingEntity();
-        boolean prev = isRiding(riding);
-        boolean seatedTwice = false;
-        // THE MULTIPLIER STAYS. This waits for state the SERVER restores on login to arrive at the
-        // client and be applied - a round trip whose latency is the machine's, not the game's.
+        // The replication, as the LINK it is. What stood here read `riding` twice with a wait
+        // between, on the reasoning that a lost seat reads true for a packet-lag moment but never
+        // twice — which is guessing at an EDGE from two samples of a level, and says nothing about
+        // when or how often the seat changed hands in between. THE MULTIPLIER STAYS in the budget:
+        // this waits for state the SERVER restores on login to reach the client and be applied, a
+        // round trip whose latency is the machine's, not the game's.
         int rejoinBudget = (int) (60 * TestTimeouts.factor());
-        for (int i = 0; i < rejoinBudget && !seatedTwice; i++) {
-            bot().waitTicks(5);
-            riding = bot().reportRidingEntity();
-            seatedTwice = prev && isRiding(riding);
-            prev = isRiding(riding);
+        try {
+            clientEvents().awaitMatching(relogOnClient, "mount",
+                    seen -> Events.countRecords(seen, "\"ok\":true") > 0,
+                    "seating him (ok:true)",
+                    "a pilot who logged out SEATED must log back in SEATED - no re-board, and his own"
+                            + " client must perform the mount the login restored",
+                    rejoinBudget * RELOG_STEP_TICKS);
+        } catch (AssertionError never) {
+            Events.assertInstrumentRan(clientEvents().since(relogOnClient, "mount"),
+                    "entity_mount_writes", "the client's own mounts must be observed at all before an"
+                            + " absent one can be read as a pilot who came back on his feet");
+            throw new AssertionError(never.getMessage() + " | the SERVER's mount record: "
+                    + events.since(relogMark, "mount"));
         }
-        assertTrue("a pilot who logged out SEATED must log back in SEATED - no re-board. riding="
-                + riding, seatedTwice);
+        JsonObject riding = bot().reportRidingEntity();
+        assertTrue("...and he must still be on it when it is read: riding=" + riding,
+                isRiding(riding));
 
         // ---- PRECONDITION before ASSERT 2 can mean anything: the hull is still level. ---------
         // Declared, not guessed: this leg's claim is about ALTITUDE, and a pilot's throttle is a
