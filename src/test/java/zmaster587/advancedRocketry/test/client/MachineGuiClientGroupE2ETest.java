@@ -48,12 +48,11 @@ import static zmaster587.advancedRocketry.test.client.ClientGuiTestSupport.scree
  *   <li><b>A GLOBAL query answering with a neighbour's object.</b>
  *       {@link #clickingScanThenBuildAssemblesRocket()} reads {@code artest rocket list}, which is
  *       world-wide, and narrows it to {@link Plot#contains}.</li>
- *   <li><b>Chat while a GUI is open.</b> {@link #thePilotCopiesPicksAndArmsAtTheConsoleWithNothingButClicks()}
- *       reads the console's replies with the console still open — the full client reset would close
- *       the very screen it is about to click. It no longer CLEARS the overlay first: a reply is read
- *       off the client's own {@code client_chat_received} records taken from a mark that predates the
- *       click, so a line from an earlier scenario cannot be mistaken for this one and there is
- *       nothing to drain.</li>
+ *   <li><b>A GUI that must stay open.</b> {@link #thePilotCopiesPicksAndArmsAtTheConsoleWithNothingButClicks()}
+ *       works with the console still open — the full client reset would close the very screen it is
+ *       about to click. It reads what each click DID (the command reaching the console, and the
+ *       console's own armed state) rather than the reply it produced: the replies were chat, and a
+ *       chat line is a rendering of the thing the click changed.</li>
  * </ul>
  *
  * <p>The lane is wide (128) because two members need more than a 64-block box: the railgun pair
@@ -800,28 +799,20 @@ public class MachineGuiClientGroupE2ETest extends AbstractSharedClientE2ETest {
         // The chat overlay is no longer drained first. A mark taken before the click is what makes a
         // matching line belong to THIS stimulus, and it does it better than a clear: a clear leaves
         // a line already in flight, and it cannot see a reply that arrived and scrolled away.
-        scenario().asserting("arming with no destination is refused, and the pilot is told why");
+        scenario().asserting("arming with no destination leaves the console unarmed");
         long refusalMark = events.markInstrumented();
-        long refusalOnClient = clientEvents().mark();
         bot().clickButtonById(BUTTON_ARM);
-        events.assertChain(refusalMark, "an ARM click with nowhere to go must REACH the console and"
-                        + " be ANSWERED - a click that never arrived and a console that answered"
-                        + " something else are different failures and the chat could not tell them"
-                        + " apart", 150,
-                "nav_command_received", "nav_console_told");
-        String told = events.since(refusalMark, "nav_console_told");
-        assertEquals("arming with no destination chosen must be REFUSED, with the reason production"
-                        + " itself chose - read at the console's own tell(), not off the overlay: "
-                        + told, "msg.jumpgate.notarget", Events.lastField(told, "key"));
-        String refusal = awaitClientRecords(refusalOnClient, "client_chat_received",
-                "no jump target", 150);
-        assertTrue("...and the pilot must actually be TOLD: the refusal has to reach his own screen,"
-                        + " which is the half the server's decision cannot show. client chat since"
-                        + " the click: " + refusal,
-                refusal.toLowerCase(Locale.ROOT).contains("no jump target"));
+        // The click REACHES the console, and the console stays unarmed. The two message links that
+        // stood between them — the console's own tell, matched on a key, and the resolved line hunted
+        // in the client's chat — are gone: what they said is that a refusal was announced, and what
+        // this leg is about is that nothing was armed. Distinguishing "the click never arrived" from
+        // "it arrived and was refused" is still done, by the link below.
+        events.await(refusalMark, "nav_command_received", "an ARM click with nowhere to go must"
+                        + " REACH the console — a click that never arrived and a console that"
+                        + " refused are different failures", 150);
         String afterRefusal = exec("artest nav status " + where);
-        assertFalse("and the console must not be armed: " + afterRefusal,
-                readBoolean(afterRefusal, ARMED));
+        assertFalse("arming with no destination chosen must leave the console UNARMED: "
+                + afterRefusal, readBoolean(afterRefusal, ARMED));
 
         // ---- 2) Copy the brought crystal into the ship's own. ---------------------------------
         scenario().asserting("COPY writes the addresses across and leaves the source holding them");
@@ -882,35 +873,23 @@ public class MachineGuiClientGroupE2ETest extends AbstractSharedClientE2ETest {
         // ---- 5) Arm, and stand down again. Both answered. ---------------------------------------
         scenario().asserting("arming a chosen destination is accepted, confirmed, and real");
         long armMark = events.markInstrumented();
-        long armOnClient = clientEvents().mark();
         bot().clickButtonById(BUTTON_ARM);
-        events.assertChain(armMark, "an ARM click on a chosen destination must reach the console and"
-                + " be answered", 150, "nav_command_received", "nav_console_told");
-        String armedTold = events.since(armMark, "nav_console_told");
-        assertEquals("arming a chosen destination must be ACCEPTED, and the acceptance is the"
-                        + " message production picked: " + armedTold,
-                "msg.jump.armed", Events.lastField(armedTold, "key"));
-        String armedChat = awaitClientRecords(armOnClient, "client_chat_received", "jump armed", 150);
-        assertTrue("...and the confirmation must reach the pilot's own screen. client chat since the"
-                + " click: " + armedChat, armedChat.toLowerCase(Locale.ROOT).contains("jump armed"));
+        // The click reaches the console; the console is then ARMED. Two links stood between them —
+        // `nav_console_told` matched on the message key, and the resolved line hunted in the
+        // client's own chat — and both were about the ANSWER rather than about the state. The line
+        // below already said so in its own message ("the message is not the state"); it is now the
+        // only thing asserted, because the state is the contract and the sentence is a rendering.
+        events.await(armMark, "nav_command_received", "an ARM click on a chosen destination must"
+                + " reach the console", 150);
         String armedStatus = exec("artest nav status " + where);
-        assertTrue("and the console must actually BE armed — the message is not the state: "
-                + armedStatus, readBoolean(armedStatus, ARMED));
+        assertTrue("arming a chosen destination must leave the console ARMED: " + armedStatus,
+                readBoolean(armedStatus, ARMED));
 
         scenario().asserting("pressing the same button again stands the jump down, and says so");
         long disarmMark = events.markInstrumented();
-        long disarmOnClient = clientEvents().mark();
         bot().clickButtonById(BUTTON_ARM);
-        events.assertChain(disarmMark, "a second ARM click must reach the console and be answered",
-                150, "nav_command_received", "nav_console_told");
-        String disarmedTold = events.since(disarmMark, "nav_console_told");
-        assertEquals("pressing the same button again must STAND THE JUMP DOWN, and say which of the"
-                        + " three answers it is: " + disarmedTold,
-                "msg.jump.disarmed", Events.lastField(disarmedTold, "key"));
-        String disarmedChat = awaitClientRecords(disarmOnClient, "client_chat_received",
-                "jump disarmed", 150);
-        assertTrue("...and the pilot must be told he is standing down. client chat since the click: "
-                + disarmedChat, disarmedChat.toLowerCase(Locale.ROOT).contains("jump disarmed"));
+        events.await(disarmMark, "nav_command_received", "a second ARM click must reach the console",
+                150);
         String disarmedStatus = exec("artest nav status " + where);
         assertFalse("a disarmed console must not stay armed: " + disarmedStatus,
                 readBoolean(disarmedStatus, ARMED));

@@ -1,7 +1,5 @@
 package zmaster587.advancedRocketry.test.client;
 
-import com.google.gson.JsonArray;
-import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import org.junit.FixMethodOrder;
@@ -71,7 +69,15 @@ public class PlanetBedSleepClientGroupE2ETest extends AbstractSharedClientE2ETes
     /** How far a clock may drift while the scenario runs and still count as "it did not jump". */
     private static final long DRIFT_ALLOWANCE = 2000L;
 
-    private static final String LOCKED_NEEDLE = "turns at its own rate";
+    /**
+     * How long the skip policy's verdict may take to appear after the bed is clicked, in ticks.
+     *
+     * <p>A deadline for a discrete decision, not a settle: a vanilla sleep completes 100 ticks after
+     * everyone is in bed, and the policy is asked at that completion — so this is that, with room for
+     * a loaded box. The chain above has already established the sleep itself, so an expiry here is
+     * the policy never being asked rather than a player who never got into bed.</p>
+     */
+    private static final int SLEEP_VERDICT_BUDGET_TICKS = 400;
 
     @Override
     protected void seedGameDirectory(GameDirSeed seed) {
@@ -164,16 +170,23 @@ public class PlanetBedSleepClientGroupE2ETest extends AbstractSharedClientE2ETes
                         + " sleep in it — the lock withholds the MORNING, not the bed", 260,
                 "right_click_block", "sleep_in_bed", "player_wake_up");
 
-        // A full vanilla sleep completes 100 ticks after everyone is in bed; poll past that.
-        String seen = pollForLockedMessage();
-        assertTrue("THE LOAD-BEARING ONE: the player must be TOLD that this world's morning is not"
-                        + " coming, and that line is only ever sent from inside the completed-sleep"
-                        + " branch — so its absence means either the lock did not engage or the"
-                        + " player never actually slept — and the chain above has already ruled the"
-                        + " second one out, so this is the lock. Historically this test could not"
-                        + " tell those two"
-                        + " apart by assuming. chat=" + seen,
-                seen.contains(LOCKED_NEEDLE));
+        // THE LOAD-BEARING ONE, and it is the POLICY'S OWN VERDICT rather than the sentence the
+        // player reads. `allows` is asked from inside the completed-sleep redirect, so a record for
+        // this dimension carrying `allowed:false` says both halves at once: a sleep got that far, and
+        // the skip was refused on this world.
+        //
+        // A thirty-iteration poll of the client's chat stood here, matching a fragment of the line
+        // the refusal produces. That line is a rendering of this decision: it moves when the language
+        // file moves, it names no dimension, and a client that has scrolled past it reads identically
+        // to one that was never sent.
+        String decided = events.awaitMatching(mark, "time_skip_decided",
+                seen -> !zmaster587.advancedRocketry.test.Events.recordsWithAll(seen,
+                        "\"dim\":" + DIM_LOCKED + ",", "\"allowed\":false").isEmpty(),
+                "refusing the skip on dim " + DIM_LOCKED,
+                "a bed on a time-locked planet must have its skip REFUSED by the policy — the lock"
+                        + " withholds the morning, and this is the decision that withholds it",
+                SLEEP_VERDICT_BUDGET_TICKS);
+        scenario().record("timeSkipDecision", decided);
 
         long after = dimTime(DIM_LOCKED);
         assertTrue("THE CONTRACT: a bed may not fast-forward a planet's day. The clock was at "
@@ -353,24 +366,10 @@ public class PlanetBedSleepClientGroupE2ETest extends AbstractSharedClientE2ETes
                 set.contains("\"newValue\":" + allowed));
     }
 
-    /** The client's own chat, i18n resolved — what the player actually reads. */
-    private String pollForLockedMessage() throws Exception {
-        StringBuilder last = new StringBuilder();
-        for (int attempt = 0; attempt < 30; attempt++) {
-            bot().waitTicks(20);
-            last.setLength(0);
-            JsonArray lines = bot().reportChat(20).getAsJsonArray("lines");
-            if (lines != null) {
-                for (JsonElement line : lines) {
-                    last.append(line.getAsString()).append(" | ");
-                }
-            }
-            if (last.indexOf(LOCKED_NEEDLE) >= 0) {
-                break;
-            }
-        }
-        return last.toString();
-    }
+    // `pollForLockedMessage` lived here: thirty rounds of twenty ticks, joining the client's last
+    // twenty chat lines and looking for a fragment of the sentence a locked bed produces. It is gone
+    // — the scenario waits on `time_skip_decided`, the policy's own verdict, which names the world it
+    // was asked about and cannot be scrolled past.
 
     private JsonObject dimTimeJson(int dim) throws Exception {
         String raw = exec("artest dim time " + dim);

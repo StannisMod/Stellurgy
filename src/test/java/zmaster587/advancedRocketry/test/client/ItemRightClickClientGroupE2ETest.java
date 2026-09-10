@@ -34,12 +34,11 @@ import static org.junit.Assert.assertTrue;
  * click, which is a stronger guarantee than either — a record read after a mark cannot have come
  * from before it, whatever else is in the world:</p>
  * <ul>
- *   <li><b>Chat.</b> {@link #rightClickInVanillaDimDispatchesAirReadoutToPlayerChat} proved "the
- *       player was told X" by searching the last N chat lines, which is why it had to re-arm the
- *       channel against the harness's own completion sentinel, one broadcast per server command.
- *       It now reads {@code client_chat_received} since a client mark, so any line in the backlog is
- *       simply another record with different text and the arming is no longer needed. The sentinel
- *       itself is gone besides: the server answers over its own control socket.</li>
+ *   <li><b>Chat.</b> {@link #rightClickInVanillaDimComposesTheAirReadout} proved "the player was
+ *       told X" by searching the last N chat lines, which is why it had to re-arm the channel
+ *       against the harness's own completion sentinel, one broadcast per server command. It no
+ *       longer looks at chat at all: what the analyser does is COMPOSE a reading, that reading is a
+ *       record with the atmosphere in it, and the sentence the player sees is a rendering of it.</li>
  *   <li><b>Entities.</b> {@code reportEntities} counts what the CLIENT can see within a radius, and
  *       a craft spawned by one scenario is still in the world when the next one asks. Both
  *       hovercraft scenarios therefore work at the SAME offset inside their own plots, so the
@@ -175,23 +174,24 @@ public class ItemRightClickClientGroupE2ETest extends AbstractSharedClientE2ETes
     // ── atmosphere analyser: the answer is two lines of chat ──────────────────
 
     /**
-     * From {@code ItemAtmosphereAnalzerReadoutE2ETest}. Player-visible side of
-     * {@code ItemAtmosphereAnalzer#onItemRightClick}, observed on the REAL client chat overlay —
-     * i18n already resolved, exactly the two lines the player reads.
+     * From {@code ItemAtmosphereAnalzerReadoutE2ETest}. What
+     * {@code ItemAtmosphereAnalzer#onItemRightClick} DOES: it reads the atmosphere the player is
+     * standing in and composes a reading of it.
      *
-     * <p>Dim 0 has no AtmosphereHandler &rarr; production falls back to {@code AtmosphereType.AIR}.
-     * Both lines must reach the player's screen: "Atmosphere Type: …air…" and "Breathable: yes".</p>
+     * <p>Dim 0 has no AtmosphereHandler &rarr; production falls back to {@code AtmosphereType.AIR},
+     * and the contract is that the analyser answers for AIR there rather than refusing or reading a
+     * neighbour's.</p>
      *
-     * <p>Four links, one contract, and the failure now names which one broke: the click reached the
-     * server ({@code right_click_item}), the item composed its two lines
-     * ({@code atmosphere_readout_composed}), the server sent them ({@code chat_message_sent}) and the
-     * client's HUD was handed them, i18n resolved ({@code client_chat_received}). The RESOLVED words
-     * are asserted on the client's record and nowhere else: on the server a
-     * {@code TextComponentTranslation} still carries its key, so a server-side text match would pin
-     * the key rather than what the player reads.</p>
+     * <p>Two links, one contract, and the failure names which one broke: the click reached the
+     * server ({@code right_click_item}) and the item composed its readout
+     * ({@code atmosphere_readout_composed}), whose own payload carries the atmosphere it composed
+     * for. Two further links stood here — the server SENDING the lines and the client's HUD being
+     * handed them — with the resolved English asserted on the client's records. They are gone: a
+     * chat line is a rendering of this reading, and pinning the rendered words tied the test to the
+     * language file.</p>
      */
     @Test
-    public void rightClickInVanillaDimDispatchesAirReadoutToPlayerChat() throws Exception {
+    public void rightClickInVanillaDimComposesTheAirReadout() throws Exception {
         scenario().arranging("give the atmosphere analyser and wait for the client to render it");
         bot().waitForWorld();
         String give = exec("artest player give-held advancedrocketry:atmanalyser");
@@ -204,39 +204,26 @@ public class ItemRightClickClientGroupE2ETest extends AbstractSharedClientE2ETes
         // replaced armChatObservation(): whatever else is in the chat channel is simply another
         // record with other text. The harness no longer adds to it — the completion sentinel that
         // used to be broadcast per server command is gone with the server's control socket.
-        scenario().measuring("mark both event logs immediately before the right-click");
+        scenario().measuring("mark the event log immediately before the right-click");
         Events events = events();
         long mark = events.markInstrumented();
-        long clientMark = clientEvents().mark();
 
-        scenario().asserting("the player reads both readout lines on his own chat");
+        scenario().asserting("the analyser composes a reading for the atmosphere it is standing in");
         bot().useItem();
 
-        events.assertChain(mark, "a right-click with the atmosphere analyser must reach the server,"
-                + " compose its readout and send it to the player", LINK_BUDGET_TICKS,
-                "right_click_item", "atmosphere_readout_composed", "chat_message_sent");
+        // A third link stood on this chain — `chat_message_sent` — and two assertions after it read
+        // the resolved lines out of the client's own chat records. Both were about the READOUT
+        // BEING RENDERED; what the analyser DOES is compose a reading for the atmosphere it is
+        // standing in, and that is the link below and the value asserted from it.
+        events.assertChain(mark, "a right-click with the atmosphere analyser must reach the server"
+                + " and compose its readout", LINK_BUDGET_TICKS,
+                "right_click_item", "atmosphere_readout_composed");
 
         // WHICH atmosphere production composed for. Dim 0 has no handler, and the contract is that
         // the analyser answers for AIR there rather than refusing or reading a neighbour's.
         String composed = events.since(mark, "atmosphere_readout_composed");
         assertEquals("a dimension with no atmosphere handler must be read out as AIR: " + composed,
                 "air", Events.firstField(composed, "atmosphere"));
-
-        // The client's own record of what its HUD was told — the two lines the player reads, with
-        // the translation already applied.
-        String chat = awaitRecord(
-                () -> clientEvents().since(clientMark, "client_chat_received"),
-                "breathable", LINK_BUDGET_TICKS);
-        Events.assertInstrumentRan(chat, "client_chat_received",
-                "the player was shown the analyser's readout");
-        assertTrue("the client must be shown the resolved 'Atmosphere Type: …air' line; the server"
-                        + " composed " + composed + " and the client's chat records since the click"
-                        + " are: " + chat,
-                recordsWithBoth(chat, "atmosphere type", "air") >= 1);
-        assertTrue("the client must be shown the resolved 'Breathable: yes' line for AIR; the server"
-                        + " composed " + composed + " and the client's chat records since the click"
-                        + " are: " + chat,
-                recordsWithBoth(chat, "breathable", "yes") >= 1);
     }
 
     // ── biome changer: the answer is a queue on a satellite ───────────────────

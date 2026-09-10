@@ -123,13 +123,11 @@ public abstract class AbstractSpaceLoginRestoreClientTest {
     /** Where an orphaned login lands, and the one dimension a restored pilot must NOT be in. */
     protected static final int OVERWORLD_DIM = 0;
 
-    /**
-     * A stable fragment of what a pilot is told when the server has no record of his ship. Matching a
-     * fragment rather than the whole line is deliberate: this is the player-visible sentence, so the
-     * test has to read what he reads — but the punctuation and the colour code around it are not the
-     * contract.
-     */
-    protected static final String SHIP_LOST_NEEDLE = "ship could not be found";
+    // `SHIP_LOST_NEEDLE` lived here — a fragment of the sentence a pilot reads when the server has no
+    // record of his ship. Its one consumer now waits on the restore's own verdict instead
+    // (`login_restored` carrying `reason:SHIP_UNKNOWN`): the sentence is a rendering of that
+    // decision, it cannot say WHICH of the four orphan causes fired, and it moves when the language
+    // file does.
 
     /** The launch dimension the ship takes off from - always registered, always terrain-generated. */
     protected static final int LAUNCH_DIM = 0;
@@ -305,20 +303,9 @@ public abstract class AbstractSpaceLoginRestoreClientTest {
         closeBoth();
     }
 
-    /** The newest client chat line containing {@code needle} (case-insensitive), or null. */
-    protected String chatLineContaining(String needle) throws Exception {
-        com.google.gson.JsonArray lines = bot().reportChat(20).getAsJsonArray("lines");
-        if (lines == null) {
-            return null;
-        }
-        for (int i = 0; i < lines.size(); i++) {
-            String line = lines.get(i).getAsString();
-            if (line.toLowerCase(java.util.Locale.ROOT).contains(needle.toLowerCase(java.util.Locale.ROOT))) {
-                return line;
-            }
-        }
-        return null;
-    }
+    // `chatLineContaining` lived here, scraping the last twenty chat lines for a rendered sentence.
+    // Its only caller now awaits the game event that sentence announces: a chat line is a RENDERING
+    // of something the game did, so the thing it renders is what a test has to be about.
 
     /**
      * The shared subject of both positive legs: whatever route put the pilot in his seat in a cell,

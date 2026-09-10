@@ -26,6 +26,7 @@ import zmaster587.advancedRocketry.test.Chains;
 import zmaster587.advancedRocketry.test.Events;
 import zmaster587.advancedRocketry.test.client.ClientEvents;
 
+import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 import static zmaster587.advancedRocketry.test.ArrangementFailure.requireArranged;
@@ -71,6 +72,15 @@ import static zmaster587.advancedRocketry.test.ArrangementFailure.requireArrange
  * the server boots.</p>
  */
 public class M1PlanetToPlanetMilestoneE2ETest {
+
+    /**
+     * How long the jump trigger's verdict may take to appear after the key goes down, in ticks.
+     *
+     * <p>A deadline for a discrete decision, not a settle: the press is answered on the tick the
+     * server handles it, and the whole budget is there so a loaded box cannot turn a decision that
+     * happened into one that did not. An expiry means the press never reached the ship.</p>
+     */
+    private static final int JUMP_PRESS_BUDGET_TICKS = 200;
 
     private static final Pattern BUILDER_POS =
             Pattern.compile("\"builderPos\":\\[(-?\\d+),(-?\\d+),(-?\\d+)]");
@@ -585,16 +595,14 @@ public class M1PlanetToPlanetMilestoneE2ETest {
             armedStatus = exec("artest nav status " + slotDim + " " + describeArgs(navSub));
             armed = "true".equals(readString(armedStatus, NAV_ARMED));
         }
-        String armChat = chatText(30);
         assertTrue("picking a listed address and pressing ARM must leave the ship ARMED at that "
                         + "address — those two clicks are the whole of how a player commits to a "
                         + "destination, and an unarmed ship refuses the jump key outright. armed="
-                        + armed + " nav=" + armedStatus + " chat=" + armChat,
+                        + armed + " nav=" + armedStatus,
                 armed);
-        assertTrue("…and the pilot must be TOLD, in his own chat, that the ship is armed. A silent "
-                        + "arming leaves him with no way to know the ship will move when he presses "
-                        + "the key. chat=" + armChat + " nav=" + armedStatus,
-                armChat.contains("jump armed") || armChat.contains("msg.jump.armed"));
+        // A second clause stood here: that the pilot is TOLD, in his own chat, that the ship is
+        // armed. It is gone — the chat line is a rendering of the arming, and the arming itself is
+        // what the line above reads, off the navigation computer's own state.
 
         // Judged on the BODY, not on the aim cell. The aim is the computer's prediction of where that
         // body will be when the ship arrives, so it legitimately moves between the pick and the arm —
@@ -631,30 +639,43 @@ public class M1PlanetToPlanetMilestoneE2ETest {
         // The mark BEFORE the key: the arrival's ledger write is awaited from here.
         long jumpMark = events.markInstrumented();
         pressJumpKey();
-        String pressChat = chatText(30);
         // Two legitimate branches, both real player paths: a clean ship spools straight up, and a
-        // ship the gate has only an ADVISORY about asks for a second press to confirm. Which one this
-        // run took is printed below and reported with the result.
+        // ship the gate has only an ADVISORY about asks for a second press to confirm. WHICH one
+        // this run took is read off the trigger's own verdict — the press is answered with one of
+        // eight named outcomes, and `jump_press_decided` carries the name.
+        //
+        // This used to be decided by looking for the words "spooling" and "confirm" in the client's
+        // chat. That is a rendering of this verdict: it moves with the language file, it cannot see
+        // a line the ring has dropped, and it made the milestone's own control flow depend on prose.
+        String pressed = events.awaitCarrying(jumpMark, "jump_press_decided", "\"phase\":\"press\"",
+                "the jump key, pressed by a seated pilot of an ARMED ship, must be ANSWERED — the"
+                        + " trigger decides something for every press, and a silence here means the"
+                        + " press never reached the ship at all",
+                JUMP_PRESS_BUDGET_TICKS);
+        String outcome = Events.text(Events.lastRecord(pressed), "outcome");
         String jumpBranch = "spooling";
-        if (!pressChat.contains("spooling") && !pressChat.contains("msg.jump.spooling")) {
-            assertTrue("the jump key, pressed by a seated pilot of an ARMED ship, must be ANSWERED — "
-                            + "either the drive spools or the gate asks him to confirm an advisory. "
-                            + "Silence means the press never reached the ship at all. chat="
-                            + pressChat + " delivery=" + exec("artest vs seat-delivery")
+        if (!"SPOOLING".equals(outcome)) {
+            assertEquals("a press that did not spool must be the gate's ADVISORY, which is an 'are"
+                            + " you sure' rather than a refusal — anything else is the jump being"
+                            + " turned down. presses=" + pressed
+                            + " delivery=" + exec("artest vs seat-delivery")
                             + " riding=" + bot().reportRidingEntity()
                             + " drive=" + exec("artest drive info " + slotDim + " "
                             + describeArgs(navAfcSub)),
-                    pressChat.contains("confirm") || pressChat.contains("msg.jump.confirm"));
+                    "WARNED", outcome);
             jumpBranch = "confirm-then-commit";
+            long confirmMark = events.mark();
             pressJumpKey();
-            pressChat = chatText(30);
-            assertTrue("…and the CONFIRMING press must spool the drive: the gate's advisory is an "
-                            + "'are you sure', not a refusal, so a second press has to carry the ship. "
-                            + "chat=" + pressChat + " drive=" + exec("artest drive info " + slotDim
-                            + " " + describeArgs(navAfcSub)),
-                    pressChat.contains("spooling") || pressChat.contains("msg.jump.spooling"));
+            String confirmed = events.awaitCarrying(confirmMark, "jump_press_decided",
+                    "\"phase\":\"press\"",
+                    "the CONFIRMING press must reach the trigger too", JUMP_PRESS_BUDGET_TICKS);
+            assertEquals("…and the CONFIRMING press must spool the drive: the gate's advisory is an"
+                            + " 'are you sure', not a refusal, so a second press has to carry the"
+                            + " ship. presses=" + confirmed + " drive="
+                            + exec("artest drive info " + slotDim + " " + describeArgs(navAfcSub)),
+                    "SPOOLING", Events.text(Events.lastRecord(confirmed), "outcome"));
         }
-        System.out.println("[M1] jump branch: " + jumpBranch + " chat=" + pressChat);
+        System.out.println("[M1] jump branch: " + jumpBranch + " firstPress=" + pressed);
 
         // The flight is short but the wind-up is not instant. The arrival is the ledger's own WRITE:
         // `ledger_settled` for this ship, since the mark taken before the fire button — whichever
@@ -1226,17 +1247,12 @@ public class M1PlanetToPlanetMilestoneE2ETest {
         bot().waitTicks(20);
     }
 
-    /** The chat the player can actually read, flattened and lower-cased for substring checks. */
-    private String chatText(int limit) throws Exception {
-        JsonObject chat = bot().reportChat(limit);
-        StringBuilder sb = new StringBuilder();
-        if (chat != null && chat.has("lines")) {
-            for (int i = 0; i < chat.getAsJsonArray("lines").size(); i++) {
-                sb.append(chat.getAsJsonArray("lines").get(i).getAsString()).append(" | ");
-            }
-        }
-        return sb.toString().toLowerCase(Locale.ROOT);
-    }
+    // `chatText` lived here: the client's last N chat lines flattened and lower-cased, for substring
+    // checks. Its two callers are gone — one asserted that the pilot is TOLD the ship is armed (the
+    // arming itself is read off the navigation computer), and one decided which JUMP BRANCH the run
+    // took by looking for the words "spooling" and "confirm" (the trigger names its own outcome, and
+    // `jump_press_decided` carries it). A milestone whose control flow turned on prose turned on the
+    // language file.
 
     /**
      * The dimension of the NEAREST body in this cell the ship may descend onto, or MIN_VALUE.

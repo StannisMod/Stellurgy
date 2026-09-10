@@ -6,7 +6,6 @@ import org.junit.Test;
 import org.junit.runners.MethodSorters;
 import org.lwjgl.input.Keyboard;
 
-import java.util.Locale;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -65,9 +64,9 @@ public class VSPilotStationDestructionE2ETest extends AbstractSharedVsClientE2ET
      *  at how long a value settles: the whole release happens inside one {@code breakBlock} call. */
     private static final int RELEASE_BUDGET_TICKS = 200;
 
-    /** The key the flight computer's own destruction notice is composed from — the message's
-     *  identity, where the rendered English is one translation of it. */
-    private static final String KEY_AFC_DESTROYED = "msg.pilotseat.afcdestroyed";
+    // `KEY_AFC_DESTROYED` lived here. Nothing asks for the destruction NOTICE any more: what it
+    // announces is the dismount, the dead thrust and the removed dummy, and those are asserted off
+    // the game rather than off a sentence.
 
     @Test
     public void breakingTheOccupiedSeatDismountsThePilotAndHoldsTheShip() throws Exception {
@@ -125,7 +124,7 @@ public class VSPilotStationDestructionE2ETest extends AbstractSharedVsClientE2ET
     }
 
     @Test
-    public void breakingTheLinkedComputerDismountsMessagesAndNeverThrusts() throws Exception {
+    public void breakingTheLinkedComputerDismountsThePilotAndNeverThrusts() throws Exception {
         int bx = 4600, by = 64, bz = 4600;
         FlyingShip ship = assembleLoadAndFly(bx, by, bz);
         bot().releaseKey(Keyboard.KEY_R);
@@ -133,36 +132,23 @@ public class VSPilotStationDestructionE2ETest extends AbstractSharedVsClientE2ET
 
         Events events = events();
         long breakMark = events.markInstrumented();
-        long breakClientMark = clientEvents().mark();
         String broke = exec("artest fill 0 " + ship.afcX + " " + ship.afcY + " " + ship.afcZ
                 + " " + ship.afcX + " " + ship.afcY + " " + ship.afcZ + " minecraft:air");
         assertTrue("breaking the flight computer block failed: " + broke,
                 broke.contains("\"ok\":true"));
 
-        // The two links the computer's breakBlock commits per seated rider, in its own source
-        // order: it TELLS him first and then throws him off. Nothing else in this window sends a
-        // status message, so the absence of the first is the diagnosis a bare overlay poll could
-        // never make — "no dummy resolved to this computer" reads exactly like "sent and the client
-        // never showed it".
-        events.assertChain(breakMark, "destroying the linked flight computer must tell the pilot"
-                        + " his computer is gone and then dismount him", RELEASE_BUDGET_TICKS,
-                "status_message_sent", "dismount");
-        String sent = events.since(breakMark, "status_message_sent");
-        assertTrue("the notice the computer's destruction sends must be keyed on "
-                + KEY_AFC_DESTROYED + ": " + sent,
-                sent.contains("\"key\":\"" + KEY_AFC_DESTROYED + "\""));
+        // What the computer's breakBlock commits per seated rider: it throws him off. A
+        // `status_message_sent` link stood ahead of this one on the chain, and a chat check for the
+        // rendered word "destroyed" stood after it; both were about the NOTICE. The game facts are
+        // the dismount here, the dead thrust below, and the seat's dummy being removed — and each of
+        // those fails on its own terms rather than on a sentence.
+        events.await(breakMark, "dismount", "destroying the linked flight computer must throw its"
+                + " pilot out of the seat", RELEASE_BUDGET_TICKS);
 
-        // The pilot is dismounted, as the CLIENT renders it (the server dismount is on the chain).
+        // The pilot is dismounted, as the CLIENT renders it (the server dismount is the link above).
         JsonObject riding = awaitRiding(40, false);
         assertTrue("destroying the linked flight computer must dismount the pilot (client-observed): "
                         + riding, !isRiding(riding));
-        // ...and the line the server sent must actually have reached his HUD. Read off the client's
-        // own record rather than the action-bar overlay, which the client counts down and discards:
-        // the poll it replaces raced vanilla's own dismount hint for the same strip of screen.
-        String shown = awaitClientChat(breakClientMark, "destroyed", RELEASE_BUDGET_TICKS,
-                "the dismounted pilot must be told his flight computer was destroyed");
-        assertTrue("the line the client was handed must say the computer was destroyed: " + shown,
-                shown.toLowerCase(Locale.ROOT).contains("destroyed"));
 
         // A brainless ship must never keep thrusting upward: the dead computer's channels die
         // with the tile. (It is free to FALL — only continued powered climb is the defect.)

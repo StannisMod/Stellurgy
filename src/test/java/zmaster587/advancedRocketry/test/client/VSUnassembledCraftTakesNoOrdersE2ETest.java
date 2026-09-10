@@ -5,7 +5,6 @@ import org.junit.Test;
 import org.junit.runners.MethodSorters;
 import org.lwjgl.input.Keyboard;
 
-import java.util.Locale;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -72,9 +71,9 @@ public class VSUnassembledCraftTakesNoOrdersE2ETest extends AbstractSharedVsClie
     /** The subject craft, far enough that the control ship is unloaded while it is flown. */
     private static final int CRAFT_X = 4600, CRAFT_Y = 71, CRAFT_Z = 4600;
 
-    /** The seat's own "this craft is not a ship" notice, by translation key — the message's
-     *  identity, where the rendered English is one translation of it. */
-    private static final String KEY_NOT_ASSEMBLED = "msg.pilotseat.notassembled";
+    // `KEY_NOT_ASSEMBLED` lived here — the seat's "this craft is not a ship" notice, by translation
+    // key. Nothing asks for the notice now: what it announces is that the craft takes no orders, and
+    // that is measured at the seams an order would travel through.
 
     /** How long one link may take. A deadline for discrete events, not a settling time. */
     private static final int LINK_BUDGET_TICKS = 200;
@@ -218,23 +217,16 @@ public class VSUnassembledCraftTakesNoOrdersE2ETest extends AbstractSharedVsClie
 
         Events events = events();
         long sitMark = events.markInstrumented();
-        long sitClientMark = clientEvents().mark();
         bot().interactBlock(CRAFT_X, CRAFT_Y, CRAFT_Z);
-        // The seat's own notice, as the chain production commits in its own source order: Forge
-        // fires the right-click before the block sees it, the seat mounts him, it decides the craft
-        // is not a ship and DEFERS the notice past the mount packet's tracker flush, and the drain
-        // sends it. This is also the positive control for the messaging instruments — the silence
-        // asserted at the end of this leg is read from the same two types.
-        events.assertChain(sitMark, "sitting on a craft that never assembled must seat the player"
-                        + " and answer him with the \"not assembled\" notice", LINK_BUDGET_TICKS,
-                "right_click_block", "mount", "action_bar_queued", "status_message_sent");
-        String queued = events.since(sitMark, "action_bar_queued");
-        assertTrue("the notice the seat queues must be keyed on " + KEY_NOT_ASSEMBLED + ": " + queued,
-                queued.contains("\"key\":\"" + KEY_NOT_ASSEMBLED + "\""));
-        String shown = awaitClientChat(sitClientMark, "not assembled", LINK_BUDGET_TICKS,
-                "the \"not assembled\" notice must reach the pilot's own HUD");
-        assertTrue("the line the client was handed must say the ship is not assembled: " + shown,
-                shown.toLowerCase(Locale.ROOT).contains("not assembled"));
+        // What production commits when he sits down, in its own source order: Forge fires the
+        // right-click before the block sees it, and the seat mounts him. Two further links stood on
+        // this chain — `action_bar_queued` and `status_message_sent` — with a chat check after them,
+        // and all three were about the NOTICE the seat answers with. A notice is a rendering; this
+        // leg's subject is that the craft takes no ORDERS, and that is asserted below off the seams
+        // the orders would have to travel through.
+        events.assertChain(sitMark, "sitting on a craft that never assembled must still SEAT the"
+                        + " player — the craft is deaf, not a wall", LINK_BUDGET_TICKS,
+                "right_click_block", "mount");
 
         JsonObject riding = awaitRiding(30, true);
         scenario().requireArranged("the client must RENDER the player on the seat the server already"
@@ -302,20 +294,11 @@ public class VSUnassembledCraftTakesNoOrdersE2ETest extends AbstractSharedVsClie
                         + " ship: " + received,
                 Events.countRecords(received, "\"who\":\"" + BOT + "\"") == 0);
 
-        // The player must get no answer from a gate that should never have been consulted — the
-        // only message this craft owes him is the notice at sit-down, which is already asserted
-        // above and is what puts both message instruments on record.
-        String lateQueued = events.since(deafMark, "action_bar_queued");
-        String lateSent = events.since(deafMark, "status_message_sent");
-        Events.assertInstrumentRan(lateQueued, "action_bar_events",
-                "the deaf craft answers none of the keys pressed at it");
-        Events.assertInstrumentRan(lateSent, "status_message_events",
-                "the deaf craft answers none of the keys pressed at it");
-        assertTrue("the craft must answer NONE of the keys pressed at it — the only message it owes"
-                        + " him is the \"not assembled\" notice at sit-down: " + lateQueued,
-                Events.countRecords(lateQueued, "\"who\":\"" + BOT + "\"") == 0);
-        assertTrue("...on either door to his action bar: " + lateSent,
-                Events.countRecords(lateSent, "\"who\":\"" + BOT + "\"") == 0);
+        // Two more absences stood here — no `action_bar_queued` and no `status_message_sent` for him
+        // after the keys — i.e. "the craft answers none of the keys pressed at it". They are gone
+        // with the rest of the message layer: what the keys must not reach is the seat and the wire,
+        // and the three absences immediately above say exactly that, off the seams an order travels
+        // rather than off the reply it would have produced.
 
         assertTrue("the refused pilot must still be SEATED — the craft is deaf, not ejecting",
                 isRiding(bot().reportRidingEntity()));

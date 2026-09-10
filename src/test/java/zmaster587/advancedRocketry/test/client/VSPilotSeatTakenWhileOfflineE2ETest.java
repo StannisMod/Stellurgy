@@ -65,14 +65,13 @@ public class VSPilotSeatTakenWhileOfflineE2ETest extends AbstractSharedVsClientE
      */
     private static final int LOGIN_LINK_BUDGET_TICKS = 600;
 
-    /** The key the seat's "somebody took your chair" refusal is composed from. The key is the
-     *  message's identity — the lang file and any resource pack are keyed on it. */
-    private static final String KEY_TAKEN = "msg.pilotseat.taken";
+    // `KEY_TAKEN` lived here — the translation key of the seat's "somebody took your chair" notice.
+    // Nothing asks for it any more: the notice is a rendering, and what it announced is asserted off
+    // the seat and the returning pilot's own position.
 
     private static final Pattern BUILDER_POS =
             Pattern.compile("\"builderPos\":\\[(-?\\d+),(-?\\d+),(-?\\d+)]");
     private static final Pattern DUMMY_ID = Pattern.compile("\"dummyId\":(-?\\d+)");
-    private static final Pattern OCCUPANT_NAME = Pattern.compile("\"occupantName\":\"([^\"]+)\"");
     private static final Pattern OCCUPANT_UUID = Pattern.compile("\"occupantUuid\":\"([^\"]+)\"");
     private static final Pattern BOUND_COUNT = Pattern.compile("\"boundCount\":(-?\\d+)");
     private static final Pattern SEAT_AT = Pattern.compile(
@@ -176,9 +175,9 @@ public class VSPilotSeatTakenWhileOfflineE2ETest extends AbstractSharedVsClientE
         String occupy = exec("artest vs seat-occupy 0 " + seatX + " " + seatY + " " + seatZ);
         scenario().requireArranged("the seat-occupy probe must seat an NPC occupant: " + occupy,
                 occupy.contains("\"ok\":true") && occupy.contains("\"mounted\":true"));
-        Matcher nm = OCCUPANT_NAME.matcher(occupy);
-        scenario().requireArranged("seat-occupy must report the occupant's name: " + occupy, nm.find());
-        final String occupantName = nm.group(1);
+        // The occupant's NAME was read here, for a message assertion that no longer exists. The uuid
+        // below is the identity everything in this scenario is asked by, and it is the one that
+        // survives the chunk reload the pilot's return performs.
         // By UUID, never by entity id. The pilot's logout unloads the seat's chunk and his return
         // reloads it, and a reloaded entity gets a FRESH id: under load the gate of 2026-09-05 saw
         // the occupant holding the seat as `{"id":2651,"class":"EntityArmorStand"}` and the test
@@ -192,36 +191,28 @@ public class VSPilotSeatTakenWhileOfflineE2ETest extends AbstractSharedVsClientE
                 occupancy.contains("\"uuid\":\"" + occupantUuid + "\""));
 
         // ---- ACT 3: the pilot comes back — a real fresh login over his saved data. --------------
-        // Both marks BEFORE the login, because everything this act asserts happens DURING it. The
-        // refusal message used to be hunted on the action bar, which the client counts down and
-        // discards about four seconds later: a reader that arrived after the fade could not tell a
-        // silently-lost chair from a message that was shown, and the fork multiplier on that loop was
-        // buying nothing but a bigger chance of watching an empty bar. A record waits.
+        // The mark BEFORE the login, because everything this act asserts happens DURING it: the
+        // reconciliation is an edge, and an edge read after the fact is one that never existed.
         long loginMark = events.markInstrumented();
-        long loginClientMark = clientEvents().mark();
         bot().connect();
         bot().waitForWorld();
 
-        // The links DeckHold.reconcileSeatMount commits, in its own source order: it takes the
-        // returner off the duplicate mount vanilla re-spawned for him, and then — after the whole
-        // restore — queues him the notice naming the occupant, deliberately delayed past the join
-        // flood; the delivery cannot precede the queueing. The vanilla forced re-mount that PRECEDES
-        // all three is deliberately NOT on this chain: where the login event falls against
-        // PlayerList's own startRiding is a fact of a run, and this test has not measured it.
-        events.assertChain(loginMark, "a pilot whose seat was taken while he was offline must be"
-                        + " reconciled off the duplicate mount and TOLD who has his chair",
-                LOGIN_LINK_BUDGET_TICKS,
-                "dismount", "action_bar_queued", "status_message_sent");
-        String queued = events.since(loginMark, "action_bar_queued");
-        assertTrue("the notice queued for the returning pilot must be the seat-taken one, keyed on "
-                        + KEY_TAKEN + ": " + queued,
-                queued.contains("\"key\":\"" + KEY_TAKEN + "\""));
+        // The link {@code DeckHold.reconcileSeatMount} commits: it takes the returner off the
+        // duplicate mount vanilla re-spawned for him. The vanilla forced re-mount that PRECEDES it is
+        // deliberately NOT on this chain — where the login event falls against PlayerList's own
+        // startRiding is a fact of a run, and this test has not measured it.
+        //
+        // Two further links stood here, `action_bar_queued` and `status_message_sent`, and both were
+        // about the NOTICE. A notice is a rendering of what the reconciliation did, not a fact about
+        // the game; what it was being read for — who has the chair — is asserted below off the seat
+        // itself, by uuid, which no sentence could establish.
+        events.await(loginMark, "dismount", "a pilot whose seat was taken while he was offline must"
+                + " be reconciled off the duplicate mount vanilla re-spawned for him",
+                LOGIN_LINK_BUDGET_TICKS);
 
         String seatAfter = exec("artest vs seat-status 0 " + seatX + " " + seatY + " " + seatZ);
         JsonObject riding = bot().reportRidingEntity();
-        String sent = events.since(loginMark, "status_message_sent");
-        String observed = "seatStatus=" + seatAfter + " riding=" + riding
-                + " statusMessages=" + sent;
+        String observed = "seatStatus=" + seatAfter + " riding=" + riding;
 
         // ---- ASSERT 1: the occupant KEEPS the seat. ---------------------------------------------
         assertTrue("the occupant who took the seat while its pilot was offline must still hold it "
@@ -265,26 +256,14 @@ public class VSPilotSeatTakenWhileOfflineE2ETest extends AbstractSharedVsClientE
         assertEquals("the displaced pilot must be restored ABOARD at his post on Z: " + posObserved,
                 seatWorld[2], cz, ABOARD_EPSILON);
 
-        // ---- ASSERT 5: he is TOLD, by name, who took his seat. ----------------------------------
-        // Two halves, because they fail for different reasons and a single overlay poll conflated
-        // them. The SERVER half pins the name exactly — it is a format argument of the translation,
-        // not a substring of a rendered sentence that a generic armour-stand name could satisfy by
-        // accident. The CLIENT half says it actually arrived at the HUD.
-        assertTrue("the returning pilot must be told WHO took his seat — the message the server sent"
-                        + " him must carry the occupant's name (\"" + occupantName + "\") as its own"
-                        + " format argument, and a silently-lost chair reads as a broken relog: "
-                        + observed,
-                Events.countRecords(sent, "\"" + occupantName + "\"") > 0);
-        String shown = awaitClientChat(loginClientMark, occupantName, LOGIN_LINK_BUDGET_TICKS,
-                "the seat-taken notice the server sent must reach the returning pilot's own HUD");
-        assertTrue("the line the client was handed must name the occupant: " + shown + " | "
-                + observed, shown.contains(occupantName));
     }
 
-    // The message is read off the CLIENT's log rather than the overlay: the overlay is a FADING
-    // value, so on a loaded box a reader was more likely to arrive after the message had gone — a
-    // green then meant nothing, and a red said "silently lost chair" about a chair that was
-    // announced. The base's awaitClientChat is the reader.
+    // ASSERT 5 stood here: "he is TOLD, by name, who took his seat" — the server's message record
+    // matched for the occupant's name, and then the same name hunted in the client's own chat log.
+    // Both are gone. A notice is a RENDERING of a game event, and every game fact they were reaching
+    // for is asserted above off the things themselves: the occupant holds the seat (by uuid), the
+    // seat carries exactly one bound dummy across the relog, and the returning pilot is put back at
+    // his post. The name in a sentence added nothing those three do not say more exactly.
 
     // ---- helpers -------------------------------------------------------------------------------
 

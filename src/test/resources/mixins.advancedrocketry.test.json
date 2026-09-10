@@ -29,6 +29,8 @@
     "MixinShipCrossingServiceEvents",
     "MixinVSShipCrossingOpsEvents",
     "MixinShipLedgerEvents",
+    "MixinTimeSkipPolicyEvents",
+    "MixinJumpTriggerEvents",
     "MixinQueryableShipDataEvents",
     "MixinTileAdvancedFlightComputerEvents",
     "MixinPhysicsObjectEvents",

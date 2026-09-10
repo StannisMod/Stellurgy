@@ -7,18 +7,17 @@ import org.junit.Test;
 
 import zmaster587.advancedRocketry.space.CellWorldMapper;
 import zmaster587.advancedRocketry.space.GalacticCoord;
+import zmaster587.advancedRocketry.test.Events;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotEquals;
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
 /**
  * The two legs where the restore must NOT put anybody on a ship: the pilot whose ship the server no
- * longer knows (he is told so, in his own chat, and lands somewhere survivable), and the player who
- * was never aboard at all (nothing happens to him).
+ * longer knows (the restore orphans him ON THAT GROUND, and lands him somewhere survivable), and the
+ * player who was never aboard at all (nothing happens to him).
  *
  * <p>These are the control legs of the restore. Without them, "everybody ends up on a ship" passes
  * the positive legs just as well as a working restore does.</p>
@@ -29,12 +28,32 @@ import static org.junit.Assert.assertTrue;
 public class SpaceLoginRestoreRefusalE2ETest extends AbstractSpaceLoginRestoreClientTest {
 
     /**
+     * The restore's own name for "his aboard record names a ship the ledger does not have" — the
+     * value {@code login_restored} carries as {@code reason}. Mirrors {@code LoginRestore.Reason}.
+     *
+     * <p>One of four orphan causes, and the point of asking by name: {@code NO_TAG} and
+     * {@code CELL_UNAVAILABLE} land the player in exactly the same place for entirely different
+     * reasons, and a test that could not tell them apart would pass on a fixture that never wrote an
+     * aboard record at all.</p>
+     */
+    private static final String REASON_SHIP_UNKNOWN = "SHIP_UNKNOWN";
+
+    /**
+     * How long the restore's verdict may take to appear after the client has its world back, in
+     * ticks. A deadline for a discrete decision production makes once per login — not a settle.
+     */
+    private static final int RESTORE_VERDICT_BUDGET_TICKS = 200;
+
+    /**
      * The other end of the restore: when the server genuinely has no record of a returning pilot's
      * ship, he is TOLD so — not silently stood up at his spawn point wondering where his ship went.
      *
-     * <p>This is a client test for the only reason that matters: the subject is a line of text a
-     * player reads. The server can be asked whether it decided he was orphaned; it cannot be asked
-     * whether he was informed. The bot's own chat log can.</p>
+     * <p>The subject is the RESTORE'S VERDICT and where it actually put him — {@code login_restored}
+     * carrying {@code SHIP_UNKNOWN}, then the server's own record of his placement. It used to be the
+     * chat line he reads, which is a rendering of that verdict: it says nothing about which orphan
+     * cause fired, and it is at the mercy of the language file and of how much has scrolled past.
+     * This stays a CLIENT test because the second half of the claim is still the client's — that he
+     * is riding nothing when he comes back.</p>
      *
      * <p><b>Why the ship is removed rather than the ledger damaged.</b> "The ledger has no such ship"
      * is one verdict reached from several directions — a ship dismantled while its owner was away, a
@@ -49,12 +68,16 @@ public class SpaceLoginRestoreRefusalE2ETest extends AbstractSpaceLoginRestoreCl
      * one server's lifetime where the arrangement can still speak about them.</p>
      */
     @Test
-    public void aPilotWhoseShipTheServerNoLongerKnowsIsToldSoWhenHeComesBack() throws Exception {
+    public void aPilotWhoseShipTheServerNoLongerKnowsIsOrphanedWhenHeComesBack() throws Exception {
         seatThePilotAboardHisShip();
 
-        // The notice must not already be on screen, or "it is there afterwards" says nothing.
-        assertNull("nothing may have told him about a missing ship before one went missing: "
-                + bot().reportChat(20), chatLineContaining(SHIP_LOST_NEEDLE));
+        // The mark, BEFORE the ship is taken away. It is what makes the verdict below attributable:
+        // a restore decided at any earlier point in this class's fixture is outside the window and
+        // cannot satisfy the wait, which is the job the "nothing has told him yet" chat check used to
+        // do — badly, since a notice scrolled out of the last twenty lines read the same as one that
+        // was never sent.
+        Events events = events();
+        long mark = events.markInstrumented();
 
         String forgot = exec("artest space ledger-forget " + arrangedShipId);
         assertTrue("arrangement: the ledger must have KNOWN this ship before being told to forget it - "
@@ -65,12 +88,22 @@ public class SpaceLoginRestoreRefusalE2ETest extends AbstractSpaceLoginRestoreCl
 
         bot().reconnect();
         bot().waitForWorld();
-        bot().waitTicks(40);
 
-        String told = chatLineContaining(SHIP_LOST_NEEDLE);
-        assertNotNull("a pilot whose ship the server cannot find must be TOLD, in chat, rather than "
-                + "appearing at his spawn point with no explanation: " + bot().reportChat(20)
-                + " serverPos=" + exec("artest player position-of " + BOT), told);
+        // THE VERDICT, as the restore's own: it read his aboard record, could not find the ship it
+        // names, and fell to the orphan branch. `reason` is production's own enum value at the one
+        // place the decision is made.
+        //
+        // What stood here was an assertion about a CHAT LINE. That is a rendering of this decision:
+        // it moves when the language file moves, it depends on how deep the client's ring is and on
+        // whether the line had been drawn yet, and it cannot distinguish "no such ship" from any
+        // other orphan cause, which `reason` does by construction.
+        String restored = events.awaitCarrying(mark, "login_restored",
+                "\"reason\":\"" + REASON_SHIP_UNKNOWN + "\"",
+                "a pilot whose ship the server cannot find must be ORPHANED by the restore, on that"
+                        + " ground and not on some other, rather than silently appearing at his spawn"
+                        + " point", RESTORE_VERDICT_BUDGET_TICKS);
+        assertFalse("...and the restore must not count him as aboard anything: " + restored,
+                restored.contains("\"aboard\":true"));
 
         // And he really is the orphan the message describes: out of the cell, off his ship.
         //
