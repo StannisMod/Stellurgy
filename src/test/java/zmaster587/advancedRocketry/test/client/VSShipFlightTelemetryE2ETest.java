@@ -632,13 +632,17 @@ public class VSShipFlightTelemetryE2ETest extends AbstractSharedVsClientE2ETest 
         exec("tp @a " + (bx + 0.5) + " " + (by + 6) + " " + (bz + 0.5) + " 0 0");
         bot().waitTicks(20);
 
-        // The LOAD, as production's own event. This was a bounded poll of `ship-info` for
+        // READINESS, as production's own event. This was a bounded poll of `ship-info` for
         // `managed:true`, under a comment calling that the one gate no event records — which stopped
-        // being true: `ShipEvent.ShipLoadedEvent` is recorded as `ship_usable` and the VS base waits
-        // on it. And `managed` was never the fact it was read as: it is a literal `true` in the
-        // report builder, so it meant "the lookup found a ship and built a report" and the wait was
-        // on nothing. The mark is `spawnMark`, taken before the assembly — the load fires ONCE and is
-        // an edge, so a mark taken here could miss it entirely.
+        // being true: `ShipEvent.ShipLoadedEvent` is published on the tick a craft becomes ready to
+        // be flown, recorded as `ship_usable`, and the base waits on it.
+        //
+        // And `managed` answers a WEAKER question than this scenario needs. It is true once a
+        // PhysicsObject for the id exists in this world; readiness is that object being physics-ready
+        // with its surrounding chunks cached, which is what makes it step. A craft that is loaded and
+        // not yet ready answers `managed:true` and does not move — and this scenario immediately
+        // flies, spins and drops it. The mark is `spawnMark`, taken before the assembly: readiness is
+        // an EDGE that fires once, so a mark taken here could miss it entirely.
         awaitShipUsable(events, spawnMark, scenarioShipId);
         String info = shipInfo();
         double[] where = new double[]{

@@ -967,7 +967,9 @@ public class TestProbeCommand extends CommandBase {
             }
             double[] omega = zmaster587.advancedRocketry.integration.vs.VSIntegration
                     .shipAngularVelocityById(world, shipId);
-            send(sender, jsonMap(shipInfoMap(shipId, s, omega)));
+            int[] gates = zmaster587.advancedRocketry.integration.vs.VSIntegration
+                    .shipPhysicsGatesById(world, shipId);
+            send(sender, jsonMap(shipInfoMap(shipId, s, omega, gates)));
             return;
         }
         // ship-info <dim> <x> <y> <z> [maxDist] — state of the loaded ship NEAREST to (x,y,z).
@@ -1003,7 +1005,11 @@ public class TestProbeCommand extends CommandBase {
             double[] omega = zmaster587.advancedRocketry.integration.vs.VSIntegration
                     .nearestShipAngularVelocity(world, parseDoubleOr(args[2], 0),
                             parseDoubleOr(args[3], 0), parseDoubleOr(args[4], 0), maxDist);
-            send(sender, jsonMap(shipInfoMap(shipId, s, omega)));
+            // Asked by the id this lookup just resolved, so `ready` describes the SAME craft the
+            // rest of the report does rather than whatever a second positional lookup would reach.
+            int[] gates = zmaster587.advancedRocketry.integration.vs.VSIntegration
+                    .shipPhysicsGatesById(world, shipId);
+            send(sender, jsonMap(shipInfoMap(shipId, s, omega, gates)));
             return;
         }
         // to-world <dim> <x> <y> <z> <subX> <subY> <subZ> — map a SUBSPACE point of the ship whose
@@ -2551,9 +2557,24 @@ public class TestProbeCommand extends CommandBase {
      * forms cannot drift into two different shapes — a caller that switches from the first to the
      * second must not have to re-learn the reply.
      */
-    private static Map<String, Object> shipInfoMap(String shipId, double[] s, double[] omega) {
+    private static Map<String, Object> shipInfoMap(String shipId, double[] s, double[] omega,
+                                                   int[] gates) {
         Map<String, Object> m = new LinkedHashMap<>();
+        // LOADED, and it says only that: this method is reached once a PhysicsObject for the id was
+        // found in this world's ship manager, and the not-found paths answer `managed:false` before
+        // getting here. It is NOT "ready to be flown" — see `ready` below, which is the question
+        // three tests read this field as answering (they polled it, then flew, spun or dropped the
+        // craft) until they were moved onto the `ship_usable` event.
         m.put("managed", true);
+        // READY: the substrate's initial-ticks delay is over and its resolver has the surrounding
+        // chunks — the same two conjuncts the physics loop selects on, and the pair
+        // `ShipLoadedAnnouncer` publishes `ShipEvent.ShipLoadedEvent` for. `false` here on a
+        // `managed:true` ship is a craft that exists and does not move yet, which is exactly the
+        // state a caller that means "I can fly this now" must not mistake for success.
+        //
+        // A READING, not a wait: readiness is an EDGE and the event above is how a test should wait
+        // for it. This field is for a report that has to say which side of that edge it is on.
+        m.put("ready", gates != null && gates.length >= 3 && gates[0] == 1 && gates[2] == 1);
         m.put("id", shipId == null ? "" : shipId);
         m.put("posX", s[0]);
         m.put("posY", s[1]);

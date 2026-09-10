@@ -483,13 +483,17 @@ public class VSShipRenderPoseSkewE2ETest extends AbstractClientE2ETest {
         exec("tp @a " + (bx + 0.5) + " " + (by + 6) + " " + (bz + 0.5) + " 0 0");
         bot().waitTicks(20);
 
-        // The LOAD, as production's own event. This was a bounded poll of `ship-info` for
+        // READINESS, as production's own event. This was a bounded poll of `ship-info` for
         // `managed:true`, under a comment saying nothing in the vocabulary records that transition —
-        // which stopped being true: `ShipEvent.ShipLoadedEvent` is recorded as `ship_usable` and the
-        // VS base waits on it. And `managed` was never the fact it was read as: it is a literal
-        // `true` in the report builder, so it meant "the lookup found a ship" and the wait was on
-        // nothing. The mark is `spawnMark`, taken before the assembly — the load fires ONCE and is an
-        // edge, so a mark taken here could miss it entirely.
+        // which stopped being true: `ShipEvent.ShipLoadedEvent` is published on the tick a craft
+        // becomes ready to be flown, and is recorded as `ship_usable`.
+        //
+        // And `managed` answers a WEAKER question than this scenario needs: it is true once a
+        // PhysicsObject for the id exists here, where readiness is that object being physics-ready
+        // with its surrounding chunks cached. This test rolls its ship past vertical, so a pose read
+        // off a loaded-but-not-yet-stepping craft is a pose that has not begun to move. The mark is
+        // `spawnMark`, taken before the assembly: readiness is an EDGE that fires once, so a mark
+        // taken here could miss it entirely.
         // Written out rather than called: this class pays its own harness and does not extend the VS
         // base that offers `awaitShipUsable`. Filtered on the SHIP, because on a shared world every
         // neighbour's craft becomes usable in the same log.

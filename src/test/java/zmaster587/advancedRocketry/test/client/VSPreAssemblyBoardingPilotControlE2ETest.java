@@ -165,6 +165,16 @@ public class VSPreAssemblyBoardingPilotControlE2ETest extends AbstractSharedVsCl
      * first pass whenever no dismount is standing at all.
      */
     private static final int SEATED_CONFIRM_SAMPLES = 12;
+
+    /**
+     * How long the CLIENT may take to perform a mount the server has already recorded, in ticks.
+     *
+     * <p>A deadline for a discrete record, not a settle: the client mounts when it is told who is
+     * riding what, so what is waited out is one server-to-client round trip. The number is the
+     * budget the 20-iteration poll it replaces spent ({@code 20 * TICKS_PER_SAMPLE}), kept so the
+     * conversion changes the FORM of the wait and not how long it is willing to wait.</p>
+     */
+    private static final int CLIENT_MOUNT_BUDGET_TICKS = 20 * TICKS_PER_SAMPLE;
     private static final int SETTLE_MAX_SAMPLES = 240;
     private static final double SETTLE_EPS = 0.05;
     private static final double MAX_CONTROL_DRIFT = MIN_CLIMB / 4.0;
@@ -252,6 +262,9 @@ public class VSPreAssemblyBoardingPilotControlE2ETest extends AbstractSharedVsCl
         // never wove answers with exactly the empty log a boarding that never happened does.
         Events events = events();
         long boardMark = events.markInstrumented();
+        // The CLIENT's own mark beside it: his client performs the mount when it is told who is
+        // riding what, and that is the half read below.
+        long boardOnClient = clientEvents().mark();
 
         String boardingEvidence = (how == Boarding.RIGHT_CLICK)
                 ? boardByRightClick()
@@ -277,13 +290,18 @@ public class VSPreAssemblyBoardingPilotControlE2ETest extends AbstractSharedVsCl
 
         // The boarding's own return value cannot be trusted to mean "he sat down" - confirm it from
         // what the client reports it is riding, WHAT that thing is, and WHERE it is.
-        JsonObject riding = awaitRiding(20);
-        scenario().requireArranged("the CLIENT never caught up with a boarding the SERVER has already "
-                        + "recorded (the chain above), so nothing below would be measured on a pilot "
-                        + "this client believes is aboard. boarding=" + how
-                        + " evidence=" + boardingEvidence + " riding=" + riding
-                        + " serverMountRecord=" + events.since(boardMark, "mount"),
-                isRiding(riding));
+        JsonObject riding;
+        try {
+            riding = ridingOnceTheClientHasMounted(boardOnClient, CLIENT_MOUNT_BUDGET_TICKS,
+                    "the CLIENT must catch up with a boarding the SERVER has already recorded (the"
+                            + " chain above), or nothing below is measured on a pilot this client"
+                            + " believes is aboard. boarding=" + how + " evidence="
+                            + boardingEvidence);
+        } catch (AssertionError notArranged) {
+            scenario().arrangementFailed(notArranged.getMessage()
+                    + " | serverMountRecord=" + events.since(boardMark, "mount"));
+            throw notArranged; // unreachable: arrangementFailed always throws
+        }
         scenario().requireArranged("the bot is riding SOMETHING, but not "
                         + "the pilot seat's mount, so it is not piloting anything. boarding=" + how
                         + " riding=" + riding,
@@ -304,6 +322,11 @@ public class VSPreAssemblyBoardingPilotControlE2ETest extends AbstractSharedVsCl
         // assembly does to this pilot — throwing him out of his seat, or swapping his stale mount
         // for the relocated one — is recorded after this point and nowhere else.
         long assemblyMark = events.markInstrumented();
+        // The CLIENT's own mark beside it: the rebind swaps his stale mount for the relocated one,
+        // and his client performs that mount. Read below as a record rather than sampled — a read
+        // taken between the tear-down and the rebuild answers `riding:false` for a pilot the
+        // assembly is in the middle of re-seating, which is the very verdict this leg reports.
+        long assemblyOnClient = clientEvents().mark();
         String assemble = assembleFixture();
         scenario().requireArranged("a with-pilot-seat build must route to a ship: " + assemble,
                 assemble.contains("\"ok\":true"));
@@ -348,7 +371,14 @@ public class VSPreAssemblyBoardingPilotControlE2ETest extends AbstractSharedVsCl
             mounts = events.since(assemblyMark, "mount");
             seatedOnTheRecord = seatedOnTheServersRecord(mounts, dismounts);
         }
-        JsonObject ridingAfter = awaitRiding(20);
+        // The CLIENT's half of the same claim, as the LINK it is: the rebind's re-seat, performed by
+        // his own client. The CONTRACT form — a client the assembly never re-seated is exactly what
+        // this leg exists to catch, so it fails as an assertion and not as an arrangement.
+        JsonObject ridingAfter = ridingOnceTheClientHasMounted(assemblyOnClient,
+                CLIENT_MOUNT_BUDGET_TICKS,
+                "a player who sat in the pilot seat before assembling his ship must be left seated by"
+                        + " the assembly, and his own client must perform the re-seat. boarding="
+                        + how);
         // Half of this claim is an ABSENCE, so the instrument that would have recorded a dismount is
         // shown RUNNING first. `entity_position_writers` is announced by the same mixin that carries
         // the mount and dismount hooks, and its injections are all required — it is woven whole or
@@ -746,14 +776,37 @@ public class VSPreAssemblyBoardingPilotControlE2ETest extends AbstractSharedVsCl
         return worst;
     }
 
-    /** Polls until the client reports it is riding something, then returns that last report. */
-    private JsonObject awaitRiding(int attempts) throws Exception {
-        JsonObject riding = bot().reportRidingEntity();
-        for (int attempt = 0; attempt < attempts && !isRiding(riding); attempt++) {
-            bot().waitTicks(TICKS_PER_SAMPLE);
-            riding = bot().reportRidingEntity();
+    /**
+     * Wait for the CLIENT to perform the mount, then read what it is riding — ONCE.
+     *
+     * <p>This polled {@code reportRidingEntity} until it answered "riding". The client PERFORMS a
+     * mount when the server tells it who is riding what, so that is a record on its own log, and a
+     * poll of the state it produces can land in the gap between a tear-down and a rebuild and answer
+     * `riding:false` for a pilot who is about to be seated. With a mark taken before the stimulus the
+     * record cannot be missed however the two sides interleave.</p>
+     *
+     * <p>The CONTRACT form: it fails as an ordinary assertion. The boarding gate below wraps it into
+     * an arrangement failure, exactly as {@code requireChain} wraps {@code assertChain} — a client
+     * that never caught up with a boarding disproves nothing about flying a ship, while a client the
+     * ASSEMBLY never re-seated is this class's subject.</p>
+     *
+     * @param clientMark taken on {@code clientEvents()} BEFORE the stimulus that seats him
+     */
+    private JsonObject ridingOnceTheClientHasMounted(long clientMark, int budgetTicks, String what)
+            throws Exception {
+        try {
+            clientEvents().awaitMatching(clientMark, "mount",
+                    seen -> Events.countRecords(seen, "\"ok\":true") > 0,
+                    "seating him (ok:true)", what, budgetTicks);
+        } catch (AssertionError never) {
+            // Which silence: a client that never mounted him and a recorder that never wove are the
+            // same empty window, and they ask for opposite investigations.
+            Events.assertInstrumentRan(clientEvents().since(clientMark, "mount"),
+                    "entity_mount_writes", "the client's own mounts must be observed at all before an"
+                            + " absent one can be read as a client that did not follow the boarding");
+            throw never;
         }
-        return riding;
+        return bot().reportRidingEntity();
     }
 
     /**

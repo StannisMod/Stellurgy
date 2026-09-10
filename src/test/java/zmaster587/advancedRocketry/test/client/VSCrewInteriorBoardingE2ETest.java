@@ -756,24 +756,21 @@ public class VSCrewInteriorBoardingE2ETest extends AbstractSharedVsClientE2ETest
         exec("tp @a " + (bx + 0.5) + " " + (by + 6) + " " + (bz + 0.5) + " 0 0");
         bot().waitTicks(20);
 
-        // An ARRANGEMENT gate, and it stays a probe read: `ship_spawned` says the REGISTRY knows the
-        // ship, which is a different fact from "a physics object is loaded here with the client
-        // present" - the state everything below needs. What is polled is that LOAD, of the craft
-        // already named above; the previous form re-derived the identity here from a bounded lookup
-        // at the base and accepted whatever answered within 24 blocks of it.
-        String info = "";
-        double[] where = null;
-        for (int i = 0; i < 40 && where == null; i++) {
-            bot().waitTicks(5);
-            info = exec("artest vs ship-info 0 id " + scenarioShipId);
-            if (!info.contains("\"managed\":true")) {
-                continue;
-            }
-            where = new double[]{readDouble(info, POS_X), readDouble(info, POS_Y),
-                    readDouble(info, POS_Z)};
-        }
-        assertTrue("this scenario's ship (" + scenarioShipId + ") must LOAD with the client present;"
-                + " last reply was: " + info, where != null);
+        // An ARRANGEMENT gate, and its own argument stands: `ship_spawned` says the REGISTRY knows
+        // the ship, which is a different fact from the craft being live here — the state everything
+        // below needs. What that argument was aimed at was `ship_spawned`; the fact itself HAS an
+        // event, and it is a stronger one than the poll it replaces.
+        //
+        // `ship_usable` is published on the tick a craft becomes ready to be FLOWN (physics-ready,
+        // surrounding chunks cached), where the `managed:true` polled here is true as soon as a
+        // PhysicsObject for the id exists. This scenario then releases a body inside the hull and
+        // reads where the deck resolver puts it, so a craft that is loaded and not yet stepping is
+        // not the state it needs. The mark is `spawnMark`, taken before the assembly: readiness is an
+        // EDGE that fires once, so a mark taken here could miss it entirely.
+        awaitShipUsable(events, spawnMark, scenarioShipId);
+        String info = exec("artest vs ship-info 0 id " + scenarioShipId);
+        double[] where = new double[]{readDouble(info, POS_X), readDouble(info, POS_Y),
+                readDouble(info, POS_Z)};
 
         // Fixture completeness by measurement: how many blocks did the assembled ship actually
         // get (region census + the ship's own blockPositions count + iron in the grown
