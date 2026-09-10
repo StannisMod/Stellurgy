@@ -120,6 +120,35 @@ public final class TestTrace {
     }
 
     /**
+     * The WORLD-routed pair, for an observation point inside a world's own method.
+     *
+     * <p>Kept separate from the entity-routed form above rather than folded into it, on the same
+     * principle that splits {@link #instrumentHere} off: where the observation is about what THIS
+     * world did, the world in hand is the exact answer, and routing by an entity's {@code world}
+     * field is an approximation of it that happens to agree. It stops agreeing on a dimension
+     * transfer, where the entity is removed from the old world before {@code setWorld} points it at
+     * the new one — the record would be filed against the world the entity is ABOUT to belong to.</p>
+     */
+    public static void instrument(net.minecraft.world.World world, String name) {
+        if (world != null && world.isRemote) {
+            com.github.stannismod.forge.testing.client.bridge.ForgeTestClientBootstrap
+                    .noteInstrumentEntered(name);
+        } else {
+            TestEventLog.noteInstrumentEntered(name);
+        }
+    }
+
+    /** {@link #record} routed by the world the event happened IN — see {@link #instrument(net.minecraft.world.World, String)}. */
+    public static void record(net.minecraft.world.World world, String type, String payload) {
+        if (world.isRemote) {
+            com.github.stannismod.forge.testing.client.bridge.ForgeTestClientBootstrap
+                    .recordEvent(type, payload);
+        } else {
+            TestEventLog.record("server", world.getTotalWorldTime(), type, payload);
+        }
+    }
+
+    /**
      * The nearest game-code frames above this call — the CALLER, which for a position write or a
      * dismount is exactly the writer an arrival timeline exists to name. Infrastructure frames (the
      * JRE, the event bus, this class, the mixin's own synthetic method) are skipped; the rest keep

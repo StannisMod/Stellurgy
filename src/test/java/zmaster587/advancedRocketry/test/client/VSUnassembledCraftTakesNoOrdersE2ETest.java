@@ -38,8 +38,9 @@ import static org.junit.Assert.assertTrue;
  *   <li><b>Leg 2 (subject, a linked craft that never assembled)</b> — arranged by the
  *       {@code artest vs seat-link} probe, which links a seat WITHOUT assembling (the only
  *       deterministic way to reproduce the post-failure state), and verified to be linked-but-not-a-
- *       ship before anything is pressed. The seat's own "not assembled" notice is asserted first, so
- *       the messaging instruments are known to speak before silence is used as evidence.</li>
+ *       ship before anything is pressed. The seat's own SIT DECISION is asserted first — production
+ *       answering, where production answers it, that no ship manages this craft — so the leg's
+ *       premise is measured before any silence is read as evidence for it.</li>
  * </ul>
  *
  * <h2>Why every negative here is asked of the LOG</h2>
@@ -219,14 +220,28 @@ public class VSUnassembledCraftTakesNoOrdersE2ETest extends AbstractSharedVsClie
         long sitMark = events.markInstrumented();
         bot().interactBlock(CRAFT_X, CRAFT_Y, CRAFT_Z);
         // What production commits when he sits down, in its own source order: Forge fires the
-        // right-click before the block sees it, and the seat mounts him. Two further links stood on
-        // this chain — `action_bar_queued` and `status_message_sent` — with a chat check after them,
-        // and all three were about the NOTICE the seat answers with. A notice is a rendering; this
-        // leg's subject is that the craft takes no ORDERS, and that is asserted below off the seams
-        // the orders would have to travel through.
+        // right-click before the block sees it, the seat mounts him, and the seat then decides
+        // whether a ship manages it — which is what decides whether anything will answer his keys.
+        // Two further links stood on this chain — `action_bar_queued` and `status_message_sent` —
+        // with a chat check after them, and all three were about the NOTICE the seat answers with.
+        // A notice is a rendering. The DECISION it renders is the third link, recorded off
+        // production's own `isManagedByShip` verdict at the moment production asks for it.
         events.assertChain(sitMark, "sitting on a craft that never assembled must still SEAT the"
-                        + " player — the craft is deaf, not a wall", LINK_BUDGET_TICKS,
-                "right_click_block", "mount");
+                        + " player and the seat must then decide his controls are dead — the craft"
+                        + " is deaf, not a wall", LINK_BUDGET_TICKS,
+                "right_click_block", "mount", "pilot_seat_sit_decided");
+        // ...and the decision must be the one this leg is built on. The record is present only when
+        // the conjunction REACHED that call, i.e. the block has a linked pilot-seat tile — which is
+        // the arrangement `seat-link` asserted above — so `managed:false` here is the refusal
+        // itself, taken where production took it, rather than a re-derivation of production's test.
+        String sat = events.since(sitMark, "pilot_seat_sit_decided");
+        // Printed on a GREEN run, because this record is the leg's PREMISE and it is new: a premise
+        // whose reading appears only inside a failure message is one nobody has ever looked at.
+        System.out.println("[vs-unassembled] sit decisions: " + Events.records(sat));
+        assertTrue("the seat must have decided that NO ship manages this craft — with a ship"
+                        + " managing it the whole leg below would be measuring a real ship's"
+                        + " refusals, and every silence it reads would mean something else: " + sat,
+                Events.countRecords(sat, "\"managed\":false") > 0);
 
         JsonObject riding = awaitRiding(30, true);
         scenario().requireArranged("the client must RENDER the player on the seat the server already"

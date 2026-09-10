@@ -78,20 +78,22 @@ public class VSPilotStationDestructionE2ETest extends AbstractSharedVsClientE2ET
         // stands between the ship and flying the last command forever.
         Events events = events();
         long breakMark = events.markInstrumented();
+        long breakClientMark = clientEvents().mark();
         String broke = exec("artest fill 0 " + ship.seatX + " " + ship.seatY + " " + ship.seatZ
                 + " " + ship.seatX + " " + ship.seatY + " " + ship.seatZ + " minecraft:air");
         assertTrue("breaking the seat block failed: " + broke, broke.contains("\"ok\":true"));
         try {
-            // The release, as the two links breakBlock commits in ITS OWN source order: it resolves
-            // the seat's linked computer and tells it the station is gone (which drops the pilot's
-            // live input and zeroes the cruise setpoint), and only THEN throws the rider off. A red
-            // here names which of the two did not happen — where the altitude window below reports
-            // one number whether the computer was never told, was told and ignored it, or was told
-            // and the substrate coasted.
+            // The release, as the three links breakBlock commits in ITS OWN source order: it
+            // resolves the seat's linked computer and tells it the station is gone (which drops the
+            // pilot's live input and zeroes the cruise setpoint), throws the rider off, and kills
+            // the mount he was sitting on. A red here names which of the three did not happen —
+            // where the altitude window below reports one number whether the computer was never
+            // told, was told and ignored it, or was told and the substrate coasted.
             events.assertChain(breakMark, "destroying the OCCUPIED pilot seat must tell the linked"
-                            + " flight computer its control station is gone and then throw the rider"
-                            + " off", RELEASE_BUDGET_TICKS,
-                    "control_station_lost", "dismount");
+                            + " flight computer its control station is gone, throw the rider off,"
+                            + " and remove the mount he was on", RELEASE_BUDGET_TICKS,
+                    "control_station_lost", "dismount", "entity_removed");
+            assertRemovedThisScenariosDummy(events, breakMark, ship.dummyId, "server");
 
             // The rider must be DISMOUNTED as the CLIENT renders it. The server dismount is already
             // on the chain above, so an expiry here is a replication statement and not an open
@@ -117,10 +119,8 @@ public class VSPilotStationDestructionE2ETest extends AbstractSharedVsClientE2ET
             bot().releaseKey(Keyboard.KEY_R);
         }
 
-        // The seat's mount dummy must be gone, as the CLIENT sees the world.
-        int dummies = clientDummyCount();
-        assertTrue("the destroyed seat's mount dummy must be removed (client sees " + dummies + ")",
-                dummies == 0);
+        // ...and the CLIENT must lose it too, off its own world's removal — the replication half.
+        awaitDummyRemovedOnClient(breakClientMark, ship.dummyId);
     }
 
     @Test
@@ -132,23 +132,24 @@ public class VSPilotStationDestructionE2ETest extends AbstractSharedVsClientE2ET
 
         Events events = events();
         long breakMark = events.markInstrumented();
+        long breakClientMark = clientEvents().mark();
         String broke = exec("artest fill 0 " + ship.afcX + " " + ship.afcY + " " + ship.afcZ
                 + " " + ship.afcX + " " + ship.afcY + " " + ship.afcZ + " minecraft:air");
         assertTrue("breaking the flight computer block failed: " + broke,
                 broke.contains("\"ok\":true"));
 
-        // What the computer's breakBlock commits per seated rider: it throws him off. A
-        // `status_message_sent` link stood ahead of this one on the chain, and a chat check for the
-        // rendered word "destroyed" stood after it; both were about the NOTICE.
+        // What the computer's breakBlock commits per seated rider, in its own source order: it
+        // throws him off, then kills the mount he was on. A `status_message_sent` link stood ahead
+        // of both, and a chat check for the rendered word "destroyed" after them; both were about
+        // the NOTICE, and both are gone.
         //
-        // ONE link, and not a chain, deliberately. `breakBlock` does three things per rider — send
-        // the message, dismount him, kill the dummy — and after the message is struck out only ONE
-        // of them is recorded: nothing publishes an entity's REMOVAL (the log's only entity
-        // lifecycle event is `entity_joined_world`). So the order this contract has is not
-        // assertable, and the dummy's disappearance is read as the settled state it is, at the end
-        // of the leg. Restoring an ordered chain here means recording the removal first.
-        events.await(breakMark, "dismount", "destroying the linked flight computer must throw its"
-                + " pilot out of the seat", RELEASE_BUDGET_TICKS);
+        // This was ONE link for a while, because with the message struck out only the dismount was
+        // recorded — nothing published an entity's REMOVAL, so the pair had no second half. The
+        // removal is now an event of its own and the order is assertable again.
+        events.assertChain(breakMark, "destroying the linked flight computer must throw its pilot"
+                        + " out of the seat and then remove the mount he was on",
+                RELEASE_BUDGET_TICKS, "dismount", "entity_removed");
+        assertRemovedThisScenariosDummy(events, breakMark, ship.dummyId, "server");
 
         // The pilot is dismounted, as the CLIENT renders it (the server dismount is the link above).
         JsonObject riding = awaitRiding(40, false);
@@ -164,9 +165,7 @@ public class VSPilotStationDestructionE2ETest extends AbstractSharedVsClientE2ET
                         + "dead computer's last command (y1=" + y1 + " y2=" + y2 + ")",
                 y2 <= y1 + 2.0);
 
-        int dummies = clientDummyCount();
-        assertTrue("the seat's mount dummy must be removed when the computer is destroyed "
-                        + "(client sees " + dummies + ")", dummies == 0);
+        awaitDummyRemovedOnClient(breakClientMark, ship.dummyId);
     }
 
     // ---- Shared arrangement --------------------------------------------------------------------
@@ -183,6 +182,12 @@ public class VSPilotStationDestructionE2ETest extends AbstractSharedVsClientE2ET
         String id;
         int seatX, seatY, seatZ;
         int afcX, afcY, afcZ;
+        /**
+         * The mount dummy this scenario seated the bot on, by entity id — the SUBJECT of every
+         * removal assertion below. Entity ids are the server's and are replicated, so the same
+         * number names the client's copy, which is what lets one identity be asked of both logs.
+         */
+        int dummyId;
     }
 
     /**
@@ -242,6 +247,7 @@ public class VSPilotStationDestructionE2ETest extends AbstractSharedVsClientE2ET
                 + " " + ship.seatZ);
         Matcher dm = DUMMY_ID.matcher(mountInfo);
         assertTrue("seat-mount-at must report a dummy id: " + mountInfo, dm.find());
+        ship.dummyId = Integer.parseInt(dm.group(1));
         String mount = exec("artest player mount-entity " + dm.group(1));
         assertTrue("bot must mount the seat dummy: " + mount, mount.contains("\"mounted\":true"));
         bot().waitTicks(10);
@@ -279,18 +285,64 @@ public class VSPilotStationDestructionE2ETest extends AbstractSharedVsClientE2ET
     }
 
     /**
-     * Wait for the client's HUD to be HANDED a line containing {@code needle}, and return its text.
+     * The removal on the chain above was THIS scenario's mount, by entity id.
      *
-     * <p>The client half of a message, off {@code client_chat_received} — the harness records every
-     * line the in-game HUD is given, chat and action bar alike, so a record made seconds ago is
-     * still there when this asks. The overlay poll it replaces read a FADING value that vanilla's
-     * own "press X to dismount" hint writes over on exactly this path, so its silence meant nothing.</p>
+     * <p><b>Why this stands beside {@code assertChain} rather than inside it.</b> A chain assertion
+     * matches on the record TYPE, and on a world several scenarios share, any entity leaving any
+     * loaded chunk produces an {@code entity_removed} — so the ORDER claim ("a removal came after
+     * the dismount") is satisfiable by a neighbour's mob despawning. The chain buys the order; this
+     * buys the subject, and neither buys the other. The two together are what the old bounded "how
+     * many dummies are within 64 blocks" read could not say at all: it saw a count at one instant
+     * and could not tell a removal that happened from one that happened and was undone.</p>
      *
-     * <p>Written here rather than on the shared base because this class does not own that base;
-     * three other classes in this family carry the same lines for the same reason.</p>
+     * @param log which log is being read, for the failure message — a mark belongs to ONE of them
      */
-    private int clientDummyCount() throws Exception {
-        return bot().reportEntities("EntityDummy", 64.0).getAsJsonArray("entities").size();
+    private static void assertRemovedThisScenariosDummy(Events events, long mark, int dummyId,
+                                                        String log) throws Exception {
+        String removals = events.since(mark, "entity_removed");
+        String needle = "\"e\":" + dummyId + ",";
+        // Printed on a GREEN run, not only inside the failure: this record and its reader are both
+        // new, and a defect in the READER cannot be found in a channel that opens only when the
+        // SUBJECT breaks. It is also what tells the next reader what normal looks like here.
+        // The DROP COUNT is printed with it, and that is not decoration: this type's ring turned
+        // over 2605 times per leg on the run that introduced it, with every assertion passing. A
+        // reader who only ever sees the records cannot tell a quiet log from a truncated one.
+        System.out.println("[vs-pilot-station] " + log + " removals for e=" + dummyId + ": "
+                + Events.records(removals)
+                + " (evicted: " + Events.droppedOf(removals, "entity_removed") + ")");
+        // The composition of what fills that ring was measured once, with
+        // `fieldLines(since(0, "entity_removed"), "cls")` here: 255 of 256 records were
+        // `EntityFallingBlock` (every scenario bulk-fills its build site and the sand dies on
+        // landing), which is why that class is now skipped by the recorder. What remains is passive
+        // mobs leaving loaded chunks — 67 evictions across both legs of this class, against a
+        // window of a few ticks between each mark and its read. The measurement is not left in: it
+        // prints 256 lines, and the eviction count above is what a reader needs.
+        assertTrue("the mount dummy this scenario seated the bot on (e=" + dummyId + ") must be the"
+                        + " entity that was REMOVED on the " + log + " — a removal of something"
+                        + " else satisfies the chain's type and says nothing about this seat: "
+                        + removals,
+                Events.countRecords(removals, needle) > 0);
+    }
+
+    /**
+     * The CLIENT's own world lost the dummy — the replication half, and an unmissable one.
+     *
+     * <p>The client removes it a tick or so after the server does (the destroy-entity packet marks
+     * it dead; {@code WorldClient.tickEntities} then sweeps it), so this is a wait rather than a
+     * read. It replaces {@code reportEntities("EntityDummy", 64)} at the end of each leg: a count of
+     * what is nearby NOW is a sample, it is answered by any dummy in range including a neighbour's,
+     * and its zero is equally produced by a client that never had the entity at all.</p>
+     */
+    private void awaitDummyRemovedOnClient(long clientMark, int dummyId) throws Exception {
+        String seen = clientEvents().awaitCarrying(clientMark, "entity_removed",
+                "\"e\":" + dummyId + ",",
+                "the destroyed station's mount dummy (e=" + dummyId + ") must be removed from the"
+                        + " CLIENT's world too — the server's removal is on the chain above, so an"
+                        + " expiry here is a replication statement and not an open question about"
+                        + " whether the seat let go of him", RELEASE_BUDGET_TICKS);
+        System.out.println("[vs-pilot-station] client removal for e=" + dummyId + ": "
+                + Events.records(seen)
+                + " (evicted: " + Events.droppedOf(seen, "entity_removed") + ")");
     }
 
     private static boolean isRiding(JsonObject riding) {

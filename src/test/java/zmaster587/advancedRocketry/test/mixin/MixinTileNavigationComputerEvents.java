@@ -6,6 +6,7 @@ import net.minecraft.util.math.BlockPos;
 import net.minecraftforge.fml.relauncher.Side;
 
 import org.spongepowered.asm.mixin.Mixin;
+import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
@@ -17,9 +18,9 @@ import zmaster587.advancedRocketry.test.trace.TestTrace;
 import zmaster587.advancedRocketry.tile.TileNavigationComputer;
 
 /**
- * The navigation console's four facts as events: a command ARRIVED at the console, the console
- * AIMED the ship at a body, a crystal was COPIED into the ship's own, and the console TOLD the
- * player something.
+ * The navigation console's five facts as events: a command ARRIVED at the console, the console
+ * AIMED the ship at a body, the pilot's commitment to that destination was DECIDED, a crystal was
+ * COPIED into the ship's own, and the console TOLD the player something.
  *
  * <h2>What each event is</h2>
  *
@@ -37,6 +38,15 @@ import zmaster587.advancedRocketry.tile.TileNavigationComputer;
  *       HEAD): the body's dimension id and the cell it was last observed in. A pick with
  *       {@code INVALID_PLANET} still lands here (the method delegates to the hand-typed form after
  *       this hook has run), and the record says so through {@code targetDim}.</li>
+ *   <li>{@code nav_arm_decided} — the pilot's COMMITMENT to the chosen destination changed, or was
+ *       refused. Three outcomes, from two of production's own methods: {@code ARMED} and
+ *       {@code REFUSED_NO_TARGET} off the return of {@code arm()} (which refuses with no target —
+ *       there is nothing to commit to), and {@code DISARMED} off {@code disarm()} when the flag it
+ *       reads was actually set. {@code by} carries the caller, because three different things stand
+ *       a console down: the pilot pressing the button again, the jump trigger after a jump commits,
+ *       and the {@code artest nav arm} probe. This is the game fact that arming used to publish
+ *       nothing of — the ARM button's only record was the packet's arrival, so a chain about arming
+ *       had no second half except the announcement.</li>
  *   <li>{@code crystal_copied} — the add-only copy from the source slot into the ship's crystal
  *       finished ({@code copySourceIntoShipCrystal}, every RETURN), with the number of addresses
  *       gained or refreshed and whether a ship crystal was even inserted. A {@code changed} of
@@ -67,6 +77,13 @@ import zmaster587.advancedRocketry.tile.TileNavigationComputer;
  * sent by anything other than the console's own {@code tell} — the jump gate's own messages at the
  * helm are another seam's.</p>
  *
+ * <p><b>And one stand-down that {@code nav_arm_decided} deliberately cannot see</b>: re-aiming the
+ * console. {@code aim()} clears the {@code armed} field DIRECTLY rather than calling
+ * {@code disarm()} (it is about to {@code markDirty()} and notify the block anyway), so a pick that
+ * un-arms a committed console produces {@code nav_target_picked} and no arm record. That is the
+ * honest reading — the pick IS the event there — and a test asserting "re-aiming stands the console
+ * down" reads the tile's state after {@code nav_target_picked}, never a silence here.</p>
+ *
  * <p>Two records mean less than they look like. {@code nav_console_told} is taken at the HEAD of
  * {@code tell}, which says nothing at all when the player is null — the hook records that case
  * anyway, with {@code who:"null"}, so a record here is "the console was ASKED to say this", never
@@ -79,6 +96,10 @@ import zmaster587.advancedRocketry.tile.TileNavigationComputer;
 public abstract class MixinTileNavigationComputerEvents {
 
     private static final String INSTRUMENT = "nav_computer_events";
+
+    /** The commitment flag {@code disarm()} guards on — read, never written. See {@link
+     *  #arTest$disarmDecided}. */
+    @Shadow private boolean armed;
 
     @Inject(method = "useNetworkData", at = @At("HEAD"))
     private void arTest$commandReceived(EntityPlayer player, Side side, byte id, NBTTagCompound nbt,
@@ -104,6 +125,41 @@ public abstract class MixinTileNavigationComputerEvents {
                 + "\",\"targetDim\":" + dimId
                 + ",\"target\":\"" + (observed == null ? "null" : TestTrace.json(observed.cellKey()))
                 + "\"");
+    }
+
+    /**
+     * The console was ARMED, or refused for want of a destination — production's own verdict, read
+     * off the return it hands its caller. {@code arm()} has one meaning of {@code false} and the
+     * method's own javadoc states it ("Refused with no target: there is nothing to commit to"), so
+     * the outcome is a rename of the boolean rather than a re-derivation of anything.
+     */
+    @Inject(method = "arm", at = @At("RETURN"))
+    private void arTest$armDecided(CallbackInfoReturnable<Boolean> cir) {
+        TestTrace.instrumentHere(INSTRUMENT);
+        TileNavigationComputer self = (TileNavigationComputer) (Object) this;
+        TestTrace.recordHere("nav_arm_decided", "\"pos\":\"" + arTest$xyz(self.getPos())
+                + "\",\"outcome\":\"" + (cir.getReturnValue() ? "ARMED" : "REFUSED_NO_TARGET")
+                + "\",\"by\":\"" + TestTrace.json(TestTrace.callerTrail()) + "\"");
+    }
+
+    /**
+     * The console STOOD DOWN — recorded on the EDGE, and the edge is production's own condition
+     * rather than a copy of it: {@code disarm()} opens with {@code if (armed)} and does nothing
+     * else, so the shadowed flag read at HEAD is exactly "this call is about to change something".
+     * Without that read the hook would record a no-op every time anything defensively disarms an
+     * already-unarmed console, and "the pilot stood the jump down" would stop being findable in the
+     * noise.
+     */
+    @Inject(method = "disarm", at = @At("HEAD"))
+    private void arTest$disarmDecided(CallbackInfo ci) {
+        TestTrace.instrumentHere(INSTRUMENT);
+        if (!armed) {
+            return; // production's own guard: nothing changes, so nothing happened
+        }
+        TileNavigationComputer self = (TileNavigationComputer) (Object) this;
+        TestTrace.recordHere("nav_arm_decided", "\"pos\":\"" + arTest$xyz(self.getPos())
+                + "\",\"outcome\":\"DISARMED\""
+                + ",\"by\":\"" + TestTrace.json(TestTrace.callerTrail()) + "\"");
     }
 
     // RETURN, not TAIL: the method has two exits (no ship crystal -> 0; the copy's count) and both

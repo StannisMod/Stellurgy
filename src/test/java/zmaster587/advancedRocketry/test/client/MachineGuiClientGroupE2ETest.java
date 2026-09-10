@@ -50,9 +50,10 @@ import static zmaster587.advancedRocketry.test.client.ClientGuiTestSupport.scree
  *       world-wide, and narrows it to {@link Plot#contains}.</li>
  *   <li><b>A GUI that must stay open.</b> {@link #thePilotCopiesPicksAndArmsAtTheConsoleWithNothingButClicks()}
  *       works with the console still open — the full client reset would close the very screen it is
- *       about to click. It reads what each click DID (the command reaching the console, and the
- *       console's own armed state) rather than the reply it produced: the replies were chat, and a
- *       chat line is a rendering of the thing the click changed.</li>
+ *       about to click. It reads what each click DID (the command reaching the console, the
+ *       console's own arm/disarm/refuse decision, and the armed state that survives it) rather than
+ *       the reply it produced: the replies were chat, and a chat line is a rendering of the thing
+ *       the click changed.</li>
  * </ul>
  *
  * <p>The lane is wide (128) because two members need more than a 64-block box: the railgun pair
@@ -751,15 +752,15 @@ public class MachineGuiClientGroupE2ETest extends AbstractSharedClientE2ETest {
      *
      * <p>What is pinned, in the order the pilot does it:</p>
      * <ol>
-     *   <li><b>Arming with nowhere to go is refused, and said out loud.</b> The negative comes first
-     *       because it doubles as the proof that a click on this GUI reaches the server at all —
-     *       and that proof is now the console's own record of the command arriving, with the
-     *       refusal reaching the pilot's screen as the second half rather than as the whole of
-     *       it.</li>
+     *   <li><b>Arming with nowhere to go is refused.</b> The negative comes first because it
+     *       doubles as the proof that a click on this GUI reaches the server at all — and that
+     *       proof is the console's own record of the command arriving, with the console's REFUSAL
+     *       as the second half of the pair rather than the sentence it answers with.</li>
      *   <li><b>Copying a brought crystal does not empty it.</b></li>
      *   <li><b>The console lists what the ship now knows</b>, read off the real GUI's buttons.</li>
      *   <li><b>Picking a listed address aims the ship at THAT address.</b></li>
-     *   <li><b>Arm, then disarm</b> — each answered in chat, each reflected in the console state.</li>
+     *   <li><b>Arm, then disarm</b> — each a decision the console records, each reflected in the
+     *       state that outlives it.</li>
      * </ol>
      *
      * <p>Runs on a console standing in the world, NOT on an assembled ship: the harness's
@@ -802,23 +803,29 @@ public class MachineGuiClientGroupE2ETest extends AbstractSharedClientE2ETest {
         scenario().asserting("arming with no destination leaves the console unarmed");
         long refusalMark = events.markInstrumented();
         bot().clickButtonById(BUTTON_ARM);
-        // The click REACHES the console, and the console stays unarmed. The two message links that
-        // stood between them — the console's own tell, matched on a key, and the resolved line hunted
-        // in the client's chat — are gone: what they said is that a refusal was announced, and what
-        // this leg is about is that nothing was armed. Distinguishing "the click never arrived" from
-        // "it arrived and was refused" is still done, by the link below.
+        // The click REACHES the console, and the console REFUSES it. The two message links that
+        // stood between those — the console's own tell, matched on a key, and the resolved line
+        // hunted in the client's chat — are gone: what they said is that a refusal was announced,
+        // and what this leg is about is that nothing was armed.
         //
-        // ONE link, and not a chain — here and at the ARM/disarm pair below, for the same reason.
-        // The console records four things (`nav_command_received`, `nav_target_picked`,
-        // `crystal_copied`, `nav_console_told`), and of those only the first is a game fact about an
-        // ARM click: picking a body and copying a crystal are other buttons, and the tell is the
-        // message. ARMING ITSELF publishes nothing — it is a state on the tile — so the ordered pair
-        // this used to assert existed only because its second half was the announcement. The state
-        // is read once, after the link, which is what a settled value is for. (The COPY click below
-        // keeps its chain: `crystal_copied` is a game fact and follows the command.)
-        events.await(refusalMark, "nav_command_received", "an ARM click with nowhere to go must"
-                        + " REACH the console — a click that never arrived and a console that"
-                        + " refused are different failures", 150);
+        // This was ONE link for a while, because arming published nothing of its own: it is a state
+        // on the tile, so once the announcement was struck out the ordered pair had no second half.
+        // The COMMITMENT is now a decision of its own (`nav_arm_decided`, off the return of
+        // production's `arm()`), which is what makes the refusal assertable as a refusal rather
+        // than as an unchanged flag — and it separates the two failures the settled read below
+        // cannot: a console that refused, and a console that armed something and lost it.
+        events.assertChain(refusalMark, "an ARM click with nowhere to go must REACH the console and"
+                        + " be REFUSED there — a click that never arrived, one that was refused,"
+                        + " and one that armed and forgot are three different failures", 150,
+                "nav_command_received", "nav_arm_decided");
+        String refusals = events.since(refusalMark, "nav_arm_decided");
+        // Printed on a GREEN run: `nav_arm_decided` and its three outcomes are new here, and a
+        // reading that only ever appears inside a failure is a reading nobody has checked.
+        System.out.println("[nav-console] arm decisions after the empty ARM click: "
+                + Events.records(refusals));
+        assertTrue("arming with nowhere to go must be refused FOR WANT OF A DESTINATION — the only"
+                        + " meaning production's arm() has for false: " + refusals,
+                Events.countRecords(refusals, "\"outcome\":\"REFUSED_NO_TARGET\"") > 0);
         String afterRefusal = exec("artest nav status " + where);
         assertFalse("arming with no destination chosen must leave the console UNARMED: "
                 + afterRefusal, readBoolean(afterRefusal, ARMED));
@@ -883,13 +890,18 @@ public class MachineGuiClientGroupE2ETest extends AbstractSharedClientE2ETest {
         scenario().asserting("arming a chosen destination is accepted, confirmed, and real");
         long armMark = events.markInstrumented();
         bot().clickButtonById(BUTTON_ARM);
-        // The click reaches the console; the console is then ARMED. Two links stood between them —
+        // The click reaches the console; the console then COMMITS. Two links stood between those —
         // `nav_console_told` matched on the message key, and the resolved line hunted in the
-        // client's own chat — and both were about the ANSWER rather than about the state. The line
-        // below already said so in its own message ("the message is not the state"); it is now the
-        // only thing asserted, because the state is the contract and the sentence is a rendering.
-        events.await(armMark, "nav_command_received", "an ARM click on a chosen destination must"
-                + " reach the console", 150);
+        // client's own chat — and both were about the ANSWER rather than about the act. What
+        // replaces them is the act itself: production's own arm() verdict, in order after the
+        // command that asked for it. The settled state is still read afterwards, because the
+        // decision and the flag that survives it are two facts and a jump fires off the second.
+        events.assertChain(armMark, "an ARM click on a chosen destination must reach the console and"
+                        + " the console must COMMIT to it", 150,
+                "nav_command_received", "nav_arm_decided");
+        String arms = events.since(armMark, "nav_arm_decided");
+        assertTrue("clicking ARM with a destination chosen must ARM the console, not refuse it: "
+                        + arms, Events.countRecords(arms, "\"outcome\":\"ARMED\"") > 0);
         String armedStatus = exec("artest nav status " + where);
         assertTrue("arming a chosen destination must leave the console ARMED: " + armedStatus,
                 readBoolean(armedStatus, ARMED));
@@ -897,8 +909,17 @@ public class MachineGuiClientGroupE2ETest extends AbstractSharedClientE2ETest {
         scenario().asserting("pressing the same button again stands the jump down, and says so");
         long disarmMark = events.markInstrumented();
         bot().clickButtonById(BUTTON_ARM);
-        events.await(disarmMark, "nav_command_received", "a second ARM click must reach the console",
-                150);
+        events.assertChain(disarmMark, "a second ARM click must reach the console and STAND IT"
+                        + " DOWN", 150, "nav_command_received", "nav_arm_decided");
+        String disarms = events.since(disarmMark, "nav_arm_decided");
+        System.out.println("[nav-console] arm decisions: armed=" + Events.records(arms)
+                + " disarmed=" + Events.records(disarms));
+        // DISARMED and not "ARMED again": the record is taken on the EDGE, so a console that was
+        // already unarmed produces nothing here at all — which is exactly the failure a state read
+        // alone cannot see, because an unarmed console reads unarmed either way.
+        assertTrue("the second click must be the console STANDING DOWN — a record of anything else"
+                        + " means the first click did not leave it armed: " + disarms,
+                Events.countRecords(disarms, "\"outcome\":\"DISARMED\"") > 0);
         String disarmedStatus = exec("artest nav status " + where);
         assertFalse("a disarmed console must not stay armed: " + disarmedStatus,
                 readBoolean(disarmedStatus, ARMED));

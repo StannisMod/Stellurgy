@@ -319,6 +319,31 @@ public final class Events {
         return new MarkOrWhyNot(env.get("seq").getAsLong(), "");
     }
 
+    /**
+     * How many records of {@code type} the ring EVICTED, from the reply's own {@code droppedByType}.
+     *
+     * <p>Every failure message in this class tells its reader to check this counter before reading a
+     * gap as an absence — and until this verb existed there was no way to ask for it except by
+     * eyeballing the raw reply, which is a thing nobody does on a run that PASSED. So a recorder
+     * whose own ring turns over hundreds of times per scenario looks healthy right up to the day a
+     * window happens to straddle the eviction, and then reds somewhere else entirely.</p>
+     *
+     * <p><b>Measured 2026-09-10, which is why this is here</b>: a newly added {@code entity_removed}
+     * recorder evicted <b>2605</b> records in one scenario leg (and {@code entity_joined_world}
+     * 2555 beside it) while every assertion on it passed. The number reached a human only because a
+     * deliberately broken assertion printed the whole envelope.</p>
+     *
+     * @return the eviction count, or {@code 0} when the reply reports none for this type
+     */
+    public static long droppedOf(String reply, String type) {
+        JsonObject env = envelope(reply);
+        if (!env.has("droppedByType") || !env.get("droppedByType").isJsonObject()) {
+            return 0L;
+        }
+        JsonObject byType = env.getAsJsonObject("droppedByType");
+        return byType.has(type) ? byType.get(type).getAsLong() : 0L;
+    }
+
     /** The most recent record in a {@code since} reply, or {@code null} when it holds none — the
      *  "what is the latest" question a reader used to answer by reading a {@code last*} static, now
      *  answered by a record that names its body and its tick. */
