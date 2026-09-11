@@ -54,7 +54,16 @@ import static org.junit.Assert.assertTrue;
  * entity at extreme Y — log flood, and it races probe replies;
  * (3) after a SECOND relocation the ship's physics goes inert (neither pilot key nor push-ship
  * moves it) and the pilot-key path dies after a dismount&rarr;re-seat across the map.
- * The extreme-|X| precision leg stays an open follow-up until (3) is settled.</p>
+ *
+ * <p><b>(3) first half: RE-TAKEN 2026-09-11 and it does NOT reproduce.</b> Leg 2 below relocates the
+ * same craft a second time, in the same cell, and the pilot flies it afterwards through the same
+ * contract the control leg passed — craft climbs, client rider tracks. So "a second relocation kills
+ * the physics" is not true of a craft that STAYS ITSELF. It is not thereby disproved of the
+ * arrangement it was seen in: that one teleported in an ordinary world, where the entry on-ramp took
+ * the craft into a cell under a NEW identity between the two moves, and a second move landing on a
+ * craft whose identity changed under it is a different question this leg does not ask. The SECOND
+ * half of (3) — the pilot-key path after a dismount&rarr;re-seat across the map — is untested and
+ * stays open, and so does the extreme-|X| precision leg it blocks.</p></p>
  */
 @FixMethodOrder(MethodSorters.NAME_ASCENDING)
 public class VSShipExtremeCoordinatesE2ETest extends AbstractSharedVsClientE2ETest {
@@ -66,6 +75,7 @@ public class VSShipExtremeCoordinatesE2ETest extends AbstractSharedVsClientE2ETe
 
     private static final Pattern BUILDER_POS =
             Pattern.compile("\"builderPos\":\\[(-?\\d+),(-?\\d+),(-?\\d+)]");
+    private static final Pattern POS_X = Pattern.compile("\"posX\":(-?[0-9.E\\-]+)");
     private static final Pattern POS_Y = Pattern.compile("\"posY\":(-?[0-9.E\\-]+)");
     private static final Pattern DUMMY_ID = Pattern.compile("\"dummyId\":(-?\\d+)");
     private static final Pattern ORIGIN_DIM = Pattern.compile("\"originDim\":(-?[0-9.E\\-]+)");
@@ -104,6 +114,14 @@ public class VSShipExtremeCoordinatesE2ETest extends AbstractSharedVsClientE2ETe
      * same tolerance {@link #climbLeg} uses for the tracking it measures during a climb.
      */
     private static final double RIDER_TRACKING_TOLERANCE = 3.0;
+
+    /**
+     * How far along X the craft is moved a SECOND time, in blocks. Far enough that the move is a
+     * real relocation rather than a nudge, and small against {@code HALF_CELL} so the seam cannot
+     * carry the craft into a neighbouring cell part-way through the leg — the subject is the
+     * SEQUENCE of two moves, and a crossing in the middle of it would answer a different question.
+     */
+    private static final int SECOND_RELOCATION_X = 50_000;
 
     /**
      * This scenario's ship, by IDENTITY. Captured once at the base, where the ship is the only
@@ -248,32 +266,8 @@ public class VSShipExtremeCoordinatesE2ETest extends AbstractSharedVsClientE2ETe
         // after a DIMENSION CHANGE tears his world down and rebuilds it. This is a rigid teleport
         // inside one world — no rebuild, so no remount is owed, and waiting for one would time out
         // and then blame a crossing that never happened.
-        com.google.gson.JsonObject ridingAfterTp = bot().reportRidingEntity();
-        assertTrue("the pilot must still be ABOARD after his craft is rigid-teleported to the top of"
-                        + " the pose band — riders are carried by the move, so a client that is not"
-                        + " riding here is the finding, not a detail. client=" + ridingAfterTp
-                        + "; the client's own mounts across the teleport: "
-                        + clientEvents().since(riderMark, "mount")
-                        + "; its dismounts: " + clientEvents().since(riderMark, "dismount")
-                        + "; the server's dismounts: " + events().since(riderServerMark, "dismount")
-                        // The first run of this assertion answered the question it was asked and
-                        // then posed a bigger one: the server's dismount carried the caller trail
-                        // `PlayerList.playerLoggedOut`, at y=3.19993e+07. The rider did not come
-                        // adrift — the CONNECTION went, and the un-seating is what a logout does on
-                        // the way out. So the two records that say WHY are read here too.
-                        + "; the client's own disconnect: "
-                        + clientEvents().since(riderMark, "client_disconnected")
-                        + "; the server's logout: "
-                        + events().since(riderServerMark, "player_logged_out")
-                        // Who threw him out, and for what. This type ABSENT while he is gone says
-                        // the server did not kick him at all, which is a different failure from any
-                        // kick — and the vanilla kick to expect here is `multiplayer.disconnect.
-                        // flying`, armed against every seated pilot on a craft whose deck lives in
-                        // subspace (see the harness's `allow-flight`).
-                        + "; the server's kicks: "
-                        + events().since(riderServerMark, "server_kicked_player"),
-                ridingAfterTp.has("posY"));
-        double riderY = ridingAfterTp.get("posY").getAsDouble();
+        double riderY = requireStillAboard("after the craft is rigid-teleported to the top of the"
+                + " pose band", riderMark, riderServerMark).get("posY").getAsDouble();
         assertTrue("the CLIENT-rendered rider must arrive WITH his ship: rider=" + riderY
                         + " ship=" + shipYAfterTp + " (apart by "
                         + Math.abs(riderY - shipYAfterTp) + " blocks); commanded=" + EXTREME_Y
@@ -288,11 +282,43 @@ public class VSShipExtremeCoordinatesE2ETest extends AbstractSharedVsClientE2ETe
                 Math.abs(shipYAfterTp - EXTREME_Y) < 200);
         climbLeg("extreme Y");
 
-        // The extreme-|X| leg is NOT automated yet — see the class javadoc: after a SECOND
-        // relocation the ship's physics goes inert (neither the pilot key nor the push-ship
-        // velocity setpoint moves it) and the pilot-key path dies after a dismount->re-seat across
-        // the map. Both are relocation-sequence findings, not coordinate-regime ones; the XZ
-        // precision leg stays an open follow-up until they are resolved.
+        // ── Leg 2: A SECOND RELOCATION, which is suspect finding (3) of the class javadoc — "after a
+        // second relocation the ship's physics goes inert (neither the pilot key nor the push-ship
+        // velocity setpoint moves it)". It was recorded under the overworld arrangement, so it
+        // describes a craft that had been taken into a cell under a new identity between the two
+        // moves, and nobody has asked it of a craft that stayed itself. Ask it here: the same craft,
+        // the same cell, moved again, and then flown by the same pilot through the same contract.
+        //
+        // Along the cell's X, at the altitude already reached: the subject is the SEQUENCE (a second
+        // move at all), not a second coordinate regime, and changing two things at once would make a
+        // red unattributable. Well inside the face, so the seam cannot carry the craft mid-leg.
+        long secondMark = clientEvents().mark();
+        long secondServerMark = events().markInstrumented();
+        String tp2 = exec("artest vs teleport-ship-by-id " + cellDim + " " + shipId
+                + " " + (BX + SECOND_RELOCATION_X) + " " + EXTREME_Y + " " + BZ);
+        assertTrue("the second teleport must succeed: " + tp2, tp2.contains("\"ok\":true"));
+        bot().waitTicks(30);
+        String unparked2 = exec("artest vs unpark-by-id " + cellDim + " " + shipId);
+        assertTrue("the second teleport leaves the craft PARKED, and a parked craft cannot be flown"
+                + " — a red below would then be about the park, not about the physics: " + unparked2,
+                unparked2.contains("\"ok\":true"));
+        bot().waitTicks(10);
+
+        String afterSecond = shipInfoById();
+        // THE MOVE ITSELF, before anything is asked about flying. A craft that did not arrive cannot
+        // disprove anything about a craft that did, and the two reds read identically at the climb.
+        scenario().requireArranged("the craft must still be THIS craft in THIS cell after the second"
+                + " teleport: " + afterSecond, afterSecond.contains("\"managed\":true"));
+        assertTrue("the second teleport must leave the craft where it was sent: commanded X "
+                        + (BX + SECOND_RELOCATION_X) + " ship=" + afterSecond,
+                Math.abs(readDouble(afterSecond, POS_X) - (BX + SECOND_RELOCATION_X)) < 200);
+        requireStillAboard("after the craft's SECOND relocation", secondMark, secondServerMark);
+
+        // The subject: does he still fly it? `climbLeg` holds the real vertical key, asserts the
+        // craft climbs, and asserts the CLIENT-rendered rider climbs with it — the same contract the
+        // control leg and the first relocation passed, so a red here is about the second move and
+        // nothing else.
+        climbLeg("after a second relocation");
 
         exec("artest player dismount");
         exec("artest vs permaload false");
@@ -304,6 +330,45 @@ public class VSShipExtremeCoordinatesE2ETest extends AbstractSharedVsClientE2ETe
      * the same tolerance the ordinary-coordinates pilot e2e uses — a precision breakdown at extreme
      * coordinates shows up here as divergence).
      */
+    /**
+     * The pilot is still ABOARD, or a failure carrying every record that says why he is not.
+     *
+     * <p>Asked before he is MEASURED, because "where is he" and "is he there at all" are different
+     * questions and only the first has an answer shaped like a number. A bare
+     * {@code reportRidingEntity().get("posY")} raised a NullPointerException with no message at all
+     * when the client was not riding — which reports nothing about a client that has just been
+     * carried across a cell.</p>
+     *
+     * <p>The records are what turned this from a symptom into a diagnosis on its first run: the
+     * server's own dismount carried the caller trail {@code PlayerList.playerLoggedOut}, so the
+     * rider had not come adrift — the CONNECTION had gone — and the kick record then named
+     * {@code multiplayer.disconnect.invalid_player_movement}. A kick type ABSENT while he is gone
+     * says the server did not throw him out at all, which is a different failure from any kick.</p>
+     *
+     * <p>NOT {@code ridingOnceTheClientHasRemounted}: that waits for the client's
+     * re-{@code startRiding} after a DIMENSION CHANGE tears his world down and rebuilds it. A rigid
+     * teleport inside one world owes no remount, and waiting for one would time out and then blame a
+     * crossing that never happened.</p>
+     */
+    private com.google.gson.JsonObject requireStillAboard(String when, long clientMark,
+                                                          long serverMark) throws Exception {
+        com.google.gson.JsonObject riding = bot().reportRidingEntity();
+        assertTrue("the pilot must still be ABOARD " + when + " — everything that rides a craft is"
+                        + " carried by the move, so a client that is not riding here is the finding,"
+                        + " not a detail. client=" + riding
+                        + "; the client's own mounts: " + clientEvents().since(clientMark, "mount")
+                        + "; its dismounts: " + clientEvents().since(clientMark, "dismount")
+                        + "; the server's dismounts: " + events().since(serverMark, "dismount")
+                        + "; the client's own disconnect: "
+                        + clientEvents().since(clientMark, "client_disconnected")
+                        + "; the server's logout: "
+                        + events().since(serverMark, "player_logged_out")
+                        + "; the server's kicks: "
+                        + events().since(serverMark, "server_kicked_player"),
+                riding.has("posY"));
+        return riding;
+    }
+
     private void climbLeg(String label) throws Exception {
         double yBefore = shipY();
         double riderYBefore = bot().reportRidingEntity().get("posY").getAsDouble();
