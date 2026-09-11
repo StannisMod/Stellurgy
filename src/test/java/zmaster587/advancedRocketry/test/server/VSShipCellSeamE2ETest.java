@@ -8,7 +8,9 @@ import zmaster587.advancedRocketry.test.GameTicks;
 import zmaster587.advancedRocketry.test.EntrySlots;
 
 import org.junit.After;
+import org.junit.FixMethodOrder;
 import org.junit.Test;
+import org.junit.runners.MethodSorters;
 
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -44,6 +46,7 @@ import static org.junit.Assert.assertTrue;
  *
  * <p>Gated on the server's real VS presence (run with); skips cleanly otherwise.</p>
  */
+@FixMethodOrder(MethodSorters.NAME_ASCENDING)
 public class VSShipCellSeamE2ETest extends AbstractSharedServerTest {
 
     private static final Pattern BUILDER_POS =
@@ -68,6 +71,30 @@ public class VSShipCellSeamE2ETest extends AbstractSharedServerTest {
 
     /** Ticks of the carried ship's own world between ping-pong readings. */
     private static final int PING_PONG_TICKS_BETWEEN = 5;
+
+    /**
+     * The deck speed this scenario COMMANDS, in blocks per second — the flight computer's own unit
+     * ({@code commandCruise}), which is not the unit a ship's {@code velY} is reported in. Half of
+     * {@code SHIP_MAX_SPEED}: firmly under way, and well inside the envelope, so the craft reaches
+     * the commanded rate rather than chasing it for the whole window.
+     */
+    private static final double DECK_CRUISE_BLOCKS_PER_SECOND = 20.0;
+
+    /** How long the arrived craft is allowed to FLY ON before the cargo is asked about again. */
+    private static final int KEEPS_ABOARD_TICKS = 200;
+
+    /**
+     * How far the deck must actually have TRAVELLED over that window for the last assertion to mean
+     * anything, in blocks.
+     *
+     * <p>This is a CONTROL, not a tolerance. A body is aboard while it is inside the hull's own stay
+     * region, so "still aboard" after a deck that barely moved is what a broken carry looks like too;
+     * the deck has to have gone further than that region is deep. At
+     * {@value #DECK_CRUISE_BLOCKS_PER_SECOND} blocks a second the craft covers about a hundred blocks
+     * in {@value #KEEPS_ABOARD_TICKS} ticks, and the fixture's hull is a few blocks across — so this
+     * demands most of that and still leaves room for the ramp to the commanded rate.</p>
+     */
+    private static final double DECK_MUST_TRAVEL = 60.0;
 
     /**
      * How far past the face the ship is placed: comfortably beyond the carry margin, so the test is
@@ -371,6 +398,135 @@ public class VSShipCellSeamE2ETest extends AbstractSharedServerTest {
     }
 
     /** Build a ship, fly it into space through the production on-ramp, and move it past its +X face. */
+    /**
+     * E2E: a craft that is STILL UNDER WAY carries its cargo across the seam and KEEPS it.
+     *
+     * <p>This is the ordinary case, not an exotic one: a craft keeps its cruise across a crossing by
+     * design, so the ship a carry delivers to is normally moving. The sibling scenario brings the
+     * craft to rest first, deliberately, because its subject is what a carry DOES and a moving deck
+     * would only be a second variable there. Here the moving deck IS the subject.</p>
+     *
+     * <p><b>The witness that matters is the LAST one</b>, and it is what separates a body PLACED
+     * from a body HELD: after the arrival is confirmed aboard, the craft is allowed to fly on, and
+     * the body must STILL be aboard. A placement alone satisfies the first read and fails this one —
+     * the craft simply leaves without its cargo, which reads afterwards as "the crossing dropped
+     * it". Measured before the hold existed: the body was 139 blocks under its own ship after 600
+     * ticks, and 419 after 1800.</p>
+     */
+    @Test
+    public void aShipStillUnderWayCarriesItsCargoAcrossTheSeamAndKeepsIt() throws Exception {
+        ShipPastItsFace arranged = arrangeAShipPastItsFace();
+        String settledVsId = arranged.settledVsId;
+
+        String heldSrc = exec("artest chunk hold " + arranged.sourceSlot + " "
+                + (long) arranged.x + " " + (long) arranged.y + " " + (long) arranged.z);
+        assertTrue("the deck's chunks could not be held, so the body would be swept away before "
+                + "anything could carry it: " + heldSrc, heldSrc.contains("\"ok\":true"));
+
+        String drop = exec("artest space loose-body " + arranged.sourceSlot + " "
+                + (long) arranged.x + " " + (long) arranged.y + " " + (long) arranged.z
+                + " " + settledVsId);
+        assertTrue("the body could not be dropped: " + drop, drop.contains("\"ok\":true"));
+        assertTrue("PRODUCTION's own aboard predicate says this body is not on the ship, so the carry "
+                + "is under no obligation to take it: " + drop, drop.contains("\"aboard\":true"));
+        String bodyId = extractString(drop, "uuid");
+        assertTrue("the drop reported no uuid to follow the body by: " + drop, bodyId != null);
+
+        long carryMark = events.mark();
+        String carry = exec("artest space seam-carry " + arranged.sourceSlot + " id "
+                + arranged.arShipId);
+        assertTrue("production does not agree the ship has left its cell: " + carry,
+                carry.contains("\"wouldCarry\":true"));
+        assertTrue("the carry did not start — the reason is in the reply: " + carry,
+                carry.contains("\"started\":true"));
+
+        long[] src = cellSectors(arranged.sourceCell);
+        String destSlotReply = exec("artest space cell-slot " + (src[0] + 1) + " " + src[1] + " "
+                + src[2]);
+        int destSlot = extractInt(destSlotReply, "slotDim");
+        assertTrue("the carry did not bind the neighbour cell to a slot: " + destSlotReply,
+                destSlot > Integer.MIN_VALUE);
+        String heldDst = exec("artest chunk hold " + destSlot + " "
+                + (long) (-(double) GalacticCoord.HALF_CELL + CellSeam.REENTRY_DEPTH) + " "
+                + (long) arranged.y + " " + (long) arranged.z + " 2");
+        assertTrue("the arrival deck's chunks could not be held: " + heldDst,
+                heldDst.contains("\"ok\":true"));
+
+        events.awaitCarrying(carryMark, "ship_entered_cell",
+                "\"ship\":\"" + arranged.arShipId + "\"",
+                "the ship itself never settled in the neighbour, so nothing can be concluded about "
+                        + "what it was carrying", SETTLE_TICKS);
+        String afterMove = exec("artest space ledger-get " + arranged.arShipId);
+        int carriedSlot = extractInt(afterMove, "slotDim");
+        assertTrue("the carried ship has no bound slot: " + afterMove,
+                carriedSlot > Integer.MIN_VALUE);
+        String arrived = arrivedShip(carriedSlot, arranged.arShipId);
+        String dstVsId = extractString(arrived, "id");
+        assertTrue("the arrived ship reported no VS id: " + arrived, dstVsId != null);
+
+        final String[] found = {""};
+        boolean landedAboard = GameTicks.until(client(), GameTicks.world(carriedSlot), SETTLE_TICKS,
+                () -> {
+                    found[0] = exec("artest space loose-body-find " + bodyId + " "
+                            + carriedSlot + " " + dstVsId);
+                    return found[0].contains("\"found\":true")
+                            && found[0].contains("\"aboard\":true");
+                });
+        assertTrue("the cargo never came to rest on the arrived ship: " + found[0]
+                + " ship=" + arrivedShip(carriedSlot, arranged.arShipId), landedAboard);
+
+        // GET UNDER WAY, on the far side, with a COMMANDED speed.
+        //
+        // AFTER the carry, not before: a first version commanded it on the source craft and the
+        // crossing then refused to start at all ("that ship is not settled in this slot") — the
+        // stimulus had broken the arrangement's own preconditions, and the resulting red said
+        // nothing about cargo. The contract under test does not need the deck to be moving DURING
+        // the crossing: it is "a carried body is HELD to the deck, not merely put down on it", and
+        // a body with no hold is left behind the moment the craft moves, whenever that is.
+        //
+        // The speed is COMMANDED rather than inherited from whatever the entry climb left, because a
+        // stimulus nobody chose is one nobody can size a window against — and the first attempt at
+        // this test sized one against a number that was in different units and passed without the
+        // production fix.
+        // Recorded BEFORE the command, so the cleanup stops this craft even if the command itself
+        // half-took or an assertion below throws.
+        underWaySlot = carriedSlot;
+        underWayVsId = dstVsId;
+        String underWay = exec("artest vs ff-cruise-by-id " + carriedSlot + " " + dstVsId
+                + " 0 0 " + DECK_CRUISE_BLOCKS_PER_SECOND);
+        assertTrue("the arrived craft could not be told to get under way, so nothing below is about "
+                        + "a moving deck: " + underWay,
+                Math.abs(extractDouble(underWay, "cruiseUp") - DECK_CRUISE_BLOCKS_PER_SECOND)
+                        < 1e-9);
+
+        // Let the craft fly on.
+        double beforeY = extractDouble(arrivedShip(carriedSlot, arranged.arShipId), "posY");
+        GameTicks.advanceWorld(client(), carriedSlot, KEEPS_ABOARD_TICKS);
+        String shipAfter = arrivedShip(carriedSlot, arranged.arShipId);
+        double afterY = extractDouble(shipAfter, "posY");
+
+        // THE CONTROL, AND IT COMES FIRST. "Still aboard" says nothing unless the deck actually WENT
+        // somewhere: a craft that did not move carries anything, including a body it has no hold on.
+        // The first version of this scenario had no such control, sized its window against a number
+        // that was in different units, and passed WITHOUT the production fix — a test that could not
+        // fail, reported as a green.
+        assertTrue("the deck did not move, so this scenario's last witness is about nothing: the "
+                        + "craft went from posY=" + beforeY + " to " + afterY + " in "
+                        + KEEPS_ABOARD_TICKS + " ticks, less than the " + DECK_MUST_TRAVEL
+                        + " blocks this test needs to have left an unheld body behind. ship="
+                        + shipAfter,
+                Math.abs(afterY - beforeY) > DECK_MUST_TRAVEL);
+
+        // THE WITNESS. A body that was merely PUT DOWN satisfies the aboard read above and fails
+        // this one: the deck has gone, and without a hold the body has not.
+        String still = exec("artest space loose-body-find " + bodyId + " " + carriedSlot + " "
+                + dstVsId);
+        assertTrue("the cargo was put down on the deck and then left behind by its own ship: the "
+                        + "craft travelled " + Math.abs(afterY - beforeY) + " blocks and the body is "
+                        + still + "; ship=" + shipAfter,
+                still.contains("\"found\":true") && still.contains("\"aboard\":true"));
+    }
+
     private ShipPastItsFace arrangeAShipPastItsFace() throws Exception {
         exec("artest vs permaload true");
         String setup = exec("artest space entry-setup 2");
@@ -472,6 +628,17 @@ public class VSShipCellSeamE2ETest extends AbstractSharedServerTest {
                         + "would be about a carry: " + stopped,
                 Math.abs(cruiseF) < 1e-9 && Math.abs(cruiseR) < 1e-9 && Math.abs(cruiseU) < 1e-9);
 
+        return finishPastTheFace(setup, arShipId, sourceCell, sourceSlot, settledVsId);
+    }
+
+    /**
+     * The half both arrangements share: move the craft past its cell's +X face, and PROVE it went.
+     * Split out when the under-way arrangement appeared, so that the two differ in whether the craft
+     * was brought to rest and in NOTHING else — which is what makes the under-way scenario's extra
+     * witness attributable to the moving deck rather than to a difference in how its ship got there.
+     */
+    private ShipPastItsFace finishPastTheFace(String setup, String arShipId, String sourceCell,
+                                              int sourceSlot, String settledVsId) throws Exception {
         // --- Act: put the ship past the +X face of its cell --------------------------------------
         // The SAME durable craft, under the physics id translated above: entry is itself a crossing,
         // so the body that reached the cell is not the one that was built.
@@ -504,8 +671,26 @@ public class VSShipCellSeamE2ETest extends AbstractSharedServerTest {
                 mx, extractDouble(moved, "posY"), extractDouble(moved, "posZ"), settledVsId);
     }
 
+    /**
+     * The craft this class last put UNDER WAY, so {@link #cleanup} can bring it back to rest.
+     *
+     * <p>These exist because the scenario that commands a cruise shares its server with the others,
+     * and a craft left accelerating is state the next scenario cannot reason about — the shared base
+     * asks its subclasses for exactly this and the first version of that scenario broke it: the
+     * method that ran after it failed IN ITS ARRANGEMENT, which reads as a broken entry path and is
+     * nothing of the kind. Recorded as fields rather than stopped at the end of the test body so the
+     * stop also happens when the test FAILS, which is precisely when a runaway craft would otherwise
+     * be handed to the next method.</p>
+     */
+    private String underWayVsId;
+    private int underWaySlot;
+
     @After
     public void cleanup() throws Exception {
+        if (underWayVsId != null) {
+            exec("artest vs ff-cruise-by-id " + underWaySlot + " " + underWayVsId + " 0 0 0");
+            underWayVsId = null;
+        }
         exec("artest chunk release");
         exec("artest space entry-clear");
         exec("artest vs permaload false");
