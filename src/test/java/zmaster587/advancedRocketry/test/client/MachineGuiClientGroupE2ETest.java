@@ -196,10 +196,21 @@ public class MachineGuiClientGroupE2ETest extends AbstractSharedClientE2ETest {
         long serverMark = events.mark();
         long clientMark = clientEvents().mark();
 
+        // The CLICK is a stimulus and the screen is a LINK, so they go into the pair built for it:
+        // `awaitMatching(…, stimulus)` re-clicks between reads until the client records a GUI of its
+        // own. What stood here was a retry loop around a wait that returned its last reading either
+        // way, which meant the six attempts were really six budgets spent in series with no verdict
+        // between them. The failure stays an ARRANGEMENT one and keeps its whole diagnostic.
         String displayed = "";
-        for (int attempt = 0; attempt < 6 && !displayed.contains("\"gui\":\"Gui"); attempt++) {
-            bot().rightClickBlock(at[0], at[1], at[2], EnumFacing.UP, EnumHand.MAIN_HAND);
-            displayed = awaitClientRecords(clientMark, "client_gui_opened", "\"gui\":\"Gui", 60);
+        try {
+            displayed = clientEvents().awaitMatching(clientMark, "client_gui_opened",
+                    reply -> !Events.recordsWithAll(reply, "\"gui\":\"Gui").isEmpty(),
+                    "carrying a Gui* screen",
+                    "right-clicking the machine must open its GUI on the CLIENT", 6 * 60,
+                    () -> bot().rightClickBlock(at[0], at[1], at[2], EnumFacing.UP,
+                            EnumHand.MAIN_HAND));
+        } catch (AssertionError never) {
+            displayed = clientEvents().since(clientMark, "client_gui_opened");
         }
 
         String screen = screenOf(bot().reportState());
@@ -232,20 +243,23 @@ public class MachineGuiClientGroupE2ETest extends AbstractSharedClientE2ETest {
      * {@code needle} (case-insensitively) or the budget runs out — the client half of a chain, which
      * the server's event log cannot see.
      *
-     * <p>Returns the last reply either way, so a caller's failure prints what the client DID record
-     * instead of one stale sample. Local to this class: the shared base offers {@link Events} over
-     * the server probe only, and the client log is reached through the bot.</p>
+     * <p>Returns the reply, so a caller's failure prints what the client DID record instead of one
+     * stale sample.</p>
+     *
+     * <p><b>The loop is gone.</b> This was a hand-rolled `awaitCarrying` — sample the log every five
+     * ticks until a needle appears — and the shared reader has had that verb the whole time, plus a
+     * case-folding record matcher ({@code recordsWithAllIgnoringCase}, which exists because prose
+     * case belongs to a translation and not to a contract). What the copy left behind: no failure
+     * narrative, no four-cause triage for an empty window, and its own budget arithmetic to keep
+     * right. The old justification — "the shared base offers Events over the server probe only" —
+     * was already false: {@code clientEvents()} is on the base and this method called it.</p>
      */
     private String awaitClientRecords(long mark, String type, String needle, int tickBudget)
             throws Exception {
-        String wanted = needle.toLowerCase(Locale.ROOT);
-        String reply = clientEvents().since(mark, type);
-        for (int waited = 0; waited < tickBudget
-                && !reply.toLowerCase(Locale.ROOT).contains(wanted); waited += 5) {
-            bot().waitTicks(5);
-            reply = clientEvents().since(mark, type);
-        }
-        return reply;
+        return clientEvents().awaitMatching(mark, type,
+                reply -> !Events.recordsWithAllIgnoringCase(reply, needle).isEmpty(),
+                "carrying " + needle + " (case-folded)",
+                "the CLIENT must record a `" + type + "` carrying " + needle, tickBudget);
     }
 
     private static int readInt(String json, Pattern p) {
@@ -1063,12 +1077,10 @@ public class MachineGuiClientGroupE2ETest extends AbstractSharedClientE2ETest {
         String checks = events.since(closeMark, "container_interact_checked");
         assertTrue("the reach check must have come back FALSE — a close for any other reason pins"
                 + " nothing about the redirect: " + checks, checks.contains("\"allowed\":false"));
-        String closedOnClient = awaitClientRecords(closeOnClient, "client_gui_opened",
-                "\"gui\":\"none\"", 200);
-        assertTrue("...and the player's own screen must go away — the server letting go of the"
-                        + " container is not yet the player seeing it close. screens the client"
-                        + " displayed since: " + closedOnClient,
-                closedOnClient.contains("\"gui\":\"none\""));
+        // The wait IS the assertion now: it fails carrying every screen the client recorded, which
+        // is what the `assertTrue` below it used to print after re-checking the wait's own exit
+        // condition.
+        awaitClientRecords(closeOnClient, "client_gui_opened", "\"gui\":\"none\"", 200);
         assertEquals("after removing inv-bypass, vanilla's distance check must close the chest "
                 + "GUI; final screen=" + screenOf(bot().reportState()), "",
                 screenOf(bot().reportState()));

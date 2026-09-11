@@ -5,6 +5,8 @@ import com.google.gson.JsonObject;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import org.lwjgl.input.Keyboard;
+
 import zmaster587.advancedRocketry.test.Events;
 
 import static org.junit.Assert.assertEquals;
@@ -409,6 +411,126 @@ public abstract class AbstractSharedVsClientE2ETest extends AbstractSharedClient
         requireUprightForAnAltitudeClaim(after, "flying the craft after lifting it off its pad");
         scenario().record("liftedTo", y);
         return after;
+    }
+
+    /**
+     * Client ticks the pilot's held vertical key is given to reach the altitude a scenario asked
+     * for. Generous on purpose: this is ARRANGEMENT and its expiry fails the scenario, so the budget
+     * has to cover a slow client rather than a healthy one.
+     */
+    protected static final int HOVER_LIFT_BUDGET_TICKS = 400;
+
+    /**
+     * How much higher the key is held than the gain the caller asked for, so that what the craft is
+     * left at after the thrust is cut still clears it.
+     *
+     * <p>Inherited from the four sites this helper replaces, which held to 3 blocks and then
+     * accepted 2 — and the first measurement of it does NOT support the reason that shape implies.
+     * Across the four scenarios (2026-09-11, this fixture family), the craft held to +3.0 was left
+     * at +3.07, +4.14, +4.73 and +4.75 once the thrust was cut: the drift after release is UPWARD
+     * every time, and the margin has not yet been observed covering a sag at all. It is kept because
+     * four samples of one hull on one machine are not enough to delete a guard, not because a sag
+     * was seen. What the craft is actually left at is printed on every run — green included, where
+     * the scenario journal is silent — so whoever tightens this has evidence rather than arithmetic.</p>
+     */
+    private static final double HOVER_SETTLE_MARGIN_BLOCKS = 1.0;
+
+    /**
+     * The gain that makes a hover a hover: far enough off the ground that nothing a scenario then
+     * observes is a body or a hull still in contact with the terrain below it. The test's own
+     * requirement, not production's — it is passed explicitly at every call site.
+     */
+    protected static final double CLEAR_HOVER_GAIN_BLOCKS = 2.0;
+
+    /**
+     * Fly the craft off the ground with the PILOT'S OWN vertical key and leave it hovering there.
+     *
+     * <p><b>Why flown and not commanded.</b> A craft held at an attitude by a probe is not the
+     * configuration the reported defects live on: a hovering ship is under station-keeping, which
+     * never brings a hull fully to rest, and the residual is the axis. Any scenario whose subject is
+     * what happens ON a hovering ship — a still crew member, a walk across a deck, a pilot standing
+     * up mid-hover — wants this arrangement and not a rigid teleport.</p>
+     *
+     * <p><b>Why this is a measurement and not a chain</b>, argued once here so no caller argues it
+     * again. Two questions are being asked and only one of them has a link:</p>
+     * <ul>
+     *   <li><em>Did the held key reach the flight computer?</em> That is something production DOES,
+     *       it is recorded where production delivers it, and it is awaited below
+     *       ({@code pilot_input_delivered}) BEFORE any altitude is believed. Without that link a
+     *       hull that could not climb and a key that never arrived produce the same red.</li>
+     *   <li><em>Did the hull climb?</em> That is an ALTITUDE. Nothing DECIDES it, so there is no
+     *       record to wait for and none worth adding — a per-tick hull position is a sample, not a
+     *       fact about the game. It is measured, inside a window.</li>
+     * </ul>
+     *
+     * <p>The window early-exits because the STIMULUS GOES ON ACTING. The key is held while it runs,
+     * so a fixed budget does not bound an observation — it decides how far the craft flies, and far
+     * enough leaves the loaded region, at which point the craft stops being ticked and stops
+     * reporting a position at all. The exit is what cuts the thrust.</p>
+     *
+     * @param shipId     the craft's identity; every read is BY IDENTITY, so a neighbour sharing the
+     *                   airspace can never answer for it
+     * @param gainBlocks how far above its starting altitude the scenario needs the craft, in blocks,
+     *                   measured after the thrust is cut
+     * @return the craft's report at the altitude it is left hovering at
+     */
+    protected final String hoverOnPilotThrust(String shipId, double gainBlocks) throws Exception {
+        String before = shipInfoById(shipId);
+        final double y0 = readDoubleOr(before, POS_Y, Double.NaN);
+        scenario().requireArranged("the craft must report an altitude before a climb from it can be"
+                + " measured: " + before, !Double.isNaN(y0));
+
+        Events events = events();
+        long liftMark = events.markInstrumented();
+        final double holdTo = gainBlocks + HOVER_SETTLE_MARGIN_BLOCKS;
+        ClientPoll.Result<Double> lift;
+        bot().holdKey(Keyboard.KEY_R);
+        try {
+            lift = ClientPoll.until(bot()::waitTicks,
+                    () -> readDoubleOr(shipInfoById(shipId), POS_Y, y0),
+                    y -> y - y0 >= holdTo, 2, HOVER_LIFT_BUDGET_TICKS / 2);
+        } finally {
+            bot().releaseKey(Keyboard.KEY_R);
+        }
+
+        // The LINK before the number. Past this line the input demonstrably reached the computer, so
+        // an altitude that did not move is about the flight and nothing else.
+        events.await(liftMark, "pilot_input_delivered", "the pilot's held vertical key must reach the"
+                + " craft's flight computer — until this link is on the record, a craft that did not"
+                + " climb says nothing about flight", HOVER_LIFT_BUDGET_TICKS);
+
+        // The state the scenario will actually use: read AFTER the thrust is cut, not the sample the
+        // window exited on. A craft still under its pilot's key is not the hover the callers arrange.
+        String after = shipInfoById(shipId);
+        double y = readDoubleOr(after, POS_Y, Double.NaN);
+        scenario().record("hoverGain", y - y0);
+        // The journal prints on failure only, and the number worth having is the one a GREEN run
+        // leaves behind: how much of the margin above survives the thrust being cut.
+        System.out.println("[hover] ship=" + shipId + " asked=" + gainBlocks + " heldTo=" + holdTo
+                + " left=" + (y - y0) + " " + lift);
+        scenario().requireArranged("the pilot must be able to fly his own craft " + gainBlocks
+                + " blocks off the ground and leave it hovering there; it is at " + (y - y0)
+                + " with the thrust cut (" + lift + "), so the hover every later reading is about"
+                + " was never established: " + after,
+                !Double.isNaN(y) && y - y0 >= gainBlocks);
+        return after;
+    }
+
+    private static final Pattern PLAYER_NAME = Pattern.compile("\"player\":\"([^\"]+)\"");
+
+    /**
+     * The bot's own player name, as the server knows it.
+     *
+     * <p>Every record this tier waits on carries {@code who}, and the log is shared by every body
+     * that crosses the same seam — so the name is what makes a wait about THIS player rather than
+     * about whoever moved next.</p>
+     */
+    protected final String botName() throws Exception {
+        String health = exec("artest player health");
+        Matcher name = PLAYER_NAME.matcher(health);
+        scenario().requireArranged("player health must echo the player name, or no wait on this tier"
+                + " can be filtered to this body: " + health, name.find());
+        return name.group(1);
     }
 
     private static final Pattern POS_X = Pattern.compile("\"posX\":(-?[0-9.E\\-]+)");

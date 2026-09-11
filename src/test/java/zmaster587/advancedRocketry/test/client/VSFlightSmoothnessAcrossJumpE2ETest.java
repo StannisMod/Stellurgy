@@ -756,14 +756,6 @@ public class VSFlightSmoothnessAcrossJumpE2ETest extends AbstractSharedVsClientE
         ridingOnceTheClientHasRemounted(clientMark, CLIENT_REMOUNT_BUDGET_TICKS);
     }
 
-    private String botName() throws Exception {
-        String health = exec("artest player health");
-        Matcher nameM = Pattern.compile("\"player\":\"([^\"]+)\"").matcher(health);
-        scenario().requireArranged("player health must echo the player name: " + health, nameM.find());
-        return nameM.group(1);
-    }
-
-
     private int waitForLoadedShip(int dim) throws Exception {
         for (int i = 0; i < 40; i++) {
             if (readIntOr(exec("artest vs ship-count-all " + dim), "count", -1) >= 1) {

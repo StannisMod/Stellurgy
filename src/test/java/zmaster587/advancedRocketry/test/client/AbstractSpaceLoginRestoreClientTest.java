@@ -320,10 +320,9 @@ public abstract class AbstractSpaceLoginRestoreClientTest {
         // the arrangement used: what is being proven here is the key->packet->flight-computer
         // chain the restored pilot will need again on the other side of the restart.
         double preY0 = clientPlayerY();
-        double preY1 = climbWith(Keyboard.KEY_R, preY0);
-        requireArranged("control leg: the seated pilot must be able to fly his ship in "
-                + "its cell BEFORE the restart. clientY " + preY0 + " -> " + preY1
-                + " (need +" + MIN_CLIMB + ")", (preY1 - preY0) >= MIN_CLIMB);
+        double preY1 = requireClimbWith(Keyboard.KEY_R, preY0,
+                "control leg: the seated pilot must be able to fly his ship in its cell BEFORE the"
+                        + " restart");
         // Let the station-hold settle the hovering ship before he logs out: the restore below
         // compares his login position against the ship's LIVE pose, and a ship still drifting
         // upward when the server stops turns that comparison into a moving target.
@@ -539,11 +538,9 @@ public abstract class AbstractSpaceLoginRestoreClientTest {
         // assertion above. Same real-key stimulus, same client-observed altitude as the pre-restart
         // leg, so a red here is attributable to the restart and nothing else.
         double postY0 = clientPlayerY();
-        double postY1 = climbWith(Keyboard.KEY_R, postY0);
-        assertTrue("after the restart, held input must MOVE THE SHIP - a restored seat with a "
-                + "dead key is a broken control chain. clientY " + postY0 + " -> " + postY1
-                + " (need +" + MIN_CLIMB + ") delivery=" + exec("artest vs seat-delivery"),
-                (postY1 - postY0) >= MIN_CLIMB);
+        climbWith(Keyboard.KEY_R, postY0,
+                "after the restart, held input must MOVE THE SHIP - a restored seat with a dead key"
+                        + " is a broken control chain");
     }
 
     /**
@@ -1531,11 +1528,29 @@ public abstract class AbstractSpaceLoginRestoreClientTest {
 
     /**
      * Hold {@code key} until the client-rendered rider altitude climbs {@link #MIN_CLIMB} over
-     * {@code from} (bounded, early-exit, load-scaled); returns the last observed altitude. Same
-     * stimulus/observation pair as the planet-side relog-control pin: the REAL key in, the
-     * client's own rendered player altitude out.
+     * {@code from} (bounded, early-exit, load-scaled), and FAIL HERE if it does not. Same
+     * stimulus/observation pair as the planet-side relog-control pin: the REAL key in, the client's
+     * own rendered player altitude out.
+     *
+     * <h2>Why the verdict lives here now</h2>
+     *
+     * <p>Both callers used to read the returned altitude and assert {@code (y1 - y0) >= MIN_CLIMB} —
+     * the loop's own exit condition, restated. Neither could fail except by the budget running out,
+     * and the message then made a claim about held input for what was a timeout.</p>
+     *
+     * <p>This one is not fixed by a WINDOW, and the reason is worth keeping. Where a quantity can
+     * come back, a window and its extremum are right; where a drive must stop on its own threshold,
+     * an independent fact has to carry the leg. Here there is neither: the ship must NOT be flown on
+     * (the caller's next step settles a hovering hull before the server writes it to disk, and a
+     * craft still climbing turns the restore comparison into a moving target), and the climb IS the
+     * whole claim — "held input moves the ship" is what these legs are about. So the drive itself is
+     * the assertion, and the expiry IS the failure, said in those words with the altitude it
+     * reached. One assertion, in the place that knows what happened.</p>
+     *
+     * @param what what this climb proves, for the failure — the caller's own sentence
      */
-    protected double climbWith(int key, double from) throws Exception {
+    private double climbWith(int key, double from, String what, boolean arrangement)
+            throws Exception {
         // THE MULTIPLIER STAYS, but NOT for the reason this comment used to give. A held key is
         // sampled and re-sent per CLIENT TICK - on change, plus a re-assert every
         // PilotInputCadence.REPEAT_TICKS - not once per rendered frame. What a loaded box stretches
@@ -1554,7 +1569,41 @@ public abstract class AbstractSpaceLoginRestoreClientTest {
         } finally {
             bot().releaseKey(key);
         }
+        if ((last - from) < MIN_CLIMB) {
+            String why = what + " — the client's own rendered rider altitude went from " + from
+                    + " to " + last + " over " + (budget * 5) + " ticks (load-scaled) with the key"
+                    + " held, which is " + (last - from) + " against the " + MIN_CLIMB
+                    + " this needs. delivery=" + exec("artest vs seat-delivery");
+            // This class types its arrangement failures through `ArrangementFailure`, not through a
+            // `Scenario` — it is not on the shared-scenario base — so the refusal goes the same way
+            // the rest of the file's do. Both calls throw; the branch picks WHICH kind.
+            if (arrangement) {
+                requireArranged(why, false);
+            }
+            assertTrue(why, false);
+        }
         return last;
+    }
+
+    /**
+     * {@link #climbWith} as the CONTRACT it is for the post-restart leg: a restored seat with a dead
+     * key is a broken control chain, and that is this class's subject.
+     */
+    protected double climbWith(int key, double from, String what) throws Exception {
+        return climbWith(key, from, what, false);
+    }
+
+    /**
+     * {@link #climbWith} as an ARRANGEMENT — the pre-restart control leg. A pilot who could not fly
+     * his ship BEFORE the restart has disproved nothing about the restore, so the JUnit XML must say
+     * "the setup this test needed never happened" rather than name the contract.
+     *
+     * <p>Two NAMED methods rather than one with a flag: a boolean parameter would pick the failure's
+     * TYPE silently at each call site, and the type is the whole difference between "this build is
+     * broken" and "this run could not ask the question".</p>
+     */
+    protected double requireClimbWith(int key, double from, String what) throws Exception {
+        return climbWith(key, from, what, true);
     }
 
     /**

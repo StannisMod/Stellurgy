@@ -215,22 +215,9 @@ public class VSDeckCaptureAndDismountE2ETest extends AbstractSharedVsClientE2ETe
         buildAndBoardShip(bx, by, bz);
         bot().waitTicks(20); // let the seated idle pilot's hold stabilise the ship
 
-        // Lift into a real hover with the pilot's own vertical-up key.
-        double startY = readDouble(shipInfo(), POS_Y);
-        bot().holdKey(Keyboard.KEY_R);
-        ClientPoll.Result<Double> lift;
-        try {
-            // Event-gated hover-lift (load-scaled ceiling + early exit): a fixed 200-iteration budget
-            // under-lifts a frame-starved client under concurrent-fork load and reds a healthy climb.
-            lift = ClientPoll.until(bot()::waitTicks,
-                    () -> readDouble(shipInfo(), POS_Y),
-                    y -> y - startY >= 3.0, 2, 200);
-        } finally {
-            bot().releaseKey(Keyboard.KEY_R);
-        }
-        double liftedY = lift.value;
-        assertTrue("the pilot must be able to lift the ship off the ground: " + startY + " -> " + liftedY,
-                liftedY - startY > 2.0);
+        // Lift into a real hover with the pilot's own vertical-up key. The delivery link, the window
+        // and why the climb is measured rather than awaited all live in the helper.
+        hoverOnPilotThrust(scenarioShipId, CLEAR_HOVER_GAIN_BLOCKS);
         bot().waitTicks(10);
 
         double shipYPre = readDouble(shipInfo(), POS_Y);
@@ -531,20 +518,9 @@ public class VSDeckCaptureAndDismountE2ETest extends AbstractSharedVsClientE2ETe
         // Fly it into a hover, then stand up: it is now an unmanned, station-keeping, hovering ship -
         // exactly the state a saved hovering ship is in on disk.
         double startY = readDouble(shipInfo(), POS_Y);
-        bot().holdKey(org.lwjgl.input.Keyboard.KEY_R);
-        ClientPoll.Result<Double> lift;
-        try {
-            // Event-gated hover-lift (load-scaled ceiling + early exit): a fixed 200-iteration budget
-            // under-lifts a frame-starved client under concurrent-fork load and reds a healthy climb.
-            lift = ClientPoll.until(bot()::waitTicks,
-                    () -> readDouble(shipInfo(), POS_Y),
-                    y -> y - startY >= 3.0, 2, 200);
-        } finally {
-            bot().releaseKey(org.lwjgl.input.Keyboard.KEY_R);
-        }
-        double liftedY = lift.value;
-        assertTrue("the pilot must lift the ship into a hover: " + startY + " -> " + liftedY,
-                liftedY - startY > 2.0);
+        // The delivery link, the window and why the climb is measured rather than awaited all live
+        // in the helper; startY is kept because this scenario compares against it after the reload.
+        hoverOnPilotThrust(scenarioShipId, CLEAR_HOVER_GAIN_BLOCKS);
         // The hold engaging is the computer's own decision, so the wait is on that record rather
         // than on 40 ticks: the state this whole scenario saves and restores is the one it names.
         Events events = events();
@@ -862,10 +838,15 @@ public class VSDeckCaptureAndDismountE2ETest extends AbstractSharedVsClientE2ETe
             mouseDelta(60, 0);
             bot().waitTicks(2);
         }
-        // Early exit + a load-scaled ceiling. The verdict below is "omega crossed 0.1 at some
-        // point", so the first sample that crosses settles it and every further tick is burned; and
-        // a FIXED 20-iteration budget can under-observe under concurrent-fork load. Equivalent to
-        // the max it replaces: "some sample exceeded 0.1" is what both compute.
+        // NOT a chain, and this is the argument. The link on the way IN exists and is taken: the
+        // command reaching the client's flight handler is `flight_cursor`, which is what
+        // flightCursorX below reads. What has no link is the hull's ANSWER — no record says "it
+        // turned", because nothing DECIDES that: the attitude law integrates a torque every tick and
+        // the result is an angular RATE. A rate is measured, and the window's EXTREMUM is the
+        // measurement, because a hull commanded round passes through every attitude and a last
+        // sample of a completed turn reads as "unmoved".
+        // The window early-exits because the verdict is "omega crossed 0.1 at some point": the first
+        // sample that crosses settles it and every further tick is burned.
         double omegaAfter = ClientPoll.until(bot()::waitTicks,
                 () -> readDouble(shipInfo(), OMEGA), o -> o > 0.1, 2, 20).value;
         System.out.println("[deckcap] force-invert control cursor="
@@ -930,8 +911,11 @@ public class VSDeckCaptureAndDismountE2ETest extends AbstractSharedVsClientE2ETe
             bot().waitTicks(2);
         }
         double cursor = flightCursorX("after twenty raw mouse deltas while inverted");
-        // Same wait as the force-invert leg above, and it carried a 1.5x budget for no stated
-        // reason; both are now the same early-exit poll with the same load-scaled ceiling.
+        // Same measurement as the force-invert leg above, and the same argument: `flight_cursor` is
+        // the link for the command going in — asserted three lines below, not merely printed — and
+        // the hull's answer is an angular rate that nothing decides and no record carries. Read the
+        // refusal there; it is not repeated here. It carried a 1.5x budget for no stated reason;
+        // both windows are now the same shape.
         double omegaTurning = ClientPoll.until(bot()::waitTicks,
                 () -> readDouble(shipInfo(), OMEGA), o -> o > 0.1, 2, 30).value;
         System.out.println("[deckcap] inverted-control cursor=" + cursor + " omegaTurning=" + omegaTurning);

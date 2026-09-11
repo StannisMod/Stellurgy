@@ -433,22 +433,9 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
         buildAndBoardShip(bx, by, bz);
         bot().waitTicks(20);
 
-        double startY = readDouble(shipInfo(), POS_Y);
-        bot().holdKey(Keyboard.KEY_R);
-        ClientPoll.Result<Double> lift;
-        try {
-            // Event-gated: hold the vertical thruster until the ship has actually climbed
-            // 3 blocks, with a load-scaled ceiling + early exit. A fixed 200-iteration budget
-            // under-lifts a frame-starved client under concurrent load and reds a healthy hover.
-            lift = ClientPoll.until(bot()::waitTicks,
-                    () -> readDouble(shipInfo(), POS_Y),
-                    y -> y - startY >= 3.0, 2, 200);
-        } finally {
-            bot().releaseKey(Keyboard.KEY_R);
-        }
-        double liftedY = lift.value;
-        assertTrue("the pilot must lift the ship into a hover: " + startY + " -> " + liftedY,
-                liftedY - startY > 2.0);
+        // The delivery link, the window and why the climb is measured rather than awaited all live
+        // in the helper.
+        hoverOnPilotThrust(scenarioShipId, CLEAR_HOVER_GAIN_BLOCKS);
         // The dismount seed's capture as a LINK: a seated body is excluded from capture, so this
         // record is a new fact and not one that was already arriving every tick.
         Events client = clientEvents();
@@ -516,22 +503,9 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
         // real W walking and real SPACE jumps through the window.
         buildAndBoardShip(bx, by, bz);
         bot().waitTicks(20);
-        double startY = readDouble(shipInfo(), POS_Y);
-        bot().holdKey(Keyboard.KEY_R);
-        ClientPoll.Result<Double> lift;
-        try {
-            // Event-gated: hold the vertical thruster until the ship has actually climbed
-            // 3 blocks, with a load-scaled ceiling + early exit. A fixed 200-iteration budget
-            // under-lifts a frame-starved client under concurrent load and reds a healthy hover.
-            lift = ClientPoll.until(bot()::waitTicks,
-                    () -> readDouble(shipInfo(), POS_Y),
-                    y -> y - startY >= 3.0, 2, 200);
-        } finally {
-            bot().releaseKey(Keyboard.KEY_R);
-        }
-        double liftedY = lift.value;
-        assertTrue("the pilot must lift the ship into a hover: " + startY + " -> " + liftedY,
-                liftedY - startY > 2.0);
+        // The delivery link, the window and why the climb is measured rather than awaited all live
+        // in the helper.
+        hoverOnPilotThrust(scenarioShipId, CLEAR_HOVER_GAIN_BLOCKS);
         // The dismount seed's capture as a LINK, awaited rather than waited out.
         Events client = clientEvents();
         long dismountMark = client.mark();
@@ -1279,21 +1253,20 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
         // Fall onto the world-top of the inverted hull from a few blocks up.
         exec("tp @a " + sx + " " + (sy + 7) + " " + sz + " 0 0");
         // The freshly-teleported client may not tick until its destination chunks stream in (the
-        // whole encounter would then sample a frozen body and prove nothing). Gate the window on
-        // the fall actually beginning.
-        double preY = bot().reportState().get("playerY").getAsDouble();
-        // Event-gated fall detection with a load-scaled ceiling: a fixed 60-iteration
-        // budget can miss a slow chunk-stream / tick start under concurrent load and red a healthy
-        // encounter before it has even begun.
-        ClientPoll.Result<Double> fall = ClientPoll.until(bot()::waitTicks,
-                () -> bot().reportState().get("playerY").getAsDouble(),
-                y -> Math.abs(y - preY) > 0.4, 2, 60);
-        assertTrue("the teleported client must start falling before the encounter window "
-                + "(client tick/chunk-stream stall)", fall.satisfied);
+        // whole encounter would then sample a frozen body and prove nothing). The premise is that
+        // THIS CLIENT IS TICKING THIS BODY, and that is something the client DOES: its ship-frame
+        // resolver runs on the body and records the tick it resolved. Awaited here rather than
+        // inferred from half a block of fall — a displacement is a proxy, and a proxy for "is it
+        // alive" answers "not yet" identically to a body that is simply not falling fast.
+        Events client = clientEvents();
+        long tickingMark = client.mark();
+        client.awaitCarrying(tickingMark, "ship_frame_tick", "\"who\":\"" + botName() + "\"",
+                "the teleported client must be ticking the falling body before the encounter window"
+                        + " opens, or every sample below is of a frozen body",
+                CAPTURE_LINK_BUDGET_TICKS);
         // The encounter's own window on the client log: every capture, every mode commit and every
         // release the hull-top meeting produces, in order. The churn below is read off it rather than
         // off a lifetime counter's delta.
-        Events client = clientEvents();
         long encounterMark = client.mark();
         StringBuilder land = new StringBuilder();
         double settledY = Double.NaN;
@@ -1420,23 +1393,20 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
                 + " fixture's own pit: " + clearing, clearing.contains("\"ok\":true"));
 
         exec("tp @a " + sx + " " + (sy + 7) + " " + sz + " 0 0");
-        // The freshly-teleported client may not tick until its destination chunks stream in (the
-        // whole encounter would then sample a frozen body and prove nothing). Gate the window on
-        // the fall actually beginning.
-        double preY = bot().reportState().get("playerY").getAsDouble();
-        // Event-gated fall detection with a load-scaled ceiling: a fixed 60-iteration
-        // budget can miss a slow chunk-stream / tick start under concurrent load and red a healthy
-        // encounter before it has even begun.
-        ClientPoll.Result<Double> fall = ClientPoll.until(bot()::waitTicks,
-                () -> bot().reportState().get("playerY").getAsDouble(),
-                y -> Math.abs(y - preY) > 0.4, 2, 60);
-        assertTrue("the teleported client must start falling before the encounter window "
-                + "(client tick/chunk-stream stall)", fall.satisfied);
+        // Same premise as the hull-top encounter above, and the same link: the client must be
+        // TICKING this body before any of the thirty samples below means anything, and its own
+        // ship-frame resolver records the tick it resolved. See that site for why a fall
+        // displacement was the wrong instrument for it.
+        Events client = clientEvents();
+        long tickingMark = client.mark();
+        client.awaitCarrying(tickingMark, "ship_frame_tick", "\"who\":\"" + botName() + "\"",
+                "the teleported client must be ticking the falling body before the encounter window"
+                        + " opens, or every sample below is of a frozen body",
+                CAPTURE_LINK_BUDGET_TICKS);
         // The encounter window on the client's own log, marked one statement before the samples
         // begin: the capture's releases and its mode commits, in order, for exactly these thirty
         // samples — where the drop counter this replaces could only say that something, some time,
         // had happened.
-        Events client = clientEvents();
         long encounterMark = client.mark();
         // The SERVER's per-tick resolution log, read as a rolling window inside the fine trace below.
         long srvTickMark = events().mark();

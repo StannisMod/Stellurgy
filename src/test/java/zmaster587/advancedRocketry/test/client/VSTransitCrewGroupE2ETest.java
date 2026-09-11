@@ -554,6 +554,18 @@ private boolean waitForRegisteredShip(int dim) throws Exception {
         // actually loaded it for the nearby bot, a tick or two after the dimension transfer — and
         // raised as an ARRANGEMENT failure, because a seat this scenario could not find has said
         // nothing about what happens to a crew member on arrival.
+        // WHY THIS IS STILL A BOUNDED READ and not a link, because the rest of this class is links
+        // now and the difference is worth stating. `ship_usable` is a record of a LOAD — it fires
+        // once each time the physics object becomes usable — and the question here is whether the
+        // ship is loaded RIGHT NOW, which is a state that comes and goes: the comment above records
+        // a first cut where `vs load-ships` was answered and the ship had unloaded again by the very
+        // next probe. A wait on the record would be satisfied by a load that has since been undone,
+        // which is the exact failure this arrangement exists to prevent.
+        //
+        // What DID change: the loop no longer hands its exit condition to an assertion that restates
+        // it. It fails INSIDE, typed as the arrangement it is, carrying the reading — so "the seat
+        // was never located" and "it was located without a world position" stay distinguishable
+        // without either of them being a re-check of `hasKey`.
         String seat = "";
         for (int i = 0; i < 40 && !hasKey(seat, "shipWorldX"); i++) {
             seat = execEnvelope("artest vs find-seat " + originDim + " id " + setupShipId(setup));
@@ -561,13 +573,17 @@ private boolean waitForRegisteredShip(int dim) throws Exception {
                 bot().waitTicks(5);
             }
         }
-        // Witness sensitivity: without a located seat the whole "still riding on the far side" observation
-        // is vacuous, so this is checked before anything is done to the ship.
-        scenario().requireArranged("the pilot seat must be found in the assembled ship (else the test"
-                + " is vacuous): " + seat, readBool(seat, "seatFound"));
-        scenario().requireArranged("the origin ship must resolve a world position with the bot beside"
-                + " it — nothing here force-loads it, so this is the proximity load having taken: "
-                + seat, hasKey(seat, "shipWorldX"));
+        if (!readBool(seat, "seatFound")) {
+            // Witness sensitivity: without a located seat the whole "still riding on the far side"
+            // observation is vacuous, so this is refused before anything is done to the ship.
+            scenario().arrangementFailed("the pilot seat must be found in the assembled ship (else"
+                    + " the test is vacuous): " + seat);
+        }
+        if (!hasKey(seat, "shipWorldX")) {
+            scenario().arrangementFailed("the origin ship must resolve a world position with the bot"
+                    + " beside it — nothing here force-loads it, so this is the proximity load"
+                    + " having taken, and it did not within 200 ticks: " + seat);
+        }
         int seatX = readInt(seat, "seatX"), seatY = readInt(seat, "seatY"), seatZ = readInt(seat, "seatZ");
 
         mountTheSeatDummy(this::execEnvelope, originDim, seatX, seatY, seatZ);
@@ -887,14 +903,30 @@ private long readCounter(String className, String field) throws Exception {
         scenario().requireArranged("...and he must still be off it when the capture is taken: "
                 + bot().reportRidingEntity(),
                 !bot().reportRidingEntity().get("riding").getAsBoolean());
-        bot().waitTicks(30); // let him settle and the capture take
-        String capture = exec("artest vs deck-capture");
-        for (int drop = 0; drop < 6 && !readBool(capture, "alreadyTracked"); drop++) {
-            exec("tp @a " + shipX + " " + (shipY + 4.0) + " " + shipZ + " 0 0");
+        // The DROP is a stimulus and the capture is a LINK, so the two go into the pair built for
+        // that: `awaitCarrying(…, stimulus)` re-drops him between reads until his own client
+        // records the deck taking him. What stood here re-read `deck-capture` after each drop and
+        // handed the last reading back for a caller to assert on — the same reading the loop had
+        // just exited on.
+        //
+        // The client's log, because the resolver that claims a body is the client's (the base's own
+        // note on this family). Keyed on nothing but the type: this helper does not know the ship's
+        // id, and the caller's assertions that follow name it.
+        long captureMark = clientEvents().mark();
+        for (int drop = 0; drop < 6; drop++) {
             bot().waitTicks(40); // fall onto the deck and settle
-            capture = exec("artest vs deck-capture");
+            if (!Events.records(clientEvents().since(captureMark, "deck_captured")).isEmpty()) {
+                break;
+            }
+            // Re-drop. Where he LANDS is not the subject — this fixture's deck is 3x3 and the cell
+            // around it is void — so the arrangement puts him over it again rather than assuming
+            // one landing spot.
+            exec("tp @a " + shipX + " " + (shipY + 4.0) + " " + shipZ + " 0 0");
         }
-        return capture;
+        // Nothing is asserted here and nothing is returned as a verdict: the caller reads the
+        // capture for its own claims. That is the difference from the loop this replaces, which
+        // handed back the reading it had just exited on for a caller to re-assert.
+        return exec("artest vs deck-capture");
     }
 
     /**
@@ -1177,17 +1209,21 @@ private long readCounter(String className, String field) throws Exception {
         // He walks off. Nothing prevents him — the danger is the mechanic, not a wall. The teleport
         // is a fallback for the run where the walk does not clear this fixture's 3x3 deck; it
         // replaces the WAY he leaves, never the leaving, which is what the mechanic reads.
+        // Walking off is a LINK — the deck RELEASES him, and his own client records it. The walk
+        // gets a WINDOW rather than a wait-until, because it is best-effort by design (this
+        // fixture's deck is 3x3 and the comment above says the teleport replaces the WAY he leaves,
+        // never the leaving); the record is then read once, and the teleport follows if it is
+        // absent. What stood here polled `deck-capture` every five ticks for the state that record
+        // announces.
+        long offMark = clientEvents().mark();
         bot().holdKey(FORWARD_KEY);
-        for (int i = 0; i < 20 && readBool(exec("artest vs deck-capture"), "alreadyTracked"); i++) {
-            bot().waitTicks(5);
-        }
+        bot().waitTicks(100);
         bot().releaseKey(FORWARD_KEY);
-        String offHull = exec("artest vs deck-capture");
-        if (readBool(offHull, "alreadyTracked")) {
+        if (Events.records(clientEvents().since(offMark, "deck_released")).isEmpty()) {
             exec("tp @a " + (deckX + 30.0) + " " + deckY + " " + (deckZ + 30.0) + " 0 0");
             bot().waitTicks(20);
-            offHull = exec("artest vs deck-capture");
         }
+        String offHull = exec("artest vs deck-capture");
         scenario().requireArranged("he must actually be off the hull, or the void has nothing to take: "
                 + offHull, !readBool(offHull, "alreadyTracked"));
 
@@ -1236,20 +1272,36 @@ private long readCounter(String className, String field) throws Exception {
         // duration itself carries. A cleanup budget shorter than the flight leaves a hull parked in
         // the world every later scenario in this class shares — which is a red somewhere else,
         // blamed on something else.
-        boolean flownOut = false;
-        for (int i = 0; i < LIVABLE_FLIGHT_TICKS / 10L && !flownOut; i++) {
-            flownOut = readInt(exec("artest space transit-tick 10"), "inTransit") == 0;
-            if (!flownOut) {
-                bot().waitTicks(2);
-            }
+        // The accelerator is a STIMULUS and the settling is a LINK, which is the pair
+        // `awaitMatching(…, stimulus)` exists for: a mechanic that advances only on a tick nobody is
+        // running, so the test has to keep driving it WHILE it waits for the record.
+        //
+        // KEYED ON THE DURABLE NAME, and that is the whole lesson of getting it wrong once. The
+        // first cut asked for `setupShipId(setup)` — the SUBSTRATE's id — and the wait expired with
+        // the log full of transit records. `ledgerSettle` is keyed by the identity the ledger keeps,
+        // which `setupDurableId`'s own javadoc states two methods up: "the setup mints this on the
+        // pad, onto the flight computer, and SETTLES THE LEDGER UNDER IT … Reading either one as the
+        // other answers found:false — that is not a missing ship, it is the wrong question."
+        //
+        // The budget's arithmetic, since it is not the loop's: the wait drives the stimulus once per
+        // five ticks of budget and each stimulus accelerates ten, so half of LIVABLE_FLIGHT_TICKS of
+        // budget delivers the whole flight the scenario asked for.
+        try {
+            events.awaitCarrying(mark, "transit_settled",
+                    "\"ship\":\"" + setupDurableId(setup) + "\"",
+                    "the jump must be flown out before this scenario returns: it shares its"
+                            + " hyperspace with every other scenario in this class, and a transit"
+                            + " left running parks a hull there with a crew record for a player who"
+                            + " is no longer alive to be re-seated",
+                    (int) (LIVABLE_FLIGHT_TICKS / 2L),
+                    () -> exec("artest space transit-tick 10"));
+        } catch (AssertionError never) {
+            // ARRANGEMENT, like the family reset that does the same job before the NEXT scenario:
+            // this scenario's own verdict was reached above, and a world it failed to put back is a
+            // statement about the fixture rather than about the void.
+            scenario().arrangementFailed(never.getMessage() + " | transit-status="
+                    + exec("artest space transit-status"));
         }
-        // ARRANGEMENT, like the family reset that does the same job before the NEXT scenario: this
-        // scenario's own verdict was reached above, and a world it failed to put back is a statement
-        // about the fixture rather than about the void.
-        scenario().requireArranged("the jump must be flown out before this scenario returns: it"
-                + " shares its hyperspace with every other scenario in this class, and a transit left"
-                + " running parks a hull there with a crew record for a player who is no longer alive"
-                + " to be re-seated. transit-status=" + exec("artest space transit-status"), flownOut);
     }
 
     /**
