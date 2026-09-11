@@ -96,14 +96,54 @@ public final class VSIntegration {
     }
 
     /**
-     * Assemble the structure anchored at {@code anchorPos} into a movable ship.
-     * A safe no-op when Valkyrien Skies is absent. Only vanilla/AR types appear in
-     * this signature — every VS-importing call stays inside {@link VSBridge}, which
-     * is reached only past the {@link #isAvailable()} gate, so no VS class is
-     * loaded on an AR install without VS.
+     * Assemble the craft standing in the given block footprint into a movable ship, under the
+     * identity its own flight computer carries.
+     *
+     * <h2>ONE SHIP, ONE IDENTITY — and this signature is how that is enforced</h2>
+     *
+     * <p>The substrate's uuid IS the craft's durable name, so nothing has to translate between two
+     * values and no lookup can be answered about the wrong craft. The name lives in exactly one
+     * place — the flight computer's own NBT — and <b>this method finds it</b>: the footprint is
+     * scanned for the computer, the computer is the assembly anchor, and its name is the identity.</p>
+     *
+     * <p><b>There is no anchor parameter and no identity parameter, deliberately.</b> Both existed
+     * and both were how the rule got broken: a caller passed a block that was not the computer (and
+     * silently got a substrate-minted id), or handed an identity in (and could hand in the wrong
+     * one, or forget). Measured 2026-09-11: a test fixture anchored on a deck block with its
+     * computer two blocks away, took a substrate-only id, and then handed its tests BOTH values with
+     * a note explaining which question takes which — a divergence dressed up as an API. A rule a
+     * caller cannot see it has broken is not enforceable by convention, so the convention is gone
+     * and the search is in here.</p>
+     *
+     * <p>A safe no-op when Valkyrien Skies is absent, and {@code null} when the footprint holds no
+     * flight computer — blocks with no computer are not a tier-2 craft, and assembling them would
+     * produce a ship nothing in the game can name. Only vanilla/AR types appear in this signature —
+     * every VS-importing call stays inside {@link VSBridge}, which is reached only past the
+     * {@link #isAvailable()} gate, so no VS class is loaded on an AR install without VS.</p>
      */
-    public static java.util.UUID assembleTier2Ship(World world, BlockPos anchorPos) {
-        return assembleTier2Ship(world, anchorPos, null);
+    public static java.util.UUID assembleTier2Ship(
+            World world, zmaster587.advancedRocketry.util.StorageChunk pasted,
+            int x0, int y0, int z0) {
+        if (!isAvailable() || pasted == null) {
+            return null;
+        }
+        // The EXTENT IS DERIVED, never passed. Every caller has just pasted this snapshot at this
+        // origin, so its own sizes ARE the footprint — and a caller that computed them could get
+        // them wrong, which one promptly did: deriving the width from the assembler's scan box
+        // instead of from the snapshot reded all five ground-flight scenarios, because the scan
+        // missed the layer the flight computer stood in. There is no arithmetic left to get wrong.
+        int width = pasted.getSizeX(), height = pasted.getSizeY(), depth = pasted.getSizeZ();
+        BlockPos afcPos = flightComputerInFootprint(world, x0, y0, z0, width, height, depth);
+        if (afcPos == null) {
+            LOGGER.error("[SPACE] refusing to assemble a tier-2 ship from the blocks pasted at"
+                            + " ({},{},{}) {}x{}x{} in dim {}: no flight computer stands in that"
+                            + " footprint, so the craft would have no name and would take a"
+                            + " substrate-minted id that nothing else in the game knows.",
+                    x0, y0, z0, width, height, depth,
+                    world == null ? "null" : world.provider.getDimension());
+            return null;
+        }
+        return assembleTier2ShipAt(world, afcPos);
     }
 
     /**
@@ -119,43 +159,49 @@ public final class VSIntegration {
         net.minecraft.tileentity.TileEntity te =
                 world == null || anchorPos == null ? null : world.getTileEntity(anchorPos);
         return te instanceof zmaster587.advancedRocketry.tile.TileAdvancedFlightComputer
-                ? ((zmaster587.advancedRocketry.tile.TileAdvancedFlightComputer) te).shipIdOrNull()
+                ? ((zmaster587.advancedRocketry.tile.TileAdvancedFlightComputer) te).getOrCreateShipId()
                 : null;
     }
 
     /**
-     * The same, KEEPING the identity {@code keepUuid} the caller already holds for this ship, so a
-     * craft that is cut out of one world and re-assembled in another stays the same ship to every
-     * lookup instead of becoming a stranger that has to be found by position. {@code null} mints a
-     * fresh identity, which is what a new build wants.
+     * The flight computer inside a just-pasted footprint, for a caller that has blocks in a world and
+     * needs the ANCHOR to be the craft's own computer.
      *
-     * <p>The identity is kept only when nothing live holds it in {@code world}; this ship's own
-     * blockless remnant is adopted, a live ship is refused with a loud log and the assembly falls
-     * back to a fresh identity. The returned uuid is the one the ship actually got, which is not
-     * necessarily the one that was asked for.</p>
+     * <p>Every assembly is anchored on the flight computer, because that is where the craft's name
+     * lives (see {@link #assembleTier2Ship}). A new build has that for free — the assembler stands on
+     * it. A paste does not: it lands a box of blocks, and the computer is somewhere inside. So the
+     * box is scanned, once, for the one tile that names the ship.</p>
+     *
+     * <p>Scanned rather than remembered on purpose: a snapshot's block layout is the snapshot's
+     * business, and a caller that carried an offset would be a second place for the layout to be
+     * wrong. Returns {@code null} when the footprint holds no flight computer, which means the blocks
+     * are not a tier-2 craft and nothing should be assembled from them.</p>
      */
-    public static java.util.UUID assembleTier2Ship(World world, BlockPos anchorPos,
-                                                   java.util.UUID keepUuid) {
-        return assembleTier2Ship(world, anchorPos, keepUuid, null);
+    private static BlockPos flightComputerInFootprint(World world, int x0, int y0, int z0,
+                                                     int width, int height, int depth) {
+        if (world == null) {
+            return null;
+        }
+        for (int ey = 0; ey < height; ey++) {
+            for (int ex = 0; ex < width; ex++) {
+                for (int ez = 0; ez < depth; ez++) {
+                    BlockPos p = new BlockPos(x0 + ex, y0 + ey, z0 + ez);
+                    if (world.getTileEntity(p)
+                            instanceof zmaster587.advancedRocketry.tile.TileAdvancedFlightComputer) {
+                        return p;
+                    }
+                }
+            }
+        }
+        return null;
     }
 
     /**
-     * The same, also carrying the craft's DURABLE name onto the record it creates. See
-     * {@link #shipUuidOfDurableId} for what that name is for; {@code null} leaves the ship unnamed,
-     * which is what a genuinely new build wants until its flight computer names it.
+     * The assembly itself, once the craft's own flight computer has been FOUND. Private: the only
+     * way in is the footprint form above, which is what keeps "the anchor is the computer" true.
      */
-    public static java.util.UUID assembleTier2Ship(World world, BlockPos anchorPos,
-                                                   java.util.UUID keepUuid,
-                                                   java.util.UUID keepDurableId) {
-        if (!isAvailable()) {
-            return null;
-        }
-        // The caller's value only when the ship cannot speak for itself. An assembly anchored on the
-        // craft's own flight computer — every new build — reads the name off it, so there is nothing
-        // to forget; a crossing anchors on the first pasted block instead and hands the name in,
-        // which is legitimate because it is carrying the SAME ship across.
-        java.util.UUID durable = keepDurableId != null
-                ? keepDurableId : durableNameAtAnchor(world, anchorPos);
+    private static java.util.UUID assembleTier2ShipAt(World world, BlockPos anchorPos) {
+        java.util.UUID durable = durableNameAtAnchor(world, anchorPos);
         // ONE SHIP, ONE IDENTITY. The substrate's uuid IS the craft's durable name, so nothing has to
         // translate between two values and no lookup can be answered about the wrong craft. Before
         // this, the substrate minted its own uuid per assembly — which is exactly why AR had to keep
@@ -186,10 +232,32 @@ public final class VSIntegration {
                 durable = null;
             }
         }
-        // The identity IS the durable name wherever there is one; keepUuid survives only for a caller
-        // that has no name to give (a hull with no flight computer keeps whatever it had).
-        java.util.UUID identity = durable != null ? durable : keepUuid;
-        return VSBridge.assembleTier2Ship(world, anchorPos, LOGGER, identity, durable);
+        // REFUSED rather than assembled under a substrate-minted identity. One ship, one identity is
+        // the rule above; the only way to break it is to reach here with no name from either source,
+        // and then the substrate mints its own and the craft leaves with two ids nothing reconciles.
+        // That used to be a silent fallback, and it cost a session: a test fixture anchored its
+        // assembly on a deck block instead of on the flight computer standing two blocks away, got a
+        // substrate-only id, and then handed its tests BOTH values with a note about which question
+        // takes which. The rule is not enforceable by convention — a caller cannot see that it broke
+        // it — so it is enforced here.
+        //
+        // Every legitimate caller already satisfies this. A new build anchors on its own flight
+        // computer (`TileRocketAssemblingMachine`), so the name is read off the anchor; a crossing
+        // anchors on the first pasted block and HANDS THE NAME IN, because it is carrying the same
+        // ship across. A caller that can do neither is not assembling a ship whose identity anyone
+        // can ask about.
+        if (durable == null) {
+            // Unreachable through the footprint form, which only calls this with a computer's own
+            // position. Kept as a refusal rather than a fallback: if a future path reaches here
+            // without a name, the craft must not be assembled under a substrate-minted id.
+            LOGGER.error("[SPACE] refusing to assemble a tier-2 ship at {} in dim {}: that block is"
+                            + " not a flight computer, so the craft has no name to be assembled"
+                            + " under.",
+                    anchorPos, world == null ? "null" : world.provider.getDimension());
+            return null;
+        }
+        // The identity IS the durable name. There is no second value and no caller-supplied one.
+        return VSBridge.assembleTier2Ship(world, anchorPos, LOGGER, durable);
     }
 
     /**
@@ -548,7 +616,11 @@ public final class VSIntegration {
             // Re-assemble under the identity the ship crossed with. Same world as the source on a
             // same-world reposition, where this ship's own blockless remnant is what holds the
             // identity - it is adopted rather than collided with.
-            shipUuid = assembleTier2Ship(dstWorld, anchor, srcShipId, srcDurableName);
+            // The paste footprint. The identity is no longer carried across by hand: the craft's
+            // flight computer crossed WITH its blocks and still holds the name, so the assembly
+            // reads it there — which is the same value `srcDurableName` used to carry, from the
+            // same tile, with no call site able to forget it.
+            shipUuid = assembleTier2Ship(dstWorld, snap, dstX, dstY, dstZ);
         } else {
             // The only DESTRUCTIVE failure of the four: the source has already been cut by this point,
             // so the ship exists as loose blocks at the paste site and nowhere else. Logged at ERROR
@@ -658,7 +730,14 @@ public final class VSIntegration {
                 }
             }
         }
-        java.util.UUID shipUuid = anchor == null ? null : assembleTier2Ship(dstWorld, anchor);
+        // The footprint, and this one CHANGES BEHAVIOUR: a restored ship now comes back as
+        // ITSELF. This path used to anchor on the first non-air block and document the result as
+        // "the identity it returns is always a fresh one, and its caller must adopt it" — on the
+        // reasoning that the ship it names died with the hyperspace world. The substrate's object
+        // did; the NAME did not. It is in the flight computer's own NBT (`shipId`) and the snapshot
+        // carries tile entities, so the name was sitting in the pasted blocks the whole time and
+        // the ledger row keyed on it now resolves again.
+        java.util.UUID shipUuid = assembleTier2Ship(dstWorld, snap, dstX, dstY, dstZ);
         return new CrossResult(anchor, shipUuid, dstY, dstY + snap.getSizeY());
     }
 

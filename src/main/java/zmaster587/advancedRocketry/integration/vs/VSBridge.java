@@ -66,53 +66,46 @@ final class VSBridge {
      * runtime behaviour can only be exercised with VS actually installed, not in a
      * headless test.</p>
      */
-    static UUID assembleTier2Ship(World world, BlockPos anchorPos, Logger logger) {
-        return assembleTier2Ship(world, anchorPos, logger, null);
-    }
-
-    /**
-     * The same assembly, KEEPING an identity the caller already holds ({@code keepUuid}), so a ship
-     * that crosses from one world to another comes out the other side as the same ship rather than as
-     * a stranger that has to be re-found by position. {@code null} means "mint a fresh one", which is
-     * what a genuinely new build wants.
-     *
-     * <p>The identity is only kept if it is FREE in {@code world}, and the one thing that can hold it
-     * is this ship's own remnant: a crossing cuts the blocks out of the source world and the physics
-     * mod's registry entry can outlive them, blockless. That remnant IS this ship, so it is adopted —
-     * dropped here so the assembly below re-registers the identity around the blocks that actually
-     * arrived. See {@link #adoptOwnRemnant}.</p>
-     */
-    static UUID assembleTier2Ship(World world, BlockPos anchorPos, Logger logger, UUID keepUuid) {
-        return assembleTier2Ship(world, anchorPos, logger, keepUuid, null);
-    }
-
-    /**
-     * The same assembly, also carrying Advanced Rocketry's DURABLE name for the craft onto the record
-     * it creates.
-     *
-     * <p>Without this the name is lost at every crossing and can only be re-established by the ship's
-     * own flight computer on a tick - which a craft nobody is standing near does not get: a hull
-     * parked in the shared hyperspace world sits in the world's ticking set and is never ticked
-     * (measured: zero ticks over a whole jump). Everything that resolves a ship BY its durable name
-     * then falls back to "whichever craft is nearest", in the one world built to hold many at once.
-     * The name belongs to the ship, so it travels with the ship.</p>
-     */
-    static UUID assembleTier2Ship(World world, BlockPos anchorPos, Logger logger, UUID keepUuid,
-                                  UUID keepDurableId) {
-        UUID identity = adoptOwnRemnant(world, keepUuid, logger);
-        ShipData ship = identity == null
-                ? ValkyrienUtils.createNewShip(world, anchorPos)
-                : ValkyrienUtils.createNewShip(world, anchorPos, identity);
-        if (keepDurableId != null) {
-            // Set WITHOUT touching the index: this record is not in the collection yet, and the
-            // indexing setter would put it there - registering a ship whose blocks have not been
-            // moved in. It is indexed with everything else when the spawn is drained.
-            ship.setArDurableIdBeforeRegistration(keepDurableId);
+    static UUID assembleTier2Ship(World world, BlockPos afcPos, Logger logger, UUID name) {
+        // ONE SHIP, ONE IDENTITY, and this signature is the last place it could have been broken.
+        // There used to be three overloads here: one with no identity at all, one with an identity
+        // and no durable name, and one with both as separate values. The first two ASSEMBLED A
+        // NAMELESS SHIP — the substrate minted its own uuid and nothing else in the game could name
+        // the craft — and being package-private made them reachable from anywhere in this package,
+        // which is the whole port. The facade's enforcement (scan the footprint for the flight
+        // computer, take its name) is worth nothing while a door beside it opens on the same room.
+        //
+        // So: ONE form, and the name is REQUIRED. Refused rather than defaulted, because a default
+        // here is precisely the silent divergence the rule exists to abolish.
+        if (name == null) {
+            logger.error("[SPACE] refusing to assemble a tier-2 ship at {}: no durable name was"
+                    + " given, and a nameless craft takes a substrate-minted id that nothing else"
+                    + " in the game knows. The name comes from the craft's own flight computer.",
+                    afcPos);
+            return null;
         }
+        // The identity IS the name. `adoptOwnRemnant` still runs on it: a crossing cuts the blocks
+        // out of the source world and the substrate's registry entry can outlive them, blockless.
+        // That remnant IS this ship, so it is dropped here and the assembly re-registers the same
+        // identity around the blocks that actually arrived. See {@link #adoptOwnRemnant}.
+        UUID identity = adoptOwnRemnant(world, name, logger);
+        ShipData ship = identity == null
+                ? ValkyrienUtils.createNewShip(world, afcPos)
+                : ValkyrienUtils.createNewShip(world, afcPos, identity);
+        // Set WITHOUT touching the index: this record is not in the collection yet, and the indexing
+        // setter would put it there - registering a ship whose blocks have not been moved in. It is
+        // indexed with everything else when the spawn is drained.
+        //
+        // Written even when `adoptOwnRemnant` refused the identity: the substrate then mints its own
+        // uuid and the two values DIVERGE for this craft, which is a state the durable name must
+        // still describe. It is the one remaining way they can differ, it is logged below, and it is
+        // not reachable from a correct build — a live ship holding this name means the craft's
+        // flight computer was duplicated, which the facade re-mints for before it gets here.
+        ship.setArDurableIdBeforeRegistration(name);
         WorldServerShipManager manager = ValkyrienUtils.getServerShipManager(world);
-        manager.queueShipSpawn(ship, anchorPos, BlockFinder.BlockFinderType.FIND_ALL_BLOCKS);
-        logger.info("Queued tier-2 ship assembly at {} (ship '{}', {}{}).", anchorPos, ship.getName(),
-                ship.getUuid(), identity == null && keepUuid != null ? ", identity NOT kept" : "");
+        manager.queueShipSpawn(ship, afcPos, BlockFinder.BlockFinderType.FIND_ALL_BLOCKS);
+        logger.info("Queued tier-2 ship assembly at {} (ship '{}', {}{}).", afcPos, ship.getName(),
+                ship.getUuid(), identity == null ? ", identity NOT kept - ids DIVERGE" : "");
         return ship.getUuid();
     }
 

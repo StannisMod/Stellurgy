@@ -801,7 +801,19 @@ public class TileRocketAssemblingMachine extends TileEntityRFConsumer implements
             // rather than told — one source of truth, the tile's own NBT, and no call site that can
             // forget. It went unbound here for exactly that reason: the id above was minted and the
             // value dropped, so a craft that had not yet crossed could not be found by its own name.
-            VSIntegration.assembleTier2Ship(world, shipAnchor);
+            // The FOOTPRINT of the craft that was just pasted, not a point: the assembly finds the
+            // flight computer inside it and takes the ship's identity off that tile. `shipAnchor`
+            // above is still this build's computer and is still what the seat links to; it is no
+            // longer handed to the assembly, because a caller that can pass an anchor can pass the
+            // wrong one.
+            // The footprint is taken from the SNAPSHOT's own sizes, not derived from the scan box:
+            // the snapshot is what was pasted, so its extents are the pasted region by definition,
+            // and a width computed off an AABB's min/max is one inclusive-vs-exclusive mistake away
+            // from a scan that misses the layer the flight computer stands in. (Measured: deriving
+            // it from `rocketBB` reded all five ground-flight scenarios — `rocket_assembled` fired
+            // and no ship was ever spawned.) The origin is the paste's own origin, lift and all.
+            VSIntegration.assembleTier2Ship(world, shipStructure,
+                    (int) rocketBB.minX, (int) rocketBB.minY + liftGap, (int) rocketBB.minZ);
             // A pilot who took the seat BEFORE assembly is riding a mount bound to the seat's
             // build-time position, which the cut above just vacated - once the blocks relocate
             // into the ship's subspace nothing in his control chain resolves and the ship ignores

@@ -4520,8 +4520,28 @@ public class TestProbeCommand extends CommandBase {
             // at (1,64,1)" gets whichever craft that lookup happens to reach - in practice the first ship
             // ever assembled there, long since departed and holding an empty yard. The caller that BUILT
             // the ship is the one caller that never has to guess.
+            // The FOOTPRINT: the 3x3 deck at y=64 and the computer + seat standing on it at y=65.
+            // This used to pass `anchor` = (1,64,1), a STONE BLOCK of the deck, while the flight
+            // computer sat at (0,65,0) — so the craft was assembled with no name and took a
+            // substrate-minted id, and this reply then carried TWO ids for one ship. The footprint
+            // form cannot express that mistake.
+            // CUT AND PASTE, the way the rocket assembler does it. The fixture used to hand the
+            // assembly a bare anchor; the assembly now takes the SNAPSHOT that was pasted, which is
+            // what production always had and this fixture never did. Pasted back at the same origin
+            // rather than lifted: production lifts one block to sever the craft from its pad, and
+            // this build stands in void with no pad, so a lift would only move every coordinate the
+            // tests address.
+            zmaster587.advancedRocketry.util.StorageChunk pilotedBuild =
+                    zmaster587.advancedRocketry.util.StorageChunk.cutWorldBB(w,
+                            new net.minecraft.util.math.AxisAlignedBB(0, 64, 0, 3, 66, 3));
+            if (pilotedBuild == null) {
+                send(sender, "{\"error\":\"could not cut the piloted fixture build\"}");
+                return;
+            }
+            pilotedBuild.pasteInWorld(w, 0, 64, 0);
             java.util.UUID pilotedShip =
-                    zmaster587.advancedRocketry.integration.vs.VSIntegration.assembleTier2Ship(w, anchor);
+                    zmaster587.advancedRocketry.integration.vs.VSIntegration.assembleTier2Ship(
+                            w, pilotedBuild, 0, 64, 0);
             // SETTLE the ship in this stack's own ledger, the way the entry on-ramp would have. Without
             // it the fixture is a ship that is nowhere: production never has a craft sitting in a cell
             // with no ledger row, and anything that asks the ledger where this ship IS - a short jump,
@@ -6401,8 +6421,26 @@ public class TestProbeCommand extends CommandBase {
                     }
                 }
             }
+            // A stone cube is not a tier-2 craft: it has nothing that could name it, and the
+            // assembly refuses it now rather than minting a substrate-only id. So the fixture puts
+            // the craft's flight computer in the cube, which is what makes it a ship at all.
+            net.minecraft.block.Block afcBlockForCube = net.minecraft.block.Block.REGISTRY.getObject(
+                    new net.minecraft.util.ResourceLocation("advancedrocketry", "advancedFlightComputer"));
+            if (afcBlockForCube != null) {
+                w.setBlockState(new net.minecraft.util.math.BlockPos(1, 65, 1),
+                        afcBlockForCube.getDefaultState());
+            }
+            // Cut and paste, as above and as the assembler does: the assembly takes the snapshot.
+            zmaster587.advancedRocketry.util.StorageChunk cubeBuild =
+                    zmaster587.advancedRocketry.util.StorageChunk.cutWorldBB(w,
+                            new net.minecraft.util.math.AxisAlignedBB(0, 64, 0, 3, 67, 3));
+            if (cubeBuild == null) {
+                send(sender, "{\"error\":\"could not cut the vs-assemble cube\"}");
+                return;
+            }
+            cubeBuild.pasteInWorld(w, 0, 64, 0);
             zmaster587.advancedRocketry.integration.vs.VSIntegration.assembleTier2Ship(
-                    w, new net.minecraft.util.math.BlockPos(1, 65, 1));
+                    w, cubeBuild, 0, 64, 0);
             send(sender, "{\"ok\":true,\"slot\":" + slot + "}");
             return;
         }
