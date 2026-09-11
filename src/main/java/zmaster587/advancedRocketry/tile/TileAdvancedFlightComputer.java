@@ -212,8 +212,15 @@ public class TileAdvancedFlightComputer extends TileEntity implements IModularIn
     /**
      * The pilot's body-frame velocity setpoint (blocks/s) while Flight Assist is on - the ship's
      * cruise control. Holding a throttle ramps it; RELEASING LEAVES IT (the ship keeps cruising);
-     * cut (X) or brake (Shift) zero it. Live state only: not persisted, and re-captured from the
-     * ship's actual velocity whenever the pilot switches Flight Assist back on.
+     * cut (X) or brake (Shift) zero it, and it is re-captured from the ship's actual velocity
+     * whenever the pilot switches Flight Assist back on.
+     *
+     * <p><b>PERSISTED in this tile's NBT</b> ({@link #writeToNBT}/{@link #readFromNBT}), and so
+     * carried by every move that carries tile NBT: a craft under way stays under way across leaving
+     * a planet, landing on one, and crossing from one region of space to the next. That is the
+     * design, not an accident of the save format. The tile is also reconstructed by any chunk cycle
+     * under the ship, which is routine for a craft parked far from any player - so a cruise held
+     * only in memory would silently stop such a craft with nothing to show for it.</p>
      */
     private double[] velocitySetpoint = new double[]{0.0, 0.0, 0.0};
 
