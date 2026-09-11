@@ -215,6 +215,25 @@ A pack built around the new ships is planned — Stellurgy, Valkyrien Skies for 
 the tech tree, and a quest mod to guide the route. The older 2.x Advanced Rocketry line stays maintained
 separately for [Towards Rocket Science](https://www.curseforge.com/minecraft/modpacks/towardsrocketscience).
 
+## Running a server
+
+One vanilla setting matters more here than in most packs.
+
+**`allow-flight=true` in `server.properties`.** Vanilla kicks a player whose ridden entity has had no block
+underneath it for eighty ticks — four seconds — with *"Flying is not enabled on this server"*. A pilot sitting
+in a tier-2 craft is exactly that case by construction: the deck he is on belongs to the craft's own subspace,
+and the anti-cheat looks for a block in the world, where there is none. The same flag guards the on-foot form,
+so a crew member walking a deck in flight is on the same timer. Left at vanilla's default, an ordinary flight
+ends in a disconnect that looks like a mod bug and is not one.
+
+This is read off vanilla's own check (`NetHandlerPlayServer`, the `vehicleFloating` and `floating` paths, both
+gated by `isFlightAllowed()`), and it applies to any mod that carries players on moving structures. The mod does
+not need the flag for anything else, and turning it on does not enable creative flight for anybody.
+
+**A manned craft stays below world coordinate 30 000 000.** Vanilla disconnects a player whose position packet
+exceeds that on any axis, whatever put him there, so it is a hard ceiling for anything with somebody aboard and
+not a tuning knob.
+
 ## Contributing
 
 Bugs and pull requests go through this repository's issue tracker. Since there is no release yet, the most

@@ -187,12 +187,26 @@ public final class SpaceSubsystem {
 
     /**
      * The ship-altitude ceiling the slot cells require: the top of the realized pose band
-     * ({@link CellWorldMapper#POSE_BAND_Y} + {@link GalacticCoord#CELL}) plus a maneuvering
-     * margin. Pure, so the "every realizable cell pose is below the initialized ceiling" contract
-     * is directly checkable.
+     * ({@link GalacticCoord#HALF_CELL}, since the cell is centred on the world origin) plus a
+     * maneuvering margin. Pure, so the "every realizable cell pose is inside the initialized range"
+     * contract is directly checkable.
      */
     public static double requiredShipCeiling() {
-        return (double) CellWorldMapper.POSE_BAND_Y + GalacticCoord.CELL + SHIP_CEILING_MARGIN;
+        return (double) GalacticCoord.HALF_CELL + SHIP_CEILING_MARGIN;
+    }
+
+    /**
+     * The ship-altitude FLOOR the slot cells require — the mirror of {@link #requiredShipCeiling}.
+     *
+     * <p>It exists because the pose band is centred on the world origin: half of every cell is at
+     * negative world Y, which the old {@code +HALF_CELL} shift had made unreachable and therefore
+     * unnecessary to ask about. The substrate keeps a lower limit beside its upper one
+     * ({@code VSConfig.shipLowerLimit}), and a band that is not declared to it is a band a ship is
+     * clamped out of on its next physics step — silently, and in the half of the cell nobody is
+     * looking at.</p>
+     */
+    public static double requiredShipFloor() {
+        return -((double) GalacticCoord.HALF_CELL + SHIP_CEILING_MARGIN);
     }
 
     /**
@@ -232,13 +246,14 @@ public final class SpaceSubsystem {
             }
             return existing;
         }
-        // The cells realize ship poses across the whole [POSE_BAND_Y, CELL + POSE_BAND_Y) band
-        // (top ~ world Y 4M) while the physics mod's stock altitude clamp sits at 1000 and a
-        // ship's own thrust can never carry it past that clamp. Raise the ceiling ONCE here,
-        // deterministically, so the full vertical range of every cell is flyable from the first
-        // tick - not ratcheted up arrival-by-arrival, which left each ship a mere ~1000-block
-        // corridor above wherever it happened to enter.
-        VSIntegration.raiseShipCeilingTo(requiredShipCeiling());
+        // The cells realize ship poses across the whole [-HALF_CELL, HALF_CELL) band on every axis
+        // while the physics mod's stock altitude clamp sits at 1000 and a ship's own thrust can
+        // never carry it past that clamp. Widen the range ONCE here, deterministically, so the full
+        // vertical range of every cell is flyable from the first tick - not ratcheted up
+        // arrival-by-arrival, which left each ship a mere ~1000-block corridor above wherever it
+        // happened to enter. BOTH ends: the band is centred, so half of it is below the world
+        // origin and a floor left at its stock value is a clamp waiting under every descent.
+        VSIntegration.widenShipAltitudeRange(requiredShipFloor(), requiredShipCeiling());
         // Register the physical slot dimensions once per JVM; a single-player world re-open reuses the
         // already-registered dims (DimensionManager registration is JVM-global and re-registering throws).
         if (SpaceSlotPool.slotDims().isEmpty()) {

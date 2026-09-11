@@ -290,18 +290,23 @@ final class VSBridge {
     }
 
     /**
-     * Raise the physics mod's ship altitude ceiling to AT LEAST {@code required}. The clamp is a
-     * global static applied per physics step; the space cells realize ship poses megablocks above
-     * the stock value, and a ship's own thrust can never carry it past the clamp - so the ceiling
-     * must cover the whole pose band BEFORE the first ship arrives, deterministically, not be
-     * ratcheted up teleport-by-teleport. Never lowers a value the user configured higher; the
-     * raise is per-session (the VS config file is not written back).
+     * Widen the physics mod's ship altitude range so it covers AT LEAST {@code [floor, ceiling]}.
+     * The clamp is a pair of global statics applied per physics step; the space cells realize ship
+     * poses megablocks from the stock values, and a ship's own thrust can never carry it past
+     * either clamp - so the range must cover the whole pose band BEFORE the first ship arrives,
+     * deterministically, not be ratcheted up teleport-by-teleport. Never narrows a range the user
+     * configured wider; the widening is per-session (the VS config file is not written back).
      */
-    static void raiseShipCeilingTo(double required, Logger logger) {
-        if (org.valkyrienskies.mod.common.config.VSConfig.shipUpperLimit < required) {
+    static void widenShipAltitudeRange(double floor, double ceiling, Logger logger) {
+        if (org.valkyrienskies.mod.common.config.VSConfig.shipUpperLimit < ceiling) {
             logger.info("Raising the physics ship altitude ceiling {} -> {} to cover the space cells.",
-                    org.valkyrienskies.mod.common.config.VSConfig.shipUpperLimit, required);
-            org.valkyrienskies.mod.common.config.VSConfig.shipUpperLimit = required;
+                    org.valkyrienskies.mod.common.config.VSConfig.shipUpperLimit, ceiling);
+            org.valkyrienskies.mod.common.config.VSConfig.shipUpperLimit = ceiling;
+        }
+        if (org.valkyrienskies.mod.common.config.VSConfig.shipLowerLimit > floor) {
+            logger.info("Lowering the physics ship altitude floor {} -> {} to cover the space cells.",
+                    org.valkyrienskies.mod.common.config.VSConfig.shipLowerLimit, floor);
+            org.valkyrienskies.mod.common.config.VSConfig.shipLowerLimit = floor;
         }
     }
 

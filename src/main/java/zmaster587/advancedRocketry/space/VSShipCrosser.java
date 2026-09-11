@@ -27,8 +27,40 @@ public final class VSShipCrosser implements ShipTransitManager.Crosser {
 
     /** Clear-sky Y the target-cell arrival pastes at (cells are void; a high column avoids any floor). */
     private static final int ARRIVAL_Y = 200;
-    /** Per-lane X offset for arrivals, so ships arriving into one cell from different lanes never overlap. */
+    /**
+     * Per-lane X offset for arrivals, so ships arriving into one cell from different lanes never
+     * overlap. Live and restored arrivals interleave on it — live lanes take the even multiples,
+     * restored the odd — so the two bands are disjoint by construction while BOTH walk away from the
+     * cell, into the clearance {@link #ARRIVAL_STAGING_X} describes, rather than one of them walking
+     * back toward it.
+     */
     private static final int ARRIVAL_LANE_STRIDE = 64;
+
+    /**
+     * Where an arrival's blocks are STAGED: beyond the cell's own local range, so no craft can ever
+     * be flying where a paste lands.
+     *
+     * <p><b>Why it is outside the cell.</b> A paste is a block operation and nothing else — no
+     * entity, no player, no pose is ever at these coordinates; the ship is moved onto its real pose
+     * by the settle step a moment later. So the staging area does not have to be anywhere a ship
+     * could legitimately be, and it should not be: every local coordinate inside a cell is somewhere
+     * a pilot may park.</p>
+     *
+     * <p><b>Why it needs saying at all.</b> The staging used to sit at world X near 0, Y 200, which
+     * was far from everything only because the cell's pose band was SHIFTED sixteen million blocks
+     * up on Y — X and Z already coincided with the cell's centre. Centring the band on 2026-09-11
+     * removed the separation Y had been carrying alone, and an arrival would have been pasted beside
+     * anything parked at its cell's origin.</p>
+     *
+     * <p><b>The window.</b> Block coordinates beyond the cell face but below the physics mod's
+     * reserved shipyard, which begins at block X 19 174 416
+     * ({@code ShipChunkAllocator.CHUNK_X_START}) and silently cancels a teleport into it. One
+     * {@link CellSeam#CARRY_MARGIN} past the face keeps it clear of a craft that overshot the seam
+     * and has not yet been carried. {@code CellWorldMapperTest} pins the band inside that window, so
+     * a cell that grows toward the shipyard fails a test instead of pasting into VS's own claims.</p>
+     */
+    public static final int ARRIVAL_STAGING_X =
+            (int) (GalacticCoord.HALF_CELL + CellSeam.CARRY_MARGIN);
 
     /** The shared crossing primitives (readiness-gated pose teleport, rider carry, unpark) the entry
      *  on-ramp and the descent already settle through. Stateless. */
@@ -414,7 +446,7 @@ public final class VSShipCrosser implements ShipTransitManager.Crosser {
                     + "DIFFERENT ship, so cutting it would deliver a stranger into the target cell");
             return null;
         }
-        int dstX = tile.index * ARRIVAL_LANE_STRIDE;
+        int dstX = ARRIVAL_STAGING_X + 2 * tile.index * ARRIVAL_LANE_STRIDE;
         VSIntegration.CrossResult res = VSIntegration.crossShip(
                 hyper, hyperAnchor.getX() + 0.5, hyperAnchor.getY() + 0.5, hyperAnchor.getZ() + 0.5,
                 arriving, dst, dstX, ARRIVAL_Y, 0);
@@ -509,13 +541,16 @@ public final class VSShipCrosser implements ShipTransitManager.Crosser {
         arrivalGuardWarned.remove(targetSlotDim);
         // Same local hold, same reason, as the live arrival above.
         DimensionManager.keepDimensionLoaded(targetSlotDim, true);
-        // A restored transit holds no hyperspace lane. Paste it in the NEGATIVE-X band, DISJOINT from live
-        // arrivals (which use tile.index*STRIDE, always >= 0), so a restored ship can never collide with a
-        // live-crossing ship pasting into the same cell. Monotonic per boot (restored transits are imported
-        // only at server start, a small set) so restored ships never overlap each other either - no wrap.
+        // A restored transit holds no hyperspace lane. Paste it on the ODD lane multiples, DISJOINT from
+        // live arrivals (which take the even ones), so a restored ship can never collide with a
+        // live-crossing ship pasting into the same cell. Monotonic per boot (restored transits are
+        // imported only at server start, a small set) so restored ships never overlap each other either -
+        // no wrap. Both bands walk AWAY from the cell into the staging clearance; the negative-X band this
+        // replaces walked back across the cell the arrival is for, which was harmless only while the cell
+        // was sixteen million blocks away on Y.
         // The snapshot source is always present (no async wait), so this pastes exactly once - a non-null
         // anchor on the first call, no retry - never a duplicate paste.
-        int dstX = -ARRIVAL_LANE_STRIDE * (restoredLane++ + 1);
+        int dstX = ARRIVAL_STAGING_X + (2 * restoredLane++ + 1) * ARRIVAL_LANE_STRIDE;
         VSIntegration.CrossResult res = VSIntegration.pasteAndAssemble(dst, snapshot, dstX, ARRIVAL_Y, 0);
         // A restored arrival is the one that CANNOT keep the ship's identity: the ship it names died
         // with the hyperspace world on the restart this transit survived, and what lands here is a

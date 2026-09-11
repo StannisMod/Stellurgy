@@ -6,6 +6,7 @@
   "compatibilityLevel": "JAVA_8",
   "refmap": "mixins.advancedrocketry.refmap.json",
   "mixins": [
+    "MixinEntityCellVoid",
     "MixinEntityGravity",
     "MixinEntityLivingShipTravel",
     "MixinEntityPlayerShipFlight",

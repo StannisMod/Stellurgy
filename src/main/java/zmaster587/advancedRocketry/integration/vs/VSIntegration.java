@@ -340,17 +340,23 @@ public final class VSIntegration {
     }
 
     /**
-     * Raise the physics mod's ship altitude ceiling to at least {@code required} (no-op when the
-     * physics mod is absent, or when the configured/current value is already higher). Called once
-     * at space-subsystem registration so every slot cell's pose band is flyable from the first
-     * tick - see {@link VSBridge#raiseShipCeilingTo} for why this must be deterministic rather
-     * than teleport-ratcheted.
+     * Widen the physics mod's ship altitude range so it covers at least {@code [floor, ceiling]}
+     * (no-op when the physics mod is absent, and each end moves only if the current value is
+     * narrower). Called once at space-subsystem registration so every slot cell's pose band is
+     * flyable from the first tick - see {@link VSBridge#widenShipAltitudeRange} for why this must be
+     * deterministic rather than teleport-ratcheted.
+     *
+     * <p>Both ends, not just the top: the cell's pose band is centred on the world origin, so half
+     * of it is at negative Y. A ceiling-only call leaves the substrate's stock floor sitting under
+     * the lower half of every cell, where it does not refuse anything — it CLAMPS, on the next
+     * physics step, which is the shape a reader cannot tell from a ship that simply stopped
+     * descending.</p>
      */
-    public static void raiseShipCeilingTo(double required) {
+    public static void widenShipAltitudeRange(double floor, double ceiling) {
         if (!isAvailable()) {
             return;
         }
-        VSBridge.raiseShipCeilingTo(required, LOGGER);
+        VSBridge.widenShipAltitudeRange(floor, ceiling, LOGGER);
     }
 
     /**

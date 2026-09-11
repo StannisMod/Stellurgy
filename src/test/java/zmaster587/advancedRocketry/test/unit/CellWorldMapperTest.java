@@ -11,9 +11,9 @@ import static org.junit.Assert.assertTrue;
 
 /**
  * Contract tests for the honest-3D cell&harr;slot-world pose mapping: all three axes realize
- * directly (world X/Z = cell-local X/Z; world Y = local Y + a fixed positive offset), the whole
- * canonical local range realizes ABOVE the vanilla void-kill line, and the mapping round-trips
- * exactly. The offset's numeric value is {@code tunable} and deliberately not pinned.
+ * directly and alike — world X/Y/Z are the cell-local offsets, with the cell centred on the world
+ * origin — every realizable pose lands somewhere a pilot can legally be, and the mapping round-trips
+ * exactly.
  */
 public class CellWorldMapperTest {
 
@@ -28,15 +28,41 @@ public class CellWorldMapperTest {
         assertEquals(-42_000.0, pose[2], 0.0);
     }
 
+    /**
+     * The vanilla limit a realized pose must respect, and the only one that DISCONNECTS rather than
+     * corrects: {@code NetHandlerPlayServer.isMovePlayerPacketInvalid} refuses a position packet
+     * whose {@code |x|}, {@code |y|} or {@code |z|} exceeds this, and the server drops the player on
+     * the spot. Read from vanilla, not chosen here.
+     */
+    private static final double VANILLA_POSITION_PACKET_LIMIT = 3.0e7;
+
+    /**
+     * Every pose a cell can realize must be somewhere a PILOT can be.
+     *
+     * <p>This replaces a test that pinned the opposite arrangement — that the whole band realized
+     * ABOVE vanilla's Y=-64 void kill, which the mapping bought with a {@code +HALF_CELL} shift on Y
+     * alone. That shift made Y spend the entire cell going up while X and Z spent half of it each
+     * way, and the top of every cell then sat past the packet limit below: measured 2026-09-11, a
+     * seated pilot teleported there was disconnected inside the same tick. The void kill is gated in
+     * cell worlds instead, so the band is centred and this is the bound that matters.</p>
+     */
     @Test
-    public void fullCanonicalLocalYRangeRealizesAboveTheVoidKillLine() {
-        // The lowest possible local Y (cell floor) must still realize above vanilla's Y=-64 kill.
+    public void everyRealizablePoseIsSomewhereAPilotCanBe() {
         double[] floor = CellWorldMapper.poseWorldOf(at(0, 0, 0, 0, -GalacticCoord.HALF_CELL, 0));
-        assertTrue("cell-floor pose " + floor[1] + " must stay above the void-kill line",
-                floor[1] > -64.0);
-        // And the mapping is monotone: the cell centre realizes HALF_CELL above the floor.
+        double[] top = CellWorldMapper.poseWorldOf(at(0, 0, 0, 0, GalacticCoord.HALF_CELL - 1, 0));
+        for (double[] pose : new double[][]{floor, top}) {
+            for (int axis = 0; axis < 3; axis++) {
+                assertTrue("a realizable cell pose must stay inside vanilla's position-packet limit,"
+                                + " which DISCONNECTS a player rather than correcting him: axis "
+                                + axis + " of pose [" + pose[0] + "," + pose[1] + "," + pose[2] + "]",
+                        Math.abs(pose[axis]) <= VANILLA_POSITION_PACKET_LIMIT);
+            }
+        }
+        // Centred, and monotone with it: the cell centre sits exactly HALF_CELL above the floor,
+        // and the floor is as far below the origin as the top is above it.
         double[] centre = CellWorldMapper.poseWorldOf(at(0, 0, 0, 0, 0, 0));
         assertEquals(GalacticCoord.HALF_CELL, centre[1] - floor[1], 0.0);
+        assertEquals(0.0, centre[1], 0.0);
     }
 
     /**
@@ -98,25 +124,57 @@ public class CellWorldMapperTest {
     }
 
     /**
-     * The case that makes the clamp worth having, rather than a theoretical bound: an arrival paste
-     * lands in a fixed block band near Y=200, while a cell's pose band starts at HALF_CELL + 256.
-     * Inverting that pose gives a local Y just BELOW the cell's range — so a ship that reported
-     * itself between the paste and the pose settle named the cell one sector down. It is reachable on
-     * every single arrival, unlike the +X face, which takes hours of flight to reach.
+     * An arrival's blocks are STAGED outside the cell, in the clearance between the cell face and
+     * the physics mod's reserved shipyard — and that window is what this pins.
+     *
+     * <p>Below the face, a paste would land where a craft may legitimately be parked (every local
+     * coordinate in a cell is somewhere a pilot can go). At or past the shipyard start, the physics
+     * mod silently cancels a teleport into its own claims. The window between them is 3.17M blocks
+     * wide today and it narrows as the cell grows, so a cell that outgrows it must fail HERE rather
+     * than by pasting a ship into VS's storage.</p>
      */
     @Test
-    public void anArrivalPasteBandPoseDoesNotDropTheShipASectorDown() {
-        GalacticCoord cell = at(57, 0, 5, 0, 0, 0);
-        double pasteBandY = 200.0; // the arrival paste lane, far below the cell's own pose band
+    public void anArrivalIsStagedBetweenTheCellFaceAndTheShipyard() {
+        long staging = zmaster587.advancedRocketry.space.VSShipCrosser.ARRIVAL_STAGING_X;
+        assertTrue("an arrival must be staged OUTSIDE the cell, where no craft can be flying:"
+                        + " staging X " + staging + " vs cell face " + GalacticCoord.HALF_CELL,
+                staging > GalacticCoord.HALF_CELL);
+        long shipyardStart = 16L * (org.valkyrienskies.mod.common.ships.chunk_claims.ShipChunkAllocator
+                .CHUNK_X_START - org.valkyrienskies.mod.common.ships.chunk_claims.ShipChunkAllocator
+                .MAX_CHUNK_RADIUS);
+        assertTrue("an arrival must be staged BELOW the physics mod's reserved shipyard, which"
+                        + " silently cancels a teleport into it: staging X " + staging
+                        + " vs shipyard start " + shipyardStart,
+                staging < shipyardStart);
+    }
 
-        assertTrue("the fixture must actually be outside the cell's local range",
-                CellWorldMapper.poseEscapesCell(0.0, pasteBandY, 0.0));
-        assertEquals("a paste-band pose must not name a neighbouring cell",
-                cell.cellKey(),
-                CellWorldMapper.coordOfPoseWithin(cell, 0.0, pasteBandY, 0.0).cellKey());
-        assertEquals("...while the honest inverse still says it is out of range",
-                cell.sectorY() - 1L,
-                CellWorldMapper.coordOfPose(cell, 0.0, pasteBandY, 0.0).sectorY());
+    /**
+     * The staging band's Y — an ordinary block altitude near 200 — is an ordinary INTERIOR Y for a
+     * cell, not a hair's breadth outside it.
+     *
+     * <p>This is what the Y centring bought, and it is why the test is kept rather than deleted.
+     * Under the old {@code +HALF_CELL} shift the cell's band began at {@code HALF_CELL + 256}, so
+     * inverting any ordinary block altitude gave a local Y just BELOW the cell's range: a ship read
+     * between the paste and the pose settle named the cell ONE SECTOR DOWN, on every single arrival,
+     * and the saturating read existed to absorb it. Centred, world Y 200 is local Y 200 — just above
+     * the cell's middle — and the commonest case in the game stopped being an edge case.</p>
+     *
+     * <p>Asked on the Y axis alone, deliberately: an arrival is STAGED outside the cell in X (see
+     * {@link #anArrivalIsStagedBetweenTheCellFaceAndTheShipyard}), so the whole staging pose is an
+     * escape and would answer this question about the wrong axis.</p>
+     */
+    @Test
+    public void anOrdinaryBlockAltitudeIsAnInteriorYForACell() {
+        GalacticCoord cell = at(57, 0, 5, 0, 0, 0);
+        double blockBandY = 200.0;
+
+        assertFalse("an ordinary block altitude must not read as an escape on Y",
+                CellWorldMapper.poseEscapesCell(0.0, blockBandY, 0.0));
+        assertEquals("...and must not name a neighbouring cell", cell.cellKey(),
+                CellWorldMapper.coordOfPoseWithin(cell, 0.0, blockBandY, 0.0).cellKey());
+        assertEquals("...with the honest inverse agreeing, no saturation needed to get there",
+                cell.sectorY(),
+                CellWorldMapper.coordOfPose(cell, 0.0, blockBandY, 0.0).sectorY());
     }
 
     /** A pose inside the cell is not "escaping" — the detector must not fire on ordinary flight. */

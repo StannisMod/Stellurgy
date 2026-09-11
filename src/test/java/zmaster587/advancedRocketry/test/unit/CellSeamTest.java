@@ -25,7 +25,7 @@ public class CellSeamTest {
 
     /** The world-frame pose whose local offset is {@code (lx,ly,lz)} — the inverse of the mapping. */
     private static double[] poseOfLocal(long lx, long ly, long lz) {
-        return new double[]{lx, ly + GalacticCoord.HALF_CELL + CellWorldMapper.POSE_BAND_Y, lz};
+        return new double[]{lx, ly, lz};
     }
 
     @Test
@@ -100,7 +100,7 @@ public class CellSeamTest {
                 CellSeam.shouldCarry(arrival[0], arrival[1], arrival[2]));
 
         // Where it landed, and how far back the return threshold is FROM THERE.
-        long arrivedAt = CellSeam.localOf(arrival[0], false);
+        long arrivedAt = CellSeam.localOf(arrival[0]);
         long returnThreshold = -GalacticCoord.HALF_CELL - CellSeam.CARRY_MARGIN;
         long returnTrip = arrivedAt - returnThreshold;
         assertTrue("returning must cost the re-entry depth plus the margin, not merely the margin: "

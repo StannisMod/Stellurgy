@@ -1,6 +1,8 @@
 package zmaster587.advancedRocketry.test.server;
 
 import zmaster587.advancedRocketry.test.ShipReadiness;
+import zmaster587.advancedRocketry.space.CellSeam;
+import zmaster587.advancedRocketry.space.CellWorldMapper;
 import zmaster587.advancedRocketry.space.GalacticCoord;
 import zmaster587.advancedRocketry.test.GameTicks;
 import zmaster587.advancedRocketry.test.EntrySlots;
@@ -277,6 +279,10 @@ public class VSShipEntryE2ETest extends AbstractSharedServerTest {
         // (0,200,0) in the arrival slot", which is an address no craft was ever put at.
         String arrivedVsId = ShipIdentity.physicsIdOf(this::exec, arrivedSlot, durableId);
         final String[] pose = {""};
+        // The ledger's own coordinate for this craft, kept from the last sample: the pose witness
+        // below compares the ship against WHERE THE LEDGER SAYS IT IS, and both are read inside the
+        // same window.
+        final String[] ledgerRow = {""};
         // Sampled on the SLOT WORLD's clock, not the server's. What drifts is the ship, and the ship
         // drifts because its own flight computer ticks in that world - so the window has to be
         // measured in the ticks the subject runs on. The two clocks are not interchangeable here: a
@@ -300,20 +306,41 @@ public class VSShipEntryE2ETest extends AbstractSharedServerTest {
                     pose[0] = poseNow + " loadedShipsInCell="
                             + extractInt(exec("artest vs ship-count " + arrivedSlot), "count");
                     String held = exec("artest space entry-status id " + durableId);
+                    ledgerRow[0] = held;
                     assertEquals("the arrived ship's address drifted out of the cell it flew to once"
                                     + " its flight computer began self-reporting its position;"
                                     + " status=" + held + " ship=" + pose[0],
                             targetCell, extractString(held, "cellKey"));
                 });
-        // And the same fact read off the ship rather than off the ledger: a cell realizes its
-        // contents in the pose band, while an arrival that never settled is left in the paste lane's
-        // ordinary block Y. The band floor is the discriminator — no exact pose is pinned.
+        // And the same fact read off the SHIP rather than off the ledger — the two compared where
+        // they must agree: the ship's realized pose against the realization of the coordinate the
+        // ledger holds for it.
+        //
+        // This used to ask whether the ship's Y had cleared HALF_CELL, on the reasoning that a cell
+        // realized its contents megablocks up while an unsettled arrival was left at the staging
+        // band's ordinary block Y. That discriminator was an artefact of the Y shift: centring the
+        // pose band on 2026-09-11 put a settled ship at its cell's centre on world Y 0, which no
+        // magnitude test can tell from anything. Comparing against the ledger's own coordinate is
+        // what the check meant all along, and it survives the next change of mapping too.
         assertTrue("the arrived ship was never loaded in its destination cell: " + pose[0],
                 pose[0].contains("\"managed\":true"));
-        assertTrue("the arrived ship is not in its cell's pose band, so it never reached the"
-                        + " coordinate the jump was aimed at (band floor " + GalacticCoord.HALF_CELL
-                        + ", the paste lane sits near ordinary block Y): " + pose[0],
-                extractDouble(pose[0], "posY") > GalacticCoord.HALF_CELL);
+        double[] expected = CellWorldMapper.poseWorldOf(GalacticCoord.ofSectorLocal(0L, 0L, 0L,
+                (long) extractDouble(ledgerRow[0], "lx"),
+                (long) extractDouble(ledgerRow[0], "ly"),
+                (long) extractDouble(ledgerRow[0], "lz")));
+        double[] actual = {extractDouble(pose[0], "posX"), extractDouble(pose[0], "posY"),
+                extractDouble(pose[0], "posZ")};
+        for (int axis = 0; axis < 3; axis++) {
+            // CARRY_MARGIN as the tolerance, because it is production's OWN answer to "still at this
+            // coordinate as far as the cell is concerned" — the distance a craft may sit past a face
+            // before the seam carries it. A settle that landed further off than that has not landed.
+            assertTrue("the arrived ship is not where its own ledger row says it is, so it never"
+                            + " reached the coordinate the jump was aimed at. axis " + axis
+                            + ": ship " + actual[axis] + " vs ledger " + expected[axis]
+                            + " (tolerance " + CellSeam.CARRY_MARGIN + "). ship=" + pose[0]
+                            + " ledger=" + ledgerRow[0],
+                    Math.abs(actual[axis] - expected[axis]) <= CellSeam.CARRY_MARGIN);
+        }
         assertEquals("nothing may still be in transit once the ledger reports arrival", 0,
                 extractInt(exec("artest space subsystem-status"), "transits"));
     }
