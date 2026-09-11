@@ -46,6 +46,7 @@
     "MixinItemStationChipEvents",
     "MixinRocketInventoryHelperEvents",
     "MixinPlanetEventHandlerEvents",
+    "MixinServerDisconnectEvents",
     "MixinSatelliteBiomeChangerEvents",
     "MixinSatelliteRegistryEvents",
     "MixinVSBridgeEvents",

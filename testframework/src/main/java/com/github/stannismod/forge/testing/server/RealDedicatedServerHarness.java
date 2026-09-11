@@ -584,6 +584,16 @@ public final class RealDedicatedServerHarness implements AutoCloseable {
         String newline = System.lineSeparator();
         StringBuilder builder = new StringBuilder();
         builder.append("enable-command-block=true").append(newline);
+        // Vanilla's anti-cheat kicks a player whose RIDDEN ENTITY has had no block under it for 80
+        // ticks — `vehicleFloating` in NetHandlerPlayServer, reason `multiplayer.disconnect.flying`,
+        // and the same flag guards the on-foot form. A body aboard a flying craft never has a world
+        // block beneath it, because the deck it stands on lives in the craft's own subspace, so any
+        // scenario that keeps a pilot seated on a hovering craft for more than four seconds is on a
+        // timer. Measured 2026-09-11: a seated pilot vanished mid-scenario and the only surviving
+        // witness was a server-side dismount whose caller trail read `PlayerList.playerLoggedOut`.
+        // Left at vanilla's default this turns an ordinary flight into a disconnect, and a test
+        // cannot tell that from the product losing the player.
+        builder.append("allow-flight=true").append(newline);
         builder.append("allow-nether=true").append(newline);
         builder.append("difficulty=1").append(newline);
         builder.append("gamemode=1").append(newline);
