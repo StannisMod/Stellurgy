@@ -1392,6 +1392,53 @@ public class TestProbeCommand extends CommandBase {
         // outlives a pilot. This is how an arrangement puts a deck in motion with NOBODY at the controls
         // — the state production itself flies an unmanned ship on — rather than through an input, which
         // a riderless seat correctly clears every tick.
+        // ff-cruise-read-by-id <dim> <shipId> — the READ-ONLY twin of `ff-cruise-by-id`.
+        //
+        // The cruise setpoint is the thing that outlives a pilot, so it is a state a scenario
+        // routinely needs to ASK about: did the climb leave one behind, did a crossing carry it,
+        // is the craft under way or merely drifting. Until this verb existed the only way to see
+        // it was to SET it and read the reply — an observation that destroys what it observes, so
+        // a test could establish the cruise was zero only by making it zero.
+        //
+        // `velY` off `ship-info` is not a substitute and must not be read as one: that is the
+        // hull's actual velocity, which lags the setpoint, is opposed by drag and station-keeping,
+        // and is zero for a whole moment after a crossing rebuilds the body while the setpoint is
+        // very much alive.
+        //
+        // ABSENCE IS A VALUE HERE, and it is emitted as `null` rather than as 0: a zero cruise is
+        // the commonest REAL answer there is (it means hover), so a zero standing in for "no
+        // computer resolved" would be indistinguishable from the mechanic working. A consumer
+        // parsing a number gets NaN and propagates it; one reading `afcResolved` gets the truth.
+        if (args.length >= 3 && "ff-cruise-read-by-id".equalsIgnoreCase(args[0])) {
+            net.minecraft.world.WorldServer readWorld =
+                    vsWorld(sender, parseIntOr(args[1], Integer.MIN_VALUE));
+            if (readWorld == null) {
+                send(sender, "{\"ok\":false,\"afcResolved\":false,\"error\":\"world not loaded\""
+                        + ",\"cruiseForward\":null,\"cruiseRight\":null,\"cruiseUp\":null}");
+                return;
+            }
+            java.util.UUID readShip;
+            try {
+                readShip = java.util.UUID.fromString(args[2]);
+            } catch (IllegalArgumentException e) {
+                send(sender, "{\"ok\":false,\"afcResolved\":false,\"error\":\"shipId is not a uuid\""
+                        + ",\"cruiseForward\":null,\"cruiseRight\":null,\"cruiseUp\":null}");
+                return;
+            }
+            BlockPos readAfc = zmaster587.advancedRocketry.integration.vs.VSIntegration
+                    .flightComputerOf(readWorld, readShip);
+            TileEntity readTe = readAfc == null ? null : readWorld.getTileEntity(readAfc);
+            if (!(readTe instanceof zmaster587.advancedRocketry.tile.TileAdvancedFlightComputer)) {
+                send(sender, "{\"ok\":false,\"afcResolved\":false"
+                        + ",\"cruiseForward\":null,\"cruiseRight\":null,\"cruiseUp\":null}");
+                return;
+            }
+            double[] held = ((zmaster587.advancedRocketry.tile.TileAdvancedFlightComputer) readTe)
+                    .commandedCruise();
+            send(sender, "{\"ok\":true,\"afcResolved\":true,\"cruiseForward\":" + held[0]
+                    + ",\"cruiseRight\":" + held[1] + ",\"cruiseUp\":" + held[2] + "}");
+            return;
+        }
         if (args.length >= 6 && "ff-cruise-by-id".equalsIgnoreCase(args[0])) {
             net.minecraft.world.WorldServer world = vsWorld(sender, parseIntOr(args[1], Integer.MIN_VALUE));
             if (world == null) {
