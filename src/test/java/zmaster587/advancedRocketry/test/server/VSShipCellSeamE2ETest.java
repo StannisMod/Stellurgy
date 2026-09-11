@@ -445,11 +445,32 @@ public class VSShipCellSeamE2ETest extends AbstractSharedServerTest {
         // a body put down on its deck is 143 blocks below it by the time anything asks, which reads
         // as "the crossing dropped the cargo" and is nothing of the kind. This scenario is about what
         // a carry does with what is aboard; an accelerating deck is a different subject.
+        //
+        // AND THAT TAKES TWO COMMANDS, because the input and the cruise are different channels.
+        // Zeroing the INPUT is the one thing that demonstrably does NOT stop this craft: by the
+        // computer's own contract, releasing a throttle leaves the cruise where it ramped to — the
+        // ship keeps cruising, which is the whole point of a cruise. The setpoint then rides through
+        // the crossing in tile NBT and re-engages the moment the rebuilt ship is ready, which is why
+        // the ship reads velY=0 at arrival and 0.667 a moment later.
         String settledVsId = vsIdOf(sourceSlot, arShipId);
         String released = exec("artest vs ff-input-by-id " + sourceSlot + " " + settledVsId
                 + " 0 0 0 0 0 0");
         assertTrue("the throttle could not be released, so the ship stays under power: " + released,
                 released.contains("\"afcResolved\":true"));
+        // ASSERTED ON THE READ-BACK, never on "the command resolved". The reply carries the cruise
+        // the computer now holds, and that — not whether a message arrived — is the quantity this
+        // step exists to establish.
+        String stopped = exec("artest vs ff-cruise-by-id " + sourceSlot + " " + settledVsId
+                + " 0 0 0");
+        assertTrue("the cruise could not be commanded, so the craft keeps flying its last setpoint: "
+                + stopped, stopped.contains("\"afcResolved\":true"));
+        double cruiseF = extractDouble(stopped, "cruiseForward");
+        double cruiseR = extractDouble(stopped, "cruiseRight");
+        double cruiseU = extractDouble(stopped, "cruiseUp");
+        assertTrue("the computer still holds a cruise after being told to stop, so the deck will "
+                        + "accelerate away from whatever is put on it and no carry assertion below "
+                        + "would be about a carry: " + stopped,
+                Math.abs(cruiseF) < 1e-9 && Math.abs(cruiseR) < 1e-9 && Math.abs(cruiseU) < 1e-9);
 
         // --- Act: put the ship past the +X face of its cell --------------------------------------
         // The SAME durable craft, under the physics id translated above: entry is itself a crossing,
