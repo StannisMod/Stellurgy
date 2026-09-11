@@ -2382,6 +2382,63 @@ public final class ShipFrameTravel {
      *
      * @return how many bodies were re-seated
      */
+    /**
+     * Carry every body this side holds aboard {@code shipId} by {@code (dx,dy,dz)} — what a
+     * TELEPORT of that craft owes its crew, as against what {@link #followShipPoses} does for its
+     * ordinary motion.
+     *
+     * <p><b>Why the per-tick pass is not enough, measured 2026-09-11.</b> Two of its conditions fail
+     * exactly at a teleport. It re-images a held body through the ship's CURRENT transform, and
+     * declines when the craft does not resolve on this side this tick — a teleported craft is parked
+     * and routinely unloaded (a crossing arrives with nobody aboard, which is the one case the
+     * substrate never loads for), so the body simply keeps the position it had: left behind. And the
+     * delta itself is the problem the deck guard exists to refuse — {@code PLAYER_MAX_OWN_BLOCKS_PER_TICK}
+     * is 2.0 blocks, sized to reject "movements no input could produce", and a teleport is millions.</p>
+     *
+     * <p><b>A delta, not a re-image.</b> The rigid teleport moves the pose and keeps the rotation, so
+     * the whole transform change IS the translation; applying it directly needs no loaded craft and
+     * cannot disagree with an attitude that did not change.</p>
+     *
+     * <p><b>A player is TOLD, not moved.</b> On the server a real player's position is owned by his
+     * client ({@link #followsRemoteOwner} is why the per-tick pass skips him), so he goes through
+     * {@code setPositionAndUpdate}, which for {@code EntityPlayerMP} is
+     * {@code connection.setPlayerLocation} — vanilla's own teleport, the one that suppresses the
+     * move check until the client acknowledges. Writing his position directly would put the server
+     * and his client in an argument that the guard then has to adjudicate.</p>
+     *
+     * <p>The committed world point moves with every body, for the same reason the per-tick pass
+     * moves it: it is what the guard measures a foreign mover against, and leaving it behind hands
+     * the guard the whole jump on the next packet.</p>
+     *
+     * @return how many bodies were carried
+     */
+    public static int carryHeldBodies(World world, String shipId,
+                                      double dx, double dy, double dz) {
+        if (world == null || shipId == null) {
+            return 0;
+        }
+        int carried = 0;
+        for (java.util.Map.Entry<Entity, ShipFrameState> held : STATE.entrySet()) {
+            Entity entity = held.getKey();
+            ShipFrameState state = held.getValue();
+            if (entity == null || state == null || !shipId.equals(state.shipId)
+                    || entity.world != world || entity.isDead || entity.isRiding()) {
+                continue;
+            }
+            double x = entity.posX + dx, y = entity.posY + dy, z = entity.posZ + dz;
+            if (followsRemoteOwner(entity)) {
+                entity.setPositionAndUpdate(x, y, z);
+            } else {
+                entity.setPosition(x, y, z);
+            }
+            state.worldX = x;
+            state.worldY = y;
+            state.worldZ = z;
+            carried++;
+        }
+        return carried;
+    }
+
     public static int followShipPoses(World world) {
         if (world == null) {
             return 0;

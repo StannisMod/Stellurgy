@@ -277,6 +277,21 @@ public final class VSIntegration {
     }
 
     /**
+     * The WORLD-frame bounding box of the ship named by {@code shipUuid}, or {@code null} when the
+     * physics mod is absent or this world's registry does not know that ship.
+     *
+     * <p>The hull's extent where it is RENDERED and collided, as against {@link #shipyardBoundsOf},
+     * which is the far-off subspace region its blocks are stored in. A caller asking "what is aboard
+     * this craft" wants this one: an entity stands in the world, not in the shipyard.</p>
+     */
+    public static AxisAlignedBB shipWorldBoundsOf(World world, java.util.UUID shipUuid) {
+        if (!isAvailable() || shipUuid == null) {
+            return null;
+        }
+        return VSBridge.shipWorldBoundsOf(world, shipUuid);
+    }
+
+    /**
      * RIGID-TELEPORT the ship NAMED by {@code shipUuid} to {@code (x,y,z)} — the identity-keyed twin
      * of {@link #teleportShipTo}. {@code false} when the physics mod is absent or no such ship is
      * registered here.

@@ -24,8 +24,20 @@ public final class VSShipCrossingOps implements ShipCrossingService.Ops {
     private static final org.apache.logging.log4j.Logger LOGGER =
             org.apache.logging.log4j.LogManager.getLogger(VSShipCrossingOps.class);
 
-    /** Rider-carry box half-width around a ship pose — the proven probe recipe's range. */
-    private static final double RIDER_RANGE = 8.0;
+    /**
+     * How far outside the hull's own bounding box a mount still counts as aboard, in blocks.
+     *
+     * <p>A seat's dummy sits where a rider's feet go, which is a little clear of the block it is
+     * bound to, and the hull box is the blocks. One block covers that and nothing else — this is a
+     * fitting margin on a measured extent, not a guess at how big a ship might be.</p>
+     *
+     * <p>It replaces a fixed 8-block half-width around the ship's POSE, credited in its own comment
+     * to "the proven probe recipe". A pose is one point on a hull, so that box found the mounts of a
+     * small craft and silently missed the cockpit of anything longer than sixteen blocks — the
+     * failure mode being a pilot left behind at the departure coordinate, which reads as the crossing
+     * dropping him.</p>
+     */
+    private static final double ABOARD_MARGIN = 1.0;
 
     @Override
     public double[] shipWorldPosition(int dimId, BlockPos afcPos) {
@@ -264,18 +276,61 @@ public final class VSShipCrossingOps implements ShipCrossingService.Ops {
         if (!world.isAirBlock(anchor)) {
             return false;
         }
-        double sx = anchor.getX() + 0.5, sy = anchor.getY() + 0.5, sz = anchor.getZ() + 0.5;
-        // Capture riders at the CURRENT pose before the write, then carry them by the same delta
-        // (the proven teleport-ship recipe; a carried dummy's seated player follows as passenger).
+        return teleportShipAndItsMounts(world, vsShipUuid,
+                anchor.getX() + 0.5, anchor.getY() + 0.5, anchor.getZ() + 0.5, px, py, pz);
+    }
+
+    /**
+     * Move a craft to {@code (px,py,pz)} and take everything that RIDES it along — the whole of what
+     * a teleport owes, with none of a crossing's readiness gate.
+     *
+     * <p>Split out of {@link #teleportPoseWithRiders} on 2026-09-11, because the two things were one
+     * method and a second caller could not have the carry without also being asked a question about
+     * a paste anchor it never pasted. The gate belongs to the crossing that owns the anchor; the
+     * carry belongs to the move.</p>
+     *
+     * @param sx the craft's CURRENT pose, which is the origin every rider is shifted from
+     */
+    public boolean teleportShipAndItsMounts(WorldServer world, java.util.UUID vsShipUuid,
+                                            double sx, double sy, double sz,
+                                            double px, double py, double pz) {
+        int destDim = world.provider.getDimension();
+        BlockPos anchor = new BlockPos(sx, sy, sz);
+        // Capture the mounts at the CURRENT pose before the write, then carry them by the same delta.
+        //
+        // WHAT IS CARRIED, and why it is only this. A body STANDING on the deck is already carried by
+        // the ship: its deck point is authoritative and `DeckFollowsItsShip` re-images it through the
+        // pose that now stands, every tick, so a crew member needs nothing here and moving him would
+        // be a second writer of the same position. What is NOT carried that way is a mount — an
+        // EntityDummy lives in world coordinates and belongs to its seat, not to a deck point — and a
+        // mount that stays behind takes its seated player with it, or rather leaves him behind with
+        // it, which is unrecoverable once the two are past tracking range.
+        //
+        // WHERE they are looked for: the hull's own world bounding box, grown by ABOARD_MARGIN. The
+        // registry knows that box for an unloaded ship too, which is the case a crossing is always
+        // in.
+        // ONE identity for the whole operation. The caller's id may be absent (the crossing's own
+        // record admits "null if the physics mod minted none"), and the positional teleport this
+        // replaces then moved "whatever ship is nearest" — so the craft that MOVED and the craft the
+        // riders were gathered around were two independent answers to two lookups. Resolved once,
+        // here, and everything below is about that one craft.
+        java.util.UUID shipId = vsShipUuid != null ? vsShipUuid
+                : VSIntegration.shipUuidAt(world, sx, sy, sz);
+        AxisAlignedBB hull = VSIntegration.shipWorldBoundsOf(world, shipId);
+        if (shipId == null || hull == null) {
+            LOGGER.error("[SPACE] refusing to teleport a ship at {} in dim {}: asked for {}, resolved"
+                    + " {}, and the registry has no world bounds for it — nothing can say which"
+                    + " mounts are aboard, and carrying the wrong ones is worse than carrying none.",
+                    anchor, destDim, vsShipUuid, shipId);
+            return false;
+        }
         List<EntityDummy> riders = world.getEntitiesWithinAABB(EntityDummy.class,
-                new AxisAlignedBB(sx, sy, sz, sx, sy, sz).grow(RIDER_RANGE));
-        // BY IDENTITY when the crossing minted one. The position form moves whatever ship is nearest
-        // to the anchor, and a destination that already holds another craft can hand back that
-        // craft — which then sits at OUR arrival pose while our ship stays where it was assembled,
-        // and every later lookup at the pose answers for the stranger.
-        boolean moved = vsShipUuid != null
-                ? VSIntegration.teleportShipToByUuid(world, vsShipUuid, px, py, pz)
-                : VSIntegration.teleportShipTo(world, sx, sy, sz, px, py, pz);
+                hull.grow(ABOARD_MARGIN));
+        // BY IDENTITY, always — the id resolved above. The position form moved whatever ship was
+        // nearest to the anchor, and a destination that already holds another craft can hand back
+        // that craft, which then sits at OUR arrival pose while our ship stays where it was
+        // assembled, and every later lookup at the pose answers for the stranger.
+        boolean moved = VSIntegration.teleportShipToByUuid(world, shipId, px, py, pz);
         if (!moved) {
             return false;
         }
@@ -291,6 +346,41 @@ public final class VSShipCrossingOps implements ShipCrossingService.Ops {
                 }
             }
         }
+        return true;
+    }
+
+    /**
+     * Move a craft and EVERYONE aboard it — its mounts, their passengers, and the crew standing on
+     * its decks. The whole of what an in-world teleport owes.
+     *
+     * <p><b>Why this is not what a CROSSING calls.</b> A crossing owns its crew already: it captures
+     * them at the departure, stashes them, and re-seats them at the arrival, so the bodies are not
+     * standing on the deck while the pose is written. Carrying them here as well is a second writer
+     * of one position, and it is not a subtle one — measured 2026-09-11, the seam scenarios put the
+     * body 138 blocks under its own ship, {@code aboard:false}, because it received the delta twice.
+     * So the two operations are NAMED rather than switched: {@link #teleportShipAndItsMounts} is the
+     * crossing's half, this is the whole move, and no caller picks between them with a flag.</p>
+     *
+     * <p>The crew are carried only if the craft actually moved: a failed teleport must not leave
+     * bodies translated away from the hull they are standing on.</p>
+     */
+    public boolean teleportShipAndEveryoneAboard(WorldServer world, java.util.UUID vsShipUuid,
+                                                 double sx, double sy, double sz,
+                                                 double px, double py, double pz) {
+        // Resolved ONCE, and the resolved id is what goes down — not the caller's, which may be
+        // absent. Passing the original would have the move and the crew carry each run their own
+        // lookup, and two lookups are two answers: the craft that moved and the craft whose crew was
+        // carried could be different ones. That is the same defect this method's own callee had
+        // until today, one level up.
+        java.util.UUID shipId = vsShipUuid != null ? vsShipUuid
+                : VSIntegration.shipUuidAt(world, sx, sy, sz);
+        if (!teleportShipAndItsMounts(world, shipId, sx, sy, sz, px, py, pz)) {
+            return false;
+        }
+        int crew = zmaster587.advancedRocketry.integration.vs.ShipFrameTravel.carryHeldBodies(
+                world, shipId == null ? null : shipId.toString(), px - sx, py - sy, pz - sz);
+        LOGGER.info("[SPACE] teleported ship {} in dim {} with {} aboard body/bodies carried.",
+                shipId, world.provider.getDimension(), crew);
         return true;
     }
 

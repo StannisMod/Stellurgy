@@ -1225,20 +1225,16 @@ public class TestProbeCommand extends CommandBase {
             }
             double dstX = parseDoubleOr(args[3], 0), dstY = parseDoubleOr(args[4], 0),
                     dstZ = parseDoubleOr(args[5], 0);
-            java.util.List<zmaster587.advancedRocketry.entity.EntityDummy> riders =
-                    world.getEntitiesWithinAABB(zmaster587.advancedRocketry.entity.EntityDummy.class,
-                            new net.minecraft.util.math.AxisAlignedBB(
-                                    before[0] - 8, before[1] - 8, before[2] - 8,
-                                    before[0] + 8, before[1] + 8, before[2] + 8));
-            boolean ok = zmaster587.advancedRocketry.integration.vs.VSIntegration
-                    .teleportShipToByUuid(world, uuid, dstX, dstY, dstZ);
-            if (ok) {
-                for (zmaster587.advancedRocketry.entity.EntityDummy d : riders) {
-                    d.setPositionAndUpdate(d.posX + (dstX - before[0]),
-                            d.posY + (dstY - before[1]), d.posZ + (dstZ - before[2]));
-                }
-            }
-            send(sender, "{\"ok\":" + ok + ",\"ridersCarried\":" + riders.size()
+            // Through PRODUCTION's own rider-carrying teleport, not a copy of it. This verb used to
+            // gather EntityDummy inside a fixed 8-block box around the ship's pose and shift them by
+            // the delta itself — the same recipe production carried, minus the seated player, so a
+            // probe teleport and a crossing could carry different sets and only the crossing's was
+            // ever fixed. The anchor it takes is a BlockPos, and the ship's current pose is the one
+            // point a caller can always name for a craft it has just looked up by identity.
+            boolean ok = new zmaster587.advancedRocketry.space.VSShipCrossingOps()
+                    .teleportShipAndEveryoneAboard(world, uuid, before[0], before[1], before[2],
+                            dstX, dstY, dstZ);
+            send(sender, "{\"ok\":" + ok
                     + ",\"fromX\":" + before[0] + ",\"fromY\":" + before[1]
                     + ",\"fromZ\":" + before[2] + "}");
             return;

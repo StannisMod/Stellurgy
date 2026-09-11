@@ -732,6 +732,24 @@ final class VSBridge {
      * not: the boot-time hyperspace reconciliation runs with nobody near any of these ships, which
      * is exactly the state the loaded set is empty in.
      */
+    /**
+     * The WORLD-frame bounding box of the registered ship {@code shipUuid}, or {@code null} when
+     * this world's registry does not know it.
+     *
+     * <p>Asked of {@code ShipData}, which is the registry's own record and outlives every load and
+     * unload — so this answers for a craft nobody is standing near, which is exactly the craft a
+     * crossing is about. It is the hull's ACTUAL extent, not a radius around its pose: a seat block
+     * forty metres down a long hull is inside this box and outside any plausible radius.</p>
+     */
+    static net.minecraft.util.math.AxisAlignedBB shipWorldBoundsOf(World world, UUID shipUuid) {
+        for (ShipData ship : ValkyrienUtils.getQueryableData(world).getShips()) {
+            if (shipUuid.equals(ship.getUuid())) {
+                return ship.getShipBB();
+            }
+        }
+        return null;
+    }
+
     static java.util.Map<UUID, double[]> registeredShipPoses(World world) {
         java.util.Map<UUID, double[]> out = new java.util.LinkedHashMap<>();
         for (ShipData ship : ValkyrienUtils.getQueryableData(world).getShips()) {
