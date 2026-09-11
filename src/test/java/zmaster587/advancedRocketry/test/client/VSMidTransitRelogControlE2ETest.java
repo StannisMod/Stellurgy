@@ -394,14 +394,6 @@ public class VSMidTransitRelogControlE2ETest extends AbstractSharedVsClientE2ETe
     }
 
     /** Poll for a loaded VS ship in {@code dim} (assembly is async; a headless server forces the load). */
-    /**
-     * The report for the NAMED ship, wherever it now is. {@code managed:false} here means that ship
-     * is not loaded — never "it is somewhere else", which is the point of asking this way.
-     */
-    private String shipInfoById(int dim, String shipId) throws Exception {
-        return exec("artest vs ship-info " + dim + " id " + shipId);
-    }
-
     private int waitForLoadedShip(int dim) throws Exception {
         for (int i = 0; i < 40; i++) {
             if (readIntOr(exec("artest vs ship-count-all " + dim), "count", -1) >= 1) {

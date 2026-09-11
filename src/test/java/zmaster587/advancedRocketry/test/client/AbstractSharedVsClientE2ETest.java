@@ -144,12 +144,28 @@ public abstract class AbstractSharedVsClientE2ETest extends AbstractSharedClient
     // `awaitShipUsable` is what waits for it.
 
     /**
-     * The ship report for {@code shipId}, wherever that ship now is. A {@code managed:false} here
-     * means that ship is not loaded — never "it is somewhere else", which is the whole point of
-     * asking this way.
+     * The ship report for {@code shipId} <b>in dimension 0</b>. A {@code managed:false} here means
+     * that ship is not loaded IN DIM 0 — it does not separate "not loaded" from "loaded in another
+     * world", so a scenario whose craft can leave dim 0 wants {@link #shipInfoById(int, String)} and
+     * has to say which world it is asking about.
+     *
+     * <p>This used to promise "wherever that ship now is", which the probe does not do: the verb is
+     * {@code ship-info &lt;dim&gt; id &lt;uuid&gt;} and it resolves the world from that dim before
+     * asking its ship manager at all (`TestProbeCommand.java:956`). The promise was harmless while
+     * every caller stayed in dim 0 and it is not a silent wrong answer even outside it — a ship in a
+     * cell world reads back `managed:false`, which fails loudly — but it fails naming the wrong
+     * thing, and that is a whole debugging session for the reader who believes the sentence.</p>
      */
     protected final String shipInfoById(String shipId) throws Exception {
-        return exec("artest vs ship-info 0 id " + shipId);
+        return shipInfoById(0, shipId);
+    }
+
+    /**
+     * The ship report for {@code shipId} as {@code dim}'s own ship manager knows it — the form a
+     * scenario staged in a cell world (or one that crosses into another) must use.
+     */
+    protected final String shipInfoById(int dim, String shipId) throws Exception {
+        return exec("artest vs ship-info " + dim + " id " + shipId);
     }
 
     /** How long a client is given to re-establish a rider's mount after a dimension change. 80
