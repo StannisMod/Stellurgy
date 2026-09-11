@@ -171,21 +171,11 @@ public class VSPilotSeatRelogControlE2ETest extends AbstractSharedVsClientE2ETes
         // this waits for state the SERVER restores on login to reach the client and be applied, a
         // round trip whose latency is the machine's, not the game's.
         int rejoinBudget = (int) (60 * TestTimeouts.factor());
-        try {
-            clientEvents().awaitMatching(relogOnClient, "mount",
-                    seen -> Events.countRecords(seen, "\"ok\":true") > 0,
-                    "seating him (ok:true)",
-                    "a pilot who logged out SEATED must log back in SEATED - no re-board, and his own"
-                            + " client must perform the mount the login restored",
-                    rejoinBudget * RELOG_STEP_TICKS);
-        } catch (AssertionError never) {
-            Events.assertInstrumentRan(clientEvents().since(relogOnClient, "mount"),
-                    "entity_mount_writes", "the client's own mounts must be observed at all before an"
-                            + " absent one can be read as a pilot who came back on his feet");
-            throw new AssertionError(never.getMessage() + " | the SERVER's mount record: "
-                    + events.since(relogMark, "mount"));
-        }
-        JsonObject riding = bot().reportRidingEntity();
+        JsonObject riding = awaitClientMount(relogOnClient,
+                "a pilot who logged out SEATED must log back in SEATED - no re-board, and his own"
+                        + " client must perform the mount the login restored",
+                rejoinBudget * RELOG_STEP_TICKS,
+                " | the SERVER's mount record: " + events.since(relogMark, "mount"));
         assertTrue("...and he must still be on it when it is read: riding=" + riding,
                 isRiding(riding));
 

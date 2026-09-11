@@ -11,6 +11,7 @@ import org.lwjgl.input.Keyboard;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import zmaster587.advancedRocketry.api.FreeFlightPhysics;
 import zmaster587.advancedRocketry.test.Events;
 
 import static org.junit.Assert.assertEquals;
@@ -271,6 +272,34 @@ public class FreeFlightModeE2ETest extends AbstractSharedClientE2ETest {
                 + Events.typesOf(events.since(mark)));
     }
 
+    /**
+     * A measurement WINDOW, in client ticks, equal to the ceiling the poll it replaces was allowed.
+     *
+     * <h2>Why the polls went, and why the number is this number</h2>
+     *
+     * <p>Nine scenarios here drove a stimulus with {@code ClientPoll.until(…, predicate, step,
+     * iterations)} and then asserted <b>the predicate the poll had just exited on</b>. That
+     * assertion cannot fail: it either restates a condition already established, or the poll hit its
+     * ceiling and the assertion re-checks the same last value — and the failure text then makes a
+     * physical claim ("F must reduce vertical velocity") about what is actually a timeout. The poll
+     * was the test; the assertion was its echo.</p>
+     *
+     * <p>So the shape is now: drive the stimulus, wait a WINDOW, read, assert. The window is
+     * {@code stepTicks × baseIterations × factor()} — <b>exactly the poll's own ceiling</b>, which is
+     * what makes the change safe in the only direction that matters: any run the poll would have
+     * passed had at most this long to converge, so the physical claim now gets the whole of that
+     * budget every time instead of exiting early. What is lost is the early exit (a few seconds of
+     * wall clock per scenario on an idle box); what is gained is an assertion that can go red.</p>
+     *
+     * <p>A window is not a poll: it does not ask, it bounds. It still scales by
+     * {@link TestTimeouts#factor()}, because a frame-starved client under concurrent-fork load
+     * spends more of our ticks reaching the same physical state — that part of the polls' design was
+     * measured and is kept.</p>
+     */
+    private int windowTicks(int stepTicks, int baseIterations) {
+        return (int) Math.ceil(stepTicks * baseIterations * TestTimeouts.factor());
+    }
+
     /** How many records of a {@code since} reply carry EVERY one of {@code needles}. */
     private static int matchingRecords(String sinceReply, String... needles) {
         int n = 0;
@@ -510,22 +539,16 @@ public class FreeFlightModeE2ETest extends AbstractSharedClientE2ETest {
         final double xb = parseDouble(before, POS_X, "posX");
         final double zb = parseDouble(before, POS_Z, "posZ");
         exec("artest rocket free-flight-input " + rocketId + " 1 1 0 0 0");
-        // Server-driven displacement: the throttle reaches the flight computer a
-        // tick or two after the probe returns, and under harness load the
-        // takeoff-kick grace can delay the horizontal ramp past a fixed window.
-        // Poll (load-scaled) until it has actually travelled, then measure — an
-        // idle run still exits inside the old 30-tick budget.
-        ClientPoll.Result<String> moved = ClientPoll.until(
-                bot()::waitTicks,
-                () -> exec("artest rocket info " + rocketId),
-                info -> {
-                    double dx = parseDouble(info, POS_X, "posX") - xb;
-                    double dz = parseDouble(info, POS_Z, "posZ") - zb;
-                    return Math.sqrt(dx * dx + dz * dz) > 1.0;
-                },
-                6, 10);
-        double xa = parseDouble(moved.value, POS_X, "posX");
-        double za = parseDouble(moved.value, POS_Z, "posZ");
+        // A WINDOW, not a poll-until-travelled: the poll exited on "moved more than a block", which
+        // is the assertion below, so the displacement could only ever be confirmed or timed out.
+        // The window is the poll's own ceiling, so the takeoff-kick grace and the horizontal ramp
+        // still get every tick they used to. The probe's own reply is what says the input was
+        // ACCEPTED here — this leg drives the input through `free-flight-input` rather than a key,
+        // so there is no delivery question left for a link to answer.
+        bot().waitTicks(windowTicks(6, 10));
+        String moved = exec("artest rocket info " + rocketId);
+        double xa = parseDouble(moved, POS_X, "posX");
+        double za = parseDouble(moved, POS_Z, "posZ");
 
         double horiz = Math.sqrt((xa - xb) * (xa - xb) + (za - zb) * (za - zb));
         assertTrue("forward thrust must move the rocket horizontally "
@@ -569,15 +592,24 @@ public class FreeFlightModeE2ETest extends AbstractSharedClientE2ETest {
         //   2) the CLIENT-rendered rocket tracks the server (no poscorrection lag).
         int rocketId = mountFreshFreeFlightRocket();
 
+        // The mark goes BEFORE the key, and here that is not a style rule: production de-duplicates
+        // free-flight input upstream of the trace seam (`KeyBindings` sends only when the input
+        // DIFFERS from the last one), so a STEADY HELD KEY traces exactly ONCE. A mark taken after
+        // the press would miss that one record and the wait would expire on a working build.
+        Events climbEvents = events();
+        long climbMark = climbEvents.markInstrumented();
+
         // Hold the real climb key. No artest free-flight-input here on purpose.
         bot().holdKey(Keyboard.KEY_R);
 
         double svrYBefore = parseDouble(exec("artest rocket info " + rocketId), POS_Y, "posY");
-        // Event-gated: hold the climb key until the server rocket has actually climbed (load-scaled
-        // ceiling + early exit; a fixed 40-tick budget can under-climb a frame-starved client under load).
-        ClientPoll.until(bot()::waitTicks,
-                () -> parseDouble(exec("artest rocket info " + rocketId), POS_Y, "posY"),
-                y -> y - svrYBefore > 2.0, 4, 10);
+        // The LINK: the held climb key must reach THIS rocket's free-flight input on the server.
+        // This leg's point is that a REAL key does what the probe does, so "the key arrived" is
+        // half of its subject and must be asserted as itself rather than inferred from altitude.
+        awaitRecord(climbEvents, climbMark, "rocket_ff_traced",
+                "holding the real climb key must deliver a free-flight input to this rocket", 100,
+                "\"e\":" + rocketId + ",");
+        bot().waitTicks(windowTicks(4, 10));
         String svrInfo = exec("artest rocket info " + rocketId);
         double svrYAfter = parseDouble(svrInfo, POS_Y, "posY");
 
@@ -770,13 +802,19 @@ public class FreeFlightModeE2ETest extends AbstractSharedClientE2ETest {
         // the inventory key (E). On foot E opens the inventory; here it must
         // strafe. E = strafe right, which after the polarity fix commands -X at
         // yaw 0 (world +X renders on the pilot's left out the nose).
+        Events eEvents = events();
+        long eMark = eEvents.markInstrumented();
         bot().holdKey(Keyboard.KEY_R);
         bot().holdKey(KEY_INVENTORY);
-        // Event-gated strafe (load-scaled ceiling + early exit): a fixed 25-tick budget can under-strafe
-        // a frame-starved client under concurrent-fork load and red a healthy strafe.
-        ClientPoll.until(bot()::waitTicks,
-                () -> parseDouble(exec("artest rocket info " + rocketId), POS_X, "posX"),
-                x -> x - xBefore < -1.0, 5, 5);
+        // The LINK first: the held keys must reach the rocket's own free-flight input. A
+        // displacement of zero is produced both by a strafe that did not happen and by a key the
+        // client ate into a GUI — and this leg's subject is which of those E does. The link does
+        // not single out E (R is down too, and the record carries no input values); what pins E is
+        // the screen check and the -X direction below.
+        awaitRecord(eEvents, eMark, "rocket_ff_traced",
+                "the held keys must deliver a free-flight input to this rocket while E is down",
+                100, "\"e\":" + rocketId + ",");
+        bot().waitTicks(windowTicks(5, 5));
 
         String screenDuring = currentScreen();
         String info = exec("artest rocket info " + rocketId);
@@ -806,13 +844,20 @@ public class FreeFlightModeE2ETest extends AbstractSharedClientE2ETest {
         int rocketId = mountFreshFreeFlightRocket();
         double xBefore = parseDouble(exec("artest rocket info " + rocketId), POS_X, "posX");
 
+        Events qEvents = events();
+        long qMark = qEvents.markInstrumented();
         bot().holdKey(Keyboard.KEY_R);          // stay airborne
         bot().holdKey(Keyboard.KEY_Q);          // strafe left
-        // Event-gated strafe (load-scaled ceiling + early exit): a fixed 25-tick budget can under-strafe
-        // a frame-starved client under concurrent-fork load and red a healthy strafe.
-        ClientPoll.until(bot()::waitTicks,
-                () -> parseDouble(exec("artest rocket info " + rocketId), POS_X, "posX"),
-                x -> x - xBefore > 1.0, 5, 5);
+        // The LINK first: the held keys' input must reach THIS rocket's free-flight input on the
+        // server. That separates "the keys never got there" from "they got there and moved nothing"
+        // — which the displacement below cannot, and neither could the poll that stood here. It
+        // does NOT single out Q: two keys are down and the record carries no input values worth
+        // matching on (its message is production's own trace string, which is scheduled to go), so
+        // the claim is "the key path is alive for this rocket", and the DIRECTION is the assertion.
+        awaitRecord(qEvents, qMark, "rocket_ff_traced",
+                "the held keys must deliver a free-flight input to this rocket", 100,
+                "\"e\":" + rocketId + ",");
+        bot().waitTicks(windowTicks(5, 5));
         double xAfter = parseDouble(exec("artest rocket info " + rocketId), POS_X, "posX");
         bot().releaseKey(Keyboard.KEY_Q);
         bot().releaseKey(Keyboard.KEY_R);
@@ -842,12 +887,10 @@ public class FreeFlightModeE2ETest extends AbstractSharedClientE2ETest {
 
         // F is downward thrust: it must reduce the vertical velocity vs the climb.
         bot().holdKey(Keyboard.KEY_F);
-        // Event-gated: hold downward thrust until it has reduced the vertical velocity (load-scaled
-        // ceiling + early exit; a fixed 10-tick budget can under-brake a frame-starved client under load).
-        ClientPoll.Result<Double> down = ClientPoll.until(bot()::waitTicks,
-                () -> parseDouble(exec("artest rocket info " + rocketId), MOTION_Y, "motionY"),
-                my -> my < myUp - 0.05, 5, 2);
-        double myDown = down.value;
+        // A WINDOW, not a poll-until-braked: the poll's predicate was `my < myUp - 0.05` and the
+        // assertion below is the same expression, so nothing here could fail except the ceiling.
+        bot().waitTicks(windowTicks(5, 2));
+        double myDown = parseDouble(exec("artest rocket info " + rocketId), MOTION_Y, "motionY");
         bot().releaseKey(Keyboard.KEY_F);
         assertTrue("F must reduce vertical velocity vs the climb (myUp=" + myUp
                 + " myDown=" + myDown + ")", myDown < myUp - 0.05);
@@ -908,11 +951,8 @@ public class FreeFlightModeE2ETest extends AbstractSharedClientE2ETest {
         }
 
         bot().holdKey(Keyboard.KEY_X);
-        // Event-gated: hold the cut until it has braked the climb into a hover (load-scaled ceiling +
-        // early exit; a fixed 40-tick budget can leave the craft mid-brake under concurrent-fork load).
-        ClientPoll.until(bot()::waitTicks,
-                () -> parseDouble(exec("artest rocket info " + rocketId), MOTION_Y, "motionY"),
-                my -> Math.abs(my) < 0.05, 5, 8);
+        // A WINDOW: the poll's predicate was `|my| < 0.05`, which is the assertion below.
+        bot().waitTicks(windowTicks(5, 8));
         String info = exec("artest rocket info " + rocketId);
         double myCut = parseDouble(info, MOTION_Y, "motionY");
         bot().releaseKey(Keyboard.KEY_X);
@@ -1081,16 +1121,12 @@ public class FreeFlightModeE2ETest extends AbstractSharedClientE2ETest {
         int rocketId = mountFreshFreeFlightRocket();
 
         bot().holdKey(Keyboard.KEY_R);
-        // Event-gated: hold R until the rendered HUD VRT setpoint has ramped and the actual velocity is
-        // chasing it (load-scaled ceiling + early exit; a fixed 25-tick budget can under-ramp under load).
-        ClientPoll.Result<String> climbHud = ClientPoll.until(bot()::waitTicks,
-                this::freeFlightHud,
-                h -> {
-                    Matcher mm = HUD_VRT.matcher(h);
-                    return mm.find() && Double.parseDouble(mm.group(1)) > 0.4
-                            && Double.parseDouble(mm.group(2)) > 0.1;
-                }, 5, 5);
-        String hudClimb = climbHud.value;
+        // A WINDOW: the poll exited on `setpoint > 0.4 && actual > 0.1`, which is exactly the pair
+        // of assertions below — so neither could fail except by the ceiling, and the failure text
+        // then blamed the ramp for a timeout. Both numbers are read off ONE rendered HUD frame,
+        // which is what lets "the actual is chasing the setpoint" be a statement about one moment.
+        bot().waitTicks(windowTicks(5, 5));
+        String hudClimb = freeFlightHud();
         bot().releaseKey(Keyboard.KEY_R);
 
         Matcher m = HUD_VRT.matcher(hudClimb);
@@ -1106,15 +1142,10 @@ public class FreeFlightModeE2ETest extends AbstractSharedClientE2ETest {
 
         // Cut: the setpoint marker must return to zero on the rendered HUD.
         bot().holdKey(Keyboard.KEY_X);
-        // Event-gated: hold cut until the rendered VRT setpoint has returned to zero (load-scaled ceiling
-        // + early exit; a fixed 15-tick budget can leave the setpoint mid-decay under load).
-        ClientPoll.Result<String> cutHud = ClientPoll.until(bot()::waitTicks,
-                this::freeFlightHud,
-                h -> {
-                    Matcher mm = HUD_VRT.matcher(h);
-                    return mm.find() && Math.abs(Double.parseDouble(mm.group(1))) <= 0.01;
-                }, 5, 3);
-        String hudCut = cutHud.value;
+        // A WINDOW: the poll exited on `|setpoint| <= 0.01` and the assertEquals below is the same
+        // number with the same tolerance.
+        bot().waitTicks(windowTicks(5, 3));
+        String hudCut = freeFlightHud();
         bot().releaseKey(Keyboard.KEY_X);
         Matcher m2 = HUD_VRT.matcher(hudCut);
         assertTrue("HUD must still render the VRT pair after the cut: " + hudCut, m2.find());
@@ -1225,17 +1256,14 @@ public class FreeFlightModeE2ETest extends AbstractSharedClientE2ETest {
         // (sent on the turn->idle edge) can be in flight for several ticks on a
         // loaded box — so poll for it instead of a single-shot read; what we
         // pin is that the divergence DOES settle under the tracker quantum.
-        // Event-gated: the resync convergence is async (the final packet can be in flight for several
-        // ticks on a loaded box); poll until the camera yaw has converged to the server heading
-        // (load-scaled ceiling + early exit) instead of a fixed 20-iteration budget.
-        ClientPoll.Result<Double> conv = ClientPoll.until(bot()::waitTicks,
-                () -> {
-                    double svrYaw = parseDouble(exec("artest rocket info " + rocketId), YAW, "rotationYaw");
-                    double camYaw = bot().reportState().get("playerYaw").getAsDouble();
-                    return angDiff(camYaw, svrYaw);
-                },
-                e -> e < 2.0, 4, 20);
-        double convErr = conv.value;
+        // A WINDOW: the poll exited on `e < 2.0` and the assertion below is `convErr < 2.0`, so the
+        // convergence could not be disproved — only timed out. The window is the poll's own ceiling,
+        // so a resync that converges at all still has every tick it used to be given.
+        bot().waitTicks(windowTicks(4, 20));
+        // Both halves of the residual read as ONE measurement, in this order: two reads a moment
+        // apart attribute the camera's yaw to whatever the server's heading was when IT was read.
+        double convErr = angDiff(bot().reportState().get("playerYaw").getAsDouble(),
+                parseDouble(exec("artest rocket info " + rocketId), YAW, "rotationYaw"));
         assertTrue("camera yaw must converge to the server craft heading "
                 + "(residual " + convErr + "°)", convErr < 2.0);
 
@@ -1299,12 +1327,9 @@ public class FreeFlightModeE2ETest extends AbstractSharedClientE2ETest {
             bot().setLook(st.get("playerYaw").getAsFloat() + 8f, st.get("playerPitch").getAsFloat());
             bot().waitTicks(1);
         }
-        // Event-gated: let the held bank integrate until the client camera roll has grown (load-scaled
-        // ceiling + early exit; a fixed 15-tick budget can under-integrate under concurrent-fork load).
-        ClientPoll.Result<Double> bank = ClientPoll.until(bot()::waitTicks,
-                () -> flightCameraNow("camRoll"),
-                r -> Math.abs(r) > 15.0, 3, 5);
-        double camRoll = bank.value;
+        // A WINDOW: the poll exited on `|r| > 15.0`, which is the assertion below.
+        bot().waitTicks(windowTicks(3, 5));
+        double camRoll = flightCameraNow("camRoll");
         double yaw1 = bot().reportRidingEntity().get("rotationYaw").getAsDouble();
         bot().releaseKey(Keyboard.KEY_R);
 
@@ -1346,22 +1371,34 @@ public class FreeFlightModeE2ETest extends AbstractSharedClientE2ETest {
             bot().setLook(st.get("playerYaw").getAsFloat(), st.get("playerPitch").getAsFloat() + 8f);
             bot().waitTicks(1);
         }
-        // Event-gated: the held pitch cursor loops the nose over the top; poll the client min-forward-Z
-        // accumulator until it has gone negative (load-scaled ceiling + early exit) instead of a fixed
-        // 60-tick budget that can under-integrate under concurrent-fork load.
-        ClientPoll.Result<Double> loop = ClientPoll.until(bot()::waitTicks,
-                () -> flightCameraNow("minForwardZ"),
-                z -> z < -0.5, 5, 12);
-        double minFwdZ = loop.value;
+        // A WINDOW: the poll exited on `z < -0.5`, which is the assertion below. `minForwardZ` is an
+        // ACCUMULATOR — a minimum over the flight — so reading it at the end of the window sees
+        // every frame in it, and nothing is lost by not sampling along the way.
+        bot().waitTicks(windowTicks(5, 12));
+        double minFwdZ = flightCameraNow("minForwardZ");
         // `riding`, not `!= null`: reportRidingEntity throws on a failed reply and otherwise
         // returns an object, so the null test was a compile-time true and the pilot could have
         // been ejected with this still green. The file reads it correctly elsewhere.
         boolean stillRiding = bot().reportRidingEntity().get("riding").getAsBoolean();
         bot().releaseKey(Keyboard.KEY_X);
 
-        assertTrue("the nose must loop past vertical — client min forward.z must go "
-                + "negative (was " + minFwdZ + "; a ±85° clamp keeps it ≳ 0.09)",
-                minFwdZ < -0.5);
+        // THE THRESHOLD COMES FROM PRODUCTION, and the number it replaces is why this matters.
+        // This asserted `minFwdZ < -0.5` under a message reading "a ±85° clamp keeps it ≳ 0.09".
+        // Both numbers were production's, written down: 85 is `FreeFlightPhysics.PITCH_MAX`, and
+        // 0.09 is cos(85°) = 0.0872, the smallest forward.z a craft held inside that clamp can
+        // show. The -0.5 was the test's own margin on top, chosen by hand. So when PITCH_MAX moves,
+        // the prose goes stale silently and the bound stops meaning anything.
+        //
+        // Derived instead: ZERO is "vertical" by definition, so a negative forward.z IS the loop —
+        // and what makes that discriminating rather than noise-sensitive is the clamp's own floor,
+        // computed here from production's constant. A clamped craft cannot read below +clampFloor,
+        // so a negative reading is the whole of that distance away from anything the clamp allows.
+        double clampFloor = Math.cos(Math.toRadians(FreeFlightPhysics.PITCH_MAX));
+        assertTrue("the nose must loop PAST vertical — client min forward.z must go negative (was "
+                + minFwdZ + "). A craft held inside production's ±" + FreeFlightPhysics.PITCH_MAX
+                + "° clamp cannot read below +" + clampFloor + ", so a negative reading is the loop"
+                + " and cannot be the clamp",
+                minFwdZ < 0.0);
         assertTrue("client must survive rendering the looping/inverted craft", stillRiding);
 
         exec("artest rocket free-flight-input " + rocketId + " 0 0 0 0 0");

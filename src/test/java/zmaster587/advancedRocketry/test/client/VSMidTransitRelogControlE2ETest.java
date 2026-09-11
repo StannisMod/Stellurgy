@@ -241,6 +241,8 @@ public class VSMidTransitRelogControlE2ETest extends AbstractSharedVsClientE2ETe
 
         // ---- ACT 2: the real mid-transit relog. The transit is probe-driven, so the park waits
         // out the relog deterministically — no race between the login and the arrival. -----------
+        // The CLIENT's mark goes before the reconnect, for the remount link at the end of the leg.
+        long clientMark = clientEvents().mark();
         bot().reconnect();
         bot().waitForWorld();
 
@@ -257,9 +259,19 @@ public class VSMidTransitRelogControlE2ETest extends AbstractSharedVsClientE2ETe
                 + " back aboard and only then settle", JUMP_LINK_BUDGET_TICKS, PILOTED_JUMP_CHAIN);
         int targetDim = arrivedTargetDim(this::exec);
 
-        // The CLIENT's half: the server's re-seat is a link above; whether his own client followed it
-        // is read here, and the helper says which of the two failed when it did not.
-        JsonObject riding = ridingOnceTheClientHasCaughtUp(CLIENT_REMOUNT_POLLS);
+        // The CLIENT's half: the server's re-seat is a link above; whether his own client followed
+        // it is read here as the LINK it is — his own `startRiding` — off the mark taken before the
+        // reconnect. A poll of `reportRidingEntity` stood here and could only sample the state this
+        // record announces.
+        //
+        // WHAT THIS LINK CANNOT SEPARATE, and the server chain is what covers it: there are two
+        // remounts in this leg — the one his client performs when the login restores him to the
+        // parked hull, and the one it performs on arrival — and NOTHING on the client log marks the
+        // arrival cut, so a mark cannot be placed between them (a server sequence number is not a
+        // client mark). The claim this link makes is therefore "his client did seat him again after
+        // the relog"; the ARRIVAL re-seat is pinned by `PILOTED_JUMP_CHAIN` above, and the settled
+        // reads below pin the end state — the seat dummy, and the target cell.
+        JsonObject riding = ridingOnceTheClientHasRemounted(clientMark, CLIENT_REMOUNT_BUDGET_TICKS);
         assertTrue("the re-mounted entity must be the ship's seat dummy: " + riding,
                 riding.get("entityClass").getAsString().endsWith("EntityDummy"));
         assertEquals("the relogged pilot must have followed his ship into the target cell",

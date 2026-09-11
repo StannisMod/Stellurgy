@@ -668,29 +668,17 @@ public class VSCrewRelogPersistenceE2ETest extends AbstractSharedVsClientE2ETest
                 "after the relog HIS deck must TAKE him again -"
                 + " a body nobody captured is one vanilla and the physics mod are holding, which"
                 + " under an inverted hull is a fall", CAPTURE_BUDGET_TICKS);
-        // ABOARD specifically, and that is a MODE the resolver picks per tick rather than a link:
-        // a hull-stand catch (falling under the inverted hull until the hull geometry stops the
-        // body somewhere) is exactly the captured-but-world-camera desync of the original report,
-        // and it must NOT satisfy this contract. So the capture above is awaited as the event it
-        // is, and the mode is read as the state it is.
-        boolean aboard = false;
-        String capNow = "";
-        for (int i = 0; i < 40 && !aboard; i++) {
-            capNow = exec("artest vs deck-capture");
-            // ABOARD, in the right MODE, and on the ship he logged out on. The last of the three is
-            // what makes this a persistence claim at all: a capture taken by any hull that happens
-            // to be in the airspace satisfies the first two, and the whole subject here is that HIS
-            // deck came back and took him.
-            aboard = capNow.contains("\"alreadyTracked\":true")
-                    && !capNow.contains("\"hullStand\":true")
-                    && scenarioShipId.equals(ShipIdentity.anchorOf(capNow));
-            if (!aboard) {
-                bot().waitTicks(5);
-            }
-        }
+        // ABOARD specifically. A hull-stand catch (falling under the inverted hull until the hull
+        // geometry stops the body somewhere) is exactly the captured-but-world-camera desync of the
+        // original report, and it must NOT satisfy this contract — so the capture above is the link
+        // that he was taken, and this is the link that says in WHICH mode.
+        String modes = awaitCommittedAboardOnHisShip(events, relogMark,
+                "after a relog on an inverted deck the player must be captured ABOARD again, not"
+                        + " held with world semantics wherever the inverted hull stopped him");
+        String capNow = exec("artest vs deck-capture");
         double postY = bot().reportState().get("playerY").getAsDouble();
-        System.out.println("[relog] preY=" + preY + " postY=" + postY + " aboard=" + aboard
-                + " dY=" + (postY - preY));
+        System.out.println("[relog] preY=" + preY + " postY=" + postY + " dY=" + (postY - preY)
+                + " modes=" + modes);
         System.out.println("[relog] cap=" + capNow);
         // What the client DID with the deck hold's restore seed - APPLY, KEEP_PREEXISTING,
         // ALREADY_SEEDED, EXPIRE or WAIT. The five-way verdict is the difference between "he was
@@ -698,13 +686,12 @@ public class VSCrewRelogPersistenceE2ETest extends AbstractSharedVsClientE2ETest
         // in this run distinguishes them.
         System.out.println("[relog] client seed decisions :: " + clientSeedDecisions(clientRelogMark));
 
-        // Relog persistence: still ABOARD (deck semantics, not a hull-stand catch), still AT the
-        // deck spot he logged out on - never handed to world gravity for a visible fall.
-        assertTrue("after a relog on an inverted deck the player must be captured ABOARD again "
-                + "(deck semantics, not hull-stand), not handed to world gravity: " + capNow,
-                aboard);
+        // Relog persistence. The ABOARD half is the link above — it fails there, with the sequence
+        // of modes production committed — so what is left is the other half: he is still AT the
+        // deck spot he logged out on, never handed to world gravity for a visible fall.
         assertTrue("after a relog the player must still be AT his deck spot, not fallen off "
-                + "(preY=" + preY + " postY=" + postY + ")", Math.abs(postY - preY) < 1.5);
+                + "(preY=" + preY + " postY=" + postY + "): " + capNow,
+                Math.abs(postY - preY) < 1.5);
     }
 
     /**
@@ -801,24 +788,14 @@ public class VSCrewRelogPersistenceE2ETest extends AbstractSharedVsClientE2ETest
                 + " otherwise the drift windows below measure a body vanilla and the physics mod"
                 + " are holding, on something that is not this deck", CAPTURE_BUDGET_TICKS);
 
-        // ABOARD specifically: the capture above is the link, and this is the MODE the resolver
-        // picks per tick - a hull-stand catch is a capture too, and it is not this contract.
-        boolean aboard = false;
-        String capNow = "";
-        for (int i = 0; i < 40 && !aboard; i++) {
-            capNow = exec("artest vs deck-capture");
-            // ...and on HIS ship. The message below already names the failure — "he is standing on
-            // something else" — and without the anchor the predicate cannot tell that case from a
-            // pass, because a capture on a neighbour's hull reads aboard in exactly this shape.
-            aboard = capNow.contains("\"alreadyTracked\":true")
-                    && !capNow.contains("\"hullStand\":true")
-                    && scenarioShipId.equals(ShipIdentity.anchorOf(capNow));
-            if (!aboard) {
-                bot().waitTicks(5);
-            }
-        }
-        assertTrue("after the relog he must be captured ABOARD the deck again, or 'he did not "
-                + "drift' would just mean he is standing on something else: " + capNow, aboard);
+        // ABOARD specifically: the capture above is the link that he was taken, and this is the
+        // link that says in which MODE - a hull-stand catch is a capture too, and it is not this
+        // contract. On HIS ship, because a capture on a neighbour's hull commits `aboard` in
+        // exactly the same shape, and then "he did not drift" would only mean he is standing on
+        // something else.
+        awaitCommittedAboardOnHisShip(events, relogMark,
+                "after the relog he must be captured ABOARD the deck again, or 'he did not drift'"
+                        + " would just mean he is standing on something else");
 
         // Everything the tight pins below measure is taken from the CLIENT's own per-tick record,
         // which starts here: the client owns this body's movement, and the server-side probe reads
@@ -1180,6 +1157,45 @@ public class VSCrewRelogPersistenceE2ETest extends AbstractSharedVsClientE2ETest
      * and a broken one still gets past a chunk stream on a loaded box before it is called a red.</p>
      */
     private static final int CAPTURE_BUDGET_TICKS = 200;
+
+    /**
+     * Wait until production's LAST committed capture mode for THIS scenario's ship is
+     * {@code aboard}.
+     *
+     * <p><b>Replaces a 40-step probe poll whose exit condition was re-asserted verbatim after it</b>
+     * — so that assertion could not fail except by the budget running out, and its message then
+     * blamed the deck for a timeout. Both sites carried the same argument for polling: that the mode
+     * is "a MODE the resolver picks per tick rather than a link". The first half is true and the
+     * conclusion no longer follows: production COMMITS the mode itself at every transition, and the
+     * record carries the ship, so the settled answer is a condition over the log rather than a state
+     * to sample. A promotion (hull-stand caught first, aboard a few ticks later) is exactly what
+     * "the LAST record for this ship" expresses.</p>
+     *
+     * <p>Filtered on the SHIP, which is what makes it a persistence claim: a capture by any hull
+     * that happens to be in the airspace commits {@code aboard} in the same shape, and on a shared
+     * world there is always a neighbour's craft. {@code VSCrewInteriorBoarding} has a sibling helper
+     * with NO ship filter — deliberately, because there it is the body's own last mode that is the
+     * subject and the ship is fixed by construction. Fold the two only if a third caller appears.</p>
+     */
+    private String awaitCommittedAboardOnHisShip(Events log, long mark, String what)
+            throws Exception {
+        String needle = "\"ship\":\"" + scenarioShipId + "\"";
+        try {
+            return log.awaitMatching(mark, "deck_mode_committed", reply -> {
+                java.util.List<String> mine = Events.recordsWithAll(reply, needle);
+                return !mine.isEmpty()
+                        && "aboard".equals(Events.text(mine.get(mine.size() - 1), "mode"));
+            }, "committing `aboard` as the LAST mode for " + scenarioShipId, what,
+                    CAPTURE_BUDGET_TICKS);
+        } catch (AssertionError never) {
+            // Which silence: nothing committed a mode at all, or something committed a different
+            // one. They ask for opposite investigations, and an empty window reads as the second.
+            Events.assertInstrumentRan(log.since(mark, "deck_mode_committed"), "deck_mode_events",
+                    "a capture MODE was committed at all after the relog");
+            throw new AssertionError(never.getMessage() + " | server verdict "
+                    + exec("artest vs deck-capture"));
+        }
+    }
 
     // The two logs are separate instruments with separate sequences: events() reads the server's
     // through the probe channel, clientEvents() the client's through the bot. A client link is

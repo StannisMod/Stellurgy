@@ -299,22 +299,11 @@ public class VSAssembledShipRealRightClickBoardingE2ETest extends AbstractShared
         // `reportRidingEntity` stood here, and it could only ever sample the state the record
         // announces — a read that lands in the gap between the tear-down and the rebuild answers
         // `riding:false` for a pilot who is about to be seated.
-        try {
-            clientEvents().awaitMatching(pressOnClient, "mount",
-                    seen -> Events.countRecords(seen, "\"ok\":true") > 0,
-                    "seating him (ok:true)",
-                    "the CLIENT must mount the player after a boarding the SERVER has already"
-                            + " recorded (the chain above), or the pilot sees himself standing on a"
-                            + " deck he is in fact strapped into", 5 * budget);
-        } catch (AssertionError never) {
-            Events.assertInstrumentRan(clientEvents().since(pressOnClient, "mount"),
-                    "entity_mount_writes", "the client's own mounts must be observed at all before"
-                            + " an absent one can be read as a boarding the client did not follow");
-            throw new AssertionError(never.getMessage() + " serverMountRecord="
-                    + events.since(pressMark, "mount") + aimDiag);
-        }
-
-        JsonObject riding = bot().reportRidingEntity();
+        JsonObject riding = awaitClientMount(pressOnClient,
+                "the CLIENT must mount the player after a boarding the SERVER has already recorded"
+                        + " (the chain above), or the pilot sees himself standing on a deck he is in"
+                        + " fact strapped into", 5 * budget,
+                " serverMountRecord=" + events.since(pressMark, "mount") + aimDiag);
         String serverRiding = exec("artest player riding-entity");
         String boardDiag = " clientRiding=" + riding + " serverRiding=" + serverRiding
                 + " mouseOverAfter=" + bot().reportMouseOver() + aimDiag;

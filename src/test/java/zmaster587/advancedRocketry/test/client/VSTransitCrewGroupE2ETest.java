@@ -327,6 +327,9 @@ private int waitForLoadedShip(int dim) throws Exception {
         // The mark is taken BEFORE the departure, so nothing the jump does can fall between two reads.
         Events events = transitEvents(this::exec);
         long mark = events.markInstrumented();
+        // And the CLIENT's own mark beside it, for the remount below: his client PERFORMS the mount
+        // when the arrival tells it who is riding what, so that half is a record on the other log.
+        long clientMark = clientEvents().mark();
 
         // Depart into hyperspace at the ship anchor (1,64,1 from transit-setup-piloted).
         String begin = exec("artest space transit-begin " + originDim + " 1 64 1 " + HYPERSPACE_JUMP_SPEED);
@@ -339,11 +342,11 @@ private int waitForLoadedShip(int dim) throws Exception {
                 + " back aboard before it settles", JUMP_LINK_BUDGET_TICKS, PILOTED_JUMP_CHAIN);
         int targetDim = arrivedTargetDim(this::exec);
 
-        // ACCEPTANCE (client oracle): the client itself must render the crew member STILL RIDING the ship's
-        // seat, in the TARGET cell — the reseat carried it across dims and re-mounted it. The server's
-        // re-seat is a link above; what is read here is whether the CLIENT followed it, and the helper
-        // says which of the two failed when it did not.
-        JsonObject riding = ridingOnceTheClientHasCaughtUp(CLIENT_REMOUNT_POLLS);
+        // ACCEPTANCE (client oracle): the client itself must PERFORM the remount and still have the
+        // crew member on the ship's seat, in the TARGET cell. The server's re-seat is a link above;
+        // what is read here is whether the CLIENT followed it — as its own link, off the mark taken
+        // before the departure — and the helper says which of the two failed when it did not.
+        JsonObject riding = ridingOnceTheClientHasRemounted(clientMark, CLIENT_REMOUNT_BUDGET_TICKS);
         assertTrue("the crew member must survive the jump still riding, on the CLIENT: " + riding
                 + " (targetDim=" + targetDim + ", clientDim=" + bot().reportWeather().get("dim").getAsInt() + ")",
                 riding.get("riding").getAsBoolean());
@@ -575,6 +578,8 @@ private boolean waitForRegisteredShip(int dim) throws Exception {
 
         Events events = transitEvents(this::execEnvelope);
         long mark = events.markInstrumented();
+        // The CLIENT's own mark, for the remount link below — taken here, before the departure.
+        long clientMark = clientEvents().mark();
 
         String begin = execEnvelope("artest space transit-begin " + originDim + " 1 64 1 " + HYPERSPACE_JUMP_SPEED);
         assertTrue("the transit must begin (departure crossing): " + begin, readBool(begin, "began"));
@@ -587,7 +592,7 @@ private boolean waitForRegisteredShip(int dim) throws Exception {
                 + " ship loaded", JUMP_LINK_BUDGET_TICKS, PILOTED_JUMP_CHAIN);
         int targetDim = arrivedTargetDim(this::execEnvelope);
 
-        JsonObject riding = ridingOnceTheClientHasCaughtUp(CLIENT_REMOUNT_POLLS);
+        JsonObject riding = ridingOnceTheClientHasRemounted(clientMark, CLIENT_REMOUNT_BUDGET_TICKS);
         assertTrue("a crew member must be re-seated on arrival with NOTHING forcing the ship loaded; client "
                 + "reports " + riding + " (targetDim=" + targetDim + ", clientDim="
                 + bot().reportWeather().get("dim").getAsInt() + ")",
@@ -866,20 +871,22 @@ private long readCounter(String className, String field) throws Exception {
      * assuming one landing spot.</p>
      */
     private String standTheBotOnTheDeck(double shipX, double shipY, double shipZ) throws Exception {
-        boolean dismounted = false;
+        // One CLIENT mark for both routes: whichever gets him off, his own `dismountRidingEntity`
+        // is the record. The sneak route gets a WINDOW rather than a wait-until — the javadoc above
+        // says the trigger is not the subject, so its expiry must not fail — and the probe route
+        // that follows is REQUIRED, as the link it is.
+        long clientMark = clientEvents().mark();
         bot().holdKey(SNEAK_KEY);
-        for (int i = 0; i < 40 && !dismounted; i++) {
-            bot().waitTicks(2);
-            dismounted = !bot().reportRidingEntity().get("riding").getAsBoolean();
-        }
+        bot().waitTicks(80);
         bot().releaseKey(SNEAK_KEY);
-        if (!dismounted) {
+        if (Events.records(clientEvents().since(clientMark, "dismount")).isEmpty()) {
             exec("artest player dismount");
-            bot().waitTicks(5);
-            dismounted = !bot().reportRidingEntity().get("riding").getAsBoolean();
+            awaitClientDismount(clientMark, "the crew member must actually leave his seat, or there"
+                    + " is no crew member on his feet to carry", 80);
         }
-        scenario().requireArranged("the crew member must actually leave his seat, or there is no crew"
-                + " member on his feet to carry: " + bot().reportRidingEntity(), dismounted);
+        scenario().requireArranged("...and he must still be off it when the capture is taken: "
+                + bot().reportRidingEntity(),
+                !bot().reportRidingEntity().get("riding").getAsBoolean());
         bot().waitTicks(30); // let him settle and the capture take
         String capture = exec("artest vs deck-capture");
         for (int drop = 0; drop < 6 && !readBool(capture, "alreadyTracked"); drop++) {
@@ -1467,7 +1474,7 @@ private long readCounter(String className, String field) throws Exception {
         // ── READING 2, SEATED in hyperspace: the corridor comes up ───────────────────────────────
         // Throws with the server's own mount/dismount record if he never came back — the arrangement
         // is asserted INSIDE, where the chain that would explain a failure is still readable.
-        JsonObject mount = ridingOnceTheClientHasCaughtUp(CLIENT_REMOUNT_POLLS);
+        JsonObject mount = ridingOnceTheClientHasRemounted(clientMark, CLIENT_REMOUNT_BUDGET_TICKS);
         long tunnelSeated = tunnelFrames();
         bot().waitTicks(20);
         long drawnSeated = tunnelFrames() - tunnelSeated;
@@ -1549,7 +1556,7 @@ private long readCounter(String className, String field) throws Exception {
 
         // He must have crossed SEATED — a departure record that already said STANDING is the sibling
         // scenario, and it passes on the broken build. Asserted inside, with the chain.
-        JsonObject mount = ridingOnceTheClientHasCaughtUp(CLIENT_REMOUNT_POLLS);
+        JsonObject mount = ridingOnceTheClientHasRemounted(clientMark, CLIENT_REMOUNT_BUDGET_TICKS);
 
         // ── THE STIMULUS: off the seat, mid-flight ───────────────────────────────────────────────
         String capture = standTheBotOnTheDeck(mount.get("posX").getAsDouble(),

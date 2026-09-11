@@ -360,17 +360,29 @@ public class VSPreAssemblyBoardingPilotControlE2ETest extends AbstractSharedVsCl
         // costs nothing on the ordinary path (no dismount at all is already "seated", which is the
         // reading during the whole time the pilot waits on his stale mount) and spends ticks only in
         // the one case that is about to be called a defect.
-        String dismounts = "";
-        String mounts = "";
-        boolean seatedOnTheRecord = false;
-        for (int sample = 0; sample < SEATED_CONFIRM_SAMPLES && !seatedOnTheRecord; sample++) {
-            if (sample > 0) {
-                bot().waitTicks(TICKS_PER_SAMPLE);
-            }
-            dismounts = events.since(assemblyMark, "dismount");
-            mounts = events.since(assemblyMark, "mount");
-            seatedOnTheRecord = seatedOnTheServersRecord(mounts, dismounts);
-        }
+        // Read through the shared wait rather than a hand-rolled sample loop. It buys three things
+        // the loop did not: it fails AT the moment the claim is disproved rather than leaving the
+        // verdict to an assertion that restated its own exit condition; its message carries the
+        // ordered chain that DID happen plus the four-cause triage for an empty window; and the
+        // budget arithmetic and the narrative stop being this class's to keep right.
+        //
+        // The type it waits on is `dismount`, NOT `mount`, and that preserves the read order the
+        // paragraph above argues for: the verb fetches the dismount view first and the predicate
+        // fetches the mount view second, so the mount view is never the older of the two.
+        events.awaitMatching(assemblyMark, "dismount",
+                dismountView -> seatedOnTheServersRecord(
+                        events.since(assemblyMark, "mount"), dismountView),
+                "leaving him SEATED on the server's own record (no dismount without a later mount)",
+                "a player who sat in the pilot seat before assembling his ship must STILL be seated"
+                        + " once assembly finishes - he should never have to stand up and sit down"
+                        + " again to fly what he just built. A dismount with no mount after it is"
+                        + " the shape the crew rebind produces when it retires the stale mount and"
+                        + " then finds no seat mount to give him back (CrewTransfer's `dummy =="
+                        + " null` exit) - read the dismount's `by` trail for the un-seater."
+                        + " boarding=" + how + " ridingBeforeAssembly=" + riding,
+                SEATED_CONFIRM_SAMPLES * TICKS_PER_SAMPLE);
+        String dismounts = events.since(assemblyMark, "dismount");
+        String mounts = events.since(assemblyMark, "mount");
         // The CLIENT's half of the same claim, as the LINK it is: the rebind's re-seat, performed by
         // his own client. The CONTRACT form — a client the assembly never re-seated is exactly what
         // this leg exists to catch, so it fails as an assertion and not as an arrangement.
@@ -385,18 +397,14 @@ public class VSPreAssemblyBoardingPilotControlE2ETest extends AbstractSharedVsCl
         // the game never starts.
         Events.assertInstrumentRan(dismounts, "entity_position_writers",
                 "assembly left the pilot in his seat");
-        assertTrue("a player who sat in the pilot seat before assembling his ship must STILL be "
-                        + "seated once assembly finishes - he should never have to stand up and sit "
-                        + "down again to fly what he just built. The server's log kept a dismount "
-                        + "with no mount after it for "
-                        + (SEATED_CONFIRM_SAMPLES * TICKS_PER_SAMPLE) + " ticks, which is the shape "
-                        + "the crew rebind produces when it retires the stale mount and then finds "
-                        + "no seat mount to give him back (CrewTransfer's `dummy == null` exit) - "
-                        + "read the dismount's `by` trail below for the un-seater. boarding=" + how
-                        + " ridingBeforeAssembly=" + riding + " ridingAfterAssembly=" + ridingAfter
-                        + " | the SERVER's own record since the assembly: dismounts=" + dismounts
-                        + " mounts=" + mounts,
-                isRiding(ridingAfter) && seatedOnTheRecord);
+        // The server's half is the wait above — it fails there, with the chain, the moment the claim
+        // is disproved. What is left here is the CLIENT's settled state, which the link before it
+        // established: he is on a mount, and the next assertion says WHICH.
+        assertTrue("...and his own client must still have him on a mount when it is read. boarding="
+                        + how + " ridingBeforeAssembly=" + riding + " ridingAfterAssembly="
+                        + ridingAfter + " | the SERVER's own record since the assembly: dismounts="
+                        + dismounts + " mounts=" + mounts,
+                isRiding(ridingAfter));
         assertTrue("the mount a player is left riding after assembly must still be the pilot seat's, "
                         + "not some leftover entity. boarding=" + how + " riding=" + ridingAfter,
                 entityClassOf(ridingAfter).contains("EntityDummy"));
@@ -440,35 +448,55 @@ public class VSPreAssemblyBoardingPilotControlE2ETest extends AbstractSharedVsCl
         // give-up record naming the queue entry (player + stale mount id) would let the counters
         // become an assertion again; there is none, so they stay in the failure message.
         int rebindBudget = (int) (240 * com.github.stannismod.forge.testing.TestTimeouts.factor());
-        String rebindState = "";
-        String decisions = "";
-        String queue = "";
-        for (int i = 0; i < rebindBudget && !decisions.contains("\"outcome\":\"REBOUND\""); i++) {
-            bot().waitTicks(TICKS_PER_SAMPLE);
-            rebindState = exec("artest vs seat-delivery");
+        // The shared wait, keyed on the outcome, instead of a sample loop that re-read three things
+        // per iteration to build a message it might never print. Two of those three — the probe's
+        // seat-delivery state and the queue's own log — are DIAGNOSTICS, and a diagnostic belongs on
+        // the failing path and at the end of the healthy one, not inside the wait: re-reading them
+        // every sample cost a probe round trip per tick and changed no verdict.
+        //
+        // Wrapped, and the wrapper is the point: this rebind is this leg's ARRANGEMENT — the control
+        // chain under test cannot come up without it — so a failure has to stay TYPED as one, which
+        // a bare `awaitCarrying` (a contract AssertionError) would not. The catch re-reads the
+        // diagnostics, proves the seam RAN before the silence is read as a refusal, and re-raises
+        // through `arrangementFailed` with the wait's own chain appended.
+        String rebindState;
+        String decisions;
+        String queue;
+        String gaveUp;
+        try {
+            events.awaitCarrying(assemblyMark, "crew_rebind_decided", "\"outcome\":\"REBOUND\"",
+                    "the crew rebind must decide REBOUND for the pilot whose ship was just"
+                            + " assembled", rebindBudget);
+        } catch (AssertionError never) {
             decisions = events.since(assemblyMark, "crew_rebind_decided");
             queue = events.since(assemblyMark, "crew_rebind_queue");
+            // An empty decision log has two readings and only one is about the product: the rebind
+            // seam ran and never reached REBOUND, or it never ran at all — the queue never asked,
+            // which is a defect one step earlier and used to arrive as "the counter did not move".
+            Events.assertInstrumentRan(decisions, "crew_transfer_events",
+                    "the assembly's crew rebind never completed");
+            scenario().arrangementFailed("the assembly's crew rebind never completed - the"
+                    + " relocated ship/seat never became resolvable, so the control chain under"
+                    + " test never came up. boarding=" + how
+                    + " lastDecision=" + Events.lastField(decisions, "outcome")
+                    + " delivery=" + exec("artest vs seat-delivery")
+                    + " | the queue's own entries in this window: " + describeGiveUps(queue)
+                    + " :: " + queue + " | " + never.getMessage());
         }
-        String gaveUp = describeGiveUps(queue);
+        rebindState = exec("artest vs seat-delivery");
+        decisions = events.since(assemblyMark, "crew_rebind_decided");
+        queue = events.since(assemblyMark, "crew_rebind_queue");
+        gaveUp = describeGiveUps(queue);
         // Printed on a GREEN run too, not only into the failure: this is the queue's own account of
         // whose entry it took and whose it dropped, and a reader who only ever sees it on a red has
         // no idea what the healthy shape looks like.
-        System.out.println("[preassembly] rebind queue :: " + gaveUp + " :: " + queue);
-        // An empty decision log has two readings and only one of them is about the product: the
-        // rebind seam ran and never reached REBOUND, or it never ran at all — the queue never asked
-        // for a rebind, which is a defect one step earlier and used to arrive as "the counter did
-        // not move". This separates them before anything is concluded from the silence.
-        Events.assertInstrumentRan(decisions, "crew_transfer_events",
-                "the assembly's crew rebind never completed");
-        scenario().requireArranged("the assembly's crew rebind never completed within "
-                        + (rebindBudget * TICKS_PER_SAMPLE) + " ticks (load-scaled) - the relocated "
-                        + "ship/seat never became resolvable, so the control chain under test never "
-                        + "came up. boarding=" + how
-                        + " lastDecision=" + Events.lastField(decisions, "outcome")
-                        + " decisions=" + decisions + " delivery=" + rebindState
-                        + " | the queue's own entries in this window: " + gaveUp
-                        + " :: " + queue,
-                decisions.contains("\"outcome\":\"REBOUND\""));
+        System.out.println("[preassembly] rebind queue :: " + gaveUp + " :: " + queue
+                + " :: lastDecision=" + Events.lastField(decisions, "outcome")
+                + " delivery=" + rebindState);
+        // The REBOUND itself is the wait above, typed as the arrangement it is. Nothing is
+        // re-asserted here: a second check of `decisions.contains("REBOUND")` would restate the
+        // condition the wait already exited on, and its message would describe a rebind failure for
+        // what could only ever be a budget that expired.
 
         // Paste-site census, printed unconditionally (visible in green runs too): assembly pastes
         // the craft one block above its build position before relocating it into the ship's
@@ -779,11 +807,11 @@ public class VSPreAssemblyBoardingPilotControlE2ETest extends AbstractSharedVsCl
     /**
      * Wait for the CLIENT to perform the mount, then read what it is riding — ONCE.
      *
-     * <p>This polled {@code reportRidingEntity} until it answered "riding". The client PERFORMS a
-     * mount when the server tells it who is riding what, so that is a record on its own log, and a
-     * poll of the state it produces can land in the gap between a tear-down and a rebuild and answer
-     * `riding:false` for a pilot who is about to be seated. With a mark taken before the stimulus the
-     * record cannot be missed however the two sides interleave.</p>
+     * <p><b>Now the base's {@code awaitClientMount}</b>, which is the same mechanism: mark before
+     * the stimulus, wait for the client's own {@code startRiding} with {@code ok:true}, prove the
+     * recorder RAN before a silence is read as a refusal, and read the state once afterwards. This
+     * class was the FOURTH copy of it; the other three were folded the same day. What stays local is
+     * the {@code what} and the diagnosis, which is all that ever differed between the four.</p>
      *
      * <p>The CONTRACT form: it fails as an ordinary assertion. The boarding gate below wraps it into
      * an arrangement failure, exactly as {@code requireChain} wraps {@code assertChain} — a client
@@ -794,19 +822,7 @@ public class VSPreAssemblyBoardingPilotControlE2ETest extends AbstractSharedVsCl
      */
     private JsonObject ridingOnceTheClientHasMounted(long clientMark, int budgetTicks, String what)
             throws Exception {
-        try {
-            clientEvents().awaitMatching(clientMark, "mount",
-                    seen -> Events.countRecords(seen, "\"ok\":true") > 0,
-                    "seating him (ok:true)", what, budgetTicks);
-        } catch (AssertionError never) {
-            // Which silence: a client that never mounted him and a recorder that never wove are the
-            // same empty window, and they ask for opposite investigations.
-            Events.assertInstrumentRan(clientEvents().since(clientMark, "mount"),
-                    "entity_mount_writes", "the client's own mounts must be observed at all before an"
-                            + " absent one can be read as a client that did not follow the boarding");
-            throw never;
-        }
-        return bot().reportRidingEntity();
+        return awaitClientMount(clientMark, what, budgetTicks, "");
     }
 
     /**

@@ -95,12 +95,15 @@ public class VSPilotStationDestructionE2ETest extends AbstractSharedVsClientE2ET
                     "control_station_lost", "dismount", "entity_removed");
             assertRemovedThisScenariosDummy(events, breakMark, ship.dummyId, "server");
 
-            // The rider must be DISMOUNTED as the CLIENT renders it. The server dismount is already
-            // on the chain above, so an expiry here is a replication statement and not an open
-            // question about whether the seat released him.
-            JsonObject riding = awaitRiding(40, false);
-            assertTrue("destroying the OCCUPIED pilot seat must dismount the rider (client-observed): "
-                            + riding, !isRiding(riding));
+            // The rider must be DISMOUNTED as the CLIENT performs it — his own
+            // `dismountRidingEntity`, off the mark taken before the break. The server dismount is
+            // already on the chain above, so an expiry here is a replication statement and not an
+            // open question about whether the seat released him.
+            JsonObject riding = awaitClientDismount(breakClientMark,
+                    "destroying the OCCUPIED pilot seat must dismount the rider on his own client",
+                    RELEASE_BUDGET_TICKS);
+            assertTrue("...and he must still be off the seat when it is read: " + riding,
+                    !isRiding(riding));
 
             // The ship must revert to an unmanned HOLD — not keep flying the latched climb, and
             // not keep cruising a retained setpoint (destruction zeroes it). This IS a measurement:
@@ -151,10 +154,12 @@ public class VSPilotStationDestructionE2ETest extends AbstractSharedVsClientE2ET
                 RELEASE_BUDGET_TICKS, "dismount", "entity_removed");
         assertRemovedThisScenariosDummy(events, breakMark, ship.dummyId, "server");
 
-        // The pilot is dismounted, as the CLIENT renders it (the server dismount is the link above).
-        JsonObject riding = awaitRiding(40, false);
-        assertTrue("destroying the linked flight computer must dismount the pilot (client-observed): "
-                        + riding, !isRiding(riding));
+        // The pilot is dismounted as the CLIENT performs it (the server dismount is the link above).
+        JsonObject riding = awaitClientDismount(breakClientMark,
+                "destroying the linked flight computer must dismount the pilot on his own client",
+                RELEASE_BUDGET_TICKS);
+        assertTrue("...and he must still be off the seat when it is read: " + riding,
+                !isRiding(riding));
 
         // A brainless ship must never keep thrusting upward: the dead computer's channels die
         // with the tile. (It is free to FALL — only continued powered climb is the defect.)
@@ -269,20 +274,12 @@ public class VSPilotStationDestructionE2ETest extends AbstractSharedVsClientE2ET
 
     // ---- Observation helpers -------------------------------------------------------------------
 
-    /** Poll until the client reports riding == {@code want} (bounded); returns the last sample.
-     *  A CLIENT-rendered dismount has no record of its own — the position writers are server-side —
-     *  so this stays a poll, and each call site states the server link it is following. */
-    private JsonObject awaitRiding(int samples, boolean want) throws Exception {
-        JsonObject riding = null;
-        for (int i = 0; i < samples; i++) {
-            riding = bot().reportRidingEntity();
-            if (isRiding(riding) == want) {
-                break;
-            }
-            bot().waitTicks(5);
-        }
-        return riding;
-    }
+    // `awaitRiding(samples, want)` lived here: a bounded poll of `reportRidingEntity`, justified in
+    // its own javadoc by "a CLIENT-rendered dismount has no record of its own — the position writers
+    // are server-side". That was WRONG about this tree. `MixinEntityPositionWriters` is in the
+    // common mixin list, so it applies on both sides, and the client's own `dismountRidingEntity` —
+    // which vanilla calls from `handleSetPassengers` when the server drops a passenger — records
+    // `dismount` in the CLIENT log. The base's `awaitClientDismount` waits for that record.
 
     /**
      * The removal on the chain above was THIS scenario's mount, by entity id.

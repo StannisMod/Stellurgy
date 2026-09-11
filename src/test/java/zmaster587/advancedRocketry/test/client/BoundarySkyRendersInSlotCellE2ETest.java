@@ -17,7 +17,6 @@ import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.function.Predicate;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -771,7 +770,7 @@ public class BoundarySkyRendersInSlotCellE2ETest extends AbstractSharedClientE2E
      *
      * @param what a player-facing sentence for what this link means, used in the failure
      */
-    private String awaitClientLog(long mark, String type, Predicate<String> holds, String what,
+    private String awaitClientLog(long mark, String type, Events.Condition holds, String what,
                                   int budgetTicks) throws Exception {
         return clientEvents().awaitMatching(mark, type, holds, "matching this link", what,
                 budgetTicks);

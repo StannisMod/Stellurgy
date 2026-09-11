@@ -1,5 +1,6 @@
 package zmaster587.advancedRocketry.test.client;
 
+import com.github.stannismod.forge.testing.TestTimeouts;
 import com.google.gson.JsonObject;
 import org.junit.FixMethodOrder;
 import org.junit.Test;
@@ -53,6 +54,100 @@ public class VSGroundFlightGroupE2ETest extends AbstractSharedVsClientE2ETest {
     private static final Pattern BUILDER_POS =
             Pattern.compile("\"builderPos\":\\[(-?\\d+),(-?\\d+),(-?\\d+)]");
     private static final Pattern POS_X = Pattern.compile("\"posX\":(-?[0-9.E\\-]+)");
+    /**
+     * The travel along {@code p} since {@code before}, or {@code null} when the ship is no longer
+     * reporting a position at all.
+     *
+     * <h2>Why every driving window needs this, measured the hard way</h2>
+     *
+     * <p>These legs used to poll until the claim held and then stop. Replacing that with a WINDOW
+     * equal to the poll's ceiling was argued as safe on the ground that any run the poll would have
+     * passed had at most that long — which is true of the ASSERTION and false of the STIMULUS. The
+     * poll released the key the moment the ship had risen; a full window keeps commanding it, and a
+     * ship under a held throttle for 200 ticks flies out of the loaded region. It then answers
+     * {@code {"managed":false,"id":…}} with no position in it, and the read fails as "expected a
+     * number" — which is a true statement about the reply and tells the reader nothing.</p>
+     *
+     * <p>So a driving window stops on OBSERVABILITY, never on the claim: when the subject leaves,
+     * there is nothing left to measure and what was measured stands. That is a different condition
+     * from the one the assertion makes, which is the whole point — the maximum over the samples
+     * taken is still falsifiable by a ship that never moved.</p>
+     */
+    private static Double travelOrNull(String shipInfo, Pattern p, double before) {
+        Matcher m = p.matcher(shipInfo);
+        return m.find() ? Double.parseDouble(m.group(1)) - before : null;
+    }
+
+    /**
+     * How long a commanded flight is DRIVEN before it is measured, in server ticks.
+     *
+     * <p>Was the ceiling of a bounded loop whose exit condition was the assertion that followed it —
+     * "keep commanding until it has climbed 1.5, then assert it climbed 1.0". Nothing in that shape
+     * can fail except the ceiling, and the failure text then blames the force controller for a
+     * timeout. The loops now drive the whole window and the assertions measure its EXTREMUM, so the
+     * claim is falsifiable and a quantity that comes back (a ship that rises and settles, a hull
+     * that turns full circle) is not read as one that never moved.</p>
+     *
+     * <p>The number is the old ceiling unchanged: every run those loops used to pass had at most
+     * this long, so nothing that passed before is given less now.</p>
+     */
+    private static final int FLIGHT_WINDOW_TICKS = 80;
+
+    /** The same, for the attitude-hold convergence leg — its loop's own ceiling was 120. */
+    private static final int ATTITUDE_WINDOW_TICKS = 120;
+
+    /**
+     * Hold {@code key} for a travel window and return {@code {maxDriven, otherAtThatInstant}} — the
+     * sample with the largest travel along {@code driven}, and the travel along {@code other} read
+     * off THE SAME reply.
+     *
+     * <p>The pair is taken from ONE {@code ship-info} reply, because a dominance claim ("the nose
+     * axis beats the lateral one") built from two reads a moment apart attributes one instant's
+     * travel to another's — which is what the form this replaces did.</p>
+     *
+     * <p><b>The drive still stops on the threshold, and that is deliberate rather than a relapse.</b>
+     * A held key goes on flying the craft, and a craft flown for the full ceiling leaves the loaded
+     * region and stops reporting a position at all (measured — see {@link #travelOrNull}). What
+     * keeps this honest is that the DOMINANCE assertion measures something the threshold did not
+     * establish: "it moved 2 blocks along Z" says nothing about whether X moved more. Where a drive
+     * must stop on its own claim, at least one assertion has to read a fact the stop did not
+     * settle, or the leg is back to asserting its own exit condition.</p>
+     *
+     * <p>The ceiling is the poll's own — 2 ticks × 60 iterations, scaled by
+     * {@link TestTimeouts#factor()} — so a frame-starved client under concurrent-fork load still
+     * gets every tick it used to.</p>
+     */
+    private double[] travelWindow(String shipId, int key, Pattern driven, Pattern other,
+                                  double drivenBefore, double otherBefore) throws Exception {
+        double best = 0.0;
+        double otherThere = 0.0;
+        String endedBy = "window";
+        bot().holdKey(key);
+        try {
+            int ceiling = (int) Math.ceil(2 * 60 * TestTimeouts.factor());
+            for (int spent = 0; spent < ceiling && Math.abs(best) <= 2.0; spent += 2) {
+                bot().waitTicks(2);
+                String info = shipInfoById(shipId);
+                Double d = travelOrNull(info, driven, drivenBefore);
+                if (d == null) {
+                    endedBy = "ship stopped reporting a position at " + spent + " ticks";
+                    break;
+                }
+                if (Math.abs(d) > Math.abs(best)) {
+                    best = d;
+                    // The other axis off THE SAME reply, so the dominance claim is about one instant.
+                    Double o = travelOrNull(info, other, otherBefore);
+                    otherThere = o == null ? otherThere : o;
+                }
+            }
+        } finally {
+            bot().releaseKey(key);
+        }
+        scenario().record("travelWindow_" + key, "maxDriven=" + best + " otherThere=" + otherThere
+                + " endedBy=" + endedBy);
+        return new double[] {best, otherThere};
+    }
+
     private static final Pattern POS_Y = Pattern.compile("\"posY\":(-?[0-9.E\\-]+)");
     private static final Pattern POS_Z = Pattern.compile("\"posZ\":(-?[0-9.E\\-]+)");
     private static final Pattern VEL_Y = Pattern.compile("\"velY\":(-?[0-9.E\\-]+)");
@@ -230,8 +325,14 @@ public class VSGroundFlightGroupE2ETest extends AbstractSharedVsClientE2ETest {
         // lag a few ticks, so drive until it rises (bounded) rather than a fixed window.
         double yBefore = readDouble(shipInfoById(shipId), POS_Y);
         double yAfter = yBefore;
+        double maxClimb = 0.0;
         double velY = 0.0;
-        for (int i = 0; i < 80 && yAfter - yBefore <= 1.5; i++) {
+        // The loop DRIVES; it no longer decides. Its exit condition used to be `yAfter - yBefore
+        // <= 1.5`, i.e. the very claim the assertion below makes — so the assertion could not fail
+        // except by the loop running out, and its message then blamed the force controller for a
+        // timeout. What is measured is the MAXIMUM climb over the window, not the last sample: a
+        // quantity read at one instant can have come back, and the window's extremum cannot.
+        for (int i = 0; i < FLIGHT_WINDOW_TICKS; i++) {
             String cmd = exec("artest vs force-vel-by-id 0 " + shipId + " 0 8 0");
             assertTrue("force-vel must reach THIS ship's own flight computer: " + cmd,
                     cmd.contains("\"commanded\":true"));
@@ -239,13 +340,15 @@ public class VSGroundFlightGroupE2ETest extends AbstractSharedVsClientE2ETest {
             String info = shipInfoById(shipId);
             yAfter = readDouble(info, POS_Y);
             velY = readDouble(info, VEL_Y);
+            maxClimb = Math.max(maxClimb, yAfter - yBefore);
         }
 
         // Force actually integrates into motion: the ship must climb. (Model A's setLinearVelocity
         // left this flat with velY≈1.8; a force controller lifts it.)
         assertTrue("commanded +Y velocity (via force) must lift the loaded ship "
-                        + "(yBefore=" + yBefore + " yAfter=" + yAfter + " velY=" + velY + ")",
-                yAfter - yBefore > 1.0);
+                        + "(yBefore=" + yBefore + " yAfter=" + yAfter + " maxClimb=" + maxClimb
+                        + " velY=" + velY + ")",
+                maxClimb > 1.0);
 
         // The same controller must also ROTATE the ship: command a yaw angular velocity,
         // realized as TORQUE (linear zeroed -> the ship hovers while it turns). The ship's
@@ -253,7 +356,13 @@ public class VSGroundFlightGroupE2ETest extends AbstractSharedVsClientE2ETest {
         // for the turn (bounded) for the same activation-lag robustness.
         double[] qBefore = readQuat(shipInfoById(shipId));
         double dot = 1.0;
-        for (int i = 0; i < 80 && dot >= 0.97; i++) {
+        double minDot = 1.0;
+        // The MINIMUM over the window is the measurement, and here that is not a refinement — it is
+        // the only correct reading. A ship under a held 1 rad/s yaw command passes through every
+        // attitude, so |dot| FALLS and then RISES back toward 1.0 as it comes round; a last-sample
+        // read of a full turn says "unmoved". The old loop hid that by exiting the moment the dot
+        // dropped — on the same predicate the assertion then restated.
+        for (int i = 0; i < FLIGHT_WINDOW_TICKS; i++) {
             String cmd = exec("artest vs force-rot-by-id 0 " + shipId + " 0 1.0 0");
             assertTrue("force-rot must reach THIS ship's own flight computer: " + cmd,
                     cmd.contains("\"commanded\":true"));
@@ -262,17 +371,23 @@ public class VSGroundFlightGroupE2ETest extends AbstractSharedVsClientE2ETest {
             // |dot| of two unit quaternions is cos(halfAngle); < 0.98 => rotated by more than ~23°.
             dot = Math.abs(qBefore[0] * qNow[0] + qBefore[1] * qNow[1]
                     + qBefore[2] * qNow[2] + qBefore[3] * qNow[3]);
+            minDot = Math.min(minDot, dot);
         }
         assertTrue("commanded yaw (via torque) must rotate the loaded ship "
-                        + "(|quat dot|=" + dot + ", 1.0 = unmoved)",
-                dot < 0.98);
+                        + "(min |quat dot| over the window=" + minDot + ", last=" + dot
+                        + ", 1.0 = unmoved)",
+                minDot < 0.98);
 
         // ATTITUDE HOLD: command an absolute target orientation (90° yaw about world Y) and the
         // controller must drive the ship's attitude TO it and converge — the interface Free
         // Flight feeds (its per-tick target quaternion). Poll for convergence (bounded).
         final double[] target = {0.70710678, 0.0, 0.70710678, 0.0}; // {w,x,y,z}
         double convDot = 0.0;
-        for (int i = 0; i < 120 && convDot < 0.98; i++) {
+        // The FINAL value is the measurement here, and unlike the two windows above that is the
+        // right reading: the claim is that the controller CONVERGES and HOLDS, so a maximum along
+        // the way would pass on a ship that swung through the target and carried on. The loop drives
+        // the whole window and no longer exits on the predicate the assertion restates.
+        for (int i = 0; i < ATTITUDE_WINDOW_TICKS; i++) {
             String cmd = exec("artest vs point-by-id 0 " + shipId
                     + " " + target[0] + " " + target[1] + " " + target[2] + " " + target[3]);
             assertTrue("point must reach THIS ship's own flight computer: " + cmd,
@@ -281,8 +396,9 @@ public class VSGroundFlightGroupE2ETest extends AbstractSharedVsClientE2ETest {
             double[] q = readQuat(shipInfoById(shipId));
             convDot = Math.abs(q[0] * target[0] + q[1] * target[1] + q[2] * target[2] + q[3] * target[3]);
         }
-        assertTrue("attitude-hold must converge the ship to the commanded orientation "
-                        + "(|dot to target|=" + convDot + ", 1.0 = exact)",
+        assertTrue("attitude-hold must converge the ship to the commanded orientation and still be"
+                        + " there at the end of the window (|dot to target|=" + convDot
+                        + ", 1.0 = exact)",
                 convDot > 0.98);
 
         // FULL FREE FLIGHT PATH: hand the flight computer a held pilot input. Its server tick
@@ -302,7 +418,10 @@ public class VSGroundFlightGroupE2ETest extends AbstractSharedVsClientE2ETest {
         double[] pBefore = readVec(shipInfoById(shipId));
         double[] at = pBefore;
         double disp = 0.0;
-        for (int i = 0; i < 80 && disp <= 1.5; i++) {
+        double maxDisp = 0.0;
+        // Drives the whole window and measures the MAXIMUM displacement: the exit condition used to
+        // be the assertion below, and a ship that moves out and drifts back reads zero at the end.
+        for (int i = 0; i < FLIGHT_WINDOW_TICKS; i++) {
             // Addressed by SHIP and re-issued from its freshest pose each iteration. The input used to
             // go to a server-wide static, which no pilot has; re-sending is also what a real pilot's
             // client does every tick, and it keeps the address on a ship that is by now moving.
@@ -315,10 +434,11 @@ public class VSGroundFlightGroupE2ETest extends AbstractSharedVsClientE2ETest {
             at = p;
             double dx = p[0] - pBefore[0], dy = p[1] - pBefore[1], dz = p[2] - pBefore[2];
             disp = Math.sqrt(dx * dx + dy * dy + dz * dz);
+            maxDisp = Math.max(maxDisp, disp);
         }
         assertTrue("a Free Flight throttle input must move the ship through the AFC's FF path "
-                        + "(displacement=" + disp + ")",
-                disp > 1.0);
+                        + "(max displacement over the window=" + maxDisp + ", last=" + disp + ")",
+                maxDisp > 1.0);
     }
 
     // ── migrated: VSShipNearbyObserverNoCrashE2ETest ─────────────────────────
@@ -400,8 +520,11 @@ public class VSGroundFlightGroupE2ETest extends AbstractSharedVsClientE2ETest {
         // Server-side seat drive: the seat must resolve its AFC, and a full-up throttle through
         // the seat->AFC per-tile path must lift the ship (isolates ground friction: up only).
         double yAfter = yBefore;
+        double maxSeatClimb = 0.0;
         String lastSeat = "";
-        for (int i = 0; i < 80 && yAfter - yBefore <= 1.5; i++) {
+        // Drives the whole window; the exit condition was the assertion below. Measures the MAXIMUM
+        // climb, so a ship that rises and settles back is not read as one that never rose.
+        for (int i = 0; i < FLIGHT_WINDOW_TICKS; i++) {
             // BY ID: this world is shared with every other scenario in the class, and the
             // unaddressed `seat-input` takes whichever pilot seat it lists first — a command that
             // answers afcResolved:true from somebody else's ship while this one sits still.
@@ -413,10 +536,12 @@ public class VSGroundFlightGroupE2ETest extends AbstractSharedVsClientE2ETest {
                     lastSeat.contains("\"afcResolved\":true"));
             bot().waitTicks(1);
             yAfter = readDouble(shipInfoById(shipId), POS_Y);
+            maxSeatClimb = Math.max(maxSeatClimb, yAfter - yBefore);
         }
         assertTrue("a throttle driven through the pilot seat -> AFC -> force path must lift the ship "
-                        + "(yBefore=" + yBefore + " yAfter=" + yAfter + ", lastSeat=" + lastSeat + ")",
-                yAfter - yBefore > 1.0);
+                        + "(yBefore=" + yBefore + " yAfter=" + yAfter + " maxClimb=" + maxSeatClimb
+                        + ", lastSeat=" + lastSeat + ")",
+                maxSeatClimb > 1.0);
     }
 
     // ── migrated: VSShipPilotKeysE2ETest ─────────────────────────────────────
@@ -491,25 +616,48 @@ public class VSGroundFlightGroupE2ETest extends AbstractSharedVsClientE2ETest {
 
         // Drive REAL keys: hold vertical-up. The client samples it, sends it to the seat, and the
         // AFC lifts the ship. Up isolates from ground friction; poll for the climb (bounded).
-        final double y0 = yBefore;
+        // THE CLIMB IS THIS LEG'S ARRANGEMENT, and that is the correction. Its own name says what it
+        // pins — the pilot TRAVELS with the ship and the camera LOCKS to the nose — and both of
+        // those need a ship that is still there to be read. So the key is held only until the craft
+        // is unambiguously airborne and is then RELEASED: flying on is not part of the claim.
+        //
+        // Measured, and it is why this leg is not a fixed window like the four command legs above.
+        // Converting it to one (the poll's own 200-tick ceiling, spent in full) reds the scenario
+        // with `{"managed":false,"id":…}`: the poll released the key the moment the ship had risen,
+        // while a full window keeps commanding it, and a ship under a held throttle for 200 ticks
+        // leaves the loaded region. The safety argument for "window = the poll's ceiling" holds for
+        // an assertion's THRESHOLD and not for a STIMULUS that goes on acting.
+        //
+        // What makes this not the old defect: the drive is typed as ARRANGEMENT and the contract
+        // assertions below read something it did not establish — the rider's climb tracking the
+        // ship's, the camera's, and the nose lock. A climb that never happens fails as an
+        // arrangement, which is what it would be.
+        double maxLift = 0.0;
+        double yAfter = yBefore;
         bot().holdKey(Keyboard.KEY_R); // flightVerticalUp
-        ClientPoll.Result<Double> lift;
         try {
-            // Event-gated hover-lift (load-scaled ceiling + early exit): a fixed 100-iteration budget
-            // under-lifts a frame-starved client under concurrent-fork load and reds a healthy climb.
-            lift = ClientPoll.until(bot()::waitTicks,
-                    () -> readDouble(shipInfoById(shipId), POS_Y),
-                    y -> y - y0 > 1.5, 2, 100);
+            int ceiling = (int) Math.ceil(2 * 100 * TestTimeouts.factor());
+            for (int spent = 0; spent < ceiling && maxLift <= 1.5; spent += 2) {
+                bot().waitTicks(2);
+                Double climbed = travelOrNull(shipInfoById(shipId), POS_Y, yBefore);
+                if (climbed == null) {
+                    scenario().record("liftEndedBy", "ship no longer reporting a position at "
+                            + spent + " ticks; maxLift=" + maxLift);
+                    break;
+                }
+                yAfter = yBefore + climbed;
+                maxLift = Math.max(maxLift, climbed);
+            }
         } finally {
             bot().releaseKey(Keyboard.KEY_R);
         }
-        double yAfter = lift.value;
-        scenario().record("lift", lift);
+        scenario().record("maxLift", maxLift);
 
-        assertTrue("holding the vertical-up key while seated must lift the ship through the FULL "
-                        + "client path (key -> packet -> seat -> AFC -> force): yBefore=" + yBefore
-                        + " yAfter=" + yAfter,
-                yAfter - yBefore > 1.0);
+        scenario().requireArranged("holding the vertical-up key while seated must get the ship "
+                        + "airborne through the FULL client path (key -> packet -> seat -> AFC -> "
+                        + "force) before the pilot can be asked to travel with it: yBefore="
+                        + yBefore + " yAfter=" + yAfter + " maxLift=" + maxLift,
+                maxLift > 1.0);
 
         // --- The seated pilot must TRAVEL with the ship (client-observed). Read the CLIENT rider +
         // camera again: both must have climbed, and the rider's climb must track the server ship's.
@@ -558,48 +706,40 @@ public class VSGroundFlightGroupE2ETest extends AbstractSharedVsClientE2ETest {
 
         final double xBeforeNose = readDouble(shipInfoById(shipId), POS_X);
         final double zBeforeNose = readDouble(shipInfoById(shipId), POS_Z);
-        ClientPoll.Result<Double> nose;
-        bot().holdKey(Keyboard.KEY_W);          // keyBindForward -> body forward
-        try {
-            nose = ClientPoll.until(bot()::waitTicks, () -> readDouble(shipInfoById(shipId), POS_Z),
-                    z -> z - zBeforeNose > 2.0, 2, 60);
-        } finally {
-            bot().releaseKey(Keyboard.KEY_W);
-        }
-        double xAfterNose = readDouble(shipInfoById(shipId), POS_X);
+        // A WINDOW, and the axis pair is taken from ONE reply per sample. Two changes, both about
+        // what the old form could not say: the poll exited on `dz > 2.0` while the first assertion
+        // claimed `dz > 1.0`, so that half could not fail; and the dominance check compared a dz
+        // from the poll's exit against a dx read afterwards, attributing one moment's travel to
+        // another's. The sample kept is the one with the largest |dz|, and its dx comes off the same
+        // ship-info as its dz.
+        double[] nose = travelWindow(shipId, Keyboard.KEY_W, POS_Z, POS_X, zBeforeNose, xBeforeNose);
         cutAndSettle();
         assertTrue("holding the FORWARD key while seated must drive the ship along its NOSE — world "
                         + "+Z on an identity-attitude ship — through the full client path. "
-                        + "zBefore=" + zBeforeNose + " poll=" + nose,
-                nose.value - zBeforeNose > 1.0);
+                        + "zBefore=" + zBeforeNose + " maxDz=" + nose[0] + " dxThere=" + nose[1],
+                nose[0] > 1.0);
         assertTrue("…and it must be the NOSE axis it drives, not merely some motion: the world-Z "
-                        + "travel must dominate the world-X travel. dz=" + (nose.value - zBeforeNose)
-                        + " dx=" + (xAfterNose - xBeforeNose),
-                Math.abs(nose.value - zBeforeNose) > Math.abs(xAfterNose - xBeforeNose));
+                        + "travel must dominate the world-X travel AT THE SAME INSTANT. dz="
+                        + nose[0] + " dx=" + nose[1],
+                Math.abs(nose[0]) > Math.abs(nose[1]));
 
         final double xBeforeStrafe = readDouble(shipInfoById(shipId), POS_X);
         final double zBeforeStrafe = readDouble(shipInfoById(shipId), POS_Z);
-        ClientPoll.Result<Double> strafe;
-        bot().holdKey(Keyboard.KEY_Q);          // strafeLeft -> +right -> world +X at identity
-        try {
-            strafe = ClientPoll.until(bot()::waitTicks, () -> readDouble(shipInfoById(shipId), POS_X),
-                    x -> x - xBeforeStrafe > 2.0, 2, 60);
-        } finally {
-            bot().releaseKey(Keyboard.KEY_Q);
-        }
-        double zAfterStrafe = readDouble(shipInfoById(shipId), POS_Z);
+        // The same window, with the axes the other way round.
+        double[] strafe = travelWindow(shipId, Keyboard.KEY_Q, POS_X, POS_Z,
+                xBeforeStrafe, zBeforeStrafe);
         cutAndSettle();
         assertTrue("holding the STRAFE key while seated must drive the ship along its LATERAL axis — "
                         + "world +X on an identity-attitude ship. That key is Q, which vanilla binds "
                         + "to drop and which reaches the craft only because the pilot-seat conflict "
                         + "context suppresses the vanilla action; a red here is that suppression, the "
                         + "strafe field on the wire, or the axis it lands on. xBefore=" + xBeforeStrafe
-                        + " poll=" + strafe,
-                strafe.value - xBeforeStrafe > 1.0);
+                        + " maxDx=" + strafe[0] + " dzThere=" + strafe[1],
+                strafe[0] > 1.0);
         assertTrue("…and it must be the LATERAL axis it drives: the world-X travel must dominate "
-                        + "the world-Z travel. dx=" + (strafe.value - xBeforeStrafe)
-                        + " dz=" + (zAfterStrafe - zBeforeStrafe),
-                Math.abs(strafe.value - xBeforeStrafe) > Math.abs(zAfterStrafe - zBeforeStrafe));
+                        + "the world-Z travel AT THE SAME INSTANT. dx=" + strafe[0]
+                        + " dz=" + strafe[1],
+                Math.abs(strafe[0]) > Math.abs(strafe[1]));
 
         // --- The mouse must STEER the ship, never free-look the camera (the FF cockpit contract).
         // The ship is now hovering roughly upright. Inject a hard SIDEWAYS mouse look each tick

@@ -437,16 +437,16 @@ public abstract class AbstractSpaceLoginRestoreClientTest {
         // startClient, before any mark could have been taken.
         String joined = awaitClientEvent(CLIENT_SESSION_START, "client_dimension_changed", null,
                 "the restored client must end up IN a world" + chain, RESTORE_LINK_BUDGET_TICKS);
-        // The server has put him back on the mount; the CLIENT still has to be told. That last step
-        // is a round trip and not a link this test owns, so it stays a short bounded poll of the
-        // client's own view - deliberately NOT the 450-tick wait it replaces, because everything
-        // that could take that long has already been asserted above. The client's own record of
-        // being told rides in the failure text either way.
+        // The server has put him back on the mount; the CLIENT still has to PERFORM it. That is a
+        // link, not a round trip to be sampled - his own `startRiding` - and it is waited for as
+        // one. A bounded poll of `reportRidingEntity` stood here, justified as "not a link this
+        // test owns"; the record it could have read was already being printed three lines below,
+        // into this method's own failure text.
+        awaitClientEvent(CLIENT_SESSION_START, "mount", "\"ok\":true",
+                "the restored client must PERFORM the mount the login put him back on" + chain,
+                RESTORE_LINK_BUDGET_TICKS);
+        // Read once, now that the link says it happened: a settled state.
         JsonObject riding = bot().reportRidingEntity();
-        for (int waited = 0; waited < 40 && !riding.get("riding").getAsBoolean(); waited += 5) {
-            bot().waitTicks(5);
-            riding = bot().reportRidingEntity();
-        }
         int dim = clientDim();
         JsonObject state = bot().reportState();
         String observed = "clientDim=" + dim + " riding=" + riding + " state=" + state + pools

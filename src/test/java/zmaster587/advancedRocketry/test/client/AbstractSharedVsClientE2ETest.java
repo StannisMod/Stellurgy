@@ -150,56 +150,130 @@ public abstract class AbstractSharedVsClientE2ETest extends AbstractSharedClient
         return exec("artest vs ship-info 0 id " + shipId);
     }
 
-    /** How many two-tick polls a client is given to re-establish a rider's mount after a dimension
-     *  change. 80 ticks: generous against an eight-fork load, short enough that a crossing which
-     *  genuinely drops its rider fails here rather than waiting out a budget. */
-    protected static final int CLIENT_REMOUNT_POLLS = 40;
+    /** How long a client is given to re-establish a rider's mount after a dimension change. 80
+     *  ticks: generous against an eight-fork load, short enough that a crossing which genuinely
+     *  drops its rider fails here rather than waiting out a budget. */
+    protected static final int CLIENT_REMOUNT_BUDGET_TICKS = 80;
 
     /**
-     * The client's mount state once it has caught up with a dimension change — or an
-     * {@link AssertionError} carrying THE CHAIN that explains why it never did.
+     * The client PERFORMED the remount after a dimension change — as the LINK it is — and then the
+     * settled mount state, read once.
      *
      * <p>A dimension change tears the client's world down and rebuilds it, and the mount to the seat
-     * entity is re-established after the new dimension is known. A scenario that reads
-     * {@code riding} in the same breath sees {@code false} — not because the crossing dropped
-     * anyone, but because it asked a tick too soon.
+     * entity is re-established after the new dimension is known. What this waits for is the client's
+     * own {@code mount} record: his {@code startRiding} is what the server's set-passengers packet
+     * makes him do, so the remount is something he DOES, at an instant, and a mark taken before the
+     * departure makes it unmissable.</p>
      *
-     * <p><b>The point is not the wait, it is what a failure SAYS.</b> "He is not riding" names a
+     * <p><b>This was a shared bounded POLL of {@code reportRidingEntity} until 2026-09-10</b>, and
+     * it is the poll a maintainer ruling was given about: <i>"Событием же? Событие нельзя
+     * пропустить"</i>. Its defect was not the budget. A single read lands in the gap between the
+     * tear-down and the rebuild and answers {@code riding:false} for a rider who is about to be
+     * seated; the poll "fixed" that by sampling until the state came back, which spends exactly the
+     * property a mark buys — a record cannot be sampled past.</p>
+     *
+     * <p><b>What a failure SAYS is the point, and it is unchanged.</b> "He is not riding" names a
      * symptom and leaves the reader to guess whether the test was early or the product broke. So on
-     * timeout this reports the SERVER's own mount/dismount record across the same window: if it
+     * expiry this reports the SERVER's own mount/dismount record across the same window: if it
      * seated him and the client did not follow, that is a replication lag; if it never seated him,
-     * the crossing dropped him and no wait here would ever have helped. Raised through
-     * {@code scenario().arrangementFailed}, so the failure is TYPED as an arrangement problem
-     * rather than a contract one — the same cut the message describes, made machine-readable.
-     * The mark is refused unless
-     * the recorder says it is both live and woven — a dead recorder answers with a confident empty
-     * list, which is the one answer that could mislead.
+     * the crossing dropped him and no wait here would ever have helped. It also proves the client's
+     * own mount recorder RAN, because an absence from a recorder nobody installed is not evidence.
+     * Raised through {@code scenario().arrangementFailed}, so the failure is TYPED as an arrangement
+     * problem rather than a contract one — the same cut the message describes, made
+     * machine-readable.</p>
+     *
+     * @param clientMark a mark on the CLIENT log, taken BEFORE the departure. A mark belongs to one
+     *                   log: the server's sequence numbers compile here and answer about the wrong
+     *                   numbering.
      */
-    protected final JsonObject ridingOnceTheClientHasCaughtUp(int iterations) throws Exception {
-        // The REFUSING mark: it reads both honesty flags and hands back the reason instead of
-        // asserting, because a recorder that is not subscribed is a HARNESS gap and this method's
-        // whole job is to keep such a gap out of the scenario's verdict.
-        Events.MarkOrWhyNot mark = events().markIfInstrumented();
+    protected final JsonObject ridingOnceTheClientHasRemounted(long clientMark, int tickBudget)
+            throws Exception {
+        // The SERVER's refusing mark, for the failure narrative only: it reads both honesty flags
+        // and hands back the reason instead of asserting, because a recorder that is not subscribed
+        // is a HARNESS gap and this method's whole job is to keep such a gap out of the verdict.
+        Events.MarkOrWhyNot serverMark = events().markIfInstrumented();
+        try {
+            clientEvents().awaitMatching(clientMark, "mount",
+                    seen -> Events.countRecords(seen, "\"ok\":true") > 0, "seating him (ok:true)",
+                    "the CLIENT must perform the remount after the crossing", tickBudget);
+        } catch (AssertionError never) {
+            String chain = serverMark.usable()
+                    ? events().since(serverMark.seq, "mount") + " | "
+                            + events().since(serverMark.seq, "dismount")
+                    : "NO CHAIN: the position-writer recorder was not usable at the mark ("
+                            + serverMark.refusal + ")";
+            Events.assertInstrumentRan(clientEvents().since(clientMark, "mount"),
+                    "entity_mount_writes", "the client's own mounts must be observed at all before"
+                            + " an absent one can be read as a remount the client never performed");
+            scenario().arrangementFailed("the client never performed the remount within "
+                    + tickBudget + " ticks of the crossing. Client says "
+                    + bot().reportRidingEntity() + "; its own mount records say "
+                    + clientEvents().since(clientMark, "mount")
+                    + "; the SERVER's mount/dismount record across the same window says " + chain
+                    + " — if it seated him and the client did not follow this is a replication lag;"
+                    + " if it never seated him the crossing dropped him, and that is a PRODUCT"
+                    + " defect, not a wait that was too short. (" + never.getMessage() + ")");
+        }
+        // Read ONCE, now that the link above says the mount happened: a settled state, not a wait.
+        return bot().reportRidingEntity();
+    }
 
-        JsonObject mount = bot().reportRidingEntity();
-        for (int i = 0; i < iterations && !mount.get("riding").getAsBoolean(); i++) {
-            bot().waitTicks(2);
-            mount = bot().reportRidingEntity();
+    /**
+     * The client MOUNTED the bot — the replication half of a boarding the server has already
+     * recorded — as a contract failure rather than an arrangement one.
+     *
+     * <p>The difference from {@link #ridingOnceTheClientHasRemounted} is only the TYPE of the
+     * failure, and it is deliberate: a boarding that the client does not follow is the contract
+     * breaking, while a remount the client does not follow after a crossing may be either the
+     * crossing dropping him or replication lag, which is an arrangement question. The mechanism —
+     * mark before the stimulus, wait for the client's own {@code startRiding}, prove the recorder
+     * ran before reading a silence — is one implementation for both.</p>
+     *
+     * @param clientMark a mark on the CLIENT log, taken BEFORE the press or the login
+     * @param diagnosis  what to append to a failure: the server's own record, the aim, whatever
+     *                   this scenario knows and the base cannot
+     */
+    protected final JsonObject awaitClientMount(long clientMark, String what, int tickBudget,
+                                                String diagnosis) throws Exception {
+        try {
+            clientEvents().awaitMatching(clientMark, "mount",
+                    seen -> Events.countRecords(seen, "\"ok\":true") > 0, "seating him (ok:true)",
+                    what, tickBudget);
+        } catch (AssertionError never) {
+            Events.assertInstrumentRan(clientEvents().since(clientMark, "mount"),
+                    "entity_mount_writes", "the client's own mounts must be observed at all before"
+                            + " an absent one can be read as a boarding the client did not follow");
+            throw new AssertionError(never.getMessage() + diagnosis);
         }
-        if (mount.get("riding").getAsBoolean()) {
-            return mount;
+        return bot().reportRidingEntity();
+    }
+
+    /**
+     * The client DISMOUNTED the bot — the replication half of a dismount the server has already
+     * recorded.
+     *
+     * <p>The mirror of {@link #awaitClientMount}, and it exists for the same reason: a bounded poll
+     * of {@code reportRidingEntity} until it answers {@code false} can only ever sample the state
+     * this record announces, and its {@code false} is equally produced by a client that had not yet
+     * been told anything. The dismount record carries no {@code ok} — {@code dismountRidingEntity}
+     * returns nothing and the record is taken at its HEAD, while the mount is still attached, so
+     * the record can say what he was thrown off.</p>
+     *
+     * @param clientMark a mark on the CLIENT log, taken BEFORE whatever removes him
+     */
+    protected final JsonObject awaitClientDismount(long clientMark, String what, int tickBudget)
+            throws Exception {
+        try {
+            clientEvents().await(clientMark, "dismount", what, tickBudget);
+        } catch (AssertionError never) {
+            Events.assertInstrumentRan(clientEvents().since(clientMark, "dismount"),
+                    "entity_mount_writes", "the client's own dismounts must be observed at all"
+                            + " before an absent one can be read as a client that kept him seated");
+            throw new AssertionError(never.getMessage() + " clientRiding="
+                    + bot().reportRidingEntity() + " serverDismountRecord="
+                    + events().since(0L, "dismount"));
         }
-        String chain = mark.usable()
-                ? events().since(mark.seq, "mount") + " | " + events().since(mark.seq, "dismount")
-                : "NO CHAIN: the position-writer recorder was not usable at the mark ("
-                        + mark.refusal + ")";
-        scenario().arrangementFailed("the client never reported the remount within "
-                + (iterations * 2) + " ticks of the crossing. Client says " + mount
-                + "; the SERVER's mount/dismount record across the same window says " + chain
-                + " — if it seated him and the client did not follow this is a replication lag; if it"
-                + " never seated him the crossing dropped him, and that is a PRODUCT defect, not a"
-                + " wait that was too short.");
-        return mount; // unreachable: arrangementFailed always throws
+        return bot().reportRidingEntity();
     }
 
     /**
@@ -359,6 +433,13 @@ public abstract class AbstractSharedVsClientE2ETest extends AbstractSharedClient
 
     @Override
     protected void resetFamilyStateBeforeTeleport() throws Exception {
+        // WAS he seated, and the CLIENT's mark, both taken BEFORE the dismount probe. The reset's
+        // wait below is conditional on this answer for a reason the poll it replaces did not have
+        // to think about: a dismount that has nothing to dismount publishes NOTHING, so a scenario
+        // arriving un-seated (which is most of them) has no record to wait for, and an
+        // unconditional wait would burn its budget on every single scenario in the family.
+        JsonObject wasRiding = bot().reportRidingEntity();
+        long clientMark = clientEvents().mark();
         exec("artest player dismount");
         exec("artest vs permaload false");
         // Release every per-tile PROBE command channel on the server. They name one ship each and
@@ -377,14 +458,16 @@ public abstract class AbstractSharedVsClientE2ETest extends AbstractSharedClient
                 + " scenarios, or a later scenario's ship flies under an earlier one's throttle;"
                 + " probe replied " + afcCleared, afcCleared.contains("\"ok\":true"));
 
-        // Asserted on the CLIENT's own view, and polled: the dismount is a server write and the
-        // client learns it on the next update packet, so reading once would pin the round-trip
-        // rather than the state.
-        JsonObject riding = bot().reportRidingEntity();
-        for (int waited = 0; waited < 40 && isRiding(riding); waited += 5) {
-            bot().waitTicks(5);
-            riding = bot().reportRidingEntity();
+        // Asserted on the CLIENT's own view. Where a dismount was actually owed — he arrived seated
+        // from the previous scenario — the client PERFORMING it is the link, and it is waited for
+        // as one; the poll that stood here sampled the state that link announces.
+        if (isRiding(wasRiding)) {
+            awaitClientDismount(clientMark, "a scenario that arrived SEATED from its predecessor"
+                    + " must have its client dismount him before the next one measures its own"
+                    + " mount step (client said " + wasRiding + " on entry)",
+                    CLIENT_REMOUNT_BUDGET_TICKS);
         }
+        JsonObject riding = bot().reportRidingEntity();
         assertFalse("a ship scenario must start un-seated as the CLIENT renders it, or its own"
                 + " mount step measures the previous scenario's seat — and /tp does not move a"
                 + " passenger, so the plot assertion that follows would fail for the wrong reason."

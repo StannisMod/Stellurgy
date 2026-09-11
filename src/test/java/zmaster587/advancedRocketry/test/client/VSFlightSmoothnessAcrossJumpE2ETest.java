@@ -104,6 +104,41 @@ public class VSFlightSmoothnessAcrossJumpE2ETest extends AbstractSharedVsClientE
     private static final double HITCH_NOISE_FLOOR_MS = 40.0;
 
     /**
+     * The physics channel's declared rate, READ FROM ITS OWN DECLARATION rather than written down.
+     *
+     * <p>The vendored VS physics loop sleeps {@code 1e9 / VSConfig.targetTps} nanoseconds per step
+     * ({@code VSWorldPhysicsLoop:64}), so {@code targetTps} IS the rate — and it is a config field,
+     * which is the whole reason a test may not carry a copy of it. Before this, the instrument
+     * control asserted {@code physHz > 40 && < 85} under a message quoting "its declared 60 Hz":
+     * three numbers, none of which the test owned, and a config change would have left the bound
+     * asserting a rate nothing runs at.</p>
+     */
+    private static final double PHYSICS_HZ = org.valkyrienskies.mod.common.config.VSConfig.targetTps;
+
+    /**
+     * The server tick rate, from vanilla's own period: {@code MinecraftServer} runs a tick every
+     * 50 ms, so the rate is the reciprocal. Written as the arithmetic rather than as "20" so the
+     * relation to the period is visible where the number is.
+     */
+    private static final double SERVER_TICK_HZ = 1000.0 / 50.0;
+
+    /**
+     * How far a SAMPLED rate may sit from its declared one before the instrument is called broken.
+     *
+     * <p>This is the test's own number and it stays one: how much a clock drifts under
+     * concurrent-fork load on a developer box is a property of the harness, not of the game. It
+     * replaces four hand-picked edges (40/85 around 60, 13/28 around 20) with one factor applied to
+     * whatever each channel declares — so the two channels cannot drift apart in strictness, and a
+     * declaration change moves both windows with it.</p>
+     *
+     * <p>The value is the widest of the four it replaces: 40 against a declared 60 is 0.67, and
+     * 13 against 20 is 0.65, so a floor of 0.6 and a ceiling of 1/0.6 ≈ 1.67 is at least as
+     * permissive as every bound that passed before. NOT tightened here — a tighter one needs the
+     * spread across repeated runs, which is not measured.</p>
+     */
+    private static final double RATE_TOLERANCE_FRACTION = 0.6;
+
+    /**
      * How much more the ground covered between beats may vary after the jump than before it.
      *
      * <p>PROVISIONAL. The first calibration run read 1.06 before and 1.63 after on the frame
@@ -219,9 +254,12 @@ public class VSFlightSmoothnessAcrossJumpE2ETest extends AbstractSharedVsClientE
         String shipNow = exec("artest vs ship-info " + originDim + " id " + shipId);
         scenario().requireArranged("the ship must still be managed at its berth: " + shipNow,
                 shipNow.contains("\"managed\":true"));
-        // The mark before the departure, so every link of the jump is in the log in order.
+        // The mark before the departure, so every link of the jump is in the log in order — and the
+        // CLIENT's own beside it, for the remount his client performs when the arrival tells it who
+        // is riding what.
         Events events = transitEvents(this::exec);
         long mark = events.markInstrumented();
+        long clientMark = clientEvents().mark();
         String begin = exec("artest space transit-begin " + originDim
                 + " " + (int) Math.round(readDouble(shipNow, "posX"))
                 + " " + (int) Math.round(readDouble(shipNow, "posY"))
@@ -238,7 +276,8 @@ public class VSFlightSmoothnessAcrossJumpE2ETest extends AbstractSharedVsClientE
         requireChain(events, mark, "the pilot must arrive SEATED in the target cell, or the post-jump"
                 + " leg has no pilot and measures a drifting hulk", PILOTED_JUMP_CHAIN);
         int targetDim = arrivedTargetDim(this::exec);
-        JsonObject arrivedRiding = ridingOnceTheClientHasCaughtUp(CLIENT_REMOUNT_POLLS);
+        JsonObject arrivedRiding =
+                ridingOnceTheClientHasRemounted(clientMark, CLIENT_REMOUNT_BUDGET_TICKS);
         scenario().requireArranged("the arrived pilot's client must be in the target cell: riding="
                         + arrivedRiding + " clientDim=" + bot().reportWeather().get("dim").getAsInt()
                         + " targetDim=" + targetDim,
@@ -555,12 +594,39 @@ public class VSFlightSmoothnessAcrossJumpE2ETest extends AbstractSharedVsClientE
                         + " Either way the pilot feels it as jerks, and the travel figure here shows "
                         + "a craft that barely moved. " + leg,
                 leg.physWriters == 1);
-        assertTrue("INSTRUMENT CONTROL (" + which + "): the physics channel must run near its "
-                        + "declared 60 Hz — it read " + Leg.round(leg.physHz) + " Hz. " + leg,
-                leg.physHz > 40.0 && leg.physHz < 85.0);
-        assertTrue("INSTRUMENT CONTROL (" + which + "): the server-tick channel must run near its "
-                        + "declared 20 Hz — it read " + Leg.round(leg.gameHz) + " Hz. " + leg,
-                leg.gameHz > 13.0 && leg.gameHz < 28.0);
+        // BOTH RATES COME FROM THEIR OWN DECLARATION NOW. These read `physHz > 40 && < 85` under a
+        // message saying "its declared 60 Hz", and `gameHz > 13 && < 28` for "20 Hz" — four numbers
+        // the test invented around two it only asserted in prose. The physics rate is
+        // `VSConfig.targetTps` (the vendored VS physics loop sleeps `1e9 / targetTps` nanos,
+        // `VSWorldPhysicsLoop:64`), and the server rate is vanilla's 50 ms tick. Neither was ever
+        // the test's to know: a config change or a VS edit would leave the bound asserting a rate
+        // nothing runs at, and the window is wide enough that it would say nothing on the way.
+        //
+        // The TOLERANCE stays the test's own, and that is the honest split: how far a sampled rate
+        // may sit from its declared one on a loaded box is a property of THIS harness, not of the
+        // game. It is one factor for both channels instead of four hand-picked edges.
+        assertRateNearItsDeclaration("physics", which, leg.physHz, PHYSICS_HZ, leg);
+        assertRateNearItsDeclaration("server-tick", which, leg.gameHz, SERVER_TICK_HZ, leg);
+    }
+
+    /**
+     * An INSTRUMENT CONTROL on one channel's sampled rate, against the rate that channel declares.
+     *
+     * <p>Its job is to refuse the smoothness numbers below when the clock they were sampled on was
+     * not running: a channel at a fraction of its rate produces gaps that read as hitches. So the
+     * failure says which channel, what it declared, and what it read.</p>
+     */
+    private static void assertRateNearItsDeclaration(String channel, String which, double sampled,
+                                                     double declared, Leg leg) {
+        double floor = declared * RATE_TOLERANCE_FRACTION;
+        double ceiling = declared / RATE_TOLERANCE_FRACTION;
+        assertTrue("INSTRUMENT CONTROL (" + which + "): the " + channel + " channel must run near"
+                        + " its DECLARED " + Leg.round(declared) + " Hz — it read "
+                        + Leg.round(sampled) + " Hz, outside [" + Leg.round(floor) + ", "
+                        + Leg.round(ceiling) + "]. Every smoothness figure below was sampled on this"
+                        + " clock, so a channel that was not running produces gaps that read as"
+                        + " hitches. " + leg,
+                sampled > floor && sampled < ceiling);
     }
 
     private static void assertNotRougher(String clock, double control, double subject,
@@ -662,6 +728,10 @@ public class VSFlightSmoothnessAcrossJumpE2ETest extends AbstractSharedVsClientE
     // --- arrangement helpers (mirroring the tier-2 client e2e classes) ---------------------------
 
     private void mountTheSeat(int dim, int seatX, int seatY, int seatZ) throws Exception {
+        // The CLIENT's mark BEFORE the mount is attempted: his own startRiding is what the link
+        // below waits for, and a mark taken after it could not tell "he was seated before I looked"
+        // from "he was never seated".
+        long clientMark = clientEvents().mark();
         String mount = "";
         boolean mounted = false;
         for (int attempt = 0; attempt < 5 && !mounted; attempt++) {
@@ -676,13 +746,14 @@ public class VSFlightSmoothnessAcrossJumpE2ETest extends AbstractSharedVsClientE
             }
         }
         scenario().requireArranged("the bot must mount the pilot-seat dummy: " + mount, mounted);
-        bot().waitTicks(10);
         // The base raises a TYPED arrangement failure carrying the server's own mount/dismount
         // record, so a red here says whether the client was merely behind or the product dropped
         // him. This class used to keep its own copy of that logic with a comment explaining why it
         // could not use the shared one; the reason was that it sat on the wrong base, and it does
-        // not any more.
-        ridingOnceTheClientHasCaughtUp(CLIENT_REMOUNT_POLLS);
+        // not any more. The settling `waitTicks(10)` that stood ahead of it went with the poll: the
+        // client's own mount record is the thing being waited for, and it cannot be arrived at too
+        // early off a mark taken before the attempt.
+        ridingOnceTheClientHasRemounted(clientMark, CLIENT_REMOUNT_BUDGET_TICKS);
     }
 
     private String botName() throws Exception {

@@ -524,9 +524,27 @@ public final class Events {
      * @param matching how to say what {@code holds} wanted, for the failure — e.g. {@code "carrying
      *                 \"ship\":\"a1\""} or {@code "differing from the previous frame"}
      */
-    public String awaitMatching(long mark, String type, java.util.function.Predicate<String> holds,
+    public String awaitMatching(long mark, String type, Condition holds,
                                 String matching, String what, int tickBudget) throws Exception {
         return awaitMatching(mark, type, holds, matching, what, tickBudget, null);
+    }
+
+    /**
+     * What {@link #awaitMatching} tests each step — a {@code Predicate<String>} that is allowed to
+     * THROW.
+     *
+     * <p>Not `java.util.function.Predicate`, and the difference is load-bearing: a condition
+     * frequently has to consult something else to answer, and everything worth consulting here is a
+     * probe call that throws. The interesting ones are exactly those: "a dismount with no LATER
+     * mount" needs the other record type, and a lambda that cannot throw has to reach for it
+     * outside the loop, where it goes stale — which is how a two-type condition silently becomes a
+     * one-type one. Widened from `Predicate` on 2026-09-10 for that case; every lambda already
+     * written satisfies it unchanged, because a lambda that throws nothing satisfies a throwing
+     * interface.</p>
+     */
+    @FunctionalInterface
+    public interface Condition {
+        boolean holds(String sinceReply) throws Exception;
     }
 
     /**
@@ -551,13 +569,13 @@ public final class Events {
      * is NOT the observation: what decides is still the record, so the verdict remains "the thing
      * production announced happened" rather than "a sample eventually read the way I wanted".</p>
      */
-    public String awaitMatching(long mark, String type, java.util.function.Predicate<String> holds,
+    public String awaitMatching(long mark, String type, Condition holds,
                                 String matching, String what, int tickBudget, Stimulus stimulus)
             throws Exception {
         String reply = "";
         for (int waited = 0; waited <= tickBudget; waited += 5) {
             reply = since(mark, type);
-            if (holds.test(reply)) {
+            if (holds.holds(reply)) {
                 return reply;
             }
             if (stimulus != null) {

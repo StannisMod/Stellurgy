@@ -297,22 +297,12 @@ public class VSJumpDriveFixtureBoardingE2ETest extends AbstractSharedVsClientE2E
         // The replication, as the LINK it is: his client performing the mount. The poll that stood
         // here could only sample the state this record announces, and a read landing between the
         // tear-down and the rebuild answers `riding:false` for a pilot who is about to be seated.
-        try {
-            clientEvents().awaitMatching(seatPressOnClient, "mount",
-                    seen -> Events.countRecords(seen, "\"ok\":true") > 0,
-                    "seating him (ok:true)",
-                    "the CLIENT must mount the pilot after a boarding the SERVER has already"
-                            + " recorded (the chain above)", 5 * budget);
-        } catch (AssertionError never) {
-            Events.assertInstrumentRan(clientEvents().since(seatPressOnClient, "mount"),
-                    "entity_mount_writes", "the client's own mounts must be observed at all before"
-                            + " an absent one can be read as a boarding the client did not follow");
-            throw new AssertionError(never.getMessage()
-                    + " serverRiding=" + exec("artest player riding-entity")
-                    + " serverMountRecord=" + events.since(seatPressMark, "mount")
-                    + seatAim.diagnosis);
-        }
-        JsonObject riding = bot().reportRidingEntity();
+        JsonObject riding = awaitClientMount(seatPressOnClient,
+                "the CLIENT must mount the pilot after a boarding the SERVER has already recorded"
+                        + " (the chain above)", 5 * budget,
+                " serverRiding=" + exec("artest player riding-entity")
+                        + " serverMountRecord=" + events.since(seatPressMark, "mount")
+                        + seatAim.diagnosis);
         assertTrue("the pilot must still be aboard when the seat is read — his client mounted him"
                         + " (the link above) and must not have taken him off again. clientRiding="
                         + riding + seatAim.diagnosis,
@@ -574,24 +564,28 @@ public class VSJumpDriveFixtureBoardingE2ETest extends AbstractSharedVsClientE2E
      * the key itself would have to assert the first route and is not written.</p>
      */
     private void leaveTheSeat(int budget) throws Exception {
-        boolean off = false;
+        // Mark the CLIENT log first: whichever route gets him off the seat, his own
+        // `dismountRidingEntity` is the record, and one mark covers both attempts.
+        long clientMark = clientEvents().mark();
+        // The sneak route gets a WINDOW, not a wait-until: it is best-effort by design (see the
+        // javadoc), so its expiry must not fail — and a poll-until-off cannot express "give the key
+        // this long and then read what happened", which is what this actually wants.
         bot().holdKey(Keyboard.KEY_LSHIFT);
-        for (int attempt = 0; attempt < budget && !off; attempt++) {
-            bot().waitTicks(2);
-            off = !isRiding(bot().reportRidingEntity());
-        }
+        bot().waitTicks(2 * budget);
         bot().releaseKey(Keyboard.KEY_LSHIFT);
-        boolean bySneak = off;
-        if (!off) {
+        boolean bySneak = !Events.records(clientEvents().since(clientMark, "dismount")).isEmpty();
+        scenario().record("leftSeatBy", bySneak ? "sneak-key" : "probe-fallback");
+        if (!bySneak) {
+            // The guaranteed route, and here the link is REQUIRED: a probe dismount that produces
+            // no client dismount is an arrangement that did not happen, not a slow one.
             exec("artest player dismount");
-            bot().waitTicks(5);
-            off = !isRiding(bot().reportRidingEntity());
+            awaitClientDismount(clientMark, "the pilot must leave the seat before reaching for the"
+                    + " console — a seated player's use press goes to the ship, not to the block he"
+                    + " is looking at. Neither the sneak key nor the probe dismount got him off it.",
+                    2 * budget);
         }
-        scenario().record("leftSeatBy", bySneak ? "sneak-key" : (off ? "probe-fallback" : "nothing"));
-        scenario().requireArranged("the pilot must leave the seat before reaching for the console — a "
-                + "seated player's use press goes to the ship, not to the block he is looking at."
-                + " Neither the sneak key nor the probe dismount got him off it.",
-                off);
+        scenario().requireArranged("...and he must still be off it when the console is clicked: "
+                + bot().reportRidingEntity(), !isRiding(bot().reportRidingEntity()));
     }
 
     /**

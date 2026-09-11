@@ -218,6 +218,9 @@ public class VSUnassembledCraftTakesNoOrdersE2ETest extends AbstractSharedVsClie
 
         Events events = events();
         long sitMark = events.markInstrumented();
+        // The CLIENT's mark beside it: he PERFORMS the mount when the server tells him who is
+        // riding what, so the replication half is a link on the other log rather than a poll.
+        long sitClientMark = clientEvents().mark();
         bot().interactBlock(CRAFT_X, CRAFT_Y, CRAFT_Z);
         // What production commits when he sits down, in its own source order: Forge fires the
         // right-click before the block sees it, the seat mounts him, and the seat then decides
@@ -243,9 +246,14 @@ public class VSUnassembledCraftTakesNoOrdersE2ETest extends AbstractSharedVsClie
                         + " refusals, and every silence it reads would mean something else: " + sat,
                 Events.countRecords(sat, "\"managed\":false") > 0);
 
-        JsonObject riding = awaitRiding(30, true);
-        scenario().requireArranged("the client must RENDER the player on the seat the server already"
-                + " mounted him to (see the chain above): " + riding, isRiding(riding));
+        // The client PERFORMS the mount — his own link, off the mark taken before the click. An
+        // ARRANGEMENT claim: a player his client never seated cannot exercise the gate below.
+        JsonObject riding = awaitClientMount(sitClientMark,
+                "the client must MOUNT the player onto the seat the server already mounted him to"
+                        + " (see the chain above) — his keys reach nothing while he is on his feet",
+                LINK_BUDGET_TICKS, " serverMountRecord=" + events.since(sitMark, "mount"));
+        scenario().requireArranged("...and he must still be on it when it is read: " + riding,
+                isRiding(riding));
 
         // ---- The absences. One mark for all of them, taken before the first key. ---------------
         long deafMark = events.markInstrumented();
@@ -391,20 +399,10 @@ public class VSUnassembledCraftTakesNoOrdersE2ETest extends AbstractSharedVsClie
 
     // ---- Observation helpers ---------------------------------------------------------------------
 
-    /** Poll until the client reports riding == {@code want} (bounded); returns the last sample.
-     *  A CLIENT-rendered mount has no record of its own — the position writers are server-side — so
-     *  this stays a poll, and its call site states the server link it is following. */
-    private JsonObject awaitRiding(int samples, boolean want) throws Exception {
-        JsonObject riding = null;
-        for (int i = 0; i < samples; i++) {
-            riding = bot().reportRidingEntity();
-            if (isRiding(riding) == want) {
-                break;
-            }
-            bot().waitTicks(5);
-        }
-        return riding;
-    }
+    // `awaitRiding(samples, want)` lived here, with a javadoc claiming "a CLIENT-rendered mount has
+    // no record of its own — the position writers are server-side". That was wrong about this tree:
+    // `MixinEntityPositionWriters` is in the COMMON mixin list, so the client's own `startRiding`
+    // records `mount` in the client log. The base's `awaitClientMount` waits for that record.
 
     private static boolean isRiding(JsonObject riding) {
         return riding != null && riding.has("riding") && riding.get("riding").getAsBoolean();
