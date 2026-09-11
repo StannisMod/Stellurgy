@@ -981,6 +981,15 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
         double loadFactor = com.github.stannismod.forge.testing.TestTimeouts.factor();
         int phaseDownFrom = (int) (120 * loadFactor);
         int totalIters = (int) (200 * loadFactor);
+        // NOT a wait, and so not a chain: the loop's ITERATIONS ARE THE STIMULUS. Production decays a
+        // seat input between re-sends, so the drive this scenario is about exists only for as long as
+        // this loop keeps re-sending it — stop iterating and the subject stops. Nothing is awaited
+        // here and nothing could be: what the scenario measures is an EXTREMUM over the drive (the
+        // largest frame step, the largest carry, the fastest rate), and an extremum is a property of
+        // a WINDOW, not of any one record — a last-sample read of a completed drive says nothing
+        // about the worst moment in it. The readings are production's own records all the same
+        // (`deck_guard_pass`, on a ROLLING mark so every resolved tick is covered, not the one each
+        // sample happened to land on).
         for (int i = 0; i < totalIters; i++) {
             if (i < phaseDownFrom && travelled > 6.0) {
                 phaseDownFrom = i; // target met - flip to descent, keep its budget proportional

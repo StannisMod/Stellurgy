@@ -808,6 +808,14 @@ public class VSDeckCaptureAndDismountE2ETest extends AbstractSharedVsClientE2ETe
         // while it does. Measured cost of getting this wrong: commanded once and read 20 ticks later,
         // the craft was at up.y = +0.038 with omega = 2.0 rad/s, i.e. still on its way round. Half a
         // turn at that rate needs about 31 ticks.
+        //
+        // NOT a wait, and so not a chain: the loop's ITERATIONS ARE THE STIMULUS. `point-by-id`
+        // engages an attitude HOLD, and the computer applies torque toward its target quaternion
+        // every tick without ever deciding that it has arrived — there is no "reached" for a record
+        // to carry, and nothing to add one to. So the craft's attitude is a value converging under a
+        // command that has to keep STANDING while it slews, and the exit is what stops re-asserting
+        // it. What the scenario then uses is not this loop's last sample but the FRESH read below,
+        // taken after the hold is cut: reaching an attitude and keeping it are different questions.
         double invertedUpY = 1.0;
         for (int i = 0; i < 40 && invertedUpY > -0.9; i++) {
             exec("artest vs point-by-id 0 " + scenarioShipId + " 0 1 0 0");
@@ -931,7 +939,16 @@ public class VSDeckCaptureAndDismountE2ETest extends AbstractSharedVsClientE2ETe
         bot().invokeStaticInt(KEY_BINDINGS, "acceptShipPilotMouseDelta", dx, dy);
     }
 
-    /** Bring the client's flight cursor back inside its centre dead-zone. */
+    /**
+     * Bring the client's flight cursor back inside its centre dead-zone.
+     *
+     * <p>A feedback controller, not a wait, which is why there is no event here to await: each
+     * iteration nudges and then reads the cursor back off production's own {@code flight_cursor}
+     * record, and the loop's TERMINATION is the goal state rather than something that happens to
+     * the game. It stays bounded so a dead input path fails instead of spinning forever, and
+     * {@link #flightCursorX} is what makes that failure legible — against a dead path it names the
+     * empty window instead of handing back the value the last live tick left behind.</p>
+     */
     private void centreFlightCursor() throws Exception {
         double cursor = flightCursorX("before centring");
         for (int i = 0; i < 200 && Math.abs(cursor) >= 0.03; i++) {
