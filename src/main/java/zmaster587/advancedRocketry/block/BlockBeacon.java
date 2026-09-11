@@ -22,11 +22,41 @@ public class BlockBeacon extends BlockMultiblockMachine {
         super(tileClass, guiId);
     }
 
+    /**
+     * Unregisters this beacon's POSITION, which is the whole of what the registry holds about it.
+     *
+     * <p>The removal used to be gated on {@code world.getTileEntity(pos) instanceof TileBeacon} — a
+     * value the removal itself never reads. When that gate was false the block went away and its
+     * registry entry stayed, and it stayed FOREVER: the only other unregister is
+     * {@code TileBeacon.setMachineEnabled(false)}, which needs the tile that no longer exists.
+     * Nothing said so. Removing a position the registry does not hold is a no-op, so asking about
+     * the tile could only ever cost cleanups, never save one.</p>
+     *
+     * <p><b>BOTH old conditions are now observable, and that is the point of the logging.</b> The
+     * tile one is removed outright; the dimension one has to stay, because without a created
+     * dimension there is no registry to remove from — but it is the other candidate for the silent
+     * skip, and a fix that quietened one while leaving the other unwatched would be indistinguishable
+     * from a fix that worked. Nobody has ever seen either condition, so each says so once when it
+     * happens rather than being inferred later from a stale entry.</p>
+     */
     @Override
     public void breakBlock(World world, BlockPos pos, IBlockState state) {
-        TileEntity tile = world.getTileEntity(pos);
-        if (tile instanceof TileBeacon && DimensionManager.getInstance().isDimensionCreated(world.provider.getDimension())) {
-            DimensionManager.getInstance().getDimensionProperties(world.provider.getDimension()).removeBeaconLocation(world, new HashedBlockPosition(pos));
+        int dim = world.provider.getDimension();
+        if (DimensionManager.getInstance().isDimensionCreated(dim)) {
+            TileEntity tile = world.getTileEntity(pos);
+            if (!(tile instanceof TileBeacon)) {
+                AdvancedRocketry.logger.warn("[BEACON] a beacon block at {} in dim {} was broken with "
+                        + "no beacon tile present (found {}); unregistering it anyway", pos, dim,
+                        tile == null ? "nothing" : tile.getClass().getName());
+            }
+            DimensionManager.getInstance().getDimensionProperties(dim)
+                    .removeBeaconLocation(world, new HashedBlockPosition(pos));
+        } else {
+            // Not a degradation that can be repaired here — there is no registry for an uncreated
+            // dimension — but it IS the other way this break can leave a beacon registered, so it is
+            // never silent.
+            AdvancedRocketry.logger.warn("[BEACON] a beacon block at {} was broken in dim {}, which "
+                    + "reports itself as not created, so nothing was unregistered", pos, dim);
         }
         super.breakBlock(world, pos, state);
     }
