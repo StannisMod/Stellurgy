@@ -128,14 +128,21 @@ public class VSTransitCrewGroupE2ETest extends AbstractSharedVsClientE2ETest {
     private static final Pattern SETUP_DURABLE_ID = Pattern.compile("\"durableId\":\"([^\"]+)\"");
 
     /**
-     * The craft's DURABLE NAME out of the same setup reply — a different identity from
-     * {@link #setupShipId}, and the only one that survives a crossing.
+     * The craft's DURABLE NAME out of the same setup reply — the only identity that survives a
+     * crossing.
      *
-     * <p>The setup mints this on the pad, onto the flight computer, and settles the ledger under it;
-     * the physics id beside it is the substrate's, and the crossing re-assembles the hull and mints a
-     * new one. So the origin cell is asked by the physics id and the far end by this name, through
-     * {@code vs ship-uuid}. Reading either one as the other answers {@code found:false} — that is not
-     * a missing ship, it is the wrong question.</p>
+     * <p><b>At the setup reply the two fields now hold ONE value</b>, and this javadoc said the
+     * opposite until 2026-09-12. The fixture used to assemble off a stone block of its own deck, so
+     * the computer's name was never found and the substrate minted a second id; the assembly takes
+     * the pasted FOOTPRINT now and finds the computer inside it, which makes that mistake
+     * inexpressible. Pinned by {@code VSShortJumpCrossesDirectlyE2ETest}, which asserts the two are
+     * equal rather than leaving it to a paragraph.</p>
+     *
+     * <p><b>The distinction is real AFTER a crossing, and that is where it still earns its keep</b>:
+     * a crossing re-assembles the hull and mints a NEW physics id, while this name rides through. So
+     * the origin cell can be asked by either, and the far end only by this one, through
+     * {@code vs ship-uuid}. Asking the far end by a physics id from before the crossing answers
+     * {@code found:false} — that is not a missing ship, it is the wrong question.</p>
      */
     private static String setupDurableId(String setup) {
         Matcher m = SETUP_DURABLE_ID.matcher(setup);

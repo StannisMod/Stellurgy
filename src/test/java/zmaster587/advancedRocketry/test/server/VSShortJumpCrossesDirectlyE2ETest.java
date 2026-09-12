@@ -127,6 +127,17 @@ public class VSShortJumpCrossesDirectlyE2ETest extends AbstractSharedServerTest 
         assertTrue("the fixture must mint a durable id — a crossing resolves its ship by identity, "
                 + "never by the anchor every transit fixture shares: " + setup,
                 setup.contains("\"durableId\":\"") && !setup.contains("\"durableId\":\"\""));
+        // ONE SHIP, ONE IDENTITY — production's rule, now pinned on the fixture that used to break
+        // it. This build was once assembled off a STONE block of its own deck, so the computer's
+        // durable name was never found and the substrate minted a second id; the reply then carried
+        // two values for one craft, and a wait keyed on the wrong one expired with the log full of
+        // records about the right one. The footprint form of the assembly fixed it by making the
+        // mistake inexpressible — it finds the computer inside the pasted extent — and this
+        // assertion is what keeps that true rather than leaving it to a comment.
+        assertEquals("the fixture's two ids must be ONE value: a craft assembled off its own flight "
+                        + "computer is named by it, and two different ids here mean the assembly "
+                        + "found no computer and took a substrate-minted name instead: " + setup,
+                extractString(setup, "durableId"), extractString(setup, "shipId"));
         assertTrue("origin ship never assembled/loaded in the pool-slot cell (dim " + originDim + ")",
                 loadedShips(originDim) >= 1);
         return setup;
@@ -150,6 +161,11 @@ public class VSShortJumpCrossesDirectlyE2ETest extends AbstractSharedServerTest 
      *  tier at one and at six forks, the ship is already loaded whenever a scenario asks. */
     private int loadedShips(int dim) throws Exception {
         return ShipReadiness.loadedCount(this::exec, dim);
+    }
+
+    private static String extractString(String json, String key) {
+        Matcher m = Pattern.compile("\"" + key + "\":\"([^\"]*)\"").matcher(json);
+        return m.find() ? m.group(1) : null;
     }
 
     private static int extractInt(String json, String key) {

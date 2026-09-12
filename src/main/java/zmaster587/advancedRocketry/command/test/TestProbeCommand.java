@@ -4557,7 +4557,6 @@ public class TestProbeCommand extends CommandBase {
             transitDurableId = afcTe instanceof zmaster587.advancedRocketry.tile.TileAdvancedFlightComputer
                     ? ((zmaster587.advancedRocketry.tile.TileAdvancedFlightComputer) afcTe).getOrCreateShipId()
                     : null;
-            net.minecraft.util.math.BlockPos anchor = new net.minecraft.util.math.BlockPos(1, 64, 1);
             // The assembler RETURNS this ship's identity, and the reply carries it. Every scenario of a
             // class shares one origin slot dim and one anchor, so an arrangement that asks about "the ship
             // at (1,64,1)" gets whichever craft that lookup happens to reach - in practice the first ship
