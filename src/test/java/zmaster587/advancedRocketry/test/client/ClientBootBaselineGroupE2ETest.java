@@ -128,8 +128,9 @@ public class ClientBootBaselineGroupE2ETest extends AbstractSharedClientE2ETest 
 
         // Read from sequence 0, NOT from a mark: the mute lands on one of the client's first END
         // ticks, before any scenario in this class can take a mark, so a since(mark) window would
-        // be empty however long it waited. Nothing can have evicted the record — the ring is 256
-        // deep PER TYPE and production reaches this seam at most once per client session.
+        // be empty however long it waited. Nothing can have evicted the record — the ring is bounded
+        // PER TYPE and production reaches this seam at most once per client session, so this type
+        // cannot overrun its own ring whatever the rest of the log is doing.
         String muted = clientEvents().awaitCarrying(0L, "test_client_muted", "\"master\"",
                 "a harness-spawned client must mute its master sound level on the first client tick"
                         + " with the sound handler up (instrument: client_proxy_events)",

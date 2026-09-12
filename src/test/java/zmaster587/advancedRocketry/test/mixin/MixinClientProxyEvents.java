@@ -48,7 +48,7 @@ import zmaster587.advancedRocketry.test.trace.TestTrace;
  * every {@code Events.mark()} a scenario will ever take. A {@code since(mark)} await therefore never
  * sees it, no matter how long it waits, and reading a silence there as "the client was not muted"
  * would be wrong. A reader asks for the whole ring instead —
- * {@code ClientBot.eventsSince(0, "test_client_muted")} — and the record is still in it: the ring is 256 PER TYPE and this type is written at most once per client session,
+ * {@code ClientBot.eventsSince(0, "test_client_muted")} — and the record is still in it: the ring is bounded PER TYPE and this type is written at most once per client session,
  * so nothing can evict it. The instrument {@code client_proxy_events} answers the same question more
  * cheaply when only "did the seam run" is wanted.</p>
  *

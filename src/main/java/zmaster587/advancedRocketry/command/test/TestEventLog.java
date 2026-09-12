@@ -85,8 +85,25 @@ public final class TestEventLog {
      * with {@code dropped} honestly reporting 173, which made the log honest and useless at the same
      * time. A ring per type costs a small map and leaves a chatty type unable to silence a quiet
      * one.</p>
+     *
+     * <p><b>256 &rarr; 4096 on 2026-09-12, and the number is SIZED rather than raised until a
+     * symptom stopped.</b> The bound is not a memory constraint and never was: at roughly 300 bytes
+     * a record and the ~19 types a server run registers, the whole log's ceiling was single-digit
+     * megabytes against a 1 GB child, three orders below anything memory forces. Its only stated
+     * reason is that a long session must not grow without limit, and that reason is satisfied at any
+     * of these numbers.</p>
+     *
+     * <p>The measurement it is sized against: one scenario's window evicted <b>2179</b> records, all
+     * of a single type, so that type alone overran 256 about ninefold. 4096 covers it whole instead
+     * of moving the ceiling to the next miss, and costs about 23 MB at the theoretical maximum —
+     * still an order below what the child can spare.</p>
+     *
+     * <p><b>What this does NOT fix</b>, because a bound that reads as a guarantee is worse than a
+     * small one: a genuinely unbounded type still overruns. The ring stays a ring,
+     * {@code dropped}/{@code droppedByType} stay in every reply, and a reader that does not carry
+     * them into its failure message still cannot tell an absent record from an evicted one.</p>
      */
-    public static final int CAPACITY_PER_TYPE = 256;
+    public static final int CAPACITY_PER_TYPE = 4096;
 
     private static final Object LOCK = new Object();
     /** One ring per type, insertion-ordered so a dump lists types in first-seen order. */
@@ -453,7 +470,7 @@ public final class TestEventLog {
          * a dimension arrival or a chunk load makes it exist there. Deliberately SERVER ONLY: the
          * client's copy of the same entity joins its world on its own clock and would double every
          * record on an integrated client. {@code EntityItem} and {@code EntityXPOrb} are skipped,
-         * because a block break or a mob death spawns dozens of them and the ring is 256; every
+         * because a block break or a mob death spawns dozens of them and the ring is bounded; every
          * other class is kept, so a reader filters on {@code cls}. Silent about WHY the entity
          * joined (spawn vs. load vs. transfer) — the event does not carry that.
          */

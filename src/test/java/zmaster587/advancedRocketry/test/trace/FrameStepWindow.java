@@ -15,8 +15,9 @@ import java.util.Locale;
  * {@code DeckLook.refWorldAt}, itself frame-lerped.</p>
  *
  * <p><b>Why an accumulator and not a record per frame.</b> This seam fires on every rendered frame.
- * The event log keeps 256 records per type, so a per-frame record would turn its own ring over in
- * about two seconds and a reader asking about a twenty-tick jump would be reading the tail of it. A
+ * The event log's ring is bounded per type, so a per-frame record would turn its own ring over in
+ * seconds and a reader asking about a twenty-tick jump would be reading the tail of it — an argument
+ * about a RATE, which no bound large enough to be affordable ever answers. A
  * render counter is not an event chain. What IS a record is the window's SUMMARY, written once at
  * {@link #close()} — one record, in the reader's own window, carrying every number the eight
  * production statics used to publish.</p>

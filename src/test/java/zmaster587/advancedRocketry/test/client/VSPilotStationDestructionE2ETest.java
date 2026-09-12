@@ -308,7 +308,8 @@ public class VSPilotStationDestructionE2ETest extends AbstractSharedVsClientE2ET
                 + Events.records(removals)
                 + " (evicted: " + Events.droppedOf(removals, "entity_removed") + ")");
         // The composition of what fills that ring was measured once, with
-        // `fieldLines(since(0, "entity_removed"), "cls")` here: 255 of 256 records were
+        // `fieldLines(since(0, "entity_removed"), "cls")` here, when the ring held 256 per type —
+        // the numbers below are that measurement and are left as taken: 255 of 256 records were
         // `EntityFallingBlock` (every scenario bulk-fills its build site and the sand dies on
         // landing), which is why that class is now skipped by the recorder. What remains is passive
         // mobs leaving loaded chunks — 67 evictions across both legs of this class, against a
