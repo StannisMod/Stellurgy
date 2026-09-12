@@ -528,6 +528,10 @@ public class VSShipCellSeamE2ETest extends AbstractSharedServerTest {
     }
 
     private ShipPastItsFace arrangeAShipPastItsFace() throws Exception {
+        // Marked at the very top, so a failure below can print every claim THIS scenario caused and
+        // nothing from the ones before it — the question is what accumulates, and an unbounded dump
+        // answers it with the whole boot.
+        long claimMark = events.mark();
         exec("artest vs permaload true");
         String setup = exec("artest space entry-setup 2");
         assertTrue("entry setup failed: " + setup, setup.contains("\"ok\":true"));
@@ -587,7 +591,16 @@ public class VSShipCellSeamE2ETest extends AbstractSharedServerTest {
                             && "SETTLED".equals(extractString(status[0], "state"));
                 },
                 () -> loadAllEntrySlots(setup));
-        assertTrue("the ship never reached space through the entry path; last ledger=" + status[0],
+        // THE CLAIM SEQUENCE BELONGS IN THIS MESSAGE, and this is the one assertion in this class
+        // that has failed for a reason outside itself. Measured 2026-09-12: a THIRD on-ramp scenario
+        // added here made whichever ran last fail HERE, 3/3, while passing alone on the same commit —
+        // accumulation across methods sharing one server, not a broken entry path. The declared
+        // method order is a workaround and the capacity limit is untouched, so the next encounter
+        // should arrive carrying what the pool DID: a pool does not run out because it is full, it
+        // runs out because every loaded cell is still CLAIMED, and those want different fixes.
+        // Records, not a snapshot — a snapshot cannot say who took a claim and never gave it back.
+        assertTrue("the ship never reached space through the entry path; last ledger=" + status[0]
+                        + " | cell claims since this scenario began: " + claimsSince(claimMark),
                 settled);
         String sourceCell = extractString(status[0], "cell");
         assertTrue("the settled ship names no cell: " + status[0], sourceCell != null);
@@ -694,6 +707,26 @@ public class VSShipCellSeamE2ETest extends AbstractSharedServerTest {
         exec("artest chunk release");
         exec("artest space entry-clear");
         exec("artest vs permaload false");
+    }
+
+    /**
+     * Every cell-claim record since {@code mark}, for a failure message.
+     *
+     * <p>Says when it CANNOT speak rather than returning an empty string: "no claim was recorded"
+     * and "the recording is not on" are the two readings this is here to separate, and an empty
+     * string is the first one wearing the second's clothes.</p>
+     */
+    private String claimsSince(long mark) throws Exception {
+        String records = exec("artest events since " + mark);
+        // MATCHED ON THE RECORD, never on the bare name. The first version asked whether the reply
+        // contained "cell_claim_" — which it always does, because the INSTRUMENTS array lists
+        // "cell_claim_events" whether anything was recorded or not. The guard written to stop an
+        // empty answer reading as a finding was itself answering from the wrong field.
+        boolean any = records.contains("\"type\":\"cell_claim_");
+        return any ? records
+                : "(NO cell-claim record — this scenario never bound a cell at all, so the pool was "
+                        + "never asked; note the reply's own dropped/droppedByType, which say whether "
+                        + "records were evicted rather than absent) " + records;
     }
 
     /** The three sector indices of a {@code sx_sy_sz} cell key. */
