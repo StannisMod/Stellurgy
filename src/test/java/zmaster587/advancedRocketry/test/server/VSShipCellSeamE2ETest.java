@@ -18,6 +18,7 @@ import java.util.regex.Pattern;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
 
 /**
  * E2E: a ship flown out through its cell's face ARRIVES IN THE NEIGHBOUR, and its ledger row names the
@@ -66,6 +67,20 @@ public class VSShipCellSeamE2ETest extends AbstractSharedServerTest {
      * ticks and gets them whenever the server runs them.</p>
      */
     private static final int SETTLE_TICKS = 600;
+
+    /**
+     * How long the craft is given to be SEEN above the entry line after its climb teleport, in
+     * server ticks.
+     *
+     * <p>Small on purpose. This is not a wait for anything to happen — the teleport has already
+     * reported the pose it wrote — it is a read of a pose that is either there or is not, with
+     * enough slack for the physics mod to publish it. A craft that is not over the line within five
+     * seconds is not on its way up.</p>
+     */
+    private static final int ABOVE_THE_LINE_TICKS = 100;
+
+    /** Ticks of dim 0 between the two tick-census reads that establish the computer is running. */
+    private static final int TICK_CENSUS_WINDOW = 5;
 
     /** The same, for waiting on a ship to become loadable in its slot. */
 
@@ -582,15 +597,120 @@ public class VSShipCellSeamE2ETest extends AbstractSharedServerTest {
                         .contains("\"ok\":true"));
         exec("artest vs unpark-by-id 0 " + srcVsId);
 
+        // THE CLIMB IS ASSERTED, not assumed — the same rule the move past the face already follows
+        // fifty lines down, and for the same reason. "The teleport replied ok" is not "the craft is
+        // above the entry line": measured 2026-09-12, a craft whose teleport reported
+        // `fromY:85 -> toY:1200, ok:true` was back at y=94.9 six hundred ticks later, and the
+        // arrangement reported that as "the ship never reached space through the entry path" — a
+        // broken on-ramp, which it was not. The on-ramp was never asked, because its one altitude
+        // condition was never met; the trigger was right and the arrangement was wrong.
+        //
+        // The wait ends on EITHER reading, because both mean the craft got here: the gate agreeing it
+        // would fire, or the computer no longer being in this world at all — entry cuts the tile out,
+        // so a craft that crossed while this loop was between polls answers `afcResolved:false`, and
+        // treating that as a timeout would fail the fastest possible success.
+        final StringBuilder gateTrace = new StringBuilder();
+        boolean overTheLine = GameTicks.until(client(), GameTicks.server(), ABOVE_THE_LINE_TICKS,
+                () -> {
+                    String gate = entryGate(srcVsId);
+                    gateTrace.append(gateDigest(gate)).append(' ');
+                    return gate.contains("\"wouldTrigger\":true")
+                            || gate.contains("\"afcResolved\":false");
+                });
+        assertTrue("the climb teleport reported ok and the craft is STILL not above the entry line, "
+                        + "so nothing below is about the on-ramp — it is about a craft that never "
+                        + "got there. Gate readings, oldest first: " + gateTrace, overTheLine);
+
+        // AND THE COMPUTER IS RUNNING. The on-ramp has exactly one caller — this craft's own flight
+        // computer, inside its own tick — so every input being right proves nothing until the
+        // computer is seen to TICK. Measured 2026-09-12: a craft sat over the line with the gate
+        // itself answering `wouldTrigger:true` for three readings and then free-fell back to the
+        // ground, tick census "0/0" throughout; the wait below spent its whole budget and reported
+        // "the ship never reached space through the entry path", which named the on-ramp for a
+        // failure the on-ramp was never given the chance to have.
+        //
+        // Read TWICE with world ticks between, because the question is movement and not a value: a
+        // census that is non-zero says the computer ran at some point, which a computer that has
+        // since stopped also satisfies.
+        String gateBefore = entryGate(srcVsId);
+        String censusBefore = extractString(gateBefore, "tickCensus");
+        GameTicks.advanceWorld(client(), 0, TICK_CENSUS_WINDOW);
+        String gateAfter = entryGate(srcVsId);
+        String censusAfter = extractString(gateAfter, "tickCensus");
+        // THE TWO READS ARE COMPARED BY OBJECT, not only by counter. "The computer at this position"
+        // is resolved afresh on every call, and vanilla re-creates a tile in place — with no NBT read
+        // and therefore no trace in any other record — so two reads can be two different computers,
+        // each honestly reporting that it has never ticked. That reading is not "the on-ramp never
+        // ran"; it is "there is nothing durable here to run", and the two want opposite fixes.
+        long identityBefore = extractLong(gateBefore, "afcIdentity");
+        long identityAfter = extractLong(gateAfter, "afcIdentity");
+        // A null on either read means the computer is no longer in this world — entry has already
+        // cut it out, which is this gate's condition reached rather than failed.
+        if (censusBefore != null && censusAfter != null) {
+            assertFalse("this craft's flight computer is not being TICKED — its census stayed at "
+                            + censusBefore + " across " + TICK_CENSUS_WINDOW + " ticks of dim 0"
+                            + (identityBefore == identityAfter
+                                    ? " (the same object both times, identity " + identityBefore + ")"
+                                    : " — AND THE TWO READS WERE DIFFERENT OBJECTS, "
+                                            + identityBefore + " then " + identityAfter + ": the "
+                                            + "position has no durable computer at all and each read "
+                                            + "is making a fresh one, so the zero census says nothing "
+                                            + "about the on-ramp")
+                            + ". The "
+                            + "entry on-ramp runs inside that tick and nowhere else, so the wait "
+                            + "below cannot exercise it and its timeout would name the on-ramp for "
+                            + "a mechanism that was never asked. Gate: " + entryGate(srcVsId)
+                            + " | earlier readings: " + gateTrace
+                            // Every deserialization of a flight computer since this scenario began.
+                            // A tile that is read from NBT again and again is one whose chunk keeps
+                            // being unloaded and re-loaded — which is a computer that cannot tick
+                            // however loaded it looks to a probe that just loaded it. Recorded on
+                            // the game's own thread, so unlike the gate's own fields this is not
+                            // describing what the reading did.
+                            + " | flight computers deserialized since: "
+                            + events.since(claimMark, "station_keeping_restored")
+                            // Which computer OBJECTS have been ticked at all, and which were thrown
+                            // away. Read against the gate's own `afcIdentity`: the same number means
+                            // the probe is holding the object that runs, a different one means it is
+                            // holding a replacement, and no record at all means nothing here ran.
+                            // FROM THE START OF THE BOOT, not from this scenario's mark. Every
+                            // computer that ran at all did so before this scenario began, so a
+                            // window-scoped read of this type is empty whether the seam works or
+                            // not — and an instrument that cannot be seen to fire is one whose
+                            // silence proves nothing. The sibling scenarios' records are this
+                            // reading's own control.
+                            + " | every computer ever ticked this boot: "
+                            + events.since(0L, "afc_first_tick")
+                            + " | invalidations: " + events.since(claimMark, "afc_invalidated")
+                            // What the TICK LOOP itself is iterating, read from inside its own pass
+                            // and therefore the one reading here that the act of reading cannot have
+                            // produced. A computer missing from these records is missing from the
+                            // list, whatever a probe that just resolved it reports.
+                            + " | computers in the tick loop: "
+                            + events.since(claimMark, "flight_computers_in_tick_loop"),
+                    censusBefore.equals(censusAfter));
+        }
+
         // Waited on BY ID: the ledger is asked about this craft, not about how many ships it holds.
         final String[] status = {""};
+        final int[] polls = {0};
         boolean settled = GameTicks.until(client(), GameTicks.server(), SETTLE_TICKS,
                 () -> {
                     status[0] = exec("artest space ledger-get " + arShipId);
                     return status[0].contains("\"found\":true")
                             && "SETTLED".equals(extractString(status[0], "state"));
                 },
-                () -> loadAllEntrySlots(setup));
+                () -> {
+                    loadAllEntrySlots(setup);
+                    // ONE READING IN TEN, so a failure carries the craft's TRAJECTORY and its
+                    // computer's tick census over the whole wait rather than one last sample. A
+                    // single reading taken at the end cannot tell a craft that never got up there
+                    // from one that got up there, was not looked at, and came back down — and those
+                    // are opposite findings.
+                    if (polls[0]++ % 10 == 0) {
+                        gateTrace.append(gateDigest(entryGate(srcVsId))).append(' ');
+                    }
+                });
         // THE CLAIM SEQUENCE BELONGS IN THIS MESSAGE, and this is the one assertion in this class
         // that has failed for a reason outside itself. Measured 2026-09-12: a THIRD on-ramp scenario
         // added here made whichever ran last fail HERE, 3/3, while passing alone on the same commit —
@@ -599,9 +719,20 @@ public class VSShipCellSeamE2ETest extends AbstractSharedServerTest {
         // should arrive carrying what the pool DID: a pool does not run out because it is full, it
         // runs out because every loaded cell is still CLAIMED, and those want different fixes.
         // Records, not a snapshot — a snapshot cannot say who took a claim and never gave it back.
-        assertTrue("the ship never reached space through the entry path; last ledger=" + status[0]
-                        + " | cell claims since this scenario began: " + claimsSince(claimMark),
-                settled);
+        if (!settled) {
+            // ASK THE GATE ITSELF. The claim dump below says what the scenario BOUND; it cannot say
+            // why the on-ramp was never reached, and the first measurement of this failure found no
+            // entry decision at all — so the question is no longer "which resource ran out" but
+            // "which of the trigger's four inputs is not what it is on the scenarios that pass".
+            // `space entry-gate` reads exactly those, off the computer's own owners (the ceiling
+            // from entryCeiling(), the pose from the same VS call the trigger makes), plus what the
+            // controller last decided and for which ship — so "never asked" is distinguishable from
+            // "asked and refused" in the same reply.
+            fail("the ship never reached space through the entry path; last ledger=" + status[0]
+                    + " | entry gate: " + entryGate(srcVsId)
+                    + " | gate trace, oldest first: " + gateTrace
+                    + " | cell claims since this scenario began: " + claimsSince(claimMark));
+        }
         String sourceCell = extractString(status[0], "cell");
         assertTrue("the settled ship names no cell: " + status[0], sourceCell != null);
         int sourceSlot = extractInt(status[0], "slotDim");
@@ -716,6 +847,46 @@ public class VSShipCellSeamE2ETest extends AbstractSharedServerTest {
      * and "the recording is not on" are the two readings this is here to separate, and an empty
      * string is the first one wearing the second's clothes.</p>
      */
+    /**
+     * Every input the entry trigger reads for {@code vsId}, for a failure message.
+     *
+     * <p>Read-only, and it recomputes nothing: the ceiling comes from the flight computer's own
+     * single owner and the pose from the same VS call the trigger makes, so a disagreement between
+     * this reply and the trigger is a finding rather than an artefact of a second implementation.</p>
+     *
+     * <p>Swallows its own failure into the TEXT rather than throwing. This runs only on a path that
+     * is already failing, and an exception here would replace the assertion's message — the reading
+     * that matters — with the diagnostic's stack trace.</p>
+     */
+    /**
+     * One gate reading as a short token — {@code y=1200.0/1000 trig=true latched=false} — so a
+     * sequence of them reads as a TRAJECTORY rather than as a wall of repeated JSON.
+     *
+     * <p>Carries the ceiling beside the altitude deliberately: "y=94.9" is only a failure against
+     * the line it is being compared with, and the two numbers have different owners.</p>
+     */
+    private static String gateDigest(String gate) {
+        if (!gate.contains("\"afcResolved\":true")) {
+            return "[afc-gone]";
+        }
+        return "[y=" + extractDouble(gate, "shipY") + "/" + extractInt(gate, "ceiling")
+                + " trig=" + (gate.contains("\"wouldTrigger\":true"))
+                + " latched=" + (gate.contains("\"latched\":true"))
+                + " posed=" + (gate.contains("\"posed\":true"))
+                // The computer's own tick census, because every other field here is an INPUT to a
+                // check that only runs if the computer runs: a reading with all four inputs right
+                // and `trig=true` still says nothing until this number is seen to MOVE.
+                + " ticks=" + extractString(gate, "tickCensus") + "]";
+    }
+
+    private String entryGate(String vsId) {
+        try {
+            return exec("artest space entry-gate 0 " + vsId);
+        } catch (Exception unreadable) {
+            return "(the entry gate could not be read: " + unreadable + ")";
+        }
+    }
+
     private String claimsSince(long mark) throws Exception {
         String records = exec("artest events since " + mark);
         // MATCHED ON THE RECORD, never on the bare name. The first version asked whether the reply
@@ -808,6 +979,12 @@ public class VSShipCellSeamE2ETest extends AbstractSharedServerTest {
         Matcher bp = BUILDER_POS.matcher(fixture);
         assertTrue("fixture (" + variant + ") missing builderPos: " + fixture, bp.find());
         return bp.group(1) + " " + bp.group(2) + " " + bp.group(3);
+    }
+
+    /** A whole number too wide for an int — an identity hash is one. {@code Long.MIN_VALUE} absent. */
+    private static long extractLong(String json, String key) {
+        Matcher m = Pattern.compile("\"" + key + "\":(-?\\d+)").matcher(json);
+        return m.find() ? Long.parseLong(m.group(1)) : Long.MIN_VALUE;
     }
 
     private static int extractInt(String json, String key) {

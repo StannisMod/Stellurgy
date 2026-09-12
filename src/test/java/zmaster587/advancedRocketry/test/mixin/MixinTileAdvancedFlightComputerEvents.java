@@ -199,6 +199,52 @@ public abstract class MixinTileAdvancedFlightComputerEvents {
                 + ",\"flightAssist\":" + flightAssistEnabled);
     }
 
+    /**
+     * The first tick each computer INSTANCE is ever given, and the moment one is invalidated.
+     *
+     * <p>These answer a question none of the five above can: <b>is the object being ticked the same
+     * object a probe reads?</b> A tile's identity is invisible from outside — a reply says
+     * {@code tickCensus:"0/0"} whether the computer has never run or whether the caller is holding a
+     * replacement that was created a moment ago — and vanilla re-creates a tile in place whenever the
+     * chunk's map holds an invalidated one, WITHOUT reading NBT, so that replacement leaves no trace
+     * in any of the other records here. The identity hash is carried on both, so two records with
+     * different hashes at one position are a tile that was replaced, and no record at all is a
+     * computer that genuinely never ran.</p>
+     *
+     * <p>Their own instrument name, for the reason the unmanned seam has one: these two are the
+     * evidence that the OTHER events' silence means what it appears to mean, so they must not be
+     * vouched for by seams that cannot fail.</p>
+     */
+    private static final String INSTRUMENT_LIFECYCLE = "flight_computer_lifecycle_events";
+
+    /** Whether this instance has already recorded its first tick. */
+    @Unique
+    private boolean arTest$tickedOnce = false;
+
+    @Inject(method = "update", at = @At("HEAD"))
+    private void arTest$firstTick(CallbackInfo ci) {
+        TestTrace.instrumentHere(INSTRUMENT_LIFECYCLE);
+        if (arTest$tickedOnce) {
+            return; // EDGE-ONLY: one record per instance, or this is every tile every tick
+        }
+        arTest$tickedOnce = true;
+        TestTrace.recordHere("afc_first_tick", arTest$posAndShip() + arTest$identity());
+    }
+
+    @Inject(method = "invalidate", at = @At("HEAD"))
+    private void arTest$invalidated(CallbackInfo ci) {
+        TestTrace.instrumentHere(INSTRUMENT_LIFECYCLE);
+        TestTrace.recordHere("afc_invalidated", arTest$posAndShip() + arTest$identity()
+                + ",\"tickedAtLeastOnce\":" + arTest$tickedOnce
+                + ",\"caller\":\"" + TestTrace.json(TestTrace.callerTrail()) + "\"");
+    }
+
+    /** This OBJECT, as distinct from the position it sits at — two tiles can share the second. */
+    @Unique
+    private String arTest$identity() {
+        return ",\"identity\":" + System.identityHashCode(this);
+    }
+
     @Unique
     private String arTest$pos() {
         BlockPos pos = ((TileAdvancedFlightComputer) (Object) this).getPos();

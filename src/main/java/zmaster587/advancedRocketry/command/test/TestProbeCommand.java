@@ -5230,6 +5230,55 @@ public class TestProbeCommand extends CommandBase {
             gate.append(",\"afcX\":").append(gateAfcPos.getX()).append(",\"afcY\":")
                     .append(gateAfcPos.getY()).append(",\"afcZ\":").append(gateAfcPos.getZ());
             gate.append(",\"planetSide\":").append(gatePlanetSide);
+            // Whether this computer is being TICKED AT ALL, and how many naming attempts it has made
+            // inside those ticks - production's own two counters, read rather than re-derived. Every
+            // other field here describes an INPUT to the trigger, and all of them can be exactly
+            // right while the trigger is never evaluated: the on-ramp lives in the computer's own
+            // tick, and a tile whose chunk is not loaded, or whose update returns before the check
+            // (no attitude, hyperspace, a crossing that cut it), reads identically from outside - no
+            // crossing, nothing ledgered, no line in the log. A census that does not advance between
+            // two reads says which of those two halves to look in.
+            gate.append(",\"tickCensus\":\"").append(gateAfc.tickCensus()).append('"');
+            // WHICH OBJECT this census belongs to. A tile is addressed by position, and vanilla
+            // replaces an invalidated one in place - so "the computer at this position" can be a
+            // different object between two calls, and a census of zero then means "this replacement
+            // is new", not "this craft's computer never ran". The number is meaningless alone and
+            // decisive beside the same number on a tick record.
+            gate.append(",\"afcIdentity\":").append(System.identityHashCode(gateAfc));
+            // The one condition of vanilla's tile-entity tick loop this verb can honestly report.
+            //
+            // The loop tests three things - the chunk is in the world's loaded set, the border
+            // contains the position, the tile is in the ticking list - and only the border is a pure
+            // predicate on coordinates. THE OTHER TWO CANNOT BE READ FROM HERE: resolving this
+            // computer at all walks the shipyard looking for its block and then asks the world for
+            // the tile, and both of those LOAD the chunk, which registers its tiles for ticking. A
+            // reply saying "the chunk is loaded and the tile is tickable" would then be describing
+            // the state this call had just produced - and beside a census of 0/0 it reads as a
+            // contradiction in production rather than as an artefact of the instrument. Measured
+            // 2026-09-12: chunkLoaded:true, tickable:true and tickCensus:"0/0" in one reply, which
+            // is not a thing the game can be doing.
+            //
+            // A caller that needs those two asks something that runs on the game's own tick instead
+            // (the flight computer's readFromNBT is recorded as an event, so a chunk that keeps
+            // being re-loaded says so by how often the tile is deserialized).
+            gate.append(",\"inBorder\":").append(gateWorld.getWorldBorder().contains(gateAfcPos));
+            // The rest of what vanilla's tile-entity loop reads before it calls update(), in the
+            // loop's own order. Two of these are honest here and two carry a caveat, and the caveat
+            // is written down rather than left for the next reader to rediscover:
+            //
+            //   invalid / hasWorld - properties of the OBJECT, unaffected by having resolved it. An
+            //     invalidated tile that is still in the ticking list is skipped forever and looks
+            //     from outside exactly like a computer that declines to act.
+            //   chunkLoaded / tickable - READ AFTER this call resolved the computer, and resolving
+            //     it walks the shipyard and asks the world for the tile, both of which load the
+            //     chunk and register its tiles. So a `true` here does NOT prove the state held when
+            //     the tick loop last ran; only a `false` is decisive. Paired with `afcIdentity`
+            //     across two calls it is still worth reading: one object seen twice is a tile the
+            //     world is keeping, whoever first made it.
+            gate.append(",\"invalid\":").append(gateTe.isInvalid());
+            gate.append(",\"hasWorld\":").append(gateTe.hasWorld());
+            gate.append(",\"chunkLoaded\":").append(gateWorld.isBlockLoaded(gateAfcPos, false));
+            gate.append(",\"tickable\":").append(gateWorld.tickableTileEntities.contains(gateTe));
             gate.append(",\"latched\":").append(gateAfc.isEntryLatched());
             gate.append(",\"ceiling\":").append(gateCeiling);
             // The two numbers the ceiling is derived FROM, beside it: a ceiling that will not be

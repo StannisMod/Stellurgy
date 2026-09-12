@@ -8,6 +8,8 @@
   "mixins": [
     "MixinChunkLoadCount",
     "MixinWorldEntityRemoval",
+    "MixinWorldFlightComputerTickCensus",
+    "MixinWorldServerAlwaysTicks",
     "MixinEntityPositionWriters",
     "MixinEntityVelocityWriters",
     "MixinShipTransformEntityWrites",
