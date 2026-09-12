@@ -463,6 +463,24 @@ public final class ShipTransitManager {
             }
         }
         HyperspaceTiles.Tile tile = tiles.allocate();
+        // THE HYPERSPACE VELOCITY DUMP. A craft keeps the cruise its pilot set across every other kind
+        // of crossing - leaving a planet, landing on one, moving from one cell to the next - and
+        // hyperspace is the single exception: speed is lost entering and leaving it, and a craft comes
+        // out at rest.
+        //
+        // Done HERE, once, and that is a decision rather than an omission. This line sits after the
+        // direct-crossing branch has already returned, so it cannot fire for a jump that is not a
+        // hyperspace flight - the call site IS the route, the same property the departure announcement
+        // below relies on. And it is done BEFORE the floor snapshot a few lines down, which is what
+        // makes one site enough: a transit RESTORED after a restart has no hyperspace ship left to
+        // read from and pastes that snapshot instead, so a dump applied only on the way out would miss
+        // exactly the arrival nobody watches. Zeroed here, every path out of hyperspace carries a
+        // zeroed setpoint, including that one.
+        //
+        // It also makes the code agree with the law the rest of the subsystem is written to: a craft's
+        // velocity INSIDE its own window is zero, so a setpoint riding through the lane was a live
+        // command for a flight that is not happening.
+        dumpCruiseForHyperspace(originSlotDim, originAnchor, shipId);
         // Capture the seated crew BEFORE the depart crossing cuts the seat blocks (a post-cut capture finds
         // nothing). captureCrew stashes the full crew inside the crosser (keyed by shipId) for the reseat at
         // arrival and returns the aboard player UUIDs for the offline-progress gate + the transit record.
@@ -1257,6 +1275,56 @@ public final class ShipTransitManager {
      * manager decides it above and hands it to the cell controller, which announces it as a transit
      * with {@code Route.DIRECT}. So the route is not a parameter — the call site IS the route.
      */
+    /**
+     * Zero the departing craft's cruise setpoint, in its origin cell, while it is still whole.
+     *
+     * <p>Reached only from the hyperspace departure — see the call site for why one site covers both
+     * ends of the flight, including a restored arrival.</p>
+     *
+     * <p><b>Every way this can fail to find a computer is reported, and none of them is silently
+     * shrugged off.</b> A craft that keeps its cruise through a jump arrives already under way, which
+     * is a behaviour a player would feel and nobody could attribute afterwards — so the interesting
+     * outcome here is the one where nothing was zeroed, and it says which step gave out. A craft with
+     * no flight computer at all is not a failure: nothing can be commanding it, so there is nothing
+     * to dump, and that case is distinguished from the others rather than folded in with them.</p>
+     */
+    private static void dumpCruiseForHyperspace(int originSlotDim, BlockPos originAnchor,
+                                                String shipId) {
+        // WorldServer, not World: the ship registry this asks answers only for a server world, and
+        // the neighbouring announcement's `World` local is right for the event bus and wrong here.
+        net.minecraft.world.WorldServer world = net.minecraftforge.common.DimensionManager
+                .getWorld(originSlotDim);
+        if (world == null) {
+            LOGGER.warn("[SPACE] cruise not dumped for the jump of ship {}: origin slot {} is not "
+                    + "loaded, so it will arrive still under way", shipId, originSlotDim);
+            return;
+        }
+        String vsShipId = zmaster587.advancedRocketry.integration.vs.VSIntegration
+                .shipIdManagingBlock(world, originAnchor);
+        if (vsShipId == null) {
+            LOGGER.warn("[SPACE] cruise not dumped for the jump of ship {}: nothing manages the "
+                    + "origin anchor {} in slot {}", shipId, originAnchor, originSlotDim);
+            return;
+        }
+        BlockPos afc = zmaster587.advancedRocketry.integration.vs.VSIntegration
+                .flightComputerOf(world, java.util.UUID.fromString(vsShipId));
+        if (afc == null) {
+            // Not a defect: a craft without a computer has no cruise to lose. Said at debug volume
+            // because it is the ONE benign member of this family and a warn here would train the
+            // reader to skip the three above it.
+            LOGGER.debug("[SPACE] ship {} jumps with no flight computer, so it carries no cruise to "
+                    + "dump", shipId);
+            return;
+        }
+        net.minecraft.tileentity.TileEntity tile = world.getTileEntity(afc);
+        if (!(tile instanceof zmaster587.advancedRocketry.tile.TileAdvancedFlightComputer)) {
+            LOGGER.warn("[SPACE] cruise not dumped for the jump of ship {}: the computer at {} is {}",
+                    shipId, afc, tile == null ? "absent" : tile.getClass().getSimpleName());
+            return;
+        }
+        ((zmaster587.advancedRocketry.tile.TileAdvancedFlightComputer) tile).commandCruise(0, 0, 0);
+    }
+
     private static void announceTransitBegan(String shipId, GalacticCoord origin,
                                              GalacticCoord target, int originSlotDim,
                                              List<UUID> crew) {
