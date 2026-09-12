@@ -18,6 +18,7 @@ import zmaster587.advancedRocketry.world.provider.WorldProviderSpace;
 
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
+import java.util.OptionalDouble;
 import java.util.WeakHashMap;
 
 public class GravityHandler implements IGravityManager {
@@ -30,7 +31,20 @@ public class GravityHandler implements IGravityManager {
 
     static Class gcWorldProvider;
     static Method gcGetGravity;
-    private static WeakHashMap<Entity, Double> entityMap = new WeakHashMap<>();
+    /**
+     * The per-entity overrides this SERVICE holds.
+     *
+     * <p><b>An instance field, and that is the point.</b> It was a mutable static while the object
+     * around it is the mod's owned gravity service — so every {@code new GravityHandler()} shared
+     * one map, and the state of a service did not live with the service. The mod object's own note
+     * on the four API services says what the arrangement is meant to be: one owner, one writer, and
+     * a loud error on a second install. A static map quietly exempted itself from all three.</p>
+     *
+     * <p>OWNER: this handler, which the mod object installs once. LIFETIME: that handler's — and a
+     * {@link WeakHashMap} additionally lets an entry go when the entity it keys does, so a world
+     * that unloads does not leave its entities pinned here.</p>
+     */
+    private final WeakHashMap<Entity, Double> entityMap = new WeakHashMap<>();
 
     static {
         try {
@@ -43,7 +57,46 @@ public class GravityHandler implements IGravityManager {
         }
     }
 
+    /**
+     * The mixin's entry point, kept STATIC so the per-tick call site does not change shape, and
+     * routed through the installed service so the per-entity overrides can live on it.
+     *
+     * <p><b>The absent-service branch is not a handled case and is not dressed as one.</b> No
+     * production caller reaches it: this runs inside {@code Entity.onUpdate}, and the handler is
+     * installed during {@code FMLInitializationEvent}, before any world exists to tick an entity
+     * in. It is written only because the accessor is nullable, it says so ONCE rather than every
+     * tick for every entity, and if it ever fires the consequence is exactly "vanilla gravity, no
+     * AR override" — which is worth reading in a log and is not worth crashing every entity in the
+     * world over.</p>
+     */
     public static void applyGravity(Entity entity) {
+        IGravityManager service = AdvancedRocketryAPI.gravityManager();
+        if (!(service instanceof GravityHandler)) {
+            reportNoService(service);
+            return;
+        }
+        ((GravityHandler) service).apply(entity);
+    }
+
+    /**
+     * Latch for the report above. A mutable static, and it is declared with its justification as
+     * this project requires: OWNER the process, LIFETIME the launch, because it answers "has this
+     * impossible thing been said yet" and the answer is not per-server or per-world. It holds no
+     * collaborator and nothing branches on it but the log line itself.
+     */
+    private static volatile boolean noServiceReported = false;
+
+    private static void reportNoService(IGravityManager found) {
+        if (noServiceReported) {
+            return;
+        }
+        noServiceReported = true;
+        AdvancedRocketry.logger.error("[GRAVITY] no gravity service is installed while entities are "
+                + "ticking (the API answered {}), so no AR gravity override is being applied at all."
+                + " This is not supposed to be reachable; said once.", found);
+    }
+
+    private void apply(Entity entity) {
         if (entity.hasNoGravity()) return;
         //Because working gravity on elytra-flying players can cause..... severe problems at lower gravity, it is my utter delight to announce to you elytra are now magic!
         //This totally isn't because Mojang decided for some godforsaken @#@#@#% reason to make ALL WAYS TO SET ELYTRA FLIGHT _protected_
@@ -157,5 +210,14 @@ public class GravityHandler implements IGravityManager {
     @Override
     public void clearGravityEffect(Entity entity) {
         entityMap.remove(entity);
+    }
+
+    @Override
+    public OptionalDouble gravityMultiplier(Entity entity) {
+        if (entity == null) {
+            return OptionalDouble.empty();
+        }
+        Double stored = entityMap.get(entity);
+        return stored == null ? OptionalDouble.empty() : OptionalDouble.of(stored);
     }
 }
