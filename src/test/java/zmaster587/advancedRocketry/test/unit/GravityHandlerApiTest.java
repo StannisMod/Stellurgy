@@ -64,27 +64,19 @@ public class GravityHandlerApiTest {
         UNSAFE = (Unsafe) theUnsafe.get(null);
     }
 
-    @AfterClass
-    public static void drainEntityMap() throws Exception {
-        // Don't leak test entities into the shared static map of other
-        // unit tests that share this JVM.
-        accessEntityMap().clear();
-    }
+    // The `@Before` and `@AfterClass` that used to drain the map are GONE, and their absence is
+    // part of what this change bought. Their own comment gave the reason they existed — "don't leak
+    // test entities into the shared static map of other unit tests that share this JVM" — which is
+    // a description of the defect, written down and lived with. The map belongs to a handler now,
+    // each method builds its own, and there is nothing shared left to drain.
 
-    @Before
-    public void resetEntityMap() throws Exception {
-        accessEntityMap().clear();
-    }
-
-    /** Reflective accessor for the private static
-     *  {@code GravityHandler.entityMap}. The map is the observable
-     *  state behind the IGravityManager API. */
-    @SuppressWarnings("unchecked")
-    private static WeakHashMap<Entity, Double> accessEntityMap() throws Exception {
-        Field f = GravityHandler.class.getDeclaredField("entityMap");
-        f.setAccessible(true);
-        return (WeakHashMap<Entity, Double>) f.get(null);
-    }
+    // The reflective accessor that used to sit here — `getDeclaredField("entityMap")` +
+    // `setAccessible(true)` — is gone. It existed because the interface could only be WRITTEN: a
+    // caller that set a multiplier had no way to ask what it was, so the only observable was the
+    // implementation's own map. The API now answers the question, and every assertion above goes
+    // through it. What this buys beyond tidiness: these tests now fail when the CONTRACT breaks
+    // rather than when the storage is renamed, and they no longer depend on the map being static,
+    // which it no longer is.
 
     private static Entity fakeEntity() throws Exception {
         // EntityItem has a real ctor that needs a World — bypass it.
@@ -114,17 +106,21 @@ public class GravityHandlerApiTest {
     // also what they always meant: none of them is about the API wiring.
 
     @Test
-    public void setGravityMultiplierRegistersEntityInMap() throws Exception {
+    public void aSetMultiplierIsReadableBack() throws Exception {
         Entity e = fakeEntity();
         IGravityManager mgr = new GravityHandler();
 
+        // CONTROL: empty BEFORE, so the read below is an observation and not a first reading of
+        // something that was already there — and so "empty" is shown to be a value this API can
+        // actually produce, rather than the shape of a broken query.
+        assertFalse("an entity nobody has touched must carry no override",
+                mgr.gravityMultiplier(e).isPresent());
+
         mgr.setGravityMultiplier(e, 0.25);
-        WeakHashMap<Entity, Double> map = accessEntityMap();
-        assertTrue("entity must be present in entityMap after "
-                        + "setGravityMultiplier",
-                map.containsKey(e));
-        assertEquals("stored multiplier must equal the value passed in",
-                0.25, map.get(e), 0.0);
+        assertTrue("the override must be readable back through the API",
+                mgr.gravityMultiplier(e).isPresent());
+        assertEquals("the value read back must be the value passed in",
+                0.25, mgr.gravityMultiplier(e).getAsDouble(), 0.0);
     }
 
     @Test
@@ -135,23 +131,53 @@ public class GravityHandlerApiTest {
         mgr.setGravityMultiplier(e, 0.25);
         mgr.setGravityMultiplier(e, 1.5);  // overwrite
 
-        assertEquals("setGravityMultiplier must replace the prior value, "
-                        + "not append",
-                1.5, accessEntityMap().get(e), 0.0);
+        assertEquals("setGravityMultiplier must replace the prior value, not append",
+                1.5, mgr.gravityMultiplier(e).getAsDouble(), 0.0);
     }
 
     @Test
-    public void clearGravityEffectRemovesEntry() throws Exception {
+    public void anOverrideOfExactlyOneIsNotTheSameAsNoOverride() throws Exception {
+        // The reason this API answers OptionalDouble and not a double with a 1.0 default. "Pinned
+        // to earthlike, whatever this dimension says" and "no override, so the dimension decides"
+        // produce different motion, and a caller given 1.0 for both cannot tell them apart.
+        Entity e = fakeEntity();
+        IGravityManager mgr = new GravityHandler();
+
+        mgr.setGravityMultiplier(e, 1.0);
+        assertTrue("a multiplier of exactly 1 is a value, not an absence",
+                mgr.gravityMultiplier(e).isPresent());
+
+        mgr.clearGravityEffect(e);
+        assertFalse("and after a clear it must read as an absence, not as 1.0",
+                mgr.gravityMultiplier(e).isPresent());
+    }
+
+    @Test
+    public void clearGravityEffectRemovesTheOverride() throws Exception {
         Entity e = fakeEntity();
         IGravityManager mgr = new GravityHandler();
 
         mgr.setGravityMultiplier(e, 0.5);
-        assertTrue("precondition: entity is in map",
-                accessEntityMap().containsKey(e));
+        assertTrue("precondition: the entity carries an override",
+                mgr.gravityMultiplier(e).isPresent());
 
         mgr.clearGravityEffect(e);
-        assertFalse("clearGravityEffect must remove the entity from the map",
-                accessEntityMap().containsKey(e));
+        assertFalse("clearGravityEffect must remove it",
+                mgr.gravityMultiplier(e).isPresent());
+    }
+
+    @Test
+    public void twoHandlersDoNotShareTheirOverrides() throws Exception {
+        // The ownership this change is about. While the map was static, every handler shared one,
+        // so a mod installing its own manager would silently read and overwrite AR's — and the
+        // tests in this file were all mutating a single map between methods without knowing it.
+        Entity e = fakeEntity();
+        IGravityManager mine = new GravityHandler();
+        IGravityManager theirs = new GravityHandler();
+
+        mine.setGravityMultiplier(e, 0.25);
+        assertFalse("a second handler must not see the first one's override",
+                theirs.gravityMultiplier(e).isPresent());
     }
 
     @Test
@@ -165,7 +191,7 @@ public class GravityHandlerApiTest {
 
         mgr.clearGravityEffect(e);
         assertFalse("untracked entity stays absent after clear",
-                accessEntityMap().containsKey(e));
+                mgr.gravityMultiplier(e).isPresent());
     }
 
     @Test
