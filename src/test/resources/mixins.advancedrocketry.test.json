@@ -30,6 +30,8 @@
     "MixinShipCrossingServiceEvents",
     "MixinVSShipCrossingOpsEvents",
     "MixinShipLedgerEvents",
+    "MixinBeaconRegistryEvents",
+    "MixinBeaconRegistryWrites",
     "MixinTimeSkipPolicyEvents",
     "MixinJumpTriggerEvents",
     "MixinQueryableShipDataEvents",

@@ -131,6 +131,16 @@ public class BeaconEnableCycleTest extends AbstractSharedServerTest {
                         + readBeaconList(),
                 beaconListContains(CX_BREAK, CY, CZ));
 
+        // MARKED BEFORE THE BREAK, so a red can say what the registry actually DID rather than only
+        // what it ended up holding. This assertion has failed intermittently in the parallel tier
+        // while passing serially, and its message could not distinguish three different defects: the
+        // unregister never ran, it ran and something registered the position again, or the break
+        // never reached production at all. The mixins behind `beacon_break` / `beacon_registered` /
+        // `beacon_unregistered` separate them. An earlier attempt put that report in a production LOG
+        // and it was unreadable from here — the mod logger writes into the server child's own log,
+        // which nothing in this harness captures.
+        String mark = exec("artest events mark");
+
         // Break the controller via place-air. world.setBlockState calls
         // the old block's breakBlock callback in Forge 1.12, which is
         // how BlockBeacon.breakBlock gets a chance to clean up the
@@ -140,10 +150,12 @@ public class BeaconEnableCycleTest extends AbstractSharedServerTest {
         assertTrue("could not air-replace controller block: " + breakResp,
                 breakResp.contains("\"ok\":true"));
 
+        boolean stillThere = beaconListContains(CX_BREAK, CY, CZ);
         assertFalse("broken-controller beacon still in registry"
                         + " (" + CX_BREAK + "," + CY + "," + CZ + ") — "
-                        + readBeaconList(),
-                beaconListContains(CX_BREAK, CY, CZ));
+                        + readBeaconList()
+                        + " | what the registry did: " + beaconEventsSince(mark),
+                stillThere);
     }
 
     // ─── helpers ───────────────────────────────────────────────────────
@@ -168,6 +180,28 @@ public class BeaconEnableCycleTest extends AbstractSharedServerTest {
 
     private static String readBeaconList() throws Exception {
         return exec("artest beacon list " + planetDim);
+    }
+
+    /**
+     * Every beacon-registry record since {@code mark}, for a failure message.
+     *
+     * <p>Built to survive its own failure: if the mark could not be parsed, or the records never
+     * arrived, this says SO rather than returning an empty string that reads as "the registry did
+     * nothing" — which is one of the three answers the caller is trying to tell apart.</p>
+     */
+    private static String beaconEventsSince(String markReply) throws Exception {
+        // `artest events mark` answers `seq`, not `mark`. The first version of this looked for the
+        // latter and reported "no mark was taken" — which is the guard below doing its job: it said
+        // it could not speak rather than returning an empty string that reads as "the registry did
+        // nothing", one of the three answers this method exists to tell apart.
+        Matcher m = Pattern.compile("\"seq\"\\s*:\\s*(\\d+)").matcher(markReply);
+        if (!m.find()) {
+            return "(no mark was taken, so nothing can be said about the sequence: " + markReply + ")";
+        }
+        String records = exec("artest events since " + m.group(1));
+        return records.contains("beacon_") ? records
+                : "(no beacon record at all in " + records.length() + " bytes of events — either the "
+                        + "break never reached production, or the recording mixins are not applied)";
     }
 
     /** True iff the dim's beacon-locations registry contains the triple
