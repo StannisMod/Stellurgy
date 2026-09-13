@@ -67,6 +67,12 @@ public class VSMidTransitRelogControlE2ETest extends AbstractSharedVsClientE2ETe
     /** A demonstrable held-key climb: well above settle jitter, cheap to reach. */
     private static final double MIN_CLIMB = 1.0;
 
+    /** Ticks the attitude hold is given to bring the hull level after the lift. The slew ceiling is
+     *  2.0 rad/s and it ramps at 4.0 rad/s^2, so a half-turn is about 45 ticks; this is four times
+     *  that, and NOT load-scaled, because the slew advances per TICK — the number says how far the
+     *  hull turns, not how long we are willing to wait. */
+    private static final int LEVEL_WINDOW_TICKS = 400;
+
     @Test
     public void aPilotWhoRelogsMidTransitRegainsControlOnArrival() throws Exception {
 
@@ -203,11 +209,53 @@ public class VSMidTransitRelogControlE2ETest extends AbstractSharedVsClientE2ETe
         // sideways at 40 b/s, every pilot input delivered and honoured, because up-thrust follows the
         // SHIP's up axis and that axis is horizontal.
         //
-        // Read, not asserted. An upright craft is not this scenario's subject and a tilted one is not
-        // yet known to be a fault; pinning a tolerance here would be inventing the contract at the
-        // moment of confusion. What it must do is be in the RED, beside the end pose, so the two can
-        // be compared.
+        // THE TILT IS NOW UNDERSTOOD, and the sentence above — "a tilted one is not yet known to be
+        // a fault" — was true when it was written and is not any more. It is not the take-off tilt
+        // the base class's lift helper exists for, and reaching for that helper here is wrong: it
+        // lifts a craft OFF A PAD, and this craft is not standing on one.
+        //
+        // This scenario assembles its craft in the cell `transit-setup-empty` materializes, and that
+        // cell is EMPTY by contract — the probe's own comment says so. So from the instant of
+        // assembly there is nothing under the hull. And a craft that has never been FLOWN is
+        // deliberately inert: `stationKeeping` is the persisted "was flown" witness, and until it is
+        // set the flight computer returns having set no target attitude and no commanded velocity at
+        // all. Nothing holds the hull up and nothing corrects its attitude, so it falls and whatever
+        // spin the assembly gave it runs free. By the time the seated pilot first holds a key, the
+        // pilot branch seeds `attitudeReference` from the hull's CURRENT attitude — so the tilt it
+        // has accumulated by then is pinned permanently, and a vertical-up command, being
+        // body-frame, becomes horizontal thrust.
+        //
+        // Measured 2026-09-13, in order: up-Y 0.23 with omega at the 2.0 rad/s cap and the hull
+        // translating at ~40 b/s, while all 96 pilot inputs were received AND delivered with the
+        // guard and the flight computer both satisfied — the red accused the control chain and
+        // nothing was wrong with it. Then, with the level command below: up-Y 0.02 -> 0.77, velY
+        // 0.0, omega 1.39 — the hold works, it simply needs its slew window.
+        //
+        // The probe attitude channel is used deliberately: it carries its own zero velocity and does
+        // not go through the `stationKeeping` gate, so it can steady a craft that has never flown —
+        // which is exactly this craft's state.
+        assertTrue("the craft must accept a level attitude command before it is flown",
+                exec("artest vs point-by-id " + originDim + " " + shipId + " 1.0 0.0 0.0 0.0")
+                        .contains("\"commanded\":true"));
+        // A WINDOW, sized from the computer's own limits rather than polled: the hold slews at a
+        // 2.0 rad/s ceiling and ramps to it at 4.0 rad/s^2, so even a half-turn is about 45 ticks.
+        // The achieved attitude is printed so the size can be re-argued from a measurement.
+        bot().waitTicks(LEVEL_WINDOW_TICKS);
         String poseBeforeClimb = shipInfoById(originDim, shipId);
+        System.out.println("[relog] after " + LEVEL_WINDOW_TICKS + " level ticks :: " + poseBeforeClimb);
+        requireUprightForAnAltitudeClaim(poseBeforeClimb,
+                "the seated pilot's own key flies his craft before the transit");
+        // AND THEN LET GO. The probe channel does not merely aim the hull: it carries a zero
+        // velocity and keeps commanding it, so a craft left under it is being told to stay exactly
+        // where it is. Leaving it active would put the pilot's own key in competition with a
+        // standing order not to move, and the control leg would red with every input delivered and
+        // honoured — which is what it did on the run before this line existed, with the hull level
+        // (up-Y 0.9999), stationary (velY ~1e-18) and all 96 inputs received and delivered.
+        assertTrue("the probe's attitude hold must be released before the pilot is asked to fly:"
+                        + " it commands a zero velocity, so a craft still under it cannot climb",
+                exec("artest vs force-clear-by-id " + originDim + " " + shipId)
+                        .contains("\"ok\":true"));
+        bot().waitTicks(10);
         long clientPilotMark = clientEvents().mark();
         if (!climbedWithinAttempts(3)) {
             scenario().arrangementFailed("control leg: the pilot must be able to fly BEFORE the"
@@ -292,9 +340,27 @@ public class VSMidTransitRelogControlE2ETest extends AbstractSharedVsClientE2ETe
         // in the cell BELOW. The client's rendered altitude is the honest witness: a block-band
         // arrival can never reach half a cell.
         double arrivedY = clientPlayerY();
+        // FOUR ALTITUDES, not one, because "he is not in the pose band" has four different subjects
+        // and the number alone cannot say which lost it. Read in the order the value travels: the
+        // ship the server holds, the server's own copy of the player, the seat dummy as the CLIENT
+        // renders it, and the client's own player. A break between any two adjacent pair names the
+        // hop; all four agreeing on a wrong number is a different bug from the client alone being
+        // wrong, and this assertion used to report only the last of them.
+        String serverPlayer = exec("artest player health");
+        String arrivedShip = shipInfoById(targetDim, shipId);
+        double ridingY = riding.has("posY") ? riding.get("posY").getAsDouble() : Double.NaN;
+        String altitudes = "shipOnServer=" + readDoubleOr(arrivedShip, "posY")
+                + " playerOnServer=" + readDoubleOr(serverPlayer, "posY")
+                + " dummyOnClient=" + ridingY
+                + " playerOnClient=" + arrivedY;
+        scenario().record("arrivalAltitudes", altitudes);
+        System.out.println("[relog] arrival altitudes :: " + altitudes
+                + " || ship=" + arrivedShip + " || server=" + serverPlayer);
         assertTrue("the arrived pilot must be in the destination cell's pose band, not the paste"
                         + " lane: client-rendered Y=" + arrivedY + " (pose band starts at "
-                        + GalacticCoord.HALF_CELL + ", the paste lane sits near 200)",
+                        + GalacticCoord.HALF_CELL + ", the paste lane sits near 200). The four"
+                        + " altitudes, in the order the value travels: " + altitudes
+                        + " || ship=" + arrivedShip + " || server=" + serverPlayer,
                 arrivedY >= GalacticCoord.HALF_CELL);
 
         // ---- ASSERT 2 (load-bearing): control RESUMES on arrival — the held key flies the -------
@@ -430,6 +496,13 @@ public class VSMidTransitRelogControlE2ETest extends AbstractSharedVsClientE2ETe
         Matcher m = Pattern.compile("\"" + key + "\":(-?[0-9.E\\-]+)").matcher(json);
         assertTrue("expected number \"" + key + "\" in: " + json, m.find());
         return Double.parseDouble(m.group(1));
+    }
+
+    /** As above, but ABSENCE is an answer: a diagnostic that refuses is worse than one that says
+     *  the field was not there. Only for building a failure message — never for a verdict. */
+    private static double readDoubleOr(String json, String key) {
+        Matcher m = Pattern.compile("\"" + key + "\":(-?[0-9.E\\-]+)").matcher(json);
+        return m.find() ? Double.parseDouble(m.group(1)) : Double.NaN;
     }
 
     private static boolean readBool(String json, String key) {

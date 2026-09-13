@@ -388,6 +388,20 @@ public abstract class AbstractSharedVsClientE2ETest extends AbstractSharedClient
      * @return the ship's report at its new altitude
      */
     protected final String liftClearOfTheGround(String shipId, int toY) throws Exception {
+        return liftClearOfTheGround(0, shipId, toY);
+    }
+
+    /**
+     * As above, for a craft that is not in the overworld.
+     *
+     * <p>Added 2026-09-13 because the dimension was hard-wired to 0 in four places here — the two
+     * reads and the two commands — and a caller whose craft sits in a SLOT cell got none of that
+     * said to it. What it got was this method's own first refusal, *"the craft must report a
+     * position before it can be lifted off its pad"*, with a reply carrying {@code managed:false}:
+     * a true sentence about the wrong world, which reads as a craft that has unloaded. The dim is
+     * now a parameter and the refusal names it.</p>
+     */
+    protected final String liftClearOfTheGround(int dim, String shipId, int toY) throws Exception {
         // The substrate's load controller drops a RIGID-TELEPORTED ship's physics object even with a
         // pilot aboard, and a ship that is not loaded is not ticked: its flight computer stops, so it
         // stops climbing and stops being reported at all. Measured 2026-08-23 — a craft lifted to 147
@@ -399,24 +413,26 @@ public abstract class AbstractSharedVsClientE2ETest extends AbstractSharedClient
                 + " controller drops it mid-climb and every later reading is about a ship that is no"
                 + " longer being ticked: " + held, held.contains("\"ok\":true"));
 
-        String before = shipInfoById(shipId);
+        String before = shipInfoById(dim, shipId);
         double x = readDoubleOr(before, POS_X, Double.NaN);
         double z = readDoubleOr(before, POS_Z, Double.NaN);
-        scenario().requireArranged("the craft must report a position before it can be lifted off its"
-                + " pad: " + before, !Double.isNaN(x) && !Double.isNaN(z));
+        scenario().requireArranged("the craft must report a position in dim " + dim + " before it"
+                + " can be lifted off its pad — a reply carrying managed:false here is as likely to"
+                + " mean the craft is in a DIFFERENT world as that it has unloaded: " + before,
+                !Double.isNaN(x) && !Double.isNaN(z));
 
-        String moved = exec("artest vs teleport-ship-by-id 0 " + shipId
+        String moved = exec("artest vs teleport-ship-by-id " + dim + " " + shipId
                 + " " + x + " " + toY + " " + z);
         scenario().requireArranged("the lift off the pad must take, or the craft flies its whole"
                 + " window in ground contact: " + moved, moved.contains("\"ok\":true"));
         bot().waitTicks(30); // transform adoption + rider sync settle
-        String unparked = exec("artest vs unpark-by-id 0 " + shipId);
+        String unparked = exec("artest vs unpark-by-id " + dim + " " + shipId);
         scenario().requireArranged("the rigid teleport leaves the ship PARKED by the substrate's own"
                 + " recipe, and a parked ship cannot be flown: " + unparked,
                 unparked.contains("\"ok\":true"));
         bot().waitTicks(10);
 
-        String after = shipInfoById(shipId);
+        String after = shipInfoById(dim, shipId);
         double y = readDoubleOr(after, POS_Y, Double.NaN);
         scenario().requireArranged("the lifted craft must still be loaded and report its new"
                 + " altitude (asked BY IDENTITY, so this cannot be a neighbour): " + after,
