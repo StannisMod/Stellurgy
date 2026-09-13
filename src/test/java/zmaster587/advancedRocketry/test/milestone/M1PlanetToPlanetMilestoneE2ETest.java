@@ -1529,7 +1529,16 @@ public class M1PlanetToPlanetMilestoneE2ETest {
         String diagnosis = "";
     }
 
-    /** Aim at a block that stands in the world (the assembler), from wherever the bot is standing. */
+    /**
+     * Aim at a block that stands in the world (the assembler), from wherever the bot is standing.
+     *
+     * <p>CLASSIFIED, and it stays a loop: the loop IS the stimulus, not an observation of one. Each
+     * pass aims the client and then reads back what the crosshair actually hit — a feedback
+     * controller terminating on its own goal state. Delete it and the aiming stops HAPPENING, not
+     * merely stop being watched. No link could replace it either: nothing in production DECIDES
+     * that a crosshair is on a block, the pick is re-derived every frame from where the player
+     * stands, and where he stands is still settling.</p>
+     */
     private Aim aimAtWorldBlock(int[] target, double tx, double ty, double tz, int budget)
             throws Exception {
         double[] targetWorld = {target[0] + tx, target[1] + ty, target[2] + tz};
@@ -1569,6 +1578,19 @@ public class M1PlanetToPlanetMilestoneE2ETest {
         return aimAt(0, afcSub, targetSub, standOffset, tx, ty, tz, budget);
     }
 
+    /**
+     * The aboard form: stand on the ship's own deck, then aim at a block of it.
+     *
+     * <p>CLASSIFIED for the same reason as {@link #aimAtWorldBlock}, plus one of its own — every
+     * pass re-derives the stand AND the target from the ship's LIVE pose, because a freshly
+     * assembled craft is still settling and a position computed once against a stale pose puts the
+     * bot in mid-air beside a ship that has moved. So each iteration performs two stimuli (a
+     * teleport and an aim) and reads the result back; it is a chase, not a wait.</p>
+     *
+     * <p>Note the order INSIDE the iteration, which is load-bearing: the teleport comes first and
+     * the aim last. A server teleport arrives as a pos-look packet and vanilla applies it with
+     * {@code setPositionAndRotation}, so an aim set before it would be overwritten by it.</p>
+     */
     private Aim aimAt(int dim, int[] afcSub, int[] targetSub, int[] standOffset,
                       double tx, double ty, double tz, int budget) throws Exception {
         Aim aim = new Aim();

@@ -142,6 +142,13 @@ public class VSMidTransitRelogControlE2ETest extends AbstractSharedVsClientE2ETe
         assertEquals("the client must have followed into the transit origin cell",
                 originDim, bot().reportWeather().get("dim").getAsInt());
 
+        // CLASSIFIED, and it stays a loop: every pass PERFORMS the mount again — it re-spawns the
+        // seat dummy and re-issues the mount — so deleting it does not leave an unwatched mount, it
+        // leaves four mounts unattempted. The spawn half is refused inside the loop rather than
+        // retried blindly, so a dummy that was never made fails as itself; what the retry is for is
+        // the mount half, whose reply carries the player's dim against the dim the dummy was found
+        // in, and `gone` when no loaded world holds it — the three answers that separate "the wrong
+        // world was asked" from "it is not there at all".
         String mountAt = "", mount = "";
         boolean mounted = false;
         for (int attempt = 0; attempt < 5 && !mounted; attempt++) {

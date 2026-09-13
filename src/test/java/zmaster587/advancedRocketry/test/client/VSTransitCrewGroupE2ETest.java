@@ -573,6 +573,10 @@ private boolean waitForRegisteredShip(int dim) throws Exception {
         // it. It fails INSIDE, typed as the arrangement it is, carrying the reading — so "the seat
         // was never located" and "it was located without a world position" stay distinguishable
         // without either of them being a re-check of `hasKey`.
+        //
+        // A syntactic scan for "a loop header value an assertion later reads" still counts this one,
+        // because `seat` is concatenated into an assertion in ANOTHER method of this class. It is a
+        // false positive, and this paragraph is the reason not to open the site again over it.
         String seat = "";
         for (int i = 0; i < 40 && !hasKey(seat, "shipWorldX"); i++) {
             seat = execEnvelope("artest vs find-seat " + originDim + " id " + setupShipId(setup));

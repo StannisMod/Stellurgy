@@ -373,6 +373,15 @@ public class VSJumpDriveFixtureBoardingE2ETest extends AbstractSharedVsClientE2E
      * itself confirms the pick. Both the stand and the aim are re-derived from the ship's live pose
      * every attempt: a freshly assembled ship settles for a while, and a position computed once
      * against a stale pose leaves the bot in mid-air beside a ship that has since moved.
+     *
+     * <p>CLASSIFIED, and it stays a loop: each pass PERFORMS two stimuli — a teleport onto the
+     * recomputed stand and an aim at the recomputed target — and then reads back what the crosshair
+     * hit. Delete it and the standing and aiming stop HAPPENING, not merely stop being watched, and
+     * no link could replace it: nothing in production decides that a crosshair is on a block.</p>
+     *
+     * <p>The order INSIDE the iteration is load-bearing: teleport first, aim last. A server teleport
+     * arrives as a pos-look packet which vanilla applies with {@code setPositionAndRotation}, so an
+     * aim set before it would be silently overwritten by it.</p>
      */
     private Aim aimAt(int[] afcSub, int[] targetSub, int[] standOffset,
                       double tx, double ty, double tz, int budget) throws Exception {
