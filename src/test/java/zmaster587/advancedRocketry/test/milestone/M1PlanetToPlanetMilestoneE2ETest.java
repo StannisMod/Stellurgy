@@ -1465,6 +1465,11 @@ public class M1PlanetToPlanetMilestoneE2ETest {
         // else builds in here, but it could not say WHICH ship, and the record names it.
         Events spawnEvents = new Events(this::exec, bot()::waitTicks);
         long spawnMark = spawnEvents.markInstrumented();
+        // CLASSIFIED, and it stays a loop: every pass PRESSES BUILD again, and re-opens the screen
+        // first when something knocked it shut. Delete it and the build stops being ATTEMPTED, not
+        // merely stop being watched — so there is nothing for a chain to attach to, and the record
+        // it exits on (`ship_spawned`) is already production's own verdict rather than a sample.
+        //
         // THE MULTIPLIER STAYS. What it waits on is VS building the ship on its OWN thread, off the
         // game loop: that work finishes in wall-clock time, so a busy box genuinely needs more game
         // ticks to elapse before it is done. Measured at 8 forks on the sibling gate test.

@@ -188,6 +188,13 @@ public class VSAssembledShipRealRightClickBoardingE2ETest extends AbstractShared
         // ---- HOP 1-3: put the crosshair on the seat, and PROVE it landed there. ------------------
         // Re-derived every attempt from the seat's LIVE world position: a freshly assembled ship
         // settles for a while, so an aim computed once against a stale pose misses by design.
+        //
+        // CLASSIFIED, and it stays a loop: each pass PERFORMS the stand and the aim against a pose
+        // that has moved since the last one, then reads back what the crosshair hit. Delete it and
+        // the standing and aiming stop HAPPENING; and no link could replace it, because nothing in
+        // production decides that a crosshair is on a block. The order inside the iteration is
+        // load-bearing — teleport first, aim last — since a teleport arrives as a pos-look packet
+        // that vanilla applies with setPositionAndRotation, overwriting any aim set before it.
         JsonObject aim = null;
         double[] seatWorld = null;
         double distSq = Double.POSITIVE_INFINITY;
