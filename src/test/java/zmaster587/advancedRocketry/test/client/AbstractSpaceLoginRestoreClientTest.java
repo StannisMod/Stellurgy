@@ -1122,16 +1122,44 @@ public abstract class AbstractSpaceLoginRestoreClientTest {
         // becoming queryable — a fact about time, not about which craft answers.
         String arrivedShipId = ShipIdentity.awaitPhysicsIdOf(this::exec, slotDim, arrangedShipId,
                 30, () -> bot().waitTicks(10));
+        // MEASURED, and the loop stays on what the measurement does NOT say. What it could still be
+        // waiting for was narrowed first: `awaitPhysicsIdOf` above has already established that the
+        // queryable registry carries this ship, `shipyardBoundsOf` builds the box straight off its
+        // chunk claim, and `pilotSeatInYard` force-loads those chunks itself before scanning — so
+        // chunk streaming is not the lag. What is left is the BLOCKS: a crossing re-assembles the
+        // hull into the subspace, and a claim can exist before its contents do.
+        //
+        // Measured 2026-09-13, both scenarios of this class that reach here, one unloaded run:
+        // ONE attempt, no refusal, and therefore zero ticks spent — so nothing below can be relying
+        // on time this loop buys. That is two samples against a comment claiming an intermittent
+        // single-shot failure under parallel-fork load, which two unloaded samples cannot refute, so
+        // the retry stays: it costs nothing when it is not needed.
+        //
+        // What the retry may no longer do is refuse in one word. `seatFound:false` covers three
+        // different arrangement faults and the probe now names the box it searched, so they can be
+        // told apart: `yard:null` is a ship with no chunk claim at all, a yard box with no seat in
+        // it is a claim whose blocks have not arrived (or a craft that genuinely carries no pilot
+        // seat), and the attempt count says whether the wait was ever real.
         String seat = null;
+        String firstRefusal = null;
+        int attempts = 0;
         for (int attempt = 0; attempt < 30; attempt++) {
             seat = exec("artest vs find-seat " + slotDim + " id " + arrivedShipId);
+            attempts++;
             if (readBool(seat, "seatFound")) {
                 break;
+            }
+            if (firstRefusal == null) {
+                firstRefusal = seat;
             }
             bot().waitTicks(10);
         }
         assertTrue("the pilot seat must survive the crossing and be locatable in the settled ship - "
-                + "without a seat there is nothing to be restored into: " + seat,
+                + "without a seat there is nothing to be restored into. " + attempts
+                + " attempt(s) in dim " + slotDim + "; the `yard` field says WHICH fault this is: "
+                + "null = the ship resolved no chunk claim, a box with no seat in it = the claim's "
+                + "blocks never arrived or the craft has no seat. first refusal: " + firstRefusal
+                + "; last: " + seat,
                 readBool(seat, "seatFound"));
         int seatX = readInt(seat, "seatX");
         int seatY = readInt(seat, "seatY");

@@ -2182,6 +2182,19 @@ public class TestProbeCommand extends CommandBase {
             } else {
                 sb.append(",\"seatFound\":false");
             }
+            // The BOX that was searched, on every reply. A `seatFound:false` is otherwise one word
+            // for three different worlds: the ship resolved no chunk claim at all (yard null), the
+            // claim is there but its blocks have not been written into the subspace yet (a yard with
+            // a plausible box and nothing in it), or the craft genuinely carries no pilot seat. A
+            // caller retrying this verb cannot tell which of those it is waiting out, and the first
+            // two are arrangement faults that look exactly like the third.
+            if (yard == null) {
+                sb.append(",\"yard\":null");
+            } else {
+                sb.append(",\"yard\":[").append((int) yard.minX).append(',').append((int) yard.minZ)
+                        .append(',').append((int) yard.maxX).append(',').append((int) yard.maxZ)
+                        .append(']');
+            }
             if (shipWorld != null) {
                 sb.append(",\"shipWorldX\":").append(shipWorld[0])
                         .append(",\"shipWorldY\":").append(shipWorld[1])
