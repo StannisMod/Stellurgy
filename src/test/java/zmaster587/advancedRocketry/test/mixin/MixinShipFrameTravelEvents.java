@@ -9,6 +9,7 @@ import net.minecraft.entity.EntityLivingBase;
 import net.minecraft.entity.player.EntityPlayer;
 
 import org.spongepowered.asm.mixin.Mixin;
+import org.spongepowered.asm.mixin.gen.Invoker;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
@@ -170,7 +171,20 @@ public abstract class MixinShipFrameTravelEvents {
         TestTrace.record(entity, "deck_released", "\"e\":" + entity.getEntityId()
                 + ",\"who\":\"" + TestTrace.json(entity.getName()) + "\",\"reason\":\""
                 + TestTrace.json(reason) + "\",\"mode\":\"" + arTest$mode(entity)
-                + "\",\"y\":" + TestTrace.fmt(entity.posY));
+                + "\",\"y\":" + TestTrace.fmt(entity.posY)
+                // THE TWO HALVES OF THE GATE, asked of production's own predicates at the instant
+                // it fired. A reason names the branch; these name what the branch SAW, and for
+                // `steppedOntoTerrain` that is the whole question — it releases when the world says
+                // there is support under the feet and the ship says there is none, and a body at the
+                // apex of a jump over its own deck should have neither.
+                + ",\"worldSupport\":" + arTest$invokeWorldSupport(entity)
+                + ",\"shipSupport\":" + arTest$invokeShipSupport(entity)
+                + ",\"onGround\":" + entity.onGround
+                + ",\"motionY\":" + TestTrace.fmt(entity.motionY)
+                // ...and the world's own answer to "what is under him", which is evidence rather
+                // than a verdict: a count cannot say whether the boxes are terrain or the craft's
+                // own hull reaching into world space, and the tops can.
+                + ",\"underFeet\":\"" + TestTrace.json(arTest$boxesUnderFeet(entity)) + "\"");
     }
 
     @Inject(method = "logCapture", at = @At("HEAD"))
@@ -305,5 +319,43 @@ public abstract class MixinShipFrameTravelEvents {
      *  held in HULL-STAND mode (world semantics); any other tracked body is ABOARD. */
     private static String arTest$mode(Entity entity) {
         return ShipFrameTravel.aboardShipId(entity) == null ? "hull" : "aboard";
+    }
+
+    /** Production's world-support predicate — the LEFT half of the `steppedOntoTerrain` gate. */
+    @Invoker("isSupportedByWorldTerrain")
+    private static boolean arTest$invokeWorldSupport(Entity entity) {
+        throw new AssertionError("mixin invoker not applied");
+    }
+
+    /** Production's ship-support count by containment: {@code -1} no ship here, {@code 0} a ship but
+     *  nothing under the feet, {@code > 0} supported. The right half of the same gate, in the form
+     *  production keeps for diagnosis. */
+    @Invoker("shipSupportObstacleCount")
+    private static int arTest$invokeShipSupport(Entity entity) {
+        throw new AssertionError("mixin invoker not applied");
+    }
+
+    /**
+     * The world collision boxes in the slab under the body's feet, as their Y extents.
+     *
+     * <p>Evidence, not a verdict: production's predicate above says WHETHER something is there, and
+     * on a craft hovering over terrain the interesting question is WHAT — real ground far below, or
+     * the craft's own hull reaching into world space where the body is standing. The slab is the
+     * body's own box dropped by production's probe depth; at most three boxes are printed, because
+     * the point is what they are and not how many.</p>
+     */
+    private static String arTest$boxesUnderFeet(Entity entity) {
+        net.minecraft.util.math.AxisAlignedBB box = entity.getEntityBoundingBox();
+        net.minecraft.util.math.AxisAlignedBB slab = new net.minecraft.util.math.AxisAlignedBB(
+                box.minX, box.minY - 0.30D, box.minZ, box.maxX, box.minY, box.maxZ);
+        java.util.List<net.minecraft.util.math.AxisAlignedBB> boxes =
+                entity.world.getCollisionBoxes(entity, slab);
+        StringBuilder out = new StringBuilder().append(boxes.size()).append(':');
+        for (int i = 0; i < boxes.size() && i < 3; i++) {
+            net.minecraft.util.math.AxisAlignedBB b = boxes.get(i);
+            out.append('[').append(TestTrace.fmt(b.minY)).append("..")
+                    .append(TestTrace.fmt(b.maxY)).append(']');
+        }
+        return out.toString();
     }
 }
