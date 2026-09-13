@@ -745,6 +745,9 @@ public class BoundarySkyRendersInSlotCellE2ETest extends AbstractSharedClientE2E
     /** How long the renderer is given to draw a frame that differs from the one before it. */
     private static final int SKY_FRAME_BUDGET_TICKS = 400;
 
+    /** How long a teleport this test issues is given to reach the CLIENT and be applied there. */
+    private static final int POS_LOOK_BUDGET_TICKS = 200;
+
     /**
      * The client event log's sequence, taken BEFORE the stimulus — and refused unless a recorder is
      * actually subscribed, because an empty log afterwards would otherwise read as "it never
@@ -942,35 +945,55 @@ public class BoundarySkyRendersInSlotCellE2ETest extends AbstractSharedClientE2E
      * is deleted at teardown). Gates on the MEASURED look, never on elapsed ticks.
      */
     private BufferedImage capture(int dim, int y, float yaw, float pitch, String name) throws Exception {
-        seat(dim, y);
-        bot().waitTicks(5);
-        bot().setLook(yaw, pitch);
-        boolean aimed = false;
-        for (int i = 0; i < 20 && !aimed; i++) {
-            bot().waitTicks(2);
-            JsonObject state = bot().reportState();
-            aimed = Math.abs(state.get("playerPitch").getAsFloat() - pitch) < 0.5f
-                    && Math.abs(wrapDegrees(state.get("playerYaw").getAsFloat() - yaw)) < 0.5f;
-        }
-        assertTrue("the client must actually be looking at " + yaw + "/" + pitch
-                + " before the frame is captured, got " + bot().reportState(), aimed);
-
-        // Re-seat AFTER the aim converged, and gate on the CLIENT's own reported altitude. The player is
-        // in free fall the whole time, and how far it has fallen is not fixed: aiming takes a variable
-        // number of polls. Altitude is not cosmetic here - the overworld sky is drawn against the
+        // ORDERED, not polled — and the ordering is the whole of it. Vanilla's
+        // `NetHandlerPlayClient.handlePlayerPosLook` ends in `setPositionAndRotation`, so a teleport
+        // packet still in flight OVERWRITES the client's yaw and pitch, and `seat()` is a teleport.
+        // Both of the loops that used to stand here were written for that race and neither could
+        // survive it: `setLook` is never re-sent, so a packet arriving after it left the aim poll
+        // re-reading a rotation nothing was going to change again, and the altitude poll would have
+        // accepted any reading inside a 21-block band. What handles the race is putting the
+        // teleport's own arrival BEFORE the aim, which is a link and cannot be missed.
+        //
+        // Measured 2026-09-13, ten captures in one unloaded run: exactly ONE pos-look applied per
+        // `seat()`, already applied before either loop's first read, and both loops exited on poll
+        // one every time. So the variability the old comment described was not reproduced here, and
+        // what the loops were actually doing was hiding this dependency rather than handling it.
+        // The altitude matters as much as the look: the overworld sky is drawn against the
         // atmosphere density AT the viewer's height, so an unpinned altitude silently changes the
-        // control frame from "thin air, dark sky, stars" to "thick air, bright noon sky". That drift is
-        // what made an earlier version of this test pass and fail on identical code.
+        // control frame from "thin air, dark sky, stars" to "thick air, bright noon sky". That drift
+        // is what made an earlier version of this test pass and fail on identical code.
+        long seatMark = clientMark();
         seat(dim, y);
-        double clientY = Double.NaN;
-        boolean seated = false;
-        for (int i = 0; i < 20 && !seated; i++) {
-            bot().waitTicks(2);
-            clientY = bot().reportState().get("playerY").getAsDouble();
-            seated = clientY > y - 20 && clientY <= y + 1;
-        }
+        clientEvents().await(seatMark, "client_pos_look_applied",
+                "the capture teleport must be APPLIED on the client before the look is set — a"
+                        + " pos-look still in flight overwrites the aim", POS_LOOK_BUDGET_TICKS);
+        // AIM LAST, and that ordering is the finding, not a tidy-up. The old shape aimed, polled
+        // until the rotation read back right, and only THEN re-seated — and the re-seat's own
+        // pos-look carries the SERVER's copy of the rotation, which is whatever the client last
+        // reported. Putting a teleport after the aim therefore un-aims it unless the client has
+        // already told the server where it is looking, and what bought that was nothing in the
+        // comment: it was the two ticks the first poll iteration happened to spend. Written out on
+        // the run that measured it: with the polls removed and the order left alone, the zenith
+        // capture came back looking at `0.0/-0.0` against a wanted `0.0/-90.0` — the horizon
+        // instead of straight up — while the old aim assertion, standing above the re-seat, had
+        // passed. With nothing following the aim, no packet can overwrite it.
+        bot().setLook(yaw, pitch);
+
+        // ONE read, of both things, after the last thing that can change either.
+        JsonObject state = bot().reportState();
+        float gotPitch = state.get("playerPitch").getAsFloat();
+        float gotYaw = state.get("playerYaw").getAsFloat();
+        double clientY = state.get("playerY").getAsDouble();
+        System.out.println("[boundarysky] " + name + " dim=" + dim + " y=" + y
+                + " look=" + gotYaw + "/" + gotPitch + " (wanted " + yaw + "/" + pitch + ")"
+                + " clientY=" + clientY);
+        assertTrue("the client must actually be looking at " + yaw + "/" + pitch
+                        + " when the frame is captured — the teleport landed before the aim was"
+                        + " set and nothing follows it, so a wrong look here is not a race. got "
+                        + state,
+                Math.abs(gotPitch - pitch) < 0.5f && Math.abs(wrapDegrees(gotYaw - yaw)) < 0.5f);
         assertTrue("the client must be back at the capture altitude " + y + " before the frame is taken,"
-                + " got " + clientY, seated);
+                + " got " + clientY, clientY > y - 20 && clientY <= y + 1);
         // Re-hide immediately before the capture: a toast can arrive at any tick, and vanilla draws
         // toasts outside the hideGUI gate, so only a fresh drain guarantees a clean frame.
         bot().setHudHidden(true);
