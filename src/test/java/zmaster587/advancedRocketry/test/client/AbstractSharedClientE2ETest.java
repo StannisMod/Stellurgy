@@ -454,6 +454,10 @@ public abstract class AbstractSharedClientE2ETest {
         // work where a wait follows it is still the right shape — anything the server does needs a
         // round trip before the client can be asked about it — so the placement stays.
         long hurtMark = events().mark();
+        // The CLIENT's mark for the same write, taken here because the packet it produces is what
+        // the gate below waits for. It survives `resetClientState` — that resets the screen and the
+        // chat, both client-owned display state, and does not touch the event log.
+        long healthMark = clientEvents().mark();
         serverClient().execute("artest player set-health 20");
         bot().waitTicks(10);
 
@@ -521,14 +525,28 @@ public abstract class AbstractSharedClientE2ETest {
         // (issued before the client reset, so its harness marker is cleared with everything else) is
         // a server write and the client learns it on the next update packet.
         double health = state.has("health") ? state.get("health").getAsDouble() : -1.0;
-        for (int waited = 0; waited < 40 && health < 19.5; waited += 5) {
-            bot().waitTicks(5);
-            // Guarded like every other read here: a client that dies DURING the poll would
-            // otherwise reproduce the same bare NPE this method was just taught not to throw, one
-            // loop iteration later and with the guard above already passed.
-            JsonObject polled = bot().reportState();
-            health = polled != null && polled.has("health")
-                    ? polled.get("health").getAsDouble() : -1.0;
+        if (health < FULL_HEALTH_BAR) {
+            // THE LINK, and it is CONDITIONAL for a reason worth stating: a server write that
+            // changes nothing sends nothing, so a client already at full health is never told
+            // anything and an unconditional wait would burn its budget on every healthy scenario —
+            // which is every scenario that did not hurt anybody. The read above is what separates
+            // the two cases; only a client that is still short waits for the packet that heals it.
+            //
+            // What replaced the poll is the packet ITSELF: `client_health_updated` is recorded where
+            // the client applies `SPacketUpdateHealth`, so this waits for the server's write
+            // ARRIVING rather than for a sampled field to look right. The record carries what the
+            // server SENT, which a locally predicted value cannot be mistaken for.
+            clientEvents().awaitMatching(healthMark, "client_health_updated",
+                    reply -> anyHealthAtLeast(reply, FULL_HEALTH_BAR),
+                    "carrying health >= " + FULL_HEALTH_BAR,
+                    "the reset heals the player on the server, and the client must be TOLD: a"
+                            + " scenario that starts short of full health measures the previous"
+                            + " one's leftovers", HEALTH_LINK_BUDGET_TICKS);
+            // Re-read for the message below: the record says the packet arrived, this says what the
+            // client holds now, and a disagreement between them is worth seeing in the failure text.
+            JsonObject healed = bot().reportState();
+            health = healed != null && healed.has("health")
+                    ? healed.get("health").getAsDouble() : -1.0;
         }
         // And when it still fails, the message names WHAT hurt him rather than only how much is
         // left: `living_hurt` carries the source and the amount per hit, so a scenario left dying in
@@ -536,11 +554,11 @@ public abstract class AbstractSharedClientE2ETest {
         // are three different texts instead of one number. Read after the poll so the window covers
         // it; an empty list with the health still short is itself the diagnosis — nothing hit him
         // here, so the shortfall arrived before this reset and the previous scenario owns it.
-        String hurts = health >= 19.5 ? "" : "\n  damage taken during this reset: "
+        String hurts = health >= FULL_HEALTH_BAR ? "" : "\n  damage taken during this reset: "
                 + events().since(hurtMark, "living_hurt");
         assertTrue("a scenario must start at full health as the CLIENT renders it, or a"
                 + " damage-observing scenario measures the previous one's leftovers; client"
-                + " reports " + health + hurts, health >= 19.5);
+                + " reports " + health + hurts, health >= FULL_HEALTH_BAR);
 
         // The world the CLIENT actually renders, asserted rather than inferred from the teleport
         // having been issued: the plot check above reads X and Z only, so without this a scenario
@@ -744,6 +762,36 @@ public abstract class AbstractSharedClientE2ETest {
         return "(" + Math.round(state.get("playerX").getAsDouble()) + ","
                 + (state.has("playerY") ? Math.round(state.get("playerY").getAsDouble()) : '?')
                 + "," + Math.round(state.get("playerZ").getAsDouble()) + motion + ")";
+    }
+
+    /**
+     * What counts as "the scenario starts at full health", in half-hearts.
+     *
+     * <p>Vanilla full is 20.0 and the reset writes exactly that, so the half-heart of slack is not
+     * for the value — it is for a client that has applied a regeneration or absorption tick between
+     * the write and the read. Below it, something hurt him.</p>
+     */
+    private static final double FULL_HEALTH_BAR = 19.5D;
+
+    /**
+     * How long the client is given to be TOLD about the reset's heal, in ticks.
+     *
+     * <p>A deadline for a packet, not a stand-in for it: the write has already happened on the
+     * server when this starts, so what is being waited for is one round trip. The old poll's own
+     * ceiling was 40 ticks and this keeps it — what changed is that the budget now bounds a wait for
+     * a RECORD instead of forty ticks of asking a field how it looks.</p>
+     */
+    private static final int HEALTH_LINK_BUDGET_TICKS = 40;
+
+    /** Whether any {@code client_health_updated} in a {@code since} reply carries at least {@code
+     *  floor} health — the packet the server sends when it heals him, as the client applied it. */
+    private static boolean anyHealthAtLeast(String sinceReply, double floor) {
+        for (String record : Events.records(sinceReply)) {
+            if (Events.number(record, "health") >= floor) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private static double round2(com.google.gson.JsonElement value) {
