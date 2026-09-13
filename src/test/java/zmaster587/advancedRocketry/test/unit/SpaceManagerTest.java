@@ -57,7 +57,16 @@ public class SpaceManagerTest {
          */
         final java.util.Set<Integer> worldRemovedBehindOurBack = new java.util.LinkedHashSet<>();
 
-        @Override public void load(int dimId, String cellKey) {
+        /**
+         * The recorded loads stay keyed by the cell's KEY, which is what this controller's own
+         * bookkeeping is keyed by and what every assertion below reads. What changed under it is that
+         * the seam now carries the whole coordinate: the key is derived here rather than handed in,
+         * so a caller that lost the cell's lattice width upstream can no longer reach this fake at
+         * all — it would not compile.
+         */
+        @Override public void load(int dimId,
+                zmaster587.advancedRocketry.space.GalacticCoord cell) {
+            String cellKey = cell.cellKey();
             loads.add(dimId + ":" + cellKey);
             bound.put(dimId, cellKey);
             worldRemovedBehindOurBack.remove(dimId); // a load builds the world back

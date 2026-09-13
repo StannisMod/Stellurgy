@@ -101,6 +101,10 @@ public class TileAdvancedFlightComputer extends TileEntity implements IModularIn
      */
     private boolean entryLatched = false;
 
+    /** Whether this computer has already said that its ledger row cannot answer a distance. Once per
+     *  tile: the scan runs every tick, and the condition persists until the row is rewritten. */
+    private boolean descentScanUnusableReported = false;
+
     /**
      * Said once per tile, not once per tick: a ship sitting against its cell's boundary would
      * otherwise report it twenty times a second. Not persisted — a fresh tile after a relocation
@@ -481,10 +485,14 @@ public class TileAdvancedFlightComputer extends TileEntity implements IModularIn
             // asked of the same stack whose ledger then takes the position report.
             zmaster587.advancedRocketry.space.SpaceSubsystem stack =
                     zmaster587.advancedRocketry.AdvancedRocketry.spaceSubsystem();
-            String cellKey = zmaster587.advancedRocketry.space.SpaceSlotPool
-                    .cellKeyFor(world.provider.getDimension());
+            // THE CELL THIS SLOT IS, asked of the pool — never rebuilt from the slot's NAME. A
+            // coordinate recovered from a key carries no lattice width (a key cannot spell one), and
+            // this report is written straight into the ledger row that the descent scan below then
+            // does arithmetic on. Rebuilding here destroyed the width of every zoned cell one tick
+            // after a ship settled in it, and the scan took the server down on the next.
             zmaster587.advancedRocketry.space.GalacticCoord cell =
-                    zmaster587.advancedRocketry.space.GalacticCoord.fromCellKey(cellKey);
+                    zmaster587.advancedRocketry.space.SpaceSlotPool
+                            .cellCoordFor(world.provider.getDimension());
             if (stack != null && cell != null) {
                 double[] pose = VSIntegration.getShipWorldPosition(world, getPos());
                 if (pose != null) {
@@ -523,7 +531,7 @@ public class TileAdvancedFlightComputer extends TileEntity implements IModularIn
                                         + "into the neighbour - its position is held at the boundary. "
                                         + "Either it has not yet passed the carry margin, or the carry was "
                                         + "refused (no free slot); the seam logs a refusal when it is one.",
-                                shipId, cellKey, pose[0], pose[1], pose[2]);
+                                shipId, cell.cellKey(), pose[0], pose[1], pose[2]);
                     }
                 }
             }
@@ -559,8 +567,29 @@ public class TileAdvancedFlightComputer extends TileEntity implements IModularIn
                         && settled.state == zmaster587.advancedRocketry.space.ShipLedger.State.SETTLED) {
                     zmaster587.advancedRocketry.universe.UniverseRegistry reg =
                             zmaster587.advancedRocketry.universe.UniverseRegistry.get(server);
-                    if (reg != null) {
-                        zmaster587.advancedRocketry.space.GalacticCoord shipCoord = settled.coord;
+                    zmaster587.advancedRocketry.space.GalacticCoord shipCoord = settled.coord;
+                    // A LEDGER ROW THAT CANNOT DO ARITHMETIC DOES NOT TAKE THE SERVER WITH IT.
+                    // Every distance method on a coordinate refuses a width-less one rather than
+                    // multiplying by a stand-in — correct, and fatal here: this runs inside
+                    // World.updateEntities, where vanilla turns any throw into a crash report and
+                    // stops the server. So the proximity scan asks first, says once what it is not
+                    // doing, and leaves the craft flyable; the pilot keeps full control and simply
+                    // gets no automatic descent while the row is unusable.
+                    if (shipCoord != null && !shipCoord.knowsItsLattice()) {
+                        if (!descentScanUnusableReported) {
+                            descentScanUnusableReported = true;
+                            zmaster587.advancedRocketry.AdvancedRocketry.logger.warn(
+                                    "[SPACE] ship {} is ledgered at '{}', a cell whose lattice width "
+                                            + "is unknown, so its descent proximity cannot be "
+                                            + "computed and NO descent will be offered here. This is "
+                                            + "not 'no body is close enough' - nothing was measured. "
+                                            + "The row was written without a width; a cell recovered "
+                                            + "from its key cannot carry one.",
+                                    shipId, shipCoord.cellKey());
+                        }
+                        shipCoord = null;
+                    }
+                    if (reg != null && shipCoord != null) {
                         long radius = zmaster587.advancedRocketry.space.ShipEntryController.DESCENT_RADIUS_BLOCKS;
                         for (zmaster587.advancedRocketry.universe.SystemBody body
                                 : descendTargetsIn(reg, shipCoord)) {

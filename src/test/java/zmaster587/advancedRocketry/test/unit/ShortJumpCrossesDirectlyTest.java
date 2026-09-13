@@ -41,7 +41,7 @@ public class ShortJumpCrossesDirectlyTest {
         final int[] dims;
         FakeBinder(int... dims) { this.dims = dims; }
         @Override public int[] slotDims() { return dims; }
-        @Override public void load(int dimId, String cellKey) { }
+        @Override public void load(int dimId, zmaster587.advancedRocketry.space.GalacticCoord cell) { }
         @Override public void unload(int dimId) { }
         @Override public void discard(int dimId) { }
         @Override public void deleteStore(String cellKey) { }

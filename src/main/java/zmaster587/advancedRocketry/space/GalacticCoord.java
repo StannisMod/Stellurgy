@@ -172,6 +172,20 @@ public final class GalacticCoord {
      * The edge length of one cell of this coordinate's lattice, in blocks, or {@link #WIDTH_UNKNOWN}
      * when it was recovered from a key and nobody has re-attached it. See the field's own note.
      */
+    /**
+     * Whether this coordinate can do lattice arithmetic at all — that is, whether it knows the width
+     * its sector indices are counted in.
+     *
+     * <p>For a caller that must NOT throw. Every distance and absolute-position method here refuses a
+     * width-less coordinate rather than multiplying by a stand-in, which is right; but some callers
+     * run where a throw is fatal to more than themselves — a tile entity's tick, where vanilla turns
+     * any exception into a crash report and stops the server. Such a caller ASKS first and says what
+     * it is not doing, instead of being taken down by an honest refusal.</p>
+     */
+    public boolean knowsItsLattice() {
+        return cellBlocks > 0L;
+    }
+
     public long cellBlocks() {
         return cellBlocks;
     }

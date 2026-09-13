@@ -218,7 +218,10 @@ public final class AboardRecord {
         if (!(world.provider instanceof WorldProviderSpaceSlot)) {
             return null;
         }
-        return GalacticCoord.fromCellKey(SpaceSlotPool.cellKeyFor(world.provider.getDimension()));
+        // The cell the slot IS, asked of the pool — not rebuilt from its name. A coordinate recovered
+        // from a key carries no lattice width, and an aboard record is a thing later arithmetic is
+        // done against.
+        return SpaceSlotPool.cellCoordFor(world.provider.getDimension());
     }
 
     /** The durable ship id of the flight computer at subspace {@code afcPos}, or {@code null}. */

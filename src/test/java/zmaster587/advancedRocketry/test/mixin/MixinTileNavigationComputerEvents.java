@@ -117,6 +117,34 @@ public abstract class MixinTileNavigationComputerEvents {
                 + ",\"known\":" + self.shipCrystal().size());
     }
 
+    /**
+     * DECLARE THE INSTRUMENT FROM THE TILE'S OWN TICK, so that silence on any event above is
+     * readable.
+     *
+     * <p>Every other seam here declares the instrument as it records — which means the roster only
+     * names this observer once it has already had something to say. That makes its two silences
+     * identical: "the console did nothing" and "this mixin never applied" both arrive as an absent
+     * instrument and an empty log, and a test awaiting {@code crystal_copied} cannot tell a console
+     * that swallowed an insertion from an instrument that was never there.</p>
+     *
+     * <p><b>Measured 2026-09-12</b>: an M1 leg awaiting {@code crystal_copied} timed out with
+     * {@code nav_computer_events} absent from {@code instruments}, and that absence was read as
+     * evidence against the instrument rather than as the finding it was. The correction — *"очевидно
+     * надо события отслеживать. это не физ величина, это изменение состояния, это действие на
+     * корабле"* — is why the fix is here rather than in the test: a state change on the ship is an
+     * event, and the answer to "the instrument cannot prove it was alive" is to make it prove it,
+     * never to go back to polling a value.</p>
+     *
+     * <p>The tick is the right place because it is the one path that runs whether or not anybody
+     * touches the console: a navigation computer that exists in a loaded world declares its observer
+     * within a tick of existing. It records NOTHING — a per-tick record would drown every window
+     * this file's events are read in — so its whole contribution is the roster entry.</p>
+     */
+    @Inject(method = "update", at = @At("HEAD"))
+    private void arTest$declareFromTick(CallbackInfo ci) {
+        TestTrace.instrumentHere(INSTRUMENT);
+    }
+
     @Inject(method = "setTargetBody", at = @At("HEAD"))
     private void arTest$targetPicked(int dimId, GalacticCoord observed, CallbackInfo ci) {
         TestTrace.instrumentHere(INSTRUMENT);

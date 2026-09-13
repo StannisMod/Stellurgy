@@ -173,15 +173,18 @@ public final class SkyNebulaeProducer {
      * <p>A live cell with no cloud gets a present-and-EMPTY entry, exactly as the bodies feed does:
      * "present and empty" is what clears a stale sky, where "absent" would leave one standing.</p>
      */
-    public static Map<Integer, List<RenderNebula>> buildByDim(Map<String, Integer> loadedCells,
+    public static Map<Integer, List<RenderNebula>> buildByDim(Map<GalacticCoord, Integer> loadedCells,
                                                               IGalaxyGenerator generator, long seed) {
         Map<Integer, List<RenderNebula>> byDim = new LinkedHashMap<>();
         if (loadedCells == null) {
             return byDim;
         }
-        for (Map.Entry<String, Integer> bound : loadedCells.entrySet()) {
+        // The snapshot hands over CELLS. It used to hand over their names, and this loop rebuilt a
+        // coordinate from each — which loses a zoned lattice's width, and the cloud direction below
+        // is arithmetic on exactly that.
+        for (Map.Entry<GalacticCoord, Integer> bound : loadedCells.entrySet()) {
             Integer slotDim = bound.getValue();
-            GalacticCoord cell = GalacticCoord.fromCellKey(bound.getKey());
+            GalacticCoord cell = bound.getKey();
             if (slotDim == null || slotDim == SpaceManager.UNBOUND_SLOT || cell == null) {
                 continue;
             }

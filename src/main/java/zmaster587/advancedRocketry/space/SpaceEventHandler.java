@@ -405,8 +405,7 @@ public final class SpaceEventHandler {
         }
         // An UNBOUND slot has no cell behind it - that covers the shared hyperspace world, which is
         // deliberately ephemeral and must never be flushed as though it were someone's home cell.
-        String cellKey = SpaceSlotPool.cellKeyFor(world.provider.getDimension());
-        GalacticCoord coord = GalacticCoord.fromCellKey(cellKey);
+        GalacticCoord coord = SpaceSlotPool.cellCoordFor(world.provider.getDimension());
         if (coord != null) {
             stack.manager.markDirty(coord);
         }

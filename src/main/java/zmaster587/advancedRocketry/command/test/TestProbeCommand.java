@@ -2832,8 +2832,8 @@ public class TestProbeCommand extends CommandBase {
             }
 
             @Override
-            public void load(int dimId, String cellKey) {
-                real.load(dimId, cellKey);
+            public void load(int dimId, zmaster587.advancedRocketry.space.GalacticCoord cell) {
+                real.load(dimId, cell);
             }
 
             @Override
@@ -6372,17 +6372,17 @@ public class TestProbeCommand extends CommandBase {
             net.minecraft.util.math.BlockPos p2 = new net.minecraft.util.math.BlockPos(1, 64, 1);
             net.minecraft.block.state.IBlockState stone = net.minecraft.init.Blocks.STONE.getDefaultState();
 
-            net.minecraft.world.WorldServer w = zmaster587.advancedRocketry.space.SpaceSlotPool.load(slot, "A");
+            net.minecraft.world.WorldServer w = zmaster587.advancedRocketry.space.SpaceSlotPool.loadScratch(slot, "A");
             w.setBlockState(p1, stone);
             boolean r1 = w.getBlockState(p1).getBlock() == net.minecraft.init.Blocks.STONE;
 
             zmaster587.advancedRocketry.space.SpaceSlotPool.unload(slot);
-            w = zmaster587.advancedRocketry.space.SpaceSlotPool.load(slot, "B");
+            w = zmaster587.advancedRocketry.space.SpaceSlotPool.loadScratch(slot, "B");
             boolean r2 = w.getBlockState(p1).getBlock() == net.minecraft.init.Blocks.STONE;
             w.setBlockState(p2, stone);
 
             zmaster587.advancedRocketry.space.SpaceSlotPool.unload(slot);
-            w = zmaster587.advancedRocketry.space.SpaceSlotPool.load(slot, "A");
+            w = zmaster587.advancedRocketry.space.SpaceSlotPool.loadScratch(slot, "A");
             boolean r3 = w.getBlockState(p1).getBlock() == net.minecraft.init.Blocks.STONE;
             boolean r4 = w.getBlockState(p2).getBlock() == net.minecraft.init.Blocks.STONE;
             zmaster587.advancedRocketry.space.SpaceSlotPool.unload(slot);
@@ -6419,8 +6419,9 @@ public class TestProbeCommand extends CommandBase {
                         }
 
                         @Override
-                        public void load(int dimId, String cellKey) {
-                            real.load(dimId, cellKey);
+                        public void load(int dimId,
+                                zmaster587.advancedRocketry.space.GalacticCoord cell) {
+                            real.load(dimId, cell);
                         }
 
                         @Override
@@ -6503,7 +6504,7 @@ public class TestProbeCommand extends CommandBase {
             String cell = args.length >= 2 ? args[1] : "deep";
             int slot = zmaster587.advancedRocketry.space.SpaceSlotPool.registerAdditionalSlots(1)[0];
             net.minecraft.world.WorldServer w =
-                    zmaster587.advancedRocketry.space.SpaceSlotPool.load(slot, cell);
+                    zmaster587.advancedRocketry.space.SpaceSlotPool.loadScratch(slot, cell);
             net.minecraft.block.state.IBlockState stone = net.minecraft.init.Blocks.STONE.getDefaultState();
             for (int dx = 0; dx < 3; dx++) {
                 for (int dy = 0; dy < 3; dy++) {
@@ -6550,7 +6551,7 @@ public class TestProbeCommand extends CommandBase {
             int dim = parseIntOr(args[1], Integer.MIN_VALUE);
             zmaster587.advancedRocketry.space.SpaceSlotPool.unload(dim);
             net.minecraft.world.WorldServer w =
-                    zmaster587.advancedRocketry.space.SpaceSlotPool.load(dim, args[2]);
+                    zmaster587.advancedRocketry.space.SpaceSlotPool.loadScratch(dim, args[2]);
             // Read the queryable ship count SYNCHRONOUSLY here (same server-thread call as the reload,
             // before any tick can auto-unload the world): VS loads its per-world ship registry from
             // the world capability at construction, so a surviving ship shows up immediately.
@@ -6565,7 +6566,7 @@ public class TestProbeCommand extends CommandBase {
             String cell = args.length >= 2 ? args[1] : "vscap";
             int slot = zmaster587.advancedRocketry.space.SpaceSlotPool.registerAdditionalSlots(1)[0];
             net.minecraft.world.WorldServer w =
-                    zmaster587.advancedRocketry.space.SpaceSlotPool.load(slot, cell);
+                    zmaster587.advancedRocketry.space.SpaceSlotPool.loadScratch(slot, cell);
             boolean support = zmaster587.advancedRocketry.integration.vs.VSIntegration.hasShipSupport(w);
             zmaster587.advancedRocketry.space.SpaceSlotPool.unload(slot);
             send(sender, "{\"ok\":true,\"slot\":" + slot + ",\"vsShipSupport\":" + support + "}");
@@ -6615,7 +6616,7 @@ public class TestProbeCommand extends CommandBase {
         if (args.length >= 3 && "load".equalsIgnoreCase(args[0])) {
             int dim = parseIntOr(args[1], Integer.MIN_VALUE);
             net.minecraft.world.WorldServer w =
-                    zmaster587.advancedRocketry.space.SpaceSlotPool.load(dim, args[2]);
+                    zmaster587.advancedRocketry.space.SpaceSlotPool.loadScratch(dim, args[2]);
             send(sender, "{\"ok\":true,\"present\":" + (w != null) + ",\"folder\":\""
                     + (w != null ? w.provider.getSaveFolder() : "") + "\"}");
             return;
