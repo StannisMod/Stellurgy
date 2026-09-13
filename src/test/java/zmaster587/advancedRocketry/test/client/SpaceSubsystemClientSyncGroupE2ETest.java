@@ -165,6 +165,25 @@ public class SpaceSubsystemClientSyncGroupE2ETest extends AbstractSharedClientE2
      */
     private static final int LINK_BUDGET_TICKS = 400;
 
+    /**
+     * How long a body dropped into a freshly entered cell is given to come to rest, in ticks.
+     *
+     * <p>The other kind of number entirely, and the pair is worth reading together: the budget above
+     * is a deadline for a packet, this is the length of a MEASUREMENT. Nothing is being waited for
+     * here — the fall is client physics converging, and no record marks its end — so what this says
+     * is how much of that convergence the single read below is taken after. Inherited from the
+     * ceiling of the poll it replaces, which is what keeps the change safe in the one direction that
+     * matters: every run the poll could have passed had at most this long. The height it lands on is
+     * printed on every run, so it can be re-sized from a measurement.</p>
+     *
+     * <p>Measured on the run that introduced this form: <b>65.0</b> at the end of the window, the
+     * platform's own height and the middle of the band. What that does NOT say is how long the fall
+     * took — a single read at the end cannot — so the number stays until someone measures the
+     * settle TIME, and shortening it on the strength of a resting height would be inventing the one
+     * quantity nobody has looked at.</p>
+     */
+    private static final int SETTLE_WINDOW_TICKS = 300;
+
     // ── slot-dim entry ────────────────────────────────────────────────────────
 
     /**
@@ -239,17 +258,24 @@ public class SpaceSubsystemClientSyncGroupE2ETest extends AbstractSharedClientE2
                 slotDim, clientWorld.get("dim").getAsInt());
 
         // …the client SETTLES standing on the platform (not void-falling / not frozen). STILL A
-        // POLL, and it stays one: a body coming to rest is client-simulated physics converging on a
-        // height, not a link production commits — there is nothing to record. Its two gating links
-        // (the world, the chunk) were asserted above, so a red here now means "it had the chunk and
-        // still fell" rather than "something in the arrangement never arrived".
-        double clientY = Double.NaN;
-        boolean settled = false;
-        for (int i = 0; i < 60 && !settled; i++) {
-            bot().waitTicks(5);
-            clientY = bot().reportState().get("playerY").getAsDouble();
-            settled = clientY > 63.5 && clientY < 68.0;
-        }
+        // A WINDOW, and the first half of the old comment was right: a body coming to rest is
+        // client-simulated physics converging on a height, not a link production commits, so there
+        // is nothing to await. The second half — "so it stays a poll" — is the part that does not
+        // follow. A loop that re-reads until the value is acceptable stops on the assertion below
+        // it, so its green says "some sample was in the band" and its red is a timeout wearing a
+        // physical claim. A measurement is taken through a window: give the fall its ticks, then
+        // read. Its two gating links (the world, the chunk) were asserted above, so a red here says
+        // "it had the chunk and still fell" rather than "the arrangement never arrived".
+        //
+        // The window is the poll's own ceiling, which is what makes the change safe in the
+        // direction that matters: any run the poll would have passed had at most this long to
+        // settle. The height is printed, so the next reader can size it from a measurement rather
+        // than inherit it.
+        bot().waitTicks(SETTLE_WINDOW_TICKS);
+        double clientY = bot().reportState().get("playerY").getAsDouble();
+        boolean settled = clientY > 63.5 && clientY < 68.0;
+        System.out.println("[spacesync] client Y after " + SETTLE_WINDOW_TICKS + " ticks: " + clientY
+                + " (the band is 63.5..68.0)");
         JsonObject clientBlock = bot().blockState(0, 64, 0);
         String serverView = exec("artest player health");
         assertTrue("client-rendered Y must settle at the platform (~65), got " + clientY

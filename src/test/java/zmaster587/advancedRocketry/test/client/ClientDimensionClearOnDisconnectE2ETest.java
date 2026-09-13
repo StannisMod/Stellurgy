@@ -244,14 +244,15 @@ public class ClientDimensionClearOnDisconnectE2ETest {
                         + " already-empty registry proves nothing about the ghost it exists to"
                         + " prevent: " + cleared, clearedDims > 0);
 
-        // The end state, read from production's own accessor. It is polled briefly and not read
-        // once because the event above is recorded at the clear's HEAD, one statement BEFORE the
-        // maps are emptied — the chain says the clear RAN, this says the registry is EMPTY.
-        int after = before;
-        for (int waited = 0; waited < 100 && after != 0; waited += 5) {
-            clientHarness.bot().waitTicks(5);
-            after = clientArDimCount();
-        }
+        // The end state, read ONCE from production's own accessor. The event above is recorded at
+        // the clear's HEAD, one statement before the maps are emptied — so the chain says the clear
+        // RAN and this says the registry is EMPTY, which is a second claim and worth making. What
+        // it is NOT is a gap to poll: the statement between them is on the client's own thread and
+        // has completed before any probe round trip can be answered, so a hundred ticks of asking
+        // could only ever repeat the first answer. (The old form's own comment said "polled briefly
+        // and not read once", which is the shape this migration is removing wherever the gap turns
+        // out to be nothing.)
+        int after = clientArDimCount();
         assertEquals("leaving a remote server must clear the client's AR dimension "
                         + "registry (was " + before + ", the clear recorded " + cleared + ")",
                 0, after);

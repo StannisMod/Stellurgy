@@ -78,21 +78,17 @@ public class ItemStationChipGuiReopenClientE2ETest extends AbstractClientE2ETest
 
     /**
      * The CLIENT's own records of {@code type} since {@code mark}, waited for until one carries
-     * {@code needle} or the budget runs out. Returns the last reply either way, so a failure prints
-     * what the client DID record rather than one stale sample.
+     * {@code needle}.
      *
-     * <p>Local to this class: {@link Events} runs over the server probe, and the client log is
-     * reached through the bot. (A sibling copy lives in {@code MachineGuiClientGroupE2ETest}; the
-     * two classes have no common base to put it on.)</p>
+     * <p>A hand-rolled copy of this loop stood here, and it had the defect the shared wait exists to
+     * remove: it exited when the reply contained the needle and RETURNED, leaving each caller to
+     * assert the very condition the loop had just stopped on — an assertion that can only restate a
+     * success or re-check the last sample of a timeout. The shared wait fails where the claim is
+     * disproved instead, and prints the whole chain that did happen.</p>
      */
-    private String awaitClientRecords(long mark, String type, String needle, int tickBudget)
-            throws Exception {
-        String reply = clientEvents().since(mark, type);
-        for (int waited = 0; waited < tickBudget && !reply.contains(needle); waited += 5) {
-            bot().waitTicks(5);
-            reply = clientEvents().since(mark, type);
-        }
-        return reply;
+    private String awaitClientRecords(long mark, String type, String needle, String what,
+                                      int tickBudget) throws Exception {
+        return clientEvents().awaitCarrying(mark, type, needle, what, tickBudget);
     }
 
     /**
@@ -135,22 +131,20 @@ public class ItemStationChipGuiReopenClientE2ETest extends AbstractClientE2ETest
         long openMark = events.mark();
         long openOnClient = clientEvents().mark();
         bot().setKey(LSHIFT, true);
-        String opened;
         try {
             bot().waitTicks(6);
             bot().useItem();
             events.assertChain(openMark, "a sneak-right-click with the chip in hand must REACH the"
                             + " server and make it open the chip's own container", 200,
                     "right_click_item", "container_opened");
-            opened = awaitClientRecords(openOnClient, "client_gui_opened",
-                    "\"gui\":\"GuiModular\"", 200);
+            awaitClientRecords(openOnClient, "client_gui_opened",
+                    "\"gui\":\"GuiModular\"",
+                    "the chip GUI must open on sneak-right-click, on the player's OWN screen — the"
+                            + " server answered the press, so what is missing is the client being"
+                            + " asked to display anything for it", 200);
         } finally {
             bot().setKey(LSHIFT, false);
         }
-        assertTrue("the chip GUI must open on sneak-right-click, on the player's own screen;"
-                        + " screensDisplayed=" + opened + " screen="
-                        + bot().reportState().get("screen").getAsString(),
-                opened.contains("\"gui\":\"GuiModular\""));
 
         // Press the chip's DELETE button (BUTTON_ID_DELETE == 1). With the
         // default selection (0) DELETE is a no-op except the unconditional
@@ -190,14 +184,10 @@ public class ItemStationChipGuiReopenClientE2ETest extends AbstractClientE2ETest
         // The player's own screen is the end of the chain, not the whole of it. Matched on the
         // event's exact `gui` field rather than by substring, so the centered GuiModular the chip
         // opened first cannot satisfy a test about GuiModularFullScreen.
-        String after = awaitClientRecords(pressOnClient, "client_gui_opened",
-                "\"gui\":\"GuiModularFullScreen\"", 200);
-        assertTrue("after the C010 fix, pressing a Space-Station-Chip button must "
-                        + "re-open the GUI as GuiModularFullScreen — the AR GuiHandler now "
-                        + "delegates MODULARFULLSCREEN (opened on AdvancedRocketry.instance) "
-                        + "to the libVulpes handler instead of returning null. screensDisplayed="
-                        + after + " screen=" + bot().reportState().get("screen").getAsString()
-                        + " handlerAnswers=" + served,
-                after.contains("\"gui\":\"GuiModularFullScreen\""));
+        awaitClientRecords(pressOnClient, "client_gui_opened", "\"gui\":\"GuiModularFullScreen\"",
+                "pressing a Space-Station-Chip button must re-open the GUI as GuiModularFullScreen"
+                        + " — the GuiHandler delegates MODULARFULLSCREEN to the libVulpes handler"
+                        + " instead of returning null, and a screen that never opens is that null"
+                        + " coming back. What the handler answered: " + served, 200);
     }
 }

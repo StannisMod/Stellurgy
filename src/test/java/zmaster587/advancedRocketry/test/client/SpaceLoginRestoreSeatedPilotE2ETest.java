@@ -193,23 +193,20 @@ public class SpaceLoginRestoreSeatedPilotE2ETest extends AbstractSpaceLoginResto
         // on the stored deck point, so his client-rendered position has to be at the ship.
         double[] shipPose = awaitShipPose(dim);
         assertNotNull("his ship must be live in the dimension he came back to: " + observed, shipPose);
+        // A WINDOW and one read, the same shape and the same constant as the base's own restore
+        // assertion — this loop was its twin, down to the exit condition being the assertion three
+        // lines below it. The act was his mount, which the base awaits as a link; what is left is
+        // the rider's position being written each tick, which nothing publishes.
+        bot().waitTicks(SEAT_SETTLE_TICKS);
+        state = bot().reportState();
         double clientX = state.get("playerX").getAsDouble();
         double clientY = state.get("playerY").getAsDouble();
         double clientZ = state.get("playerZ").getAsDouble();
-        for (int attempt = 0; attempt < 40 && Math.abs(clientY - shipPose[1]) > POSE_EPSILON;
-                attempt++) {
-            bot().waitTicks(10);
-            state = bot().reportState();
-            if (!state.get("worldReady").getAsBoolean()) {
-                continue;
-            }
-            clientX = state.get("playerX").getAsDouble();
-            clientY = state.get("playerY").getAsDouble();
-            clientZ = state.get("playerZ").getAsDouble();
-            double[] livePose = awaitShipPose(dim);
-            if (livePose != null) {
-                shipPose = livePose;
-            }
+        // The ship's pose read AFTER the client's, so a craft that drifted between the two reads
+        // shows up as a residual instead of being hidden by a reference taken before it moved.
+        double[] settledPose = awaitShipPose(dim);
+        if (settledPose != null) {
+            shipPose = settledPose;
         }
         // Re-read at the END of the settle window, not at the start of it: the deck hold sends its
         // restore seed once the ship is up, which can be several seconds after the client joined,
