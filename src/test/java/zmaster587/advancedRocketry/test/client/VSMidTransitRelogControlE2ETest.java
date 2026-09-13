@@ -12,6 +12,8 @@ import org.lwjgl.input.Keyboard;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import zmaster587.advancedRocketry.space.CellSeam;
+import zmaster587.advancedRocketry.space.CellWorldMapper;
 import zmaster587.advancedRocketry.space.GalacticCoord;
 import zmaster587.advancedRocketry.test.Events;
 import zmaster587.advancedRocketry.test.ShipIdentity;
@@ -109,8 +111,9 @@ public class VSMidTransitRelogControlE2ETest extends AbstractSharedVsClientE2ETe
         // afterwards is keyed on this: the ship is about to be flown, departed and re-materialised
         // in another cell, and a transit cell is a POOL slot that routinely holds an earlier
         // scenario's leavings.
+        String durableId = ShipIdentity.nameFromAssembly(assembled);
         String shipId = ShipIdentity.awaitPhysicsIdOf(this::exec, originDim,
-                ShipIdentity.nameFromAssembly(assembled), 40, () -> bot().waitTicks(5));
+                durableId, 40, () -> bot().waitTicks(5));
         // The transit stack must know WHICH craft the jump is about, by its durable name: a jump
         // begun for a ship the stack cannot name captures nobody and never reaches the ledger, so a
         // relogging pilot is sent to spawn as SHIP_UNKNOWN (measured 2026-09-05, this very class).
@@ -332,13 +335,22 @@ public class VSMidTransitRelogControlE2ETest extends AbstractSharedVsClientE2ETe
         assertEquals("the relogged pilot must have followed his ship into the target cell",
                 targetDim, bot().reportWeather().get("dim").getAsInt());
 
-        // ---- ASSERT 1b: he is OUT IN THE CELL, not in the paste lane. A cell realizes its
-        // coordinates in the POSE band (world Y = local Y + half a cell + the band offset), while an
-        // arrival pastes its blocks into the ordinary block band near Y=200. If the ship is left
-        // where it was pasted, the pilot rides ~2M blocks below everything the destination system
-        // holds — every body, every other ship — and his own flight computer then reports an address
-        // in the cell BELOW. The client's rendered altitude is the honest witness: a block-band
-        // arrival can never reach half a cell.
+        // ---- ASSERT 1b: he arrived WHERE HIS SHIP'S LEDGER ROW SAYS, not still in the paste band.
+        //
+        // This used to ask whether his rendered Y had cleared HALF_CELL, on the reasoning that a
+        // cell realized its contents megablocks up while an unsettled arrival was left at the
+        // staging band's ordinary block Y. That discriminator was an artefact of the Y shift:
+        // `CellWorldMapper` was centred on 2026-09-11 — world Y = local Y, the cell centre at the
+        // world origin — so a settled ship whose coordinate has a local Y of 0 sits at world Y 0,
+        // which no magnitude test can tell from anything. This scenario's target is
+        // `ofSectorLocal(7001, 0, 0, 0, 0, 0)`, i.e. exactly that, so the old assertion demanded a
+        // number the arrival can no longer produce and had been red since the mapping changed.
+        //
+        // A magnitude test cannot be repaired, either: under centring the paste band (world Y ~200)
+        // and the cell centre (0) are 200 apart, which is well inside CARRY_MARGIN — production's
+        // own answer to "still at this coordinate". So the claim is made against the LEDGER's
+        // coordinate instead, which is what it meant all along and survives the next change of
+        // mapping too.
         double arrivedY = clientPlayerY();
         // FOUR ALTITUDES, not one, because "he is not in the pose band" has four different subjects
         // and the number alone cannot say which lost it. Read in the order the value travels: the
@@ -356,12 +368,23 @@ public class VSMidTransitRelogControlE2ETest extends AbstractSharedVsClientE2ETe
         scenario().record("arrivalAltitudes", altitudes);
         System.out.println("[relog] arrival altitudes :: " + altitudes
                 + " || ship=" + arrivedShip + " || server=" + serverPlayer);
-        assertTrue("the arrived pilot must be in the destination cell's pose band, not the paste"
-                        + " lane: client-rendered Y=" + arrivedY + " (pose band starts at "
-                        + GalacticCoord.HALF_CELL + ", the paste lane sits near 200). The four"
-                        + " altitudes, in the order the value travels: " + altitudes
+        String ledgerRow = exec("artest space entry-status id " + durableId);
+        double[] settled = CellWorldMapper.poseWorldOf(GalacticCoord.ofSectorLocal(0L, 0L, 0L,
+                (long) readDoubleOr(ledgerRow, "lx"),
+                (long) readDoubleOr(ledgerRow, "ly"),
+                (long) readDoubleOr(ledgerRow, "lz")));
+        scenario().record("settledPose", java.util.Arrays.toString(settled));
+        // CARRY_MARGIN as the tolerance, because it is production's OWN answer to "still at this
+        // coordinate as far as the cell is concerned" — the distance a craft may sit past a face
+        // before the seam carries it. The pilot rides a seat dummy a few blocks off his hull's own
+        // pose, which that margin absorbs many times over.
+        assertTrue("the relogged pilot must arrive where his ship's LEDGER ROW says it settled, not"
+                        + " somewhere else in the cell: client-rendered Y=" + arrivedY
+                        + " vs the ledger coordinate realized at Y=" + settled[1]
+                        + " (tolerance " + CellSeam.CARRY_MARGIN + "). ledger=" + ledgerRow
+                        + ". The four altitudes, in the order the value travels: " + altitudes
                         + " || ship=" + arrivedShip + " || server=" + serverPlayer,
-                arrivedY >= GalacticCoord.HALF_CELL);
+                Math.abs(arrivedY - settled[1]) < CellSeam.CARRY_MARGIN);
 
         // ---- ASSERT 2 (load-bearing): control RESUMES on arrival — the held key flies the -------
         // arrived ship. A restored seat with a dead key is a broken chain, and it is exactly what
