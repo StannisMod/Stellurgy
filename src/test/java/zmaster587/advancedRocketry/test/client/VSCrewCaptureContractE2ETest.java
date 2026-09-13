@@ -103,6 +103,48 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
      */
     private static final int CAPTURE_LINK_BUDGET_TICKS = 200;
 
+    /**
+     * How long a vertical jump is given to end on the deck it started from, in ticks.
+     *
+     * <p>A DEADLINE for a discrete event, not a stand-in for it: the landing is a record, and this
+     * only says how long we are willing to wait for it. Sized from the arc it bounds — a jump rises
+     * and falls in well under twenty ticks on a hovering craft, and what this budget actually has to
+     * cover is a body the resolver has to catch on the way down, so it is several times that rather
+     * than a tight fit. A body that never lands on this ship is the finding, and it is the one thing
+     * a fixed sample count could never report.</p>
+     */
+    private static final int JUMP_LANDING_BUDGET_TICKS = 120;
+
+    /**
+     * How far the carry the client installs may exceed the craft's own reading of its speed at that
+     * body, in blocks per tick.
+     *
+     * <p>Both sides are per-TICK maxima of dense series now — the client's from every
+     * {@code ship_frame_tick}, the craft's from every {@code deck_guard_pass} — so this covers only
+     * the moment between the guard's reading and the commit that follows it, i.e. what the craft's
+     * acceleration does inside one tick. It does NOT have to cover the sampling mismatch it
+     * replaced: a per-tick peak against a five-tick average needed a slack that grew with how hard
+     * the drive oscillated, which is a bar that can only be tuned upwards forever.</p>
+     *
+     * <p><b>Measured in both regimes, and the answer was the same number twice</b>: excess
+     * <b>0.0</b> — idle, client 2.1666666666666856 against 2.1666666666666856; under seven
+     * concurrent classes, 3.0231607075978246 against 3.0231607075978246. Equal to the last digit
+     * each time, at different peaks, because at the peak both readings come from the craft's own
+     * velocity at that point. That is the shape a healthy agreement has.</p>
+     *
+     * <p>So the bar is not a slack for disagreement — there is none to cover. What it covers is the
+     * one case the two runs did not produce: a tick on which the client commits and the guard does
+     * not pass, leaving the client's maximum one tick of the craft's ACCELERATION ahead of the
+     * guard's. Sized from that acceleration as this drive exhibits it — the sampled rate moved
+     * 2.562 to 3.719 over twenty iterations, about 0.06 blocks/tick/tick — and rounded up to one
+     * decimal. It is deliberately far below the defect it exists for, a client reconstructing the
+     * rate from its own observations, which was once out by a factor of two hundred.</p>
+     *
+     * <p>The excess is printed on every run beside this bar, so how much of it is being used stays
+     * readable rather than remembered.</p>
+     */
+    private static final double CARRY_OVER_STEP_TOLERANCE = 0.1D;
+
     // ---- Staying aboard: a jump from the top deck must not release the capture ------------------
 
     @Test
@@ -325,7 +367,6 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
         // 180 needs a free spin that VS damps). The playtest symptom: with NO input, the crew member
         // is dragged sideways while the CLIENT capture thrashes (drop + re-capture every few ticks).
         buildAndBoardShip(bx, by, bz);
-        bot().waitTicks(20);
         // A seated body is an EXCLUDED state and is never captured, so the capture the dismount seed
         // installs is a genuine new link and not a record that was already arriving. Awaited rather
         // than waited out: the seed is refused for the few ticks the client's own `isRiding` lingers,
@@ -431,7 +472,6 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
         // The reported no-input sideways drag lives on that configuration, upright included - so the
         // subject here is a real hover: lift with the pilot's own vertical key, stand up, hold still.
         buildAndBoardShip(bx, by, bz);
-        bot().waitTicks(20);
 
         // The delivery link, the window and why the climb is measured rather than awaited all live
         // in the helper.
@@ -502,7 +542,6 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
         // persisted, so ACTIVITY is the missing axis. Same arrangement as the still-hover pin, plus
         // real W walking and real SPACE jumps through the window.
         buildAndBoardShip(bx, by, bz);
-        bot().waitTicks(20);
         // The delivery link, the window and why the climb is measured rather than awaited all live
         // in the helper.
         hoverOnPilotThrust(scenarioShipId, CLEAR_HOVER_GAIN_BLOCKS);
@@ -545,11 +584,27 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
                     t * 2, bot().reportState().get("playerY").getAsDouble()));
         }
         bot().releaseKey(Keyboard.KEY_SPACE);
-        for (int t = 3; t < 10; t++) {
+        // THE LINK THAT CLOSES THIS WINDOW, where fourteen more sampled ticks used to stand. The
+        // claim is that the jump ENDS on this deck, and production records exactly that: the
+        // resolver owning a tick's move and putting the body on a surface it was not on the tick
+        // before, filtered to this scenario's ship. A fixed sample count could only say "no release
+        // was recorded in twenty ticks", which is also what it says about a body still falling —
+        // and on the run that sent us here it WAS still falling, four blocks below its deck.
+        //
+        // The arc keeps being sampled while the body is airborne, because the diagnostic is a
+        // trajectory and a trajectory is not one record; the WAIT below is what decides when the
+        // window is over.
+        for (int t = 3; t < 6; t++) {
             bot().waitTicks(2);
             arc.append(String.format(java.util.Locale.ROOT, "[t%d y=%.2f] ",
                     t * 2, bot().reportState().get("playerY").getAsDouble()));
         }
+        client.awaitCarrying(jumpMark, "deck_contact", "\"ship\":\"" + scenarioShipId + "\"",
+                "a vertical jump on a hovering ship must LAND BACK on this ship's deck — the "
+                        + "resolver's own contact edge is what says he did, and the arc sampled so "
+                        + "far is " + arc, JUMP_LANDING_BUDGET_TICKS);
+        arc.append(String.format(java.util.Locale.ROOT, "[landed y=%.2f] ",
+                bot().reportState().get("playerY").getAsDouble()));
         String jumpReleases = client.since(jumpMark, "deck_released");
         String jumpHeld = client.since(jumpMark, "deck_captured");
         System.out.println("[crewcap] jump-arc " + arc
@@ -727,7 +782,6 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
         // says nothing about gaps), or a gap whose following tick is unremarkable — which would mean
         // the churn measured on the predicting pose source came from somewhere else entirely.
         buildAndBoardShip(bx, by, bz);
-        bot().waitTicks(20);
         Events client = clientEvents();
         long dismountMark = client.mark();
         exec("artest player dismount");
@@ -793,7 +847,6 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
         // is moves, which is exactly what happened when a body met an inverted hull, and the next
         // movement packet carries it.
         buildAndBoardShip(bx, by, bz);
-        bot().waitTicks(20);
         Events client = clientEvents();
         long dismountMark = client.mark();
         exec("artest player dismount");
@@ -1120,20 +1173,45 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
         // carry a body faster than the craft says it is moving — which a client reconstructing the
         // rate from its own observations could, and once did by a factor of two hundred.
         //
-        // ONE-SIDED deliberately, and this is a limit of the instrument rather than of the claim.
-        // Equality cannot be asserted from this scenario: the drive oscillates hard (this window
-        // reached 4.99 blocks/tick of ship movement), each sample costs two round-trips on separate
-        // sides, and the maxima of sparsely sampled series of a fast-varying quantity are not
-        // comparable — two CLIENT-side readings of the same carry, sampled at different instants in
-        // this same window, differ by 0.65 between themselves. What a steady climb measured, where
-        // that objection does not apply: declared 1.5333/tick against 1.4700 applied. Pinning
-        // equality wants a per-tick paired trace from both sides, which is a separate instrument.
-        assertTrue("the client must carry the body, and never by more than the deck actually moved:"
-                + " client " + maxClientCarryY + "/tick against the craft's own measured rate "
-                + maxRate + "/tick (declared peak " + maxDeclaredCarry + ") :: " + samples,
-                maxDeclaredCarry > 0.2
-                        && maxClientCarryY > 0.2
-                        && maxClientCarryY <= maxRate + 0.25);
+        // PAIRED PER PASS — and the comparison this replaces could not hold on a fast drive whatever
+        // production did. It compared the largest carry the client installed, read from EVERY tick
+        // record, against the largest ship rate this loop SAMPLED, one reading per five iterations.
+        // A per-tick maximum against a five-tick average of an oscillating quantity is biased in one
+        // direction by construction: the dense series finds the peak, the sparse one averages through
+        // it. Measured 2026-09-13 under fork load: 6.087 against 5.527, with the declared peak the
+        // same sampling had missed printed beside them at 1.767 — three numbers from three different
+        // moments of a 65-block descent. The old comment said as much and called the paired trace "a
+        // separate instrument"; it is not, the guard has been publishing both halves on one record
+        // since the deck-capture vocabulary landed.
+        //
+        // The craft's own speed is compared from the DENSE series it is recorded in. `carrySeen` on
+        // every guard pass is production's own reading of how fast the craft is going at this body,
+        // in blocks per tick, and it is deliberately the LARGER of the two readings production has
+        // (the measured velocity and the declared one) — so it is an upper bound on the craft's
+        // speed by construction, which is exactly the right-hand side for a one-sided claim.
+        //
+        // NOT `frameStep`, and not the difference between them: that number is the deck's
+        // displacement since the last commit, and the guard's own comment records it running
+        // severalfold apart from the allowance on a craft whose drive changes hard between ticks.
+        // Measured here before this pin was written: 2.56 blocks of "excess" on a healthy run, which
+        // is production working as documented rather than a defect.
+        double carrySeenExcess = maxClientCarryY - maxCarry;
+        System.out.println("[crewcap] carry-vs-declared: client " + maxClientCarryY
+                + " against the craft's own densest reading " + maxCarry
+                + " (excess " + carrySeenExcess + ", bar " + CARRY_OVER_STEP_TOLERANCE + ")");
+        assertTrue("the client must carry the body, and never by more than the craft says it is"
+                + " moving — both read per TICK, which is the half that was wrong: the client's carry"
+                + " came from every tick record and the craft's rate from one sample in five, so a"
+                + " peak was being compared with an average through it. client " + maxClientCarryY
+                + "/tick against " + maxCarry + "/tick, excess " + carrySeenExcess + " (bar "
+                + CARRY_OVER_STEP_TOLERANCE + ") :: " + samples,
+                carrySeenExcess <= CARRY_OVER_STEP_TOLERANCE);
+        // The sensitivity halves of the old form, kept and separated: a window in which the craft
+        // declared nothing and the client installed nothing satisfies any per-pass bound there is.
+        assertTrue("the craft must have declared real motion and the client must have installed a"
+                + " real carry, or the bound above is vacuous: declared peak " + maxDeclaredCarry
+                + ", client carry " + maxClientCarryY + " :: " + samples,
+                maxDeclaredCarry > 0.2 && maxClientCarryY > 0.2);
     }
 
     // ---- Excluded states: the dismount deck-hold must never snap a creative-flying ex-pilot -----
@@ -1645,7 +1723,6 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
         // resolve the SAME subspace deck block whatever the ship's roll - the deck under his feet
         // does not move in the ship frame when the ship rolls.
         buildAndBoardShip(bx, by, bz);
-        bot().waitTicks(20);
         Events client = clientEvents();
         long dismountMark = client.mark();
         exec("artest player dismount");
@@ -2020,7 +2097,6 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
         // The stimulus is the real client mouse path (Entity.turn); the observation is the
         // client's own world look; the ship attitude read server-side is the cross-side oracle.
         double[] ship = buildAndBoardShip(bx, by, bz);
-        bot().waitTicks(20);
         Events client = clientEvents();
         long dismountMark = client.mark();
         exec("artest player dismount");
@@ -2389,9 +2465,19 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
         return Math.toDegrees(Math.acos(clampUnit(dot(pa, pb) / (na * nb))));
     }
 
-    /** Build the ship and sit the bot on its pilot seat; returns the ship's world position. */
+    /**
+     * Build the ship and sit the bot on its pilot seat; returns the ship's world position.
+     *
+     * <p>It ENDS ON LINKS, and that is what the seven callers' {@code waitTicks(20)} used to stand in
+     * for: the client performing its own mount, and the client's pilot gate opening on the body now
+     * riding that seat. Both are records production writes on the side this class observes, so a
+     * caller that starts its scenario the tick this returns is starting after the two things it
+     * needed, rather than after a number that was chosen once and copied into seven scenarios.</p>
+     */
     private double[] buildAndBoardShip(int bx, int by, int bz) throws Exception {
         double[] ship = buildShip(bx, by, bz);
+        Events boarding = clientEvents();
+        long boardMark = boarding.mark();
         // Located inside the ship this scenario NAMES. `vs seat-mount <dim>` takes the first pilot
         // seat in the world's loaded-tile list with no filter at all; the positional form of
         // find-seat narrows that to "the yard nearest a point", which on a world holding two craft
@@ -2406,7 +2492,16 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
         assertTrue("seat-mount-at must report a dummy id: " + mountInfo, dm.find());
         assertTrue("bot must mount the seat dummy: " + mountInfo,
                 exec("artest player mount-entity " + dm.group(1)).contains("\"mounted\":true"));
-        bot().waitTicks(10);
+        // The server says it mounted him; these two say the CLIENT did, and this class's whole
+        // subject is what the client's resolver does with a body. The mount is his own `startRiding`;
+        // the gate is the client's keybind tick deciding that the body it is holding is a ship's
+        // pilot, which is the state every caller's stimulus is issued into.
+        boarding.awaitCarrying(boardMark, "mount", "\"ok\":true",
+                "the client must PERFORM the mount the server reported, or the scenario below drives "
+                        + "a body that is not in the seat it thinks it is", CAPTURE_LINK_BUDGET_TICKS);
+        boarding.awaitCarrying(boardMark, "ship_pilot_gate_decided", "\"open\":true",
+                "the client's pilot gate must OPEN on the seated body, or a scenario that commands "
+                        + "the craft from this seat is commanding nothing", CAPTURE_LINK_BUDGET_TICKS);
         return ship;
     }
 
