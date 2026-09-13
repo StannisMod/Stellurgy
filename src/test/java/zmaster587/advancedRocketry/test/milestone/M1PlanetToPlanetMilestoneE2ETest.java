@@ -369,6 +369,7 @@ public class M1PlanetToPlanetMilestoneE2ETest {
         // replicated to the client are three different faults with three different owners, and the
         // old loop timed out identically on all of them.
         long seatMark = events.mark();
+        long seatClientMark = clientEvents().mark();
         pressUse();
         String sitDecision = events.await(seatMark, "pilot_seat_sit_decided",
                 "a real use-key press aimed at the ship's PILOT SEAT must REACH that seat — the "
@@ -380,11 +381,11 @@ public class M1PlanetToPlanetMilestoneE2ETest {
                         + "followed by a craft that will not answer its controls. decision="
                         + sitDecision, sitDecision.contains("\"managed\":true"));
 
-        JsonObject riding = bot().reportRidingEntity();
-        for (int attempt = 0; attempt < budget && !isRiding(riding); attempt++) {
-            bot().waitTicks(5);
-            riding = bot().reportRidingEntity();
-        }
+        JsonObject riding = awaitClientMount(seatClientMark,
+                "a real use-key press aimed at the ship's PILOT SEAT must seat the pilot, as the "
+                        + "CLIENT itself performs it — the crosshair was proven to be on that block "
+                        + "and the seat agreed it belongs to a ship, so a silence here is the mount "
+                        + "never happening on his side", budget, seatAim.diagnosis);
         String serverRiding = exec("artest player riding-entity");
         assertTrue("a real use-key press aimed at the ship's PILOT SEAT must seat the pilot, as the "
                         + "CLIENT itself renders him. The crosshair was proven to be on that very "
@@ -452,7 +453,7 @@ public class M1PlanetToPlanetMilestoneE2ETest {
                 budget * 5);
 
         // (2) Still seated — and the crossing's own seat chain says how.
-        JsonObject arrivalRiding = assertStillSeated(events, entryMark,
+        JsonObject arrivalRiding = assertStillSeated(events, entryMark, entryClientMark,
                 "the pilot who FLEW his own ship into space must still be in his seat on arrival — a "
                         + "crossing must never stand him up. clientDim=" + clientDim
                         + " delivery=" + exec("artest vs seat-delivery"),
@@ -768,7 +769,7 @@ public class M1PlanetToPlanetMilestoneE2ETest {
                         + " status=" + statusAfterJump,
                 budget * 5);
 
-        JsonObject jumpRiding = assertStillSeated(events, jumpMark,
+        JsonObject jumpRiding = assertStillSeated(events, jumpMark, jumpClientMark,
                 "the pilot who FIRED the jump must still be in his seat when it ends — he never "
                         + "stood up, so nothing about crossing a cell may stand him up. A red here is "
                         + "the crew capture, the re-seat, or the dimension hand-off, in that order — "
@@ -999,7 +1000,7 @@ public class M1PlanetToPlanetMilestoneE2ETest {
                         + " bodies=" + bodies,
                 descentDim == targetDim);
 
-        JsonObject landedRiding = assertStillSeated(events, descentMark,
+        JsonObject landedRiding = assertStillSeated(events, descentMark, descentClientMark,
                 "and the pilot must still be flying his ship when it comes out over the planet he "
                         + "set out for — the loop is only closed if the man who took off is the man "
                         + "who arrives. clientDim=" + descentDim
@@ -1012,15 +1013,19 @@ public class M1PlanetToPlanetMilestoneE2ETest {
         // is asserted where it now happens: the CLIENT's own altitude, above everything the world is
         // able to build. This is a strictly stronger reading than the old leg made (which never
         // checked altitude at all), not a relaxed one.
-        double arrivalY = Double.NEGATIVE_INFINITY;
-        for (int attempt = 0; attempt < budget
-                && arrivalY <= TerrainHeightFinder.MAX_BUILD_Y; attempt++) {
-            bot().waitTicks(5);
-            JsonObject state = bot().reportState();
-            if (state.has("playerY")) {
-                arrivalY = state.get("playerY").getAsDouble();
-            }
-        }
+        // READ ONCE, because the thing this was waiting for has already been waited for. The
+        // altitude is a physical value and a value is measured, not polled — but the old loop was
+        // not measuring it either: it was waiting for the CROSSING that puts the ship there, and
+        // re-reading a number until it liked it is what that looked like from inside. The crossing's
+        // own pose write is a record, and the re-seat above already required the client to have
+        // followed the whole arrival, so by here the pose is settled and one read is the measurement.
+        String posed = events.await(descentMark, "crossing_pose_settled",
+                "the descent must WRITE the arrived ship's pose — until it does there is no altitude "
+                        + "to read, and a number sampled before it is the paste band's, not the "
+                        + "arrival's", budget * 5);
+        JsonObject arrivalState = bot().reportState();
+        double arrivalY = arrivalState.has("playerY")
+                ? arrivalState.get("playerY").getAsDouble() : Double.NEGATIVE_INFINITY;
         assertTrue("…and he must come out IN THE SKY over it, not on the ground and never inside it. "
                         + "The arrival pose is placed above the whole vanilla block band on purpose: "
                         + "a ship's blocks cannot exist above the build height, so an arrival that "
@@ -1029,7 +1034,8 @@ public class M1PlanetToPlanetMilestoneE2ETest {
                         + "he was supposed to fly down to. clientY=" + arrivalY
                         + " buildHeight=" + TerrainHeightFinder.MAX_BUILD_Y
                         + " clientDim=" + descentDim + " riding=" + landedRiding
-                        + " serverRiding=" + exec("artest player riding-entity"),
+                        + " serverRiding=" + exec("artest player riding-entity")
+                        + " | the pose the descent actually wrote: " + posed,
                 arrivalY > TerrainHeightFinder.MAX_BUILD_Y);
 
         System.out.println("[M1] leg 8 (descent onto the planet) " + elapsed(tLeg)
@@ -1164,6 +1170,7 @@ public class M1PlanetToPlanetMilestoneE2ETest {
         Aim aim = aimAt(dim, afcSub, seatSub, OFF_STAND, 0.5, 0.2, 0.5, budget);
         assertAimed(aim, seatSub, "pilot seat", "pilotseat");
         long sitMark = log.mark();
+        long sitClientMark = clientEvents().mark();
         pressUse();
         // Same three links as the first boarding, in the same order: the press reaches the seat, the
         // seat knows it belongs to a ship, the mount reaches the client.
@@ -1174,12 +1181,10 @@ public class M1PlanetToPlanetMilestoneE2ETest {
         assertTrue("…and the seat must still know it belongs to a ship: an unmanaged seat carries no "
                         + "flight input, so the jump he is about to fire would go nowhere. decision="
                         + decision, decision.contains("\"managed\":true"));
-        JsonObject riding = bot().reportRidingEntity();
-        for (int attempt = 0; attempt < budget && !isRiding(riding); attempt++) {
-            bot().waitTicks(5);
-            riding = bot().reportRidingEntity();
-        }
-        return riding;
+        return awaitClientMount(sitClientMark,
+                "the pilot must be back in his seat on the CLIENT before he fires the drive — the "
+                        + "jump key is routed through the seat he occupies, and a seating that only "
+                        + "the server performed carries no input", budget, aim.diagnosis);
     }
 
     /**
@@ -1779,24 +1784,89 @@ public class M1PlanetToPlanetMilestoneE2ETest {
      * later mount". An untouched pilot — no records at all — passes, because never having been moved
      * is the strongest form of still being seated.</p>
      */
-    private JsonObject assertStillSeated(Events log, long serverMark, String what, int budget)
-            throws Exception {
-        JsonObject riding = bot().reportRidingEntity();
-        for (int attempt = 0; attempt < budget && !isRiding(riding); attempt++) {
-            bot().waitTicks(5);
-            riding = bot().reportRidingEntity();
+    private JsonObject assertStillSeated(Events log, long serverMark, long clientMark, String what,
+                                         int budget) throws Exception {
+        // WAIT FOR THE CHAIN TO END SEATED, not for its first link. A crossing takes the crew off and
+        // puts them back, so the client's own records across one arrival read
+        // dismount -> mount -> dismount -> mount; a wait that returns on the first `mount` reads the
+        // world in the MIDDLE of that, and the read after it can honestly say riding:false.
+        // *Measured 2026-09-13, by writing it the short way first*: the jump leg failed with the
+        // server holding the pilot on the arrived hull (`ridingEntityId:2299`) and the client
+        // rendering `riding:false` — which is not the defect it looks like, it is a question asked
+        // one link too early. The old two-samples-in-a-row poll covered this by accident.
+        try {
+            clientEvents().awaitMatching(clientMark, "mount",
+                    seen -> endsSeated(clientEvents(), clientMark),
+                    "the client's own mount chain ENDING in a mount", what
+                            + " — and the CLIENT has to perform the re-seat, not merely be told about"
+                            + " it", budget * 5);
+        } catch (AssertionError never) {
+            Events.assertInstrumentRan(clientEvents().since(clientMark, "mount"),
+                    "entity_mount_writes", "the client's own mounts must be observed AT ALL before an"
+                            + " absent one can be read as a re-seat the client never performed");
+            throw new AssertionError(never.getMessage()
+                    + " | the client's own chain: mounts=" + clientEvents().since(clientMark, "mount")
+                    + " ||| dismounts=" + clientEvents().since(clientMark, "dismount"), never);
         }
-        String mounts = log.since(serverMark, "mount");
-        String dismounts = log.since(serverMark, "dismount");
-        long lastMount = readLongOr(Events.lastField(mounts, "seq"), Long.MIN_VALUE);
-        long lastDismount = readLongOr(Events.lastField(dismounts, "seq"), Long.MIN_VALUE);
-        boolean answered = lastDismount == Long.MIN_VALUE || lastMount > lastDismount;
+        JsonObject riding = bot().reportRidingEntity();
         assertTrue(what + " clientRiding=" + riding
                         + " serverRiding=" + exec("artest player riding-entity")
-                        + " | he was taken off a mount and not put back: dismounts=" + dismounts
-                        + " | mounts=" + mounts,
-                isRiding(riding) && answered);
+                        + " | he was taken off a mount and not put back. The SERVER's chain —"
+                        + " dismounts=" + log.since(serverMark, "dismount")
+                        + " ||| mounts=" + log.since(serverMark, "mount"),
+                isRiding(riding) && endsSeated(log, serverMark));
         return riding;
+    }
+
+    /**
+     * Whether {@code log}'s mount chain since {@code mark} ENDS seated: either nothing touched him,
+     * or every dismount was answered by a LATER mount.
+     *
+     * <p>Compared by sequence, which is the only thing that carries order once the rings are per
+     * type. "Nothing touched him" passes on purpose: never having been moved is the strongest form of
+     * still being seated, and the caller established he was seated when it took the mark.</p>
+     */
+    private static boolean endsSeated(Events log, long mark) throws Exception {
+        long lastMount = readLongOr(Events.lastField(log.since(mark, "mount"), "seq"),
+                Long.MIN_VALUE);
+        long lastDismount = readLongOr(Events.lastField(log.since(mark, "dismount"), "seq"),
+                Long.MIN_VALUE);
+        return lastDismount == Long.MIN_VALUE || lastMount > lastDismount;
+    }
+
+    /**
+     * Wait for THE CLIENT to have seated the bot itself, and hand back what it renders.
+     *
+     * <p><b>The client's own mount HAS a record</b>, and this file said otherwise for a while.
+     * {@code MixinEntityPositionWriters} sits in the COMMON mixin list, and {@code TestTrace.record}
+     * routes by the entity's own {@code world.isRemote} — so a {@code startRiding} performed on the
+     * client is written to the CLIENT's log, carrying the verdict its caller got back
+     * ({@code ok:true} for a mount that took). Polling {@code reportRidingEntity} instead watches the
+     * SHADOW of that act: it cannot say when the mount happened, cannot distinguish a refusal from a
+     * mount that has not replicated, and on expiry reports the last sample as though it were the
+     * finding.</p>
+     *
+     * <p>An absent record is separated from a dead recorder before it is allowed to mean anything —
+     * a silence here is read as "the client never seated him", and that reading is only available
+     * once the roster says somebody was listening.</p>
+     */
+    private JsonObject awaitClientMount(long clientMark, String what, int budget, String diagnosis)
+            throws Exception {
+        try {
+            clientEvents().awaitMatching(clientMark, "mount",
+                    seen -> Events.countRecords(seen, "\"ok\":true") > 0,
+                    "a mount the client's own startRiding accepted (ok:true)", what, budget * 5);
+        } catch (AssertionError never) {
+            Events.assertInstrumentRan(clientEvents().since(clientMark, "mount"),
+                    "entity_mount_writes", "the client's own mounts must be observed AT ALL before an"
+                            + " absent one can be read as a seating the client never performed");
+            throw new AssertionError(never.getMessage()
+                    + " | the client renders: " + bot().reportRidingEntity()
+                    + " | every mount the SERVER has recorded this boot: "
+                    + new Events(this::exec, bot()::waitTicks).since(0L, "mount") + diagnosis, never);
+        }
+        // Read ONCE, now that the link says the mount happened: a settled state, not a wait.
+        return bot().reportRidingEntity();
     }
 
     /** A record's numeric field as a sequence, or {@code fallback} when it is absent. */
