@@ -72,6 +72,21 @@ public class VSShipRenderPoseSkewE2ETest extends AbstractClientE2ETest {
     /** How long a teleport is given to reach the CLIENT and be applied there. */
     private static final int POS_LOOK_BUDGET_TICKS = 300;
 
+    /**
+     * How long the commanded ~160-degree roll is given to finish, in ticks.
+     *
+     * <p>Derived from the flight computer's own limits rather than from a run that happened to
+     * pass: the attitude hold slews at a 2.0 rad/s ceiling and ramps to it at 4.0 rad/s², so the
+     * 2.79 rad turn is about 45 ticks end to end, and the gate this leg checks (an up-Y below -0.3,
+     * i.e. past 107 degrees) is crossed inside the first 30. This is roughly three times that.</p>
+     *
+     * <p>NOT scaled by the load factor, and that is the point of the form: the slew advances per
+     * TICK, so the number says how far the craft turns, not how long we are willing to wait. What
+     * makes a window safe here is that the attitude is HELD once reached — a longer window reads the
+     * same state — which is exactly what a loop exiting on the assertion below it cannot claim.</p>
+     */
+    private static final int ROLL_WINDOW_TICKS = 120;
+
     /** THIS scenario's ship, by identity — captured once by {@link #buildShip}. */
     private String shipId;
     /** The observation point behind every skew record — asserted before a silence is read as "the
@@ -143,15 +158,23 @@ public class VSShipRenderPoseSkewE2ETest extends AbstractClientE2ETest {
         assertTrue("attitude hold must accept the past-vertical roll",
                 exec("artest vs point-by-id 0 " + shipId + " "
                         + Math.cos(h) + " " + Math.sin(h) + " 0.0 0.0").contains("\"commanded\":true"));
-        double upY = 1.0;
-        String info = "";
-        for (int i = 0; i < 60 && upY >= -0.3; i++) {
-            bot().waitTicks(10);
-            info = shipInfo();
-            double qx = readDouble(info, Q_X), qz = readDouble(info, Q_Z);
-            upY = 1.0 - 2.0 * (qx * qx + qz * qz);
-        }
-        assertTrue("the ship must reach the steep inversion before the hull leg (upY=" + upY + "): "
+        // A WINDOW, then one read. The line above used to say "gate on the MEASURED attitude, never
+        // elapsed ticks", and the half of that which is right is that a TICK COUNT may not be the
+        // gate — the attitude still is. What it licensed was a loop whose exit condition is the
+        // assertion three lines below it, and such a loop can only time out; it can never disprove
+        // anything, because on expiry it reports the last sample as though that were the finding.
+        // The attitude is a physical value nobody publishes and the hold never decides it has
+        // arrived, so there is no link to await here — but the hold KEEPS the attitude once reached,
+        // so giving the slew its ticks and then measuring reads the same state a longer wait would.
+        bot().waitTicks(ROLL_WINDOW_TICKS);
+        String info = shipInfo();
+        double qx = readDouble(info, Q_X), qz = readDouble(info, Q_Z);
+        // The ship's own up, world-frame, from the attitude quaternion the probe reports.
+        double upY = 1.0 - 2.0 * (qx * qx + qz * qz);
+        System.out.println("[poseskew] upY after " + ROLL_WINDOW_TICKS + " ticks: " + upY
+                + " (the gate is < -0.3)");
+        assertTrue("the ship must reach the steep inversion before the hull leg (upY=" + upY
+                + " after " + ROLL_WINDOW_TICKS + " ticks of a commanded 160-degree roll): "
                 + info, upY < -0.3);
         // The drop point must be FREE AIR, and nothing here guaranteed that it was. The fixture is
         // assembled into a 10-block band cleared inside whatever ground the base sits in, and the

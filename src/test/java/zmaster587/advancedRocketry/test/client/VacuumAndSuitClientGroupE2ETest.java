@@ -261,24 +261,36 @@ public class VacuumAndSuitClientGroupE2ETest extends AbstractSharedClientE2ETest
      * mark-scoped, so a drop that was healed back between two samples can no longer be missed; and
      * the number is what the SERVER SENT rather than what the client happens to render now, so a
      * local prediction cannot stand in for a damage packet that never arrived.</p>
+     *
+     * <p>The waiting itself belongs to {@code Events.awaitMatching}; only the predicate is this
+     * scenario's. Running out of budget THROWS here, printing the chain the client did record and
+     * the four reasons a log can be empty — where the private loop it replaced returned the last
+     * sample (or {@code NaN}) and left each caller to assert on it. That also removes a hole those
+     * asserts had: a drop healed back inside the same reply made the wait succeed and the caller's
+     * {@code current < threshold} fail, which is the one case the mark-scoped read exists to catch.
+     * The number answered is still the LAST health the client was told, for the record; the claim
+     * this method now makes is that a health below {@code threshold} was among them.</p>
+     *
+     * @param what what the caller is really claiming, with its own cross-side context, for the
+     *             failure sentence
      */
-    private double awaitClientHealthBelow(long clientMark, double threshold, int tickBudget)
-            throws Exception {
+    private double awaitClientHealthBelow(long clientMark, double threshold, String what,
+                                          int tickBudget) throws Exception {
+        String reply = clientEvents().awaitMatching(clientMark, "client_health_updated",
+                r -> healthsIn(r, threshold)[1] > 0, "below " + threshold, what, tickBudget);
+        return healthsIn(reply, threshold)[0];
+    }
+
+    /** {@code {last health in the reply (NaN if none), how many of them were below threshold}}. */
+    private static double[] healthsIn(String reply, double threshold) {
+        Matcher m = CLIENT_HEALTH.matcher(reply);
         double last = Double.NaN;
-        for (int waited = 0; waited <= tickBudget; waited += 5) {
-            String reply = clientEvents().since(clientMark, "client_health_updated");
-            Matcher m = CLIENT_HEALTH.matcher(reply);
-            boolean below = false;
-            while (m.find()) {
-                last = Double.parseDouble(m.group(1));
-                below = below || last < threshold;
-            }
-            if (below) {
-                return last;
-            }
-            bot().waitTicks(5);
+        int below = 0;
+        while (m.find()) {
+            last = Double.parseDouble(m.group(1));
+            if (last < threshold) below++;
         }
-        return last;
+        return new double[]{last, below};
     }
 
     // ── ItemSpaceChest (component route) ──────────────────────────────────────
@@ -389,16 +401,15 @@ public class VacuumAndSuitClientGroupE2ETest extends AbstractSharedClientE2ETest
                     + " other reason. Decisions since the flip: " + decisions,
                     Events.countRecords(decisions, "\"immune\":false") >= 1);
 
-            double current = awaitClientHealthBelow(clientMark, healthStart, LINK_BUDGET_TICKS);
+            double current = awaitClientHealthBelow(clientMark, healthStart,
+                    "the client must be TOLD the damage, not only the server hold it (he started"
+                            + " at " + healthStart + "); server damage records: " + hurts,
+                    LINK_BUDGET_TICKS);
             int chestAirAfter = readChestAirComponentRoute();
             scenario().record("chestAirAfter", chestAirAfter).record("healthAfter", current);
 
             assertEquals("tank must be fully drained after the wait window; chestAir="
                     + chestAirAfter, 0, chestAirAfter);
-            assertTrue("the client must be TOLD the damage, not only the server hold it; the last"
-                    + " health it was sent was " + current + " (started " + healthStart
-                    + "), server damage records: " + hurts,
-                    current < healthStart);
         } finally {
             restoreDim(originalDensity);
         }
@@ -455,23 +466,14 @@ public class VacuumAndSuitClientGroupE2ETest extends AbstractSharedClientE2ETest
         // that never happened used to be indistinguishable from three other things: a pad that never
         // found the player in its 1x2x1 box, one that found him with no deficit to fill, and one that
         // filled him while the client was never told.
-        String fills = "";
-        int filled = 0;
-        int refused = 0;
-        for (int waited = 0; waited <= LINK_BUDGET_TICKS; waited += 5) {
-            fills = events.since(mark, "suit_air_filled");
-            filled = Events.countRecords(fills, "\"type\":\"suit_air_filled\"");
-            refused = Events.countRecords(fills, "\"filled\":0");
-            if (filled - refused >= 1) {
-                break;
-            }
-            bot().waitTicks(5);
-        }
+        String fills = events.awaitMatching(mark, "suit_air_filled",
+                reply -> Events.countRecords(reply, "\"type\":\"suit_air_filled\"")
+                        - Events.countRecords(reply, "\"filled\":0") >= 1,
+                "whose \"filled\" is not 0",
+                "the pad must actually transfer oxygen into the suit — a request the chest"
+                        + " answered with 0 is the pad finding nothing to fill, not a refill",
+                LINK_BUDGET_TICKS);
         scenario().record("suitAirFills", fills);
-        assertTrue("the pad must actually transfer oxygen into the suit — a request the chest"
-                        + " answered with 0 is the pad finding nothing to fill, not a refill."
-                        + " Fill records since he stepped on: " + fills,
-                filled - refused >= 1);
 
         int airAfter = readChestAirComponentRoute();
         // The armour slot's NBT reaches the client on its own packet, some ticks after the fill the
@@ -648,11 +650,11 @@ public class VacuumAndSuitClientGroupE2ETest extends AbstractSharedClientE2ETest
                             + " the missing chest. Drains since the flip: " + drains,
                     0, Events.typesOf(drains).size());
 
-            double current = awaitClientHealthBelow(clientMark, healthStart, LINK_BUDGET_TICKS);
+            double current = awaitClientHealthBelow(clientMark, healthStart,
+                    "the client must be told the damage (he started at " + healthStart
+                            + "); server damage: " + hurts,
+                    LINK_BUDGET_TICKS);
             scenario().record("healthAfter", current);
-            assertTrue("the client must be told the damage; last health it was sent was " + current
-                    + " (started " + healthStart + "), server damage: " + hurts,
-                    current < healthStart);
             assertEquals("chestAir must remain -1 throughout — no chest = no decrement path",
                     -1, readChestAir());
         } finally {
@@ -700,11 +702,11 @@ public class VacuumAndSuitClientGroupE2ETest extends AbstractSharedClientE2ETest
                     + " what hurt him since the flip: " + hurts,
                     hurts.contains("\"source\":\"Vacuum\""));
 
-            double current = awaitClientHealthBelow(clientMark, healthStart, LINK_BUDGET_TICKS);
+            double current = awaitClientHealthBelow(clientMark, healthStart,
+                    "vacuum damage never reached the client (he started at " + healthStart
+                            + "); server damage: " + hurts,
+                    LINK_BUDGET_TICKS);
             scenario().record("healthAfter", current);
-            assertTrue("vacuum damage never reached the client: last health it was sent was " + current
-                    + " (started " + healthStart + "), server damage: " + hurts,
-                    current < healthStart);
         } finally {
             restoreDim(originalDensity);
         }

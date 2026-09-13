@@ -1,7 +1,5 @@
 package zmaster587.advancedRocketry.test.server;
 
-import zmaster587.advancedRocketry.test.GameTicks;
-
 import org.junit.Test;
 
 import java.util.regex.Matcher;
@@ -41,9 +39,6 @@ import static org.junit.Assert.assertTrue;
  * deferred to a future follow-up.</p>
  */
 public class WirelessTransceiverContractTest extends AbstractSharedServerTest {
-
-    /** Ticks between asks while a tile entity materializes - the old 500 ms. */
-    private static final int TILE_POLL_TICKS = 10;
 
     private static final Pattern NET_ID = Pattern.compile("\"networkID\":(-?\\d+)");
     private static final Pattern SHARED_ID = Pattern.compile("\"sharedNetworkId\":(-?\\d+)");
@@ -313,25 +308,17 @@ public class WirelessTransceiverContractTest extends AbstractSharedServerTest {
                             + " advancedrocketry:wirelessTransciever"));
             assertTrue("place failed at x=" + x + ": " + r,
                     r.contains("\"placed\":true"));
-            // Under parallel-fork load the tile entity can lag the block
-            // setBlockState (or the chunk holding it can unload between
-            // commands). wireless-pair then sees tile=null and flakes.
-            // Poll wireless-info until the probe signals it found the tile
-            // (response carries `"ok":true`; tile-missing responses carry
-            // `"error":...`). Budget 20 × 500 ms — happy path costs one
-            // round-trip; non-happy 10 s ceiling absorbs the worst case
-            // observed under load.
-            String last = "n/a";
-            boolean ready = false;
-            for (int attempt = 0; attempt < 20; attempt++) {
-                last = info(x);
-                if (last.contains("\"ok\":true")) {
-                    ready = true;
-                    break;
-                }
-                GameTicks.advance(client(), GameTicks.server(), TILE_POLL_TICKS);
-            }
-            assertTrue("tile entity never materialized at x=" + x + ": " + last, ready);
+            // ONE read, not a poll: the tile is there before `place` answers. 1.12.2's
+            // Chunk.setBlockState creates the tile entity and hands it to World.setTileEntity
+            // before it returns, and World.getTileEntity consults the pending list when the world
+            // is mid-tick — so the place probe, which force-loads the chunk and then calls
+            // setBlockState, has already established what this read asks about. wireless-info's
+            // `"ok":true` IS `getTileEntity(pos) instanceof TileWirelessTransceiver`, so a loop
+            // here has nothing left to wait for; on a real failure its timeout reported ten
+            // seconds of silence where this read names the tile that is actually at the position.
+            String info = info(x);
+            assertTrue("no transceiver tile at x=" + x + " right after place: " + info,
+                    info.contains("\"ok\":true"));
         }
     }
 

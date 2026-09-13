@@ -175,6 +175,18 @@ public class VSPreAssemblyBoardingPilotControlE2ETest extends AbstractSharedVsCl
      * conversion changes the FORM of the wait and not how long it is willing to wait.</p>
      */
     private static final int CLIENT_MOUNT_BUDGET_TICKS = 20 * TICKS_PER_SAMPLE;
+
+    /**
+     * How long the CLIENT may take to be told where it now stands, and to be sent the blocks it is
+     * standing among, in ticks.
+     *
+     * <p>Two discrete records, not a settle: a teleport arrives as a pos-look packet and a chunk
+     * arrives as chunk data, and the client can neither be clicked through nor asked what it sees
+     * until they have. The number is the budget the 20-iteration poll it replaces spent
+     * ({@code 20 * TICKS_PER_SAMPLE}), kept so the conversion changes the FORM of the wait and not
+     * how long it is willing to wait.</p>
+     */
+    private static final int CLIENT_TERRAIN_BUDGET_TICKS = 20 * TICKS_PER_SAMPLE;
     private static final int SETTLE_MAX_SAMPLES = 240;
     private static final double SETTLE_EPS = 0.05;
     private static final double MAX_CONTROL_DRIFT = MIN_CLIMB / 4.0;
@@ -232,22 +244,35 @@ public class VSPreAssemblyBoardingPilotControlE2ETest extends AbstractSharedVsCl
 
         // Stand the client on the pad, next to the craft. The wait is not cosmetic: the server
         // ignores block interactions while a teleport it issued is still unconfirmed by the client,
-        // and a right-click sent too early would be dropped without a trace.
+        // and a right-click sent too early would be dropped without a trace. That confirmation is a
+        // RECORD — the pos-look packet the teleport arrives as — so it is awaited rather than
+        // counted out in ticks, and the mark is taken before the command that must produce it.
+        long standMark = clientEvents().mark();
         exec("tp @a " + STAND_X + " " + STAND_Y + " " + STAND_Z + " 0 0");
-        bot().waitTicks(20);
+        clientEvents().await(standMark, "client_pos_look_applied",
+                "the stand-beside-the-craft teleport must be APPLIED on the client before anything"
+                        + " is asked of it or clicked through it", CLIENT_TERRAIN_BUDGET_TICKS);
 
         // MEASURE the seat before touching it - the fixture's geometry is verified, never assumed.
-        JsonObject seatBlock = null;
-        String seatName = "";
-        boolean seatChunkLoaded = false;
-        for (int attempt = 0; attempt < 20 && !seatName.toLowerCase(Locale.ROOT).contains("pilotseat"); attempt++) {
-            bot().waitTicks(TICKS_PER_SAMPLE);
+        // An unloaded chunk reports an EMPTY block name, which is otherwise indistinguishable from
+        // "the wrong block is there" - so the chunk reaching this client is established FIRST, and
+        // it too is a record: `chunk_data_applied` is the instant the client can see a chunk's
+        // blocks, which no Forge event reports (the load event fires on an empty chunk).
+        //
+        // Asked of the CLIENT's own state first, because the client is the side that must react.
+        // This class runs the scenario twice against one shared client, and on the second pass the
+        // seat's chunk may already be applied — nobody owes a record then, and an unconditional wait
+        // would spend its whole budget learning that.
+        JsonObject seatBlock = bot().blockState(SEAT_X, SEAT_Y, SEAT_Z);
+        if (!(seatBlock.has("loaded") && seatBlock.get("loaded").getAsBoolean())) {
+            clientEvents().awaitCarrying(standMark, "chunk_data_applied",
+                    "\"cx\":" + (SEAT_X >> 4) + ",\"cz\":" + (SEAT_Z >> 4) + ",",
+                    "the seat's chunk must reach the client before its block can be measured",
+                    CLIENT_TERRAIN_BUDGET_TICKS);
             seatBlock = bot().blockState(SEAT_X, SEAT_Y, SEAT_Z);
-            // An unloaded chunk reports an EMPTY block name, which is otherwise indistinguishable
-            // from "the wrong block is there" - separate the two before believing either.
-            seatChunkLoaded = seatBlock.has("loaded") && seatBlock.get("loaded").getAsBoolean();
-            seatName = seatChunkLoaded ? seatBlock.get("block").getAsString() : "";
         }
+        boolean seatChunkLoaded = seatBlock.has("loaded") && seatBlock.get("loaded").getAsBoolean();
+        String seatName = seatChunkLoaded ? seatBlock.get("block").getAsString() : "";
         scenario().requireArranged("the seat's chunk must be LOADED on the client before its block can "
                         + "be measured - an unloaded chunk reports an empty block name, not a wrong "
                         + "one. measured=" + seatBlock,
@@ -535,11 +560,12 @@ public class VSPreAssemblyBoardingPilotControlE2ETest extends AbstractSharedVsCl
         // ---- CONTROL LEG ---------------------------------------------------------------------
         // Settle first: a freshly assembled physics object may be resolved upward out of the pad it
         // overlaps, and that motion is not the pilot's.
-        double yRest = settleShipAltitude();
+        Settle rest = settleShipAltitude();
+        double yRest = rest.y;
         scenario().requireArranged("the ship never reached a stable "
                         + "resting altitude within " + (SETTLE_MAX_SAMPLES * TICKS_PER_SAMPLE)
                         + " ticks, so it will not sit still and NO climb measured on it could be "
-                        + "attributed to pilot input. boarding=" + how,
+                        + "attributed to pilot input. boarding=" + how + " — " + rest.trace,
                 !Double.isNaN(yRest));
 
         double controlDrift = measureMaxDrift(yRest);
@@ -762,18 +788,44 @@ public class VSPreAssemblyBoardingPilotControlE2ETest extends AbstractSharedVsCl
         return m.find() ? Double.parseDouble(m.group(1)) : Double.NaN;
     }
 
+    /** A settle attempt: the altitude it came to rest at ({@code NaN} if it never did), and why. */
+    private static final class Settle {
+        final double y;
+        final String trace;
+        Settle(double y, String trace) { this.y = y; this.trace = trace; }
+    }
+
     /**
      * Waits for the ship to hold one altitude within {@link #SETTLE_EPS} across
-     * {@link #SETTLE_STABLE_SAMPLES} consecutive samples, and returns that altitude - or
-     * {@code NaN} if it never settles within the budget.
+     * {@link #SETTLE_STABLE_SAMPLES} consecutive samples, and answers that altitude - or
+     * {@code NaN}, with the reading, if it never settles within the budget.
+     *
+     * <p>CLASSIFIED, and it stays a loop. The altitude is a physical value nobody publishes and the
+     * physics object never decides it has come to rest, so there is no link to await; but neither is
+     * this the window-then-read form that governs a converging value, because the claim is not about
+     * a VALUE at all — it is about the SEQUENCE. "The ship is sitting still" is a statement that N
+     * consecutive readings agreed, and no single read taken at the end of a window can make it: a
+     * craft still oscillating about the pad answers with a plausible altitude every time it is
+     * asked. The loop IS the measurement here, not a way of waiting for one.</p>
+     *
+     * <p>What the expiry may no longer do is report {@code NaN} and leave the caller to say
+     * "it never settled", which would be equally true of a ship that had drifted a hundred blocks
+     * and of one wobbling by six centimetres. The trace carries the last anchor, the last reading
+     * and the longest run of agreeing samples, so a refusal can be argued with rather than only
+     * repeated.</p>
      */
-    private double settleShipAltitude() throws Exception {
+    private Settle settleShipAltitude() throws Exception {
         double anchor = Double.NaN;
+        double last = Double.NaN;
         int stable = 0;
+        int bestRun = 0;
+        int unresolved = 0;
         for (int sample = 0; sample < SETTLE_MAX_SAMPLES; sample++) {
             bot().waitTicks(TICKS_PER_SAMPLE);
             double y = shipPosY();
+            last = y;
             if (Double.isNaN(y)) {
+                unresolved++;
                 anchor = Double.NaN;
                 stable = 0;
                 continue;
@@ -783,12 +835,16 @@ public class VSPreAssemblyBoardingPilotControlE2ETest extends AbstractSharedVsCl
                 stable = 0;
             } else {
                 stable++;
+                bestRun = Math.max(bestRun, stable);
                 if (stable >= SETTLE_STABLE_SAMPLES) {
-                    return y;
+                    return new Settle(y, "settled at " + y + " after " + (sample + 1) + " samples");
                 }
             }
         }
-        return Double.NaN;
+        return new Settle(Double.NaN, "never held one altitude to within " + SETTLE_EPS
+                + " across " + SETTLE_STABLE_SAMPLES + " samples: longest agreeing run " + bestRun
+                + ", last anchor " + anchor + ", last reading " + last + ", "
+                + unresolved + " of " + SETTLE_MAX_SAMPLES + " samples resolved no ship at all");
     }
 
     /** The largest deviation from {@code from} over a full measurement window. */
