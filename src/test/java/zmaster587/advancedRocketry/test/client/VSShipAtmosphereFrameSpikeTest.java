@@ -7,6 +7,7 @@ import org.junit.runners.MethodSorters;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import zmaster587.advancedRocketry.test.Events;
 import zmaster587.advancedRocketry.test.ShipIdentity;
 
 import static org.junit.Assert.assertTrue;
@@ -73,6 +74,16 @@ public class VSShipAtmosphereFrameSpikeTest extends AbstractSharedVsClientE2ETes
     private static final int BX = 5200, BY = 64, BZ = 5200;
     /** Static control cabin, far from the ship and from its shipyard. */
     private static final int CX = 5600, CY = 70, CZ = 5600;
+
+    /**
+     * How long the atmosphere gate is given to evaluate a moved player, in ticks.
+     *
+     * <p>The gate runs on the player's own {@code LivingUpdateEvent}, so one server tick after the
+     * teleport is the whole of what is being waited for; the rest is slack for a loaded box. It is
+     * the budget the twenty-read probe poll it replaces spent ({@code 20 * 5}), kept so the
+     * conversion changes the FORM of the wait and not how long it is willing to wait.</p>
+     */
+    private static final int ATMOSPHERE_GATE_WINDOW_TICKS = 100;
 
     @Test
     public void aSealedShipCabinDoesNotReachItsOwnCrew_documentsKnownBug() throws Exception {
@@ -233,24 +244,49 @@ public class VSShipAtmosphereFrameSpikeTest extends AbstractSharedVsClientE2ETes
     }
 
     /**
-     * Teleport the player to a point and read back what the per-entity gate cached for him. The
-     * cache is only written when the resolved atmosphere CHANGES, so the two legs are run in
-     * opposite directions (pressurised control first, ship second) and each read is polled.
+     * Teleport the player to a point and answer what the per-entity gate then resolved him to.
+     *
+     * <p>The wait is production's own decision, not a re-read of its result. The gate caches a
+     * player's atmosphere only when the resolved type CHANGES, and that change is a write it makes
+     * in one breath with the sync packet — so it is recorded ({@code player_atmosphere_changed},
+     * carrying what he was resolved TO and what the cache held before). The two legs are still run
+     * in opposite directions, because no change means no record and nothing to observe: an
+     * atmosphere the player is already in is not a thing that happens.</p>
+     *
+     * <p>What this replaced was a poll of the cache through a reflective probe, twenty reads of a
+     * private static map until one came back non-empty. It could not say when the change happened,
+     * could not tell a change made and undone from one never made, and answered the same silence
+     * for "the gate resolved him to what he was already in" as for "the gate never ran".</p>
      */
     private String cachedAtmosphereWithPlayerAt(double x, double y, double z) throws Exception {
+        long mark = events().markInstrumented();
         exec("tp @a " + x + " " + y + " " + z + " 0 0");
-        String cached = "";
-        for (int i = 0; i < 20; i++) {
-            bot().waitTicks(5);
-            String resp = exec("artest atmosphere cached-for-player");
-            Matcher m = CACHED_ATM.matcher(resp);
-            if (m.find()) {
-                cached = m.group(1);
-                if (!cached.isEmpty()) {
-                    break;
-                }
-            }
-        }
+        // A WINDOW, and it is not a poll: there is nothing here to ask twice. The handler ticks
+        // EVERY entity in its dimension on that entity's own living update, so it evaluates the
+        // player at his new position on the next server tick — both legs of this test are in dim 0,
+        // and `tp` has already moved the server's copy of him by the time the command answers. What
+        // the window is for is load, not convergence.
+        bot().waitTicks(ATMOSPHERE_GATE_WINDOW_TICKS);
+        String changes = events().since(mark, "player_atmosphere_changed");
+
+        // AN ABSENCE IS AN ANSWER HERE, and this is what makes it one. One leg of this test expects
+        // the gate to resolve the player into a sealed cabin and the other expects it NOT to — that
+        // second expectation IS the bug being documented — so a silent log is a finding rather than
+        // a failure. It is only a finding while the log can prove it was listening: without this, a
+        // mixin that never wove and a gate that never changed its mind produce the same silence.
+        Events.assertInstrumentRan(changes, "atmosphere_change_events",
+                "whether the per-entity atmosphere gate changed its mind about this player");
+
+        // The RESOLUTION itself is a state, not an event, and is read as one. The record above says
+        // a change HAPPENED and when; it cannot say what the player is resolved to now, because the
+        // answer when nothing changed is the value already in the cache. Reading both is the point:
+        // the pair separates "he was moved into a different atmosphere" from "he is in the same one
+        // he was in", which is exactly the difference between this test's two legs.
+        String resp = exec("artest atmosphere cached-for-player");
+        Matcher m = CACHED_ATM.matcher(resp);
+        String cached = m.find() ? m.group(1) : "";
+        System.out.println("[S1/gate] at (" + x + "," + y + "," + z + ") cached=" + cached
+                + " changes=" + changes);
         return cached;
     }
 

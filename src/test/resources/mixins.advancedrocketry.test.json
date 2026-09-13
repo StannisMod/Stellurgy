@@ -59,6 +59,7 @@
     "MixinEntityRocketEvents",
     "MixinItemAtmosphereAnalzerEvents",
     "MixinAtmosphereNeedsSuitEvents",
+    "MixinAtmosphereChangeEvents",
     "MixinItemSpaceChestEvents",
     "MixinItemAirUtilsEvents",
     "MixinDelayedActionBarEvents",
