@@ -487,6 +487,11 @@ public class VSShipEntryClientGroupE2ETest extends AbstractSharedVsClientE2ETest
             // the ship never reached the line, the trigger declined, the entry was declined, or the
             // message was sent to nobody. The last sample and the highest altitude seen are what
             // the assertion below reports.
+            // CLASSIFIED, and it stays: the exit is a RECORD (`entry_decided`), not a sampled state,
+            // so this is already a wait for production's own verdict. What the loop adds around that
+            // wait is the trace the failure reports — the altitude the craft actually reached, which
+            // no record carries and which a shared `awaitMatching` deliberately cannot collect (its
+            // stimulus parameter is for work a headless test must DO, never for an observation).
             int climbBudget = (int) (800 * TestTimeouts.factor());
             for (int attempt = 0; attempt < climbBudget && decided == null; attempt++) {
                 bot().waitTicks(5);

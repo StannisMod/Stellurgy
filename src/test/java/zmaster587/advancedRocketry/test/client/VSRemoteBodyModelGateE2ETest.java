@@ -157,6 +157,23 @@ public class VSRemoteBodyModelGateE2ETest extends AbstractSharedVsClientE2ETest 
      *  cannot falsify anything here. */
     private static final String STEEP_ROLL = "0.17365 0.0 0.0 0.98481";
 
+    /**
+     * How long the commanded ~160-degree roll is given to finish, in ticks.
+     *
+     * <p>The hold slews at about 2 rad/s, so this turn is roughly 28 ticks of slewing; this is about
+     * four times that, which is slack for a craft that has to start from wherever the previous leg
+     * left it. It is NOT scaled by the load factor: the slew advances per tick, so the number says
+     * how far the craft turns rather than how long we are willing to wait, and what protects it
+     * under load is that the attitude is HELD once reached. The reached value is printed on every
+     * run, so the size can be re-argued from a measurement.</p>
+     *
+     * <p>Measured on the run that introduced this form, in both scenarios of the class:
+     * <b>-0.9346</b> and <b>-0.9347</b> against a gate of {@code < -0.85}. Two readings agreeing to
+     * three decimals are the signature of an attitude that has ARRIVED and is being held — a craft
+     * still slewing would not land on the same number twice.</p>
+     */
+    private static final int ROLL_WINDOW_TICKS = 120;
+
     // ---- Leg A: the bug - a body the ship does NOT carry must not be drawn ship-aligned --------
 
     @Test
@@ -543,14 +560,20 @@ public class VSRemoteBodyModelGateE2ETest extends AbstractSharedVsClientE2ETest 
         assertTrue("attitude hold must accept the steep roll",
                 exec("artest vs point-by-id 0 " + scenarioShipId + " " + STEEP_ROLL)
                         .contains("\"commanded\":true"));
-        double upY = 1.0;
-        for (int i = 0; i < 60 && upY > -0.85; i++) {
-            bot().waitTicks(10);
-            // The ship's own up, world-frame, from the attitude quaternion the probe reports.
-            String info = shipInfo();
-            double qx = readDouble(info, Q_X), qz = readDouble(info, Q_Z);
-            upY = 1.0 - 2.0 * (qx * qx + qz * qz);
-        }
+        // A WINDOW, not a poll — and the comment above was right that a tick count cannot be the
+        // GATE, which is a different claim from "so it must re-read until it likes the answer". An
+        // attitude converging under a hold is a physical value nobody publishes, and the hold never
+        // decides it has arrived, so there is no link to await; but a loop whose exit is the
+        // assertion three lines below it can be timed out and never disproved. Give the slew its
+        // ticks, then read: the hold applies torque toward its target every tick and HOLDS the
+        // attitude once it is there, so a window longer than the slew reads the same state.
+        bot().waitTicks(ROLL_WINDOW_TICKS);
+        // The ship's own up, world-frame, from the attitude quaternion the probe reports.
+        String info = shipInfo();
+        double qx = readDouble(info, Q_X), qz = readDouble(info, Q_Z);
+        double upY = 1.0 - 2.0 * (qx * qx + qz * qz);
+        System.out.println("[modelgate] upY after " + ROLL_WINDOW_TICKS + " ticks: " + upY
+                + " (the gate is < -0.85)");
         assertTrue("the ship must reach the steep roll for either leg to mean anything (upY=" + upY + ")",
                 upY < -0.85);
     }
