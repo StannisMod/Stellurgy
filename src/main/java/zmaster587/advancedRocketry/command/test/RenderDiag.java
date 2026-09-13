@@ -79,6 +79,18 @@ public final class RenderDiag {
     }
 
     /** Forget everything. For a harness that reuses one client across scenarios. */
+    /**
+     * Deliberately NOT called between scenarios, and the reason is how the counters are READ.
+     *
+     * <p>Every reader of these takes a value before its stimulus and another after, and asserts on
+     * the DELTA — never on an absolute. A counter that is cumulative for the life of the client
+     * therefore tells such a reader the exact truth, and zeroing it between scenarios would buy
+     * nothing while adding a round trip to every scenario in every shared class.</p>
+     *
+     * <p>Checked 2026-09-13 while giving the pilot-input counters an owner, which needed the
+     * opposite treatment: those are printed as absolutes into failure messages, so their leak
+     * reaches a reader. Kept for a caller that genuinely wants a fresh baseline.</p>
+     */
     public static void reset() {
         skyFramesDrawn = 0L;
         nebulaeDrawnLastFrame = 0;

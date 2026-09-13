@@ -162,6 +162,9 @@ public class TestProbeCommand extends CommandBase {
                 case "infra":
                     handleInfra(server, sender, tail(args));
                     break;
+                case "diag":
+                    handleDiag(sender, tail(args));
+                    break;
                 case "place":
                     handlePlace(server, sender, tail(args));
                     break;
@@ -14839,6 +14842,32 @@ public class TestProbeCommand extends CommandBase {
                 world.getChunkProvider().provideChunk(ccx + dx, ccz + dz);
             }
         }
+    }
+
+    /**
+     * {@code /artest diag reset} — zero the SERVER copy of the pilot-input counters.
+     *
+     * <p>Exists to give {@code SeatDiag}'s reset an OWNER. Its counters are cumulative for the life
+     * of the JVM, and a shared harness runs every scenario of a class against one server — so a
+     * failure in the fourteenth scenario printed totals belonging to all fourteen. Nothing asserts
+     * on them, which is why this was invisible: the only damage a leaking diagnostic does is to the
+     * diagnosis, and a wrong diagnosis costs a session rather than a red.</p>
+     *
+     * <p>Deliberately NOT a reset of every diagnostic holder in this package, and the two exclusions
+     * are the point. {@code RenderDiag}'s readers all take a before and an after and compare the
+     * DELTA, so a cumulative counter tells them the truth and zeroing it would buy nothing.
+     * {@code ClientDiag} holds one value written once when the client's proxy comes up and read by
+     * one boot-baseline scenario: a per-scenario reset would replace the only reading it ever gets
+     * with {@code NaN}. A reset is only correct where the reader asks an absolute question about
+     * ONE scenario.</p>
+     */
+    private void handleDiag(ICommandSender sender, String[] args) {
+        if (args.length >= 1 && "reset".equalsIgnoreCase(args[0])) {
+            SeatDiag.reset();
+            send(sender, "{\"ok\":true,\"reset\":[\"SeatDiag\"]}");
+            return;
+        }
+        send(sender, "{\"error\":\"usage: /artest diag reset\"}");
     }
 
     private void handlePlace(MinecraftServer server, ICommandSender sender, String[] args) {

@@ -21,6 +21,18 @@ public final class ClientDiag {
         testClientMasterVolume = level;
     }
 
+    /**
+     * Deliberately NOT called between scenarios, and the reason is the value's lifetime.
+     *
+     * <p>This is written once, when the client's proxy comes up, and read by one boot-baseline
+     * scenario. It is an observation about THIS CLIENT, not an accumulator belonging to a scenario —
+     * so a per-scenario reset would replace the only reading it ever gets with {@code NaN} and the
+     * baseline would go red for a reason that has nothing to do with the client's volume. It exists
+     * for a caller that wants to re-arm the observation deliberately.</p>
+     *
+     * <p>Checked 2026-09-13 while giving the pilot-input counters an owner: a reset is correct only
+     * where the reader asks an ABSOLUTE question about ONE scenario, and this reader does not.</p>
+     */
     public static void reset() {
         testClientMasterVolume = Float.NaN;
     }
