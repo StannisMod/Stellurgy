@@ -52,6 +52,15 @@ public class VSPilotKeysWithSpaceSubsystemE2ETest {
 
     private static final String VARIANT = "with-pilot-seat";
     private static final int BX = 2800, BY = 64, BZ = 2800;
+
+    /**
+     * How long the craft is given to become USABLE with the client present, in ticks.
+     *
+     * <p>A deadline for an event production publishes, not a guess at how long loading takes: the
+     * poll it replaced spent forty rounds of five ticks asking a probe, so this is that same
+     * ceiling, spent waiting for the record instead of sampling for its consequence.</p>
+     */
+    private static final int SHIP_LOAD_BUDGET_TICKS = 200;
     private static final String BOT = "ForgeTestClient";
 
     /** The ship must gain at least this much altitude while the key is held, or it is not flying. */
@@ -144,19 +153,19 @@ public class VSPilotKeysWithSpaceSubsystemE2ETest {
         exec("tp @a " + (BX + 0.5) + " " + (BY + 6) + " " + (BZ + 0.5) + " 0 0");
         clientHarness.bot().waitTicks(20);
 
-        // A ship becoming LOADED has no event of its own, so this half stays a bounded probe read —
-        // but it is asked BY IDENTITY now, so a "managed":false is a statement about THIS ship and
-        // never a report about a neighbour that happens to be nearer.
-        double yBefore = Double.NaN;
-        String atBase = "";
-        for (int attempt = 0; attempt < 40 && Double.isNaN(yBefore); attempt++) {
-            clientHarness.bot().waitTicks(5);
-            atBase = exec("artest vs ship-info 0 id " + shipUuid);
-            Matcher m = POS_Y.matcher(atBase);
-            if (m.find()) {
-                yBefore = Double.parseDouble(m.group(1));
-            }
-        }
+        // A ship becoming LOADED **does** have an event of its own, and this comment said otherwise
+        // until the poll below was converted: production publishes `ShipLoadedEvent` when a craft
+        // becomes steppable, recorded as `ship_usable` and carrying both of its identities. So the
+        // wait is that record for THIS ship, and the position is read once afterwards — a poll of
+        // the probe could only say that a lookup eventually answered, never when the craft became
+        // usable, and on expiry it reported the last empty reply as though that were the finding.
+        events.awaitCarrying(spawnMark, "ship_usable", "\"vsShip\":\"" + shipUuid + "\"",
+                "the ship the registry named must become USABLE with the client present — until it"
+                        + " is, its physics are not stepped and every reading below describes a"
+                        + " craft that cannot move", SHIP_LOAD_BUDGET_TICKS);
+        String atBase = exec("artest vs ship-info 0 id " + shipUuid);
+        Matcher baseY = POS_Y.matcher(atBase);
+        double yBefore = baseY.find() ? Double.parseDouble(baseY.group(1)) : Double.NaN;
         assertTrue("the ship the registry named must LOAD with the client present within 200 ticks."
                         + " The lookup's own answer IS the diagnosis and this message used to throw"
                         + " it away: a reply carrying \"managed\":false means the physics mod does not"

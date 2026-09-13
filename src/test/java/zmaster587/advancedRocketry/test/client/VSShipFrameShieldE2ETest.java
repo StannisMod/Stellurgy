@@ -95,15 +95,19 @@ public class VSShipFrameShieldE2ETest extends AbstractSharedVsClientE2ETest {
         // emitters probe could not tell a WORLD frame (the VS lookup found no managing ship) from a
         // SHIP frame that is not ready (the hull is not loaded on this side) from a tile that never
         // entered the active set at all — and only the last of those three is a shield bug.
-        String frames = "";
-        String frame = null;
-        for (int waited = 0; waited <= FRAME_BUDGET_TICKS && frame == null; waited += 5) {
-            frames = events.since(spawnMark, "field_frame_resolved");
-            frame = recordWithAll(frames, "\"shipFramed\":true", "\"ready\":true");
-            if (frame == null) {
-                bot().waitTicks(5);
-            }
-        }
+        // The shared wait, where a hand-rolled copy of it stood: the loop re-read the log until a
+        // record carried both needles and then let its caller assert that same condition. What the
+        // condition IS has not changed — a record that is ship-framed AND ready — but a failure now
+        // names the claim and prints the whole chain that did happen, instead of handing back the
+        // last empty reply for an assertion to restate.
+        String frames = events.awaitMatching(spawnMark, "field_frame_resolved",
+                seen -> recordWithAll(seen, "\"shipFramed\":true", "\"ready\":true") != null,
+                "carrying shipFramed:true AND ready:true",
+                "the ship's emitter must resolve a SHIP frame and report it ready — a world-frame"
+                        + " shield on a ship projects its shell at the shipyard rather than the"
+                        + " flying hull, and a ship-framed emitter whose frame is not ready"
+                        + " contributes no shell at all", FRAME_BUDGET_TICKS);
+        String frame = recordWithAll(frames, "\"shipFramed\":true", "\"ready\":true");
         assertTrue("the ship's emitter must resolve a SHIP frame AND report it ready — a world-frame"
                 + " shield on a ship would project its shell at the shipyard rather than the flying"
                 + " hull, and a ship-framed emitter whose frame is not ready contributes no shell at"

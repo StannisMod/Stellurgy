@@ -291,13 +291,19 @@ public class VSPilotSeatMountMessagesE2ETest extends AbstractSharedVsClientE2ETe
         scenario().requireArranged("the dismount probe must say what the bot was riding when it was"
                 + " asked — without that this cannot tell a dismount that was owed from one that was"
                 + " not: " + probe, was.find());
-        if (Integer.parseInt(was.group(1)) >= 0) {
+        boolean wasSeated = Integer.parseInt(was.group(1)) >= 0;
+        if (wasSeated) {
             events.await(mark, "dismount", "the probe must actually take the bot off the seat before"
                     + " a leg that measures somebody else's click can mean anything — it reported"
                     + " him riding " + was.group(1) + " when asked (" + probe + ")",
                     NOTICE_BUDGET_TICKS);
         }
-        JsonObject riding = awaitRiding(30, false);
+        // CONDITIONAL on the same fact as the server half above, and for the same reason one line
+        // down: a dismount that had nothing to dismount publishes nothing on either side, so an
+        // unconditional wait for the client's own record would spend its whole budget proving that
+        // the bot was already off the seat. Measured by writing it the other way first — 150 ticks
+        // of `deck_look` and no chain at all.
+        JsonObject riding = wasSeated ? awaitRiding(30, false) : bot().reportRidingEntity();
         scenario().requireArranged("the bot must be OFF the seat, as the client renders him, before"
                 + " the next leg clicks it: " + riding + " probe=" + probe, !isRiding(riding));
     }
@@ -348,19 +354,69 @@ public class VSPilotSeatMountMessagesE2ETest extends AbstractSharedVsClientE2ETe
 
     // ---- Observation helpers -------------------------------------------------------------------
 
-    /** Poll until the client reports riding == {@code want} (bounded); returns the last sample.
-     *  A CLIENT-rendered mount has no record of its own — the position writers are server-side — so
-     *  this stays a poll, and every call site above states the server link it is following. */
+    /**
+     * Wait for the CLIENT's own mount chain to end seated (or not), and hand back what it renders.
+     *
+     * <p><b>The client's own mount HAS a record, and the sentence that stood here said otherwise.</b>
+     * {@code MixinEntityPositionWriters} is in the COMMON mixin list and {@code TestTrace.record}
+     * routes by the entity's own {@code world.isRemote}, so a {@code startRiding} performed on the
+     * client is written to the CLIENT's log with the verdict its caller got. Polling
+     * {@code reportRidingEntity} watched the SHADOW of that act instead: it cannot say when the
+     * mount happened, cannot tell a refusal from a mount that has not replicated, and on expiry
+     * reports the last sample as though the sample were the finding.</p>
+     *
+     * <p>The chain is read to its END rather than to its first link. A seating that re-seats — and
+     * a crossing does — reads {@code dismount → mount → dismount → mount}, so a wait that returns on
+     * the first mount lands mid-chain and the read after it can honestly say the wrong thing.</p>
+     */
     private JsonObject awaitRiding(int samples, boolean want) throws Exception {
-        JsonObject riding = null;
-        for (int i = 0; i < samples; i++) {
-            riding = bot().reportRidingEntity();
-            if (isRiding(riding) == want) {
-                break;
-            }
-            bot().waitTicks(5);
+        Events client = clientEvents();
+        long mark = client.mark();
+        // THE STATE OF THE SIDE THE TRANSITION IS OWED BY, read first. A body already where the
+        // caller wants it owes no transition and will record none, so waiting for one spends the
+        // whole budget proving the obvious — and the server's opinion cannot stand in for this,
+        // which is what the first version of this wait assumed. Measured twice: the server reported
+        // the bot riding, took him off, and the CLIENT recorded nothing at all across 150 ticks,
+        // because on that path the client had already let go.
+        JsonObject now = bot().reportRidingEntity();
+        if (isRiding(now) == want) {
+            return now;
         }
-        return riding;
+        // The mark is taken HERE, after the stimulus the caller issued: what is being waited for is
+        // the client catching up with a server mount that has already been asserted on its own
+        // chain, so the window is "from now on" and an empty one means he was already where he
+        // belongs — which `endsSeated` reports as seated, deliberately.
+        try {
+            client.awaitMatching(mark, want ? "mount" : "dismount",
+                    seen -> endsSeated(client, mark) == want,
+                    want ? "the client's own chain ENDING in a mount"
+                            : "the client's own chain ENDING in a dismount",
+                    "the client must " + (want ? "RENDER the pilot on the seat the server already"
+                            + " mounted him to" : "let the pilot GO once the server has")
+                            + " — an expiry here is a replication statement, never an open question"
+                            + " about whether the click worked", samples * 5);
+        } catch (AssertionError never) {
+            Events.assertInstrumentRan(client.since(mark, "mount"), "entity_mount_writes",
+                    "the client's own mounts must be observed AT ALL before an absent one can be"
+                            + " read as a seating the client never performed");
+            throw new AssertionError(never.getMessage()
+                    + " | the client's chain: mounts=" + client.since(mark, "mount")
+                    + " ||| dismounts=" + client.since(mark, "dismount"), never);
+        }
+        return bot().reportRidingEntity();
+    }
+
+    /** Whether {@code log}'s mount chain since {@code mark} ENDS seated: either nothing touched him,
+     *  or every dismount was answered by a LATER mount. Compared by sequence, which is the only
+     *  thing that carries order once the rings are per type. */
+    private static boolean endsSeated(Events log, long mark) throws Exception {
+        String lastMount = Events.lastField(log.since(mark, "mount"), "seq");
+        String lastDismount = Events.lastField(log.since(mark, "dismount"), "seq");
+        if (lastDismount == null) {
+            return true;
+        }
+        return lastMount != null
+                && Long.parseLong(lastMount.trim()) > Long.parseLong(lastDismount.trim());
     }
 
     private static boolean isRiding(JsonObject riding) {
