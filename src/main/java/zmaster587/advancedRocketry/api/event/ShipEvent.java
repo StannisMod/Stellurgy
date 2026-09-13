@@ -1,5 +1,6 @@
 package zmaster587.advancedRocketry.api.event;
 
+import net.minecraft.util.math.BlockPos;
 import net.minecraft.world.World;
 import net.minecraftforge.fml.common.eventhandler.Event;
 
@@ -125,6 +126,39 @@ public class ShipEvent extends Event {
     public static class ShipGoneEvent extends ShipEvent {
         public ShipGoneEvent(World world, String shipId, String substrateId) {
             super(world, shipId, substrateId);
+        }
+    }
+
+    /**
+     * The FLIGHT COMPUTER of a ship is live in this world: its tile is loaded, is being ticked, and
+     * knows the durable id it carries.
+     *
+     * <p><b>Why this is not {@link ShipLoadedEvent} said differently.</b> That event reports that a
+     * craft's PHYSICS will be stepped. This one reports that the block a durable id can be resolved
+     * THROUGH is present — and the two come apart exactly where it matters. A craft kept loaded
+     * while nobody is aboard is already steppable, so its physics edge has long since passed; when a
+     * returning player's login asks the world for that craft's computer, the tile is not in the
+     * world's loaded-tile list yet, the load it triggers is queued rather than immediate, and the
+     * arrival of the blocks moves no readiness flag. A consumer waiting for the physics edge
+     * therefore waits for a transition that has already happened and will not happen again.</p>
+     *
+     * <p>Posted ONCE per computer instance, on the first tick it runs with a ship id — server side,
+     * like the rest of this family. A computer that is unloaded and comes back is a new instance and
+     * posts again, which is the property a consumer holding a durable id needs.</p>
+     *
+     * <p><b>What it does not tell you</b>: whether the craft is steppable, who is aboard, or that the
+     * hull is intact. It says one thing — ask this world for that id now and you will find it.</p>
+     */
+    public static class FlightComputerLiveEvent extends ShipEvent {
+
+        /** Where the computer sits, so a consumer that needs the ship's frame can start from it. */
+        public final net.minecraft.util.math.BlockPos pos;
+
+        public FlightComputerLiveEvent(World world, String shipId, BlockPos pos) {
+            // No substrate id: the computer knows the craft it belongs to by AR's own identity, and
+            // deriving the substrate's would be a lookup this event has no reason to perform.
+            super(world, shipId, null);
+            this.pos = pos;
         }
     }
 }

@@ -586,6 +586,18 @@ public abstract class AbstractSpaceLoginRestoreClientTest {
                 + " creepBandTotal=" + creepBandTotal(sinceConnect, -1L)
                 + " " + writerSummary(sinceConnect, -1L);
 
+        // WHERE the login put him, and HOW the hold that is supposed to seat a STANDING crew member
+        // ended. The placement carries its own y; `deck_hold_ended` carries `why` — `resolving`
+        // means the hold concluded with the capture on its own ship, `expired` means the window ran
+        // out and the body was left wherever the login chose, which for a settled ship is the
+        // SHIP'S OWN world position rather than the deck point he stood on. The whole scenario's
+        // records, because a login produces exactly one of each and a mark would only narrow what
+        // is already unambiguous.
+        String placement = events().since(0, "login_restored");
+        String holdEnded = events().since(0, "deck_hold_login")
+                + " | ended: " + events().since(0, "deck_hold_ended")
+                + " | pins: " + events().since(0, "deck_hold_pin");
+
         // THE DRIVER, not the condition. The previous cut of this pin measured a body on a deck that
         // was standing perfectly still - every field came back exactly 0.0, carry included - and a
         // held body on a motionless deck cannot drift no matter what is wrong with the hold. That
@@ -646,11 +658,14 @@ public abstract class AbstractSpaceLoginRestoreClientTest {
         // point after the key is RELEASED - a body that keeps going once the input stops is carrying
         // something the walk did not give it. Measured under the RESTORED capture first.
         double[] restoredWalk = walkThenIdle(dim);
+        String restoredWalkLines = lastWalkLines;
+        String restoredWalkMovers = lastWalkMovers;
         // TWICE under the SAME capture. The first pair came back four times weaker under the restored
         // capture than under the re-installed one, and those two legs differed in ORDER as well as in
         // provenance. A second walk through the unchanged capture separates them: still weak means the
         // restored capture is the variable, back to normal means the first walk after a login is.
         double[] restoredWalkAgain = walkThenIdle(dim);
+        String restoredWalkAgainLines = lastWalkLines;
 
         String cure = measureAfterReCapture(dim);
 
@@ -658,6 +673,8 @@ public abstract class AbstractSpaceLoginRestoreClientTest {
         // cure turned into an in-run CONTROL - same body, same deck, same key, only the capture's
         // provenance differs. Diagnostic, not a pin.
         double[] freshWalk = walkThenIdle(dim);
+        String freshWalkLines = lastWalkLines;
+        String freshWalkMovers = lastWalkMovers;
         double[] freshWalkAgain = walkThenIdle(dim);
 
         System.out.println("[space-drag] deckMoved=" + deckMoved + " bodyTravel=" + bodyTravel
@@ -676,10 +693,30 @@ public abstract class AbstractSpaceLoginRestoreClientTest {
         // Every number is measured and printed BEFORE any witness is allowed to fire: a witness that
         // aborts mid-experiment throws away the comparison that makes the result legible, which is
         // exactly what happened on the first plain-relog run.
+        // Read AGAIN, after the walks. The first read is taken a few ticks into the login and a hold
+        // lives for two hundred: asking once at the top says what the hold had done by then, which
+        // is not the same question as how it ENDED. Both are printed, in that order, so a reader can
+        // see the hold still running at the first read and finished by the second.
+        String holdAfter = events().since(0, "deck_hold_login")
+                + " | ended: " + events().since(0, "deck_hold_ended")
+                + " | pins: " + events().since(0, "deck_hold_pin");
+
         String walkTable = "\n  restored 1: " + describeWalk(restoredWalk)
                 + "\n  restored 2: " + describeWalk(restoredWalkAgain)
                 + "\n  fresh 1:    " + describeWalk(freshWalk)
-                + "\n  fresh 2:    " + describeWalk(freshWalkAgain);
+                + "\n  fresh 2:    " + describeWalk(freshWalkAgain)
+                // The per-tick evidence for the comparison the table asks the reader to make. The
+                // totals say a restored walk is weak; only the lines say WHEN it was weak — a body
+                // that fell for its first ticks and one that never left the ground produce the same
+                // summary, and the deck flag and obstacle count per tick tell them apart. The
+                // FRESH leg rides along as the control, because "restored looks odd" means nothing
+                // without the shape a healthy walk makes on this same deck.
+                + "\n  the login's own placement: " + placement
+                + "\n  the hold, a few ticks in:  " + holdEnded
+                + "\n  the hold, after the walks: " + holdAfter
+                + "\n  restored 1, tick by tick:" + restoredWalkLines + restoredWalkMovers
+                + "\n  restored 2, tick by tick:" + restoredWalkAgainLines
+                + "\n  fresh 1, tick by tick (the control):" + freshWalkLines + freshWalkMovers;
         requireArranged("the walk must actually move him along the deck, or the pin below "
                         + "measures a body that never walked. A walk that is weak ONLY under the "
                         + "restored capture is itself the finding rather than an arrangement fault - "
@@ -749,6 +786,24 @@ public abstract class AbstractSpaceLoginRestoreClientTest {
      * planet side: the subject is an inherited VELOCITY, not an inherited INPUT, and a window opened on
      * the release tick cannot tell a key that is still held from a body that is still moving.</p>
      */
+    /**
+     * The WALK window's own per-tick lines from the most recent {@link #walkThenIdle}, so a caller
+     * comparing several walks can keep each one's evidence rather than only its totals.
+     */
+    protected String lastWalkLines = "";
+
+    /**
+     * WHO ELSE touched the body during that same walk window: every world-frame move request the
+     * suppression hook caught, and every re-seat pass that moved something.
+     *
+     * <p>The tick lines say the body lags the point the resolver committed; they cannot say who put
+     * it there. These two records name the two candidates production actually has — a world-frame
+     * mover pushing a resolved body, and the pose pass re-seating it — and an empty pair is a
+     * reading of its own: then the lag comes from neither and the resolver's own commit is the
+     * place to look.</p>
+     */
+    protected String lastWalkMovers = "";
+
     protected double[] walkThenIdle(int dim) throws Exception {
         commandWindowCruise(dim);
         double[] deckBefore = awaitShipPose(dim);
@@ -762,6 +817,11 @@ public abstract class AbstractSpaceLoginRestoreClientTest {
         bot().waitTicks(6);
         bot().releaseKey(Keyboard.KEY_W);
         String walkHistory = clientTickHistory();
+        lastWalkLines = linesAfter(walkHistory, walkFrom);
+        lastWalkMovers = "\n      world-frame movers: "
+                + clientEvents().since(walkReleaseMark, "ship_frame_world_move")
+                + "\n      re-seat passes: "
+                + clientEvents().since(walkReleaseMark, "deck_reseat_pass");
         long dropsInWalk = guardReleases(clientReleases(walkReleaseMark, "a swept and committed walk"));
         bot().waitTicks(2);
         long idleFrom = lastClientTick();
@@ -818,6 +878,29 @@ public abstract class AbstractSpaceLoginRestoreClientTest {
             }
         }
         return n;
+    }
+
+    /**
+     * The per-tick lines of the window that starts after {@code fromTick}, oldest first.
+     *
+     * <p>The summary fields answer "how much" and cannot answer "from which tick onwards": a walk
+     * that is weak because the body spent its first ticks falling and a walk that is weak because it
+     * never left the ground read the same in {@code walkTravel} and {@code offDeckTicksInWalk}. The
+     * lines carry the deck flag, the obstacle count, the committed point and the live one per tick,
+     * so the shape is readable rather than inferred.</p>
+     *
+     * <p>An empty window says so in words: no resolved tick at all is a different reading from a
+     * body that resolved and did not move, and the two are otherwise both printed as zeros.</p>
+     */
+    protected String linesAfter(String history, long fromTick) {
+        Matcher m = HISTORY_LINE.matcher(history);
+        StringBuilder out = new StringBuilder();
+        while (m.find()) {
+            if (Long.parseLong(m.group(1)) > fromTick) {
+                out.append("\n      ").append(m.group());
+            }
+        }
+        return out.length() == 0 ? " (no resolved tick at all in this window)" : out.toString();
     }
 
     /** The most obstacles the sweep saw in the window - a body standing inside geometry sees more. */

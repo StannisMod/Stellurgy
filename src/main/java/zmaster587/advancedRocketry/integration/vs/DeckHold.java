@@ -86,6 +86,9 @@ public final class DeckHold {
         /** Whether the returning client has been ASKED to capture yet. The hold may not conclude
          *  before it has: see the exit rule in {@link DeckHold#onPlayerTick}. */
         boolean seedSent;
+        /** Whether this hold has already said it is running without a ship; see
+         *  {@link DeckHold#holdUnresolved}. Per hold, so the line names one craft once. */
+        boolean announcedUnresolved;
 
         /** Non-null once the ship has been found; the pin and the capture packet need this shape. */
         String shipId;
@@ -354,13 +357,7 @@ public final class DeckHold {
         double[] world = hold.resolved() ? VSIntegration.toWorldFrameFor(
                 player.world, hold.shipId, hold.subX, hold.subY, hold.subZ) : null;
         if (world == null) {
-            // The ship is not loaded (yet), or has not been found: hold the body still where it is
-            // so gravity cannot ratchet it off the deck spot while the ship streams in.
-            player.setPositionAndUpdate(player.posX, player.posY, player.posZ);
-            player.motionX = 0.0;
-            player.motionY = 0.0;
-            player.motionZ = 0.0;
-            player.fallDistance = 0.0f;
+            holdUnresolved(player, hold);
             return;
         }
         // Pin to the CURRENT world image of the persisted deck point (the ship may sit at any
@@ -380,6 +377,48 @@ public final class DeckHold {
                         hold.shipId, hold.subX, hold.subY, hold.subZ, true),
                 player);
         hold.seedSent = true;
+    }
+
+    /**
+     * What a hold does for the ticks it has no ship to pin against — and it is a DEGRADATION, so it
+     * says so and it does as little as it can.
+     *
+     * <p>What stood here pinned the body to its own world position and zeroed all three components
+     * of its motion, every tick, with one stated reason: gravity must not ratchet it off the deck
+     * spot while the craft streams in. That reason is a statement about a craft standing STILL.
+     * Measured 2026-09-13 on a cruising deck: the pin held the body at a fixed WORLD point while the
+     * deck moved out from under it — 0.2 blocks a tick, which is one tick of the ship's own carry —
+     * so the crew member was dragged backwards along his own deck until the resolver stopped finding
+     * a floor under him, and zeroing the horizontal motion every tick meant a walk could never
+     * accumulate any speed at all (a constant one-impulse step instead of the usual acceleration).
+     * The hold spent its entire window doing this, because the event it was waiting for could not
+     * arrive; that half is fixed above, and this half must still be right for the ticks it does
+     * spend here.</p>
+     *
+     * <p>So: if the ship-frame resolver is already carrying this body ABOARD a deck, stand down
+     * entirely — it is doing the very job this branch is a stand-in for, and doing it in the frame
+     * that moves. Otherwise cancel only what the stated reason names: the FALL. Downward motion and
+     * fall damage go; anything the player is doing horizontally is his own.</p>
+     *
+     * <p>Not silent, either: a hold that reaches this branch says so once, naming the craft it is
+     * waiting for. A degradation that cannot be told from success is how this one survived.</p>
+     */
+    private static void holdUnresolved(EntityPlayerMP player, Hold hold) {
+        if (!hold.announcedUnresolved) {
+            hold.announcedUnresolved = true;
+            LOGGER.info("[SPACE] holding {} without a ship to pin against: {} is not resolvable in "
+                            + "this world yet. He is kept from falling, nothing more - his position "
+                            + "is NOT being maintained against a moving deck until it resolves.",
+                    player.getName(), hold.durableShipId == null
+                            ? "the craft a crossing will name" : "ship " + hold.durableShipId);
+        }
+        if (ShipFrameTravel.isResolvingAboard(player)) {
+            return; // already carried in the ship's own frame; a world-frame pin would fight it
+        }
+        if (player.motionY < 0.0) {
+            player.motionY = 0.0;
+        }
+        player.fallDistance = 0.0f;
     }
 
     /**
@@ -451,17 +490,40 @@ public final class DeckHold {
      */
     @SubscribeEvent
     public void onShipLoaded(zmaster587.advancedRocketry.api.event.ShipEvent.ShipLoadedEvent event) {
-        if (event.world == null || event.world.isRemote || event.shipId == null || HOLDS.isEmpty()) {
+        resolveHoldsNaming(event.world, event.shipId);
+    }
+
+    /**
+     * The computer a hold resolves THROUGH is live: resolve every hold that names its ship.
+     *
+     * <p><b>This is the event a durable hold actually waits for, and the reason the sibling above is
+     * not enough.</b> Resolving means finding that computer among the world's loaded tiles, so the
+     * fact that matters is the tile's arrival — while {@code ShipLoadedEvent} reports that the
+     * craft's PHYSICS became steppable. A craft kept loaded with nobody aboard crossed that line
+     * long before the player came back, so his login sees no edge at all: the one-shot resolve at arm
+     * time finds no tile yet (the load it asks for is queued, not immediate), and nothing later says
+     * the blocks have arrived. Measured 2026-09-13 on the standing relog: a hold spent its whole
+     * window unresolved, pinning its crew member in world coordinates on a moving deck.</p>
+     */
+    @SubscribeEvent
+    public void onFlightComputerLive(
+            zmaster587.advancedRocketry.api.event.ShipEvent.FlightComputerLiveEvent event) {
+        resolveHoldsNaming(event.world, event.shipId);
+    }
+
+    /** Every unresolved hold in {@code world} whose durable name is {@code shipId}, resolved now. */
+    private static void resolveHoldsNaming(net.minecraft.world.World world, String shipId) {
+        if (world == null || world.isRemote || shipId == null || HOLDS.isEmpty()) {
             return;
         }
         for (Map.Entry<UUID, Hold> entry : HOLDS.entrySet()) {
             Hold hold = entry.getValue();
             if (hold.resolved() || hold.durableShipId == null
-                    || !event.shipId.equals(hold.durableShipId.toString())) {
+                    || !shipId.equals(hold.durableShipId.toString())) {
                 continue;
             }
             net.minecraft.entity.player.EntityPlayer player =
-                    event.world.getPlayerEntityByUUID(entry.getKey());
+                    world.getPlayerEntityByUUID(entry.getKey());
             if (player instanceof EntityPlayerMP) {
                 resolve((EntityPlayerMP) player, hold);
             }

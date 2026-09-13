@@ -456,6 +456,7 @@ public class TileAdvancedFlightComputer extends TileEntity implements IModularIn
         // and every aboard tag resolve a ship BY that id, falling back to "whichever craft is nearest"
         // exactly where the world holds more than one. Costs one claim test per tick until it takes.
         bindDurableIdToThisShip();
+        announceLiveOnce();
         FreeFlightPhysics.Quat attitude = VSIntegration.getShipAttitude(world, getPos());
         if (attitude == null) {
             return; // not on a physics ship (or physics mod absent)
@@ -1169,6 +1170,36 @@ public class TileAdvancedFlightComputer extends TileEntity implements IModularIn
         } catch (IllegalArgumentException notAUuid) {
             durableIdBound = true; // nothing here will ever parse; stop asking
         }
+    }
+
+    /** Whether THIS instance has already announced itself; see {@link #announceLiveOnce()}. */
+    private boolean announcedLive = false;
+
+    /**
+     * Say once, on the bus, that this computer can now be found in this world by its durable id.
+     *
+     * <p><b>The fact a waiting consumer actually needs, and the one nothing published.</b> Resolving
+     * a durable ship id means finding THIS tile among the world's loaded ones, so a consumer holding
+     * such an id — a login restore putting a crew member back on his deck, a jump resolving its
+     * craft — is waiting for the tile, not for the craft's physics. Those two are the same moment
+     * for a craft that loads while somebody watches, and come apart for one that was kept loaded
+     * while nobody was: its physics readiness edge passed long ago, and the arrival of its blocks
+     * moves no flag at all. A consumer subscribed to the readiness edge then waits for a transition
+     * that has been and gone, which is a wait that never ends.</p>
+     *
+     * <p>Announced from the tick loop rather than from {@code validate()} on purpose: a tile is
+     * constructed before it is bound to a ship and before its chunk is ticking, and an announcement
+     * made there would name an id this computer does not yet carry. Here it is one flag test per
+     * tick after the first, and the claim is exactly what the name says.</p>
+     */
+    private void announceLiveOnce() {
+        if (announcedLive || shipId == null) {
+            return;
+        }
+        announcedLive = true;
+        net.minecraftforge.common.MinecraftForge.EVENT_BUS.post(
+                new zmaster587.advancedRocketry.api.event.ShipEvent.FlightComputerLiveEvent(
+                        world, shipId.toString(), getPos()));
     }
 
     /** Flight Assist on/off — the one piece of flight state the ship remembers.
