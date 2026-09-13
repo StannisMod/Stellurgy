@@ -173,6 +173,16 @@ public abstract class AbstractSpaceLoginRestoreClientTest {
      */
     protected static final double POSE_EPSILON = 24.0D;
 
+    /**
+     * How long the re-seated client is given to finish resolving WHERE its seat is, in ticks.
+     *
+     * <p>Not a budget: the mount itself is a link and is awaited as one. What remains afterwards is
+     * the rider's position being written each tick, which nothing publishes — so it is measured
+     * through a window, and this is the window. Unscaled by the load factor for the usual reason:
+     * the resolution advances per tick, so this number says how much the world does.</p>
+     */
+    protected static final int SEAT_SETTLE_TICKS = 40;
+
     /** Sentinel for "the client has no world yet", so nobody reads a "dim" key that is absent. */
     protected static final int NO_CLIENT_WORLD = Integer.MIN_VALUE;
 
@@ -491,27 +501,30 @@ public abstract class AbstractSpaceLoginRestoreClientTest {
 
         // Being seated is reported before the client has finished resolving WHERE the seat is: right
         // after the join its X and Z snap to the ship while Y is still converging, so a sample taken
-        // the instant "riding" turns true catches a position that belongs to neither end. Give it a
-        // bounded number of ticks to settle and keep the LAST reading either way - if it never
-        // converges that is a real failure and the assertions below must still report it.
+        // the instant "riding" turns true catches a position that belongs to neither end.
+        //
+        // A WINDOW, and not a poll. The loop that stood here re-read until
+        // `|clientY - shipPose[1]| <= POSE_EPSILON`, which is the assertion below — so a green said
+        // "one sample happened to match" and a red was a timeout wearing the words of a position
+        // claim. The act this was really waiting on is his own mount, and that is a link, awaited
+        // above; what is left is the rider's position being written each tick, which nothing
+        // publishes and no record could carry. So: give it the ticks, then read.
+        bot().waitTicks(SEAT_SETTLE_TICKS);
+        state = bot().reportState();
         double clientX = state.get("playerX").getAsDouble();
         double clientY = state.get("playerY").getAsDouble();
         double clientZ = state.get("playerZ").getAsDouble();
-        for (int attempt = 0; attempt < 40 && Math.abs(clientY - shipPose[1]) > POSE_EPSILON;
-                attempt++) {
-            bot().waitTicks(10);
-            state = bot().reportState();
-            if (!state.get("worldReady").getAsBoolean()) {
-                continue;
-            }
-            clientX = state.get("playerX").getAsDouble();
-            clientY = state.get("playerY").getAsDouble();
-            clientZ = state.get("playerZ").getAsDouble();
-            double[] livePose = awaitShipPose(dim);
-            if (livePose != null) {
-                shipPose = livePose;
-            }
+        // The ship's pose read AFTER the client's, so the comparison is against where the ship was
+        // at the later of the two moments: a craft that drifted between the reads shows up as a
+        // residual rather than being hidden by a reference taken before it moved.
+        double[] settledPose = awaitShipPose(dim);
+        if (settledPose != null) {
+            shipPose = settledPose;
         }
+        System.out.println("[restore] seat settle after " + SEAT_SETTLE_TICKS + " ticks: client="
+                + clientX + "," + clientY + "," + clientZ + " ship=" + shipPose[0] + ","
+                + shipPose[1] + "," + shipPose[2] + " dY=" + Math.abs(clientY - shipPose[1])
+                + " (the bar is " + POSE_EPSILON + ")");
         observed = "clientDim=" + dim + " riding=" + bot().reportRidingEntity() + " state=" + state
                 + " shipPose=[" + shipPose[0] + "," + shipPose[1] + "," + shipPose[2] + "]" + pools;
         assertEquals("he must come back at his ship on X: " + observed,

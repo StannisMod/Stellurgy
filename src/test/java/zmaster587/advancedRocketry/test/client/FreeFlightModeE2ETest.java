@@ -167,6 +167,10 @@ public class FreeFlightModeE2ETest extends AbstractSharedClientE2ETest {
 
         // Pad-bounds detection occasionally races chunk/structure state on the
         // shared world; retry the assemble a couple of times before failing.
+        // A DRIVING loop: each pass re-issues the stimulus (rebuild, assemble again) and reads
+        // only the command's own verdict — delete it and the assemble stops happening, not
+        // merely stop being watched. The assertion below reads the last response, after the
+        // driving has stopped.
         String assemble = exec("artest rocket assemble 0 " + bx + " " + by + " " + bz);
         for (int attempt = 0; attempt < 3 && !assemble.contains("\"ok\":true"); attempt++) {
             bot().waitTicks(5);
@@ -652,6 +656,10 @@ public class FreeFlightModeE2ETest extends AbstractSharedClientE2ETest {
         exec("artest rocket free-flight-input " + rocketId + " 0 1 0 0 0");
         bot().waitTicks(8); // past the launch-kick transient, into a steady climb
 
+        // A SAMPLING LADDER, not a poll: the per-tick delta IS the subject, so the reads cannot
+        // be collapsed into one window read at the end — "it advanced every tick" and "it froze
+        // then jumped" have the same endpoints. There is no early exit and no acceptance test in
+        // the header: the ladder always spends its eight ticks and the ratio is the finding.
         int samples = 8;
         int moved = 0;
         double prev = bot().reportRidingEntity().get("posY").getAsDouble();
@@ -1300,19 +1308,37 @@ public class FreeFlightModeE2ETest extends AbstractSharedClientE2ETest {
         long camMark = openFlightCameraWindow(); // this drag's own extrema, not the last leg's
         bot().holdKey(Keyboard.KEY_R); // keep airborne so tickFreeFlight integrates pitch
 
-        // A real mouse drag: repeated +6° swipes (above MAX_PITCH_RATE=4, so
-        // each tick integrates at the rate cap and discards the excess). Loop
-        // until the nose passes 20° or we run out of budget — under load the
-        // bot round-trips can skip ticks, so a fixed count undershoots.
-        double nosePitch = 0;
-        for (int i = 0; i < 30 && nosePitch <= 20.0; i++) {
+        // A real mouse drag: repeated +6° swipes. This loop is the STIMULUS — it performs the
+        // drag — so it owes a budget and a read taken after the swipes stop, not a reading per
+        // iteration. It used to exit on `nosePitch > 20.0`, which is the assertion below: the
+        // claim could be timed out but never disproved.
+        //
+        // The count is MEASURED, and the measurement corrected the arithmetic that produced it.
+        // From the production constants alone: the flight cursor is ABSOLUTE
+        // (KeyBindings.FF_CURSOR_SENS = 0.04 per degree), so a +6° swipe adds 0.24 deflection and
+        // five saturate it at 1.0; the nose then integrates at MAX_PITCH_RATE = 4°/tick, which
+        // predicts ~33° after twelve swipes. Run, twelve swipes reached **71.1°** — an iteration
+        // costs more than the one tick it waits (the reportState/setLook round-trips each pass
+        // ticks of their own) and the nose keeps integrating after the last swipe, since the
+        // deflection stays where the drag left it.
+        //
+        // That headroom matters: past 90° the nose goes over the top (the attitude is a
+        // quaternion — there is no clamp to stop it) and the pitch reading turns back down
+        // through the bound. So the drive is EIGHT, measured at 40.8° — twice the bound, and
+        // twice as far again from the wrap.
+        for (int i = 0; i < 8; i++) {
             JsonObject st = bot().reportState();
             bot().setLook(st.get("playerYaw").getAsFloat(),
                           st.get("playerPitch").getAsFloat() + 6f);
             bot().waitTicks(1);
-            nosePitch = parseDouble(exec("artest rocket info " + rocketId),
-                    FF_PITCH, "freeFlightPitch");
         }
+        double nosePitch = parseDouble(exec("artest rocket info " + rocketId),
+                FF_PITCH, "freeFlightPitch");
+        // Printed because a green now says only "past 20°"; the margin the fixed drive actually
+        // leaves is what a tighter pin would have to be built from, and one run is not a
+        // distribution.
+        System.out.println("[ff-drag] nose pitch after 8 swipes: " + nosePitch
+                + "° (the bound is 20.0°, the wrap is 90°)");
         double maxErr = Events.number(
                 closeFlightCameraWindow(camMark, "the mouse-drag leg"), "maxErrDeg");
         bot().releaseKey(Keyboard.KEY_R);

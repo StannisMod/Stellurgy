@@ -266,6 +266,22 @@ public class MachineGuiClientGroupE2ETest extends AbstractSharedClientE2ETest {
         return Integer.parseInt(readGroup(json, p));
     }
 
+    /**
+     * Whether any {@code region_scan_advanced} in a {@code since} reply ended on a discovery.
+     *
+     * <p>The instrument records a completion pass whenever it CHANGED something, which includes a
+     * pass that only replaced the survey object, so a record on its own does not mean a look
+     * resolved — the count does.</p>
+     */
+    private static boolean anyDiscoveryResolved(String sinceReply) {
+        for (String record : Events.records(sinceReply)) {
+            if (Events.number(record, "discoveries") >= 1) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     private static boolean readBoolean(String json, Pattern p) {
         return Boolean.parseBoolean(readGroup(json, p));
     }
@@ -697,14 +713,18 @@ public class MachineGuiClientGroupE2ETest extends AbstractSharedClientE2ETest {
                 begun.contains("\"accepted\":true"));
 
         scenario().measuring("the crystal in the machine, after a survey driven only by clicks");
-        // Left as a bounded read: the addresses are an ACCUMULATION over the cells the look
-        // resolved, not a link — and the links either side of it are now named above, so a red here
-        // means the survey ran and found nothing rather than "something did not happen".
+        // The addresses ARE an accumulation and stay a single read — but what the test was waiting
+        // for is not the accumulation, it is the completion pass that feeds it, and production
+        // records that: `region_scan_advanced` is taken when a pass CHANGES what the instrument
+        // holds, and carries the discovery count it ended on. So the wait is that record with a
+        // non-zero count, and the crystal is read once afterwards. The old poll asked the crystal
+        // twenty times and, on expiry, reported the same zero it had read at the start.
+        events.awaitMatching(scanMark, "region_scan_advanced",
+                MachineGuiClientGroupE2ETest::anyDiscoveryResolved,
+                "carrying a non-zero discovery count",
+                "a survey driven entirely from the GUI must resolve at least one look into a"
+                        + " discovery before the crystal can hold an address", 400);
         String done = exec("artest telescope info " + where);
-        for (int attempt = 0; attempt < 20 && readInt(done, TELESCOPE_ADDRESSES) < 1; attempt++) {
-            bot().waitTicks(20);
-            done = exec("artest telescope info " + where);
-        }
         assertTrue("a survey driven entirely from the GUI left the crystal empty: " + done
                         + " surveySteps=" + events.since(scanMark, "region_scan_advanced"),
                 readInt(done, TELESCOPE_ADDRESSES) >= 1);

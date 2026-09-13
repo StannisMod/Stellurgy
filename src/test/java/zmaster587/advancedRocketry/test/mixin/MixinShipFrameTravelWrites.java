@@ -14,6 +14,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 import zmaster587.advancedRocketry.integration.vs.ShipFrameTravel;
 import zmaster587.advancedRocketry.integration.vs.VSIntegration;
+import zmaster587.advancedRocketry.test.trace.DeckReseatState;
 import zmaster587.advancedRocketry.test.trace.ShipFrameGuardState;
 import zmaster587.advancedRocketry.test.trace.TestTrace;
 
@@ -438,6 +439,13 @@ public abstract class MixinShipFrameTravelWrites {
      * different readings. The counter this replaces was a lifetime total, which made the sensitivity
      * gate that reads it satisfiable by any earlier scenario in a shared client: it said "this
      * mechanism exists in this JVM", where the gate's own prose claims "it ran during this roll".</p>
+     *
+     * <p>{@code maxStep} is how far the FURTHEST of those bodies was carried by this pass, from
+     * {@link DeckReseatState} — the deck's own step out from under a standing body. It rides here
+     * rather than being read off a field because a field answers with the last pass on either side,
+     * whenever that was; on the record it belongs to a pass a reader's marks can contain. The take
+     * happens before the early return, so a pass that moved nothing still releases the
+     * accumulator.</p>
      */
     @Inject(method = "followShipPoses", at = @At("RETURN"))
     private static void arTest$reseatPass(World world, CallbackInfoReturnable<Integer> cir) {
@@ -445,12 +453,14 @@ public abstract class MixinShipFrameTravelWrites {
             return;
         }
         TestTrace.instrumentHere("deck_reseat_pass_events");
+        double maxStep = DeckReseatState.takePassMax();
         int bodies = cir.getReturnValue() == null ? 0 : cir.getReturnValue();
         if (bodies <= 0) {
             return;
         }
         TestTrace.recordHere("deck_reseat_pass",
-                "\"remote\":" + world.isRemote + ",\"bodies\":" + bodies);
+                "\"remote\":" + world.isRemote + ",\"bodies\":" + bodies
+                        + ",\"maxStep\":" + maxStep);
     }
 
     /**

@@ -338,15 +338,14 @@ public class VSJumpDriveFixtureBoardingE2ETest extends AbstractSharedVsClientE2E
                         + navAim.diagnosis,
                 5 * budget);
 
-        // WHICH screen is up is a state, read after the link above rather than waited for: the open
-        // has already been recorded, so this only lets the client finish putting it on screen.
-        String screen = "";
-        for (int attempt = 0; attempt < 10 && screen.isEmpty(); attempt++) {
-            screen = ClientGuiTestSupport.screenOf(bot().reportState());
-            if (screen.isEmpty()) {
-                bot().waitTicks(5);
-            }
-        }
+        // WHICH screen is up is a state, read ONCE after the link above — there is no gap here to
+        // poll. Checked in the vanilla source rather than assumed: Minecraft.displayGuiScreen
+        // posts GuiOpenEvent (which is what the record above is taken off) and assigns
+        // currentScreen sixteen lines later in the same call, so a client that recorded the open
+        // and has answered one probe round-trip since has the screen up. The one case that leaves
+        // currentScreen alone is a CANCELLED open, and the record carries `cancelled` — printed
+        // below, where the old fifty-tick poll could only report an empty string.
+        String screen = ClientGuiTestSupport.screenOf(bot().reportState());
         assertTrue("a real use-key press aimed at the assembled ship's NAVIGATION CONSOLE must open "
                         + "its GUI on the client. This is the second block a jump-capable craft asks "
                         + "the pilot to touch, and unlike the seat its whole answer IS the screen — a "

@@ -148,20 +148,20 @@ public class VSCrewRelogPersistenceE2ETest extends AbstractSharedVsClientE2ETest
         long poseTraceMark = clientEvents().mark();
         bot().invokeStaticInt("org.valkyrienskies.mod.common.ships.ship_world.PhysicsObject",
                 "arTest$armPoseTrace", 200);
-        double upY = 1.0;
-        // The deck's own step out from under a standing body, sampled as the roll runs: this is the
-        // displacement the leg below has to be able to see, so it is measured rather than assumed.
-        // Sampled here because it PEAKS mid-roll — read once at the end it would report the rate the
-        // craft had finished at, which is zero.
-        double deckStep = 0.0;
-        for (int attempt = 0; attempt < 25 && upY > -0.9; attempt++) {
-            bot().waitTicks(10);
-            deckStep = Math.max(deckStep, clientDouble("zmaster587.advancedRocketry.test.trace.DeckReseatState", "lastReseatStep"));
-            // The shared reading, which uses the full expression 1 - 2(qx^2 + qz^2). The
-            // single-axis shortcut this loop carried answers a confident 1.0 for a ship that rolled
-            // about a different axis, and would fail this ARRANGEMENT gate for the wrong reason.
-            upY = upYOf(shipInfo());
-        }
+        // A WINDOW, not a poll. The header used to exit on `upY > -0.9`, which is the arrangement
+        // gate below — so its green said "some sample was inverted" and could not be disproved. An
+        // attitude converging under the hold IS a physical value, and the hold never decides it has
+        // arrived, so there is no link to await; but a loop that re-reads until the value is
+        // acceptable is a poll whatever the value is made of. Give the roll its ticks, then read.
+        //
+        // The window is the roll's own time rather than a budget: the hold slews at about 2 rad/s,
+        // so half a turn is ~31 ticks, and an attitude this far past the reference reseed is ADOPTED
+        // and then HELD — a window longer than the slew cannot walk back out of the state.
+        bot().waitTicks(ROLL_WINDOW_TICKS);
+        // The shared reading, which uses the full expression 1 - 2(qx^2 + qz^2). The single-axis
+        // shortcut this leg carried answers a confident 1.0 for a ship that rolled about a different
+        // axis, and would fail this ARRANGEMENT gate for the wrong reason.
+        double upY = upYOf(shipInfo());
         String rollHistory = clientTickHistory();
         double rollSeatMiss = seatMiss(rollHistory, rollMark);
         // A zero deckStep is ambiguous on its own — a pass that never ran and a pass that ran on a
@@ -170,10 +170,20 @@ public class VSCrewRelogPersistenceE2ETest extends AbstractSharedVsClientE2ETest
         // was a lifetime total, so on a shared client the sensitivity gate below — "the mechanism
         // must have run at all" — was satisfied by any earlier scenario's re-seat, which is a
         // statement about the JVM and not about this roll.
+        // The deck's own step out from under a standing body: the displacement the leg below has to
+        // be able to see, so it is measured rather than assumed. Taken as the LARGEST step over the
+        // passes inside this roll's own marks, because it peaks mid-roll — the pass that ends the
+        // turn carries the rate the craft finished at, which is zero. It used to be sampled off a
+        // latest-value field, which answers with the last pass on either side whenever that was.
         long reseated = 0L;
+        double deckStep = 0.0;
         for (String pass : Events.records(
                 clientEvents().since(rollReleaseMark, "deck_reseat_pass"))) {
             reseated += (long) Events.number(pass, "bodies");
+            double step = Events.number(pass, "maxStep");
+            if (step > deckStep) {
+                deckStep = step;
+            }
         }
         String rollReleases = clientReleases(rollReleaseMark, "the roll");
         long dropsDuringRoll = guardReleases(rollReleases);
@@ -257,6 +267,22 @@ public class VSCrewRelogPersistenceE2ETest extends AbstractSharedVsClientE2ETest
      * the same defect is the same angle through a longer arm.</p>
      */
     private static final double SEAT_MISS_TOLERANCE = 0.02D;
+
+    /**
+     * How long a commanded half-turn is given to finish, in ticks.
+     *
+     * <p>The attitude hold slews at about 2 rad/s, so half a turn takes roughly 31 ticks; this is
+     * about two and a half times that. Two legs command the same 170-degree roll and both wait
+     * exactly this long, because it is a property of the hold and not of either occasion.</p>
+     *
+     * <p><b>Deliberately NOT scaled by the load factor.</b> That factor stretches wall clock, and
+     * this number does not denote how long we are willing to wait — it denotes how far the craft
+     * turns, which is a fixed amount per tick. Scaling it would turn the ship further on a loaded
+     * box and make the same test a different experiment per machine. What protects the wait under
+     * load is the other half of the arrangement: the attitude is ADOPTED and then HELD, so a
+     * window longer than the slew reads the same state as one exactly its length.</p>
+     */
+    private static final int ROLL_WINDOW_TICKS = 80;
 
     /**
      * A crew member WALKING his own deck must never be released by the external-move guard.
@@ -627,17 +653,19 @@ public class VSCrewRelogPersistenceE2ETest extends AbstractSharedVsClientE2ETest
         assertTrue("attitude hold must accept the inversion",
                 exec("artest vs point-by-id 0 " + scenarioShipId + " "
                         + Math.cos(h) + " " + Math.sin(h) + " 0.0 0.0").contains("\"commanded\":true"));
-        // An attitude CONVERGING under the hold is a physical value, not a link, so it stays a
-        // bounded poll - but a poll, not a sleep: the reading below used to be taken once, at a
-        // moment nothing had promised the roll was over. Read through the shared upYOf, which uses
-        // the full expression: the single-axis shortcut this leg carried (1 - 2*qx^2) answers a
-        // confident 1.0 for a ship that rolled about a different axis, and the sibling deck-crew
-        // leg records exactly that mistake.
-        double upY = 1.0;
-        for (int attempt = 0; attempt < 40 && upY > -0.9; attempt++) {
-            bot().waitTicks(10);
-            upY = upYOf(shipInfo());
-        }
+        // An attitude CONVERGING under the hold is a physical value and not a link — production
+        // never decides it has arrived — so this is a WINDOW and one read. It was a poll whose exit
+        // condition is the gate below, which is the one shape question 2 does not license however
+        // physical the value: its green says "some sample was inverted". The same window as the
+        // roll leg above, for the same reason: the hold slews at ~2 rad/s, half a turn is ~31
+        // ticks, and the attitude is HELD once reached. NOT scaled by the load factor, for the
+        // reason given there.
+        //
+        // Read through the shared upYOf, which uses the full expression: the single-axis shortcut
+        // this leg carried (1 - 2*qx^2) answers a confident 1.0 for a ship that rolled about a
+        // different axis, and the sibling deck-crew leg records exactly that mistake.
+        bot().waitTicks(ROLL_WINDOW_TICKS);
+        double upY = upYOf(shipInfo());
         assertTrue("the ship must be (near-)inverted for the relog to be able to drop the player "
                 + "(upY=" + upY + ")", upY < -0.9);
         String capBefore = exec("artest vs deck-capture");
@@ -1233,19 +1261,6 @@ public class VSCrewRelogPersistenceE2ETest extends AbstractSharedVsClientE2ETest
         return Events.countRecords(releases, "\"reason\":\"externalMove");
     }
 
-    /** Class holding the client-side diagnostics this test quotes in its failure text. */
-    private static final String SHIP_FRAME_TRAVEL =
-            "zmaster587.advancedRocketry.integration.vs.ShipFrameTravel";
-
-    /** A client-side static field, as a string — diagnostics only, never an assertion subject. */
-    private String clientString(String className, String field) throws Exception {
-        try {
-            return bot().readStaticField(className, field).get("value").getAsString();
-        } catch (Exception unavailable) {
-            return "<unreadable: " + unavailable.getMessage() + ">";
-        }
-    }
-
     /** Build a ship at this base and wait for it to load with the client present; returns its world pos. */
     private double[] buildShip(int bx, int by, int bz) throws Exception {
         exec("tp @a " + (bx + 600) + " 120 " + (bz + 600) + " 0 0");
@@ -1321,11 +1336,6 @@ public class VSCrewRelogPersistenceE2ETest extends AbstractSharedVsClientE2ETest
     }
 
     /** Distance ALONG the deck - the ship-frame horizontal plane, with the deck normal dropped. */
-    /** A client-side static as a number. */
-    private double clientDouble(String className, String field) throws Exception {
-        return Double.parseDouble(clientString(className, field).trim());
-    }
-
     private static double alongDeck(double[] a, double[] b) {
         double dx = a[0] - b[0], dz = a[2] - b[2];
         return Math.sqrt(dx * dx + dz * dz);
