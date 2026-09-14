@@ -5,6 +5,8 @@ import org.junit.Test;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import zmaster587.advancedRocketry.test.FixtureSite;
+
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
@@ -31,16 +33,21 @@ public class WearAccrualDisableTest extends AbstractSharedServerTest {
         return String.join("\n", client().execute(c));
     }
 
-    private void preClear(int baseX, int baseY, int baseZ) throws Exception {
-        int cx1 = (baseX - 2) >> 4, cz1 = (baseZ - 2) >> 4;
-        int cx2 = (baseX + 7) >> 4, cz2 = (baseZ + 7) >> 4;
-        client().execute("artest chunk warmup 0 " + cx1 + " " + cz1 + " " + cx2 + " " + cz2);
-        client().execute("artest fill 0 " + (baseX - 2) + " " + (baseY + 1) + " " + (baseZ - 2)
-                + " " + (baseX + 7) + " " + (baseY + 10) + " " + (baseZ + 7) + " minecraft:air");
+    /**
+     * FIRST link: the volume this craft is built in is EMPTY, and a failure names what was in it.
+     *
+     * <p>The site stands in open air, so this ASSERTS rather than digs. It still warms the chunks -
+     * the fill inside it force-loads every chunk in the box - so nothing downstream lost a
+     * guarantee it had.</p>
+     */
+    private void requireClearSite(FixtureSite site) throws Exception {
+        site.requireClear(this::cmd, 2, 10, "the craft is built and worn in this volume");
     }
 
-    private int buildAndAssemble(int baseX, int baseY, int baseZ) throws Exception {
-        preClear(baseX, baseY, baseZ);
+    private int buildAndAssemble(FixtureSite site) throws Exception {
+        // The site owns the coordinates; these aliases keep the body below unchanged.
+        final int baseX = site.x, baseY = site.y, baseZ = site.z;
+        requireClearSite(site);
         String fixture = cmd("artest fixture rocket 0 " + baseX + " " + baseY + " " + baseZ + " simple");
         assertTrue("fixture build failed: " + fixture, fixture.contains("\"ok\":true"));
         Matcher bp = BUILDER_POS.matcher(fixture);
@@ -72,14 +79,14 @@ public class WearAccrualDisableTest extends AbstractSharedServerTest {
 
             // --- system ON: a worn motor raises the breaking probability ---
             assertTrue(cmd("artest config set partsWearSystem true").contains("\"ok\":true"));
-            int onRocket = buildAndAssemble(3200, 64, 3200);
+            int onRocket = buildAndAssemble(FixtureSite.openAir(0, 3200, 3200));
             double probOn = damagePartsAndReadProb(onRocket, 200);
             assertTrue("with the wear system ON, driving damageParts must accrue wear "
                     + "(breaking probability > 0), got " + probOn, probOn > 0);
 
             // --- system OFF: identical driving accrues nothing ---
             assertTrue(cmd("artest config set partsWearSystem false").contains("\"ok\":true"));
-            int offRocket = buildAndAssemble(3260, 64, 3200);
+            int offRocket = buildAndAssemble(FixtureSite.openAir(0, 3260, 3200));
             double probOff = damagePartsAndReadProb(offRocket, 200);
             assertEquals("with the wear system OFF, damageParts must not advance any wear "
                     + "stage (breaking probability stays 0)", 0.0, probOff, 1e-9);

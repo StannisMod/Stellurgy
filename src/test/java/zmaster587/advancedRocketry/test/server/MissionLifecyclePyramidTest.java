@@ -5,6 +5,8 @@ import org.junit.Test;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import zmaster587.advancedRocketry.test.FixtureSite;
+
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
@@ -47,13 +49,15 @@ public class MissionLifecyclePyramidTest extends AbstractSharedServerTest {
     }
 
     private long buildRocketAndStartGasMission(int baseX, long duration) throws Exception {
-        int baseY = 64;
-        int baseZ = 500;
-        // Clear airspace so the assembler can scan a clean pad column.
-        ok(client().execute(
-                "artest fill 0 " + (baseX - 2) + " " + (baseY + 1) + " " + (baseZ - 2)
-                        + " " + (baseX + 7) + " " + (baseY + 10) + " " + (baseZ + 7)
-                        + " minecraft:air"));
+        final FixtureSite site = FixtureSite.openAir(0, baseX, 500);
+        // The site owns the coordinates; these aliases keep the body below unchanged.
+        final int baseY = site.y, baseZ = site.z;
+        // FIRST link: the volume this craft is built and flown in is EMPTY. The site
+        // stands in open air, so this ASSERTS rather than digs - anything standing here
+        // means the arrangement is wrong, and it is said now instead of arriving many
+        // links later wearing some mechanic's name.
+        site.requireClear(cmd -> ok(client().execute(cmd)), 2, 10,
+                "the craft is built and flown in this volume");
         String fixture = ok(client().execute(
                 "artest fixture rocket 0 " + baseX + " " + baseY + " " + baseZ + " simple"));
         Matcher bp = BUILDER_POS.matcher(fixture);

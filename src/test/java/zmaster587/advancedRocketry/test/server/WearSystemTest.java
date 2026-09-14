@@ -5,6 +5,8 @@ import org.junit.Test;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import zmaster587.advancedRocketry.test.FixtureSite;
+
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
@@ -26,16 +28,22 @@ public class WearSystemTest extends AbstractSharedServerTest {
     private static final Pattern BUILDER_POS = Pattern.compile("\"builderPos\":\\[(-?\\d+),(-?\\d+),(-?\\d+)]");
     private static final Pattern ROCKET_LIST_ID = Pattern.compile("\"id\":(-?\\d+)");
 
-    private void preClear(int baseX, int baseY, int baseZ) throws Exception {
-        int cx1 = (baseX - 2) >> 4, cz1 = (baseZ - 2) >> 4;
-        int cx2 = (baseX + 7) >> 4, cz2 = (baseZ + 7) >> 4;
-        client().execute("artest chunk warmup 0 " + cx1 + " " + cz1 + " " + cx2 + " " + cz2);
-        client().execute("artest fill 0 " + (baseX - 2) + " " + (baseY + 1) + " " + (baseZ - 2)
-                + " " + (baseX + 7) + " " + (baseY + 10) + " " + (baseZ + 7) + " minecraft:air");
+    /**
+     * FIRST link: the volume this craft is built in is EMPTY, and a failure names what was in it.
+     *
+     * <p>The site stands in open air, so this ASSERTS rather than digs. It still warms the chunks -
+     * the fill inside it force-loads every chunk in the box - so nothing downstream lost a
+     * guarantee it had.</p>
+     */
+    private void requireClearSite(FixtureSite site) throws Exception {
+        site.requireClear(cmd -> String.join("\n", client().execute(cmd)), 2, 10,
+                "the craft is built and worn in this volume");
     }
 
-    private int[] buildFixture(int baseX, int baseY, int baseZ) throws Exception {
-        preClear(baseX, baseY, baseZ);
+    private int[] buildFixture(FixtureSite site) throws Exception {
+        // The site owns the coordinates; these aliases keep the body below unchanged.
+        final int baseX = site.x, baseY = site.y, baseZ = site.z;
+        requireClearSite(site);
         String fixture = String.join("\n", client().execute(
                 "artest fixture rocket 0 " + baseX + " " + baseY + " " + baseZ + " simple"));
         assertTrue("fixture build failed: " + fixture, fixture.contains("\"ok\":true"));
@@ -65,8 +73,9 @@ public class WearSystemTest extends AbstractSharedServerTest {
 
     @Test
     public void motorTankSeatHostWearCapability() throws Exception {
-        int bx = 2900, by = 64, bz = 2900;
-        buildFixture(bx, by, bz);
+        final FixtureSite bSite = FixtureSite.openAir(0, 2900, 2900);
+        final int bx = bSite.x, by = bSite.y, bz = bSite.z;
+        buildFixture(bSite);
         int rocketX = bx + 3, rocketY = by + 1, rocketZ = bz + 3;
 
         // Engine, fuel tank, seat positions (see fixture builder).
@@ -85,8 +94,9 @@ public class WearSystemTest extends AbstractSharedServerTest {
 
     @Test
     public void wearStageRoundTripsThroughCapability() throws Exception {
-        int bx = 2960, by = 64, bz = 2900;
-        buildFixture(bx, by, bz);
+        final FixtureSite bSite = FixtureSite.openAir(0, 2960, 2900);
+        final int bx = bSite.x, by = bSite.y, bz = bSite.z;
+        buildFixture(bSite);
         int ex = bx + 3 - 1, ey = by + 1, ez = bz + 3;
 
         String set = String.join("\n", client().execute("artest wear set 0 " + ex + " " + ey + " " + ez + " 7"));
@@ -108,14 +118,16 @@ public class WearSystemTest extends AbstractSharedServerTest {
     @Test
     public void wornMotorRaisesBreakingProbability() throws Exception {
         // Pristine rocket: zero failure probability.
-        int ax = 2900, ay = 64, az = 3020;
-        int pristine = assembleAndGetId(buildFixture(ax, ay, az));
+        final FixtureSite aSite = FixtureSite.openAir(0, 2900, 3020);
+        final int ax = aSite.x, ay = aSite.y, az = aSite.z;
+        int pristine = assembleAndGetId(buildFixture(aSite));
         assertEquals("pristine rocket must have zero breaking probability",
                 0.0, breakingProbOf(pristine), 1e-6);
 
         // Max out one engine's wear before assembly -> breaking probability rises.
-        int bx = 2960, by = 64, bz = 3020;
-        int[] builder = buildFixture(bx, by, bz);
+        final FixtureSite bSite = FixtureSite.openAir(0, 2960, 3020);
+        final int bx = bSite.x, by = bSite.y, bz = bSite.z;
+        int[] builder = buildFixture(bSite);
         int rocketX = bx + 3, rocketY = by + 1, rocketZ = bz + 3;
         client().execute("artest wear set 0 " + (rocketX - 1) + " " + rocketY + " " + rocketZ + " 10");
         int worn = assembleAndGetId(builder);
@@ -125,8 +137,9 @@ public class WearSystemTest extends AbstractSharedServerTest {
 
     @Test
     public void standaloneRepairResetsMotorWear() throws Exception {
-        int bx = 2900, by = 64, bz = 3080;
-        int[] builder = buildFixture(bx, by, bz);
+        final FixtureSite bSite = FixtureSite.openAir(0, 2900, 3080);
+        final int bx = bSite.x, by = bSite.y, bz = bSite.z;
+        int[] builder = buildFixture(bSite);
         int rocketId = assembleAndGetId(builder);
         // Wear one motor to stage 5 (no PrecisionAssembler nearby -> standalone path).
         String inject = String.join("\n", client().execute("artest infra inject-broken-part " + rocketId + " 5"));
@@ -167,8 +180,9 @@ public class WearSystemTest extends AbstractSharedServerTest {
 
     @Test
     public void wornTankAndSeatSurfaceForLaunchGate() throws Exception {
-        int bx = 2960, by = 64, bz = 3080;
-        int[] builder = buildFixture(bx, by, bz);
+        final FixtureSite bSite = FixtureSite.openAir(0, 2960, 3080);
+        final int bx = bSite.x, by = bSite.y, bz = bSite.z;
+        int[] builder = buildFixture(bSite);
         int rocketX = bx + 3, rocketY = by + 1, rocketZ = bz + 3;
         client().execute("artest wear set 0 " + rocketX + " " + (rocketY + 1) + " " + rocketZ + " 8");  // a fuel tank
         client().execute("artest wear set 0 " + rocketX + " " + (rocketY + 4) + " " + rocketZ + " 10"); // the seat
@@ -189,14 +203,16 @@ public class WearSystemTest extends AbstractSharedServerTest {
     public void wornMotorsProduceLessThrust() throws Exception {
         // Pristine reference rocket.
         int[] pristineBuilder = {0, 0, 0};
-        int ax = 2900, ay = 64, az = 2960;
-        pristineBuilder = buildFixture(ax, ay, az);
+        final FixtureSite aSite = FixtureSite.openAir(0, 2900, 2960);
+        final int ax = aSite.x, ay = aSite.y, az = aSite.z;
+        pristineBuilder = buildFixture(aSite);
         int pristineThrust = thrustOf(assembleAndGetId(pristineBuilder));
         assertTrue("pristine thrust must be positive", pristineThrust > 0);
 
         // Worn rocket: max out both engine wear stages before assembly.
-        int bx = 2960, by = 64, bz = 2960;
-        int[] wornBuilder = buildFixture(bx, by, bz);
+        final FixtureSite bSite = FixtureSite.openAir(0, 2960, 2960);
+        final int bx = bSite.x, by = bSite.y, bz = bSite.z;
+        int[] wornBuilder = buildFixture(bSite);
         int rocketX = bx + 3, rocketY = by + 1, rocketZ = bz + 3;
         client().execute("artest wear set 0 " + (rocketX - 1) + " " + rocketY + " " + rocketZ + " 10");
         client().execute("artest wear set 0 " + (rocketX + 1) + " " + rocketY + " " + rocketZ + " 10");

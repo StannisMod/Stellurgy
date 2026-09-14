@@ -7,6 +7,8 @@ import org.junit.Test;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import zmaster587.advancedRocketry.test.FixtureSite;
+
 import static org.junit.Assert.assertTrue;
 
 /**
@@ -44,7 +46,7 @@ public class AdvancedFlightComputerTierGateTest extends AbstractSharedServerTest
             + "the production fallback it describes may still exist, and would then be dead code with "
             + "no test to say so; that is its own finding, not this file's.")
     public void flightComputerWithoutVsBuildsInertRocket() throws Exception {
-        String assemble = assembleFixture(1200, 64, 1200, VARIANT);
+        String assemble = assembleFixture(FixtureSite.openAir(0, 1200, 1200), VARIANT);
         // A rocket WAS built (fallback taken) ...
         assertTrue("expected exactly one rocket from the fallback path: " + assemble,
                 assemble.contains("\"rocketCount\":1"));
@@ -66,7 +68,7 @@ public class AdvancedFlightComputerTierGateTest extends AbstractSharedServerTest
         // Needs Valkyrien Skies on the server classpath (suite run with );
         // skips cleanly otherwise.
 
-        String assemble = assembleFixture(1600, 64, 1600, VARIANT);
+        String assemble = assembleFixture(FixtureSite.openAir(0, 1600, 1600), VARIANT);
         // The defining contract of the fork WITH VS: the AFC diverts the build to a
         // ship, so no EntityRocket is spawned on the pad.
         assertTrue("with VS, an AFC-bearing build must not spawn a rocket: " + assemble,
@@ -80,7 +82,7 @@ public class AdvancedFlightComputerTierGateTest extends AbstractSharedServerTest
         // "computer with instructions" requirement — the scan must not reject it as NOGUIDANCE,
         // and with VS the build routes to a ship (no rocket).
 
-        String assemble = assembleFixture(2000, 64, 2000, "advanced-flight-computer-only");
+        String assemble = assembleFixture(FixtureSite.openAir(0, 2000, 2000), "advanced-flight-computer-only");
         assertTrue("an AFC alone must satisfy the guidance requirement and route to a ship "
                         + "(no rocket): " + assemble,
                 assemble.contains("\"rocketCount\":0"));
@@ -92,7 +94,7 @@ public class AdvancedFlightComputerTierGateTest extends AbstractSharedServerTest
             + "on every run rather than failing. The mirror gate it describes: without VS the AFC is "
             + "inert, the build falls back to a rocket, and a rocket still needs a guidance computer.")
     public void flightComputerAloneWithoutVsStillRequiresGuidance() throws Exception {
-        String coords = placeFixture(2000, 64, 2000, "advanced-flight-computer-only");
+        String coords = placeFixture(FixtureSite.openAir(0, 2000, 2000), "advanced-flight-computer-only");
         String assemble = String.join("\n", client().execute("artest rocket assemble 0 " + coords));
         assertTrue("without VS, an AFC alone must not satisfy guidance — scan must be NOGUIDANCE: "
                         + assemble,
@@ -105,8 +107,8 @@ public class AdvancedFlightComputerTierGateTest extends AbstractSharedServerTest
      * and {@code rocketCount}). See {@code RocketAssemblySmokeTest} for the
      * chunk-warmup / pre-clear rationale.
      */
-    private String assembleFixture(int baseX, int baseY, int baseZ, String variant) throws Exception {
-        String coords = placeFixture(baseX, baseY, baseZ, variant);
+    private String assembleFixture(FixtureSite site, String variant) throws Exception {
+        String coords = placeFixture(site, variant);
         String assemble = String.join("\n", client().execute("artest rocket assemble 0 " + coords));
         assertTrue("assemble (" + variant + ") failed: " + assemble, assemble.contains("\"ok\":true"));
         return assemble;
@@ -118,18 +120,20 @@ public class AdvancedFlightComputerTierGateTest extends AbstractSharedServerTest
      * test that expects the scan to FAIL (e.g. NOGUIDANCE) can drive {@code rocket assemble}
      * directly, since that probe returns an error (not {@code ok:true}) on a non-SUCCESS scan.
      */
-    private String placeFixture(int baseX, int baseY, int baseZ, String variant) throws Exception {
+    private String placeFixture(FixtureSite site, String variant) throws Exception {
+        // The site owns the coordinates; these aliases keep the body below unchanged.
+        final int baseX = site.x, baseY = site.y, baseZ = site.z;
         int cx1 = (baseX - 2) >> 4, cz1 = (baseZ - 2) >> 4;
         int cx2 = (baseX + 7) >> 4, cz2 = (baseZ + 7) >> 4;
         String warmup = String.join("\n", client().execute(
                 "artest chunk warmup 0 " + cx1 + " " + cz1 + " " + cx2 + " " + cz2));
         assertTrue("chunk warmup failed: " + warmup, warmup.contains("\"ok\":true"));
 
-        String fillAir = String.join("\n", client().execute(
-                "artest fill 0 " + (baseX - 2) + " " + (baseY + 1) + " " + (baseZ - 2)
-                        + " " + (baseX + 7) + " " + (baseY + 10) + " " + (baseZ + 7)
-                        + " minecraft:air"));
-        assertTrue("pre-clear failed: " + fillAir, fillAir.contains("\"ok\":true"));
+        // FIRST link: the volume this craft is built in is EMPTY. The site stands in open air, so
+        // this ASSERTS rather than digs - anything standing here means the arrangement is wrong,
+        // and it is said now instead of arriving many links later as a scan that found nothing.
+        site.requireClear(cmd -> String.join("\n", client().execute(cmd)), 2, 10,
+                "the craft is built and scanned in this volume");
 
         String fixture = String.join("\n", client().execute(
                 "artest fixture rocket 0 " + baseX + " " + baseY + " " + baseZ + " " + variant));

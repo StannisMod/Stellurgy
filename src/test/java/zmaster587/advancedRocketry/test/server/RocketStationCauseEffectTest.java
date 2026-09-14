@@ -6,6 +6,8 @@ import org.junit.Test;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import zmaster587.advancedRocketry.test.FixtureSite;
+
 import static org.junit.Assert.assertTrue;
 
 /**
@@ -56,12 +58,16 @@ public class RocketStationCauseEffectTest extends AbstractSharedServerTest {
         return String.join("\n", resp);
     }
 
-    private int buildAndAssemble(int baseX, int baseY, int baseZ) throws Exception {
-        String fillAir = ok(client().execute(
-                "artest fill 0 " + (baseX - 2) + " " + (baseY + 1) + " " + (baseZ - 2)
-                        + " " + (baseX + 7) + " " + (baseY + 10) + " " + (baseZ + 7)
-                        + " minecraft:air"));
-        assertTrue("pre-clear failed: " + fillAir, fillAir.contains("\"ok\":true"));
+    private int buildAndAssemble(FixtureSite site) throws Exception {
+        // The site owns the coordinates; these aliases keep the
+        // body below unchanged, so what moved is visible in one place.
+        final int baseX = site.x, baseY = site.y, baseZ = site.z;
+        // FIRST link: the volume this craft is built and flown in is EMPTY. The site
+        // stands in open air, so this ASSERTS rather than digs - anything standing here
+        // means the arrangement is wrong, and it is said now instead of arriving many
+        // links later wearing some mechanic's name.
+        site.requireClear(cmd -> ok(client().execute(cmd)), 2, 10,
+                "the craft is built and flown in this volume");
 
         String fixture = ok(client().execute(
                 "artest fixture rocket 0 " + baseX + " " + baseY + " " + baseZ + " simple"));
@@ -106,7 +112,7 @@ public class RocketStationCauseEffectTest extends AbstractSharedServerTest {
 
         // Build a rocket. The rocket itself stays on overworld; we just
         // need its guidance computer to invoke overrideLandingStation.
-        int rocketId = buildAndAssemble(2000, 64, 500);
+        int rocketId = buildAndAssemble(FixtureSite.openAir(0, 2000, 500));
 
         // Production cause-effect under test:
         //   gc.overrideLandingStation(station)
@@ -138,7 +144,7 @@ public class RocketStationCauseEffectTest extends AbstractSharedServerTest {
         ok(client().execute("artest station add-pad " + stationId + " 60 60 beta"));
         // intentionally NOT calling set-autoland — pad stays opt-out.
 
-        int rocketId = buildAndAssemble(2100, 64, 500);
+        int rocketId = buildAndAssemble(FixtureSite.openAir(0, 2100, 500));
         ok(client().execute("artest rocket override-landing " + rocketId + " " + stationId));
 
         String padsAfter = ok(client().execute("artest station pads " + stationId));
@@ -162,7 +168,7 @@ public class RocketStationCauseEffectTest extends AbstractSharedServerTest {
             ok(client().execute("artest station set-autoland " + stationId + " 70 " + z + " true"));
         }
 
-        int rocketId = buildAndAssemble(2200, 64, 500);
+        int rocketId = buildAndAssemble(FixtureSite.openAir(0, 2200, 500));
         ok(client().execute("artest rocket override-landing " + rocketId + " " + stationId));
 
         String pads = ok(client().execute("artest station pads " + stationId));
@@ -179,7 +185,7 @@ public class RocketStationCauseEffectTest extends AbstractSharedServerTest {
     public void overrideLandingStationOnUnknownStationProbeReturnsError() throws Exception {
         // Probe-API contract: bogus station id must produce a clean error,
         // not silently no-op against whatever happens to be in the registry.
-        int rocketId = buildAndAssemble(2300, 64, 500);
+        int rocketId = buildAndAssemble(FixtureSite.openAir(0, 2300, 500));
         String resp = ok(client().execute(
                 "artest rocket override-landing " + rocketId + " 9999999"));
         assertTrue("override-landing on unknown station must error: " + resp,

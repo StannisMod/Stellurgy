@@ -7,6 +7,8 @@ import org.junit.Test;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import zmaster587.advancedRocketry.test.FixtureSite;
+
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertTrue;
@@ -58,17 +60,16 @@ public class RocketLaunchDepthTest extends AbstractSharedServerTest {
         return String.join("\n", resp);
     }
 
-    private int buildAndAssemble(int baseX, int baseY, int baseZ) throws Exception {
-        // Pre-clear a generous halo so any pre-existing terrain or test
-        // detritus doesn't leak into the scan.
-        String fillAir = ok(client().execute(
-                "artest fill 0 " + (baseX - 2) + " " + (baseY + 1) + " " + (baseZ - 2)
-                        + " " + (baseX + 7) + " " + (baseY + 10) + " " + (baseZ + 7)
-                        + " minecraft:air"));
-        assertTrue("pre-clear failed: " + fillAir, fillAir.contains("\"ok\":true"));
+    private int buildAndAssemble(FixtureSite site) throws Exception {
+        // FIRST link: the volume this rocket is built and launched in is empty. It is an assertion
+        // and not a clearing — the site stands in open air, so anything standing in it means the
+        // arrangement is wrong, and saying so here is what keeps it from arriving later as a launch
+        // that would not take off.
+        site.requireClear(cmd -> ok(client().execute(cmd)), 2, 10,
+                "the rocket is built and launched in this volume");
 
         String fixture = ok(client().execute(
-                "artest fixture rocket 0 " + baseX + " " + baseY + " " + baseZ + " simple"));
+                "artest fixture rocket 0 " + site.x + " " + site.y + " " + site.z + " simple"));
         assertTrue("fixture failed: " + fixture, fixture.contains("\"ok\":true"));
         Matcher bp = BUILDER_POS.matcher(fixture);
         assertTrue("fixture missing builderPos: " + fixture, bp.find());
@@ -114,7 +115,7 @@ public class RocketLaunchDepthTest extends AbstractSharedServerTest {
         // RocketLaunchEventTest.launchInstantRespondsOkAndEchoesMode only
         // proved the probe wiring didn't crash.
         int destDim = firstNonOverworldArDimOrSkip();
-        int id = buildAndAssemble(1000, 64, 500);
+        int id = buildAndAssemble(FixtureSite.openAir(0, 1000, 500));
 
         String prog = ok(client().execute(
                 "artest rocket set-destination " + id + " " + destDim));
@@ -151,7 +152,7 @@ public class RocketLaunchDepthTest extends AbstractSharedServerTest {
         // No set-destination call -> guidance computer slot 0 is empty ->
         // getDestinationDimId returns Constants.INVALID_PLANET -> launch
         // bails with "error.rocket.cannotGetThere".
-        int id = buildAndAssemble(1100, 64, 500);
+        int id = buildAndAssemble(FixtureSite.openAir(0, 1100, 500));
 
         String launch = ok(client().execute(
                 "artest rocket launch " + id + " true instant"));
@@ -177,7 +178,7 @@ public class RocketLaunchDepthTest extends AbstractSharedServerTest {
         // any events and must NOT mutate state. Verify by force-launching
         // (cheap, deterministic), then calling instant launch — the
         // second call must complete cleanly with isInFlight still true.
-        int id = buildAndAssemble(1200, 64, 500);
+        int id = buildAndAssemble(FixtureSite.openAir(0, 1200, 500));
         ok(client().execute("artest rocket launch " + id + " false force"));
 
         String preInfo = ok(client().execute("artest rocket info " + id));
@@ -225,7 +226,7 @@ public class RocketLaunchDepthTest extends AbstractSharedServerTest {
         // This is essentially a sanity check that "obviously valid"
         // configurations work. If a regression broke it, every
         // overworld->overworld flight would silently fail.
-        int id = buildAndAssemble(1300, 64, 500);
+        int id = buildAndAssemble(FixtureSite.openAir(0, 1300, 500));
         ok(client().execute("artest rocket set-destination " + id + " 0"));
 
         String launch = ok(client().execute(
@@ -256,7 +257,7 @@ public class RocketLaunchDepthTest extends AbstractSharedServerTest {
      *  silent bail-outs. */
     @Test
     public void rocketInfoExposesErrorMessageField() throws Exception {
-        int id = buildAndAssemble(1400, 64, 500);
+        int id = buildAndAssemble(FixtureSite.openAir(0, 1400, 500));
         String info = ok(client().execute("artest rocket info " + id));
         assertTrue("rocket info must expose errorMessage field: " + info,
                 info.contains("\"errorMessage\":"));

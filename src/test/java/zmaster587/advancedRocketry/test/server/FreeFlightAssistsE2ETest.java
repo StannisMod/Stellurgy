@@ -5,6 +5,8 @@ import org.junit.Test;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import zmaster587.advancedRocketry.test.FixtureSite;
+
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
@@ -34,12 +36,16 @@ public class FreeFlightAssistsE2ETest extends AbstractSharedServerTest {
         return String.join("\n", resp);
     }
 
-    private int buildAndAssemble(int baseX, int baseY, int baseZ) throws Exception {
-        String fillAir = ok(client().execute(
-                "artest fill 0 " + (baseX - 2) + " " + (baseY + 1) + " " + (baseZ - 2)
-                        + " " + (baseX + 7) + " " + (baseY + 50) + " " + (baseZ + 7)
-                        + " minecraft:air"));
-        assertTrue("pre-clear failed: " + fillAir, fillAir.contains("\"ok\":true"));
+    private int buildAndAssemble(FixtureSite site) throws Exception {
+        // The site owns the coordinates; these aliases keep the
+        // body below unchanged, so what moved is visible in one place.
+        final int baseX = site.x, baseY = site.y, baseZ = site.z;
+        // FIRST link: the volume this craft is built and flown in is EMPTY. The site
+        // stands in open air, so this ASSERTS rather than digs - anything standing here
+        // means the arrangement is wrong, and it is said now instead of arriving many
+        // links later wearing some mechanic's name.
+        site.requireClear(cmd -> ok(client().execute(cmd)), 2, 50,
+                "the craft is built and flown in this volume");
 
         String fixture = ok(client().execute(
                 "artest fixture rocket 0 " + baseX + " " + baseY + " " + baseZ + " simple"));
@@ -74,7 +80,7 @@ public class FreeFlightAssistsE2ETest extends AbstractSharedServerTest {
 
     @Test
     public void flightAssistDefaultsOnAndTogglesThroughProbe() throws Exception {
-        int id = buildAndAssemble(4000, 64, 500);
+        int id = buildAndAssemble(FixtureSite.openAir(0, 4000, 500));
         String info0 = ok(client().execute("artest rocket info " + id));
         assertTrue("FA must default to true: " + info0,
                 info0.contains("\"flightAssistOn\":true"));
@@ -95,7 +101,7 @@ public class FreeFlightAssistsE2ETest extends AbstractSharedServerTest {
 
     @Test
     public void setFlightAssistRejectsBadValue() throws Exception {
-        int id = buildAndAssemble(4050, 64, 500);
+        int id = buildAndAssemble(FixtureSite.openAir(0, 4050, 500));
         String resp = ok(client().execute(
                 "artest rocket set-flight-assist " + id + " wat"));
         assertTrue("bad value must report error: " + resp,
@@ -104,7 +110,7 @@ public class FreeFlightAssistsE2ETest extends AbstractSharedServerTest {
 
     @Test
     public void cutFlagThroughInputIsStoredOnServer() throws Exception {
-        int id = buildAndAssemble(4100, 64, 500);
+        int id = buildAndAssemble(FixtureSite.openAir(0, 4100, 500));
         ok(client().execute("artest rocket set-flight-mode " + id + " FREE_FLIGHT"));
         ok(client().execute("artest rocket start-free-flight " + id));
 
@@ -126,7 +132,7 @@ public class FreeFlightAssistsE2ETest extends AbstractSharedServerTest {
         // THE Flight Assist feature: holding forward RAMPS the
         // velocity setpoint; releasing the key KEEPS it — the craft cruises
         // hands-off instead of coasting down.
-        int id = buildAndAssemble(4150, 64, 500);
+        int id = buildAndAssemble(FixtureSite.openAir(0, 4150, 500));
         ok(client().execute("artest rocket set-flight-mode " + id + " FREE_FLIGHT"));
         ok(client().execute("artest rocket start-free-flight " + id));
 
@@ -152,7 +158,7 @@ public class FreeFlightAssistsE2ETest extends AbstractSharedServerTest {
     public void cutEasesTheCraftIntoAGravityCancelledHover() throws Exception {
         // X (cut): zero the setpoint -> FA damps motion to zero AND holds
         // altitude (gravity cancelled) — brake-to-hover, not brake-to-fall.
-        int id = buildAndAssemble(4200, 64, 500);
+        int id = buildAndAssemble(FixtureSite.openAir(0, 4200, 500));
         ok(client().execute("artest rocket set-flight-mode " + id + " FREE_FLIGHT"));
         ok(client().execute("artest rocket start-free-flight " + id));
 
@@ -180,7 +186,7 @@ public class FreeFlightAssistsE2ETest extends AbstractSharedServerTest {
     public void yawingTheCraftRotatesTheCruiseVelocity() throws Exception {
         // The setpoint is body-frame: cruise forward, then yaw ~90° — the
         // WORLD velocity must rotate with the nose (from +Z toward -X).
-        int id = buildAndAssemble(4300, 64, 500);
+        int id = buildAndAssemble(FixtureSite.openAir(0, 4300, 500));
         ok(client().execute("artest rocket set-flight-mode " + id + " FREE_FLIGHT"));
         ok(client().execute("artest rocket start-free-flight " + id));
 
@@ -212,7 +218,7 @@ public class FreeFlightAssistsE2ETest extends AbstractSharedServerTest {
         // had been failing since that change landed and nobody read it — the cruise built here is 4.0
         // against a ceiling of 3.0. The capture is still the contract; it is now tested where the
         // contract holds, and the clamp is tested beside it as its own leg.
-        int id = buildAndAssemble(4350, 64, 500);
+        int id = buildAndAssemble(FixtureSite.openAir(0, 4350, 500));
         ok(client().execute("artest rocket set-flight-mode " + id + " FREE_FLIGHT"));
         ok(client().execute("artest rocket start-free-flight " + id));
 
@@ -259,7 +265,7 @@ public class FreeFlightAssistsE2ETest extends AbstractSharedServerTest {
      */
     @Test
     public void reEnablingFlightAssistAboveItsCeilingDeceleratesToTheCeiling() throws Exception {
-        int id = buildAndAssemble(4375, 64, 500);
+        int id = buildAndAssemble(FixtureSite.openAir(0, 4375, 500));
         ok(client().execute("artest rocket set-flight-mode " + id + " FREE_FLIGHT"));
         ok(client().execute("artest rocket start-free-flight " + id));
 
@@ -293,7 +299,7 @@ public class FreeFlightAssistsE2ETest extends AbstractSharedServerTest {
     @Test
     public void flightAssistOffStillAcceptsExplicitBrake() throws Exception {
         // Cross-side wiring: FA=off + brake input still attenuates motion.
-        int id = buildAndAssemble(4400, 64, 500);
+        int id = buildAndAssemble(FixtureSite.openAir(0, 4400, 500));
         ok(client().execute("artest rocket set-flight-mode " + id + " FREE_FLIGHT"));
         ok(client().execute("artest rocket start-free-flight " + id));
         ok(client().execute("artest rocket set-flight-assist " + id + " off"));
@@ -319,7 +325,7 @@ public class FreeFlightAssistsE2ETest extends AbstractSharedServerTest {
         // The client engine sound is driven by getEnginePower(); in FF that must be
         // non-zero for thrust in ANY direction — not only motionY>0 (the classic
         // areEnginesRunning gate that made the sound cut out in cruise/hover).
-        int id = buildAndAssemble(4250, 64, 500);
+        int id = buildAndAssemble(FixtureSite.openAir(0, 4250, 500));
         ok(client().execute("artest rocket set-flight-mode " + id + " FREE_FLIGHT"));
         ok(client().execute("artest rocket start-free-flight " + id));
 

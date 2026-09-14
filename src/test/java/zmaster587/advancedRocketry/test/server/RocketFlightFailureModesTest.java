@@ -6,6 +6,8 @@ import org.junit.Test;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import zmaster587.advancedRocketry.test.FixtureSite;
+
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
@@ -64,11 +66,16 @@ public class RocketFlightFailureModesTest extends AbstractSharedServerTest {
         return -1;
     }
 
-    private int buildAndAssemble(int baseX, int baseY, int baseZ) throws Exception {
-        ok(client().execute(
-                "artest fill 0 " + (baseX - 2) + " " + (baseY + 1) + " " + (baseZ - 2)
-                        + " " + (baseX + 7) + " " + (baseY + 10) + " " + (baseZ + 7)
-                        + " minecraft:air"));
+    private int buildAndAssemble(FixtureSite site) throws Exception {
+        // The site owns the coordinates; these aliases keep the
+        // body below unchanged, so what moved is visible in one place.
+        final int baseX = site.x, baseY = site.y, baseZ = site.z;
+        // FIRST link: the volume this craft is built and flown in is EMPTY. The site
+        // stands in open air, so this ASSERTS rather than digs - anything standing here
+        // means the arrangement is wrong, and it is said now instead of arriving many
+        // links later wearing some mechanic's name.
+        site.requireClear(cmd -> ok(client().execute(cmd)), 2, 10,
+                "the craft is built and flown in this volume");
         String fixture = ok(client().execute(
                 "artest fixture rocket 0 " + baseX + " " + baseY + " " + baseZ + " simple"));
         Matcher bp = BUILDER_POS.matcher(fixture);
@@ -90,7 +97,7 @@ public class RocketFlightFailureModesTest extends AbstractSharedServerTest {
         // Production EntityRocket.explode() (line 1720) sets the entity
         // dead. After dead it's no longer in the world.loadedEntityList
         // and findRocket(id) returns null.
-        int id = buildAndAssemble(7000, 64, 500);
+        int id = buildAndAssemble(FixtureSite.openAir(0, 7000, 500));
         String infoBefore = ok(client().execute("artest rocket info " + id));
         Matcher um = UUID_FIELD.matcher(infoBefore);
         assertTrue("no uuid in info: " + infoBefore, um.find());
@@ -119,7 +126,7 @@ public class RocketFlightFailureModesTest extends AbstractSharedServerTest {
         //
         // If a future PR adds an out-of-fuel explode path, this test
         // fails — flip the assertion + delete the documents-bug note.
-        int id = buildAndAssemble(7100, 64, 500);
+        int id = buildAndAssemble(FixtureSite.openAir(0, 7100, 500));
 
         // Put the rocket in mid-flight (orbit=true so descent gate is
         // active, flight=true so the isInFlight branch is taken).
@@ -153,7 +160,7 @@ public class RocketFlightFailureModesTest extends AbstractSharedServerTest {
         // and never enters flight. Pin that gate: zero fuel + valid destination
         // must NOT transition to in-flight.
         int destDim = firstNonOverworldArDimOrSkip();
-        int id = buildAndAssemble(7200, 64, 500);
+        int id = buildAndAssemble(FixtureSite.openAir(0, 7200, 500));
         ok(client().execute("artest rocket set-destination " + id + " " + destDim));
         ok(client().execute("artest rocket drain-fuel " + id));
         // launch with fillFuel=false to keep tanks empty.

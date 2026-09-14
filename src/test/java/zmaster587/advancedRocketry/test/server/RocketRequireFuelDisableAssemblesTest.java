@@ -5,6 +5,8 @@ import org.junit.Test;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import zmaster587.advancedRocketry.test.FixtureSite;
+
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
@@ -41,12 +43,19 @@ public class RocketRequireFuelDisableAssemblesTest extends AbstractSharedServerT
     }
 
     /** Build the simple fixture at the given pad and return the raw assemble response. */
-    private String buildAndAssemble(int baseX, int baseY, int baseZ) throws Exception {
+    private String buildAndAssemble(FixtureSite site) throws Exception {
+        // The site owns the coordinates; these aliases keep the
+        // body below unchanged, so what moved is visible in one place.
+        final int baseX = site.x, baseY = site.y, baseZ = site.z;
         int cx1 = (baseX - 2) >> 4, cz1 = (baseZ - 2) >> 4;
         int cx2 = (baseX + 7) >> 4, cz2 = (baseZ + 7) >> 4;
         client().execute("artest chunk warmup 0 " + cx1 + " " + cz1 + " " + cx2 + " " + cz2);
-        client().execute("artest fill 0 " + (baseX - 2) + " " + (baseY + 1) + " " + (baseZ - 2)
-                + " " + (baseX + 7) + " " + (baseY + 10) + " " + (baseZ + 7) + " minecraft:air");
+        // FIRST link: the volume this craft is built and flown in is EMPTY. The site
+        // stands in open air, so this ASSERTS rather than digs - anything standing here
+        // means the arrangement is wrong, and it is said now instead of arriving many
+        // links later wearing some mechanic's name.
+        site.requireClear(cmd -> String.join("\n", client().execute(cmd)), 2, 10,
+                "the craft is built and flown in this volume");
         String fixture = cmd("artest fixture rocket 0 " + baseX + " " + baseY + " " + baseZ + " simple");
         assertTrue("fixture build failed: " + fixture, fixture.contains("\"ok\":true"));
         Matcher bp = BUILDER_POS.matcher(fixture);
@@ -68,14 +77,14 @@ public class RocketRequireFuelDisableAssemblesTest extends AbstractSharedServerT
             // SUCCESS; the "status" field it echoes is the POST-assemble status
             // (ALREADY_ASSEMBLED), so we gate on "ok":true, not status==SUCCESS.
             assertTrue(cmd("artest config set rocketRequireFuel true").contains("\"ok\":true"));
-            String on = buildAndAssemble(3400, 64, 3400);
+            String on = buildAndAssemble(FixtureSite.openAir(0, 3400, 3400));
             assertTrue("simple fixture must assemble on rocketRequireFuel=true (scan SUCCESS): " + on,
                     on.contains("\"ok\":true"));
 
             // Contract: flipping fuel off must NOT block assembly. Pre-fix the
             // scan returned NOFUEL (the regression) and "ok":true was absent.
             assertTrue(cmd("artest config set rocketRequireFuel false").contains("\"ok\":true"));
-            String off = buildAndAssemble(3460, 64, 3400);
+            String off = buildAndAssemble(FixtureSite.openAir(0, 3460, 3400));
             assertTrue("with rocketRequireFuel=false a valid rocket must still assemble "
                     + "(no fuel-adequacy gate); scan status was " + status(off) + ": " + off,
                     off.contains("\"ok\":true"));

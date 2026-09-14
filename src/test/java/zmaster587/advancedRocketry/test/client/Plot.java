@@ -24,8 +24,14 @@ public final class Plot {
     /** Edge of a plot, in blocks. Wide enough for a rocket fixture plus its pad. */
     public static final int SIZE = 64;
 
-    /** Open air above generated terrain, so a plot starts empty without clearing anything. */
-    public static final int DEFAULT_Y = 150;
+    /**
+     * Open air above generated terrain, so a plot starts empty without clearing anything.
+     *
+     * <p>The band is defined once, at {@link zmaster587.advancedRocketry.test.FixtureSite#OPEN_AIR_Y},
+     * because a client plot and a server fixture are asking the same question of the world and two
+     * numbers that are the SAME quantity must not be able to drift apart.</p>
+     */
+    public static final int DEFAULT_Y = zmaster587.advancedRocketry.test.FixtureSite.OPEN_AIR_Y;
 
     /**
      * Where a class's plots live and how far apart they sit.

@@ -5,6 +5,8 @@ import org.junit.Test;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import zmaster587.advancedRocketry.test.FixtureSite;
+
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
@@ -47,12 +49,16 @@ public class RcsDeprecationTest extends AbstractSharedServerTest {
         return String.join("\n", resp);
     }
 
-    private int buildAndAssemble(int baseX, int baseY, int baseZ) throws Exception {
-        String fillAir = ok(client().execute(
-                "artest fill 0 " + (baseX - 2) + " " + (baseY + 1) + " " + (baseZ - 2)
-                        + " " + (baseX + 7) + " " + (baseY + 10) + " " + (baseZ + 7)
-                        + " minecraft:air"));
-        assertTrue("pre-clear failed: " + fillAir, fillAir.contains("\"ok\":true"));
+    private int buildAndAssemble(FixtureSite site) throws Exception {
+        // The site owns the coordinates; these aliases keep the
+        // body below unchanged, so what moved is visible in one place.
+        final int baseX = site.x, baseY = site.y, baseZ = site.z;
+        // FIRST link: the volume this craft is built and flown in is EMPTY. The site
+        // stands in open air, so this ASSERTS rather than digs - anything standing here
+        // means the arrangement is wrong, and it is said now instead of arriving many
+        // links later wearing some mechanic's name.
+        site.requireClear(cmd -> ok(client().execute(cmd)), 2, 10,
+                "the craft is built and flown in this volume");
 
         String fixture = ok(client().execute(
                 "artest fixture rocket 0 " + baseX + " " + baseY + " " + baseZ + " simple"));
@@ -77,7 +83,7 @@ public class RcsDeprecationTest extends AbstractSharedServerTest {
 
     @Test
     public void rcsToggleNoLongerMutatesRcsMode() throws Exception {
-        int id = buildAndAssemble(3300, 64, 500);
+        int id = buildAndAssemble(FixtureSite.openAir(0, 3300, 500));
 
         // Drive the deprecated TOGGLE_RCS server path directly — the probe
         // invokes EntityRocket.toggleRCS() and reports RCS_MODE before/after.

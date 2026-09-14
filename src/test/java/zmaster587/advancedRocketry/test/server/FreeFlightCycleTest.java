@@ -5,6 +5,8 @@ import org.junit.Test;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import zmaster587.advancedRocketry.test.FixtureSite;
+
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
@@ -47,15 +49,16 @@ public class FreeFlightCycleTest extends AbstractSharedServerTest {
         return String.join("\n", resp);
     }
 
-    private int buildAndAssemble(int baseX, int baseY, int baseZ) throws Exception {
-        // Clear the full flight column: the world seed is random per run and
-        // overhanging terrain above the pad pins the craft (move() zeroes
-        // motionY on the ceiling collision) — see the client suite's note.
-        String fillAir = ok(client().execute(
-                "artest fill 0 " + (baseX - 2) + " " + (baseY + 1) + " " + (baseZ - 2)
-                        + " " + (baseX + 7) + " " + (baseY + 50) + " " + (baseZ + 7)
-                        + " minecraft:air"));
-        assertTrue("pre-clear failed: " + fillAir, fillAir.contains("\"ok\":true"));
+    private int buildAndAssemble(FixtureSite site) throws Exception {
+        // The site owns the coordinates; these aliases keep the
+        // body below unchanged, so what moved is visible in one place.
+        final int baseX = site.x, baseY = site.y, baseZ = site.z;
+        // FIRST link: the volume this craft is built and flown in is EMPTY. The site
+        // stands in open air, so this ASSERTS rather than digs - anything standing here
+        // means the arrangement is wrong, and it is said now instead of arriving many
+        // links later wearing some mechanic's name.
+        site.requireClear(cmd -> ok(client().execute(cmd)), 2, 50,
+                "the craft is built and flown in this volume");
 
         String fixture = ok(client().execute(
                 "artest fixture rocket 0 " + baseX + " " + baseY + " " + baseZ + " simple"));
@@ -99,7 +102,7 @@ public class FreeFlightCycleTest extends AbstractSharedServerTest {
 
     @Test
     public void freshRocketDefaultsToClassicLaunchMode() throws Exception {
-        int id = buildAndAssemble(2000, 64, 500);
+        int id = buildAndAssemble(FixtureSite.openAir(0, 2000, 500));
         String info = ok(client().execute("artest rocket info " + id));
         assertTrue("default mode must be CLASSIC_LAUNCH: " + info,
                 info.contains("\"flightMode\":\"CLASSIC_LAUNCH\""));
@@ -107,7 +110,7 @@ public class FreeFlightCycleTest extends AbstractSharedServerTest {
 
     @Test
     public void setFlightModeRoundTripsThroughInfo() throws Exception {
-        int id = buildAndAssemble(2100, 64, 500);
+        int id = buildAndAssemble(FixtureSite.openAir(0, 2100, 500));
 
         String set = ok(client().execute(
                 "artest rocket set-flight-mode " + id + " FREE_FLIGHT"));
@@ -129,7 +132,7 @@ public class FreeFlightCycleTest extends AbstractSharedServerTest {
 
     @Test
     public void setFlightModeRejectsUnknownMode() throws Exception {
-        int id = buildAndAssemble(2200, 64, 500);
+        int id = buildAndAssemble(FixtureSite.openAir(0, 2200, 500));
         String resp = ok(client().execute(
                 "artest rocket set-flight-mode " + id + " WARPDRIVE"));
         assertTrue("unknown mode must be reported as error: " + resp,
@@ -140,7 +143,7 @@ public class FreeFlightCycleTest extends AbstractSharedServerTest {
     public void startFreeFlightBypassesClassicCountdown() throws Exception {
         // Critical FF contract: NO destination chip programmed, NO classic
         // countdown — start-free-flight goes directly to isInFlight=true.
-        int id = buildAndAssemble(2300, 64, 500);
+        int id = buildAndAssemble(FixtureSite.openAir(0, 2300, 500));
         ok(client().execute("artest rocket set-flight-mode " + id + " FREE_FLIGHT"));
 
         String start = ok(client().execute(
@@ -161,7 +164,7 @@ public class FreeFlightCycleTest extends AbstractSharedServerTest {
     public void startFreeFlightRejectsClassicRocket() throws Exception {
         // Counter-test: start-free-flight on a rocket still in CLASSIC mode
         // must NOT silently launch it (classic flow has its own gates).
-        int id = buildAndAssemble(2400, 64, 500);
+        int id = buildAndAssemble(FixtureSite.openAir(0, 2400, 500));
         String resp = ok(client().execute(
                 "artest rocket start-free-flight " + id));
         assertTrue("classic rocket must reject start-free-flight: " + resp,
@@ -179,7 +182,7 @@ public class FreeFlightCycleTest extends AbstractSharedServerTest {
         // would (calls rocket.applyFreeFlightInput). After the probe completes,
         // info must reflect the new currentFreeFlightInput so a client UI /
         // tick loop reads what was set.
-        int id = buildAndAssemble(2500, 64, 500);
+        int id = buildAndAssemble(FixtureSite.openAir(0, 2500, 500));
         ok(client().execute("artest rocket set-flight-mode " + id + " FREE_FLIGHT"));
         ok(client().execute("artest rocket start-free-flight " + id));
 
@@ -212,7 +215,7 @@ public class FreeFlightCycleTest extends AbstractSharedServerTest {
         // engine start there is no takeoff kick: the craft rests in the
         // liftoff hover until input arrives, so 10 ticks of full vertical
         // throttle must produce a clearly positive climb rate.
-        int id = buildAndAssemble(2550, 64, 500);
+        int id = buildAndAssemble(FixtureSite.openAir(0, 2550, 500));
         ok(client().execute("artest rocket set-flight-mode " + id + " FREE_FLIGHT"));
         ok(client().execute("artest rocket start-free-flight " + id));
 
@@ -229,7 +232,7 @@ public class FreeFlightCycleTest extends AbstractSharedServerTest {
         // starting the engines is NOT a launch — the craft eases
         // ~1 block off the pad and HOVERS there (near-zero motion), without
         // any takeoff kick and without auto-landing.
-        int id = buildAndAssemble(2900, 64, 500);
+        int id = buildAndAssemble(FixtureSite.openAir(0, 2900, 500));
         ok(client().execute("artest rocket set-flight-mode " + id + " FREE_FLIGHT"));
         String info0 = ok(client().execute("artest rocket info " + id));
         double y0 = parseDouble(info0, POS_Y, "posY");
@@ -252,7 +255,7 @@ public class FreeFlightCycleTest extends AbstractSharedServerTest {
         // touchdown auto-shutdown. From the engine-start hover,
         // pilot descent input drives the craft into ground contact, which
         // exits flight (engines off) and zeroes motion.
-        int id = buildAndAssemble(2950, 64, 500);
+        int id = buildAndAssemble(FixtureSite.openAir(0, 2950, 500));
         ok(client().execute("artest rocket set-flight-mode " + id + " FREE_FLIGHT"));
         ok(client().execute("artest rocket start-free-flight " + id));
         ok(client().execute("artest rocket free-flight-tick " + id + " 40")); // reach the hover
@@ -269,7 +272,7 @@ public class FreeFlightCycleTest extends AbstractSharedServerTest {
 
     @Test
     public void verticalInputDrainsPrimaryFuel() throws Exception {
-        int id = buildAndAssemble(2600, 64, 500);
+        int id = buildAndAssemble(FixtureSite.openAir(0, 2600, 500));
         ok(client().execute("artest rocket set-flight-mode " + id + " FREE_FLIGHT"));
         ok(client().execute("artest rocket start-free-flight " + id));
 
@@ -294,7 +297,7 @@ public class FreeFlightCycleTest extends AbstractSharedServerTest {
     public void inputOnClassicRocketIsDroppedSilently() throws Exception {
         // Authority/mode contract: free-flight-input is a no-op when the
         // rocket isn't in FREE_FLIGHT. The probe reports applied=false.
-        int id = buildAndAssemble(2700, 64, 500);
+        int id = buildAndAssemble(FixtureSite.openAir(0, 2700, 500));
         // (intentionally NO set-flight-mode — rocket stays CLASSIC_LAUNCH)
 
         String applied = ok(client().execute(
@@ -313,7 +316,7 @@ public class FreeFlightCycleTest extends AbstractSharedServerTest {
     public void inputClamping() throws Exception {
         // Server-side authority: out-of-range float inputs must be clamped
         // before storage. The applied JSON is the clamped value.
-        int id = buildAndAssemble(2800, 64, 500);
+        int id = buildAndAssemble(FixtureSite.openAir(0, 2800, 500));
         ok(client().execute("artest rocket set-flight-mode " + id + " FREE_FLIGHT"));
         ok(client().execute("artest rocket start-free-flight " + id));
 

@@ -5,6 +5,8 @@ import org.junit.Test;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import zmaster587.advancedRocketry.test.FixtureSite;
+
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
@@ -64,12 +66,16 @@ public class RocketFlightCycleDepthTest extends AbstractSharedServerTest {
         return Integer.parseInt(m.group(1));
     }
 
-    private int buildAndAssemble(int baseX, int baseY, int baseZ) throws Exception {
-        String fillAir = ok(client().execute(
-                "artest fill 0 " + (baseX - 2) + " " + (baseY + 1) + " " + (baseZ - 2)
-                        + " " + (baseX + 7) + " " + (baseY + 10) + " " + (baseZ + 7)
-                        + " minecraft:air"));
-        assertTrue("pre-clear failed: " + fillAir, fillAir.contains("\"ok\":true"));
+    private int buildAndAssemble(FixtureSite site) throws Exception {
+        // The site owns the coordinates; these aliases keep the
+        // body below unchanged, so what moved is visible in one place.
+        final int baseX = site.x, baseY = site.y, baseZ = site.z;
+        // FIRST link: the volume this craft is built and flown in is EMPTY. The site
+        // stands in open air, so this ASSERTS rather than digs - anything standing here
+        // means the arrangement is wrong, and it is said now instead of arriving many
+        // links later wearing some mechanic's name.
+        site.requireClear(cmd -> ok(client().execute(cmd)), 2, 10,
+                "the craft is built and flown in this volume");
 
         String fixture = ok(client().execute(
                 "artest fixture rocket 0 " + baseX + " " + baseY + " " + baseZ + " simple"));
@@ -115,7 +121,7 @@ public class RocketFlightCycleDepthTest extends AbstractSharedServerTest {
         // EntityRocketBase.onOrbitReached BEFORE any dispatch branch). If
         // a regression moves the post() after a conditional branch that
         // doesn't always execute, this test surfaces it.
-        int id = buildAndAssemble(3000, 64, 500);
+        int id = buildAndAssemble(FixtureSite.openAir(0, 3000, 500));
 
         String before = ok(client().execute("artest rocket event-counts"));
         int orbitBefore = parseGroup(ORBIT_COUNT, before, "orbitReached before");
@@ -137,7 +143,7 @@ public class RocketFlightCycleDepthTest extends AbstractSharedServerTest {
 
     @Test
     public void dismantleFiresRocketDismantleEvent() throws Exception {
-        int id = buildAndAssemble(3100, 64, 500);
+        int id = buildAndAssemble(FixtureSite.openAir(0, 3100, 500));
 
         String before = ok(client().execute("artest rocket event-counts"));
         int dismantleBefore = parseGroup(DISMANTLE_COUNT, before, "dismantle before");
@@ -173,7 +179,7 @@ public class RocketFlightCycleDepthTest extends AbstractSharedServerTest {
         }
         org.junit.Assume.assumeTrue(destDim != -1);
 
-        int id = buildAndAssemble(3200, 64, 500);
+        int id = buildAndAssemble(FixtureSite.openAir(0, 3200, 500));
         ok(client().execute("artest rocket set-destination " + id + " " + destDim));
 
         String before = ok(client().execute("artest rocket event-counts"));
@@ -192,7 +198,7 @@ public class RocketFlightCycleDepthTest extends AbstractSharedServerTest {
         // Counter-test: an unrouteable rocket (no chip programmed) bails
         // in launch() with setError("cannotGetThere") BEFORE the
         // RocketLaunchEvent post. So the counter must NOT advance.
-        int id = buildAndAssemble(3300, 64, 500);
+        int id = buildAndAssemble(FixtureSite.openAir(0, 3300, 500));
 
         String before = ok(client().execute("artest rocket event-counts"));
         int launchBefore = parseGroup(LAUNCH_COUNT, before, "launch before");
@@ -216,7 +222,7 @@ public class RocketFlightCycleDepthTest extends AbstractSharedServerTest {
         // contract here (the field is exposed and >= 0); the advancing
         // assertion belongs in the testClient e2e harness, where a
         // real player keeps the chunk hot.
-        int id = buildAndAssemble(3400, 64, 500);
+        int id = buildAndAssemble(FixtureSite.openAir(0, 3400, 500));
         String info = ok(client().execute("artest rocket info " + id));
         assertTrue("rocket info must expose ticksExisted field: " + info,
                 info.contains("\"ticksExisted\":"));
@@ -245,7 +251,7 @@ public class RocketFlightCycleDepthTest extends AbstractSharedServerTest {
         // "simple" rocket fixture has guidance computer + seat -> the
         // reachSpaceManned branch fires. Pin that this branch doesn't
         // crash on a rocket with no programmed chip.
-        int id = buildAndAssemble(3500, 64, 500);
+        int id = buildAndAssemble(FixtureSite.openAir(0, 3500, 500));
         String resp = ok(client().execute("artest rocket force-orbit-reached " + id));
         assertTrue("orbit-reached on un-programmed rocket must succeed (no crash): "
                 + resp, resp.contains("\"ok\":true"));
