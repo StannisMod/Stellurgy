@@ -7,6 +7,7 @@ import java.util.Map;
 
 import zmaster587.advancedRocketry.test.ArrangementFailure;
 
+import zmaster587.advancedRocketry.test.Plot;
 /**
  * A scenario's own flight recorder, and the thing that makes its failure readable.
  *

@@ -11,6 +11,8 @@ import java.util.regex.Pattern;
 
 import zmaster587.advancedRocketry.test.Events;
 
+import zmaster587.advancedRocketry.test.FixtureSite;
+
 import static org.junit.Assert.assertTrue;
 
 /**
@@ -53,7 +55,7 @@ public class VSPilotSeatMountMessagesE2ETest extends AbstractSharedVsClientE2ETe
         return "vs-pilot-seat-messages";
     }
 
-    private static final int SEAT_X = 4200, SEAT_Y = 71, SEAT_Z = 4200;
+    private static final int SEAT_X = 4200, SEAT_Y = FixtureSite.OPEN_AIR_Y, SEAT_Z = 4200;
     /** Leg 4's own seat, clear of leg 3's NPC occupant so neither leg has to be torn down. */
     private static final int LINKED_X = SEAT_X + 2, LINKED_Z = SEAT_Z + 2;
     private static final Pattern OCCUPANT_NAME = Pattern.compile("\"occupantName\":\"([^\"]+)\"");

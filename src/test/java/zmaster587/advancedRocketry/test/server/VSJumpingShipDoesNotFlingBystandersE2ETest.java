@@ -10,6 +10,8 @@ import org.junit.Test;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import zmaster587.advancedRocketry.test.FixtureSite;
+
 import static org.junit.Assert.assertTrue;
 
 /**
@@ -43,7 +45,7 @@ public class VSJumpingShipDoesNotFlingBystandersE2ETest extends AbstractSharedSe
             Pattern.compile("\"builderPos\":\\[(-?\\d+),(-?\\d+),(-?\\d+)]");
 
     /** A loaded overworld region of this class's own, well clear of every other server e2e. */
-    private static final int SRC_X = 9400, SRC_Y = 80, SRC_Z = 9400;
+    private static final int SRC_X = 9400, SRC_Y = FixtureSite.OPEN_AIR_Y, SRC_Z = 9400;
 
     /** How far the ship jumps. The lever arm IS the amplifier: a small rotation of a hull this far
      *  away moves a point near the old spot by hundreds of blocks per tick. */

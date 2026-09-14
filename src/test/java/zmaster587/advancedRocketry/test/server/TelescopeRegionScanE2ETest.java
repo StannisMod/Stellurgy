@@ -4,6 +4,8 @@ import zmaster587.advancedRocketry.test.GameTicks;
 
 import org.junit.Test;
 
+import zmaster587.advancedRocketry.test.FixtureSite;
+
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertTrue;
@@ -33,7 +35,7 @@ public class TelescopeRegionScanE2ETest extends AbstractSharedServerTest {
     private static final int SURVEY_TICKS = 200;
     private static final int SWEEP_TICKS = 300;
 
-    private static final int CY = 64;
+    private static final int CY = FixtureSite.OPEN_AIR_Y;
     private static final int CZ = 4300;
 
     private String exec(String command) throws Exception {

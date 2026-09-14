@@ -5,6 +5,8 @@ import org.junit.Test;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import zmaster587.advancedRocketry.test.FixtureSite;
+
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotEquals;
@@ -297,7 +299,7 @@ public class WirelessTransceiverContractTest extends AbstractSharedServerTest {
 
     // --- helpers -----------------------------------------------------------
 
-    private static final int Y = 65;
+    private static final int Y = FixtureSite.OPEN_AIR_Y;
     private static final int Z = 2000;
     private static final int DIM = 0;
 

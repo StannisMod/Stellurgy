@@ -15,6 +15,8 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 
+import zmaster587.advancedRocketry.test.FixtureSite;
+
 import static org.junit.Assert.assertTrue;
 
 /**
@@ -87,7 +89,7 @@ public class SpikeFarCoordinatePlayabilityTest extends AbstractClientE2ETest {
 
     private static final int OVERWORLD = 0;
     /** Well above sea level: 2M and 16M are both ocean, and a delivery into water measures the water. */
-    private static final int FLOOR_Y = 140;
+    private static final int FLOOR_Y = FixtureSite.OPEN_AIR_Y;
     private static final int STAND_Y = FLOOR_Y + 1;
 
     /** The corridor runs +X from the player; the wall's near face is this many blocks ahead. */

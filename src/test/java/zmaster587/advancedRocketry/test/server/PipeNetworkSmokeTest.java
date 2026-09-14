@@ -6,6 +6,8 @@ import org.junit.Test;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import zmaster587.advancedRocketry.test.FixtureSite;
+
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
@@ -119,7 +121,7 @@ public class PipeNetworkSmokeTest extends AbstractSharedServerTest {
      */
     @Test
     public void inventoryHatchAcceptsAndExportsItems() throws Exception {
-        int hx = 1400, hy = 65, hz = 1200;
+        int hx = 1400, hy = FixtureSite.OPEN_AIR_Y, hz = 1200;
         ok(client().execute("artest place 0 " + hx + " " + hy + " " + hz
                 + " advancedrocketry:invhatch"));
 
@@ -155,7 +157,7 @@ public class PipeNetworkSmokeTest extends AbstractSharedServerTest {
      */
     @Test
     public void fluidHatchAcceptsAndExportsFluids() throws Exception {
-        int fx = 1500, fy = 65, fz = 1200;
+        int fx = 1500, fy = FixtureSite.OPEN_AIR_Y, fz = 1200;
         ok(client().execute("artest place 0 " + fx + " " + fy + " " + fz
                 + " advancedrocketry:liquidTank"));
 

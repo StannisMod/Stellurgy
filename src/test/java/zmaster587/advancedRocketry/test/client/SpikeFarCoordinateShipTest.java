@@ -15,6 +15,8 @@ import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import zmaster587.advancedRocketry.test.FixtureSite;
+
 import static org.junit.Assert.assertTrue;
 
 /**
@@ -87,7 +89,7 @@ public class SpikeFarCoordinateShipTest extends AbstractClientE2ETest {
      * The stone pad this class lays a block below it stays; at x=16M the surface is ocean, and a
      * pad the test builds is what keeps the fixture out of water whatever the band is set to.
      */
-    private static final int BASE_Y = zmaster587.advancedRocketry.test.FixtureSite.OPEN_AIR_Y;
+    private static final int BASE_Y = FixtureSite.OPEN_AIR_Y;
 
     private static final String VARIANT = "with-pilot-seat";
     private static final double MIN_LIFT_BLOCKS = 1.0d;

@@ -8,6 +8,8 @@ import org.junit.Test;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import zmaster587.advancedRocketry.test.FixtureSite;
+
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
@@ -52,7 +54,7 @@ public class VSCrossingLeavesNoShipBehindE2ETest extends AbstractSharedServerTes
 
     private static final int BASE_Z = 5400;
     /** Where a ship is built, and the clear-sky altitude every crossing lands at. */
-    private static final int BUILD_Y = 80, SKY_Y = 150;
+    private static final int BUILD_Y = FixtureSite.OPEN_AIR_Y, SKY_Y = 150;
     /** One base per method, far enough apart that no method can resolve another's ship. */
     private static final int LEG1_X = 5400, LEG2_X = 6000, LEG3_X = 6600;
     /** Distance between a crossing's source and its destination — well beyond {@link #POSE_TOLERANCE}. */

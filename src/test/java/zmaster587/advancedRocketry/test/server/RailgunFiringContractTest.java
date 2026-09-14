@@ -6,6 +6,8 @@ import org.junit.Test;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import zmaster587.advancedRocketry.test.FixtureSite;
+
 import static org.junit.Assert.assertTrue;
 
 /**
@@ -32,11 +34,11 @@ import static org.junit.Assert.assertTrue;
 public class RailgunFiringContractTest extends AbstractSharedServerTest {
 
     private static final int SX = 4900;
-    private static final int SY = 64;
+    private static final int SY = FixtureSite.OPEN_AIR_Y;
     private static final int SZ = 4900;
 
     private static final int DX = 4960;
-    private static final int DY = 64;
+    private static final int DY = FixtureSite.OPEN_AIR_Y;
     private static final int DZ = 4900;
 
     // Separate sources for the cross-dimension cases (shared server JVM).

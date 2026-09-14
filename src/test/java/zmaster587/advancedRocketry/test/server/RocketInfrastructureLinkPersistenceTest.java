@@ -12,6 +12,8 @@ import java.nio.file.Path;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import zmaster587.advancedRocketry.test.FixtureSite;
+
 import static org.junit.Assert.assertTrue;
 
 /**
@@ -60,7 +62,7 @@ public class RocketInfrastructureLinkPersistenceTest {
     public void infrastructureLinkSurvivesRestart() throws Exception {
         firstBoot = RealDedicatedServerHarness.startWith(workDir, /*cleanupOnClose=*/false);
 
-        int sx = 1300, sy = 65, sz = 1300;
+        int sx = 1300, sy = FixtureSite.OPEN_AIR_Y, sz = 1300;
         String place = String.join("\n", firstBoot.client().execute(
                 "artest place 0 " + sx + " " + sy + " " + sz + " advancedrocketry:fuelingStation"));
         assertTrue("place fueling station failed: " + place, place.contains("\"placed\":true"));

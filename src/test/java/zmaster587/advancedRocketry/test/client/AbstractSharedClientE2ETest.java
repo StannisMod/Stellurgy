@@ -26,6 +26,8 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import zmaster587.advancedRocketry.test.Plot;
+
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
@@ -376,7 +378,7 @@ public abstract class AbstractSharedClientE2ETest {
     private void resetBetweenScenarios() throws Exception {
         final Plot.Lane lane = lane();
         Plot plot = PLOTS.computeIfAbsent(testName.getMethodName(),
-                name -> new Plot(nextPlotIndex++, name, 0, lane));
+                name -> Plot.forScenario(nextPlotIndex++, name, 0, lane));
         scenario = new Scenario(testName.getMethodName(), subsystem(), plot);
 
         // SERVER side first: its commands echo harness markers into the chat the client reset is
@@ -908,6 +910,27 @@ public abstract class AbstractSharedClientE2ETest {
 
     protected final Plot plot() {
         return scenario.plot();
+    }
+
+    /**
+     * WHERE THIS SCENARIO'S FIXTURE STANDS. Ask for it; do not choose coordinates.
+     *
+     * <p>Two guarantees arrive together and neither is something a scenario has to get right. The
+     * PLOT is this scenario's own — allocated once per test method on a lane whose stride cannot be
+     * narrower than a plot — so it cannot overlap a sibling's. The HEIGHT is the open-air band,
+     * because {@link zmaster587.advancedRocketry.test.FixtureSite#openAir} has no Y parameter to
+     * pass. And {@code requireClear} then ASSERTS that the volume actually cleared lies inside the
+     * plot, so the non-overlap is checked rather than merely intended.</p>
+     *
+     * <p><b>This did not exist until 2026-09-14, and the hole it closes was costing point bugs.</b>
+     * The allocator above had been here all along, but the ship classes never used it: each scenario
+     * wrote its own {@code bx = 5220, bz = 5220}. Two scenarios of one class built at one site in
+     * one world and each silently levelled the other's leavings with its pre-clear; nothing said so
+     * until the pre-clear became an assertion. A hand-picked coordinate is a promise; this is a
+     * mechanism.</p>
+     */
+    protected final zmaster587.advancedRocketry.test.FixtureSite site() {
+        return plot().site();
     }
 
     protected final RealDedicatedServerHarness server() {

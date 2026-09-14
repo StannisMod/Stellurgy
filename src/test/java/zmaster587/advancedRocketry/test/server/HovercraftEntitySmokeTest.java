@@ -6,6 +6,8 @@ import org.junit.Test;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import zmaster587.advancedRocketry.test.FixtureSite;
+
 import static org.junit.Assert.assertTrue;
 
 /**
@@ -29,7 +31,7 @@ public class HovercraftEntitySmokeTest extends AbstractHeadlessServerTest {
 
     @Test
     public void hovercraftSpawnsAndTicksWithoutCrash() throws Exception {
-        int px = 2300, py = 80, pz = 2300;
+        int px = 2300, py = FixtureSite.OPEN_AIR_Y, pz = 2300;
 
         // Solid floor so the hovercraft falls onto stone, not into a cave.
         client().execute("artest fill 0 " + (px - 1) + " " + (py - 1) + " " + (pz - 1)

@@ -3,6 +3,8 @@ package zmaster587.advancedRocketry.test.server;
 import com.github.stannismod.forge.testing.junit.AbstractHeadlessServerTest;
 import org.junit.Test;
 
+import zmaster587.advancedRocketry.test.FixtureSite;
+
 import static org.junit.Assert.assertTrue;
 
 /**
@@ -34,7 +36,7 @@ public class SelectorServerSmokeTest extends AbstractHeadlessServerTest {
     @Test
     public void selectorTileStateMachineFollowsSimulatedClicks() throws Exception {
         // Place at a position that won't collide with other tests' fixtures.
-        int x = 250, y = 64, z = 250;
+        int x = 250, y = FixtureSite.OPEN_AIR_Y, z = 250;
         String place = String.join("\n", client().execute(
                 "artest place 0 " + x + " " + y + " " + z + " advancedrocketry:planetSelector"));
         assertTrue("could not place planetSelector: " + place,

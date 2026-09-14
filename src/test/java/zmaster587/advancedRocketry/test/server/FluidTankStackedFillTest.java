@@ -5,6 +5,8 @@ import org.junit.Test;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import zmaster587.advancedRocketry.test.FixtureSite;
+
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
@@ -100,13 +102,15 @@ public class FluidTankStackedFillTest extends AbstractSharedServerTest {
 
     @Test
     public void smallInjectionFillsBottomTankAndLeavesTopEmpty() throws Exception {
-        // Stack:
-        //   top at (BASE_X, 65, BASE_Z)
-        //   bottom at (BASE_X, 64, BASE_Z)
+        // A STACK, and the whole subject is that the top sits one block above the bottom. Both Ys
+        // were absolute (64 and 65) until 2026-09-14, and the mechanical lift into the open-air
+        // band gave them the SAME constant — two numbers that were a RELATION, written as two
+        // absolutes. The second tank then refused to place on top of the first and the red said
+        // "liquidTank place failed", which is true and says nothing about tanks.
         int baseX = 8000;
         int baseZ = 8000;
-        int bottomY = 64;
-        int topY = 65;
+        int bottomY = FixtureSite.OPEN_AIR_Y;
+        int topY = bottomY + 1;
         warmup(baseX, baseZ);
         placeTank(baseX, bottomY, baseZ);
         placeTank(baseX, topY, baseZ);
@@ -140,8 +144,8 @@ public class FluidTankStackedFillTest extends AbstractSharedServerTest {
         // Different column from the first test (position isolation).
         int baseX = 8020;
         int baseZ = 8000;
-        int bottomY = 64;
-        int topY = 65;
+        int bottomY = FixtureSite.OPEN_AIR_Y;
+        int topY = bottomY + 1;   // a stack: see the sibling scenario above
         warmup(baseX, baseZ);
         placeTank(baseX, bottomY, baseZ);
         placeTank(baseX, topY, baseZ);

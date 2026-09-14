@@ -82,7 +82,9 @@ public class SatelliteTypeBehaviourTest extends AbstractSharedServerTest {
 
         // Use isolated coords far from any other test's footprint
         // (AbstractSharedServerTest contract — position-isolated).
-        int x = 5000, y = 70, z = 5000;
+        // The band. A biome belongs to the COLUMN, so this Y never mattered and a hard-coded 70
+        // only inherited whatever the seed rolled here.
+        int x = 5000, y = zmaster587.advancedRocketry.test.FixtureSite.OPEN_AIR_Y, z = 5000;
 
         // Ensure the chunk is loaded — fill a small region with air;
         // /artest fill also force-loads the chunk(s).

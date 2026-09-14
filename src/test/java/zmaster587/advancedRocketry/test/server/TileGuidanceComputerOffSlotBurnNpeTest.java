@@ -53,7 +53,11 @@ public class TileGuidanceComputerOffSlotBurnNpeTest extends AbstractHeadlessServ
         // Off-station: an empty grid cell far from the created station. After the C076
         // grid-mapping fix, getSpaceStationFromBlockCoords(4608,·,4608) reverse-maps to grid
         // (2,2) → spiral index 18 → no station → null (the created station sits at index 1).
-        int x = 4608, y = 100, z = 4608;
+        // The band. This stands in the SPACE dimension, which is void, so the lift is not about
+        // escaping terrain — it is about one definition of where a fixture stands instead of a 100
+        // nobody chose. The X and Z are load-bearing (they reverse-map to an empty grid cell); the
+        // Y is not, and now says so.
+        int x = 4608, y = zmaster587.advancedRocketry.test.FixtureSite.OPEN_AIR_Y, z = 4608;
         ok(exec("artest fill " + SPACE_DIM + " " + (x - 1) + " " + (y - 1) + " " + (z - 1)
                 + " " + (x + 1) + " " + (y + 1) + " " + (z + 1) + " minecraft:air"));
         String place = exec("artest place " + SPACE_DIM + " " + x + " " + y + " " + z

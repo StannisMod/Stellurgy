@@ -14,6 +14,10 @@ import java.util.regex.Pattern;
 import zmaster587.advancedRocketry.api.FreeFlightPhysics;
 import zmaster587.advancedRocketry.test.Events;
 
+import zmaster587.advancedRocketry.test.FixtureSite;
+
+import zmaster587.advancedRocketry.test.Plot;
+
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotEquals;
@@ -101,7 +105,7 @@ public class FreeFlightModeE2ETest extends AbstractSharedClientE2ETest {
      * reads exactly 0.0 — on a class whose world is generated with a RANDOM seed each run, so the
      * hill is there on some runs and not others.</p>
      */
-    private static final int BASE_Y = zmaster587.advancedRocketry.test.FixtureSite.OPEN_AIR_Y;
+    private static final int BASE_Y = FixtureSite.OPEN_AIR_Y;
 
     /**
      * The observation point behind this class's engine-state links: the test-only mixin on

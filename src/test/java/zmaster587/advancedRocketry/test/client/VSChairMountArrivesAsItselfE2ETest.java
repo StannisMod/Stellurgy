@@ -9,6 +9,8 @@ import org.junit.runners.MethodSorters;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import zmaster587.advancedRocketry.test.FixtureSite;
+
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
@@ -46,7 +48,7 @@ public class VSChairMountArrivesAsItselfE2ETest extends AbstractSharedVsClientE2
             Pattern.compile("\\{\"id\":(-?\\d+),\"class\":\"([^\"]+)\"");
 
     /** Far from every other fixture's build site, and high enough to be clear of any terrain. */
-    private static final int FX = 7700, FY = 90, FZ = 7700;
+    private static final int FX = 7700, FY = FixtureSite.OPEN_AIR_Y, FZ = 7700;
     /** The chair block, one step from where the player stands — inside interaction reach. */
     private static final int CX = FX + 1, CY = FY + 1, CZ = FZ;
 

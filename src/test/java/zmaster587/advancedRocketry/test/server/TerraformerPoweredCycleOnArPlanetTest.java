@@ -9,6 +9,8 @@ import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import zmaster587.advancedRocketry.test.FixtureSite;
+
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertTrue;
@@ -56,7 +58,7 @@ public class TerraformerPoweredCycleOnArPlanetTest extends AbstractSharedServerT
 
     /** Each method picks distinct controller coords so per-method planets
      *  don't collide if a future refactor moves to class-scope. */
-    private static final int CY = 128;
+    private static final int CY = FixtureSite.OPEN_AIR_Y;
     private static final int CX_POSITIVE = 200;
     private static final int CX_NO_FUEL  = 400;
     private static final int CX_NO_POWER = 600;

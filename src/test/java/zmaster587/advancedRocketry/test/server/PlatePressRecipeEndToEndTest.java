@@ -3,6 +3,8 @@ package zmaster587.advancedRocketry.test.server;
 import com.github.stannismod.forge.testing.server.TestClient;
 import org.junit.Test;
 
+import zmaster587.advancedRocketry.test.FixtureSite;
+
 import static org.junit.Assert.assertTrue;
 
 /**
@@ -34,7 +36,7 @@ public class PlatePressRecipeEndToEndTest extends AbstractSharedServerTest {
 
     @Test
     public void platePressFixtureBuildsExpectedStack() throws Exception {
-        int x = 400, y = 70, z = 400;
+        int x = 400, y = FixtureSite.OPEN_AIR_Y, z = 400;
         TestClient c = client();
         String resp = String.join("\n",
                 c.execute("artest fixture machine " + FIXTURE_KEY + " 0 " + x + " " + y + " " + z));
@@ -57,7 +59,7 @@ public class PlatePressRecipeEndToEndTest extends AbstractSharedServerTest {
 
     @Test
     public void platePressRedstoneActivationDropsRecipeOutput() throws Exception {
-        int x = 500, y = 70, z = 400;
+        int x = 500, y = FixtureSite.OPEN_AIR_Y, z = 400;
         TestClient c = client();
         // Build fixture + capture the resolved output id.
         String fixture = String.join("\n",

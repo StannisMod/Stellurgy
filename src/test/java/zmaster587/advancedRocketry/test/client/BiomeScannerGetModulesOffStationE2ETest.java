@@ -4,6 +4,8 @@ import com.github.stannismod.forge.testing.junit.AbstractClientE2ETest;
 import com.google.gson.JsonObject;
 import org.junit.Test;
 
+import zmaster587.advancedRocketry.test.FixtureSite;
+
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
@@ -33,7 +35,7 @@ import static org.junit.Assert.assertTrue;
  */
 public class BiomeScannerGetModulesOffStationE2ETest extends AbstractClientE2ETest {
 
-    private static final int X = 8, Y = 64, Z = 8;
+    private static final int X = 8, Y = FixtureSite.OPEN_AIR_Y, Z = 8;
 
     private String exec(String cmd) throws Exception {
         return String.join("\n", serverClient().execute(cmd));

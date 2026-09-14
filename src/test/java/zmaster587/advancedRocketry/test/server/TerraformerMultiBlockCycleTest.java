@@ -3,6 +3,8 @@ package zmaster587.advancedRocketry.test.server;
 import com.github.stannismod.forge.testing.junit.AbstractHeadlessServerTest;
 import org.junit.Test;
 
+import zmaster587.advancedRocketry.test.FixtureSite;
+
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
@@ -37,7 +39,7 @@ public class TerraformerMultiBlockCycleTest extends AbstractHeadlessServerTest {
 
     @Test
     public void terraformerControllerSurvivesTickWithoutStructure() throws Exception {
-        int x = 2000, y = 64, z = 2000;
+        int x = 2000, y = FixtureSite.OPEN_AIR_Y, z = 2000;
 
         String place = String.join("\n", client().execute(
                 "artest place 0 " + x + " " + y + " " + z + " advancedrocketry:terraformer"));

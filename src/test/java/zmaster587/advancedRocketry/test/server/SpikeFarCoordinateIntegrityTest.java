@@ -8,6 +8,8 @@ import zmaster587.advancedRocketry.test.GameTicks;
 import java.util.ArrayList;
 import java.util.List;
 
+import zmaster587.advancedRocketry.test.FixtureSite;
+
 import static org.junit.Assert.assertTrue;
 
 /**
@@ -37,7 +39,7 @@ public class SpikeFarCoordinateIntegrityTest extends AbstractHeadlessServerTest 
     private static final int[] X_LADDER = {2_000_000, 8_000_000, 16_000_000, 28_000_000};
 
     private static final int OVERWORLD = 0;
-    private static final int PLACE_Y = 100;
+    private static final int PLACE_Y = FixtureSite.OPEN_AIR_Y;
 
     private String exec(String cmd) throws Exception {
         return String.join("\n", client().execute(cmd));

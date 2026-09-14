@@ -151,7 +151,10 @@ public class SatelliteCoverageGapsTest extends AbstractSharedServerTest {
     @Test
     public void biomeChangerEventuallyTerraformsAllQueuedPositions() throws Exception {
         long satId = createSat("biomeChanger", 100, 10_000, 1000);
-        int baseX = 5500, y = 70, z = 5500;
+        // The band. A biome is a property of the COLUMN in 1.12, so the Y this reads and terraforms
+        // at never mattered — which is exactly why it sat at a hard-coded 70 until 2026-09-14,
+        // inheriting whatever the seed put there for no reason at all.
+        int baseX = 5500, y = zmaster587.advancedRocketry.test.FixtureSite.OPEN_AIR_Y, z = 5500;
         int n = 5;
 
         // Pre-load chunks at the synthetic test positions.
@@ -198,7 +201,7 @@ public class SatelliteCoverageGapsTest extends AbstractSharedServerTest {
     @Test
     public void biomeChangerWithoutConfiguredBiomeLeavesWorldUnchanged() throws Exception {
         long satId = createSat("biomeChanger", 100, 10_000, 1000);
-        int x = 5600, y = 70, z = 5600;
+        int x = 5600, y = zmaster587.advancedRocketry.test.FixtureSite.OPEN_AIR_Y, z = 5600;
 
         client().execute("artest fill 0 " + (x - 1) + " " + (y - 1) + " " + (z - 1) + " "
                 + (x + 1) + " " + (y + 1) + " " + (z + 1) + " minecraft:air");

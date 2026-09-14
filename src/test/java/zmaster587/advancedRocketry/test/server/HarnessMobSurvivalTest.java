@@ -7,6 +7,8 @@ import org.junit.Test;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import zmaster587.advancedRocketry.test.FixtureSite;
+
 import static org.junit.Assert.assertTrue;
 
 /**
@@ -34,7 +36,7 @@ public class HarnessMobSurvivalTest extends AbstractSharedServerTest {
 
     @Test
     public void aPersistentNoAiMobSurvivesInTheHarnessWorld() throws Exception {
-        final int x = 7930, y = 80, z = 7930;
+        final int x = 7930, y = FixtureSite.OPEN_AIR_Y, z = 7930;
 
         // Warm the chunk and lay ONE floor block so the subject is supported the moment it spawns —
         // a fall from an unsupported spawn would kill a 10-HP cow and masquerade as the bug.

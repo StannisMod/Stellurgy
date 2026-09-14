@@ -9,6 +9,8 @@ import org.lwjgl.input.Keyboard;
 
 import zmaster587.advancedRocketry.test.Events;
 
+import zmaster587.advancedRocketry.test.Plot;
+
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;

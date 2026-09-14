@@ -6,6 +6,8 @@ import org.junit.Test;
 
 import zmaster587.advancedRocketry.test.ShipIdentity;
 
+import zmaster587.advancedRocketry.test.FixtureSite;
+
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 import static zmaster587.advancedRocketry.test.ArrangementFailure.requireArranged;
@@ -43,8 +45,8 @@ public class NavLookupNamesItsOwnShipE2ETest extends AbstractSharedServerTest {
      * Two craft, each carrying a flight computer and a navigation computer, far enough apart to be
      * two registered ships and near enough that neither is obviously "the" nearest to anything.
      */
-    private static final int SHIP_A_X = 6100, SHIP_A_Y = 80, SHIP_A_Z = 6100;
-    private static final int SHIP_B_X = 6164, SHIP_B_Y = 80, SHIP_B_Z = 6100;
+    private static final int SHIP_A_X = 6100, SHIP_A_Y = FixtureSite.OPEN_AIR_Y, SHIP_A_Z = 6100;
+    private static final int SHIP_B_X = 6164, SHIP_B_Y = FixtureSite.OPEN_AIR_Y, SHIP_B_Z = 6100;
 
     @Test
     public void eachShipsNavigationLookupAnswersForItsOwnShip() throws Exception {

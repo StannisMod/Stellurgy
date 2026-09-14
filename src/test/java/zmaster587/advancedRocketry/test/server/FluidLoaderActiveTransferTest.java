@@ -5,6 +5,8 @@ import org.junit.Test;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import zmaster587.advancedRocketry.test.FixtureSite;
+
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
@@ -70,11 +72,16 @@ public class FluidLoaderActiveTransferTest extends AbstractSharedServerTest {
      */
     @Test
     public void loaderTransfersOxygenIntoRocketStorageLiquidTanks() throws Exception {
-        int lx = 1300, ly = 65, lz = 1300;
+        // THE PAIR MOVES TOGETHER. The loader sat at y=65 and the rocket's base at y=64, one below
+        // it — a RELATIVE geometry written as two absolute numbers, which is why the mechanical
+        // lift could not touch this class: moving either alone would have put the loader a hundred
+        // blocks from the craft it loads while both lines still looked plausible.
+        final FixtureSite rocketSite = FixtureSite.openAir(0, 1300 + 20, 1300);
+        int lx = 1300, ly = rocketSite.y + 1, lz = 1300;
         ok("artest place 0 " + lx + " " + ly + " " + lz
                 + " advancedrocketry:loader 5");
 
-        int rocketId = assembleFixture(lx + 20, 64, lz, "with-fluid-cargo");
+        int rocketId = assembleFixture(rocketSite, "with-fluid-cargo");
 
         // Pre-load loader's tank with oxygen. The loader IS a
         // TileFluidHatch, so `fluid inject` works against its world pos.
@@ -143,11 +150,13 @@ public class FluidLoaderActiveTransferTest extends AbstractSharedServerTest {
      */
     @Test
     public void unloaderDrainsRocketStorageLiquidTanksIntoOwnTank() throws Exception {
-        int ux = 1400, uy = 65, uz = 1400;
+        // The pair moves together; see the sibling scenario above for why this is one decision.
+        final FixtureSite rocketSite = FixtureSite.openAir(0, 1400 + 20, 1400);
+        int ux = 1400, uy = rocketSite.y + 1, uz = 1400;
         ok("artest place 0 " + ux + " " + uy + " " + uz
                 + " advancedrocketry:loader 4");
 
-        int rocketId = assembleFixture(ux + 20, 64, uz, "with-fluid-cargo");
+        int rocketId = assembleFixture(rocketSite, "with-fluid-cargo");
 
         // Pre-fill rocket's storage liquidTanks with oxygen via the
         // dedicated probe.
@@ -216,11 +225,14 @@ public class FluidLoaderActiveTransferTest extends AbstractSharedServerTest {
                 resp.contains("\"ok\":true"));
     }
 
-    private int assembleFixture(int baseX, int baseY, int baseZ, String variant)
+    private int assembleFixture(FixtureSite site, String variant)
             throws Exception {
-        ok("artest fill 0 " + (baseX - 2) + " " + (baseY + 1) + " " + (baseZ - 2)
-                + " " + (baseX + 7) + " " + (baseY + 10) + " " + (baseZ + 7)
-                + " minecraft:air");
+        // The site owns the coordinates; these aliases keep the body below unchanged.
+        final int baseX = site.x, baseY = site.y, baseZ = site.z;
+        // FIRST link: the volume is EMPTY, measured by the air fill's own `placed` — the number the
+        // pre-clear it replaces was throwing away. Open air, so this ASSERTS rather than digs.
+        site.requireClear(cmd -> exec(cmd), 2, 10,
+                "the craft the loader fills stands in this volume");
         String fx = exec("artest fixture rocket 0 " + baseX + " " + baseY + " " + baseZ
                 + " " + variant);
         assertTrue("fixture rocket (" + variant + ") failed: " + fx,

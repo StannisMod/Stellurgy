@@ -7,6 +7,8 @@ import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import zmaster587.advancedRocketry.test.FixtureSite;
+
 import static org.junit.Assert.assertTrue;
 
 /**
@@ -40,7 +42,7 @@ public class FuelingStationFuelsAdjacentRocketTest extends AbstractHeadlessServe
 
     /** Rocket pad center coords — isolated patch (no collisions). */
     private static final int RX = 2800;
-    private static final int RY = 64;
+    private static final int RY = FixtureSite.OPEN_AIR_Y;
     private static final int RZ = 2800;
     /** Fueling station placed 8 blocks away — within max link distance. */
     private static final int FX = RX - 8;

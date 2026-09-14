@@ -6,6 +6,8 @@ import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import zmaster587.advancedRocketry.test.FixtureSite;
+
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
@@ -28,7 +30,7 @@ import static org.junit.Assert.assertTrue;
 public class ShieldPriorityGroupControlTest extends AbstractSharedServerTest {
 
     private static final int DIM = 0;
-    private static final int Y = 64;
+    private static final int Y = FixtureSite.OPEN_AIR_Y;
 
     @Test
     public void groupPushesPriorityIntoMemberEmitters() throws Exception {

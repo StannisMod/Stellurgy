@@ -25,6 +25,8 @@ import zmaster587.advancedRocketry.test.Events;
 import zmaster587.advancedRocketry.test.GameTicks;
 import zmaster587.advancedRocketry.test.ShipIdentity;
 
+import zmaster587.advancedRocketry.test.FixtureSite;
+
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotEquals;
@@ -134,7 +136,7 @@ public abstract class AbstractSpaceLoginRestoreClientTest {
 
     /** Where the piloted ship is built: a loaded overworld region well clear of other fixtures. */
     protected static final int SRC_X = 6800;
-    protected static final int SRC_Y = 80;
+    protected static final int SRC_Y = FixtureSite.OPEN_AIR_Y;
     protected static final int SRC_Z = 6800;
 
     /** A world height comfortably above the default orbit ceiling, so the ceiling check fires. */

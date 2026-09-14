@@ -12,6 +12,8 @@ import java.nio.file.Path;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import zmaster587.advancedRocketry.test.FixtureSite;
+
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
@@ -52,7 +54,7 @@ public class WirelessTransceiverRestartTest {
     private static final int DIM = 0;
     private static final int X_A = 1100;
     private static final int X_B = 1125;
-    private static final int Y = 65;
+    private static final int Y = FixtureSite.OPEN_AIR_Y;
     private static final int Z = 1100;
 
     @Before

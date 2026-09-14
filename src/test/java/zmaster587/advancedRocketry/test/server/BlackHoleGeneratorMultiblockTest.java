@@ -5,6 +5,8 @@ import org.junit.Test;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import zmaster587.advancedRocketry.test.FixtureSite;
+
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
@@ -29,7 +31,7 @@ import static org.junit.Assert.assertTrue;
 public class BlackHoleGeneratorMultiblockTest extends AbstractSharedServerTest {
 
     private static final int CX = 3000;
-    private static final int CY = 64;
+    private static final int CY = FixtureSite.OPEN_AIR_Y;
     private static final int CZ = 3000;
 
     @Test

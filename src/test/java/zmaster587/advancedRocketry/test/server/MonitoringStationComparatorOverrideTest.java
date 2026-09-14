@@ -47,7 +47,13 @@ public class MonitoringStationComparatorOverrideTest extends AbstractSharedServe
             Pattern.compile("\"linkedEntityId\":(-?\\d+)");
 
     // Position-isolated x offsets per AbstractSharedServerTest contract.
-    private static final int CY = 64;
+    /**
+     * The one anchor every coordinate in this class is relative to — the station sits at
+     * {@code CY + 2} on a stone pad the test lays at {@code CY}, and the rocket's base is {@code CY}
+     * itself. It was a hard-coded 64 until 2026-09-14; nothing here wants terrain, and because every
+     * other Y is derived from this one, the whole class moves as a unit.
+     */
+    private static final int CY = zmaster587.advancedRocketry.test.FixtureSite.OPEN_AIR_Y;
     private static final int CZ = 7000;
     private static final int CX_NO_ROCKET = 7400;
     private static final int CX_ALTITUDE = 7600;
@@ -133,12 +139,12 @@ public class MonitoringStationComparatorOverrideTest extends AbstractSharedServe
     // -- helpers ----------------------------------------------------------
 
     private int buildAndAssemble(int baseX, int baseY, int baseZ) throws Exception {
-        int cx1 = (baseX - 2) >> 4, cz1 = (baseZ - 2) >> 4;
-        int cx2 = (baseX + 7) >> 4, cz2 = (baseZ + 7) >> 4;
-        exec("artest chunk warmup 0 " + cx1 + " " + cz1 + " " + cx2 + " " + cz2);
-        exec("artest fill 0 " + (baseX - 2) + " " + (baseY + 1) + " " + (baseZ - 2)
-                + " " + (baseX + 7) + " " + (baseY + 10) + " " + (baseZ + 7)
-                + " minecraft:air");
+        // FIRST link: the volume is EMPTY, measured by the air fill's own `placed` — the number the
+        // pre-clear it replaces was throwing away. The site is in the band, so this ASSERTS rather
+        // than digs, and its fill force-loads every chunk in the box, which is what the warmup did.
+        zmaster587.advancedRocketry.test.FixtureSite.openAir(0, baseX, baseZ)
+                .requireClear(cmd -> exec(cmd), 2, 10,
+                        "the craft the monitoring station reports on stands in this volume");
         String fixture = exec("artest fixture rocket 0 " + baseX + " " + baseY + " " + baseZ
                 + " simple");
         assertTrue("fixture build failed: " + fixture, fixture.contains("\"ok\":true"));

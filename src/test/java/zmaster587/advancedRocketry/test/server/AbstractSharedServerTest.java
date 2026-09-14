@@ -6,6 +6,14 @@ import com.github.stannismod.forge.testing.server.TestClient;
 import org.junit.AfterClass;
 import org.junit.Assume;
 import org.junit.BeforeClass;
+import org.junit.Rule;
+import org.junit.rules.TestName;
+
+import java.util.HashMap;
+import java.util.Map;
+
+import zmaster587.advancedRocketry.test.FixtureSite;
+import zmaster587.advancedRocketry.test.Plot;
 
 /**
  * class-scoped harness lifecycle base class.
@@ -106,5 +114,55 @@ public abstract class AbstractSharedServerTest {
      *  RealDedicatedServerHarness API beyond `client()`. */
     protected static RealDedicatedServerHarness harness() {
         return shared;
+    }
+
+    // ---- position isolation, as a MECHANISM ----------------------------------------------------
+    //
+    // Contract item 1 above ("Position-isolated: each method picks a unique BASE_X offset ... or
+    // includes a hash of its method name in the position") was prose, and prose is what every
+    // method had to remember. It is now something a method can ASK for: `site()` hands out this
+    // scenario's own plot, in the open-air band, and the clear that follows asserts the volume
+    // stays inside it.
+    //
+    // Unique WITHIN THE CLASS is the whole requirement, because each class boots its own server in
+    // @BeforeClass and therefore its own world. The key carries the class anyway, so a fork that
+    // runs several classes in one JVM never hands two of them the same patch either.
+
+    @Rule
+    public final TestName scenarioName = new TestName();
+
+    private static final Map<String, Plot> PLOTS = new HashMap<>();
+    private static int nextPlotIndex;
+
+    /**
+     * Where this class's plots live. Override for a class whose fixtures are wider than a plot, or
+     * that must keep coordinates its green runs were taken on.
+     */
+    protected Plot.Lane lane() {
+        return Plot.Lane.DEFAULT;
+    }
+
+    /** This scenario's own patch of world — allocated once, never recycled. */
+    protected final Plot plot() {
+        String key = getClass().getName() + "#" + scenarioName.getMethodName();
+        synchronized (PLOTS) {
+            Plot existing = PLOTS.get(key);
+            if (existing == null) {
+                existing = Plot.forScenario(nextPlotIndex++, key, 0, lane());
+                PLOTS.put(key, existing);
+            }
+            return existing;
+        }
+    }
+
+    /**
+     * WHERE THIS SCENARIO'S FIXTURE STANDS. Ask for it; do not choose coordinates.
+     *
+     * <p>The plot decides WHERE and cannot overlap a sibling's; {@link FixtureSite#openAir} decides
+     * the HEIGHT and takes no Y at all; and {@code requireClear} asserts the volume actually cleared
+     * lies inside the plot. None of the three is a thing the scenario has to get right.</p>
+     */
+    protected final FixtureSite site() {
+        return plot().site();
     }
 }

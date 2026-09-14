@@ -6,6 +6,8 @@ import org.junit.Test;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import zmaster587.advancedRocketry.test.FixtureSite;
+
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
@@ -29,7 +31,10 @@ public class RocketInfrastructureSmokeTest extends AbstractSharedServerTest {
 
     @Test
     public void fuelingStationLinksToAssembledRocket() throws Exception {
-        int sx = 850, sy = 65, sz = 850;
+        // The pair moves together: the machine sits one block above the rocket's base,
+        // a RELATIVE geometry that was written as two absolute numbers.
+        final FixtureSite rocketSite = FixtureSite.openAir(0, 850 + 20, 850);
+        int sx = 850, sy = rocketSite.y + 1, sz = 850;
         String place = String.join("\n", client().execute(
                 "artest place 0 " + sx + " " + sy + " " + sz + " advancedrocketry:fuelingStation"));
         assertTrue("place fueling station failed: " + place,
@@ -46,7 +51,7 @@ public class RocketInfrastructureSmokeTest extends AbstractSharedServerTest {
         assertTrue("infra info on empty pos didn't error: " + emptyInfra,
                 emptyInfra.contains("\"error\":\"no tile entity\""));
 
-        int rocketId = assembleFixture(sx + 20, 64, sz, "simple");
+        int rocketId = assembleFixture(rocketSite, "simple");
         String link = String.join("\n", client().execute(
                 "artest infra link 0 " + sx + " " + sy + " " + sz + " " + rocketId));
         assertTrue("infra link probe errored: " + link, link.contains("\"ok\":true"));
@@ -109,10 +114,13 @@ public class RocketInfrastructureSmokeTest extends AbstractSharedServerTest {
      */
     @Test
     public void unlinkRemovesAssociation() throws Exception {
-        int sx = 950, sy = 65, sz = 950;
+        // The pair moves together: the machine sits one block above the rocket's base,
+        // a RELATIVE geometry that was written as two absolute numbers.
+        final FixtureSite rocketSite = FixtureSite.openAir(0, 950 + 20, 950);
+        int sx = 950, sy = rocketSite.y + 1, sz = 950;
         ok(client().execute("artest place 0 " + sx + " " + sy + " " + sz
                 + " advancedrocketry:fuelingStation"));
-        int rocketId = assembleFixture(sx + 20, 64, sz, "simple");
+        int rocketId = assembleFixture(rocketSite, "simple");
 
         String link = String.join("\n", client().execute(
                 "artest infra link 0 " + sx + " " + sy + " " + sz + " " + rocketId));
@@ -145,7 +153,10 @@ public class RocketInfrastructureSmokeTest extends AbstractSharedServerTest {
      */
     @Test
     public void monitoringStationReportsRocketTelemetry() throws Exception {
-        int mx = 1000, my = 65, mz = 1000;
+        // The pair moves together: the machine sits one block above the rocket's base,
+        // a RELATIVE geometry that was written as two absolute numbers.
+        final FixtureSite rocketSite = FixtureSite.openAir(0, 1000 + 20, 1000);
+        int mx = 1000, my = rocketSite.y + 1, mz = 1000;
         ok(client().execute("artest place 0 " + mx + " " + my + " " + mz
                 + " advancedrocketry:monitoringStation"));
 
@@ -155,7 +166,7 @@ public class RocketInfrastructureSmokeTest extends AbstractSharedServerTest {
         assertTrue("monitor must report no linked rocket initially: " + preLink,
                 preLink.contains("\"linkedEntityId\":-1"));
 
-        int rocketId = assembleFixture(mx + 20, 64, mz, "simple");
+        int rocketId = assembleFixture(rocketSite, "simple");
         String link = String.join("\n", client().execute(
                 "artest infra link 0 " + mx + " " + my + " " + mz + " " + rocketId));
         assertTrue("link to monitoring station must succeed: " + link,
@@ -190,11 +201,14 @@ public class RocketInfrastructureSmokeTest extends AbstractSharedServerTest {
      */
     @Test
     public void fluidLoaderTransfersFluidAfterLanding() throws Exception {
-        int lx = 1050, ly = 65, lz = 1050;
+        // The pair moves together: the machine sits one block above the rocket's base,
+        // a RELATIVE geometry that was written as two absolute numbers.
+        final FixtureSite rocketSite = FixtureSite.openAir(0, 1050 + 20, 1050);
+        int lx = 1050, ly = rocketSite.y + 1, lz = 1050;
         // Loader meta=5 -> TileRocketFluidLoader.
         ok(client().execute("artest place 0 " + lx + " " + ly + " " + lz
                 + " advancedrocketry:loader 5"));
-        int rocketId = assembleFixture(lx + 20, 64, lz, "simple");
+        int rocketId = assembleFixture(rocketSite, "simple");
         ok(client().execute("artest infra link 0 " + lx + " " + ly + " " + lz + " " + rocketId));
 
         // Tick — the production update() iterates getFluidTiles() and
@@ -220,11 +234,14 @@ public class RocketInfrastructureSmokeTest extends AbstractSharedServerTest {
      */
     @Test
     public void fluidUnloaderTransfersFluidAfterLanding() throws Exception {
-        int ux = 1100, uy = 65, uz = 1100;
+        // The pair moves together: the machine sits one block above the rocket's base,
+        // a RELATIVE geometry that was written as two absolute numbers.
+        final FixtureSite rocketSite = FixtureSite.openAir(0, 1100 + 20, 1100);
+        int ux = 1100, uy = rocketSite.y + 1, uz = 1100;
         // Loader meta=4 -> TileRocketFluidUnloader.
         ok(client().execute("artest place 0 " + ux + " " + uy + " " + uz
                 + " advancedrocketry:loader 4"));
-        int rocketId = assembleFixture(ux + 20, 64, uz, "simple");
+        int rocketId = assembleFixture(rocketSite, "simple");
         ok(client().execute("artest infra link 0 " + ux + " " + uy + " " + uz + " " + rocketId));
 
         // Pre-fill the rocket's fuel tanks by injecting into the rocket's
@@ -259,11 +276,14 @@ public class RocketInfrastructureSmokeTest extends AbstractSharedServerTest {
      */
     @Test
     public void rocketLoaderTransfersItemsAfterLanding() throws Exception {
-        int lx = 1150, ly = 65, lz = 1150;
+        // The pair moves together: the machine sits one block above the rocket's base,
+        // a RELATIVE geometry that was written as two absolute numbers.
+        final FixtureSite rocketSite = FixtureSite.openAir(0, 1150 + 20, 1150);
+        int lx = 1150, ly = rocketSite.y + 1, lz = 1150;
         // Loader meta=3 -> TileRocketLoader.
         ok(client().execute("artest place 0 " + lx + " " + ly + " " + lz
                 + " advancedrocketry:loader 3"));
-        int rocketId = assembleFixture(lx + 20, 64, lz, "with-cargo");
+        int rocketId = assembleFixture(rocketSite, "with-cargo");
         ok(client().execute("artest infra link 0 " + lx + " " + ly + " " + lz + " " + rocketId));
 
         // Drop 32 cobblestone into the loader's input slot 0.
@@ -300,10 +320,13 @@ public class RocketInfrastructureSmokeTest extends AbstractSharedServerTest {
      */
     @Test
     public void rocketUnloaderRemovesItemsAfterLanding() throws Exception {
-        int ux = 1200, uy = 65, uz = 1200;
+        // The pair moves together: the machine sits one block above the rocket's base,
+        // a RELATIVE geometry that was written as two absolute numbers.
+        final FixtureSite rocketSite = FixtureSite.openAir(0, 1200 + 20, 1200);
+        int ux = 1200, uy = rocketSite.y + 1, uz = 1200;
         ok(client().execute("artest place 0 " + ux + " " + uy + " " + uz
                 + " advancedrocketry:loader 2"));
-        int rocketId = assembleFixture(ux + 20, 64, uz, "with-cargo");
+        int rocketId = assembleFixture(rocketSite, "with-cargo");
         ok(client().execute("artest infra link 0 " + ux + " " + uy + " " + uz + " " + rocketId));
 
         // Tick the unloader — empty cargo -> no transfer, but the loop must
@@ -323,15 +346,17 @@ public class RocketInfrastructureSmokeTest extends AbstractSharedServerTest {
 
     /**
      * Helper: build a rocket fixture, assemble it, return its entity id.
-     * Pre-clears terrain so the scan sees only the placed components (same
-     * pattern as RocketAssemblySmokeTest).
+     *
+     * <p>The site stands in the open-air band, so the check below ASSERTS that the scan will see
+     * only the placed components rather than digging terrain away and hoping (same pattern as
+     * RocketAssemblySmokeTest).</p>
      */
-    private int assembleFixture(int baseX, int baseY, int baseZ, String variant) throws Exception {
-        String fillAir = String.join("\n", client().execute(
-                "artest fill 0 " + (baseX - 2) + " " + (baseY + 1) + " " + (baseZ - 2)
-                        + " " + (baseX + 7) + " " + (baseY + 10) + " " + (baseZ + 7)
-                        + " minecraft:air"));
-        assertTrue("pre-clear failed: " + fillAir, fillAir.contains("\"ok\":true"));
+    private int assembleFixture(FixtureSite site, String variant) throws Exception {
+        // The site owns the coordinates; these aliases keep the body below unchanged.
+        final int baseX = site.x, baseY = site.y, baseZ = site.z;
+        // FIRST link: the volume is EMPTY, measured by the air fill's own `placed`.
+        site.requireClear(cmd -> String.join("\n", client().execute(cmd)), 2, 10,
+                "the craft this infrastructure links to stands in this volume");
 
         String fx = String.join("\n", client().execute(
                 "artest fixture rocket 0 " + baseX + " " + baseY + " " + baseZ + " " + variant));

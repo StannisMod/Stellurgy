@@ -12,6 +12,8 @@ import org.junit.Test;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import zmaster587.advancedRocketry.test.FixtureSite;
+
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
@@ -36,7 +38,7 @@ public class VSShipDescentE2ETest extends AbstractSharedServerTest {
             Pattern.compile("\"builderPos\":\\[(-?\\d+),(-?\\d+),(-?\\d+)]");
 
     /** A loaded overworld region distinct from the entry e2e's, well clear of other tests. */
-    private static final int SRC_X = 6400, SRC_Y = 80, SRC_Z = 6400;
+    private static final int SRC_X = 6400, SRC_Y = FixtureSite.OPEN_AIR_Y, SRC_Z = 6400;
     /** A world Y comfortably above the default orbit ceiling (ARConfiguration.orbit = 1000). */
     private static final int ABOVE_CEILING_Y = 1200;
     /** The descent target: the overworld — always registered, terrain-generated. */

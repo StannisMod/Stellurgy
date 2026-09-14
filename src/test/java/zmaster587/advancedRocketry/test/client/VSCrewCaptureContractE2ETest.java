@@ -55,13 +55,23 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
 
     private static final Pattern BUILDER_POS =
             Pattern.compile("\"builderPos\":\\[(-?\\d+),(-?\\d+),(-?\\d+)]");
-    /** Floor of the staging clearing: far enough below the hull that a body which MISSES it keeps
-     *  falling, so a miss fails this scenario as a miss instead of as a hold that never engaged. */
-    private static final int SHAFT_FLOOR_Y = 40;
+    /**
+     * How far BELOW the hull the staging clearing reaches: far enough that a body which MISSES it
+     * keeps falling, so a miss fails this scenario as a miss instead of as a hold that never
+     * engaged.
+     *
+     * <p><b>A CLEARANCE, and it was an absolute y=40 until 2026-09-14.</b> That number was chosen
+     * against a hull sitting near y=72, and it is the same defect {@code CLEAR_AIR_Y} had one file
+     * over: an absolute altitude that silently stops bracketing its subject the moment the subject
+     * moves. With the fixture in the open-air band the old pair cleared y=40..90 — a slab entirely
+     * BELOW the craft, while the body was dropped at {@code shipY + 7} into a volume nothing had
+     * looked at. Measured against the hull, the clearing follows it wherever it is flown.</p>
+     */
+    private static final int SHAFT_BELOW_HULL = 30;
 
-    /** Ceiling of the staging clearing: above the drop point (`shipY + 7`) with room to spare, so
-     *  the body is never released inside a block. */
-    private static final int SHAFT_CEILING_Y = 90;
+    /** How far ABOVE the hull it reaches: past the drop point ({@code shipY + 7}) with room to
+     *  spare, so the body is never released inside a block. */
+    private static final int SHAFT_ABOVE_HULL = 12;
 
     /** The hull's angular rate, read beside a body that is supposed to be resting on it. */
     private static final Pattern OMEGA_AT_HULL = Pattern.compile("\"omega\":(-?[0-9.E\\-]+)");
@@ -1500,8 +1510,10 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
         // leave it while falling, and deep enough that a body which MISSES the hull keeps falling and
         // fails this scenario loudly, instead of landing on terrain and failing it as a hold that did
         // not engage.
-        String clearing = exec("artest fill 0 " + ((int) sx - 12) + " " + (SHAFT_FLOOR_Y) + " "
-                + ((int) sz - 12) + " " + ((int) sx + 12) + " " + (SHAFT_CEILING_Y) + " "
+        String clearing = exec("artest fill 0 " + ((int) sx - 12) + " "
+                + ((int) sy - SHAFT_BELOW_HULL) + " "
+                + ((int) sz - 12) + " " + ((int) sx + 12) + " "
+                + ((int) sy + SHAFT_ABOVE_HULL) + " "
                 + ((int) sz + 12) + " minecraft:air");
         assertTrue("the staging clearing was not cut, so this scenario would stage a drop inside the"
                 + " fixture's own pit: " + clearing, clearing.contains("\"ok\":true"));
@@ -2018,8 +2030,10 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
         // it, so what it opens is a shaft whose rim is higher than the deck a body is aimed at: the
         // body then stands on world geometry a metre off the craft and nothing downstream can tell
         // that from a hold that refused to engage.
-        String clearing = exec("artest fill 0 " + ((int) sx - 12) + " " + SHAFT_FLOOR_Y + " "
-                + ((int) sz - 12) + " " + ((int) sx + 12) + " " + SHAFT_CEILING_Y + " "
+        String clearing = exec("artest fill 0 " + ((int) sx - 12) + " "
+                + ((int) sy - SHAFT_BELOW_HULL) + " "
+                + ((int) sz - 12) + " " + ((int) sx + 12) + " "
+                + ((int) sy + SHAFT_ABOVE_HULL) + " "
                 + ((int) sz + 12) + " minecraft:air");
         scenario().requireArranged("the staging clearing was not cut, so the body would meet the"
                 + " fixture's own structure instead of the deck: " + clearing,

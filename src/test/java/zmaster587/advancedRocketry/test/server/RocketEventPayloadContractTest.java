@@ -7,6 +7,8 @@ import zmaster587.advancedRocketry.test.GameTicks;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import zmaster587.advancedRocketry.test.FixtureSite;
+
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 import static zmaster587.advancedRocketry.test.server.WorldCommandFixtures.exec;
@@ -60,7 +62,7 @@ public class RocketEventPayloadContractTest extends AbstractSharedServerTest {
     private static final Pattern ORBIT_REACHED_DIM = Pattern.compile("\"orbitReachedDim\":(-?\\d+)");
     private static final Pattern ORBIT_REACHED_COUNT = Pattern.compile("\"orbitReached\":(-?\\d+)");
 
-    private static final int CY = 64;
+    private static final int CY = FixtureSite.OPEN_AIR_Y;
     private static final int CZ = 8000;
     private static final int CX_DISMANTLE = 8000;
     private static final int CX_PRELAUNCH = 8400;

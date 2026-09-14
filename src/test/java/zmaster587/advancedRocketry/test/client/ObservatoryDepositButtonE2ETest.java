@@ -4,6 +4,8 @@ import org.junit.FixMethodOrder;
 import org.junit.Test;
 import org.junit.runners.MethodSorters;
 
+import zmaster587.advancedRocketry.test.FixtureSite;
+
 import static org.junit.Assert.assertTrue;
 import static zmaster587.advancedRocketry.test.client.ClientGuiTestSupport.openGuiByRightClick;
 
@@ -28,7 +30,7 @@ public class ObservatoryDepositButtonE2ETest extends AbstractSharedClientE2ETest
     private static final int BUTTON_DEPOSIT = 10;
 
     private static final int X = 5200;
-    private static final int Y = 64;
+    private static final int Y = FixtureSite.OPEN_AIR_Y;
     private static final int Z = 5200;
 
     @Override

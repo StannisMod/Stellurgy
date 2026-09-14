@@ -7,6 +7,8 @@ import org.junit.Test;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import zmaster587.advancedRocketry.test.FixtureSite;
+
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 import static zmaster587.advancedRocketry.test.server.WorldCommandFixtures.exec;
@@ -48,7 +50,7 @@ public class OxygenVentBoundedByBlobCapTest extends AbstractSharedServerTest {
     private static final Pattern ATM_TYPE  = Pattern.compile("\"type\":\"([^\"]*)\"");
 
     private static final int DIM = 0;
-    private static final int CY = 64;
+    private static final int CY = FixtureSite.OPEN_AIR_Y;
     private static final int CZ = 2800;
     /** Two patches, X-spread far apart so the two blobs never interact. */
     private static final int CX_WITHIN = 2800;

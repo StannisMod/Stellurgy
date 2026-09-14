@@ -6,6 +6,8 @@ import org.junit.Test;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import zmaster587.advancedRocketry.test.FixtureSite;
+
 import static org.junit.Assert.assertTrue;
 
 /**
@@ -76,7 +78,7 @@ public class MachineRecipeIntegrationTest extends AbstractHeadlessServerTest {
     @Test
     public void cuttingMachineRunsFirstRegisteredRecipe() throws Exception {
         // 1. Build the cutting-machine multiblock.
-        int cx = 400, cy = 64, cz = 400;
+        int cx = 400, cy = FixtureSite.OPEN_AIR_Y, cz = 400;
         String fixture = String.join("\n", client().execute(
                 "artest fixture machine cutting 0 " + cx + " " + cy + " " + cz));
         assertTrue("fixture machine cutting failed: " + fixture,

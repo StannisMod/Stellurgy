@@ -11,6 +11,8 @@ import org.junit.Test;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import zmaster587.advancedRocketry.test.FixtureSite;
+
 import static org.junit.Assert.assertTrue;
 
 /**
@@ -36,7 +38,7 @@ public class VSShipAutoTakeoffE2ETest extends AbstractSharedServerTest {
     private static final Pattern BUILDER_POS =
             Pattern.compile("\"builderPos\":\\[(-?\\d+),(-?\\d+),(-?\\d+)]");
 
-    private static final int SRC_X = 6500, SRC_Y = 80, SRC_Z = 6500;
+    private static final int SRC_X = 6500, SRC_Y = FixtureSite.OPEN_AIR_Y, SRC_Z = 6500;
     /** A short hop below the default orbit ceiling (1000), so the diagonal climb crosses it quickly. */
     private static final int NEAR_CEILING_Y = 985;
 

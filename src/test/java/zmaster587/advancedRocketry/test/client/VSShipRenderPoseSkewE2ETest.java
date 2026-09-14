@@ -13,6 +13,8 @@ import zmaster587.advancedRocketry.test.ArrangementFailure;
 import zmaster587.advancedRocketry.test.Events;
 import zmaster587.advancedRocketry.test.ShipIdentity;
 
+import zmaster587.advancedRocketry.test.Plot;
+
 import static org.junit.Assert.assertTrue;
 
 /**

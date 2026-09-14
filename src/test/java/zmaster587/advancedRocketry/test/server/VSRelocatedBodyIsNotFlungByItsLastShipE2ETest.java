@@ -10,6 +10,8 @@ import org.junit.Test;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import zmaster587.advancedRocketry.test.FixtureSite;
+
 import static org.junit.Assert.assertTrue;
 
 /**
@@ -54,7 +56,7 @@ public class VSRelocatedBodyIsNotFlungByItsLastShipE2ETest extends AbstractShare
             Pattern.compile("\"builderPos\":\\[(-?\\d+),(-?\\d+),(-?\\d+)]");
 
     /** A loaded overworld region of this class's own, well clear of every other server e2e. */
-    private static final int SRC_X = 10600, SRC_Y = 80, SRC_Z = 10600;
+    private static final int SRC_X = 10600, SRC_Y = FixtureSite.OPEN_AIR_Y, SRC_Z = 10600;
 
     /** How far the SUBJECT is carried. The lever arm IS the amplifier, and this is the distance the
      *  field report was taken at: a craft built on one plot, a body teleported to another ~4 500

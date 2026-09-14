@@ -3,6 +3,8 @@ package zmaster587.advancedRocketry.test.server;
 import com.github.stannismod.forge.testing.junit.AbstractHeadlessServerTest;
 import org.junit.Test;
 
+import zmaster587.advancedRocketry.test.FixtureSite;
+
 import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertTrue;
 
@@ -39,7 +41,7 @@ public class UvAssemblerDivergesFromRocketAssemblerTest extends AbstractHeadless
      * row far from other test patches. Position-isolated from MachineDomainSmokeSuite
      * (x ≥ 700, peaking at 2200).
      */
-    private static final int Y = 64;
+    private static final int Y = FixtureSite.OPEN_AIR_Y;
     private static final int Z_ROCKET = 2600;
     private static final int Z_UV     = 2600;
     private static final int X_ROCKET = 2500;

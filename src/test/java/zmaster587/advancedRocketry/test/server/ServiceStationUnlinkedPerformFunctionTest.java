@@ -30,7 +30,9 @@ public class ServiceStationUnlinkedPerformFunctionTest extends AbstractSharedSer
 
     // Isolated lane, clear of the other service-station fixtures.
     private static final int X = 16400;
-    private static final int Y = 70;
+    /** The open-air band. A hard-coded 70 until 2026-09-14; this station is placed and asked to
+     *  perform a function with nothing linked to it, and never looks down. */
+    private static final int Y = zmaster587.advancedRocketry.test.FixtureSite.OPEN_AIR_Y;
     private static final int Z = 15900;
 
     @Test

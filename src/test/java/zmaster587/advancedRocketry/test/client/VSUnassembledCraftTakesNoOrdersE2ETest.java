@@ -12,6 +12,8 @@ import com.google.gson.JsonObject;
 
 import zmaster587.advancedRocketry.test.Events;
 
+import zmaster587.advancedRocketry.test.FixtureSite;
+
 import static org.junit.Assert.assertTrue;
 
 /**
@@ -68,9 +70,9 @@ public class VSUnassembledCraftTakesNoOrdersE2ETest extends AbstractSharedVsClie
     private static final Pattern COUNT = Pattern.compile("\"count\":(-?\\d+)");
 
     /** The control ship's build site. */
-    private static final int SHIP_X = 3600, SHIP_Y = 64, SHIP_Z = 3600;
+    private static final int SHIP_X = 3600, SHIP_Y = FixtureSite.OPEN_AIR_Y, SHIP_Z = 3600;
     /** The subject craft, far enough that the control ship is unloaded while it is flown. */
-    private static final int CRAFT_X = 4600, CRAFT_Y = 71, CRAFT_Z = 4600;
+    private static final int CRAFT_X = 4600, CRAFT_Y = FixtureSite.OPEN_AIR_Y, CRAFT_Z = 4600;
 
     // `KEY_NOT_ASSEMBLED` lived here — the seat's "this craft is not a ship" notice, by translation
     // key. Nothing asks for the notice now: what it announces is that the craft takes no orders, and

@@ -5,6 +5,8 @@ import java.util.regex.Pattern;
 
 import org.junit.Test;
 
+import zmaster587.advancedRocketry.test.FixtureSite;
+
 import static org.junit.Assert.assertTrue;
 import static zmaster587.advancedRocketry.test.ArrangementFailure.requireArranged;
 
@@ -20,11 +22,26 @@ import static zmaster587.advancedRocketry.test.ArrangementFailure.requireArrange
  */
 public class VSNavComputerAssemblyE2ETest extends AbstractSharedServerTest {
 
-    // This fixture is built INSIDE a hill and does not care: surveyed 2026-08-14, the surface at
-    // (7200, 7200) is y=90 while this builds at 80, and the test is green — it only builds, scans
-    // and links, so nothing here flies, stands or falls. Do not "fix" the Y to match the terrain,
-    // and do not read this as a template: a fixture whose mechanic DOES touch the ground belongs on
-    // surveyed ground (see FixtureGroundOnPinnedSeedTest, which deliberately omits this one).
+    // NOT LIFTED INTO THE OPEN-AIR BAND, AND THIS IS DEBT, NOT AN EXCEPTION.
+    //
+    // Every other ship fixture in the suite moved into the band on 2026-09-14. This one did not,
+    // because lifting it turns it RED, and what the attempt measured is worse than a broken test:
+    //
+    //   at y=80  — immediately after `rocket assemble`, `artest vs ship-count-all 0` reports
+    //              count=0. No ship. The craft's blocks are still in the world, which is why the
+    //              `nav status` read at a WORLD position below finds the computer at all.
+    //   at y=150 — count=1, and `ship-info` reports a real, level, motionless ship at
+    //              (7202,155,7203). The blocks have left the world, and the same world read finds
+    //              nothing anywhere in the column (scanned navY-3 .. navY+8).
+    //
+    // So this test's green is bought by the craft NOT becoming a ship: it asserts that the tier-2
+    // assembler links the navigation computer, and reads that link off blocks the tier-2 path never
+    // took. The fixture is built INSIDE a hill here (surveyed 2026-08-14: the surface at 7200,7200
+    // is y=90 while this builds at 80), which is the likeliest reason the assembly does not produce
+    // a ship — but WHY is not measured, so it is not asserted.
+    //
+    // Do not "fix" this by lifting it and chasing the red, and do not re-read the old note that
+    // said the Y here "does not care". It cared.
     private static final int BASE_X = 7200, BASE_Y = 80, BASE_Z = 7200;
     private static final Pattern BUILDER_POS =
             Pattern.compile("\"builderPos\":\\[(-?\\d+),(-?\\d+),(-?\\d+)\\]");

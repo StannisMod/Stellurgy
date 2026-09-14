@@ -6,6 +6,8 @@ import org.junit.Test;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import zmaster587.advancedRocketry.test.FixtureSite;
+
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
@@ -33,7 +35,7 @@ public class AtmosphereOxygenSmokeTest extends AbstractHeadlessServerTest {
      * neighbours — air on the detector's sample faces, a solid support under the torch — and they
      * stay.</p>
      */
-    private static final int SITE_Y = zmaster587.advancedRocketry.test.FixtureSite.OPEN_AIR_Y;
+    private static final int SITE_Y = FixtureSite.OPEN_AIR_Y;
 
     @Test
     public void earthDensityZeroFlipsAtmosphereToVacuum() throws Exception {
@@ -72,7 +74,7 @@ public class AtmosphereOxygenSmokeTest extends AbstractHeadlessServerTest {
      */
     @Test
     public void atmosphereDetectorReportsCurrentAtmosphereOnRedstone() throws Exception {
-        int bx = 1700, by = SITE_Y,bz = 1500;
+        int bx = 1700, by = SITE_Y, bz = 1500;
 
         // Clear neighbours so the detector's sample loop sees AIR (any opaque
         // block on any face would suppress the AIR branch). 3×3×3 air around
@@ -139,7 +141,7 @@ public class AtmosphereOxygenSmokeTest extends AbstractHeadlessServerTest {
      */
     @Test
     public void co2ScrubberRemovesCo2InSealedRoom() throws Exception {
-        int bx = 1700, by = SITE_Y,bz = 1600;
+        int bx = 1700, by = SITE_Y, bz = 1600;
 
         // Clear neighbours so the place doesn't replace an arbitrary block.
         ok(client().execute("artest fill 0 " + (bx - 1) + " " + (by - 1) + " " + (bz - 1)
@@ -197,7 +199,7 @@ public class AtmosphereOxygenSmokeTest extends AbstractHeadlessServerTest {
      */
     @Test
     public void gasChargePadFillsSuitTank() throws Exception {
-        int bx = 1700, by = SITE_Y,bz = 1700;
+        int bx = 1700, by = SITE_Y, bz = 1700;
 
         ok(client().execute("artest fill 0 " + (bx - 1) + " " + (by - 1) + " " + (bz - 1)
                 + " " + (bx + 1) + " " + (by + 1) + " " + (bz + 1) + " minecraft:air"));
@@ -283,7 +285,7 @@ public class AtmosphereOxygenSmokeTest extends AbstractHeadlessServerTest {
      */
     @Test
     public void torchExtinguishesInLowOxygenConfig() throws Exception {
-        int bx = 1700, by = SITE_Y,bz = 1800;
+        int bx = 1700, by = SITE_Y, bz = 1800;
 
         // Clear neighbourhood so torch placement isn't refused for lack of a
         // valid floor block.

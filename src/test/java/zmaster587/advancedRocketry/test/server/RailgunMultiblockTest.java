@@ -2,6 +2,8 @@ package zmaster587.advancedRocketry.test.server;
 
 import org.junit.Test;
 
+import zmaster587.advancedRocketry.test.FixtureSite;
+
 import static org.junit.Assert.assertTrue;
 
 /**
@@ -41,7 +43,7 @@ import static org.junit.Assert.assertTrue;
 public class RailgunMultiblockTest extends AbstractSharedServerTest {
 
     private static final int CX = 4500;
-    private static final int CY = 64;
+    private static final int CY = FixtureSite.OPEN_AIR_Y;
     private static final int CZ = 4500;
 
     @Test

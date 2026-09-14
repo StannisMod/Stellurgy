@@ -43,7 +43,7 @@ public final class FixtureSite {
     public static final int OPEN_AIR_Y = 150;
 
     /** Edge of the launchpad the rocket fixture lays at the site, in blocks. */
-    private static final int PAD = 5;
+    static final int PAD = 5;
 
     private static final Pattern PLACED = Pattern.compile("\"placed\":(-?\\d+)");
     private static final Pattern VOLUME = Pattern.compile("\"volume\":(-?\\d+)");
@@ -56,12 +56,27 @@ public final class FixtureSite {
     /** Why this site keeps its terrain, or {@code null} when it stands in open air. */
     private final String groundIsTheSubject;
 
-    private FixtureSite(int dim, int x, int y, int z, String groundIsTheSubject) {
+    /**
+     * The plot this site was ALLOCATED from, or {@code null} when the coordinates were chosen by
+     * hand. It is what turns non-overlap from "we picked different numbers" into something
+     * {@link #requireClear} can check: the volume a scenario actually clears is asserted to lie
+     * inside its own plot, so a fixture that reaches into a neighbour's fails as an arrangement
+     * instead of silently levelling somebody else's craft.
+     */
+    private final Plot plot;
+
+    private FixtureSite(int dim, int x, int y, int z, String groundIsTheSubject, Plot plot) {
         this.dim = dim;
         this.x = x;
         this.y = y;
         this.z = z;
         this.groundIsTheSubject = groundIsTheSubject;
+        this.plot = plot;
+    }
+
+    /** A site allocated from a plot: open air, and bound to the plot for the containment check. */
+    static FixtureSite openAirIn(Plot plot, int x, int z) {
+        return new FixtureSite(plot.dim, x, OPEN_AIR_Y, z, null, plot);
     }
 
     /**
@@ -72,7 +87,7 @@ public final class FixtureSite {
      * already give.</p>
      */
     public static FixtureSite openAir(int dim, int x, int z) {
-        return new FixtureSite(dim, x, OPEN_AIR_Y, z, null);
+        return new FixtureSite(dim, x, OPEN_AIR_Y, z, null, null);
     }
 
     /**
@@ -90,7 +105,7 @@ public final class FixtureSite {
                             + " indistinguishable from a site nobody examined, which is the state"
                             + " this argument exists to end");
         }
-        return new FixtureSite(dim, x, y, z, why);
+        return new FixtureSite(dim, x, y, z, why, null);
     }
 
     /** Is this site standing on world terrain on purpose? */
@@ -128,6 +143,21 @@ public final class FixtureSite {
         int x1 = x - halo, z1 = z - halo;
         int x2 = x + PAD + halo, z2 = z + PAD + halo;
         int y1 = y + 1, y2 = y + height;
+        // THE VOLUME YOU ARE ABOUT TO TOUCH IS INSIDE YOUR OWN PLOT. Checked, not assumed — this is
+        // what makes the plot a CONTRACT rather than a convention. A scenario that asks for a halo
+        // its plot cannot hold would otherwise clear a strip of the neighbour's, which is invisible
+        // from inside either test and surfaces much later as somebody else's craft gone missing.
+        // A site whose coordinates were chosen by hand has no plot to be checked against, and says
+        // so by being unchecked; that is the state this whole seam exists to retire.
+        if (plot != null && !plot.containsBox(x1, z1, x2, z2)) {
+            ArrangementFailure.arrangementFailed(
+                    what + " — the working area (" + x1 + "," + z1 + ")..(" + x2 + "," + z2 + ")"
+                            + " leaves this scenario's own plot " + plot + ". halo=" + halo
+                            + " and this plot holds at most " + plot.maxHalo() + "; a scenario that"
+                            + " needs more room declares a WIDER LANE, because the alternative is"
+                            + " clearing a strip of a neighbouring scenario's world and neither test"
+                            + " can see that happen");
+        }
         String reply = probe.exec("artest fill " + dim
                 + " " + x1 + " " + y1 + " " + z1
                 + " " + x2 + " " + y2 + " " + z2

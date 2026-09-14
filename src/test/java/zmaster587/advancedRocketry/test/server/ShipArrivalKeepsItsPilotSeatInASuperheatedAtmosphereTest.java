@@ -9,6 +9,8 @@ import org.junit.Test;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import zmaster587.advancedRocketry.test.FixtureSite;
+
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
@@ -42,7 +44,7 @@ public class ShipArrivalKeepsItsPilotSeatInASuperheatedAtmosphereTest extends Ab
             Pattern.compile("\"builderPos\":\\[(-?\\d+),(-?\\d+),(-?\\d+)]");
 
     /** Where the ship is built, and the clear sky it crosses into. Well clear of other fixtures. */
-    private static final int SRC_X = 5300, SRC_Y = 80, SRC_Z = 5300;
+    private static final int SRC_X = 5300, SRC_Y = FixtureSite.OPEN_AIR_Y, SRC_Z = 5300;
     private static final int DST_X = 5364, DST_Y = 150, DST_Z = 5300;
 
     /** Two lone blocks away from the ship: the instrument check, then the control proper. */

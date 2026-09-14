@@ -5,6 +5,8 @@ import org.junit.Test;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import zmaster587.advancedRocketry.test.FixtureSite;
+
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
@@ -48,7 +50,7 @@ public class ElevatorCapsuleStateAndNbtTest extends AbstractSharedServerTest {
      * a 3x3 entity is a collision the scenario never asks about and would not report. In the band
      * there is nothing to be inside of.
      */
-    private static final int BASE_Y = zmaster587.advancedRocketry.test.FixtureSite.OPEN_AIR_Y;
+    private static final int BASE_Y = FixtureSite.OPEN_AIR_Y;
     private static final int BASE_Z = 7000;
 
     private static final Pattern ENTITY_ID = Pattern.compile("\"entityId\":(-?\\d+)");

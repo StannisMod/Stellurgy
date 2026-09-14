@@ -14,6 +14,8 @@ import zmaster587.advancedRocketry.test.Events;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import zmaster587.advancedRocketry.test.FixtureSite;
+
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertTrue;
@@ -173,8 +175,8 @@ public class WorldCommandFetchModeratorTest {
         // Stage both bots at known, well-separated positions.
         // Use vanilla /tp from the server console — works for any
         // connected player and doesn't need probe machinery.
-        int sx = 100, sy = 80, sz = 100; // bot1 (moderator) destination
-        int tx = 200, ty = 80, tz = 200; // bot2 (target) starting position
+        int sx = 100, sy = FixtureSite.OPEN_AIR_Y, sz = 100; // bot1 (moderator) destination
+        int tx = 200, ty = FixtureSite.OPEN_AIR_Y, tz = 200; // bot2 (target) starting position
 
         // Place stone to stand on so /tp doesn't drop into the void.
         exec("artest place 0 " + sx + " " + (sy - 1) + " " + sz + " minecraft:stone");

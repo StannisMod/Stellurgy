@@ -15,6 +15,8 @@ import org.junit.runners.MethodSorters;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import zmaster587.advancedRocketry.test.FixtureSite;
+
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
@@ -55,7 +57,7 @@ public class VSShipCellSeamE2ETest extends AbstractSharedServerTest {
     private static final Pattern CELL_KEY = Pattern.compile("^(-?\\d+)_(-?\\d+)_(-?\\d+)$");
 
     /** Where this test builds its ship — its own region, clear of the entry/descent legs. */
-    private static final int SRC_X = 6800, SRC_Y = 80, SRC_Z = 6800;
+    private static final int SRC_X = 6800, SRC_Y = FixtureSite.OPEN_AIR_Y, SRC_Z = 6800;
     /** A world Y comfortably above the default orbit ceiling (ARConfiguration.orbit = 1000). */
     private static final int ABOVE_CEILING_Y = 1200;
 

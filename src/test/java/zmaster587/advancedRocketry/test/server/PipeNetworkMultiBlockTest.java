@@ -6,6 +6,8 @@ import org.junit.Test;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import zmaster587.advancedRocketry.test.FixtureSite;
+
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
@@ -35,7 +37,7 @@ public class PipeNetworkMultiBlockTest extends AbstractHeadlessServerTest {
     public void generatorAndHatchCoexistAcrossTicks() throws Exception {
         // Use coords near the working EnergySystemsSmokeTest position so the
         // chunk's skylight is in the same regime that test verified.
-        int gx = 1110, gy = 100, gz = 1110;     // solar generator (needs sky access)
+        int gx = 1110, gy = FixtureSite.OPEN_AIR_Y, gz = 1110;     // solar generator (needs sky access)
         int hx = gx + 1;                          // forge-power-input adjacent east
 
         // Daytime + clear weather -> solar must produce.

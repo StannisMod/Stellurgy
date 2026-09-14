@@ -1,7 +1,14 @@
-package zmaster587.advancedRocketry.test.client;
+package zmaster587.advancedRocketry.test;
 
 /**
  * A private patch of world handed to exactly one scenario of a shared-harness class.
+ *
+ * <p><b>It lived in {@code test.client} until 2026-09-14.</b> A patch of world is not a client
+ * concept: the server tier needs one for the same reason and had nothing — its position-isolation
+ * contract was prose in a javadoc, asking each method to pick a unique base by hand. Moving it up
+ * is what lets {@link #site} exist, and {@code site()} is the whole point: the plot supplies
+ * NON-OVERLAP and {@link FixtureSite} supplies the HEIGHT, and until they were joined every
+ * scenario chose coordinates for itself.</p>
  *
  * <p>When one client harness carries several scenarios they also share one WORLD, and that
  * multiplies a specific failure: a "find the X" query answering with a DIFFERENT scenario's object,
@@ -35,6 +42,12 @@ public final class Plot {
 
     /**
      * The ground a fixture that needs REAL TERRAIN stands on, measured rather than chosen.
+     *
+     * <p>GROUND-SUBJECT: this constant IS the terrain. It is the surveyed surface height of the two
+     * clean plots the pinned seed offers, so a fixture-site counter that flags it for standing below
+     * the open-air band is reporting the definition of the exception rather than an instance of the
+     * defect. Every other Y in the suite moved into the band on 2026-09-14; this one is why the band
+     * has an opposite.</p>
      *
      * <p>A fixture built at a fixed Y needs the surface to be AT that Y, flat, dry and unobstructed
      * across its whole footprint, and the pinned seed grants that almost nowhere. Surveyed
@@ -127,13 +140,60 @@ public final class Plot {
     /** Edge of this plot, from its lane. Usually {@link #SIZE}. */
     public final int size;
 
-    Plot(int index, String owner, int dim, Lane lane) {
+    private Plot(int index, String owner, int dim, Lane lane) {
         this.index = index;
         this.owner = owner;
         this.dim = dim;
         this.originX = lane.originX + index * lane.stride;
         this.originZ = lane.originZ;
         this.size = lane.plotSize;
+    }
+
+    /**
+     * The plot for one scenario. {@code index} must be unique within the class that allocates —
+     * that, plus {@link Lane}'s refusal of a stride narrower than a plot, is the whole non-overlap
+     * argument, and it is structural rather than a convention anyone has to remember.
+     *
+     * <p>Public because two shared bases in two packages allocate, and the allocator's own test
+     * builds plots directly rather than through a JUnit lifecycle.</p>
+     */
+    public static Plot forScenario(int index, String owner, int dim, Lane lane) {
+        return new Plot(index, owner, dim, lane);
+    }
+
+    /**
+     * How far into the plot a fixture stands. Leaves {@value} blocks of margin on the low side and
+     * {@code size - 1 - INSET - FixtureSite.PAD} on the high side, so a fixture's working envelope
+     * fits around it; {@link #maxHalo()} is that budget, and {@code requireClear} refuses a halo
+     * past it rather than quietly reaching into a neighbour.
+     */
+    private static final int FIXTURE_INSET = 20;
+
+    /**
+     * WHERE THIS SCENARIO'S FIXTURE STANDS — the one supported way to get a site.
+     *
+     * <p>It joins the two halves that were never joined: the plot decides WHERE (unique per
+     * scenario, on a lane whose stride cannot be narrower than a plot), and {@link FixtureSite}
+     * decides the HEIGHT — its {@code openAir} takes no Y at all. A scenario that asks for this
+     * cannot collide with its sibling and cannot stand in terrain, and neither is a thing it has to
+     * get right.</p>
+     */
+    public FixtureSite site() {
+        return FixtureSite.openAirIn(this, x(FIXTURE_INSET), z(FIXTURE_INSET));
+    }
+
+    /**
+     * The widest halo a fixture on this plot may clear before its envelope would leave the plot.
+     * A lane with a wider {@code plotSize} raises it; that is the supported way to need more room.
+     */
+    public int maxHalo() {
+        return Math.min(FIXTURE_INSET, size - 1 - FIXTURE_INSET - FixtureSite.PAD);
+    }
+
+    /** Does this whole horizontal box lie inside the plot? */
+    public boolean containsBox(int x1, int z1, int x2, int z2) {
+        return x1 >= originX && z1 >= originZ
+                && x2 < originX + size && z2 < originZ + size;
     }
 
     /** Absolute X of a point {@code dx} blocks into the plot. */

@@ -2,6 +2,8 @@ package zmaster587.advancedRocketry.test.server;
 
 import org.junit.Test;
 
+import zmaster587.advancedRocketry.test.FixtureSite;
+
 import static org.junit.Assert.assertTrue;
 import static zmaster587.advancedRocketry.test.server.WorldCommandFixtures.exec;
 
@@ -26,7 +28,7 @@ public class SatelliteBuilderAssembleUnregisteredDirectTest extends AbstractShar
 
     @Test
     public void directAssembleWithUnregisteredCoreTypeIsNullSafe() throws Exception {
-        int x = 10960, y = 64, z = 9760; // isolated column, distinct chunk from other builder tests
+        int x = 10960, y = FixtureSite.OPEN_AIR_Y, z = 9760; // isolated column, distinct chunk from other builder tests
 
         exec("artest chunk warmup 0 " + (x >> 4) + " " + (z >> 4) + " " + (x >> 4) + " " + (z >> 4));
         String place = exec("artest place 0 " + x + " " + y + " " + z + " advancedrocketry:satelliteBuilder");

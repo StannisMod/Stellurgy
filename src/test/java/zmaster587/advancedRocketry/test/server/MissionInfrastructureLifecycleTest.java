@@ -100,7 +100,7 @@ public class MissionInfrastructureLifecycleTest extends AbstractSharedServerTest
      *  baseZ) — chunk (baseX>>4, baseZ>>4) is the rocket's chunk. */
     private int[] placeMonitoringStation(int baseX, int baseZ) throws Exception {
         int ix = baseX;
-        int iy = 66;
+        int iy = FixtureSite.OPEN_AIR_Y;
         int iz = baseZ;
         ok(client().execute("artest place 0 " + ix + " " + iy + " " + iz
                 + " advancedrocketry:monitoringStation"));

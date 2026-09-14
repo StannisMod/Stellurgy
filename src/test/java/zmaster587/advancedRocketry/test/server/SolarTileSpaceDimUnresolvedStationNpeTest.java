@@ -2,6 +2,8 @@ package zmaster587.advancedRocketry.test.server;
 
 import org.junit.Test;
 
+import zmaster587.advancedRocketry.test.FixtureSite;
+
 import static org.junit.Assert.assertTrue;
 
 /**
@@ -34,7 +36,7 @@ public class SolarTileSpaceDimUnresolvedStationNpeTest extends AbstractSharedSer
     /** C076 — TileSolarArray ticks off-station in the space dim without NPE. */
     @Test
     public void solarArrayInSpaceDimOffStationTicksWithoutCrashing() throws Exception {
-        int cx = 9100, cy = 100, cz = 9100;
+        int cx = 9100, cy = FixtureSite.OPEN_AIR_Y, cz = 9100;
 
         ok(client().execute("artest dim load " + SPACE_DIM));
 

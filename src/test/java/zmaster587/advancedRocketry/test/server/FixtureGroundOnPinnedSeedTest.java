@@ -2,7 +2,7 @@ package zmaster587.advancedRocketry.test.server;
 
 import com.github.stannismod.forge.testing.junit.AbstractHeadlessServerTest;
 import org.junit.Test;
-import zmaster587.advancedRocketry.test.client.Plot;
+import zmaster587.advancedRocketry.test.Plot;
 
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;

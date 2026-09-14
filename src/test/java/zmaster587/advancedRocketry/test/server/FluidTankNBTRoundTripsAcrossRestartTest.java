@@ -12,6 +12,8 @@ import java.nio.file.Path;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import zmaster587.advancedRocketry.test.FixtureSite;
+
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
@@ -39,7 +41,7 @@ public class FluidTankNBTRoundTripsAcrossRestartTest {
 
     /** Tank position — far enough from spawn that no other tile collides. */
     private static final int TX = 2400;
-    private static final int TY = 64;
+    private static final int TY = FixtureSite.OPEN_AIR_Y;
     private static final int TZ = 2400;
     /** Amount injected; below libVulpes' default tank capacity (16 000 mB)
      *  so {@code fluid inject} doesn't clamp and we can read it back exactly. */

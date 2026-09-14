@@ -5,6 +5,8 @@ import java.util.List;
 
 import org.junit.Test;
 
+import zmaster587.advancedRocketry.test.FixtureSite;
+
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
@@ -27,7 +29,7 @@ import static org.junit.Assert.assertTrue;
  */
 public class Tier1AimsAtWhatThisWorldKnowsE2ETest extends AbstractSharedServerTest {
 
-    private static final int CY = 64;
+    private static final int CY = FixtureSite.OPEN_AIR_Y;
     private static final int CZ = 4900;
     private static final int X = 4900;
 

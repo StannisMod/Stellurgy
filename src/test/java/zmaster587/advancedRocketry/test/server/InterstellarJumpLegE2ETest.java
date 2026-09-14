@@ -13,6 +13,8 @@ import org.junit.Test;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import zmaster587.advancedRocketry.test.FixtureSite;
+
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 import static zmaster587.advancedRocketry.test.ArrangementFailure.requireArranged;
@@ -47,7 +49,7 @@ import static zmaster587.advancedRocketry.test.ArrangementFailure.requireArrange
 public class InterstellarJumpLegE2ETest extends AbstractSharedServerTest {
 
     /** Where the craft is built — a loaded overworld region well clear of the other space suites. */
-    private static final int SRC_X = 6800, SRC_Y = 80, SRC_Z = 6800;
+    private static final int SRC_X = 6800, SRC_Y = FixtureSite.OPEN_AIR_Y, SRC_Z = 6800;
     /** A world Y comfortably above the default orbit ceiling (ARConfiguration.orbit = 1000). */
     private static final int ABOVE_CEILING_Y = 1200;
 

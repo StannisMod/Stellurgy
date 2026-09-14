@@ -8,6 +8,8 @@ import org.junit.Test;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import zmaster587.advancedRocketry.test.FixtureSite;
+
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
@@ -36,7 +38,7 @@ public class VSShipCrossingSpikeTest extends AbstractSharedServerTest {
             Pattern.compile("\"builderPos\":\\[(-?\\d+),(-?\\d+),(-?\\d+)]");
 
     /** Where the piloted ship is built, and where it is crossed to (well separated, same loaded region). */
-    private static final int SRC_X = 5000, SRC_Y = 80, SRC_Z = 5000;
+    private static final int SRC_X = 5000, SRC_Y = FixtureSite.OPEN_AIR_Y, SRC_Z = 5000;
     // Destination is up in clear sky (well above terrain) so the re-assembled ship is isolated from the
     // ground — VS's FIND_ALL_BLOCKS flood-fill must grab only the ship, not connect it to terrain.
     private static final int DST_X = 5064, DST_Y = 150, DST_Z = 5000;

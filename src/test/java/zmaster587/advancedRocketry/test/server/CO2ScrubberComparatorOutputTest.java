@@ -5,6 +5,8 @@ import org.junit.Test;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import zmaster587.advancedRocketry.test.FixtureSite;
+
 import static org.junit.Assert.assertTrue;
 
 /**
@@ -31,7 +33,7 @@ import static org.junit.Assert.assertTrue;
 public class CO2ScrubberComparatorOutputTest extends AbstractSharedServerTest {
 
     private static final int PX = 6400;
-    private static final int PY = 65;
+    private static final int PY = FixtureSite.OPEN_AIR_Y;
     private static final int PZ = 6400;
 
     private static final Pattern VALUE_PAT =

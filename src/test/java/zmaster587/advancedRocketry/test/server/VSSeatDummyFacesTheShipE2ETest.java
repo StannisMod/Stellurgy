@@ -12,6 +12,8 @@ import java.util.regex.Pattern;
 
 import zmaster587.advancedRocketry.api.FreeFlightPhysics;
 
+import zmaster587.advancedRocketry.test.FixtureSite;
+
 import static org.junit.Assert.assertTrue;
 
 /**
@@ -36,7 +38,7 @@ public class VSSeatDummyFacesTheShipE2ETest extends AbstractSharedServerTest {
     private static final Pattern BUILDER_POS =
             Pattern.compile("\"builderPos\":\\[(-?\\d+),(-?\\d+),(-?\\d+)]");
 
-    private static final int SRC_X = 8800, SRC_Y = 80, SRC_Z = 8800;
+    private static final int SRC_X = 8800, SRC_Y = FixtureSite.OPEN_AIR_Y, SRC_Z = 8800;
 
     /** Quaternion for a ~90-degree yaw about world +Y: far from the fixture's own axis-aligned heading. */
     private static final double TURN_QW = 0.70711, TURN_QY = 0.70711;

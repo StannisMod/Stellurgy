@@ -2,6 +2,8 @@ package zmaster587.advancedRocketry.test.server;
 
 import org.junit.Test;
 
+import zmaster587.advancedRocketry.test.FixtureSite;
+
 import static org.junit.Assert.assertTrue;
 import static zmaster587.advancedRocketry.test.server.WorldCommandFixtures.exec;
 
@@ -37,7 +39,7 @@ import static zmaster587.advancedRocketry.test.server.WorldCommandFixtures.exec;
  */
 public class StationControllersSmokeTest extends AbstractSharedServerTest {
 
-    private static final int CY = 64;
+    private static final int CY = FixtureSite.OPEN_AIR_Y;
     private static final int CZ = 9000;
     private static final int CX_ORIENT  = 9000;
     private static final int CX_GRAV    = 9100;

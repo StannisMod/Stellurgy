@@ -5,6 +5,8 @@ import org.junit.Test;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import zmaster587.advancedRocketry.test.FixtureSite;
+
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertTrue;
@@ -64,7 +66,7 @@ public class TerraformingTerminalChipRecognitionTest extends AbstractSharedServe
     private static final Pattern REDSTONE = Pattern.compile("\"redstonePower\":(true|false)");
     private static final Pattern SAT_ID = Pattern.compile("\"id\":(-?\\d+)");
 
-    private static final int CY = 64;
+    private static final int CY = FixtureSite.OPEN_AIR_Y;
     private static final int CZ = 11000;
     private static final int CX_VALID = 11500;
     private static final int CX_NO_RS = 12000;

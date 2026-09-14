@@ -5,6 +5,8 @@ import org.junit.Test;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import zmaster587.advancedRocketry.test.FixtureSite;
+
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
@@ -24,7 +26,7 @@ public class VSPilotSeatDummyReuseTest extends AbstractSharedServerTest {
 
     @Test
     public void theSeatMountProbeReusesTheSeatsSingleDummy() throws Exception {
-        int x = 3000, y = 70, z = 3000;
+        int x = 3000, y = FixtureSite.OPEN_AIR_Y, z = 3000;
         String warmup = String.join("\n", client().execute(
                 "artest chunk warmup 0 " + (x >> 4) + " " + (z >> 4) + " " + (x >> 4) + " " + (z >> 4)));
         assertTrue("chunk warmup failed: " + warmup, warmup.contains("\"ok\":true"));

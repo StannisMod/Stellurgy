@@ -9,6 +9,8 @@ import org.junit.Test;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import zmaster587.advancedRocketry.test.FixtureSite;
+
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
@@ -38,7 +40,7 @@ public class VSCrossingOutOfAnUnloadedSourceE2ETest extends AbstractHeadlessServ
             Pattern.compile("\"builderPos\":\\[(-?\\d+),(-?\\d+),(-?\\d+)]");
 
     private static final int BASE_X = 7000, BASE_Z = 7000;
-    private static final int BUILD_Y = 80, SKY_Y = 150;
+    private static final int BUILD_Y = FixtureSite.OPEN_AIR_Y, SKY_Y = 150;
     private static final int HOP = 160;
     private static final double POSE_TOLERANCE = 64.0;
 

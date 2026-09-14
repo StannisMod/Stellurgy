@@ -5,6 +5,8 @@ import org.junit.Test;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import zmaster587.advancedRocketry.test.FixtureSite;
+
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 import static zmaster587.advancedRocketry.test.server.WorldCommandFixtures.exec;
@@ -48,7 +50,7 @@ public class UvAssemblerOutputEntityClassTest extends AbstractSharedServerTest {
     /** Rocket-assembler fixture at x=5500; UV-assembler fixture at x=5700.
      *  Far enough apart to avoid scan-volume overlap (rocket bb ~6 wide × 8
      *  tall; UV bb 5×6×4). */
-    private static final int CY = 64;
+    private static final int CY = FixtureSite.OPEN_AIR_Y;
     private static final int CZ = 5500;
     private static final int CX_ROCKET = 5500;
     private static final int CX_UV     = 5700;

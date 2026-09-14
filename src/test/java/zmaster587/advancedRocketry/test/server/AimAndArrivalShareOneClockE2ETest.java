@@ -5,6 +5,8 @@ import org.junit.Test;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import zmaster587.advancedRocketry.test.FixtureSite;
+
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 import static zmaster587.advancedRocketry.test.ArrangementFailure.requireArranged;
@@ -46,7 +48,7 @@ import static zmaster587.advancedRocketry.test.ArrangementFailure.requireArrange
  */
 public class AimAndArrivalShareOneClockE2ETest extends AbstractSharedServerTest {
 
-    private static final int NAV_X = 7400, NAV_Y = 80, NAV_Z = 7400;
+    private static final int NAV_X = 7400, NAV_Y = FixtureSite.OPEN_AIR_Y, NAV_Z = 7400;
 
     /**
      * How far the clocks are driven apart. The playtest's own split was 14&nbsp;912 ticks; this is

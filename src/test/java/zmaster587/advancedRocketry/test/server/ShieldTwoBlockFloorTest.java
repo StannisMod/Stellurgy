@@ -4,6 +4,8 @@ import org.junit.Test;
 
 import java.util.List;
 
+import zmaster587.advancedRocketry.test.FixtureSite;
+
 import static org.junit.Assert.assertTrue;
 
 /**
@@ -26,7 +28,7 @@ import static org.junit.Assert.assertTrue;
 public class ShieldTwoBlockFloorTest extends AbstractSharedServerTest {
 
     private static final int DIM = 0;
-    private static final int Y = 64;
+    private static final int Y = FixtureSite.OPEN_AIR_Y;
     private static final int CHARGE_ITERATIONS = 60;
     private static final int FE_PER_ITERATION = 4000;
 

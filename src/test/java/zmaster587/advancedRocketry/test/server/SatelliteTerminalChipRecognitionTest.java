@@ -5,6 +5,8 @@ import org.junit.Test;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import zmaster587.advancedRocketry.test.FixtureSite;
+
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertTrue;
@@ -74,7 +76,7 @@ public class SatelliteTerminalChipRecognitionTest extends AbstractSharedServerTe
     private static final Pattern POST_REGISTERED = Pattern.compile("\"postSatRegistered\":(true|false)");
     private static final Pattern POST_NBT_NULL = Pattern.compile("\"postNbtNull\":(true|false)");
 
-    private static final int CY = 64;
+    private static final int CY = FixtureSite.OPEN_AIR_Y;
     private static final int CZ = 13000;
     private static final int CX_STATUS3 = 13500;
     private static final int CX_NO_CHIP = 14000;

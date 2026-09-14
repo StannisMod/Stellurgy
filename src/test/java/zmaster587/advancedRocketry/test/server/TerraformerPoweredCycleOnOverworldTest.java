@@ -7,6 +7,8 @@ import org.junit.Test;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import zmaster587.advancedRocketry.test.FixtureSite;
+
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertTrue;
@@ -37,7 +39,7 @@ import static zmaster587.advancedRocketry.test.server.WorldCommandFixtures.exec;
 public class TerraformerPoweredCycleOnOverworldTest extends AbstractSharedServerTest {
 
     private static final int DIM = 0;
-    private static final int CY = 128;
+    private static final int CY = FixtureSite.OPEN_AIR_Y;
     private static final int CZ = 4000;
     private static final int CX_POSITIVE = 4000;
     private static final int CX_NEGATIVE = 4200;

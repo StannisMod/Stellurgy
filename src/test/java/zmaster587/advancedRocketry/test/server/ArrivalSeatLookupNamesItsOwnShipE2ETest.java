@@ -5,6 +5,8 @@ import org.junit.After;
 
 import org.junit.Test;
 
+import zmaster587.advancedRocketry.test.FixtureSite;
+
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
@@ -34,10 +36,10 @@ public class ArrivalSeatLookupNamesItsOwnShipE2ETest extends AbstractSharedServe
     /** World a ship is given to become loadable - the old 40 x 250 ms. */
 
     /** The craft that HAS a pilot seat — the one an arrival would be asking about. */
-    private static final int SEATED_X = 5800, SEATED_Y = 80, SEATED_Z = 5800;
+    private static final int SEATED_X = 5800, SEATED_Y = FixtureSite.OPEN_AIR_Y, SEATED_Z = 5800;
     /** A second craft with a flight computer but NO pilot seat, parked far enough to be a separate
      *  ship and near enough to win every position lookup made at its own position. */
-    private static final int SEATLESS_X = 5864, SEATLESS_Y = 80, SEATLESS_Z = 5800;
+    private static final int SEATLESS_X = 5864, SEATLESS_Y = FixtureSite.OPEN_AIR_Y, SEATLESS_Z = 5800;
 
     @Test
     public void theSeatLookupFindsItsOwnShipsSeatWithAnotherCraftNearer() throws Exception {
@@ -65,7 +67,14 @@ public class ArrivalSeatLookupNamesItsOwnShipE2ETest extends AbstractSharedServe
         assertTrue("fewer than two ships are registered, so no lookup can pick the wrong one: " + all,
                 extractInt(all, "count") >= 2);
 
-        String seatedShip = shipUuidAt(SEATED_X, SEATED_Y + 2, SEATED_Z);
+        // THE IDENTITY COMES FROM THE ASSEMBLY THAT MINTED IT, not from a lookup at a position.
+        //
+        // It was read out of `seat-yard`'s `nearest` field until 2026-09-14, and that field is now
+        // GONE along with the positional lookup behind it: a ship's blocks live in its subspace, so
+        // in the world it has a pose and no extent for a distance to be measured to. This class is
+        // ABOUT that defect — its subject leg proves an arrival asks by identity — and it was
+        // getting the identity it asks with from the very lookup under test.
+        String seatedShip = zmaster587.advancedRocketry.test.ShipIdentity.nameFromAssembly(seatedAsm);
         assertNotNull("could not read the seated craft's ship identity — without it the subject leg "
                 + "cannot ask about that ship at all", seatedShip);
 
@@ -84,20 +93,6 @@ public class ArrivalSeatLookupNamesItsOwnShipE2ETest extends AbstractSharedServe
         assertTrue("asked about its own ship, the arrival's seat lookup still scanned whichever "
                         + "shipyard was nearest and found no seat: " + byIdentity,
                 extractInt(byIdentity, "seats") >= 1);
-    }
-
-    /**
-     * The uuid of the ship a POSITION lookup resolves at {@code (x,y,z)} — read off the same
-     * diagnostic an arrival prints, which leads with the resolved ship's identity.
-     */
-    private String shipUuidAt(int x, int y, int z) throws Exception {
-        String nearest = extractString(
-                exec("artest vs seat-yard 0 " + x + " " + y + " " + z), "nearest");
-        if (nearest == null || nearest.startsWith("none") || nearest.startsWith("vs-absent")) {
-            return null;
-        }
-        int space = nearest.indexOf(' ');
-        return space < 0 ? nearest : nearest.substring(0, space);
     }
 
     @After

@@ -7,6 +7,8 @@ import org.junit.Test;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import zmaster587.advancedRocketry.test.FixtureSite;
+
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
@@ -138,10 +140,13 @@ public class RocketMonitoringStationLaunchTriggerTest extends AbstractSharedServ
     }
 
     /** Assembles a rocket via the standard fixture; returns its entity id. */
-    private static int assembleFixture(int baseX, int baseY, int baseZ) throws Exception {
-        ok(client().execute("artest fill 0 " + (baseX - 2) + " " + (baseY + 1)
-                + " " + (baseZ - 2) + " " + (baseX + 7) + " " + (baseY + 10)
-                + " " + (baseZ + 7) + " minecraft:air"));
+    private static int assembleFixture(FixtureSite site) throws Exception {
+        // The site owns the coordinates; these aliases keep the body below unchanged.
+        final int baseX = site.x, baseY = site.y, baseZ = site.z;
+        // FIRST link: the volume is EMPTY, measured by the air fill's own `placed`. Open air, so
+        // this ASSERTS rather than digs.
+        site.requireClear(cmd -> join(client().execute(cmd)), 2, 10,
+                "the craft whose launch the station triggers stands in this volume");
         String fx = join(client().execute("artest fixture rocket 0 " + baseX
                 + " " + baseY + " " + baseZ + " simple"));
         assertTrue("fixture rocket failed: " + fx, fx.contains("\"ok\":true"));
@@ -161,10 +166,13 @@ public class RocketMonitoringStationLaunchTriggerTest extends AbstractSharedServ
     @Test
     public void risingRedstoneEdgeFiresPrepareLaunchExactlyOnce_andSustainedDoesNotRefire()
             throws Exception {
-        int mx = 9500, my = 65, mz = 9500;
+        // The pair moves together: the station sits one block above the rocket's base, a RELATIVE
+        // geometry that was written as two absolute numbers.
+        final FixtureSite rocketSite = FixtureSite.openAir(0, 9500 + 20, 9500);
+        int mx = 9500, my = rocketSite.y + 1, mz = 9500;
         ok(client().execute("artest place 0 " + mx + " " + my + " " + mz
                 + " advancedrocketry:monitoringStation"));
-        int rocketId = assembleFixture(mx + 20, 64, mz);
+        int rocketId = assembleFixture(rocketSite);
         ok(client().execute("artest infra link 0 " + mx + " " + my + " " + mz
                 + " " + rocketId));
 
@@ -211,10 +219,12 @@ public class RocketMonitoringStationLaunchTriggerTest extends AbstractSharedServ
     public void fallingRedstoneEdgeResetsTheGate_andSecondRisingEdgeRefires()
             throws Exception {
         // Distinct column from the first test (position isolation).
-        int mx = 9520, my = 65, mz = 9500;
+        // The pair moves together; see the sibling scenario above.
+        final FixtureSite rocketSite = FixtureSite.openAir(0, 9520 + 20, 9500);
+        int mx = 9520, my = rocketSite.y + 1, mz = 9500;
         ok(client().execute("artest place 0 " + mx + " " + my + " " + mz
                 + " advancedrocketry:monitoringStation"));
-        int rocketId = assembleFixture(mx + 20, 64, mz);
+        int rocketId = assembleFixture(rocketSite);
         ok(client().execute("artest infra link 0 " + mx + " " + my + " " + mz
                 + " " + rocketId));
 

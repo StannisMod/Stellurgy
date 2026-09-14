@@ -6,6 +6,8 @@ import org.junit.Test;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import zmaster587.advancedRocketry.test.FixtureSite;
+
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 import static zmaster587.advancedRocketry.test.server.WorldCommandFixtures.exec;
@@ -59,7 +61,7 @@ public class RocketPreLaunchEventCancellationTest extends AbstractSharedServerTe
     private static final Pattern OBSERVED = Pattern.compile("\"observed\":(-?\\d+)");
     private static final Pattern CANCELLED = Pattern.compile("\"cancelled\":(-?\\d+)");
 
-    private static final int CY = 64;
+    private static final int CY = FixtureSite.OPEN_AIR_Y;
     /** Two well-separated rocket fixtures so the cancel test and the
      *  no-cancel test each have their own pad — same shared harness,
      *  different geometry, no cross-state. */

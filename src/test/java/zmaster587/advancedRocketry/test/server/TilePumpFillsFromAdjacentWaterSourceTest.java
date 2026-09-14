@@ -5,6 +5,8 @@ import org.junit.Test;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import zmaster587.advancedRocketry.test.FixtureSite;
+
 import static org.junit.Assert.assertTrue;
 
 /**
@@ -39,7 +41,7 @@ import static org.junit.Assert.assertTrue;
 public class TilePumpFillsFromAdjacentWaterSourceTest extends AbstractSharedServerTest {
 
     private static final int PX = 6300;
-    private static final int PY = 65;
+    private static final int PY = FixtureSite.OPEN_AIR_Y;
     private static final int PZ = 6300;
 
     // The pump's fluid-stored probe emits "fluid":"<name>","amount":<n>.

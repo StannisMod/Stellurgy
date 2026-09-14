@@ -2,6 +2,8 @@ package zmaster587.advancedRocketry.test.server;
 
 import org.junit.Test;
 
+import zmaster587.advancedRocketry.test.FixtureSite;
+
 import static org.junit.Assert.assertTrue;
 
 /**
@@ -25,7 +27,7 @@ import static org.junit.Assert.assertTrue;
 public class SpaceElevatorMultiblockTest extends AbstractSharedServerTest {
 
     private static final int CX = 6500;
-    private static final int CY = 64;
+    private static final int CY = FixtureSite.OPEN_AIR_Y;
     private static final int CZ = 6500;
 
     @Test

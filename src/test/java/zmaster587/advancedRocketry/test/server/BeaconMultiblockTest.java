@@ -2,6 +2,8 @@ package zmaster587.advancedRocketry.test.server;
 
 import org.junit.Test;
 
+import zmaster587.advancedRocketry.test.FixtureSite;
+
 import static org.junit.Assert.assertTrue;
 
 /**
@@ -32,7 +34,7 @@ import static org.junit.Assert.assertTrue;
 public class BeaconMultiblockTest extends AbstractSharedServerTest {
 
     private static final int CX = 3500;
-    private static final int CY = 64;
+    private static final int CY = FixtureSite.OPEN_AIR_Y;
     private static final int CZ = 3500;
 
     @Test

@@ -14,6 +14,8 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 
+import zmaster587.advancedRocketry.test.FixtureSite;
+
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
@@ -57,8 +59,8 @@ public class SpawnPointReachesClientE2ETest {
     // (8,64,8). Choosing Y outside that makes "the client holds the value we
     // installed" a guarantee rather than a probability — which matters because
     // the harness generates a random world seed on every boot.
-    private static final int SPAWN_A_X = 1337, SPAWN_A_Y = 71, SPAWN_A_Z = -424;
-    private static final int SPAWN_B_X = -2048, SPAWN_B_Y = 79, SPAWN_B_Z = 777;
+    private static final int SPAWN_A_X = 1337, SPAWN_A_Y = FixtureSite.OPEN_AIR_Y, SPAWN_A_Z = -424;
+    private static final int SPAWN_B_X = -2048, SPAWN_B_Y = FixtureSite.OPEN_AIR_Y, SPAWN_B_Z = 777;
 
     private Path workDir;
     private RealDedicatedServerHarness serverHarness;

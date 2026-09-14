@@ -2,6 +2,8 @@ package zmaster587.advancedRocketry.test.server;
 
 import org.junit.Test;
 
+import zmaster587.advancedRocketry.test.FixtureSite;
+
 import static org.junit.Assert.assertTrue;
 
 /**
@@ -33,7 +35,7 @@ public class TileMachineDepthTest extends AbstractSharedServerTest {
     // tiles placed by separate tests don't interact.
     private static final int BASE_X = 200;
     private static final int BASE_Z = 200;
-    private static final int Y = 80; // above terrain to avoid stone overwrite quirks
+    private static final int Y = FixtureSite.OPEN_AIR_Y; // above terrain to avoid stone overwrite quirks
 
     private static String ok(java.util.List<String> resp) {
         return String.join("\n", resp);

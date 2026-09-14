@@ -16,6 +16,8 @@ import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
 import java.util.List;
 
+import zmaster587.advancedRocketry.test.FixtureSite;
+
 import static org.junit.Assert.assertTrue;
 
 /**
@@ -87,7 +89,7 @@ public class SpikeFarCoordinateRenderJitterTest extends AbstractClientE2ETest {
     private static final int DELIVERY_ATTEMPTS = 4;
 
     private static final int OVERWORLD = 0;
-    private static final int FLOOR_Y = 140;
+    private static final int FLOOR_Y = FixtureSite.OPEN_AIR_Y;
     private static final int EYE_Y = FLOOR_Y + 1;
 
     private Path outDir;

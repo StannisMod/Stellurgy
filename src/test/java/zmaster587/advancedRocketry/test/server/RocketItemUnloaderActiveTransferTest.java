@@ -5,6 +5,8 @@ import org.junit.Test;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import zmaster587.advancedRocketry.test.FixtureSite;
+
 import static org.junit.Assert.assertTrue;
 
 /**
@@ -56,12 +58,16 @@ public class RocketItemUnloaderActiveTransferTest extends AbstractSharedServerTe
      */
     @Test
     public void unloaderPullsItemsFromRocketStorage() throws Exception {
-        int ux = 1450, uy = 65, uz = 1450;
+        // THE PAIR MOVES TOGETHER: the unloader sat one block above the rocket's base, a RELATIVE
+        // geometry written as two absolute numbers, so moving either alone would separate them
+        // while both lines still read plausibly.
+        final FixtureSite rocketSite = FixtureSite.openAir(0, 1450 + 20, 1450);
+        int ux = 1450, uy = rocketSite.y + 1, uz = 1450;
         // Loader meta=2 -> TileRocketUnloader (item unloader).
         ok("artest place 0 " + ux + " " + uy + " " + uz
                 + " advancedrocketry:loader 2");
 
-        int rocketId = assembleFixture(ux + 20, 64, uz, "with-cargo");
+        int rocketId = assembleFixture(rocketSite, "with-cargo");
 
         // Pre-fill rocket's storage inventory tiles (the with-cargo
         // chest) with cobblestone via the dedicated probe.
@@ -117,11 +123,14 @@ public class RocketItemUnloaderActiveTransferTest extends AbstractSharedServerTe
                 resp.contains("\"ok\":true"));
     }
 
-    private int assembleFixture(int baseX, int baseY, int baseZ, String variant)
+    private int assembleFixture(FixtureSite site, String variant)
             throws Exception {
-        ok("artest fill 0 " + (baseX - 2) + " " + (baseY + 1) + " " + (baseZ - 2)
-                + " " + (baseX + 7) + " " + (baseY + 10) + " " + (baseZ + 7)
-                + " minecraft:air");
+        // The site owns the coordinates; these aliases keep the body below unchanged.
+        final int baseX = site.x, baseY = site.y, baseZ = site.z;
+        // FIRST link: the volume is EMPTY, measured by the air fill's own `placed`. Open air, so
+        // this ASSERTS rather than digs.
+        site.requireClear(cmd -> exec(cmd), 2, 10,
+                "the craft the unloader empties stands in this volume");
         String fx = exec("artest fixture rocket 0 " + baseX + " " + baseY + " " + baseZ
                 + " " + variant);
         assertTrue("fixture rocket (" + variant + ") failed: " + fx,

@@ -6,6 +6,8 @@ import org.junit.Test;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import zmaster587.advancedRocketry.test.FixtureSite;
+
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
@@ -63,7 +65,7 @@ public class SealDetectorDispatchTest extends AbstractSharedServerTest {
     public void stoneBlockReportsSealedBranch() throws Exception {
         // Full solid ROCK material -> isBlockSealed returns true via the
         // final `isFullBlock` clause. Branch: "sealed".
-        int x = 200, y = 80, z = 200;
+        int x = 200, y = FixtureSite.OPEN_AIR_Y, z = 200;
         place(x, y, z, "minecraft:stone");
         assertEquals("solid stone at " + x + "," + y + "," + z
                         + " must produce branch 'sealed'",
@@ -72,7 +74,7 @@ public class SealDetectorDispatchTest extends AbstractSharedServerTest {
 
     @Test
     public void cobblestoneBlockReportsSealedBranch() throws Exception {
-        int x = 210, y = 80, z = 200;
+        int x = 210, y = FixtureSite.OPEN_AIR_Y, z = 200;
         place(x, y, z, "minecraft:cobblestone");
         assertEquals("solid cobblestone must produce branch 'sealed'",
                 "sealed", probe(x, y, z));
@@ -85,7 +87,7 @@ public class SealDetectorDispatchTest extends AbstractSharedServerTest {
         // Material.AIR is on materialBanList (SealableBlockHandler line
         // 219). isBlockSealed returns false (material check); dispatch
         // falls through to isMaterialBanned -> true -> "notsealmat".
-        int x = 220, y = 80, z = 200;
+        int x = 220, y = FixtureSite.OPEN_AIR_Y, z = 200;
         place(x, y, z, "minecraft:air");
         assertEquals("air must produce branch 'notsealmat' (Material.AIR is banned)",
                 "notsealmat", probe(x, y, z));
@@ -95,7 +97,7 @@ public class SealDetectorDispatchTest extends AbstractSharedServerTest {
     public void leavesReportNotSealMatBranch() throws Exception {
         // Material.LEAVES is on materialBanList. Pins the multi-material
         // ban contract (not just AIR).
-        int x = 230, y = 80, z = 200;
+        int x = 230, y = FixtureSite.OPEN_AIR_Y, z = 200;
         place(x, y, z, "minecraft:leaves");
         assertEquals("leaves must produce branch 'notsealmat' (Material.LEAVES is banned)",
                 "notsealmat", probe(x, y, z));
@@ -106,7 +108,7 @@ public class SealDetectorDispatchTest extends AbstractSharedServerTest {
         // Material.SAND is on materialBanList — pinning this guards
         // against silent removal from the default ban list (which would
         // let sand seal rooms, a player-visible regression).
-        int x = 240, y = 80, z = 200;
+        int x = 240, y = FixtureSite.OPEN_AIR_Y, z = 200;
         place(x, y, z, "minecraft:sand");
         assertEquals("sand must produce branch 'notsealmat' (Material.SAND is banned)",
                 "notsealmat", probe(x, y, z));
@@ -124,7 +126,7 @@ public class SealDetectorDispatchTest extends AbstractSharedServerTest {
         // adjacent block; /artest place succeeds at the placement call
         // but the torch entity immediately detaches, leaving air —
         // which fires "notsealmat" instead.)
-        int x = 250, y = 80, z = 200;
+        int x = 250, y = FixtureSite.OPEN_AIR_Y, z = 200;
         place(x, y, z, "minecraft:stone_slab");
         assertEquals("stone slab must produce branch 'other' (solid ROCK, "
                         + "not banned, half-block bounds, not a fluid)",
@@ -141,7 +143,7 @@ public class SealDetectorDispatchTest extends AbstractSharedServerTest {
      *  {@code @After} to restore the shared harness's default state. */
     @Test
     public void goldBlockBannedReportsNotSealBlockBranch() throws Exception {
-        int x = 270, y = 80, z = 200;
+        int x = 270, y = FixtureSite.OPEN_AIR_Y, z = 200;
         place(x, y, z, "minecraft:gold_block");
         try {
             // Baseline: a full solid block not yet on any ban list seals
@@ -188,7 +190,7 @@ public class SealDetectorDispatchTest extends AbstractSharedServerTest {
      *  pin. */
     @Test
     public void oxygenFluidBlockReportsFluidBranch() throws Exception {
-        int x = 280, y = 80, z = 200;
+        int x = 280, y = FixtureSite.OPEN_AIR_Y, z = 200;
         place(x, y, z, "advancedrocketry:oxygenfluid");
         assertEquals("AR's oxygenFluid block (Material.WATER + BlockFluidClassic) "
                         + "must produce branch 'fluid'",
@@ -234,7 +236,7 @@ public class SealDetectorDispatchTest extends AbstractSharedServerTest {
         // The probe response must echo the input position alongside the
         // branch — tests rely on this for correlating probe calls to the
         // fixture they evaluated.
-        int x = 260, y = 80, z = 200;
+        int x = 260, y = FixtureSite.OPEN_AIR_Y, z = 200;
         place(x, y, z, "minecraft:stone");
         String resp = String.join("\n", client().execute(
                 "artest seal-detector check " + DIM + " " + x + " " + y + " " + z));

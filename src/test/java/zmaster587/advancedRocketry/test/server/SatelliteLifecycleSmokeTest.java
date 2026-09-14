@@ -6,6 +6,8 @@ import org.junit.Test;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import zmaster587.advancedRocketry.test.FixtureSite;
+
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
@@ -131,7 +133,7 @@ public class SatelliteLifecycleSmokeTest extends AbstractSharedServerTest {
         // pinned seed rolled here, and the 3x3x3 clear below then reads as a pocket in rock rather
         // than as air. In the band there is nothing to be inside of, and the clear below keeps its
         // own job — the place must not silently replace some other block.
-        int bx = 1800, by = zmaster587.advancedRocketry.test.FixtureSite.OPEN_AIR_Y, bz = 1900;
+        int bx = 1800, by = FixtureSite.OPEN_AIR_Y, bz = 1900;
         ok(client().execute("artest fill 0 " + (bx - 1) + " " + (by - 1) + " " + (bz - 1)
                 + " " + (bx + 1) + " " + (by + 1) + " " + (bz + 1) + " minecraft:air"));
 
