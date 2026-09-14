@@ -194,9 +194,21 @@ public final class SpaceEventHandler {
             // assigned until later in the login sequence, and both send paths dereference it — so the
             // notice is queued for the moment he is actually on the server.
             pendingShipLostNotices.add(player.getUniqueID());
+            // He is being put down in the plain world, so EVERYTHING that bound him to a ship or a
+            // cell has to let go — not just the aboard record cleared above. This branch undid one
+            // of six bindings for as long as it was the only code that knew the operation existed;
+            // the event is that operation, and every subsystem that binds a player answers it.
+            // Posted even though the record is already gone: the others are this handler's to ask
+            // about, not to know.
+            // No null guard on the service: it is built during mod init and this runs on a login,
+            // so a null here is a mod that failed to initialise — which must throw where it happens
+            // rather than be reported as "he was bound to nothing".
+            java.util.List<String> released = zmaster587.advancedRocketry.AdvancedRocketry
+                    .playerRelease().toTheWorld(player);
             LOGGER.warn("[SPACE] {} returned aboard ship {} but the ledger has no record of it; he is "
-                    + "being placed at his spawn point and his aboard record is cleared",
-                    player.getName(), aboard == null ? "?" : aboard.shipId);
+                    + "being placed at his spawn point and released from {}",
+                    player.getName(), aboard == null ? "?" : aboard.shipId,
+                    released.isEmpty() ? "nothing (he was bound to nothing else)" : released);
         }
         LOGGER.info("[SPACE] login restore for {}: {} -> dim {} ({})",
                 player.getName(), placement.reason, placement.dimension,
@@ -250,6 +262,53 @@ public final class SpaceEventHandler {
                 it.remove();
             }
         }
+    }
+
+    /**
+     * Let go of the claims this handler holds for {@code player}, and name what was let go.
+     *
+     * <p>Called by {@link zmaster587.advancedRocketry.player.PlayerRelease}, which owns the order
+     * and the report; this method owns only its own two stores. The aboard RECORD is released by
+     * that caller rather than here, because its owner is {@link ShipAboardTag} and this handler is
+     * merely the busiest of its writers.</p>
+     *
+     * <p>Deliberately NOT the same as {@link #onPlayerLoggedOut}, which gives the cell claim back
+     * but REFRESHES the aboard record: a logout is how a player keeps his ship across a restart.
+     * Opposite intent, so the two stay separate methods and neither calls the other.</p>
+     */
+    public boolean holdsCellClaimFor(net.minecraft.entity.player.EntityPlayer player) {
+        return heldCells.containsKey(player.getUniqueID());
+    }
+
+    /** @return whether a claim was actually given back */
+    public boolean releaseCellClaim(net.minecraft.entity.player.EntityPlayer player) {
+        UUID playerId = player.getUniqueID();
+        if (!heldCells.containsKey(playerId)) {
+            return false;
+        }
+        releaseHeldCell(playerId);
+        return true;
+    }
+
+    public boolean hasQueuedSeating(net.minecraft.entity.player.EntityPlayer player) {
+        UUID playerId = player.getUniqueID();
+        for (PendingSeat seat : pendingSeats) {
+            if (playerId.equals(seat.playerId)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Drop a seating queued for this player: it is work aimed at somebody being taken out of the
+     * ship world entirely, and left in place it would put him back on a deck moments later.
+     *
+     * @return whether anything was queued
+     */
+    public boolean releaseQueuedSeating(net.minecraft.entity.player.EntityPlayer player) {
+        UUID playerId = player.getUniqueID();
+        return pendingSeats.removeIf(seat -> playerId.equals(seat.playerId));
     }
 
     private void releaseHeldCell(UUID playerId) {

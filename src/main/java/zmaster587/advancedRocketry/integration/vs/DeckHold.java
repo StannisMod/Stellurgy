@@ -307,6 +307,26 @@ public final class DeckHold {
         }
     }
 
+    /**
+     * Let go of the deck this player is being held to, answering whether he was held.
+     *
+     * <p>A hold is what keeps a body moving with the hull under it, so a player returned to the
+     * plain world while one stands is a player the next tick will drag after a ship he is no longer
+     * on. Called by {@link zmaster587.advancedRocketry.player.PlayerRelease}.</p>
+     *
+     * <p>Static because the store is: {@code HOLDS} has been a private static map since long before
+     * this method, so a caller that had to find the right INSTANCE would be asking for a precision
+     * the state does not have.</p>
+     */
+    public static boolean releaseHold(net.minecraft.entity.player.EntityPlayer player) {
+        return HOLDS.remove(player.getUniqueID()) != null;
+    }
+
+    /** Is a deck currently holding this player? */
+    public static boolean isHeld(net.minecraft.entity.player.EntityPlayer player) {
+        return HOLDS.containsKey(player.getUniqueID());
+    }
+
     @SubscribeEvent
     public void onPlayerTick(TickEvent.PlayerTickEvent event) {
         if (event.phase != TickEvent.Phase.START || event.side != net.minecraftforge.fml.relauncher.Side.SERVER

@@ -82,6 +82,22 @@ public final class HyperspaceVoid {
     /** Consecutive ticks adrift, per player. An entry exists only while its player is adrift. */
     private final Map<UUID, Integer> adriftTicks = new HashMap<>();
 
+    /**
+     * Let go of the drift this player has accumulated, answering whether there was any.
+     *
+     * <p>A run of adrift ticks counted in hyperspace would otherwise follow him out of it and be
+     * spent on whatever he does next. Called by
+     * {@link zmaster587.advancedRocketry.player.PlayerRelease}.</p>
+     */
+    public boolean releaseDrift(net.minecraft.entity.player.EntityPlayer player) {
+        return adriftTicks.remove(player.getUniqueID()) != null;
+    }
+
+    /** Is this player part-way through a run of adrift ticks? */
+    public boolean isDrifting(net.minecraft.entity.player.EntityPlayer player) {
+        return adriftTicks.containsKey(player.getUniqueID());
+    }
+
 
     @SubscribeEvent
     public void onServerTick(TickEvent.ServerTickEvent event) {

@@ -373,12 +373,8 @@ public class PlanetEventHandler {
                         );
 
                         // Grace on the post-transfer entity instance
-                        if (moved != null) {
-                            moved.getEntityData().setLong(
-                                    "arRocketTransferGrace",
-                                    newWorld.getTotalWorldTime() + 100L
-                            );
-                        }
+                        zmaster587.advancedRocketry.atmosphere.RocketTransferGrace.stamp(
+                                moved, newWorld.getTotalWorldTime());
 
                         Entity rocket = newWorld.getEntityFromUuid(ent.entity2.getPersistentID());
                         if (rocket != null && moved != null) {

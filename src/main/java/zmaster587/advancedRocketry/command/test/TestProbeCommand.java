@@ -4206,6 +4206,15 @@ public class TestProbeCommand extends CommandBase {
         if (args.length >= 2 && "aboard-tag".equalsIgnoreCase(args[0])) {
             net.minecraft.entity.player.EntityPlayerMP target =
                     server.getPlayerList().getPlayerByUsername(args[1]);
+            // HEADLESS TIER: the connected-player list is the wrong and only place this used to
+            // look, so on a server test — where the player comes from `player ensure-fake` and is
+            // never in that list — the witness answered "player not found" about a player that
+            // exists. Measured 2026-09-14 by a release contract test whose INDEPENDENT leg could
+            // not see its own subject. The fake is matched by name like any other.
+            if (target == null && fakePlayer != null
+                    && fakePlayer.getName().equals(args[1])) {
+                target = fakePlayer;
+            }
             if (target == null) {
                 send(sender, "{\"error\":\"player not found\",\"player\":\""
                         + escapeJson(args[1]) + "\"}");
@@ -20776,6 +20785,59 @@ public class TestProbeCommand extends CommandBase {
                     + ",\"wasRidingId\":" + wasRidingId
                     + ",\"ridingEntityIdNow\":" + (player.getRidingEntity() == null
                             ? -1 : player.getRidingEntity().getEntityId()) + "}");
+            return;
+        }
+        if ("bindings".equals(sub)) {
+            // /artest player bindings — ask production what this player is currently bound to.
+            // Read-only: the reader and the releaser walk ONE list inside PlayerRelease, so this
+            // cannot drift from what a release would report, and a witness with side effects would
+            // be measuring its own footprint.
+            send(sender, "{\"ok\":true,\"bound\":" + jsonStringArray(
+                    zmaster587.advancedRocketry.AdvancedRocketry.playerRelease().boundTo(player))
+                    + "}");
+            return;
+        }
+        if ("bind-aboard".equals(sub)) {
+            // /artest player bind-aboard <shipUuid> — stamp a REAL aboard record, the same one the
+            // boarding paths write. An ARRANGEMENT verb, deliberately separate from `space
+            // aboard-tag`, which is the read-only witness and must stay one.
+            //
+            // Arranging the binding directly is honest for the release contract: that contract's
+            // subject is "a bound player becomes unbound", not how he came to be bound — which is
+            // another mechanic's contract, pinned by the boarding e2es.
+            if (args.length < 2) {
+                send(sender, "{\"error\":\"usage: player bind-aboard <shipUuid>\"}");
+                return;
+            }
+            zmaster587.advancedRocketry.space.ShipAboardTag.stamp(player,
+                    zmaster587.advancedRocketry.space.ShipAboardTag.Aboard.standing(
+                            java.util.UUID.fromString(args[1]), null, 0.0, 0.0, 0.0));
+            send(sender, "{\"ok\":true,\"tagged\":" + (zmaster587.advancedRocketry.space.ShipAboardTag
+                    .of(player) != null) + "}");
+            return;
+        }
+        if ("bind-grace".equals(sub)) {
+            // /artest player bind-grace — open the post-transfer suit-check window, exactly as a
+            // rocket dimension transfer does.
+            zmaster587.advancedRocketry.atmosphere.RocketTransferGrace.stamp(
+                    player, player.world.getTotalWorldTime());
+            send(sender, "{\"ok\":true,\"active\":"
+                    + zmaster587.advancedRocketry.atmosphere.RocketTransferGrace.isActive(
+                            player, player.world.getTotalWorldTime()) + "}");
+            return;
+        }
+        if ("release".equals(sub)) {
+            // /artest player release — call production's own PlayerRelease and report what every
+            // subsystem let go of. The mod holds six independent per-player bindings and this is the
+            // operation that undoes them; the probe adds nothing to it, which is the point — a reset
+            // that cleared things only the probe knew about would be a second, private list.
+            //
+            // The dismount is separate and stays the caller's, exactly as PlayerRelease's javadoc
+            // says: a mount is the player's own field rather than state a subsystem holds for him.
+            java.util.List<String> released = zmaster587.advancedRocketry.AdvancedRocketry
+                    .playerRelease().toTheWorld(player);
+            send(sender, "{\"ok\":true,\"releasedCount\":" + released.size()
+                    + ",\"released\":" + jsonStringArray(released) + "}");
             return;
         }
         if ("riding-entity".equals(sub)) {

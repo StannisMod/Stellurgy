@@ -299,6 +299,27 @@ public class AdvancedRocketry {
         return instance == null ? null : instance.spaceSubsystem;
     }
 
+    /**
+     * Returns a player to the plain world — see {@link zmaster587.advancedRocketry.player.PlayerRelease}.
+     *
+     * <p><b>Lifetime: the MOD's, and stated because it differs from {@code spaceSubsystem} above.</b>
+     * That one is attached when a server starts and released when it stops, because its state is the
+     * running server's. This object holds NO per-player state of its own — only references to the
+     * binding owners and the order in which to ask them — and those owners are themselves built once
+     * at mod init and left on the bus. So its lifetime is theirs; giving it a shorter one would say
+     * something untrue about what it holds.</p>
+     *
+     * <p>That the owners' own state is the SERVER's while their objects are the mod's is a real
+     * defect and a pre-existing one, recorded in {@code attachServerServices}' javadoc below. This
+     * class neither worsens nor fixes it.</p>
+     */
+    private zmaster587.advancedRocketry.player.PlayerRelease playerRelease;
+
+    /** The release service, or {@code null} before mod init has built it. */
+    public static zmaster587.advancedRocketry.player.PlayerRelease playerRelease() {
+        return instance == null ? null : instance.playerRelease;
+    }
+
     static {
         FluidRegistry.enableUniversalBucket(); // Must be called before preInit
     }
@@ -1342,13 +1363,24 @@ public class AdvancedRocketry {
         MinecraftForge.EVENT_BUS.register(new zmaster587.advancedRocketry.space.SpaceSubsystemEvents());
         // Login restore (a returning player goes back to his ship, not to a stale pool slot) and the
         // cell-divergence hook. Independent of the controller so it stays quiet while it is down.
-        MinecraftForge.EVENT_BUS.register(new zmaster587.advancedRocketry.space.SpaceEventHandler());
+        // The two binding owners are KEPT, not just registered: returning a player to the plain
+        // world is a direct call on every subsystem that holds something of his, and a caller that
+        // had to rediscover these instances would be reaching for a bus instead — which is what
+        // this replaced, and which could not say in what order the five releases ran, whether they
+        // all ran, or what a thrown one meant.
+        zmaster587.advancedRocketry.space.SpaceEventHandler spaceEvents =
+                new zmaster587.advancedRocketry.space.SpaceEventHandler();
+        MinecraftForge.EVENT_BUS.register(spaceEvents);
         // Carries a pre-assembly boarding across the asynchronous ship assembly (core assembly
         // glue - registered unconditionally, works with the space subsystem down).
         MinecraftForge.EVENT_BUS.register(new zmaster587.advancedRocketry.space.AssemblyCrewRebind());
         // Hyperspace is a void with ships in it and nothing else: leaving your ship out there is
         // fatal. Idle on every tick that has no hyperspace world and no player in it.
-        MinecraftForge.EVENT_BUS.register(new zmaster587.advancedRocketry.space.HyperspaceVoid());
+        zmaster587.advancedRocketry.space.HyperspaceVoid hyperspaceVoid =
+                new zmaster587.advancedRocketry.space.HyperspaceVoid();
+        MinecraftForge.EVENT_BUS.register(hyperspaceVoid);
+        playerRelease = new zmaster587.advancedRocketry.player.PlayerRelease(
+                spaceEvents, hyperspaceVoid);
         MinecraftForge.EVENT_BUS.register(new zmaster587.advancedRocketry.util.DelayedActionBar());
 
         PacketHandler.init();

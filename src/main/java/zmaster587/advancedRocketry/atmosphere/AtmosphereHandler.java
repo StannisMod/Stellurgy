@@ -334,6 +334,25 @@ public class AtmosphereHandler {
         prevAtmosphere.remove(event.player);
     }
 
+    /**
+     * Let go of the two things this subsystem remembers about a player, answering whether the one
+     * that MATTERS was there: the atmosphere it last told his client about, and the post-transfer
+     * grace window in which the suit check is suppressed.
+     *
+     * <p>The grace is what the answer is about. It is five seconds during which an airless world
+     * does him no harm — correct for the arrival it was opened for, and a silently disabled safety
+     * check for anything he does next. A player handed back to the world carrying one is being
+     * measured against a gate that was told to stand down. The remembered atmosphere is a client
+     * notification cache: dropping it costs one redundant packet and is not worth reporting.</p>
+     *
+     * <p>Static because both stores are, and called by
+     * {@link zmaster587.advancedRocketry.player.PlayerRelease}.</p>
+     */
+    public static boolean releasePlayer(EntityPlayer player) {
+        prevAtmosphere.remove(player);
+        return RocketTransferGrace.clear(player, player.world.getTotalWorldTime());
+    }
+
     private void onBlockRemove(HashedBlockPosition pos) {
         List<AreaBlob> blobs = getBlobWithinRadius(pos, MAX_BLOB_RADIUS);
         for (AreaBlob blob : blobs) {
