@@ -49,9 +49,6 @@ public class VSShipFrameShieldE2ETest extends AbstractSharedVsClientE2ETest {
     private static final Pattern ENTITY_ID = Pattern.compile("\"entityId\":(-?\\d+)");
 
     private static final String VARIANT = "with-shield-emitter";
-    private static final FixtureSite SITE = FixtureSite.openAir(0, 5200, 5200);
-    /** The site owns the coordinates; these aliases keep the body below unchanged. */
-    private static final int BX = SITE.x, BY = SITE.y, BZ = SITE.z;
 
     /** A deadline for the emitter's frame DECISION — the tile loads in the ship's subspace chunk,
      *  looks the managing ship up and its frame becomes ready once the hull is loaded on this side.
@@ -62,8 +59,13 @@ public class VSShipFrameShieldE2ETest extends AbstractSharedVsClientE2ETest {
     @Test
     public void shieldRidesTheAssembledShipAndDeflectsOnBoard() throws Exception {
 
+        // WHERE THIS SCENARIO STANDS IS ASKED FOR, NOT CHOSEN: the plot is this scenario's own, and
+        // the height is the open-air band because the site has no Y to pass.
+        final FixtureSite site = site();
+        final int bx = site.x, by = site.y, bz = site.z;
+
         exec("artest vs permaload true");
-        exec("tp @a " + (BX + 40) + " 120 " + (BZ + 40) + " 0 0");
+        exec("tp @a " + (bx + 40) + " 120 " + (bz + 40) + " 0 0");
         bot().waitTicks(10);
 
         // The mark goes before the assembly, so every record read below belongs to THIS ship by
@@ -73,7 +75,7 @@ public class VSShipFrameShieldE2ETest extends AbstractSharedVsClientE2ETest {
         Events events = events();
         long spawnMark = events.markInstrumented();
 
-        String assemble = assembleFixture(SITE);
+        String assemble = assembleFixture(site);
         assertTrue("a with-shield-emitter build must route to a ship: " + assemble,
                 assemble.contains("\"rocketCount\":0"));
         // The identity, from the registry's record of THIS assembly's own add.
@@ -81,7 +83,7 @@ public class VSShipFrameShieldE2ETest extends AbstractSharedVsClientE2ETest {
                 "a with-shield-emitter assembly must create a VS ship in the queryable registry");
 
         // Sit the client on the ship so the hull (and the emitter's chunk) loads server-side.
-        exec("tp @a " + (BX + 0.5) + " " + (BY + 6) + " " + (BZ + 0.5) + " 0 0");
+        exec("tp @a " + (bx + 0.5) + " " + (by + 6) + " " + (bz + 0.5) + " 0 0");
         bot().waitTicks(20);
         // ARRANGEMENT: the ship has a physics object at all — the thing a chunk read, a deck and a
         // frame lookup depend on, and which the registry record above does NOT imply. It is not a
@@ -143,8 +145,8 @@ public class VSShipFrameShieldE2ETest extends AbstractSharedVsClientE2ETest {
                 + subToWorld + ") — the frame did not map the centre out to the flying hull:\n" + emitters,
                 subToWorld > 64.0);
         assertTrue("the shell's world centre is not near the ship's world position (worldXZ=" + wx1 + ","
-                + wz1 + " ship=" + BX + "," + BZ + ") — the shell is not on the hull:\n" + emitters,
-                Math.abs(wx1 - (BX + 0.5)) < 24.0 && Math.abs(wz1 - (BZ + 0.5)) < 24.0);
+                + wz1 + " ship=" + bx + "," + bz + ") — the shell is not on the hull:\n" + emitters,
+                Math.abs(wx1 - (bx + 0.5)) < 24.0 && Math.abs(wz1 - (bz + 0.5)) < 24.0);
 
         // Check 3 (before pushing, while the ship is roughly settled): charge the emitter and deflect an
         // inbound arrow off the ship-framed shell. Re-read the world centre immediately so the arrow is

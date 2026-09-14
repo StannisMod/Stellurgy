@@ -90,12 +90,11 @@ public class VSJumpDriveFixtureBoardingE2ETest extends AbstractSharedVsClientE2E
      * the class is addressed to it: the base coordinates locate the fixture, never the ship.
      */
     private String scenarioShipId;
-    private static final FixtureSite SITE = FixtureSite.openAir(0, 2900, 2900);
-    /** The site owns the coordinates; these aliases keep the body below unchanged. */
-    private static final int BX = SITE.x, BY = SITE.y, BZ = SITE.z;
+    /** This scenario's site, from its own plot. Bound at the top of the test, never chosen here. */
+    private FixtureSite site;
 
     /** The craft's own centre column on the pad, and the deck level the pilot walks on. */
-    private static final int CRAFT_X = BX + 3, CRAFT_Y = BY + 1, CRAFT_Z = BZ + 3;
+    private int craftX, craftY, craftZ;
 
     /**
      * Every block of the craft, as an offset from the FLIGHT COMPUTER. The flight computer is the
@@ -141,7 +140,14 @@ public class VSJumpDriveFixtureBoardingE2ETest extends AbstractSharedVsClientE2E
         int budget = (int) (40 * TestTimeouts.factor());
 
         // ---- ARRANGEMENT: build the craft and let the assembler turn it into a ship. -------------
-        exec("tp @a " + (BX + 600) + " 120 " + (BZ + 600) + " 0 0");
+        // WHERE THIS SCENARIO STANDS IS ASKED FOR, NOT CHOSEN: the plot is this scenario's own, and
+        // the height is the open-air band because the site has no Y to pass.
+        site = site();
+        final int bx = site.x, by = site.y, bz = site.z;
+        craftX = bx + 3;
+        craftY = by + 1;
+        craftZ = bz + 3;
+        exec("tp @a " + (bx + 600) + " 120 " + (bz + 600) + " 0 0");
         bot().waitTicks(10);
 
         // Marked BEFORE the assembly is queued, so the registry's own record of a ship being added
@@ -161,7 +167,7 @@ public class VSJumpDriveFixtureBoardingE2ETest extends AbstractSharedVsClientE2E
                 + " the queryable registry before any of its consoles can be aimed at (the spawn is"
                 + " asynchronous)");
 
-        exec("tp @a " + (BX + 0.5) + " " + (BY + 10) + " " + (BZ + 0.5) + " 0 0");
+        exec("tp @a " + (bx + 0.5) + " " + (by + 10) + " " + (bz + 0.5) + " 0 0");
         bot().waitTicks(20);
         double yRest = Double.NaN;
         for (int attempt = 0; attempt < budget && Double.isNaN(yRest); attempt++) {
@@ -506,11 +512,11 @@ public class VSJumpDriveFixtureBoardingE2ETest extends AbstractSharedVsClientE2E
     }
 
     /** Where a component sits on the pad after the assembler's one-block lift, in world coordinates. */
-    private static int[] liftedBuildPos(int[] offsetFromAfc) {
-        // The flight computer is built at (CRAFT_X - 1, CRAFT_Y + 4, CRAFT_Z); the assembler cuts the
+    private int[] liftedBuildPos(int[] offsetFromAfc) {
+        // The flight computer is built at (craftX - 1, craftY + 4, craftZ); the assembler cuts the
         // craft out and pastes it one block higher before handing it to the physics mod.
-        return new int[]{CRAFT_X - 1 + offsetFromAfc[0], CRAFT_Y + 5 + offsetFromAfc[1],
-                CRAFT_Z + offsetFromAfc[2]};
+        return new int[]{craftX - 1 + offsetFromAfc[0], craftY + 5 + offsetFromAfc[1],
+                craftZ + offsetFromAfc[2]};
     }
 
     // ---- helpers --------------------------------------------------------------------------------
@@ -615,9 +621,10 @@ public class VSJumpDriveFixtureBoardingE2ETest extends AbstractSharedVsClientE2E
         // pre-clear it replaces was throwing away. Open air, so this ASSERTS rather than digs.
         // The height goes past this fixture's 12: the jump-drive variant is the tallest in the
         // catalogue and the pilot walks its deck, so the envelope is the hull plus the room above it.
-        SITE.requireClear(this::exec, 2, 20,
+        site.requireClear(this::exec, 2, 20,
                 "the jump-drive hull, and the deck the pilot boards it across");
-        String fixture = exec("artest fixture rocket 0 " + BX + " " + BY + " " + BZ + " " + VARIANT);
+        String fixture = exec("artest fixture rocket 0 " + site.x + " " + site.y + " " + site.z
+                + " " + VARIANT);
         scenario().requireArranged("fixture (" + VARIANT + ") failed: " + fixture,
                 fixture.contains("\"ok\":true"));
         Matcher bp = BUILDER_POS.matcher(fixture);

@@ -42,9 +42,6 @@ public class VSShipUnmannedCruiseE2ETest extends AbstractSharedVsClientE2ETest {
     private static final Pattern DUMMY_ID = Pattern.compile("\"dummyId\":(-?\\d+)");
 
     private static final String VARIANT = "with-pilot-seat";
-    private static final FixtureSite SITE = FixtureSite.openAir(0, 4800, 4800);
-    /** The site owns the coordinates; these aliases keep the body below unchanged. */
-    private static final int BX = SITE.x, BY = SITE.y, BZ = SITE.z;
 
     /** THIS scenario's ship, by identity — the address every altitude sample uses. */
     private String shipId;
@@ -53,22 +50,27 @@ public class VSShipUnmannedCruiseE2ETest extends AbstractSharedVsClientE2ETest {
     public void aDismountedPilotsShipKeepsCruisingAndSurvivesRemount() throws Exception {
 
         Events events = events();
+        // WHERE THIS SCENARIO STANDS IS ASKED FOR, NOT CHOSEN. The plot is this scenario's own and
+        // cannot overlap a sibling's; the height is the open-air band, because the site has no Y to
+        // pass. Neither is a number this test has to get right, and both used to be.
+        final FixtureSite site = site();
+        final int bx = site.x, by = site.y, bz = site.z;
         // The mark is taken BEFORE the assembly is queued, so the ship_spawned record it waits for is
         // THIS assembly's ship and can be nobody else's. What it replaces was a poll for an ABSOLUTE
         // ship count >= 1 — a question any ship the world already held answers — followed by a
         // nearest-ship lookup at the build site to recover an identity the registry's own record
         // carries.
         long spawnMark = events.markInstrumented();
-        exec("tp @a " + (BX + 600) + " 120 " + (BZ + 600) + " 0 0");
+        exec("tp @a " + (bx + 600) + " 120 " + (bz + 600) + " 0 0");
         bot().waitTicks(10);
-        String assemble = assembleFixture(SITE);
+        String assemble = assembleFixture(site);
         assertTrue("a with-pilot-seat build must route to a ship: " + assemble,
                 assemble.contains("\"rocketCount\":0"));
         shipId = awaitShipSpawned(events,
                 spawnMark, "a with-pilot-seat assembly must create a VS ship in the registry");
         bot().waitTicks(40);
 
-        exec("tp @a " + (BX + 0.5) + " " + (BY + 6) + " " + (BZ + 0.5) + " 0 0");
+        exec("tp @a " + (bx + 0.5) + " " + (by + 6) + " " + (bz + 0.5) + " 0 0");
         bot().waitTicks(20);
         // The LOAD is the one gate here the log cannot answer: `managed:true` means the physics mod
         // owns a loaded object for this ship, and nothing records that. It stays a bounded poll — but

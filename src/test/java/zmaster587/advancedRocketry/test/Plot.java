@@ -166,8 +166,14 @@ public final class Plot {
      * {@code size - 1 - INSET - FixtureSite.PAD} on the high side, so a fixture's working envelope
      * fits around it; {@link #maxHalo()} is that budget, and {@code requireClear} refuses a halo
      * past it rather than quietly reaching into a neighbour.
+     *
+     * <p><b>PUBLIC because a migrating class needs to subtract it.</b> A lane declares its ORIGIN,
+     * a site stands {@value} blocks into the plot, and a class that means "put the fixture exactly
+     * where its green runs were taken" therefore writes {@code new Lane(proven - FIXTURE_INSET, …)}.
+     * A lane written AT the proven number instead moves the fixture twenty blocks and nothing says
+     * so, which is the whole reason this is not private.</p>
      */
-    private static final int FIXTURE_INSET = 20;
+    public static final int FIXTURE_INSET = 20;
 
     /**
      * WHERE THIS SCENARIO'S FIXTURE STANDS — the one supported way to get a site.
@@ -179,15 +185,81 @@ public final class Plot {
      * get right.</p>
      */
     public FixtureSite site() {
-        return FixtureSite.openAirIn(this, x(FIXTURE_INSET), z(FIXTURE_INSET));
+        return siteAt(FIXTURE_INSET, FIXTURE_INSET);
     }
 
     /**
-     * The widest halo a fixture on this plot may clear before its envelope would leave the plot.
-     * A lane with a wider {@code plotSize} raises it; that is the supported way to need more room.
+     * A site at a CHOSEN point inside this plot, for the rare scenario that stands TWO structures
+     * and needs a stated distance between them — a ship and the control cabin it is compared
+     * against, two craft one of which is later parked near the other's base.
+     *
+     * <p>This is not a way round {@link #site}: the offsets are into THIS plot, so {@link #x} and
+     * {@link #z} refuse anything outside it, and the two sites' working volumes are checked against
+     * each other when they are cleared (see {@link #claimWorkingVolume}). What the caller is
+     * choosing is the SEPARATION, which is the thing its scenario actually means; where the pair
+     * lives is still the allocator's.</p>
+     *
+     * <p>A scenario whose structures do not fit declares a wider {@link Lane#plotSize}.</p>
      */
+    public FixtureSite siteAt(int dx, int dz) {
+        return FixtureSite.openAirIn(this, x(dx), z(dz));
+    }
+
+    /**
+     * The widest halo a fixture standing at this world point may clear before its envelope would
+     * leave the plot. A lane with a wider {@code plotSize} raises it; that is the supported way to
+     * need more room.
+     */
+    public int maxHaloAt(int worldX, int worldZ) {
+        int west = worldX - originX;
+        int north = worldZ - originZ;
+        int east = originX + size - 1 - (worldX + FixtureSite.PAD);
+        int south = originZ + size - 1 - (worldZ + FixtureSite.PAD);
+        return Math.min(Math.min(west, north), Math.min(east, south));
+    }
+
+    /** The budget for a site from {@link #site()} — the one nearly every scenario stands on. */
     public int maxHalo() {
-        return Math.min(FIXTURE_INSET, size - 1 - FIXTURE_INSET - FixtureSite.PAD);
+        return maxHaloAt(x(FIXTURE_INSET), z(FIXTURE_INSET));
+    }
+
+    /**
+     * Working volumes already cleared on this plot, keyed by the SITE that cleared each.
+     *
+     * <p>Keyed by site and not by box on purpose: one fixture re-prepared with a different halo is
+     * one structure and must be allowed to grow, while two DIFFERENT bases reaching into each other
+     * is the defect. A plot is handed to one scenario and a scenario runs once, so nothing here
+     * outlives the test method that filled it.</p>
+     */
+    private final java.util.Map<String, int[]> cleared = new java.util.LinkedHashMap<>();
+
+    /**
+     * Record that a fixture at {@code (siteX, siteZ)} is about to clear this box, and REFUSE it if
+     * another site on this same plot has already cleared ground it overlaps.
+     *
+     * <p>{@link #forScenario} keeps two SCENARIOS apart; this keeps two STRUCTURES of one scenario
+     * apart, which is the same failure one level down and the one {@link #siteAt} makes possible.
+     * Neither is a promise a test has to keep — both are refusals before a block is touched.</p>
+     */
+    void claimWorkingVolume(int siteX, int siteZ, int x1, int z1, int x2, int z2, String what) {
+        String key = siteX + "," + siteZ;
+        for (java.util.Map.Entry<String, int[]> other : cleared.entrySet()) {
+            if (other.getKey().equals(key)) {
+                continue;
+            }
+            int[] o = other.getValue();
+            boolean disjoint = x2 < o[0] || o[2] < x1 || z2 < o[1] || o[3] < z1;
+            if (!disjoint) {
+                ArrangementFailure.arrangementFailed(
+                        what + " — this scenario already cleared (" + o[0] + "," + o[1] + ")..("
+                                + o[2] + "," + o[3] + ") for its fixture at " + other.getKey()
+                                + ", and the volume asked for now, (" + x1 + "," + z1 + ")..("
+                                + x2 + "," + z2 + "), reaches into it. One of the two structures"
+                                + " would level the other and neither half of the scenario could"
+                                + " see it happen; stand them further apart on " + this);
+            }
+        }
+        cleared.put(key, new int[]{x1, z1, x2, z2});
     }
 
     /** Does this whole horizontal box lie inside the plot? */

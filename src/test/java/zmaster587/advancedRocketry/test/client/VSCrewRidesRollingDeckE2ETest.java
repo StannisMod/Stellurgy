@@ -56,9 +56,6 @@ public class VSCrewRidesRollingDeckE2ETest extends AbstractSharedVsClientE2ETest
     private static final Pattern PLAYER_Z = Pattern.compile("\"playerZ\":(-?[0-9.E\\-]+)");
 
     private static final String VARIANT = "with-pilot-seat";
-    private static final FixtureSite SITE = FixtureSite.openAir(0, 2900, 2900);
-    /** The site owns the coordinates; these aliases keep the body below unchanged. */
-    private static final int BX = SITE.x, BY = SITE.y, BZ = SITE.z;
     /** Roll to command, in degrees. Well past the angle at which an un-held entity would slide off. */
     private static final double ROLL_DEG = 45.0;
 
@@ -100,11 +97,16 @@ public class VSCrewRidesRollingDeckE2ETest extends AbstractSharedVsClientE2ETest
     @Test
     public void aStandingCrewMemberStaysOnTheDeckWhenTheShipRolls() throws Exception {
 
+        // WHERE THIS SCENARIO STANDS IS ASKED FOR, NOT CHOSEN: the plot is this scenario's own, and
+        // the height is the open-air band because the site has no Y to pass.
+        final FixtureSite site = site();
+        final int bx = site.x, by = site.y, bz = site.z;
+
         // Keep the observer far while the ship spawns (a nearby observer trips the double-load path).
-        exec("tp @a " + (BX + 600) + " 120 " + (BZ + 600) + " 0 0");
+        exec("tp @a " + (bx + 600) + " 120 " + (bz + 600) + " 0 0");
         bot().waitTicks(10);
 
-        String assemble = assembleFixture(SITE, VARIANT);
+        String assemble = assembleFixture(site, VARIANT);
         assertTrue("a with-pilot-seat build must route to a ship: " + assemble,
                 assemble.contains("\"rocketCount\":0"));
 
@@ -122,7 +124,7 @@ public class VSCrewRidesRollingDeckE2ETest extends AbstractSharedVsClientE2ETest
         String shipId = ShipIdentity.awaitPhysicsIdOf(this::exec, 0,
                 ShipIdentity.nameFromAssembly(assemble), 40, () -> bot().waitTicks(5));
 
-        exec("tp @a " + (BX + 0.5) + " " + (BY + 8) + " " + (BZ + 0.5) + " 0 0");
+        exec("tp @a " + (bx + 0.5) + " " + (by + 8) + " " + (bz + 0.5) + " 0 0");
         // Await the ship LOADING near the client (same event-gated barrier, load-scaled + early exit).
         ClientPoll.Result<Integer> loadedShips = ClientPoll.until(bot()::waitTicks,
                 () -> count("ship-count"), n -> n >= 1, 5, 40);

@@ -107,21 +107,15 @@ public class VSShipEntryClientGroupE2ETest extends AbstractSharedVsClientE2ETest
     private static final String BOT = "ForgeTestClient";
 
     private static final String VARIANT = "with-pilot-seat";
-    /**
-     * The open-air band. It was a hard-coded 64 until 2026-09-14, and this class is the one the
-     * pinned-seed survey had already convicted: the refused leg's plot at 3000/3000 is FOREST
-     * CANOPY on ground at y=71..79, so a fixture at 64 stood seven to fifteen blocks inside the
-     * landscape while its pre-clear dug a shaft through it. Neither leg here wants ground — one
-     * craft climbs through the orbit line and the other is refused at it.
-     *
-     * <p>The site counter could not see this: it is spelled {@code BY}, which none of its four
-     * patterns match. The class was named in the hand-off by measurement instead.</p>
-     */
-    private static final int BY = FixtureSite.OPEN_AIR_Y;
-    /** The granted leg's build site — each scenario keeps the ground its green runs were taken on. */
-    private static final int GRANTED_BX = 2800, GRANTED_BZ = 2800;
-    /** The refused leg's, a hundred blocks clear of it. */
-    private static final int REFUSED_BX = 3000, REFUSED_BZ = 3000;
+    // THE HEIGHT AND THE GROUND BOTH COME FROM THE ALLOCATED SITE NOW, and the reason this class is
+    // worth a note is what the old spelling cost. Its Y was a hard-coded 64 until 2026-09-14, and
+    // this is the class the pinned-seed survey had already convicted: the refused leg's base at
+    // 3000/3000 is FOREST CANOPY on ground at y=71..79, so a fixture at 64 stood seven to fifteen
+    // blocks inside the landscape while its pre-clear dug a shaft through it. Neither leg wants
+    // ground — one craft climbs through the orbit line and the other is refused at it. The site
+    // counter could not see any of it, because the constant was spelled `BY` and none of its four
+    // patterns match that; the class was found by measurement instead. Asking for a site is what
+    // makes a spelling irrelevant.
 
     /** The seeded atmosphere ceiling: the config key's minimum, so the climb stays short. */
     private static final int ORBIT_LINE = 255;
@@ -217,7 +211,9 @@ public class VSShipEntryClientGroupE2ETest extends AbstractSharedVsClientE2ETest
                 + "config opts it in: " + status, status.contains("\"registered\":true"));
 
         int budget = (int) (40 * TestTimeouts.factor());
-        String shipUuid = boardAssembledCraftAt(GRANTED_BX, GRANTED_BZ, budget);
+        // Allocated, not chosen: the granted leg's ground is this scenario's own plot.
+        final FixtureSite site = site();
+        String shipUuid = boardAssembledCraftAt(site, budget);
         double yRest = shipY(shipUuid);
         scenario().requireArranged("the ship must report an altitude before it is flown: "
                 + shipInfoById(shipUuid), !Double.isNaN(yRest));
@@ -452,7 +448,10 @@ public class VSShipEntryClientGroupE2ETest extends AbstractSharedVsClientE2ETest
                 + " entry would be granted: " + further, further.contains("\"exhausted\":true"));
 
         int budget = (int) (40 * TestTimeouts.factor());
-        String shipUuid = boardAssembledCraftAt(REFUSED_BX, REFUSED_BZ, budget);
+        // Allocated, not chosen. The refused leg used to stand a hundred blocks from the granted
+        // one by hand; the allocator's stride is what keeps them apart now, and it is checked.
+        final FixtureSite site = site();
+        String shipUuid = boardAssembledCraftAt(site, budget);
         double yRest = shipY(shipUuid);
         scenario().requireArranged("the ship must report an altitude before it is flown: "
                 + shipInfoById(shipUuid), !Double.isNaN(yRest));
@@ -570,8 +569,8 @@ public class VSShipEntryClientGroupE2ETest extends AbstractSharedVsClientE2ETest
                             upY = 1.0 - 2.0 * (ax * ax + az * az);
                         }
                         if (px.find() && pz.find()) {
-                            double dx = Double.parseDouble(px.group(1)) - REFUSED_BX;
-                            double dz = Double.parseDouble(pz.group(1)) - REFUSED_BZ;
+                            double dx = Double.parseDouble(px.group(1)) - site.x;
+                            double dz = Double.parseDouble(pz.group(1)) - site.z;
                             horiz = Math.sqrt(dx * dx + dz * dz);
                         }
                         if (climb.length() < 1400) {
@@ -693,8 +692,8 @@ public class VSShipEntryClientGroupE2ETest extends AbstractSharedVsClientE2ETest
     // ── arrangement, shared by both scenarios ────────────────────────────────────────────────────
 
     /**
-     * Build a with-pilot-seat craft at {@code (bx, BY, bz)}, wait for the physics mod to own it, seat
-     * the bot on it, and return the ship's IDENTITY.
+     * Build a with-pilot-seat craft at the caller's allocated {@code site}, wait for the physics mod
+     * to own it, seat the bot on it, and return the ship's IDENTITY.
      *
      * <p>The identity comes from the CREATION, not from a position: the event mark is taken before the
      * assembly is queued, so the {@code ship_spawned} record it is read off is THIS scenario's own ship
@@ -702,19 +701,20 @@ public class VSShipEntryClientGroupE2ETest extends AbstractSharedVsClientE2ETest
      * through the atmosphere ceiling — after which a nearest-ship query at the base answers about a
      * neighbour, or about nothing, in exactly the shape of a correct reply.</p>
      */
-    private String boardAssembledCraftAt(int bx, int bz, int budget) throws Exception {
+    private String boardAssembledCraftAt(FixtureSite site, int budget) throws Exception {
+        final int bx = site.x, bz = site.z;
         // Stand the client well clear while the fixture is built, then beside it so it stays loaded.
         exec("tp @a " + (bx + 600) + " 120 " + (bz + 600) + " 0 0");
         bot().waitTicks(10);
         Events events = events();
         long spawnMark = events.markInstrumented();
-        String assemble = assembleFixture(FixtureSite.openAir(0, bx, bz), VARIANT);
+        String assemble = assembleFixture(site, VARIANT);
         scenario().requireArranged("a with-pilot-seat build must route to a ship: " + assemble,
                 assemble.contains("\"ok\":true"));
         String shipUuid = awaitShipSpawned(events, spawnMark, "a with-pilot-seat assembly must create"
                 + " a VS ship in the physics registry — its record is where this scenario's ship"
                 + " identity comes from, and every later question about the craft is keyed on it");
-        exec("tp @a " + (bx + 0.5) + " " + (BY + 6) + " " + (bz + 0.5) + " 0 0");
+        exec("tp @a " + (bx + 0.5) + " " + (site.y + 6) + " " + (bz + 0.5) + " 0 0");
         bot().waitTicks(20);
 
         // The spawn record above is the registry's account of an ADD; it does not say the physics

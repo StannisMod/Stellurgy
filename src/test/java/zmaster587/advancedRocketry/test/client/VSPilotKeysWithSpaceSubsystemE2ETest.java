@@ -18,6 +18,7 @@ import org.lwjgl.input.Keyboard;
 
 import zmaster587.advancedRocketry.test.Events;
 import zmaster587.advancedRocketry.test.FixtureSite;
+import zmaster587.advancedRocketry.test.Plot;
 
 import static org.junit.Assert.assertTrue;
 
@@ -52,9 +53,20 @@ public class VSPilotKeysWithSpaceSubsystemE2ETest {
     private static final Pattern DUMMY_ID = Pattern.compile("\"dummyId\":(-?\\d+)");
 
     private static final String VARIANT = "with-pilot-seat";
-    private static final FixtureSite SITE = FixtureSite.openAir(0, 2800, 2800);
+    /**
+     * This scenario's patch of world. The lane keeps the coordinates this test's green runs were
+     * taken on; the SITE inside it is allocated, so what it clears is checked against the plot
+     * instead of being trusted. This class boots its own server and runs one scenario — it does not
+     * extend a shared base, which is why it allocates here rather than calling {@code site()}.
+     *
+     * <p>Not static: a plot records the ground its scenario has cleared, and that record belongs to
+     * the test instance that made it.</p>
+     */
+    private final Plot plot =
+            Plot.forScenario(0, "the pilot-keys craft", 0, new Plot.Lane(2800, 2800, Plot.SIZE));
+    private final FixtureSite site = plot.site();
     /** The site owns the coordinates; these aliases keep the body below unchanged. */
-    private static final int BX = SITE.x, BY = SITE.y, BZ = SITE.z;
+    private final int bx = site.x, by = site.y, bz = site.z;
 
     /**
      * How long the craft is given to become USABLE with the client present, in ticks.
@@ -132,7 +144,7 @@ public class VSPilotKeysWithSpaceSubsystemE2ETest {
                 + "anything - the seeded config is what opts it in: " + status,
                 status.contains("\"registered\":true"));
 
-        exec("tp @a " + (BX + 600) + " 120 " + (BZ + 600) + " 0 0");
+        exec("tp @a " + (bx + 600) + " 120 " + (bz + 600) + " 0 0");
         clientHarness.bot().waitTicks(10);
 
         // The event log, built by hand because this class boots its own harness pair rather than
@@ -140,7 +152,7 @@ public class VSPilotKeysWithSpaceSubsystemE2ETest {
         // clock the reader steps on. Nothing else about it differs.
         Events events = new Events(this::exec, ticks -> clientHarness.bot().waitTicks(ticks));
         long spawnMark = events.markInstrumented();
-        String assemble = assembleFixture(SITE, VARIANT);
+        String assemble = assembleFixture(site, VARIANT);
         assertTrue("a with-pilot-seat build must route to a ship: " + assemble,
                 assemble.contains("\"ok\":true"));
 
@@ -153,7 +165,7 @@ public class VSPilotKeysWithSpaceSubsystemE2ETest {
         assertTrue("a ship_spawned record must name the ship: " + spawned, shipUuid != null);
 
         // Stand the client next to the ship so it stays loaded, then read its resting altitude.
-        exec("tp @a " + (BX + 0.5) + " " + (BY + 6) + " " + (BZ + 0.5) + " 0 0");
+        exec("tp @a " + (bx + 0.5) + " " + (by + 6) + " " + (bz + 0.5) + " 0 0");
         clientHarness.bot().waitTicks(20);
 
         // A ship becoming LOADED **does** have an event of its own, and this comment said otherwise

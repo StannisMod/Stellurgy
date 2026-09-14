@@ -145,6 +145,11 @@ public class VSRiderKeepsHisMountAtCruiseE2ETest extends AbstractSharedVsClientE
         // definition of where a fixture stands instead of a 64 nobody chose. The first link still
         // earns its place: it MEASURES that the cell is empty rather than taking the setup probe's
         // word for it.
+        //
+        // NOT ALLOCATED FROM A PLOT, deliberately. A plot keeps a scenario clear of its siblings in
+        // a SHARED world; this craft is alone in a cell made for it, so there is nobody to be kept
+        // clear of, and moving it into a region of that dimension whose extent nobody has measured
+        // would be a real risk taken for no contract.
         final zmaster587.advancedRocketry.test.FixtureSite site =
                 zmaster587.advancedRocketry.test.FixtureSite.openAir(dim, 40, 40);
         int bx = site.x, by = site.y, bz = site.z;

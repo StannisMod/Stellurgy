@@ -52,15 +52,30 @@ import static org.junit.Assert.assertTrue;
 public abstract class AbstractSharedVsClientE2ETest extends AbstractSharedClientE2ETest {
 
     /**
-     * Where the parking plots live for a ship class.
+     * Where a ship class's plots live.
      *
-     * <p>Ship fixtures in this tier are built on the ground along the x==z diagonal between roughly
-     * 2800 and 6500, and each scenario keeps the base coordinates its green runs were taken on. The
-     * plots this lane hands out are only the place the reset PARKS the player between scenarios, so
-     * they are pushed well off that diagonal: a plot that contained another scenario's ship would
-     * make "stay inside your plot" mean nothing.</p>
+     * <p><b>It was called {@code SHIP_PARKING_LANE} until 2026-09-14, and the rename records a
+     * change of meaning.</b> Ship fixtures used to be built along the x==z diagonal between roughly
+     * 2800 and 6500 on coordinates each scenario chose for itself, and a plot was then only the
+     * place the between-scenario reset PARKED the player — pushed well off that diagonal, because a
+     * parking plot containing somebody's ship would have made "stay inside your plot" mean nothing.
+     * The scenarios now build ON their plots, so the two are one thing and the separation the old
+     * name protected is no longer needed: a scenario's fixture and its parking spot are supposed to
+     * be the same patch of world, and that is the whole point of asking for it.</p>
+     *
+     * <p>The player still lands at the plot's CENTRE and the fixture stands inset from its corner,
+     * so the reset never drops him onto his own launchpad.</p>
+     *
+     * <p><b>The stride is 100 and the plot is 64, and the 36 blocks between them are deliberate.</b>
+     * Non-overlap needs only stride >= plotSize, so touching plots would satisfy the contract — but
+     * what a plot bounds is the ground a fixture CLEARS, and a ship is not ground. It is a physics
+     * body that drifts, climbs and is parked, and these scenarios' green runs were all taken with
+     * their craft roughly 100 blocks apart on the old hand-picked diagonal. Keeping that number is
+     * free and keeps the migration a change of WHO chooses the address rather than a change of how
+     * far apart two flying hulls are. A class that wants its plots adjacent says so in its own
+     * lane.</p>
      */
-    protected static final Plot.Lane SHIP_PARKING_LANE = new Plot.Lane(2000, 8000, Plot.SIZE);
+    protected static final Plot.Lane SHIP_LANE = new Plot.Lane(2000, 8000, 100);
 
     // `SHIP_QUERY_RADIUS` LIVED HERE and is gone with what it bounded (2026-09-14). It was how far
     // from its query point a positional `vs ship-info` answer could be and still be attributed to
@@ -609,7 +624,7 @@ public abstract class AbstractSharedVsClientE2ETest extends AbstractSharedClient
 
     @Override
     protected Plot.Lane lane() {
-        return SHIP_PARKING_LANE;
+        return SHIP_LANE;
     }
 
     @Override

@@ -81,9 +81,6 @@ public class VSPilotSeatTakenWhileOfflineE2ETest extends AbstractSharedVsClientE
             "\"posX\":(-?[0-9.E\\-]+),\"posY\":(-?[0-9.E\\-]+),\"posZ\":(-?[0-9.E\\-]+)");
 
     private static final String VARIANT = "with-pilot-seat";
-    private static final FixtureSite SITE = FixtureSite.openAir(0, 7600, 7600);
-    /** The site owns the coordinates; these aliases keep the body below unchanged. */
-    private static final int BX = SITE.x, BY = SITE.y, BZ = SITE.z;
 
     /** The account the client harness plays under — the server keys his data and probes by it. */
     private static final String BOT = "ForgeTestClient";
@@ -99,7 +96,11 @@ public class VSPilotSeatTakenWhileOfflineE2ETest extends AbstractSharedVsClientE
     public void aSeatTakenWhileThePilotWasOfflineStaysWithTheOccupant() throws Exception {
 
         // ---- ARRANGE: build + assemble a piloted ship, seat the client player on it. ------------
-        exec("tp @a " + (BX + 600) + " 120 " + (BZ + 600) + " 0 0");
+        // WHERE THIS SCENARIO STANDS IS ASKED FOR, NOT CHOSEN: the plot is this scenario's own, and
+        // the height is the open-air band because the site has no Y to pass.
+        final FixtureSite site = site();
+        final int bx = site.x, by = site.y, bz = site.z;
+        exec("tp @a " + (bx + 600) + " 120 " + (bz + 600) + " 0 0");
         bot().waitTicks(10);
         // The registry's own record of the ship being added, since a mark taken before the assembly
         // was queued: THIS scenario's ship by construction, where a count on a shared world is
@@ -107,7 +108,7 @@ public class VSPilotSeatTakenWhileOfflineE2ETest extends AbstractSharedVsClientE
         // this wait is gone with it — it was a machine-shaped number standing in for a deadline.
         Events events = events();
         long spawnMark = events.markInstrumented();
-        String assemble = assembleFixture(SITE);
+        String assemble = assembleFixture(site);
         scenario().requireArranged("a with-pilot-seat build must route to a ship: " + assemble,
                 assemble.contains("\"rocketCount\":0"));
         // The return value is KEPT: it is this scenario's ship by construction (the mark precedes the
@@ -118,7 +119,7 @@ public class VSPilotSeatTakenWhileOfflineE2ETest extends AbstractSharedVsClientE
         // Keep the ship observable while nobody is online: the offline window below leaves the
         // server empty, and an unloaded ship would fail every probe the arrangement depends on.
         exec("artest vs permaload true");
-        exec("tp @a " + (BX + 0.5) + " " + (BY + 6) + " " + (BZ + 0.5) + " 0 0");
+        exec("tp @a " + (bx + 0.5) + " " + (by + 6) + " " + (bz + 0.5) + " 0 0");
         bot().waitTicks(40);
 
         String mountInfo = exec("artest vs seat-mount 0 id " + shipUuid);
@@ -163,8 +164,8 @@ public class VSPilotSeatTakenWhileOfflineE2ETest extends AbstractSharedVsClientE
 
         // With no player near them the ship's chunks can drop out from under the probes below —
         // force them back in before acting on the seat.
-        exec("artest chunk warmup 0 " + ((BX - 2) >> 4) + " " + ((BZ - 2) >> 4)
-                + " " + ((BX + 7) >> 4) + " " + ((BZ + 7) >> 4));
+        exec("artest chunk warmup 0 " + ((bx - 2) >> 4) + " " + ((bz - 2) >> 4)
+                + " " + ((bx + 7) >> 4) + " " + ((bz + 7) >> 4));
 
         // Vanilla takes a seated player's mount WITH him into his player data — witnessed here
         // because the occupy below must therefore spawn the seat's fresh (single) dummy, and

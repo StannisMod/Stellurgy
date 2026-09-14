@@ -88,7 +88,7 @@ public class VSCrewRelogPersistenceE2ETest extends AbstractSharedVsClientE2ETest
      */
     @Test
     public void aCrewMemberStandingOnADeckIsNotReleasedWhileTheShipRolls() throws Exception {
-        requireHeIsHeldThroughARoll(6680, 6680, "ordinary world coordinates");
+        requireHeIsHeldThroughARoll(site(), "ordinary world coordinates");
     }
 
     // A "far from origin" variant of this leg was tried and is REFUTED, so it is not here: the
@@ -96,12 +96,11 @@ public class VSCrewRelogPersistenceE2ETest extends AbstractSharedVsClientE2ETest
     // position. Measured - a ship built at world 6720 reports its crew at B=5120000.000, 51200.000 in
     // exactly the same range, because that is simply where Valkyrien Skies parks a subspace. There is
     // no coordinate-magnitude variable to vary.
-    private void requireHeIsHeldThroughARoll(int bx, int bz, String where) throws Exception {
-        // The open-air band. This was a bare `final int by = 64;` until 2026-09-14 — a staging
-        // decision with no name, which the fixture-site counter's own patterns cannot see either,
-        // since neither `by` nor this line mentions a fixture.
-        final FixtureSite site = FixtureSite.openAir(0, bx, bz);
-        final int by = site.y;
+    private void requireHeIsHeldThroughARoll(FixtureSite site, String where) throws Exception {
+        // The caller asks the allocator for this site; it used to pass two coordinates it had chosen,
+        // and the Y was a bare `final int by = 64;` until 2026-09-14 — a staging decision with no
+        // name, which the fixture-site counter's own patterns could not see either.
+        final int bx = site.x, by = site.y, bz = site.z;
 
         double[] ship = buildShip(site);
         // The mark BEFORE he is put on the deck. A capture is an EPISODE the resolver opens when a
@@ -322,13 +321,12 @@ public class VSCrewRelogPersistenceE2ETest extends AbstractSharedVsClientE2ETest
      */
     @Test
     public void aCrewMemberWalkingHisOwnDeckIsNeverReleasedByTheExternalMoveGuard() throws Exception {
-        requireHeIsHeldThroughAWalk(6720, 6720, "ordinary world coordinates");
+        requireHeIsHeldThroughAWalk(site(), "ordinary world coordinates");
     }
 
-    private void requireHeIsHeldThroughAWalk(int bx, int bz, String where) throws Exception {
-        // The open-air band; see the sibling above for why this was a nameless `by = 64`.
-        final FixtureSite site = FixtureSite.openAir(0, bx, bz);
-        final int by = site.y;
+    private void requireHeIsHeldThroughAWalk(FixtureSite site, String where) throws Exception {
+        // Allocated, not chosen; see the sibling above for why the Y was a nameless `by = 64`.
+        final int bx = site.x, by = site.y, bz = site.z;
 
         double[] ship = buildShip(site);
         Events events = events();
@@ -459,7 +457,7 @@ public class VSCrewRelogPersistenceE2ETest extends AbstractSharedVsClientE2ETest
      */
     @Test
     public void aCrewMemberIsNotReleasedWhenTheServerSkipsATickBurst() throws Exception {
-        final FixtureSite site = FixtureSite.openAir(0, 6760, 6760);
+        final FixtureSite site = site();
         final int bx = site.x, by = site.y, bz = site.z;
 
         double[] ship = buildShip(site);
@@ -635,7 +633,7 @@ public class VSCrewRelogPersistenceE2ETest extends AbstractSharedVsClientE2ETest
 
     @Test
     public void aPlayerWhoRelogsOnAnInvertedDeckStaysAboardIt() throws Exception {
-        final FixtureSite site = FixtureSite.openAir(0, 6520, 6520);
+        final FixtureSite site = site();
         final int bx = site.x, by = site.y, bz = site.z;
 
         // Capture the client player on the OPEN top deck while the ship is upright, then roll the
@@ -751,7 +749,7 @@ public class VSCrewRelogPersistenceE2ETest extends AbstractSharedVsClientE2ETest
      */
     @Test
     public void aCrewMemberWhoLogsOutWalkingComesBackStandingStillOnHisDeckSpot() throws Exception {
-        final FixtureSite site = FixtureSite.openAir(0, 6620, 6620);
+        final FixtureSite site = site();
         final int bx = site.x, by = site.y, bz = site.z;
 
         double[] ship = buildShip(site);

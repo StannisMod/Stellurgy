@@ -71,7 +71,7 @@ public class VSPilotStationDestructionE2ETest extends AbstractSharedVsClientE2ET
 
     @Test
     public void breakingTheOccupiedSeatDismountsThePilotAndHoldsTheShip() throws Exception {
-        final FixtureSite site = FixtureSite.openAir(0, 4400, 4400);
+        final FixtureSite site = site();
         final int bx = site.x, by = site.y, bz = site.z;
         FlyingShip ship = assembleLoadAndFly(site);
 
@@ -130,7 +130,7 @@ public class VSPilotStationDestructionE2ETest extends AbstractSharedVsClientE2ET
 
     @Test
     public void breakingTheLinkedComputerDismountsThePilotAndNeverThrusts() throws Exception {
-        final FixtureSite site = FixtureSite.openAir(0, 4600, 4600);
+        final FixtureSite site = site();
         final int bx = site.x, by = site.y, bz = site.z;
         FlyingShip ship = assembleLoadAndFly(site);
         bot().releaseKey(Keyboard.KEY_R);

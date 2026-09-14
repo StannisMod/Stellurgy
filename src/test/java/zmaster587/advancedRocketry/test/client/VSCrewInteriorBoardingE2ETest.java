@@ -140,7 +140,7 @@ public class VSCrewInteriorBoardingE2ETest extends AbstractSharedVsClientE2ETest
     @Test
     public void aBodyReleasedInsideAnInvertedShipIsSeatedBackOnTheDeck()
             throws Exception {
-        final FixtureSite site = FixtureSite.openAir(0, 6620, 6620);
+        final FixtureSite site = site();
         final int bx = site.x, by = site.y, bz = site.z;
 
         // Seat the bot, invert the ship under him, dismount INSIDE: the dismount seed captures
@@ -312,7 +312,7 @@ public class VSCrewInteriorBoardingE2ETest extends AbstractSharedVsClientE2ETest
 
     @Test
     public void aBodyLostMidCavityOfAnEnclosedInvertedShipIsReclaimedByTheDeck() throws Exception {
-        final FixtureSite site = FixtureSite.openAir(0, 6820, 6820);
+        final FixtureSite site = site();
         final int bx = site.x, by = site.y, bz = site.z;
 
         // The open-topped cockpit above cannot exercise interior boarding: since the enclosure
@@ -492,7 +492,7 @@ public class VSCrewInteriorBoardingE2ETest extends AbstractSharedVsClientE2ETest
 
     @Test
     public void aFlyingCrewMemberAscendsAlongTheDeckNormalAndReseatsOnFlightOff() throws Exception {
-        final FixtureSite site = FixtureSite.openAir(0, 6720, 6720);
+        final FixtureSite site = site();
         final int bx = site.x, by = site.y, bz = site.z;
 
         // The flying-aboard contract on a steeply ROLLED ship: starting creative flight on the

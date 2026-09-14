@@ -103,6 +103,43 @@ public class PlotAllocationContractTest {
                 !probeWasCalled[0]);
     }
 
+    /**
+     * The same contract one level down, and the level {@link Plot#siteAt} opened. A scenario that
+     * stands TWO structures on its own plot can put them through each other exactly as two
+     * scenarios used to; the plot refuses the second clear rather than trusting the offsets.
+     */
+    @Test
+    public void twoFixturesOfOneScenarioMayNotClearOverlappingGround() throws Exception {
+        Plot p = Plot.forScenario(0, "two-structure scenario", 0, new Plot.Lane(0, 0, 192, 192));
+        Events.Probe empty = cmd -> "{\"ok\":true,\"placed\":0,\"volume\":0}";
+
+        // Twelve blocks apart, with a halo of 8 each: the first fixture's envelope reaches to
+        // dx=20+5+8=33 and the second's starts at dx=32-8=24, so they share ground.
+        p.siteAt(20, 20).requireClear(empty, 8, 10, "the first structure");
+        try {
+            p.siteAt(32, 32).requireClear(empty, 8, 10, "the second structure, too close");
+            fail("two fixtures on one plot cleared overlapping ground; the second must be refused");
+        } catch (ArrangementFailure expected) {
+            assertTrue("the refusal must name the ground already cleared, so a reader knows WHICH"
+                            + " structure is at risk: " + expected.getMessage(),
+                    expected.getMessage().contains("already cleared"));
+        }
+
+        // Far enough apart, the same two calls are fine — otherwise this test would pass on a plot
+        // that simply refuses everything.
+        p.siteAt(20, 20).requireClear(empty, 8, 10, "the first structure again, grown");
+        p.siteAt(120, 120).requireClear(empty, 8, 10, "a second structure with room of its own");
+    }
+
+    /** A fixture re-prepared at its OWN base is one structure and may clear a wider volume. */
+    @Test
+    public void oneFixtureMayBeClearedTwiceWithADifferentHalo() throws Exception {
+        Plot p = plot(0);
+        Events.Probe empty = cmd -> "{\"ok\":true,\"placed\":0,\"volume\":0}";
+        p.site().requireClear(empty, 2, 10, "the fixture, prepared");
+        p.site().requireClear(empty, 12, 10, "the same fixture, prepared wider");
+    }
+
     @Test
     public void aLaneCannotBeDeclaredNarrowerThanItsPlots() {
         try {

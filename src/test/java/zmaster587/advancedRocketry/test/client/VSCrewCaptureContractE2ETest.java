@@ -162,7 +162,7 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
 
     @Test
     public void jumpingOnTheTopDeckKeepsTheCaptureAndLandsBackOnIt() throws Exception {
-        final FixtureSite site = FixtureSite.openAir(0, 5220, 5220);
+        final FixtureSite site = site();
         final int bx = site.x, by = site.y, bz = site.z;
 
         // The subject is on the HARD side of the geometry: the fixture's walkable deck is the hull's
@@ -272,7 +272,7 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
 
     @Test
     public void walkingOnTheGroundBesideAParkedShipNeverEntersItsFrame() throws Exception {
-        final FixtureSite site = FixtureSite.openAir(0, 5320, 5320);
+        final FixtureSite site = site();
         final int bx = site.x, by = site.y, bz = site.z;
 
         double[] ship = buildShip(site);
@@ -374,7 +374,7 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
 
     @Test
     public void aStillCrewMemberOnASteeplyRolledDeckIsNotDraggedSideways() throws Exception {
-        final FixtureSite site = FixtureSite.openAir(0, 5420, 5420);
+        final FixtureSite site = site();
         final int bx = site.x, by = site.y, bz = site.z;
 
         // Board and stand up on the LEVEL deck (the dismount seed captures the ex-pilot), then roll
@@ -481,7 +481,7 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
 
     @Test
     public void aStillCrewMemberOnAHoveringShipIsNotDraggedSideways() throws Exception {
-        final FixtureSite site = FixtureSite.openAir(0, 5520, 5520);
+        final FixtureSite site = site();
         final int bx = site.x, by = site.y, bz = site.z;
 
         // The playtest ship is not attitude-HELD by a probe - it HOVERS under station-keeping, which
@@ -552,7 +552,7 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
 
     @Test
     public void walkingAndJumpingOnAHoveringShipDoesNotChurnTheCapture() throws Exception {
-        final FixtureSite site = FixtureSite.openAir(0, 5620, 5620);
+        final FixtureSite site = site();
         final int bx = site.x, by = site.y, bz = site.z;
 
         // The round-11 playtest drag happens on a NEARLY-LEVEL hovering ship while the crew member
@@ -801,7 +801,7 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
 
     @Test
     public void aPerTickTraceShowsWhatTheDeckPoseDoesAcrossAPacketGap() throws Exception {
-        final FixtureSite site = FixtureSite.openAir(0, 6520, 6520);
+        final FixtureSite site = site();
         final int bx = site.x, by = site.y, bz = site.z;
 
         // A SPIKE, and it is allowed to come back "no". The client's pose source only behaves
@@ -866,7 +866,7 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
 
     @Test
     public void aWildClientSideStepOnADeckNeverBecomesADeclaredPosition() throws Exception {
-        final FixtureSite site = FixtureSite.openAir(0, 6320, 6320);
+        final FixtureSite site = site();
         final int bx = site.x, by = site.y, bz = site.z;
 
         // Player movement is client-authoritative and the server accepts it. That is the contract,
@@ -989,7 +989,7 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
 
     @Test
     public void aStillCrewMemberOnAFastClimbingShipKeepsHisCapture() throws Exception {
-        final FixtureSite site = FixtureSite.openAir(0, 5720, 5720);
+        final FixtureSite site = site();
         final int bx = site.x, by = site.y, bz = site.z;
 
         // The round-13 playtest thrash correlates with INVERSION, but the drop lines' real common
@@ -1252,7 +1252,7 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
 
     @Test
     public void aCreativeFlyingExPilotIsNeverSnappedBackByTheDismountHold() throws Exception {
-        final FixtureSite site = FixtureSite.openAir(0, 5820, 5820);
+        final FixtureSite site = site();
         final int bx = site.x, by = site.y, bz = site.z;
 
         // The live war: dismount the pilot seat and start creative-FLYING within the dismount
@@ -1349,7 +1349,7 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
 
     @Test
     public void standingOnTheWorldTopOfAnInvertedShipKeepsWorldFrameSemantics() throws Exception {
-        final FixtureSite site = FixtureSite.openAir(0, 5920, 5920);
+        final FixtureSite site = site();
         final int bx = site.x, by = site.y, bz = site.z;
 
         // The round-15 playtest residue: standing on the world-facing top of an inverted hull (its
@@ -1454,7 +1454,7 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
 
     @Test
     public void aHullTopEncounterNeverEntersTheShipFrame() throws Exception {
-        final FixtureSite site = FixtureSite.openAir(0, 6020, 6020);
+        final FixtureSite site = site();
         final int bx = site.x, by = site.y, bz = site.z;
 
         // The verified outer-hull half (the round-15 residue): a body meeting the world-facing
@@ -1751,7 +1751,7 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
 
     @Test
     public void theCrosshairPicksTheSameDeckBlockAtAnyAttitude() throws Exception {
-        final FixtureSite site = FixtureSite.openAir(0, 6120, 6120);
+        final FixtureSite site = site();
         final int bx = site.x, by = site.y, bz = site.z;
 
         // The raytrace origin (getPositionEyes) ran along WORLD up while the camera renders the eye
@@ -1930,7 +1930,7 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
 
     @Test
     public void aBodyMeetingADeckThatManoeuvredUnwatchedIsNotCarriedByIt() throws Exception {
-        final FixtureSite site = FixtureSite.openAir(0, 6220, 6220);
+        final FixtureSite site = site();
         final int bx = site.x, by = site.y, bz = site.z;
 
         // The client is not TOLD a craft's velocity; while it is handling a body on a deck it
@@ -2128,7 +2128,7 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
 
     @Test
     public void theMouseTurnsTheWalkingCrewsAimInTheDeckFrameAndTheAimRidesTheDeck() throws Exception {
-        final FixtureSite site = FixtureSite.openAir(0, 6420, 6420);
+        final FixtureSite site = site();
         final int bx = site.x, by = site.y, bz = site.z;
 
         // The walking-crew look contract, in its two player-visible halves, on a STEEPLY ROLLED

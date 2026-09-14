@@ -88,6 +88,14 @@ public class VSShipExtremeCoordinatesE2ETest extends AbstractSharedVsClientE2ETe
     /**
      * The craft's horizontal base. The Y is not here because the SITE owns it, and the site cannot
      * be a constant: this class builds in a space CELL whose dimension id is only known at run time.
+     *
+     * <p><b>NOT allocated from a plot, and this is the reason rather than an oversight.</b> Every
+     * other ship scenario asks {@code site()} for its ground, because it shares a world with its
+     * siblings and the plot is what keeps them apart. This one builds inside a cell created for it
+     * alone: there is no sibling to collide with, so an allocator would be protecting against
+     * nothing — and it would move the craft into a region of a dimension whose extent nobody here
+     * has measured, which is a real risk bought for no contract. A cell scenario that ever stands
+     * TWO structures is the case that changes this answer.</p>
      */
     private static final int BX = 3400, BZ = 3400;
 

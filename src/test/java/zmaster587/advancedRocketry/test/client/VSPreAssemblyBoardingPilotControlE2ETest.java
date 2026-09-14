@@ -242,7 +242,7 @@ public class VSPreAssemblyBoardingPilotControlE2ETest extends AbstractSharedVsCl
      */
     @Test
     public void aPilotWhoRightClickedTheSeatBeforeAssemblyCanFlyTheShip() throws Exception {
-        runPreAssemblyBoardingScenario(FixtureSite.openAir(0, 2800, 2800), Boarding.RIGHT_CLICK);
+        runPreAssemblyBoardingScenario(site(), Boarding.RIGHT_CLICK);
     }
 
     /**
@@ -252,9 +252,11 @@ public class VSPreAssemblyBoardingPilotControlE2ETest extends AbstractSharedVsCl
      */
     @Test
     public void aPilotBoardedByProbeBeforeAssemblyCanFlyTheShip() throws Exception {
-        // ITS OWN PLOT, a hundred blocks from the right-click scenario's. The two shared one until
-        // 2026-09-14 and each silently levelled the other's leavings with its pre-clear.
-        runPreAssemblyBoardingScenario(FixtureSite.openAir(0, 2900, 2900), Boarding.PROBE);
+        // ITS OWN PLOT, and it is the allocator that says so rather than a second coordinate typed
+        // here. The two scenarios shared one site until 2026-09-14 and each silently levelled the
+        // other's leavings with its pre-clear; splitting them by hand fixed this pair and nothing
+        // else, which is why asking for the plot replaced choosing one.
+        runPreAssemblyBoardingScenario(site(), Boarding.PROBE);
     }
 
     /**

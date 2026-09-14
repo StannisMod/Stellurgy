@@ -126,21 +126,29 @@ public class FreeFlightModeE2ETest extends AbstractSharedClientE2ETest {
     }
 
     /**
-     * The strip this file's scenarios have always flown on: x from 3000, z=500, 100 apart. Ground
-     * level, therefore terrain-dependent, therefore NOT relocatable on the strength of a refactor.
-     * 27 scenarios reach x=5600; the pre-migration file already used up to 5100 on this line.
+     * The strip this file's scenarios have always flown on: x from 3000, z=500, 100 apart. 27
+     * scenarios reach x=5600; the pre-migration file already used up to 5100 on this line.
+     *
+     * <p>It was documented as un-relocatable because it was ground level. It is not any more —
+     * {@link #BASE_Y} is the open-air band — so what keeps the lane here is only that these are the
+     * numbers 27 scenarios' green runs were taken on, which is reason enough not to move them and
+     * not a claim about terrain.</p>
      */
     @Override
     protected Plot.Lane lane() {
         return new Plot.Lane(3000, 500, 100);
     }
 
+    // THE BASE COMES FROM THE ALLOCATED SITE, not from the plot's corner. The difference is not
+    // cosmetic: a fixture at the corner has no room on the low side, so the volume it clears leaves
+    // the plot and `requireClear`'s containment check can never pass. `site()` insets it, which is
+    // what makes the check mean something here.
     private int baseX() {
-        return plot().originX;
+        return site().x;
     }
 
     private int baseZ() {
-        return plot().originZ;
+        return site().z;
     }
 
     /** Stand the bot above and beside its own plot's build site, clear of the pad. */
@@ -169,9 +177,8 @@ public class FreeFlightModeE2ETest extends AbstractSharedClientE2ETest {
         //
         // The site is in the open-air band now, so the column starts empty and this ASSERTS that,
         // on the air fill's own `placed`, rather than digging and hoping.
-        zmaster587.advancedRocketry.test.FixtureSite.openAir(0, baseX, baseZ)
-                .requireClear(this::exec, 2, 50,
-                        "the rocket is assembled here and climbs fifty blocks up this column");
+        site().requireClear(this::exec, 2, 50,
+                "the rocket is assembled here and climbs fifty blocks up this column");
 
         String fixture = exec("artest fixture rocket 0 " + baseX + " " + baseY + " "
                 + baseZ + " simple");

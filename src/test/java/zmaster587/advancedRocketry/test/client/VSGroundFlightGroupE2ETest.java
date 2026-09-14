@@ -13,6 +13,7 @@ import java.util.regex.Pattern;
 import zmaster587.advancedRocketry.api.FreeFlightPhysics;
 import zmaster587.advancedRocketry.test.Events;
 import zmaster587.advancedRocketry.test.FixtureSite;
+import zmaster587.advancedRocketry.test.Plot;
 
 import static org.junit.Assert.assertTrue;
 
@@ -50,6 +51,30 @@ public class VSGroundFlightGroupE2ETest extends AbstractSharedVsClientE2ETest {
     @Override
     protected String subsystem() {
         return "vs-ground-flight";
+    }
+
+    /**
+     * Where this class's two-ship scenario stands its pair, as offsets into its own plot.
+     *
+     * <p><b>The 100 on each axis is the number that survived the migration</b> — 141 blocks along
+     * the diagonal, this tier's own fixture spacing, which the nearest-form leg depends on: ship B
+     * has to start far enough from A's base that the positional lookup is not merely confused by
+     * construction, and is then parked CLOSER to it so the lookup answers with the wrong one. The
+     * addresses (5400/5400 and 5500/5500) were hand-picked and are gone; the distance between them
+     * was the content and it is kept exactly.</p>
+     */
+    private static final int SHIP_A_INSET = 20;
+    /** @see #SHIP_A_INSET */
+    private static final int SHIP_B_INSET = 120;
+
+    /**
+     * Wide enough to hold both ships of the two-ship scenario, with room for each one's working
+     * volume. Every other scenario in this class stands one fixture and uses only {@link #site()},
+     * which insets it the same 20 blocks whatever the plot's edge is.
+     */
+    @Override
+    protected Plot.Lane lane() {
+        return new Plot.Lane(SHIP_LANE.originX, SHIP_LANE.originZ, 192, 192);
     }
 
     private static final Pattern BUILDER_POS =
@@ -178,12 +203,16 @@ public class VSGroundFlightGroupE2ETest extends AbstractSharedVsClientE2ETest {
     @Test
     public void aShipQuestionKeyedOnIdNamesItsOwnShipAndTheNearestFormDoesNot() throws Exception {
 
-        final FixtureSite siteA = FixtureSite.openAir(0, 5400, 5400);
-        final FixtureSite siteB = FixtureSite.openAir(0, 5500, 5500);
+        // TWO STRUCTURES, ONE SCENARIO — so the plot supplies the ground and this scenario supplies
+        // only the SEPARATION, which is the thing it actually means. The pair used to be two
+        // hand-picked bases 141 blocks apart; the offsets below keep exactly that distance, the
+        // allocator decides where the pair lives, and `requireClear` refuses either fixture reaching
+        // into the other. This class declares a wider lane in lane() to hold both.
+        final FixtureSite siteA = plot().siteAt(SHIP_A_INSET, SHIP_A_INSET);
+        final FixtureSite siteB = plot().siteAt(SHIP_B_INSET, SHIP_B_INSET);
         final int ax = siteA.x, ay = siteA.y, az = siteA.z;
         final int bx = siteB.x, by = siteB.y, bz = siteB.z;
 
-        // Two ships, built 141 blocks apart — this tier's own fixture spacing.
         exec("tp @a " + (ax + 600) + " 120 " + (az + 600) + " 0 0");
         bot().waitTicks(10);
 
@@ -282,7 +311,7 @@ public class VSGroundFlightGroupE2ETest extends AbstractSharedVsClientE2ETest {
     @Test
     public void assembledShipLoadsWithClientPresentAndFliesAndRotatesUnderForce() throws Exception {
 
-        final FixtureSite site = FixtureSite.openAir(0, 2200, 2200);
+        final FixtureSite site = site();
         final int BX = site.x, BY = site.y, BZ = site.z;
 
         // Keep the client FAR AWAY during assembly + spawn. VS crashes with
@@ -455,7 +484,7 @@ public class VSGroundFlightGroupE2ETest extends AbstractSharedVsClientE2ETest {
     @Test
     public void assemblingWithAnObserverAtThePadDoesNotCrashVs() throws Exception {
 
-        final FixtureSite site = FixtureSite.openAir(0, 2400, 2400);
+        final FixtureSite site = site();
         final int BX = site.x, BY = site.y, BZ = site.z;
 
         // Put the observer AT the build site and keep it there through assembly + spawn — the
@@ -496,7 +525,7 @@ public class VSGroundFlightGroupE2ETest extends AbstractSharedVsClientE2ETest {
     @Test
     public void seatPathResolvesAfcAndFliesTheShip() throws Exception {
 
-        final FixtureSite site = FixtureSite.openAir(0, 2600, 2600);
+        final FixtureSite site = site();
         final int BX = site.x, BY = site.y, BZ = site.z;
 
         // Assemble far from any observer (double-load window), then approach to load.
@@ -568,7 +597,7 @@ public class VSGroundFlightGroupE2ETest extends AbstractSharedVsClientE2ETest {
     @Test
     public void seatedPilotFliesShipTravelsWithItAndCameraLocksToNose() throws Exception {
 
-        final FixtureSite site = FixtureSite.openAir(0, 2800, 2800);
+        final FixtureSite site = site();
         final int BX = site.x, BY = site.y, BZ = site.z;
 
         exec("tp @a " + (BX + 600) + " 120 " + (BZ + 600) + " 0 0");

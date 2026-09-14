@@ -141,7 +141,7 @@ public class VSShipFlightTelemetryE2ETest extends AbstractSharedVsClientE2ETest 
         // class stands in the band now, and so does every other ship fixture in the suite. The note
         // is kept because it says why this one moved first and what its lift was an answer to — not
         // because a reader can still see the other half of the comparison here.
-        final FixtureSite site = FixtureSite.openAir(0, 3120, 3120);
+        final FixtureSite site = site();
         final int bx = site.x, by = site.y, bz = site.z;
 
         double[] ship = buildAndBoardShip(site);
@@ -369,7 +369,7 @@ public class VSShipFlightTelemetryE2ETest extends AbstractSharedVsClientE2ETest 
 
     @Test
     public void anInvertedShipTurnsThePilotsCameraOverAndKeepsHisEyeOutOfTheDeck() throws Exception {
-        final FixtureSite site = FixtureSite.openAir(0, 3220, 3220);
+        final FixtureSite site = site();
         final int bx = site.x, by = site.y, bz = site.z;
 
         buildAndBoardShip(site);
@@ -442,7 +442,7 @@ public class VSShipFlightTelemetryE2ETest extends AbstractSharedVsClientE2ETest 
 
     @Test
     public void crewStaysOnASteeplyRolledDeckInsteadOfBeingFlungIntoACorner() throws Exception {
-        final FixtureSite site = FixtureSite.openAir(0, 3320, 3320);
+        final FixtureSite site = site();
         final int bx = site.x, by = site.y, bz = site.z;
 
         double[] ship = buildShip(site);
@@ -519,7 +519,7 @@ public class VSShipFlightTelemetryE2ETest extends AbstractSharedVsClientE2ETest 
 
     @Test
     public void aCrewMemberRidesARotatingDeckWithoutTheCaptureThrashing() throws Exception {
-        final FixtureSite site = FixtureSite.openAir(0, 3520, 3520);
+        final FixtureSite site = site();
         final int bx = site.x, by = site.y, bz = site.z;
 
         double[] ship = buildShip(site);
@@ -570,7 +570,7 @@ public class VSShipFlightTelemetryE2ETest extends AbstractSharedVsClientE2ETest 
 
     @Test
     public void aBodyOnADeckWithWorldGroundBelowStaysOnTheDeck() throws Exception {
-        final FixtureSite site = FixtureSite.openAir(0, 3420, 3420);
+        final FixtureSite site = site();
         final int bx = site.x, by = site.y, bz = site.z;
 
         // Playtest report: standing on the deck of a DOCKED tier-2 ship (one resting on the ground), the
@@ -651,7 +651,7 @@ public class VSShipFlightTelemetryE2ETest extends AbstractSharedVsClientE2ETest 
 
     @Test
     public void aStationKeepingShipHoldsAltitudeInsteadOfSinking() throws Exception {
-        final FixtureSite site = FixtureSite.openAir(0, 3620, 3620);
+        final FixtureSite site = site();
         final int bx = site.x, by = site.y, bz = site.z;
 
         double[] ship = buildAndBoardShip(site);

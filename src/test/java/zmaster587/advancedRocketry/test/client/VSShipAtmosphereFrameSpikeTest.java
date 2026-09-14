@@ -9,6 +9,7 @@ import java.util.regex.Pattern;
 
 import zmaster587.advancedRocketry.test.Events;
 import zmaster587.advancedRocketry.test.FixtureSite;
+import zmaster587.advancedRocketry.test.Plot;
 import zmaster587.advancedRocketry.test.ShipIdentity;
 
 import static org.junit.Assert.assertTrue;
@@ -71,20 +72,23 @@ public class VSShipAtmosphereFrameSpikeTest extends AbstractSharedVsClientE2ETes
 
     private static final String VARIANT = "with-pilot-seat";
 
-    /** Build site of the ship; distinct from every other VS client test's site. */
-    private static final FixtureSite SITE = FixtureSite.openAir(0, 5200, 5200);
-    /** The site owns the coordinates; these aliases keep the body below unchanged. */
-    private static final int BX = SITE.x, BY = SITE.y, BZ = SITE.z;
-    /** Static control cabin, far from the ship and from its shipyard. */
     /**
-     * The static-world cabin's base, in the open-air band. Its Y was a hard-coded 70 until
-     * 2026-09-14 — and this one is not a fixture, so the site counter's own patterns never saw it:
-     * it is spelled {@code CX/CY/CZ}. The cabin is a stone shell this class BUILDS, so it wants no
-     * terrain; what a fixed 70 bought was whatever the seed left touching the shell, and a sealed
-     * volume whose walls may be continuous with the landscape is the one thing this leg must not
-     * be unsure about.
+     * How far into the plot the static control cabin stands, measured from the plot's origin.
+     *
+     * <p><b>The separation is the number that matters, not the address.</b> The cabin is the
+     * CONTROL leg — the same shell, in the plain world — so it has to be clear of the ship, of the
+     * ship's drift while the cabin is built, and of the shipyard VS relocates hull blocks into. It
+     * stood 400 blocks from the build site (5200 vs 5600) for as long as both were hand-picked, and
+     * this offset preserves exactly that distance while letting the allocator choose where the pair
+     * lives. {@link #lane()} widens the plot to hold both; a cabin outside the plot would be a
+     * second hand-picked coordinate wearing a helper's clothes.</p>
+     *
+     * <p>Its Y is the open-air band and was a hard-coded 70 until 2026-09-14. The cabin is a stone
+     * shell this class BUILDS, so it wants no terrain: what a fixed 70 bought was whatever the seed
+     * left touching the shell, and a sealed volume whose walls may be continuous with the landscape
+     * is the one thing this leg must not be unsure about.</p>
      */
-    private static final int CX = 5600, CY = FixtureSite.OPEN_AIR_Y, CZ = 5600;
+    private static final int CABIN_INSET = 420;
 
     /**
      * How long the atmosphere gate is given to evaluate a moved player, in ticks.
@@ -96,14 +100,31 @@ public class VSShipAtmosphereFrameSpikeTest extends AbstractSharedVsClientE2ETes
      */
     private static final int ATMOSPHERE_GATE_WINDOW_TICKS = 100;
 
+    /**
+     * Wide enough for the ship AND its control cabin, which stand {@value #CABIN_INSET} blocks
+     * apart. This is the supported way to need more room: a scenario whose structures do not fit
+     * declares a wider lane, rather than reaching past its plot into a neighbour's.
+     */
+    @Override
+    protected Plot.Lane lane() {
+        return new Plot.Lane(SHIP_LANE.originX, SHIP_LANE.originZ, 512, 512);
+    }
+
     @Test
     public void aSealedShipCabinDoesNotReachItsOwnCrew_documentsKnownBug() throws Exception {
 
+        // WHERE THIS SCENARIO STANDS IS ASKED FOR, NOT CHOSEN. Both structures come off the one
+        // plot, so the 400-block separation below is the only spatial fact this class still states.
+        final FixtureSite site = site();
+        final int bx = site.x, by = site.y, bz = site.z;
+        final int cx = plot().x(CABIN_INSET), cy = FixtureSite.OPEN_AIR_Y, cz = plot().z(CABIN_INSET);
+        anchor = new int[]{bx, by + 5, bz};
+
         // ── Control leg: the same cabin, in the plain world ───────────────────────────────
-        buildCabin(CX, CY, CZ);
-        String ctrlSeal = sealCabin(CX, CY, CZ);
+        buildCabin(cx, cy, cz);
+        String ctrlSeal = sealCabin(cx, cy, cz);
         int ctrlBlob = readInt(ctrlSeal, BLOB_SIZE);
-        String ctrlAtm = atmosphereAt(CX, CY, CZ);
+        String ctrlAtm = atmosphereAt(cx, cy, cz);
         System.out.println("[S1/control] seal=" + ctrlSeal + " atm=" + ctrlAtm);
         assertTrue("CONTROL: a vent in a sealed cabin in the plain world must seal a non-empty "
                         + "blob — otherwise nothing measured on the ship means anything (seal="
@@ -113,7 +134,7 @@ public class VSShipAtmosphereFrameSpikeTest extends AbstractSharedVsClientE2ETes
                         + ", raw=" + ctrlSeal + ")",
                 "PressurizedAir".equalsIgnoreCase(ctrlAtm));
 
-        String ctrlCached = cachedAtmosphereWithPlayerAt(CX + 0.5, CY, CZ + 0.5);
+        String ctrlCached = cachedAtmosphereWithPlayerAt(cx + 0.5, cy, cz + 0.5);
         System.out.println("[S1/control] cachedForPlayer=" + ctrlCached);
         assertTrue("CONTROL: the per-entity gate must see the seal for a player standing INSIDE "
                         + "the static cabin — this is the instrument the ship leg reads (cached="
@@ -124,10 +145,10 @@ public class VSShipAtmosphereFrameSpikeTest extends AbstractSharedVsClientE2ETes
         // Bring the client to the build site BEFORE assembling: a client near the ship is what
         // makes VS load it (a headless server alone never does), and one run that assembled with
         // the player still 400 blocks away at the control cabin left the registry empty.
-        exec("tp @a " + (BX + 0.5) + " " + (BY + 8) + " " + (BZ + 0.5) + " 0 0");
+        exec("tp @a " + (bx + 0.5) + " " + (by + 8) + " " + (bz + 0.5) + " 0 0");
         bot().waitTicks(20);
 
-        String assemble = assembleFixture(SITE);
+        String assemble = assembleFixture(site);
         System.out.println("[S1/ship] assemble=" + assemble);
         assertTrue("a with-pilot-seat build must route to a VS ship (no rocket): " + assemble,
                 assemble.contains("\"rocketCount\":0"));
@@ -308,7 +329,7 @@ public class VSShipAtmosphereFrameSpikeTest extends AbstractSharedVsClientE2ETes
      * own live world position (which is keyed off its SUBSPACE block and so never goes stale)
      * every time it is used.
      */
-    private int[] anchor = {BX, BY + 5, BZ};
+    private int[] anchor;
 
     /** The craft this spike assembled — the subject of every lookup, and never re-derived from a pose. */
     private String scenarioShipId;

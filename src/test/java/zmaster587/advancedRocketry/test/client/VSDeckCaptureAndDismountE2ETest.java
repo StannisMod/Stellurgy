@@ -129,7 +129,7 @@ public class VSDeckCaptureAndDismountE2ETest extends AbstractSharedVsClientE2ETe
 
     @Test
     public void aRealClientPlayerOnAGroundedDeckStaysOnItInsteadOfFallingThrough() throws Exception {
-        final FixtureSite site = FixtureSite.openAir(0, 3620, 3620);
+        final FixtureSite site = site();
         final int bx = site.x, by = site.y, bz = site.z;
 
         // Grounded on purpose: a freshly assembled ship has physics disabled, so it rests where it was
@@ -212,7 +212,7 @@ public class VSDeckCaptureAndDismountE2ETest extends AbstractSharedVsClientE2ETe
 
     @Test
     public void standingUpWhileHoveringKeepsTheShipUpAndThePilotOnTheDeck() throws Exception {
-        final FixtureSite site = FixtureSite.openAir(0, 3720, 3720);
+        final FixtureSite site = site();
         final int bx = site.x, by = site.y, bz = site.z;
 
         buildAndBoardShip(site);
@@ -324,7 +324,7 @@ public class VSDeckCaptureAndDismountE2ETest extends AbstractSharedVsClientE2ETe
 
     @Test
     public void aClientPlayerReturningToASavedShipStandsOnItsDeckInsteadOfFallingThrough() throws Exception {
-        final FixtureSite site = FixtureSite.openAir(0, 3820, 3820);
+        final FixtureSite site = site();
         final int bx = site.x, by = site.y, bz = site.z;
 
         // The maintainer's "old ships" are ones from a PRIOR SESSION - assembled, the world saved and
@@ -419,7 +419,7 @@ public class VSDeckCaptureAndDismountE2ETest extends AbstractSharedVsClientE2ETe
 
     @Test
     public void flyingIntoAShipsAirspaceWithoutStandingOnItDoesNotHijackTheCamera() throws Exception {
-        final FixtureSite site = FixtureSite.openAir(0, 3920, 3920);
+        final FixtureSite site = site();
         final int bx = site.x, by = site.y, bz = site.z;
 
         double[] ship = buildShip(site);
@@ -530,7 +530,7 @@ public class VSDeckCaptureAndDismountE2ETest extends AbstractSharedVsClientE2ETe
 
     @Test
     public void aHoveringShipKeepsHoveringAcrossAReloadInsteadOfFalling() throws Exception {
-        final FixtureSite site = FixtureSite.openAir(0, 4320, 4320);
+        final FixtureSite site = site();
         final int bx = site.x, by = site.y, bz = site.z;
 
         buildAndBoardShip(site);
@@ -618,7 +618,7 @@ public class VSDeckCaptureAndDismountE2ETest extends AbstractSharedVsClientE2ETe
 
     @Test
     public void standingUpFromASeatOnASteeplyTiltedShipKeepsThePilotOnTheDeck() throws Exception {
-        final FixtureSite site = FixtureSite.openAir(0, 4620, 4620);
+        final FixtureSite site = site();
         final int bx = site.x, by = site.y, bz = site.z;
 
         buildAndBoardShip(site);
@@ -699,7 +699,7 @@ public class VSDeckCaptureAndDismountE2ETest extends AbstractSharedVsClientE2ETe
     @Test
     public void aFreshlyDismountedPilotStaysCapturedWhenTheShipThenRollsNinetyDegrees() throws Exception {
         double h = Math.toRadians(90.0) / 2.0; // deck on its side (upY ~ 0)
-        assertDismountThenRollHolds(FixtureSite.openAir(0, 4720, 4720),
+        assertDismountThenRollHolds(site(),
                 Math.cos(h), Math.sin(h), -0.35, 0.35, "90deg");
     }
 
@@ -709,7 +709,7 @@ public class VSDeckCaptureAndDismountE2ETest extends AbstractSharedVsClientE2ETe
         // ~ -0.93, i.e. ~160deg - nearly inverted, the ex-pilot hanging below the deck). An EXACT 180deg is
         // the axis-angle singularity the controller cannot converge to, and a free spin to it is VS-damped
         // in a headless run - so the last few degrees to full inversion are a manual-playtest item.
-        assertDismountThenRollHolds(FixtureSite.openAir(0, 4820, 4820),
+        assertDismountThenRollHolds(site(),
                 0.17365, 0.98481, -1.01, -0.4, "past-vertical");
     }
 
@@ -815,7 +815,7 @@ public class VSDeckCaptureAndDismountE2ETest extends AbstractSharedVsClientE2ETe
 
     @Test
     public void enteringAndLeavingTheSeatOnAnInvertedShipWorks() throws Exception {
-        final FixtureSite site = FixtureSite.openAir(0, 4520, 4520);
+        final FixtureSite site = site();
         final int bx = site.x, by = site.y, bz = site.z;
 
         double[] ship = buildShip(site);
@@ -916,7 +916,7 @@ public class VSDeckCaptureAndDismountE2ETest extends AbstractSharedVsClientE2ETe
 
     @Test
     public void aSeatedPilotCanStillTurnTheShipWhenItIsInverted() throws Exception {
-        final FixtureSite site = FixtureSite.openAir(0, 4420, 4420);
+        final FixtureSite site = site();
         final int bx = site.x, by = site.y, bz = site.z;
 
         buildAndBoardShip(site);
@@ -1011,7 +1011,7 @@ public class VSDeckCaptureAndDismountE2ETest extends AbstractSharedVsClientE2ETe
 
     @Test
     public void aClientPlayerRidingASteeplyTiltedDeckHasStableCaptureAndCamera() throws Exception {
-        final FixtureSite site = FixtureSite.openAir(0, 4120, 4120);
+        final FixtureSite site = site();
         final int bx = site.x, by = site.y, bz = site.z;
 
         double[] ship = buildShip(site);
@@ -1100,7 +1100,7 @@ public class VSDeckCaptureAndDismountE2ETest extends AbstractSharedVsClientE2ETe
 
     @Test
     public void anInvertedShipsMovementAndCameraFramesStayConsistent() throws Exception {
-        final FixtureSite site = FixtureSite.openAir(0, 4020, 4020);
+        final FixtureSite site = site();
         final int bx = site.x, by = site.y, bz = site.z;
 
         double[] ship = buildShip(site);

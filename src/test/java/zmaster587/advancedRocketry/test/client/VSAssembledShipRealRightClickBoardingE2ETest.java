@@ -89,9 +89,6 @@ public class VSAssembledShipRealRightClickBoardingE2ETest extends AbstractShared
      * blocks. The seat block itself is identical in both variants.
      */
     private static final String VARIANT = "with-pilot-deck";
-    private static final FixtureSite SITE = FixtureSite.openAir(0, 2800, 2800);
-    /** The site owns the coordinates; these aliases keep the body below unchanged. */
-    private static final int BX = SITE.x, BY = SITE.y, BZ = SITE.z;
 
     /**
      * The use key's code. Mouse buttons enter {@code KeyBinding} as {@code -100 + button}, so RMB is
@@ -100,8 +97,6 @@ public class VSAssembledShipRealRightClickBoardingE2ETest extends AbstractShared
      */
     private static final int KEY_USE_ITEM = -99;
 
-    /** Where the fixture puts the seat before assembly; assembly carries it into the ship's subspace. */
-    private static final int BUILD_SEAT_X = BX + 3, BUILD_SEAT_Y = BY + 5, BUILD_SEAT_Z = BZ + 3;
 
     /**
      * Where the bot stands to board, as an offset from the seat's LIVE world position: on the deck
@@ -126,7 +121,14 @@ public class VSAssembledShipRealRightClickBoardingE2ETest extends AbstractShared
         int budget = (int) (40 * TestTimeouts.factor());
 
         // ---- ARRANGEMENT: build, assemble, and get the ship LOADED with the client present. ------
-        exec("tp @a " + (BX + 600) + " 120 " + (BZ + 600) + " 0 0");
+        // WHERE THIS SCENARIO STANDS IS ASKED FOR, NOT CHOSEN: the plot is this scenario's own, and
+        // the height is the open-air band because the site has no Y to pass.
+        final FixtureSite site = site();
+        final int bx = site.x, by = site.y, bz = site.z;
+        // Where the fixture puts the seat before assembly; assembly carries it into the ship's
+        // subspace. Derived from the allocated base, never written as an address.
+        final int buildSeatX = bx + 3, buildSeatY = by + 5, buildSeatZ = bz + 3;
+        exec("tp @a " + (bx + 600) + " 120 " + (bz + 600) + " 0 0");
         bot().waitTicks(10);
 
         // The mark is taken BEFORE the assembly is queued, so the registry record that follows is
@@ -136,13 +138,13 @@ public class VSAssembledShipRealRightClickBoardingE2ETest extends AbstractShared
         // for. A red now says which of the two never happened.
         Events events = events();
         long spawnMark = events.markInstrumented();
-        String assemble = assembleFixture(SITE, VARIANT);
+        String assemble = assembleFixture(site, VARIANT);
         scenario().requireArranged("a " + VARIANT + " build must route to a ship: " + assemble,
                 assemble.contains("\"ok\":true"));
         shipUuid = awaitShipSpawned(events, spawnMark, "the assembly must create a VS ship in the"
                 + " queryable registry before anything can be aimed at it (the spawn is asynchronous)");
 
-        exec("tp @a " + (BX + 0.5) + " " + (BY + 8) + " " + (BZ + 0.5) + " 0 0");
+        exec("tp @a " + (bx + 0.5) + " " + (by + 8) + " " + (bz + 0.5) + " 0 0");
         bot().waitTicks(20);
         double yRest = Double.NaN;
         String atBase = "";
@@ -248,7 +250,7 @@ public class VSAssembledShipRealRightClickBoardingE2ETest extends AbstractShared
         String aimDiag = " observedPlayer=(" + px + "," + py + "," + pz + ")"
                 + " seatWorld=" + java.util.Arrays.toString(seatWorld)
                 + " seatSubspace=(" + seatSubX + "," + seatSubY + "," + seatSubZ + ")"
-                + " buildSeat=(" + BUILD_SEAT_X + "," + BUILD_SEAT_Y + "," + BUILD_SEAT_Z + ")"
+                + " buildSeat=(" + buildSeatX + "," + buildSeatY + "," + buildSeatZ + ")"
                 + " distSq=" + distSq + " mouseOver=" + aim + " findSeat=" + found;
 
         scenario().requireArranged("the bot must OBSERVABLY stand within the server's interaction reach "

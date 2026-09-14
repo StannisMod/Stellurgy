@@ -149,14 +149,21 @@ public final class FixtureSite {
         // from inside either test and surfaces much later as somebody else's craft gone missing.
         // A site whose coordinates were chosen by hand has no plot to be checked against, and says
         // so by being unchecked; that is the state this whole seam exists to retire.
-        if (plot != null && !plot.containsBox(x1, z1, x2, z2)) {
-            ArrangementFailure.arrangementFailed(
-                    what + " — the working area (" + x1 + "," + z1 + ")..(" + x2 + "," + z2 + ")"
-                            + " leaves this scenario's own plot " + plot + ". halo=" + halo
-                            + " and this plot holds at most " + plot.maxHalo() + "; a scenario that"
-                            + " needs more room declares a WIDER LANE, because the alternative is"
-                            + " clearing a strip of a neighbouring scenario's world and neither test"
-                            + " can see that happen");
+        if (plot != null) {
+            if (!plot.containsBox(x1, z1, x2, z2)) {
+                ArrangementFailure.arrangementFailed(
+                        what + " — the working area (" + x1 + "," + z1 + ")..(" + x2 + "," + z2 + ")"
+                                + " leaves this scenario's own plot " + plot + ". halo=" + halo
+                                + " and a fixture standing at " + x + "," + z + " on this plot may"
+                                + " clear at most " + plot.maxHaloAt(x, z) + "; a scenario that"
+                                + " needs more room declares a WIDER LANE, because the alternative"
+                                + " is clearing a strip of a neighbouring scenario's world and"
+                                + " neither test can see that happen");
+            }
+            // AND NOT INTO A STRUCTURE THIS SAME SCENARIO ALREADY BUILT. The check above keeps the
+            // volume inside one plot; a scenario standing two fixtures on that plot can still put
+            // them through each other, which is the identical defect one level down.
+            plot.claimWorkingVolume(x, z, x1, z1, x2, z2, what);
         }
         String reply = probe.exec("artest fill " + dim
                 + " " + x1 + " " + y1 + " " + z1
