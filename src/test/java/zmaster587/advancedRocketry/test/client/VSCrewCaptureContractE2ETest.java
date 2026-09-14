@@ -64,6 +64,8 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
 
     /** The hull's angular rate, read beside a body that is supposed to be resting on it. */
     private static final Pattern OMEGA_AT_HULL = Pattern.compile("\"omega\":(-?[0-9.E\\-]+)");
+    private static final Pattern BODY_SHIP_FRAME_Y =
+            Pattern.compile("\"bodyShipFrameY\":(-?[0-9.E\\-]+)");
 
     /** The body's OWN motion and the velocity the substrate holds for it — the two candidate
      *  writers, read together because a body drifting for either reason looks the same. */
@@ -575,13 +577,26 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
         // window the jump owns. Comparing a JVM-lifetime `lastDropReason` before and after — what
         // this did — is blind to a release whose reason equals the previous one, which on a repeated
         // gate is the likeliest case there is.
+        // SAMPLED IN THE FRAME THE JUMP HAPPENS IN, beside the world one rather than instead of it.
+        //
+        // `playerY` alone cannot answer "did he jump": the deck under him is a hovering craft with
+        // its own vertical drift, so a world-frame arc is the jump PLUS whatever the ship did, and
+        // the two cannot be separated afterwards. Measured 2026-09-14 across three runs of this
+        // scenario, world-frame rises of 0.70, 0.27 and 0.21 blocks — and since production's support
+        // probe reaches 0.30, a run at 0.21 never lifted the body off its own deck at all and went
+        // green having exercised nothing. Whether that was a weak jump or a sinking ship is exactly
+        // what the world frame cannot say.
+        //
+        // The ship-frame reading is production's own (`bodyShipFrameY`, the body's live position
+        // mapped into the ship's frame), read through the gate probe. It costs a round trip per
+        // sample and no ticks, so the arc's pacing is unchanged.
         long jumpMark = client.mark();
         bot().holdKey(Keyboard.KEY_SPACE);
         StringBuilder arc = new StringBuilder();
         for (int t = 0; t < 3; t++) {
             bot().waitTicks(2);
-            arc.append(String.format(java.util.Locale.ROOT, "[t%d y=%.2f] ",
-                    t * 2, bot().reportState().get("playerY").getAsDouble()));
+            arc.append(String.format(java.util.Locale.ROOT, "[t%d y=%.2f sub=%.2f] ",
+                    t * 2, bot().reportState().get("playerY").getAsDouble(), jumperShipFrameY()));
         }
         bot().releaseKey(Keyboard.KEY_SPACE);
         // THE LINK THAT CLOSES THIS WINDOW, where fourteen more sampled ticks used to stand. The
@@ -596,8 +611,8 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
         // window is over.
         for (int t = 3; t < 6; t++) {
             bot().waitTicks(2);
-            arc.append(String.format(java.util.Locale.ROOT, "[t%d y=%.2f] ",
-                    t * 2, bot().reportState().get("playerY").getAsDouble()));
+            arc.append(String.format(java.util.Locale.ROOT, "[t%d y=%.2f sub=%.2f] ",
+                    t * 2, bot().reportState().get("playerY").getAsDouble(), jumperShipFrameY()));
         }
         client.awaitCarrying(jumpMark, "deck_contact", "\"ship\":\"" + scenarioShipId + "\"",
                 "a vertical jump on a hovering ship must LAND BACK on this ship's deck — the "
@@ -2547,6 +2562,20 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
         return bot().readStaticField(className, field).get("value").getAsString();
     }
 
+    /**
+     * The jumper's own position in his ship's frame, live, or {@code NaN} when nothing resolves it.
+     *
+     * <p>{@code bodyShipFrameY} and not {@code shipFrameY}: the second is the CAPTURE's bookkeeping
+     * and only moves when the resolver commits, so a body mid-jump reads as perfectly still on it.
+     * The first is derived from the entity's own position every time it is asked, which is what a
+     * trajectory needs. {@code NaN} rather than a refusal: this is a diagnostic inside an arc, and a
+     * reading that is missing for one sample must not end the scenario.</p>
+     */
+    private double jumperShipFrameY() throws Exception {
+        Matcher m = BODY_SHIP_FRAME_Y.matcher(exec("artest vs deck-capture"));
+        return m.find() ? Double.parseDouble(m.group(1)) : Double.NaN;
+    }
+
     private double clientDouble(String className, String field) throws Exception {
         return Double.parseDouble(clientString(className, field));
     }
@@ -2605,6 +2634,20 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
         assertTrue("chunk warmup failed",
                 exec("artest chunk warmup 0 " + cx1 + " " + cz1 + " " + cx2 + " " + cz2)
                         .contains("\"ok\":true"));
+        // THIS IS A SHAFT, NOT A CLEARING, and the class is staged in terrain because of it. The
+        // hole is `baseY+1..baseY+10` at a hard-coded `baseY = 64` while the surface at these plots
+        // is around y≈72, so what it digs is a ten-block pit with rock on every side and a RIM that
+        // sits above the hull. Measured here 2026-09-14, the release record that made it visible:
+        //   reason=steppedOntoTerrain y=75.3035 onGround=false motionY=0.318
+        //   worldSupport=true shipSupport=0 underFeet="1:[75.0000..76.0000]"
+        // — one box, integer bounds, exactly one block tall: the first UNCLEARED block above the
+        // pit. The craft hovers two blocks up, its deck lands at ~74.4, and a crew member who jumps
+        // puts his feet in the ceiling. The gate then says, correctly, that world terrain is under
+        // him and lets the deck go while he is standing on his own ship.
+        //
+        // Deepening the hole was tried and is NOT the fix: a craft assembled in mid-air is a physics
+        // body that settles, so raising this class means BUILDING THE PLATFORM it rests on and
+        // moving the plots into open air — a migration, not a bigger number here.
         assertTrue("pre-clear failed",
                 exec("artest fill 0 " + (baseX - 2) + " " + (baseY + 1) + " " + (baseZ - 2)
                         + " " + (baseX + 7) + " " + (baseY + 10) + " " + (baseZ + 7) + " minecraft:air")
