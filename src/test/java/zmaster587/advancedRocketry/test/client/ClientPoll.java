@@ -39,6 +39,56 @@ public final class ClientPoll {
         void waitTicks(int ticks) throws Exception;
     }
 
+    /**
+     * A WINDOW, not a poll: take {@code samples} readings {@code ticksBetween} client ticks apart and
+     * hand back every one of them. No predicate, no early exit, nothing to be satisfied.
+     *
+     * <h2>Why this exists beside {@link #until}</h2>
+     *
+     * <p>{@link #until} exits the moment its predicate holds, and for the question it was written for
+     * — <i>has the ship started turning</i>, <i>has it climbed two blocks</i>, <i>is there a ship in
+     * the registry</i> — that is exactly right: those are LATCHING. Once true they stay true, so the
+     * first observation that sees it is as good as any later one.</p>
+     *
+     * <p><b>A predicate that can be satisfied TRANSIENTLY is the opposite, and an early exit there is
+     * a defect rather than an optimisation.</b> Ask "has the rate fallen below X" of a quantity that
+     * OSCILLATES and the loop stops at the first trough — which is not the same fact as "it came to
+     * rest", and nothing downstream can tell the two apart.</p>
+     *
+     * <p><i>Measured 2026-09-14</i>, on the one site in this suite that had that shape. A brake was
+     * polled with {@code omega <= 0.05}; it reported satisfied at iteration 103 with 0.0377, while
+     * its own sampled trajectory over the same window read 0.219, 0.288, 0.372, 0.123, <b>0.393</b> —
+     * a rate that was rising, sampled at a dip three iterations later. The scenario went green on a
+     * ship that had plainly not stopped, and the run that reddened differed only in whether a sample
+     * happened to land in a trough.</p>
+     *
+     * <p>So the question "did it stop AND stay stopped" is asked of the whole window: take the
+     * readings, and let the caller assert on the WORST of them. The window cannot end early, which is
+     * the only property that makes that assertion mean anything.</p>
+     *
+     * <p>Samples immediately, so the first reading costs no ticks — the window is then at least
+     * {@code (samples - 1) * ticksBetween} client ticks, and more on a slow box, which is the
+     * harmless direction. The tick counts are how much WORLD the window covers and are therefore
+     * NEVER scaled by the harness's load factor: scaling them would make the same test a different
+     * experiment on every machine.</p>
+     */
+    public static <T> java.util.List<T> observe(Step step, Probe<T> probe,
+                                                int samples, int ticksBetween) throws Exception {
+        if (samples <= 0) {
+            throw new IllegalArgumentException("samples must be > 0, was " + samples);
+        }
+        if (ticksBetween <= 0) {
+            throw new IllegalArgumentException("ticksBetween must be > 0, was " + ticksBetween);
+        }
+        java.util.List<T> readings = new java.util.ArrayList<T>(samples);
+        readings.add(probe.read());
+        for (int i = 1; i < samples; i++) {
+            step.waitTicks(ticksBetween);
+            readings.add(probe.read());
+        }
+        return readings;
+    }
+
     /** Reads the observed value once (a client static, {@code reportState}, or a server probe). */
     @FunctionalInterface
     public interface Probe<T> {

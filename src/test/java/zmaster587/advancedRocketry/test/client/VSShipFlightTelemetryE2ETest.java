@@ -57,6 +57,31 @@ public class VSShipFlightTelemetryE2ETest extends AbstractSharedVsClientE2ETest 
     private static final Pattern POS_Z = Pattern.compile("\"posZ\":(-?[0-9.E\\-]+)");
     private static final Pattern VEL_Y = Pattern.compile("\"velY\":(-?[0-9.E\\-]+)");
     private static final Pattern OMEGA = Pattern.compile("\"omega\":(-?[0-9.E\\-]+)");
+
+    /**
+     * Client ticks the brake is given to act before anything is judged.
+     *
+     * <p>300 is the budget this scenario has always given it — the replaced poll's single-fork
+     * ceiling was 150 iterations two ticks apart. It is kept unchanged on purpose: the instrument is
+     * what is being fixed here, and moving the allowance in the same change would confound "the
+     * question is now askable" with "the question got easier".</p>
+     *
+     * <p>A TICK COUNT, so it is never scaled by the harness's load factor. It says how much WORLD the
+     * brake gets, not how long we are willing to wait for an answer.</p>
+     */
+    private static final int BRAKE_SETTLE_TICKS = 300;
+
+    /**
+     * The hold that decides: how many readings, and how far apart in client ticks.
+     *
+     * <p>Sized from the oscillation it has to outlast rather than picked. Measured 2026-09-14, the
+     * rate swung from 0.123 to 0.393 within 25 poll iterations of two ticks each — one visible swing
+     * is on the order of fifty ticks — so a hold of {@code (10 - 1) * 10 = 90} ticks spans well over
+     * a full swing and cannot be straddled by a single trough.</p>
+     */
+    private static final int HOLD_SAMPLES = 10;
+    /** @see #HOLD_SAMPLES */
+    private static final int HOLD_TICKS_BETWEEN = 10;
     private static final Pattern DUMMY_ID = Pattern.compile("\"dummyId\":(-?\\d+)");
     private static final Pattern SEAT_X = Pattern.compile("\"seatX\":(-?\\d+)");
     private static final Pattern SEAT_Y = Pattern.compile("\"seatY\":(-?\\d+)");
@@ -151,8 +176,12 @@ public class VSShipFlightTelemetryE2ETest extends AbstractSharedVsClientE2ETest 
         assertTrue("a raw mouse delta must deflect the client's flight cursor (got "
                 + cursorDeflected + ")", Math.abs(cursorDeflected) > 0.2);
 
-        // Event-gated: poll omega until the deflected cursor has actually spun the ship up (load-scaled
-        // ceiling + early exit; a fixed 60-iteration budget can under-observe under concurrent-fork load).
+        // Poll omega until the deflected cursor has actually spun the ship up. This one STAYS a poll,
+        // and the reason is the shape of its question rather than habit: "has it started turning" is
+        // LATCHING — the first observation that sees the rate above the line records a fact that
+        // cannot un-happen, so exiting there is exiting on the answer. Contrast the brake below,
+        // where "has it fallen below the line" can be true for one sample of a rate that is rising,
+        // and an early exit is therefore a way to miss the subject rather than a way to save ticks.
         ClientPoll.Result<Double> spin = ClientPoll.until(bot()::waitTicks,
                 () -> readDouble(shipInfo(), OMEGA),
                 o -> o >= 0.05, 2, 60);
@@ -169,32 +198,36 @@ public class VSShipFlightTelemetryE2ETest extends AbstractSharedVsClientE2ETest 
         assertTrue("the client's flight cursor must return to centre (got " + cursorCentred + ")",
                 Math.abs(cursorCentred) < CURSOR_DEADZONE);
 
-        // With the cursor centred the controller must brake the ship to rest. Load-scaled, like the
-        // spin-UP poll twenty lines above — this was the one fixed budget left in the pair, and a
-        // brake that needs a few more ticks under fork load is not a ship that failed to stop.
+        // With the cursor centred the controller must brake the ship to rest — and STAY at rest. That
+        // second half is the contract, and it is why this is a WINDOW and not a poll.
         //
-        // Sampled as a TRAJECTORY, not as one number at the end. A single residual rate cannot tell
-        // apart the three states production can be in here, and they are three different faults: a
-        // rate still FALLING steeply is a brake that wanted longer than the budget; a rate that
-        // PLATEAUS is a ship still EXECUTING a rotation command, because the computer holds the last
+        // It used to be `ClientPoll.until(..., o -> o <= 0.05, ...)`, and that predicate can be
+        // satisfied by a TROUGH. An early exit is right for a latching question (has it started
+        // turning, has it climbed two blocks) because such a fact cannot un-happen; "the rate is
+        // below X" of an oscillating quantity is the opposite, and the loop stops at the first dip.
+        // Measured 2026-09-14: the poll reported satisfied at iteration 103 with omega=0.0377 while
+        // its own trajectory over that same window read 0.219, 0.288, 0.372, 0.123, 0.393 — rising,
+        // sampled at a dip. The scenario went GREEN on a ship that had plainly not stopped, and the
+        // run that reddened differed from it only in whether a sample landed in a trough.
+        //
+        // So: give the brake the ticks it has always had, then WATCH. The window cannot end early,
+        // the assertion is on the WORST reading in it, and the whole trajectory goes into the
+        // message — a rate still FALLING steeply is a brake that wanted longer; one that PLATEAUS or
+        // climbs is a ship still EXECUTING a rotation command, because the computer holds the last
         // input it was handed and a "stop" that never landed leaves it turning at whatever
-        // deflection did; a rate creeping down smoothly with no floor is no braking torque at all,
-        // only the substrate's own damping. The samples are what lets the reader of a red say which
-        // of the three he is looking at, and they cost one append per twenty-fifth poll.
+        // deflection did; one creeping down with no floor is no braking torque at all, only the
+        // substrate's own damping.
+        bot().waitTicks(BRAKE_SETTLE_TICKS);
+        java.util.List<Double> hold = ClientPoll.observe(bot()::waitTicks,
+                () -> readDouble(shipInfo(), OMEGA), HOLD_SAMPLES, HOLD_TICKS_BETWEEN);
         StringBuilder omegaTrace = new StringBuilder();
-        int[] polls = {0};
-        ClientPoll.Result<Double> braked = ClientPoll.until(bot()::waitTicks,
-                () -> {
-                    double omegaNow = readDouble(shipInfo(), OMEGA);
-                    int poll = polls[0]++;
-                    if (poll % 25 == 0) {
-                        omegaTrace.append(poll == 0 ? "" : " ").append(poll).append(':')
-                                .append(Math.round(omegaNow * 1000.0) / 1000.0);
-                    }
-                    return omegaNow;
-                },
-                o -> o <= 0.05, 2, 150);
-        double settled = braked.value;
+        double settled = 0.0;
+        for (int i = 0; i < hold.size(); i++) {
+            double omegaNow = hold.get(i);
+            settled = Math.max(settled, omegaNow);
+            omegaTrace.append(i == 0 ? "" : " ").append(i * HOLD_TICKS_BETWEEN).append("t:")
+                    .append(Math.round(omegaNow * 1000.0) / 1000.0);
+        }
         // Every control packet this computer ACCEPTED since before the centring began. The recorder
         // sits on setPilotInput, which the seat calls only after its own pilot guard, so a record
         // here is a packet the server took — and a stream that stops while the cursor was still
@@ -206,8 +239,9 @@ public class VSShipFlightTelemetryE2ETest extends AbstractSharedVsClientE2ETest 
         // NOT Events.lastField: that reads STRING fields ("k":"v") and a record's tick is a bare
         // number, so it would answer null for a stream that is plainly there.
         String lastAcceptedTick = lastNumericField(pilotInputs, "tick");
-        System.out.println("[tier2] omega spinning=" + spinning + " settled=" + settled
-                + " poll=" + braked + " trace=[" + omegaTrace + "]"
+        System.out.println("[tier2] omega spinning=" + spinning + " worstInHold=" + settled
+                + " settle=" + BRAKE_SETTLE_TICKS + "t hold=" + HOLD_SAMPLES + "x"
+                + HOLD_TICKS_BETWEEN + "t trace=[" + omegaTrace + "]"
                 + " pilotInputsAcceptedSinceCentring=" + accepted
                 + " lastAcceptedTick=" + lastAcceptedTick);
         // The controller read-back that used to be printed here is GONE, and its absence is the
@@ -216,15 +250,19 @@ public class VSShipFlightTelemetryE2ETest extends AbstractSharedVsClientE2ETest 
         // client that is frequently a different craft. It answered a different question from the
         // one this scenario asks, it was never asserted on, and production allocated an array on
         // every physics step to keep it fed. `ship-info` below is asked about THIS ship.
-        assertTrue("with the flight cursor centred the ship must STOP turning, not coast: it was "
-                + "spinning at " + spinning + " rad/s and is still at " + settled
-                + " after " + braked
-                + ". Its rate through the brake window, every 25th poll: [" + omegaTrace + "]"
-                + " — a rate that PLATEAUS is a ship still executing a rotation command, not one"
-                + " failing to coast to a stop. The computer accepted " + accepted + " pilot inputs"
-                + " since before the cursor was centred (the last at tick " + lastAcceptedTick
-                + "), and the idle that says 'stop' is sent ONCE, on the tick the cursor enters the"
-                + " dead-zone: a stream that ends before then never carried it.",
+        assertTrue("with the flight cursor centred the ship must STOP turning AND STAY stopped, not"
+                + " coast: it was spinning at " + spinning + " rad/s, and after "
+                + BRAKE_SETTLE_TICKS + " ticks to brake its WORST rate across the following "
+                + ((HOLD_SAMPLES - 1) * HOLD_TICKS_BETWEEN) + "-tick hold was " + settled
+                + ". The whole hold, by tick offset: [" + omegaTrace + "]"
+                + " — a rate that PLATEAUS or climbs is a ship still executing a rotation command,"
+                + " not one failing to coast to a stop. This is the WORST of the hold and not the"
+                + " first reading under the line, deliberately: the earlier form exited on its first"
+                + " dip and passed this scenario on a ship whose rate was rising. The computer"
+                + " accepted " + accepted + " pilot inputs since before the cursor was centred (the"
+                + " last at tick " + lastAcceptedTick + "), and the idle that says 'stop' is sent"
+                + " ONCE, on the tick the cursor enters the dead-zone: a stream that ends before"
+                + " then never carried it.",
                 settled <= 0.05);
 
         exec("artest player dismount");
