@@ -25,6 +25,7 @@ import zmaster587.advancedRocketry.space.TerrainHeightFinder;
 import zmaster587.advancedRocketry.test.Chains;
 import zmaster587.advancedRocketry.test.Events;
 import zmaster587.advancedRocketry.test.FixtureSite;
+import zmaster587.advancedRocketry.test.Plot;
 import zmaster587.advancedRocketry.test.client.ClientEvents;
 
 import static org.junit.Assert.assertEquals;
@@ -138,10 +139,31 @@ public class M1PlanetToPlanetMilestoneE2ETest {
     /** A jump-capable craft with a walkable deck: the ship this milestone is about. */
     private static final String VARIANT = "with-jump-drive";
 
-    /** Far from every other fixture site, so a stray ship from another run can never be read here. */
-    private static final FixtureSite SITE = FixtureSite.openAir(0, 8400, 8400);
+    /**
+     * This milestone's own patch of world.
+     *
+     * <p><b>The lane keeps the coordinates this test's green runs were taken on</b> — 8400/8400,
+     * chosen to be far from every other fixture site so a stray ship from another run can never be
+     * read here — while the SITE inside it is allocated rather than typed. What that buys is the
+     * pair of refusals the plot carries: the volume this fixture clears is asserted to lie inside
+     * the plot, and a second structure on it could not reach into the first. This class boots its
+     * own server and runs one scenario, so index 0 is the whole allocation it will ever need.</p>
+     *
+     * <p>Not static: a plot records the ground its scenario has cleared, and that record belongs to
+     * the test instance that made it, not to the JVM.</p>
+     *
+     * <p><b>The lane origin is the proven coordinate MINUS the inset, and the subtraction is the
+     * point.</b> A lane names a plot's corner; a site stands {@link Plot#FIXTURE_INSET} blocks
+     * inside it, so writing the proven number as the ORIGIN would build the craft twenty blocks
+     * away from where every green run put it, silently.</p>
+     */
+    private static final int PROVEN_X = 8400, PROVEN_Z = 8400;
+    /** @see #plot */
+    private final Plot plot = Plot.forScenario(0, "the milestone's craft", 0,
+            new Plot.Lane(PROVEN_X - Plot.FIXTURE_INSET, PROVEN_Z - Plot.FIXTURE_INSET, Plot.SIZE));
+    private final FixtureSite site = plot.site();
     /** The site owns the coordinates; these aliases keep the body below unchanged. */
-    private static final int BX = SITE.x, BY = SITE.y, BZ = SITE.z;
+    private final int bx = site.x, by = site.y, bz = site.z;
 
     /**
      * The seeded atmosphere ceiling: the config key's own minimum. The ONE arrangement knob in this
@@ -309,7 +331,7 @@ public class M1PlanetToPlanetMilestoneE2ETest {
 
         // ---- LEG 1: stand the craft up on a pad. Blocks only — no interaction happens here. -----
         tLeg = System.currentTimeMillis();
-        exec("tp @a " + (BX + 600) + " 120 " + (BZ + 600) + " 0 0");
+        exec("tp @a " + (bx + 600) + " 120 " + (bz + 600) + " 0 0");
         bot().waitTicks(10);
         int[] builderPos = placeFixture();
         System.out.println("[M1] leg 1 (fixture placed) " + elapsed(tLeg)
@@ -1440,8 +1462,7 @@ public class M1PlanetToPlanetMilestoneE2ETest {
         // Walk up to the machine: two blocks south of it on the pad, face-on, well inside the
         // server's interaction reach.
         double standX = builderPos[0] + 0.5, standZ = builderPos[2] + 2.5;
-        exec("tp @a " + standX + " " + (BY + 1) + " " + standZ + " 0 0");
-        bot().waitTicks(20);
+        standOnThePad(standX, standZ, builderPos);
         emptyTheHand();
 
         // The builder's own stored energy, read before a single button is pressed. The fixture
@@ -1713,15 +1734,91 @@ public class M1PlanetToPlanetMilestoneE2ETest {
         // digging a shaft. The height covers the tallest variant in the catalogue plus the deck the
         // player walks to reach its console; the climb to the orbit line is production's business
         // and no pre-clear could cover it.
-        SITE.requireClear(this::exec, 2, 20,
+        site.requireClear(this::exec, 2, 20,
                 "the jump-capable craft, and the deck the player boards and works it from");
-        String fixture = exec("artest fixture rocket 0 " + BX + " " + BY + " " + BZ + " " + VARIANT);
+        String fixture = exec("artest fixture rocket 0 " + bx + " " + by + " " + bz + " " + VARIANT);
         requireArranged("fixture (" + VARIANT + ") failed: " + fixture,
                 fixture.contains("\"ok\":true"));
         Matcher bp = BUILDER_POS.matcher(fixture);
         requireArranged("fixture missing builderPos: " + fixture, bp.find());
         return new int[]{Integer.parseInt(bp.group(1)), Integer.parseInt(bp.group(2)),
                 Integer.parseInt(bp.group(3))};
+    }
+
+    /**
+     * How long the client is given to receive the pad it is standing on, in ticks.
+     *
+     * <p>A bounded poll and not a link, because what is being waited for is not a decision this game
+     * publishes: it is a chunk arriving over a socket. The blind spot is named at the failure — a
+     * budget that runs out cannot tell a slow client from a client that will never be sent the
+     * chunk, and the reply printed there is what distinguishes them.</p>
+     */
+    private static final int CLIENT_FLOOR_BUDGET_TICKS = 200;
+
+    /**
+     * Put the player on the launchpad AND ESTABLISH THAT HE IS ON IT — measured through the CLIENT,
+     * which is the side that decides whether he falls.
+     *
+     * <p><b>Why this is not a teleport and a wait.</b> Vanilla player movement is client
+     * authoritative: the server takes the position the client sends. After a long teleport the
+     * client has no blocks at the destination for some number of ticks, and a client with no blocks
+     * under it is falling — so the server is handed a fall and accepts it. The pad's chunk is
+     * force-loaded on the SERVER by {@code requireClear}; nothing in that says the client has it.</p>
+     *
+     * <p><b>This was invisible until the fixtures left the landscape.</b> At the old {@code y = 64}
+     * the pad rested ON the terrain, so a player who never received the pad came to rest at the same
+     * height anyway and every assertion downstream was satisfied. Lifting the site into the open-air
+     * band removed the floor that was doing the work, and the leg failed with the player 87 blocks
+     * below a machine the test's own prints show standing there with full energy. The arrangement
+     * was never right; it was being propped up by ground nobody had named.</p>
+     *
+     * <p>The FIRST read is taken before the teleport and is a control: the client is 600 blocks away
+     * at that point, so it must NOT have the pad. Without it, a green here could mean "the wait
+     * works" or "the client had the chunk all along", and those are different worlds.</p>
+     */
+    private void standOnThePad(double standX, double standZ, int[] builderPos) throws Exception {
+        final int floorX = builderPos[0], floorY = by, floorZ = builderPos[2] + 2;
+
+        JsonObject before = bot().blockState(floorX, floorY, floorZ);
+        System.out.println("[M1] client's view of the pad BEFORE the teleport (600 blocks away): "
+                + before);
+
+        exec("tp @a " + standX + " " + (by + 1) + " " + standZ + " 0 0");
+
+        JsonObject floor = null;
+        for (int attempt = 0; attempt < CLIENT_FLOOR_BUDGET_TICKS / 5; attempt++) {
+            bot().waitTicks(5);
+            floor = bot().blockState(floorX, floorY, floorZ);
+            if (floor.has("block") && floor.get("block").getAsString().contains("launchpad")) {
+                break;
+            }
+        }
+        requireArranged("the CLIENT must receive the launchpad it is being stood on before anything"
+                        + " is measured at the machine. Until it arrives the client sees air under"
+                        + " itself, falls, and the server takes the fall — the pad being present on"
+                        + " the SERVER is not the question. Asked at (" + floorX + "," + floorY + ","
+                        + floorZ + ") for " + CLIENT_FLOOR_BUDGET_TICKS + " ticks; last reply "
+                        + floor + ". A reply with \"loaded\":false is a chunk that never arrived,"
+                        + " which is a different failure from a block that arrived as something else",
+                floor != null && floor.has("block")
+                        && floor.get("block").getAsString().contains("launchpad"));
+        System.out.println("[M1] client has the pad: " + floor);
+
+        // Put him back on it. The first teleport happened while the client had nothing to stand on,
+        // so wherever he has fallen to is where he is; this is the one that lands on a floor both
+        // sides agree exists.
+        exec("tp @a " + standX + " " + (by + 1) + " " + standZ + " 0 0");
+        bot().waitTicks(20);
+
+        JsonObject state = bot().reportState();
+        // `playerY`, checked against the harness rather than assumed: a `y` that is absent reads as
+        // NaN, every comparison against NaN is false, and the assertion would then fail for the
+        // wrong reason — or, written the other way round, pass on a field nobody ever sent.
+        double y = state.has("playerY") ? state.get("playerY").getAsDouble() : Double.NaN;
+        requireArranged("and he must STAY on it: the client reports y=" + y + " where the pad's"
+                        + " surface is " + (by + 1) + ". Still falling here means the floor arrived"
+                        + " and something else is taking him off it. state=" + state,
+                Math.abs(y - (by + 1)) < 1.5);
     }
 
     /** Server-side clear plus a client-observed empty hand (a held stack eats the use press). */
