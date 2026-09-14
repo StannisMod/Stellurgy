@@ -19,6 +19,22 @@ import static org.junit.Assert.assertTrue;
  */
 public class AtmosphereOxygenSmokeTest extends AbstractHeadlessServerTest {
 
+    /**
+     * The Y every block in this class is placed at: the open-air band, not terrain.
+     *
+     * <p>It was a hard-coded 70 until 2026-09-14, and nothing in this class ever wanted the ground.
+     * What 70 actually bought was whatever the pinned seed rolled at each plot — the surface on this
+     * seed runs y=64..99 across the sites in use, so a block at 70 stood in the open at one and
+     * inside rock at the next, and the per-scenario clears below turned the second into a pocket.
+     * A pocket happens to satisfy every assertion here, which is exactly why it could sit unnoticed:
+     * the landscape was never in the story. In the band there is nothing to be inside of.</p>
+     *
+     * <p>The small clears each scenario still does are NOT this; they are about a block's own
+     * neighbours — air on the detector's sample faces, a solid support under the torch — and they
+     * stay.</p>
+     */
+    private static final int SITE_Y = zmaster587.advancedRocketry.test.FixtureSite.OPEN_AIR_Y;
+
     @Test
     public void earthDensityZeroFlipsAtmosphereToVacuum() throws Exception {
         String baseline = String.join("\n", client().execute("artest atmosphere get 0 0 70 0"));
@@ -56,7 +72,7 @@ public class AtmosphereOxygenSmokeTest extends AbstractHeadlessServerTest {
      */
     @Test
     public void atmosphereDetectorReportsCurrentAtmosphereOnRedstone() throws Exception {
-        int bx = 1700, by = 70, bz = 1500;
+        int bx = 1700, by = SITE_Y,bz = 1500;
 
         // Clear neighbours so the detector's sample loop sees AIR (any opaque
         // block on any face would suppress the AIR branch). 3×3×3 air around
@@ -123,7 +139,7 @@ public class AtmosphereOxygenSmokeTest extends AbstractHeadlessServerTest {
      */
     @Test
     public void co2ScrubberRemovesCo2InSealedRoom() throws Exception {
-        int bx = 1700, by = 70, bz = 1600;
+        int bx = 1700, by = SITE_Y,bz = 1600;
 
         // Clear neighbours so the place doesn't replace an arbitrary block.
         ok(client().execute("artest fill 0 " + (bx - 1) + " " + (by - 1) + " " + (bz - 1)
@@ -181,7 +197,7 @@ public class AtmosphereOxygenSmokeTest extends AbstractHeadlessServerTest {
      */
     @Test
     public void gasChargePadFillsSuitTank() throws Exception {
-        int bx = 1700, by = 70, bz = 1700;
+        int bx = 1700, by = SITE_Y,bz = 1700;
 
         ok(client().execute("artest fill 0 " + (bx - 1) + " " + (by - 1) + " " + (bz - 1)
                 + " " + (bx + 1) + " " + (by + 1) + " " + (bz + 1) + " minecraft:air"));
@@ -267,7 +283,7 @@ public class AtmosphereOxygenSmokeTest extends AbstractHeadlessServerTest {
      */
     @Test
     public void torchExtinguishesInLowOxygenConfig() throws Exception {
-        int bx = 1700, by = 70, bz = 1800;
+        int bx = 1700, by = SITE_Y,bz = 1800;
 
         // Clear neighbourhood so torch placement isn't refused for lack of a
         // valid floor block.

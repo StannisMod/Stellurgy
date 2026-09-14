@@ -8,6 +8,7 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 import zmaster587.advancedRocketry.test.Events;
+import zmaster587.advancedRocketry.test.FixtureSite;
 
 import static org.junit.Assert.assertTrue;
 
@@ -48,7 +49,9 @@ public class VSShipFrameShieldE2ETest extends AbstractSharedVsClientE2ETest {
     private static final Pattern ENTITY_ID = Pattern.compile("\"entityId\":(-?\\d+)");
 
     private static final String VARIANT = "with-shield-emitter";
-    private static final int BX = 5200, BY = 64, BZ = 5200;
+    private static final FixtureSite SITE = FixtureSite.openAir(0, 5200, 5200);
+    /** The site owns the coordinates; these aliases keep the body below unchanged. */
+    private static final int BX = SITE.x, BY = SITE.y, BZ = SITE.z;
 
     /** A deadline for the emitter's frame DECISION — the tile loads in the ship's subspace chunk,
      *  looks the managing ship up and its frame becomes ready once the hull is loaded on this side.
@@ -70,7 +73,7 @@ public class VSShipFrameShieldE2ETest extends AbstractSharedVsClientE2ETest {
         Events events = events();
         long spawnMark = events.markInstrumented();
 
-        String assemble = assembleFixture(BX, BY, BZ);
+        String assemble = assembleFixture(SITE);
         assertTrue("a with-shield-emitter build must route to a ship: " + assemble,
                 assemble.contains("\"rocketCount\":0"));
         // The identity, from the registry's record of THIS assembly's own add.
@@ -277,15 +280,16 @@ public class VSShipFrameShieldE2ETest extends AbstractSharedVsClientE2ETest {
         return v * v;
     }
 
-    private String assembleFixture(int baseX, int baseY, int baseZ) throws Exception {
-        int cx1 = (baseX - 2) >> 4, cz1 = (baseZ - 2) >> 4;
-        int cx2 = (baseX + 7) >> 4, cz2 = (baseZ + 7) >> 4;
-        assertTrue("chunk warmup failed",
-                exec("artest chunk warmup 0 " + cx1 + " " + cz1 + " " + cx2 + " " + cz2).contains("\"ok\":true"));
-        assertTrue("pre-clear failed",
-                exec("artest fill 0 " + (baseX - 2) + " " + (baseY + 1) + " " + (baseZ - 2)
-                        + " " + (baseX + 7) + " " + (baseY + 10) + " " + (baseZ + 7) + " minecraft:air")
-                        .contains("\"ok\":true"));
+    private String assembleFixture(FixtureSite site) throws Exception {
+        // The site owns the coordinates; these aliases keep the body below unchanged.
+        final int baseX = site.x, baseY = site.y, baseZ = site.z;
+        // FIRST link: the volume the hull and its shield shell occupy is EMPTY, measured by the air
+        // fill's own `placed`. The site stands in open air, so this ASSERTS rather than digs — and
+        // the ten-block shaft it replaces was a hazard for this subject in particular: a shell whose
+        // radius is checked against blocks is checked against the pit's walls as readily as against
+        // the craft. The fill force-loads every chunk in the box, so the warmup lost nothing.
+        site.requireClear(this::exec, 2, 20,
+                "the hull, and the shell the emitter projects around it");
         String fixture = exec("artest fixture rocket 0 " + baseX + " " + baseY + " " + baseZ + " " + VARIANT);
         assertTrue("fixture (" + VARIANT + ") failed: " + fixture, fixture.contains("\"ok\":true"));
         Matcher bp = BUILDER_POS.matcher(fixture);

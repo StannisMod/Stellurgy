@@ -141,10 +141,15 @@ public class VSRiderKeepsHisMountAtCruiseE2ETest extends AbstractSharedVsClientE
         scenario().requireArranged("empty cell setup must succeed: " + setup, readBool(setup, "ok"));
         int dim = readInt(setup, "originDim");
 
-        int bx = 40, by = 64, bz = 40;
-        scenario().requireArranged("chunk warmup failed",
-                readBool(exec("artest chunk warmup " + dim + " " + ((bx - 2) >> 4) + " " + ((bz - 2) >> 4)
-                        + " " + ((bx + 7) >> 4) + " " + ((bz + 7) >> 4)), "ok"));
+        // The cell is a void world, so this is not about escaping terrain — it is about ONE
+        // definition of where a fixture stands instead of a 64 nobody chose. The first link still
+        // earns its place: it MEASURES that the cell is empty rather than taking the setup probe's
+        // word for it.
+        final zmaster587.advancedRocketry.test.FixtureSite site =
+                zmaster587.advancedRocketry.test.FixtureSite.openAir(dim, 40, 40);
+        int bx = site.x, by = site.y, bz = site.z;
+        site.requireClear(this::exec, 2, 16,
+                "the craft whose rider must stay aboard through the cruise");
 
         String fixture = exec("artest fixture rocket " + dim + " " + bx + " " + by + " " + bz
                 + " with-pilot-seat");

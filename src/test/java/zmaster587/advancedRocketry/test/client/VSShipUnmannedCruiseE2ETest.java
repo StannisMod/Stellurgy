@@ -10,6 +10,7 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 import zmaster587.advancedRocketry.test.Events;
+import zmaster587.advancedRocketry.test.FixtureSite;
 
 import static org.junit.Assert.assertTrue;
 
@@ -41,7 +42,9 @@ public class VSShipUnmannedCruiseE2ETest extends AbstractSharedVsClientE2ETest {
     private static final Pattern DUMMY_ID = Pattern.compile("\"dummyId\":(-?\\d+)");
 
     private static final String VARIANT = "with-pilot-seat";
-    private static final int BX = 4800, BY = 64, BZ = 4800;
+    private static final FixtureSite SITE = FixtureSite.openAir(0, 4800, 4800);
+    /** The site owns the coordinates; these aliases keep the body below unchanged. */
+    private static final int BX = SITE.x, BY = SITE.y, BZ = SITE.z;
 
     /** THIS scenario's ship, by identity — the address every altitude sample uses. */
     private String shipId;
@@ -58,7 +61,7 @@ public class VSShipUnmannedCruiseE2ETest extends AbstractSharedVsClientE2ETest {
         long spawnMark = events.markInstrumented();
         exec("tp @a " + (BX + 600) + " 120 " + (BZ + 600) + " 0 0");
         bot().waitTicks(10);
-        String assemble = assembleFixture(BX, BY, BZ);
+        String assemble = assembleFixture(SITE);
         assertTrue("a with-pilot-seat build must route to a ship: " + assemble,
                 assemble.contains("\"rocketCount\":0"));
         shipId = awaitShipSpawned(events,
@@ -247,16 +250,15 @@ public class VSShipUnmannedCruiseE2ETest extends AbstractSharedVsClientE2ETest {
         return Double.parseDouble(m.group(1));
     }
 
-    private String assembleFixture(int baseX, int baseY, int baseZ) throws Exception {
-        int cx1 = (baseX - 2) >> 4, cz1 = (baseZ - 2) >> 4;
-        int cx2 = (baseX + 7) >> 4, cz2 = (baseZ + 7) >> 4;
-        assertTrue("chunk warmup failed",
-                exec("artest chunk warmup 0 " + cx1 + " " + cz1 + " " + cx2 + " " + cz2)
-                        .contains("\"ok\":true"));
-        assertTrue("pre-clear failed",
-                exec("artest fill 0 " + (baseX - 2) + " " + (baseY + 1) + " " + (baseZ - 2)
-                        + " " + (baseX + 7) + " " + (baseY + 10) + " " + (baseZ + 7) + " minecraft:air")
-                        .contains("\"ok\":true"));
+    private String assembleFixture(FixtureSite site) throws Exception {
+        // The site owns the coordinates; these aliases keep the body below unchanged.
+        final int baseX = site.x, baseY = site.y, baseZ = site.z;
+        // FIRST link: the volume the craft is built in and cruises out of is EMPTY, measured by the
+        // air fill's own `placed`. Open air, so this ASSERTS rather than digging the shaft it
+        // replaces — a craft that cruises out of a pit meets its rim, and the red then names the
+        // cruise. The fill force-loads every chunk in the box, so the warmup lost nothing.
+        site.requireClear(this::exec, 2, 16,
+                "the hull, and the first blocks of the lane it cruises along");
         String fixture = exec("artest fixture rocket 0 " + baseX + " " + baseY + " " + baseZ
                 + " " + VARIANT);
         assertTrue("fixture (" + VARIANT + ") failed: " + fixture, fixture.contains("\"ok\":true"));

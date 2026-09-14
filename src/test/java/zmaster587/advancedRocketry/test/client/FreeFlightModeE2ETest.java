@@ -90,8 +90,18 @@ public class FreeFlightModeE2ETest extends AbstractSharedClientE2ETest {
     private static final Pattern FUEL_PRIMARY_AMOUNT =
             Pattern.compile("\"primaryFuelType\":\"([^\"]+)\".*?\"\\1\":\\{\"amount\":(-?\\d+)");
 
-    /** Ground level for every fixture here; the pad is built on terrain, not in air. */
-    private static final int BASE_Y = 64;
+    /**
+     * The base Y for every fixture here: the OPEN-AIR band, not terrain.
+     *
+     * <p>It was 64, documented as "the pad is built on terrain, not in air" — which was a statement
+     * about where the pad happened to be, never something this class needs. Nothing here touches the
+     * ground: a rocket is assembled on the launchpad the fixture lays at this Y and then flown. What
+     * terrain cost is written at the pre-clear below, which had to reach FIFTY blocks up because a
+     * hill or a tree overhanging the pad pins the assembled rocket and every thrust assertion then
+     * reads exactly 0.0 — on a class whose world is generated with a RANDOM seed each run, so the
+     * hill is there on some runs and not others.</p>
+     */
+    private static final int BASE_Y = zmaster587.advancedRocketry.test.FixtureSite.OPEN_AIR_Y;
 
     /**
      * The observation point behind this class's engine-state links: the test-only mixin on
@@ -145,16 +155,19 @@ public class FreeFlightModeE2ETest extends AbstractSharedClientE2ETest {
         final int baseX = baseX();
         final int baseY = BASE_Y;
         final int baseZ = baseZ();
-        // Clear the full flight column, not just the build site. The world is
-        // generated with a RANDOM seed each run; a hill or tree overhanging the
-        // pad above the old +10 ceiling pins the assembled rocket in place
-        // (Entity.move() zeroes motionY on the vertical collision) and every
-        // thrust assertion downstream reads an exactly-0.0 motion. Caught via
-        // collidedVertically=true after a run-to-run flaky "rocket never moves".
-        String fillAir = exec("artest fill 0 " + (baseX - 2) + " " + (baseY + 1) + " "
-                + (baseZ - 2) + " " + (baseX + 7) + " " + (baseY + 50) + " "
-                + (baseZ + 7) + " minecraft:air");
-        assertTrue("pre-clear failed: " + fillAir, fillAir.contains("\"ok\":true"));
+        // FIRST link: the whole FLIGHT COLUMN is empty, not just the build site — fifty blocks of
+        // it, because that is how far this rocket climbs inside the window. The reach is inherited
+        // from the pre-clear this replaces, which needed it for a different reason: the world here
+        // is generated with a RANDOM seed each run, and a hill or tree overhanging the pad above the
+        // old +10 ceiling pinned the assembled rocket in place (Entity.move zeroes motionY on a
+        // vertical collision) so every thrust assertion downstream read exactly 0.0. It was caught
+        // by collidedVertically=true after a run-to-run flaky "rocket never moves".
+        //
+        // The site is in the open-air band now, so the column starts empty and this ASSERTS that,
+        // on the air fill's own `placed`, rather than digging and hoping.
+        zmaster587.advancedRocketry.test.FixtureSite.openAir(0, baseX, baseZ)
+                .requireClear(this::exec, 2, 50,
+                        "the rocket is assembled here and climbs fifty blocks up this column");
 
         String fixture = exec("artest fixture rocket 0 " + baseX + " " + baseY + " "
                 + baseZ + " simple");

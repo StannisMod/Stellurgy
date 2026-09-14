@@ -13,6 +13,7 @@ import org.junit.runners.MethodSorters;
 import org.lwjgl.input.Keyboard;
 
 import zmaster587.advancedRocketry.test.Events;
+import zmaster587.advancedRocketry.test.FixtureSite;
 
 import static org.junit.Assert.assertTrue;
 
@@ -106,7 +107,17 @@ public class VSShipEntryClientGroupE2ETest extends AbstractSharedVsClientE2ETest
     private static final String BOT = "ForgeTestClient";
 
     private static final String VARIANT = "with-pilot-seat";
-    private static final int BY = 64;
+    /**
+     * The open-air band. It was a hard-coded 64 until 2026-09-14, and this class is the one the
+     * pinned-seed survey had already convicted: the refused leg's plot at 3000/3000 is FOREST
+     * CANOPY on ground at y=71..79, so a fixture at 64 stood seven to fifteen blocks inside the
+     * landscape while its pre-clear dug a shaft through it. Neither leg here wants ground — one
+     * craft climbs through the orbit line and the other is refused at it.
+     *
+     * <p>The site counter could not see this: it is spelled {@code BY}, which none of its four
+     * patterns match. The class was named in the hand-off by measurement instead.</p>
+     */
+    private static final int BY = FixtureSite.OPEN_AIR_Y;
     /** The granted leg's build site — each scenario keeps the ground its green runs were taken on. */
     private static final int GRANTED_BX = 2800, GRANTED_BZ = 2800;
     /** The refused leg's, a hundred blocks clear of it. */
@@ -697,7 +708,7 @@ public class VSShipEntryClientGroupE2ETest extends AbstractSharedVsClientE2ETest
         bot().waitTicks(10);
         Events events = events();
         long spawnMark = events.markInstrumented();
-        String assemble = assembleFixture(bx, BY, bz, VARIANT);
+        String assemble = assembleFixture(FixtureSite.openAir(0, bx, bz), VARIANT);
         scenario().requireArranged("a with-pilot-seat build must route to a ship: " + assemble,
                 assemble.contains("\"ok\":true"));
         String shipUuid = awaitShipSpawned(events, spawnMark, "a with-pilot-seat assembly must create"
@@ -737,7 +748,7 @@ public class VSShipEntryClientGroupE2ETest extends AbstractSharedVsClientE2ETest
         // through the ceiling, the other has to reach it for a refusal to be asked for — and a craft
         // launched from a pad is tipped by the substrate's collision response and then holds the
         // tilt. The lift is asserted, including that the craft came up level.
-        liftClearOfTheGround(shipUuid, CLEAR_AIR_Y);
+        liftClearOfThePad(shipUuid, PAD_CLEARANCE_BLOCKS);
 
         // Board post-assembly (the proven path - boarding variants have their own test).
         String mountInfo = exec("artest vs seat-mount 0 id " + shipUuid);
@@ -751,16 +762,15 @@ public class VSShipEntryClientGroupE2ETest extends AbstractSharedVsClientE2ETest
         return shipUuid;
     }
 
-    private String assembleFixture(int baseX, int baseY, int baseZ, String variant) throws Exception {
-        int cx1 = (baseX - 2) >> 4, cz1 = (baseZ - 2) >> 4;
-        int cx2 = (baseX + 7) >> 4, cz2 = (baseZ + 7) >> 4;
-        scenario().requireArranged("chunk warmup failed",
-                exec("artest chunk warmup 0 " + cx1 + " " + cz1 + " " + cx2 + " " + cz2)
-                        .contains("\"ok\":true"));
-        scenario().requireArranged("pre-clear failed",
-                exec("artest fill 0 " + (baseX - 2) + " " + (baseY + 1) + " " + (baseZ - 2)
-                        + " " + (baseX + 7) + " " + (baseY + 10) + " " + (baseZ + 7) + " minecraft:air")
-                        .contains("\"ok\":true"));
+    private String assembleFixture(FixtureSite site, String variant) throws Exception {
+        // The site owns the coordinates; these aliases keep the body below unchanged.
+        final int baseX = site.x, baseY = site.y, baseZ = site.z;
+        // FIRST link: the volume is EMPTY, measured by the air fill's own `placed`. Open air, so
+        // this ASSERTS rather than digs — and for this class the pre-clear it replaces was cutting
+        // a shaft through a forest canopy, since the refused leg's plot is wooded ground at
+        // y=71..79 on the pinned seed.
+        site.requireClear(this::exec, 2, 16,
+                "the craft that climbs to the orbit line, and the first blocks of that climb");
         String fixture = exec("artest fixture rocket 0 " + baseX + " " + baseY + " " + baseZ + " " + variant);
         scenario().requireArranged("fixture (" + variant + ") failed: " + fixture,
                 fixture.contains("\"ok\":true"));

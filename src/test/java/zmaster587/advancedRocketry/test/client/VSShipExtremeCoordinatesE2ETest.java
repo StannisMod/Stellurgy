@@ -9,6 +9,7 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 import zmaster587.advancedRocketry.test.Events;
+import zmaster587.advancedRocketry.test.FixtureSite;
 
 import static org.junit.Assert.assertTrue;
 
@@ -84,7 +85,11 @@ public class VSShipExtremeCoordinatesE2ETest extends AbstractSharedVsClientE2ETe
     private static final Pattern SHIP_WORLD_Z = Pattern.compile("\"shipWorldZ\":(-?[0-9.E\\-]+)");
 
     private static final String VARIANT = "with-pilot-seat";
-    private static final int BX = 3400, BY = 64, BZ = 3400;
+    /**
+     * The craft's horizontal base. The Y is not here because the SITE owns it, and the site cannot
+     * be a constant: this class builds in a space CELL whose dimension id is only known at run time.
+     */
+    private static final int BX = 3400, BZ = 3400;
 
     /**
      * How far below the TOP of the realized pose band this scenario flies, in blocks. The margin is
@@ -166,7 +171,7 @@ public class VSShipExtremeCoordinatesE2ETest extends AbstractSharedVsClientE2ETe
 
         Events events = events();
         long assemblyMark = events.markInstrumented();
-        String assemble = assembleFixture(cellDim, BX, BY, BZ, VARIANT);
+        String assemble = assembleFixture(FixtureSite.openAir(cellDim, BX, BZ), VARIANT);
         assertTrue("a with-pilot-seat build must route to a ship: " + assemble,
                 assemble.contains("\"rocketCount\":0"));
         // The craft's CREATION, and its identity, from one record. A count that rises says a ship
@@ -453,17 +458,16 @@ public class VSShipExtremeCoordinatesE2ETest extends AbstractSharedVsClientE2ETe
         return Double.parseDouble(m.group(1));
     }
 
-    private String assembleFixture(int dim, int baseX, int baseY, int baseZ, String variant)
+    private String assembleFixture(FixtureSite site, String variant)
             throws Exception {
-        int cx1 = (baseX - 2) >> 4, cz1 = (baseZ - 2) >> 4;
-        int cx2 = (baseX + 7) >> 4, cz2 = (baseZ + 7) >> 4;
-        assertTrue("chunk warmup failed",
-                exec("artest chunk warmup " + dim + " " + cx1 + " " + cz1 + " " + cx2 + " " + cz2)
-                        .contains("\"ok\":true"));
-        assertTrue("pre-clear failed",
-                exec("artest fill " + dim + " " + (baseX - 2) + " " + (baseY + 1) + " " + (baseZ - 2)
-                        + " " + (baseX + 7) + " " + (baseY + 10) + " " + (baseZ + 7) + " minecraft:air")
-                        .contains("\"ok\":true"));
+        // The site owns the coordinates; these aliases keep the body below unchanged.
+        final int dim = site.dim, baseX = site.x, baseY = site.y, baseZ = site.z;
+        // FIRST link: the volume is EMPTY, measured by the air fill's own `placed`, which is the
+        // number the pre-clear it replaces was throwing away. The cell this builds in is void, so
+        // there is no terrain to escape — what the band buys here is ONE definition of where a
+        // fixture stands, shared with every other class, instead of a 64 nobody chose.
+        site.requireClear(this::exec, 2, 16,
+                "the craft that is then flown to the far edge of the realized pose band");
         String fixture = exec("artest fixture rocket " + dim + " " + baseX + " " + baseY + " "
                 + baseZ + " " + variant);
         assertTrue("fixture (" + variant + ") failed: " + fixture, fixture.contains("\"ok\":true"));

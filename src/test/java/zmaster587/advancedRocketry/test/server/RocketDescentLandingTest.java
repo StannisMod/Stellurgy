@@ -1,6 +1,7 @@
 package zmaster587.advancedRocketry.test.server;
 
 import org.junit.Test;
+import zmaster587.advancedRocketry.test.FixtureSite;
 import zmaster587.advancedRocketry.test.GameTicks;
 
 import java.util.regex.Matcher;
@@ -65,11 +66,13 @@ public class RocketDescentLandingTest extends AbstractSharedServerTest {
     // picks a position-disjoint chunk so leaked tickets do not bleed
     // into other tests.
 
-    private int buildAndAssemble(int baseX, int baseY, int baseZ) throws Exception {
-        ok(client().execute(
-                "artest fill 0 " + (baseX - 2) + " " + (baseY + 1) + " " + (baseZ - 2)
-                        + " " + (baseX + 7) + " " + (baseY + 10) + " " + (baseZ + 7)
-                        + " minecraft:air"));
+    private int buildAndAssemble(FixtureSite site) throws Exception {
+        // The site owns the coordinates; these aliases keep the body below unchanged.
+        final int baseX = site.x, baseY = site.y, baseZ = site.z;
+        // FIRST link: the volume this craft is built in is EMPTY. The site stands in open air, so
+        // this ASSERTS rather than digs, and the fill inside it force-loads every chunk in the box.
+        site.requireClear(cmd -> ok(client().execute(cmd)), 2, 10,
+                "the craft is built in this volume and then teleported to its descent altitude");
         String fixture = ok(client().execute(
                 "artest fixture rocket 0 " + baseX + " " + baseY + " " + baseZ + " simple"));
         Matcher bp = BUILDER_POS.matcher(fixture);
@@ -106,7 +109,7 @@ public class RocketDescentLandingTest extends AbstractSharedServerTest {
         // Probe-surface sanity: /artest rocket tick must succeed and
         // expose ticksExisted in the response. Used by the explicit
         // synthetic-tick path in Phase 5 (failure-mode tests).
-        int id = buildAndAssemble(6000, 64, 500);
+        int id = buildAndAssemble(FixtureSite.openAir(0, 6000, 500));
         String tickResp = ok(client().execute("artest rocket tick " + id + " 5"));
         assertTrue("tick probe must succeed: " + tickResp,
                 tickResp.contains("\"ok\":true"));
@@ -127,9 +130,10 @@ public class RocketDescentLandingTest extends AbstractSharedServerTest {
         //   - state: orbit=true, flight=false, ticksExisted=DESCENT_TIMER+1
         //   - await 5 real ticks -> onUpdate runs at least once ->
         //     gate fires -> isInFlight flips to true.
-        int baseX = 6100;
-        int baseZ = 500;
-        int id = buildAndAssemble(baseX, 64, baseZ);
+        final FixtureSite site = FixtureSite.openAir(0, 6100, 500);
+        int baseX = site.x;
+        int baseZ = site.z;
+        int id = buildAndAssemble(site);
         forceLoadChunksAround(0, baseX, baseZ);
 
         ok(client().execute("artest rocket set-state " + id
@@ -148,9 +152,10 @@ public class RocketDescentLandingTest extends AbstractSharedServerTest {
         // Counter-test under real ticking: with ticksExisted well below
         // DESCENT_TIMER, even a few real server ticks must NOT flip the
         // gate. Pins that the gate is correctly conditional on the timer.
-        int baseX = 6200;
-        int baseZ = 500;
-        int id = buildAndAssemble(baseX, 64, baseZ);
+        final FixtureSite site = FixtureSite.openAir(0, 6200, 500);
+        int baseX = site.x;
+        int baseZ = site.z;
+        int id = buildAndAssemble(site);
         forceLoadChunksAround(0, baseX, baseZ);
 
         ok(client().execute("artest rocket set-state " + id
@@ -175,9 +180,10 @@ public class RocketDescentLandingTest extends AbstractSharedServerTest {
         // negative or burning false), motionY decreases on every tick.
         // After 5 real ticks the rocket's posY must have dropped below
         // its starting altitude. Pin: gravity actually integrates.
-        int baseX = 6400;
-        int baseZ = 500;
-        int id = buildAndAssemble(baseX, 64, baseZ);
+        final FixtureSite site = FixtureSite.openAir(0, 6400, 500);
+        int baseX = site.x;
+        int baseZ = site.z;
+        int id = buildAndAssemble(site);
         forceLoadChunksAround(0, baseX, baseZ);
 
         ok(client().execute("artest rocket set-state " + id
@@ -199,13 +205,20 @@ public class RocketDescentLandingTest extends AbstractSharedServerTest {
     public void landedEventFiresOnGroundCollisionUnderRealTicks_realTick() throws Exception {
         // Drive the line-1284 landed branch via REAL ticking with the
         // rocket's chunk force-loaded:
-        //   - 5×5 stone floor at y=64
-        //   - orbit=true, flight=true, posY=66, motionY=-10
+        //   - 5×5 stone floor at the site's own Y
+        //   - orbit=true, flight=true, posY=siteY+2, motionY=-10
         //   - wait 6 ticks -> move() collides with stone -> RocketLandedEvent.
-        int baseX = 6300;
-        int baseY = 64;
-        int baseZ = 500;
-        int id = buildAndAssemble(baseX, baseY, baseZ);
+        //
+        // THE FLOOR THIS LANDS ON IS BUILT HERE, so the site needs no terrain — which is why it is
+        // an open-air site like every other scenario in this class and not a declared ground one.
+        // The -10 step does not overshoot the plate: Entity.move gathers collision boxes over the
+        // SWEPT box (getEntityBoundingBox().expand(x, y, z)) and clamps the descent to the first one
+        // it meets, so a one-block plate stops a ten-block fall.
+        final FixtureSite site = FixtureSite.openAir(0, 6300, 500);
+        int baseX = site.x;
+        int baseY = site.y;
+        int baseZ = site.z;
+        int id = buildAndAssemble(site);
         forceLoadChunksAround(0, baseX, baseZ);
 
         ok(client().execute("artest fill 0 " + (baseX - 2) + " " + baseY + " " + (baseZ - 2)
@@ -240,7 +253,8 @@ public class RocketDescentLandingTest extends AbstractSharedServerTest {
         // (This test doesn't need real ticking — dismantle is synchronous —
         // but it does need the destination chunk loaded, which the fill
         // probe pulls in automatically.)
-        int id = buildAndAssemble(6500, 64, 500);
+        final FixtureSite site = FixtureSite.openAir(0, 6500, 500);
+        int id = buildAndAssemble(site);
 
         String info = ok(client().execute("artest rocket info " + id));
         Matcher mY = POS_Y_FIELD.matcher(info);
@@ -257,8 +271,8 @@ public class RocketDescentLandingTest extends AbstractSharedServerTest {
             for (int dz = -2; dz <= 2 && !foundNonAir; dz++) {
                 for (int dy = 0; dy <= 4 && !foundNonAir; dy++) {
                     String blockResp = ok(client().execute(
-                            "artest block at 0 " + (6500 + dx) + " " + (posY + dy)
-                                    + " " + (500 + dz)));
+                            "artest block at 0 " + (site.x + dx) + " " + (posY + dy)
+                                    + " " + (site.z + dz)));
                     if (!blockResp.contains("\"isAir\":true")) {
                         foundNonAir = true;
                         break outer;

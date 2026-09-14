@@ -338,10 +338,35 @@ public abstract class AbstractSharedVsClientE2ETest extends AbstractSharedClient
     }
 
     /**
-     * Where a craft is lifted to before it is flown: high enough that the fixture's own launchpad is
-     * far below it, low enough to stay under the lowest orbit line the config permits (255).
+     * How far ABOVE ITS OWN PAD a craft is lifted before it is flown — a clearance, not an altitude.
+     *
+     * <p><b>This was an absolute Y of 150 until 2026-09-14, and that is a different quantity wearing
+     * the same number.</b> 150 is also {@link zmaster587.advancedRocketry.test.FixtureSite#OPEN_AIR_Y},
+     * the band a fixture stands in so that it starts on no terrain — and the two are equal only by
+     * coincidence of today's values. The moment a fixture moves into that band, "lift the craft to
+     * 150" is a lift to where the craft already is: the pad contact this exists to break is not
+     * broken, the arrival assertion passes because the craft is at the altitude it was asked for,
+     * and nothing anywhere says the arrangement did nothing. The two numbers must never be merged
+     * for the same reason — they answer *above what?* differently.</p>
+     *
+     * <p>86 is the clearance that has been in force since this helper existed: every caller stood on
+     * a pad at y=64 and was lifted to 150. It is kept rather than re-derived because that is the
+     * value the family's green runs were taken on. Its lower bound is argued, though: the arrival
+     * check below accepts the craft within 20 blocks of its target, so a clearance near that could
+     * be satisfied by a craft that never left the pad, and this one is more than four times it.</p>
      */
-    protected static final int CLEAR_AIR_Y = 150;
+    protected static final int PAD_CLEARANCE_BLOCKS = 86;
+
+    /**
+     * The highest Y a lift may leave a craft at.
+     *
+     * <p>Absolute on purpose, and it stays absolute while the clearance above becomes relative: two
+     * independent limits meet at this number and neither one scales with the site. A vanilla world's
+     * top block is y=255, so a craft teleported past it is outside the world its scenario then reads;
+     * and 255 is the lowest orbit line the rocket config permits, which the entry scenarios seed, so
+     * a lift that reached it would perform the crossing those scenarios exist to command.</p>
+     */
+    protected static final int MAX_LIFT_Y = 255;
 
     /**
      * Take a freshly assembled craft OFF THE PAD it was built on, straight up, and prove it came up
@@ -365,10 +390,14 @@ public abstract class AbstractSharedVsClientE2ETest extends AbstractSharedClient
      * afterwards and the arrival is read back BY IDENTITY — a positional read at the old base would
      * answer about whatever is nearest to a place this craft has just left.</p>
      *
+     * @param clearanceBlocks how far above the craft's CURRENT altitude to leave it. The method took
+     *                        an absolute target Y until 2026-09-14; it was renamed with the change so
+     *                        that no call site could go on passing the old quantity to a parameter
+     *                        that now means something else and be compiled.
      * @return the ship's report at its new altitude
      */
-    protected final String liftClearOfTheGround(String shipId, int toY) throws Exception {
-        return liftClearOfTheGround(0, shipId, toY);
+    protected final String liftClearOfThePad(String shipId, int clearanceBlocks) throws Exception {
+        return liftClearOfThePad(0, shipId, clearanceBlocks);
     }
 
     /**
@@ -381,7 +410,8 @@ public abstract class AbstractSharedVsClientE2ETest extends AbstractSharedClient
      * a true sentence about the wrong world, which reads as a craft that has unloaded. The dim is
      * now a parameter and the refusal names it.</p>
      */
-    protected final String liftClearOfTheGround(int dim, String shipId, int toY) throws Exception {
+    protected final String liftClearOfThePad(int dim, String shipId, int clearanceBlocks)
+            throws Exception {
         // The substrate's load controller drops a RIGID-TELEPORTED ship's physics object even with a
         // pilot aboard, and a ship that is not loaded is not ticked: its flight computer stops, so it
         // stops climbing and stops being reported at all. Measured 2026-08-23 — a craft lifted to 147
@@ -395,11 +425,26 @@ public abstract class AbstractSharedVsClientE2ETest extends AbstractSharedClient
 
         String before = shipInfoById(dim, shipId);
         double x = readDoubleOr(before, POS_X, Double.NaN);
+        double fromY = readDoubleOr(before, POS_Y, Double.NaN);
         double z = readDoubleOr(before, POS_Z, Double.NaN);
         scenario().requireArranged("the craft must report a position in dim " + dim + " before it"
                 + " can be lifted off its pad — a reply carrying managed:false here is as likely to"
                 + " mean the craft is in a DIFFERENT world as that it has unloaded: " + before,
-                !Double.isNaN(x) && !Double.isNaN(z));
+                !Double.isNaN(x) && !Double.isNaN(fromY) && !Double.isNaN(z));
+
+        // WHERE THE CLEARANCE IS MEASURED FROM: the craft's own reported altitude, which is the pad
+        // it was assembled on. Read here rather than passed in, so a fixture that moves — into the
+        // open-air band, onto a surveyed plot, into a cell — carries its lift with it instead of
+        // leaving a call site holding a number that used to be above its pad.
+        int toY = (int) Math.round(fromY) + clearanceBlocks;
+        scenario().requireArranged("the lift would leave the craft at y=" + toY + ", above the"
+                + " ceiling of " + MAX_LIFT_Y + ": this site (y=" + fromY + ") plus this clearance ("
+                + clearanceBlocks + ") leaves the band a lift is allowed to end in. A craft already"
+                + " standing that high is not on a pad to be taken off one, and one teleported past"
+                + " the world's top block is outside the world every later reading is taken in.",
+                toY <= MAX_LIFT_Y);
+        scenario().record("liftFrom", fromY);
+        scenario().record("liftClearance", clearanceBlocks);
 
         String moved = exec("artest vs teleport-ship-by-id " + dim + " " + shipId
                 + " " + x + " " + toY + " " + z);

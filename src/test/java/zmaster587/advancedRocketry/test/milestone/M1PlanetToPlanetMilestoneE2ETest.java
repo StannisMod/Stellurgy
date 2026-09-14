@@ -24,6 +24,7 @@ import org.lwjgl.input.Keyboard;
 import zmaster587.advancedRocketry.space.TerrainHeightFinder;
 import zmaster587.advancedRocketry.test.Chains;
 import zmaster587.advancedRocketry.test.Events;
+import zmaster587.advancedRocketry.test.FixtureSite;
 import zmaster587.advancedRocketry.test.client.ClientEvents;
 
 import static org.junit.Assert.assertEquals;
@@ -138,7 +139,9 @@ public class M1PlanetToPlanetMilestoneE2ETest {
     private static final String VARIANT = "with-jump-drive";
 
     /** Far from every other fixture site, so a stray ship from another run can never be read here. */
-    private static final int BX = 8400, BY = 64, BZ = 8400;
+    private static final FixtureSite SITE = FixtureSite.openAir(0, 8400, 8400);
+    /** The site owns the coordinates; these aliases keep the body below unchanged. */
+    private static final int BX = SITE.x, BY = SITE.y, BZ = SITE.z;
 
     /**
      * The seeded atmosphere ceiling: the config key's own minimum. The ONE arrangement knob in this
@@ -1704,15 +1707,14 @@ public class M1PlanetToPlanetMilestoneE2ETest {
 
     /** Warm the chunks, clear the site and stand the craft up; returns the assembler's position. */
     private int[] placeFixture() throws Exception {
-        int cx1 = (BX - 2) >> 4, cz1 = (BZ - 2) >> 4;
-        int cx2 = (BX + 7) >> 4, cz2 = (BZ + 7) >> 4;
-        requireArranged("chunk warmup failed",
-                exec("artest chunk warmup 0 " + cx1 + " " + cz1 + " " + cx2 + " " + cz2)
-                        .contains("\"ok\":true"));
-        requireArranged("pre-clear failed",
-                exec("artest fill 0 " + (BX - 2) + " " + (BY + 1) + " " + (BZ - 2)
-                        + " " + (BX + 7) + " " + (BY + 12) + " " + (BZ + 7) + " minecraft:air")
-                        .contains("\"ok\":true"));
+        // FIRST link: the volume is EMPTY, measured by the air fill's own `placed` — the number the
+        // pre-clear it replaces was throwing away. The site stands in the open-air band, so the
+        // craft rests on the launchpad the fixture lays at its own Y and this ASSERTS rather than
+        // digging a shaft. The height covers the tallest variant in the catalogue plus the deck the
+        // player walks to reach its console; the climb to the orbit line is production's business
+        // and no pre-clear could cover it.
+        SITE.requireClear(this::exec, 2, 20,
+                "the jump-capable craft, and the deck the player boards and works it from");
         String fixture = exec("artest fixture rocket 0 " + BX + " " + BY + " " + BZ + " " + VARIANT);
         requireArranged("fixture (" + VARIANT + ") failed: " + fixture,
                 fixture.contains("\"ok\":true"));

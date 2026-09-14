@@ -12,6 +12,7 @@ import java.util.regex.Pattern;
 
 import zmaster587.advancedRocketry.api.FreeFlightPhysics;
 import zmaster587.advancedRocketry.test.Events;
+import zmaster587.advancedRocketry.test.FixtureSite;
 
 import static org.junit.Assert.assertTrue;
 
@@ -177,8 +178,10 @@ public class VSGroundFlightGroupE2ETest extends AbstractSharedVsClientE2ETest {
     @Test
     public void aShipQuestionKeyedOnIdNamesItsOwnShipAndTheNearestFormDoesNot() throws Exception {
 
-        final int ax = 5400, ay = 64, az = 5400;
-        final int bx = 5500, by = 64, bz = 5500;
+        final FixtureSite siteA = FixtureSite.openAir(0, 5400, 5400);
+        final FixtureSite siteB = FixtureSite.openAir(0, 5500, 5500);
+        final int ax = siteA.x, ay = siteA.y, az = siteA.z;
+        final int bx = siteB.x, by = siteB.y, bz = siteB.z;
 
         // Two ships, built 141 blocks apart — this tier's own fixture spacing.
         exec("tp @a " + (ax + 600) + " 120 " + (az + 600) + " 0 0");
@@ -192,14 +195,14 @@ public class VSGroundFlightGroupE2ETest extends AbstractSharedVsClientE2ETest {
         // different ships" would be a claim made by the very instrument under test.
         Events events = events();
         long spawnMarkA = events.markInstrumented();
-        String assembleA = assembleFixture(ax, ay, az, AFC_VARIANT);
+        String assembleA = assembleFixture(siteA, AFC_VARIANT);
         scenario().requireArranged("ship A must assemble: " + assembleA,
                 assembleA.contains("\"rocketCount\":0"));
         String idA = awaitShipSpawned(events, spawnMarkA,
                 "ship A's assembly must create a VS ship in the queryable registry (async spawn)");
 
         long spawnMarkB = events.markInstrumented();
-        String assembleB = assembleFixture(bx, by, bz, AFC_VARIANT);
+        String assembleB = assembleFixture(siteB, AFC_VARIANT);
         scenario().requireArranged("ship B must assemble: " + assembleB,
                 assembleB.contains("\"rocketCount\":0"));
         String idB = awaitShipSpawned(events, spawnMarkB,
@@ -279,7 +282,8 @@ public class VSGroundFlightGroupE2ETest extends AbstractSharedVsClientE2ETest {
     @Test
     public void assembledShipLoadsWithClientPresentAndFliesAndRotatesUnderForce() throws Exception {
 
-        final int BX = 2200, BY = 64, BZ = 2200;
+        final FixtureSite site = FixtureSite.openAir(0, 2200, 2200);
+        final int BX = site.x, BY = site.y, BZ = site.z;
 
         // Keep the client FAR AWAY during assembly + spawn. VS crashes with
         // "Tried loading a ShipData that was already loaded?" if a player is near the
@@ -294,7 +298,7 @@ public class VSGroundFlightGroupE2ETest extends AbstractSharedVsClientE2ETest {
         // world is answered by every neighbour that ever assembled one — and it names the ship.
         Events events = events();
         long spawnMark = events.markInstrumented();
-        String assemble = assembleFixture(BX, BY, BZ, AFC_VARIANT);
+        String assemble = assembleFixture(site, AFC_VARIANT);
         assertTrue("with VS, the AFC build must route to a ship (no rocket): " + assemble,
                 assemble.contains("\"rocketCount\":0"));
         final String shipId = awaitShipSpawned(events, spawnMark,
@@ -451,7 +455,8 @@ public class VSGroundFlightGroupE2ETest extends AbstractSharedVsClientE2ETest {
     @Test
     public void assemblingWithAnObserverAtThePadDoesNotCrashVs() throws Exception {
 
-        final int BX = 2400, BY = 64, BZ = 2400;
+        final FixtureSite site = FixtureSite.openAir(0, 2400, 2400);
+        final int BX = site.x, BY = site.y, BZ = site.z;
 
         // Put the observer AT the build site and keep it there through assembly + spawn — the
         // double-load window the sister test avoids. If the guard is absent, VS faults here.
@@ -460,7 +465,7 @@ public class VSGroundFlightGroupE2ETest extends AbstractSharedVsClientE2ETest {
 
         Events events = events();
         long spawnMark = events.markInstrumented();
-        String assemble = assembleFixture(BX, BY, BZ, AFC_VARIANT);
+        String assemble = assembleFixture(site, AFC_VARIANT);
         assertTrue("with VS, the AFC build must route to a ship (no rocket): " + assemble,
                 assemble.contains("\"rocketCount\":0"));
 
@@ -491,7 +496,8 @@ public class VSGroundFlightGroupE2ETest extends AbstractSharedVsClientE2ETest {
     @Test
     public void seatPathResolvesAfcAndFliesTheShip() throws Exception {
 
-        final int BX = 2600, BY = 64, BZ = 2600;
+        final FixtureSite site = FixtureSite.openAir(0, 2600, 2600);
+        final int BX = site.x, BY = site.y, BZ = site.z;
 
         // Assemble far from any observer (double-load window), then approach to load.
         exec("tp @a " + (BX + 600) + " 120 " + (BZ + 600) + " 0 0");
@@ -499,7 +505,7 @@ public class VSGroundFlightGroupE2ETest extends AbstractSharedVsClientE2ETest {
 
         Events events = events();
         long spawnMark = events.markInstrumented();
-        String assemble = assembleFixture(BX, BY, BZ, SEAT_VARIANT);
+        String assemble = assembleFixture(site, SEAT_VARIANT);
         assertTrue("a with-pilot-seat build must route to a ship (no rocket): " + assemble,
                 assemble.contains("\"rocketCount\":0"));
         // The identity, off this scenario's own creation record — not re-derived from the base below.
@@ -562,14 +568,15 @@ public class VSGroundFlightGroupE2ETest extends AbstractSharedVsClientE2ETest {
     @Test
     public void seatedPilotFliesShipTravelsWithItAndCameraLocksToNose() throws Exception {
 
-        final int BX = 2800, BY = 64, BZ = 2800;
+        final FixtureSite site = FixtureSite.openAir(0, 2800, 2800);
+        final int BX = site.x, BY = site.y, BZ = site.z;
 
         exec("tp @a " + (BX + 600) + " 120 " + (BZ + 600) + " 0 0");
         bot().waitTicks(10);
 
         Events events = events();
         long spawnMark = events.markInstrumented();
-        String assemble = assembleFixture(BX, BY, BZ, SEAT_VARIANT);
+        String assemble = assembleFixture(site, SEAT_VARIANT);
         assertTrue("a with-pilot-seat build must route to a ship: " + assemble,
                 assemble.contains("\"rocketCount\":0"));
         // The identity, off this scenario's own creation record. It is fixed HERE, before the ship has
@@ -812,16 +819,14 @@ public class VSGroundFlightGroupE2ETest extends AbstractSharedVsClientE2ETest {
         return Double.parseDouble(m.group(1));
     }
 
-    private String assembleFixture(int baseX, int baseY, int baseZ, String variant) throws Exception {
-        int cx1 = (baseX - 2) >> 4, cz1 = (baseZ - 2) >> 4;
-        int cx2 = (baseX + 7) >> 4, cz2 = (baseZ + 7) >> 4;
-        assertTrue("chunk warmup failed",
-                exec("artest chunk warmup 0 " + cx1 + " " + cz1 + " " + cx2 + " " + cz2)
-                        .contains("\"ok\":true"));
-        assertTrue("pre-clear failed",
-                exec("artest fill 0 " + (baseX - 2) + " " + (baseY + 1) + " " + (baseZ - 2)
-                        + " " + (baseX + 7) + " " + (baseY + 10) + " " + (baseZ + 7) + " minecraft:air")
-                        .contains("\"ok\":true"));
+    private String assembleFixture(FixtureSite site, String variant) throws Exception {
+        // The site owns the coordinates; these aliases keep the body below unchanged.
+        final int baseX = site.x, baseY = site.y, baseZ = site.z;
+        // FIRST link: the volume is EMPTY, measured by the air fill's own `placed` — the number the
+        // pre-clear it replaces was throwing away. Open air, so this ASSERTS rather than digs, and
+        // the scenarios below fly, rotate and ride the craft out of this volume.
+        site.requireClear(this::exec, 2, 16,
+                "the hull, and the first blocks of the lane it flies and rotates through");
         String fixture = exec("artest fixture rocket 0 " + baseX + " " + baseY + " " + baseZ
                 + " " + variant);
         assertTrue("fixture (" + variant + ") failed: " + fixture, fixture.contains("\"ok\":true"));

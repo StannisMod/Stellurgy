@@ -17,6 +17,7 @@ import org.junit.Test;
 import org.lwjgl.input.Keyboard;
 
 import zmaster587.advancedRocketry.test.Events;
+import zmaster587.advancedRocketry.test.FixtureSite;
 
 import static org.junit.Assert.assertTrue;
 
@@ -51,7 +52,9 @@ public class VSPilotKeysWithSpaceSubsystemE2ETest {
     private static final Pattern DUMMY_ID = Pattern.compile("\"dummyId\":(-?\\d+)");
 
     private static final String VARIANT = "with-pilot-seat";
-    private static final int BX = 2800, BY = 64, BZ = 2800;
+    private static final FixtureSite SITE = FixtureSite.openAir(0, 2800, 2800);
+    /** The site owns the coordinates; these aliases keep the body below unchanged. */
+    private static final int BX = SITE.x, BY = SITE.y, BZ = SITE.z;
 
     /**
      * How long the craft is given to become USABLE with the client present, in ticks.
@@ -137,7 +140,7 @@ public class VSPilotKeysWithSpaceSubsystemE2ETest {
         // clock the reader steps on. Nothing else about it differs.
         Events events = new Events(this::exec, ticks -> clientHarness.bot().waitTicks(ticks));
         long spawnMark = events.markInstrumented();
-        String assemble = assembleFixture(BX, BY, BZ, VARIANT);
+        String assemble = assembleFixture(SITE, VARIANT);
         assertTrue("a with-pilot-seat build must route to a ship: " + assemble,
                 assemble.contains("\"ok\":true"));
 
@@ -224,16 +227,15 @@ public class VSPilotKeysWithSpaceSubsystemE2ETest {
         return String.join("\n", serverHarness.client().execute(cmd));
     }
 
-    private String assembleFixture(int baseX, int baseY, int baseZ, String variant) throws Exception {
-        int cx1 = (baseX - 2) >> 4, cz1 = (baseZ - 2) >> 4;
-        int cx2 = (baseX + 7) >> 4, cz2 = (baseZ + 7) >> 4;
-        assertTrue("chunk warmup failed",
-                exec("artest chunk warmup 0 " + cx1 + " " + cz1 + " " + cx2 + " " + cz2)
-                        .contains("\"ok\":true"));
-        assertTrue("pre-clear failed",
-                exec("artest fill 0 " + (baseX - 2) + " " + (baseY + 1) + " " + (baseZ - 2)
-                        + " " + (baseX + 7) + " " + (baseY + 10) + " " + (baseZ + 7) + " minecraft:air")
-                        .contains("\"ok\":true"));
+    private String assembleFixture(FixtureSite site, String variant) throws Exception {
+        // The site owns the coordinates; these aliases keep the body below unchanged.
+        final int baseX = site.x, baseY = site.y, baseZ = site.z;
+        // FIRST link: the volume the craft is built in and CLIMBS out of is EMPTY, measured by the
+        // air fill's own `placed`. Open air, so this ASSERTS rather than digging the shaft it
+        // replaces — a scenario whose subject is the pilot's keys reading a climb cannot afford a
+        // craft that meets the rim instead, because the red then accuses the key path.
+        site.requireClear(this::exec, 2, 16,
+                "the hull, and the first blocks of the lane the pilot's key drives it up");
         String fixture = exec("artest fixture rocket 0 " + baseX + " " + baseY + " " + baseZ + " " + variant);
         assertTrue("fixture (" + variant + ") failed: " + fixture, fixture.contains("\"ok\":true"));
         Matcher bp = BUILDER_POS.matcher(fixture);

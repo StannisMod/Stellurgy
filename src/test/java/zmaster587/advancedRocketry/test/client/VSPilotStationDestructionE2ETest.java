@@ -10,6 +10,7 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 import zmaster587.advancedRocketry.test.Events;
+import zmaster587.advancedRocketry.test.FixtureSite;
 
 import static org.junit.Assert.assertTrue;
 
@@ -70,8 +71,9 @@ public class VSPilotStationDestructionE2ETest extends AbstractSharedVsClientE2ET
 
     @Test
     public void breakingTheOccupiedSeatDismountsThePilotAndHoldsTheShip() throws Exception {
-        int bx = 4400, by = 64, bz = 4400;
-        FlyingShip ship = assembleLoadAndFly(bx, by, bz);
+        final FixtureSite site = FixtureSite.openAir(0, 4400, 4400);
+        final int bx = site.x, by = site.y, bz = site.z;
+        FlyingShip ship = assembleLoadAndFly(site);
 
         // Break the seat WHILE the climb key is still held — the exact latch scenario: the client
         // can no longer send a release (the seat tile is gone), so only the destruction handler
@@ -128,8 +130,9 @@ public class VSPilotStationDestructionE2ETest extends AbstractSharedVsClientE2ET
 
     @Test
     public void breakingTheLinkedComputerDismountsThePilotAndNeverThrusts() throws Exception {
-        int bx = 4600, by = 64, bz = 4600;
-        FlyingShip ship = assembleLoadAndFly(bx, by, bz);
+        final FixtureSite site = FixtureSite.openAir(0, 4600, 4600);
+        final int bx = site.x, by = site.y, bz = site.z;
+        FlyingShip ship = assembleLoadAndFly(site);
         bot().releaseKey(Keyboard.KEY_R);
         bot().waitTicks(10);
 
@@ -201,7 +204,9 @@ public class VSPilotStationDestructionE2ETest extends AbstractSharedVsClientE2ET
      * (probe mount — the harness cannot right-click a subspace block), and fly it up a couple of
      * blocks on a REAL held key. Returns with the climb key still held.
      */
-    private FlyingShip assembleLoadAndFly(int bx, int by, int bz) throws Exception {
+    private FlyingShip assembleLoadAndFly(FixtureSite site) throws Exception {
+        // The site owns the coordinates; these aliases keep the body below unchanged.
+        final int bx = site.x, by = site.y, bz = site.z;
         exec("tp @a " + (bx + 600) + " 120 " + (bz + 600) + " 0 0");
         bot().waitTicks(10);
 
@@ -210,7 +215,7 @@ public class VSPilotStationDestructionE2ETest extends AbstractSharedVsClientE2ET
         // incremented by every neighbour that ever assembled one on this shared world.
         Events events = events();
         long spawnMark = events.markInstrumented();
-        String assemble = assembleFixture(bx, by, bz);
+        String assemble = assembleFixture(site);
         assertTrue("a with-pilot-seat build must route to a ship: " + assemble,
                 assemble.contains("\"rocketCount\":0"));
         FlyingShip ship = new FlyingShip();
@@ -366,16 +371,15 @@ public class VSPilotStationDestructionE2ETest extends AbstractSharedVsClientE2ET
         return Double.parseDouble(m.group(1));
     }
 
-    private String assembleFixture(int baseX, int baseY, int baseZ) throws Exception {
-        int cx1 = (baseX - 2) >> 4, cz1 = (baseZ - 2) >> 4;
-        int cx2 = (baseX + 7) >> 4, cz2 = (baseZ + 7) >> 4;
-        assertTrue("chunk warmup failed",
-                exec("artest chunk warmup 0 " + cx1 + " " + cz1 + " " + cx2 + " " + cz2)
-                        .contains("\"ok\":true"));
-        assertTrue("pre-clear failed",
-                exec("artest fill 0 " + (baseX - 2) + " " + (baseY + 1) + " " + (baseZ - 2)
-                        + " " + (baseX + 7) + " " + (baseY + 10) + " " + (baseZ + 7) + " minecraft:air")
-                        .contains("\"ok\":true"));
+    private String assembleFixture(FixtureSite site) throws Exception {
+        // The site owns the coordinates; these aliases keep the body below unchanged.
+        final int baseX = site.x, baseY = site.y, baseZ = site.z;
+        // FIRST link: the volume the craft is built in and FLOWN out of is EMPTY, measured by the
+        // air fill's own `placed`. Open air, so this ASSERTS rather than digs — a craft climbing on
+        // a held key out of a ten-block pit meets its rim, and the red then accuses the destruction
+        // handler this class exists to test.
+        site.requireClear(this::exec, 2, 16,
+                "the hull, and the first blocks of the lane it climbs before the seat is broken");
         String fixture = exec("artest fixture rocket 0 " + baseX + " " + baseY + " " + baseZ
                 + " " + VARIANT);
         assertTrue("fixture (" + VARIANT + ") failed: " + fixture, fixture.contains("\"ok\":true"));

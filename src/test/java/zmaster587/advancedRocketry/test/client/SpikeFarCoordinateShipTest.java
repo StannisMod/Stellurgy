@@ -80,7 +80,14 @@ public class SpikeFarCoordinateShipTest extends AbstractClientE2ETest {
     /** Below the reserved quadrant's Z edge (Z ≥ -25,584), so the arena is ordinary world at every X. */
     private static final int ARENA_Z = -100_000;
     /** Well above sea level: 16M is ocean, and a fixture built into water is not a fixture. */
-    private static final int BASE_Y = 140;
+    /**
+     * The arena's base Y: the OPEN-AIR band. It was a hand-picked 140 until 2026-09-14 — already
+     * clear of terrain, and that is exactly the point: two numbers meaning "high enough to be above
+     * whatever is down there" is one number too many, and the other one moves when the band does.
+     * The stone pad this class lays a block below it stays; at x=16M the surface is ocean, and a
+     * pad the test builds is what keeps the fixture out of water whatever the band is set to.
+     */
+    private static final int BASE_Y = zmaster587.advancedRocketry.test.FixtureSite.OPEN_AIR_Y;
 
     private static final String VARIANT = "with-pilot-seat";
     private static final double MIN_LIFT_BLOCKS = 1.0d;

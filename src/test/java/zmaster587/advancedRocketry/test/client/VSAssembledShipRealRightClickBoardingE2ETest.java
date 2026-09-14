@@ -11,6 +11,7 @@ import org.junit.Test;
 import org.junit.runners.MethodSorters;
 
 import zmaster587.advancedRocketry.test.Events;
+import zmaster587.advancedRocketry.test.FixtureSite;
 
 import static org.junit.Assert.assertTrue;
 
@@ -88,7 +89,9 @@ public class VSAssembledShipRealRightClickBoardingE2ETest extends AbstractShared
      * blocks. The seat block itself is identical in both variants.
      */
     private static final String VARIANT = "with-pilot-deck";
-    private static final int BX = 2800, BY = 64, BZ = 2800;
+    private static final FixtureSite SITE = FixtureSite.openAir(0, 2800, 2800);
+    /** The site owns the coordinates; these aliases keep the body below unchanged. */
+    private static final int BX = SITE.x, BY = SITE.y, BZ = SITE.z;
 
     /**
      * The use key's code. Mouse buttons enter {@code KeyBinding} as {@code -100 + button}, so RMB is
@@ -133,7 +136,7 @@ public class VSAssembledShipRealRightClickBoardingE2ETest extends AbstractShared
         // for. A red now says which of the two never happened.
         Events events = events();
         long spawnMark = events.markInstrumented();
-        String assemble = assembleFixture(BX, BY, BZ, VARIANT);
+        String assemble = assembleFixture(SITE, VARIANT);
         scenario().requireArranged("a " + VARIANT + " build must route to a ship: " + assemble,
                 assemble.contains("\"ok\":true"));
         shipUuid = awaitShipSpawned(events, spawnMark, "the assembly must create a VS ship in the"
@@ -363,16 +366,15 @@ public class VSAssembledShipRealRightClickBoardingE2ETest extends AbstractShared
                 && aim.get("blockZ").getAsInt() == seatZ;
     }
 
-    private String assembleFixture(int baseX, int baseY, int baseZ, String variant) throws Exception {
-        int cx1 = (baseX - 2) >> 4, cz1 = (baseZ - 2) >> 4;
-        int cx2 = (baseX + 7) >> 4, cz2 = (baseZ + 7) >> 4;
-        scenario().requireArranged("chunk warmup failed",
-                exec("artest chunk warmup 0 " + cx1 + " " + cz1 + " " + cx2 + " " + cz2)
-                        .contains("\"ok\":true"));
-        scenario().requireArranged("pre-clear failed",
-                exec("artest fill 0 " + (baseX - 2) + " " + (baseY + 1) + " " + (baseZ - 2)
-                        + " " + (baseX + 7) + " " + (baseY + 10) + " " + (baseZ + 7) + " minecraft:air")
-                        .contains("\"ok\":true"));
+    private String assembleFixture(FixtureSite site, String variant) throws Exception {
+        // The site owns the coordinates; these aliases keep the body below unchanged.
+        final int baseX = site.x, baseY = site.y, baseZ = site.z;
+        // FIRST link: the volume is EMPTY, measured by the air fill's own `placed` — the number the
+        // pre-clear it replaces was throwing away. Open air, so this ASSERTS rather than digs, and
+        // it matters for a RIGHT-CLICK subject in particular: a player on a pit's rim aims over the
+        // block he means, and the miss reads as the interaction path refusing him.
+        site.requireClear(this::exec, 2, 16,
+                "the hull, and the air the player stands and right-clicks in beside its seat");
         String fixture = exec("artest fixture rocket 0 " + baseX + " " + baseY + " " + baseZ + " " + variant);
         scenario().requireArranged("fixture (" + variant + ") failed: " + fixture,
                 fixture.contains("\"ok\":true"));

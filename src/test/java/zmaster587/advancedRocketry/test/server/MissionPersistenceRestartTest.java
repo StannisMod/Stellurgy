@@ -12,6 +12,8 @@ import java.nio.file.Path;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import zmaster587.advancedRocketry.test.FixtureSite;
+
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
@@ -81,12 +83,13 @@ public class MissionPersistenceRestartTest {
     }
 
     private int buildAndAssembleRocket(RealDedicatedServerHarness boot, int baseX) throws Exception {
-        int baseY = 64;
-        int baseZ = 600;
-        ok(boot.client().execute(
-                "artest fill 0 " + (baseX - 2) + " " + (baseY + 1) + " " + (baseZ - 2)
-                        + " " + (baseX + 7) + " " + (baseY + 10) + " " + (baseZ + 7)
-                        + " minecraft:air"));
+        final FixtureSite site = FixtureSite.openAir(0, baseX, 600);
+        // The site owns the coordinates; these aliases keep the body below unchanged.
+        final int baseY = site.y, baseZ = site.z;
+        // FIRST link: the volume this craft is built in is EMPTY. The site stands in open air, so
+        // this ASSERTS rather than digs, and the fill inside it force-loads every chunk in the box.
+        site.requireClear(cmd -> ok(boot.client().execute(cmd)), 2, 10,
+                "the craft whose mission must survive the restart is built in this volume");
         String fixture = ok(boot.client().execute(
                 "artest fixture rocket 0 " + baseX + " " + baseY + " " + baseZ + " simple"));
         Matcher bp = BUILDER_POS.matcher(fixture);

@@ -8,6 +8,8 @@ import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import zmaster587.advancedRocketry.test.FixtureSite;
+
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
@@ -98,8 +100,11 @@ public class MachineDomainSmokeSuite extends AbstractSharedServerTest {
         assertTrue("recipes-summary errored: " + summary,
                 !summary.contains("\"error\""));
 
-        // Layout: row of machines on flat stone at y=64, x=2100..2140 step 5.
-        int y = 64;
+        // Layout: a row of machines in the open-air band, x=2100..2140 step 5. The Y was a
+        // hard-coded 64 until 2026-09-14, described here as "flat stone" — which is a claim about
+        // the pinned seed that nothing checked, and every machine below is placed, ticked and read
+        // back without ever asking what is under it.
+        int y = FixtureSite.OPEN_AIR_Y;
         int z = 2100;
         int xOff = 2100;
 
@@ -165,22 +170,27 @@ public class MachineDomainSmokeSuite extends AbstractSharedServerTest {
 
     // ─────────────────────────────────────────────────────────────────────
     // From MultiblockValidationSmokeTest
-    // Position patch: cutting fixture at (300,64,300); probe sanity at (200..212, 100..102, 200..212)
+    // Position patch: cutting fixture at x/z 300; probe sanity at x/z 200..212. Every Y here is the
+    // open-air band — nothing in this method stands on ground, and until 2026-09-14 they were the
+    // hard-coded 64 and 100 that put them wherever the seed's landscape happened to be.
     // ─────────────────────────────────────────────────────────────────────
 
     @Test
     public void cuttingMachineMultiblockValidatesAndInvalidates() throws Exception {
+        final int probeY = FixtureSite.OPEN_AIR_Y;
         // Step 0 — fixture-builder primitives still healthy.
-        String emptyInfo = join(client().execute("artest machine info 0 200 100 200"));
+        String emptyInfo = join(client().execute("artest machine info 0 200 " + probeY + " 200"));
         assertTrue("empty position machine info wrong: " + emptyInfo,
                 emptyInfo.contains("\"error\":\"no tile entity\""));
         String fill = join(client().execute(
-                "artest fill 0 210 100 210 212 102 212 minecraft:stone"));
+                "artest fill 0 210 " + probeY + " 210 212 " + (probeY + 2) + " 212 minecraft:stone"));
         assertTrue("fill 3x3x3 stone failed: " + fill,
                 fill.contains("\"ok\":true") && fill.contains("\"volume\":27"));
 
-        // Step 1 — build the multiblock fixture.
-        int cx = 300, cy = 64, cz = 300;
+        // Step 1 — build the multiblock fixture. Its Y is the band: a cutting multiblock is
+        // validated by its own STRUCTURE, so it wants nothing under it.
+        final FixtureSite site = FixtureSite.openAir(0, 300, 300);
+        int cx = site.x, cy = site.y, cz = site.z;
         String fixture = join(client().execute(
                 "artest fixture machine cutting 0 " + cx + " " + cy + " " + cz));
         assertTrue("fixture machine cutting failed: " + fixture,
@@ -225,23 +235,28 @@ public class MachineDomainSmokeSuite extends AbstractSharedServerTest {
 
     // ─────────────────────────────────────────────────────────────────────
     // From EnergySystemsSmokeTest
-    // Position patch: battery at (1000,64,1000), solar panel at (1100,100,1100).
+    // Position patch: battery at x/z 1000, solar panel at x/z 1100, both in the open-air band.
     // Friendly globals: time=day, weather=clear. Not restored (no test in this
     // suite depends on natural time/weather).
     // ─────────────────────────────────────────────────────────────────────
 
     @Test
     public void solarPanelAccumulatesEnergyOverTicks() throws Exception {
+        // The band, not terrain. Both Ys were hard-coded (64 and 100) until 2026-09-14, and the
+        // SOLAR one is the reason this is not cosmetic: a panel's generation branch asks whether it
+        // can see the sky, and a fixed Y over generated terrain answers that question with the seed.
+        // The battery's Y never mattered and moves with it so the two stay one decision.
+        final int siteY = FixtureSite.OPEN_AIR_Y;
         // 1. Empty-pos NPE guard.
-        String empty = join(client().execute("artest energy stored 0 1000 64 1000"));
+        String empty = join(client().execute("artest energy stored 0 1000 " + siteY + " 1000"));
         assertTrue("expected 'no tile entity' on empty pos: " + empty,
                 empty.contains("\"no tile entity\""));
 
         // 2. libVulpes creative battery — Forge-energy capability presence (optional).
         String placeBattery = join(client().execute(
-                "artest place 0 1000 64 1000 libvulpes:creativepowerbattery"));
+                "artest place 0 1000 " + siteY + " 1000 libvulpes:creativepowerbattery"));
         if (placeBattery.contains("\"placed\":true")) {
-            String bat = join(client().execute("artest energy stored 0 1000 64 1000"));
+            String bat = join(client().execute("artest energy stored 0 1000 " + siteY + " 1000"));
             assertTrue("creative battery missing IEnergyStorage: " + bat,
                     bat.contains("\"hasEnergy\":true"));
             assertTrue("creative battery has zero capacity: " + bat,
@@ -252,21 +267,21 @@ public class MachineDomainSmokeSuite extends AbstractSharedServerTest {
         client().execute("time set day");
         client().execute("weather clear 100000");
         String placeSolar = join(client().execute(
-                "artest place 0 1100 100 1100 advancedrocketry:solarGenerator"));
+                "artest place 0 1100 " + siteY + " 1100 advancedrocketry:solarGenerator"));
         assertTrue("could not place solarGenerator: " + placeSolar,
                 placeSolar.contains("\"placed\":true"));
 
-        String s0 = join(client().execute("artest energy stored 0 1100 100 1100"));
+        String s0 = join(client().execute("artest energy stored 0 1100 " + siteY + " 1100"));
         assertTrue("solarGenerator missing IEnergyStorage: " + s0,
                 s0.contains("\"hasEnergy\":true"));
         long initial = parseLong(ENERGY_STORED, s0);
         assertTrue("could not read initial energyStored: " + s0, initial >= 0L);
 
         String tick = join(client().execute(
-                "artest tile force-tick 0 1100 100 1100 100"));
+                "artest tile force-tick 0 1100 " + siteY + " 1100 100"));
         assertTrue("force-tick failed: " + tick, tick.contains("\"ok\":true"));
 
-        String s1 = join(client().execute("artest energy stored 0 1100 100 1100"));
+        String s1 = join(client().execute("artest energy stored 0 1100 " + siteY + " 1100"));
         long after = parseLong(ENERGY_STORED, s1);
         assertTrue("solarGenerator did not accumulate energy: initial=" + initial
                         + " after-100-ticks=" + after + " response=" + s1,
@@ -275,12 +290,16 @@ public class MachineDomainSmokeSuite extends AbstractSharedServerTest {
 
     // ─────────────────────────────────────────────────────────────────────
     // From SealedRoomOxygenVentTest
-    // Position patch: 5×5×4 room centred at (1500,64,1500). Vent at floor.
+    // Position patch: 5×5×4 room centred at x/z 1500, in the open-air band. Vent at floor.
     // ─────────────────────────────────────────────────────────────────────
 
     @Test
     public void sealedRoomBecomesBreathableThenLeaks() throws Exception {
-        int bx = 1500, by = 64, bz = 1500;
+        // The room is BUILT here, floor walls and roof, so it needs no ground — and standing it in
+        // the band is what makes "sealed" a property of what this scenario built rather than of
+        // whatever the seed left touching it. The Y was a hard-coded 64 until 2026-09-14.
+        final FixtureSite site = FixtureSite.openAir(0, 1500, 1500);
+        int bx = site.x, by = site.y, bz = site.z;
 
         ok(client().execute("artest fill 0 " + (bx - 2) + " " + (by - 1) + " " + (bz - 2)
                 + " " + (bx + 2) + " " + by + " " + (bz + 2) + " minecraft:stone"));
@@ -411,12 +430,14 @@ public class MachineDomainSmokeSuite extends AbstractSharedServerTest {
 
     // ─────────────────────────────────────────────────────────────────────
     // From SpecialInfrastructureSmokeTest
-    // Position patch: 4 devices at x=700,710,730,740, y=64, z=700.
+    // Position patch: 4 devices at x=700,710,730,740, z=700, in the open-air band.
     // ─────────────────────────────────────────────────────────────────────
 
     @Test
     public void allSpecialBlocksPlaceAndTickWithoutException() throws Exception {
-        int y = 64;
+        // The band, not terrain. Each device is placed, force-ticked and read back; none of them
+        // asks what is beneath it. The Y was a hard-coded 64 until 2026-09-14.
+        int y = FixtureSite.OPEN_AIR_Y;
         int baseX = 700, baseZ = 700;
 
         Map<String, Integer> devices = new LinkedHashMap<>();
@@ -460,12 +481,16 @@ public class MachineDomainSmokeSuite extends AbstractSharedServerTest {
 
     // ─────────────────────────────────────────────────────────────────────
     // From MicrowaveReceiverSmokeTest
-    // Position patch: 5×5 multiblock at (1700..1704, 64, 1700..1704). Controller (xC,yC,zC)=(1702,64,1702).
+    // Position patch: 5×5 multiblock at x/z 1700..1704 in the open-air band. Controller at +2,+2.
     // ─────────────────────────────────────────────────────────────────────
 
     @Test
     public void multiblockValidatesAndTicksWithoutCrash() throws Exception {
-        int x0 = 1700, y = 64, z0 = 1700;
+        // The whole 5x5 is laid by this method, so nothing here wants ground. The Y was a
+        // hard-coded 64 until 2026-09-14, which put a sky-facing receiver under whatever the seed
+        // had grown over it.
+        final FixtureSite site = FixtureSite.openAir(0, 1700, 1700);
+        int x0 = site.x, y = site.y, z0 = site.z;
         int xC = x0 + 2, zC = z0 + 2;
 
         String fill = join(client().execute(
@@ -510,12 +535,14 @@ public class MachineDomainSmokeSuite extends AbstractSharedServerTest {
 
     // ─────────────────────────────────────────────────────────────────────
     // From BlackHoleGeneratorSmokeTest
-    // Position patch: controller at (1800,64,1800), no multiblock structure.
+    // Position patch: controller at x/z 1800 in the open-air band, no multiblock structure.
     // ─────────────────────────────────────────────────────────────────────
 
     @Test
     public void controllerWithoutStructureTicksWithoutCrash() throws Exception {
-        int x = 1800, y = 64, z = 1800;
+        // The band, not terrain: a controller that is ticked without its structure has no interest
+        // in what is under it, and the Y was a hard-coded 64 until 2026-09-14.
+        int x = 1800, y = FixtureSite.OPEN_AIR_Y, z = 1800;
 
         String place = join(client().execute(
                 "artest place 0 " + x + " " + y + " " + z

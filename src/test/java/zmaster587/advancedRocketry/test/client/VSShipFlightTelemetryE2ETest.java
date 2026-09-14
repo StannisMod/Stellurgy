@@ -16,6 +16,7 @@ import java.util.regex.Pattern;
 import javax.imageio.ImageIO;
 
 import zmaster587.advancedRocketry.test.Events;
+import zmaster587.advancedRocketry.test.FixtureSite;
 
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
@@ -127,19 +128,23 @@ public class VSShipFlightTelemetryE2ETest extends AbstractSharedVsClientE2ETest 
 
     @Test
     public void seatedPilotSeesLiveVelocityAndACentredCursorStopsTheShipTurning() throws Exception {
-        // IN THE AIR, and this one site is in the air while its five neighbours are not — because it
-        // is an EXPERIMENT with one variable. Measured 2026-09-14 at four client forks: with the
-        // flight cursor provably inside its dead-zone (worst deflection 0.016 against 0.05), this
-        // craft went on turning at 0.2-0.5 rad/s, oscillating. Nothing was commanding it. It is the
-        // only scenario in this suite that spins a hull while the hull is still standing on its pad
-        // at the bottom of the shared pre-clear's ten-block shaft, and a contact impulse on an
-        // asymmetric hull is off-axis — it spins it.
+        // IN THE AIR. This site was lifted before its neighbours were, as an EXPERIMENT with one
+        // variable. Measured 2026-09-14 at four client forks: with the flight cursor provably inside
+        // its dead-zone (worst deflection 0.016 against 0.05), this craft went on turning at
+        // 0.2-0.5 rad/s, oscillating, with nothing commanding it — and it was the only scenario in
+        // the suite that spins a hull while the hull still stands on its pad at the bottom of the
+        // shared pre-clear's ten-block shaft, where a contact impulse on an asymmetric hull is
+        // off-axis. Same pad, same craft, same load, no shaft: if the turning stopped, the rock was
+        // turning it.
         //
-        // So: same pad, same craft, same load, no shaft. If the turning stops, the rock was turning
-        // it; if it survives, the command latched on the computer and the ground is innocent.
-        final int bx = 3120, by = Plot.DEFAULT_Y, bz = 3120;
+        // THE CONTRAST THIS PARAGRAPH DESCRIBES NO LONGER EXISTS IN THE TREE: every site in this
+        // class stands in the band now, and so does every other ship fixture in the suite. The note
+        // is kept because it says why this one moved first and what its lift was an answer to — not
+        // because a reader can still see the other half of the comparison here.
+        final FixtureSite site = FixtureSite.openAir(0, 3120, 3120);
+        final int bx = site.x, by = site.y, bz = site.z;
 
-        double[] ship = buildAndBoardShip(bx, by, bz);
+        double[] ship = buildAndBoardShip(site);
 
         // --- The HUD panel. Climb, then read the text the CLIENT actually rendered. Before the ship's
         // velocity reached the client the panel had no speed line at all, and no bars.
@@ -364,9 +369,10 @@ public class VSShipFlightTelemetryE2ETest extends AbstractSharedVsClientE2ETest 
 
     @Test
     public void anInvertedShipTurnsThePilotsCameraOverAndKeepsHisEyeOutOfTheDeck() throws Exception {
-        final int bx = 3220, by = 64, bz = 3220;
+        final FixtureSite site = FixtureSite.openAir(0, 3220, 3220);
+        final int bx = site.x, by = site.y, bz = site.z;
 
-        buildAndBoardShip(bx, by, bz);
+        buildAndBoardShip(site);
         bot().waitTicks(20);
 
         double rollUpright = deckCamera("roll");
@@ -436,9 +442,10 @@ public class VSShipFlightTelemetryE2ETest extends AbstractSharedVsClientE2ETest 
 
     @Test
     public void crewStaysOnASteeplyRolledDeckInsteadOfBeingFlungIntoACorner() throws Exception {
-        final int bx = 3320, by = 64, bz = 3320;
+        final FixtureSite site = FixtureSite.openAir(0, 3320, 3320);
+        final int bx = site.x, by = site.y, bz = site.z;
 
-        double[] ship = buildShip(bx, by, bz);
+        double[] ship = buildShip(site);
 
         // Stand a living body on the level deck and let it settle. An armour stand is a living entity
         // with a player's movement rules, and unlike a player it has no client sending positions - so
@@ -512,9 +519,10 @@ public class VSShipFlightTelemetryE2ETest extends AbstractSharedVsClientE2ETest 
 
     @Test
     public void aCrewMemberRidesARotatingDeckWithoutTheCaptureThrashing() throws Exception {
-        final int bx = 3520, by = 64, bz = 3520;
+        final FixtureSite site = FixtureSite.openAir(0, 3520, 3520);
+        final int bx = site.x, by = site.y, bz = site.z;
 
-        double[] ship = buildShip(bx, by, bz);
+        double[] ship = buildShip(site);
         int crewId = dropStandAndAwaitItsCapture(ship);
 
         // Everything from here is counted off THIS body's own release records, since a mark taken
@@ -562,7 +570,8 @@ public class VSShipFlightTelemetryE2ETest extends AbstractSharedVsClientE2ETest 
 
     @Test
     public void aBodyOnADeckWithWorldGroundBelowStaysOnTheDeck() throws Exception {
-        final int bx = 3420, by = 64, bz = 3420;
+        final FixtureSite site = FixtureSite.openAir(0, 3420, 3420);
+        final int bx = site.x, by = site.y, bz = site.z;
 
         // Playtest report: standing on the deck of a DOCKED tier-2 ship (one resting on the ground), the
         // player fell through the deck. A ship's world bounding box overlaps the terrain it sits on, and
@@ -570,7 +579,7 @@ public class VSShipFlightTelemetryE2ETest extends AbstractSharedVsClientE2ETest 
         // the deck of a grounded ship was handed to vanilla, which cannot see the subspace deck and let
         // it fall. The fix keys the takeover on standing on a SHIP block, not on the absence of world
         // ground: a body on the deck is resolved in the ship frame whatever the terrain below does.
-        double[] ship = buildShip(bx, by, bz);
+        double[] ship = buildShip(site);
 
         // A body settled on the actual deck - the exact thing the pilot stands on.
         int standId = dropStandAndAwaitItsCapture(ship);
@@ -642,9 +651,10 @@ public class VSShipFlightTelemetryE2ETest extends AbstractSharedVsClientE2ETest 
 
     @Test
     public void aStationKeepingShipHoldsAltitudeInsteadOfSinking() throws Exception {
-        final int bx = 3620, by = 64, bz = 3620;
+        final FixtureSite site = FixtureSite.openAir(0, 3620, 3620);
+        final int bx = site.x, by = site.y, bz = site.z;
 
-        double[] ship = buildAndBoardShip(bx, by, bz);
+        double[] ship = buildAndBoardShip(site);
 
         // Fly it a couple of blocks up so it is genuinely airborne (and mark it "flown", which arms the
         // unmanned station-keeping hold), then release the throttle.
@@ -741,7 +751,9 @@ public class VSShipFlightTelemetryE2ETest extends AbstractSharedVsClientE2ETest 
      * record, taken since a mark set before this assembly was queued, and {@link #shipInfo()}
      * carries it for the rest of the scenario.</p>
      */
-    private double[] buildShip(int bx, int by, int bz) throws Exception {
+    private double[] buildShip(FixtureSite site) throws Exception {
+        // The site owns the coordinates; these aliases keep the body below unchanged.
+        final int bx = site.x, by = site.y, bz = site.z;
         exec("tp @a " + (bx + 600) + " 120 " + (bz + 600) + " 0 0");
         bot().waitTicks(10);
 
@@ -751,7 +763,7 @@ public class VSShipFlightTelemetryE2ETest extends AbstractSharedVsClientE2ETest 
         // the identity from a nearest-ship lookup at the build site.
         Events events = events();
         long spawnMark = events.markInstrumented();
-        String assemble = assembleFixture(bx, by, bz);
+        String assemble = assembleFixture(site);
         assertTrue("a with-pilot-seat build must route to a ship: " + assemble,
                 assemble.contains("\"rocketCount\":0"));
         scenarioShipId = awaitShipSpawned(events, spawnMark,
@@ -782,8 +794,10 @@ public class VSShipFlightTelemetryE2ETest extends AbstractSharedVsClientE2ETest 
     }
 
     /** Build the ship and sit the bot on its pilot seat; returns the ship's world position. */
-    private double[] buildAndBoardShip(int bx, int by, int bz) throws Exception {
-        double[] ship = buildShip(bx, by, bz);
+    private double[] buildAndBoardShip(FixtureSite site) throws Exception {
+        // The site owns the coordinates; these aliases keep the body below unchanged.
+        final int bx = site.x, by = site.y, bz = site.z;
+        double[] ship = buildShip(site);
         // The seat is located INSIDE this scenario's own ship: `vs seat-mount <dim>` takes the first
         // pilot seat in the world's loaded-tile list with no position filter, which is unambiguous
         // only while the world holds one ship, and mounts a neighbour's once scenarios share one.
@@ -1095,16 +1109,22 @@ public class VSShipFlightTelemetryE2ETest extends AbstractSharedVsClientE2ETest 
         return Integer.parseInt(m.group(1));
     }
 
-    private String assembleFixture(int baseX, int baseY, int baseZ) throws Exception {
-        int cx1 = (baseX - 2) >> 4, cz1 = (baseZ - 2) >> 4;
-        int cx2 = (baseX + 7) >> 4, cz2 = (baseZ + 7) >> 4;
-        assertTrue("chunk warmup failed",
-                exec("artest chunk warmup 0 " + cx1 + " " + cz1 + " " + cx2 + " " + cz2)
-                        .contains("\"ok\":true"));
-        assertTrue("pre-clear failed",
-                exec("artest fill 0 " + (baseX - 2) + " " + (baseY + 1) + " " + (baseZ - 2)
-                        + " " + (baseX + 7) + " " + (baseY + 10) + " " + (baseZ + 7) + " minecraft:air")
-                        .contains("\"ok\":true"));
+    private String assembleFixture(FixtureSite site) throws Exception {
+        // The site owns the coordinates; these aliases keep the body below unchanged.
+        final int baseX = site.x, baseY = site.y, baseZ = site.z;
+        // FIRST link: the volume is EMPTY, measured by the air fill's own `placed`. Open air, so
+        // this ASSERTS rather than digging the shaft it replaces.
+        //
+        // The grounded-deck scenario in this class is not an exception to that and never was: the
+        // "world ground below" it is about is a stone floor IT LAYS under the deck at run time. At a
+        // fixed y=64 the seed's own surface sat near the deck as well, so that experiment had two
+        // floors and controlled one of them. In the band the only world ground is the one the
+        // scenario puts there, which is what makes it an experiment.
+        //
+        // HEIGHT 24 is the ENVELOPE: ~10 of hull, the deck on top, a body standing and jumping on
+        // it, and the room a craft rolled upside down by the mouse sweeps.
+        site.requireClear(this::exec, 2, 24,
+                "the hull, the deck a body rides, and the air the craft rolls and climbs through");
         String fixture = exec("artest fixture rocket 0 " + baseX + " " + baseY + " " + baseZ + " " + VARIANT);
         assertTrue("fixture (" + VARIANT + ") failed: " + fixture, fixture.contains("\"ok\":true"));
         Matcher bp = BUILDER_POS.matcher(fixture);

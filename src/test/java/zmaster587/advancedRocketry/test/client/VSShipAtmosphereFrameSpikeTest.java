@@ -8,6 +8,7 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 import zmaster587.advancedRocketry.test.Events;
+import zmaster587.advancedRocketry.test.FixtureSite;
 import zmaster587.advancedRocketry.test.ShipIdentity;
 
 import static org.junit.Assert.assertTrue;
@@ -71,9 +72,19 @@ public class VSShipAtmosphereFrameSpikeTest extends AbstractSharedVsClientE2ETes
     private static final String VARIANT = "with-pilot-seat";
 
     /** Build site of the ship; distinct from every other VS client test's site. */
-    private static final int BX = 5200, BY = 64, BZ = 5200;
+    private static final FixtureSite SITE = FixtureSite.openAir(0, 5200, 5200);
+    /** The site owns the coordinates; these aliases keep the body below unchanged. */
+    private static final int BX = SITE.x, BY = SITE.y, BZ = SITE.z;
     /** Static control cabin, far from the ship and from its shipyard. */
-    private static final int CX = 5600, CY = 70, CZ = 5600;
+    /**
+     * The static-world cabin's base, in the open-air band. Its Y was a hard-coded 70 until
+     * 2026-09-14 — and this one is not a fixture, so the site counter's own patterns never saw it:
+     * it is spelled {@code CX/CY/CZ}. The cabin is a stone shell this class BUILDS, so it wants no
+     * terrain; what a fixed 70 bought was whatever the seed left touching the shell, and a sealed
+     * volume whose walls may be continuous with the landscape is the one thing this leg must not
+     * be unsure about.
+     */
+    private static final int CX = 5600, CY = FixtureSite.OPEN_AIR_Y, CZ = 5600;
 
     /**
      * How long the atmosphere gate is given to evaluate a moved player, in ticks.
@@ -116,7 +127,7 @@ public class VSShipAtmosphereFrameSpikeTest extends AbstractSharedVsClientE2ETes
         exec("tp @a " + (BX + 0.5) + " " + (BY + 8) + " " + (BZ + 0.5) + " 0 0");
         bot().waitTicks(20);
 
-        String assemble = assembleFixture(BX, BY, BZ);
+        String assemble = assembleFixture(SITE);
         System.out.println("[S1/ship] assemble=" + assemble);
         assertTrue("a with-pilot-seat build must route to a VS ship (no rocket): " + assemble,
                 assemble.contains("\"rocketCount\":0"));
@@ -345,16 +356,15 @@ public class VSShipAtmosphereFrameSpikeTest extends AbstractSharedVsClientE2ETes
         return m.find() ? Integer.parseInt(m.group(1)) : -1;
     }
 
-    private String assembleFixture(int baseX, int baseY, int baseZ) throws Exception {
-        int cx1 = (baseX - 2) >> 4, cz1 = (baseZ - 2) >> 4;
-        int cx2 = (baseX + 7) >> 4, cz2 = (baseZ + 7) >> 4;
-        assertTrue("chunk warmup failed",
-                exec("artest chunk warmup 0 " + cx1 + " " + cz1 + " " + cx2 + " " + cz2)
-                        .contains("\"ok\":true"));
-        assertTrue("pre-clear failed",
-                exec("artest fill 0 " + (baseX - 2) + " " + (baseY + 1) + " " + (baseZ - 2)
-                        + " " + (baseX + 7) + " " + (baseY + 10) + " " + (baseZ + 7) + " minecraft:air")
-                        .contains("\"ok\":true"));
+    private String assembleFixture(FixtureSite site) throws Exception {
+        // The site owns the coordinates; these aliases keep the body below unchanged.
+        final int baseX = site.x, baseY = site.y, baseZ = site.z;
+        // FIRST link: the volume the hull and the cabin built on it occupy is EMPTY, measured by
+        // the air fill's own `placed`. Open air, so this ASSERTS rather than digs. It matters more
+        // here than in most: the subject is a SEALED cabin, and a shell whose stone is continuous
+        // with the pit's wall is not the shape this leg believes it built.
+        site.requireClear(this::exec, 2, 16,
+                "the hull, and the sealed cabin raised on it");
         String fixture = exec("artest fixture rocket 0 " + baseX + " " + baseY + " " + baseZ
                 + " " + VARIANT);
         assertTrue("fixture (" + VARIANT + ") failed: " + fixture, fixture.contains("\"ok\":true"));

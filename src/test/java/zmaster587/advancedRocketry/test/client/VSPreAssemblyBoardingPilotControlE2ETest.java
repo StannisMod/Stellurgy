@@ -12,6 +12,7 @@ import org.junit.runners.MethodSorters;
 import org.lwjgl.input.Keyboard;
 
 import zmaster587.advancedRocketry.test.Events;
+import zmaster587.advancedRocketry.test.FixtureSite;
 
 import static org.junit.Assert.assertTrue;
 
@@ -104,18 +105,36 @@ public class VSPreAssemblyBoardingPilotControlE2ETest extends AbstractSharedVsCl
      */
     private String shipUuid;
     private static final Pattern DUMMY_ID = Pattern.compile("\"dummyId\":(-?\\d+)");
-    private static final Pattern SEAT_XYZ = Pattern.compile(
+    private static final Pattern SEAT_POS = Pattern.compile(
             "\"seatX\":(-?\\d+),\"seatY\":(-?\\d+),\"seatZ\":(-?\\d+)");
 
     private static final String VARIANT = "with-pilot-seat";
-    private static final int BX = 2800, BY = 64, BZ = 2800;
+
+    /**
+     * THIS CLASS'S SITE IS PER-SCENARIO, and it was one shared constant until 2026-09-14.
+     *
+     * <p>Both scenarios built at (2800, 2800) on one shared client, and therefore in one world.
+     * Nothing said so: the pit pre-clear each of them ran silently levelled whatever the other had
+     * left standing, so the overlap could not be seen from inside either test. The first link's
+     * arithmetic found it the moment the site moved into the band and the clear became an
+     * ASSERTION — <i>18 of the 1600 blocks in the working area were NOT air</i>, which is the
+     * previous scenario's structure tower and rocket builder, left behind when its craft was cut
+     * into a ship.</p>
+     *
+     * <p>The fix is the suite's own rule and not a teardown: one plot per scenario, never recycled.
+     * A teardown has to be remembered and can fail; a plot nobody else looks at cannot.</p>
+     */
+    private FixtureSite site;
+
+    /** This scenario's base, from its own site. */
+    private int bx, by, bz;
 
     /**
      * Where the fixture puts the pilot seat: the craft's centre column is (baseX+3, baseZ+3) and the
      * seat caps it four blocks above the craft's base row (which itself sits one above the pad).
      * Measured against the world before the click, never trusted blind.
      */
-    private static final int SEAT_X = BX + 3, SEAT_Y = BY + 5, SEAT_Z = BZ + 3;
+    private int seatX, seatY, seatZ;
 
     /**
      * A clear spot on the launchpad, two blocks north of the craft's column and well inside the
@@ -123,7 +142,21 @@ public class VSPreAssemblyBoardingPilotControlE2ETest extends AbstractSharedVsCl
      * slide off before it is damped). The craft occupies only the z=baseZ+3 slice, so this column
      * is empty from the pad up.
      */
-    private static final double STAND_X = BX + 3.5, STAND_Y = BY + 1, STAND_Z = BZ + 1.5;
+    private double standX, standY, standZ;
+
+    /** Bind this scenario to its own plot; every coordinate below is derived from it. */
+    private void useSite(FixtureSite chosen) {
+        this.site = chosen;
+        this.bx = chosen.x;
+        this.by = chosen.y;
+        this.bz = chosen.z;
+        this.seatX = bx + 3;
+        this.seatY = by + 5;
+        this.seatZ = bz + 3;
+        this.standX = bx + 3.5;
+        this.standY = by + 1;
+        this.standZ = bz + 1.5;
+    }
 
     /**
      * The server refuses a block interaction beyond (reach + 3) blocks, so wherever the client
@@ -209,7 +242,7 @@ public class VSPreAssemblyBoardingPilotControlE2ETest extends AbstractSharedVsCl
      */
     @Test
     public void aPilotWhoRightClickedTheSeatBeforeAssemblyCanFlyTheShip() throws Exception {
-        runPreAssemblyBoardingScenario(Boarding.RIGHT_CLICK);
+        runPreAssemblyBoardingScenario(FixtureSite.openAir(0, 2800, 2800), Boarding.RIGHT_CLICK);
     }
 
     /**
@@ -219,14 +252,17 @@ public class VSPreAssemblyBoardingPilotControlE2ETest extends AbstractSharedVsCl
      */
     @Test
     public void aPilotBoardedByProbeBeforeAssemblyCanFlyTheShip() throws Exception {
-        runPreAssemblyBoardingScenario(Boarding.PROBE);
+        // ITS OWN PLOT, a hundred blocks from the right-click scenario's. The two shared one until
+        // 2026-09-14 and each silently levelled the other's leavings with its pre-clear.
+        runPreAssemblyBoardingScenario(FixtureSite.openAir(0, 2900, 2900), Boarding.PROBE);
     }
 
     /**
      * The shared scenario, so the two variants cannot drift apart: build loose, board (by
      * {@code how}), assemble, settle, measure a no-key control leg, then measure the key-held climb.
      */
-    private void runPreAssemblyBoardingScenario(Boarding how) throws Exception {
+    private void runPreAssemblyBoardingScenario(FixtureSite plot, Boarding how) throws Exception {
+        useSite(plot);
 
         // The subsystem must actually be up, or the run silently degrades into a different
         // configuration than the one a player is in and its result would mean nothing.
@@ -235,12 +271,12 @@ public class VSPreAssemblyBoardingPilotControlE2ETest extends AbstractSharedVsCl
                         + "config is what opts it in: " + status,
                 status.contains("\"registered\":true"));
 
-        exec("tp @a " + (BX + 600) + " 120 " + (BZ + 600) + " 0 0");
+        exec("tp @a " + (bx + 600) + " 120 " + (bz + 600) + " 0 0");
         bot().waitTicks(10);
 
         // Build the craft as LOOSE BLOCKS only. Assembly is deliberately deferred until after the
         // player has taken his seat - that ordering is the entire experiment.
-        buildLooseFixture(BX, BY, BZ, VARIANT);
+        buildLooseFixture(site, VARIANT);
 
         // Stand the client on the pad, next to the craft. The wait is not cosmetic: the server
         // ignores block interactions while a teleport it issued is still unconfirmed by the client,
@@ -248,7 +284,7 @@ public class VSPreAssemblyBoardingPilotControlE2ETest extends AbstractSharedVsCl
         // RECORD — the pos-look packet the teleport arrives as — so it is awaited rather than
         // counted out in ticks, and the mark is taken before the command that must produce it.
         long standMark = clientEvents().mark();
-        exec("tp @a " + STAND_X + " " + STAND_Y + " " + STAND_Z + " 0 0");
+        exec("tp @a " + standX + " " + standY + " " + standZ + " 0 0");
         clientEvents().await(standMark, "client_pos_look_applied",
                 "the stand-beside-the-craft teleport must be APPLIED on the client before anything"
                         + " is asked of it or clicked through it", CLIENT_TERRAIN_BUDGET_TICKS);
@@ -263,13 +299,13 @@ public class VSPreAssemblyBoardingPilotControlE2ETest extends AbstractSharedVsCl
         // This class runs the scenario twice against one shared client, and on the second pass the
         // seat's chunk may already be applied — nobody owes a record then, and an unconditional wait
         // would spend its whole budget learning that.
-        JsonObject seatBlock = bot().blockState(SEAT_X, SEAT_Y, SEAT_Z);
+        JsonObject seatBlock = bot().blockState(seatX, seatY, seatZ);
         if (!(seatBlock.has("loaded") && seatBlock.get("loaded").getAsBoolean())) {
             clientEvents().awaitCarrying(standMark, "chunk_data_applied",
-                    "\"cx\":" + (SEAT_X >> 4) + ",\"cz\":" + (SEAT_Z >> 4) + ",",
+                    "\"cx\":" + (seatX >> 4) + ",\"cz\":" + (seatZ >> 4) + ",",
                     "the seat's chunk must reach the client before its block can be measured",
                     CLIENT_TERRAIN_BUDGET_TICKS);
-            seatBlock = bot().blockState(SEAT_X, SEAT_Y, SEAT_Z);
+            seatBlock = bot().blockState(seatX, seatY, seatZ);
         }
         boolean seatChunkLoaded = seatBlock.has("loaded") && seatBlock.get("loaded").getAsBoolean();
         String seatName = seatChunkLoaded ? seatBlock.get("block").getAsString() : "";
@@ -278,7 +314,7 @@ public class VSPreAssemblyBoardingPilotControlE2ETest extends AbstractSharedVsCl
                         + "one. measured=" + seatBlock,
                 seatChunkLoaded);
         scenario().requireArranged("the block the test is about to board must really be the pilot seat "
-                        + "as the CLIENT sees it, at (" + SEAT_X + "," + SEAT_Y + "," + SEAT_Z
+                        + "as the CLIENT sees it, at (" + seatX + "," + seatY + "," + seatZ
                         + "). measured=" + seatBlock,
                 seatName.toLowerCase(Locale.ROOT).contains("pilotseat"));
 
@@ -333,8 +369,8 @@ public class VSPreAssemblyBoardingPilotControlE2ETest extends AbstractSharedVsCl
                 entityClassOf(riding).contains("EntityDummy"));
         double mountDistSq = distanceSqFromMountToSeatCentre(riding);
         scenario().requireArranged("the mount the bot is riding is not "
-                        + "at the seat it was supposed to board, at (" + SEAT_X + "," + SEAT_Y + ","
-                        + SEAT_Z + "). boarding=" + how + " distSq=" + mountDistSq
+                        + "at the seat it was supposed to board, at (" + seatX + "," + seatY + ","
+                        + seatZ + "). boarding=" + how + " distSq=" + mountDistSq
                         + " limit=" + MOUNT_AT_SEAT_DIST_SQ + " riding=" + riding,
                 mountDistSq < MOUNT_AT_SEAT_DIST_SQ);
 
@@ -529,8 +565,8 @@ public class VSPreAssemblyBoardingPilotControlE2ETest extends AbstractSharedVsCl
         // relocation from a leftover world-frame copy (which would explain pilot input landing on
         // a world-coordinate seat in live play).
         System.out.println("[PASTE-SITE] boarding=" + how
-                + " seatBuild=" + bot().blockState(SEAT_X, SEAT_Y, SEAT_Z)
-                + " seatPaste=" + bot().blockState(SEAT_X, SEAT_Y + 1, SEAT_Z));
+                + " seatBuild=" + bot().blockState(seatX, seatY, seatZ)
+                + " seatPaste=" + bot().blockState(seatX, seatY + 1, seatZ));
 
         // The ship's IDENTITY, taken from its CREATION. This scenario built the craft and assembled
         // it, so it was already TOLD which ship that is: the assembly records `ship_spawned`, read
@@ -608,7 +644,7 @@ public class VSPreAssemblyBoardingPilotControlE2ETest extends AbstractSharedVsCl
         // measurement windows ran on the live ship), so anything still at the paste site is a
         // LINGERING world-frame copy, not relocation-in-progress.
         System.out.println("[PASTE-SITE post-flight] boarding=" + how
-                + " seatPaste=" + bot().blockState(SEAT_X, SEAT_Y + 1, SEAT_Z));
+                + " seatPaste=" + bot().blockState(seatX, seatY + 1, seatZ));
 
         // Delivery-chain diagnostics, gathered AFTER the key-held window so they describe this very
         // attempt. Folded into the failure message: a red run must name the gate that ate the
@@ -684,7 +720,7 @@ public class VSPreAssemblyBoardingPilotControlE2ETest extends AbstractSharedVsCl
         double distSq = Double.POSITIVE_INFINITY;
         for (int attempt = 0; attempt < 5 && distSq >= MAX_INTERACT_DIST_SQ; attempt++) {
             if (attempt > 0) {
-                exec("tp @a " + STAND_X + " " + STAND_Y + " " + STAND_Z + " 0 0");
+                exec("tp @a " + standX + " " + standY + " " + standZ + " 0 0");
             }
             // The wait is load-bearing twice over: the server drops interactions while its own
             // teleport is unconfirmed, and the client needs time to damp any leftover motion.
@@ -738,7 +774,7 @@ public class VSPreAssemblyBoardingPilotControlE2ETest extends AbstractSharedVsCl
                         + "held item. held=" + heldId,
                 heldId != null && heldId.isEmpty());
 
-        return "click=" + bot().interactBlock(SEAT_X, SEAT_Y, SEAT_Z);
+        return "click=" + bot().interactBlock(seatX, seatY, seatZ);
     }
 
     /**
@@ -754,15 +790,15 @@ public class VSPreAssemblyBoardingPilotControlE2ETest extends AbstractSharedVsCl
 
         // The probe takes the first pilot seat it finds anywhere in the world; pin that it found
         // OUR seat, at the position the block measurement just verified.
-        Matcher sm = SEAT_XYZ.matcher(mountInfo);
+        Matcher sm = SEAT_POS.matcher(mountInfo);
         scenario().requireArranged("seat-mount must report the seat position it bound: " + mountInfo,
                 sm.find());
-        scenario().requireArranged("the seat the probe bound must be the fixture's seat at (" + SEAT_X
-                        + "," + SEAT_Y + "," + SEAT_Z + "), not some other pilot seat in the world: "
+        scenario().requireArranged("the seat the probe bound must be the fixture's seat at (" + seatX
+                        + "," + seatY + "," + seatZ + "), not some other pilot seat in the world: "
                         + mountInfo,
-                Integer.parseInt(sm.group(1)) == SEAT_X
-                        && Integer.parseInt(sm.group(2)) == SEAT_Y
-                        && Integer.parseInt(sm.group(3)) == SEAT_Z);
+                Integer.parseInt(sm.group(1)) == seatX
+                        && Integer.parseInt(sm.group(2)) == seatY
+                        && Integer.parseInt(sm.group(3)) == seatZ);
 
         Matcher dm = DUMMY_ID.matcher(mountInfo);
         scenario().requireArranged("seat-mount must report a dummy id: " + mountInfo, dm.find());
@@ -984,7 +1020,7 @@ public class VSPreAssemblyBoardingPilotControlE2ETest extends AbstractSharedVsCl
     }
 
     /** How far the ridden mount sits from the seat block's centre, or {@code +inf} if unreported. */
-    private static double distanceSqFromMountToSeatCentre(JsonObject riding) {
+    private double distanceSqFromMountToSeatCentre(JsonObject riding) {
         if (riding == null || !riding.has("posX") || !riding.has("posY") || !riding.has("posZ")) {
             return Double.POSITIVE_INFINITY;
         }
@@ -992,10 +1028,11 @@ public class VSPreAssemblyBoardingPilotControlE2ETest extends AbstractSharedVsCl
                 riding.get("posY").getAsDouble(), riding.get("posZ").getAsDouble());
     }
 
-    private static double distanceSqToSeatCentre(double x, double y, double z) {
-        double dx = x - (SEAT_X + 0.5);
-        double dy = y - (SEAT_Y + 0.5);
-        double dz = z - (SEAT_Z + 0.5);
+    /** Instance, not static: the seat it measures to belongs to THIS scenario's plot. */
+    private double distanceSqToSeatCentre(double x, double y, double z) {
+        double dx = x - (seatX + 0.5);
+        double dy = y - (seatY + 0.5);
+        double dz = z - (seatZ + 0.5);
         return dx * dx + dy * dy + dz * dz;
     }
 
@@ -1006,16 +1043,15 @@ public class VSPreAssemblyBoardingPilotControlE2ETest extends AbstractSharedVsCl
      * post-assembly-boarding tests which do both at once, because the player has to be able to sit
      * down in between.
      */
-    private void buildLooseFixture(int baseX, int baseY, int baseZ, String variant) throws Exception {
-        int cx1 = (baseX - 2) >> 4, cz1 = (baseZ - 2) >> 4;
-        int cx2 = (baseX + 7) >> 4, cz2 = (baseZ + 7) >> 4;
-        scenario().requireArranged("chunk warmup failed",
-                exec("artest chunk warmup 0 " + cx1 + " " + cz1 + " " + cx2 + " " + cz2)
-                        .contains("\"ok\":true"));
-        scenario().requireArranged("pre-clear failed",
-                exec("artest fill 0 " + (baseX - 2) + " " + (baseY + 1) + " " + (baseZ - 2)
-                        + " " + (baseX + 7) + " " + (baseY + 10) + " " + (baseZ + 7) + " minecraft:air")
-                        .contains("\"ok\":true"));
+    private void buildLooseFixture(FixtureSite site, String variant) throws Exception {
+        // The site owns the coordinates; these aliases keep the body below unchanged.
+        final int baseX = site.x, baseY = site.y, baseZ = site.z;
+        // FIRST link: the volume is EMPTY, measured by the air fill's own `placed`. Open air, so
+        // this ASSERTS rather than digs. It matters here because the player WALKS to the loose
+        // craft and clicks its seat before anything is assembled — a pit puts him on a rim a metre
+        // above the block he is aiming at, and the red then reads as the right-click path.
+        site.requireClear(this::exec, 2, 16,
+                "the loose craft, and the air the player stands and clicks in beside it");
         String fixture = exec("artest fixture rocket 0 " + baseX + " " + baseY + " " + baseZ + " " + variant);
         scenario().requireArranged("fixture (" + variant + ") failed: " + fixture, fixture.contains("\"ok\":true"));
         Matcher bp = BUILDER_POS.matcher(fixture);

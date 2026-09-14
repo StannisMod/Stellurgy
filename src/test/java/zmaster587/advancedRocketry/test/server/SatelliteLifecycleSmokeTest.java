@@ -125,7 +125,13 @@ public class SatelliteLifecycleSmokeTest extends AbstractSharedServerTest {
      */
     @Test
     public void satelliteTerminalListsAttachedSatellites() throws Exception {
-        int bx = 1800, by = 70, bz = 1900;
+        // The terminal stands in the OPEN-AIR BAND, not on terrain. Its Y was a hard-coded 70 until
+        // 2026-09-14 and the scenario never wanted ground: a terminal resolves a chip to a live
+        // satellite, which has nothing to do with what is under it. What 70 bought was whatever the
+        // pinned seed rolled here, and the 3x3x3 clear below then reads as a pocket in rock rather
+        // than as air. In the band there is nothing to be inside of, and the clear below keeps its
+        // own job — the place must not silently replace some other block.
+        int bx = 1800, by = zmaster587.advancedRocketry.test.FixtureSite.OPEN_AIR_Y, bz = 1900;
         ok(client().execute("artest fill 0 " + (bx - 1) + " " + (by - 1) + " " + (bz - 1)
                 + " " + (bx + 1) + " " + (by + 1) + " " + (bz + 1) + " minecraft:air"));
 

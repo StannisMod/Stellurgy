@@ -6,6 +6,8 @@ import org.junit.Test;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import zmaster587.advancedRocketry.test.FixtureSite;
+
 import static org.junit.Assert.assertTrue;
 
 /**
@@ -24,7 +26,14 @@ public class RocketLaunchSmokeTest extends AbstractHeadlessServerTest {
 
     @Test
     public void assembledRocketTransitionsToFlight() throws Exception {
-        int baseX = 600, baseY = 64, baseZ = 600;
+        final FixtureSite site = FixtureSite.openAir(0, 600, 600);
+        // The site owns the coordinates; these aliases keep the body below unchanged.
+        final int baseX = site.x, baseY = site.y, baseZ = site.z;
+        // FIRST link: the volume this craft is built and LAUNCHED out of is EMPTY. The site stands
+        // in open air, so this ASSERTS rather than digs; the height covers the hull and the first
+        // blocks of its climb, which is the only part of the lane the scenario stays to watch.
+        site.requireClear(cmd -> String.join("\n", client().execute(cmd)), 2, 10,
+                "the craft is built here and launched straight up out of this volume");
         String fixture = String.join("\n", client().execute(
                 "artest fixture rocket 0 " + baseX + " " + baseY + " " + baseZ));
         assertTrue("fixture rocket failed: " + fixture, fixture.contains("\"ok\":true"));

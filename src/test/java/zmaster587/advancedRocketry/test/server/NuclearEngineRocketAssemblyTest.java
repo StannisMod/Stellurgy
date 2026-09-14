@@ -5,6 +5,8 @@ import org.junit.Test;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import zmaster587.advancedRocketry.test.FixtureSite;
+
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
@@ -68,7 +70,7 @@ public class NuclearEngineRocketAssemblyTest extends AbstractSharedServerTest {
 
     @Test
     public void nuclearCoreAboveMotorContributesNuclearThrust() throws Exception {
-        int entityId = buildAndAssemble(1700, 64, 500, "with-nuclear-stack");
+        int entityId = buildAndAssemble(FixtureSite.openAir(0, 1700, 500), "with-nuclear-stack");
         String info = String.join("\n",
                 client().execute("artest rocket info " + entityId));
         // Both nuclear motors must register in engineCount via the
@@ -90,8 +92,8 @@ public class NuclearEngineRocketAssemblyTest extends AbstractSharedServerTest {
         // REJECTS the rocket entirely. The probe surfaces the scan status
         // when not SUCCESS, mirroring the chat / GUI error the player
         // sees when they hit "Build" without proper engine wiring.
-        int baseX = 1800, baseY = 64, baseZ = 500;
-        String assemble = setupAndAttemptAssemble(baseX, baseY, baseZ, "with-nuclear-misplaced");
+        String assemble = setupAndAttemptAssemble(
+                FixtureSite.openAir(0, 1800, 500), "with-nuclear-misplaced");
         // Player-visible contract — nuclear motor with core misplaced
         // (no IRocketEngine or IRocketNuclearCore below) leaves
         // thrustNuclearReactorLimit=0 -> nuclearTotalLimit=0 ->
@@ -107,12 +109,14 @@ public class NuclearEngineRocketAssemblyTest extends AbstractSharedServerTest {
     /** Run fixture + assemble but DON'T assert SUCCESS — returns the raw
      *  assemble response so the caller can pin a specific error status
      *  (e.g. NOENGINES) on the failure path. */
-    private String setupAndAttemptAssemble(int baseX, int baseY, int baseZ, String variant) throws Exception {
-        int cx1 = (baseX - 2) >> 4, cz1 = (baseZ - 2) >> 4;
-        int cx2 = (baseX + 7) >> 4, cz2 = (baseZ + 7) >> 4;
-        client().execute("artest chunk warmup 0 " + cx1 + " " + cz1 + " " + cx2 + " " + cz2);
-        client().execute("artest fill 0 " + (baseX - 2) + " " + (baseY + 1) + " " + (baseZ - 2)
-                + " " + (baseX + 7) + " " + (baseY + 10) + " " + (baseZ + 7) + " minecraft:air");
+    private String setupAndAttemptAssemble(FixtureSite site, String variant) throws Exception {
+        // The site owns the coordinates; these aliases keep the body below unchanged.
+        final int baseX = site.x, baseY = site.y, baseZ = site.z;
+        // FIRST link: the volume this build stands in is EMPTY. The site is in open air, so this
+        // ASSERTS rather than digs, and its fill force-loads every chunk in the box — the warmup it
+        // replaces lost nothing. Nothing flies here: the subject is the assembly scan's REFUSAL.
+        site.requireClear(cmd -> String.join("\n", client().execute(cmd)), 2, 10,
+                "the build the assembly scan must reject stands in this volume");
         String fixture = String.join("\n", client().execute(
                 "artest fixture rocket 0 " + baseX + " " + baseY + " " + baseZ + " " + variant));
         assertTrue("fixture (" + variant + ") failed: " + fixture, fixture.contains("\"ok\":true"));
@@ -125,20 +129,15 @@ public class NuclearEngineRocketAssemblyTest extends AbstractSharedServerTest {
                 "artest rocket assemble 0 " + bx + " " + by + " " + bz));
     }
 
-    /** Mirror of RocketAssemblySmokeTest#buildAndAssemble (chunk warmup,
-     *  air pre-clear, fixture, assemble, return last spawned rocket id). */
-    private int buildAndAssemble(int baseX, int baseY, int baseZ, String variant) throws Exception {
-        int cx1 = (baseX - 2) >> 4, cz1 = (baseZ - 2) >> 4;
-        int cx2 = (baseX + 7) >> 4, cz2 = (baseZ + 7) >> 4;
-        String warmup = String.join("\n", client().execute(
-                "artest chunk warmup 0 " + cx1 + " " + cz1 + " " + cx2 + " " + cz2));
-        assertTrue("chunk warmup failed: " + warmup, warmup.contains("\"ok\":true"));
-
-        String fillAir = String.join("\n", client().execute(
-                "artest fill 0 " + (baseX - 2) + " " + (baseY + 1) + " " + (baseZ - 2)
-                        + " " + (baseX + 7) + " " + (baseY + 10) + " " + (baseZ + 7)
-                        + " minecraft:air"));
-        assertTrue("pre-clear failed: " + fillAir, fillAir.contains("\"ok\":true"));
+    /** Mirror of RocketAssemblySmokeTest#buildAndAssemble (clear-site check,
+     *  fixture, assemble, return last spawned rocket id). */
+    private int buildAndAssemble(FixtureSite site, String variant) throws Exception {
+        // The site owns the coordinates; these aliases keep the body below unchanged.
+        final int baseX = site.x, baseY = site.y, baseZ = site.z;
+        // FIRST link: the volume this craft is built in is EMPTY. Open air, so it ASSERTS rather
+        // than digs, and the fill inside it force-loads every chunk in the box.
+        site.requireClear(cmd -> String.join("\n", client().execute(cmd)), 2, 10,
+                "the craft whose thrust is read stands in this volume");
 
         String fixture = String.join("\n", client().execute(
                 "artest fixture rocket 0 " + baseX + " " + baseY + " " + baseZ + " " + variant));

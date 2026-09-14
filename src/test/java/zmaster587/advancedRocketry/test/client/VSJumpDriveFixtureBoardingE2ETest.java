@@ -14,6 +14,7 @@ import org.lwjgl.input.Keyboard;
 
 import zmaster587.advancedRocketry.hyperdrive.DriveTuning;
 import zmaster587.advancedRocketry.test.Events;
+import zmaster587.advancedRocketry.test.FixtureSite;
 
 import static org.junit.Assert.assertTrue;
 
@@ -89,7 +90,9 @@ public class VSJumpDriveFixtureBoardingE2ETest extends AbstractSharedVsClientE2E
      * the class is addressed to it: the base coordinates locate the fixture, never the ship.
      */
     private String scenarioShipId;
-    private static final int BX = 2900, BY = 64, BZ = 2900;
+    private static final FixtureSite SITE = FixtureSite.openAir(0, 2900, 2900);
+    /** The site owns the coordinates; these aliases keep the body below unchanged. */
+    private static final int BX = SITE.x, BY = SITE.y, BZ = SITE.z;
 
     /** The craft's own centre column on the pad, and the deck level the pilot walks on. */
     private static final int CRAFT_X = BX + 3, CRAFT_Y = BY + 1, CRAFT_Z = BZ + 3;
@@ -608,15 +611,12 @@ public class VSJumpDriveFixtureBoardingE2ETest extends AbstractSharedVsClientE2E
      */
 
     private String assembleFixture() throws Exception {
-        int cx1 = (BX - 2) >> 4, cz1 = (BZ - 2) >> 4;
-        int cx2 = (BX + 7) >> 4, cz2 = (BZ + 7) >> 4;
-        scenario().requireArranged("chunk warmup failed",
-                exec("artest chunk warmup 0 " + cx1 + " " + cz1 + " " + cx2 + " " + cz2)
-                        .contains("\"ok\":true"));
-        scenario().requireArranged("pre-clear failed",
-                exec("artest fill 0 " + (BX - 2) + " " + (BY + 1) + " " + (BZ - 2)
-                        + " " + (BX + 7) + " " + (BY + 12) + " " + (BZ + 7) + " minecraft:air")
-                        .contains("\"ok\":true"));
+        // FIRST link: the volume is EMPTY, measured by the air fill's own `placed` — the number the
+        // pre-clear it replaces was throwing away. Open air, so this ASSERTS rather than digs.
+        // The height goes past this fixture's 12: the jump-drive variant is the tallest in the
+        // catalogue and the pilot walks its deck, so the envelope is the hull plus the room above it.
+        SITE.requireClear(this::exec, 2, 20,
+                "the jump-drive hull, and the deck the pilot boards it across");
         String fixture = exec("artest fixture rocket 0 " + BX + " " + BY + " " + BZ + " " + VARIANT);
         scenario().requireArranged("fixture (" + VARIANT + ") failed: " + fixture,
                 fixture.contains("\"ok\":true"));

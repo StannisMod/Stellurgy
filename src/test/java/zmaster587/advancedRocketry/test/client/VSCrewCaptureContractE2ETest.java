@@ -11,6 +11,7 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 import zmaster587.advancedRocketry.test.Events;
+import zmaster587.advancedRocketry.test.FixtureSite;
 import zmaster587.advancedRocketry.test.ShipIdentity;
 
 import static org.junit.Assert.assertEquals;
@@ -151,13 +152,14 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
 
     @Test
     public void jumpingOnTheTopDeckKeepsTheCaptureAndLandsBackOnIt() throws Exception {
-        final int bx = 5220, by = 64, bz = 5220;
+        final FixtureSite site = FixtureSite.openAir(0, 5220, 5220);
+        final int bx = site.x, by = site.y, bz = site.z;
 
         // The subject is on the HARD side of the geometry: the fixture's walkable deck is the hull's
         // TOP surface, so the player's feet stand at the ship's world-AABB ceiling and a vanilla jump
         // apex (~1.25) pokes above the old grown-box gate. On the old gate this exact jump released
         // the capture mid-air; the contract is that it must not.
-        double[] ship = buildShip(bx, by, bz);
+        double[] ship = buildShip(site);
         Events client = clientEvents();
         long arrivalMark = client.mark();
         exec("tp @a " + ship[0] + " " + (ship[1] + 4) + " " + ship[2] + " 0 0");
@@ -260,9 +262,10 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
 
     @Test
     public void walkingOnTheGroundBesideAParkedShipNeverEntersItsFrame() throws Exception {
-        final int bx = 5320, by = 64, bz = 5320;
+        final FixtureSite site = FixtureSite.openAir(0, 5320, 5320);
+        final int bx = site.x, by = site.y, bz = site.z;
 
-        double[] ship = buildShip(bx, by, bz);
+        double[] ship = buildShip(site);
 
         // Tilt the parked ship: an axis-aligned world box around a rotated hull over-includes a large
         // ground area, and a tilted transform is what aliased a GROUND position onto a subspace block
@@ -361,14 +364,15 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
 
     @Test
     public void aStillCrewMemberOnASteeplyRolledDeckIsNotDraggedSideways() throws Exception {
-        final int bx = 5420, by = 64, bz = 5420;
+        final FixtureSite site = FixtureSite.openAir(0, 5420, 5420);
+        final int bx = site.x, by = site.y, bz = site.z;
 
         // Board and stand up on the LEVEL deck (the dismount seed captures the ex-pilot), then roll
         // the unmanned ship past vertical and HOLD it - the closest headless stand-in for the live
         // "walking an inverted deck" configuration (the AFC caps commanded rolls near ~160; a true
         // 180 needs a free spin that VS damps). The playtest symptom: with NO input, the crew member
         // is dragged sideways while the CLIENT capture thrashes (drop + re-capture every few ticks).
-        buildAndBoardShip(bx, by, bz);
+        buildAndBoardShip(site);
         // A seated body is an EXCLUDED state and is never captured, so the capture the dismount seed
         // installs is a genuine new link and not a record that was already arriving. Awaited rather
         // than waited out: the seed is refused for the few ticks the client's own `isRiding` lingers,
@@ -467,13 +471,14 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
 
     @Test
     public void aStillCrewMemberOnAHoveringShipIsNotDraggedSideways() throws Exception {
-        final int bx = 5520, by = 64, bz = 5520;
+        final FixtureSite site = FixtureSite.openAir(0, 5520, 5520);
+        final int bx = site.x, by = site.y, bz = site.z;
 
         // The playtest ship is not attitude-HELD by a probe - it HOVERS under station-keeping, which
         // never brings it fully to rest (a ~-0.01/tick vertical residual plus correction wobble).
         // The reported no-input sideways drag lives on that configuration, upright included - so the
         // subject here is a real hover: lift with the pilot's own vertical key, stand up, hold still.
-        buildAndBoardShip(bx, by, bz);
+        buildAndBoardShip(site);
 
         // The delivery link, the window and why the climb is measured rather than awaited all live
         // in the helper.
@@ -537,13 +542,14 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
 
     @Test
     public void walkingAndJumpingOnAHoveringShipDoesNotChurnTheCapture() throws Exception {
-        final int bx = 5620, by = 64, bz = 5620;
+        final FixtureSite site = FixtureSite.openAir(0, 5620, 5620);
+        final int bx = site.x, by = site.y, bz = site.z;
 
         // The round-11 playtest drag happens on a NEARLY-LEVEL hovering ship while the crew member
         // is actively walking and jumping - the still-crew pins stayed green while the live drag
         // persisted, so ACTIVITY is the missing axis. Same arrangement as the still-hover pin, plus
         // real W walking and real SPACE jumps through the window.
-        buildAndBoardShip(bx, by, bz);
+        buildAndBoardShip(site);
         // The delivery link, the window and why the climb is measured rather than awaited all live
         // in the helper.
         hoverOnPilotThrust(scenarioShipId, CLEAR_HOVER_GAIN_BLOCKS);
@@ -785,7 +791,8 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
 
     @Test
     public void aPerTickTraceShowsWhatTheDeckPoseDoesAcrossAPacketGap() throws Exception {
-        final int bx = 6520, by = 64, bz = 6520;
+        final FixtureSite site = FixtureSite.openAir(0, 6520, 6520);
+        final int bx = site.x, by = site.y, bz = site.z;
 
         // A SPIKE, and it is allowed to come back "no". The client's pose source only behaves
         // differently on the ticks a pose does NOT arrive for — 12 in 298 on a loaded client — and
@@ -796,7 +803,7 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
         // What would make it say "no": no gap in the window (then the trace shows a steady state and
         // says nothing about gaps), or a gap whose following tick is unremarkable — which would mean
         // the churn measured on the predicting pose source came from somewhere else entirely.
-        buildAndBoardShip(bx, by, bz);
+        buildAndBoardShip(site);
         Events client = clientEvents();
         long dismountMark = client.mark();
         exec("artest player dismount");
@@ -849,7 +856,8 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
 
     @Test
     public void aWildClientSideStepOnADeckNeverBecomesADeclaredPosition() throws Exception {
-        final int bx = 6320, by = 64, bz = 6320;
+        final FixtureSite site = FixtureSite.openAir(0, 6320, 6320);
+        final int bx = site.x, by = site.y, bz = site.z;
 
         // Player movement is client-authoritative and the server accepts it. That is the contract,
         // and it is not being changed here — what is added is a BOUND: a body AR is carrying on a
@@ -861,7 +869,7 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
         // The stimulus is the DRIVER rather than the condition: the client's own idea of where it
         // is moves, which is exactly what happened when a body met an inverted hull, and the next
         // movement packet carries it.
-        buildAndBoardShip(bx, by, bz);
+        buildAndBoardShip(site);
         Events client = clientEvents();
         long dismountMark = client.mark();
         exec("artest player dismount");
@@ -971,7 +979,8 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
 
     @Test
     public void aStillCrewMemberOnAFastClimbingShipKeepsHisCapture() throws Exception {
-        final int bx = 5720, by = 64, bz = 5720;
+        final FixtureSite site = FixtureSite.openAir(0, 5720, 5720);
+        final int bx = site.x, by = site.y, bz = site.z;
 
         // The round-13 playtest thrash correlates with INVERSION, but the drop lines' real common
         // factor is fast per-tick SHIP MOTION (a freefall reaching 0.87 blocks/tick; a hunting
@@ -983,7 +992,7 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
         // Board by WALKING ON, never through the pilot seat: a seat-mount leaves a dismounted (empty)
         // dummy on the seat, and that dummy overwrites the AFC's pilot input every tick - the
         // seat-input probe below is then inert and the ship never moves (two voided runs found this).
-        double[] ship = buildShip(bx, by, bz);
+        double[] ship = buildShip(site);
         Events client = clientEvents();
         long arrivalMark = client.mark();
         exec("tp @a " + ship[0] + " " + (ship[1] + 4) + " " + ship[2] + " 0 0");
@@ -1233,7 +1242,8 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
 
     @Test
     public void aCreativeFlyingExPilotIsNeverSnappedBackByTheDismountHold() throws Exception {
-        final int bx = 5820, by = 64, bz = 5820;
+        final FixtureSite site = FixtureSite.openAir(0, 5820, 5820);
+        final int bx = site.x, by = site.y, bz = site.z;
 
         // The live war: dismount the pilot seat and start creative-FLYING within the dismount
         // hold's 20-tick window. The window re-sends the deck-capture seed every tick; a seed that
@@ -1241,7 +1251,7 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
         // handles() releases him right back (creativeFlight), and the next seed snaps him again -
         // the player is frozen mid-air, camera gates flickering, for the whole window. The
         // contract: an ex-pilot in an excluded state keeps world-frame movement - no snap, ever.
-        buildAndBoardShip(bx, by, bz);
+        buildAndBoardShip(site);
         exec("gamemode creative @a"); // flight needs creative; the harness default is not
         bot().waitTicks(20);
         // Marked BEFORE the dismount: everything this scenario is about — the seed's capture, the
@@ -1329,7 +1339,8 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
 
     @Test
     public void standingOnTheWorldTopOfAnInvertedShipKeepsWorldFrameSemantics() throws Exception {
-        final int bx = 5920, by = 64, bz = 5920;
+        final FixtureSite site = FixtureSite.openAir(0, 5920, 5920);
+        final int bx = site.x, by = site.y, bz = site.z;
 
         // The round-15 playtest residue: standing on the world-facing top of an inverted hull (its
         // former belly), the capture cycle chews - in subspace that surface has NO floor beneath
@@ -1338,7 +1349,7 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
         // re-capture takes unconditionally and ship-frame gravity fights the world's hull collision
         // every tick. The outer-hull contract: that body is NOT ABOARD - it keeps world gravity and
         // movement and stands on the hull as on terrain, never tunneling.
-        double[] ship = buildShip(bx, by, bz);
+        double[] ship = buildShip(site);
         double h = Math.toRadians(160.0) / 2.0;
         assertTrue("attitude hold must accept the past-vertical roll",
                 exec("artest vs point-by-id 0 " + scenarioShipId + " "
@@ -1433,7 +1444,8 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
 
     @Test
     public void aHullTopEncounterNeverEntersTheShipFrame() throws Exception {
-        final int bx = 6020, by = 64, bz = 6020;
+        final FixtureSite site = FixtureSite.openAir(0, 6020, 6020);
+        final int bx = site.x, by = site.y, bz = site.z;
 
         // The verified outer-hull half (the round-15 residue): a body meeting the world-facing
         // surface of an inverted hull - where in subspace there is NO floor beneath it - must NEVER
@@ -1441,7 +1453,7 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
         // the feet) as standing support, so a faller who punched slightly into the hull was
         // captured, ship-frame gravity (world-up at inversion) flung him off, and the post-drop
         // re-capture re-entered every tick: the round-15 log's obstacles=0 capture bursts.
-        double[] ship = buildShip(bx, by, bz);
+        double[] ship = buildShip(site);
         double h = Math.toRadians(160.0) / 2.0;
         assertTrue("attitude hold must accept the past-vertical roll",
                 exec("artest vs point-by-id 0 " + scenarioShipId + " "
@@ -1727,7 +1739,8 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
 
     @Test
     public void theCrosshairPicksTheSameDeckBlockAtAnyAttitude() throws Exception {
-        final int bx = 6120, by = 64, bz = 6120;
+        final FixtureSite site = FixtureSite.openAir(0, 6120, 6120);
+        final int bx = site.x, by = site.y, bz = site.z;
 
         // The raytrace origin (getPositionEyes) ran along WORLD up while the camera renders the eye
         // along the SHIP's up; on a rolled deck the two diverge by up to an eye height, so the
@@ -1737,7 +1750,7 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
         // crew member held at the SAME deck point, looking straight down, must see the crosshair
         // resolve the SAME subspace deck block whatever the ship's roll - the deck under his feet
         // does not move in the ship frame when the ship rolls.
-        buildAndBoardShip(bx, by, bz);
+        buildAndBoardShip(site);
         Events client = clientEvents();
         long dismountMark = client.mark();
         exec("artest player dismount");
@@ -1905,7 +1918,8 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
 
     @Test
     public void aBodyMeetingADeckThatManoeuvredUnwatchedIsNotCarriedByIt() throws Exception {
-        final int bx = 6220, by = 64, bz = 6220;
+        final FixtureSite site = FixtureSite.openAir(0, 6220, 6220);
+        final int bx = site.x, by = site.y, bz = site.z;
 
         // The client is not TOLD a craft's velocity; while it is handling a body on a deck it
         // reconstructs one by differencing two observations of the transform. That difference is an
@@ -1915,7 +1929,7 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
         // climbs hard with nobody aboard to observe it, STOPS, and only then is a body dropped on.
         // The average over that interval says the deck is rising; the deck is not. A body handed the
         // average is carried by a manoeuvre that ended before it arrived.
-        double[] ship = buildShip(bx, by, bz);
+        double[] ship = buildShip(site);
 
         // FIRST the client must have SEEN this craft, and that is not a detail of the staging — it
         // is what the scenario is about. A rate is a difference between two observations, so a craft
@@ -2100,7 +2114,8 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
 
     @Test
     public void theMouseTurnsTheWalkingCrewsAimInTheDeckFrameAndTheAimRidesTheDeck() throws Exception {
-        final int bx = 6420, by = 64, bz = 6420;
+        final FixtureSite site = FixtureSite.openAir(0, 6420, 6420);
+        final int bx = site.x, by = site.y, bz = site.z;
 
         // The walking-crew look contract, in its two player-visible halves, on a STEEPLY ROLLED
         // deck (the attitude where the old world-frame aim under a deck-levelled camera diverged
@@ -2111,7 +2126,7 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
         //       carries the world aim with it.
         // The stimulus is the real client mouse path (Entity.turn); the observation is the
         // client's own world look; the ship attitude read server-side is the cross-side oracle.
-        double[] ship = buildAndBoardShip(bx, by, bz);
+        double[] ship = buildAndBoardShip(site);
         Events client = clientEvents();
         long dismountMark = client.mark();
         exec("artest player dismount");
@@ -2489,8 +2504,10 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
      * caller that starts its scenario the tick this returns is starting after the two things it
      * needed, rather than after a number that was chosen once and copied into seven scenarios.</p>
      */
-    private double[] buildAndBoardShip(int bx, int by, int bz) throws Exception {
-        double[] ship = buildShip(bx, by, bz);
+    private double[] buildAndBoardShip(FixtureSite site) throws Exception {
+        // The site owns the coordinates; these aliases keep the body below unchanged.
+        final int bx = site.x, by = site.y, bz = site.z;
+        double[] ship = buildShip(site);
         Events boarding = clientEvents();
         long boardMark = boarding.mark();
         // Located inside the ship this scenario NAMES. `vs seat-mount <dim>` takes the first pilot
@@ -2583,7 +2600,9 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
     // ---- helpers (self-contained, mirroring the other tier-2 e2e classes) ----------------------
 
     /** Build a ship at this base and wait for it to load with the client present; returns its world pos. */
-    private double[] buildShip(int bx, int by, int bz) throws Exception {
+    private double[] buildShip(FixtureSite site) throws Exception {
+        // The site owns the coordinates; these aliases keep the body below unchanged.
+        final int bx = site.x, by = site.y, bz = site.z;
         exec("tp @a " + (bx + 600) + " 120 " + (bz + 600) + " 0 0");
         bot().waitTicks(10);
 
@@ -2593,7 +2612,7 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
         // the identity from a nearest-ship lookup at the build site.
         Events events = events();
         long spawnMark = events.markInstrumented();
-        String assemble = assembleFixture(bx, by, bz);
+        String assemble = assembleFixture(site);
         assertTrue("a with-pilot-seat build must route to a ship: " + assemble,
                 assemble.contains("\"rocketCount\":0"));
 
@@ -2628,30 +2647,31 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
         return where;
     }
 
-    private String assembleFixture(int baseX, int baseY, int baseZ) throws Exception {
-        int cx1 = (baseX - 2) >> 4, cz1 = (baseZ - 2) >> 4;
-        int cx2 = (baseX + 7) >> 4, cz2 = (baseZ + 7) >> 4;
-        assertTrue("chunk warmup failed",
-                exec("artest chunk warmup 0 " + cx1 + " " + cz1 + " " + cx2 + " " + cz2)
-                        .contains("\"ok\":true"));
-        // THIS IS A SHAFT, NOT A CLEARING, and the class is staged in terrain because of it. The
-        // hole is `baseY+1..baseY+10` at a hard-coded `baseY = 64` while the surface at these plots
-        // is around y≈72, so what it digs is a ten-block pit with rock on every side and a RIM that
-        // sits above the hull. Measured here 2026-09-14, the release record that made it visible:
+    private String assembleFixture(FixtureSite site) throws Exception {
+        // The site owns the coordinates; these aliases keep the body below unchanged.
+        final int baseX = site.x, baseY = site.y, baseZ = site.z;
+        // THE PIT IS GONE, AND THIS IS THE DEFECT IT COST. What stood here was a fill of
+        // `baseY+1..baseY+10` at a hard-coded `baseY = 64` while the surface at these plots is
+        // around y≈72 — a ten-block SHAFT with rock on every side and a RIM sitting above the hull.
+        // Measured here 2026-09-14, the release record that made it visible:
         //   reason=steppedOntoTerrain y=75.3035 onGround=false motionY=0.318
         //   worldSupport=true shipSupport=0 underFeet="1:[75.0000..76.0000]"
         // — one box, integer bounds, exactly one block tall: the first UNCLEARED block above the
-        // pit. The craft hovers two blocks up, its deck lands at ~74.4, and a crew member who jumps
-        // puts his feet in the ceiling. The gate then says, correctly, that world terrain is under
-        // him and lets the deck go while he is standing on his own ship.
+        // pit. The craft hovered two blocks up, its deck landed at ~74.4, and a crew member who
+        // jumped put his feet in the ceiling. The gate then said, correctly, that world terrain was
+        // under him and let the deck go while he stood on his own ship.
         //
-        // Deepening the hole was tried and is NOT the fix: a craft assembled in mid-air is a physics
-        // body that settles, so raising this class means BUILDING THE PLATFORM it rests on and
-        // moving the plots into open air — a migration, not a bigger number here.
-        assertTrue("pre-clear failed",
-                exec("artest fill 0 " + (baseX - 2) + " " + (baseY + 1) + " " + (baseZ - 2)
-                        + " " + (baseX + 7) + " " + (baseY + 10) + " " + (baseZ + 7) + " minecraft:air")
-                        .contains("\"ok\":true"));
+        // The site now stands in the open-air band, where the craft rests on the launchpad the
+        // fixture lays at its own Y and there is no rim to meet. The clear below therefore ASSERTS
+        // rather than digs, and the number it asserts is the air fill's own `placed`.
+        //
+        // HEIGHT 24 is the ENVELOPE, not the hull: the fixture is ~10 blocks of hull from the pad,
+        // its deck is the hull's top surface, a crew member standing there adds ~2 and a vanilla
+        // jump ~1.25 more, and several scenarios here hover, roll or invert the craft and drop a
+        // body onto it from a few blocks above that. A floor check, or a check sized to the hull,
+        // is exactly what was green throughout the failure above.
+        site.requireClear(this::exec, 2, 24,
+                "the hull, the deck a crew member walks and jumps on, and the air above it");
         String fixture = exec("artest fixture rocket 0 " + baseX + " " + baseY + " " + baseZ + " " + VARIANT);
         assertTrue("fixture (" + VARIANT + ") failed: " + fixture, fixture.contains("\"ok\":true"));
         Matcher bp = BUILDER_POS.matcher(fixture);

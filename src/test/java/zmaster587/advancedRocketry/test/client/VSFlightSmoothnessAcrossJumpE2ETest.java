@@ -189,10 +189,15 @@ public class VSFlightSmoothnessAcrossJumpE2ETest extends AbstractSharedVsClientE
         scenario().requireArranged("the empty transit setup must succeed: " + setup, readBool(setup, "ok"));
         int originDim = readInt(setup, "originDim");
 
-        int bx = 40, by = 64, bz = 40;
-        scenario().requireArranged("chunk warmup failed",
-                exec("artest chunk warmup " + originDim + " " + ((bx - 2) >> 4) + " " + ((bz - 2) >> 4)
-                        + " " + ((bx + 7) >> 4) + " " + ((bz + 7) >> 4)).contains("\"ok\":true"));
+        // The cell is a void world, so this is not about escaping terrain — it is about ONE
+        // definition of where a fixture stands instead of a 64 nobody chose. The first link still
+        // earns its place: it MEASURES that the cell is empty rather than taking the setup probe's
+        // word for it, and this class's four clocks are all sensitive to what the hull meets.
+        final zmaster587.advancedRocketry.test.FixtureSite site =
+                zmaster587.advancedRocketry.test.FixtureSite.openAir(originDim, 40, 40);
+        int bx = site.x, by = site.y, bz = site.z;
+        site.requireClear(this::exec, 2, 16,
+                "the craft whose flight smoothness is measured across the jump");
         // The BIGGEST flyable tier-2 variant the catalogue has, not the bare one. Mass and block
         // count are on the causal path for every one of the four clocks — the physics step's cost,
         // the volume of ship state synced per tick, the chunk work a moving hull does — and the

@@ -10,6 +10,7 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 import zmaster587.advancedRocketry.test.Events;
+import zmaster587.advancedRocketry.test.FixtureSite;
 import zmaster587.advancedRocketry.test.ShipIdentity;
 
 import static org.junit.Assert.assertTrue;
@@ -139,11 +140,12 @@ public class VSCrewInteriorBoardingE2ETest extends AbstractSharedVsClientE2ETest
     @Test
     public void aBodyReleasedInsideAnInvertedShipIsSeatedBackOnTheDeck()
             throws Exception {
-        final int bx = 6620, by = 64, bz = 6620;
+        final FixtureSite site = FixtureSite.openAir(0, 6620, 6620);
+        final int bx = site.x, by = site.y, bz = site.z;
 
         // Seat the bot, invert the ship under him, dismount INSIDE: the dismount seed captures
         // him ABOARD in the cockpit of the inverted ship.
-        buildAndBoardShip(bx, by, bz);
+        buildAndBoardShip(site);
         bot().waitTicks(20);
         double h = Math.toRadians(170.0) / 2.0;
         assertTrue("attitude hold must accept the inversion",
@@ -310,7 +312,8 @@ public class VSCrewInteriorBoardingE2ETest extends AbstractSharedVsClientE2ETest
 
     @Test
     public void aBodyLostMidCavityOfAnEnclosedInvertedShipIsReclaimedByTheDeck() throws Exception {
-        final int bx = 6820, by = 64, bz = 6820;
+        final FixtureSite site = FixtureSite.openAir(0, 6820, 6820);
+        final int bx = site.x, by = site.y, bz = site.z;
 
         // The open-topped cockpit above cannot exercise interior boarding: since the enclosure
         // term, its re-seat path is supported first contact (the body is pressed against the
@@ -321,7 +324,7 @@ public class VSCrewInteriorBoardingE2ETest extends AbstractSharedVsClientE2ETest
         // the cavity's world-floor - and the outer-hull fallback pinned it there with a world
         // camera, the reported "captured, but the camera never flips" desync. The contract: the
         // deck reclaims it without standing support and carries it back AGAINST world gravity.
-        buildAndBoardShip(bx, by, bz, "with-roofed-deck");
+        buildAndBoardShip(site, "with-roofed-deck");
         bot().waitTicks(20);
         double h = Math.toRadians(170.0) / 2.0;
         assertTrue("attitude hold must accept the inversion",
@@ -489,7 +492,8 @@ public class VSCrewInteriorBoardingE2ETest extends AbstractSharedVsClientE2ETest
 
     @Test
     public void aFlyingCrewMemberAscendsAlongTheDeckNormalAndReseatsOnFlightOff() throws Exception {
-        final int bx = 6720, by = 64, bz = 6720;
+        final FixtureSite site = FixtureSite.openAir(0, 6720, 6720);
+        final int bx = site.x, by = site.y, bz = site.z;
 
         // The flying-aboard contract on a steeply ROLLED ship: starting creative flight on the
         // deck keeps the body the deck's (no release, ship camera stays), the vertical fly
@@ -497,7 +501,7 @@ public class VSCrewInteriorBoardingE2ETest extends AbstractSharedVsClientE2ETest
         // regardless of the roll; a world-up ascent would instead leak most of its motion into
         // the subspace deck PLANE (at 60 deg: cos60 = 0.5 up, sin60 = 0.87 sideways) - and
         // turning flight off hands the body to deck gravity, which seats it back on the deck.
-        buildAndBoardShip(bx, by, bz);
+        buildAndBoardShip(site);
         exec("gamemode creative @a"); // flight needs creative; the harness default is not
         bot().waitTicks(20);
         double h = Math.toRadians(60.0) / 2.0;
@@ -692,8 +696,8 @@ public class VSCrewInteriorBoardingE2ETest extends AbstractSharedVsClientE2ETest
     // ---- helpers (self-contained, mirroring the other tier-2 e2e classes) ----------------------
 
     /** Build the ship and sit the bot on its pilot seat; returns the ship's world position. */
-    private double[] buildAndBoardShip(int bx, int by, int bz) throws Exception {
-        return buildAndBoardShip(bx, by, bz, VARIANT);
+    private double[] buildAndBoardShip(FixtureSite site) throws Exception {
+        return buildAndBoardShip(site, VARIANT);
     }
 
     private int readIntFrom(String json, Pattern p) {
@@ -702,8 +706,10 @@ public class VSCrewInteriorBoardingE2ETest extends AbstractSharedVsClientE2ETest
         return Integer.parseInt(m.group(1));
     }
 
-    private double[] buildAndBoardShip(int bx, int by, int bz, String variant) throws Exception {
-        double[] ship = buildShip(bx, by, bz, variant);
+    private double[] buildAndBoardShip(FixtureSite site, String variant) throws Exception {
+        // The site owns the coordinates; these aliases keep the body below unchanged.
+        final int bx = site.x, by = site.y, bz = site.z;
+        double[] ship = buildShip(site, variant);
         // The seat is located INSIDE this scenario's own ship: `vs seat-mount <dim>` takes the first
         // pilot seat in the world's loaded-tile list with no position filter, which is unambiguous
         // only while the world holds one ship, and mounts a neighbour's once scenarios share one.
@@ -724,7 +730,9 @@ public class VSCrewInteriorBoardingE2ETest extends AbstractSharedVsClientE2ETest
         return ship;
     }
 
-    private double[] buildShip(int bx, int by, int bz, String variant) throws Exception {
+    private double[] buildShip(FixtureSite site, String variant) throws Exception {
+        // The site owns the coordinates; these aliases keep the body below unchanged.
+        final int bx = site.x, by = site.y, bz = site.z;
         exec("tp @a " + (bx + 600) + " 120 " + (bz + 600) + " 0 0");
         bot().waitTicks(10);
 
@@ -734,7 +742,7 @@ public class VSCrewInteriorBoardingE2ETest extends AbstractSharedVsClientE2ETest
         Events events = events();
         long spawnMark = events.markInstrumented();
         exec("artest vs spawn-diag reset");
-        String assemble = assembleFixture(bx, by, bz, variant);
+        String assemble = assembleFixture(site, variant);
         assertTrue("a with-pilot-seat build must route to a ship: " + assemble,
                 assemble.contains("\"rocketCount\":0"));
 
@@ -803,27 +811,32 @@ public class VSCrewInteriorBoardingE2ETest extends AbstractSharedVsClientE2ETest
         return where;
     }
 
-    private String assembleFixture(int baseX, int baseY, int baseZ, String variant) throws Exception {
-        // EXPERIMENT (#60 root cause): the site (6820,6820) is FORESTED. VS's flood detector treats
-        // leaves/logs as floodable (they are NOT in shipSpawnDetectorBlacklist), so when the tier-2
-        // assembly flood escapes the craft it grabs the surrounding canopy and hits the 15001 cap ->
-        // "Ship too big" abort -> no ship. The tight pre-clear only cleared the fixture's own box, not
-        // the trees. Fell everything in the flood's measured reach (bbox was ~[base-16..+19, ..90]).
-        int cx1 = (baseX - 18) >> 4, cz1 = (baseZ - 18) >> 4;
-        int cx2 = (baseX + 22) >> 4, cz2 = (baseZ + 22) >> 4;
-        assertTrue("chunk warmup failed",
-                exec("artest chunk warmup 0 " + cx1 + " " + cz1 + " " + cx2 + " " + cz2)
-                        .contains("\"ok\":true"));
-        // Two stacked fills: the fill verb caps volume at 32768; base-18..base+21 (40 wide) x 20 tall
-        // x 40 = 32000 each, covering the measured escaped-flood bbox in two layers.
-        assertTrue("pre-clear (lower) failed",
-                exec("artest fill 0 " + (baseX - 18) + " " + (baseY + 1) + " " + (baseZ - 18)
-                        + " " + (baseX + 21) + " " + (baseY + 20) + " " + (baseZ + 21) + " minecraft:air")
-                        .contains("\"ok\":true"));
-        assertTrue("pre-clear (upper) failed",
-                exec("artest fill 0 " + (baseX - 18) + " " + (baseY + 21) + " " + (baseZ - 18)
-                        + " " + (baseX + 21) + " " + (baseY + 40) + " " + (baseZ + 21) + " minecraft:air")
-                        .contains("\"ok\":true"));
+    private String assembleFixture(FixtureSite site, String variant) throws Exception {
+        // The site owns the coordinates; these aliases keep the body below unchanged.
+        final int baseX = site.x, baseY = site.y, baseZ = site.z;
+        // THE FOREST THIS USED TO FELL IS NOT HERE ANY MORE, and the history is worth keeping
+        // because it is the sharpest instance of what the band buys. The site (6820,6820) is
+        // FORESTED at ground level: VS's flood detector treats leaves and logs as floodable (they
+        // are not in shipSpawnDetectorBlacklist), so when the tier-2 assembly flood escaped the
+        // craft it took the surrounding canopy with it, hit the 15001-block cap and aborted with
+        // "Ship too big" — no ship at all. The treatment was a 40x20x40 pre-clear in two stacked
+        // fills (the fill verb caps a volume at 32768), sized to the flood's measured bbox, felling
+        // the wood before every assembly. None of that is a property of the subject; all of it is a
+        // property of standing in a forest.
+        //
+        // In the open-air band the flood escapes into air, which it cannot take. The halo stays
+        // WIDE (18) all the same, because what it now asserts is that nothing of anyone else's is
+        // standing in the volume this flood can reach — the same question, asked instead of dug.
+        //
+        // HEIGHT 18, not the old 40. The 40 was sized to a forest canopy reaching y≈90 over a base
+        // at 64; there is no canopy here. 18 is this class's own envelope: the tallest variant it
+        // builds is with-roofed-deck, whose roof sits at base+9 on a tower raised to take it, and a
+        // body is released in the cavity under that roof. It also has to fit: `artest fill` caps a
+        // volume at 32768 and a 42x42 footprint leaves room for 18 layers (31752), so a taller box
+        // here would be refused by the probe rather than by a reviewer.
+        site.requireClear(this::exec, 18, 18,
+                "the hull, the cockpit cavity a body is released inside, and the whole volume the"
+                        + " assembly flood can escape into");
         String fixture = exec("artest fixture rocket 0 " + baseX + " " + baseY + " " + baseZ + " " + variant);
         assertTrue("fixture (" + variant + ") failed: " + fixture, fixture.contains("\"ok\":true"));
         Matcher bp = BUILDER_POS.matcher(fixture);

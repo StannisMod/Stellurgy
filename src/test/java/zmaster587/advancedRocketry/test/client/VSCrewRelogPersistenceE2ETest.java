@@ -11,6 +11,7 @@ import java.util.regex.Pattern;
 import com.google.gson.JsonObject;
 
 import zmaster587.advancedRocketry.test.Events;
+import zmaster587.advancedRocketry.test.FixtureSite;
 import zmaster587.advancedRocketry.test.ShipIdentity;
 
 import static org.junit.Assert.assertEquals;
@@ -96,9 +97,13 @@ public class VSCrewRelogPersistenceE2ETest extends AbstractSharedVsClientE2ETest
     // exactly the same range, because that is simply where Valkyrien Skies parks a subspace. There is
     // no coordinate-magnitude variable to vary.
     private void requireHeIsHeldThroughARoll(int bx, int bz, String where) throws Exception {
-        final int by = 64;
+        // The open-air band. This was a bare `final int by = 64;` until 2026-09-14 — a staging
+        // decision with no name, which the fixture-site counter's own patterns cannot see either,
+        // since neither `by` nor this line mentions a fixture.
+        final FixtureSite site = FixtureSite.openAir(0, bx, bz);
+        final int by = site.y;
 
-        double[] ship = buildShip(bx, by, bz);
+        double[] ship = buildShip(site);
         // The mark BEFORE he is put on the deck. A capture is an EPISODE the resolver opens when a
         // body meets a deck, and the 80-tick sleep this replaces could only ask whether it happened
         // to be open when it finally looked - an episode that opened and closed inside the sleep,
@@ -321,9 +326,11 @@ public class VSCrewRelogPersistenceE2ETest extends AbstractSharedVsClientE2ETest
     }
 
     private void requireHeIsHeldThroughAWalk(int bx, int bz, String where) throws Exception {
-        final int by = 64;
+        // The open-air band; see the sibling above for why this was a nameless `by = 64`.
+        final FixtureSite site = FixtureSite.openAir(0, bx, bz);
+        final int by = site.y;
 
-        double[] ship = buildShip(bx, by, bz);
+        double[] ship = buildShip(site);
         Events events = events();
         long captureMark = events.markInstrumented();
         exec("tp @a " + ship[0] + " " + (ship[1] + 4) + " " + ship[2] + " 0 0");
@@ -452,9 +459,10 @@ public class VSCrewRelogPersistenceE2ETest extends AbstractSharedVsClientE2ETest
      */
     @Test
     public void aCrewMemberIsNotReleasedWhenTheServerSkipsATickBurst() throws Exception {
-        final int bx = 6760, by = 64, bz = 6760;
+        final FixtureSite site = FixtureSite.openAir(0, 6760, 6760);
+        final int bx = site.x, by = site.y, bz = site.z;
 
-        double[] ship = buildShip(bx, by, bz);
+        double[] ship = buildShip(site);
         Events events = events();
         long captureMark = events.markInstrumented();
         exec("tp @a " + ship[0] + " " + (ship[1] + 4) + " " + ship[2] + " 0 0");
@@ -627,12 +635,13 @@ public class VSCrewRelogPersistenceE2ETest extends AbstractSharedVsClientE2ETest
 
     @Test
     public void aPlayerWhoRelogsOnAnInvertedDeckStaysAboardIt() throws Exception {
-        final int bx = 6520, by = 64, bz = 6520;
+        final FixtureSite site = FixtureSite.openAir(0, 6520, 6520);
+        final int bx = site.x, by = site.y, bz = site.z;
 
         // Capture the client player on the OPEN top deck while the ship is upright, then roll the
         // ship to inverted UNDER him - the capture carries his deck spot through the roll, leaving
         // him standing on the deck of an inverted ship (hanging under the hull in world terms).
-        double[] ship = buildShip(bx, by, bz);
+        double[] ship = buildShip(site);
         Events events = events();
         long captureMark = events.markInstrumented();
         exec("tp @a " + ship[0] + " " + (ship[1] + 4) + " " + ship[2] + " 0 0");
@@ -742,9 +751,10 @@ public class VSCrewRelogPersistenceE2ETest extends AbstractSharedVsClientE2ETest
      */
     @Test
     public void aCrewMemberWhoLogsOutWalkingComesBackStandingStillOnHisDeckSpot() throws Exception {
-        final int bx = 6620, by = 64, bz = 6620;
+        final FixtureSite site = FixtureSite.openAir(0, 6620, 6620);
+        final int bx = site.x, by = site.y, bz = site.z;
 
-        double[] ship = buildShip(bx, by, bz);
+        double[] ship = buildShip(site);
         Events events = events();
         long captureMark = events.markInstrumented();
         exec("tp @a " + ship[0] + " " + (ship[1] + 4) + " " + ship[2] + " 0 0");
@@ -1262,7 +1272,9 @@ public class VSCrewRelogPersistenceE2ETest extends AbstractSharedVsClientE2ETest
     }
 
     /** Build a ship at this base and wait for it to load with the client present; returns its world pos. */
-    private double[] buildShip(int bx, int by, int bz) throws Exception {
+    private double[] buildShip(FixtureSite site) throws Exception {
+        // The site owns the coordinates; these aliases keep the body below unchanged.
+        final int bx = site.x, by = site.y, bz = site.z;
         exec("tp @a " + (bx + 600) + " 120 " + (bz + 600) + " 0 0");
         bot().waitTicks(10);
 
@@ -1273,7 +1285,7 @@ public class VSCrewRelogPersistenceE2ETest extends AbstractSharedVsClientE2ETest
         // two of its samples is indistinguishable from one that never happened.
         Events events = events();
         long spawnMark = events.markInstrumented();
-        String assemble = assembleFixture(bx, by, bz);
+        String assemble = assembleFixture(site);
         assertTrue("a with-pilot-seat build must route to a ship: " + assemble,
                 assemble.contains("\"rocketCount\":0"));
         // The IDENTITY, off that same record: this scenario built the ship, so it is TOLD which
@@ -1306,16 +1318,18 @@ public class VSCrewRelogPersistenceE2ETest extends AbstractSharedVsClientE2ETest
         return where;
     }
 
-    private String assembleFixture(int baseX, int baseY, int baseZ) throws Exception {
-        int cx1 = (baseX - 2) >> 4, cz1 = (baseZ - 2) >> 4;
-        int cx2 = (baseX + 7) >> 4, cz2 = (baseZ + 7) >> 4;
-        assertTrue("chunk warmup failed",
-                exec("artest chunk warmup 0 " + cx1 + " " + cz1 + " " + cx2 + " " + cz2)
-                        .contains("\"ok\":true"));
-        assertTrue("pre-clear failed",
-                exec("artest fill 0 " + (baseX - 2) + " " + (baseY + 1) + " " + (baseZ - 2)
-                        + " " + (baseX + 7) + " " + (baseY + 10) + " " + (baseZ + 7) + " minecraft:air")
-                        .contains("\"ok\":true"));
+    private String assembleFixture(FixtureSite site) throws Exception {
+        // The site owns the coordinates; these aliases keep the body below unchanged.
+        final int baseX = site.x, baseY = site.y, baseZ = site.z;
+        // FIRST link: the volume is EMPTY, measured by the air fill's own `placed`. Open air, so
+        // this ASSERTS rather than digging the shaft it replaces — whose rim put world terrain under
+        // a crew member standing on his own deck, which is the state this class carries across a
+        // relog and would therefore have carried the defect across too.
+        //
+        // HEIGHT 24 is the ENVELOPE: hull, deck, a body standing and walking on it, and the room the
+        // hull rolls through.
+        site.requireClear(this::exec, 2, 24,
+                "the hull, the deck the crew member is held on, and the air he walks and rolls through");
         String fixture = exec("artest fixture rocket 0 " + baseX + " " + baseY + " " + baseZ + " " + VARIANT);
         assertTrue("fixture (" + VARIANT + ") failed: " + fixture, fixture.contains("\"ok\":true"));
         Matcher bp = BUILDER_POS.matcher(fixture);

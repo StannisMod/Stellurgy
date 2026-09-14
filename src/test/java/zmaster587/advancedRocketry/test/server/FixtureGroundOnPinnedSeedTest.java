@@ -47,13 +47,18 @@ public class FixtureGroundOnPinnedSeedTest extends AbstractHeadlessServerTest {
     private static final Object[][] FIXTURES = {
             {"VSPilotSeatRelogControl", Plot.CLEAN_GROUND_X, Plot.CLEAN_GROUND_Y, Plot.CLEAN_GROUND_Z},
             {"VSShipRenderPoseSkew", Plot.CLEAN_GROUND_X, Plot.CLEAN_GROUND_Y, Plot.CLEAN_GROUND_Z},
-            // RETIRED IN PLACE, not deleted: the row used to read "VSShipEntryRefused", and that
-            // class no longer exists — its two scenarios were folded into a group class that shares
-            // one client. The group still stands at the plot the old pair used, which this same
-            // survey measured as a forest canopy on ground at y=71..79, so the row as written was
-            // guarding a patch of ground nobody builds on while the class that DOES build there had
-            // no guard at all. Restoring it means moving that class's site first; asserting here
-            // before then would only red on a plot the suite has not yet left.
+            // RETIRED FOR GOOD, and the reason changed on 2026-09-14. The row used to read
+            // "VSShipEntryRefused", a class that no longer exists — its two scenarios were folded
+            // into a group class sharing one client, and that group went on standing at the old
+            // plot, which this same survey measured as forest canopy on ground at y=71..79. The row
+            // was therefore guarding a patch of ground nobody built on while the class that DID
+            // build there had no guard at all, and the note here said restoring it meant moving
+            // that class's site first.
+            //
+            // The site HAS now moved: VSShipEntryClientGroupE2ETest stands in the open-air band.
+            // So the row is not owed back — a fixture belongs in this table when it builds on
+            // TERRAIN, and that one no longer does. The note stays because the anchor it guarded is
+            // gone and a silent deletion would read as an oversight rather than as a decision.
             {"VSRemoteBodyModelGate.standing", Plot.CLEAN_GROUND_X, Plot.CLEAN_GROUND_Y,
                     Plot.CLEAN_GROUND_Z},
             {"VSRemoteBodyModelGate.carried", Plot.CLEAN_GROUND_X, Plot.CLEAN_GROUND_Y,

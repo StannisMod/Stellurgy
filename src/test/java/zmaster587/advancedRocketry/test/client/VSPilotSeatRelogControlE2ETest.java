@@ -129,7 +129,7 @@ public class VSPilotSeatRelogControlE2ETest extends AbstractSharedVsClientE2ETes
         // The budget keeps its wall-clock across a UNIT change: `budget` counts 5-tick polls, and the
         // event wait takes a tick budget, so it is multiplied by 5.
         awaitShipUsable(events, spawnMark, shipId, budget * 5);
-        liftClearOfTheGround(shipId, CLEAR_AIR_Y);
+        liftClearOfThePad(shipId, PAD_CLEARANCE_BLOCKS);
 
         String mountInfo = exec("artest vs seat-mount 0 id " + shipId);
         Matcher dm = DUMMY_ID.matcher(mountInfo);

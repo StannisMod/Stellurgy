@@ -1,6 +1,7 @@
 package zmaster587.advancedRocketry.test.client;
 
 import zmaster587.advancedRocketry.test.Events;
+import zmaster587.advancedRocketry.test.FixtureSite;
 import zmaster587.advancedRocketry.test.GameTicks;
 
 import com.google.gson.JsonObject;
@@ -80,7 +81,9 @@ public class VSPilotSeatTakenWhileOfflineE2ETest extends AbstractSharedVsClientE
             "\"posX\":(-?[0-9.E\\-]+),\"posY\":(-?[0-9.E\\-]+),\"posZ\":(-?[0-9.E\\-]+)");
 
     private static final String VARIANT = "with-pilot-seat";
-    private static final int BX = 7600, BY = 64, BZ = 7600;
+    private static final FixtureSite SITE = FixtureSite.openAir(0, 7600, 7600);
+    /** The site owns the coordinates; these aliases keep the body below unchanged. */
+    private static final int BX = SITE.x, BY = SITE.y, BZ = SITE.z;
 
     /** The account the client harness plays under — the server keys his data and probes by it. */
     private static final String BOT = "ForgeTestClient";
@@ -104,7 +107,7 @@ public class VSPilotSeatTakenWhileOfflineE2ETest extends AbstractSharedVsClientE
         // this wait is gone with it — it was a machine-shaped number standing in for a deadline.
         Events events = events();
         long spawnMark = events.markInstrumented();
-        String assemble = assembleFixture(BX, BY, BZ);
+        String assemble = assembleFixture(SITE);
         scenario().requireArranged("a with-pilot-seat build must route to a ship: " + assemble,
                 assemble.contains("\"rocketCount\":0"));
         // The return value is KEPT: it is this scenario's ship by construction (the mark precedes the
@@ -292,16 +295,14 @@ public class VSPilotSeatTakenWhileOfflineE2ETest extends AbstractSharedVsClientE
                 Double.parseDouble(pm.group(2)), Double.parseDouble(pm.group(3))};
     }
 
-    private String assembleFixture(int baseX, int baseY, int baseZ) throws Exception {
-        int cx1 = (baseX - 2) >> 4, cz1 = (baseZ - 2) >> 4;
-        int cx2 = (baseX + 7) >> 4, cz2 = (baseZ + 7) >> 4;
-        scenario().requireArranged("chunk warmup failed",
-                exec("artest chunk warmup 0 " + cx1 + " " + cz1 + " " + cx2 + " " + cz2)
-                        .contains("\"ok\":true"));
-        scenario().requireArranged("pre-clear failed",
-                exec("artest fill 0 " + (baseX - 2) + " " + (baseY + 1) + " " + (baseZ - 2)
-                        + " " + (baseX + 7) + " " + (baseY + 10) + " " + (baseZ + 7) + " minecraft:air")
-                        .contains("\"ok\":true"));
+    private String assembleFixture(FixtureSite site) throws Exception {
+        // The site owns the coordinates; these aliases keep the body below unchanged.
+        final int baseX = site.x, baseY = site.y, baseZ = site.z;
+        // FIRST link: the volume is EMPTY, measured by the air fill's own `placed` — the number the
+        // pre-clear it replaces was throwing away. Open air, so this ASSERTS rather than digs, and
+        // it raises an ArrangementFailure, the same type scenario().requireArranged does.
+        site.requireClear(this::exec, 2, 16,
+                "the hull whose seat is taken and re-taken across a relog");
         String fixture = exec("artest fixture rocket 0 " + baseX + " " + baseY + " " + baseZ + " " + VARIANT);
         scenario().requireArranged("fixture (" + VARIANT + ") failed: " + fixture,
                 fixture.contains("\"ok\":true"));

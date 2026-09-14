@@ -42,7 +42,16 @@ import static org.junit.Assert.assertTrue;
 public class DockingPortNbtAndPacketTest extends AbstractSharedServerTest {
 
     private static final int BASE_X = 9000;
-    private static final int BASE_Y = 64;
+    /**
+     * The open-air band, not terrain. This was a hard-coded 64 until 2026-09-14 and the scenarios
+     * never wanted ground: the subjects are an NBT round-trip and a packet schema, neither of which
+     * can see what is under the block. What 64 bought was whatever the pinned seed rolled at
+     * x=9000, unsurveyed and unasserted either way, so the port may have been standing in air or
+     * replacing a block of the landscape and no reading here could tell. Nothing failed because of
+     * it, which is precisely why it could stand: the landscape was never in the story. In the band
+     * there is nothing to be inside of.
+     */
+    private static final int BASE_Y = zmaster587.advancedRocketry.test.FixtureSite.OPEN_AIR_Y;
     private static final int BASE_Z = 9000;
 
     private static final Pattern MY_ID = Pattern.compile("\"myId\":\"([^\"]*)\"");

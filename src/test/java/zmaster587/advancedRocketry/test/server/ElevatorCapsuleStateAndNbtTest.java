@@ -40,7 +40,15 @@ import static org.junit.Assert.assertTrue;
 public class ElevatorCapsuleStateAndNbtTest extends AbstractSharedServerTest {
 
     private static final int BASE_X = 7000;
-    private static final int BASE_Y = 80;
+    /**
+     * The open-air band, not terrain. A hard-coded 80 until 2026-09-14, and no scenario here wants
+     * ground: the subjects are the capsule's motion FLAGS and its NBT round-trip, both read out of
+     * the entity the tick after it spawns. 80 bought whatever the pinned seed rolled at x=7000 —
+     * unsurveyed either way — so the capsule may have been spawned inside the landscape, which for
+     * a 3x3 entity is a collision the scenario never asks about and would not report. In the band
+     * there is nothing to be inside of.
+     */
+    private static final int BASE_Y = zmaster587.advancedRocketry.test.FixtureSite.OPEN_AIR_Y;
     private static final int BASE_Z = 7000;
 
     private static final Pattern ENTITY_ID = Pattern.compile("\"entityId\":(-?\\d+)");

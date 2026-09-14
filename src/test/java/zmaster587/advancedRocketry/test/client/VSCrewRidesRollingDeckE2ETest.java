@@ -9,6 +9,7 @@ import java.util.regex.Pattern;
 
 import static org.junit.Assert.assertTrue;
 import zmaster587.advancedRocketry.test.Events;
+import zmaster587.advancedRocketry.test.FixtureSite;
 import zmaster587.advancedRocketry.test.ShipIdentity;
 
 /**
@@ -55,7 +56,9 @@ public class VSCrewRidesRollingDeckE2ETest extends AbstractSharedVsClientE2ETest
     private static final Pattern PLAYER_Z = Pattern.compile("\"playerZ\":(-?[0-9.E\\-]+)");
 
     private static final String VARIANT = "with-pilot-seat";
-    private static final int BX = 2900, BY = 64, BZ = 2900;
+    private static final FixtureSite SITE = FixtureSite.openAir(0, 2900, 2900);
+    /** The site owns the coordinates; these aliases keep the body below unchanged. */
+    private static final int BX = SITE.x, BY = SITE.y, BZ = SITE.z;
     /** Roll to command, in degrees. Well past the angle at which an un-held entity would slide off. */
     private static final double ROLL_DEG = 45.0;
 
@@ -75,16 +78,18 @@ public class VSCrewRidesRollingDeckE2ETest extends AbstractSharedVsClientE2ETest
         return Math.sqrt(dx * dx + dy * dy + dz * dz);
     }
 
-    private String assembleFixture(int baseX, int baseY, int baseZ, String variant) throws Exception {
-        int cx1 = (baseX - 2) >> 4, cz1 = (baseZ - 2) >> 4;
-        int cx2 = (baseX + 7) >> 4, cz2 = (baseZ + 7) >> 4;
-        assertTrue("chunk warmup failed",
-                exec("artest chunk warmup 0 " + cx1 + " " + cz1 + " " + cx2 + " " + cz2)
-                        .contains("\"ok\":true"));
-        assertTrue("pre-clear failed",
-                exec("artest fill 0 " + (baseX - 2) + " " + (baseY + 1) + " " + (baseZ - 2)
-                        + " " + (baseX + 7) + " " + (baseY + 10) + " " + (baseZ + 7) + " minecraft:air")
-                        .contains("\"ok\":true"));
+    private String assembleFixture(FixtureSite site, String variant) throws Exception {
+        // The site owns the coordinates; these aliases keep the body below unchanged.
+        final int baseX = site.x, baseY = site.y, baseZ = site.z;
+        // FIRST link: the volume is EMPTY, measured by the air fill's own `placed`. Open air, so
+        // this ASSERTS rather than digging the shaft it replaces — whose rim sat above the hull and
+        // put a block of world terrain under a crew member standing on his own rolling deck, which
+        // is the exact configuration this class is about.
+        //
+        // HEIGHT 24 is the ENVELOPE: ~10 of hull, the deck on top, a body standing and jumping
+        // there, and the room the hull sweeps as it rolls.
+        site.requireClear(this::exec, 2, 24,
+                "the hull, the deck a crew member rides, and the air it rolls through");
         String fixture = exec("artest fixture rocket 0 " + baseX + " " + baseY + " " + baseZ + " " + variant);
         assertTrue("fixture (" + variant + ") failed: " + fixture, fixture.contains("\"ok\":true"));
         Matcher bp = BUILDER_POS.matcher(fixture);
@@ -99,7 +104,7 @@ public class VSCrewRidesRollingDeckE2ETest extends AbstractSharedVsClientE2ETest
         exec("tp @a " + (BX + 600) + " 120 " + (BZ + 600) + " 0 0");
         bot().waitTicks(10);
 
-        String assemble = assembleFixture(BX, BY, BZ, VARIANT);
+        String assemble = assembleFixture(SITE, VARIANT);
         assertTrue("a with-pilot-seat build must route to a ship: " + assemble,
                 assemble.contains("\"rocketCount\":0"));
 

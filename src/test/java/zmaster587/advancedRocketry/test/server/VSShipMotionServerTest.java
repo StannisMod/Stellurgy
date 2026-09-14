@@ -1,5 +1,6 @@
 package zmaster587.advancedRocketry.test.server;
 
+import zmaster587.advancedRocketry.test.FixtureSite;
 import zmaster587.advancedRocketry.test.GameTicks;
 import zmaster587.advancedRocketry.test.ShipIdentity;
 
@@ -18,8 +19,8 @@ import static org.junit.Assert.assertTrue;
  * command did not move the ship here, an e2e built on it would be false-green for reasons nothing
  * else in the suite would report.
  *
- * <p>The command is horizontal (+Z) to keep gravity out of the measured delta. Ships are addressed
- * by nearest-to-build-site exactly once, to learn this craft's identity; everything after asks by
+ * <p>The command is horizontal (+Z) to keep gravity out of the measured delta. This craft's identity
+ * comes from the NAME the assembler minted it with, never from a position: everything after asks by
  * id, so a shared server carrying another test's ship cannot start answering for it.</p>
  *
  * <p><b>Two things this class was wrong about until 2026-08-22, both measured rather than argued.</b>
@@ -40,9 +41,10 @@ public class VSShipMotionServerTest extends AbstractSharedServerTest {
 
     private static final String VARIANT = "with-advanced-flight-computer";
 
-    // Distinct from AdvancedFlightComputerTierGateTest's sites (1200 / 1600) so the
-    // nearest-ship probe never picks up that test's lingering ship on the shared server.
-    private static final int BX = 2200, BY = 64, BZ = 2200;
+    // Horizontally distinct from AdvancedFlightComputerTierGateTest's sites (1200 / 1600): the
+    // server is shared, and two craft assembled in one another's working volume interfere whatever
+    // each test then asks by id.
+    private static final FixtureSite SITE = FixtureSite.openAir(0, 2200, 2200);
 
     /**
      * Budgets in SERVER TICKS. The assembly relocation and the force-load are both driven by the
@@ -77,7 +79,7 @@ public class VSShipMotionServerTest extends AbstractSharedServerTest {
 
         // Assemble the tier-2 ship — with VS this routes to a ship (no rocket) and
         // queues an async VS relocation.
-        String assemble = assembleFixture(BX, BY, BZ, VARIANT);
+        String assemble = assembleFixture(SITE, VARIANT);
         assertTrue("with VS, the AFC build must route to a ship (no rocket): " + assemble,
                 assemble.contains("\"rocketCount\":0"));
 
@@ -177,16 +179,15 @@ public class VSShipMotionServerTest extends AbstractSharedServerTest {
     }
 
     /** Place the fixture on a pad and run scan+assemble; returns the raw assemble JSON. */
-    private String assembleFixture(int baseX, int baseY, int baseZ, String variant) throws Exception {
-        int cx1 = (baseX - 2) >> 4, cz1 = (baseZ - 2) >> 4;
-        int cx2 = (baseX + 7) >> 4, cz2 = (baseZ + 7) >> 4;
-        assertTrue("chunk warmup failed",
-                exec("artest chunk warmup 0 " + cx1 + " " + cz1 + " " + cx2 + " " + cz2)
-                        .contains("\"ok\":true"));
-        assertTrue("pre-clear failed",
-                exec("artest fill 0 " + (baseX - 2) + " " + (baseY + 1) + " " + (baseZ - 2)
-                        + " " + (baseX + 7) + " " + (baseY + 10) + " " + (baseZ + 7) + " minecraft:air")
-                        .contains("\"ok\":true"));
+    private String assembleFixture(FixtureSite site, String variant) throws Exception {
+        // The site owns the coordinates; these aliases keep the body below unchanged.
+        final int baseX = site.x, baseY = site.y, baseZ = site.z;
+        // FIRST link: the volume this craft is built and DRIVEN in is EMPTY. The site stands in open
+        // air, so this ASSERTS rather than digs, and it still force-loads every chunk in the box on
+        // the way through — so the warmup this replaces lost nothing. The height covers the hull
+        // plus the lane it is commanded along, not the pad.
+        site.requireClear(this::exec, 2, 10,
+                "the craft is built here and then driven horizontally out of this volume");
         String fixture = exec("artest fixture rocket 0 " + baseX + " " + baseY + " " + baseZ + " " + variant);
         assertTrue("fixture (" + variant + ") failed: " + fixture, fixture.contains("\"ok\":true"));
         Matcher bp = BUILDER_POS.matcher(fixture);

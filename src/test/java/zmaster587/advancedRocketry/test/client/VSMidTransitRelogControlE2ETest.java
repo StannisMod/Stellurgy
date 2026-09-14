@@ -87,10 +87,16 @@ public class VSMidTransitRelogControlE2ETest extends AbstractSharedVsClientE2ETe
         assertTrue("empty transit setup must succeed: " + setup, readBool(setup, "ok"));
         int originDim = readInt(setup, "originDim");
 
-        int bx = 40, by = 64, bz = 40;
-        scenario().requireArranged("chunk warmup failed",
-                exec("artest chunk warmup " + originDim + " " + ((bx - 2) >> 4) + " " + ((bz - 2) >> 4)
-                        + " " + ((bx + 7) >> 4) + " " + ((bz + 7) >> 4)).contains("\"ok\":true"));
+        // The origin CELL is a void world, so this lift is not about escaping terrain — it is about
+        // there being ONE definition of where a fixture stands, shared with every other class,
+        // instead of a 64 nobody chose. What the first link below buys here is real all the same:
+        // `transit-setup-empty` says the cell is empty and this MEASURES it, on the air fill's own
+        // `placed`, before a craft is built in it.
+        final zmaster587.advancedRocketry.test.FixtureSite site =
+                zmaster587.advancedRocketry.test.FixtureSite.openAir(originDim, 40, 40);
+        int bx = site.x, by = site.y, bz = site.z;
+        site.requireClear(this::exec, 2, 16,
+                "the craft that is flown, relogged and flown again inside this cell");
         String fixture = exec("artest fixture rocket " + originDim + " " + bx + " " + by + " " + bz
                 + " with-pilot-seat");
         scenario().requireArranged("fixture (with-pilot-seat) failed: " + fixture,
