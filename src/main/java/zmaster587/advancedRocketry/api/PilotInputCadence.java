@@ -21,8 +21,29 @@ package zmaster587.advancedRocketry.api;
  *
  * <p>A CHANGE is sent immediately, as before. A held non-idle input is re-sent every
  * {@link #REPEAT_TICKS} ticks, so the cost of any single loss is bounded by that interval instead of
- * lasting until the pilot happens to move a control. An IDLE input is never repeated: losing "no
- * input" costs nothing, because the absence of input is what the server falls back to anyway.</p>
+ * lasting until the pilot happens to move a control. An IDLE input is never repeated.</p>
+ *
+ * <h3>Why the idle exemption is safe, which is NOT what this file used to say</h3>
+ *
+ * <p>It said losing "no input" costs nothing "because the absence of input is what the server falls
+ * back to anyway". <b>That is false about this server.</b>
+ * {@code TileAdvancedFlightComputer.setPilotInput} documents the opposite: a {@code null} leaves the
+ * last command in place and the ship coasts. The computer LATCHES; absence is not a stop.</p>
+ *
+ * <p>The exemption is safe for a different reason, and it is worth knowing which: <b>an idle input
+ * cannot reach the one command that outlives a pilot.</b> The Flight-Assist cruise setpoint is
+ * zeroed only by CUT or BRAKE ({@code FreeFlightPhysics.shipRampSetpoint}), and
+ * {@link FreeFlightInput#isIdle()} requires both to be absent — so a held cut is a NON-idle input
+ * and gets the same keep-alive as every other held one. What an idle does reach (the rotation rates,
+ * and the ramping of the setpoint) lives on a field that is never persisted and dies with the
+ * computer's tile, in the very event that would have dropped the packet.</p>
+ *
+ * <p><b>Two things must stay true or this exemption becomes a hole</b>, and both are pinned by unit
+ * tests rather than by this paragraph: {@code PilotInputCadenceTest} holds that a held cut is not
+ * idle and IS re-asserted, and {@code ShipVelocityCommandTest} holds that an idle input leaves the
+ * cruise exactly where it was. Change either — let {@code isIdle()} ignore the cut channel, or let a
+ * released stick bleed the setpoint — and a dropped packet starts costing a craft its autopilot,
+ * silently, while this comment goes on saying it is free.</p>
  *
  * <p>The phase is derived from the seat, not shared: a fixed {@code tick % N} would stack every pilot
  * on a server into the same tick, which is how a keep-alive turns into a burst. Two seats therefore

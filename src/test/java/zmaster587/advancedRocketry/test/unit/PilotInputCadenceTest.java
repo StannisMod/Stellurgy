@@ -56,10 +56,47 @@ public class PilotInputCadenceTest {
     public void anIdleInputIsNeverRepeated() {
         FreeFlightInput idle = FreeFlightInput.zero();
         for (long tick = 0; tick <= 4L * PilotInputCadence.REPEAT_TICKS; tick++) {
-            assertFalse("releasing everything must not become a heartbeat: losing \"no input\" costs "
-                            + "nothing, because no input is what the server falls back to",
+            assertFalse("releasing everything must not become a heartbeat. This is SAFE, but not for"
+                            + " the reason the exemption used to give: 'no input is what the server"
+                            + " falls back to' is false — the flight computer LATCHES a null. It is"
+                            + " safe because an idle cannot reach the cruise setpoint, which is the"
+                            + " only command that outlives a pilot; the test below is what holds"
+                            + " that, and it is the one to read before changing this",
                     PilotInputCadence.shouldSend(idle, idle, tick, 0));
         }
+    }
+
+    /**
+     * THE COMMAND THAT STOPS A CRAFT IS NOT EXEMPT — it is the exemption's whole safety argument.
+     *
+     * <p>An idle input is deliberately never repeated. That would be a hole if an idle were how a
+     * pilot stops, because it is sent exactly once, on the tick the cursor enters its dead-zone. It
+     * is not: what zeroes the Flight-Assist cruise — the setpoint that goes on flying a craft with
+     * nobody at the controls — is CUT or BRAKE, and {@link FreeFlightInput#isIdle()} requires both to
+     * be absent. So a held cut is a NON-idle input and gets the same 20-tick keep-alive every other
+     * held input gets.</p>
+     *
+     * <p>Pinned because the argument rests on it and nothing else did. Make {@code isIdle()} ignore
+     * the cut channel, and the exemption silently starts covering the one input it must not.</p>
+     */
+    @Test
+    public void aHeldCutIsNotIdleAndIsThereforeReasserted() {
+        FreeFlightInput cut = new FreeFlightInput(0f, 0f, 0f, 0f, 0f, 0f, 0f, true);
+        assertFalse("a cut is the command that zeroes the cruise; it must never count as idle",
+                cut.isIdle());
+        FreeFlightInput brake = new FreeFlightInput(0f, 0f, 0f, 0f, 0f, 0f, 1f, false);
+        assertFalse("a brake zeroes the cruise too, so it is not idle either", brake.isIdle());
+
+        boolean reasserted = false;
+        for (long tick = 0; tick < 4L * PilotInputCadence.REPEAT_TICKS; tick++) {
+            if (PilotInputCadence.shouldSend(cut, cut, tick, 0)) {
+                reasserted = true;
+                break;
+            }
+        }
+        assertTrue("a HELD cut must be re-asserted by the keep-alive within one repeat interval —"
+                        + " it is the only way a pilot cancels an autopilot that outlives him, and"
+                        + " the idle exemption is only safe while this holds", reasserted);
     }
 
     @Test

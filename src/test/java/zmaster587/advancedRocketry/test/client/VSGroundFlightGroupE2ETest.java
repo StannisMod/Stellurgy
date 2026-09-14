@@ -249,25 +249,24 @@ public class VSGroundFlightGroupE2ETest extends AbstractSharedVsClientE2ETest {
         assertTrue("…and it must report where A IS now, not where it was built (posY=" + aY + ")",
                 aY > ay + 20);
 
-        // LEG 2 — the nearest form, asked at A's OWN base, now names B. This is the failure the id
-        // form exists to remove, observed rather than asserted.
-        String nearestAtAsBase = exec("artest vs ship-info 0 " + ax + " " + ay + " " + az);
-        scenario().record("nearestAtAsBase", nearestAtAsBase);
-        assertTrue("the unbounded nearest lookup must still answer something: " + nearestAtAsBase,
-                nearestAtAsBase.contains("\"managed\":true"));
-        assertTrue("CONTROL: asked at A's own base with A flown away, the unbounded nearest lookup "
-                + "must answer with B — this is the wrong answer the id form exists to prevent, and "
-                + "a run where it happens to be right would make the id form untested. reply="
-                + nearestAtAsBase, idB.equals(readShipId(nearestAtAsBase)));
-
-        // LEG 3 — and the bounded form, the previous mitigation, answers about NOTHING.
-        String boundedAtAsBase = exec("artest vs ship-info 0 " + ax + " " + ay + " " + az
-                + " " + SHIP_QUERY_RADIUS);
-        scenario().record("boundedAtAsBase", boundedAtAsBase);
-        assertTrue("CONTROL: bounded at " + SHIP_QUERY_RADIUS + " blocks the same question answers "
-                + "managed:false — correct about the neighbour and useless about A, which is why a "
-                + "radius is a mitigation and not an identity. reply=" + boundedAtAsBase,
-                boundedAtAsBase.contains("\"managed\":false"));
+        // LEG 2 — the positional form is GONE, and that is now the contract.
+        //
+        // Two legs stood here until 2026-09-14 and they were controls: asked at A's own base with A
+        // flown away, the unbounded nearest lookup answered with B (the wrong ship the id form
+        // exists to prevent), and the bounded form answered about nothing at all — correct about the
+        // neighbour, useless about A, which is why a radius was a mitigation and never an identity.
+        // Both demonstrated a form that no longer exists: a ship's blocks live in its subspace, so
+        // in the world it has a pose and no extent for a distance to be measured to, and the whole
+        // family was removed. A control for a form nobody can call is not a control.
+        //
+        // What survives is the half that is still checkable and is the reason the removal happened:
+        // the probe must REFUSE the positional spelling rather than quietly answering about
+        // somebody's craft.
+        String positional = exec("artest vs ship-info 0 " + ax + " " + ay + " " + az);
+        scenario().record("positionalRefused", positional);
+        assertTrue("asking for a ship BY POSITION must be refused, not answered: the reply must not "
+                + "look like a ship report. reply=" + positional,
+                !positional.contains("\"managed\":true"));
     }
 
     // ── migrated: VSShipClientLoadE2ETest ────────────────────────────────────

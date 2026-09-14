@@ -824,29 +824,11 @@ public class TestProbeCommand extends CommandBase {
                     + ",\"countAfterAdd\":" + planted[1] + "}");
             return;
         }
-        // empty-nearest-and-look <dim> <x> <y> <z> — TEST-ONLY fault injection for the ONE-TICK
-        // window: empty the nearest LOADED ship's block set and, in this same call, ask the
-        // nearest-ship lookup what it answers there. Both halves must be one call — the window lasts
-        // until the destroy pass runs on the next tick, and two probe commands are separated by a
-        // whole world pass, so asking in a second command would ask after the collector and go green
-        // on a build with no filter at all.
-        if (args.length >= 5 && "empty-nearest-and-look".equalsIgnoreCase(args[0])) {
-            net.minecraft.world.WorldServer world = vsWorld(sender, parseIntOr(args[1], Integer.MIN_VALUE));
-            if (world == null) {
-                send(sender, "{\"error\":\"world not loaded\"}");
-                return;
-            }
-            String[] looked = zmaster587.advancedRocketry.integration.vs.VSIntegration
-                    .emptyNearestShipAndLookAgain(world, parseDoubleOr(args[2], 0),
-                            parseDoubleOr(args[3], 0), parseDoubleOr(args[4], 0));
-            if (looked == null) {
-                send(sender, "{\"error\":\"no loaded ship to empty\"}");
-                return;
-            }
-            send(sender, "{\"ok\":true,\"emptied\":\"" + looked[0] + "\""
-                    + ",\"lookupAnswered\":\"" + looked[1] + "\"}");
-            return;
-        }
+        // `empty-nearest-and-look` IS GONE. Its whole subject was the unbounded nearest-ship
+        // lookup — it emptied a hull and asked that lookup what it then answered — and the lookup
+        // was removed on 2026-09-14: a ship's blocks live in its subspace, so in the world it has a
+        // pose and no extent a distance could be measured to. A fault injector outlives its fault
+        // only as a way to keep the fault.
         // load-ships <dim> — force all known ships loaded + physics-enabled (a headless
         // server has no player near a ship to auto-load it).
         if (args.length >= 2 && "load-ships".equalsIgnoreCase(args[0])) {
@@ -886,8 +868,10 @@ public class TestProbeCommand extends CommandBase {
             m.put("seats", zmaster587.advancedRocketry.space.CrewTransfer.countSeatsOfShip(
                     world, new net.minecraft.util.math.BlockPos(qx, qy, qz), want));
             m.put("askedShip", want == null ? "BY-POSITION" : want.toString());
-            m.put("nearest", zmaster587.advancedRocketry.integration.vs.VSIntegration
-                    .describeShipAt(world, qx, qy, qz));
+            // The `nearest` field that stood here is GONE with the lookup behind it (2026-09-14). It
+            // named whichever hull a distance happened to reach, and a distance to a craft whose
+            // blocks live in its subspace measures nothing. A caller that wants to know WHICH ship
+            // this count is about passes its uuid, which is what `askedShip` then reports.
             send(sender, jsonMap(m));
             return;
         }
@@ -975,46 +959,18 @@ public class TestProbeCommand extends CommandBase {
             send(sender, jsonMap(shipInfoMap(shipId, s, omega, gates)));
             return;
         }
-        // ship-info <dim> <x> <y> <z> [maxDist] — state of the loaded ship NEAREST to (x,y,z).
+        // THE POSITIONAL `ship-info <dim> <x> <y> <z>` IS GONE, removed 2026-09-14.
         //
-        // maxDist bounds the lookup: without it, on a world holding several ships, the answer is a
-        // NEIGHBOUR the moment the intended ship unloads or flies off, and it looks identical
-        // either way. But the bound is a mitigation and not an identity, and the distance it
-        // compares is the full 3-D one — so a bound sized against how far apart ships are BUILT
-        // says nothing about how far one of them then CLIMBS. Use this form to capture "id" once,
-        // then ask by id.
-        if (args.length >= 5 && "ship-info".equalsIgnoreCase(args[0])) {
-            net.minecraft.world.WorldServer world = vsWorld(sender, parseIntOr(args[1], Integer.MIN_VALUE));
-            if (world == null) {
-                send(sender, "{\"error\":\"world not loaded\"}");
-                return;
-            }
-            double maxDist = args.length >= 6
-                    ? parseDoubleOr(args[5], Double.POSITIVE_INFINITY) : Double.POSITIVE_INFINITY;
-            double[] s = zmaster587.advancedRocketry.integration.vs.VSIntegration.nearestShipState(
-                    world, parseDoubleOr(args[2], 0), parseDoubleOr(args[3], 0),
-                    parseDoubleOr(args[4], 0), maxDist);
-            if (s == null) {
-                send(sender, "{\"managed\":false}");
-                return;
-            }
-            // WHICH ship answered. Without it the reply is unattributable by construction: two
-            // ships produce the same shape of report and nothing in it says which one this is.
-            String shipId = zmaster587.advancedRocketry.integration.vs.VSIntegration.nearestShipId(
-                    world, parseDoubleOr(args[2], 0), parseDoubleOr(args[3], 0),
-                    parseDoubleOr(args[4], 0), maxDist);
-            // Angular velocity (rad/s): without it a test cannot tell "the pilot centred the flight
-            // cursor and the ship stopped turning" from "it is still turning, slowly".
-            double[] omega = zmaster587.advancedRocketry.integration.vs.VSIntegration
-                    .nearestShipAngularVelocity(world, parseDoubleOr(args[2], 0),
-                            parseDoubleOr(args[3], 0), parseDoubleOr(args[4], 0), maxDist);
-            // Asked by the id this lookup just resolved, so `ready` describes the SAME craft the
-            // rest of the report does rather than whatever a second positional lookup would reach.
-            int[] gates = zmaster587.advancedRocketry.integration.vs.VSIntegration
-                    .shipPhysicsGatesById(world, shipId);
-            send(sender, jsonMap(shipInfoMap(shipId, s, omega, gates)));
-            return;
-        }
+        // It answered with the loaded ship NEAREST the query point, and that is not a question about
+        // a ship: a ship's blocks live in its subspace, so in the world it has a pose and no extent
+        // for a distance to be measured to. Unbounded it could not fail, and so could not warn; the
+        // `maxDist` that was offered as a mitigation is a threshold on the same meaningless number,
+        // and it is a full 3-D distance, so a bound sized against how far apart two craft are BUILT
+        // says nothing about how far one of them then CLIMBS.
+        //
+        // Ask `ship-info <dim> id <shipUuid>` instead. A diagnostic of the form "did my craft end up
+        // where I put it" resolves the craft by id FIRST and reads its pose second; there is no
+        // other order in which the answer means anything.
         // to-world <dim> <x> <y> <z> <subX> <subY> <subZ> — map a SUBSPACE point of the ship whose
         // grown world AABB contains (x,y,z) through THIS side's (the server's) transform. Paired
         // with the client-side skew statics it measures cross-side pose divergence: the same
@@ -1812,25 +1768,14 @@ public class TestProbeCommand extends CommandBase {
                 }
             }
             String wantShipId = null;
-            // seat-mount <dim> id <shipUuid> — the only form that is an IDENTITY rather than a
-            // narrower guess. `near` still resolves through nearestShipId, so it answers with the
-            // closest ship within its bound and a caller that means one particular craft is trusting
-            // a distance; this branch names it. The seat is then matched through the ship's own chunk
-            // CLAIM (shipIdOwningBlock, containment), so the seat found belongs to that hull or none
-            // is returned.
+            // seat-mount <dim> id <shipUuid> — the only form there is, because it is the only one
+            // that NAMES a craft. A `near <x> <y> <z> [maxDist]` form stood here until 2026-09-14
+            // and resolved through a nearest-ship lookup: a caller that meant one particular hull
+            // was trusting a distance to a thing that has no extent in the world. The seat is
+            // matched through the ship's own chunk CLAIM (shipIdOwningBlock), so the seat found
+            // belongs to that hull or none is returned.
             if (args.length >= 4 && "id".equalsIgnoreCase(args[2])) {
                 wantShipId = args[3];
-            } else if (args.length >= 6 && "near".equalsIgnoreCase(args[2])) {
-                double maxDist = args.length >= 7
-                        ? parseDoubleOr(args[6], Double.POSITIVE_INFINITY) : Double.POSITIVE_INFINITY;
-                wantShipId = zmaster587.advancedRocketry.integration.vs.VSIntegration.nearestShipId(
-                        world, parseDoubleOr(args[3], 0), parseDoubleOr(args[4], 0),
-                        parseDoubleOr(args[5], 0), maxDist);
-                if (wantShipId == null) {
-                    send(sender, "{\"seatFound\":false,\"reason\":\"no loaded ship near that point\""
-                            + ",\"seatsLoaded\":" + seats.size() + "}");
-                    return;
-                }
             }
             zmaster587.advancedRocketry.tile.TilePilotSeat seat = null;
             for (zmaster587.advancedRocketry.tile.TilePilotSeat candidate : seats) {

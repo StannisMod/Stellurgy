@@ -232,21 +232,6 @@ final class VSBridge {
         return true;
     }
 
-    /** Human-readable identity of the ship a POSITION lookup resolves to, for diagnostics only. */
-    static String describeNearestShip(World world, double x, double y, double z) {
-        ShipData ship = nearestQueryableShip(world, x, y, z);
-        if (ship == null) {
-            return "none";
-        }
-        Vec3d p = ship.getShipTransform().getShipPositionVec3d();
-        AxisAlignedBB yard = claimBounds(ship);
-        return ship.getUuid() + " '" + ship.getName() + "' at ("
-                + (int) p.x + "," + (int) p.y + "," + (int) p.z + ")"
-                + (yard == null ? " yard=NONE"
-                        : " yard=[" + (int) yard.minX + ".." + (int) yard.maxX + "]x["
-                                + (int) yard.minZ + ".." + (int) yard.maxZ + "]");
-    }
-
     /**
      * The body&rarr;world attitude of the ship managing the block at {@code pos}, as
      * an AR-core {@link FreeFlightPhysics.Quat}, or {@code null} if no ship manages
@@ -575,34 +560,6 @@ final class VSBridge {
      */
     static int queryableShipCount(World world) {
         return ValkyrienUtils.getQueryableData(world).getShips().size();
-    }
-
-    /**
-     * TEST-ONLY FAULT INJECTION: empty the block set of the LOADED ship nearest {@code (x,y,z)} and,
-     * in this same call, ask the nearest-ship lookup what it answers there.
-     *
-     * <p>Answers {@code [emptiedShipUuid, whatTheLookupSaid]}, with {@code ""} for a lookup that
-     * answered nothing, or {@code null} when no loaded ship was there to empty.</p>
-     *
-     * <p><b>Both halves must happen inside one call, and that is the whole design.</b> The window
-     * this reproduces — a hull whose blocks are gone while its physics object is still loaded — lasts
-     * until the manager's destroy pass runs, which is the next tick. Two probe commands are separated
-     * by a complete world pass, so a test that emptied a ship in one command and asked in the next
-     * would be asking after the collector had already run, and would go green on a build with no
-     * filter at all.</p>
-     *
-     * <p>Nothing needs cleaning up afterwards: the destroy pass collects an emptied ship on its next
-     * tick, which is the same path production uses for a cut hull.</p>
-     */
-    static String[] emptyNearestShipAndLookAgain(World world, double x, double y, double z) {
-        PhysicsObject victim = nearestShip(world, x, y, z, Double.POSITIVE_INFINITY);
-        if (victim == null) {
-            return null;
-        }
-        String emptied = victim.getShipData().getUuid().toString();
-        victim.getShipData().getBlockPositions().clear();
-        String answered = nearestShipId(world, x, y, z, Double.POSITIVE_INFINITY);
-        return new String[] {emptied, answered == null ? "" : answered};
     }
 
     /**
@@ -990,51 +947,10 @@ final class VSBridge {
     }
 
     /**
-     * State of the loaded ship whose world position is nearest to {@code (x,y,z)}, as a
-     * flat array {@code [posX, posY, posZ, qw, qx, qy, qz, velX, velY, velZ]} (world-frame
-     * position + body&rarr;world attitude + linear velocity), or {@code null} if no ship is
-     * loaded. Only primitive/MC types cross back to AR core.
-     *
-     * <p>{@code maxDist} bounds the search: when the nearest loaded ship is farther than that from
-     * the query point the answer is {@code null} — "no ship here" — rather than a distant one.
-     * Pass {@link Double#POSITIVE_INFINITY} for the unbounded query. A world holding several ships
-     * cannot attribute an unbounded answer to the ship the caller meant: the moment that ship
-     * unloads or flies off, the lookup silently starts describing its neighbour instead, and
-     * nothing in the answer says so.</p>
-     *
-     * <p><b>A bound is a mitigation, not an identity.</b> The distance it compares is the FULL 3-D
-     * one ({@link #nearestShip}), so a bound sized against how far apart two ships are BUILT says
-     * nothing about how far one of them then FLIES: a caller that means one particular ship and
-     * lets it move should capture {@link #nearestShipId} once, while its ship is provably the only
-     * candidate, and use {@link #shipStateById} afterwards.</p>
-     */
-    static double[] nearestShipState(World world, double x, double y, double z, double maxDist) {
-        PhysicsObject physo = nearestShip(world, x, y, z, maxDist);
-        if (physo == null) {
-            return null;
-        }
-        return stateOf(physo);
-    }
-
-    /**
-     * The IDENTITY of the loaded ship nearest to {@code (x,y,z)} within {@code maxDist} — its VS
-     * ship uuid, as a string — or {@code null} when there is none.
-     *
-     * <p>This is the one call in this family that a caller is meant to make at a moment it can
-     * defend: right after its own assembly, when the queried spot provably holds its ship and no
-     * other. Everything afterwards goes through {@link #shipStateById}, which has no distance term
-     * to be wrong about.</p>
-     */
-    static String nearestShipId(World world, double x, double y, double z, double maxDist) {
-        PhysicsObject physo = nearestShip(world, x, y, z, maxDist);
-        return physo == null ? null : physo.getShipData().getUuid().toString();
-    }
-
-    /**
      * The IDENTITY of the ship that owns a SUBSPACE block position — its VS ship uuid as a string —
      * or {@code null} when the position belongs to no loaded ship.
      *
-     * <p>This is the inverse of {@link #nearestShipId}: it answers from the ship's chunk CLAIM, which
+     * <p>It answers from the ship's chunk CLAIM, which
      * contains the block or does not, rather than from a distance that is merely small. A caller
      * holding a block of a ship (a seat, a controller, a hatch) uses this to say WHICH ship it is a
      * block of, on a world where several ships exist and their subspace yards sit side by side.</p>
@@ -1046,7 +962,8 @@ final class VSBridge {
     }
 
     /**
-     * State of the loaded ship with this uuid, in the same layout as {@link #nearestShipState}, or
+     * State of the loaded ship with this uuid, as
+     * {@code [posX,posY,posZ, qw,qx,qy,qz, velX,velY,velZ]}, or
      * {@code null} when the id names no ship that is loaded here (unloaded, deleted, another world,
      * or not a uuid at all). Position-independent: the ship may be anywhere.
      */
@@ -1813,21 +1730,6 @@ final class VSBridge {
     }
 
     /**
-     * The world-frame angular velocity {@code [x,y,z]} (rad/s) of the loaded ship nearest to
-     * {@code (x,y,z)}, or {@code null} if no ship is loaded. Read-only; used by the flight HUD and by
-     * the test probe that pins "a centred flight cursor brings the ship's spin to rest".
-     */
-    static double[] nearestShipAngularVelocity(World world, double x, double y, double z,
-                                               double maxDist) {
-        PhysicsObject physo = nearestShip(world, x, y, z, maxDist);
-        if (physo == null) {
-            return null;
-        }
-        Vector3dc w = physo.getPhysicsData().getAngularVelocity();
-        return new double[]{w.x(), w.y(), w.z()};
-    }
-
-    /**
      * Is this record a REMNANT — a ship that owns no blocks — rather than a craft?
      *
      * <p>A hull cut out of a world leaves its record behind owning nothing. The manager's registry
@@ -1846,30 +1748,4 @@ final class VSBridge {
         return data.getBlockPositions() != null && data.getBlockPositions().isEmpty();
     }
 
-    private static PhysicsObject nearestShip(World world, double x, double y, double z) {
-        return nearestShip(world, x, y, z, Double.POSITIVE_INFINITY);
-    }
-
-    private static PhysicsObject nearestShip(World world, double x, double y, double z,
-                                             double maxDist) {
-        PhysicsObject best = null;
-        double bestDistSq = Double.MAX_VALUE;
-        ImmutableList<PhysicsObject> ships =
-                ValkyrienUtils.getServerShipManager(world).getAllLoadedThreadSafe();
-        for (PhysicsObject physo : ships) {
-            if (isBlocklessRemnant(physo.getShipData())) {
-                continue;
-            }
-            Vec3d pos = physo.getShipData().getShipTransform().getShipPositionVec3d();
-            double distSq = pos.squareDistanceTo(x, y, z);
-            if (distSq < bestDistSq) {
-                bestDistSq = distSq;
-                best = physo;
-            }
-        }
-        if (best != null && Double.isFinite(maxDist) && bestDistSq > maxDist * maxDist) {
-            return null;
-        }
-        return best;
-    }
 }

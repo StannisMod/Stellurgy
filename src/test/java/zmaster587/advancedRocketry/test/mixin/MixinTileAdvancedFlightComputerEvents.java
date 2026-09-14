@@ -123,11 +123,32 @@ public abstract class MixinTileAdvancedFlightComputerEvents {
     @Unique
     private Boolean arTest$lastHold = null;
 
+    /**
+     * The computer was handed an input — and WHAT it was handed, not merely that it was handed
+     * something.
+     *
+     * <p>This used to write {@code "input":"null"|"set"}, and that could not answer the one question
+     * a still-turning craft raises. The computer LATCHES: a {@code null} leaves the last command in
+     * force, and the only thing that stops a rotation is an IDLE input, which the client sends ONCE
+     * on the tick its cursor enters the dead-zone and never repeats. So "ten inputs were accepted"
+     * is compatible with both "the stop arrived and was ignored" and "the stop never arrived", which
+     * send a reader to opposite subsystems.</p>
+     *
+     * <p>So the record carries the discriminator — {@code idle} as its own value, distinct from
+     * {@code set} — and the three rotation channels this craft's residual rate is about. Measured
+     * 2026-09-14: a craft went on turning at 0.5-1.2 rad/s with its pilot's cursor provably inside
+     * the dead-zone, in the pit and again in open air, and nothing here could say which half it was.</p>
+     */
     @Inject(method = "setPilotInput", at = @At("HEAD"))
     private void arTest$pilotInputSet(FreeFlightInput input, CallbackInfo ci) {
         TestTrace.instrumentHere(INSTRUMENT);
+        String what = input == null ? "null" : (input.isIdle() ? "idle" : "set");
+        String channels = input == null ? ""
+                : ",\"yaw\":" + input.yawInput
+                        + ",\"pitch\":" + input.pitchInput
+                        + ",\"roll\":" + input.rollInput;
         TestTrace.recordHere("pilot_input_set", arTest$posAndShip()
-                + ",\"input\":\"" + (input == null ? "null" : "set") + "\"");
+                + ",\"input\":\"" + what + "\"" + channels);
     }
 
     @Inject(method = "markCruiseDirty", at = @At("HEAD"))

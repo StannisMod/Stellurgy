@@ -556,10 +556,6 @@ public final class CrewTransfer {
                                 : "NONE(the crossed ship is not registered here)")
                         : "[" + (int) afc.yard.minX + ".." + (int) afc.yard.maxX + "]x["
                                 + (int) afc.yard.minZ + ".." + (int) afc.yard.maxZ + "]")
-                // What a POSITION lookup would have answered, always — the difference between the
-                // two is what says "we were asking about the wrong ship".
-                .append(" nearestToAnchor=").append(VSIntegration.describeShipAt(world,
-                        anchor.getX() + 0.5, anchor.getY() + 0.5, anchor.getZ() + 0.5))
                 // Which ship in THIS world carries the durable id the filter is comparing against —
                 // the translation between the two identities a jump holds. A refusal count says the
                 // filter said no; this says whether the id it wanted names anything here at all, and
@@ -686,11 +682,6 @@ public final class CrewTransfer {
                                 : "NONE(the crossed ship is not registered here)")
                         : "[" + (int) yard.minX + ".." + (int) yard.maxX + "]x["
                                 + (int) yard.minZ + ".." + (int) yard.maxZ + "]")
-                // What a POSITION lookup would have answered, always — it is the difference between
-                // the two that says "we were asking about the wrong ship", and reconstructing it
-                // afterwards took a scan of the world's region files.
-                .append(" nearestToAnchor=").append(VSIntegration.describeShipAt(world,
-                        anchor.getX() + 0.5, anchor.getY() + 0.5, anchor.getZ() + 0.5))
                 .append(" seatsReached=").append(seats.size())
                 .append(" crew=").append(crew.size())
                 .append(" wantShip=").append(expectedShipId);

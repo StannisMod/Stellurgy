@@ -327,18 +327,13 @@ public final class VSIntegration {
         return VSBridge.unparkShip(world, shipUuid);
     }
 
-    /**
-     * One line naming the ship a POSITION lookup resolves to at {@code (x,y,z)} — uuid, name, its
-     * pose and its shipyard — or {@code "none"}. Diagnostics only: a give-up report that prints a
-     * shipyard box without saying WHOSE it is cannot distinguish "the ship is broken" from "we asked
-     * about the wrong ship", and that distinction is the whole finding.
-     */
-    public static String describeShipAt(World world, double x, double y, double z) {
-        if (!isAvailable()) {
-            return "vs-absent";
-        }
-        return VSBridge.describeNearestShip(world, x, y, z);
-    }
+    // `describeShipAt` IS GONE, removed 2026-09-14 with the rest of the positional resolves. It
+    // named the ship a POSITION lookup resolves to, and its two callers printed that beside the ship
+    // they MEANT so a reader could see the two diverge. That is a real thing to want and it was the
+    // wrong way to get it: the answer came from a nearest lookup, which is a distance to a hull that
+    // has no extent in the world, so on the day the two differed the line could not be trusted
+    // either. A give-up report says which ship it was asking about by NAMING it — the id is in hand
+    // at every one of these sites — not by asking the world who happens to be around.
 
     /**
      * The physics mod's hard ceiling for ship altitude (world Y), or
@@ -1296,23 +1291,18 @@ public final class VSIntegration {
         return shipAttitudeAt(entity.world, entity.posX, entity.posY, entity.posZ);
     }
 
-    /**
-     * The world-frame angular velocity {@code [x,y,z]} (rad/s) of the loaded ship nearest to
-     * {@code (x,y,z)}, or {@code null} when VS is absent or no ship is loaded. Only AR-core/MC types
-     * cross the gate.
-     */
-    public static double[] nearestShipAngularVelocity(World world, double x, double y, double z) {
-        return nearestShipAngularVelocity(world, x, y, z, Double.POSITIVE_INFINITY);
-    }
-
-    /** Distance-bounded {@link #nearestShipAngularVelocity(World, double, double, double)}. */
-    public static double[] nearestShipAngularVelocity(World world, double x, double y, double z,
-                                                      double maxDist) {
-        if (!isAvailable()) {
-            return null;
-        }
-        return VSBridge.nearestShipAngularVelocity(world, x, y, z, maxDist);
-    }
+    // THE NEAREST-SHIP LOOKUPS ARE GONE — removed 2026-09-14 on the maintainer's ruling, and the
+    // reason is geometric rather than stylistic: a ship's blocks live in its SUBSPACE, so in the
+    // world it has a pose and no extent a distance could be measured to. "The ship nearest this
+    // point" therefore compares a number against a quantity that describes nothing, and a BOUND on
+    // it is not a mitigation — it is a threshold on the same meaningless number. Unbounded, the
+    // lookup cannot fail and so cannot warn: it once mounted a pilot onto a craft 16,000,000 blocks
+    // away and the reply was shaped exactly like success.
+    //
+    // A ship is named by its id. Where a caller has only a place, the honest question is CONTAINMENT
+    // ({@link #shipIdsAt}), and its answer is a LIST whose size the caller must look at — two hulls
+    // can occupy one space. A diagnostic of the form "did my ship end up where I put it" resolves
+    // the ship by id FIRST and then reads its pose; there is no other order that says anything.
 
     /**
      * The world position {@code [x, y, z]} of the pilot seat at ship-subspace {@code seatPos},
@@ -1569,21 +1559,6 @@ public final class VSIntegration {
     }
 
     /**
-     * TEST-ONLY FAULT INJECTION: empty the nearest LOADED ship's block set and ask the nearest-ship
-     * lookup, in one call, what it answers at the same point.
-     *
-     * <p>Answers {@code [emptiedShipUuid, whatTheLookupSaid]}, or {@code null} when VS is absent or
-     * no loaded ship was there — absence rather than a fabricated pair, so "nothing to empty" cannot
-     * be read as "the lookup behaved".</p>
-     */
-    public static String[] emptyNearestShipAndLookAgain(World world, double x, double y, double z) {
-        if (!isAvailable()) {
-            return null;
-        }
-        return VSBridge.emptyNearestShipAndLookAgain(world, x, y, z);
-    }
-
-    /**
      * DIAGNOSTIC: identity of the ship registry {@code world} answers with, matching the hex the
      * physics mod prints when it serialises that world. {@code "?"} when VS is absent.
      */
@@ -1619,50 +1594,10 @@ public final class VSIntegration {
     }
 
     /**
-     * State of the loaded ship nearest to {@code (x,y,z)} as
-     * {@code [posX,posY,posZ, qw,qx,qy,qz, velX,velY,velZ]}, or {@code null} when VS is
-     * absent or no ship is loaded. Only AR-core/MC types cross the gate.
-     */
-    public static double[] nearestShipState(World world, double x, double y, double z) {
-        return nearestShipState(world, x, y, z, Double.POSITIVE_INFINITY);
-    }
-
-    /**
-     * As {@link #nearestShipState(World, double, double, double)}, but answering {@code null} when
-     * the nearest loaded ship is farther than {@code maxDist} from the query point. A caller that
-     * means ONE ship needs this: an unbounded nearest lookup on a world holding several ships
-     * starts describing a neighbour the moment the intended ship unloads or flies off, and says
-     * nothing about having done so.
-     */
-    public static double[] nearestShipState(World world, double x, double y, double z,
-                                            double maxDist) {
-        if (!isAvailable()) {
-            return null;
-        }
-        return VSBridge.nearestShipState(world, x, y, z, maxDist);
-    }
-
-    /**
-     * The identity (VS ship uuid, as a string) of the loaded ship nearest to {@code (x,y,z)} within
-     * {@code maxDist}, or {@code null} when VS is absent or there is no such ship.
-     *
-     * <p>Captured once, at a moment the caller can defend — its own ship freshly assembled at a
-     * spot nothing else occupies — it turns every later question into
-     * {@link #shipStateById(World, String)}, which cannot answer about a different ship however far
-     * this one travels. The distance bound is only how the FIRST answer is attributed; it is not an
-     * identity, and it is a full 3-D distance, so it says nothing about a ship that then climbs.</p>
-     */
-    public static String nearestShipId(World world, double x, double y, double z, double maxDist) {
-        if (!isAvailable()) {
-            return null;
-        }
-        return VSBridge.nearestShipId(world, x, y, z, maxDist);
-    }
-
-    /**
-     * State of the loaded ship named by {@code shipId}, in the layout of
-     * {@link #nearestShipState(World, double, double, double)}, or {@code null} when VS is absent or
-     * that ship is not loaded here. Position-independent.
+     * State of the loaded ship named by {@code shipId} as
+     * {@code [posX,posY,posZ, qw,qx,qy,qz, velX,velY,velZ]}, or {@code null} when VS is absent or
+     * that ship is not loaded here. Position-independent — which is the whole point: this is how a
+     * ship is asked about, now that the nearest-ship lookups are gone.
      */
     public static double[] shipStateById(World world, String shipId) {
         if (!isAvailable()) {

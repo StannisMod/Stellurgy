@@ -1136,13 +1136,21 @@ public final class ShipFrameTravel {
         if (entity == null || entity.world == null || !VSIntegration.isAvailable()) {
             return null;
         }
+        // THE SHIP IS THE ONE THIS BODY IS DECLARED TO BE ON, or there is no census.
+        //
+        // A positional fallback stood here until 2026-09-14: when nothing had declared a ship it took
+        // `shipIdsAt(...)` and used `ids.get(0)`. That is a first-match taken as an IDENTITY, and the
+        // sibling reading twenty lines up already says what it is worth — "two hulls may occupy the
+        // same space, so a list is the honest answer and its SIZE is the part a caller has to look
+        // at: ... a coin toss that will read as a clean number either way". Every number below is
+        // computed in one ship's frame, so a census built on the wrong hull is not approximately
+        // right; it is a well-formed report about a craft the caller never asked about.
+        //
+        // Absence is the honest answer instead: a body nobody has put on a deck has no ship frame to
+        // be censused in, and a caller that gets null learns exactly that. It is a diagnostic, so the
+        // cost of saying "I do not know" is a line in a probe reply.
         ShipFrameState state = STATE.get(entity);
         String shipId = state != null ? state.shipId : null;
-        if (shipId == null) {
-            List<String> ids = VSIntegration.shipIdsAt(
-                    entity.world, entity.posX, entity.posY, entity.posZ);
-            shipId = ids.isEmpty() ? null : ids.get(0);
-        }
         if (shipId == null) {
             return null;
         }

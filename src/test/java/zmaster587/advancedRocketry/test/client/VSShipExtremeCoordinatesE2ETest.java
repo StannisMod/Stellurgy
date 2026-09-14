@@ -371,7 +371,17 @@ public class VSShipExtremeCoordinatesE2ETest extends AbstractSharedVsClientE2ETe
 
     private void climbLeg(String label) throws Exception {
         double yBefore = shipY();
-        double riderYBefore = bot().reportRidingEntity().get("posY").getAsDouble();
+        // THROUGH THE GUARD, not a bare read. This call site was doing
+        // `reportRidingEntity().get("posY")` directly, and on 2026-09-14 it raised a
+        // NullPointerException with no message at all — the single least informative red a client
+        // e2e can produce, about the one question this class exists to answer. The guard beside it
+        // was written for exactly this and says whether he was PUT DOWN or never PICKED UP, with the
+        // client's mounts, the server's dismounts, the logout and the kick all in the message. The
+        // marks are taken here because a climb leg has no earlier one of its own.
+        long climbClientMark = clientEvents().mark();
+        long climbServerMark = events().mark();
+        double riderYBefore = requireStillAboard("before the " + label + " climb leg is driven",
+                climbClientMark, climbServerMark).get("posY").getAsDouble();
         bot().holdKey(Keyboard.KEY_R); // flightVerticalUp
         ClientPoll.Result<Double> lift;
         try {
@@ -390,7 +400,11 @@ public class VSShipExtremeCoordinatesE2ETest extends AbstractSharedVsClientE2ETe
                 + " yAfter=" + yAfter + ")", yAfter - yBefore > 1.0);
         bot().waitTicks(6);
         double serverDelta = shipY() - yBefore;
-        double riderDelta = bot().reportRidingEntity().get("posY").getAsDouble() - riderYBefore;
+        // Through the guard for the same reason as the read before the climb: a pilot who came adrift
+        // DURING the leg is the most interesting way this can fail, and a bare read turns it into a
+        // NullPointerException that names neither the leg nor the moment.
+        double riderDelta = requireStillAboard("after the " + label + " climb leg was driven",
+                climbClientMark, climbServerMark).get("posY").getAsDouble() - riderYBefore;
         // Third witness on divergence: the SERVER-side player position separates "the seat glue died
         // server-side" (server player static too) from "the client stopped tracking" (server player
         // climbed, client did not).

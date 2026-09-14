@@ -13,7 +13,6 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
-import static zmaster587.advancedRocketry.test.AdvancedRocketryTestConstants.SHIP_CAPTURE_RADIUS_BLOCKS;
 
 /**
  * The shared-client base for the Valkyrien Skies / tier-2 ship scenarios.
@@ -61,33 +60,14 @@ public abstract class AbstractSharedVsClientE2ETest extends AbstractSharedClient
      */
     protected static final Plot.Lane SHIP_PARKING_LANE = new Plot.Lane(2000, 8000, Plot.SIZE);
 
-    /**
-     * How far from its query point a {@code vs ship-info} answer may be and still be attributed to
-     * THIS scenario, in blocks — <b>for the CAPTURE only</b>.
-     *
-     * <p>{@code vs ship-info <dim> <x> <y> <z>} is a NEAREST-ship lookup
-     * ({@code VSBridge.nearestShip}) — it reports whichever loaded ship is closest to the point, and
-     * until this constant existed it had no distance bound at all. With one ship in the world that
-     * is exact. With several, it answers with a NEIGHBOUR the moment this scenario's ship unloads or
-     * flies off, and the reply is indistinguishable from a correct one: the caller gets a plausible
-     * position, attitude and angular velocity belonging to a ship it never built.</p>
-     *
-     * <p>48 is chosen against the tier's own geometry: these classes space their fixtures <b>100
-     * blocks</b> apart, so a bound below 50 can never admit a neighbour.</p>
-     *
-     * <p><b>It is not, and cannot be, an identity.</b> The distance {@code nearestShip} compares is
-     * the full 3-D one, Y included, and this tier's flight scenarios climb on purpose — one holds
-     * the lift key for 60 uninterrupted ticks to clear the terrain, which at the flight model's cap
-     * is over a hundred blocks. Bounded, every later query about that ship answers
-     * {@code managed:false}; unbounded, it answers about the neighbour. Neither is a report about
-     * the ship the scenario built.</p>
-     *
-     * <p>So the bound is spent <b>once</b>, by {@link #captureShipIdAt}, at the only moment it is
-     * defensible — the scenario's own ship freshly assembled at its own base, before anything has
-     * moved — and everything afterwards goes through {@link #shipInfoById}, which has no distance
-     * term at all.</p>
-     */
-    protected static final int SHIP_QUERY_RADIUS = SHIP_CAPTURE_RADIUS_BLOCKS;
+    // `SHIP_QUERY_RADIUS` LIVED HERE and is gone with what it bounded (2026-09-14). It was how far
+    // from its query point a positional `vs ship-info` answer could be and still be attributed to
+    // this scenario — 48 blocks, chosen against the 100-block fixture spacing so a neighbour could
+    // never be admitted. Its own javadoc already said the quiet part: the bound "is not, and cannot
+    // be, an identity", because the distance is the full 3-D one and these scenarios climb, so
+    // bounded it answers `managed:false` about the ship they built and unbounded it answers about
+    // the neighbour. The positional form is now removed outright; a scenario names its ship from the
+    // `ship_spawned` record its own assembly wrote, and asks by id thereafter.
 
     private static final Pattern SHIP_ID = Pattern.compile("\"id\":\"([^\"]*)\"");
     /** The two quaternion components an upright test needs; see {@link #upYOf}. */

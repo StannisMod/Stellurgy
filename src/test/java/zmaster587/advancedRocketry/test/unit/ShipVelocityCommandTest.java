@@ -261,4 +261,42 @@ public class ShipVelocityCommandTest {
         double[] a = FreeFlightPhysics.shipControlAccel(Double.NaN, 0, 0, 0, 0, 0, PHYS_DT, 0, 0, 0, AUTHORITY);
         assertTrue("a NaN command is sanitised, not propagated", !Double.isNaN(a[0]));
     }
+
+    /**
+     * AN IDLE INPUT CANNOT REACH THE CRUISE — the other half of why the client may leave an idle out
+     * of its keep-alive.
+     *
+     * <p>A cruise setpoint is the one command that outlives a pilot: a held throttle ramps it,
+     * RELEASING keeps it, and only cut or brake zeroes it. So "the pilot let go" and "the pilot
+     * stopped the craft" are different events, and the first must not be able to become the second by
+     * accident. Releasing everything leaves the setpoint exactly where it was.</p>
+     *
+     * <p>Pinned here because an argument made in {@code PilotInputCadence} depends on it and lived
+     * only in prose: an idle is never re-sent, which is safe precisely while an idle cannot change
+     * this number. Let a released stick bleed the setpoint — even slightly — and a dropped packet
+     * starts costing a craft its autopilot, silently, with a comment still saying it is free.</p>
+     */
+    @Test
+    public void releasingEverythingLeavesTheCruiseExactlyWhereItWas() {
+        // INSIDE maxSpeed, and that is load-bearing rather than tidy. The ramp clamps the setpoint's
+        // MAGNITUDE, so a triple whose length exceeds the cap is scaled down on every call whatever
+        // the input was — this test was first written with (7, -2, 3.5), whose length is 8.0777
+        // against a cap of 8.0, and it failed reporting 6.9327. That red was the clamp, not the
+        // input: a subject chosen out of range makes the instrument measure something else.
+        final double[] cruising = {5.0, -2.0, 3.0}; // |v| = 6.164, comfortably under MAX
+        double[] held = FreeFlightPhysics.shipRampSetpoint(
+                cruising[0], cruising[1], cruising[2], FreeFlightInput.zero(), MAX, RAMP);
+        assertArrayEquals("an idle input must leave the cruise untouched: releasing the controls is"
+                        + " not the same event as stopping the craft",
+                cruising, held, 1e-9);
+
+        // And the two inputs that ARE a stop, so this test says what it is contrasted with.
+        double[] byCut = FreeFlightPhysics.shipRampSetpoint(cruising[0], cruising[1], cruising[2],
+                new FreeFlightInput(0f, 0f, 0f, 0f, 0f, 0f, 0f, true), MAX, RAMP);
+        assertArrayEquals("a CUT is how a pilot cancels the autopilot", new double[]{0, 0, 0},
+                byCut, 1e-9);
+        double[] byBrake = FreeFlightPhysics.shipRampSetpoint(cruising[0], cruising[1], cruising[2],
+                new FreeFlightInput(0f, 0f, 0f, 0f, 0f, 0f, 1f, false), MAX, RAMP);
+        assertArrayEquals("so is a BRAKE", new double[]{0, 0, 0}, byBrake, 1e-9);
+    }
 }

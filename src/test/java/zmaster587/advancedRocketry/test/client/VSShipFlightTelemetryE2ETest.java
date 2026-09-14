@@ -83,6 +83,12 @@ public class VSShipFlightTelemetryE2ETest extends AbstractSharedVsClientE2ETest 
     /** @see #HOLD_SAMPLES */
     private static final int HOLD_TICKS_BETWEEN = 10;
     private static final Pattern DUMMY_ID = Pattern.compile("\"dummyId\":(-?\\d+)");
+    private static final Pattern CRUISE_FWD = Pattern.compile("\"cruiseForward\":(-?[0-9.E\\-]+)");
+    private static final Pattern CRUISE_RIGHT = Pattern.compile("\"cruiseRight\":(-?[0-9.E\\-]+)");
+    private static final Pattern CRUISE_UP = Pattern.compile("\"cruiseUp\":(-?[0-9.E\\-]+)");
+    private static final Pattern AFC_X = Pattern.compile("\"afcX\":(-?\\d+)");
+    private static final Pattern AFC_Y = Pattern.compile("\"afcY\":(-?\\d+)");
+    private static final Pattern AFC_Z = Pattern.compile("\"afcZ\":(-?\\d+)");
     private static final Pattern SEAT_X = Pattern.compile("\"seatX\":(-?\\d+)");
     private static final Pattern SEAT_Y = Pattern.compile("\"seatY\":(-?\\d+)");
     private static final Pattern SEAT_Z = Pattern.compile("\"seatZ\":(-?\\d+)");
@@ -121,7 +127,17 @@ public class VSShipFlightTelemetryE2ETest extends AbstractSharedVsClientE2ETest 
 
     @Test
     public void seatedPilotSeesLiveVelocityAndACentredCursorStopsTheShipTurning() throws Exception {
-        final int bx = 3120, by = 64, bz = 3120;
+        // IN THE AIR, and this one site is in the air while its five neighbours are not — because it
+        // is an EXPERIMENT with one variable. Measured 2026-09-14 at four client forks: with the
+        // flight cursor provably inside its dead-zone (worst deflection 0.016 against 0.05), this
+        // craft went on turning at 0.2-0.5 rad/s, oscillating. Nothing was commanding it. It is the
+        // only scenario in this suite that spins a hull while the hull is still standing on its pad
+        // at the bottom of the shared pre-clear's ten-block shaft, and a contact impulse on an
+        // asymmetric hull is off-axis — it spins it.
+        //
+        // So: same pad, same craft, same load, no shaft. If the turning stops, the rock was turning
+        // it; if it survives, the command latched on the computer and the ground is innocent.
+        final int bx = 3120, by = Plot.DEFAULT_Y, bz = 3120;
 
         double[] ship = buildAndBoardShip(bx, by, bz);
 
@@ -194,6 +210,12 @@ public class VSShipFlightTelemetryE2ETest extends AbstractSharedVsClientE2ETest 
         // held NON-idle input is re-asserted on a keep-alive; an idle one is exempt). The records
         // this mark collects are therefore the whole of what the computer was ever told to stop for.
         long centreMark = events.markInstrumented();
+        // The CLIENT mark beside it, for the one question a red here cannot otherwise answer: did
+        // the cursor STAY centred? `flight_cursor` is written on every tick the pilot path runs, so
+        // the records since this mark are the whole history of what the client was commanding —
+        // and a ship still turning with a cursor that never left its dead-zone is a different fault
+        // from one whose pilot kept steering. Without it the two are one red.
+        long cursorMarkAfterCentring = clientEvents().mark();
         double cursorCentred = centreFlightCursor();
         assertTrue("the client's flight cursor must return to centre (got " + cursorCentred + ")",
                 Math.abs(cursorCentred) < CURSOR_DEADZONE);
@@ -217,6 +239,36 @@ public class VSShipFlightTelemetryE2ETest extends AbstractSharedVsClientE2ETest 
         // input it was handed and a "stop" that never landed leaves it turning at whatever
         // deflection did; one creeping down with no floor is no braking torque at all, only the
         // substrate's own damping.
+        // THE CONFOUND, removed before the question is asked. The climb leg above held the vertical
+        // throttle, and a held throttle RAMPS the Flight-Assist cruise setpoint while releasing it
+        // KEEPS that setpoint — the documented contract, with an e2e of its own. So a craft that has
+        // merely stopped being steered is still commanded to fly, and asking "did it stop turning"
+        // of it is a compound question.
+        //
+        // Measured 2026-09-14, which is why this is here: the physics recorder showed cmdSpeed=12.0
+        // for the whole brake window, netMove [-42,-84,+4], the craft descending eighty-four blocks
+        // onto the ground with its linear controller saturated. Every residual-rate reading this
+        // scenario has ever taken came from a craft in that state. The pit hid it — the pad held the
+        // craft where it was put, and contact friction killed the spin the controller was supposed
+        // to kill.
+        //
+        // Cut it the way a player does, with the cut key, not with a probe: the cruise is the
+        // pilot's own channel and this scenario is about the pilot's own controls.
+        bot().holdKey(Keyboard.KEY_X);
+        bot().waitTicks(20);
+        bot().releaseKey(Keyboard.KEY_X);
+        bot().waitTicks(10);
+        String cruiseAfterCut = exec("artest vs ff-cruise-read-by-id 0 " + scenarioShipId);
+        scenario().record("cruiseAfterCut", cruiseAfterCut);
+        assertTrue("ARRANGEMENT: the cruise must be ZERO before the brake is judged, or this leg"
+                        + " measures a craft that is still commanded to fly and merely not steered."
+                        + " The cut key is what a pilot uses and it zeroes the setpoint; if this"
+                        + " reply carries a non-zero cruise the cut did not take: " + cruiseAfterCut,
+                cruiseAfterCut.contains("\"afcResolved\":true")
+                        && Math.abs(readDouble(cruiseAfterCut, CRUISE_FWD)) < 1e-6
+                        && Math.abs(readDouble(cruiseAfterCut, CRUISE_RIGHT)) < 1e-6
+                        && Math.abs(readDouble(cruiseAfterCut, CRUISE_UP)) < 1e-6);
+
         bot().waitTicks(BRAKE_SETTLE_TICKS);
         java.util.List<Double> hold = ClientPoll.observe(bot()::waitTicks,
                 () -> readDouble(shipInfo(), OMEGA), HOLD_SAMPLES, HOLD_TICKS_BETWEEN);
@@ -236,10 +288,33 @@ public class VSShipFlightTelemetryE2ETest extends AbstractSharedVsClientE2ETest 
         // counts deliveries and claims nothing more.
         String pilotInputs = events.since(centreMark, "pilot_input_set");
         int accepted = matchingRecords(pilotInputs, "\"input\":\"set\"");
+        // THE discriminator, and it is the whole reason this window is read at all: the computer
+        // LATCHES, so only an IDLE input stops a rotation. "The stop arrived and was ignored" and
+        // "the stop never arrived" send a reader to opposite subsystems and are indistinguishable
+        // from a count of accepted packets.
+        int idleHandedOver = matchingRecords(pilotInputs, "\"input\":\"idle\"");
         // NOT Events.lastField: that reads STRING fields ("k":"v") and a record's tick is a bare
         // number, so it would answer null for a stream that is plainly there.
         String lastAcceptedTick = lastNumericField(pilotInputs, "tick");
+        // What the CLIENT was commanding through the whole settle and hold. The worst deflection the
+        // cursor reached since it was centred is the discriminator: inside the dead-zone means the
+        // client asked for nothing and the craft turned anyway; outside it means the craft was being
+        // steered and the subject of this leg was never set up.
+        String cursorAfter = clientEvents().since(cursorMarkAfterCentring, "flight_cursor");
+        double worstCursor = Math.max(maxAbsField(cursorAfter, "x"), maxAbsField(cursorAfter, "y"));
+        // HOW MANY COMPUTERS drove this ship while it was supposed to be stopping. The physics-thread
+        // recorder stamps every step with who drove it precisely because "two controllers on one ship
+        // is a stale tile instance that outlived its replacement in the ship's controller set" — and a
+        // dead instance still holding the pilot's last DEFLECTED input would command a turn forever
+        // while the live one is handed the idle. That is the difference between "the brake is wrong"
+        // and "something else is still pressing", which the rate alone cannot show.
+        String seatNow = exec("artest vs find-seat 0 id " + scenarioShipId);
+        String drivers = seatNow.contains("\"afcX\"")
+                ? exec("artest vs motion-trace 0 " + readInt(seatNow, AFC_X) + " "
+                        + readInt(seatNow, AFC_Y) + " " + readInt(seatNow, AFC_Z) + " 20000")
+                : "(no afc address in: " + seatNow + ")";
         System.out.println("[tier2] omega spinning=" + spinning + " worstInHold=" + settled
+                + " worstCursorAfterCentring=" + worstCursor
                 + " settle=" + BRAKE_SETTLE_TICKS + "t hold=" + HOLD_SAMPLES + "x"
                 + HOLD_TICKS_BETWEEN + "t trace=[" + omegaTrace + "]"
                 + " pilotInputsAcceptedSinceCentring=" + accepted
@@ -258,11 +333,27 @@ public class VSShipFlightTelemetryE2ETest extends AbstractSharedVsClientE2ETest 
                 + " — a rate that PLATEAUS or climbs is a ship still executing a rotation command,"
                 + " not one failing to coast to a stop. This is the WORST of the hold and not the"
                 + " first reading under the line, deliberately: the earlier form exited on its first"
-                + " dip and passed this scenario on a ship whose rate was rising. The computer"
-                + " accepted " + accepted + " pilot inputs since before the cursor was centred (the"
-                + " last at tick " + lastAcceptedTick + "), and the idle that says 'stop' is sent"
-                + " ONCE, on the tick the cursor enters the dead-zone: a stream that ends before"
-                + " then never carried it.",
+                + " dip and passed this scenario on a ship whose rate was rising."
+                + "\n  WHICH FAULT THIS IS, from the client's own record: the worst cursor"
+                + " deflection since the centring was " + worstCursor + " against a dead-zone of "
+                + CURSOR_DEADZONE + ". Inside it, the client asked for NOTHING and the craft turned"
+                + " anyway — the command latched on the computer, which stops only on an idle input"
+                + " that is sent ONCE, on the tick the cursor enters the dead-zone, and is the one"
+                + " input deliberately exempt from the keep-alive that re-asserts a held one."
+                + " Outside it, the craft was still being STEERED and this leg never had its"
+                + " subject. A " + (-1.0) + " means the cursor recorder said nothing at all, which"
+                + " is a third thing and not a centred cursor."
+                + "\n  AND WHICH HALF OF THAT: the computer was handed " + idleHandedOver
+                + " IDLE input(s) since before the cursor was centred, beside " + accepted
+                + " deflected one(s) (the last at tick " + lastAcceptedTick + "). ZERO idle means"
+                + " the stop never reached the computer at all — look at the send and its delivery,"
+                + " where a packet whose tile is not loaded is dropped in silence. One or more means"
+                + " the stop WAS handed over and the craft turned anyway — look at what the"
+                + " controller does with an idle input, not at the wire. Every record in the window: "
+                + pilotInputs
+                + "\n  WHO WAS DRIVING, from the physics recorder — `writers` above 1 means a stale"
+                + " flight computer is still commanding this ship beside the live one, which is a"
+                + " different fault from a brake that does not brake: " + drivers,
                 settled <= 0.05);
 
         exec("artest player dismount");
@@ -912,6 +1003,30 @@ public class VSShipFlightTelemetryE2ETest extends AbstractSharedVsClientE2ETest 
             last = m.group(1);
         }
         return last == null ? "none" : last;
+    }
+
+    /**
+     * The largest absolute value of a numeric {@code field} across every record in a {@code since}
+     * reply, or {@code -1} when no record carries one.
+     *
+     * <p>The WORST and not the last, deliberately: this is asked of a stream that says what the
+     * client was commanding over a whole window, and "it ended up centred" is not the same claim as
+     * "it never left centre" — the second is the one a still-turning craft has to be judged against.
+     * A {@code -1} is distinguishable from a real reading, so "the recorder said nothing" cannot be
+     * mistaken for "the cursor was at zero".</p>
+     */
+    private static double maxAbsField(String sinceReply, String field) {
+        Matcher m = Pattern.compile("\"" + field + "\":(-?[0-9.E\\-]+)")
+                .matcher(String.valueOf(sinceReply));
+        double worst = -1.0;
+        while (m.find()) {
+            try {
+                worst = Math.max(worst, Math.abs(Double.parseDouble(m.group(1))));
+            } catch (NumberFormatException ignored) {
+                // A field that is not a number is not this reading; the -1 below still says so.
+            }
+        }
+        return worst;
     }
 
     /** How many records of a {@code since} reply carry EVERY one of {@code needles}. */

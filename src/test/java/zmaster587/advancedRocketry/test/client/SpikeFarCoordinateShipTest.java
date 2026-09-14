@@ -190,8 +190,12 @@ public class SpikeFarCoordinateShipTest extends AbstractClientE2ETest {
                 // keeps every rung's ship permanently loaded — so at 16M it mounted the pilot onto
                 // the ORIGIN ship's seat, the client 16M away saw no entity to ride, and the reply
                 // read exactly like a far-coordinate failure. It was not one.
-                String mountInfo = exec("artest vs seat-mount 0 near " + x + " " + BASE_Y + " "
-                        + ARENA_Z + " 512");
+                //
+                // By ID, not by a 512-block radius. The radius form was removed on 2026-09-14 with
+                // the rest of the positional resolves, and this rung is the sharpest argument for
+                // why: a bound chosen against how far apart the rungs are BUILT says nothing on a
+                // ladder whose whole subject is distance. The id is in hand two lines up.
+                String mountInfo = exec("artest vs seat-mount 0 id " + shipId);
                 if (!mountInfo.contains("\"seatFound\":true")) {
                     verdicts.put(x, "the pilot seat was not findable: " + oneLine(mountInfo));
                     continue;
@@ -346,7 +350,10 @@ public class SpikeFarCoordinateShipTest extends AbstractClientE2ETest {
             String shipId = ShipIdentity.awaitPhysicsIdOf(this::exec, 0,
                     ShipIdentity.nameFromAssembly(assemble), 40, () -> bot().waitTicks(5));
 
-            String mountInfo = exec("artest vs seat-mount 0 near 0 " + BASE_Y + " " + ARENA_Z + " 512");
+            // By ID. The `near <x> <y> <z> <maxDist>` form this used went with the rest of the
+            // positional resolves on 2026-09-14: a distance to a craft whose blocks live in its
+            // subspace measures nothing, and the id was already resolved three lines up.
+            String mountInfo = exec("artest vs seat-mount 0 id " + shipId);
             assertTrue("no seat: " + oneLine(mountInfo), mountInfo.contains("\"seatFound\":true"));
             Matcher dm = DUMMY_ID.matcher(mountInfo);
             assertTrue("no dummy id", dm.find());

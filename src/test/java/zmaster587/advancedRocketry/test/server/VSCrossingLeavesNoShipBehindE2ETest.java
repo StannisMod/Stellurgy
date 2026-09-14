@@ -120,6 +120,15 @@ public class VSCrossingLeavesNoShipBehindE2ETest extends AbstractSharedServerTes
      * same path a cut hull takes in production.
      */
     @Test
+    @org.junit.Ignore("SUBJECT REMOVED, retired in place 2026-09-14. This pins a property of the"
+            + " nearest-ship lookup — that it refuses a hull whose blocks have just been taken away —"
+            + " and that lookup no longer exists: a ship's blocks live in its subspace, so in the"
+            + " world it has a pose and no extent for a distance to be measured to, and the whole"
+            + " positional family was removed rather than bounded. Its fault injector"
+            + " (`vs empty-nearest-and-look`) went with it, so the body below calls a verb that is"
+            + " not there. Kept rather than deleted because the REASONING is the part worth finding"
+            + " again: a craft with no blocks is a record on its way out of the world, and any lookup"
+            + " that hands it to a caller gives an answer that is about to stop being true.")
     public void theNearestShipLookupRefusesAHullWithNoBlocks() throws Exception {
         exec("artest vs permaload true");
 
