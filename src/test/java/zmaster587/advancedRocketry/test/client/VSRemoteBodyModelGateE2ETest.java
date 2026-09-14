@@ -178,7 +178,10 @@ public class VSRemoteBodyModelGateE2ETest extends AbstractSharedVsClientE2ETest 
 
     @Test
     public void aBodyStandingOnTerrainBesideARolledShipIsNotDrawnShipAligned() throws Exception {
-        final int bx = 7420, by = 64, bz = 7420;
+        // GROUND-SUBJECT: this leg's premise is a body standing on REAL TERRAIN beside the ship, so
+        // it takes the surveyed-clean plot rather than the open-air band. The old 7420 had 49 water
+        // columns in its own footprint, and a body cannot stand on water.
+        final int bx = Plot.CLEAN_GROUND_X, by = Plot.CLEAN_GROUND_Y, bz = Plot.CLEAN_GROUND_Z;
 
         double[] ship = buildShip(bx, by, bz);
         rollShip(bx, by, bz);
@@ -303,7 +306,11 @@ public class VSRemoteBodyModelGateE2ETest extends AbstractSharedVsClientE2ETest 
 
     @Test
     public void aBodyCarriedByARolledDeckIsStillDrawnShipAligned() throws Exception {
-        final int bx = 7620, by = 64, bz = 7620;
+        // GROUND-SUBJECT: the second and last clean plot. This class's two scenarios share ONE world
+        // and the pinned seed offers no third, so this sits sixteen blocks from leg A's — which is
+        // why every assertion here resolves its ship BY IDENTITY rather than by what happens to be
+        // nearby. The old 7620 was a slope (relief 21).
+        final int bx = Plot.CLEAN_GROUND_X, by = Plot.CLEAN_GROUND_Y, bz = Plot.CLEAN_GROUND_Z2;
 
         double[] ship = buildShip(bx, by, bz);
         // Put the subject on the deck BEFORE the roll: it rides the deck up with the ship, which is

@@ -12819,6 +12819,32 @@ public class TestProbeCommand extends CommandBase {
 
     // Worldgen probe -----------------------------------------------------
 
+    /**
+     * The four commonest entries of a histogram, biggest first, as {@code "name xN"} joined by
+     * commas. A survey over four thousand columns would otherwise answer with a wall of ones.
+     */
+    private static String topHistogramString(Map<String, Integer> histogram) {
+        java.util.List<Map.Entry<String, Integer>> entries =
+                new java.util.ArrayList<Map.Entry<String, Integer>>(histogram.entrySet());
+        java.util.Collections.sort(entries, new java.util.Comparator<Map.Entry<String, Integer>>() {
+            @Override
+            public int compare(Map.Entry<String, Integer> a, Map.Entry<String, Integer> b) {
+                return b.getValue() - a.getValue();
+            }
+        });
+        StringBuilder out = new StringBuilder();
+        for (int i = 0; i < entries.size() && i < 4; i++) {
+            if (i > 0) {
+                out.append(", ");
+            }
+            out.append(entries.get(i).getKey()).append(" x").append(entries.get(i).getValue());
+        }
+        if (entries.size() > 4) {
+            out.append(", +").append(entries.size() - 4).append(" more");
+        }
+        return out.toString();
+    }
+
     private void handleWorldgen(MinecraftServer server, ICommandSender sender, String[] args) {
         if (args.length >= 3 && "create-asteroid-dim".equalsIgnoreCase(args[0])) {
             // worldgen create-asteroid-dim <newDimId> <templateDimId>
@@ -12983,6 +13009,150 @@ public class TestProbeCommand extends CommandBase {
             info.put("biome", biome.getRegistryName() == null
                     ? "unknown" : biome.getRegistryName().toString());
             info.put("biomeId", Biome.getIdForBiome(biome));
+            send(sender, jsonMap(info));
+            return;
+        }
+        if (args.length >= 6 && "survey".equalsIgnoreCase(args[0])) {
+            // worldgen survey <dim> <x0> <z0> <x1> <z1> [clearance]
+            //
+            // Is this PATCH of world fit to stand a fixture on? `sample` answers for one column at a
+            // chunk's centre, which is the wrong shape for the question: a fixture occupies an AREA,
+            // and the things that break it - a two-block step, a pond, a tree trunk in the assembly
+            // volume - are all invisible to a single column that happens to miss them.
+            //
+            // Every field is reported unconditionally, including the ones that are fine, so a spot
+            // that is rejected says WHICH property rejected it and a spot that is accepted can be
+            // re-checked later against the same numbers.
+            int dim = parseIntOr(args[1], Integer.MIN_VALUE);
+            int x0 = Math.min(parseIntOr(args[2], 0), parseIntOr(args[4], 0));
+            int x1 = Math.max(parseIntOr(args[2], 0), parseIntOr(args[4], 0));
+            int z0 = Math.min(parseIntOr(args[3], 0), parseIntOr(args[5], 0));
+            int z1 = Math.max(parseIntOr(args[3], 0), parseIntOr(args[5], 0));
+            int clearance = args.length >= 7 ? parseIntOr(args[6], 12) : 12;
+            WorldServer world = server.getWorld(dim);
+            if (world == null) {
+                send(sender, "{\"error\":\"world not loaded\",\"dim\":" + dim + "}");
+                return;
+            }
+            // A survey that quietly loads a thousand chunks is a survey nobody can afford to run in
+            // a gate. Refuse loudly instead of taking minutes.
+            long columns = (long) (x1 - x0 + 1) * (z1 - z0 + 1);
+            if (columns > 40000L) {
+                send(sender, "{\"error\":\"area too large\",\"columns\":" + columns
+                        + ",\"max\":40000}");
+                return;
+            }
+            for (int cx = x0 >> 4; cx <= (x1 >> 4); cx++) {
+                for (int cz = z0 >> 4; cz <= (z1 >> 4); cz++) {
+                    ensureChunkAreaLoaded(world, (cx << 4) + 8, (cz << 4) + 8, 0);
+                }
+            }
+            int minTop = Integer.MAX_VALUE;
+            int maxTop = Integer.MIN_VALUE;
+            Map<Integer, Integer> topHistogram = new LinkedHashMap<Integer, Integer>();
+            Map<String, Integer> blockHistogram = new LinkedHashMap<String, Integer>();
+            Map<String, Integer> biomeHistogram = new LinkedHashMap<String, Integer>();
+            int liquidColumns = 0;
+            int vegetationColumns = 0;
+            int obstructedColumns = 0;
+            int solidObstructedColumns = 0;
+            int obstructingBlocks = 0;
+            String worstColumn = "none";
+            int worstObstruction = 0;
+            for (int x = x0; x <= x1; x++) {
+                for (int z = z0; z <= z1; z++) {
+                    int top = world.getHeight(x, z);
+                    minTop = Math.min(minTop, top);
+                    maxTop = Math.max(maxTop, top);
+                    Integer priorTop = topHistogram.get(top);
+                    topHistogram.put(top, priorTop == null ? 1 : priorTop + 1);
+                    BlockPos surface = new BlockPos(x, Math.max(0, top - 1), z);
+                    IBlockState state = world.getBlockState(surface);
+                    net.minecraft.block.Block block = state.getBlock();
+                    String name = block.getRegistryName() == null
+                            ? "minecraft:air" : block.getRegistryName().toString();
+                    Integer priorBlock = blockHistogram.get(name);
+                    blockHistogram.put(name, priorBlock == null ? 1 : priorBlock + 1);
+                    Biome biome = world.getBiome(surface);
+                    String biomeName = biome.getRegistryName() == null
+                            ? "unknown" : biome.getRegistryName().toString();
+                    Integer priorBiome = biomeHistogram.get(biomeName);
+                    biomeHistogram.put(biomeName, priorBiome == null ? 1 : priorBiome + 1);
+                    if (state.getMaterial().isLiquid()) {
+                        liquidColumns++;
+                    }
+                    if (block instanceof net.minecraft.block.BlockLeaves
+                            || block instanceof net.minecraft.block.BlockLog
+                            || block instanceof net.minecraft.block.BlockBush) {
+                        vegetationColumns++;
+                    }
+                    // What stands in the volume a fixture would occupy. Counted ABOVE the surface,
+                    // because that is the volume an assembly scan walks. Tall grass and flowers are
+                    // counted SEPARATELY from a tree trunk: a fixture places its blocks straight
+                    // through anything replaceable, so counting a daisy as an obstruction rejects
+                    // half a continent of otherwise perfect plain.
+                    int here = 0;
+                    int hereSolid = 0;
+                    for (int y = top; y < top + clearance; y++) {
+                        BlockPos above = new BlockPos(x, y, z);
+                        if (world.isAirBlock(above)) {
+                            continue;
+                        }
+                        here++;
+                        IBlockState aboveState = world.getBlockState(above);
+                        if (!aboveState.getBlock().isReplaceable(world, above)) {
+                            hereSolid++;
+                        }
+                    }
+                    if (here > 0) {
+                        obstructedColumns++;
+                        obstructingBlocks += here;
+                    }
+                    if (hereSolid > 0) {
+                        solidObstructedColumns++;
+                        if (hereSolid > worstObstruction) {
+                            worstObstruction = hereSolid;
+                            worstColumn = "[" + x + "," + top + "," + z + "]";
+                        }
+                    }
+                }
+            }
+            int modeTop = minTop;
+            int modeCount = 0;
+            for (Map.Entry<Integer, Integer> e : topHistogram.entrySet()) {
+                if (e.getValue() > modeCount) {
+                    modeCount = e.getValue();
+                    modeTop = e.getKey();
+                }
+            }
+            Map<String, Object> info = new LinkedHashMap<String, Object>();
+            info.put("ok", true);
+            info.put("dim", dim);
+            info.put("x0", x0);
+            info.put("z0", z0);
+            info.put("x1", x1);
+            info.put("z1", z1);
+            info.put("columns", columns);
+            info.put("clearance", clearance);
+            info.put("minTopY", minTop);
+            info.put("maxTopY", maxTop);
+            info.put("relief", maxTop - minTop);
+            info.put("modeTopY", modeTop);
+            info.put("modeTopShare", modeCount / (double) columns);
+            info.put("liquidColumns", liquidColumns);
+            info.put("vegetationColumns", vegetationColumns);
+            info.put("obstructedColumns", obstructedColumns);
+            info.put("solidObstructedColumns", solidObstructedColumns);
+            info.put("obstructingBlocks", obstructingBlocks);
+            info.put("worstColumn", worstColumn);
+            info.put("worstObstruction", worstObstruction);
+            info.put("surfaces", topHistogramString(blockHistogram));
+            info.put("biomes", topHistogramString(biomeHistogram));
+            // The verdict, spelled out rather than left to the caller to re-derive: flat enough to
+            // stand on, no liquid, nothing growing, nothing in the air above.
+            info.put("flat", maxTop - minTop <= 1);
+            info.put("dry", liquidColumns == 0);
+            info.put("clear", solidObstructedColumns == 0 && vegetationColumns == 0);
             send(sender, jsonMap(info));
             return;
         }
@@ -19831,6 +20001,96 @@ public class TestProbeCommand extends CommandBase {
                     + ",\"isPlanetaryProvider\":"
                     + (player.world.provider instanceof zmaster587.advancedRocketry.api.IPlanetaryProvider)
                     + ",\"gravityMultiplier\":" + gravity + "}");
+            return;
+        }
+        if ("sleep-state".equals(sub)) {
+            // /artest player sleep-state [<x> <y> <z>]
+            //
+            // READ-ONLY. Every input the bed path consumes, reported unconditionally against
+            // the bed position (default: the player's own). A sleep that produced nothing has
+            // at least four readings - the click never arrived, the provider refused the spot,
+            // vanilla refused the moment, or the sleep completed and the SKIP was declined -
+            // and a probe that reports only one of them cannot tell them apart. So this says
+            // all of them every time and lets the reader do the comparing.
+            net.minecraft.util.math.BlockPos bedPos = args.length >= 4
+                    ? new net.minecraft.util.math.BlockPos(
+                            (int) parseDoubleOr(args[1], player.posX),
+                            (int) parseDoubleOr(args[2], player.posY),
+                            (int) parseDoubleOr(args[3], player.posZ))
+                    : player.getPosition();
+            net.minecraft.world.World sleepWorld = player.world;
+            net.minecraft.block.state.IBlockState bedState = sleepWorld.getBlockState(bedPos);
+            String bedBlock = bedState.getBlock().getRegistryName() == null
+                    ? "?" : bedState.getBlock().getRegistryName().toString();
+            net.minecraft.block.state.IBlockState underState = sleepWorld.getBlockState(
+                    new net.minecraft.util.math.BlockPos(player.posX, player.posY - 0.5D, player.posZ));
+            String underBlock = underState.getBlock().getRegistryName() == null
+                    ? "?" : underState.getBlock().getRegistryName().toString();
+            // What the bed is standing on, and what the player's own column holds at that same
+            // height: a bed hanging in the air over a platform that is not there is a FIXTURE
+            // failure, and it reads exactly like a refused sleep unless the support is said out loud.
+            net.minecraft.block.state.IBlockState bedSupportState =
+                    sleepWorld.getBlockState(bedPos.down());
+            String bedSupport = bedSupportState.getBlock().getRegistryName() == null
+                    ? "?" : bedSupportState.getBlock().getRegistryName().toString();
+            net.minecraft.block.state.IBlockState playerColumnState = sleepWorld.getBlockState(
+                    new net.minecraft.util.math.BlockPos(player.posX, bedPos.getY() - 1, player.posZ));
+            String playerColumnAtBedLevel = playerColumnState.getBlock().getRegistryName() == null
+                    ? "?" : playerColumnState.getBlock().getRegistryName().toString();
+            // The provider gate, which is the one that refuses SILENTLY: BlockBed returns on
+            // DENY without sending the player any message at all.
+            String canSleepAt = sleepWorld.provider.canSleepAt(player, bedPos).name();
+            // Vanilla's own "is it night" gate, asked the way trySleep asks it (Forge replaced
+            // the isDaytime() check with this event).
+            boolean sleepingTimeOk = net.minecraftforge.event.ForgeEventFactory
+                    .fireSleepingTimeCheck(player, bedPos);
+            zmaster587.advancedRocketry.atmosphere.AtmosphereHandler sleepAtm =
+                    zmaster587.advancedRocketry.atmosphere.AtmosphereHandler.getOxygenHandler(
+                            sleepWorld.provider.getDimension());
+            String bedAtmos = sleepAtm == null ? "none"
+                    : sleepAtm.getAtmosphereType(bedPos).getUnlocalizedName();
+            boolean bedBreathable = sleepAtm != null
+                    && sleepAtm.getAtmosphereType(bedPos).isBreathable();
+            // An approximation of trySleep's NOT_SAFE scan: the same box, but without vanilla's
+            // private SleepEnemyPredicate, so a non-zero count here is a candidate rather than a
+            // verdict.
+            int hostilesNearBed = sleepWorld.getEntitiesWithinAABB(
+                    net.minecraft.entity.monster.EntityMob.class,
+                    new net.minecraft.util.math.AxisAlignedBB(
+                            bedPos.getX() - 8.0D, bedPos.getY() - 5.0D, bedPos.getZ() - 8.0D,
+                            bedPos.getX() + 8.0D, bedPos.getY() + 5.0D, bedPos.getZ() + 8.0D)).size();
+            int rotationalPeriod = sleepWorld.provider instanceof zmaster587.advancedRocketry.api.IPlanetaryProvider
+                    ? ((zmaster587.advancedRocketry.api.IPlanetaryProvider) sleepWorld.provider)
+                            .getRotationalPeriod(null) : 24000;
+            send(sender, "{\"ok\":true,\"player\":\"" + escapeJson(player.getName()) + "\""
+                    + ",\"dim\":" + sleepWorld.provider.getDimension()
+                    + ",\"bedPos\":[" + bedPos.getX() + "," + bedPos.getY() + "," + bedPos.getZ() + "]"
+                    + ",\"bedBlock\":\"" + escapeJson(bedBlock) + "\""
+                    // The player's own position, not just the distance: a scalar cannot say WHICH
+                    // axis is wrong, and "too far from the bed" reads identically whether the player
+                    // walked away, fell, or was never put where the fixture thinks it is.
+                    + ",\"playerPos\":[" + player.posX + "," + player.posY + "," + player.posZ + "]"
+                    + ",\"onGround\":" + player.onGround
+                    + ",\"blockUnderPlayer\":\"" + escapeJson(underBlock) + "\""
+                    + ",\"blockUnderBed\":\"" + escapeJson(bedSupport) + "\""
+                    + ",\"playerColumnAtBedLevel\":\"" + escapeJson(playerColumnAtBedLevel) + "\""
+                    + ",\"distanceToBed\":" + Math.sqrt(player.getDistanceSq(bedPos))
+                    + ",\"sleeping\":" + player.isPlayerSleeping()
+                    + ",\"fullyAsleep\":" + player.isPlayerFullyAsleep()
+                    + ",\"sleepTimer\":" + player.sleepTimer
+                    + ",\"allPlayersAsleep\":"
+                    + (sleepWorld instanceof net.minecraft.world.WorldServer
+                            && ((net.minecraft.world.WorldServer) sleepWorld).areAllPlayersAsleep())
+                    + ",\"canSleepAt\":\"" + escapeJson(canSleepAt) + "\""
+                    + ",\"sleepingTimeOk\":" + sleepingTimeOk
+                    + ",\"isDaytime\":" + sleepWorld.isDaytime()
+                    + ",\"bedAtmos\":\"" + escapeJson(bedAtmos) + "\""
+                    + ",\"bedBreathable\":" + bedBreathable
+                    + ",\"hostilesNearBed\":" + hostilesNearBed
+                    + ",\"timeSkipAllowed\":"
+                    + zmaster587.advancedRocketry.world.TimeSkipPolicy.allows(sleepWorld)
+                    + ",\"worldTime\":" + sleepWorld.getWorldTime()
+                    + ",\"rotationalPeriod\":" + rotationalPeriod + "}");
             return;
         }
         if ("try-sleep".equals(sub)) {

@@ -566,11 +566,20 @@ public abstract class AbstractSharedClientE2ETest {
         // are three different texts instead of one number. Read after the poll so the window covers
         // it; an empty list with the health still short is itself the diagnosis — nothing hit him
         // here, so the shortfall arrived before this reset and the previous scenario owns it.
-        String hurts = health >= FULL_HEALTH_BAR ? "" : "\n  damage taken during this reset: "
-                + events().since(hurtMark, "living_hurt");
-        assertTrue("a scenario must start at full health as the CLIENT renders it, or a"
-                + " damage-observing scenario measures the previous one's leftovers; client"
-                + " reports " + health + hurts, health >= FULL_HEALTH_BAR);
+        //
+        // The SERVER's own view goes in beside it, and it answers a different question: `living_hurt`
+        // says what happened to him, this says WHO is wrong. "The client is stale" and "the player
+        // really is hurt" need opposite fixes and are indistinguishable from the client's number
+        // alone. Both are read only on the failing path, so a healthy scenario pays for neither.
+        if (health < FULL_HEALTH_BAR) {
+            org.junit.Assert.fail("a scenario must start at full health as the CLIENT renders it, or"
+                    + " a damage-observing scenario measures the previous one's leftovers; client"
+                    + " reports " + health
+                    + "; server reports "
+                    + String.join("\n", serverClient().execute("artest player health"))
+                    + "\n  damage taken during this reset: "
+                    + events().since(hurtMark, "living_hurt"));
+        }
 
         // The world the CLIENT actually renders, asserted rather than inferred from the teleport
         // having been issued: the plot check above reads X and Z only, so without this a scenario
