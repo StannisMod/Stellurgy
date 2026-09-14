@@ -179,6 +179,10 @@ public abstract class MixinShipFrameTravelEvents {
                 // apex of a jump over its own deck should have neither.
                 + ",\"worldSupport\":" + arTest$invokeWorldSupport(entity)
                 + ",\"shipSupport\":" + arTest$invokeShipSupport(entity)
+                // Beside it, the containment-resolved count this record used to print as if it were
+                // the gate's. The two are different questions and a disagreement is a finding, so
+                // both travel rather than one silently standing for the other.
+                + ",\"shipSupportByContainment\":" + arTest$invokeShipSupportByContainment(entity)
                 + ",\"onGround\":" + entity.onGround
                 + ",\"motionY\":" + TestTrace.fmt(entity.motionY)
                 // ...and the world's own answer to "what is under him", which is evidence rather
@@ -327,12 +331,41 @@ public abstract class MixinShipFrameTravelEvents {
         throw new AssertionError("mixin invoker not applied");
     }
 
-    /** Production's ship-support count by containment: {@code -1} no ship here, {@code 0} a ship but
-     *  nothing under the feet, {@code > 0} supported. The right half of the same gate, in the form
-     *  production keeps for diagnosis. */
+    /** Production's ship-support count by CONTAINMENT — kept only to sit beside the gate's own
+     *  number below, because the two disagreeing is itself a reading. Not the gate's evidence. */
     @Invoker("shipSupportObstacleCount")
-    private static int arTest$invokeShipSupport(Entity entity) {
+    private static int arTest$invokeShipSupportByContainment(Entity entity) {
         throw new AssertionError("mixin invoker not applied");
+    }
+
+    /**
+     * The right half of the gate AS THE GATE ASKED IT — and it is a different question from the one
+     * this recorder used to print.
+     *
+     * <p>The release gate evaluates {@code shipSupportObstacleCountAt(entity, state.shipId, gate)}:
+     * the count under the feet AT THE GATE POINT, in the frame of the ship the CAPTURE chose. The
+     * invoker above is {@code shipSupportObstacleCount}, the containment-resolved variant — a
+     * neighbouring quantity, at the body's live local, against whatever ship contains it. This
+     * recorder was armed precisely so a `steppedOntoTerrain` release would carry the two things the
+     * branch SAW, and for months it carried the wrong one of the two.</p>
+     *
+     * <p>*Measured 2026-09-13*: a release recorded {@code worldSupport=true, shipSupport=1} — a pair
+     * that cannot fire this branch at all, since it releases on {@code world && !ship}. The gate had
+     * not misfired; the record was answering a different question, and reading it as the gate's
+     * evidence would have made a product defect out of an instrument defect.</p>
+     *
+     * <p>{@code explainHandles} is used rather than another invoker because it documents itself as
+     * asking at {@code gatePointFor} — the same point the live gate uses — so the two cannot drift
+     * apart again without that promise being broken in one place. {@code -2} means the body is not
+     * an {@code EntityLivingBase}, which that entry point cannot answer for.</p>
+     */
+    private static int arTest$invokeShipSupport(Entity entity) {
+        if (!(entity instanceof net.minecraft.entity.EntityLivingBase)) {
+            return -2;
+        }
+        Object count = ShipFrameTravel.explainHandles(
+                (net.minecraft.entity.EntityLivingBase) entity).get("shipSupportObstacles");
+        return count instanceof Number ? ((Number) count).intValue() : -2;
     }
 
     /**
