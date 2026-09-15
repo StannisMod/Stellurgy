@@ -173,9 +173,13 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
         Events client = clientEvents();
         long arrivalMark = client.mark();
         exec("tp @a " + ship[0] + " " + (ship[1] + 4) + " " + ship[2] + " 0 0");
-        // PACING for the teleport itself; the capture it is meant to produce is asserted as a RECORD
-        // below, from a mark taken before the tp so nothing between the two can be missed.
-        bot().waitTicks(80);
+        // NOTHING BETWEEN THE TELEPORT AND THE LINK. Eighty ticks of "pacing" stood here, defended
+        // by the very sentence that makes them pointless: the capture IS asserted as a record, from
+        // a mark taken before the teleport, and the wait below advances the client itself until that
+        // record appears. So the settle could only ever delay a scenario that was already correct —
+        // it could not make the assertion truer, and on a slow box it did not make it likelier.
+        // Re-derived 2026-09-15 on the maintainer's challenge that an argued budget is usually an
+        // excuse; here the argument was sound and the conclusion drawn from it was not.
         // Carrying this scenario's ship, not merely of this type: the record names the hull that took
         // the body, and a neighbour's capture in the same window would satisfy a type-only wait and
         // open the interval below on a craft the scenario never touches.
@@ -1017,7 +1021,9 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
         Events client = clientEvents();
         long arrivalMark = client.mark();
         exec("tp @a " + ship[0] + " " + (ship[1] + 4) + " " + ship[2] + " 0 0");
-        bot().waitTicks(80); // pacing for the teleport; the capture itself is the record below
+        // The settle that stood here is gone for the reason given at the first of these: the capture
+        // is a record awaited from a mark taken before the teleport, and the wait advances the
+        // client itself.
         client.awaitCarrying(arrivalMark, "deck_captured", "\"ship\":\"" + scenarioShipId + "\"",
                 "the client player must be taken by THIS ship's deck"
                 + " before the drive, or the churn window is about nobody",
@@ -1966,7 +1972,8 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
         Events client = clientEvents();
         long seedMark = client.mark();
         exec("tp @a " + ship[0] + " " + (ship[1] + 3) + " " + ship[2] + " 0 0");
-        bot().waitTicks(60); // pacing for the teleport; the observation it must leave is the record
+        // Same as the two above: the record this teleport must leave is awaited from a mark taken
+        // before it, so sixty ticks of pacing added delay and nothing else.
         client.awaitCarrying(seedMark, "deck_captured", "\"ship\":\"" + scenarioShipId + "\"",
                 "the body must be taken by THIS deck ONCE before the"
                 + " manoeuvre, or the client holds no earlier observation of the craft and the"
@@ -2211,7 +2218,13 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
         // Baseline aim (a server re-aim, which must RE-SEED the deck look, not fight it).
         long lookMarkAim = clientEvents().mark();
         exec("tp @a ~ ~ ~ 20 10");
-        bot().waitTicks(10);
+        // THIS ONE DECIDED A VERDICT, where the three above only delayed. `deckLookIn` reads the
+        // LAST `deck_look` since the mark and asserts no wait of its own, so the ten ticks were what
+        // made that window non-empty and post-aim: too few and the read is the aim before this one,
+        // or nothing at all. It is a link now — and its blind spot is written where the helper is.
+        awaitClientLookApplied(lookMarkAim,
+                "the server's re-aim must reach the client before its deck look is read, or the"
+                        + " reading belongs to the aim before it");
         assertTrue("the deck-frame look must be engaged for a captured walking crew member "
                         + "(deckActive=false would make every assertion below vacuous)",
                 Boolean.parseBoolean(Events.text(
@@ -2330,8 +2343,12 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
         double bestMag = -1.0, bestWalkedYaw = 0.0, bestHeldYaw = 0.0;
         StringBuilder legs = new StringBuilder();
         for (int dir = 0; dir < 4; dir++) {
+            long reseatMark = clientEvents().mark();
             exec("tp @a " + anchor[0] + " " + anchor[1] + " " + anchor[2] + " 0 0");
-            bot().waitTicks(10); // settle + deck-look re-seed from the tp's world aim
+            // The re-seed is what the leg below measures against, and ten ticks were deciding
+            // whether it had happened — the same defect as the baseline aim above, inside a loop.
+            awaitClientLookApplied(reseatMark,
+                    "each leg's deck yaw is read against the re-seed this teleport performs");
             if (dir > 0) {
                 bot().turnLook(600f * dir, 0f); // dir * 90 degrees of deck yaw
                 bot().waitTicks(2);

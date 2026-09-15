@@ -705,8 +705,14 @@ public class VSRemoteBodyModelGateE2ETest extends AbstractSharedVsClientE2ETest 
     /** Teleport beside a world position and aim at it. Used by the ship legs, where the camera has
      *  to be moved to the fixture first. */
     private void lookAt(double x, double y, double z) throws Exception {
+        long moveMark = clientEvents().mark();
         exec("tp @a " + (x + 8) + " " + (y + 3) + " " + (z + 8) + " 0 0");
-        bot().waitTicks(20);
+        // `aimAt` computes the look FROM the client's own position and then verifies it, so the move
+        // has to have reached the client first: aiming from where it used to be produces a valid
+        // aim at the wrong thing.
+        awaitClientPlacedNear(moveMark, x + 8, z + 8,
+                "the camera is moved to the fixture before it is aimed at it, and both are the"
+                        + " client's");
         aimAt(x, y, z);
     }
 

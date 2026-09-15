@@ -96,8 +96,11 @@ public class VehicleRideClientGroupE2ETest extends AbstractSharedClientE2ETest {
                 + plot().z(PAD_DZ) + " " + plot().x(PAD_DX + PAD_EDGE - 1) + " " + PAD_Y + " "
                 + plot().z(PAD_DZ + PAD_EDGE - 1) + " minecraft:stone");
         scenario().requireArranged("platform fill must succeed: " + fill, fill.contains("\"ok\":true"));
+        long standMark = clientEvents().mark();
         exec("tp @a " + (standX() + 0.5) + " " + (PAD_Y + 1) + " " + (standZ() + 0.5));
-        bot().waitTicks(5);
+        awaitClientPlacedNear(standMark, standX() + 0.5, standZ() + 0.5,
+                "every scenario here places a vehicle at the player and mounts him from where he"
+                        + " stands, which is a fact about the client");
     }
 
     private int standX() {

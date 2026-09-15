@@ -3,6 +3,8 @@ package zmaster587.advancedRocketry.test.client;
 import com.github.stannismod.forge.testing.junit.AbstractClientE2ETest;
 import org.junit.Test;
 
+import zmaster587.advancedRocketry.test.Events;
+
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -24,6 +26,10 @@ public class SpaceSlotVsShipReloadE2ETest extends AbstractClientE2ETest {
 
     private static final Pattern SLOT = Pattern.compile("\"slot\":(-?\\d+)");
     private static final Pattern COUNT = Pattern.compile("\"count\":(-?\\d+)");
+
+    /** How long the client is given to FOLLOW a dimension transfer the server has performed — one
+     *  round trip plus a world teardown and rebuild. */
+    private static final int DIM_LINK_BUDGET_TICKS = 200;
 
     /** Enter the pool dim, then move the bot right on top of the ship (assembled around 0..2,64..66)
      *  so VS proximity-loads it. */
@@ -69,9 +75,17 @@ public class SpaceSlotVsShipReloadE2ETest extends AbstractClientE2ETest {
         assertTrue("the ship must LOAD (physics) with a client on it in the pool dim: loaded=" + loaded,
                 loaded >= 1);
 
-        // Bot leaves (a world with a player cannot unload), then rebind the slot.
+        // Bot leaves (a world with a player cannot unload), then rebind the slot. The LEAVING is
+        // what matters and it is a dimension change, so it is waited for as the client's own record
+        // of one: a world the client has not left yet still holds a player, and the reload asserted
+        // below would then be asked of a world that cannot unload.
+        Events clientLog = ClientEvents.of(bot());
+        long leaveMark = clientLog.mark();
         exec("artest tp 0");
-        bot().waitTicks(20);
+        clientLog.awaitCarrying(leaveMark, "client_dimension_changed", "\"dim\":0,",
+                "the bot must actually LEAVE the pool dimension — a world with a player in it"
+                        + " cannot unload, and the reload below is about an unloaded one",
+                DIM_LINK_BUDGET_TICKS);
         assertTrue("slot must reload after the ship's world is unloaded: ",
                 exec("artest space reload " + slot + " deep").contains("\"present\":true"));
         bot().waitTicks(20);

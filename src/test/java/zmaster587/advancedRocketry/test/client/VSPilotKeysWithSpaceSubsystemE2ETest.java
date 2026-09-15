@@ -76,6 +76,10 @@ public class VSPilotKeysWithSpaceSubsystemE2ETest {
      * ceiling, spent waiting for the record instead of sampling for its consequence.</p>
      */
     private static final int SHIP_LOAD_BUDGET_TICKS = 200;
+
+    /** How long the CLIENT is given to APPLY a placement the server has already written, in ticks —
+     *  a ceiling on one round trip. */
+    private static final int PLACEMENT_LINK_BUDGET_TICKS = 200;
     private static final String BOT = "ForgeTestClient";
 
     /** The ship must gain at least this much altitude while the key is held, or it is not flying. */
@@ -144,8 +148,15 @@ public class VSPilotKeysWithSpaceSubsystemE2ETest {
                 + "anything - the seeded config is what opts it in: " + status,
                 status.contains("\"registered\":true"));
 
+        // The CLIENT's own log, for the two placements this scenario depends on. This class boots
+        // its own harness pair rather than extending the tier's base, so the shared wait is reached
+        // through its static form instead of an inherited method.
+        Events clientLog = ClientEvents.of(clientHarness.bot());
+        long awayMark = clientLog.mark();
         exec("tp @a " + (bx + 600) + " 120 " + (bz + 600) + " 0 0");
-        clientHarness.bot().waitTicks(10);
+        ClientEvents.awaitPlacedNear(clientLog, awayMark, bx + 600, bz + 600,
+                "the assembly below must run with no observer near it, and the observer is a client",
+                PLACEMENT_LINK_BUDGET_TICKS);
 
         // The event log, built by hand because this class boots its own harness pair rather than
         // sharing the tier's base: the probe channel is the server's, and the client supplies the
@@ -165,8 +176,12 @@ public class VSPilotKeysWithSpaceSubsystemE2ETest {
         assertTrue("a ship_spawned record must name the ship: " + spawned, shipUuid != null);
 
         // Stand the client next to the ship so it stays loaded, then read its resting altitude.
+        long approachMark = clientLog.mark();
         exec("tp @a " + (bx + 0.5) + " " + (by + 6) + " " + (bz + 0.5) + " 0 0");
-        clientHarness.bot().waitTicks(20);
+        ClientEvents.awaitPlacedNear(clientLog, approachMark, bx + 0.5, bz + 0.5,
+                "\"stand the client next to the ship so it stays loaded\" is the arrangement, and it"
+                        + " is true when the CLIENT is there, not when the server says so",
+                PLACEMENT_LINK_BUDGET_TICKS);
 
         // A ship becoming LOADED **does** have an event of its own, and this comment said otherwise
         // until the poll below was converted: production publishes `ShipLoadedEvent` when a craft

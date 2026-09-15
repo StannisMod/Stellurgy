@@ -165,12 +165,15 @@ public class MachineGuiClientGroupE2ETest extends AbstractSharedClientE2ETest {
         // Stand ON the machine's own column, one block up, looking down at its top face. The
         // source classes all used exactly this pose; in open air it needs no terrain at all.
         //
-        // ARRANGEMENT settle, not a link: the teleport is a server write and this is the time the
-        // client is given to catch up with it. Deliberately NOT gated on `chunk_data_applied` —
-        // this class shares one world across seven scenarios and force-loads its plot, so a chunk
-        // the client already holds sends nothing and a wait for it would never return.
+        // A LINK on the CLIENT applying the move. The note this replaces was right about the CHUNK
+        // record and wrong to conclude there was nothing to wait on: `chunk_data_applied` is
+        // change-gated, so a chunk the client already holds sends nothing and a wait for it would
+        // never return — but `client_pos_look_applied` is written for EVERY server-driven placement,
+        // gated by nothing, so this one always has something to close on.
+        long standMark = clientEvents().mark();
         exec("tp @a " + (x + 0.5) + " " + (Y + 2) + " " + (z + 0.5) + " 0 90");
-        bot().waitTicks(40);
+        awaitClientPlacedNear(standMark, x + 0.5, z + 0.5,
+                "every scenario in this class opens a GUI from where the player stands");
         return new int[]{x, Y, z};
     }
 
@@ -336,8 +339,11 @@ public class MachineGuiClientGroupE2ETest extends AbstractSharedClientE2ETest {
                 .describeOnFailureWith("artest rocket list " + dim);
 
         scenario().arranging("stand on the launchpad within reach of the builder");
+        long standMark = clientEvents().mark();
         exec("tp @a " + (baseX + 2.5) + " " + (Y + 1) + " " + (baseZ + 2.5) + " 0 0");
-        bot().waitTicks(40);
+        awaitClientPlacedNear(standMark, baseX + 2.5, baseZ + 2.5,
+                "\"within reach of the builder\" is a claim about where the client stands, and the"
+                        + " GUI below is opened from there");
 
         String screen = openMachineGui(new int[]{bx, by, bz});
         scenario().requireArranged("expected the assembler GUI to open, got: " + screen,

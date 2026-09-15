@@ -1231,8 +1231,15 @@ private long readCounter(String className, String field) throws Exception {
         bot().waitTicks(100);
         bot().releaseKey(FORWARD_KEY);
         if (Events.records(clientEvents().since(offMark, "deck_released")).isEmpty()) {
+            // The fallback that gets him off the hull when walking did not: a teleport, and its far
+            // side is the client applying it. Twenty ticks here were the same bet as everywhere
+            // else, and the read below — "he must actually be off the hull" — is the assertion they
+            // were deciding.
+            long shoveMark = clientEvents().mark();
             exec("tp @a " + (deckX + 30.0) + " " + deckY + " " + (deckZ + 30.0) + " 0 0");
-            bot().waitTicks(20);
+            awaitClientPlacedNear(shoveMark, deckX + 30.0, deckZ + 30.0,
+                    "the body must be off the hull ON THE CLIENT, which is the side whose resolver"
+                            + " decides whether the deck still holds him");
         }
         String offHull = exec("artest vs deck-capture");
         scenario().requireArranged("he must actually be off the hull, or the void has nothing to take: "

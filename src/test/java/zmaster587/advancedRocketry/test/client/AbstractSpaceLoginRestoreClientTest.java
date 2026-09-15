@@ -1411,8 +1411,13 @@ public abstract class AbstractSpaceLoginRestoreClientTest {
 
         // Board on the ground. The client has to be standing at the ship for its seat to be a loaded
         // tile at all, which is what the mount probe searches.
+        long boardMark = clientEvents().mark();
         exec("tp @a " + (SRC_X + 0.5) + " " + (SRC_Y + 6) + " " + (SRC_Z + 0.5) + " 0 0");
-        bot().waitTicks(20);
+        // The comment above IS the reason this is a link: "the client has to be standing at the
+        // ship" is a fact about the client, and the seat is a loaded tile because of where it is.
+        ClientEvents.awaitPlacedNear(clientEvents(), boardMark, SRC_X + 0.5, SRC_Z + 0.5,
+                "the mount probe searches LOADED tiles, and the seat is loaded because the client is"
+                        + " standing at the ship", RESTORE_LINK_BUDGET_TICKS);
         // On the ship this scenario built, by the id resolved from its own name. The bare form takes
         // the first pilot seat in the world's loaded-tile list — an arrival order — and this mounts
         // the bot on whatever it finds.
