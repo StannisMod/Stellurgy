@@ -153,14 +153,22 @@ public class FreeFlightModeE2ETest extends AbstractSharedClientE2ETest {
 
     /** Stand the bot above and beside its own plot's build site, clear of the pad. */
     private void tpNearBuildSite() throws Exception {
+        long mark = clientEvents().mark();
         exec("tp @a " + (baseX() + 10) + " " + (BASE_Y + 15) + " " + (baseZ() + 10) + " 0 0");
-        bot().waitTicks(10);
+        // The far side of a teleport is the CLIENT applying it, and that is what the assembly below
+        // needs: the bot has to be clear of the pad on the side that renders and collides.
+        awaitClientPlacedNear(mark, baseX() + 10, baseZ() + 10,
+                "the bot must be standing clear of the pad before anything is built on it");
     }
 
     /** Stand the bot on its own plot's pad, within {@code mount-entity} range of the rocket. */
     private void tpOntoPad() throws Exception {
+        long mark = clientEvents().mark();
         exec("tp @a " + (baseX() + 0.5) + " " + (BASE_Y + 1) + " " + (baseZ() + 0.5) + " 0 0");
-        bot().waitTicks(5);
+        // `mount-entity` is a RANGE check against where the player is, so the placement has to have
+        // landed before the mount is issued — five ticks were a bet on that round trip.
+        awaitClientPlacedNear(mark, baseX() + 0.5, baseZ() + 0.5,
+                "the bot must be on the pad, within mounting range of the rocket");
     }
 
     private int buildAndAssemble() throws Exception {
@@ -489,11 +497,9 @@ public class FreeFlightModeE2ETest extends AbstractSharedClientE2ETest {
 
     private int mountFreshFreeFlightRocket() throws Exception {
         final int baseX = baseX(), baseY = BASE_Y, baseZ = baseZ();
-        exec("tp @a " + (baseX + 10) + " " + (baseY + 15) + " " + (baseZ + 10) + " 0 0");
-        bot().waitTicks(10);
+        tpNearBuildSite();
         int rocketId = buildAndAssemble();
-        exec("tp @a " + (baseX + 0.5) + " " + (baseY + 1) + " " + (baseZ + 0.5) + " 0 0");
-        bot().waitTicks(5);
+        tpOntoPad();
         exec("artest player mount-entity " + rocketId);
         exec("artest rocket set-flight-mode " + rocketId + " FREE_FLIGHT");
         Events events = events();
@@ -1007,11 +1013,9 @@ public class FreeFlightModeE2ETest extends AbstractSharedClientE2ETest {
     /** Build + mount + flip to FREE_FLIGHT, but do NOT start the engines. */
     private int mountColdFreeFlightRocket() throws Exception {
         final int baseX = baseX(), baseY = BASE_Y, baseZ = baseZ();
-        exec("tp @a " + (baseX + 10) + " " + (baseY + 15) + " " + (baseZ + 10) + " 0 0");
-        bot().waitTicks(10);
+        tpNearBuildSite();
         int rocketId = buildAndAssemble();
-        exec("tp @a " + (baseX + 0.5) + " " + (baseY + 1) + " " + (baseZ + 0.5) + " 0 0");
-        bot().waitTicks(5);
+        tpOntoPad();
         exec("artest player mount-entity " + rocketId);
         exec("artest rocket set-flight-mode " + rocketId + " FREE_FLIGHT");
         // Fuel up (a freshly-assembled fixture is empty): the ENGINE_START

@@ -733,8 +733,10 @@ public class VSCrewInteriorBoardingE2ETest extends AbstractSharedVsClientE2ETest
     private double[] buildShip(FixtureSite site, String variant) throws Exception {
         // The site owns the coordinates; these aliases keep the body below unchanged.
         final int bx = site.x, by = site.y, bz = site.z;
+        long awayMark = clientEvents().mark();
         exec("tp @a " + (bx + 600) + " 120 " + (bz + 600) + " 0 0");
-        bot().waitTicks(10);
+        awaitClientPlacedNear(awayMark, bx + 600, bz + 600,
+                "the assembly below must run with no observer near it, and the observer is a client");
 
         // The mark is taken BEFORE the assembly is queued, so the record awaited below is THIS
         // scenario's own ship and never a neighbour's - which is what a whole-dimension COUNT could

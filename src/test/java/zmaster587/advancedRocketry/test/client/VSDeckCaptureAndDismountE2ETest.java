@@ -437,8 +437,12 @@ public class VSDeckCaptureAndDismountE2ETest extends AbstractSharedVsClientE2ETe
         // NEGATIVE (the bug): a player who has NEVER stood on this deck flies into its airspace, off the
         // deck. He comes straight from far, so nothing has captured him (his ship-frame movement state is
         // empty). His view must stay his own - not snap to the tilted deck's horizon.
+        long awayMark = clientEvents().mark();
         exec("tp @a " + (sx + 200) + " 120 " + (sz + 200) + " 0 0");
-        bot().waitTicks(10);
+        // He must be AWAY on the client, because the claim below is about a body the deck has never
+        // touched: a client still standing on the deck is still being captured there.
+        awaitClientPlacedNear(awayMark, sx + 200, sz + 200,
+                "the negative leg needs a body that has never stood on this deck");
         Events clientEvents = clientEvents();
         long flyInMark = clientEvents.mark();
         exec("tp @a " + sx + " " + (sy + 3) + " " + sz + " 0 0");
@@ -1158,8 +1162,10 @@ public class VSDeckCaptureAndDismountE2ETest extends AbstractSharedVsClientE2ETe
     private double[] buildShip(FixtureSite site) throws Exception {
         // The site owns the coordinates; these aliases keep the body below unchanged.
         final int bx = site.x, by = site.y, bz = site.z;
+        long awayMark = clientEvents().mark();
         exec("tp @a " + (bx + 600) + " 120 " + (bz + 600) + " 0 0");
-        bot().waitTicks(10);
+        awaitClientPlacedNear(awayMark, bx + 600, bz + 600,
+                "the assembly below must run with no observer near it, and the observer is a client");
 
         // The registry's own addShip, awaited as a LINK since a mark taken BEFORE the assembly is
         // queued — so the record is THIS scenario's ship and names it, where a whole-dimension count
