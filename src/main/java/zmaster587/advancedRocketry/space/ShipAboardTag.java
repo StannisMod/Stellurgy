@@ -5,6 +5,9 @@ import java.util.UUID;
 import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.nbt.NBTTagCompound;
 
+import zmaster587.advancedRocketry.player.CapabilityPlayerBindings;
+import zmaster587.advancedRocketry.player.IPlayerBindings;
+
 /**
  * The per-player durable record "<i>I am aboard tier-2 ship X, at Y</i>", stored in the player's
  * persistent ForgeData compound so it survives a logout and a server restart.
@@ -292,22 +295,38 @@ public final class ShipAboardTag {
         }
     }
 
-    /** Stamp {@code aboard} onto {@code player}'s persistent entity data (he just sat down). */
+    // ---- the player-facing shims ------------------------------------------------------------
+    //
+    // THE RECORD LIVES IN THE PLAYER'S BINDINGS CAPABILITY, not in his raw forge data, since
+    // 2026-09-14. The NBT functions above are unchanged and are still the codec — the capability
+    // serializes through them, so the shape on disk and every decision encoded in it (an absent
+    // posture key means SEATED, an absent coordinate means "in no cell") has exactly one definition.
+    //
+    // What the move bought is not tidiness. Forge copies no capability across a respawn and copies
+    // only the `PlayerPersisted` sub-tag of the entity data, and this record was written beside that
+    // sub-tag rather than inside it — so a player who died aboard his ship lost the only record of
+    // which ship it was, silently, and every promise about a returning crew member stopped holding
+    // for him. The capability is carried across death deliberately.
+
+    /** Stamp {@code aboard} onto {@code player} (he just sat down). */
     public static void stamp(EntityPlayer player, Aboard aboard) {
-        if (player != null) {
-            write(player.getEntityData(), aboard);
+        IPlayerBindings bindings = CapabilityPlayerBindings.get(player);
+        if (bindings != null) {
+            bindings.setAboard(aboard);
         }
     }
 
     /** {@code player}'s aboard record, or {@code null} if he is not aboard a tier-2 ship. */
     public static Aboard of(EntityPlayer player) {
-        return player == null ? null : read(player.getEntityData());
+        IPlayerBindings bindings = CapabilityPlayerBindings.get(player);
+        return bindings == null ? null : bindings.aboard();
     }
 
     /** Drop {@code player}'s aboard record (he stood up, or his ship is gone). */
     public static void clear(EntityPlayer player) {
-        if (player != null) {
-            clear(player.getEntityData());
+        IPlayerBindings bindings = CapabilityPlayerBindings.get(player);
+        if (bindings != null) {
+            bindings.setAboard(null);
         }
     }
 }

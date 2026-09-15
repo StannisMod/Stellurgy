@@ -79,7 +79,18 @@ public final class HyperspaceVoid {
     public static final DamageSource VOID_OF_HYPERSPACE =
             new DamageSource("arHyperspaceVoid").setDamageBypassesArmor().setDamageIsAbsolute();
 
-    /** Consecutive ticks adrift, per player. An entry exists only while its player is adrift. */
+    /**
+     * Consecutive ticks adrift, per player. An entry exists only while its player is adrift.
+     *
+     * <p><b>NOT moved into the player's bindings capability, and this is a deferred question rather
+     * than an oversight.</b> The argument for moving it is that losing the count on a relog lets a
+     * crew member the void is counting down to killing reset it by disconnecting. The argument
+     * against is written at {@link #pruneDeparted} below and predates this: a returning player is
+     * placed by the login restore, which is *a fresh judgement, not a continuation*, so resuming his
+     * countdown where it stopped asserts something about a situation he may no longer be in. Both
+     * are real; the second is the one the code was built on, so it stands until it is overturned
+     * deliberately.</p>
+     */
     private final Map<UUID, Integer> adriftTicks = new HashMap<>();
 
     /**

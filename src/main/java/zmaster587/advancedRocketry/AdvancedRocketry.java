@@ -474,6 +474,11 @@ public class AdvancedRocketry {
 
         //Register cap events
         MinecraftForge.EVENT_BUS.register(new CapabilityProtectiveArmor());
+        // Attaches the player-bindings capability, and carries it across a death — Forge copies no
+        // capability on respawn, and without this a player who dies aboard his ship loses the only
+        // record of which ship it was.
+        MinecraftForge.EVENT_BUS.register(
+                new zmaster587.advancedRocketry.player.CapabilityPlayerBindings());
 
         //Register Packets - the discriminator space is declared in PacketRegistry, which owns the
         //wire order; a packet is added by appending it there, never by a call from here.
@@ -1273,6 +1278,10 @@ public class AdvancedRocketry {
     public void postInit(FMLPostInitializationEvent event) {
 
         CapabilitySpaceArmor.register();
+        // The player's own bindings: one home for what this mod holds on him, attached to the
+        // player and written with him. Registered beside its siblings; unlike them its storage does
+        // real work, because a player is not a host that persists its own NBT.
+        zmaster587.advancedRocketry.player.CapabilityPlayerBindings.register();
         zmaster587.advancedRocketry.api.capability.CapabilityWear.register();
         //Need to raise the Max Entity Radius to allow player interaction with rockets
         World.MAX_ENTITY_RADIUS = 20;

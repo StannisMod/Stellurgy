@@ -1,7 +1,11 @@
 package zmaster587.advancedRocketry.atmosphere;
 
 import net.minecraft.entity.Entity;
+import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.nbt.NBTTagCompound;
+
+import zmaster587.advancedRocketry.player.CapabilityPlayerBindings;
+import zmaster587.advancedRocketry.player.IPlayerBindings;
 
 /**
  * The short window after a rocket transfer in which an entity is IMMUNE to the suit check.
@@ -24,7 +28,14 @@ import net.minecraft.nbt.NBTTagCompound;
  */
 public final class RocketTransferGrace {
 
-    /** The NBT key on the entity's own forge data. Public because the test probe reports it. */
+    /**
+     * The NBT key on a NON-PLAYER entity's forge data.
+     *
+     * <p>A PLAYER's window lives in his {@code IPlayerBindings} capability, which is what makes it
+     * survive a death and lets a release find it. Any other entity keeps the flat key: the fixture
+     * this grace was written for carries passengers that are not always players, and a capability
+     * on every entity in the world to hold one long would be a poor trade.</p>
+     */
     public static final String KEY = "arRocketTransferGrace";
 
     /**
@@ -41,14 +52,26 @@ public final class RocketTransferGrace {
 
     /** Open the window on {@code entity}, counted from the destination world's clock. */
     public static void stamp(Entity entity, long worldTime) {
-        if (entity != null) {
+        if (entity == null) {
+            return;
+        }
+        IPlayerBindings bindings = bindingsOf(entity);
+        if (bindings != null) {
+            bindings.setGraceUntil(worldTime + WINDOW_TICKS);
+        } else {
             entity.getEntityData().setLong(KEY, worldTime + WINDOW_TICKS);
         }
     }
 
     /** Is {@code entity} still inside the window? */
     public static boolean isActive(Entity entity, long worldTime) {
-        return entity != null && entity.getEntityData().getLong(KEY) > worldTime;
+        if (entity == null) {
+            return false;
+        }
+        IPlayerBindings bindings = bindingsOf(entity);
+        return bindings != null
+                ? bindings.graceUntil() > worldTime
+                : entity.getEntityData().getLong(KEY) > worldTime;
     }
 
     /**
@@ -61,9 +84,27 @@ public final class RocketTransferGrace {
         if (entity == null) {
             return false;
         }
+        IPlayerBindings bindings = bindingsOf(entity);
+        if (bindings != null) {
+            boolean wasActive = bindings.graceUntil() > worldTime;
+            bindings.setGraceUntil(0L);
+            return wasActive;
+        }
         NBTTagCompound data = entity.getEntityData();
         boolean wasActive = data.getLong(KEY) > worldTime;
         data.removeTag(KEY);
         return wasActive;
+    }
+
+    /**
+     * This entity's bindings when it is a player the capability is attached to, else {@code null}.
+     *
+     * <p>Null here is not a degradation: it means "not a player", and the flat-key path beside every
+     * caller is the correct answer for one. It is null for a PLAYER only before the capability is
+     * registered, which is a broken mod and shows up as the window silently not persisting.</p>
+     */
+    private static IPlayerBindings bindingsOf(Entity entity) {
+        return entity instanceof EntityPlayer
+                ? CapabilityPlayerBindings.get((EntityPlayer) entity) : null;
     }
 }
