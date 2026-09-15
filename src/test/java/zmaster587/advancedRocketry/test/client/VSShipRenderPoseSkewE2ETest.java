@@ -124,9 +124,26 @@ public class VSShipRenderPoseSkewE2ETest extends AbstractClientE2ETest {
         // could only be too short (a red about the instrument) or needlessly long.
         // Carrying this scenario's ship: the record names the hull that took him, and the skew
         // sampled below is a comparison between one body and one ship's render pose.
-        events.awaitCarrying(captureMark, "deck_captured", "\"ship\":\"" + shipId + "\"",
-                "the client player must be TAKEN by THIS parked"
-                + " deck before the control window opens", DECK_LINK_BUDGET_TICKS);
+        // ...and it must still be HOLDING him when the wait returns. `deck_captured` is a COMMIT:
+        // it proves the deck took him at some tick in the window, which is not the same claim as
+        // "he is on the deck now" — and the sample below needs the second. Measured 2026-09-15, both
+        // runs of the acceptance gate: this wait returned on a capture the deck had already let go
+        // of, and the one-shot read a line later reported `verdict:false` as though the capture had
+        // never happened. The predicate is now the CHAIN: the last capture of this ship after the
+        // last release. A release carries its own `reason`, so an expiry here names why he was let
+        // go instead of leaving the reader to guess at a budget.
+        try {
+            events.awaitMatching(captureMark, "deck_captured",
+                    seen -> endsCaptured(events, captureMark, shipId),
+                    "a capture of " + shipId + " with no LATER release",
+                    "the client player must be TAKEN by THIS parked"
+                    + " deck, and still held by it, before the control window opens",
+                    DECK_LINK_BUDGET_TICKS);
+        } catch (AssertionError never) {
+            throw new AssertionError(never.getMessage() + " | the releases in this window, with"
+                    + " production's own reason for each: "
+                    + events.since(captureMark, "deck_released"), never);
+        }
         // One sample, and proved to be about this scenario's craft: the skew measured below is the
         // render pose of the ANCHOR ship against the body it carries, so a capture taken by a
         // neighbouring hull would still produce numbers — about the wrong pair.
@@ -600,5 +617,28 @@ public class VSShipRenderPoseSkewE2ETest extends AbstractClientE2ETest {
     private static double distance(double[] a, double[] b) {
         double dx = a[0] - b[0], dy = a[1] - b[1], dz = a[2] - b[2];
         return Math.sqrt(dx * dx + dy * dy + dz * dz);
+    }
+
+    /**
+     * Whether the deck episode since {@code mark} ENDS held: the last {@code deck_captured} naming
+     * {@code ship} comes after the last {@code deck_released}.
+     *
+     * <p>Compared by SEQUENCE, the only ordering two per-type rings share. {@code deck_released}
+     * carries the body but not the ship — one client stands on one deck in this scenario, so any
+     * release in the window is this body's, and treating it as such errs toward waiting longer
+     * rather than toward a capture that has already ended.</p>
+     */
+    private static boolean endsCaptured(Events log, long mark, String ship) throws Exception {
+        java.util.List<String> captures = Events.recordsWithAll(log.since(mark, "deck_captured"),
+                "\"ship\":\"" + ship + "\"");
+        if (captures.isEmpty()) {
+            return false;
+        }
+        java.util.List<String> releases = Events.records(log.since(mark, "deck_released"));
+        if (releases.isEmpty()) {
+            return true;
+        }
+        return Events.number(captures.get(captures.size() - 1), "seq")
+                > Events.number(releases.get(releases.size() - 1), "seq");
     }
 }

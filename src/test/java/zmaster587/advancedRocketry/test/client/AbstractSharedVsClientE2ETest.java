@@ -208,8 +208,16 @@ public abstract class AbstractSharedVsClientE2ETest extends AbstractSharedClient
         // is a HARNESS gap and this method's whole job is to keep such a gap out of the verdict.
         Events.MarkOrWhyNot serverMark = events().markIfInstrumented();
         try {
+            // THE CHAIN MUST END SEATED, not merely contain a mount. A crossing legitimately takes
+            // him off and puts him back, so the window holds several records; a predicate that
+            // stops at the first `ok:true` can return on an INTERMEDIATE mount that a later
+            // dismount undoes, and the caller's read-once then says riding:false one line later.
+            // Measured 2026-09-15 in the acceptance run: `VSTransitCrewGroup`'s arrival red was
+            // exactly that shape — the link returned, the state contradicted it, and the message
+            // blamed the product. Ending seated is the property the caller is about to assert.
             clientEvents().awaitMatching(clientMark, "mount",
-                    seen -> Events.countRecords(seen, "\"ok\":true") > 0, "seating him (ok:true)",
+                    seen -> endsSeated(clientEvents(), clientMark),
+                    "a chain that ENDS in a mount (every dismount answered by a later one)",
                     "the CLIENT must perform the remount after the crossing", tickBudget);
         } catch (AssertionError never) {
             String chain = serverMark.usable()
@@ -220,8 +228,10 @@ public abstract class AbstractSharedVsClientE2ETest extends AbstractSharedClient
             Events.assertInstrumentRan(clientEvents().since(clientMark, "mount"),
                     "entity_mount_writes", "the client's own mounts must be observed at all before"
                             + " an absent one can be read as a remount the client never performed");
-            scenario().arrangementFailed("the client never performed the remount within "
-                    + tickBudget + " ticks of the crossing. Client says "
+            scenario().arrangementFailed("the client's mount chain did not END seated within "
+                    + tickBudget + " ticks of the crossing — either it never remounted him, or it"
+                    + " did and something took him off again, and its own records below say which."
+                    + " Client says "
                     + bot().reportRidingEntity() + "; its own mount records say "
                     + clientEvents().since(clientMark, "mount")
                     + "; the SERVER's mount/dismount record across the same window says " + chain
@@ -673,6 +683,25 @@ public abstract class AbstractSharedVsClientE2ETest extends AbstractSharedClient
 
     private static boolean isRiding(JsonObject riding) {
         return riding != null && riding.has("riding") && riding.get("riding").getAsBoolean();
+    }
+
+    /**
+     * Whether {@code log}'s mount chain since {@code mark} ENDS seated: either nothing touched him,
+     * or every dismount was answered by a LATER mount.
+     *
+     * <p>Compared by SEQUENCE, which is the only thing carrying order once the rings are kept per
+     * type — two records of different types have no other common ordering. This is the predicate a
+     * wait for "he is seated" needs: the presence of a mount says a mount happened, and in any
+     * window that contains a crossing, a re-seat or a relog, several did.</p>
+     */
+    protected static boolean endsSeated(Events log, long mark) throws Exception {
+        String lastMount = Events.lastField(log.since(mark, "mount"), "seq");
+        String lastDismount = Events.lastField(log.since(mark, "dismount"), "seq");
+        if (lastDismount == null) {
+            return true;
+        }
+        return lastMount != null
+                && Long.parseLong(lastMount.trim()) > Long.parseLong(lastDismount.trim());
     }
 
     // ---- the hyperspace jump as a CHAIN of events, and the clock that drives it ----

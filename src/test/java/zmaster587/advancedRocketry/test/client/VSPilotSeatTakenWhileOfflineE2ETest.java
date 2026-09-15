@@ -66,6 +66,10 @@ public class VSPilotSeatTakenWhileOfflineE2ETest extends AbstractSharedVsClientE
      */
     private static final int LOGIN_LINK_BUDGET_TICKS = 600;
 
+    /** How long the client is given to PERFORM the seating the server has already done, in ticks —
+     *  a ceiling on one round trip, not a guess at how long sitting down takes. */
+    private static final int SEAT_LINK_BUDGET_TICKS = 200;
+
     // `KEY_TAKEN` lived here — the translation key of the seat's "somebody took your chair" notice.
     // Nothing asks for it any more: the notice is a rendering, and what it announced is asserted off
     // the seat and the returning pilot's own position.
@@ -135,12 +139,23 @@ public class VSPilotSeatTakenWhileOfflineE2ETest extends AbstractSharedVsClientE
         final int seatX = Integer.parseInt(sm.group(1));
         final int seatY = Integer.parseInt(sm.group(2));
         final int seatZ = Integer.parseInt(sm.group(3));
+        // The CLIENT's own mark, one statement before the mount that produces the record.
+        long seatMark = clientEvents().mark();
         String mount = exec("artest player mount-entity " + dm.group(1));
         scenario().requireArranged("bot must mount the seat dummy: " + mount,
                 mount.contains("\"mounted\":true"));
-        bot().waitTicks(10);
+        // A LINK, where ten ticks used to stand: the server mounts him and the client PERFORMS the
+        // seating when it is told, which is a record. Measured 2026-09-15 — under four client forks
+        // those ten ticks were not enough and the scenario reported `riding:false` as though the
+        // seat had refused him, which is the reading a budget always invites.
+        JsonObject seated = awaitClientMount(seatMark,
+                "the CLIENT must confirm it is seated before it logs out — the whole scenario is"
+                        + " about what happens to a seat its occupant left while offline, and an"
+                        + " occupant the client never seated was never in it",
+                SEAT_LINK_BUDGET_TICKS,
+                " | server said: " + mount);
         scenario().requireArranged("the CLIENT must confirm it is seated before it logs out: "
-                + bot().reportRidingEntity(), isRiding(bot().reportRidingEntity()));
+                + seated, isRiding(seated));
 
         // ---- ACT 1: a REAL logout that leaves the world running (disconnect half only). ---------
         // The client is away, so it has no world of its own to wait in - but the SERVER is still

@@ -408,18 +408,10 @@ public class VSPilotSeatMountMessagesE2ETest extends AbstractSharedVsClientE2ETe
         return bot().reportRidingEntity();
     }
 
-    /** Whether {@code log}'s mount chain since {@code mark} ENDS seated: either nothing touched him,
-     *  or every dismount was answered by a LATER mount. Compared by sequence, which is the only
-     *  thing that carries order once the rings are per type. */
-    private static boolean endsSeated(Events log, long mark) throws Exception {
-        String lastMount = Events.lastField(log.since(mark, "mount"), "seq");
-        String lastDismount = Events.lastField(log.since(mark, "dismount"), "seq");
-        if (lastDismount == null) {
-            return true;
-        }
-        return lastMount != null
-                && Long.parseLong(lastMount.trim()) > Long.parseLong(lastDismount.trim());
-    }
+    // `endsSeated` lived here as a private copy until 2026-09-15, when the shared remount wait was
+    // found returning on an INTERMEDIATE mount for want of exactly this predicate. It moved to the
+    // shared base so one definition answers "is he seated at the END of this window" for every
+    // class that asks — this one included.
 
     private static boolean isRiding(JsonObject riding) {
         return riding != null && riding.has("riding") && riding.get("riding").getAsBoolean();
