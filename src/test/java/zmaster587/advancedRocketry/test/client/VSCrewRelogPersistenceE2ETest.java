@@ -671,10 +671,20 @@ public class VSCrewRelogPersistenceE2ETest extends AbstractSharedVsClientE2ETest
         // Read through the shared upYOf, which uses the full expression: the single-axis shortcut
         // this leg carried (1 - 2*qx^2) answers a confident 1.0 for a ship that rolled about a
         // different axis, and the sibling deck-crew leg records exactly that mistake.
+        // READ BOTH ENDS of the window, so a red says WHICH failure it is. Measured 2026-09-15 in a
+        // full-tier gate: this leg failed at upY=0.9999929 — not part-way through a slew that needed
+        // longer, but a ship that had not moved AT ALL, with `commanded:true` in hand. A one-ended
+        // read cannot tell "the hold is still slewing" from "the hold never started", and those have
+        // opposite fixes: the first is a window too short, the second is a command that was accepted
+        // and did nothing, which no wait can repair.
+        double upYBefore = upYOf(shipInfo());
         bot().waitTicks(ROLL_WINDOW_TICKS);
         double upY = upYOf(shipInfo());
-        assertTrue("the ship must be (near-)inverted for the relog to be able to drop the player "
-                + "(upY=" + upY + ")", upY < -0.9);
+        assertTrue("the ship must be (near-)inverted for the relog to be able to drop the player"
+                + " (upY went " + upYBefore + " -> " + upY + " across " + ROLL_WINDOW_TICKS
+                + " ticks). If those two are equal the attitude hold never started and the window is"
+                + " innocent; if they differ it was still slewing and the window is short.",
+                upY < -0.9);
         String capBefore = exec("artest vs deck-capture");
         assertTrue("the player must still be captured on the inverted deck before the relog: "
                 + capBefore, capBefore.contains("\"alreadyTracked\":true"));

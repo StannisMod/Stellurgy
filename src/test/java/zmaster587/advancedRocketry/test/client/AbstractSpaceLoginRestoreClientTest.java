@@ -1184,9 +1184,17 @@ public abstract class AbstractSpaceLoginRestoreClientTest {
         Events events = events();
         // Before the mount, so the two links it produces cannot be missed between two reads.
         long seatMark = events.mark();
+        // The CLIENT's own mark for the same mount, beside the server's: the seating this scenario
+        // depends on is one the CLIENT has to perform, and that is a record rather than a delay.
+        long seatClientMark = clientEvents().mark();
         String mount = exec("artest player mount-entity " + readInt(mountAt, "dummyId"));
         assertTrue("the client must take the pilot seat: " + mount, readBool(mount, "mounted"));
-        bot().waitTicks(10);
+        // Measured 2026-09-15 in a full-tier gate: these ten ticks were not enough under four client
+        // forks, and the scenario then reported `riding:false` — which reads as the seat refusing a
+        // pilot the server had already seated. A replication lag, said as one.
+        ClientEvents.awaitMounted(clientEvents(), seatClientMark,
+                "the CLIENT must confirm it is seated BEFORE the restart, or 'seated afterwards' is"
+                        + " not an observation about the restore at all", RESTORE_LINK_BUDGET_TICKS);
 
         assertTrue("the CLIENT must confirm it is seated BEFORE the restart, or 'seated afterwards' "
                 + "is not an observation about the restore at all: " + bot().reportRidingEntity(),
@@ -1424,10 +1432,15 @@ public abstract class AbstractSpaceLoginRestoreClientTest {
         String seatMount = exec("artest vs seat-mount " + LAUNCH_DIM + " id " + groundShipId);
         assertTrue("the ground-side pilot seat must offer a mount: " + seatMount,
                 readBool(seatMount, "seatFound"));
+        long groundSeatMark = clientEvents().mark();
         String mount = exec("artest player mount-entity " + readInt(seatMount, "dummyId"));
         assertTrue("the client must take the pilot seat while still on the ground: " + mount,
                 readBool(mount, "mounted"));
-        bot().waitTicks(10);
+        // The same replication lag the restart-side seating hit, and the red it produced was in both
+        // runs of the third acceptance pair: ten ticks, then an absolute read of the client's state.
+        ClientEvents.awaitMounted(clientEvents(), groundSeatMark,
+                "the CLIENT must confirm it is seated on the ground before this pilot is flown"
+                        + " anywhere", RESTORE_LINK_BUDGET_TICKS);
         assertTrue("the CLIENT must confirm it is seated on the ground: " + bot().reportRidingEntity(),
                 bot().reportRidingEntity().get("riding").getAsBoolean());
 

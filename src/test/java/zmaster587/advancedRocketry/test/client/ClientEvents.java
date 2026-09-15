@@ -81,6 +81,53 @@ public final class ClientEvents {
         return false;
     }
 
+    /**
+     * Wait until the CLIENT has SEATED him since {@code mark} and nothing has taken him off after
+     * it — the replication half of a mount the server has already performed.
+     *
+     * <p>The predicate is over the CHAIN, not a count: a window that can hold a dismount after the
+     * mount (a retried boarding, a crossing's re-seat, a seat destroyed under him) makes "a mount
+     * happened" a weaker claim than the one a caller is about to assert. <b>A mount must EXIST and
+     * be later than every dismount</b> — an empty window means NOT YET, which is the difference
+     * between this and a predicate written for a caller holding a prior read.</p>
+     *
+     * <p>Static, and here rather than on a base class, for the same reason as
+     * {@link #awaitPlacedNear}: the tier has two class hierarchies and the login-restore family
+     * belongs to neither of the shared bases.</p>
+     *
+     * @param clientLog the CLIENT's log ({@link #of})
+     * @param mark      a mark on THAT log, taken BEFORE the command that mounts him
+     */
+    public static void awaitMounted(Events clientLog, long mark, String what, int tickBudget)
+            throws Exception {
+        try {
+            clientLog.awaitMatching(mark, "mount", seen -> endsMounted(clientLog, mark),
+                    "a chain that ENDS in a mount (a mount exists, after every dismount)",
+                    what, tickBudget);
+        } catch (AssertionError never) {
+            // An absence is evidence only once somebody was listening.
+            Events.assertInstrumentRan(clientLog.since(mark, "mount"), "entity_mount_writes",
+                    "the client's own mounts must be observed at all before an absent one can be"
+                            + " read as a seating the client never performed");
+            throw new AssertionError(never.getMessage()
+                    + " | the client's own chain: mounts=" + clientLog.since(mark, "mount")
+                    + " ||| dismounts=" + clientLog.since(mark, "dismount"), never);
+        }
+    }
+
+    /** Whether {@code log}'s mount chain since {@code mark} ends with him SEATED: a mount exists,
+     *  and it is later than every dismount. Compared by {@code seq}, the only ordering two per-type
+     *  rings share. */
+    public static boolean endsMounted(Events log, long mark) throws Exception {
+        String lastMount = Events.lastField(log.since(mark, "mount"), "seq");
+        if (lastMount == null) {
+            return false;
+        }
+        String lastDismount = Events.lastField(log.since(mark, "dismount"), "seq");
+        return lastDismount == null
+                || Long.parseLong(lastMount.trim()) > Long.parseLong(lastDismount.trim());
+    }
+
     /** The bot's own event log, read through {@link Events}, paced by that same bot's ticks. */
     public static Events of(ClientBot bot) {
         return new Events(probe(bot), bot::waitTicks);

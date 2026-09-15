@@ -728,13 +728,7 @@ public abstract class AbstractSharedVsClientE2ETest extends AbstractSharedClient
      * means — here, "not yet". That single line is the difference between a wait and a no-op.</p>
      */
     protected static boolean endsMounted(Events log, long mark) throws Exception {
-        String lastMount = Events.lastField(log.since(mark, "mount"), "seq");
-        if (lastMount == null) {
-            return false;
-        }
-        String lastDismount = Events.lastField(log.since(mark, "dismount"), "seq");
-        return lastDismount == null
-                || Long.parseLong(lastMount.trim()) > Long.parseLong(lastDismount.trim());
+        return ClientEvents.endsMounted(log, mark);
     }
 
     // ---- the hyperspace jump as a CHAIN of events, and the clock that drives it ----
