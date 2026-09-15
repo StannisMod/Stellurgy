@@ -147,8 +147,10 @@ public class VSJumpDriveFixtureBoardingE2ETest extends AbstractSharedVsClientE2E
         craftX = bx + 3;
         craftY = by + 1;
         craftZ = bz + 3;
+        long awayMark = clientEvents().mark();
         exec("tp @a " + (bx + 600) + " 120 " + (bz + 600) + " 0 0");
-        bot().waitTicks(10);
+        awaitClientPlacedNear(awayMark, bx + 600, bz + 600,
+                "the assembly below must run with no observer near it, and the observer is a client");
 
         // Marked BEFORE the assembly is queued, so the registry's own record of a ship being added
         // is THIS craft's by construction. It also splits the wait below in two: the ship coming
@@ -167,8 +169,11 @@ public class VSJumpDriveFixtureBoardingE2ETest extends AbstractSharedVsClientE2E
                 + " the queryable registry before any of its consoles can be aimed at (the spawn is"
                 + " asynchronous)");
 
+        long approachMark = clientEvents().mark();
         exec("tp @a " + (bx + 0.5) + " " + (by + 10) + " " + (bz + 0.5) + " 0 0");
-        bot().waitTicks(20);
+        awaitClientPlacedNear(approachMark, bx + 0.5, bz + 0.5,
+                "the client's ARRIVAL is what loads this craft, so the settle below is measuring a"
+                        + " ship only an arrived client can have brought into being");
         double yRest = Double.NaN;
         for (int attempt = 0; attempt < budget && Double.isNaN(yRest); attempt++) {
             bot().waitTicks(5);

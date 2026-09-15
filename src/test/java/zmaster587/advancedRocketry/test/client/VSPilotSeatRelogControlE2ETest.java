@@ -92,8 +92,10 @@ public class VSPilotSeatRelogControlE2ETest extends AbstractSharedVsClientE2ETes
     public void aPilotWhoRelogsSeatedKeepsControlOfHisShip() throws Exception {
 
         // ---- ARRANGE: build + assemble a piloted ship, seat the client player on it. ------------
+        long awayMark = clientEvents().mark();
         exec("tp @a " + (BX + 600) + " 120 " + (BZ + 600) + " 0 0");
-        bot().waitTicks(10);
+        awaitClientPlacedNear(awayMark, BX + 600, BZ + 600,
+                "the assembly below must run with no observer near it, and the observer is a client");
         // THE MULTIPLIER STAYS on the CLIMB budgets below, and on the LOAD wait: what those wait on
         // is wall-clock work — a physical value converging, VS building the ship off the game loop —
         // and a busy box genuinely gives the same window less world. The IDENTITY is a different
@@ -109,8 +111,11 @@ public class VSPilotSeatRelogControlE2ETest extends AbstractSharedVsClientE2ETes
                 assemble.contains("\"rocketCount\":0"));
         shipId = awaitShipSpawned(events, spawnMark,
                 "assembly must create a NEW VS ship in the queryable registry (async spawn)");
+        long approachMark = clientEvents().mark();
         exec("tp @a " + (BX + 0.5) + " " + (BY + 6) + " " + (BZ + 0.5) + " 0 0");
-        bot().waitTicks(40);
+        awaitClientPlacedNear(approachMark, BX + 0.5, BZ + 0.5,
+                "the client's ARRIVAL is what loads the ship, so the load wait below is waiting on"
+                        + " something only an arrived client can cause");
 
         // WAIT for the ship this scenario ALREADY NAMES to be loaded, then take it OFF ITS PAD
         // before anyone flies it.

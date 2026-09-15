@@ -128,8 +128,10 @@ public class VSAssembledShipRealRightClickBoardingE2ETest extends AbstractShared
         // Where the fixture puts the seat before assembly; assembly carries it into the ship's
         // subspace. Derived from the allocated base, never written as an address.
         final int buildSeatX = bx + 3, buildSeatY = by + 5, buildSeatZ = bz + 3;
+        long awayMark = clientEvents().mark();
         exec("tp @a " + (bx + 600) + " 120 " + (bz + 600) + " 0 0");
-        bot().waitTicks(10);
+        awaitClientPlacedNear(awayMark, bx + 600, bz + 600,
+                "the assembly below must run with no observer near it, and the observer is a client");
 
         // The mark is taken BEFORE the assembly is queued, so the registry record that follows is
         // THIS scenario's ship by construction and never a neighbour's on a shared world. It also
@@ -144,8 +146,11 @@ public class VSAssembledShipRealRightClickBoardingE2ETest extends AbstractShared
         shipUuid = awaitShipSpawned(events, spawnMark, "the assembly must create a VS ship in the"
                 + " queryable registry before anything can be aimed at it (the spawn is asynchronous)");
 
+        long approachMark = clientEvents().mark();
         exec("tp @a " + (bx + 0.5) + " " + (by + 8) + " " + (bz + 0.5) + " 0 0");
-        bot().waitTicks(20);
+        awaitClientPlacedNear(approachMark, bx + 0.5, bz + 0.5,
+                "the client's ARRIVAL is what loads the ship here, so the settle below is measuring"
+                        + " a craft only an arrived client can have brought into being");
         double yRest = Double.NaN;
         String atBase = "";
         for (int attempt = 0; attempt < budget && Double.isNaN(yRest); attempt++) {

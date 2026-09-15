@@ -145,8 +145,14 @@ public class VSShipAtmosphereFrameSpikeTest extends AbstractSharedVsClientE2ETes
         // Bring the client to the build site BEFORE assembling: a client near the ship is what
         // makes VS load it (a headless server alone never does), and one run that assembled with
         // the player still 400 blocks away at the control cabin left the registry empty.
+        long approachMark = clientEvents().mark();
         exec("tp @a " + (bx + 0.5) + " " + (by + 8) + " " + (bz + 0.5) + " 0 0");
-        bot().waitTicks(20);
+        // The comment above is the reason this is a LINK and not twenty ticks: what makes VS load
+        // the ship is a CLIENT being near it, and a client still on its way is exactly the run that
+        // left the registry empty.
+        awaitClientPlacedNear(approachMark, bx + 0.5, bz + 0.5,
+                "the client must be AT the build site before the assembly, because a client near the"
+                        + " ship is what makes the physics mod load it");
 
         String assemble = assembleFixture(site);
         System.out.println("[S1/ship] assemble=" + assemble);
