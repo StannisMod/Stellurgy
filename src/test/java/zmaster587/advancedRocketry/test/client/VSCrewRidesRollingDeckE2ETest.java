@@ -103,8 +103,11 @@ public class VSCrewRidesRollingDeckE2ETest extends AbstractSharedVsClientE2ETest
         final int bx = site.x, by = site.y, bz = site.z;
 
         // Keep the observer far while the ship spawns (a nearby observer trips the double-load path).
+        long awayMark = clientEvents().mark();
         exec("tp @a " + (bx + 600) + " 120 " + (bz + 600) + " 0 0");
-        bot().waitTicks(10);
+        awaitClientPlacedNear(awayMark, bx + 600, bz + 600,
+                "the observer that must not be near the spawn is a CLIENT, so his being away is a"
+                        + " fact about the client and not about elapsed ticks");
 
         String assemble = assembleFixture(site, VARIANT);
         assertTrue("a with-pilot-seat build must route to a ship: " + assemble,
@@ -135,9 +138,13 @@ public class VSCrewRidesRollingDeckE2ETest extends AbstractSharedVsClientE2ETest
         // Find it, then drop the bot ONTO it: standing next to a ship would prove nothing.
         String where = exec("artest vs ship-info 0 id " + shipId);
         assertTrue("ship must be managed: " + where, where.contains("\"managed\":true"));
+        long dropMark = clientEvents().mark();
         exec("tp @a " + readDouble(where, POS_X) + " " + (readDouble(where, POS_Y) + 4)
                 + " " + readDouble(where, POS_Z) + " 0 0");
-        bot().waitTicks(80); // fall onto the deck and settle
+        awaitClientPlacedNear(dropMark, readDouble(where, POS_X), readDouble(where, POS_Z),
+                "the drop onto the deck is the client's fall, so the client must first BE over the"
+                        + " deck — the ticks below are for the fall, not for the teleport");
+        bot().waitTicks(80); // the fall itself: four blocks of it, and it is a value converging
 
         String level = exec("artest vs player-ship-data");
         // "Aboard" is tested by CONTAINMENT (shipLoaded: the player's world position lies inside a

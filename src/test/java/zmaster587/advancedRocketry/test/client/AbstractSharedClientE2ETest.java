@@ -903,6 +903,24 @@ public abstract class AbstractSharedClientE2ETest {
                 "placing the client at " + x + ", " + z, what, PLACEMENT_LINK_BUDGET_TICKS);
     }
 
+    /**
+     * Wait until the CLIENT has APPLIED a server position-look write — for the rotation-only form,
+     * {@code tp @a ~ ~ ~ <yaw> <pitch>}, where there is no destination to match on.
+     *
+     * <p>The packet applies position and rotation together and the record is written after that, so
+     * a record since the mark means the aim the test is about to read is the one the server wrote.
+     * <b>Its blind spot, because it has one:</b> the seam does not record yaw or pitch, so this
+     * proves that <i>a</i> position-look write was applied, not that it was THIS one. A rubber-band
+     * correction arriving inside the same window would also satisfy it — which is why the aiming
+     * form uses it and the moving form does not
+     * ({@link #awaitClientPlacedNear} matches on where the body ended up).</p>
+     *
+     * @param mark the CLIENT's own mark, taken BEFORE the aiming command
+     */
+    protected final void awaitClientLookApplied(long mark, String what) throws Exception {
+        clientEvents().await(mark, "client_pos_look_applied", what, PLACEMENT_LINK_BUDGET_TICKS);
+    }
+
     /** As {@link #appliedInsidePlot}, for a point rather than a region. */
     private static boolean appliedNear(String sinceReply, double x, double z) {
         for (String record : Events.records(sinceReply)) {

@@ -213,8 +213,12 @@ public class VSGroundFlightGroupE2ETest extends AbstractSharedVsClientE2ETest {
         final int ax = siteA.x, ay = siteA.y, az = siteA.z;
         final int bx = siteB.x, by = siteB.y, bz = siteB.z;
 
+        long awayMark = clientEvents().mark();
         exec("tp @a " + (ax + 600) + " 120 " + (az + 600) + " 0 0");
-        bot().waitTicks(10);
+        // The observer has to be away ON THE CLIENT, which is the side that pulls chunks in; the
+        // server moving him is a different fact and the one the ten ticks were standing in for.
+        awaitClientPlacedNear(awayMark, ax + 600, az + 600,
+                "the observer must be far from both build sites before either is assembled");
 
         // Each ship's identity comes from ITS OWN creation record. Two ships in one scenario is
         // exactly the case a single mark could not tell apart — `ship_spawned` since one mark would
@@ -242,8 +246,11 @@ public class VSGroundFlightGroupE2ETest extends AbstractSharedVsClientE2ETest {
         // lookup names, never whether a ship stays loaded.
         exec("artest vs permaload true");
         exec("artest vs load-ships 0");
+        long approachMark = clientEvents().mark();
         exec("tp @a " + (ax + 0.5) + " " + (ay + 6) + " " + (az + 0.5) + " 0 0");
-        bot().waitTicks(20);
+        awaitClientPlacedNear(approachMark, ax + 0.5, az + 0.5,
+                "the client must be standing over ship A before anything is asked about it — a"
+                        + " client that has not arrived pulls no chunks and loads no ship");
 
         // Readiness, awaited twice — both ships must be USABLE before either leg below means
         // anything: LEG 2 needs B loaded for the nearest form to be able to answer with it, and
@@ -319,8 +326,11 @@ public class VSGroundFlightGroupE2ETest extends AbstractSharedVsClientE2ETest {
         // ship as it spawns (spawn-load and proximity-load collide in one server tick).
         // Assemble with no observer, let the ship settle, THEN approach so a single
         // proximity load runs.
+        long awayMark = clientEvents().mark();
         exec("tp @a " + (BX + 600) + " 120 " + (BZ + 600) + " 0 0");
-        bot().waitTicks(10);
+        awaitClientPlacedNear(awayMark, BX + 600, BZ + 600,
+                "the whole point of this leg is that NO observer is near the build during the"
+                        + " spawn, and the observer being away is a fact about the client");
 
         // The registry's own record of the ship being added, since a mark taken before the assembly
         // was queued: THIS scenario's ship by construction — where a count incremented on a shared
@@ -336,8 +346,11 @@ public class VSGroundFlightGroupE2ETest extends AbstractSharedVsClientE2ETest {
 
         // Now walk the client ONTO the ship's projected location. A real client near the
         // ship pulls its chunks in and VS loads it — the thing testServer never does.
+        long approachMark = clientEvents().mark();
         exec("tp @a " + (BX + 0.5) + " " + (BY + 6) + " " + (BZ + 0.5) + " 0 0");
-        bot().waitTicks(20);
+        awaitClientPlacedNear(approachMark, BX + 0.5, BZ + 0.5,
+                "the client's ARRIVAL is what pulls the ship's chunks, so the readiness link below"
+                        + " is waiting on something only a client that got here can cause");
 
         // Wait for the ship to become USABLE (the state testServer could never reach). The identity
         // is already held from the spawn record above, so this waits for the one fact that record
@@ -489,8 +502,11 @@ public class VSGroundFlightGroupE2ETest extends AbstractSharedVsClientE2ETest {
 
         // Put the observer AT the build site and keep it there through assembly + spawn — the
         // double-load window the sister test avoids. If the guard is absent, VS faults here.
+        long standMark = clientEvents().mark();
         exec("tp @a " + (BX + 0.5) + " " + (BY + 6) + " " + (BZ + 0.5) + " 0 0");
-        bot().waitTicks(10);
+        awaitClientPlacedNear(standMark, BX + 0.5, BZ + 0.5,
+                "this leg's whole subject is an observer PRESENT through the spawn, so his being"
+                        + " here is the arrangement rather than something to allow time for");
 
         Events events = events();
         long spawnMark = events.markInstrumented();
@@ -529,8 +545,11 @@ public class VSGroundFlightGroupE2ETest extends AbstractSharedVsClientE2ETest {
         final int BX = site.x, BY = site.y, BZ = site.z;
 
         // Assemble far from any observer (double-load window), then approach to load.
+        long awayMark = clientEvents().mark();
         exec("tp @a " + (BX + 600) + " 120 " + (BZ + 600) + " 0 0");
-        bot().waitTicks(10);
+        awaitClientPlacedNear(awayMark, BX + 600, BZ + 600,
+                "the assembly below must happen with no observer near it, and the observer is a"
+                        + " client");
 
         Events events = events();
         long spawnMark = events.markInstrumented();
@@ -541,8 +560,11 @@ public class VSGroundFlightGroupE2ETest extends AbstractSharedVsClientE2ETest {
         final String shipId = awaitShipSpawned(events, spawnMark, "assembly must create a VS ship");
         bot().waitTicks(40);
 
+        long approachMark = clientEvents().mark();
         exec("tp @a " + (BX + 0.5) + " " + (BY + 6) + " " + (BZ + 0.5) + " 0 0");
-        bot().waitTicks(20);
+        awaitClientPlacedNear(approachMark, BX + 0.5, BZ + 0.5,
+                "the client's arrival is what loads the ship here, so the readiness link below is"
+                        + " waiting on something only an arrived client can cause");
 
         // Readiness only: the approach above must have got the physics object loaded. Awaited on
         // production's own event, from the pre-assembly mark — it fires once per load, so a later
@@ -600,8 +622,11 @@ public class VSGroundFlightGroupE2ETest extends AbstractSharedVsClientE2ETest {
         final FixtureSite site = site();
         final int BX = site.x, BY = site.y, BZ = site.z;
 
+        long awayMark = clientEvents().mark();
         exec("tp @a " + (BX + 600) + " 120 " + (BZ + 600) + " 0 0");
-        bot().waitTicks(10);
+        awaitClientPlacedNear(awayMark, BX + 600, BZ + 600,
+                "the assembly below must happen with no observer near it, and the observer is a"
+                        + " client");
 
         Events events = events();
         long spawnMark = events.markInstrumented();
@@ -615,8 +640,10 @@ public class VSGroundFlightGroupE2ETest extends AbstractSharedVsClientE2ETest {
         bot().waitTicks(40);
 
         // Approach so the client loads the ship (and its seat/AFC tiles).
+        long approachMark = clientEvents().mark();
         exec("tp @a " + (BX + 0.5) + " " + (BY + 6) + " " + (BZ + 0.5) + " 0 0");
-        bot().waitTicks(20);
+        awaitClientPlacedNear(approachMark, BX + 0.5, BZ + 0.5,
+                "the seat and flight computer reach this client only because it is standing here");
 
         // Readiness only: the approach must have got the physics object loaded. Awaited on
         // production's own event, from the pre-assembly mark — it fires once per load, so a later

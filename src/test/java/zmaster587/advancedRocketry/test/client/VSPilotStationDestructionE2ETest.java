@@ -207,8 +207,10 @@ public class VSPilotStationDestructionE2ETest extends AbstractSharedVsClientE2ET
     private FlyingShip assembleLoadAndFly(FixtureSite site) throws Exception {
         // The site owns the coordinates; these aliases keep the body below unchanged.
         final int bx = site.x, by = site.y, bz = site.z;
+        long awayMark = clientEvents().mark();
         exec("tp @a " + (bx + 600) + " 120 " + (bz + 600) + " 0 0");
-        bot().waitTicks(10);
+        awaitClientPlacedNear(awayMark, bx + 600, bz + 600,
+                "the assembly below must run with no observer near it, and the observer is a client");
 
         // The registry's own record of the ship being added, since a mark taken before the assembly
         // was queued: THIS scenario's ship by construction, where the count it replaces is
@@ -223,8 +225,11 @@ public class VSPilotStationDestructionE2ETest extends AbstractSharedVsClientE2ET
                 "assembly must create a VS ship in the queryable registry (async spawn)");
         bot().waitTicks(40); // settle before the observer approaches; the LOAD is awaited below
 
+        long approachMark = clientEvents().mark();
         exec("tp @a " + (bx + 0.5) + " " + (by + 6) + " " + (bz + 0.5) + " 0 0");
-        bot().waitTicks(20);
+        awaitClientPlacedNear(approachMark, bx + 0.5, bz + 0.5,
+                "the client's ARRIVAL is what loads the ship, so the readiness link below is"
+                        + " waiting on something only an arrived client can cause");
         // Identity is already settled above, off the record of THIS scenario's own assembly. What
         // still has to be waited for is a different fact the registry record does not prove: the
         // physics object being USABLE — production's own load event, the conjunction the physics

@@ -100,8 +100,10 @@ public class VSPilotSeatTakenWhileOfflineE2ETest extends AbstractSharedVsClientE
         // the height is the open-air band because the site has no Y to pass.
         final FixtureSite site = site();
         final int bx = site.x, by = site.y, bz = site.z;
+        long awayMark = clientEvents().mark();
         exec("tp @a " + (bx + 600) + " 120 " + (bz + 600) + " 0 0");
-        bot().waitTicks(10);
+        awaitClientPlacedNear(awayMark, bx + 600, bz + 600,
+                "the assembly below must run with no observer near it, and the observer is a client");
         // The registry's own record of the ship being added, since a mark taken before the assembly
         // was queued: THIS scenario's ship by construction, where a count on a shared world is
         // answered by every neighbour that ever assembled one. The fork multiplier that used to size
@@ -119,8 +121,10 @@ public class VSPilotSeatTakenWhileOfflineE2ETest extends AbstractSharedVsClientE
         // Keep the ship observable while nobody is online: the offline window below leaves the
         // server empty, and an unloaded ship would fail every probe the arrangement depends on.
         exec("artest vs permaload true");
+        long approachMark = clientEvents().mark();
         exec("tp @a " + (bx + 0.5) + " " + (by + 6) + " " + (bz + 0.5) + " 0 0");
-        bot().waitTicks(40);
+        awaitClientPlacedNear(approachMark, bx + 0.5, bz + 0.5,
+                "every probe below is about a ship this client is standing over");
 
         String mountInfo = exec("artest vs seat-mount 0 id " + shipUuid);
         Matcher dm = DUMMY_ID.matcher(mountInfo);

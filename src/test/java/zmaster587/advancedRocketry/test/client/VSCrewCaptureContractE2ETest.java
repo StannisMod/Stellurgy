@@ -311,9 +311,20 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
                         + " " + (by + 4) + " " + (pz + 12) + " minecraft:air").contains("\"ok\":true"));
         // Face NORTH (yaw 180 looks along -Z in MC): the walk starts at the platform's south edge
         // and crosses its full depth without stepping off.
+        long standMark = clientEvents().mark();
         exec("tp @a " + (px + 4) + " " + (by + 1) + " " + (pz + 11) + " 180 0");
-        bot().waitTicks(30);
+        awaitClientPlacedNear(standMark, px + 4, pz + 11,
+                "the walk is driven by the CLIENT, so it starts where the client stands");
+        // The baseline is a converging VALUE — he is placed a block up and lands — so it is read as
+        // a WINDOW of two readings rather than after a settle. Two that agree ARE the resting
+        // height; two that differ mean he is still moving, which is an arrangement fault this
+        // scenario must not walk into rather than a number to average.
+        double firstY = bot().reportState().get("playerY").getAsDouble();
+        bot().waitTicks(10);
         double groundY = bot().reportState().get("playerY").getAsDouble();
+        scenario().requireArranged("the walker must come to REST on the platform before the walk"
+                + " begins, or the excursion below is measured against a falling body (y="
+                + firstY + " then " + groundY + ")", Math.abs(groundY - firstY) < 0.05);
 
         // The gate's own decisions for THIS walk, from a mark taken before the first step. The
         // negative below ("never captured") is satisfied by a walker the ship frame never looked at,
@@ -1780,7 +1791,8 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
 
         long lookMarkLevel = clientEvents().mark();
         exec("tp @a ~ ~ ~ 0 90"); // look straight down at the deck underfoot
-        bot().waitTicks(10);
+        awaitClientLookApplied(lookMarkLevel,
+                "the crosshair read below is the CLIENT's, so the aim must have reached it");
         String level = crosshairBlock("looking down at the level deck");
         // The body's own SUBSPACE feet, read in the same breath. The header's claim is about the
         // deck UNDER HIS FEET, and nothing in this scenario pins him to one deck spot across a
@@ -1830,7 +1842,8 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
 
         long lookMarkRolled = clientEvents().mark();
         exec("tp @a ~ ~ ~ 0 90");
-        bot().waitTicks(10);
+        awaitClientLookApplied(lookMarkRolled,
+                "the crosshair read below is the CLIENT's, so the aim must have reached it");
         String rolled = crosshairBlock("looking down on the rolled deck");
         String feetRolled = readSubPos(exec("artest vs subspace-census"));
         String lookRolled = deckLookIn(lookMarkRolled, "while looking down on the rolled deck");
@@ -2163,7 +2176,10 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
         // `deck_captured` is the per-tick commit rather than an edge, so awaiting one here would
         // return the tick it was asked and witness nothing. What changes is the capture's deck POINT,
         // and no event names a move within one deck. The state read below is the honest instrument.
+        long hopMark = clientEvents().mark();
         exec("tp @a " + ship[0] + " " + (ship[1] + 4) + " " + ship[2] + " 0 0");
+        awaitClientPlacedNear(hopMark, ship[0], ship[2],
+                "the hop must have reached the client before its landing is given time to settle");
         bot().waitTicks(40);
         // Read ONCE, and proved to be about THIS ship: the two execs this replaces
         // printed one sample and asserted a second, and neither said which craft
@@ -2233,8 +2249,11 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
         // cone about the deck normal, and the world look turns WITH the ship instead of staying
         // world-glued. Pin the aim to world +Z first (perpendicular to the X roll axis), so the
         // expected world turn of a deck-glued aim is exactly the extra roll angle.
+        long pinMark = clientEvents().mark();
         exec("tp @a ~ ~ ~ 0 0");
-        bot().waitTicks(10);
+        awaitClientLookApplied(pinMark,
+                "the aim is PINNED here and the turn below is measured from it, so the pin must"
+                        + " have reached the client before the first reading");
         double[] lookBefore = clientLook();
         double coneBefore = dot(up, lookBefore);
         double h2 = Math.toRadians(85.0) / 2.0;
@@ -2370,7 +2389,12 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
         // (hunting) ship: per-frame step statistics of the ABSOLUTE body path vs the path
         // RELATIVE to a fixed deck point. A smooth path has max ~ mean step; a tick-stepped one
         // has max >> mean. Feeds the open jump-stutter residual; no contract asserted here.
+        long anchorMark = clientEvents().mark();
         exec("tp @a " + anchor[0] + " " + anchor[1] + " " + anchor[2] + " 0 0");
+        awaitClientPlacedNear(anchorMark, anchor[0], anchor[2],
+                "the frame statistics below are about a body standing HERE");
+        // The remaining settle is a landing, and nothing is asserted on what it produces: this
+        // window is print-only diagnostics for the jump-stutter residual.
         bot().waitTicks(15);
         // OPEN the window, jump, CLOSE it: the statistics are accumulated on the test side (the
         // render seam fires per frame, which no event log can carry) and the window's summary is one
@@ -2617,8 +2641,10 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
     private double[] buildShip(FixtureSite site) throws Exception {
         // The site owns the coordinates; these aliases keep the body below unchanged.
         final int bx = site.x, by = site.y, bz = site.z;
+        long awayMark = clientEvents().mark();
         exec("tp @a " + (bx + 600) + " 120 " + (bz + 600) + " 0 0");
-        bot().waitTicks(10);
+        awaitClientPlacedNear(awayMark, bx + 600, bz + 600,
+                "the assembly below must run with no observer near it, and the observer is a client");
 
         // The mark is taken BEFORE the assembly is queued, so the record awaited below names THIS
         // scenario's own ship by construction — where the pre-assembly ship COUNT it replaces asked a
@@ -2639,8 +2665,11 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
                 "a " + VARIANT + " assembly must create a VS ship in the queryable registry");
         bot().waitTicks(40);
 
+        long approachMark = clientEvents().mark();
         exec("tp @a " + (bx + 0.5) + " " + (by + 6) + " " + (bz + 0.5) + " 0 0");
-        bot().waitTicks(20);
+        awaitClientPlacedNear(approachMark, bx + 0.5, bz + 0.5,
+                "the client's ARRIVAL is what pulls the ship's chunks, so the readiness link below"
+                        + " is waiting on something only an arrived client can cause");
 
         // READINESS, which is a different fact and still has to be waited for: `ship_spawned` is the
         // registry's record of an ADD, not a promise that a physics object is LOADED here with the
