@@ -79,6 +79,10 @@ public class VSRiderKeepsHisMountAtCruiseE2ETest extends AbstractSharedVsClientE
     /** Ticks between the two samples a cruise-speed measurement is taken from. */
     private static final int SETTLE_SAMPLE_TICKS = 10;
 
+    /** How long the CLIENT is given to perform a seating or a release the server has already done,
+     *  in ticks — a ceiling on one round trip. */
+    private static final int SEAT_LINK_BUDGET_TICKS = 200;
+
     /** How close two successive speed samples must be before the cruise counts as STEADY. Loose
      *  enough to survive physics jitter, tight enough that the telemetry the mount publishes has
      *  stopped moving - which is the condition the anchor staleness needs. */
@@ -206,6 +210,9 @@ public class VSRiderKeepsHisMountAtCruiseE2ETest extends AbstractSharedVsClientE
         String mount = "";
         boolean mounted = false;
         int dummyId = -1;
+        // The CLIENT's mark before the FIRST attempt: every pass performs a real mount, so the
+        // record that closes the wait below may belong to any of them.
+        long seatClientMark = clientEvents().mark();
         for (int attempt = 0; attempt < 5 && !mounted; attempt++) {
             String mountAt = exec("artest vs seat-mount-at " + dim
                     + " " + mountX + " " + mountY + " " + mountZ);
@@ -219,7 +226,13 @@ public class VSRiderKeepsHisMountAtCruiseE2ETest extends AbstractSharedVsClientE
             }
         }
         scenario().requireArranged("the bot must mount the pilot-seat dummy: " + mount, mounted);
-        bot().waitTicks(10);
+        // THE CLIENT'S OWN SEATING, as a link. The ten ticks that stood here produced the red whose
+        // text is three lines below — "the mount reported success and he is off ten ticks later" —
+        // and under four client forks it was replication lag: the server reported him riding a live
+        // dummy carrying one passenger while the client had not applied the packet yet.
+        awaitClientMount(seatClientMark, "the client must report the bot seated before anything"
+                + " else — this whole scenario is about a rider the client is rendering aboard",
+                SEAT_LINK_BUDGET_TICKS, "");
         // The same discriminator the mid-transit relog scenario carries, and for the same reason:
         // "he is not seated" is produced BOTH by something removing the dummy under him and by
         // something dismounting him from a dummy that is still there, and this class exists for
@@ -236,8 +249,13 @@ public class VSRiderKeepsHisMountAtCruiseE2ETest extends AbstractSharedVsClientE
 
         // The instrument's own proof: it must be able to say FALSE. Without this leg, the cruise
         // assertion below is green on a reporter that is simply stuck on true.
+        long offClientMark = clientEvents().mark();
         exec("artest player dismount");
-        bot().waitTicks(10);
+        // The control's own far side is a record too: the client LETTING GO is what makes the
+        // reporter's FALSE mean something, and ten ticks were the same bet as above in reverse.
+        awaitClientDismount(offClientMark, "CONTROL: the client must be able to report NOT riding —"
+                + " otherwise the cruise leg below is green on a reporter stuck on true",
+                SEAT_LINK_BUDGET_TICKS);
         assertFalse("CONTROL: the client must be able to report NOT riding - otherwise the cruise"
                         + " leg cannot fail", riding());
 

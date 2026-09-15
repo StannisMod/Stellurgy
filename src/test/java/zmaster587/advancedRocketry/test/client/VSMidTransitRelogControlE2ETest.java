@@ -75,6 +75,10 @@ public class VSMidTransitRelogControlE2ETest extends AbstractSharedVsClientE2ETe
      *  hull turns, not how long we are willing to wait. */
     private static final int LEVEL_WINDOW_TICKS = 400;
 
+    /** How long the CLIENT is given to perform a seating the server has already done, in ticks —
+     *  a ceiling on one round trip, not a guess at how long sitting down takes. */
+    private static final int SEAT_LINK_BUDGET_TICKS = 200;
+
     @Test
     public void aPilotWhoRelogsMidTransitRegainsControlOnArrival() throws Exception {
 
@@ -171,6 +175,10 @@ public class VSMidTransitRelogControlE2ETest extends AbstractSharedVsClientE2ETe
         // world was asked" from "it is not there at all".
         String mountAt = "", mount = "";
         boolean mounted = false;
+        // The CLIENT's mark before the FIRST attempt: every pass performs a real mount, so the
+        // record that closes the wait below may belong to any of them, and the chain predicate is
+        // what makes a retried boarding readable rather than ambiguous.
+        long seatClientMark = clientEvents().mark();
         for (int attempt = 0; attempt < 5 && !mounted; attempt++) {
             mountAt = exec("artest vs seat-mount-at " + originDim
                     + " " + seatX + " " + seatY + " " + seatZ);
@@ -184,7 +192,14 @@ public class VSMidTransitRelogControlE2ETest extends AbstractSharedVsClientE2ETe
         assertTrue("the bot must mount the pilot-seat dummy (5 spawn+mount attempts): " + mount,
                 mounted);
         int dummyId = readInt(mountAt, "dummyId");
-        bot().waitTicks(10);
+        // THE CLIENT'S OWN SEATING, waited for as the record it is. Ten ticks stood here and the
+        // failure they produced is quoted in this file's own diagnostic below — "the mount reported
+        // success and he is off ten ticks later" — which under four client forks was a replication
+        // lag and nothing else: the server reported him riding a live dummy holding one passenger
+        // while the client had not applied it yet (measured 2026-09-15 in a full-tier gate).
+        awaitClientMount(seatClientMark, "the bot must be seated BEFORE the jump (control), as the"
+                + " CLIENT renders it — everything this scenario asks afterwards is about a pilot"
+                + " the client believes is in the seat", SEAT_LINK_BUDGET_TICKS, "");
         // WHICH of the two happened, because "he is not riding" covers both and they are different
         // faults. Measured 2026-09-07: the mount reports success and ten ticks later he is off — and
         // nothing said whether the DUMMY was removed under him or he was dismounted from a dummy that

@@ -216,8 +216,8 @@ public abstract class AbstractSharedVsClientE2ETest extends AbstractSharedClient
             // exactly that shape — the link returned, the state contradicted it, and the message
             // blamed the product. Ending seated is the property the caller is about to assert.
             clientEvents().awaitMatching(clientMark, "mount",
-                    seen -> endsSeated(clientEvents(), clientMark),
-                    "a chain that ENDS in a mount (every dismount answered by a later one)",
+                    seen -> endsMounted(clientEvents(), clientMark),
+                    "a chain that ENDS in a mount (a mount exists, after every dismount)",
                     "the CLIENT must perform the remount after the crossing", tickBudget);
         } catch (AssertionError never) {
             String chain = serverMark.usable()
@@ -261,14 +261,22 @@ public abstract class AbstractSharedVsClientE2ETest extends AbstractSharedClient
     protected final JsonObject awaitClientMount(long clientMark, String what, int tickBudget,
                                                 String diagnosis) throws Exception {
         try {
+            // ENDS seated, for the same reason its sibling above does: the caller reads the state on
+            // the next line, and a window that can hold a dismount after the mount — a retried
+            // boarding, a re-seat, a seat destroyed under him — makes "a mount happened" a weaker
+            // claim than the one being asserted.
             clientEvents().awaitMatching(clientMark, "mount",
-                    seen -> Events.countRecords(seen, "\"ok\":true") > 0, "seating him (ok:true)",
+                    seen -> endsMounted(clientEvents(), clientMark),
+                    "a chain that ENDS in a mount (a mount exists, after every dismount)",
                     what, tickBudget);
         } catch (AssertionError never) {
             Events.assertInstrumentRan(clientEvents().since(clientMark, "mount"),
                     "entity_mount_writes", "the client's own mounts must be observed at all before"
                             + " an absent one can be read as a boarding the client did not follow");
-            throw new AssertionError(never.getMessage() + diagnosis);
+            throw new AssertionError(never.getMessage()
+                    + " | the client's own chain: mounts=" + clientEvents().since(clientMark, "mount")
+                    + " ||| dismounts=" + clientEvents().since(clientMark, "dismount")
+                    + diagnosis);
         }
         return bot().reportRidingEntity();
     }
@@ -690,9 +698,17 @@ public abstract class AbstractSharedVsClientE2ETest extends AbstractSharedClient
      * or every dismount was answered by a LATER mount.
      *
      * <p>Compared by SEQUENCE, which is the only thing carrying order once the rings are kept per
-     * type — two records of different types have no other common ordering. This is the predicate a
-     * wait for "he is seated" needs: the presence of a mount says a mount happened, and in any
-     * window that contains a crossing, a re-seat or a relog, several did.</p>
+     * type — two records of different types have no other common ordering.</p>
+     *
+     * <p><b>AN EMPTY WINDOW ANSWERS TRUE, and that makes this the WRONG predicate for a wait.</b>
+     * It is written for a caller that has ALREADY read the current state and is asking whether
+     * anything since the mark changed it — for which "nothing happened" means "still where he was".
+     * A wait has not read anything, so an empty window means "not yet", and a wait on this predicate
+     * returns instantly having observed nothing at all. Use {@link #endsMounted} to WAIT for a
+     * seating. <i>Measured 2026-09-15: this predicate was moved here and handed straight to
+     * {@code awaitClientMount}, which then returned before the client had applied anything and
+     * produced a deterministic red one line later — the same wait-shaped no-op this whole task
+     * exists to remove, arrived at through an event predicate rather than a budget.</i></p>
      */
     protected static boolean endsSeated(Events log, long mark) throws Exception {
         String lastMount = Events.lastField(log.since(mark, "mount"), "seq");
@@ -702,6 +718,23 @@ public abstract class AbstractSharedVsClientE2ETest extends AbstractSharedClient
         }
         return lastMount != null
                 && Long.parseLong(lastMount.trim()) > Long.parseLong(lastDismount.trim());
+    }
+
+    /**
+     * Whether the client has SEATED him since {@code mark} and nothing has taken him off after it:
+     * a mount record must EXIST, and be later than every dismount.
+     *
+     * <p>The waiting form of {@link #endsSeated}, and the difference is only what an EMPTY window
+     * means — here, "not yet". That single line is the difference between a wait and a no-op.</p>
+     */
+    protected static boolean endsMounted(Events log, long mark) throws Exception {
+        String lastMount = Events.lastField(log.since(mark, "mount"), "seq");
+        if (lastMount == null) {
+            return false;
+        }
+        String lastDismount = Events.lastField(log.since(mark, "dismount"), "seq");
+        return lastDismount == null
+                || Long.parseLong(lastMount.trim()) > Long.parseLong(lastDismount.trim());
     }
 
     // ---- the hyperspace jump as a CHAIN of events, and the clock that drives it ----
