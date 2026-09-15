@@ -263,9 +263,13 @@ public class VSPilotStationDestructionE2ETest extends AbstractSharedVsClientE2ET
         Matcher dm = DUMMY_ID.matcher(mountInfo);
         assertTrue("seat-mount-at must report a dummy id: " + mountInfo, dm.find());
         ship.dummyId = Integer.parseInt(dm.group(1));
+        long seatMark = clientEvents().mark();
         String mount = exec("artest player mount-entity " + dm.group(1));
         assertTrue("bot must mount the seat dummy: " + mount, mount.contains("\"mounted\":true"));
-        bot().waitTicks(10);
+        // The lift below is commanded by a real key held on a client that must already be riding;
+        // ten ticks were a bet on that, and this whole class is about what happens to a pilot.
+        awaitClientMount(seatMark, "the client must be riding the seat before its pilot flies it",
+                RELEASE_BUDGET_TICKS, " | server said: " + mount);
 
         final double baseY = y0;
         bot().holdKey(Keyboard.KEY_R);

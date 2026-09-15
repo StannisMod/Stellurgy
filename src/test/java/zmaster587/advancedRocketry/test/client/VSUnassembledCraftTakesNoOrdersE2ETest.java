@@ -70,6 +70,9 @@ public class VSUnassembledCraftTakesNoOrdersE2ETest extends AbstractSharedVsClie
     private static final Pattern COUNT = Pattern.compile("\"count\":(-?\\d+)");
 
     /** The control ship's build site. */
+    /** How long the CLIENT is given to PERFORM a seating the server has already done, in ticks. */
+    private static final int SEAT_LINK_BUDGET_TICKS = 200;
+
     private static final int SHIP_X = 3600, SHIP_Y = FixtureSite.OPEN_AIR_Y, SHIP_Z = 3600;
     /** The subject craft, far enough that the control ship is unloaded while it is flown. */
     private static final int CRAFT_X = 4600, CRAFT_Y = FixtureSite.OPEN_AIR_Y, CRAFT_Z = 4600;
@@ -149,10 +152,14 @@ public class VSUnassembledCraftTakesNoOrdersE2ETest extends AbstractSharedVsClie
                 mountInfo.contains("\"seatFound\":true"));
         Matcher dm = DUMMY_ID.matcher(mountInfo);
         scenario().requireArranged("seat-mount must report a dummy id: " + mountInfo, dm.find());
+        long seatMark = clientEvents().mark();
         String mount = exec("artest player mount-entity " + dm.group(1));
         scenario().requireArranged("the bot must mount the seat dummy: " + mount,
                 mount.contains("\"mounted\":true"));
-        bot().waitTicks(10); // let the mount replicate and the client recognise the pilot seat
+        // "Let the mount replicate" is a record on the client's own log. The control below presses a
+        // command key from that seat, and a client not yet riding routes it elsewhere.
+        awaitClientMount(seatMark, "the client must be riding the seat before a command key is"
+                + " pressed from it", SEAT_LINK_BUDGET_TICKS, " | server said: " + mount);
 
         // A command key: the jump key, chosen because a ship with no hyperdrive answers it with a
         // refusal and changes no flight state — so this control cannot perturb anything downstream.

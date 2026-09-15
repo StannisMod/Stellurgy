@@ -31,6 +31,9 @@ import static org.junit.Assert.assertTrue;
 @FixMethodOrder(MethodSorters.NAME_ASCENDING)
 public class VSShipUnmannedCruiseE2ETest extends AbstractSharedVsClientE2ETest {
 
+    /** How long the CLIENT is given to PERFORM a seating the server has already done, in ticks. */
+    private static final int SEAT_LINK_BUDGET_TICKS = 200;
+
     @Override
     protected String subsystem() {
         return "vs-ship-unmanned-cruise";
@@ -105,9 +108,13 @@ public class VSShipUnmannedCruiseE2ETest extends AbstractSharedVsClientE2ETest {
                 mountInfo.contains("\"seatFound\":true"));
         Matcher dm = DUMMY_ID.matcher(mountInfo);
         assertTrue("seat-mount must report a dummy id: " + mountInfo, dm.find());
+        long seatMark = clientEvents().mark();
         String mount = exec("artest player mount-entity " + dm.group(1));
         assertTrue("bot must mount the seat dummy: " + mount, mount.contains("\"mounted\":true"));
-        bot().waitTicks(10);
+        // The deflection below is a real key on a client that must already be riding; the setpoint
+        // ramp it drives is what the whole scenario measures.
+        awaitClientMount(seatMark, "the client must be riding the seat before the cruise is flown"
+                + " from it", SEAT_LINK_BUDGET_TICKS, " | server said: " + mount);
 
         // 60 ticks of full deflection = the whole setpoint ramp (rest -> cruise speed). Kept
         // short deliberately: the ship keeps climbing for the rest of the test, and it must stay

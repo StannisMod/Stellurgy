@@ -80,6 +80,10 @@ public class FreeFlightModeE2ETest extends AbstractSharedClientE2ETest {
     private static final Pattern BUILDER_POS =
             Pattern.compile("\"builderPos\":\\[(-?\\d+),(-?\\d+),(-?\\d+)]");
     private static final Pattern ROCKET_ID = Pattern.compile("\"id\":(-?\\d+)");
+
+    /** How long the CLIENT is given to perform a seating or a release the server has already done,
+     *  in ticks — a ceiling on one round trip. */
+    private static final int SEAT_LINK_BUDGET_TICKS = 200;
     /** One {@code rocket list} entry: id plus the x/y/z it stands at. */
     private static final Pattern ROCKET_ENTRY = Pattern.compile(
             "\\{\"id\":(-?\\d+),\"uuid\":\"[^\"]*\",\"dim\":-?\\d+,"
@@ -745,11 +749,25 @@ public class FreeFlightModeE2ETest extends AbstractSharedClientE2ETest {
         tpNearBuildSite();
         int rocketId = buildAndAssemble();
         tpOntoPad();
+        // THE SUBJECT HERE IS A TRANSIENT STATE, so what is asserted is the RECORD OF ITS
+        // APPEARANCE, not a live read taken afterwards. The pre-launch HUD is what the pilot sees
+        // between entering the mode and starting the engines; the `ff_hud` recorder writes a record
+        // each time the line CHANGES, so the moment it said this is in the log whether or not it is
+        // still saying it when anybody looks.
+        //
+        // Measured 2026-09-15, and it is why this is not a mount link: converting the ten ticks here
+        // into a wait for the client's own mount made the read LATER, the engines had started by
+        // then, and the assertion failed on a HUD that was correct for the moment it was read. A
+        // live read of a transient state is a race that no wait can win — a longer one loses harder.
+        long hudMark = clientEvents().mark();
         exec("artest player mount-entity " + rocketId);
         exec("artest rocket set-flight-mode " + rocketId + " FREE_FLIGHT");
-        bot().waitTicks(10);
-
-        String hud = freeFlightHud();
+        String hud = Events.text(Events.lastRecord(clientEvents().awaitMatching(hudMark, "ff_hud",
+                seen -> !Events.recordsWithAll(seen, "Free Flight Mode", "ENGINES OFF").isEmpty(),
+                "carrying the pre-launch title AND the engine-start hint",
+                "entering free-flight mode must draw the pre-launch HUD — its mode title and its"
+                        + " ENGINES OFF hint — for the pilot who just sat down",
+                SEAT_LINK_BUDGET_TICKS)), "text");
 
         assertTrue("pre-launch FF HUD must show the mode title: " + hud,
                 hud.contains("Free Flight Mode"));
@@ -807,9 +825,22 @@ public class FreeFlightModeE2ETest extends AbstractSharedClientE2ETest {
         // override does NOT leak into normal gameplay.
         tpNearBuildSite();
         // Guarantee the precondition: not riding, no GUI up.
+        //
+        // READ FIRST, WAIT ONLY IF HE IS ABOARD — and this branch is not an optimisation. A
+        // dismount record exists only where there was something to dismount FROM, so on the common
+        // path (he is already on his feet) an unconditional wait for one spends its whole budget on
+        // a state that was already correct and then fails. Measured 2026-09-15: exactly that, twice,
+        // after this very conversion — the same empty-window trap the shared mount wait was repaired
+        // for hours earlier, met again from the other side.
+        long offMark = clientEvents().mark();
+        boolean wasRiding = bot().reportRidingEntity().get("riding").getAsBoolean();
         exec("artest player dismount");
         bot().closeScreen();
-        bot().waitTicks(3);
+        if (wasRiding) {
+            clientEvents().await(offMark, "dismount",
+                    "the client must LET GO of the rocket before a key is pressed as a pedestrian",
+                    SEAT_LINK_BUDGET_TICKS);
+        }
         assertEquals("precondition: no screen should be open before pressing E",
                 "", currentScreen());
 

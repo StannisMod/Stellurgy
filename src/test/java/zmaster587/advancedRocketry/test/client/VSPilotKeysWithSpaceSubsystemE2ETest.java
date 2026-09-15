@@ -206,9 +206,14 @@ public class VSPilotKeysWithSpaceSubsystemE2ETest {
         String mountInfo = exec("artest vs seat-mount 0 id " + shipUuid);
         Matcher dm = DUMMY_ID.matcher(mountInfo);
         assertTrue("seat-mount must report a dummy id: " + mountInfo, dm.find());
+        long seatMark = clientLog.mark();
         String mount = exec("artest player mount-entity " + dm.group(1));
         assertTrue("bot must mount the seat dummy: " + mount, mount.contains("\"mounted\":true"));
-        clientHarness.bot().waitTicks(10);
+        // The key below goes through the real client input path, and a client that is not yet
+        // riding routes it somewhere else entirely — so the seating is a link, not ten ticks.
+        ClientEvents.awaitMounted(clientLog, seatMark,
+                "the client must be riding the seat before a pilot key is pressed on it",
+                PLACEMENT_LINK_BUDGET_TICKS);
 
         // The real key, through the real client input path, exactly as a player holds it.
         final double y0 = yBefore;

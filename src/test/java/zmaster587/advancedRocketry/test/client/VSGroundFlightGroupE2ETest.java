@@ -119,6 +119,10 @@ public class VSGroundFlightGroupE2ETest extends AbstractSharedVsClientE2ETest {
      */
     private static final int FLIGHT_WINDOW_TICKS = 80;
 
+    /** How long the CLIENT is given to PERFORM a seating the server has already done, in ticks —
+     *  a ceiling on one round trip, not a guess at how long sitting down takes. */
+    private static final int SEAT_LINK_BUDGET_TICKS = 200;
+
     /** The same, for the attitude-hold convergence leg — its loop's own ceiling was 120. */
     private static final int ATTITUDE_WINDOW_TICKS = 120;
 
@@ -666,10 +670,15 @@ public class VSGroundFlightGroupE2ETest extends AbstractSharedVsClientE2ETest {
                 + " " + sm.group(3));
         Matcher dm = DUMMY_ID.matcher(mountInfo);
         assertTrue("seat-mount-at must report a dummy id: " + mountInfo, dm.find());
+        long seatMark = clientEvents().mark();
         String mount = exec("artest player mount-entity " + dm.group(1));
         assertTrue("bot must mount the seat dummy: " + mount,
                 mount.contains("\"mounted\":true"));
-        bot().waitTicks(10); // let the mount replicate and the client recognise the pilot seat
+        // "Let the mount replicate" is the right sentence and ten ticks were the wrong way to say
+        // it: replication is a record on the client's own log, and the baseline read below is of the
+        // mount the client is rendering.
+        awaitClientMount(seatMark, "the client must be riding the seat dummy before its position is"
+                + " baselined — that reading IS the rider's", SEAT_LINK_BUDGET_TICKS, "");
 
         // Baseline the CLIENT pilot position BEFORE the climb: the mount the bot rides (its dummy)
         // and the player camera. A pilot glued to the ship rises with it; a detached one stays here.

@@ -62,6 +62,9 @@ public class VSPilotSeatRelogControlE2ETest extends AbstractSharedVsClientE2ETes
     // The surveyed-clean ground of the pinned seed. The old 7200/7200 was inside a mountain whose
     // surface is y=80..93, so this fixture's ship was assembled in rock and could not climb — which
     // was ledgered as a control-chain defect (#161) for eleven days.
+    /** How long the CLIENT is given to PERFORM a seating the server has already done, in ticks. */
+    private static final int SEAT_LINK_BUDGET_TICKS = 200;
+
     private static final int BX = Plot.CLEAN_GROUND_X;
     private static final int BY = Plot.CLEAN_GROUND_Y;
     private static final int BZ = Plot.CLEAN_GROUND_Z;
@@ -141,10 +144,15 @@ public class VSPilotSeatRelogControlE2ETest extends AbstractSharedVsClientE2ETes
         String mountInfo = exec("artest vs seat-mount 0 id " + shipId);
         Matcher dm = DUMMY_ID.matcher(mountInfo);
         scenario().requireArranged("seat-mount must report a dummy id: " + mountInfo, dm.find());
+        long seatMark = clientEvents().mark();
         String mount = exec("artest player mount-entity " + dm.group(1));
         scenario().requireArranged("bot must mount the seat dummy: " + mount,
                 mount.contains("\"mounted\":true"));
-        bot().waitTicks(10);
+        // The control leg below asks whether the chain works BEFORE the relog; a client that has not
+        // seated him yet would answer for a pilot who is not in the seat.
+        awaitClientMount(seatMark, "the client must be riding the seat before the control leg, or"
+                + " the post-relog leg has nothing to be compared against", SEAT_LINK_BUDGET_TICKS,
+                " | server said: " + mount);
 
         // ---- CONTROL LEG (pre-relog): the chain works before the relog, or the post-relog leg
         // cannot indict the relog. -----------------------------------------------------------
