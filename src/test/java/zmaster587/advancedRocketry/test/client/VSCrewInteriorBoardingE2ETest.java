@@ -764,8 +764,11 @@ public class VSCrewInteriorBoardingE2ETest extends AbstractSharedVsClientE2ETest
         }
         bot().waitTicks(40);
 
+        long approachMark = clientEvents().mark();
         exec("tp @a " + (bx + 0.5) + " " + (by + 6) + " " + (bz + 0.5) + " 0 0");
-        bot().waitTicks(20);
+        awaitClientPlacedNear(approachMark, bx + 0.5, bz + 0.5,
+                "the client's ARRIVAL is what pulls the ship's chunks, so what is asked of the"
+                        + " ship below is only answerable because a client got here");
 
         // An ARRANGEMENT gate, and its own argument stands: `ship_spawned` says the REGISTRY knows
         // the ship, which is a different fact from the craft being live here — the state everything

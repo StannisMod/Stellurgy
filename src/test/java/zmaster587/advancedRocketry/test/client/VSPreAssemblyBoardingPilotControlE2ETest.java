@@ -273,8 +273,10 @@ public class VSPreAssemblyBoardingPilotControlE2ETest extends AbstractSharedVsCl
                         + "config is what opts it in: " + status,
                 status.contains("\"registered\":true"));
 
+        long awayMark = clientEvents().mark();
         exec("tp @a " + (bx + 600) + " 120 " + (bz + 600) + " 0 0");
-        bot().waitTicks(10);
+        awaitClientPlacedNear(awayMark, bx + 600, bz + 600,
+                "the assembly below must run with no observer near it, and the observer is a client");
 
         // Build the craft as LOOSE BLOCKS only. Assembly is deliberately deferred until after the
         // player has taken his seat - that ordering is the entire experiment.

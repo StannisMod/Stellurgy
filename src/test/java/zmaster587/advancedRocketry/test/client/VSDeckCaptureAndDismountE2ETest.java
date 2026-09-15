@@ -1179,8 +1179,11 @@ public class VSDeckCaptureAndDismountE2ETest extends AbstractSharedVsClientE2ETe
                 "assembly must create a NEW VS ship in the queryable registry (async spawn)");
         bot().waitTicks(40);
 
+        long approachMark = clientEvents().mark();
         exec("tp @a " + (bx + 0.5) + " " + (by + 6) + " " + (bz + 0.5) + " 0 0");
-        bot().waitTicks(20);
+        awaitClientPlacedNear(approachMark, bx + 0.5, bz + 0.5,
+                "the client's ARRIVAL is what pulls the ship's chunks, so what is asked of the"
+                        + " ship below is only answerable because a client got here");
 
         // The IDENTITY is already known: this scenario ASSEMBLED the ship, and the registry's own
         // `ship_spawned` record above names it. What still has to be waited for is a different fact

@@ -61,8 +61,10 @@ public class VSShipUnmannedCruiseE2ETest extends AbstractSharedVsClientE2ETest {
         // nearest-ship lookup at the build site to recover an identity the registry's own record
         // carries.
         long spawnMark = events.markInstrumented();
+        long awayMark = clientEvents().mark();
         exec("tp @a " + (bx + 600) + " 120 " + (bz + 600) + " 0 0");
-        bot().waitTicks(10);
+        awaitClientPlacedNear(awayMark, bx + 600, bz + 600,
+                "the assembly below must run with no observer near it, and the observer is a client");
         String assemble = assembleFixture(site);
         assertTrue("a with-pilot-seat build must route to a ship: " + assemble,
                 assemble.contains("\"rocketCount\":0"));
@@ -70,8 +72,11 @@ public class VSShipUnmannedCruiseE2ETest extends AbstractSharedVsClientE2ETest {
                 spawnMark, "a with-pilot-seat assembly must create a VS ship in the registry");
         bot().waitTicks(40);
 
+        long approachMark = clientEvents().mark();
         exec("tp @a " + (bx + 0.5) + " " + (by + 6) + " " + (bz + 0.5) + " 0 0");
-        bot().waitTicks(20);
+        awaitClientPlacedNear(approachMark, bx + 0.5, bz + 0.5,
+                "the client's ARRIVAL is what pulls the ship's chunks, so what is asked of the"
+                        + " ship below is only answerable because a client got here");
         // The LOAD is the one gate here the log cannot answer: `managed:true` means the physics mod
         // owns a loaded object for this ship, and nothing records that. It stays a bounded poll — but
         // asked BY IDENTITY, so it has no distance term to be wrong about however far this ship then

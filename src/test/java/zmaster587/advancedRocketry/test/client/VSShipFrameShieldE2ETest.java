@@ -65,8 +65,10 @@ public class VSShipFrameShieldE2ETest extends AbstractSharedVsClientE2ETest {
         final int bx = site.x, by = site.y, bz = site.z;
 
         exec("artest vs permaload true");
+        long awayMark = clientEvents().mark();
         exec("tp @a " + (bx + 40) + " 120 " + (bz + 40) + " 0 0");
-        bot().waitTicks(10);
+        awaitClientPlacedNear(awayMark, bx + 40, bz + 40,
+                "the assembly below must run with no observer near it, and the observer is a client");
 
         // The mark goes before the assembly, so every record read below belongs to THIS ship by
         // construction — where a count incremented on a shared world is answered by any neighbour
@@ -83,8 +85,11 @@ public class VSShipFrameShieldE2ETest extends AbstractSharedVsClientE2ETest {
                 "a with-shield-emitter assembly must create a VS ship in the queryable registry");
 
         // Sit the client on the ship so the hull (and the emitter's chunk) loads server-side.
+        long approachMark = clientEvents().mark();
         exec("tp @a " + (bx + 0.5) + " " + (by + 6) + " " + (bz + 0.5) + " 0 0");
-        bot().waitTicks(20);
+        awaitClientPlacedNear(approachMark, bx + 0.5, bz + 0.5,
+                "the client's ARRIVAL is what pulls the ship's chunks, so what is asked of the"
+                        + " ship below is only answerable because a client got here");
         // ARRANGEMENT: the ship has a physics object at all — the thing a chunk read, a deck and a
         // frame lookup depend on, and which the registry record above does NOT imply. It is not a
         // proof that the client's approach loaded it: the same record is written when the spawn

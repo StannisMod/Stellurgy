@@ -704,8 +704,10 @@ public class VSShipEntryClientGroupE2ETest extends AbstractSharedVsClientE2ETest
     private String boardAssembledCraftAt(FixtureSite site, int budget) throws Exception {
         final int bx = site.x, bz = site.z;
         // Stand the client well clear while the fixture is built, then beside it so it stays loaded.
+        long awayMark = clientEvents().mark();
         exec("tp @a " + (bx + 600) + " 120 " + (bz + 600) + " 0 0");
-        bot().waitTicks(10);
+        awaitClientPlacedNear(awayMark, bx + 600, bz + 600,
+                "the assembly below must run with no observer near it, and the observer is a client");
         Events events = events();
         long spawnMark = events.markInstrumented();
         String assemble = assembleFixture(site, VARIANT);
@@ -714,8 +716,11 @@ public class VSShipEntryClientGroupE2ETest extends AbstractSharedVsClientE2ETest
         String shipUuid = awaitShipSpawned(events, spawnMark, "a with-pilot-seat assembly must create"
                 + " a VS ship in the physics registry — its record is where this scenario's ship"
                 + " identity comes from, and every later question about the craft is keyed on it");
+        long approachMark = clientEvents().mark();
         exec("tp @a " + (bx + 0.5) + " " + (site.y + 6) + " " + (bz + 0.5) + " 0 0");
-        bot().waitTicks(20);
+        awaitClientPlacedNear(approachMark, bx + 0.5, bz + 0.5,
+                "the client's ARRIVAL is what pulls the ship's chunks, so what is asked of the"
+                        + " ship below is only answerable because a client got here");
 
         // The spawn record above is the registry's account of an ADD; it does not say the physics
         // object is LOADED, and an unloaded ship is not ticked and cannot be flown. So the load is

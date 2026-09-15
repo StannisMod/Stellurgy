@@ -107,8 +107,10 @@ public class VSUnassembledCraftTakesNoOrdersE2ETest extends AbstractSharedVsClie
      * and it is what puts every one of leg 2's observation points on record as having executed.
      */
     private void controlARealShipDoesTakeOrders() throws Exception {
+        long awayMark = clientEvents().mark();
         exec("tp @a " + (SHIP_X + 600) + " 120 " + (SHIP_Z + 600) + " 0 0");
-        bot().waitTicks(10);
+        awaitClientPlacedNear(awayMark, SHIP_X + 600, SHIP_Z + 600,
+                "the assembly below must run with no observer near it, and the observer is a client");
 
         // The registry's own record of the ship being added, since a mark taken before the assembly
         // was queued: THIS scenario's ship by construction, where a whole-dimension count is
@@ -124,8 +126,11 @@ public class VSUnassembledCraftTakesNoOrdersE2ETest extends AbstractSharedVsClie
                 "assembly must create a VS ship in the queryable registry (async spawn)");
         bot().waitTicks(40);
 
+        long approachMark = clientEvents().mark();
         exec("tp @a " + (SHIP_X + 0.5) + " " + (SHIP_Y + 6) + " " + (SHIP_Z + 0.5) + " 0 0");
-        bot().waitTicks(20);
+        awaitClientPlacedNear(approachMark, SHIP_X + 0.5, SHIP_Z + 0.5,
+                "the client's ARRIVAL is what pulls the ship's chunks, so what is asked of the"
+                        + " ship below is only answerable because a client got here");
         // The LOAD has no event of its own, so this stays a bounded probe read — but it is ASSERTED
         // now: an unloaded control ship used to red at the seat-mount below as "seat-mount must find
         // the ship's pilot seat", which names the wrong thing entirely.

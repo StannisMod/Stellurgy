@@ -756,8 +756,10 @@ public class VSRemoteBodyModelGateE2ETest extends AbstractSharedVsClientE2ETest 
 
     /** Build a ship at this base and wait for it to load with the client present; returns its world pos. */
     private double[] buildShip(int bx, int by, int bz) throws Exception {
+        long awayMark = clientEvents().mark();
         exec("tp @a " + (bx + 600) + " 120 " + (bz + 600) + " 0 0");
-        bot().waitTicks(10);
+        awaitClientPlacedNear(awayMark, bx + 600, bz + 600,
+                "the assembly below must run with no observer near it, and the observer is a client");
 
         // The registry's own record of the ship being ADDED, since a mark taken before the assembly
         // was queued. Two things a count could not do: it is THIS scenario's ship by construction —
@@ -775,8 +777,11 @@ public class VSRemoteBodyModelGateE2ETest extends AbstractSharedVsClientE2ETest 
                 + " and not a guess at how long a value takes to settle)");
         bot().waitTicks(40);
 
+        long approachMark = clientEvents().mark();
         exec("tp @a " + (bx + 0.5) + " " + (by + 6) + " " + (bz + 0.5) + " 0 0");
-        bot().waitTicks(20);
+        awaitClientPlacedNear(approachMark, bx + 0.5, bz + 0.5,
+                "the client's ARRIVAL is what pulls the ship's chunks, so what is asked of the"
+                        + " ship below is only answerable because a client got here");
 
         // Whether the physics object is LOADED stays a bounded poll: it is a state the substrate
         // reaches, not a commit anything records, and VS pulls a ship LOADED off the game loop — so a
