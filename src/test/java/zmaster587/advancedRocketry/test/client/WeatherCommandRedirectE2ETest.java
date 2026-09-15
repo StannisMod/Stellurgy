@@ -1,5 +1,7 @@
 package zmaster587.advancedRocketry.test.client;
 
+import zmaster587.advancedRocketry.test.Events;
+
 import com.github.stannismod.forge.testing.client.RealClientHarness;
 import com.github.stannismod.forge.testing.junit.AbstractClientE2ETest;
 import com.github.stannismod.forge.testing.junit.AbstractHeadlessServerTest;
@@ -142,8 +144,9 @@ public class WeatherCommandRedirectE2ETest {
         assertFalse("planet must start clear: " + before,
                 before.contains("\"isRaining\":true"));
 
+        long transferMark = clientEvents().mark();
         serverHarness.client().execute("artest tp " + DIM);
-        waitForClientDim(DIM);
+        awaitClientDim(transferMark, DIM);
 
         // The player — standing on the planet — types vanilla /weather rain.
         clientHarness.bot().sendChat("/weather rain 600");
@@ -186,24 +189,53 @@ public class WeatherCommandRedirectE2ETest {
                 + overworldAfterClear, overworldAfterClear.contains("\"isRaining\":true"));
     }
 
-    /** Polls until the client world reports the expected dimension (~10 s cap). */
-    private void waitForClientDim(int expectedDim) throws Exception {
-        for (int waited = 0; waited < 200; waited += 10) {
-            clientHarness.bot().waitTicks(10);
-            JsonObject w = clientHarness.bot().reportWeather();
-            if (w != null && w.has("dim") && w.get("dim").getAsInt() == expectedDim) {
-                return;
-            }
+    /**
+     * The client is IN {@code expectedDim}, waited for as the RESPAWN packet that puts it there.
+     *
+     * <p>The harness records the far side of a transfer where the client finishes rebuilding its
+     * world, and the server sends that packet unconditionally — so this always has something to
+     * close on. The ten-tick sampling it replaces could only report that twenty samples had not
+     * caught the change yet, which is a sentence about the machine.</p>
+     *
+     * @param transferMark the CLIENT's own mark, taken BEFORE the command that transfers him
+     */
+    private void awaitClientDim(long transferMark, int expectedDim) throws Exception {
+        try {
+            clientEvents().awaitCarrying(transferMark, "client_dimension_changed",
+                    "\"dim\":" + expectedDim + ",",
+                    "the player must be standing on the planet before he types the command this"
+                            + " test is about — the redirect is keyed to the world he is IN",
+                    DIM_LINK_BUDGET_TICKS);
+        } catch (AssertionError never) {
+            Events.assertInstrumentRan(clientEvents().since(transferMark, "client_dimension_changed"),
+                    "client_dimension_changed", "the client's own dimension changes must be observed"
+                            + " at all before an absent one can be read as a transfer that failed");
+            throw new AssertionError(never.getMessage() + " | last weather report: "
+                    + clientHarness.bot().reportWeather(), never);
         }
-        throw new AssertionError("client never reached dim " + expectedDim
-                + " (last weather report: " + clientHarness.bot().reportWeather() + ")");
     }
+
+    /** The CLIENT's own event log, behind the shared verbs. */
+    private Events clientEvents() {
+        return ClientEvents.of(clientHarness.bot());
+    }
+
+    /** How long the client is given to FOLLOW a transfer the server has already performed. */
+    private static final int DIM_LINK_BUDGET_TICKS = 200;
 
     /**
      * Polls the SERVER-side wrapped weather flag of {@code dim} until it equals
      * {@code raining} (~10 s cap) — the chat command travels client &rarr; server and
      * lands on the next tick, so a one-shot read would race it. Returns a JSON
      * object with the final raw probe output under {@code raw}.
+     *
+     * <p><b>A POLL, deliberately, and here is what it cannot see.</b> Nothing publishes a weather
+     * record: neither AR's test mixins nor the harness records a weather write on either side
+     * (searched both source roots, 2026-09-15), so there is no link to wait on and this samples a
+     * flag instead. Two consequences a reader must carry: an expiry here cannot tell "the command
+     * never reached the server" from "it reached it and the redirect did nothing", and a flag that
+     * flipped and flipped BACK inside one ten-tick gap is invisible to it. The fix is a recorder on
+     * the weather write, not a longer budget.</p>
      */
     private JsonObject waitForServerRaining(int dim, boolean raining) throws Exception {
         String raw = "";
@@ -221,7 +253,16 @@ public class WeatherCommandRedirectE2ETest {
                 + raining + "; last probe: " + raw);
     }
 
-    /** Polls until client-visible rainStrength reaches {@code minStrength} (~10 s cap, soft). */
+    /**
+     * Polls until client-visible rainStrength reaches {@code minStrength} (~10 s cap, soft).
+     *
+     * <p><b>A VALUE, not a link, and it stays a poll for that reason.</b> Rain strength RAMPS — the
+     * client moves it a little each tick toward the server's target — so there is no instant at
+     * which it "happens" and no record that could carry one. What it cannot see: the ramp's shape
+     * between two samples, and a strength that rose and fell inside one ten-tick gap. The caller
+     * asserts on the returned report, so a wait that ends short is a value the caller can judge
+     * rather than a verdict this method invents.</p>
+     */
     private JsonObject waitForClientRainStrengthAtLeast(float minStrength) throws Exception {
         JsonObject latest = clientHarness.bot().reportWeather();
         for (int waited = 0; waited < 200; waited += 10) {

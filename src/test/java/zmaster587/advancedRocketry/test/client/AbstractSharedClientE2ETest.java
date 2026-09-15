@@ -432,12 +432,34 @@ public abstract class AbstractSharedClientE2ETest {
         // The server cannot be stale about which world it is ticking a player in.
         int serverDim = playerDimOnTheServer(plot.dim);
         if (serverDim != plot.dim) {
+            // The CLIENT's far side of the transfer, marked one statement before the command that
+            // causes it: the server tears the old world down and builds a new one over a round
+            // trip nobody here can bound, and `client_dimension_changed` is recorded where the
+            // client finishes doing exactly that.
+            long transferMark = clientEvents().mark();
             serverClient().execute("artest tp " + plot.dim);
-            bot().waitTicks(20);
+            // NO WAIT ON THE SERVER HALF, and that is a statement about the code rather than a
+            // shortened budget: `PlayerList.transferPlayerToDimension` assigns `player.dimension`
+            // in its first three lines and runs to the end on the server thread, and the probe
+            // answers only after it returns. So the reply IS the receipt, and this read — a second
+            // command, ordered behind the first on that same thread — cannot see the old world.
+            // The twenty ticks that used to sit here were not buying the transfer; they were a
+            // disguised assertion that twenty ticks is enough for one, which is a claim about the
+            // box. Measured in vanilla source, `build/rfg/minecraft-src/…/PlayerList.java:650`.
             int afterTransfer = playerDimOnTheServer(plot.dim);
             assertEquals("the between-scenario transfer must actually move the player's world, or"
                     + " the teleport that follows puts him at the right coordinates in the wrong"
                     + " one; the server still ticks him in", plot.dim, afterTransfer);
+            // And the client must ARRIVE, because the scenario about to run renders there. The
+            // rendered-dim assertion at the end of this method reads that world once; this is what
+            // makes the read honest, where before it was backed by whatever the three settles in
+            // between happened to add up to.
+            clientEvents().awaitMatching(transferMark, "client_dimension_changed",
+                    reply -> Events.countRecords(reply, "\"dim\":" + plot.dim + ",") > 0,
+                    "naming dim " + plot.dim,
+                    "the client must follow the between-scenario transfer into the plot's world;"
+                            + " a scenario that starts rendering the world it LEFT measures the"
+                            + " previous one's surroundings", DIM_LINK_BUDGET_TICKS);
         }
         // Mark the event log HERE, one statement before the teleport, so that a plot miss can ask
         // the one question the diagnostic below could never answer: WHO wrote this body's position.
@@ -447,8 +469,24 @@ public abstract class AbstractSharedClientE2ETest {
         // whole class because a recorder was unavailable. An unusable mark is REMEMBERED, not
         // thrown, so an empty log later reads as "the recorder was off" rather than as a finding.
         markThePositionRecorder();
+        // The CLIENT's mark for the same write. A teleport's far side is the client APPLYING the
+        // server's position packet, and the harness records that as `client_pos_look_applied` with
+        // the absolute coordinates the client ends up holding — so the plot check below reads a
+        // body that has demonstrably been placed, rather than one that has merely had long enough.
+        long placedMark = clientEvents().mark();
         serverClient().execute("tp @a " + (plot.centerX() + 0.5) + " " + (Plot.DEFAULT_Y + 1)
                 + " " + (plot.centerZ() + 0.5) + " 0 0");
+        // Matched on WHERE, not merely on "a teleport happened": the packet is resent on every
+        // movement rejection (the harness's own note on this seam says so), so a record alone would
+        // close this wait on a rubber-band from the world he is leaving. The predicate is the same
+        // region the plot check below uses, asked of the coordinates the client actually applied.
+        clientEvents().awaitMatching(placedMark, "client_pos_look_applied",
+                reply -> appliedInsidePlot(reply, plot),
+                "placing the client inside " + plot,
+                "the scenario's opening teleport must REACH the client — everything this method"
+                        + " asserts afterwards is about a body at the plot, and a body still in"
+                        + " flight fails those assertions in the previous scenario's name",
+                PLACEMENT_LINK_BUDGET_TICKS);
 
         // Health is restored HERE: after the teleport, and with the settle wait below still between
         // it and the client reset. Both halves of that placement were paid for in a gate.
@@ -459,24 +497,30 @@ public abstract class AbstractSharedClientE2ETest {
         // 2026-09-06: the first FULL-suite gate (186 tests, where each fork's neighbours differ from
         // the *VS* subset's) failed the health gate at 18.5.
         //
-        // BEFORE THE SETTLE WAIT, and the ordering is kept even though the reason that forced it is
-        // gone. `serverClient().execute` used to complete each command with a sentinel BROADCAST
-        // into the client's chat, arriving a tick or two after the command returned: issued
-        // immediately before the reset, these two left one marker behind and every scenario in the
-        // tier failed its own backlog-is-empty guard. The server answers over its own control socket
-        // now and the harness refuses to start without one, so no such line exists. Grouping server
-        // work where a wait follows it is still the right shape — anything the server does needs a
-        // round trip before the client can be asked about it — so the placement stays.
+        // BEFORE THE RESET, and the ordering is kept even though the reason that forced it is gone.
+        // `serverClient().execute` used to complete each command with a sentinel BROADCAST into the
+        // client's chat, arriving a tick or two after the command returned: issued immediately
+        // before the reset, these two left one marker behind and every scenario in the tier failed
+        // its own backlog-is-empty guard. The server answers over its own control socket now and the
+        // harness refuses to start without one, so no such line exists.
         long hurtMark = events().mark();
         // The CLIENT's mark for the same write, taken here because the packet it produces is what
         // the gate below waits for. It survives `resetClientState` — that resets the screen and the
         // chat, both client-owned display state, and does not touch the event log.
         long healthMark = clientEvents().mark();
         serverClient().execute("artest player set-health 20");
-        bot().waitTicks(10);
-
+        // NO PACING BETWEEN THE WRITE AND THE RESET. The heal is gated below by a LINK on
+        // `client_health_updated` since a mark taken BEFORE the write, so a packet still in flight
+        // is what that wait is for; ten ticks here only decided whether the gate's cheap branch or
+        // its link branch ran, and paid for that decision in every scenario of the tier.
         JsonObject cleared = bot().resetClientState();
-        bot().waitTicks(2);
+        // NOR AFTER THE RESET, and again because of what the code does rather than to save time:
+        // `reset_client_state` runs its whole body inside `runOnClientThread` — closes the screen,
+        // clears the chat and the overlay, releases the keys — and answers only afterwards, so this
+        // reply is the receipt for all four. The three assertions below can therefore be read as
+        // assertions about the RESET. Two ticks of waiting could not make them truer; a late chat
+        // line arriving inside that window could make them falser, which is the wrong direction for
+        // a wait to be able to move a verdict.
 
         // Assert the reset, do not trust it. This is the shared harness's own contract, and it is
         // the assertion the spike that produced this class failed on before any of it existed.
@@ -511,28 +555,26 @@ public abstract class AbstractSharedClientE2ETest {
                 + " searches the last N lines can pass on a previous scenario's identical message;"
                 + " reset reported " + cleared, 0, chatLines);
         if (!plot.contains(px, pz)) {
-            // READ ONCE, then WAIT — never wait first. The teleport is a server write and this is a
-            // client read, so a miss has two causes and only one of them is a fault: the body is
-            // still on its way (a round trip this read got in front of), or something else owns it.
-            // Waiting is therefore the RECOVERY, not the routine: a scenario whose first read lands
-            // inside its plot spends exactly the ticks it always did, and only a scenario that has
-            // already missed pays anything. An earlier cut polled unconditionally and cost a
-            // neighbouring class five reds — a settle every scenario pays is not an observation of
-            // the arrangement, it IS the arrangement.
+            // READ ONCE, AND IT IS THE VERDICT. The wait that used to live here was the recovery for
+            // a read that could get in front of the teleport's round trip — and that race is gone:
+            // the link above does not return until the client has APPLIED a position inside this
+            // plot, so a body outside it now has exactly one meaning. Something moved him after he
+            // was placed, and that is the interesting case, not the tolerable one.
             //
-            // Measured 2026-08-12, four scenarios of one class in one run: THREE reached their plot
-            // while being watched (they were early reads and nothing more) and one never arrived at
-            // all, with its body below Y=-800 and falling. One message had been reporting both.
+            // So the six-sample trail below is DIAGNOSIS and no longer a second chance. Keeping it
+            // as one would re-introduce the defect in its most convincing form: a body that wanders
+            // back inside the plot during the poll would pass, and the failure it hid is a scenario
+            // running on a body somebody else owns.
+            //
+            // Measured 2026-08-12, before the link existed, four scenarios of one class in one run:
+            // THREE reached their plot while being watched (early reads and nothing more) and one
+            // never arrived at all, with its body below Y=-800 and falling. One message had been
+            // reporting both; the link separates them at the source.
             String settle = diagnoseMissedPlot(plot);
-            state = bot().reportState();
-            px = state.has("playerX") ? state.get("playerX").getAsDouble() : px;
-            pz = state.has("playerZ") ? state.get("playerZ").getAsDouble() : pz;
-            if (!plot.contains(px, pz)) {
-                org.junit.Assert.fail("a scenario must start inside its own plot " + plot
-                        + "; the client reports the player at " + px + "," + pz
-                        + settle + " resetCleared=" + cleared);
-            }
-            scenario.record("plotSettle", settle.replace('\n', ' '));
+            org.junit.Assert.fail("a scenario must start inside its own plot " + plot
+                    + "; the client APPLIED a placement there and then reported the player at "
+                    + px + "," + pz + " — so this body was moved after it was placed"
+                    + settle + " resetCleared=" + cleared);
         }
 
         // Asserted on the CLIENT's own view, and polled rather than read once: the set-health above
@@ -805,6 +847,72 @@ public abstract class AbstractSharedClientE2ETest {
      * a RECORD instead of forty ticks of asking a field how it looks.</p>
      */
     private static final int HEALTH_LINK_BUDGET_TICKS = 40;
+
+    /**
+     * How long the client is given to FOLLOW a between-scenario dimension transfer, in ticks.
+     *
+     * <p>Same kind of number as {@link #HEALTH_LINK_BUDGET_TICKS} and it is worth naming the kind:
+     * the server has already performed the transfer when this starts, so what is bounded is one
+     * round trip plus the client tearing down a world and building another. It is a ceiling on a
+     * thing that HAPPENS — an expiry here says the client never arrived, which is news — rather
+     * than a guess at how long arriving takes.</p>
+     */
+    private static final int DIM_LINK_BUDGET_TICKS = 200;
+
+    /**
+     * How long the client is given to APPLY the opening teleport, in ticks.
+     *
+     * <p>A cross-world transfer re-sends the chunks around the destination before the position
+     * packet can be applied, so this is the longer of the two; within one world it returns on the
+     * first record and costs nothing.</p>
+     */
+    private static final int PLACEMENT_LINK_BUDGET_TICKS = 200;
+
+    /** Whether any {@code client_pos_look_applied} in a {@code since} reply put the client inside
+     *  {@code plot} — the coordinates as the CLIENT applied them, which is the same region and the
+     *  same body the plot assertion reads afterwards. A record that carries no finite X/Z (the seam
+     *  writes JSON null for those) answers NaN, and NaN is inside nothing. */
+    private static boolean appliedInsidePlot(String sinceReply, Plot plot) {
+        for (String record : Events.records(sinceReply)) {
+            if (plot.contains(Events.number(record, "x"), Events.number(record, "z"))) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Wait until the CLIENT has APPLIED a server placement within one block of {@code x, z}.
+     *
+     * <p>The far side of a teleport, offered here because it is the same wait the prologue makes
+     * and a subclass that hand-rolls it grows the fourth private copy of a shared idea. A stimulus
+     * aimed from where the player stands — a ray-traced right-click, a look-direction command — is
+     * dispatched by the CLIENT from the position the client holds, so "he has been teleported" is a
+     * fact about the wrong process until this returns.</p>
+     *
+     * <p>Matched on WHERE rather than on a record of any kind: the seam re-sends this packet on
+     * every movement rejection, so a bare type wait can close on a rubber-band. The tolerance is a
+     * block because a placement above the surface may settle onto it.</p>
+     *
+     * @param mark the CLIENT's own mark, taken BEFORE the teleport command
+     */
+    protected final void awaitClientPlacedNear(long mark, double x, double z, String what)
+            throws Exception {
+        clientEvents().awaitMatching(mark, "client_pos_look_applied",
+                reply -> appliedNear(reply, x, z),
+                "placing the client at " + x + ", " + z, what, PLACEMENT_LINK_BUDGET_TICKS);
+    }
+
+    /** As {@link #appliedInsidePlot}, for a point rather than a region. */
+    private static boolean appliedNear(String sinceReply, double x, double z) {
+        for (String record : Events.records(sinceReply)) {
+            if (Math.abs(Events.number(record, "x") - x) <= 1.0
+                    && Math.abs(Events.number(record, "z") - z) <= 1.0) {
+                return true;
+            }
+        }
+        return false;
+    }
 
     /** Whether any {@code client_health_updated} in a {@code since} reply carries at least {@code
      *  floor} health — the packet the server sends when it heals him, as the client applied it. */

@@ -14,6 +14,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 
+import zmaster587.advancedRocketry.test.Events;
 import zmaster587.advancedRocketry.test.FixtureSite;
 
 import static org.junit.Assert.assertEquals;
@@ -241,8 +242,9 @@ public class SpawnPointReachesClientE2ETest {
                         && destOracle.contains("\"spawnZ\":" + SPAWN_B_Z));
 
         // Real cross-dimension transfer through PlayerList.transferPlayerToDimension.
+        long toPlanet = clientEvents().mark();
         exec("artest tp " + PLANET_DIM);
-        waitForClientDim(PLANET_DIM);
+        awaitClientDim(toPlanet, PLANET_DIM);
 
         JsonObject onPlanet = waitForClientSpawn(SPAWN_B_X, SPAWN_B_Y, SPAWN_B_Z);
         assertEquals("client should be on the planet: " + onPlanet,
@@ -251,8 +253,9 @@ public class SpawnPointReachesClientE2ETest {
                 SPAWN_B_X, SPAWN_B_Y, SPAWN_B_Z);
 
         // Same contract in the opposite direction.
+        long toOverworld = clientEvents().mark();
         exec("artest tp 0");
-        waitForClientDim(0);
+        awaitClientDim(toOverworld, 0);
         assertSpawnEquals("client world spawn after transferring back to the overworld",
                 waitForClientSpawn(SPAWN_B_X, SPAWN_B_Y, SPAWN_B_Z),
                 SPAWN_B_X, SPAWN_B_Y, SPAWN_B_Z);
@@ -278,18 +281,39 @@ public class SpawnPointReachesClientE2ETest {
         return latest;
     }
 
-    /** Polls until the client reports the expected dim, capped at ~10 seconds. */
-    private void waitForClientDim(int expectedDim) throws Exception {
-        for (int waited = 0; waited < 200; waited += 10) {
-            clientHarness.bot().waitTicks(10);
-            JsonObject s = clientHarness.bot().reportSpawn();
-            if (s != null && s.has("dim") && s.get("dim").getAsInt() == expectedDim) {
-                return;
-            }
+    /**
+     * The client is IN {@code expectedDim}, waited for as the RESPAWN packet that puts it there.
+     *
+     * <p>The record's TAIL is the first instant the client's own dimension IS this one; the poll it
+     * replaces read the rendered dimension every ten ticks and could only ever report that ten
+     * samples had not caught it yet — a statement about the machine, not about the transfer. The
+     * server sends that packet unconditionally, so this wait always has something to close on.</p>
+     *
+     * @param transferMark the CLIENT's own mark, taken BEFORE the command that transfers him
+     */
+    private void awaitClientDim(long transferMark, int expectedDim) throws Exception {
+        try {
+            clientEvents().awaitCarrying(transferMark, "client_dimension_changed",
+                    "\"dim\":" + expectedDim + ",",
+                    "the client must follow the transfer into dim " + expectedDim
+                            + ", or the spawn read below is the world he LEFT", DIM_LINK_BUDGET_TICKS);
+        } catch (AssertionError never) {
+            Events.assertInstrumentRan(clientEvents().since(transferMark, "client_dimension_changed"),
+                    "client_dimension_changed", "the client's own dimension changes must be observed"
+                            + " at all before an absent one can be read as a transfer that failed");
+            throw new AssertionError(never.getMessage() + " | last spawn report: "
+                    + clientHarness.bot().reportSpawn(), never);
         }
-        throw new AssertionError("client never reached dim " + expectedDim
-                + " (last spawn report: " + clientHarness.bot().reportSpawn() + ")");
     }
+
+    /** The CLIENT's own event log, behind the shared verbs. */
+    private Events clientEvents() {
+        return ClientEvents.of(clientHarness.bot());
+    }
+
+    /** How long the client is given to FOLLOW a transfer the server has already performed — one
+     *  round trip plus a world teardown and rebuild. The old poll's own ceiling. */
+    private static final int DIM_LINK_BUDGET_TICKS = 200;
 
     private static void assertSpawnEquals(String what, JsonObject s, int x, int y, int z) {
         assertEquals(what + " — X: " + s, x, s.get("spawnX").getAsInt());

@@ -1,5 +1,7 @@
 package zmaster587.advancedRocketry.test.client;
 
+import zmaster587.advancedRocketry.test.Events;
+
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import org.junit.FixMethodOrder;
@@ -296,8 +298,9 @@ public class PlanetBedSleepClientGroupE2ETest extends AbstractSharedClientE2ETes
         scenario().requireArranged("the bed's HEAD was not placed: " + head,
                 head.contains("\"ok\":true"));
 
+        long transferMark = clientEvents().mark();
         exec("artest tp " + dim);
-        waitForClientDim(dim);
+        awaitClientDim(transferMark, dim);
 
         // WAIT FOR THE EVENT the client records when it APPLIES a chunk's data — the first instant it
         // can see these blocks. Movement in Minecraft is client-driven: a client that has not received
@@ -398,17 +401,41 @@ public class PlanetBedSleepClientGroupE2ETest extends AbstractSharedClientE2ETes
                 + "last planet worldTime=" + last);
     }
 
-    private void waitForClientDim(int expectedDim) throws Exception {
-        for (int waited = 0; waited < 200; waited += 10) {
-            bot().waitTicks(10);
-            JsonObject w = bot().reportWeather();
-            if (w != null && w.has("dim") && w.get("dim").getAsInt() == expectedDim) {
-                return;
-            }
+    /**
+     * The client is IN {@code expectedDim}, waited for as the RESPAWN packet that puts it there.
+     *
+     * <p>The transfer tears the old world down and builds a new {@code WorldClient}; the harness
+     * records the far side of that as `client_dimension_changed`, and its TAIL is the first instant
+     * "the client's own dimension is N" is true. Sampling the rendered dimension every ten ticks saw
+     * the same fact later, if at all — and its expiry could only say that ten samples had not caught
+     * it yet, which is a sentence about this machine rather than about the transfer.</p>
+     *
+     * <p>No read-first branch here, and the reason is worth the line: the server sends the respawn
+     * packet unconditionally, so this link always has something to close on — where an edge-gated
+     * record would not.</p>
+     *
+     * @param transferMark the CLIENT's own mark, taken BEFORE the command that transfers him
+     */
+    private void awaitClientDim(long transferMark, int expectedDim) throws Exception {
+        try {
+            clientEvents().awaitCarrying(transferMark, "client_dimension_changed",
+                    "\"dim\":" + expectedDim + ",",
+                    "the client must follow the transfer into dim " + expectedDim
+                            + " — everything below is about what he sees there",
+                    DIM_LINK_BUDGET_TICKS);
+        } catch (AssertionError never) {
+            Events.assertInstrumentRan(clientEvents().since(transferMark, "client_dimension_changed"),
+                    "client_dimension_changed", "the client's own dimension changes must be observed"
+                            + " at all before an absent one can be read as a transfer that failed");
+            scenario().arrangementFailed("client never reached dim " + expectedDim
+                    + " (last weather report: " + bot().reportWeather() + ") — "
+                    + never.getMessage());
         }
-        scenario().arrangementFailed("client never reached dim " + expectedDim
-                + " (last weather report: " + bot().reportWeather() + ")");
     }
+
+    /** How long the client is given to FOLLOW a transfer the server has already performed: one
+     *  round trip plus a world teardown and rebuild. The old poll's own ceiling. */
+    private static final int DIM_LINK_BUDGET_TICKS = 200;
 
     /** A numeric field of a probe reply, failing loudly rather than substituting a plausible zero. */
     private static double readDouble(String json, String key) {

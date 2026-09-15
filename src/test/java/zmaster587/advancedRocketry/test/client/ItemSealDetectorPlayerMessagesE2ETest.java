@@ -112,18 +112,48 @@ public class ItemSealDetectorPlayerMessagesE2ETest extends AbstractSharedClientE
         return m.group(1);
     }
 
-    /** Polls until the CLIENT renders {@code itemId} in the main hand (~10 s cap). */
-    private void waitForHeld(String itemId) throws Exception {
-        String held = "";
-        for (int waited = 0; waited < 200; waited += 5) {
-            bot().waitTicks(5);
-            held = bot().reportPlayerItems().getAsJsonObject("held").get("id").getAsString();
-            if (itemId.equals(held)) return;
+    /**
+     * The client is holding {@code itemId}, waited for as the set-slot PACKET that puts it there.
+     *
+     * <p>Read once first, because the seam change-gates per (window, slot): re-equipping what the
+     * hand already holds is recorded nowhere, and a scenario inheriting the item from its
+     * predecessor would wait out the budget for a packet nobody sends. An ARRANGEMENT gate, typed
+     * as one — the contract here is what the detector SAYS, and an empty hand says nothing.</p>
+     *
+     * @param equipMark the CLIENT's own mark, taken BEFORE the command that equips the item
+     */
+    private void awaitHeld(long equipMark, String itemId) throws Exception {
+        String held = heldOnClient();
+        if (itemId.equals(held)) {
+            return;
         }
-        scenario().arrangementFailed("the client never rendered " + itemId
-                + " in hand within 200 ticks; held=" + held
-                + " — the detector was never in the player's hand, so no branch could dispatch");
+        try {
+            clientEvents().awaitCarrying(equipMark, "client_slot_set",
+                    "\"item\":\"" + itemId + "\"",
+                    "the equip must REACH the client: every branch below is dispatched from the hand"
+                            + " the client renders", HELD_LINK_BUDGET_TICKS);
+        } catch (AssertionError never) {
+            Events.assertInstrumentRan(clientEvents().since(equipMark, "client_slot_set"),
+                    "client_slot_set", "the client's own slot writes must be observed at all before"
+                            + " an absent one can be read as an equip that never landed");
+            scenario().arrangementFailed("the client was never told it holds " + itemId
+                    + "; it renders " + held + " — " + never.getMessage());
+        }
+        held = heldOnClient();
+        if (!itemId.equals(held)) {
+            scenario().arrangementFailed("the client APPLIED a slot write carrying " + itemId
+                    + " and still renders " + held + " in hand");
+        }
     }
+
+    /** What the client renders in the main hand, right now. */
+    private String heldOnClient() throws Exception {
+        return bot().reportPlayerItems().getAsJsonObject("held").get("id").getAsString();
+    }
+
+    /** How long the client is given to be TOLD about an equip, in ticks — the old poll's ceiling,
+     *  now bounding a wait for a RECORD instead of 200 ticks of asking a field how it looks. */
+    private static final int HELD_LINK_BUDGET_TICKS = 200;
 
     /**
      * Wait until the CLIENT's own event log carries a record matching {@code needle}, or the budget
@@ -190,11 +220,15 @@ public class ItemSealDetectorPlayerMessagesE2ETest extends AbstractSharedClientE
         scenario().requireArranged("perch place must not error: " + perch, !perch.contains("\"error\""));
 
         scenario().arranging("give the seal detector and wait for the CLIENT to render it in hand");
+        long equipMark = clientEvents().mark();
         String give = exec("artest player give-held advancedrocketry:sealdetector");
         scenario().requireArranged("give-held sealdetector must succeed: " + give,
                 give.contains("\"ok\":true"));
         exec("tp @a " + (x + 0.5) + " " + (Y + 1) + " " + (z - 1.5));
-        waitForHeld("advancedrocketry:sealdetector");
+        awaitClientPlacedNear(equipMark, x + 0.5, z - 1.5,
+                "the detector is used from where the player stands, so the client must have been"
+                        + " put there before it clicks");
+        awaitHeld(equipMark, "advancedrocketry:sealdetector");
 
         // Mark both logs at the LAST moment before the stimulus. The mark is what makes a dirty
         // backlog harmless: a record read after it cannot be a line written before it, so the

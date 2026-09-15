@@ -108,24 +108,69 @@ public class ItemRightClickClientGroupE2ETest extends AbstractSharedClientE2ETes
     }
 
     /**
-     * Polls until the CLIENT renders {@code itemId} in the main hand (~10 s cap). A server-side
-     * equip needs a sync round-trip, and clicking before it lands drives the click with an empty
-     * hand — which is a different production path and reads as a contract failure.
+     * The client is holding {@code itemId}, waited for as the PACKET that puts it there.
+     *
+     * <p>A server-side equip reaches the client as a set-slot write, and the harness records it
+     * where the client applies it — so this waits for the arrival rather than asking a rendered
+     * field how it looks every five ticks. What that changes is what an expiry MEANS: the poll it
+     * replaces could only ever report "still not, after 200 ticks", which is a sentence about this
+     * machine, while an absent record with the recorder proven live says the equip never reached
+     * the client at all.</p>
+     *
+     * <p><b>Read once first, and that branch is not an optimisation.</b> The seam change-gates per
+     * (window, slot) on item and count, so re-equipping what the hand already holds is recorded
+     * NOWHERE — and a scenario that inherits the right item from its predecessor would then wait out
+     * the whole budget for a packet nobody was going to send.</p>
+     *
+     * <p>Still an ARRANGEMENT gate, and typed as one: the contract under test is what the
+     * right-click does, and a hand that never filled means the click below would have dispatched an
+     * empty one.</p>
+     *
+     * @param equipMark the CLIENT's own mark, taken BEFORE the command that equips the item
      */
-    private void waitForHeld(String itemId) throws Exception {
-        String held = "";
-        for (int waited = 0; waited < 200; waited += 5) {
-            bot().waitTicks(5);
-            held = bot().reportPlayerItems().getAsJsonObject("held").get("id").getAsString();
-            if (itemId.equals(held)) {
-                scenario().record("clientHeld", held);
-                return;
+    private void awaitHeld(long equipMark, String itemId) throws Exception {
+        String held = heldOnClient();
+        if (!itemId.equals(held)) {
+            try {
+                clientEvents().awaitCarrying(equipMark, "client_slot_set",
+                        "\"item\":\"" + itemId + "\"",
+                        "the equip must REACH the client — the right-click below is dispatched from"
+                                + " the hand the client renders, so an item that never arrived makes"
+                                + " it a click with an empty hand", HELD_LINK_BUDGET_TICKS);
+            } catch (AssertionError never) {
+                // Which silence it was. An empty log from a recorder that never wove says nothing
+                // about the equip, and must not be read as one that failed.
+                Events.assertInstrumentRan(clientEvents().since(equipMark, "client_slot_set"),
+                        "client_slot_set", "the client's own slot writes must be observed at all"
+                                + " before an absent one can be read as an equip that never landed");
+                scenario().arrangementFailed("the client was never told it holds " + itemId
+                        + "; it renders " + held + " — " + never.getMessage());
             }
+            held = heldOnClient();
         }
-        scenario().arrangementFailed("the client never rendered " + itemId + " in hand within 200"
-                + " ticks; held=" + held + " — the item was never in the player's hand, so the"
-                + " right-click below could not have dispatched it");
+        // READ ONCE, after the link: the record says the packet arrived, this says what the hand
+        // renders now, and a disagreement between the two is worth seeing in the failure text.
+        if (!itemId.equals(held)) {
+            scenario().arrangementFailed("the client APPLIED a slot write carrying " + itemId
+                    + " and still renders " + held + " in hand — the item reached the client and"
+                    + " something else holds the main hand");
+        }
+        scenario().record("clientHeld", held);
     }
+
+    /** What the client renders in the main hand, right now. */
+    private String heldOnClient() throws Exception {
+        return bot().reportPlayerItems().getAsJsonObject("held").get("id").getAsString();
+    }
+
+    /**
+     * How long the client is given to be TOLD about an equip, in ticks.
+     *
+     * <p>A deadline for one round trip that has already happened on the server, not a guess at how
+     * long equipping takes. It keeps the old poll's own ceiling so that nothing that used to pass on
+     * a slow box starts failing here.</p>
+     */
+    private static final int HELD_LINK_BUDGET_TICKS = 200;
 
     private static int extractInt(String src, Pattern pattern) {
         Matcher m = pattern.matcher(src);
@@ -196,10 +241,11 @@ public class ItemRightClickClientGroupE2ETest extends AbstractSharedClientE2ETes
     public void rightClickInVanillaDimComposesTheAirReadout() throws Exception {
         scenario().arranging("give the atmosphere analyser and wait for the client to render it");
         bot().waitForWorld();
+        long equipMark = clientEvents().mark();
         String give = exec("artest player give-held advancedrocketry:atmanalyser");
         scenario().requireArranged("give-held atmanalyser must succeed: " + give,
                 give.contains("\"ok\":true"));
-        waitForHeld("advancedrocketry:atmanalyser");
+        awaitHeld(equipMark, "advancedrocketry:atmanalyser");
 
         // Both marks BEFORE the click, so nothing that happens afterwards can be missed between two
         // reads and nothing that happened before it can be mistaken for the answer. This is what
@@ -249,6 +295,7 @@ public class ItemRightClickClientGroupE2ETest extends AbstractSharedClientE2ETes
         scenario().arranging("register a biome-changer satellite and equip its chip");
         bot().waitForWorld();
 
+        long equipMark = clientEvents().mark();
         String equip = exec("artest player equip-biomechanger " + plot().dim);
         scenario().requireArranged("equip-biomechanger must succeed: " + equip,
                 equip.contains("\"ok\":true"));
@@ -258,7 +305,7 @@ public class ItemRightClickClientGroupE2ETest extends AbstractSharedClientE2ETes
         scenario().record("satId", satId)
                 .describeOnFailureWith("artest satellite poslist-size " + plot().dim + " " + satId);
 
-        waitForHeld("advancedrocketry:biomechanger");
+        awaitHeld(equipMark, "advancedrocketry:biomechanger");
 
         scenario().measuring("the satellite's queue before the click");
         int posBefore = extractInt(
@@ -311,12 +358,13 @@ public class ItemRightClickClientGroupE2ETest extends AbstractSharedClientE2ETes
     public void rightClickWithEmptySatelliteIdOpensNoGuiAndDoesNotCrash() throws Exception {
         scenario().arranging("equip an ore scanner with no satellite bound");
         bot().waitForWorld();
+        long equipMark = clientEvents().mark();
         String equip = exec("artest player equip-orescanner none");
         scenario().requireArranged("equip-orescanner must succeed: " + equip,
                 equip.contains("\"ok\":true"));
         scenario().requireArranged("empty branch must report hadSatelliteId:false: " + equip,
                 equip.contains("\"hadSatelliteId\":false"));
-        waitForHeld("advancedrocketry:orescanner");
+        awaitHeld(equipMark, "advancedrocketry:orescanner");
 
         scenario().asserting("no screen opens on the client");
         Events events = events();
@@ -353,12 +401,13 @@ public class ItemRightClickClientGroupE2ETest extends AbstractSharedClientE2ETes
     public void rightClickWithRegisteredSatelliteIdOpensOreMappingGui() throws Exception {
         scenario().arranging("register an ore-mapping satellite and equip a scanner bound to it");
         bot().waitForWorld();
+        long equipMark = clientEvents().mark();
         String equip = exec("artest player equip-orescanner " + plot().dim);
         scenario().requireArranged("equip-orescanner must succeed: " + equip,
                 equip.contains("\"ok\":true"));
         scenario().requireArranged("resolved branch must report hadSatelliteId:true: " + equip,
                 equip.contains("\"hadSatelliteId\":true"));
-        waitForHeld("advancedrocketry:orescanner");
+        awaitHeld(equipMark, "advancedrocketry:orescanner");
 
         scenario().asserting("the OreMapping GUI opens on the client");
         Events events = events();
@@ -423,11 +472,16 @@ public class ItemRightClickClientGroupE2ETest extends AbstractSharedClientE2ETes
 
         scenario().arranging("stand the survival player two blocks above it, holding the item");
         exec("gamemode survival @a");
+        long equipMark = clientEvents().mark();
         String give = exec("artest player give-held advancedrocketry:hovercraft");
         scenario().requireArranged("give-held must succeed: " + give, give.contains("\"ok\":true"));
         exec("tp @a " + (x + 0.5) + " " + (Y + 2) + " " + (z + 0.5));
-        bot().waitTicks(10);
-        waitForHeld("advancedrocketry:hovercraft");
+        // The click below is ray-traced from where the player stands and is dispatched by the
+        // CLIENT, so the placement has to have reached the client — which is a link, where the ten
+        // ticks that stood here were a guess at a round trip.
+        awaitClientPlacedNear(equipMark, x + 0.5, z + 0.5,
+                "the survival player must be standing over the block before he right-clicks at it");
+        awaitHeld(equipMark, "advancedrocketry:hovercraft");
 
         // The stimulus is ray-traced SERVER-side from the player's look, so the aim has to have
         // arrived before the click. Aiming and clicking in the same breath leaves the ray pointing
@@ -503,13 +557,16 @@ public class ItemRightClickClientGroupE2ETest extends AbstractSharedClientE2ETes
         bot().waitForWorld();
         forceLoadAround(x, z);
         exec("gamemode survival @a");
+        long equipMark = clientEvents().mark();
         String give = exec("artest player give-held advancedrocketry:hovercraft");
         scenario().requireArranged("give-held must succeed: " + give, give.contains("\"ok\":true"));
         // 200 is 50 blocks above the plot's own fixture level, and nothing is ever placed there —
         // so the upward ray has nothing to hit that belongs to this scenario or any other.
         exec("tp @a " + (x + 0.5) + " 200 " + (z + 0.5));
-        bot().waitTicks(10);
-        waitForHeld("advancedrocketry:hovercraft");
+        awaitClientPlacedNear(equipMark, x + 0.5, z + 0.5,
+                "the player must be up in the empty air ON THE CLIENT before he clicks: the ray"
+                        + " this scenario needs to hit nothing is cast from where the client stands");
+        awaitHeld(equipMark, "advancedrocketry:hovercraft");
 
         // The control this scenario turns on: it must be able to tell "nothing spawned" from
         // "something else's craft is in range". Read the count BEFORE the click, in the same

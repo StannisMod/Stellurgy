@@ -92,31 +92,60 @@ public class ItemStationChipGuiReopenClientE2ETest extends AbstractClientE2ETest
     }
 
     /**
-     * Poll the CLIENT-rendered held item until it is {@code itemId} (~10 s).
+     * The client is holding {@code itemId}, waited for as the set-slot PACKET that puts it there.
      *
      * <p>An ARRANGEMENT gate, and it stays one: the stimulus below is the client's own use of the
-     * item in its hand, so what has to be true first is that the client's hand HOLDS the chip — a
-     * rendered-state fact, not a link of the contract. A failure here is the fixture not being
-     * built, and it says so.</p>
+     * item in its hand, so what has to be true first is that the client's hand HOLDS the chip. What
+     * changed is what a failure here MEANS. The poll this replaces could only say "the field still
+     * did not read right after 200 ticks", which is a sentence about the machine; the link says the
+     * equip never reached the client, and the instrument check beside it separates that from a
+     * recorder that never wove.</p>
+     *
+     * <p>Read once first: the seam change-gates per (window, slot), so re-equipping an item the
+     * hand already holds is recorded nowhere at all.</p>
+     *
+     * @param equipMark the CLIENT's own mark, taken BEFORE the command that equips the item
      */
-    private void waitForHeld(String itemId) throws Exception {
-        String held = "";
-        for (int waited = 0; waited < 200; waited += 5) {
-            bot().waitTicks(5);
-            held = bot().reportPlayerItems().getAsJsonObject("held").get("id").getAsString();
-            if (itemId.equals(held)) return;
+    private void awaitHeld(long equipMark, String itemId) throws Exception {
+        String held = heldOnClient();
+        if (itemId.equals(held)) {
+            return;
         }
-        throw new AssertionError("ARRANGEMENT: the client never rendered " + itemId + " in hand, so"
-                + " the sneak-right-click below would have used an empty hand; held=" + held);
+        try {
+            clientEvents().awaitCarrying(equipMark, "client_slot_set",
+                    "\"item\":\"" + itemId + "\"",
+                    "ARRANGEMENT: the equip must REACH the client, or the sneak-right-click below"
+                            + " uses an empty hand", HELD_LINK_BUDGET_TICKS);
+        } catch (AssertionError never) {
+            Events.assertInstrumentRan(clientEvents().since(equipMark, "client_slot_set"),
+                    "client_slot_set", "the client's own slot writes must be observed at all before"
+                            + " an absent one can be read as an equip that never landed");
+            throw never;
+        }
+        held = heldOnClient();
+        if (!itemId.equals(held)) {
+            throw new AssertionError("ARRANGEMENT: the client APPLIED a slot write carrying "
+                    + itemId + " and still renders " + held + " in hand");
+        }
     }
+
+    /** What the client renders in the main hand, right now. */
+    private String heldOnClient() throws Exception {
+        return bot().reportPlayerItems().getAsJsonObject("held").get("id").getAsString();
+    }
+
+    /** How long the client is given to be TOLD about an equip, in ticks — the old poll's own
+     *  ceiling, now bounding a wait for a RECORD. */
+    private static final int HELD_LINK_BUDGET_TICKS = 200;
 
     @Test
     public void chipButtonPressReopensGuiAsFullScreen() throws Exception {
         bot().waitForWorld();
 
+        long equipMark = clientEvents().mark();
         String equip = exec("artest player equip-stationchip");
         assertTrue("equip-stationchip must succeed: " + equip, equip.contains("\"ok\":true"));
-        waitForHeld(CHIP);
+        awaitHeld(equipMark, CHIP);
 
         // Sneak + right-click opens the chip's libVulpes modular GUI (this open
         // targets LibVulpes.instance, so it works even on the buggy build).
