@@ -97,6 +97,5 @@ public class CapabilityPlayerBindings {
         }
         fresh.setAboard(old.aboard());
         fresh.setGraceUntil(old.graceUntil());
-        fresh.setAdriftTicks(old.adriftTicks());
     }
 }

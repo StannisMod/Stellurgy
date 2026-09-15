@@ -33,11 +33,9 @@ import zmaster587.advancedRocketry.space.ShipAboardTag;
 public class PlayerBindings implements IPlayerBindings, ICapabilitySerializable<NBTTagCompound> {
 
     private static final String GRACE_UNTIL = "graceUntil";
-    private static final String ADRIFT_TICKS = "adriftTicks";
 
     private ShipAboardTag.Aboard aboard;
     private long graceUntil;
-    private int adriftTicks;
 
     @Override
     public ShipAboardTag.Aboard aboard() {
@@ -60,23 +58,10 @@ public class PlayerBindings implements IPlayerBindings, ICapabilitySerializable<
     }
 
     @Override
-    public int adriftTicks() {
-        return adriftTicks;
-    }
-
-    @Override
-    public void setAdriftTicks(int ticks) {
-        this.adriftTicks = ticks;
-    }
-
-    @Override
     public List<String> boundTo(long worldTime) {
         List<String> bound = new ArrayList<>();
         if (aboard != null) {
             bound.add("aboard record");
-        }
-        if (adriftTicks > 0) {
-            bound.add("hyperspace drift");
         }
         // The grace is a DEADLINE, so an expired one is not a binding: it constrains nothing and
         // reporting it would make a release claim work it did not do.
@@ -90,7 +75,6 @@ public class PlayerBindings implements IPlayerBindings, ICapabilitySerializable<
     public List<String> releaseAll(long worldTime) {
         List<String> released = boundTo(worldTime);
         aboard = null;
-        adriftTicks = 0;
         graceUntil = 0L;
         return released;
     }
@@ -116,9 +100,6 @@ public class PlayerBindings implements IPlayerBindings, ICapabilitySerializable<
         if (graceUntil != 0L) {
             tag.setLong(GRACE_UNTIL, graceUntil);
         }
-        if (adriftTicks != 0) {
-            tag.setInteger(ADRIFT_TICKS, adriftTicks);
-        }
         return tag;
     }
 
@@ -129,6 +110,5 @@ public class PlayerBindings implements IPlayerBindings, ICapabilitySerializable<
         }
         aboard = ShipAboardTag.read(tag);
         graceUntil = tag.getLong(GRACE_UNTIL);
-        adriftTicks = tag.getInteger(ADRIFT_TICKS);
     }
 }
