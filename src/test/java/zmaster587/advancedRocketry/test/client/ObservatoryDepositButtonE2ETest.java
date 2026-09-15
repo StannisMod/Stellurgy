@@ -81,9 +81,13 @@ public class ObservatoryDepositButtonE2ETest extends AbstractSharedClientE2ETest
         assertTrue("and the probe must see it there without depositing anything: " + info,
                 info.contains("\"crystalDims\":[" + fresh + "]"));
 
-        // Stand at the machine and open its GUI the way a player does.
+        // Stand at the machine and open its GUI the way a player does. The right-click below is
+        // dispatched by the CLIENT and reach-checked against where it stands, so the placement is
+        // waited for as the packet that applies it.
+        long standMark = clientEvents().mark();
         exec("tp @a " + (X + 0.5) + " " + (Y + 2) + " " + (Z + 2.5) + " 0 30");
-        bot().waitTicks(20);
+        awaitClientPlacedNear(standMark, X + 0.5, Z + 2.5,
+                "the player must be at the machine before he right-clicks it");
         String screen = openGuiByRightClick(bot(), X, Y, Z);
         assertTrue("right-clicking the observatory must open a GUI, got: " + screen,
                 screen.contains("Gui"));

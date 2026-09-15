@@ -129,9 +129,12 @@ public class VacuumAndSuitClientGroupE2ETest extends AbstractSharedClientE2ETest
                 + plot().z(PAD_DZ + PAD_EDGE - 1) + " minecraft:stone");
         scenario().requireArranged("platform fill must succeed: " + fill,
                 fill.contains("\"ok\":true"));
+        long standMark = clientEvents().mark();
         exec("tp @a " + (plot().x(STAND_DX) + 0.5) + " " + (PAD_Y + 1) + " "
                 + (plot().z(STAND_DZ) + 0.5));
-        bot().waitTicks(10);
+        // Where he STANDS decides what atmosphere he is in, and the readings below are the client's.
+        awaitClientPlacedNear(standMark, plot().x(STAND_DX) + 0.5, plot().z(STAND_DZ) + 0.5,
+                "the vacuum this scenario is about is the one at the player's own position");
 
         exec("artest player clear-armor");
         exec("gamerule naturalRegeneration false");

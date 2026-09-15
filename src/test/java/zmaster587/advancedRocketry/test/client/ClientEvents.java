@@ -41,6 +41,46 @@ public final class ClientEvents {
     private ClientEvents() {
     }
 
+    /**
+     * Wait until the client has APPLIED a server placement within one block of {@code x, z}.
+     *
+     * <p>The far side of a teleport: the server writes the position, the client applies the packet,
+     * and the harness records THAT with the absolute coordinates the client ends up holding. A test
+     * that reads the client — its rendered position, its tracked chunks, a ray cast from where it
+     * stands — is asking about the side this record belongs to, and a fixed settle in its place is a
+     * guess at one round trip.</p>
+     *
+     * <p>Matched on WHERE rather than on a record of any kind, because the seam re-sends this packet
+     * on every movement rejection and a bare type wait can close on a rubber-band. The tolerance is
+     * a block: a placement above the surface may settle onto it.</p>
+     *
+     * <p>Static, and here rather than on a base class, because the tier has TWO hierarchies — the
+     * shared AR bases and the harness's own {@code AbstractClientE2ETest} — and this is the third
+     * time a wait that belongs to both has been solved by copying it into each.</p>
+     *
+     * @param clientLog the CLIENT's log ({@link #of})
+     * @param mark      a mark on THAT log, taken BEFORE the teleport command
+     */
+    public static void awaitPlacedNear(Events clientLog, long mark, double x, double z,
+                                       String what, int tickBudget) throws Exception {
+        clientLog.awaitMatching(mark, "client_pos_look_applied",
+                reply -> appliedNear(reply, x, z),
+                "placing the client at " + x + ", " + z, what, tickBudget);
+    }
+
+    /** Whether any {@code client_pos_look_applied} in a {@code since} reply put the client within a
+     *  block of {@code x, z}. A record carrying no finite coordinate answers NaN, and NaN is near
+     *  nothing. */
+    public static boolean appliedNear(String sinceReply, double x, double z) {
+        for (String record : Events.records(sinceReply)) {
+            if (Math.abs(Events.number(record, "x") - x) <= 1.0
+                    && Math.abs(Events.number(record, "z") - z) <= 1.0) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     /** The bot's own event log, read through {@link Events}, paced by that same bot's ticks. */
     public static Events of(ClientBot bot) {
         return new Events(probe(bot), bot::waitTicks);

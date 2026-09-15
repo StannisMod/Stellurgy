@@ -898,9 +898,7 @@ public abstract class AbstractSharedClientE2ETest {
      */
     protected final void awaitClientPlacedNear(long mark, double x, double z, String what)
             throws Exception {
-        clientEvents().awaitMatching(mark, "client_pos_look_applied",
-                reply -> appliedNear(reply, x, z),
-                "placing the client at " + x + ", " + z, what, PLACEMENT_LINK_BUDGET_TICKS);
+        ClientEvents.awaitPlacedNear(clientEvents(), mark, x, z, what, PLACEMENT_LINK_BUDGET_TICKS);
     }
 
     /**
@@ -921,16 +919,9 @@ public abstract class AbstractSharedClientE2ETest {
         clientEvents().await(mark, "client_pos_look_applied", what, PLACEMENT_LINK_BUDGET_TICKS);
     }
 
-    /** As {@link #appliedInsidePlot}, for a point rather than a region. */
-    private static boolean appliedNear(String sinceReply, double x, double z) {
-        for (String record : Events.records(sinceReply)) {
-            if (Math.abs(Events.number(record, "x") - x) <= 1.0
-                    && Math.abs(Events.number(record, "z") - z) <= 1.0) {
-                return true;
-            }
-        }
-        return false;
-    }
+    // The POINT form of `appliedInsidePlot` lives in ClientEvents.appliedNear, because the tier has
+    // two class hierarchies — these shared bases and the harness's own AbstractClientE2ETest — and a
+    // wait that belongs to both must not be solved by copying it into each.
 
     /** Whether any {@code client_health_updated} in a {@code since} reply carries at least {@code
      *  floor} health — the packet the server sends when it heals him, as the client applied it. */

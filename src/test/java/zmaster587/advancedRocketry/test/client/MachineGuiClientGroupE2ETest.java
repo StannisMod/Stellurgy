@@ -1025,8 +1025,11 @@ public class MachineGuiClientGroupE2ETest extends AbstractSharedClientE2ETest {
         String place = exec("artest place " + dim + " " + x + " " + Y + " " + z + " minecraft:chest");
         scenario().requireArranged("chest place must succeed: " + place,
                 place.contains("\"placed\":true"));
+        long standMark = clientEvents().mark();
         exec("tp @a " + (x + 0.5) + " " + (Y + 2) + " " + (z + 0.5) + " 0 90");
-        bot().waitTicks(40);
+        awaitClientPlacedNear(standMark, x + 0.5, z + 0.5,
+                "the container below is opened for a player standing at the chest, and the GUI it"
+                        + " produces is rendered by the client that got there");
 
         // Opened SERVER-side (mirrors BlockChest.onBlockActivated -> player.displayGUIChest) rather
         // than by right-click: the right-click packet was dropped before the chunk/player settled
@@ -1054,8 +1057,13 @@ public class MachineGuiClientGroupE2ETest extends AbstractSharedClientE2ETest {
                 addResp.contains("\"inBypass\":true"));
 
         long farMark = events.markInstrumented();
+        long farClientMark = clientEvents().mark();
         exec("tp @a " + (x + 200) + " " + (Y + 1) + " " + (z + 200) + " 0 0");
-        bot().waitTicks(40);
+        // The claim is that the GUI SURVIVES this teleport, so the teleport has to have reached the
+        // client before its screen is read — forty ticks were a bet on that, and on a loaded box the
+        // bet decides the verdict.
+        awaitClientPlacedNear(farClientMark, x + 200, z + 200,
+                "the 200-block teleport must have reached the client before its screen is read");
 
         JsonObject afterTpWithBypass = bot().reportState();
         // Diagnostic: re-check bypass status post-teleport so a failure can distinguish "bypass
