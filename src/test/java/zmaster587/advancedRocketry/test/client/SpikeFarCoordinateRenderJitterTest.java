@@ -44,8 +44,10 @@ import static org.junit.Assert.assertTrue;
  * <ol>
  *   <li><b>The capture must contain a scene.</b> A framebuffer enabled at RUNTIME receives the HUD
  *       pass and not the world pass, so every capture comes back as the clear colour — which reads
- *       exactly like "the renderer drew nothing". The client must be started with
- *       {@code -PclientFbo=true}, and the first frame is checked for being more than one flat colour.</li>
+ *       exactly like "the renderer drew nothing". This test therefore declares
+ *       {@code requiresFramebufferAtLaunch()}, so its own client starts with the FBO on whatever the
+ *       invocation passes, and the first frame is still checked for being more than one flat
+ *       colour.</li>
  *   <li><b>The scene must be STATIC.</b> Two captures with no motion between them must be identical.
  *       If they are not, something in the frame is animating and "frames differ" can no longer mean
  *       "the camera moved" — the run is inconclusive and says so rather than producing a number.</li>
@@ -64,7 +66,43 @@ import static org.junit.Assert.assertTrue;
  * <p>Designed to come back NO: if every coordinate shows zero repeats, the render is not the ceiling
  * and the cell bound has to be justified by something else or dropped.</p>
  */
+@org.junit.Ignore("RETIRED 2026-09-16, answered. The render does not quantize out to 24M (measured"
+        + " 2026-08-12; TASK-249 and the space model's far-coordinate table). Kept rather than deleted"
+        + " because that table cites this class as its evidence. Un-ignoring is removing this"
+        + " annotation and nothing else: do it if the cell bound moves or the render path changes.")
 public class SpikeFarCoordinateRenderJitterTest extends AbstractClientE2ETest {
+
+    // RETIRED 2026-09-16 — maintainer: "Он же отработал, теперь пусть игнорируется. Он не проверяет
+    // механики." And on why the file stays: "Ну да, и поэтому мы его не удаляем" — `space-model.md`
+    // cites this class as the evidence for its far-coordinate table, and a citation needs a target.
+    //
+    // IT ANSWERED ITS QUESTION. Measured 2026-08-12: the camera walked 0.05 blocks a step and frames
+    // compared CLEAN at every rung out to 24M. Recorded in TASK-249 ("L2 landed — the render does not
+    // quantize, and neither does the wire"). That measurement stands; this class re-establishing it
+    // every run buys nothing and costs a client boot and five screenshots.
+    //
+    // NOT converted into a contract test, which is `spike-experiment-design` rule 9's first ending,
+    // because it proved a NEGATIVE about the renderer at coordinates the game does not put players
+    // at yet. There is no mechanic to pin. The second ending — @Ignore — is honest here for the one
+    // condition that makes it honest: un-ignoring is removing the annotation and nothing else. The
+    // instrument is complete, both its controls included.
+
+    /**
+     * This spike measures WORLD pixels, so its client is launched with the framebuffer already on.
+     *
+     * <p><b>Declared here rather than asked of the operator</b>, which is what the base class's hook
+     * exists for and what this test did not use until 2026-09-16. It relied on {@code -PclientFbo=true}
+     * being remembered at the command line; a full-tier run does not pass it, so on every such run
+     * this spike reported its own control as INCONCLUSIVE and had to be re-run alone and its result
+     * merged in by hand. Measured that day: 184 passed, 2 failed, and this was one of the two — a red
+     * that said nothing about the subject and everything about the invocation.</p>
+     *
+     * <p>Zero tests overrode this hook before this one, and its javadoc already said why it is there.</p>
+     */
+    @Override
+    protected boolean requiresFramebufferAtLaunch() {
+        return true;
+    }
 
     /**
      * The origin is carried as the CONTROL in the same run: "zero repeats at 16M" means nothing until
@@ -168,7 +206,11 @@ public class SpikeFarCoordinateRenderJitterTest extends AbstractClientE2ETest {
             BufferedImage first = capture("jitter_" + x + "_ctrl_a");
             if (isFlat(first)) {
                 inconclusive.add("x=" + x + " capture is one flat colour " + describe(first)
-                        + " - the framebuffer is not receiving the world pass (start with -PclientFbo=true)");
+                        + " - the framebuffer is not receiving the world pass. This class declares"
+                        + " requiresFramebufferAtLaunch(), so the FBO is not the operator's to"
+                        + " remember: if this fires, the launch-time enable itself did not take"
+                        + " (a driver that refuses the FBO path, or the hook not reaching this"
+                        + " client) and the GL support check above is the next thing to read.");
                 continue;
             }
             // SETTLE. The first run said the scene was not static and it was right: chunk streaming,

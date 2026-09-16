@@ -748,7 +748,7 @@ public abstract class AbstractSharedClientE2ETest {
         // count of guard drops over every body, and the releases it was counting are printed in full
         // on the next line — each naming its body and the gate's whole reason.
         String clientResolver =
-                "client deck commits (whole ring): " + clientEvents().since(0, "deck_commit")
+                "client deck commits (whole ring): " + clientEvents().since(0, "deck_entered")
                 + "\n  client deck releases (whole ring): " + clientEvents().since(0, "deck_released")
                 // The body's own ship-frame point, per tick, instead of the three statics that used
                 // to be sampled here: those held whatever the LAST resolved body left in them, which

@@ -526,10 +526,15 @@ public class VSShipFlightTelemetryE2ETest extends AbstractSharedVsClientE2ETest 
         int crewId = dropStandAndAwaitItsCapture(ship);
 
         // Everything from here is counted off THIS body's own release records, since a mark taken
-        // before the spin: each external-move drop is a `deck_released` whose reason production
-        // itself writes ("externalMove(sub) gapTicks=…"), carrying the entity it dropped. The
-        // JVM-global counter it replaces summed every body's churn — the bot's included — and could
-        // not say whose deck was thrashing.
+        // before the spin: every drop is a `deck_released` carrying the entity it dropped and
+        // production's own reason. The JVM-global counter it replaces summed every body's churn —
+        // the bot's included — and could not say whose deck was thrashing.
+        //
+        // Counted over ALL reasons since 2026-09-16. It used to filter on `externalMove`, the guard
+        // that compared a committed deck point against the live one; that guard is gone, so the
+        // filter would now return zero for a deck that thrashed its crew off through any other gate.
+        // The contract has not changed — a rotating deck must not drop the body it carries — and
+        // narrowing it to one mechanism was always describing the suspect rather than the crime.
         Events events = events();
         long spinMark = events.markInstrumented();
 
@@ -546,9 +551,9 @@ public class VSShipFlightTelemetryE2ETest extends AbstractSharedVsClientE2ETest 
         String released = events.since(spinMark, "deck_released");
         // A LOW count and a dead recorder produce the same number, so the recorder is asked first.
         Events.assertInstrumentRan(released, DECK_INSTRUMENT,
-                "few external-move drops means the deck's own rotation was tolerated");
-        int drops = matchingRecords(released, "\"e\":" + crewId + ",", "\"reason\":\"externalMove");
-        System.out.println("[tier2][SPIN] external-move drops for entity " + crewId
+                "few drops means the deck's own rotation was tolerated");
+        int drops = matchingRecords(released, "\"e\":" + crewId + ",", "\"reason\":");
+        System.out.println("[tier2][SPIN] capture drops for entity " + crewId
                 + " during a 2 rad/s roll spin: " + drops);
         System.out.println("[tier2][SPIN] releases since the spin began: " + released);
 
@@ -1087,7 +1092,7 @@ public class VSShipFlightTelemetryE2ETest extends AbstractSharedVsClientE2ETest 
                 + " " + ship[2]), ENTITY_ID);
         // Keyed on the body AND on the ship: the entity needle alone says a deck took him, never
         // which deck, and every reading below is expressed in the taking ship's own frame.
-        awaitRecord(events, dropMark, "deck_commit",
+        awaitRecord(events, dropMark, "deck_entered",
                 "THIS ship's deck must TAKE the dropped body (entity " + crewId + "): the ship-frame"
                         + " resolver never captured it for this craft, so nothing below is about how"
                         + " a captured body rides THIS deck", 200,

@@ -154,14 +154,14 @@ public class VSCrewInteriorBoardingE2ETest extends AbstractSharedVsClientE2ETest
         bot().waitTicks(200);
 
         // The arrangement as a CHAIN, not a budget: the probe un-seats him and the deck takes him.
-        // `dismount` is recorded at the un-seating and `deck_commit` at the capture production
+        // `dismount` is recorded at the un-seating and `deck_entered` at the capture production
         // installs, so a failure names WHICH link never happened - where the 30x4 poll it replaces
         // could only print the last sample of a server verdict.
         Events events = events();
         long dismountMark = events.markInstrumented();
         exec("artest player dismount");
         requireChain(events, dismountMark, "the dismounted pilot must be taken by the deck inside the"
-                + " inverted ship", "dismount", "deck_commit");
+                + " inverted ship", "dismount", "deck_entered");
         // ...and ABOARD, not stood on the outer hull. Production commits the mode itself at every
         // transition, so it is read from that commit instead of inferred from the probe's dump.
         String modesBefore = awaitCommittedMode(events, dismountMark, "aboard",
@@ -218,35 +218,42 @@ public class VSCrewInteriorBoardingE2ETest extends AbstractSharedVsClientE2ETest
                 + subAfterRelease + " region=" + regionStr + ")",
                 subInRegion(subAfterRelease, regionStr));
 
-        // ARRANGEMENT, and it is a CLIENT fact: the guard must actually drop the client's capture.
-        // For an EntityPlayerMP the server REBASES the position instead of releasing, so the server
-        // probe can report "still tracked" straight through a release the client really performed -
-        // which is the hole the 30-sample server majority this replaces used to fall into.
-        String releases = requireLink(clientEvents, releaseMark, "deck_released",
-                "the world teleport must read as an external move and drop the CLIENT capture, or"
-                        + " nothing below is about a re-claim");
-        String releaseReason = Events.firstField(releases, "reason");
-        if (releaseReason == null || !releaseReason.startsWith("externalMove")) {
-            scenario().arrangementFailed("the release must be the EXTERNAL-MOVE guard - any other"
-                    + " gate (leftShipRegion, steppedOntoTerrain, an excluded state) means the body"
-                    + " left the subject's premise rather than being handed back to world gravity"
-                    + " inside the hull. reason=" + releaseReason + " :: " + releases);
-        }
+        // THE PREMISE OF THIS LEG CHANGED WITH THE GAME, and it is not a test detail — read this
+        // before the assertion below.
+        //
+        // It used to require that a world teleport INSIDE the hull dropped the client's capture, via
+        // the external-move guard, so that the re-claim it then measured had something to re-claim.
+        // That guard compared the body's live ship-frame point against the one the last tick had
+        // committed and called a large enough difference a foreign mover. It is gone (2026-09-16):
+        // a capture is a STATE entered and left by edges, and a body moved WITHIN the craft that
+        // holds it has not left anything, so nothing releases it.
+        //
+        // So the teleport no longer ends the episode, and the correct assertion is the opposite of
+        // the old one: the body STAYS aboard. That is the behaviour the ruling asks for — being
+        // moved about inside a ship you are on does not throw you off it — and it is a stronger
+        // contract than the re-claim ever was, because a re-claim can only be observed after a drop
+        // the player should never have experienced.
+        String stillHeld = deckCaptureOfThisShip(scenarioShipId,
+                "a body teleported WITHIN the hull that holds it must still be held by that hull:"
+                        + " moving inside a craft is not leaving it");
+        scenario().requireArranged("the body must remain aboard across a teleport inside the hull,"
+                + " with no release at all: " + stillHeld
+                + " | releases in the window (there should be none): "
+                + clientEvents.since(releaseMark, "deck_released"),
+                stillHeld.contains("\"verdict\":true"));
 
-        // The subject: the deck reclaims the released body. The mark is taken AFTER the release on
-        // purpose - `deck_commit` is written on EVERY resolved tick, so a mark from before it is
-        // satisfied by the captures that preceded it and would prove nothing. From here the first
-        // record is the RE-capture; and because an ongoing capture keeps writing one every tick,
-        // this cannot miss a re-claim that landed between the two reads either.
-        long reclaimMark = clientEvents.mark();
-        // Carrying THIS ship: the record names the hull that re-took the body, and "the deck reclaimed
-        // him" is a claim about the ship he was released inside — a type-only wait cannot tell it
-        // from another hull picking him up on his way down.
-        String reclaimed = clientEvents.awaitCarrying(reclaimMark, "deck_commit",
-                "\"ship\":\"" + scenarioShipId + "\"",
-                "THIS ship's deck must reclaim the body released inside the inverted ship, instead of"
-                        + " leaving it to world gravity through the world-down cockpit opening",
-                DECK_LINK_BUDGET_TICKS);
+        // THE SUBJECT MOVED WITH THE PREMISE, and the wait that stood here is gone rather than
+        // renamed. It awaited a RE-capture: the teleport dropped the body, and the deck was supposed
+        // to take it back instead of letting it fall out through the world-down cockpit opening.
+        // With no release there is no re-capture, and a wait for one would spend its whole budget on
+        // an edge nobody is going to write — the exact defect this family spent two days on, only
+        // inverted.
+        //
+        // What that wait was really defending is unchanged and is now asserted ABOVE, one gate
+        // earlier: the body is still held by this craft after being moved about inside it. The
+        // settle sampled below — where he comes to rest, and whose camera he has — is the other half
+        // and needs no wait at all, because he never left.
+        String reclaimed = "no re-capture: the body was never released (see the premise above)";
 
         // Sample the settle: where does the body come to rest, and what camera does the client own?
         StringBuilder trace = new StringBuilder();
@@ -269,16 +276,30 @@ public class VSCrewInteriorBoardingE2ETest extends AbstractSharedVsClientE2ETest
         // The mode is read from the RELEASE mark, not from the re-claim mark, and the difference is
         // the whole reason this read can answer at all. `deck_mode_committed` is an EDGE — it is
         // written at `logCapture`, which production calls only when a capture is INSTALLED or its
-        // mode TRANSITIONS — while `deck_commit` is a per-tick commit. Production repairs an
-        // external-move release inside the same tick that performs it (the travel commit re-captures
-        // the body on the spot it moved to), so the one mode commit of this episode is already
-        // written by the time the release record has been read and a fresh mark taken: a window that
-        // opens at the re-claim contains the captures and never the commit, and the read came back
-        // null on a body the trace shows resolved on the deck. The window from the release covers
-        // the release AND the re-claim, and every commit in it is post-release by construction.
-        String modesAfter = awaitCommittedMode(clientEvents, releaseMark, "aboard",
-                "the reclaimed body must be committed ABOARD rather than onto the outer hull");
-        String releasesAfter = clientEvents.since(reclaimMark, "deck_released");
+        // mode TRANSITIONS — and it can be written in the very tick that performs the release, so a
+        // window opened at the RE-CLAIM can miss it entirely and the read then comes back null on a
+        // body the trace shows resolved on the deck. The window from the RELEASE covers the release
+        // and the re-claim both, and every mode commit in it is post-release by construction.
+        //
+        // NOT a wait on `deck_mode_committed` any more, and the reason is the whole change: that
+        // record is an EDGE, written when a capture is installed or its MODE TRANSITIONS. The
+        // episode is never broken here now, so the mode never transitions and the edge never fires
+        // — the wait spent its whole budget and reported "the deck committed nothing", over a
+        // window holding hundreds of resolved ticks of a body that was aboard the entire time.
+        // Measured 2026-09-16, both interior scenarios.
+        //
+        // The claim was never about a transition. It is that the body ends up under DECK semantics
+        // rather than pinned to the cavity's world floor by the outer-hull fallback, and that is a
+        // STATE: `hullStand` false on a live capture. Read it, do not wait for an edge that says it.
+        String modesAfter = deckCaptureOfThisShip(scenarioShipId,
+                "the body in the cavity must still be held by THIS craft");
+        assertTrue("the body inside the hull must be held under DECK semantics, not demoted to the"
+                + " outer-hull mode that pins it to the cavity's world floor: " + modesAfter,
+                modesAfter.contains("\"hullStand\":false"));
+        // Since the TELEPORT, not since a re-claim that no longer happens: the window this leg cares
+        // about is "did anything let go of him while he was being moved about inside the hull", and
+        // the honest answer is that there should be nothing in it at all.
+        String releasesAfter = clientEvents.since(releaseMark, "deck_released");
         boolean shipCam = Boolean.parseBoolean(deckCameraText("active"));
         double settledY = bot().reportState().get("playerY").getAsDouble();
         String capEnd = exec("artest vs deck-capture");
@@ -292,10 +313,16 @@ public class VSCrewInteriorBoardingE2ETest extends AbstractSharedVsClientE2ETest
         // back by SHIP-frame gravity (never lost through the world-down cockpit opening to the
         // world below, never pinned by the outer-hull fallback), stays resolved ABOARD at its
         // deck spot, and the client's ship camera engages.
-        assertTrue("a body released inside the ship must be re-seated ABOARD, not held with world"
-                + " semantics on the outer hull (last committed mode="
-                + lastCommittedMode(modesAfter) + ", releases since the re-claim: " + releasesAfter
-                + "): " + trace, "aboard".equals(lastCommittedMode(modesAfter)));
+        // Read at the END of the settle, off the live capture, and NOT off the mode edge: the
+        // episode is unbroken through this whole leg, so nothing transitions and no mode record is
+        // written. `hullStand` false IS "held with deck semantics"; it is production's own
+        // distinction, asked of the state rather than of a history of changes to it.
+        String modesSettled = deckCaptureOfThisShip(scenarioShipId,
+                "the settled body must still be held by THIS craft");
+        assertTrue("a body moved about inside the ship must stay held with DECK semantics, not with"
+                + " world semantics on the outer hull (" + modesSettled + ", releases in this"
+                + " window: " + releasesAfter + "): " + trace,
+                modesSettled.contains("\"hullStand\":false"));
         assertTrue("the body must stay WITH the inverted ship at its deck spot, not fall out "
                 + "(preY=" + preY + " settledY=" + settledY + ", cap=" + capEnd + "): " + trace,
                 Math.abs(settledY - preY) < 2.5 && capEnd.contains("\"alreadyTracked\":true"));
@@ -332,13 +359,13 @@ public class VSCrewInteriorBoardingE2ETest extends AbstractSharedVsClientE2ETest
                         + Math.cos(h) + " " + Math.sin(h) + " 0.0 0.0").contains("\"commanded\":true"));
         bot().waitTicks(200);
 
-        // Same arrangement chain as the open-cockpit scenario: `dismount` then `deck_commit`, and
+        // Same arrangement chain as the open-cockpit scenario: `dismount` then `deck_entered`, and
         // the MODE off production's own commit.
         Events events = events();
         long dismountMark = events.markInstrumented();
         exec("artest player dismount");
         requireChain(events, dismountMark, "the dismounted pilot must be taken by the deck inside the"
-                + " inverted roofed ship", "dismount", "deck_commit");
+                + " inverted roofed ship", "dismount", "deck_entered");
         String modesBefore = awaitCommittedMode(events, dismountMark, "aboard",
                 "the dismounted pilot must be captured ABOARD inside the inverted ship");
         double preY = bot().reportState().get("playerY").getAsDouble();
@@ -394,41 +421,39 @@ public class VSCrewInteriorBoardingE2ETest extends AbstractSharedVsClientE2ETest
                 + " vs stand " + sub0[1] + "; is the attitude hold converged? ship-info="
                 + shipInfo() + ")", parseSub(subAfter)[1] > sub0[1] + 0.5);
 
-        // ARRANGEMENT: the displacement must have dropped the CLIENT's capture (the server rebases
-        // an EntityPlayerMP instead of releasing, so its probe cannot witness this).
-        String releases = requireLink(clientEvents, releaseMark, "deck_released",
-                "the mid-cavity displacement must read as an external move and drop the CLIENT"
-                        + " capture, or nothing below is about a re-claim");
+        // ARRANGEMENT, and it is the OPPOSITE of what it was until 2026-09-16 — see the sibling
+        // scenario above for the full reasoning. This used to require that the displacement DROPPED
+        // the client's capture, through the external-move guard, so that a re-claim could be
+        // measured. That guard is gone: a capture is a state entered and left by edges, and a body
+        // moved WITHIN the craft holding it has left nothing. So the displacement must now leave the
+        // episode intact, and "the body is still this craft's" is the stronger claim anyway —
+        // a re-claim is only observable after a drop the player should never have felt.
+        String releases = clientEvents.since(releaseMark, "deck_released");
+        scenario().requireArranged("a body displaced INSIDE the cavity of the craft that holds it"
+                + " must not be released at all: " + releases,
+                Events.records(releases).isEmpty());
 
         // THE SUBJECT: the displaced body comes back under DECK semantics - carried by ship-frame
         // gravity against world gravity, at its deck stand, with the ship camera - instead of being
         // pinned to the cavity's world-floor by the outer-hull fallback (the reported "captured, but
         // the camera never flips" desync).
         //
-        // NOT the `interior_claimed` record, and that is a statement about which mechanism a
-        // teleport drives rather than a softening of the pin. `interiorCandidate` is consulted only
-        // for a body the gate finds UNTRACKED, and a world teleport never leaves one for a tick: the
-        // external-move guard releases inside the same tick's travel, and that tick's own commit
-        // re-captures the body on the spot it moved to - production says so where it does it
-        // ("reached only when heldShipFramePos released mid-tick (externalMove) and this commit
-        // re-captures on the same anchor"), and a run's own record chain says it too: released,
-        // captured and mode-committed with nothing in between. So the CLAIM gate is unreachable from
-        // this stimulus, and awaiting it fails a healthy client. What the enclosure term does on the
-        // path a teleport DOES drive is keep the re-captured body aboard - the anchored branch
-        // demotes an unsupported body to hull-stand (mode "hull") or lets it go for having no deck
-        // below unless it is inside the region under a ship-frame roof - and that is what the mode
-        // commit and the settle below discriminate.
+        // NOT the `interior_claimed` record, and that was true before this change for a reason that
+        // is now simply stronger: `interiorCandidate` is consulted only for a body the gate finds
+        // UNTRACKED, and a teleport inside the hull never produces one. It used to be that the
+        // guard released and the same tick's commit re-captured, so the untracked window was one
+        // tick wide; now there is no release at all and the window does not exist. Either way the
+        // CLAIM gate is unreachable from this stimulus and awaiting it fails a healthy client.
         //
         // A run that wants the claim gate itself has to arrange a body that is untracked INSIDE the
         // hull for at least one gate call: an entry through a hatch, a relog inside the cavity, or a
         // flight-off, none of which is a teleport.
-        long reclaimMark = clientEvents.mark();
-        String reclaimed = clientEvents.awaitCarrying(reclaimMark, "deck_commit",
-                "\"ship\":\"" + scenarioShipId + "\"",
-                "the displaced body must be re-captured BY THIS SHIP - a displacement that ends with"
-                        + " no capture at all leaves the body to world gravity in the cavity, and one"
-                        + " that ends on another hull has left the cavity under test",
-                DECK_LINK_BUDGET_TICKS);
+        //
+        // The wait for a re-capture that stood here is gone with the drop it depended on. What it
+        // defended — the body ends up under DECK semantics in the cavity rather than pinned to the
+        // world floor by the outer-hull fallback — is what the mode commit and the settle below
+        // discriminate, and neither needs an edge.
+        String reclaimed = "no re-capture: the episode was never broken (see the arrangement above)";
 
         // Sample the settle: where does the claimed body come to rest?
         StringBuilder trace = new StringBuilder();
@@ -444,8 +469,13 @@ public class VSCrewInteriorBoardingE2ETest extends AbstractSharedVsClientE2ETest
         // this episode lands in the same tick as the release - before a mark taken at the re-claim
         // could open. The window from the release holds it, and everything in that window is
         // post-displacement.
-        String modesAfter = awaitCommittedMode(clientEvents, releaseMark, "aboard",
-                "the claimed cavity body must be committed ABOARD rather than onto the outer hull");
+        // A live STATE read, not a wait on the mode edge — see the sibling scenario above for why
+        // that edge no longer fires: the episode is never broken, so the mode never transitions.
+        String modesAfter = deckCaptureOfThisShip(scenarioShipId,
+                "the displaced cavity body must still be held by THIS craft");
+        assertTrue("the displaced body must be held under DECK semantics, not demoted to the"
+                + " outer-hull mode that pins it to the cavity's world floor: " + modesAfter,
+                modesAfter.contains("\"hullStand\":false"));
         boolean shipCam = Boolean.parseBoolean(deckCameraText("active"));
         double settledY = bot().reportState().get("playerY").getAsDouble();
         double[] subEnd = parseSub(censusField("subPos"));
@@ -462,11 +492,16 @@ public class VSCrewInteriorBoardingE2ETest extends AbstractSharedVsClientE2ETest
         // The interior-boarding contract, positive half: the ENCLOSED unsupported body is the
         // deck's - claimed ABOARD (not pinned by the outer-hull fallback on the cavity's
         // world-floor), carried back against world gravity to its deck stand, ship camera on.
-        assertTrue("an unsupported body in an enclosed cavity must be claimed ABOARD, not pinned by"
-                + " the outer-hull fallback (last committed mode=" + lastCommittedMode(modesAfter)
-                + "): " + modesAfter + " | the releases in this window, each with the gate that"
-                + " performed it: " + releasesAfter + " | server verdict " + capEnd + " :: " + trace,
-                "aboard".equals(lastCommittedMode(modesAfter)));
+        // The live state at the end of the settle, for the reason given at the sibling scenario:
+        // the episode never breaks here, so the mode edge never fires and a history of changes is
+        // the wrong instrument for a claim about where the body ENDED.
+        String modesSettled = deckCaptureOfThisShip(scenarioShipId,
+                "the settled cavity body must still be held by THIS craft");
+        assertTrue("an unsupported body in an enclosed cavity must be held with DECK semantics, not"
+                + " pinned by the outer-hull fallback (" + modesSettled + ") | the releases in this"
+                + " window, each with the gate that performed it: " + releasesAfter
+                + " | server verdict " + capEnd + " :: " + trace,
+                modesSettled.contains("\"hullStand\":false"));
         assertTrue("deck gravity must carry the body BACK to the deck, not let it settle on the "
                 + "roof ~3 world blocks below (preY=" + preY + " settledY=" + settledY + "): " + trace,
                 Math.abs(settledY - preY) < 1.5 && capEnd.contains("\"alreadyTracked\":true"));
@@ -515,7 +550,7 @@ public class VSCrewInteriorBoardingE2ETest extends AbstractSharedVsClientE2ETest
         long dismountMark = events.markInstrumented();
         exec("artest player dismount");
         requireChain(events, dismountMark, "the dismounted pilot must be taken by the rolled deck",
-                "dismount", "deck_commit");
+                "dismount", "deck_entered");
         String modesBefore = awaitCommittedMode(events, dismountMark, "aboard",
                 "the dismounted pilot must be captured ABOARD on the rolled deck");
         double[] sub0 = parseSub(censusField("subPos"));

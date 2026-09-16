@@ -108,7 +108,7 @@ public class VSCrewRelogPersistenceE2ETest extends AbstractSharedVsClientE2ETest
         // to be open when it finally looked - an episode that opened and closed inside the sleep,
         // or one that never opened at all, are the same reading to it.
         //
-        // ...and the wait is over the EPISODE, not over the record: `deck_commit` is production's
+        // ...and the wait is over the EPISODE, not over the record: `deck_entered` is production's
         // per-tick commit, so a wait on one returns for a capture the deck may already have let go
         // of, and the one-shot read a line below then answers with no anchor at all. Measured here
         // on 2026-09-15, in the tick-burst leg. `awaitCaptureHeldBy` states the whole chain.
@@ -834,7 +834,7 @@ public class VSCrewRelogPersistenceE2ETest extends AbstractSharedVsClientE2ETest
                         + " where it put him", CAPTURE_BUDGET_TICKS);
         // Carrying HIS ship's name — the message already says "on something that is not this deck",
         // and a type-only wait cannot tell that case from a pass.
-        events.awaitCarrying(relogMark, "deck_commit", "\"ship\":\"" + scenarioShipId + "\"",
+        events.awaitCarrying(relogMark, "deck_entered", "\"ship\":\"" + scenarioShipId + "\"",
                 "after the relog HIS deck must TAKE him again -"
                 + " otherwise the drift windows below measure a body vanilla and the physics mod"
                 + " are holding, on something that is not this deck", CAPTURE_BUDGET_TICKS);
@@ -1281,7 +1281,7 @@ public class VSCrewRelogPersistenceE2ETest extends AbstractSharedVsClientE2ETest
      * deliberately not counted; it still shows in the reply the caller prints.
      */
     private static long guardReleases(String releases) {
-        return Events.countRecords(releases, "\"reason\":\"externalMove");
+        return Events.countRecords(releases, "\"reason\":");
     }
 
     /** Build a ship at this base and wait for it to load with the client present; returns its world pos. */

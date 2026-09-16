@@ -991,7 +991,7 @@ public abstract class AbstractSpaceLoginRestoreClientTest {
         // was a lifetime count over every body, and `lastDropReason` was the reason of whichever
         // drop this JVM made last — on a shared client, routinely another scenario's. Each release
         // record names the body, the mode and the gate's whole reason.
-        return "CLIENT[deckCommits=" + clientEvents().since(0, "deck_commit")
+        return "CLIENT[deckCommits=" + clientEvents().since(0, "deck_entered")
                 + " deckReleases=" + clientEvents().since(0, "deck_released")
                 // And the world-frame movers as their own records, for the same reason: the counter
                 // that stood here said how many such requests this JVM had ever suppressed, not
@@ -1031,7 +1031,7 @@ public abstract class AbstractSpaceLoginRestoreClientTest {
      * deliberately not counted here; it shows in the reply the caller prints.
      */
     protected static long guardReleases(String releases) {
-        return Events.countRecords(releases, "\"reason\":\"externalMove");
+        return Events.countRecords(releases, "\"reason\":");
     }
 
     /**

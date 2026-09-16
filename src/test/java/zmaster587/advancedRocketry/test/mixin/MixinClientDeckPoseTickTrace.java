@@ -7,7 +7,6 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import org.valkyrienskies.mod.common.ships.ship_world.PhysicsObject;
 
 import zmaster587.advancedRocketry.test.trace.DeckPoseTraceState;
-import zmaster587.advancedRocketry.test.trace.ShipFrameGuardState;
 import zmaster587.advancedRocketry.test.trace.TestTrace;
 
 /**
@@ -92,7 +91,6 @@ public abstract class MixinClientDeckPoseTickTrace {
         final double behindAngle = angleBetween(shownQ.w(), shownQ.x(), shownQ.y(), shownQ.z(),
                 arrival[3], arrival[4], arrival[5], arrival[6]);
 
-        final double[] guard = ShipFrameGuardState.last(true); // this injector is client-only
         TestTrace.recordHere("client_deck_pose_tick",
                 "\"arrived\":" + arrived
                         + ",\"arrivedY\":" + TestTrace.fmt(arrival[1])
@@ -102,14 +100,6 @@ public abstract class MixinClientDeckPoseTickTrace {
                         + ",\"stepAngle\":" + TestTrace.fmt(stepAngle)
                         + ",\"behindAngle\":" + TestTrace.fmt(behindAngle)
                         + ",\"declaredOmega\":" + TestTrace.fmt(arrival[7])
-                        + ",\"behind\":" + TestTrace.fmt(arrival[1] - shownY)
-                        // The guard's last pass on THIS side, from the test-side holder the guard
-                        // recorder fills — production publishes no such statics any more, and the
-                        // durable, per-body, windowable answer is the `deck_guard_pass` record. What
-                        // belongs in THIS row is only the latest, because the row is about a craft's
-                        // tick and the comparison it exists to make is step against allowance.
-                        + ",\"guardStep\":" + TestTrace.fmt(guard[0])
-                        + ",\"guardAllowed\":" + TestTrace.fmt(guard[1])
-                        + ",\"guardCarry\":" + TestTrace.fmt(guard[2]));
+                        + ",\"behind\":" + TestTrace.fmt(arrival[1] - shownY));
     }
 }

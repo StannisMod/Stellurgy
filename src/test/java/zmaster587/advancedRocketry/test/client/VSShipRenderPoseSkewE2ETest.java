@@ -30,7 +30,7 @@ import static org.junit.Assert.assertTrue;
  * Everything this scenario needs to have HAPPENED is awaited on the ordered event logs: the
  * assembly becoming a ship in the physics registry ({@code ship_spawned}, which also hands over the
  * identity every later question is keyed on), the parked deck TAKING the body
- * ({@code deck_commit}), the drop teleport being applied on the client
+ * ({@code deck_entered}), the drop teleport being applied on the client
  * ({@code client_pos_look_applied}) and the hull-stand mode being committed
  * ({@code deck_mode_committed} with {@code mode=hull}). What stays a bounded poll is what a poll is
  * for: an attitude slewing to a threshold, a body beginning to fall, and a physics object becoming
@@ -124,13 +124,13 @@ public class VSShipRenderPoseSkewE2ETest extends AbstractClientE2ETest {
         // could only be too short (a red about the instrument) or needlessly long.
         // Carrying this scenario's ship: the record names the hull that took him, and the skew
         // sampled below is a comparison between one body and one ship's render pose.
-        // ...and it must still be HOLDING him when the wait returns. `deck_commit` is a COMMIT:
-        // it proves the deck took him at some tick in the window, which is not the same claim as
-        // "he is on the deck now" — and the sample below needs the second. Measured 2026-09-15, both
-        // runs of the acceptance gate: this wait returned on a capture the deck had already let go
-        // of, and the one-shot read a line later reported `verdict:false` as though the capture had
-        // never happened. The predicate is now the CHAIN: the last capture of this ship after the
-        // last release. A release carries its own `reason`, so an expiry here names why he was let
+        // ...and it must still be HOLDING him when the wait returns. `deck_entered` is an EDGE: it
+        // proves a craft TOOK him, which is not the same claim as "he is on the deck now" — and the
+        // sample below needs the second. Measured 2026-09-15, both runs of the acceptance gate: this
+        // wait returned on a capture the deck had already let go of, and the one-shot read a line
+        // later reported `verdict:false` as though the capture had never happened. The predicate is
+        // the CHAIN: the opening on this ship, later than the last release and than any entry onto
+        // another hull. A release carries its own `reason`, so an expiry here names why he was let
         // go instead of leaving the reader to guess at a budget.
         ShipIdentity.awaitCaptureHeldBy(events, captureMark, shipId,
                 "the client player must be TAKEN by THIS parked"

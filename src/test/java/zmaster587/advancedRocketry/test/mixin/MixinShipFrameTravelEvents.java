@@ -135,6 +135,7 @@ public abstract class MixinShipFrameTravelEvents {
     private static final String INSTRUMENT_SEED = "deck_seed_events";
     private static final String INSTRUMENT_GATE = "deck_gate_events";
     private static final String INSTRUMENT_GATE_WINDOW = "deck_gate_window_events";
+    private static final String INSTRUMENT_CARRY = "deck_carry_events";
     private static final String INSTRUMENT_CONTACT = "deck_contact_events";
 
     /**
@@ -185,41 +186,85 @@ public abstract class MixinShipFrameTravelEvents {
      */
     @Inject(method = "captureState", at = @At("HEAD"))
     private static void arTest$entered(Entity entity, String shipId, double localX, double localY,
-                                       double localZ, double worldX, double worldY, double worldZ,
-                                       double carryX, double carryY, double carryZ, CallbackInfo ci) {
+                                       double localZ, double carryX, double carryY, double carryZ,
+                                       CallbackInfo ci) {
         TestTrace.instrument(entity, INSTRUMENT);
         if (entity == null || entity.world == null) {
             return;
         }
         // Production's own mode-agnostic answer, asked BEFORE the install: a hull-stand body is held
-        // by a particular craft too, and `aboardShipId` would call every hull-stand commit an entry.
+        // by a particular craft too, and `aboardShipId` would call every hull-stand entry an entry
+        // onto nothing.
         String from = ShipFrameTravel.capturedShipId(entity);
         if (shipId != null && shipId.equals(from)) {
-            return; // a routine per-tick commit on the anchor already held: not an edge
+            return; // the anchor is already this craft: an install that changes nothing is no edge
         }
+        // `worldY` is read LIVE rather than taken from an argument. It used to be the committed
+        // world point, which `captureState` no longer receives — production stopped being handed a
+        // world position it had no reader for. At the HEAD of an install the body is still where
+        // whatever caused the install left it, which is the honest answer to "where was he when the
+        // deck took him".
         TestTrace.record(entity, "deck_entered", "\"e\":" + entity.getEntityId()
                 + ",\"who\":\"" + TestTrace.json(entity.getName()) + "\",\"ship\":\""
                 + TestTrace.json(shipId)
                 + "\",\"from\":" + (from == null ? "null" : "\"" + TestTrace.json(from) + "\"")
                 + ",\"local\":\"" + TestTrace.fmt(localX) + "," + TestTrace.fmt(localY) + ","
-                + TestTrace.fmt(localZ) + "\",\"worldY\":" + TestTrace.fmt(worldY));
+                + TestTrace.fmt(localZ) + "\",\"worldY\":" + TestTrace.fmt(entity.posY)
+                + ",\"carry\":\"" + TestTrace.fmt(carryX) + "," + TestTrace.fmt(carryY) + ","
+                + TestTrace.fmt(carryZ) + "\"");
     }
 
-    @Inject(method = "captureState", at = @At("TAIL"))
-    private static void arTest$captured(Entity entity, String shipId, double localX, double localY,
-                                        double localZ, double worldX, double worldY, double worldZ,
-                                        double carryX, double carryY, double carryZ, CallbackInfo ci) {
-        TestTrace.instrument(entity, INSTRUMENT);
+    // `deck_commit` LIVED HERE, on the TAIL of `captureState`, and it is gone (2026-09-16).
+    //
+    // It was the per-tick record this whole family was read through: `captureState` rebuilt the
+    // state every resolved tick, so the instrument on `STATE.put` — placed there because it is the
+    // one write site and therefore complete — fired twenty times a second per body per side. Fifty-
+    // four test call sites read it as evidence that a deck held a body, which is the one thing a
+    // commit cannot be: a body already held emits one immediately after ANY mark, so a wait on it
+    // returns on an episode that was already running. That is ledger #501, and it cost seven client
+    // scenarios and eight refuted hypotheses.
+    //
+    // `captureState` now runs only at an EDGE, so a record here would be `deck_entered` with a
+    // different name. The two edges are the vocabulary: `deck_entered` and `deck_released`.
+    //
+    // ONE of those fifty-four sites read the carry, and the first count of them said zero — a grep
+    // that looked two lines either side of each mention and so could not see a helper reducing over
+    // `"carry":` in a reply handed to it. That question is real and it now has `deck_carry` below,
+    // named for what it measures instead of for the map write it happened to sit on.
+
+    /**
+     * The deck carry bound into a body's motion on a resolved tick.
+     *
+     * <p><b>Per tick by design, and that is the difference from what it replaces.</b> The carry IS a
+     * per-tick quantity — the deck velocity at the body's point, which the next tick subtracts back
+     * out — so a reader asking for the largest carry over a manoeuvre needs every tick of it. This
+     * is the one question {@code deck_commit} answered legitimately, for one scenario; the other
+     * fifty-three sites wanted "is he aboard", which is what the two edges are for.</p>
+     *
+     * <p>Taken at {@code remember}'s HEAD, which is every resolved tick and no other time, with the
+     * carry as an ARGUMENT rather than read back off the state — the state is written by the very
+     * call being observed, so reading it here would be reading this record's own subject after the
+     * fact.</p>
+     *
+     * <p>Its own ring, 256 deep, so about thirteen seconds of one body's history: a reader marks
+     * before the manoeuvre and keeps the window inside that. It cannot answer anything about
+     * capture — a body with no open episode never reaches {@code remember} at all.</p>
+     */
+    @Inject(method = "remember", at = @At("HEAD"))
+    private static void arTest$carried(Entity entity, String shipId, double localX, double localY,
+                                       double localZ, double carryX, double carryY, double carryZ,
+                                       CallbackInfo ci) {
+        TestTrace.instrument(entity, INSTRUMENT_CARRY);
         if (entity == null || entity.world == null) {
             return;
         }
-        TestTrace.record(entity, "deck_commit", "\"e\":" + entity.getEntityId()
+        TestTrace.record(entity, "deck_carry", "\"e\":" + entity.getEntityId()
                 + ",\"who\":\"" + TestTrace.json(entity.getName()) + "\",\"ship\":\""
                 + TestTrace.json(shipId)
+                + "\",\"carry\":\"" + TestTrace.fmt(carryX) + "," + TestTrace.fmt(carryY) + ","
+                + TestTrace.fmt(carryZ)
                 + "\",\"local\":\"" + TestTrace.fmt(localX) + "," + TestTrace.fmt(localY) + ","
-                + TestTrace.fmt(localZ) + "\",\"worldY\":" + TestTrace.fmt(worldY)
-                + ",\"carry\":\"" + TestTrace.fmt(carryX) + "," + TestTrace.fmt(carryY) + ","
-                + TestTrace.fmt(carryZ) + "\"");
+                + TestTrace.fmt(localZ) + "\"");
     }
 
     @Inject(method = "release", at = @At("HEAD"))

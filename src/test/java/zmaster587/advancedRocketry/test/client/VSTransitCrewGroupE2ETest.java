@@ -924,7 +924,7 @@ private long readCounter(String className, String field) throws Exception {
         long captureMark = clientEvents().mark();
         for (int drop = 0; drop < 6; drop++) {
             bot().waitTicks(40); // fall onto the deck and settle
-            if (!Events.records(clientEvents().since(captureMark, "deck_commit")).isEmpty()) {
+            if (!Events.records(clientEvents().since(captureMark, "deck_carry")).isEmpty()) {
                 break;
             }
             // Re-drop. Where he LANDS is not the subject — this fixture's deck is 3x3 and the cell

@@ -199,7 +199,7 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
         // the body, and a neighbour's capture in the same window would satisfy a type-only wait and
         // open the interval below on a craft the scenario never touches.
         //
-        // Over the EPISODE and not the record, and over the EPISODE'S OPENING at that. `deck_commit`
+        // Over the EPISODE and not the record, and over the EPISODE'S OPENING at that. `deck_entered`
         // is a per-tick commit, so "a capture of this ship happened" is satisfied by one the deck
         // has since let go of — and, measured 2026-09-16, by one that was ALREADY RUNNING when the
         // mark was taken: this scenario's body arrives beside the hull in HULL-STAND from the
@@ -272,7 +272,7 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
         // precondition the absence needs — an empty release list from a client that was resolving
         // nobody is not an answer about the capture.
         String releases = client.since(jumpMark, "deck_released");
-        String held = client.since(jumpMark, "deck_commit");
+        String held = client.since(jumpMark, "deck_carry");
         bot().invokeStaticInt(FRAME_STEP_WINDOW, "close");
         String jumpSteps = Events.lastRecord(
                 clientEvents().since(jumpStepMark, "frame_step_window"));
@@ -281,7 +281,7 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
                 + (jumpSteps == null ? "(the render seam sampled no aboard frame)" : jumpSteps)
                 + " posLookApplies=" + posLookD
                 + " capturesForThisShip=" + Events.countRecords(
-                        client.since(jumpMark, "deck_commit"), "\"ship\":\"" + scenarioShipId + "\"")
+                        client.since(jumpMark, "deck_carry"), "\"ship\":\"" + scenarioShipId + "\"")
                 + " windowTicks=60");
         System.out.println("[crewcap] jump deckY=" + deckY + " apex=" + apex + " settledY=" + settledY
                 + " samples=" + samples + " :: " + trace
@@ -292,7 +292,7 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
                 "the capture was or was not released somewhere in the jump arc");
         assertTrue("the jump must actually leave the deck (apex=" + apex + " deckY=" + deckY + ")",
                 apex - deckY > 0.5);
-        // Counted on the SHIP, not on the type: `held` is already `since(mark, "deck_commit")`, so
+        // Counted on the SHIP, not on the type: `held` is already `since(mark, "deck_carry")`, so
         // the type needle only asks whether the reply is non-empty — a question the reply's own
         // filter has answered. The ship is the part that is not already known.
         assertTrue("the client must have been resolving this body ON THIS SHIP through the arc, or an"
@@ -407,7 +407,7 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
         // Kept BESIDE it rather than deleted: the heartbeat answers a different question — what the
         // standing verdict is — and the two disagreeing would be a reading in its own right.
         String heartbeat = client.since(walkMark, "deck_gate_decided");
-        String captures = client.since(walkMark, "deck_commit");
+        String captures = client.since(walkMark, "deck_carry");
         System.out.println("[crewcap] ground-walk groundY=" + groundY + " yMin=" + yMin + " yMax="
                 + yMax + " captured=" + captured + "/" + samples + " :: " + trace
                 + "\n[crewcap] ground-walk gate decisions :: " + gate
@@ -454,7 +454,7 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
         Events client = clientEvents();
         long dismountMark = client.mark();
         exec("artest player dismount");
-        client.awaitCarrying(dismountMark, "deck_commit", "\"ship\":\"" + scenarioShipId + "\"",
+        client.awaitCarrying(dismountMark, "deck_entered", "\"ship\":\"" + scenarioShipId + "\"",
                 "the dismount seed must put the ex-pilot on THIS ship's"
                 + " deck before the stillness window means anything", CAPTURE_LINK_BUDGET_TICKS);
 
@@ -493,11 +493,11 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
         forwardSeen = maxInput(tickLines, 1);
         trace.append(tickLines);
         String releases = client.since(churnMark, "deck_released");
-        String gate = client.since(churnMark, "deck_commit");
+        String gate = client.since(churnMark, "deck_carry");
         double x1 = bot().reportState().get("playerX").getAsDouble();
         double z1 = bot().reportState().get("playerZ").getAsDouble();
         double drift = Math.sqrt((x1 - x0) * (x1 - x0) + (z1 - z0) * (z1 - z0));
-        long churn = Events.countRecords(releases, "\"reason\":\"externalMove");
+        long churn = Events.countRecords(releases, "\"reason\":");
         System.out.println("[crewcap] still-drift upY=" + upY + " drift=" + drift
                 + " clientDropChurn=" + churn + " capturesForThisShip="
                 + Events.countRecords(gate, "\"ship\":\"" + scenarioShipId + "\"")
@@ -513,8 +513,13 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
         // Asked of the frame's own per-body verdict rather than of `resolvedTicks`. That static is
         // JVM-global and cumulative, so on a shared client it counted every body this side ever
         // resolved: a delta proved "something was resolved", never "this crew member was", and an
-        // earlier scenario's traffic could satisfy it on its own. `deck_commit` is recorded at
-        // every commit and carries the ship, so it is scoped to THIS craft by its own payload.
+        // earlier scenario's traffic could satisfy it on its own. `deck_carry` is written on every
+        // RESOLVED TICK and carries the ship, so it is scoped to THIS craft by its own payload —
+        // and it answers "was this body being resolved AT ALL in my window", which an EDGE cannot:
+        // `deck_entered` fires once, when a craft takes a body, and is then silent for as long as
+        // it holds one. Measured 2026-09-16: four scenarios went red in one run after a rename put
+        // the edge here, each reporting "the frame never resolved this body" over a window holding
+        // hundreds of resolved ticks.
         //
         // NOT `deck_gate_decided`, which was tried first and is wrong for THIS question. That record
         // is a heartbeat — written on a verdict CHANGE and otherwise at most once every five seconds
@@ -562,7 +567,7 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
         Events client = clientEvents();
         long dismountMark = client.mark();
         exec("artest player dismount");
-        client.awaitCarrying(dismountMark, "deck_commit", "\"ship\":\"" + scenarioShipId + "\"",
+        client.awaitCarrying(dismountMark, "deck_entered", "\"ship\":\"" + scenarioShipId + "\"",
                 "the dismount seed must put the ex-pilot on THIS ship's"
                 + " hovering deck before the stillness window means anything",
                 CAPTURE_LINK_BUDGET_TICKS);
@@ -584,8 +589,8 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
         // The churn, as the client's own releases in THIS window with the gate that fired on each —
         // where a cumulative counter delta could only say that something, some time, had happened.
         String releases = client.since(churnMark, "deck_released");
-        String gate = client.since(churnMark, "deck_commit");
-        long churn = Events.countRecords(releases, "\"reason\":\"externalMove");
+        String gate = client.since(churnMark, "deck_carry");
+        long churn = Events.countRecords(releases, "\"reason\":");
         double x1 = bot().reportState().get("playerX").getAsDouble();
         double z1 = bot().reportState().get("playerZ").getAsDouble();
         double drift = Math.sqrt((x1 - x0) * (x1 - x0) + (z1 - z0) * (z1 - z0));
@@ -631,7 +636,7 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
         Events client = clientEvents();
         long dismountMark = client.mark();
         exec("artest player dismount");
-        client.awaitCarrying(dismountMark, "deck_commit", "\"ship\":\"" + scenarioShipId + "\"",
+        client.awaitCarrying(dismountMark, "deck_entered", "\"ship\":\"" + scenarioShipId + "\"",
                 "the dismount seed must put the ex-pilot on THIS ship's"
                 + " hovering deck before any activity on it can churn a capture",
                 CAPTURE_LINK_BUDGET_TICKS);
@@ -701,12 +706,12 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
         arc.append(String.format(java.util.Locale.ROOT, "[landed y=%.2f] ",
                 bot().reportState().get("playerY").getAsDouble()));
         String jumpReleases = client.since(jumpMark, "deck_released");
-        String jumpHeld = client.since(jumpMark, "deck_commit");
+        String jumpHeld = client.since(jumpMark, "deck_carry");
         System.out.println("[crewcap] jump-arc " + arc
                 + "\n[crewcap] jump-arc releases :: " + jumpReleases);
         Events.assertInstrumentRan(jumpReleases, "deck_capture_events",
                 "the capture was or was not released during the vertical jump");
-        // On the SHIP: `jumpHeld` is already filtered to `deck_commit`, so the type needle asks
+        // On the SHIP: `jumpHeld` is already filtered to `deck_carry`, so the type needle asks
         // only whether the reply is non-empty. See the sibling above.
         assertTrue("the client must have been resolving the jumper ON THIS SHIP through his arc, or an"
                 + " empty release list says nothing about the capture: " + jumpHeld,
@@ -756,10 +761,10 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
         String capture = exec("artest vs deck-capture");
         // The client's releases in THIS window, each with the gate that released it.
         String releases = client.since(releaseMark, "deck_released");
-        String gate = client.since(releaseMark, "deck_commit");
+        String gate = client.since(releaseMark, "deck_carry");
         Events.assertInstrumentRan(releases, "deck_capture_events",
                 "the client's capture was or was not cycled during the activity");
-        long churn = Events.countRecords(releases, "\"reason\":\"externalMove");
+        long churn = Events.countRecords(releases, "\"reason\":");
         System.out.println("[crewcap] active-churn churn=" + churn + " capturesForThisShip="
                 + Events.countRecords(gate, "\"ship\":\"" + scenarioShipId + "\"") + " capture=" + capture
                 + "\n[crewcap] client releases in window :: " + releases);
@@ -769,17 +774,15 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
         assertTrue("the client must be resolving through the activity window - the ship frame's"
                 + " frame never committed a capture for this body: " + gate,
                 Events.countRecords(gate, "\"ship\":\"" + scenarioShipId + "\"") > 0);
-        // The churn contract: activity must never cycle the capture through the external-move guard
-        // (the drag war). A GEOMETRIC release (walked off the tiny fixture deck -> leftShipRegion /
-        // steppedOntoTerrain) is legitimate and not this test's subject. The releases are the
-        // client's own records since the mark, so a red names every gate that fired and in which
-        // order, not a count.
-        assertTrue("walking and jumping on a hovering ship must not churn the capture (external-move"
-                + " releases in window=" + churn + "): " + releases, churn < 5);
-        String lastReason = String.valueOf(Events.lastField(releases, "reason"));
-        assertTrue("any release during deck activity must be geometric, never the external-move "
-                + "guard (last release='" + lastReason + "'): " + releases,
-                !lastReason.startsWith("externalMove"));
+        // The churn contract: activity on a hovering deck must not cycle the capture. It used to be
+        // aimed at ONE release reason — the external-move guard, the drag war — with a second
+        // assertion that the last release was not that reason. The guard is gone, so both would now
+        // pass on a product that churned the body through every other gate it has. The count is
+        // therefore over EVERY release in the window: a body walking and jumping on its own deck
+        // should not be handed back at all, whatever the reason given. The releases are the client's
+        // own records since the mark, so a red names every gate that fired and in which order.
+        assertTrue("walking and jumping on a hovering ship must not churn the capture (releases in"
+                + " window=" + churn + "): " + releases, churn < 5);
 
         // AND the server refused NOTHING of what he did. This is the false-positive leg of the
         // movement bound, and it is the one that matters: a bound that rubber-bands a crew member
@@ -1049,292 +1052,27 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
                 + " in the trace above)");
     }
 
-    // ---- #47 driver isolation: sustained fast ship motion vs the CLIENT external-move guard -----
-
-    @Test
-    public void aStillCrewMemberOnAFastClimbingShipKeepsHisCapture() throws Exception {
-        final FixtureSite site = site();
-        final int bx = site.x, by = site.y, bz = site.z;
-
-        // The round-13 playtest thrash correlates with INVERSION, but the drop lines' real common
-        // factor is fast per-tick SHIP MOTION (a freefall reaching 0.87 blocks/tick; a hunting
-        // inverted hover stepping 0.2-0.4/tick) - the inverted attitude merely hunts harder. The
-        // driver is reproduced here directly, at level attitude: a sustained full-stick climb. The
-        // guard math says a smooth climb can NEVER trip it while the carry-widening sees the ship's
-        // velocity (allowed grows 3x faster than the step); so any external-move churn in this window
-        // means the CLIENT's velocity feed is blind and the widening never engaged.
-        // Board by WALKING ON, never through the pilot seat: a seat-mount leaves a dismounted (empty)
-        // dummy on the seat, and that dummy overwrites the AFC's pilot input every tick - the
-        // seat-input probe below is then inert and the ship never moves (two voided runs found this).
-        double[] ship = buildShip(site);
-        Events client = clientEvents();
-        // The settle that stood here is gone for the reason given at the first of these: the capture
-        // is a record awaited from a mark taken before the teleport, and the wait advances the
-        // client itself.
-        //
-        // Under the gate window since 2026-09-16. This arrangement is one of the seven that go red
-        // after any predecessor has run in this world, and every field of the reply it fails with is
-        // a NEGATIVE — no hull contains him, nothing is under him, no candidate. The window says
-        // what the gate decided per tick on BOTH sides and what it was answering from; without it
-        // the red cannot distinguish "the frame never asked" from "it asked and answered no".
-        long arrivalServerMark = events().mark();
-        long arrivalMark = client.mark();
-        awaitCaptureUnderGateWatch(arrivalMark, arrivalServerMark, scenarioShipId,
-                "the client player must be taken by THIS ship's deck"
-                + " before the drive, or the churn window is about nobody",
-                CAPTURE_LINK_BUDGET_TICKS, GATE_WINDOW_RECORDS,
-                () -> exec("tp @a " + ship[0] + " " + (ship[1] + 4) + " " + ship[2] + " 0 0"));
-        // Read ONCE, and proved to be about THIS ship: the two execs this replaces
-        // printed one sample and asserted a second, and neither said which craft
-        // held the body.
-        //
-        // The gate window is still OPEN across this read, deliberately. Measured 2026-09-16: the
-        // wait above passed — the client's own capture chain completed on this ship — and THIS read,
-        // which asks the SERVER, came back `alreadyTracked:false, containingShipIds:[],
-        // verdict:false` for the same body a moment later. So the red is not "the deck never took
-        // him"; it is the two sides answering differently about a capture, and the trail is what
-        // says which side was asked and what it answered.
-        String deckCapture4;
-        try {
-            deckCapture4 = deckCaptureOfThisShip(scenarioShipId,
-                    "the capture this assertion reads must be on this scenario's own ship");
-            scenario().requireArranged("the client player must be captured on the deck before the"
-                    + " drive: " + deckCapture4,
-                    deckCapture4.contains("\"verdict\":true"));
-        } catch (AssertionError noCapture) {
-            throw new AssertionError(noCapture.getMessage() + " | " + deckGateTrail(arrivalMark,
-                    arrivalServerMark), noCapture);
-        } finally {
-            closeDeckGateWindow();
-        }
-
-        // CONTROL: a quiet parked window. The guard must be quiet here (the still-crew pins), or a
-        // quiet driver window would prove nothing about the driver. Read as the client's own
-        // `deck_released` records in the window rather than a lifetime counter's delta, so a red
-        // names the gate that fired instead of a number.
-        long controlMark = client.mark();
-        bot().waitTicks(60);
-        String controlReleases = client.since(controlMark, "deck_released");
-        long controlChurn = Events.countRecords(controlReleases, "\"reason\":\"externalMove");
-
-        // DRIVER: sustained vertical motion, commanded SERVER-side through the seat->AFC path (the
-        // crew member is standing on the deck, not sitting). The pilot input decays fast, so the
-        // command is re-sent EVERY tick (the seat-drive e2e's cadence). Two phases: full-up first
-        // (gains altitude; the fixture's thrust may or may not reach the guard-relevant rate), then
-        // full-down from that altitude (thrust plus gravity - the fast regime the round-13 freefall
-        // episode lived in), stopped well above the ground. The regime gate below asserts the peak
-        // per-tick rate actually reached the guard's static epsilon, or the run is void.
-        // The driver window's own mark. `deck_released` keeps its own 256-deep ring, so a window this
-        // long (hundreds of ticks of a per-tick capture commit) cannot evict the releases that are
-        // the thing being counted.
-        long driveMark = client.mark();
-        double shipY0 = readDouble(shipInfo(), POS_Y);
-        // The per-tick pose trace, armed HERE because this is the regime the question lives in: a
-        // craft moving 3-5 blocks per tick, which is where a pose that fails to arrive costs
-        // something. The spike that introduced the trace drives a craft that drifts at 0.1, and a
-        // gap boundary there looks like every other tick.
-        long poseTraceMark = clientEvents().mark();
-        bot().invokeStaticInt("org.valkyrienskies.mod.common.ships.ship_world.PhysicsObject",
-                "arTest$armPoseTrace", 160);
-        double maxFrameStep = 0.0, maxCarry = -1.0, maxRate = 0.0, travelled = 0.0;
-        double maxDeclaredCarry = 0.0, maxClientCarryY = 0.0;
-        // A ROLLING mark over the client's own per-tick records. The carry below used to be read off
-        // a static, so it showed only the tick each fifth-iteration sample happened to land on; and a
-        // single window over the whole drive would outrun the log's 256-deep per-type ring, since
-        // this loop runs for hundreds of client ticks. Advancing the mark past the last record read
-        // covers EVERY resolved tick at the same one round trip per sample.
-        long carryMark = clientEvents().mark();
-        long guardMark = carryMark;
-        double yPrev = shipY0;
-        StringBuilder samples = new StringBuilder();
-        // The drive's thrust duty-cycle is cadence-bound: the pilot input decays between re-sends,
-        // so when concurrent forks stretch the per-iteration round-trip the ship climbs LESS per
-        // iteration (measured: a consistent ~3.1 blocks over the fixed budget at 8-12 forks vs >4
-        // idle). Scale the phase budgets by the harness load factor and let the up phase exit as
-        // soon as the instrument-fires target is comfortably met - an idle machine exits at the
-        // same iteration it always did, a loaded one gets the iterations it actually needs.
-        double loadFactor = com.github.stannismod.forge.testing.TestTimeouts.factor();
-        int phaseDownFrom = (int) (120 * loadFactor);
-        int totalIters = (int) (200 * loadFactor);
-        // NOT a wait, and so not a chain: the loop's ITERATIONS ARE THE STIMULUS. Production decays a
-        // seat input between re-sends, so the drive this scenario is about exists only for as long as
-        // this loop keeps re-sending it — stop iterating and the subject stops. Nothing is awaited
-        // here and nothing could be: what the scenario measures is an EXTREMUM over the drive (the
-        // largest frame step, the largest carry, the fastest rate), and an extremum is a property of
-        // a WINDOW, not of any one record — a last-sample read of a completed drive says nothing
-        // about the worst moment in it. The readings are production's own records all the same
-        // (`deck_guard_pass`, on a ROLLING mark so every resolved tick is covered, not the one each
-        // sample happened to land on).
-        for (int i = 0; i < totalIters; i++) {
-            if (i < phaseDownFrom && travelled > 6.0) {
-                phaseDownFrom = i; // target met - flip to descent, keep its budget proportional
-                totalIters = i + (int) (80 * loadFactor);
-            }
-            boolean up = i < phaseDownFrom;
-            // BY ID: the unaddressed `seat-input` drives whichever pilot seat the world lists first,
-            // and this world holds every other scenario's ship too — it answers afcResolved:true
-            // while flying somebody else's craft, which reads here as a ship that will not move.
-            String drive = exec("artest vs seat-input-by-id 0 " + scenarioShipId + " 0 "
-                    + (up ? "1" : "-1") + " 0 0 0 0");
-            assertTrue("seat-input must reach THIS scenario's seat and resolve its AFC: " + drive,
-                    drive.contains("\"seatFound\":true") && drive.contains("\"afcResolved\":true"));
-            bot().waitTicks(1);
-            if (i % 5 == 4) {
-                double yNow = readDouble(shipInfo(), POS_Y);
-                double rate = Math.abs(yNow - yPrev) / 5.0;
-                maxRate = Math.max(maxRate, rate);
-                travelled = Math.max(travelled, Math.abs(yNow - shipY0));
-                yPrev = yNow;
-                // Every guard pass since the previous sample, not the one this sample landed on:
-                // the step and the allowance it was judged against travel together on each record,
-                // where the two statics this replaces were read a round trip apart and could belong
-                // to different passes — and to a different body.
-                double step = Double.NaN, carry = Double.NaN;
-                for (String pass : Events.records(
-                        clientEvents().since(guardMark, "deck_guard_pass"))) {
-                    step = Events.number(pass, "frameStep");
-                    carry = Events.number(pass, "carrySeen");
-                    maxFrameStep = Math.max(maxFrameStep, step);
-                    maxCarry = Math.max(maxCarry, carry);
-                    guardMark = (long) Events.number(pass, "seq") + 1L;
-                }
-                // CROSS-SIDE, on ONE axis and one quantity: the craft's declared VERTICAL velocity
-                // (server, blocks/second) against the VERTICAL carry the client installs for the
-                // body (blocks/tick). Vertical because that is the axis this drive moves on, and
-                // because the two must be the same physical number for the body not to slide.
-                //
-                // Compared as MAXIMA over the window rather than as a pair of readings: each sample
-                // costs two round-trips and the craft accelerates between them, so a paired
-                // comparison measures the harness's latency as much as the client's agreement — it
-                // read 1.0667 against 0.7474 on a run where the extrema were within a tenth.
-                double declaredCarry = Math.abs(readDouble(shipInfo(), VEL_Y)) * SECONDS_PER_TICK;
-                maxDeclaredCarry = Math.max(maxDeclaredCarry, declaredCarry);
-                for (String tick : Events.records(
-                        clientEvents().since(carryMark, "ship_frame_tick"))) {
-                    maxClientCarryY = Math.max(maxClientCarryY,
-                            Math.abs(Events.number(tick, "carryY")));
-                    carryMark = (long) Events.number(tick, "seq") + 1L;
-                }
-                if (i % 20 == 19) {
-                    // No churn column here any more: a release is a RECORD carrying its own sequence
-                    // and the gate that made it, so WHEN it happened is read off the log below
-                    // instead of interpolated between two samples of a counter.
-                    samples.append(String.format(java.util.Locale.ROOT,
-                            "[%d y=%.1f rate=%.3f step=%.3f carry=%.4f] ",
-                            i, yNow, rate, step, carry));
-                }
-                // Descending: never ride it into the ground - a hull impact drops the capture for
-                // legitimate reasons and would contaminate the churn count.
-                if (!up && yNow - (by + 2) < 6.0) {
-                    samples.append("[abort-descent y=").append(yNow).append("] ");
-                    break;
-                }
-            }
-        }
-        exec("artest vs seat-input-by-id 0 " + scenarioShipId + " 0 0 0 0 0 0");
-        double shipY1 = readDouble(shipInfo(), POS_Y);
-        String driveReleases = client.since(driveMark, "deck_released");
-        long churn = Events.countRecords(driveReleases, "\"reason\":\"externalMove");
-        String gate = client.since(driveMark, "deck_commit");
-        // gapTicks is the discriminator the guard already computes and this message used to drop on
-        // the floor. The guard's budget is ONE tick and flat, so "frameMoved 0.626 against
-        // allowed 0.200" means two different things depending on it: gapTicks=1 says the deck really
-        // stepped that far in one tick with the carry-widening blind (the client velocity feed
-        // empty), gapTicks=N says the displacement accumulated over N ticks and is being compared
-        // against a one-tick budget - a defect in the comparison, not in the feed. Without it the
-        // red names a number and no cause.
-        // The whole shape, from the release record of THIS window rather than from eight statics
-        // holding whichever drop this JVM made last — which on a shared client is routinely another
-        // scenario's, and was never guaranteed to be the drop the numbers above are about. The gate
-        // composes all of it into the reason it releases with, so the record already carries it.
-        String lastRelease = Events.lastRecord(driveReleases);
-        String dropShape = lastRelease == null
-                ? "lastDrop (no release in the drive window)"
-                : "lastDrop " + Events.text(lastRelease, "reason");
-        System.out.println("[crewcap] climb-churn shipY=" + shipY0 + "->" + shipY1 + " travelled="
-                + travelled + " maxRate=" + maxRate + " churn=" + churn
-                + " control=" + controlChurn + " maxFrameStep=" + maxFrameStep + " maxCarry="
-                + maxCarry + " capturesForThisShip=" + Events.countRecords(gate, "\"ship\":\"" + scenarioShipId + "\"")
-                + " " + dropShape
-                + " declaredCarryY=" + maxDeclaredCarry + " clientCarryY=" + maxClientCarryY
-                + " :: " + samples
-                + "\n[crewcap] climb releases in the control window :: " + controlReleases
-                + "\n[crewcap] climb releases in the drive window :: " + driveReleases
-                + "\n[crewcap] climb pose trace :: "
-                + clientEvents().since(poseTraceMark, "client_deck_pose_tick"));
-
-        // Instrument-fires guards: the ship really moved, fast enough to matter to the guard, the
-        // client really resolved the body, the release recorder was listening, and the control window
-        // was quiet - otherwise the churn number below is vacuous.
-        Events.assertInstrumentRan(driveReleases, "deck_capture_events",
-                "the capture was or was not cycled by the drive");
-        assertTrue("the commanded drive must actually move the ship (travelled=" + travelled
-                + "); a wrong-seat seat-input or dead AFC voids the run", travelled > 4.0);
-        assertTrue("the drive must reach the guard-relevant regime (maxRate=" + maxRate
-                + " blocks/tick vs the 0.2 static epsilon); a slower ship cannot falsify the claim",
-                maxRate > 0.2);
-        // Asked of the frame's own per-body capture commits. `resolvedTicks` was JVM-global and cumulative,
-        // so its delta said "some body was resolved", never "this one was".
-        assertTrue("the client must be resolving the crew member through the drive - the ship"
-                + " frame's frame never committed a capture for this body: " + gate,
-                Events.countRecords(gate, "\"ship\":\"" + scenarioShipId + "\"") > 0);
-        assertTrue("the control (quiet hover) window must not churn (external-move releases="
-                + controlChurn + "): " + controlReleases, controlChurn < 3);
-        // The contract (deck-frame walking, along the ship-motion axis): smooth sustained ship
-        // motion must never cycle the crew capture through the external-move guard - the deck's own
-        // carry is the guard's to absorb. frameMoved >> entityMoved in the drop shape = the deck
-        // stepped under an unmoved body and the widening was blind (carry ~0 = the client velocity
-        // feed is empty).
-        assertTrue("a fast-climbing ship must not churn its still crew member's capture: external-move"
-                + " releases=" + churn + " maxFrameStep=" + maxFrameStep + " maxCarry=" + maxCarry
-                + " " + dropShape + " :: " + samples + " :: every release in the drive window, in"
-                + " order and each naming its gate: " + driveReleases, churn == 0);
-
-        // AND the carry the body receives stays inside what the craft DECLARED. The craft states its
-        // velocity with every pose it sends and the client applies that, so the client can never
-        // carry a body faster than the craft says it is moving — which a client reconstructing the
-        // rate from its own observations could, and once did by a factor of two hundred.
-        //
-        // PAIRED PER PASS — and the comparison this replaces could not hold on a fast drive whatever
-        // production did. It compared the largest carry the client installed, read from EVERY tick
-        // record, against the largest ship rate this loop SAMPLED, one reading per five iterations.
-        // A per-tick maximum against a five-tick average of an oscillating quantity is biased in one
-        // direction by construction: the dense series finds the peak, the sparse one averages through
-        // it. Measured 2026-09-13 under fork load: 6.087 against 5.527, with the declared peak the
-        // same sampling had missed printed beside them at 1.767 — three numbers from three different
-        // moments of a 65-block descent. The old comment said as much and called the paired trace "a
-        // separate instrument"; it is not, the guard has been publishing both halves on one record
-        // since the deck-capture vocabulary landed.
-        //
-        // The craft's own speed is compared from the DENSE series it is recorded in. `carrySeen` on
-        // every guard pass is production's own reading of how fast the craft is going at this body,
-        // in blocks per tick, and it is deliberately the LARGER of the two readings production has
-        // (the measured velocity and the declared one) — so it is an upper bound on the craft's
-        // speed by construction, which is exactly the right-hand side for a one-sided claim.
-        //
-        // NOT `frameStep`, and not the difference between them: that number is the deck's
-        // displacement since the last commit, and the guard's own comment records it running
-        // severalfold apart from the allowance on a craft whose drive changes hard between ticks.
-        // Measured here before this pin was written: 2.56 blocks of "excess" on a healthy run, which
-        // is production working as documented rather than a defect.
-        double carrySeenExcess = maxClientCarryY - maxCarry;
-        System.out.println("[crewcap] carry-vs-declared: client " + maxClientCarryY
-                + " against the craft's own densest reading " + maxCarry
-                + " (excess " + carrySeenExcess + ", bar " + CARRY_OVER_STEP_TOLERANCE + ")");
-        assertTrue("the client must carry the body, and never by more than the craft says it is"
-                + " moving — both read per TICK, which is the half that was wrong: the client's carry"
-                + " came from every tick record and the craft's rate from one sample in five, so a"
-                + " peak was being compared with an average through it. client " + maxClientCarryY
-                + "/tick against " + maxCarry + "/tick, excess " + carrySeenExcess + " (bar "
-                + CARRY_OVER_STEP_TOLERANCE + ") :: " + samples,
-                carrySeenExcess <= CARRY_OVER_STEP_TOLERANCE);
-        // The sensitivity halves of the old form, kept and separated: a window in which the craft
-        // declared nothing and the client installed nothing satisfies any per-pass bound there is.
-        assertTrue("the craft must have declared real motion and the client must have installed a"
-                + " real carry, or the bound above is vacuous: declared peak " + maxDeclaredCarry
-                + ", client carry " + maxClientCarryY + " :: " + samples,
-                maxDeclaredCarry > 0.2 && maxClientCarryY > 0.2);
-    }
+    // ---- #47 driver isolation LIVED HERE, and its subject is gone (2026-09-16) --------------
+    //
+    // `aStillCrewMemberOnAFastClimbingShipKeepsHisCapture` drove a craft up under full stick with a
+    // crew member standing still on the deck, and asserted that the capture did not churn. What it
+    // was pinning was the CLIENT external-move guard: that guard compared the body's live ship-frame
+    // point against the one the last tick committed, called a large enough difference a foreign
+    // mover, and released -- so a deck stepping 1.6 blocks in a tick could drop its own crew. The
+    // scenario's whole apparatus was about the guard's allowance: the `deck_guard_pass` rows, the
+    // carry-widening, `maxFrameStep` against `allowed`, and a control window proving the guard was
+    // quiet while parked.
+    //
+    // The guard was removed under the ruling that a capture is a STATE entered and left by edges,
+    // with nothing re-decided per tick. Nothing now compares a committed point to a live one, so
+    // there is no allowance to be too small and no churn of this kind to pin. The scenario is not
+    // re-aimed because there is nothing left to aim it at: it would assert that a mechanism which no
+    // longer exists does not misfire, which is a test that cannot fail.
+    //
+    // What it measured that is NOT covered elsewhere, said plainly rather than quietly dropped: that
+    // a body standing on a hard-accelerating deck stays on it. That is a real contract and it is
+    // worth a scenario -- one that asserts the body is still aboard at the end of the climb, through
+    // the two edges, with no reference to any guard. TASK-437 stage 4 owns writing it.
 
     // ---- Excluded states: the dismount deck-hold must never snap a creative-flying ex-pilot -----
 
@@ -1405,7 +1143,7 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
         // guard's share of those releases — the same fact the cumulative drop counter carried, minus
         // the guessing about which window it belonged to.
         String releases = client.since(flightMark, "deck_released");
-        long churn = Events.countRecords(releases, "\"reason\":\"externalMove");
+        long churn = Events.countRecords(releases, "\"reason\":");
         exec("gamemode survival @a"); // leave the shared world as the other tests expect it
         System.out.println("[crewcap] fly-window y0=" + y0 + " yMax=" + yMax + " maxDrop=" + maxDrop
                 + " trackedAtEnd=" + trackedAtEnd + " externalMoveReleases=" + churn + " :: " + win
@@ -1489,7 +1227,7 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
                 // full below, so the last-write static has nothing left to add here.
                 land.append(String.format(java.util.Locale.ROOT,
                         "[t%d y=%.2f res=%d] ", i * 3, py,
-                        Events.countRecords(client.since(encounterMark, "deck_commit"),
+                        Events.countRecords(client.since(encounterMark, "deck_carry"),
                                 "\"ship\":\"" + scenarioShipId + "\"")));
             }
             settledY = py;
@@ -1529,7 +1267,7 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
                 + "world-frame semantics)", !camActive);
         // (d) And the capture machinery must not churn against him — the client's own external-move
         // releases in THIS window, each naming the gate that fired.
-        long churn = Events.countRecords(releases, "\"reason\":\"externalMove");
+        long churn = Events.countRecords(releases, "\"reason\":");
         System.out.println("[crewcap] hull-top settledY=" + settledY + " shipY=" + sy
                 + " externalMoveReleases=" + churn + " camActive=" + camActive + " :: " + land
                 + "\n[crewcap] hull-top releases :: " + releases
@@ -1701,7 +1439,7 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
                 clientEvents().since(clientDropMark, "ship_velocity_big"));
         String releases = client.since(encounterMark, "deck_released");
         String modes = client.since(encounterMark, "deck_mode_committed");
-        long churn = Events.countRecords(releases, "\"reason\":\"externalMove");
+        long churn = Events.countRecords(releases, "\"reason\":");
         // Printed on the PASSING path too, and with the horizontal numbers: this scenario passes
         // alone and fails when its class runs, so the only way to name the difference is to have the
         // same readings from both. A message that exists only on the failing path can describe a
@@ -2091,7 +1829,7 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
         client.assertChain(seedMark, "the body must stand on this deck and then be taken off it, or"
                 + " the client holds no stale observation of the craft and there is nothing for the"
                 + " manoeuvre below to be wrong about", CAPTURE_LINK_BUDGET_TICKS,
-                "deck_commit", "deck_released");
+                "deck_entered", "deck_released");
         bot().waitTicks(40);
 
         String before = shipInfo();
@@ -2162,13 +1900,16 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
                         i, tracked, bot().reportState().get("playerY").getAsDouble()));
             }
         }
-        // Every capture the encounter committed, each with the carry production installed with it.
-        String captures = client.since(contactMark, "deck_commit");
-        // Counted on the SHIP: the reply is already filtered to `deck_commit`, so a type needle
+        // Every resolved tick of the encounter, each with the carry production bound into the body
+        // on it. `deck_carry` and not `deck_commit`: the commit is gone, and this is the question it
+        // answered legitimately — the carry IS per-tick, and the maximum over a manoeuvre needs
+        // every tick of it, not an edge.
+        String captures = client.since(contactMark, "deck_carry");
+        // Counted on the SHIP: the reply is already filtered to `deck_carry`, so a type needle
         // asks only whether it is non-empty. And `maxCarryY` below reduces over EVERY record in the
-        // reply, so a capture by another hull in this window would put a carry into the maximum that
-        // the craft named further down never declared — the two counts being equal is what lets the
-        // reduction stay a reduction over the whole reply.
+        // reply, so a tick resolved against another hull in this window would put a carry into the
+        // maximum that the craft named further down never declared — the two counts being equal is
+        // what lets the reduction stay a reduction over the whole reply.
         long onThisShip = Events.countRecords(captures, "\"ship\":\"" + scenarioShipId + "\"");
         boolean captured = onThisShip > 0;
         scenario().requireArranged("every capture in the contact window must be by the craft this"
@@ -2195,7 +1936,7 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
                 + " averageOverWindow~" + averageOverWindow + "/tick maxHeldCarry=" + maxHeldCarry
                 + " :: " + contact
                 + "\n[crewcap] unwatched-manoeuvre captures at contact :: " + captures);
-        Events.assertInstrumentRan(captures, "deck_capture_events",
+        Events.assertInstrumentRan(captures, "deck_carry_events",
                 "the carry the client installed at first contact is a reading, or nobody was looking");
 
         scenario().requireArranged("the craft must actually MOVE while nobody watches it, or the"
@@ -2264,10 +2005,12 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
         // dismount leaves the body beside the seat, walled in on all four sides - the walk legs
         // below need runway). The capture then carries this open-deck spot through the rolls.
         //
-        // A settle and NOT an event wait: the body is captured at both ends of this hop, and
-        // `deck_commit` is the per-tick commit rather than an edge, so awaiting one here would
-        // return the tick it was asked and witness nothing. What changes is the capture's deck POINT,
-        // and no event names a move within one deck. The state read below is the honest instrument.
+        // A settle and NOT an event wait, and the reason is stronger since the per-tick commit was
+        // removed rather than weaker: the body is captured at BOTH ENDS of this hop, on the same
+        // craft, so no episode opens and no episode closes. There is no edge here to wait for —
+        // `deck_entered` fires when a craft TAKES a body, and this one already had it. What changes
+        // is the capture's deck POINT, which is carry-over and not an event. The state read below is
+        // the honest instrument.
         long hopMark = clientEvents().mark();
         exec("tp @a " + ship[0] + " " + (ship[1] + 4) + " " + ship[2] + " 0 0");
         awaitClientPlacedNear(hopMark, ship[0], ship[2],
@@ -2689,13 +2432,18 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
     // against the instrument that produced the reading, and every absence claim below carries one.
 
     /**
-     * The largest vertical CARRY any capture in a {@code deck_commit} reply was committed with.
+     * The largest vertical CARRY in a {@code deck_carry} reply.
      *
-     * <p>The carry is the deck velocity production binds into the captured body's motion, and it is
-     * an argument of the commit — so this is the exact value installed, on every tick it was
-     * installed, where a read of the last-write static could only catch whichever one a sample
-     * happened to land on. Zero when the reply carries no capture at all, which the caller
-     * distinguishes by asserting the captures exist.</p>
+     * <p>The carry is the deck velocity production binds into the resolved body's motion, and it is
+     * an argument of the tick that binds it — so this is the exact value installed, on every tick it
+     * was installed, where a read of a last-write static could only catch whichever one a sample
+     * happened to land on. Zero when the reply carries no record at all, which the caller
+     * distinguishes by asserting the records exist.</p>
+     *
+     * <p>It read {@code deck_entered} until 2026-09-16. When that record was removed as "read by
+     * nobody for its per-tick content", this helper was the reader nobody had found: its own line
+     * names neither the record nor the field, so the search that declared the count missed it. The
+     * question was real and got a record of its own.</p>
      */
     private static double maxCarryY(String sinceReply) {
         double max = 0.0;

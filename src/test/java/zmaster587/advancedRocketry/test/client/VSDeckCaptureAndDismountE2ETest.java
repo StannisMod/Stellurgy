@@ -11,6 +11,7 @@ import java.util.regex.Pattern;
 import zmaster587.advancedRocketry.test.Events;
 import zmaster587.advancedRocketry.test.FixtureSite;
 import zmaster587.advancedRocketry.test.ShipIdentity;
+import zmaster587.advancedRocketry.test.ShipReadiness;
 
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
@@ -145,19 +146,22 @@ public class VSDeckCaptureAndDismountE2ETest extends AbstractSharedVsClientE2ETe
         // deck or it does not, and 80 ticks was a guess at how long that takes. The mark goes before
         // the teleport, so nothing can happen between the stimulus and the read.
         //
-        // `deck_commit` is a per-tick COMMIT, so a body the build step already left standing on
-        // this deck satisfies the await at once. That is deliberate and it is still the right link:
-        // what this scenario's bug looks like is NO capture on the client at all while the server
-        // holds him — and a capture that existed and was then lost shows up in the release absence
-        // over the sink window below, which is where "he kept sinking" would have to appear.
+        // This used to note that the record was a per-tick COMMIT, so a body the build step had
+        // already left standing on this deck satisfied the await at once — and called that
+        // acceptable. It was not: that is exactly the defect ledger #501 cost seven scenarios on,
+        // and this class held two of them. The wait is now on the EDGE, so the teleport has to
+        // produce a capture of its own before it returns. What this scenario's bug looks like is NO
+        // capture on the client at all while the server holds him, and a capture that existed and
+        // was then lost shows up in the release absence over the sink window below.
         Events clientEvents = clientEvents();
         long landingMark = clientEvents.mark();
         exec("tp @a " + ship[0] + " " + (ship[1] + 4) + " " + ship[2] + " 0 0");
         // Carrying this scenario's ship: the record names the hull that took the body, and this class
         // shares its world — a type-only wait returns on a sibling scenario's capture and calls the
-        // fall-through "resolved". And over the EPISODE rather than the record: `deck_commit` is
-        // the resolver's per-tick commit, so a capture the deck has since let go of satisfies "it
-        // happened" while the server read on the next line sees nobody holding him.
+        // fall-through "resolved". And over the EPISODE rather than the edge alone: an episode that
+        // OPENED and was then let go of would satisfy "it happened" while the server read on the
+        // next line sees nobody holding him, so the predicate is the chain — the opening, with no
+        // later release and no later entry onto another hull.
         String landing = ShipIdentity.awaitCaptureHeldBy(clientEvents, landingMark, scenarioShipId,
                 "the player's OWN client must resolve him on the deck of THIS grounded ship — a"
                         + " fall-through leaves the client with no capture at all, which is the fault"
@@ -333,6 +337,20 @@ public class VSDeckCaptureAndDismountE2ETest extends AbstractSharedVsClientE2ETe
         final FixtureSite site = site();
         final int bx = site.x, by = site.y, bz = site.z;
 
+        // This scenario's SUBJECT is the unload, so it opts out of the server's default for itself.
+        // A test server holds its ships permanently loaded; that is right for every scenario whose
+        // craft merely has to exist, and fatal for the two here, whose whole path begins with a hull
+        // going away. Without the opt-out the arrangement gate refuses — correctly — with "no
+        // `ship_unloaded` naming this ship", and it refuses for the WHOLE budget.
+        //
+        // Scoped to this scenario rather than to the class: eight of the fourteen here pass BECAUSE
+        // ships stay loaded, so a class-level opt-out trades these two reds for a different set. The
+        // restore is the dangerous half — a `false` left in force turns the default off for
+        // everything after it in this JVM — so it is put back in a `finally` at the end.
+        ShipReadiness.letShipsUnload(this::exec,
+                "this scenario's subject IS the unload-and-reload path of a saved ship");
+        try {
+
         // The maintainer's "old ships" are ones from a PRIOR SESSION - assembled, the world saved and
         // unloaded, then loaded again. A freshly assembled ship (the grounded test above) is already
         // loaded and holds him fine; a ship loaded from disk starts in the registry, UNLOADED, until a
@@ -378,7 +396,7 @@ public class VSDeckCaptureAndDismountE2ETest extends AbstractSharedVsClientE2ETe
         // Return to the ship exactly as re-entering a docked ship from a saved world, and stand on
         // it. Two links, and each one names a different fault: the ship comes back
         // (`ship_loaded` — a new physics object for THIS ship), and his own client then takes him
-        // onto its deck (`deck_commit`). 80 ticks used to cover both and could distinguish
+        // onto its deck (`deck_entered`). 80 ticks used to cover both and could distinguish
         // neither.
         long reloadMark = events.markInstrumented();
         Events clientEvents = clientEvents();
@@ -413,6 +431,14 @@ public class VSDeckCaptureAndDismountE2ETest extends AbstractSharedVsClientE2ETe
                 capture.contains("\"verdict\":true") && readInt(capture, OBSTACLES) > 0);
         assertTrue("the client must render him ON the reloaded deck, not fallen through: serverY="
                 + serverY + " clientY=" + clientY, Math.abs(clientY - serverY) < 2.0);
+
+        } finally {
+            // In a `finally` and not at the end of the happy path: a scenario that fails here would
+            // otherwise leave the default OFF for every scenario that runs after it in this JVM,
+            // which turns one red into a class of them and hides the original.
+            ShipReadiness.holdShipsLoaded(this::exec,
+                    "the unload was this scenario's subject; the rest of the class needs the default");
+        }
     }
 
     // ---- Bug: flying into a ship's airspace hijacks a walking player's camera ------------------
@@ -542,6 +568,14 @@ public class VSDeckCaptureAndDismountE2ETest extends AbstractSharedVsClientE2ETe
         final FixtureSite site = site();
         final int bx = site.x, by = site.y, bz = site.z;
 
+        // Same opt-out and the same reason as the sibling reload scenario above: this one's subject
+        // is a hull going away and coming back, which the server's permanently-loaded default makes
+        // impossible. Restored in a `finally` so a red here cannot disarm the default for whatever
+        // runs next in this JVM.
+        ShipReadiness.letShipsUnload(this::exec,
+                "this scenario's subject IS a hovering craft surviving an unload and reload");
+        try {
+
         buildAndBoardShip(site);
         bot().waitTicks(20);
 
@@ -607,6 +641,11 @@ public class VSDeckCaptureAndDismountE2ETest extends AbstractSharedVsClientE2ETe
                 + "at " + hoverY + " and after reload is at " + afterY
                 + ". What the computer restored from NBT: " + restored
                 + " | what it then decided unmanned: " + heldAfter, hoverY - afterY < 3.0);
+
+        } finally {
+            ShipReadiness.holdShipsLoaded(this::exec,
+                    "the unload was this scenario's subject; the rest of the class needs the default");
+        }
     }
 
     // ---- Bug: entering / leaving the seat on a truly INVERTED ship (the maintainer's live scenario) --
@@ -666,7 +705,7 @@ public class VSDeckCaptureAndDismountE2ETest extends AbstractSharedVsClientE2ETe
         Events clientEvents = clientEvents();
         long dismountMark = clientEvents.mark();
         exec("artest player dismount");
-        String seeded = clientEvents.awaitCarrying(dismountMark, "deck_commit",
+        String seeded = clientEvents.awaitCarrying(dismountMark, "deck_entered",
                 "\"ship\":\"" + scenarioShipId + "\"",
                 "standing up on THIS tilted deck must leave the ex-pilot captured ON THE CLIENT — the"
                         + " seed is what puts him there, and without it the heights below are"
@@ -756,7 +795,7 @@ public class VSDeckCaptureAndDismountE2ETest extends AbstractSharedVsClientE2ETe
         Events clientEvents = clientEvents();
         long dismountMark = clientEvents.mark();
         exec("artest player dismount");
-        String seeded = clientEvents.awaitCarrying(dismountMark, "deck_commit",
+        String seeded = clientEvents.awaitCarrying(dismountMark, "deck_entered",
                 "\"ship\":\"" + scenarioShipId + "\"",
                 "the fresh dismount must engage the ship-frame capture on THIS ship's level deck",
                 DECK_LINK_BUDGET_TICKS);
@@ -789,7 +828,7 @@ public class VSDeckCaptureAndDismountE2ETest extends AbstractSharedVsClientE2ETe
         // committed a capture, and every release with the gate that performed it. This replaces a
         // read of the cumulative `resolvedTicks` static, which counted every body this side ever
         // resolved and so could not be scoped to this window at all.
-        String rollCaptures = clientEvents.since(rollMark, "deck_commit");
+        String rollCaptures = clientEvents.since(rollMark, "deck_carry");
         String rollReleases = clientEvents.since(rollMark, "deck_released");
         // Read once and proved to be about this scenario's craft: the whole claim below is "the roll
         // did not hand him away", and a capture re-anchored onto a neighbour's hull mid-roll is

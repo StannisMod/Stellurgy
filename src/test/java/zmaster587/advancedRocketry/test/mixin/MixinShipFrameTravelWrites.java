@@ -15,7 +15,6 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 import zmaster587.advancedRocketry.integration.vs.ShipFrameTravel;
 import zmaster587.advancedRocketry.integration.vs.VSIntegration;
 import zmaster587.advancedRocketry.test.trace.DeckReseatState;
-import zmaster587.advancedRocketry.test.trace.ShipFrameGuardState;
 import zmaster587.advancedRocketry.test.trace.TestTrace;
 
 /**
@@ -80,32 +79,6 @@ public abstract class MixinShipFrameTravelWrites {
         }
     };
 
-    /**
-     * The LIVE body point in the ship frame, from the guard pass a few frames earlier in the tick.
-     *
-     * <p>Distinct from the committed point the tick line carries as {@code H=}: the commit only
-     * changes when the resolver commits, so it reads "perfectly still" for a body something else is
-     * holding, while this is where the body actually IS on the deck right now. Production computes
-     * it in {@code heldShipFramePos} and hands it to {@code noteGuardPass}, which is the pass that
-     * compares it against the committed point — the same relay {@link #ARTEST$WALK} performs, and
-     * for the same reason.</p>
-     *
-     * <p><b>Per BODY, not per thread, and keyed by IDENTITY.</b> Several bodies resolve on one
-     * thread within a tick, so a thread-wide holder would hand a body that got no guard pass — one
-     * whose capture was installed this very tick — the point of whichever body passed the guard
-     * before it, with nothing in the record saying so. Weak keys, which also switch key comparison
-     * to {@code ==}: vanilla {@code Entity} equality is the network id alone, so an integrated
-     * game's two copies of one body would otherwise share one slot and overwrite each other, which
-     * is the defect this slice exists to remove.</p>
-     *
-     * <p>Absent until that body's own first guard pass, and the line then carries the committed
-     * point in its place with {@code B?} in place of {@code B=} — "this body has not been judged
-     * yet" and "it was judged, at these coordinates" are different answers, and a zero triple would
-     * read as the second.</p>
-     */
-    private static final java.util.Map<Entity, double[]> ARTEST$BODY =
-            new com.google.common.collect.MapMaker().weakKeys()
-                    .<Entity, double[]>makeMap();
 
     @Inject(method = "travel", at = @At("HEAD"))
     private static void arTest$enterTravel(EntityLivingBase entity, float strafe, float vertical,
@@ -137,10 +110,18 @@ public abstract class MixinShipFrameTravelWrites {
         }
         TestTrace.instrument(entity, "ship_frame_tick_events");
         double[] walk = ARTEST$WALK.get();
-        // This body's own live deck point, or nothing when the guard has not judged it yet. The
-        // segment says which: `B=` carries a measurement, `B?` says there is none. A zero triple
-        // would have read as a body sitting on its ship's origin.
-        double[] body = ARTEST$BODY.get(entity);
+        // This body's own live deck point, or nothing when it is not held by a craft this side can
+        // transform through. The segment says which: `B=` carries a measurement, `B?` says there is
+        // none, and a zero triple would have read as a body sitting on its ship's origin.
+        //
+        // DERIVED here since 2026-09-16, where it used to be handed over by the external-move
+        // guard's pass and held in a map until this line ran. The guard is gone; the quantity is
+        // not, and it never needed the guard — it is the body's own position through its anchor's
+        // transform, which is the same expression production now uses to start its sweep.
+        String anchor = ShipFrameTravel.capturedShipId(entity);
+        double[] body = anchor == null || entity.world == null ? null
+                : VSIntegration.toShipFrameFor(
+                        entity.world, anchor, entity.posX, entity.posY, entity.posZ);
         String bodySeg = body == null ? "B?"
                 : String.format(java.util.Locale.ROOT, "B=%.3f,%.3f,%.3f",
                         body[0], body[1], body[2]);
@@ -489,60 +470,6 @@ public abstract class MixinShipFrameTravelWrites {
                         + ",\"dx\":" + x + ",\"dy\":" + y + ",\"dz\":" + z);
     }
 
-    /**
-     * What the external-move guard measured, per pass, on the body it was judging.
-     *
-     * <p>The pair is the point. A frame step means nothing without the allowance it was compared
-     * against, and production used to publish the two as separate statics that a reader sampled one
-     * field at a time from another JVM — so the step could be one body's and the allowance another's,
-     * and neither could be tied to the pass that dropped a capture. One record carries both, plus the
-     * two discriminator vectors that name WHICH writer moved the body: {@code frameMoved} is the deck
-     * stepping under an unmoved body, {@code entityMoved} is something moving the body itself.</p>
-     *
-     * <p>Recorded on every pass, which is the same per-tick cadence as the tick line and turns its
-     * own 256-deep ring over in about thirteen seconds — a reader takes a mark and asks for the
-     * window it cares about.</p>
-     */
-    @Inject(method = "noteGuardPass", at = @At("HEAD"))
-    private static void arTest$guardPass(Entity entity, double frameStep, double allowed,
-                                         double carrySeen, double frameMovedX, double frameMovedY,
-                                         double frameMovedZ, double entityMovedX,
-                                         double entityMovedY, double entityMovedZ,
-                                         double bodyLocalX, double bodyLocalY, double bodyLocalZ,
-                                         CallbackInfo ci) {
-        if (entity == null) {
-            return;
-        }
-        // Held for the tick line, which needs the live point and the committed one in the same row.
-        // Kept ahead of the world guard below: a pass on a world-less body still measured the point,
-        // and skipping it would leave the body's next line reporting an older pass as if it were
-        // this one.
-        ARTEST$BODY.put(entity, new double[]{bodyLocalX, bodyLocalY, bodyLocalZ});
-        if (entity.world == null) {
-            return;
-        }
-        TestTrace.instrument(entity, "deck_guard_pass_events");
-        // Held for the per-tick deck-pose trace, which needs the step and its allowance in the SAME
-        // row as the craft's pose; see ShipFrameGuardState for why that is not the record's job.
-        ShipFrameGuardState.note(entity.world.isRemote, frameStep, allowed, carrySeen);
-        TestTrace.record(entity, "deck_guard_pass",
-                "\"e\":" + entity.getEntityId()
-                        + ",\"frameStep\":" + frameStep
-                        + ",\"allowed\":" + allowed
-                        + ",\"carrySeen\":" + carrySeen
-                        + ",\"frameMovedX\":" + frameMovedX
-                        + ",\"frameMovedY\":" + frameMovedY
-                        + ",\"frameMovedZ\":" + frameMovedZ
-                        + ",\"entityMovedX\":" + entityMovedX
-                        + ",\"entityMovedY\":" + entityMovedY
-                        + ",\"entityMovedZ\":" + entityMovedZ
-                        // The live ship-frame point this pass judged. It was three statics that
-                        // nothing in production read, and a reader polling them from another JVM
-                        // got whichever body either side had last passed through the guard.
-                        + ",\"bodyLocalX\":" + bodyLocalX
-                        + ",\"bodyLocalY\":" + bodyLocalY
-                        + ",\"bodyLocalZ\":" + bodyLocalZ);
-    }
 
     /**
      * Whether the solid the hull-stand sweep consumes IS the body's own world volume.

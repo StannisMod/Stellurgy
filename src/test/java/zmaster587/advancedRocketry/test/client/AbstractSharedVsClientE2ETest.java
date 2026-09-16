@@ -979,11 +979,11 @@ public abstract class AbstractSharedVsClientE2ETest extends AbstractSharedClient
         openDeckGateWindow(recordsEach);
         try {
             stimulus.run();
-            // The EDGE form, not the held form. This helper's whole premise is that the stimulus
-            // CREATES the capture, and a body already held by the same craft when the mark was taken
-            // satisfies the held form on its first tick — from the episode that was already running.
-            // Measured 2026-09-16; the reasoning is at the method.
-            return zmaster587.advancedRocketry.test.ShipIdentity.awaitCaptureEnteredHeldBy(
+            // There is one form of this wait again. It briefly had two — a "held" one and an "edge"
+            // one — because a held body republished a per-tick commit and the held form could be
+            // satisfied by an episode that predated the mark. The commit is gone; the only records
+            // left are the two edges, and an edge cannot predate the mark it is read after.
+            return zmaster587.advancedRocketry.test.ShipIdentity.awaitCaptureHeldBy(
                     clientEvents(), clientMark, shipId, what, tickBudget);
         } catch (AssertionError notTaken) {
             closeDeckGateWindow();

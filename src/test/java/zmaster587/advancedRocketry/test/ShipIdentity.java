@@ -267,42 +267,44 @@ public final class ShipIdentity {
     }
 
     /**
-     * Wait until the deck episode since {@code mark} ENDS with {@code shipId} holding this body: a
-     * {@code deck_commit} record naming that ship exists, and it is LATER than every
-     * {@code deck_released} and every {@code deck_entered} onto another hull in the window.
+     * Wait until a deck episode OPENED on {@code shipId} since {@code mark} and is still unbroken: a
+     * {@code deck_entered} naming that craft, later than every {@code deck_released} and every
+     * {@code deck_entered} onto another hull in the window.
      *
-     * <p><b>Why the chain and not the record.</b> {@code deck_commit} is the resolver's per-tick
-     * COMMIT, not an edge — a held body emits one every tick — so "a capture of this ship was
-     * recorded" says the deck took him at some tick in the window, which is a weaker claim than
-     * "he is on the deck now". A caller that goes on to READ the live state needs the second.
-     * <i>Measured 2026-09-15, in two separate full-tier gates: a wait on the record alone returned
-     * on a capture the deck had already let go of, and the one-shot {@code deck-capture} read a
-     * line later answered with no anchor at all — a red about the instrument's timing, dressed as
-     * a body no ship was holding.</i></p>
+     * <p><b>There was a second form of this wait for one day, and the ruling that removed the
+     * per-tick commit removed the need for it.</b> The distinction was "is he on this deck now"
+     * versus "did he GET on it since my mark", and it existed because a held body republished
+     * {@code deck_commit} every tick — so a window opened over a body that was already aboard
+     * contained a record immediately, and the wait returned before its own stimulus had applied.
+     * With the commit gone there is nothing to observe but the two edges, and an edge cannot
+     * predate the mark it is read after. The two questions are one question. <i>Measured
+     * 2026-09-16, ledger #501: seven client scenarios, eight refuted hypotheses, and the body in
+     * the trail was already held in HULL-STAND by the very craft the scenario was about to
+     * teleport it onto.</i></p>
      *
-     * <p>An empty window means NOT YET, which is what separates this from a predicate written for a
-     * caller who already holds a read; and a release carries production's own {@code reason}, so an
-     * expiry here names why he was let go instead of leaving the reader to guess at a budget.</p>
+     * <p>An empty window means NOT YET, which is what a wait needs; and a release carries
+     * production's own {@code reason}, so an expiry names why he was let go instead of leaving the
+     * reader to guess at a budget.</p>
      *
      * <p>Here rather than on a base class for the reason this whole class is: the scenarios that
-     * capture a body on a deck sit under three different bases, and the {@code deck_commit}
-     * records they wait on are on whichever log — the client's or the server's — belongs to the side
-     * whose resolver took the body.</p>
+     * capture a body on a deck sit under three different bases, and the edges they wait on are on
+     * whichever log — the client's or the server's — belongs to the side whose resolver took the
+     * body.</p>
      *
      * @param log    the log the capture is recorded on, client or server
      * @param mark   a mark on THAT log, taken BEFORE whatever puts the body on the deck
      * @param what   the scenario's own sentence for what the capture means, used in the failure
-     * @return the {@code deck_commit} records since the mark, for the caller's own reading
+     * @return the {@code deck_entered} records since the mark, for the caller's own reading
      */
     public static String awaitCaptureHeldBy(Events log, long mark, String shipId, String what,
                                             int tickBudget) throws Exception {
         assertTrue("this wait cannot mean anything without the scenario's own ship id — it was null,"
                 + " so any hull's capture would satisfy it: " + what, shipId != null);
         try {
-            return log.awaitMatching(mark, "deck_commit",
+            return log.awaitMatching(mark, "deck_entered",
                     seen -> endsCapturedBy(log, mark, shipId),
-                    "a commit on " + shipId + " with no LATER release and no LATER capture by"
-                    + " another hull",
+                    "an episode OPENED on " + shipId + " since the mark, with no LATER release and"
+                    + " no LATER entry onto another hull",
                     what, tickBudget);
         } catch (AssertionError never) {
             throw new AssertionError(never.getMessage() + " | the releases in this window, with"
@@ -313,66 +315,23 @@ public final class ShipIdentity {
     }
 
     /**
-     * As {@link #awaitCaptureHeldBy}, but the episode must have STARTED since the mark: a
-     * {@code deck_entered} naming {@code shipId}, and only then the same held-at-the-end chain.
+     * Whether the deck episode in {@code log} since {@code mark} ends HELD by {@code shipId}: an
+     * episode OPENED on that craft since the mark, and nothing later ended it.
      *
-     * <p><b>Why a second form exists, measured 2026-09-16.</b> {@code awaitCaptureHeldBy} answers
-     * "is he on this deck now", and for a caller whose body was ALREADY on that deck when the mark
-     * was taken it answers YES on the first tick — from the episode that was already running. A
-     * held body emits {@code deck_commit} every tick, so an old episode puts a record into any
-     * window you open, and {@code endsCapturedBy} cannot tell it from a new one. It was written to
-     * survive a capture being UNDONE inside the window; it was never able to survive a capture that
-     * PREDATES it.</p>
-     *
-     * <p>The measurement: a scenario marked, teleported its body to the deck, and waited. The trail
-     * shows the body already held in HULL-STAND on that same craft at the first gate call after the
-     * mark, at {@code (2120.50, 153.201, 8020.50)} — beside the hull, not on it. The wait returned
-     * on that stale commit before the teleport had landed; the teleport then RELEASED the old
-     * capture, and the arrangement read that followed found the body three blocks above the deck,
-     * still falling, with nothing holding it. The red named the read, and the defect was in the
-     * wait.</p>
-     *
-     * <p><b>So the choice between the two is about the CALLER's premise, not about strictness.</b>
-     * Use this one when the stimulus is supposed to CREATE the capture — a teleport onto a deck, a
-     * walk-on, a dismount — because there the point is that a new episode began. Use
-     * {@link #awaitCaptureHeldBy} when the body may legitimately already be aboard and the question
-     * is only whether it still is; asking for an edge there would wait out a budget for a record
-     * nobody is going to write.</p>
-     *
-     * @param log  the log the capture is recorded on, client or server
-     * @param mark a mark on THAT log, taken BEFORE the stimulus that is to create the episode
-     */
-    public static String awaitCaptureEnteredHeldBy(Events log, long mark, String shipId, String what,
-                                                   int tickBudget) throws Exception {
-        assertTrue("this wait cannot mean anything without the scenario's own ship id — it was null,"
-                + " so any hull's capture would satisfy it: " + what, shipId != null);
-        try {
-            return log.awaitMatching(mark, "deck_entered",
-                    seen -> !Events.recordsWithAll(log.since(mark, "deck_entered"),
-                            "\"ship\":\"" + shipId + "\"").isEmpty()
-                            && endsCapturedBy(log, mark, shipId),
-                    "an episode OPENED on " + shipId + " since the mark, and still held at the end",
-                    what, tickBudget);
-        } catch (AssertionError never) {
-            throw new AssertionError(never.getMessage() + " | the episode edges in this window, each"
-                    + " naming the anchor it replaced: " + log.since(mark, "deck_entered")
-                    + " ||| the per-tick commits, whose presence alone proves nothing about WHEN the"
-                    + " episode began: " + log.since(mark, "deck_commit")
-                    + " ||| the releases, with production's own reason for each: "
-                    + log.since(mark, "deck_released"), never);
-        }
-    }
-
-    /**
-     * Whether the deck episode in {@code log} since {@code mark} ends HELD by {@code shipId}: the
-     * last {@code deck_commit} naming that ship is later than everything that could have ended it.
+     * <p><b>Over the two EDGES, and over nothing else</b> — which is the whole vocabulary there is
+     * since the per-tick commit was removed (2026-09-16). A body enters a craft's frame and leaves
+     * it; the resolver no longer republishes "still here" twenty times a second, so there is no
+     * longer a record whose presence in a window says nothing about when the episode began. The
+     * predicate that used to need spelling out — "wait for the edge, not the commit" — is now the
+     * only one expressible, and the second wait built for it has been deleted rather than kept as a
+     * synonym.</p>
      *
      * <p><b>An episode can end two ways, and only one of them is a release.</b> The other is an
      * anchor SWITCH — {@code captureState} overwrites the state, so a body held by A and then
-     * captured by B leaves no {@code deck_released} at all, and A's commits merely stop arriving.
-     * Against releases alone this predicate would answer "still held by A" forever, which on a
-     * world a class shares with its siblings is exactly the confusion the whole class exists to
-     * remove. So a {@code deck_entered} naming any OTHER ship counts as an end too.</p>
+     * captured by B leaves no {@code deck_released} at all. Against releases alone this predicate
+     * would answer "still held by A" forever, which on a world a class shares with its siblings is
+     * exactly the confusion the whole class exists to remove. So a {@code deck_entered} naming any
+     * OTHER ship counts as an end too.</p>
      *
      * <p>Compared by {@code seq}, the only ordering per-type rings share. {@code deck_released}
      * carries the body but not the ship, so any release in the window is treated as this body's —
@@ -380,7 +339,7 @@ public final class ShipIdentity {
      * ended.</p>
      */
     public static boolean endsCapturedBy(Events log, long mark, String shipId) throws Exception {
-        java.util.List<String> captures = Events.recordsWithAll(log.since(mark, "deck_commit"),
+        java.util.List<String> captures = Events.recordsWithAll(log.since(mark, "deck_entered"),
                 "\"ship\":\"" + shipId + "\"");
         if (captures.isEmpty()) {
             return false;
