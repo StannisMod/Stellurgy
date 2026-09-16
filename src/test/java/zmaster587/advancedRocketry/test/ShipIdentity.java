@@ -313,6 +313,57 @@ public final class ShipIdentity {
     }
 
     /**
+     * As {@link #awaitCaptureHeldBy}, but the episode must have STARTED since the mark: a
+     * {@code deck_entered} naming {@code shipId}, and only then the same held-at-the-end chain.
+     *
+     * <p><b>Why a second form exists, measured 2026-09-16.</b> {@code awaitCaptureHeldBy} answers
+     * "is he on this deck now", and for a caller whose body was ALREADY on that deck when the mark
+     * was taken it answers YES on the first tick — from the episode that was already running. A
+     * held body emits {@code deck_commit} every tick, so an old episode puts a record into any
+     * window you open, and {@code endsCapturedBy} cannot tell it from a new one. It was written to
+     * survive a capture being UNDONE inside the window; it was never able to survive a capture that
+     * PREDATES it.</p>
+     *
+     * <p>The measurement: a scenario marked, teleported its body to the deck, and waited. The trail
+     * shows the body already held in HULL-STAND on that same craft at the first gate call after the
+     * mark, at {@code (2120.50, 153.201, 8020.50)} — beside the hull, not on it. The wait returned
+     * on that stale commit before the teleport had landed; the teleport then RELEASED the old
+     * capture, and the arrangement read that followed found the body three blocks above the deck,
+     * still falling, with nothing holding it. The red named the read, and the defect was in the
+     * wait.</p>
+     *
+     * <p><b>So the choice between the two is about the CALLER's premise, not about strictness.</b>
+     * Use this one when the stimulus is supposed to CREATE the capture — a teleport onto a deck, a
+     * walk-on, a dismount — because there the point is that a new episode began. Use
+     * {@link #awaitCaptureHeldBy} when the body may legitimately already be aboard and the question
+     * is only whether it still is; asking for an edge there would wait out a budget for a record
+     * nobody is going to write.</p>
+     *
+     * @param log  the log the capture is recorded on, client or server
+     * @param mark a mark on THAT log, taken BEFORE the stimulus that is to create the episode
+     */
+    public static String awaitCaptureEnteredHeldBy(Events log, long mark, String shipId, String what,
+                                                   int tickBudget) throws Exception {
+        assertTrue("this wait cannot mean anything without the scenario's own ship id — it was null,"
+                + " so any hull's capture would satisfy it: " + what, shipId != null);
+        try {
+            return log.awaitMatching(mark, "deck_entered",
+                    seen -> !Events.recordsWithAll(log.since(mark, "deck_entered"),
+                            "\"ship\":\"" + shipId + "\"").isEmpty()
+                            && endsCapturedBy(log, mark, shipId),
+                    "an episode OPENED on " + shipId + " since the mark, and still held at the end",
+                    what, tickBudget);
+        } catch (AssertionError never) {
+            throw new AssertionError(never.getMessage() + " | the episode edges in this window, each"
+                    + " naming the anchor it replaced: " + log.since(mark, "deck_entered")
+                    + " ||| the per-tick commits, whose presence alone proves nothing about WHEN the"
+                    + " episode began: " + log.since(mark, "deck_commit")
+                    + " ||| the releases, with production's own reason for each: "
+                    + log.since(mark, "deck_released"), never);
+        }
+    }
+
+    /**
      * Whether the deck episode in {@code log} since {@code mark} ends HELD by {@code shipId}: the
      * last {@code deck_commit} naming that ship is later than everything that could have ended it.
      *

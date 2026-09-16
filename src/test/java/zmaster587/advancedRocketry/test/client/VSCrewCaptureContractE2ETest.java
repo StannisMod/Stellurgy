@@ -117,6 +117,23 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
     private static final int CAPTURE_LINK_BUDGET_TICKS = 200;
 
     /**
+     * How many gate decisions the deck-gate window may record PER SIDE around a capture stimulus.
+     *
+     * <p>Sized from the question, not from the wait: the capture is decided in the handful of ticks
+     * after the body arrives, and forty of them either side spans that with room for the arrival to
+     * be slow without spending the log's 256-deep ring. A window that runs out says so in its last
+     * record rather than going quiet — see {@code DeckGateWindow}.</p>
+     */
+    private static final int GATE_WINDOW_RECORDS = 40;
+
+    /**
+     * The same budget for a WALK rather than an arrival: twelve four-tick steps is forty-eight ticks
+     * of gate decisions, and the round trips between them add more. Eighty covers it with room and
+     * still stops well short of the log's 256-deep ring for this type.
+     */
+    private static final int GATE_WINDOW_RECORDS_WALK = 80;
+
+    /**
      * How long a vertical jump is given to end on the deck it started from, in ticks.
      *
      * <p>A DEADLINE for a discrete event, not a stand-in for it: the landing is a record, and this
@@ -171,8 +188,6 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
         // the capture mid-air; the contract is that it must not.
         double[] ship = buildShip(site);
         Events client = clientEvents();
-        long arrivalMark = client.mark();
-        exec("tp @a " + ship[0] + " " + (ship[1] + 4) + " " + ship[2] + " 0 0");
         // NOTHING BETWEEN THE TELEPORT AND THE LINK. Eighty ticks of "pacing" stood here, defended
         // by the very sentence that makes them pointless: the capture IS asserted as a record, from
         // a mark taken before the teleport, and the wait below advances the client itself until that
@@ -184,21 +199,37 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
         // the body, and a neighbour's capture in the same window would satisfy a type-only wait and
         // open the interval below on a craft the scenario never touches.
         //
-        // Over the EPISODE and not the record: `deck_commit` is a per-tick commit, so "a capture
-        // of this ship happened" is satisfied by one the deck has since let go of — and every leg
-        // in this class reads the live capture on the next line.
-        ShipIdentity.awaitCaptureHeldBy(client, arrivalMark, scenarioShipId,
+        // Over the EPISODE and not the record, and over the EPISODE'S OPENING at that. `deck_commit`
+        // is a per-tick commit, so "a capture of this ship happened" is satisfied by one the deck
+        // has since let go of — and, measured 2026-09-16, by one that was ALREADY RUNNING when the
+        // mark was taken: this scenario's body arrives beside the hull in HULL-STAND from the
+        // previous leg, its stale commit lands one tick after the mark, the wait returns before the
+        // teleport has even applied, and the read below then catches the body three blocks up and
+        // still falling. The edge is what the stimulus is supposed to produce.
+        long arrivalServerMark = events().mark();
+        long arrivalMark = client.mark();
+        awaitCaptureUnderGateWatch(arrivalMark, arrivalServerMark, scenarioShipId,
                 "the client player must be taken by THIS ship's deck"
                 + " before the jump — the whole scenario is about a capture that already exists",
-                CAPTURE_LINK_BUDGET_TICKS);
+                CAPTURE_LINK_BUDGET_TICKS, GATE_WINDOW_RECORDS,
+                () -> exec("tp @a " + ship[0] + " " + (ship[1] + 4) + " " + ship[2] + " 0 0"));
         // Read ONCE, and proved to be about THIS ship: the two execs this replaces
         // printed one sample and asserted a second, and neither said which craft
-        // held the body.
-        String deckCapture = deckCaptureOfThisShip(scenarioShipId,
-                "the capture this assertion reads must be on this scenario's own ship");
-        scenario().requireArranged("the client player must be captured on the deck before the jump: "
-                + deckCapture,
-                deckCapture.contains("\"verdict\":true"));
+        // held the body. Still under the open gate window — the wait buys a CLIENT capture and this
+        // read asks the SERVER, which is where the two have been seen to disagree.
+        String deckCapture;
+        try {
+            deckCapture = deckCaptureOfThisShip(scenarioShipId,
+                    "the capture this assertion reads must be on this scenario's own ship");
+            scenario().requireArranged("the client player must be captured on the deck before the"
+                    + " jump: " + deckCapture,
+                    deckCapture.contains("\"verdict\":true"));
+        } catch (AssertionError noCapture) {
+            throw new AssertionError(noCapture.getMessage() + " | " + deckGateTrail(arrivalMark,
+                    arrivalServerMark), noCapture);
+        } finally {
+            closeDeckGateWindow();
+        }
         double deckY = bot().reportState().get("playerY").getAsDouble();
 
         // A REAL jump: the space key on the real client. The contract is that the capture does not
@@ -338,9 +369,18 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
         // negative below ("never captured") is satisfied by a walker the ship frame never looked at,
         // and nothing in the old form could tell those apart: `deck_capture_events` announces itself
         // only INSIDE a capture or a release, so on a body that was never captured it says nothing.
-        // `deck_gate_decided` is the positive precondition — the frame was ASKED about this body,
-        // tick after tick, and answered.
+        //
+        // The positive precondition is `deck_gate_explained`, NOT `deck_gate_decided`, and the
+        // sentence that used to stand here — "the frame was ASKED about this body, tick after tick"
+        // — was a claim about a record that does not behave that way. `deck_gate_decided` is a
+        // HEARTBEAT: written on a verdict CHANGE and otherwise at most once per hundred ticks. This
+        // walk is twelve four-tick steps, comfortably inside one heartbeat, and a walker beside a
+        // parked ship is the most stable verdict there is — so the window contained NOTHING and the
+        // assertion below read that as "the frame never asked". It went red exactly that way on
+        // 2026-09-16, with the record absent from `droppedByType`, which is the log saying it was
+        // never written rather than evicted.
         Events client = clientEvents();
+        openDeckGateWindow(GATE_WINDOW_RECORDS_WALK);
         long walkMark = client.mark();
         int captured = 0, samples = 0;
         double yMin = groundY, yMax = groundY;
@@ -361,19 +401,24 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
             }
         } finally {
             bot().releaseKey(Keyboard.KEY_W);
+            closeDeckGateWindow();
         }
-        String gate = client.since(walkMark, "deck_gate_decided");
+        String gate = client.since(walkMark, "deck_gate_explained");
+        // Kept BESIDE it rather than deleted: the heartbeat answers a different question — what the
+        // standing verdict is — and the two disagreeing would be a reading in its own right.
+        String heartbeat = client.since(walkMark, "deck_gate_decided");
         String captures = client.since(walkMark, "deck_commit");
         System.out.println("[crewcap] ground-walk groundY=" + groundY + " yMin=" + yMin + " yMax="
                 + yMax + " captured=" + captured + "/" + samples + " :: " + trace
                 + "\n[crewcap] ground-walk gate decisions :: " + gate
+                + "\n[crewcap] ground-walk standing verdict (heartbeat) :: " + heartbeat
                 + "\n[crewcap] ground-walk captures in window :: " + captures);
 
-        Events.assertInstrumentRan(gate, "deck_gate_events",
+        Events.assertInstrumentRan(gate, "deck_gate_window_events",
                 "the ship frame was or was not asked about this walker at all");
         assertTrue("the ship frame must have been ASKED about the walker, or \"never captured\" is a"
                 + " statement about the arrangement and not about the gate: " + gate,
-                Events.countRecords(gate, "\"type\":\"deck_gate_decided\"") > 0);
+                Events.countRecords(gate, "\"type\":\"deck_gate_explained\"") > 0);
         assertTrue("a player walking on world terrain beside a parked ship must NEVER be captured "
                 + "into its frame (" + captured + "/" + samples + " samples captured): " + trace
                 + " :: the gate's own answers: " + gate,
@@ -1023,23 +1068,45 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
         // seat-input probe below is then inert and the ship never moves (two voided runs found this).
         double[] ship = buildShip(site);
         Events client = clientEvents();
-        long arrivalMark = client.mark();
-        exec("tp @a " + ship[0] + " " + (ship[1] + 4) + " " + ship[2] + " 0 0");
         // The settle that stood here is gone for the reason given at the first of these: the capture
         // is a record awaited from a mark taken before the teleport, and the wait advances the
         // client itself.
-        ShipIdentity.awaitCaptureHeldBy(client, arrivalMark, scenarioShipId,
+        //
+        // Under the gate window since 2026-09-16. This arrangement is one of the seven that go red
+        // after any predecessor has run in this world, and every field of the reply it fails with is
+        // a NEGATIVE — no hull contains him, nothing is under him, no candidate. The window says
+        // what the gate decided per tick on BOTH sides and what it was answering from; without it
+        // the red cannot distinguish "the frame never asked" from "it asked and answered no".
+        long arrivalServerMark = events().mark();
+        long arrivalMark = client.mark();
+        awaitCaptureUnderGateWatch(arrivalMark, arrivalServerMark, scenarioShipId,
                 "the client player must be taken by THIS ship's deck"
                 + " before the drive, or the churn window is about nobody",
-                CAPTURE_LINK_BUDGET_TICKS);
+                CAPTURE_LINK_BUDGET_TICKS, GATE_WINDOW_RECORDS,
+                () -> exec("tp @a " + ship[0] + " " + (ship[1] + 4) + " " + ship[2] + " 0 0"));
         // Read ONCE, and proved to be about THIS ship: the two execs this replaces
         // printed one sample and asserted a second, and neither said which craft
         // held the body.
-        String deckCapture4 = deckCaptureOfThisShip(scenarioShipId,
-                "the capture this assertion reads must be on this scenario's own ship");
-        scenario().requireArranged("the client player must be captured on the deck before the drive: "
-                + deckCapture4,
-                deckCapture4.contains("\"verdict\":true"));
+        //
+        // The gate window is still OPEN across this read, deliberately. Measured 2026-09-16: the
+        // wait above passed — the client's own capture chain completed on this ship — and THIS read,
+        // which asks the SERVER, came back `alreadyTracked:false, containingShipIds:[],
+        // verdict:false` for the same body a moment later. So the red is not "the deck never took
+        // him"; it is the two sides answering differently about a capture, and the trail is what
+        // says which side was asked and what it answered.
+        String deckCapture4;
+        try {
+            deckCapture4 = deckCaptureOfThisShip(scenarioShipId,
+                    "the capture this assertion reads must be on this scenario's own ship");
+            scenario().requireArranged("the client player must be captured on the deck before the"
+                    + " drive: " + deckCapture4,
+                    deckCapture4.contains("\"verdict\":true"));
+        } catch (AssertionError noCapture) {
+            throw new AssertionError(noCapture.getMessage() + " | " + deckGateTrail(arrivalMark,
+                    arrivalServerMark), noCapture);
+        } finally {
+            closeDeckGateWindow();
+        }
 
         // CONTROL: a quiet parked window. The guard must be quiet here (the still-crew pins), or a
         // quiet driver window would prove nothing about the driver. Read as the client's own
@@ -1974,18 +2041,32 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
         // Measured on the way to this: staged without this step the whole encounter produced 25
         // derivations, every one of them one tick wide.
         Events client = clientEvents();
-        long seedMark = client.mark();
-        exec("tp @a " + ship[0] + " " + (ship[1] + 3) + " " + ship[2] + " 0 0");
         // Same as the two above: the record this teleport must leave is awaited from a mark taken
-        // before it, so sixty ticks of pacing added delay and nothing else.
-        ShipIdentity.awaitCaptureHeldBy(client, seedMark, scenarioShipId,
+        // before it, so sixty ticks of pacing added delay and nothing else. Under the gate window
+        // since 2026-09-16 — this is the second half of the bisect pair, and the half that goes red
+        // with exactly one predecessor in front of it.
+        long seedServerMark = events().mark();
+        long seedMark = client.mark();
+        awaitCaptureUnderGateWatch(seedMark, seedServerMark, scenarioShipId,
                 "the body must be taken by THIS deck ONCE before the"
                 + " manoeuvre, or the client holds no earlier observation of the craft and the"
-                + " interval under test does not exist", CAPTURE_LINK_BUDGET_TICKS);
-        String seeded = exec("artest vs deck-capture");
-        scenario().requireArranged("the body must stand on the deck ONCE before the manoeuvre, or"
-                + " the client holds no earlier observation and the interval under test does not"
-                + " exist: " + seeded, seeded.contains("\"alreadyTracked\":true"));
+                + " interval under test does not exist",
+                CAPTURE_LINK_BUDGET_TICKS, GATE_WINDOW_RECORDS,
+                () -> exec("tp @a " + ship[0] + " " + (ship[1] + 3) + " " + ship[2] + " 0 0"));
+        // Still under the open gate window — see the sibling scenario: the wait buys a CLIENT
+        // capture and THIS read asks the SERVER, which is where the two have been seen to disagree.
+        String seeded;
+        try {
+            seeded = exec("artest vs deck-capture");
+            scenario().requireArranged("the body must stand on the deck ONCE before the manoeuvre,"
+                    + " or the client holds no earlier observation and the interval under test does"
+                    + " not exist: " + seeded, seeded.contains("\"alreadyTracked\":true"));
+        } catch (AssertionError noCapture) {
+            throw new AssertionError(noCapture.getMessage() + " | " + deckGateTrail(seedMark,
+                    seedServerMark), noCapture);
+        } finally {
+            closeDeckGateWindow();
+        }
         // The earlier observation must be of THE CRAFT THAT THEN MANOEUVRES. An observation of a
         // neighbouring hull is an observation of a craft that stands still for the whole interval,
         // which is the one arrangement under which this scenario's contract holds trivially.

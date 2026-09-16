@@ -16,6 +16,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 import zmaster587.advancedRocketry.integration.vs.ShipFrameTravel;
+import zmaster587.advancedRocketry.test.trace.DeckGateWindow;
 import zmaster587.advancedRocketry.test.trace.TestTrace;
 
 /**
@@ -71,6 +72,12 @@ import zmaster587.advancedRocketry.test.trace.TestTrace;
  *       ({@code travel}, {@code jump}, {@code GravityHandler}), and recording each would turn its
  *       256-deep ring over in a few seconds. A mid-tick change of the answer is still recorded, so
  *       the newest record is always the gate's current answer rather than its last flip.</li>
+ *   <li>{@code deck_gate_explained} — the same RETURN of {@code handles}, but for ONE body a test
+ *       has armed by entity id and only while its window is open: per tick per side, with
+ *       production's own {@code explainHandles} breakdown, every loaded hull's world box, and the
+ *       resolver's four process-wide statics on the SAME record. It exists because the heartbeat
+ *       above cannot answer a question posed over three ticks; {@link DeckGateWindow} carries the
+ *       reasoning and the blind spots.</li>
  *   <li>{@code deck_contact} — RETURN of {@code travel}, only when the resolver handled the tick
  *       ({@code true}) AND {@code onGround} flipped false→true since the previous {@code travel}
  *       return for that body. A landing on the deck (or the hull) as an edge, not a state. This
@@ -109,7 +116,11 @@ import zmaster587.advancedRocketry.test.trace.TestTrace;
  *       when that verdict CHANGES and otherwise at most once every five seconds (above), so the
  *       number of records says nothing about how many consumers asked. What it proves is that the
  *       frame was asked about this body at all, and what it last answered — and any window longer
- *       than the heartbeat is guaranteed to contain one record for a body that exists.</li>
+ *       than the heartbeat is guaranteed to contain one record for a body that exists. <b>A window
+ *       SHORTER than the heartbeat is guaranteed nothing</b>, and a stable verdict then writes
+ *       nothing at all in it — which reads exactly like a frame that never asked. For a short
+ *       window use {@code deck_gate_explained} ({@link DeckGateWindow}), which is armed for one body
+ *       and records per tick.</li>
  *   <li>{@code deck_seed_decided} has no entity and is routed by the calling thread's side. The
  *       pending-seed pass runs on the side that received the packet, so a decision taken on a
  *       server thread lands in the server log even when the body it concerns is a client one.</li>
@@ -123,6 +134,7 @@ public abstract class MixinShipFrameTravelEvents {
     private static final String INSTRUMENT_INTERIOR = "interior_claim_events";
     private static final String INSTRUMENT_SEED = "deck_seed_events";
     private static final String INSTRUMENT_GATE = "deck_gate_events";
+    private static final String INSTRUMENT_GATE_WINDOW = "deck_gate_window_events";
     private static final String INSTRUMENT_CONTACT = "deck_contact_events";
 
     /**
@@ -309,6 +321,16 @@ public abstract class MixinShipFrameTravelEvents {
     @Inject(method = "handles", at = @At("RETURN"))
     private static void arTest$gateDecided(EntityLivingBase entity, CallbackInfoReturnable<Boolean> cir) {
         TestTrace.instrument(entity, INSTRUMENT_GATE);
+        // Declared UNCONDITIONALLY, and from the mixin rather than from the window's own `open`:
+        // the roster exists to separate "nothing to say" from "this mixin never wove", and `open`
+        // is called reflectively from the bot, so it would announce an observer that is not
+        // installed. The cost is one set-add per gate call beside the one above it.
+        TestTrace.instrument(entity, INSTRUMENT_GATE_WINDOW);
+        // Before the player filter and before the heartbeat below, because the window answers a
+        // different question from `deck_gate_decided` and must not inherit its resolution: see
+        // DeckGateWindow, which says why a heartbeat cannot answer it. Closed, this is an int
+        // compare.
+        DeckGateWindow.sample(entity, cir.getReturnValueZ());
         if (!(entity instanceof EntityPlayer) || entity.world == null) {
             return;
         }

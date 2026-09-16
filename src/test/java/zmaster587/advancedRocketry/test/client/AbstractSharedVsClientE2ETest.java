@@ -894,6 +894,122 @@ public abstract class AbstractSharedVsClientE2ETest extends AbstractSharedClient
         return targetDim;
     }
 
+    /**
+     * The deck-GATE window: what {@code ShipFrameTravel.handles} decided about ONE body, per tick,
+     * on BOTH sides. Invoked on the client, but it arms both resolvers — a client test runs against
+     * an INTEGRATED server, so there is one JVM, one static, and one entity id shared by the two
+     * copies of the player. See {@code DeckGateWindow} for why {@code deck_gate_decided} (a
+     * hundred-tick heartbeat) cannot answer a question posed over three ticks.
+     */
+    private static final String DECK_GATE_WINDOW =
+            "zmaster587.advancedRocketry.test.trace.DeckGateWindow";
+
+    /**
+     * Arm the deck-gate window on this scenario's own player for the next {@code recordsEach} gate
+     * decisions per side.
+     *
+     * <p>Call it BEFORE the stimulus whose gate decisions are in question — a window opened after
+     * the teleport cannot see the ticks the teleport landed in, which are the ones that decide
+     * whether a body is taken by a deck.</p>
+     *
+     * <p>The id comes out of the server's own {@code deck-capture} reply ({@code entityId}), which
+     * is the same number the client's copy carries; there is no harness verb that reports a player's
+     * entity id, and inferring it from a log record would make the arming depend on the subject
+     * having already been recorded.</p>
+     *
+     * @param recordsEach how many records each side may write — see {@code DeckGateWindow#open}, the
+     *                    budget is deliberately the caller's to state
+     * @return the entity id it armed
+     */
+    protected final int openDeckGateWindow(int recordsEach) throws Exception {
+        String reply = exec("artest vs deck-capture");
+        Matcher id = Pattern.compile("\"entityId\":(-?\\d+)").matcher(String.valueOf(reply));
+        assertTrue("the deck-capture reply must carry entityId, or the gate window cannot be armed"
+                + " on a named body — and a window armed on the wrong body is silent in exactly the"
+                + " way a body nobody asked about is: " + reply, id.find());
+        int entityId = Integer.parseInt(id.group(1));
+        bot().invokeStaticInt(DECK_GATE_WINDOW, "open", entityId, recordsEach);
+        return entityId;
+    }
+
+    /** Close the deck-gate window. Safe to call on a window that is already closed. */
+    protected final void closeDeckGateWindow() throws Exception {
+        bot().invokeStaticInt(DECK_GATE_WINDOW, "close");
+    }
+
+    /** The stimulus a {@link #awaitCaptureUnderGateWatch} watches — whatever puts the body on the
+     *  deck. Declared because the harness's calls throw, and a {@code Runnable} cannot. */
+    protected interface Stimulus {
+        void run() throws Exception;
+    }
+
+    /**
+     * Run {@code stimulus} with the deck-gate window open on this scenario's player, then wait for
+     * the capture — and when it does not arrive, print what the gate decided on both sides.
+     *
+     * <p><b>The window is opened before the stimulus</b>, because the decisions in question are the
+     * ones taken in the ticks the stimulus lands in. The failure this exists for reports a body in
+     * empty air with nothing beneath it and no hull containing it — every field of it a negative,
+     * and a negative read once cannot say whether the frame was asked, what it was asked about, or
+     * what it was answering from.</p>
+     *
+     * <p><b>Two marks, taken by the CALLER, one from each log.</b> They are parameters rather than
+     * something this method takes for itself so that the caller keeps its own client mark for the
+     * chains it asserts afterwards — and so that it is visible at the call site which log each one
+     * belongs to. A mark belongs to ONE log; {@code clientEvents().since(serverMark, …)} compiles,
+     * runs, and answers about the wrong numbering.</p>
+     *
+     * <p><b>The window is NOT closed when the wait succeeds, and that was measured rather than
+     * guessed.</b> This wait buys a CLIENT-side capture chain; the arrangement reads that follow it
+     * ask the SERVER whether anything holds the same body — and on 2026-09-16 that is exactly where
+     * the red landed: the wait passed, and the server's probe two lines later reported no capture at
+     * all. A window closed in a {@code finally} is shut before the assertion it exists to explain.
+     * So the caller closes it with {@link #closeDeckGateWindow} once its arrangement reads are done,
+     * and until then the budget is what bounds it — an over-run window stops itself and says so.</p>
+     *
+     * @param clientMark  a mark from {@code clientEvents()}, taken before the stimulus
+     * @param serverMark  a mark from {@code events()}, taken before the stimulus
+     * @param recordsEach the gate window's budget per side; state it from the length of the
+     *                    stimulus, not from habit
+     */
+    protected final String awaitCaptureUnderGateWatch(long clientMark, long serverMark, String shipId,
+                                                      String what, int tickBudget, int recordsEach,
+                                                      Stimulus stimulus)
+            throws Exception {
+        openDeckGateWindow(recordsEach);
+        try {
+            stimulus.run();
+            // The EDGE form, not the held form. This helper's whole premise is that the stimulus
+            // CREATES the capture, and a body already held by the same craft when the mark was taken
+            // satisfies the held form on its first tick — from the episode that was already running.
+            // Measured 2026-09-16; the reasoning is at the method.
+            return zmaster587.advancedRocketry.test.ShipIdentity.awaitCaptureEnteredHeldBy(
+                    clientEvents(), clientMark, shipId, what, tickBudget);
+        } catch (AssertionError notTaken) {
+            closeDeckGateWindow();
+            throw new AssertionError(notTaken.getMessage() + " | " + deckGateTrail(clientMark,
+                    serverMark), notTaken);
+        }
+    }
+
+    /**
+     * Both sides' gate decisions since their OWN marks, for a failure message.
+     *
+     * <p>Two marks and not one, and that is the whole point: the client and the server keep separate
+     * sequences, so a single mark read against both logs answers about the wrong numbering on one of
+     * them. Each half is taken from the log that produced its mark.</p>
+     */
+    protected final String deckGateTrail(long clientMark, long serverMark) throws Exception {
+        return "the gate's own decisions, CLIENT: " + clientEvents().since(clientMark,
+                "deck_gate_explained")
+                + " ||| the gate's own decisions, SERVER: " + events().since(serverMark,
+                "deck_gate_explained")
+                + " ||| the windows themselves (a `records:0` here is the instrument saying nobody"
+                + " asked, not the gate saying no): " + clientEvents().since(clientMark,
+                "deck_gate_window")
+                + " / " + events().since(serverMark, "deck_gate_window");
+    }
+
     /** The client-side deck-camera window: poses, the eye, and the two per-client counters. */
     private static final String DECK_CAMERA_WINDOW =
             "zmaster587.advancedRocketry.test.trace.DeckCameraState";
