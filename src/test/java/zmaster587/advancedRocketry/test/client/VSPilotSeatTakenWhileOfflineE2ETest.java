@@ -124,7 +124,6 @@ public class VSPilotSeatTakenWhileOfflineE2ETest extends AbstractSharedVsClientE
                 "assembly must create a NEW VS ship in the queryable registry (async spawn)");
         // Keep the ship observable while nobody is online: the offline window below leaves the
         // server empty, and an unloaded ship would fail every probe the arrangement depends on.
-        exec("artest vs permaload true");
         long approachMark = clientEvents().mark();
         exec("tp @a " + (bx + 0.5) + " " + (by + 6) + " " + (bz + 0.5) + " 0 0");
         awaitClientPlacedNear(approachMark, bx + 0.5, bz + 0.5,

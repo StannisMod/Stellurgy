@@ -145,7 +145,7 @@ public class VSDeckCaptureAndDismountE2ETest extends AbstractSharedVsClientE2ETe
         // deck or it does not, and 80 ticks was a guess at how long that takes. The mark goes before
         // the teleport, so nothing can happen between the stimulus and the read.
         //
-        // `deck_captured` is a per-tick COMMIT, so a body the build step already left standing on
+        // `deck_commit` is a per-tick COMMIT, so a body the build step already left standing on
         // this deck satisfies the await at once. That is deliberate and it is still the right link:
         // what this scenario's bug looks like is NO capture on the client at all while the server
         // holds him — and a capture that existed and was then lost shows up in the release absence
@@ -155,9 +155,10 @@ public class VSDeckCaptureAndDismountE2ETest extends AbstractSharedVsClientE2ETe
         exec("tp @a " + ship[0] + " " + (ship[1] + 4) + " " + ship[2] + " 0 0");
         // Carrying this scenario's ship: the record names the hull that took the body, and this class
         // shares its world — a type-only wait returns on a sibling scenario's capture and calls the
-        // fall-through "resolved".
-        String landing = clientEvents.awaitCarrying(landingMark, "deck_captured",
-                "\"ship\":\"" + scenarioShipId + "\"",
+        // fall-through "resolved". And over the EPISODE rather than the record: `deck_commit` is
+        // the resolver's per-tick commit, so a capture the deck has since let go of satisfies "it
+        // happened" while the server read on the next line sees nobody holding him.
+        String landing = ShipIdentity.awaitCaptureHeldBy(clientEvents, landingMark, scenarioShipId,
                 "the player's OWN client must resolve him on the deck of THIS grounded ship — a"
                         + " fall-through leaves the client with no capture at all, which is the fault"
                         + " this scenario exists for", DECK_LINK_BUDGET_TICKS);
@@ -306,9 +307,14 @@ public class VSDeckCaptureAndDismountE2ETest extends AbstractSharedVsClientE2ETe
 
         // The pilot must stay aboard: resolved on the deck in the ship frame, and rendered there by his
         // own client - not dropped into the world. The client's capture is a link and is awaited as
-        // one; a seat dismount seeds it, so a client with no `deck_captured` since the un-seating is
-        // the "left in the world" half of the report, named instead of inferred from two heights.
-        clientEvents.awaitCarrying(clientDismountMark, "deck_captured",
+        // one; a seat dismount seeds it, so a client that never TOOK him since the un-seating is the
+        // "left in the world" half of the report, named instead of inferred from two heights.
+        //
+        // The EDGE and not the per-tick commit, because the sentence below is "must take him": a
+        // RIDING body is excluded from capture (`isExcludedFromCapture`), so it holds none while he
+        // is seated and standing up has to produce an entry. Where a body may already be held at the
+        // mark, this wait would have nothing to close on and `awaitCaptureHeldBy` is the form.
+        clientEvents.awaitCarrying(clientDismountMark, "deck_entered",
                 "\"ship\":\"" + scenarioShipId + "\"",
                 "the ex-pilot's OWN client must take him onto THIS ship's deck when he stands up"
                         + " mid-hover", DECK_LINK_BUDGET_TICKS);
@@ -372,7 +378,7 @@ public class VSDeckCaptureAndDismountE2ETest extends AbstractSharedVsClientE2ETe
         // Return to the ship exactly as re-entering a docked ship from a saved world, and stand on
         // it. Two links, and each one names a different fault: the ship comes back
         // (`ship_loaded` — a new physics object for THIS ship), and his own client then takes him
-        // onto its deck (`deck_captured`). 80 ticks used to cover both and could distinguish
+        // onto its deck (`deck_commit`). 80 ticks used to cover both and could distinguish
         // neither.
         long reloadMark = events.markInstrumented();
         Events clientEvents = clientEvents();
@@ -380,8 +386,7 @@ public class VSDeckCaptureAndDismountE2ETest extends AbstractSharedVsClientE2ETe
         exec("tp @a " + ship[0] + " " + (ship[1] + 4) + " " + ship[2] + " 0 0");
         String reloaded = awaitThisShip(events, reloadMark, "ship_loaded",
                 "a saved ship must come back when the player returns to its deck");
-        String landing = clientEvents.awaitCarrying(landingMark, "deck_captured",
-                "\"ship\":\"" + scenarioShipId + "\"",
+        String landing = ShipIdentity.awaitCaptureHeldBy(clientEvents, landingMark, scenarioShipId,
                 "the returning player's OWN client must resolve him on THIS RELOADED deck — the"
                         + " playtest's \"old ships drop me through\" is exactly this link missing",
                 DECK_LINK_BUDGET_TICKS);
@@ -661,7 +666,7 @@ public class VSDeckCaptureAndDismountE2ETest extends AbstractSharedVsClientE2ETe
         Events clientEvents = clientEvents();
         long dismountMark = clientEvents.mark();
         exec("artest player dismount");
-        String seeded = clientEvents.awaitCarrying(dismountMark, "deck_captured",
+        String seeded = clientEvents.awaitCarrying(dismountMark, "deck_commit",
                 "\"ship\":\"" + scenarioShipId + "\"",
                 "standing up on THIS tilted deck must leave the ex-pilot captured ON THE CLIENT — the"
                         + " seed is what puts him there, and without it the heights below are"
@@ -751,7 +756,7 @@ public class VSDeckCaptureAndDismountE2ETest extends AbstractSharedVsClientE2ETe
         Events clientEvents = clientEvents();
         long dismountMark = clientEvents.mark();
         exec("artest player dismount");
-        String seeded = clientEvents.awaitCarrying(dismountMark, "deck_captured",
+        String seeded = clientEvents.awaitCarrying(dismountMark, "deck_commit",
                 "\"ship\":\"" + scenarioShipId + "\"",
                 "the fresh dismount must engage the ship-frame capture on THIS ship's level deck",
                 DECK_LINK_BUDGET_TICKS);
@@ -784,7 +789,7 @@ public class VSDeckCaptureAndDismountE2ETest extends AbstractSharedVsClientE2ETe
         // committed a capture, and every release with the gate that performed it. This replaces a
         // read of the cumulative `resolvedTicks` static, which counted every body this side ever
         // resolved and so could not be scoped to this window at all.
-        String rollCaptures = clientEvents.since(rollMark, "deck_captured");
+        String rollCaptures = clientEvents.since(rollMark, "deck_commit");
         String rollReleases = clientEvents.since(rollMark, "deck_released");
         // Read once and proved to be about this scenario's craft: the whole claim below is "the roll
         // did not hand him away", and a capture re-anchored onto a neighbour's hull mid-roll is
@@ -899,8 +904,7 @@ public class VSDeckCaptureAndDismountE2ETest extends AbstractSharedVsClientE2ETe
         Events clientEvents = clientEvents();
         long dismountMark = clientEvents.mark();
         exec("artest player dismount");
-        String seeded = clientEvents.awaitCarrying(dismountMark, "deck_captured",
-                "\"ship\":\"" + scenarioShipId + "\"",
+        String seeded = ShipIdentity.awaitCaptureHeldBy(clientEvents, dismountMark, scenarioShipId,
                 "leaving the seat on THIS INVERTED ship must leave the ex-pilot captured BY IT on his"
                         + " own client, which is where the reported fall-through happens",
                 DECK_LINK_BUDGET_TICKS);
@@ -1030,8 +1034,7 @@ public class VSDeckCaptureAndDismountE2ETest extends AbstractSharedVsClientE2ETe
         // The message says CLIENT, so the read is the client's: his own resolver's capture record,
         // awaited rather than given 80 ticks. (The server probe beside it re-evaluates handles() for
         // the SERVER player and reads the SERVER state map — a second opinion, not this one.)
-        clientEvents.awaitCarrying(landingMark, "deck_captured",
-                "\"ship\":\"" + scenarioShipId + "\"",
+        ShipIdentity.awaitCaptureHeldBy(clientEvents, landingMark, scenarioShipId,
                 "the client must be captured on THIS upright deck before the ship is tilted under him",
                 DECK_LINK_BUDGET_TICKS);
         // Read ONCE, and proved to be about THIS ship: the two execs this replaces
@@ -1112,6 +1115,12 @@ public class VSDeckCaptureAndDismountE2ETest extends AbstractSharedVsClientE2ETe
         // Flip the ship nearly upside-down: a 160-degree roll about its nose (+Z) - past inverted, but
         // shy of the exact 180 axis-angle singularity so the controller converges cleanly. Quaternion
         // (w,x,y,z) = (cos80, 0, 0, sin80). This is the regime the playtest saw break.
+        // For these two hundred ticks NOBODY is near the craft — the observer is teleported into its
+        // box only after the pose is read — and the substrate drops a physics object no player
+        // holds. Measured 2026-09-16 in a full-tier pair: this leg's `ship-info` came back
+        // `{"managed":false}`, the hull unloaded under it mid-slew, on the second run of a tree
+        // whose first run was green. What keeps it loaded is no longer anything this leg says: a
+        // test server holds every ship loaded from the moment the probes register.
         assertTrue("attitude hold must accept the flip",
                 exec("artest vs point-by-id 0 " + scenarioShipId + " 0.17365 0.0 0.0 0.98481")
                         .contains("\"commanded\":true"));

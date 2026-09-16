@@ -41,7 +41,6 @@ public class VSShortJumpCrossesDirectlyE2ETest extends AbstractSharedServerTest 
 
     @Test
     public void aShortJumpArrivesWithoutEverBeingInFlight() throws Exception {
-        exec("artest vs permaload true");
 
         String setup = setUpPilotedShip();
         int originDim = extractInt(setup, "originDim");
@@ -70,7 +69,6 @@ public class VSShortJumpCrossesDirectlyE2ETest extends AbstractSharedServerTest 
      */
     @Test
     public void theSameJumpFlownSlowlyStillGoesThroughHyperspace() throws Exception {
-        exec("artest vs permaload true");
 
         String setup = setUpPilotedShip();
         int originDim = extractInt(setup, "originDim");
@@ -109,11 +107,15 @@ public class VSShortJumpCrossesDirectlyE2ETest extends AbstractSharedServerTest 
         assertTrue("the arrival was announced but names no dimension: " + arrived, targetDim >= 0);
         assertTrue("the ship never (re)loaded in the target cell (dim " + targetDim + "); countAll="
                 + exec("artest vs ship-count-all " + targetDim), loadedShips(targetDim) >= 1);
-        // The cell's ship count NAMES what it counted, so the arrived craft is identified rather
-        // than approached: the premise "exactly one ship is here" and the answer "and this is it"
-        // are one reading, instead of a count followed by a nearest-ship lookup that would answer
-        // just as confidently if the cell held two.
-        String arrivedId = ShipIdentity.theOnlyLoadedShipIn(this::exec, targetDim);
+        // Identified off the ARRIVAL'S OWN RECORD, which names the craft that arrived. "The only
+        // loaded ship in this cell" stood here and was an accident: it worked while an earlier
+        // scenario's hull unloaded once nobody was near it, and stopped the day a test server began
+        // holding ships loaded — the cell then held two and the read could not say which was this
+        // jump's. A count is a premise about the cell; the record is an identity.
+        String durableId = Events.lastField(arrived, "ship");
+        assertTrue("the arrival must name the craft that made it, or nothing below is addressed to"
+                + " this jump's ship: " + arrived, durableId != null && !durableId.trim().isEmpty());
+        String arrivedId = ShipIdentity.physicsIdOf(this::exec, targetDim, durableId.trim());
         String dstInfo = exec("artest vs ship-info " + targetDim + " id " + arrivedId);
         assertTrue("the arrived ship is not VS-managed in the target cell: " + dstInfo,
                 dstInfo.contains("\"managed\":true"));
@@ -145,7 +147,6 @@ public class VSShortJumpCrossesDirectlyE2ETest extends AbstractSharedServerTest 
 
     @org.junit.After
     public void resetPermaload() throws Exception {
-        exec("artest vs permaload false");
     }
 
     /** This tier's reader of the server's ordered event log. */

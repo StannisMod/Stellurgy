@@ -140,7 +140,6 @@ public class SpaceLoginRestoreSeatedPilotE2ETest extends AbstractSpaceLoginResto
         assertTrue("his ship must still be ledgered - there has to be a ship to restore him ONTO: "
                 + ledger, ledger.contains("\"found\":true"));
 
-        exec("artest vs permaload true");
 
         // The mark before the client exists, because the restore fires ON his connection: taken
         // afterwards it could not tell "the hook never ran" from "the hook ran before I looked".

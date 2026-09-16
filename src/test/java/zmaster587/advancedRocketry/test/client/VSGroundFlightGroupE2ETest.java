@@ -245,10 +245,8 @@ public class VSGroundFlightGroupE2ETest extends AbstractSharedVsClientE2ETest {
         String idB = awaitShipSpawned(events, spawnMarkB,
                 "ship B's assembly must create a VS ship in the queryable registry (async spawn)");
 
-        // permaload so BOTH stay loaded with one client that cannot stand in two places. This is an
-        // affordance, and it is scoped OFF the leg under test: the question here is which ship a
-        // lookup names, never whether a ship stays loaded.
-        exec("artest vs permaload true");
+        // BOTH stay loaded with one client that cannot stand in two places — the test server holds
+        // them, and this leg asks which ship a lookup names, never whether a ship stays loaded.
         exec("artest vs load-ships 0");
         long approachMark = clientEvents().mark();
         exec("tp @a " + (ax + 0.5) + " " + (ay + 6) + " " + (az + 0.5) + " 0 0");

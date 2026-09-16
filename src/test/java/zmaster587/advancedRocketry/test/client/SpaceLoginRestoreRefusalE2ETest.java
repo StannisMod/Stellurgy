@@ -166,7 +166,6 @@ public class SpaceLoginRestoreRefusalE2ETest extends AbstractSpaceLoginRestoreCl
                 + "leave him in the overworld for the wrong reason: " + ledger,
                 ledger.contains("\"found\":true"));
 
-        exec("artest vs permaload true");
         startClient();
         bot().waitForWorld();
         bot().waitTicks(450);

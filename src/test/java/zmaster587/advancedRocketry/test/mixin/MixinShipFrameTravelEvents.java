@@ -26,13 +26,22 @@ import zmaster587.advancedRocketry.test.trace.TestTrace;
  * <h2>The events, each taken where production already answers</h2>
  *
  * <ul>
- *   <li>{@code deck_captured} — TAIL of {@code captureState}: the anchored capture state as
+ *   <li>{@code deck_entered} — HEAD of {@code captureState}, when the body is NOT already held by
+ *       the ship about to take it: the episode's opening EDGE, and the twin of
+ *       {@code deck_released}. Carries {@code from}, the anchor being replaced. Use this to ask
+ *       whether a deck TOOK a body; use {@code deck_commit} to ask whether it is holding one now.
+ *       Rare, so its ring spans a whole scenario where the commit's spans thirteen seconds.</li>
+ *   <li>{@code deck_commit} — TAIL of {@code captureState}: the anchored capture state as
  *       production just installed it. Carries the deck point, the world Y and the {@code carry}
  *       triple production bound as the deck velocity the body's motion contains. <b>Not an
- *       edge</b>: {@code captureState} is also the per-tick COMMIT — every resolved tick goes
- *       through {@code remember}, which rebuilds the state — so a body held by a deck emits this
- *       once a tick and fills its own 256-deep ring in about thirteen seconds. A first contact, a
- *       seed and a routine commit are not distinguishable here; the {@code carry} triple and the
+ *       edge, and named for what it is since 2026-09-16</b>: {@code captureState} is also the
+ *       per-tick COMMIT — every resolved tick goes through {@code remember}, which rebuilds the
+ *       state — so a body held by a deck emits this once a tick and fills its own 256-deep ring in
+ *       about thirteen seconds. It was called {@code deck_captured}, which reads as an edge, and
+ *       eighteen call sites duly read it as one: they awaited a record that says the deck took the
+ *       body at SOME tick in the window, then read the live capture on the next line, and went red
+ *       when the two disagreed. A first contact, a seed and a routine commit are not
+ *       distinguishable here — {@code deck_entered} above is — and the {@code carry} triple and the
  *       deck point are, which is what the value under test is.</li>
  *   <li>{@code deck_released} — HEAD of {@code release}, gated on {@code isResolving}: only a body
  *       that IS tracked has an episode to end, and {@code release} no-ops for an untracked one. The
@@ -89,9 +98,13 @@ import zmaster587.advancedRocketry.test.trace.TestTrace;
  *       {@code remember} and only THEN restores {@code hullStand}, so a re-capture taken on that
  *       path records {@code "aboard"} for a body that finishes the tick in hull-stand. The mode is
  *       not readable at that instant by anything, production's own log line included.</li>
- *   <li>{@code deck_released} sees what {@code release} removes, and only that. A path that dropped
- *       the capture state without going through {@code release} would end an episode silently here —
- *       today there is none, which is the property this event assumes and cannot itself check.</li>
+ *   <li>{@code deck_released} sees what {@code release} removes, and only that. <b>There IS one path
+ *       that ends an episode without it</b>: {@code captureState} overwrites the state, so a body
+ *       held by A and then captured by B has A's episode ended with no release record. That case is
+ *       visible only as the {@code from} field of the {@code deck_entered} naming B — which is why
+ *       a "still held by A" reading is over both records and not over the releases alone. Any
+ *       OTHER path dropping the state silently would be invisible here, and that is the property
+ *       this event assumes and cannot itself check.</li>
  *   <li>{@code deck_gate_decided} cannot be used to COUNT gate calls: it records a body's verdict
  *       when that verdict CHANGES and otherwise at most once every five seconds (above), so the
  *       number of records says nothing about how many consumers asked. What it proves is that the
@@ -139,6 +152,47 @@ public abstract class MixinShipFrameTravelEvents {
     private static final Map<Entity, Long> arTest$lastGateRecord =
             new MapMaker().weakKeys().<Entity, Long>makeMap();
 
+    /**
+     * HEAD of {@code captureState}: the body is about to be held by {@code shipId} and is not held
+     * by it now — the EPISODE's opening edge, the twin of {@code deck_released}.
+     *
+     * <p><b>Path-independent by construction, and that is the whole reason it is taken here.</b>
+     * {@code STATE.put} happens in {@code captureState} and nowhere else (and {@code STATE.remove}
+     * in {@code release} and nowhere else), so these two injectors see every capture there is. The
+     * alternative — recording at the three places that INSTALL one ({@code remember}'s first
+     * contact, the candidate path in {@code handles}, and {@code applySeedCapture}) — would be an
+     * instrument only as complete as its enumeration of entries, and the third of those calls no
+     * {@code logCapture} at all, so {@code deck_mode_committed} already does not fire for a seeded
+     * capture.</p>
+     *
+     * <p>{@code from} carries the anchor being replaced, and names this record's one blind spot: an
+     * anchor SWITCH (held by A, captured by B with no intervening release) ends A's episode with NO
+     * {@code deck_released} — production simply overwrites the state. A reader asking "is the
+     * episode on A still open" must treat a {@code deck_entered} naming another ship as an end
+     * too.</p>
+     */
+    @Inject(method = "captureState", at = @At("HEAD"))
+    private static void arTest$entered(Entity entity, String shipId, double localX, double localY,
+                                       double localZ, double worldX, double worldY, double worldZ,
+                                       double carryX, double carryY, double carryZ, CallbackInfo ci) {
+        TestTrace.instrument(entity, INSTRUMENT);
+        if (entity == null || entity.world == null) {
+            return;
+        }
+        // Production's own mode-agnostic answer, asked BEFORE the install: a hull-stand body is held
+        // by a particular craft too, and `aboardShipId` would call every hull-stand commit an entry.
+        String from = ShipFrameTravel.capturedShipId(entity);
+        if (shipId != null && shipId.equals(from)) {
+            return; // a routine per-tick commit on the anchor already held: not an edge
+        }
+        TestTrace.record(entity, "deck_entered", "\"e\":" + entity.getEntityId()
+                + ",\"who\":\"" + TestTrace.json(entity.getName()) + "\",\"ship\":\""
+                + TestTrace.json(shipId)
+                + "\",\"from\":" + (from == null ? "null" : "\"" + TestTrace.json(from) + "\"")
+                + ",\"local\":\"" + TestTrace.fmt(localX) + "," + TestTrace.fmt(localY) + ","
+                + TestTrace.fmt(localZ) + "\",\"worldY\":" + TestTrace.fmt(worldY));
+    }
+
     @Inject(method = "captureState", at = @At("TAIL"))
     private static void arTest$captured(Entity entity, String shipId, double localX, double localY,
                                         double localZ, double worldX, double worldY, double worldZ,
@@ -147,7 +201,7 @@ public abstract class MixinShipFrameTravelEvents {
         if (entity == null || entity.world == null) {
             return;
         }
-        TestTrace.record(entity, "deck_captured", "\"e\":" + entity.getEntityId()
+        TestTrace.record(entity, "deck_commit", "\"e\":" + entity.getEntityId()
                 + ",\"who\":\"" + TestTrace.json(entity.getName()) + "\",\"ship\":\""
                 + TestTrace.json(shipId)
                 + "\",\"local\":\"" + TestTrace.fmt(localX) + "," + TestTrace.fmt(localY) + ","

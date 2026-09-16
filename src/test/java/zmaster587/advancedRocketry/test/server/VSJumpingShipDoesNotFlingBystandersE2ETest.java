@@ -77,7 +77,6 @@ public class VSJumpingShipDoesNotFlingBystandersE2ETest extends AbstractSharedSe
 
         // No player stands anywhere near this craft, and an unattended ship unloads: without this the
         // ship is REGISTERED and not LOADED, which has no transform to read and no physics to tick.
-        exec("artest vs permaload true");
 
         clearArea(SRC_X, SRC_Z);
         String coords = placeFixture(SRC_X, SRC_Y, SRC_Z, "with-pilot-deck");
@@ -197,7 +196,6 @@ public class VSJumpingShipDoesNotFlingBystandersE2ETest extends AbstractSharedSe
 
     @After
     public void cleanup() throws Exception {
-        exec("artest vs permaload false");
     }
 
     // --- helpers (mirror VSShipDescentE2ETest) ------------------------------------------------------

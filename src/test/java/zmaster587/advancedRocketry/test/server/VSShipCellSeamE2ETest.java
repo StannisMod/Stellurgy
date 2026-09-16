@@ -549,7 +549,6 @@ public class VSShipCellSeamE2ETest extends AbstractSharedServerTest {
         // nothing from the ones before it — the question is what accumulates, and an unbounded dump
         // answers it with the whole boot.
         long claimMark = events.mark();
-        exec("artest vs permaload true");
         String setup = exec("artest space entry-setup 2");
         assertTrue("entry setup failed: " + setup, setup.contains("\"ok\":true"));
 
@@ -839,7 +838,6 @@ public class VSShipCellSeamE2ETest extends AbstractSharedServerTest {
         }
         exec("artest chunk release");
         exec("artest space entry-clear");
-        exec("artest vs permaload false");
     }
 
     /**

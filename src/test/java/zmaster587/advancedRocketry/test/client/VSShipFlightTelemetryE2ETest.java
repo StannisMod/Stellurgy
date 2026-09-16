@@ -1087,7 +1087,7 @@ public class VSShipFlightTelemetryE2ETest extends AbstractSharedVsClientE2ETest 
                 + " " + ship[2]), ENTITY_ID);
         // Keyed on the body AND on the ship: the entity needle alone says a deck took him, never
         // which deck, and every reading below is expressed in the taking ship's own frame.
-        awaitRecord(events, dropMark, "deck_captured",
+        awaitRecord(events, dropMark, "deck_commit",
                 "THIS ship's deck must TAKE the dropped body (entity " + crewId + "): the ship-frame"
                         + " resolver never captured it for this craft, so nothing below is about how"
                         + " a captured body rides THIS deck", 200,

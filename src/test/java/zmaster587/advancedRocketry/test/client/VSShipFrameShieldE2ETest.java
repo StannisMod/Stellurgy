@@ -64,7 +64,6 @@ public class VSShipFrameShieldE2ETest extends AbstractSharedVsClientE2ETest {
         final FixtureSite site = site();
         final int bx = site.x, by = site.y, bz = site.z;
 
-        exec("artest vs permaload true");
         long awayMark = clientEvents().mark();
         exec("tp @a " + (bx + 40) + " 120 " + (bz + 40) + " 0 0");
         awaitClientPlacedNear(awayMark, bx + 40, bz + 40,

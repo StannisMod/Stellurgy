@@ -49,7 +49,6 @@ public class VSShipCrossingSpikeTest extends AbstractSharedServerTest {
         // A headless server has no player to hold a ship loaded, so a freshly assembled ship auto-unloads
         // between probe calls (its physics object drops out of the loaded set). Pin ships loaded so the
         // observations below are stable; reset in @After. (This is the permanentlyLoaded lever.)
-        exec("artest vs permaload true");
 
         // CONTROL: no ship exists yet, so the seat witness must report a negative. This proves a
         // later "afcResolved:true" is a real observation, not a stuck-on witness.
@@ -142,7 +141,6 @@ public class VSShipCrossingSpikeTest extends AbstractSharedServerTest {
     @org.junit.After
     public void resetPermaload() throws Exception {
         // Shared-harness state-leak contract: don't leave "permanently loaded" set for later tests.
-        exec("artest vs permaload false");
     }
 
     // --- helpers ------------------------------------------------------------------------------------

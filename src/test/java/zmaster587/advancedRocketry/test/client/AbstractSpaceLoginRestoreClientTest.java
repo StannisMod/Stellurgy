@@ -403,7 +403,6 @@ public abstract class AbstractSpaceLoginRestoreClientTest {
 
         // Issued BEFORE the client connects: the restore fires on his connection, and a headless
         // server has nobody standing near the ship to hold it loaded for the re-seating.
-        exec("artest vs permaload true");
 
         // AND THE MARK BEFORE THE CLIENT EXISTS, because the restore fires ON the connection: a
         // reader that arrived after it would find an empty log and could not tell that from a
@@ -992,7 +991,7 @@ public abstract class AbstractSpaceLoginRestoreClientTest {
         // was a lifetime count over every body, and `lastDropReason` was the reason of whichever
         // drop this JVM made last — on a shared client, routinely another scenario's. Each release
         // record names the body, the mode and the gate's whole reason.
-        return "CLIENT[deckCommits=" + clientEvents().since(0, "deck_captured")
+        return "CLIENT[deckCommits=" + clientEvents().since(0, "deck_commit")
                 + " deckReleases=" + clientEvents().since(0, "deck_released")
                 // And the world-frame movers as their own records, for the same reason: the counter
                 // that stood here said how many such requests this JVM had ever suppressed, not
@@ -1252,7 +1251,6 @@ public abstract class AbstractSpaceLoginRestoreClientTest {
                 0, readInt(status, "ledger"));
 
         // Headless: nothing holds a freshly assembled or freshly crossed ship loaded between calls.
-        exec("artest vs permaload true");
 
         startClient();
         bot().waitForWorld();
@@ -1383,7 +1381,6 @@ public abstract class AbstractSpaceLoginRestoreClientTest {
         assertEquals("no ship may be ledgered before the flight: " + status,
                 0, readInt(status, "ledger"));
 
-        exec("artest vs permaload true");
         startClient();
         bot().waitForWorld();
 

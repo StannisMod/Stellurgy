@@ -167,15 +167,13 @@ public class VSShipExtremeCoordinatesE2ETest extends AbstractSharedVsClientE2ETe
                 + " in: " + setup, setup.contains("\"ok\":true"));
         cellDim = (int) readDouble(setup, ORIGIN_DIM);
 
-        // Held loaded BEFORE the craft exists, and this ordering is load-bearing. A craft assembled
-        // in a cell has no player anywhere near it — the pilot cannot enter until his seat is found,
-        // and the seat cannot be found until the craft is built — so the substrate's load controller
-        // drops its physics object inside that very window. Measured on this scenario's first run in
-        // a cell: the log read `ship_spawned`, `ship_loaded`, `ship_unloaded`, and the craft never
-        // became usable at all.
-        assertTrue("the craft must be held loaded across the window where nobody is near it, or the"
-                + " substrate drops it before it can ever be flown",
-                exec("artest vs permaload true").contains("\"ok\":true"));
+        // Held loaded BEFORE the craft exists, and the reason is worth keeping even though the lever
+        // is no longer pulled here. A craft assembled in a cell has no player anywhere near it — the
+        // pilot cannot enter until his seat is found, and the seat cannot be found until the craft is
+        // built — so the substrate's load controller drops its physics object inside that very
+        // window. Measured on this scenario's first run in a cell: the log read `ship_spawned`,
+        // `ship_loaded`, `ship_unloaded`, and the craft never became usable at all. A test server
+        // holds its ships loaded from the moment the probes register, which is before any of this.
 
         Events events = events();
         long assemblyMark = events.markInstrumented();
@@ -212,9 +210,19 @@ public class VSShipExtremeCoordinatesE2ETest extends AbstractSharedVsClientE2ETe
                 mountInfo.contains("\"seatFound\":true"));
         Matcher dm = DUMMY_ID.matcher(mountInfo);
         assertTrue("seat-mount must report a dummy id: " + mountInfo, dm.find());
+        // The mark before the mount command, and then the CLIENT's own seating as a LINK. The ten
+        // ticks this replaces were a guess at replication, and everything below rides on him being
+        // aboard: measured 2026-09-16 in a full-tier pair, the same tree that had just run this
+        // green failed the very next arrangement gate with `riding:false` and an EMPTY client mount
+        // window — the boarding had not reached the client inside ten ticks under load, and the
+        // budget could only ever be too short, never wrong in a way that says so.
+        long seatMountMark = clientEvents().mark();
         assertTrue("bot must mount the seat dummy",
                 exec("artest player mount-entity " + dm.group(1)).contains("\"mounted\":true"));
-        bot().waitTicks(10);
+        awaitClientMount(seatMountMark, "the client must FOLLOW the seat boarding before anything"
+                        + " below is asked of a pilot — every leg here is about what a SEATED body"
+                        + " does when its craft moves", CLIENT_REMOUNT_BUDGET_TICKS,
+                " | the server's own seat-mount reply was: " + mountInfo);
 
         // SUSPECT FINDING (1), and it is kept as a WORKAROUND here rather than re-taken: after a
         // rigid teleport to extreme Y, VS's load controller was seen unloading the physics object
@@ -334,7 +342,6 @@ public class VSShipExtremeCoordinatesE2ETest extends AbstractSharedVsClientE2ETe
         climbLeg("after a second relocation");
 
         exec("artest player dismount");
-        exec("artest vs permaload false");
     }
 
     /**

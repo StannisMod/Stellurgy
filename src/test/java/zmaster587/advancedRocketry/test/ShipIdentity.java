@@ -10,8 +10,8 @@ import static org.junit.Assert.assertTrue;
  * Asserting that a reading is about the ship the scenario MEANS, and not about a neighbour's.
  *
  * <p>Every harness-tier class that assembles a craft runs in a world it shares with its siblings —
- * one world per class, twelve to fourteen scenarios in the densest ones, each leaving a hull behind
- * and some of them setting {@code vs permaload}. A reading that says "a ship holds this body" is
+ * one world per class, twelve to fourteen scenarios in the densest ones, each leaving a hull behind,
+ * and a test server keeps every one of those hulls loaded. A reading that says "a ship holds this body" is
  * therefore satisfied byte-identically by a body resolved against somebody else's craft, and no
  * amount of tightening the flag itself changes that: the flag is not the part that is ambiguous.</p>
  *
@@ -264,5 +264,98 @@ public final class ShipIdentity {
                 + " Every flag in the reply reads the same either way, and the subspace coordinates"
                 + " beside them belong to that other hull: " + playerShipDataReply,
                 expectedShipId, aboard);
+    }
+
+    /**
+     * Wait until the deck episode since {@code mark} ENDS with {@code shipId} holding this body: a
+     * {@code deck_commit} record naming that ship exists, and it is LATER than every
+     * {@code deck_released} and every {@code deck_entered} onto another hull in the window.
+     *
+     * <p><b>Why the chain and not the record.</b> {@code deck_commit} is the resolver's per-tick
+     * COMMIT, not an edge — a held body emits one every tick — so "a capture of this ship was
+     * recorded" says the deck took him at some tick in the window, which is a weaker claim than
+     * "he is on the deck now". A caller that goes on to READ the live state needs the second.
+     * <i>Measured 2026-09-15, in two separate full-tier gates: a wait on the record alone returned
+     * on a capture the deck had already let go of, and the one-shot {@code deck-capture} read a
+     * line later answered with no anchor at all — a red about the instrument's timing, dressed as
+     * a body no ship was holding.</i></p>
+     *
+     * <p>An empty window means NOT YET, which is what separates this from a predicate written for a
+     * caller who already holds a read; and a release carries production's own {@code reason}, so an
+     * expiry here names why he was let go instead of leaving the reader to guess at a budget.</p>
+     *
+     * <p>Here rather than on a base class for the reason this whole class is: the scenarios that
+     * capture a body on a deck sit under three different bases, and the {@code deck_commit}
+     * records they wait on are on whichever log — the client's or the server's — belongs to the side
+     * whose resolver took the body.</p>
+     *
+     * @param log    the log the capture is recorded on, client or server
+     * @param mark   a mark on THAT log, taken BEFORE whatever puts the body on the deck
+     * @param what   the scenario's own sentence for what the capture means, used in the failure
+     * @return the {@code deck_commit} records since the mark, for the caller's own reading
+     */
+    public static String awaitCaptureHeldBy(Events log, long mark, String shipId, String what,
+                                            int tickBudget) throws Exception {
+        assertTrue("this wait cannot mean anything without the scenario's own ship id — it was null,"
+                + " so any hull's capture would satisfy it: " + what, shipId != null);
+        try {
+            return log.awaitMatching(mark, "deck_commit",
+                    seen -> endsCapturedBy(log, mark, shipId),
+                    "a commit on " + shipId + " with no LATER release and no LATER capture by"
+                    + " another hull",
+                    what, tickBudget);
+        } catch (AssertionError never) {
+            throw new AssertionError(never.getMessage() + " | the releases in this window, with"
+                    + " production's own reason for each: " + log.since(mark, "deck_released")
+                    + " ||| the episode edges, each naming the anchor it replaced: "
+                    + log.since(mark, "deck_entered"), never);
+        }
+    }
+
+    /**
+     * Whether the deck episode in {@code log} since {@code mark} ends HELD by {@code shipId}: the
+     * last {@code deck_commit} naming that ship is later than everything that could have ended it.
+     *
+     * <p><b>An episode can end two ways, and only one of them is a release.</b> The other is an
+     * anchor SWITCH — {@code captureState} overwrites the state, so a body held by A and then
+     * captured by B leaves no {@code deck_released} at all, and A's commits merely stop arriving.
+     * Against releases alone this predicate would answer "still held by A" forever, which on a
+     * world a class shares with its siblings is exactly the confusion the whole class exists to
+     * remove. So a {@code deck_entered} naming any OTHER ship counts as an end too.</p>
+     *
+     * <p>Compared by {@code seq}, the only ordering per-type rings share. {@code deck_released}
+     * carries the body but not the ship, so any release in the window is treated as this body's —
+     * which errs toward waiting longer rather than toward reporting a capture that has already
+     * ended.</p>
+     */
+    public static boolean endsCapturedBy(Events log, long mark, String shipId) throws Exception {
+        java.util.List<String> captures = Events.recordsWithAll(log.since(mark, "deck_commit"),
+                "\"ship\":\"" + shipId + "\"");
+        if (captures.isEmpty()) {
+            return false;
+        }
+        double held = Events.number(captures.get(captures.size() - 1), "seq");
+        if (Double.isNaN(held)) {
+            return false; // an unreadable sequence orders nothing; wait rather than answer from it
+        }
+        for (String release : Events.records(log.since(mark, "deck_released"))) {
+            if (endsIt(release, held)) {
+                return false;
+            }
+        }
+        for (String entered : Events.records(log.since(mark, "deck_entered"))) {
+            if (!entered.contains("\"ship\":\"" + shipId + "\"") && endsIt(entered, held)) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    /** Whether {@code record} comes after the commit at {@code held} — and so ended that episode. An
+     *  unreadable {@code seq} counts as ending it: a comparison against NaN is false either way, and
+     *  the honest reading of "I cannot order this" is to keep waiting rather than to report held. */
+    private static boolean endsIt(String record, double held) {
+        double seq = Events.number(record, "seq");
+        return Double.isNaN(seq) || seq > held;
     }
 }

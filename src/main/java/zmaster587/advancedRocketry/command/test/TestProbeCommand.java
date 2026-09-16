@@ -837,8 +837,15 @@ public class TestProbeCommand extends CommandBase {
                 send(sender, "{\"error\":\"world not loaded\"}");
                 return;
             }
-            send(sender, "{\"requested\":"
-                    + zmaster587.advancedRocketry.integration.vs.VSIntegration.loadAllShips(world) + "}");
+            int[] loads = zmaster587.advancedRocketry.integration.vs.VSIntegration.loadAllShips(world);
+            if (loads == null) {
+                send(sender, "{\"error\":\"vs absent\"}");
+                return;
+            }
+            // BOTH halves: a zero `requested` beside a non-zero `alreadyLoaded` is "nothing needed
+            // doing", and beside a zero it is "this world holds no ships" — the same number, two
+            // answers, and a caller that sees only the first cannot tell them apart.
+            send(sender, "{\"requested\":" + loads[0] + ",\"alreadyLoaded\":" + loads[1] + "}");
             return;
         }
         // seat-yard <dim> <x> <y> <z> [shipUuid] — how many pilot-seat tiles the ARRIVAL's own seat
@@ -956,7 +963,15 @@ public class TestProbeCommand extends CommandBase {
                     .shipAngularVelocityById(world, shipId);
             int[] gates = zmaster587.advancedRocketry.integration.vs.VSIntegration
                     .shipPhysicsGatesById(world, shipId);
-            send(sender, jsonMap(shipInfoMap(shipId, s, omega, gates)));
+            java.util.Map<String, Object> info = shipInfoMap(shipId, s, omega, gates);
+            // WHAT THE HULL IS MADE OF, beside where it is. A pose answers "the craft is here" and
+            // says nothing about whether anything of it is; a loaded craft with no blocks is a
+            // registry remnant that answers position lookups exactly like a real one. Every reader
+            // of this verb already prints the reply, so putting the count here is what makes a whole
+            // tier's logs carry it. Added 2026-09-16, after a body over a deck was refused by
+            // containment and nothing in the reply could say whether the craft was empty.
+            info.put("blocks", blockCountOf(world, shipId));
+            send(sender, jsonMap(info));
             return;
         }
         // THE POSITIONAL `ship-info <dim> <x> <y> <z>` IS GONE, removed 2026-09-14.
@@ -2596,6 +2611,27 @@ public class TestProbeCommand extends CommandBase {
         m.put("omega", omega == null ? 0.0
                 : Math.sqrt(omega[0] * omega[0] + omega[1] * omega[1] + omega[2] * omega[2]));
         return m;
+    }
+
+    /**
+     * How many blocks the registry says the ship named {@code shipId} owns, or {@code -1} when this
+     * world's registry does not know it.
+     *
+     * <p>Read off the same registry row {@code ships-registered} reports, so the two verbs cannot
+     * disagree about one craft. {@code -1} is deliberately not {@code 0}: "the registry has no row
+     * for this id" and "this craft owns nothing" are different findings, and a zero would merge
+     * them.</p>
+     */
+    private static int blockCountOf(net.minecraft.world.WorldServer world, String shipId) {
+        for (java.util.Map<String, Object> row
+                : zmaster587.advancedRocketry.integration.vs.VSIntegration.registeredShips(world)) {
+            if (String.valueOf(shipId).equals(String.valueOf(row.get("id")))
+                    || String.valueOf(shipId).equals(String.valueOf(row.get("durableId")))) {
+                Object blocks = row.get("blocks");
+                return blocks instanceof Number ? ((Number) blocks).intValue() : -1;
+            }
+        }
+        return -1;
     }
 
     private static net.minecraft.world.WorldServer vsWorld(ICommandSender sender, int dim) {

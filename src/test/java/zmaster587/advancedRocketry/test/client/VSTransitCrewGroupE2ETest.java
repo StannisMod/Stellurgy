@@ -30,11 +30,12 @@ import static org.junit.Assert.assertTrue;
  * luck, and none of them needed narrowing. That is the opposite of the ground-fixture cluster, where
  * every scenario shares dim 0 and the gates had to be rewritten.</p>
  *
- * <p>The three things the scenarios DO leave behind are closed by
- * {@link AbstractSharedVsClientE2ETest}: a still-riding player, {@code vs permaload} (each scenario
- * switches it on for itself), and the flight computer's static command channels. Their original
- * {@code @After cleanup()} methods did the first two by hand and did not check them; the shared
- * reset asserts both, so those methods are dropped rather than carried over.</p>
+ * <p>The things the scenarios DO leave behind are closed by {@link AbstractSharedVsClientE2ETest}:
+ * a still-riding player and the flight computer's static command channels. Their original
+ * {@code @After cleanup()} methods did that by hand and did not check it; the shared reset asserts
+ * it, so those methods are dropped rather than carried over. ({@code vs permaload} was the third
+ * item here until a test server began holding its ships loaded by default — nobody switches it on
+ * for himself any more, and nothing switches it off between scenarios.)</p>
  *
  * <p>{@code bot().setRenderDistance} is the one channel that belongs to this family alone — the
  * sky-observing scenario widens it — so it is restored here, in the reset, and not in an
@@ -312,7 +313,6 @@ private int waitForLoadedShip(int dim) throws Exception {
     public void aSeatedCrewMemberSurvivesAHyperspaceTransitStillRiding() throws Exception {
 
         // Headless: pin ships loaded so a freshly assembled ship does not auto-unload between probe calls.
-        exec("artest vs permaload true");
 
         // Build a PILOTED tier-2 ship in a fresh transit ORIGIN pool cell. The assembly is DEFERRED
         // rather than threaded — the spawn is queued and the ship manager drains that queue in its
@@ -416,7 +416,6 @@ private int waitForLoadedShip(int dim) throws Exception {
     @Test
     public void aSeatedCrewMemberIsAboardHisShipInHyperspaceWhileItIsStillFlying() throws Exception {
 
-        exec("artest vs permaload true");
 
         String setup = exec("artest space transit-setup-piloted");
         assertTrue("piloted transit setup must succeed: " + setup, readBool(setup, "ok"));
@@ -782,7 +781,6 @@ private long readCounter(String className, String field) throws Exception {
         assertTrue("the sky pass gate must be open, read back off the client's own field: " + rd,
                 rd.get("skyPassEnabled").getAsBoolean());
 
-        exec("artest vs permaload true");
 
         String setup = exec("artest space transit-setup-piloted");
         assertTrue("piloted transit setup must succeed: " + setup, readBool(setup, "ok"));
@@ -926,7 +924,7 @@ private long readCounter(String className, String field) throws Exception {
         long captureMark = clientEvents().mark();
         for (int drop = 0; drop < 6; drop++) {
             bot().waitTicks(40); // fall onto the deck and settle
-            if (!Events.records(clientEvents().since(captureMark, "deck_captured")).isEmpty()) {
+            if (!Events.records(clientEvents().since(captureMark, "deck_commit")).isEmpty()) {
                 break;
             }
             // Re-drop. Where he LANDS is not the subject — this fixture's deck is 3x3 and the cell
@@ -1040,7 +1038,6 @@ private long readCounter(String className, String field) throws Exception {
     @Test
     public void aCrewMemberLivesInHyperspaceUntilHeStepsOffHisShip() throws Exception {
 
-        exec("artest vs permaload true");
         // The void exempts creative and spectator on purpose, so the mode is SET rather than assumed:
         // in either of them this scenario could only ever come back "he survived".
         exec("gamemode survival @a");
@@ -1335,7 +1332,6 @@ private long readCounter(String className, String field) throws Exception {
     @Test
     public void aWalkingCrewMemberTravelsWithHisShipThroughHyperspace() throws Exception {
 
-        exec("artest vs permaload true");
 
         String setup = exec("artest space transit-setup-piloted");
         assertTrue("piloted transit setup must succeed: " + setup, readBool(setup, "ok"));
@@ -1511,7 +1507,6 @@ private long readCounter(String className, String field) throws Exception {
         assertTrue("the sky pass gate must be open, read back off the client's own field: " + rd,
                 rd.get("skyPassEnabled").getAsBoolean());
 
-        exec("artest vs permaload true");
         exec("gamemode survival @a");
 
         String setup = exec("artest space transit-setup-piloted");
@@ -1602,7 +1597,6 @@ private long readCounter(String className, String field) throws Exception {
     @Test
     public void aCrewMemberWhoStoodUpMidFlightArrivesOnHisFeet() throws Exception {
 
-        exec("artest vs permaload true");
         exec("gamemode survival @a");
 
         String setup = exec("artest space transit-setup-piloted");

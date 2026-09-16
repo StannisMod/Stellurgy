@@ -86,7 +86,6 @@ public class VSShipEntryE2ETest extends AbstractSharedServerTest {
     public void aPilotedShipClimbingPastTheCeilingEntersSpaceViaTheFlightComputerTick() throws Exception {
 
         // Headless: pin ships loaded so a freshly assembled/crossed ship does not auto-unload between calls.
-        exec("artest vs permaload true");
         // Install the entry stack into SpaceSubsystem so the PRODUCTION trigger path runs under the harness.
         String setup = exec("artest space entry-setup 2");
         assertTrue("entry setup failed: " + setup, setup.contains("\"ok\":true"));
@@ -185,7 +184,6 @@ public class VSShipEntryE2ETest extends AbstractSharedServerTest {
     @Test
     public void aShipThatEnteredSpaceCanJumpToAnotherCellOnTheLiveStack() throws Exception {
 
-        exec("artest vs permaload true");
         String setup = exec("artest space entry-setup 2");
         assertTrue("entry setup failed: " + setup, setup.contains("\"ok\":true"));
 
@@ -252,7 +250,6 @@ public class VSShipEntryE2ETest extends AbstractSharedServerTest {
         // pasted ship becomes live for free and the arrival's own readiness gate is never tested,
         // which is how this leg stayed green while the same jump, flown by hand, gave up in the
         // paste lane. From here the arrival must make its own ship loadable.
-        exec("artest vs permaload false");
 
         // Nothing below pumps the manager either: the live Ticker advances the transit every tick.
         boolean done = awaitWithinTicks(SETTLE_TICKS,
@@ -350,7 +347,6 @@ public class VSShipEntryE2ETest extends AbstractSharedServerTest {
     @After
     public void cleanup() throws Exception {
         exec("artest space entry-clear");
-        exec("artest vs permaload false");
     }
 
     // --- helpers (mirror VSShipCrossingSpikeTest / VSShipTransitE2ETest) -----------------------------

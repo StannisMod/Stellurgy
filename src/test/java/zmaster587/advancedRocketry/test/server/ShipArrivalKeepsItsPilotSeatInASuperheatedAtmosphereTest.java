@@ -63,7 +63,6 @@ public class ShipArrivalKeepsItsPilotSeatInASuperheatedAtmosphereTest extends Ab
 
         // A headless server has nobody near a ship to hold it loaded; pin ships so the observations
         // below are of the ship and not of VS's unload policy. Reset in @After.
-        exec("artest vs permaload true");
 
         // The craft is BUILT while the world is still temperate — a player builds at home and lands
         // elsewhere, and building in the fire is a different story than arriving in it.
@@ -167,7 +166,6 @@ public class ShipArrivalKeepsItsPilotSeatInASuperheatedAtmosphereTest extends Ab
         if (originalTemperature != Integer.MIN_VALUE) {
             exec("artest planet set-temp 0 " + originalTemperature);
         }
-        exec("artest vs permaload false");
     }
 
     // --- helpers ------------------------------------------------------------------------------------

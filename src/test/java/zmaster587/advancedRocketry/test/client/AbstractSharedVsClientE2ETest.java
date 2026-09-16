@@ -30,12 +30,15 @@ import static org.junit.Assert.assertTrue;
  *       dummy or captured by a deck. A passenger is not moved by {@code /tp}, so without this the
  *       shared reset's plot assertion fails naming coordinates — the symptom, not the cause — and a
  *       scenario that opens by mounting would mount a seat it is already sitting on.</li>
- *   <li><b>{@code vs permaload}.</b> The headless affordance that keeps a freshly assembled ship
- *       loaded with no player to hold it. Several scenarios switch it on and never switch it off,
- *       which hands the next scenario a world where ships never unload — and a scenario whose
- *       subject IS the unload (a reload, a client-load gate) would then silently measure the
- *       affordance instead of the product. It is reset to OFF, so a scenario that needs it SETS
- *       it.</li>
+ *   <li><b>{@code vs permaload} — NO LONGER RESET HERE, and the reason is the interesting part.</b>
+ *       It is the headless affordance that keeps a ship loaded with no player to hold it, and this
+ *       reset used to switch it OFF between scenarios so that each one had to set it for itself.
+ *       That is backwards: every scenario in this family wants it, 45 classes said so by hand, and
+ *       a reset that turned it off mid-run took it away from whatever came next. A test server now
+ *       holds ships loaded from the moment the probes register. What the old note got right is the
+ *       hazard, and it survives in the other direction: a scenario whose subject IS the unload
+ *       would silently measure the affordance, so those three turn it off for themselves and say
+ *       why.</li>
  *   <li><b>The flight computer's probe command channels.</b> They are per-tile and name one ship
  *       each, so they cannot bleed onto a neighbour — but they deliberately OUTRANK the pilot
  *       channel, so one left in force hands the next scenario a computer that ignores its own pilot.
@@ -451,13 +454,8 @@ public abstract class AbstractSharedVsClientE2ETest extends AbstractSharedClient
         // pilot aboard, and a ship that is not loaded is not ticked: its flight computer stops, so it
         // stops climbing and stops being reported at all. Measured 2026-08-23 — a craft lifted to 147
         // flew to 242 at full commanded speed and then went silent for the remaining ten minutes of
-        // its window, with the gate reporting afcResolved=false. The affordance that holds it is this
-        // one, and the family reset switches it back off.
-        String held = exec("artest vs permaload true");
-        scenario().requireArranged("a lifted ship must be held loaded, or the substrate's load"
-                + " controller drops it mid-climb and every later reading is about a ship that is no"
-                + " longer being ticked: " + held, held.contains("\"ok\":true"));
-
+        // its window, with the gate reporting afcResolved=false. What holds it is no longer said
+        // here: a test server keeps its ships loaded from the moment the probes register.
         String before = shipInfoById(dim, shipId);
         double x = readDoubleOr(before, POS_X, Double.NaN);
         double fromY = readDoubleOr(before, POS_Y, Double.NaN);
@@ -655,7 +653,6 @@ public abstract class AbstractSharedVsClientE2ETest extends AbstractSharedClient
         JsonObject wasRiding = bot().reportRidingEntity();
         long clientMark = clientEvents().mark();
         exec("artest player dismount");
-        exec("artest vs permaload false");
         // Release every per-tile PROBE command channel on the server. They name one ship each and
         // cannot bleed onto a neighbour, but they deliberately OUTRANK the pilot channel, so a
         // scenario that left one in force hands the next scenario a computer that ignores its own
@@ -770,7 +767,34 @@ public abstract class AbstractSharedVsClientE2ETest extends AbstractSharedClient
      */
     protected final String deckCaptureOfThisShip(String shipId, String what) throws Exception {
         String reply = exec("artest vs deck-capture");
-        zmaster587.advancedRocketry.test.ShipIdentity.assertCaptureAnchoredOn(reply, shipId, what);
+        try {
+            zmaster587.advancedRocketry.test.ShipIdentity.assertCaptureAnchoredOn(reply, shipId, what);
+        } catch (AssertionError notHeld) {
+            // WHERE THE SHIP IS, beside the verdict that nobody is holding this body. The reply
+            // already says "no hull contains him"; it cannot say whether that is because the body is
+            // in the wrong place or because the CRAFT is, and those have opposite investigations.
+            // Added 2026-09-16, when three scenarios failed this way at once and the reply — perfect,
+            // complete, and about the body alone — could not distinguish them.
+            throw new AssertionError(notHeld.getMessage() + " | and this is where that ship actually"
+                    + " is, read at the same instant: " + shipInfoById(shipId)
+                    // BOTH copies of the body, and labelled, because they are two different readings
+                    // and I read one as the other: `reportState` is the CLIENT's player and the
+                    // verdict above is the SERVER's. Printing them side by side unlabelled is how a
+                    // single position gets read as a disagreement between the sides (2026-09-16).
+                    + " | the body, CLIENT: " + bot().reportState()
+                    + " | the body, SERVER: " + exec("artest vs player-ship-data")
+                    // ...and WHAT that hull is made of. A craft can be loaded, posed and present
+                    // while containing nothing: `blocks:0` is a registry remnant, and a hull with no
+                    // blocks has no world box for a containment query to answer with. The pose alone
+                    // cannot tell that apart from a body standing in the wrong place.
+                    + " | the registry: " + exec("artest vs ships-registered 0")
+                    // ...and WHERE THE NEIGHBOURS ARE. This scenario passes ALONE and fails after its
+                    // siblings have run (measured 2026-09-16), so the hulls they left behind are part
+                    // of the arrangement whether the scenario means them to be or not. A containment
+                    // question is answered against all of them, and the reply's `containingShipIds`
+                    // names only the ones that matched — never the ones that were asked.
+                    + " | every loaded hull: " + exec("artest vs ships-loaded 0"), notHeld);
+        }
         return reply;
     }
 

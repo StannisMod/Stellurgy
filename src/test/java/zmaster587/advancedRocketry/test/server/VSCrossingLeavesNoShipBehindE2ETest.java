@@ -41,9 +41,12 @@ import static org.junit.Assert.assertTrue;
  * requires the resolved ship to actually be AT the destination.</p>
  *
  * <p><b>Why nothing here pumps {@code vs load-ships}.</b> It is not needed — a ship is created already
- * loaded, and {@code permaload} keeps it that way for the whole class, so the loaded set fills itself.
- * It is also not safe: pumping a load while {@code permaload} holds crashes the dedicated server if any
- * registered ship happens to be unloaded, which a shared harness cannot rule out.</p>
+ * loaded, and {@code permaload} keeps it that way for the whole class (a test server holds it for
+ * every class now, not just this one), so the loaded set fills itself. It is also not safe: pumping
+ * a load while {@code permaload} holds crashes the dedicated server if any registered ship happens
+ * to be unloaded, which a shared harness cannot rule out. <b>That hazard is now tier-wide</b>, since
+ * the flag is held everywhere and seventeen sites pump loads; what keeps the one class whose ships
+ * ARE registered-and-unloaded safe is that it turns the flag off for itself.</p>
  *
  * <p>Gated on the server's real VS presence; skips cleanly otherwise.</p>
  */
@@ -73,7 +76,6 @@ public class VSCrossingLeavesNoShipBehindE2ETest extends AbstractSharedServerTes
     /** The defect in one crossing: the ship object left behind in the world the crossing departed. */
     @Test
     public void aCrossingDoesNotLeaveAShipInTheWorldItLeft() throws Exception {
-        exec("artest vs permaload true");
 
         buildShipAt(LEG1_X);
         assertTrue("this leg measures the ship OBJECT a crossing strands, which can only exist if the "
@@ -86,7 +88,6 @@ public class VSCrossingLeavesNoShipBehindE2ETest extends AbstractSharedServerTes
     /** The same leak three crossings deep — the shape a player walks (entry, jump, descent). */
     @Test
     public void threeCrossingsDoNotAccumulateShips() throws Exception {
-        exec("artest vs permaload true");
 
         buildShipAt(LEG2_X);
         assertTrue("the source must be loaded when it is cut: " + counters(),
@@ -132,7 +133,6 @@ public class VSCrossingLeavesNoShipBehindE2ETest extends AbstractSharedServerTes
             + " again: a craft with no blocks is a record on its way out of the world, and any lookup"
             + " that hands it to a caller gives an answer that is about to stop being true.")
     public void theNearestShipLookupRefusesAHullWithNoBlocks() throws Exception {
-        exec("artest vs permaload true");
 
         buildShipAt(LEG3_X);
         assertTrue("the ship must be loaded and findable before it is emptied, or this leg tests the"
@@ -165,7 +165,6 @@ public class VSCrossingLeavesNoShipBehindE2ETest extends AbstractSharedServerTes
     @org.junit.After
     public void resetPermaload() throws Exception {
         // Shared-harness state-leak contract: never leave "permanently loaded" set for a later method.
-        exec("artest vs permaload false");
     }
 
     // --- the invariant ------------------------------------------------------------------------------

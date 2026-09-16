@@ -302,6 +302,13 @@ public class M1PlanetToPlanetMilestoneE2ETest {
         Events events = new Events(this::exec, bot()::waitTicks);
         long tLeg = System.currentTimeMillis();
 
+        // Leg 4 says why, and it holds for the whole loop: an observer is aboard the whole way, so
+        // keeping the ship loaded is production's job here — a harness affordance doing it would
+        // hide the failure to.
+        zmaster587.advancedRocketry.test.ShipReadiness.letShipsUnload(this::exec,
+                "this milestone walks a player's own loop with an observer aboard, and production is"
+                + " what must keep the ship loaded across the crossing");
+
         // ---- LEG 0: the world this loop is walked in is the one the test asked for. -------------
         String fuelCfg = exec("artest config get rocketRequireFuel");
         requireArranged("the seeded config file must have been PARSED. This reads the live "

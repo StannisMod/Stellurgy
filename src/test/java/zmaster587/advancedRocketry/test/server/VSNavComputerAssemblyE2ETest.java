@@ -49,7 +49,6 @@ public class VSNavComputerAssemblyE2ETest extends AbstractSharedServerTest {
     @Test
     public void aBuiltNavigationComputerIsLinkedToItsShipByTheAssembler() throws Exception {
 
-        exec("artest vs permaload true");
         String fixture = exec("artest fixture rocket 0 " + BASE_X + " " + BASE_Y + " " + BASE_Z
                 + " with-nav-computer");
         assertTrue("the with-nav-computer fixture must build: " + fixture, fixture.contains("\"ok\":true"));

@@ -2,6 +2,7 @@ package zmaster587.advancedRocketry.test.server;
 
 import zmaster587.advancedRocketry.test.Events;
 import zmaster587.advancedRocketry.test.GameTicks;
+import zmaster587.advancedRocketry.test.ShipReadiness;
 
 import org.junit.Test;
 
@@ -15,11 +16,12 @@ import static org.junit.Assert.assertTrue;
  * E2E: a jump with <b>nobody aboard and nobody nearby</b> must still finish on the pose realizing its
  * target coordinate — not in the arrival paste band.
  *
- * <p>This is the case the existing transit e2e cannot see. That test opens with
- * {@code artest vs permaload true} and calls {@code artest vs load-ships} while it waits, then asserts
- * the ship is VS-managed at {@code (0,200,0)} — the paste column. So it supplies the loadedness the
- * arrival is supposed to establish for itself, and it pins the paste band AS success. An arrival that
- * never reaches its pose passes it.</p>
+ * <p>This is the case the existing transit e2e cannot see. That test runs with the server's ships
+ * held permanently loaded (as every test does, unless it says otherwise) and calls
+ * {@code artest vs load-ships} while it waits, then asserts the ship is VS-managed at
+ * {@code (0,200,0)} — the paste column. So it is handed the loadedness the arrival is supposed to
+ * establish for itself, and it pins the paste band AS success. An arrival that never reaches its
+ * pose passes it.</p>
  *
  * <p>Here neither affordance is used: no permaload, no forced load. That matters because the real
  * deferral in an arrival is not asynchrony but a POLICY — Valkyrien Skies loads a ship only when a
@@ -47,6 +49,10 @@ public class VSUnmannedTransitSettlesOnItsPoseE2ETest extends AbstractSharedServ
 
     @Test
     public void anUnmannedJumpEndsOnItsPoseNotInThePasteBand() throws Exception {
+
+        ShipReadiness.letShipsUnload(this::exec,
+                "an unmanned arrival must establish its own loadedness; held up by the harness,"
+                + " \"the pose is realized\" would be asserted about a craft that was never let go");
 
         // A real craft — a deck, a flight computer, a pilot seat linked to it and a durable id. UNMANNED
         // is about who is ABOARD, not about what the hull is: a craft nobody can sit in could not be

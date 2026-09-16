@@ -50,7 +50,6 @@ public class VSJumpCarriesLooseBodiesE2ETest extends AbstractSharedServerTest {
     @Test
     public void aJumpCarriesTheBodiesLyingOnItsDeck() throws Exception {
 
-        exec("artest vs permaload true");
 
         String setup = exec("artest space transit-setup-piloted");
         assertTrue("piloted transit setup failed: " + setup, setup.contains("\"ok\":true"));
@@ -143,7 +142,6 @@ public class VSJumpCarriesLooseBodiesE2ETest extends AbstractSharedServerTest {
 
     @org.junit.After
     public void resetPermaload() throws Exception {
-        exec("artest vs permaload false");
     }
 
     /** This tier's reader of the server's ordered event log. */

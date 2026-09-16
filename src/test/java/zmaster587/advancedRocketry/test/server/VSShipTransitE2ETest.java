@@ -38,7 +38,6 @@ public class VSShipTransitE2ETest extends AbstractSharedServerTest {
     public void aVsShipTransitsFromOneCellToAnotherThroughHyperspace() throws Exception {
 
         // Headless: pin ships loaded so a freshly assembled ship does not auto-unload between probe calls.
-        exec("artest vs permaload true");
 
         // Build a real craft in a fresh origin cell (a pool slot world) + the whole transit stack.
         String setup = exec("artest space transit-setup-piloted");
@@ -91,7 +90,6 @@ public class VSShipTransitE2ETest extends AbstractSharedServerTest {
 
     @org.junit.After
     public void resetPermaload() throws Exception {
-        exec("artest vs permaload false");
     }
 
     // --- helpers (mirror VSShipCrossingSpikeTest) ---------------------------------------------------

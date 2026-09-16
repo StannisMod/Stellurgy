@@ -3,6 +3,7 @@ package zmaster587.advancedRocketry.test.server;
 import com.github.stannismod.forge.testing.junit.AbstractHeadlessServerTest;
 import zmaster587.advancedRocketry.test.GameTicks;
 import zmaster587.advancedRocketry.test.ShipIdentity;
+import zmaster587.advancedRocketry.test.ShipReadiness;
 
 import org.junit.Test;
 
@@ -52,6 +53,23 @@ public class VSCrossingOutOfAnUnloadedSourceE2ETest extends AbstractHeadlessServ
      */
     private static final int WAIT_TICKS = 200;
     private static final int SETTLE_TICKS = 60;
+
+    /**
+     * The one class that has to TURN THE AFFORDANCE OFF, because its subject is the state the
+     * affordance removes.
+     *
+     * <p>A test server holds every ship permanently loaded from the moment the probes register —
+     * a headless run has no player to hold one, and every other scenario wants its craft to survive
+     * between probe calls. Here a registered ship that is NOT loaded is the whole arrangement: with
+     * the flag on, this class would silently become a copy of the loaded-source class next door and
+     * could not fail. Said here, once, rather than left to the default being what it used to be.</p>
+     */
+    @org.junit.Before
+    public void theSourceMustBeAbleToUNLOAD() throws Exception {
+        ShipReadiness.letShipsUnload(this::exec,
+                "this class's subject IS a registered ship nobody has loaded; held loaded, it would"
+                + " silently become a copy of the loaded-source class next door");
+    }
 
     @Test
     public void aCrossingOutOfAnUnloadedSourceLeavesNoRegistryEntry() throws Exception {

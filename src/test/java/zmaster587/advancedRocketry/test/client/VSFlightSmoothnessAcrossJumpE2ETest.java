@@ -180,7 +180,6 @@ public class VSFlightSmoothnessAcrossJumpE2ETest extends AbstractSharedVsClientE
         // Headless: nothing but the client holds a ship loaded, and the probe calls below run
         // between client ticks. This affordance touches ship LOADING, never the timing of the
         // physics loop or of the render thread, which is all this test reads.
-        exec("artest vs permaload true");
 
         // ---- ARRANGE: the transit stack over an empty origin cell, and a real flyable ship built
         // in it by the real assembler. The piloted setup fixture's bare deck has no propulsion, so
@@ -397,7 +396,6 @@ public class VSFlightSmoothnessAcrossJumpE2ETest extends AbstractSharedVsClientE
                 bot().setFrameRate(previousFrameRate);
             }
             exec("artest player dismount");
-            exec("artest vs permaload false");
             exec("artest vs motion-trace reset");
         } catch (Exception ignored) {
         }

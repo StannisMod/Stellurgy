@@ -605,15 +605,40 @@ final class VSBridge {
      * for each. Returns how many ships it requested. (In real play a nearby client loads
      * the ship itself; this is the headless/no-observer equivalent.)
      */
-    static int loadAllShips(World world) {
+    /**
+     * Queue an immediate load for every registered ship in {@code world} that is not loaded yet, and
+     * answer {@code [requested, alreadyLoaded]}.
+     *
+     * <p>BOTH numbers, because {@code requested == 0} has two meanings a caller must be able to tell
+     * apart: nothing needed loading, or there was nothing there at all. The single count this
+     * returned until 2026-09-16 could not, and a test read it as "the ship is loadable" — which it
+     * stopped being the day the server began holding ships loaded and the honest answer became
+     * zero.</p>
+     */
+    static int[] loadAllShipsCounted(World world) {
         WorldServerShipManager manager = ValkyrienUtils.getServerShipManager(world);
         int requested = 0;
+        int alreadyLoaded = 0;
         for (ShipData ship : ValkyrienUtils.getQueryableData(world).getShips()) {
             ship.setPhysicsEnabled(true);
+            // Only what is not LOADED. Queueing a load for a ship that already has a PhysicsObject
+            // is a request for work that is done — the manager no longer dies of it, but asking is
+            // still wrong, and the count returned below would otherwise report the size of the
+            // registry rather than the number of loads this call actually asked for.
+            //
+            // NOT `isShipInUse`, which also answers true for a ship whose chunks are streaming in
+            // the background. That ship is not loaded yet, and an IMMEDIATE request for it is the
+            // one thing a caller who wants it loaded NOW can do — it is also the exact arrangement
+            // `VSDoubleQueuedShipLoadDoesNotKillTheServerE2ETest` is built on, so filtering it here
+            // would quietly disarm the test that guards the crash this verb used to aim at.
+            if (manager.getPhysObjectFromUUID(ship.getUuid()) != null) {
+                alreadyLoaded++;
+                continue;
+            }
             manager.queueShipLoad(ship.getUuid());
             requested++;
         }
-        return requested;
+        return new int[]{requested, alreadyLoaded};
     }
 
     /**

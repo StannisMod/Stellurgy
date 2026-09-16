@@ -161,12 +161,96 @@ public final class Events {
 
     /** Everything recorded at or after {@code mark}, in order, as the raw reply. */
     public String since(long mark) throws Exception {
-        return probe.exec("artest events since " + mark);
+        return read("artest events since " + mark);
     }
 
     /** The records of one {@code type} at or after {@code mark}, in order, as the raw reply. */
     public String since(long mark, String type) throws Exception {
-        return probe.exec("artest events since " + mark + " " + type);
+        return read("artest events since " + mark + " " + type);
+    }
+
+    /**
+     * The highest eviction count REPORTED so far for each record type, so a growing one is announced
+     * once per growth instead of on every read.
+     *
+     * <p><b>A static, and here is its owner and its lifetime</b>: the TEST JVM — the client or the
+     * server process this suite runs in — for as long as that process lives. It holds nothing but
+     * "what has already been printed", no assertion reads it, and a wrong value costs a duplicate
+     * line or a missing one, never a verdict. Two logs (the server's and the client's) share it and
+     * count separately, so the blind spot is named rather than engineered away: a growth on the
+     * quieter side is masked while the busier side's total is higher. Announcing the busy side is
+     * the point.</p>
+     */
+    private static final java.util.Map<String, Long> REPORTED_EVICTIONS =
+            new java.util.concurrent.ConcurrentHashMap<>();
+
+    /**
+     * The log's per-type ring depth ({@code TestEventLog.CAPACITY_PER_TYPE}), as the STEP between
+     * eviction announcements.
+     *
+     * <p>Copied rather than read: the constant lives in the production-side log and this is a test
+     * reading its own output over a probe channel. It is a reporting cadence, not an assertion — a
+     * drift between the two costs a line said early or late and nothing else.</p>
+     */
+    private static final long RING_DEPTH_PER_TYPE = 256L;
+
+    /**
+     * Read a reply and ANNOUNCE what the log threw away to produce it.
+     *
+     * <p>The ring is bounded per type; when a type turns it over, every window that straddles the
+     * eviction reads an absence that is not one. That number has always travelled in the reply's
+     * envelope and was printed only by a FAILING assertion — so a recorder whose ring turns over
+     * hundreds of times a scenario looked healthy on every green run, right up to the day a window
+     * happened to land on it and something else went red. <i>Maintainer ruling 2026-09-16, on a red
+     * whose envelope showed 25 217 evictions and which could not be compared against the green run
+     * before it because the green run printed nothing: "пусть печатаются всегда".</i></p>
+     *
+     * <p>Announced on GROWTH, not on every read: a line per new high, naming the type and the jump.
+     * A run that evicts nothing says nothing, which is what makes a run that does stand out.</p>
+     */
+    private String read(String command) throws Exception {
+        String reply = probe.exec(command);
+        announceEvictions(reply);
+        return reply;
+    }
+
+    /** @see #read(String) — split out so any other reader of a log reply can announce the same. */
+    public static void announceEvictions(String reply) {
+        JsonObject env;
+        try {
+            env = envelope(reply);
+        } catch (RuntimeException | AssertionError notAnEnvelope) {
+            return; // a reply with no envelope has no counters to announce; the caller's own
+        }           // assertions are what say whether that is a problem
+        if (env == null || !env.has("droppedByType") || !env.get("droppedByType").isJsonObject()) {
+            return;
+        }
+        for (java.util.Map.Entry<String, JsonElement> byType
+                : env.getAsJsonObject("droppedByType").entrySet()) {
+            long now;
+            try {
+                now = byType.getValue().getAsLong();
+            } catch (RuntimeException notANumber) {
+                continue;
+            }
+            if (now <= 0L) {
+                continue;
+            }
+            Long before = REPORTED_EVICTIONS.get(byType.getKey());
+            // A RING'S WORTH since the last line, not every record. These counters climb on every
+            // read of a chatty type, so "announce on growth" alone is a line per read — 821 of them
+            // in one class, which is the same silence wearing a different coat. One ring's depth is
+            // the step because that is the unit of harm: it is exactly how much has to be lost for a
+            // window to have been emptied under a reader.
+            if (before != null && now < before + RING_DEPTH_PER_TYPE) {
+                continue;
+            }
+            REPORTED_EVICTIONS.merge(byType.getKey(), now, Math::max);
+            System.out.println("[events] RING EVICTED `" + byType.getKey() + "` — " + now
+                    + " records dropped so far (+" + (before == null ? now : now - before)
+                    + " since this was last said). Any window of this type that straddles the"
+                    + " eviction reads an absence that is not one.");
+        }
     }
 
     /**

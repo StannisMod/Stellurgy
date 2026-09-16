@@ -183,7 +183,11 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
         // Carrying this scenario's ship, not merely of this type: the record names the hull that took
         // the body, and a neighbour's capture in the same window would satisfy a type-only wait and
         // open the interval below on a craft the scenario never touches.
-        client.awaitCarrying(arrivalMark, "deck_captured", "\"ship\":\"" + scenarioShipId + "\"",
+        //
+        // Over the EPISODE and not the record: `deck_commit` is a per-tick commit, so "a capture
+        // of this ship happened" is satisfied by one the deck has since let go of — and every leg
+        // in this class reads the live capture on the next line.
+        ShipIdentity.awaitCaptureHeldBy(client, arrivalMark, scenarioShipId,
                 "the client player must be taken by THIS ship's deck"
                 + " before the jump — the whole scenario is about a capture that already exists",
                 CAPTURE_LINK_BUDGET_TICKS);
@@ -237,7 +241,7 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
         // precondition the absence needs — an empty release list from a client that was resolving
         // nobody is not an answer about the capture.
         String releases = client.since(jumpMark, "deck_released");
-        String held = client.since(jumpMark, "deck_captured");
+        String held = client.since(jumpMark, "deck_commit");
         bot().invokeStaticInt(FRAME_STEP_WINDOW, "close");
         String jumpSteps = Events.lastRecord(
                 clientEvents().since(jumpStepMark, "frame_step_window"));
@@ -246,7 +250,7 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
                 + (jumpSteps == null ? "(the render seam sampled no aboard frame)" : jumpSteps)
                 + " posLookApplies=" + posLookD
                 + " capturesForThisShip=" + Events.countRecords(
-                        client.since(jumpMark, "deck_captured"), "\"ship\":\"" + scenarioShipId + "\"")
+                        client.since(jumpMark, "deck_commit"), "\"ship\":\"" + scenarioShipId + "\"")
                 + " windowTicks=60");
         System.out.println("[crewcap] jump deckY=" + deckY + " apex=" + apex + " settledY=" + settledY
                 + " samples=" + samples + " :: " + trace
@@ -257,7 +261,7 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
                 "the capture was or was not released somewhere in the jump arc");
         assertTrue("the jump must actually leave the deck (apex=" + apex + " deckY=" + deckY + ")",
                 apex - deckY > 0.5);
-        // Counted on the SHIP, not on the type: `held` is already `since(mark, "deck_captured")`, so
+        // Counted on the SHIP, not on the type: `held` is already `since(mark, "deck_commit")`, so
         // the type needle only asks whether the reply is non-empty — a question the reply's own
         // filter has answered. The ship is the part that is not already known.
         assertTrue("the client must have been resolving this body ON THIS SHIP through the arc, or an"
@@ -359,7 +363,7 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
             bot().releaseKey(Keyboard.KEY_W);
         }
         String gate = client.since(walkMark, "deck_gate_decided");
-        String captures = client.since(walkMark, "deck_captured");
+        String captures = client.since(walkMark, "deck_commit");
         System.out.println("[crewcap] ground-walk groundY=" + groundY + " yMin=" + yMin + " yMax="
                 + yMax + " captured=" + captured + "/" + samples + " :: " + trace
                 + "\n[crewcap] ground-walk gate decisions :: " + gate
@@ -405,7 +409,7 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
         Events client = clientEvents();
         long dismountMark = client.mark();
         exec("artest player dismount");
-        client.awaitCarrying(dismountMark, "deck_captured", "\"ship\":\"" + scenarioShipId + "\"",
+        client.awaitCarrying(dismountMark, "deck_commit", "\"ship\":\"" + scenarioShipId + "\"",
                 "the dismount seed must put the ex-pilot on THIS ship's"
                 + " deck before the stillness window means anything", CAPTURE_LINK_BUDGET_TICKS);
 
@@ -444,7 +448,7 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
         forwardSeen = maxInput(tickLines, 1);
         trace.append(tickLines);
         String releases = client.since(churnMark, "deck_released");
-        String gate = client.since(churnMark, "deck_captured");
+        String gate = client.since(churnMark, "deck_commit");
         double x1 = bot().reportState().get("playerX").getAsDouble();
         double z1 = bot().reportState().get("playerZ").getAsDouble();
         double drift = Math.sqrt((x1 - x0) * (x1 - x0) + (z1 - z0) * (z1 - z0));
@@ -464,7 +468,7 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
         // Asked of the frame's own per-body verdict rather than of `resolvedTicks`. That static is
         // JVM-global and cumulative, so on a shared client it counted every body this side ever
         // resolved: a delta proved "something was resolved", never "this crew member was", and an
-        // earlier scenario's traffic could satisfy it on its own. `deck_captured` is recorded at
+        // earlier scenario's traffic could satisfy it on its own. `deck_commit` is recorded at
         // every commit and carries the ship, so it is scoped to THIS craft by its own payload.
         //
         // NOT `deck_gate_decided`, which was tried first and is wrong for THIS question. That record
@@ -513,7 +517,7 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
         Events client = clientEvents();
         long dismountMark = client.mark();
         exec("artest player dismount");
-        client.awaitCarrying(dismountMark, "deck_captured", "\"ship\":\"" + scenarioShipId + "\"",
+        client.awaitCarrying(dismountMark, "deck_commit", "\"ship\":\"" + scenarioShipId + "\"",
                 "the dismount seed must put the ex-pilot on THIS ship's"
                 + " hovering deck before the stillness window means anything",
                 CAPTURE_LINK_BUDGET_TICKS);
@@ -535,7 +539,7 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
         // The churn, as the client's own releases in THIS window with the gate that fired on each —
         // where a cumulative counter delta could only say that something, some time, had happened.
         String releases = client.since(churnMark, "deck_released");
-        String gate = client.since(churnMark, "deck_captured");
+        String gate = client.since(churnMark, "deck_commit");
         long churn = Events.countRecords(releases, "\"reason\":\"externalMove");
         double x1 = bot().reportState().get("playerX").getAsDouble();
         double z1 = bot().reportState().get("playerZ").getAsDouble();
@@ -582,7 +586,7 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
         Events client = clientEvents();
         long dismountMark = client.mark();
         exec("artest player dismount");
-        client.awaitCarrying(dismountMark, "deck_captured", "\"ship\":\"" + scenarioShipId + "\"",
+        client.awaitCarrying(dismountMark, "deck_commit", "\"ship\":\"" + scenarioShipId + "\"",
                 "the dismount seed must put the ex-pilot on THIS ship's"
                 + " hovering deck before any activity on it can churn a capture",
                 CAPTURE_LINK_BUDGET_TICKS);
@@ -652,12 +656,12 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
         arc.append(String.format(java.util.Locale.ROOT, "[landed y=%.2f] ",
                 bot().reportState().get("playerY").getAsDouble()));
         String jumpReleases = client.since(jumpMark, "deck_released");
-        String jumpHeld = client.since(jumpMark, "deck_captured");
+        String jumpHeld = client.since(jumpMark, "deck_commit");
         System.out.println("[crewcap] jump-arc " + arc
                 + "\n[crewcap] jump-arc releases :: " + jumpReleases);
         Events.assertInstrumentRan(jumpReleases, "deck_capture_events",
                 "the capture was or was not released during the vertical jump");
-        // On the SHIP: `jumpHeld` is already filtered to `deck_captured`, so the type needle asks
+        // On the SHIP: `jumpHeld` is already filtered to `deck_commit`, so the type needle asks
         // only whether the reply is non-empty. See the sibling above.
         assertTrue("the client must have been resolving the jumper ON THIS SHIP through his arc, or an"
                 + " empty release list says nothing about the capture: " + jumpHeld,
@@ -707,7 +711,7 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
         String capture = exec("artest vs deck-capture");
         // The client's releases in THIS window, each with the gate that released it.
         String releases = client.since(releaseMark, "deck_released");
-        String gate = client.since(releaseMark, "deck_captured");
+        String gate = client.since(releaseMark, "deck_commit");
         Events.assertInstrumentRan(releases, "deck_capture_events",
                 "the client's capture was or was not cycled during the activity");
         long churn = Events.countRecords(releases, "\"reason\":\"externalMove");
@@ -832,7 +836,7 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
         Events client = clientEvents();
         long dismountMark = client.mark();
         exec("artest player dismount");
-        client.awaitCarrying(dismountMark, "deck_captured", "\"ship\":\"" + scenarioShipId + "\"",
+        ShipIdentity.awaitCaptureHeldBy(client, dismountMark, scenarioShipId,
                 "a body must be taken by THIS ship's deck, or the guard"
                 + " columns of this trace are empty and half the reading is missing",
                 CAPTURE_LINK_BUDGET_TICKS);
@@ -898,7 +902,7 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
         Events client = clientEvents();
         long dismountMark = client.mark();
         exec("artest player dismount");
-        client.awaitCarrying(dismountMark, "deck_captured", "\"ship\":\"" + scenarioShipId + "\"",
+        ShipIdentity.awaitCaptureHeldBy(client, dismountMark, scenarioShipId,
                 "the body must be taken by THIS ship's deck before the"
                 + " server can be asked what it accepts FROM a deck", CAPTURE_LINK_BUDGET_TICKS);
         // Read ONCE, and proved to be about THIS ship: the two execs this replaces
@@ -1024,7 +1028,7 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
         // The settle that stood here is gone for the reason given at the first of these: the capture
         // is a record awaited from a mark taken before the teleport, and the wait advances the
         // client itself.
-        client.awaitCarrying(arrivalMark, "deck_captured", "\"ship\":\"" + scenarioShipId + "\"",
+        ShipIdentity.awaitCaptureHeldBy(client, arrivalMark, scenarioShipId,
                 "the client player must be taken by THIS ship's deck"
                 + " before the drive, or the churn window is about nobody",
                 CAPTURE_LINK_BUDGET_TICKS);
@@ -1164,7 +1168,7 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
         double shipY1 = readDouble(shipInfo(), POS_Y);
         String driveReleases = client.since(driveMark, "deck_released");
         long churn = Events.countRecords(driveReleases, "\"reason\":\"externalMove");
-        String gate = client.since(driveMark, "deck_captured");
+        String gate = client.since(driveMark, "deck_commit");
         // gapTicks is the discriminator the guard already computes and this message used to drop on
         // the floor. The guard's budget is ONE tick and flat, so "frameMoved 0.626 against
         // allowed 0.200" means two different things depending on it: gapTicks=1 says the deck really
@@ -1418,7 +1422,7 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
                 // full below, so the last-write static has nothing left to add here.
                 land.append(String.format(java.util.Locale.ROOT,
                         "[t%d y=%.2f res=%d] ", i * 3, py,
-                        Events.countRecords(client.since(encounterMark, "deck_captured"),
+                        Events.countRecords(client.since(encounterMark, "deck_commit"),
                                 "\"ship\":\"" + scenarioShipId + "\"")));
             }
             settledY = py;
@@ -1783,7 +1787,7 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
         Events client = clientEvents();
         long dismountMark = client.mark();
         exec("artest player dismount");
-        client.awaitCarrying(dismountMark, "deck_captured", "\"ship\":\"" + scenarioShipId + "\"",
+        ShipIdentity.awaitCaptureHeldBy(client, dismountMark, scenarioShipId,
                 "the ex-pilot must be taken by THIS ship's deck before"
                 + " any claim about a crosshair on that deck", CAPTURE_LINK_BUDGET_TICKS);
         // Read ONCE, and proved to be about THIS ship: the two execs this replaces
@@ -1974,7 +1978,7 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
         exec("tp @a " + ship[0] + " " + (ship[1] + 3) + " " + ship[2] + " 0 0");
         // Same as the two above: the record this teleport must leave is awaited from a mark taken
         // before it, so sixty ticks of pacing added delay and nothing else.
-        client.awaitCarrying(seedMark, "deck_captured", "\"ship\":\"" + scenarioShipId + "\"",
+        ShipIdentity.awaitCaptureHeldBy(client, seedMark, scenarioShipId,
                 "the body must be taken by THIS deck ONCE before the"
                 + " manoeuvre, or the client holds no earlier observation of the craft and the"
                 + " interval under test does not exist", CAPTURE_LINK_BUDGET_TICKS);
@@ -2006,7 +2010,7 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
         client.assertChain(seedMark, "the body must stand on this deck and then be taken off it, or"
                 + " the client holds no stale observation of the craft and there is nothing for the"
                 + " manoeuvre below to be wrong about", CAPTURE_LINK_BUDGET_TICKS,
-                "deck_captured", "deck_released");
+                "deck_commit", "deck_released");
         bot().waitTicks(40);
 
         String before = shipInfo();
@@ -2078,8 +2082,8 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
             }
         }
         // Every capture the encounter committed, each with the carry production installed with it.
-        String captures = client.since(contactMark, "deck_captured");
-        // Counted on the SHIP: the reply is already filtered to `deck_captured`, so a type needle
+        String captures = client.since(contactMark, "deck_commit");
+        // Counted on the SHIP: the reply is already filtered to `deck_commit`, so a type needle
         // asks only whether it is non-empty. And `maxCarryY` below reduces over EVERY record in the
         // reply, so a capture by another hull in this window would put a carry into the maximum that
         // the craft named further down never declared — the two counts being equal is what lets the
@@ -2164,7 +2168,7 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
         Events client = clientEvents();
         long dismountMark = client.mark();
         exec("artest player dismount");
-        client.awaitCarrying(dismountMark, "deck_captured", "\"ship\":\"" + scenarioShipId + "\"",
+        ShipIdentity.awaitCaptureHeldBy(client, dismountMark, scenarioShipId,
                 "the ex-pilot must be taken by THIS ship's deck before"
                 + " any claim about looking or walking on it", CAPTURE_LINK_BUDGET_TICKS);
         // Read ONCE, and proved to be about THIS ship: the two execs this replaces
@@ -2180,7 +2184,7 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
         // below need runway). The capture then carries this open-deck spot through the rolls.
         //
         // A settle and NOT an event wait: the body is captured at both ends of this hop, and
-        // `deck_captured` is the per-tick commit rather than an edge, so awaiting one here would
+        // `deck_commit` is the per-tick commit rather than an edge, so awaiting one here would
         // return the tick it was asked and witness nothing. What changes is the capture's deck POINT,
         // and no event names a move within one deck. The state read below is the honest instrument.
         long hopMark = clientEvents().mark();
@@ -2604,7 +2608,7 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
     // against the instrument that produced the reading, and every absence claim below carries one.
 
     /**
-     * The largest vertical CARRY any capture in a {@code deck_captured} reply was committed with.
+     * The largest vertical CARRY any capture in a {@code deck_commit} reply was committed with.
      *
      * <p>The carry is the deck velocity production binds into the captured body's motion, and it is
      * an argument of the commit — so this is the exact value installed, on every tick it was

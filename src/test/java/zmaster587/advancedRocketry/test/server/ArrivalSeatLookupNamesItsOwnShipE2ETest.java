@@ -46,7 +46,6 @@ public class ArrivalSeatLookupNamesItsOwnShipE2ETest extends AbstractSharedServe
 
         // Headless: nobody is near a ship to hold it loaded, and an unloaded ship reads as a missing
         // one. Reset in @After (shared-harness contract).
-        exec("artest vs permaload true");
 
         clearArea(SEATED_X, SEATED_Z);
         clearArea(SEATLESS_X, SEATLESS_Z);
@@ -97,7 +96,6 @@ public class ArrivalSeatLookupNamesItsOwnShipE2ETest extends AbstractSharedServe
 
     @After
     public void restoreSharedServerState() throws Exception {
-        exec("artest vs permaload false");
     }
 
     // --- helpers (mirror VSShipEntryE2ETest) --------------------------------------------------

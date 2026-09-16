@@ -1583,14 +1583,17 @@ public final class VSIntegration {
 
     /**
      * Force every known ship in {@code world} loaded and physics-enabled (headless/no-observer
-     * equivalent of a nearby player loading it); returns the number requested, or -1 when VS
-     * is absent.
+     * equivalent of a nearby player loading it).
+     *
+     * @return {@code [requested, alreadyLoaded]} — a load is queued only for a ship that has no
+     *         physics object yet, so a caller can tell "nothing needed loading" from "there was
+     *         nothing here"; {@code null} when VS is absent.
      */
-    public static int loadAllShips(World world) {
+    public static int[] loadAllShips(World world) {
         if (!isAvailable()) {
-            return -1;
+            return null;
         }
-        return VSBridge.loadAllShips(world);
+        return VSBridge.loadAllShipsCounted(world);
     }
 
     /**

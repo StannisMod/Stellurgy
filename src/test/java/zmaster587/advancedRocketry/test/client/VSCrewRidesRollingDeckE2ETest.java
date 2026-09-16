@@ -185,7 +185,7 @@ public class VSCrewRidesRollingDeckE2ETest extends AbstractSharedVsClientE2ETest
         // lifetime total over every body this JVM has resolved, so on a shared client it said nothing
         // about this roll. Each record names its body and the gate's whole reason.
         System.out.println("[rollingdeck] client deckCommits="
-                + clientEvents().since(0, "deck_captured")
+                + clientEvents().since(0, "deck_commit")
                 + " deckReleases=" + clientEvents().since(0, "deck_released")
                 // The server's half as ITS records, not a probe reply of statics: the verb that
                 // served them is gone, and each record here names the body it is about.

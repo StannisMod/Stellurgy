@@ -114,8 +114,8 @@ public class SpikeFarCoordinateShipTest extends AbstractClientE2ETest {
         exec("gamerule doWeatherCycle false");
         exec("weather clear");
         // Headless has no player holding a distant ship loaded, and the client is one player in one
-        // place while two ships exist in this run.
-        assertTrue(exec("artest vs permaload true").contains("\"ok\":true"));
+        // place while two ships exist in this run — which a test server now answers for every
+        // scenario, from the moment the probes register.
 
         Map<Integer, String> verdicts = new LinkedHashMap<>();
         // Which ship answered for which rung. Two rungs that report the same id measured one subject
@@ -268,7 +268,6 @@ public class SpikeFarCoordinateShipTest extends AbstractClientE2ETest {
             out = built;
             try {
                 exec("artest player dismount");
-                exec("artest vs permaload false");
             } catch (Exception ignored) {
                 // teardown must not mask the finding
             }
@@ -339,7 +338,6 @@ public class SpikeFarCoordinateShipTest extends AbstractClientE2ETest {
         exec("gamerule logAdminCommands false");
         exec("gamerule doMobSpawning false");
         bot().setRenderDistance(4);
-        assertTrue(exec("artest vs permaload true").contains("\"ok\":true"));
 
         StringBuilder out = new StringBuilder("[SPIKE one-shot command survival]\n");
         try {
@@ -414,7 +412,6 @@ public class SpikeFarCoordinateShipTest extends AbstractClientE2ETest {
             writeReport("one-shot-command-survival.txt", out.toString());
             try {
                 exec("artest player dismount");
-                exec("artest vs permaload false");
             } catch (Exception ignored) {
                 // teardown must not mask the reading
             }

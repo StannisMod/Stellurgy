@@ -154,14 +154,14 @@ public class VSCrewInteriorBoardingE2ETest extends AbstractSharedVsClientE2ETest
         bot().waitTicks(200);
 
         // The arrangement as a CHAIN, not a budget: the probe un-seats him and the deck takes him.
-        // `dismount` is recorded at the un-seating and `deck_captured` at the capture production
+        // `dismount` is recorded at the un-seating and `deck_commit` at the capture production
         // installs, so a failure names WHICH link never happened - where the 30x4 poll it replaces
         // could only print the last sample of a server verdict.
         Events events = events();
         long dismountMark = events.markInstrumented();
         exec("artest player dismount");
         requireChain(events, dismountMark, "the dismounted pilot must be taken by the deck inside the"
-                + " inverted ship", "dismount", "deck_captured");
+                + " inverted ship", "dismount", "deck_commit");
         // ...and ABOARD, not stood on the outer hull. Production commits the mode itself at every
         // transition, so it is read from that commit instead of inferred from the probe's dump.
         String modesBefore = awaitCommittedMode(events, dismountMark, "aboard",
@@ -234,7 +234,7 @@ public class VSCrewInteriorBoardingE2ETest extends AbstractSharedVsClientE2ETest
         }
 
         // The subject: the deck reclaims the released body. The mark is taken AFTER the release on
-        // purpose - `deck_captured` is written on EVERY resolved tick, so a mark from before it is
+        // purpose - `deck_commit` is written on EVERY resolved tick, so a mark from before it is
         // satisfied by the captures that preceded it and would prove nothing. From here the first
         // record is the RE-capture; and because an ongoing capture keeps writing one every tick,
         // this cannot miss a re-claim that landed between the two reads either.
@@ -242,7 +242,7 @@ public class VSCrewInteriorBoardingE2ETest extends AbstractSharedVsClientE2ETest
         // Carrying THIS ship: the record names the hull that re-took the body, and "the deck reclaimed
         // him" is a claim about the ship he was released inside — a type-only wait cannot tell it
         // from another hull picking him up on his way down.
-        String reclaimed = clientEvents.awaitCarrying(reclaimMark, "deck_captured",
+        String reclaimed = clientEvents.awaitCarrying(reclaimMark, "deck_commit",
                 "\"ship\":\"" + scenarioShipId + "\"",
                 "THIS ship's deck must reclaim the body released inside the inverted ship, instead of"
                         + " leaving it to world gravity through the world-down cockpit opening",
@@ -269,7 +269,7 @@ public class VSCrewInteriorBoardingE2ETest extends AbstractSharedVsClientE2ETest
         // The mode is read from the RELEASE mark, not from the re-claim mark, and the difference is
         // the whole reason this read can answer at all. `deck_mode_committed` is an EDGE — it is
         // written at `logCapture`, which production calls only when a capture is INSTALLED or its
-        // mode TRANSITIONS — while `deck_captured` is a per-tick commit. Production repairs an
+        // mode TRANSITIONS — while `deck_commit` is a per-tick commit. Production repairs an
         // external-move release inside the same tick that performs it (the travel commit re-captures
         // the body on the spot it moved to), so the one mode commit of this episode is already
         // written by the time the release record has been read and a fresh mark taken: a window that
@@ -332,13 +332,13 @@ public class VSCrewInteriorBoardingE2ETest extends AbstractSharedVsClientE2ETest
                         + Math.cos(h) + " " + Math.sin(h) + " 0.0 0.0").contains("\"commanded\":true"));
         bot().waitTicks(200);
 
-        // Same arrangement chain as the open-cockpit scenario: `dismount` then `deck_captured`, and
+        // Same arrangement chain as the open-cockpit scenario: `dismount` then `deck_commit`, and
         // the MODE off production's own commit.
         Events events = events();
         long dismountMark = events.markInstrumented();
         exec("artest player dismount");
         requireChain(events, dismountMark, "the dismounted pilot must be taken by the deck inside the"
-                + " inverted roofed ship", "dismount", "deck_captured");
+                + " inverted roofed ship", "dismount", "deck_commit");
         String modesBefore = awaitCommittedMode(events, dismountMark, "aboard",
                 "the dismounted pilot must be captured ABOARD inside the inverted ship");
         double preY = bot().reportState().get("playerY").getAsDouble();
@@ -423,7 +423,7 @@ public class VSCrewInteriorBoardingE2ETest extends AbstractSharedVsClientE2ETest
         // hull for at least one gate call: an entry through a hatch, a relog inside the cavity, or a
         // flight-off, none of which is a teleport.
         long reclaimMark = clientEvents.mark();
-        String reclaimed = clientEvents.awaitCarrying(reclaimMark, "deck_captured",
+        String reclaimed = clientEvents.awaitCarrying(reclaimMark, "deck_commit",
                 "\"ship\":\"" + scenarioShipId + "\"",
                 "the displaced body must be re-captured BY THIS SHIP - a displacement that ends with"
                         + " no capture at all leaves the body to world gravity in the cavity, and one"
@@ -515,7 +515,7 @@ public class VSCrewInteriorBoardingE2ETest extends AbstractSharedVsClientE2ETest
         long dismountMark = events.markInstrumented();
         exec("artest player dismount");
         requireChain(events, dismountMark, "the dismounted pilot must be taken by the rolled deck",
-                "dismount", "deck_captured");
+                "dismount", "deck_commit");
         String modesBefore = awaitCommittedMode(events, dismountMark, "aboard",
                 "the dismounted pilot must be captured ABOARD on the rolled deck");
         double[] sub0 = parseSub(censusField("subPos"));

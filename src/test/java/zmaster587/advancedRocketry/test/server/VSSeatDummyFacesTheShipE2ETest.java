@@ -57,7 +57,6 @@ public class VSSeatDummyFacesTheShipE2ETest extends AbstractSharedServerTest {
     @Test
     public void theSeatMountTurnsWithItsShip() throws Exception {
 
-        exec("artest vs permaload true");
         clearArea(SRC_X, SRC_Z);
         String coords = placeFixture(SRC_X, SRC_Y, SRC_Z, "with-pilot-seat");
         String asm = exec("artest rocket assemble 0 " + coords);
@@ -125,7 +124,6 @@ public class VSSeatDummyFacesTheShipE2ETest extends AbstractSharedServerTest {
 
     @After
     public void cleanup() throws Exception {
-        exec("artest vs permaload false");
     }
 
     // --- observation --------------------------------------------------------------------------------

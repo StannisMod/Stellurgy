@@ -107,10 +107,15 @@ public class VSCrewRelogPersistenceE2ETest extends AbstractSharedVsClientE2ETest
         // body meets a deck, and the 80-tick sleep this replaces could only ask whether it happened
         // to be open when it finally looked - an episode that opened and closed inside the sleep,
         // or one that never opened at all, are the same reading to it.
+        //
+        // ...and the wait is over the EPISODE, not over the record: `deck_commit` is production's
+        // per-tick commit, so a wait on one returns for a capture the deck may already have let go
+        // of, and the one-shot read a line below then answers with no anchor at all. Measured here
+        // on 2026-09-15, in the tick-burst leg. `awaitCaptureHeldBy` states the whole chain.
         Events events = events();
         long captureMark = events.markInstrumented();
         exec("tp @a " + ship[0] + " " + (ship[1] + 4) + " " + ship[2] + " 0 0");
-        events.awaitCarrying(captureMark, "deck_captured", "\"ship\":\"" + scenarioShipId + "\"",
+        ShipIdentity.awaitCaptureHeldBy(events, captureMark, scenarioShipId,
                 "the crew member must be TAKEN by THIS ship's deck"
                 + " after being put on it - nothing below is about a deck capture until there is"
                 + " one", CAPTURE_BUDGET_TICKS);
@@ -332,7 +337,7 @@ public class VSCrewRelogPersistenceE2ETest extends AbstractSharedVsClientE2ETest
         Events events = events();
         long captureMark = events.markInstrumented();
         exec("tp @a " + ship[0] + " " + (ship[1] + 4) + " " + ship[2] + " 0 0");
-        events.awaitCarrying(captureMark, "deck_captured", "\"ship\":\"" + scenarioShipId + "\"",
+        ShipIdentity.awaitCaptureHeldBy(events, captureMark, scenarioShipId,
                 "the crew member must be TAKEN by THIS ship's deck"
                 + " before he walks on it (" + where + ")", CAPTURE_BUDGET_TICKS);
         // Read ONCE, and proved to be about THIS ship: the two execs this replaces
@@ -464,7 +469,7 @@ public class VSCrewRelogPersistenceE2ETest extends AbstractSharedVsClientE2ETest
         Events events = events();
         long captureMark = events.markInstrumented();
         exec("tp @a " + ship[0] + " " + (ship[1] + 4) + " " + ship[2] + " 0 0");
-        events.awaitCarrying(captureMark, "deck_captured", "\"ship\":\"" + scenarioShipId + "\"",
+        ShipIdentity.awaitCaptureHeldBy(events, captureMark, scenarioShipId,
                 "the crew member must be TAKEN by THIS ship's deck"
                 + " before the server is made to stall under him", CAPTURE_BUDGET_TICKS);
         // Read ONCE, and proved to be about THIS ship: the two execs this replaces
@@ -643,7 +648,7 @@ public class VSCrewRelogPersistenceE2ETest extends AbstractSharedVsClientE2ETest
         Events events = events();
         long captureMark = events.markInstrumented();
         exec("tp @a " + ship[0] + " " + (ship[1] + 4) + " " + ship[2] + " 0 0");
-        events.awaitCarrying(captureMark, "deck_captured", "\"ship\":\"" + scenarioShipId + "\"",
+        ShipIdentity.awaitCaptureHeldBy(events, captureMark, scenarioShipId,
                 "the player must be TAKEN by THIS ship's deck while the"
                 + " ship is still upright - the capture is what carries his deck spot through the"
                 + " roll", CAPTURE_BUDGET_TICKS);
@@ -709,7 +714,7 @@ public class VSCrewRelogPersistenceE2ETest extends AbstractSharedVsClientE2ETest
         // Carrying HIS ship's name, not merely of this type: "the deck TOOK him again" is a claim
         // about the deck he logged out on, and a record written by any other hull's capture would
         // satisfy a type-only wait and start the mode loop below at the wrong moment.
-        events.awaitCarrying(relogMark, "deck_captured", "\"ship\":\"" + scenarioShipId + "\"",
+        ShipIdentity.awaitCaptureHeldBy(events, relogMark, scenarioShipId,
                 "after the relog HIS deck must TAKE him again -"
                 + " a body nobody captured is one vanilla and the physics mod are holding, which"
                 + " under an inverted hull is a fall", CAPTURE_BUDGET_TICKS);
@@ -766,7 +771,7 @@ public class VSCrewRelogPersistenceE2ETest extends AbstractSharedVsClientE2ETest
         Events events = events();
         long captureMark = events.markInstrumented();
         exec("tp @a " + ship[0] + " " + (ship[1] + 4) + " " + ship[2] + " 0 0");
-        events.awaitCarrying(captureMark, "deck_captured", "\"ship\":\"" + scenarioShipId + "\"",
+        ShipIdentity.awaitCaptureHeldBy(events, captureMark, scenarioShipId,
                 "the player must be TAKEN by THIS ship's deck before he"
                 + " walks on it - the walk he logs out carrying is only meaningful under a capture",
                 CAPTURE_BUDGET_TICKS);
@@ -829,7 +834,7 @@ public class VSCrewRelogPersistenceE2ETest extends AbstractSharedVsClientE2ETest
                         + " where it put him", CAPTURE_BUDGET_TICKS);
         // Carrying HIS ship's name — the message already says "on something that is not this deck",
         // and a type-only wait cannot tell that case from a pass.
-        events.awaitCarrying(relogMark, "deck_captured", "\"ship\":\"" + scenarioShipId + "\"",
+        events.awaitCarrying(relogMark, "deck_commit", "\"ship\":\"" + scenarioShipId + "\"",
                 "after the relog HIS deck must TAKE him again -"
                 + " otherwise the drift windows below measure a body vanilla and the physics mod"
                 + " are holding, on something that is not this deck", CAPTURE_BUDGET_TICKS);

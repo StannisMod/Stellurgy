@@ -64,7 +64,6 @@ public class VSShipMotionServerTest extends AbstractSharedServerTest {
 
     @After
     public void cleanup() throws Exception {
-        exec("artest vs permaload false");
     }
 
     @Test
@@ -75,7 +74,6 @@ public class VSShipMotionServerTest extends AbstractSharedServerTest {
         // gone from the loaded set by the time the next call asks about it. This is what the class
         // was disabled for; the probe that holds a ship loaded server-side has existed since
         // 2026-07-13.
-        exec("artest vs permaload true");
 
         // Assemble the tier-2 ship — with VS this routes to a ship (no rocket) and
         // queues an async VS relocation.
@@ -101,8 +99,16 @@ public class VSShipMotionServerTest extends AbstractSharedServerTest {
         // 2) A headless server has no player near the ship to auto-load it, so it stays
         //    unloaded/dormant. Force it loaded + physics-enabled (a nearby client does
         //    this itself in real play).
+        //
+        //    The assertion is that the ship IS loaded afterwards, not that a load was REQUESTED.
+        //    Those came apart on 2026-09-16: a test server now holds its ships loaded, so nothing
+        //    needs requesting and `requested:0` is the honest answer — which the old pin read as a
+        //    failure. `requested` says what this call had to do; `alreadyLoaded` says what it found
+        //    done. Either way the postcondition is one ship loaded in this world.
         String load = exec("artest vs load-ships 0");
-        assertTrue("load-ships must request the ship: " + load, load.contains("\"requested\":1"));
+        assertTrue("load-ships must account for the ship, either as a queued load or as one already"
+                + " loaded: " + load,
+                load.contains("\"requested\":1") || load.contains("\"alreadyLoaded\":1"));
 
         // 3) The ship's NAME, from the assembler that minted it, and then its position asked BY that
         //    name. The identity used to be re-derived here from a bounded lookup at the build spot,

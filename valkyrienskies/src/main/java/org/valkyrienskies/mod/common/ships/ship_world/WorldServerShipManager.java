@@ -394,8 +394,16 @@ public class WorldServerShipManager implements IPhysObjectWorld {
                 throw new IllegalStateException("No ship found for ID:\n" + toLoadID);
             }
             ShipData toLoad = toLoadOptional.get();
+            // Already loaded is a SATISFIED request, not an error — the same reading the background
+            // loop below takes, and for the same reason. queueShipLoad is public and thread safe and
+            // says "ensure this ship is loaded"; it is not an assertion about the current state, and
+            // its callers are outside this manager's tick (a login path, a watch update, a probe that
+            // asks for the whole registry). "Please make sure X is loaded" answered while X is loaded
+            // has nothing to do. Throwing here instead put an IllegalStateException in the world tick
+            // with nothing between it and the server loop, and took the whole dedicated server down.
             if (loadedShips.containsKey(toLoadID)) {
-                throw new IllegalStateException("Tried loading a ShipData that was already loaded?\n" + toLoad);
+                loadingInBackground.remove(toLoadID);
+                continue;
             }
             // Remove this ship from the background loading set, if it is in it.
             loadingInBackground.remove(toLoadID);
@@ -452,9 +460,13 @@ public class WorldServerShipManager implements IPhysObjectWorld {
         backgroundLoadQueue.clear();
         // Unload far away ships immediately.
         for (final UUID toUnloadID : unloadQueue) {
-            // Make sure we have a ship with this ID that can be unloaded
+            // Not loaded is a SATISFIED request, the mirror of the load loop above: queueShipUnload
+            // asks for a ship not to be loaded, and one that is already unloaded needs nothing done
+            // to it. The state can arrive here legitimately — an unload queued on one tick for a ship
+            // something else unloaded first, or a queue that outlived the world's own pass — and
+            // dying for it is the same defect wearing the other sign.
             if (!loadedShips.containsKey(toUnloadID)) {
-                throw new IllegalStateException("Tried unloading a ShipData that isn\'t loaded? Ship ID is\n" + toUnloadID);
+                continue;
             }
             PhysicsObject physicsObject = getPhysObjectFromUUID(toUnloadID);
             if (VSConfig.showAnnoyingDebugOutput) {

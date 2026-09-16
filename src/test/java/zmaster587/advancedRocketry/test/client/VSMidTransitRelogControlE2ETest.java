@@ -83,7 +83,6 @@ public class VSMidTransitRelogControlE2ETest extends AbstractSharedVsClientE2ETe
     public void aPilotWhoRelogsMidTransitRegainsControlOnArrival() throws Exception {
 
         // Headless: pin ships loaded so the assembled ship survives between probe calls.
-        exec("artest vs permaload true");
 
         // ---- ARRANGE: the transit stack over an EMPTY origin cell, then a real FLYABLE piloted
         // ship built there with the real assembler. --------------------------------------------
@@ -428,7 +427,6 @@ public class VSMidTransitRelogControlE2ETest extends AbstractSharedVsClientE2ETe
     public void cleanup() {
         try {
             exec("artest player dismount");
-            exec("artest vs permaload false");
         } catch (Exception ignored) {
         }
     }

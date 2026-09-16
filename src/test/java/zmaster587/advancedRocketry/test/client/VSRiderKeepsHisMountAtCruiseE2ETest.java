@@ -139,7 +139,6 @@ public class VSRiderKeepsHisMountAtCruiseE2ETest extends AbstractSharedVsClientE
         // Headless: nobody is near the ship between probe calls, so pin it loaded. This is
         // arrangement only - what is under test is what the client is TOLD about an entity it
         // already has, not whether the ship loads.
-        exec("artest vs permaload true");
 
         String setup = exec("artest space transit-setup-empty");
         scenario().requireArranged("empty cell setup must succeed: " + setup, readBool(setup, "ok"));

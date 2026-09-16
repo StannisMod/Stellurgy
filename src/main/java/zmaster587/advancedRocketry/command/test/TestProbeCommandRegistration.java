@@ -56,6 +56,20 @@ public final class TestProbeCommandRegistration {
         // The ordered event log. Subscribed here and nowhere else, so a shipped game has no
         // subscriber, builds no record and pays nothing for what only a test wants to see.
         TestEventLog.ServerRecorder.ensureRegistered();
+        // Ships stay loaded for the life of a TEST server, and a scenario whose SUBJECT is an
+        // unloaded ship turns it off for itself (`artest vs permaload false`).
+        //
+        // The physics substrate loads a ship only while a player is within its load distance and
+        // queues an unload every tick for one that is not — right for a real game, and unreachable
+        // for a headless test, which has no player to spare and often none in the world at all. So
+        // every scenario that assembles a craft wanted this, and each said so for itself: 45 classes
+        // called the probe verb by hand, and 28 of them switched it back off when they finished,
+        // which turned it off for whatever ran next in the same JVM.
+        //
+        // Set HERE rather than in a test base class because the tier has six of those and twelve
+        // classes sit on the framework's own — a default installed per hierarchy is only as complete
+        // as the list of hierarchies, and this one has to hold for every test there is.
+        zmaster587.advancedRocketry.integration.vs.VSIntegration.setShipsPermanentlyLoaded(true);
         AdvancedRocketry.logger.info("Registered /artest test-only probe commands (-D" + FLAG + "=true)");
         bootstrapTestServerBridge();
     }

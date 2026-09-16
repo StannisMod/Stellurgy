@@ -100,7 +100,6 @@ public class SpaceLoginRestoreDeckCrewE2ETest extends AbstractSpaceLoginRestoreC
                         || offline.contains("\"error\":\"no players connected\""));
 
         // Nobody is left near the ship to hold its chunks while he is away.
-        exec("artest vs permaload true");
 
         Events restore = events();
         long restoreMark = restore.mark();
@@ -229,7 +228,6 @@ public class SpaceLoginRestoreDeckCrewE2ETest extends AbstractSpaceLoginRestoreC
                 offline.contains("\"error\":\"no such player\"")
                         || offline.contains("\"error\":\"no players connected\""));
 
-        exec("artest vs permaload true");
         Events restore = events();
         long restoreMark = restore.mark();
         bot().connect();

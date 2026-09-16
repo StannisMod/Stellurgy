@@ -3,6 +3,7 @@ package zmaster587.advancedRocketry.test.server;
 import com.github.stannismod.forge.testing.junit.AbstractHeadlessServerTest;
 import zmaster587.advancedRocketry.test.GameTicks;
 import zmaster587.advancedRocketry.test.ShipIdentity;
+import zmaster587.advancedRocketry.test.ShipReadiness;
 
 import org.junit.Test;
 
@@ -64,6 +65,12 @@ public class VSDoubleQueuedShipLoadDoesNotKillTheServerE2ETest extends AbstractH
     @Test
     public void anImmediateLoadOfAPermanentlyLoadedShipDoesNotKillTheServer() throws Exception {
 
+        // This scenario is the one that needs BOTH states, in this order, and it says so rather than
+        // inheriting either. First the ship must be allowed to unload — a test server holds its ships
+        // loaded by default, and under that default the arrangement below can never be reached.
+        ShipReadiness.letShipsUnload(this::exec,
+                "the ship has to UNLOAD before anything can ask for it twice");
+
         buildShip();
 
         // The enabling condition: registered, with nothing loaded behind it. Without it the immediate
@@ -73,9 +80,14 @@ public class VSDoubleQueuedShipLoadDoesNotKillTheServerE2ETest extends AbstractH
         assertTrue("the ship left the registry as well as the loaded set, so there is nothing to load: "
                 + counters(), queryableShips() >= 1);
 
+        // ...and now the other half: permanent loading is what makes the world's own pass queue a
+        // BACKGROUND load every tick this ship is unloaded, which is the second wanter.
+        ShipReadiness.holdShipsLoaded(this::exec,
+                "the world's pass only queues the background load while the ship is permanently"
+                + " loaded and unloaded — that is the second of the two wanters");
+
         // Now both wanters exist: permanent loading makes the world's pass queue a background load every
         // tick this ship is unloaded, and the explicit request queues the immediate one.
-        exec("artest vs permaload true");
         exec("artest vs load-ships 0");
         settle();
 

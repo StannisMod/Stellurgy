@@ -111,7 +111,6 @@ public class VSJumpDumpsTheCruiseE2ETest extends AbstractSharedServerTest {
      * drift apart, and the copy nobody maintains is the one that breaks silently.
      */
     private Arrived jumpUnderCruise(long speed, String route) throws Exception {
-        exec("artest vs permaload true");
 
         String setup = exec("artest space transit-setup-piloted");
         assertTrue("piloted transit setup failed: " + setup, setup.contains("\"ok\":true"));
@@ -148,12 +147,19 @@ public class VSJumpDumpsTheCruiseE2ETest extends AbstractSharedServerTest {
         assertTrue("the arrival was announced but names no dimension: " + arrived, targetDim >= 0);
         assertTrue("the ship never (re)loaded in the target cell (dim " + targetDim + "); countAll="
                 + exec("artest vs ship-count-all " + targetDim), loadedShips(targetDim) >= 1);
-        return new Arrived(targetDim, ShipIdentity.theOnlyLoadedShipIn(this::exec, targetDim));
+        // Identified off the ARRIVAL'S OWN RECORD, not off "the only loaded ship in this cell". That
+        // read worked only while an earlier scenario's hull unloaded itself once nobody was near it;
+        // with a test server holding ships loaded, the target cell holds two and a count cannot say
+        // which one this jump produced.
+        String durableId = Events.lastField(arrived, "ship");
+        assertTrue("the arrival must name the craft that made it, or the cruise read below is about"
+                + " whichever hull the cell happens to hold: " + arrived,
+                durableId != null && !durableId.trim().isEmpty());
+        return new Arrived(targetDim, ShipIdentity.physicsIdOf(this::exec, targetDim, durableId.trim()));
     }
 
     @org.junit.After
     public void resetPermaload() throws Exception {
-        exec("artest vs permaload false");
     }
 
     // ─── plumbing, mirroring this tier's siblings ───────────────────────────────

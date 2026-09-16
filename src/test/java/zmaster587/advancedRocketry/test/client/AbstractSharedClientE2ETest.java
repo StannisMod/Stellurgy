@@ -59,10 +59,13 @@ import static org.junit.Assert.assertTrue;
  *       {@code artest station list}) must narrow the answer with {@link Plot#contains}.</li>
  *   <li><b>Declare the phase</b> as it goes, through {@link #scenario()} — that is what lets a
  *       failure name the broken system without anyone opening this file.</li>
- *   <li><b>No un-restored global mutation.</b> Atmosphere density, weather and permaload are
- *       shareable only if every scenario SETS what it needs and MEASURES that the set took; a
- *       scenario that assumes a global instead belongs on the per-method
- *       {@link AbstractClientE2ETest}.</li>
+ *   <li><b>No un-restored global mutation.</b> Atmosphere density and weather are shareable only if
+ *       every scenario SETS what it needs and MEASURES that the set took; a scenario that assumes a
+ *       global instead belongs on the per-method {@link AbstractClientE2ETest}. ({@code vs
+ *       permaload} used to be on this list and is not any more: a test server holds its ships
+ *       loaded from the moment the probes register, so it is a property of the server rather than
+ *       something each scenario sets — and the three whose subject IS an unloaded ship turn it off
+ *       for themselves.)</li>
  *   <li><b>Declare a config, do not write one.</b> A value the server reads at START goes through
  *       {@link #seedGameDirectory}, which merges the class's keys into one file before boot; a value
  *       read at every use is flipped per scenario through {@code artest config set} and restored in
@@ -730,7 +733,7 @@ public abstract class AbstractSharedClientE2ETest {
         // count of guard drops over every body, and the releases it was counting are printed in full
         // on the next line — each naming its body and the gate's whole reason.
         String clientResolver =
-                "client deck commits (whole ring): " + clientEvents().since(0, "deck_captured")
+                "client deck commits (whole ring): " + clientEvents().since(0, "deck_commit")
                 + "\n  client deck releases (whole ring): " + clientEvents().since(0, "deck_released")
                 // The body's own ship-frame point, per tick, instead of the three statics that used
                 // to be sampled here: those held whatever the LAST resolved body left in them, which

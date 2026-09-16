@@ -73,13 +73,11 @@ public class VSUnpilotedEntryE2ETest extends AbstractSharedServerTest {
     @After
     public void cleanup() throws Exception {
         exec("artest space entry-clear");
-        exec("artest vs permaload false");
     }
 
     @Test
     public void anUnpilotedShipClimbingPastTheCeilingStillEntersSpace() throws Exception {
 
-        exec("artest vs permaload true");
         String setup = exec("artest space entry-setup 2");
         assertTrue("entry setup failed: " + setup, setup.contains("\"ok\":true"));
 
