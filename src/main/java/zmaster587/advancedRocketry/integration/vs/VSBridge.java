@@ -559,8 +559,10 @@ final class VSBridge {
      * substrate's ordering; that knowledge belongs where it is understood.</p>
      *
      * <p><b>A scenario's cleanup verb, not a game mechanic.</b> A craft marked here is gone for good
-     * — nothing revives a ship somebody declared finished — and a hull with blocks leaves them
-     * behind in the world where it stood.</p>
+     * — nothing revives a ship somebody declared finished. Its blocks are DISCARDED, not pasted back
+     * into the world: {@code PhysicsObject.destroyShip} guards the copy-back on {@code !isDead()},
+     * precisely so that retiring a hull does not print a whole craft into the world where it was
+     * floating. Deconstruction is the other disposition and it is a different flag.</p>
      */
     static int markAllShipsDead(World world) {
         int marked = 0;
