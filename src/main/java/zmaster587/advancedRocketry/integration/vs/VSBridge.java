@@ -523,6 +523,67 @@ final class VSBridge {
     }
 
     /**
+     * Every LOADED ship in {@code world} as identity → world bounding box, in one pass.
+     *
+     * <p>One pass and one map because the caller's question is about PAIRS: asking per ship would
+     * walk the manager once per craft and could read two boxes a tick apart, which for a question
+     * about whether two hulls overlap is the difference between a meeting and a near miss.</p>
+     */
+    static java.util.Map<String, AxisAlignedBB> loadedShipBoxes(World world) {
+        java.util.Map<String, AxisAlignedBB> out = new java.util.LinkedHashMap<>();
+        for (PhysicsObject physo : ValkyrienUtils.getServerShipManager(world).getAllLoadedThreadSafe()) {
+            AxisAlignedBB box = physo.getShipBoundingBox();
+            if (box != null) {
+                out.put(physo.getShipData().getUuid().toString(), box);
+            }
+        }
+        return out;
+    }
+
+    /**
+     * Bring the ship named by {@code shipId} to rest: linear and angular velocity both zeroed.
+     *
+     * <p><b>This is a WRITE, not a brake, and the difference is measured.</b> The substrate
+     * recomputes velocity from forces on every physics step and overwrites what is written here
+     * ({@link #pushShipById} records the measurement: 25 setpoints a tick apart moved a craft by
+     * −0.6 blocks). So a caller that means "stay stopped" has to keep saying it, every tick, for as
+     * long as it means it — which is exactly what the collision module does while two hulls
+     * overlap.</p>
+     */
+    /**
+     * Mark every registered ship in {@code world} for collection, and answer how many were marked.
+     *
+     * <p>Through {@code ShipData.markDead()}, which is the substrate's own "this craft is finished"
+     * — it collects on its next tick, copying nothing back for a blockless hull and deleting the
+     * ship chunks. The alternative, deregistering by hand, requires the caller to know the
+     * substrate's ordering; that knowledge belongs where it is understood.</p>
+     *
+     * <p><b>A scenario's cleanup verb, not a game mechanic.</b> A craft marked here is gone for good
+     * — nothing revives a ship somebody declared finished — and a hull with blocks leaves them
+     * behind in the world where it stood.</p>
+     */
+    static int markAllShipsDead(World world) {
+        int marked = 0;
+        for (ShipData ship : ValkyrienUtils.getQueryableData(world).getShips()) {
+            if (!ship.isDead()) {
+                ship.markDead();
+                marked++;
+            }
+        }
+        return marked;
+    }
+
+    static boolean haltShipById(World world, String shipId) {
+        PhysicsObject physo = shipById(world, shipId);
+        if (physo == null) {
+            return false;
+        }
+        physo.getPhysicsData().setLinearVelocity(new Vector3d(0.0, 0.0, 0.0));
+        physo.getPhysicsData().setAngularVelocity(new Vector3d(0.0, 0.0, 0.0));
+        return true;
+    }
+
+    /**
      * Every ship in {@code world}'s REGISTRY, described one per entry: its substrate id, AR's durable
      * name, how many blocks it owns, whether anything has it loaded, and whether it has been declared
      * finished.

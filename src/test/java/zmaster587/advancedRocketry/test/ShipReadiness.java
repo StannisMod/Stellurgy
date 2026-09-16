@@ -42,6 +42,33 @@ public final class ShipReadiness {
     private static final Pattern COUNT = Pattern.compile("\"count\":(-?\\d+)");
 
     /**
+     * Clear the craft this scenario built out of {@code dim} — every registered ship in that world
+     * is marked finished and the substrate collects it.
+     *
+     * <p><b>Why a scenario owes this.</b> A craft left behind used to be harmless: nobody was near
+     * it, so it unloaded, and an unloaded hull does not move. Now a test server holds its ships
+     * loaded, and a hull left behind goes on ticking — measured 2026-09-16, inside one class: one
+     * craft still climbing at y=609, one fallen to y=70 and drifting sideways, in the world the next
+     * scenario runs in. Maintainer, the same day: <i>"в @After всем тестам с кораблями надо добавить
+     * убийство их кораблей. Негоже мусор после себя оставлять."</i></p>
+     *
+     * <p>Marks EVERY ship in the world, not this scenario's alone, because that is what a shared
+     * world's cleanup means: the next scenario is entitled to an empty sky, and a craft that belongs
+     * to nobody in particular is exactly the one nothing else will clear. A class that stages two
+     * craft and means to keep one across scenarios must not call this.</p>
+     *
+     * <p>Answers how many it marked, so a caller can print it; nothing here asserts on the number —
+     * a scenario that built nothing legitimately clears nothing.</p>
+     */
+    public static int clearCraftFrom(Events.Probe probe, int dim) throws Exception {
+        String reply = probe.exec("artest vs destroy-ships " + dim);
+        Matcher m = Pattern.compile("\"marked\":(-?\\d+)").matcher(String.valueOf(reply));
+        assertTrue("the cleanup verb must answer how many craft it marked, or a scenario cannot say"
+                + " whether it left anything behind: " + reply, m.find());
+        return Integer.parseInt(m.group(1));
+    }
+
+    /**
      * Let this scenario's ships UNLOAD again — the opt-out from the default a test server runs
      * under, for the handful of scenarios whose subject is the unload itself.
      *

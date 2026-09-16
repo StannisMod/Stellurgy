@@ -77,6 +77,44 @@ public final class VSIntegration {
         // Publish "a ship became usable" on the bus. Registered here for the same reason as the line
         // above: it is a pure AR type and only runs where a substrate exists to have ships at all.
         net.minecraftforge.common.MinecraftForge.EVENT_BUS.register(new ShipLoadedAnnouncer());
+        // Two craft stop when they meet. Its own module, deletable in one piece — see its javadoc
+        // for what it deliberately does not do.
+        ShipMeetingStop.register();
+    }
+
+    /**
+     * Every LOADED ship in {@code world} as identity → world bounding box, or an empty map when the
+     * substrate is absent.
+     */
+    public static java.util.Map<String, net.minecraft.util.math.AxisAlignedBB> loadedShipBoxes(
+            World world) {
+        if (!isAvailable()) {
+            return java.util.Collections.emptyMap();
+        }
+        return VSBridge.loadedShipBoxes(world);
+    }
+
+    /**
+     * Bring the ship named by {@code shipId} to rest — both velocities zeroed. A WRITE the substrate
+     * overwrites on its next physics step, so a caller that means "stay stopped" says it every tick;
+     * {@code VSBridge.haltShipById} carries the measurement.
+     */
+    public static boolean haltShip(World world, String shipId) {
+        return isAvailable() && VSBridge.haltShipById(world, shipId);
+    }
+
+    /**
+     * Mark every registered ship in {@code world} as finished, so the substrate collects them on its
+     * next tick; answers how many were marked, or {@code -1} when the substrate is absent.
+     *
+     * <p>For a scenario clearing up after itself. It is irreversible by design — the substrate never
+     * revives a craft declared finished — so nothing in gameplay should reach for it.</p>
+     */
+    public static int markAllShipsDead(World world) {
+        if (!isAvailable()) {
+            return -1;
+        }
+        return VSBridge.markAllShipsDead(world);
     }
 
     /**

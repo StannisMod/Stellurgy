@@ -419,6 +419,13 @@ public class ARConfiguration {
     public double wearWarnProbability = 0.05;
     @ConfigProperty(needsSync = true)
     public boolean wearCriticalBlocksLaunch = false;
+    /**
+     * Whether two craft refuse to pass through one another. Until this existed they simply
+     * overlapped and nothing happened; what it does is crude on purpose — both stop while their
+     * boxes overlap, nothing is conserved — so it is a switch a server can turn off whole.
+     */
+    @ConfigProperty(needsSync = true)
+    public boolean shipsCollide = true;
     @ConfigProperty(needsSync = true)
     public double serviceStationStandaloneRepairMultiplier = 3.0;
     @ConfigProperty(needsSync = true)
@@ -662,6 +669,7 @@ public class ARConfiguration {
         arConfig.wearThrustPenaltyMax = config.get(ROCKET, "wearThrustPenaltyMax", 0.5, "Fraction of thrust a fully-worn rocket motor loses (partsWearSystem). 0.5 means a motor at max wear produces half thrust; 0 disables the thrust penalty (wear then only affects explosion chance)").getDouble();
         arConfig.wearWarnProbability = config.get(ROCKET, "wearWarnProbability", 0.05, "Failure probability (0..1) at or above which the pilot is warned before launch that the rocket is worn. Also the threshold that blocks launch when wearCriticalBlocksLaunch is true").getDouble();
         arConfig.wearCriticalBlocksLaunch = config.get(ROCKET, "wearCriticalBlocksLaunch", false, "If true, a rocket whose failure probability is at/above wearWarnProbability is refused launch (no explosion). If false, the pilot is warned but may still launch and risk the stochastic explosion").getBoolean();
+        arConfig.shipsCollide = config.get(ROCKET, "shipsCollide", true, "If true, two ships whose bounding boxes overlap are both held at rest while they overlap, and a collision event naming both is posted. Crude by design: nothing is conserved, no momentum is transferred and the hulls are compared as boxes rather than blocks. Set false to restore the old behaviour, in which two ships pass through each other").getBoolean();
         arConfig.serviceStationStandaloneRepairMultiplier = config.get(ROCKET, "serviceStationStandaloneRepairMultiplier", 3.0, "Resource cost multiplier when the service station repairs a worn part WITHOUT a linked PrecisionAssembler (consumes the repair recipe's non-part ingredients times this factor). The assembler-backed path stays at 1x").getDouble();
         arConfig.wearTankLeakChanceMax = config.get(ROCKET, "wearTankLeakChanceMax", 0.5, "Chance (0..1) that a fully-worn fuel tank carrying fuel/oxidizer leaks at launch. Scaled by the tank's wear stage. A leak both bleeds fuel and adds to the launch failure (explosion) probability").getDouble();
         arConfig.wearTankLeakFuelLoss = config.get(ROCKET, "wearTankLeakFuelLoss", 0.25, "Fraction of a fuel type's loaded fuel lost when a worn tank of that type leaks at launch").getDouble();

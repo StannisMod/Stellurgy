@@ -684,6 +684,18 @@ public abstract class AbstractSharedVsClientE2ETest extends AbstractSharedClient
                 + " passenger, so the plot assertion that follows would fail for the wrong reason."
                 + " client reports " + riding, isRiding(riding));
         scenario().record("resetRiding", riding);
+
+        // AND THE CRAFT ITSELF GOES. A scenario used to be able to walk away from its hull because
+        // nobody was near it, so it unloaded, and an unloaded hull does not move. That stopped being
+        // true when a test server began holding its ships loaded: measured 2026-09-16 inside one
+        // class, an abandoned craft was still CLIMBING at y=609 and another had fallen to y=70 and
+        // was drifting sideways — in the world the next scenario was about to run in.
+        //
+        // Last in the reset, deliberately: the dismount above needs the seat, and the seat is on the
+        // craft. And the count is printed rather than asserted — a scenario that built nothing
+        // legitimately clears nothing, and a number nobody can predict is not a contract.
+        System.out.println("[reset] craft cleared from this family's world: "
+                + zmaster587.advancedRocketry.test.ShipReadiness.clearCraftFrom(this::exec, 0));
     }
 
     private static boolean isRiding(JsonObject riding) {

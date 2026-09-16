@@ -848,6 +848,20 @@ public class TestProbeCommand extends CommandBase {
             send(sender, "{\"requested\":" + loads[0] + ",\"alreadyLoaded\":" + loads[1] + "}");
             return;
         }
+        // destroy-ships <dim> — mark every registered ship in this world as finished, so the
+        // substrate collects them on its next tick. A scenario's own cleanup: a craft left behind is
+        // not inert any more (it is held loaded, it still ticks, and it is still flying wherever it
+        // was last pointed), so leaving one is leaving a moving object in the next scenario's world.
+        if (args.length >= 2 && "destroy-ships".equalsIgnoreCase(args[0])) {
+            net.minecraft.world.WorldServer world = vsWorld(sender, parseIntOr(args[1], Integer.MIN_VALUE));
+            if (world == null) {
+                send(sender, "{\"error\":\"world not loaded\"}");
+                return;
+            }
+            int marked = zmaster587.advancedRocketry.integration.vs.VSIntegration.markAllShipsDead(world);
+            send(sender, "{\"ok\":" + (marked >= 0) + ",\"marked\":" + marked + "}");
+            return;
+        }
         // seat-yard <dim> <x> <y> <z> [shipUuid] — how many pilot-seat tiles the ARRIVAL's own seat
         // lookup reaches, and whose shipyard it looked in. With a uuid the ship is resolved BY
         // IDENTITY (what a crossing does with the ship it created); without one it falls back to
