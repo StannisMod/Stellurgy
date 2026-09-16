@@ -268,10 +268,15 @@ public class PhysicsObject implements IPhysicsEntity {
         // ...unless the ship is DEAD, which means DISCARD and not deconstruct. The two dispositions
         // were never distinguished here because until the dead flag existed the only ships reaching
         // this path with blocks were being deconstructed on purpose. They are opposites: a caller
-        // that retires a parked hull wants the record gone and the blocks left where they are, in a
-        // subspace shipyard nothing loads or can reach — copying them back would paste a whole craft
-        // into the world at the hull's position, which is the one outcome that call site exists to
-        // avoid.
+        // that retires a parked hull wants the craft GONE, and copying its blocks back would paste a
+        // whole craft into the world at the hull's position, which is the one outcome that call site
+        // exists to avoid.
+        //
+        // GONE, not abandoned: the ship's chunks are deleted from the world at the end of this
+        // method, unconditionally, so a discarded craft leaves nothing behind in the shipyard
+        // either. This comment said "the blocks left where they are, in a subspace shipyard nothing
+        // loads or can reach" until 2026-09-16 — which contradicted the line below it, and was
+        // quoted to the maintainer as fact before anybody read that line.
         if (!getBlockPositions().isEmpty() && !getShipData().isDead()) {
             if (deconstructState.copyBlocks) {
                 MutableBlockPos newPos = new MutableBlockPos();
