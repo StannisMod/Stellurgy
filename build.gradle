@@ -429,6 +429,14 @@ def configureHarnessTest = { Test t, boolean enableClient ->
         // `mixin.*` property it is given). Off by default because it is loud; reach for it the moment
         // a test-only mixin returns an empty observation, since "queued" and "woven" are different
         // claims and only this distinguishes them.
+        // -PplotOffset=N starts this class's plot allocator at N instead of 0, so a scenario can be
+        // run on a LATER plot without a predecessor in front of it. It exists to separate two things
+        // that every ordinary run changes together — what ran before this scenario, and where its
+        // fixture stands — and which therefore cannot be told apart by comparing a solo run against
+        // a class run. An experiment lever: it belongs in no gate and no default.
+        if (project.hasProperty('plotOffset')) {
+            t.systemProperty 'artest.plot.offset', project.property('plotOffset').toString()
+        }
         if (project.hasProperty('mixinDebug')) {
             t.systemProperty 'mixin.debug', project.property('mixinDebug').toString()
         }

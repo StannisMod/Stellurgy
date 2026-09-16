@@ -105,6 +105,21 @@ public abstract class AbstractSharedClientE2ETest {
     /** Scenario name -> its plot. Stable within a run because the method order is pinned. */
     private static final Map<String, Plot> PLOTS = new HashMap<>();
     private static int nextPlotIndex;
+
+    /**
+     * Where this class's plot allocation STARTS, from {@code -PplotOffset=N} (default 0).
+     *
+     * <p>An experiment lever, and it exists because an ordinary run cannot separate two variables it
+     * always changes together: <b>what ran in this world before a scenario</b>, and <b>which plot the
+     * scenario's fixture stands on</b>. Running a test alone gives it plot #0 and no predecessor;
+     * running it second gives it plot #1 AND a predecessor. A scenario that is green in the first and
+     * red in the second therefore accuses both, and comparing the two runs answers neither.</p>
+     *
+     * <p>With this, a scenario can be run alone on plot #N — one variable moved, the other held.
+     * Belongs in no gate and no default: it changes where fixtures stand, which is the one thing the
+     * allocator exists to decide.</p>
+     */
+    private static final int PLOT_OFFSET = Integer.getInteger("artest.plot.offset", 0);
     /** Which concrete class the live pair was booted for; null when nothing is up. */
     private static Class<?> bootedFor;
 
@@ -264,7 +279,7 @@ public abstract class AbstractSharedClientE2ETest {
         HARNESS_DEAD.set(false);
         firstFailure = null;
         PLOTS.clear();
-        nextPlotIndex = 0;
+        nextPlotIndex = PLOT_OFFSET;
 
         GameDirSeed seed = new GameDirSeed();
         seedGameDirectory(seed);
