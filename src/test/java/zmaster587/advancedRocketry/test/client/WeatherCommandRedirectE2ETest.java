@@ -190,29 +190,17 @@ public class WeatherCommandRedirectE2ETest {
     }
 
     /**
-     * The client is IN {@code expectedDim}, waited for as the RESPAWN packet that puts it there.
-     *
-     * <p>The harness records the far side of a transfer where the client finishes rebuilding its
-     * world, and the server sends that packet unconditionally — so this always has something to
-     * close on. The ten-tick sampling it replaces could only report that twenty samples had not
-     * caught the change yet, which is a sentence about the machine.</p>
+     * The client is IN {@code expectedDim}, waited for as the RESPAWN packet that puts it there —
+     * {@link ClientEvents#awaitDim}, which is where the wait and its narrative live.
      *
      * @param transferMark the CLIENT's own mark, taken BEFORE the command that transfers him
      */
     private void awaitClientDim(long transferMark, int expectedDim) throws Exception {
-        try {
-            clientEvents().awaitCarrying(transferMark, "client_dimension_changed",
-                    "\"dim\":" + expectedDim + ",",
-                    "the player must be standing on the planet before he types the command this"
-                            + " test is about — the redirect is keyed to the world he is IN",
-                    DIM_LINK_BUDGET_TICKS);
-        } catch (AssertionError never) {
-            Events.assertInstrumentRan(clientEvents().since(transferMark, "client_dimension_changed"),
-                    "client_dimension_changed", "the client's own dimension changes must be observed"
-                            + " at all before an absent one can be read as a transfer that failed");
-            throw new AssertionError(never.getMessage() + " | last weather report: "
-                    + clientHarness.bot().reportWeather(), never);
-        }
+        ClientEvents.awaitDim(clientEvents(), transferMark, expectedDim,
+                "he must be standing on the planet before he types the command this test is about,"
+                        + " since the redirect is keyed to the world he is IN",
+                DIM_LINK_BUDGET_TICKS,
+                () -> "last weather report: " + clientHarness.bot().reportWeather());
     }
 
     /** The CLIENT's own event log, behind the shared verbs. */

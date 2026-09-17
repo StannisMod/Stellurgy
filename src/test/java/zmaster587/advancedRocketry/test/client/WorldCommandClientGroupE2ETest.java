@@ -142,17 +142,6 @@ public class WorldCommandClientGroupE2ETest extends AbstractSharedClientE2ETest 
     }
 
     /**
-     * Wait for the CLIENT to be respawned into {@code expectedDim}, from a mark taken before the
-     * command was typed. A poll on the rendered dimension could not tell "already there" from
-     * "never went", and a world torn down and rebuilt twice between two samples shows one change or
-     * none.
-     */
-    private void awaitClientDim(Events events, long mark, int expectedDim) throws Exception {
-        awaitRecordCarrying(events, mark, "client_dimension_changed", "\"dim\":" + expectedDim + ",",
-                "the command must land the player's own client in dim " + expectedDim);
-    }
-
-    /**
      * Wait for a chat line carrying {@code needle} to reach the client's HUD, from a mark taken
      * before the command was typed.
      *
@@ -309,7 +298,9 @@ public class WorldCommandClientGroupE2ETest extends AbstractSharedClientE2ETest 
             Events clientLog = clientEvents();
             long mark = clientLog.mark();
             bot().sendChat("/ar goto dimension " + targetDim);
-            awaitClientDim(clientLog, mark, targetDim);
+            awaitClientDim(mark, targetDim,
+                    "the server half is read below and would agree about a world the client never"
+                            + " reached");
 
             String health = exec("artest player health");
             assertTrue("server must agree the player is in dim " + targetDim + ": " + health,
@@ -354,7 +345,9 @@ public class WorldCommandClientGroupE2ETest extends AbstractSharedClientE2ETest 
             Events clientLog = clientEvents();
             long mark = clientLog.mark();
             bot().sendChat("/ar goto dimension " + targetDim);
-            awaitClientDim(clientLog, mark, targetDim);
+            awaitClientDim(mark, targetDim,
+                    "the world type read next is the CLIENT's, so until he has arrived it is the"
+                            + " world he LEFT");
 
             String onPlanet = clientWorldType();
             scenario().record("planetWorldType", onPlanet);
@@ -394,7 +387,8 @@ public class WorldCommandClientGroupE2ETest extends AbstractSharedClientE2ETest 
         Events clientLog = clientEvents();
         long mark = clientLog.mark();
         bot().sendChat("/ar goto station " + stationId);
-        awaitClientDim(clientLog, mark, SPACE_DIM);
+        awaitClientDim(mark, SPACE_DIM,
+                "the command's whole claim is that it renders the station's world for him");
     }
 
     // ── /ar fetch ─────────────────────────────────────────────────────────────
@@ -458,7 +452,8 @@ public class WorldCommandClientGroupE2ETest extends AbstractSharedClientE2ETest 
                 "\"who\":\"" + botName + "\"",
                 "a self-fetch must still run the transfer: the teleporter places the body");
         scenario().record("selfFetchPlacement", placed);
-        awaitClientDim(clientLog, clientMark, plot().dim);
+        awaitClientDim(clientMark, plot().dim,
+                "the rendered position read below belongs to the world he ends in");
 
         JsonObject post = bot().reportState();
         double postX = post.get("playerX").getAsDouble();

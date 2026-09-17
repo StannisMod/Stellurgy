@@ -82,7 +82,7 @@ public class SpaceSlotVsShipReloadE2ETest extends AbstractClientE2ETest {
         Events clientLog = ClientEvents.of(bot());
         long leaveMark = clientLog.mark();
         exec("artest tp 0");
-        clientLog.awaitCarrying(leaveMark, "client_dimension_changed", "\"dim\":0,",
+        ClientEvents.awaitDim(clientLog, leaveMark, 0,
                 "the bot must actually LEAVE the pool dimension — a world with a player in it"
                         + " cannot unload, and the reload below is about an unloaded one",
                 DIM_LINK_BUDGET_TICKS);

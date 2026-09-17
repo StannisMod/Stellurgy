@@ -759,9 +759,14 @@ public class VSCrewInteriorBoardingE2ETest extends AbstractSharedVsClientE2ETest
                 + readIntFrom(seat, SEAT_Y) + " " + readIntFrom(seat, SEAT_Z));
         Matcher dm = DUMMY_ID.matcher(mountInfo);
         assertTrue("seat-mount-at must report a dummy id: " + mountInfo, dm.find());
+        // The CLIENT's mark before the mount, because the reply above is the SERVER's receipt and
+        // every caller of this helper goes on to drive the bot as a seated pilot.
+        long seatClientMark = clientEvents().mark();
         assertTrue("bot must mount the seat dummy: " + mountInfo,
                 exec("artest player mount-entity " + dm.group(1)).contains("\"mounted\":true"));
-        bot().waitTicks(10);
+        awaitClientMount(seatClientMark, "the bot must be seated as HIS OWN CLIENT renders him"
+                + " before this helper hands the ship back — the server reporting a mount is the"
+                + " other process", DECK_LINK_BUDGET_TICKS, " mountInfo=" + mountInfo);
         return ship;
     }
 

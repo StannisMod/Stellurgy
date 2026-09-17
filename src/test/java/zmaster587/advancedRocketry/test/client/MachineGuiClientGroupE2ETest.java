@@ -5,6 +5,7 @@ import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import net.minecraft.util.EnumFacing;
 import net.minecraft.util.EnumHand;
+import org.junit.Before;
 import org.junit.FixMethodOrder;
 import org.junit.Test;
 import org.junit.runners.MethodSorters;
@@ -16,6 +17,7 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 import zmaster587.advancedRocketry.test.Plot;
+import zmaster587.advancedRocketry.test.RocketList;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
@@ -84,10 +86,6 @@ public class MachineGuiClientGroupE2ETest extends AbstractSharedClientE2ETest {
 
     private static final Pattern BUILDER_POS =
             Pattern.compile("\"builderPos\":\\[(-?\\d+),(-?\\d+),(-?\\d+)]");
-    /** One {@code rocket list} entry: id plus the x/y/z it stands at. */
-    private static final Pattern ROCKET_ENTRY = Pattern.compile(
-            "\\{\"id\":(-?\\d+),\"uuid\":\"[^\"]*\",\"dim\":-?\\d+,"
-                    + "\"pos\":\\[(-?[0-9.E\\-]+),(-?[0-9.E\\-]+),(-?[0-9.E\\-]+)]}");
 
     // Navigation console button ids — the console's own module ids, which libVulpes puts straight
     // on the GuiButton.
@@ -428,16 +426,23 @@ public class MachineGuiClientGroupE2ETest extends AbstractSharedClientE2ETest {
      * only while the world holds exactly one rocket, which is precisely what a shared world stops
      * guaranteeing.</p>
      */
+    /**
+     * Every rocket the PREVIOUS scenario left behind goes, before this one builds its own — see
+     * {@link RocketList#clearFrom} for what a plot cannot contain and why.
+     *
+     * <p>A {@code @Before} for the same reason the base's whole reset is one: JUnit runs
+     * {@code @After} before the rules finish, so cleanup the next scenario must see belongs at the
+     * next scenario's start.</p>
+     */
+    @Before
+    public void clearRocketsLeftByTheLastScenario() throws Exception {
+        System.out.println("[reset] rockets cleared from this class's world: "
+                + RocketList.clearFrom(this::exec, 0));
+    }
+
     private int rocketIdInThisPlot(String list) {
-        Matcher entry = ROCKET_ENTRY.matcher(list);
-        while (entry.find()) {
-            double px = Double.parseDouble(entry.group(2));
-            double pz = Double.parseDouble(entry.group(4));
-            if (plot().contains(px, pz)) {
-                return Integer.parseInt(entry.group(1));
-            }
-        }
-        return -1;
+        java.util.List<RocketList.Entry> mine = RocketList.inPlot(list, plot());
+        return mine.isEmpty() ? -1 : mine.get(0).id;
     }
 
     // ── railgun ───────────────────────────────────────────────────────────────

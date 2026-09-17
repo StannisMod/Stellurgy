@@ -128,6 +128,73 @@ public final class ClientEvents {
                 || Long.parseLong(lastMount.trim()) > Long.parseLong(lastDismount.trim());
     }
 
+    /**
+     * Wait until the CLIENT has been respawned into {@code expectedDim} — the far side of a transfer
+     * the server has already ordered.
+     *
+     * <p>A transfer tears the old world down and builds a new {@code WorldClient}; the harness
+     * records that as {@code client_dimension_changed}, and the record's arrival is the first
+     * instant "the client's own dimension is N" is true. A poll on the rendered dimension cannot
+     * tell <i>already there</i> from <i>never went</i>, and a client torn down and rebuilt twice
+     * between two samples shows one change or none — so its expiry could only ever report that N
+     * samples had not caught the change yet, which is a sentence about the machine.</p>
+     *
+     * <p>No read-first branch, and the reason is worth the line: the server sends the respawn packet
+     * unconditionally, so this link always has something to close on — where a record written only
+     * on an EDGE would not, and would burn the whole budget on the healthy path.</p>
+     *
+     * <p>Static, and here rather than on a base class, for the same reason as
+     * {@link #awaitPlacedNear} and {@link #awaitMounted}: <b>five classes across three hierarchies
+     * had grown a private copy of this wait</b> — two of them written out as polling loops over the
+     * same record, and three of the five unable to say which silence they met.</p>
+     *
+     * @param clientLog the CLIENT's log ({@link #of})
+     * @param mark      a mark on THAT log, taken BEFORE the command that transfers him
+     * @param what      what the caller needs the client to be in that dimension FOR
+     */
+    public static void awaitDim(Events clientLog, long mark, int expectedDim, String what,
+                                int tickBudget) throws Exception {
+        awaitDim(clientLog, mark, expectedDim, what, tickBudget, null);
+    }
+
+    /**
+     * As above, appending {@code tail}'s reading to the failure.
+     *
+     * <p>For a caller holding a probe whose answer makes the silence readable — the client's last
+     * weather report, its last spawn report. It is asked only when the wait has already failed.</p>
+     */
+    public static void awaitDim(Events clientLog, long mark, int expectedDim, String what,
+                                int tickBudget, Diagnostic tail) throws Exception {
+        try {
+            // Asked of the FIELD. The needle form this replaces — `"dim":N,` as a substring of the
+            // record's serialisation — pins the writer's field ORDER and the comma after the value,
+            // so a record that gained a field would make this wait expire and report a transfer that
+            // never happened.
+            clientLog.awaitField(mark, "client_dimension_changed", "dim", expectedDim,
+                    "the client must follow the transfer into dim " + expectedDim + " — " + what,
+                    tickBudget);
+        } catch (AssertionError never) {
+            // An absence is evidence only once somebody was listening.
+            Events.assertInstrumentRan(clientLog.since(mark, "client_dimension_changed"),
+                    "client_dimension_changed", "the client's own dimension changes must be observed"
+                            + " at all before an absent one can be read as a transfer that failed");
+            throw new AssertionError(never.getMessage()
+                    + (tail == null ? "" : " | " + tail.read()), never);
+        }
+    }
+
+    /**
+     * A reading taken only to make a failure legible — evaluated after the wait has lost, never on
+     * the healthy path.
+     *
+     * <p>Its own interface rather than {@code Supplier<String>} because everything worth reading
+     * here is a probe call, and a probe call throws.</p>
+     */
+    @FunctionalInterface
+    public interface Diagnostic {
+        String read() throws Exception;
+    }
+
     /** The bot's own event log, read through {@link Events}, paced by that same bot's ticks. */
     public static Events of(ClientBot bot) {
         return new Events(probe(bot), bot::waitTicks);

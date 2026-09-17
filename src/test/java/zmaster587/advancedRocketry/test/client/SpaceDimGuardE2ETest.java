@@ -162,9 +162,9 @@ public class SpaceDimGuardE2ETest extends AbstractSharedClientE2ETest {
         // client's record of its dimension changes rather than sampled — a client torn down and
         // rebuilt twice between two samples shows one change or none, and the records show both, in
         // order.
-        awaitRecordCarrying(clientLog, clientMark, "client_dimension_changed", "\"dim\":0,",
-                "the player whose body the guard moved must SEE the overworld: his client is"
-                        + " respawned into it", GUARD_LINK_BUDGET_TICKS);
+        ClientEvents.awaitDim(clientLog, clientMark, 0,
+                "the player whose body the guard moved must SEE the overworld, not merely be"
+                        + " reported there", GUARD_LINK_BUDGET_TICKS);
 
         String after = exec("artest player health");
         int dim = intField(DIM, after, "dim");

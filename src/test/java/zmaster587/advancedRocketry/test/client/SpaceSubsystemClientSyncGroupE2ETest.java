@@ -222,7 +222,7 @@ public class SpaceSubsystemClientSyncGroupE2ETest extends AbstractSharedClientE2
         // that the registration sync landed (a client that never registered the dim could not build
         // a WorldClient for it). Waited for as a LINK: the respawn is a discrete event, and a client
         // torn down and rebuilt between two samples shows one change or none.
-        awaitRecordCarrying(clientLog, entryMark, "client_dimension_changed", "\"dim\":" + slotDim + ",",
+        ClientEvents.awaitDim(clientLog, entryMark, slotDim,
                 "a player transferred into a pool slot must be respawned into it on his own client",
                 LINK_BUDGET_TICKS);
         // …and it has the platform's chunk. That is the second link the old ten ticks were paying

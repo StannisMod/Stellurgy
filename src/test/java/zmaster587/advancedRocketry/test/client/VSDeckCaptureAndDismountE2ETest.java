@@ -915,9 +915,13 @@ public class VSDeckCaptureAndDismountE2ETest extends AbstractSharedVsClientE2ETe
                 + invertedUpY + "): " + info0, invertedUpY < -0.85);
 
         // ENTER the seat on the inverted ship — located inside THIS ship, not "the first seat in
-        // the world" (see mountPilotSeatOfShipAt).
+        // the world" (see mountPilotSeatOfShipAt). The mark is taken here rather than inside the
+        // helper because the helper's other callers take their own.
+        long seatClientMark = clientEvents().mark();
         mountPilotSeatOfShipAt(bx, by, bz);
-        bot().waitTicks(20);
+        awaitClientMount(seatClientMark, "the turn commands below are sent BY THE CLIENT from the"
+                + " seat it believes he is in, so the server's own mount receipt is not enough",
+                DECK_LINK_BUDGET_TICKS, "");
 
         // SYMPTOM "after entering, the ship does not react": a turn command must actually move it.
         for (int i = 0; i < 15; i++) {

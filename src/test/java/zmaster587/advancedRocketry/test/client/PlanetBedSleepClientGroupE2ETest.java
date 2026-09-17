@@ -402,34 +402,21 @@ public class PlanetBedSleepClientGroupE2ETest extends AbstractSharedClientE2ETes
     }
 
     /**
-     * The client is IN {@code expectedDim}, waited for as the RESPAWN packet that puts it there.
+     * The client is IN {@code expectedDim}, waited for as the RESPAWN packet that puts it there —
+     * {@link ClientEvents#awaitDim}, which is where the wait and its narrative live.
      *
-     * <p>The transfer tears the old world down and builds a new {@code WorldClient}; the harness
-     * records the far side of that as `client_dimension_changed`, and its TAIL is the first instant
-     * "the client's own dimension is N" is true. Sampling the rendered dimension every ten ticks saw
-     * the same fact later, if at all — and its expiry could only say that ten samples had not caught
-     * it yet, which is a sentence about this machine rather than about the transfer.</p>
-     *
-     * <p>No read-first branch here, and the reason is worth the line: the server sends the respawn
-     * packet unconditionally, so this link always has something to close on — where an edge-gated
-     * record would not.</p>
+     * <p>What is local is the TYPING: a client that never arrived has measured nothing about the
+     * sleep these scenarios are for, so the failure is an arrangement's and not an assertion's.</p>
      *
      * @param transferMark the CLIENT's own mark, taken BEFORE the command that transfers him
      */
     private void awaitClientDim(long transferMark, int expectedDim) throws Exception {
         try {
-            clientEvents().awaitCarrying(transferMark, "client_dimension_changed",
-                    "\"dim\":" + expectedDim + ",",
-                    "the client must follow the transfer into dim " + expectedDim
-                            + " — everything below is about what he sees there",
-                    DIM_LINK_BUDGET_TICKS);
+            ClientEvents.awaitDim(clientEvents(), transferMark, expectedDim,
+                    "everything below is about what he sees there", DIM_LINK_BUDGET_TICKS,
+                    () -> "last weather report: " + bot().reportWeather());
         } catch (AssertionError never) {
-            Events.assertInstrumentRan(clientEvents().since(transferMark, "client_dimension_changed"),
-                    "client_dimension_changed", "the client's own dimension changes must be observed"
-                            + " at all before an absent one can be read as a transfer that failed");
-            scenario().arrangementFailed("client never reached dim " + expectedDim
-                    + " (last weather report: " + bot().reportWeather() + ") — "
-                    + never.getMessage());
+            scenario().arrangementFailed(never.getMessage());
         }
     }
 

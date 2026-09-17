@@ -249,21 +249,14 @@ private int waitForLoadedShip(int dim) throws Exception {
                 boardedShip.find());
         parkedHullName = boardedShip.group(1);
         int corridorDim = readInt(exec("artest space transit-status"), "hyperDim");
-        try {
-            clientEvents().awaitMatching(clientMark, "client_dimension_changed",
-                    seen -> seen.contains("\"dim\":" + corridorDim + ",")
-                            || seen.contains("\"dim\":" + corridorDim + "}"),
-                    "for the corridor's own world (dim " + corridorDim + ")",
-                    "the crew member must be carried into the corridor with his ship, as HIS OWN"
-                            + " CLIENT sees it — the server has already seated him on the hull"
-                            + " parked in the lane", JUMP_LINK_BUDGET_TICKS);
-        } catch (AssertionError never) {
-            // The server's half beside the client's, because the two answer different questions and
-            // the client log alone cannot say whether the jump got as far as the lane. Appended on
-            // the failure path only: on the happy path this would be a probe call per wait.
-            throw new AssertionError(never.getMessage() + " | server chain since the mark: "
-                    + events.since(serverMark));
-        }
+        // The server's half is appended on the FAILURE path only, because the two logs answer
+        // different questions and the client's alone cannot say whether the jump got as far as the
+        // lane; on the happy path it would be a probe call per wait.
+        ClientEvents.awaitDim(clientEvents(), clientMark, corridorDim,
+                "the crew member must be carried into the corridor with his ship, as HIS OWN CLIENT"
+                        + " sees it — the server has already seated him on the hull parked in the"
+                        + " lane", JUMP_LINK_BUDGET_TICKS,
+                () -> "server chain since the mark: " + events.since(serverMark));
         return corridorDim;
     }
 
@@ -550,9 +543,13 @@ private boolean waitForRegisteredShip(int dim) throws Exception {
         // force-load. (A first cut called `vs load-ships` here instead, and the ship had unloaded again by
         // the very next probe: find-seat came back with the seat located but NO ship world position. That
         // is this same bug biting the arrangement rather than the assertion.)
+        // The CLIENT's mark BEFORE the transfer is ordered: what made the origin ship load is this
+        // body's PROXIMITY, so the seat search below is asking about a world he has to be in.
+        long enterMark = clientEvents().mark();
         String enter = execEnvelope("artest space enter " + botName + " " + originDim + " 1 64 1");
         assertTrue("space enter into the origin cell must succeed: " + enter, readBool(enter, "ok"));
-        bot().waitTicks(20);
+        awaitClientDim(enterMark, originDim,
+                "the proximity load the seat search depends on is this body being THERE");
         assertEquals("the client must have followed into the transit origin cell",
                 originDim, bot().reportWeather().get("dim").getAsInt());
 
@@ -710,9 +707,12 @@ private void seatTheBot(int originDim, String shipId) throws Exception {
         int sx = (int) Math.round(readDouble(seat, "shipWorldX"));
         int sy = (int) Math.round(readDouble(seat, "shipWorldY"));
         int sz = (int) Math.round(readDouble(seat, "shipWorldZ"));
+        // The CLIENT's mark BEFORE the transfer is ordered — see the sibling arrangement above.
+        long enterMark = clientEvents().mark();
         String enter = exec("artest space enter " + botName + " " + originDim + " " + sx + " " + sy + " " + sz);
         assertTrue("space enter into the origin cell must succeed: " + enter, readBool(enter, "ok"));
-        bot().waitTicks(20);
+        awaitClientDim(enterMark, originDim,
+                "the mount below seats him on a ship in that cell, and the client renders it");
         assertEquals("the client must have followed into the transit origin cell",
                 originDim, bot().reportWeather().get("dim").getAsInt());
         // The SERVER's own view of the same player, because the mount below is a server-side
@@ -1434,16 +1434,10 @@ private long readCounter(String className, String field) throws Exception {
         // rebuild at the tail of the respawn packet — not a dimension number to sample. The poll this
         // replaces then re-read the capture for its assertions, so the reply a reader diagnosed from
         // was never the reply that decided the test.
-        try {
-            clientEvents().awaitMatching(clientMark, "client_dimension_changed",
-                    seen -> seen.contains("\"dim\":" + targetDim + ",")
-                            || seen.contains("\"dim\":" + targetDim + "}"),
-                    "for the target cell (dim " + targetDim + ")",
-                    "the arrival crossing must carry the crew member on his feet too — his own client"
-                            + " must be moved into the TARGET cell", JUMP_LINK_BUDGET_TICKS);
-        } catch (AssertionError never) {
-            throw new AssertionError(never.getMessage() + " | the server's chain: " + events.since(mark));
-        }
+        ClientEvents.awaitDim(clientEvents(), clientMark, targetDim,
+                "the arrival crossing must carry the crew member on his feet too — his own client"
+                        + " must be moved into the TARGET cell", JUMP_LINK_BUDGET_TICKS,
+                () -> "the server's chain: " + events.since(mark));
         // ONE reply, for both the verdict and the diagnosis. The chain above ended at the settle,
         // which the server commits only once everyone is back aboard, so this is a read of a state
         // production has already announced rather than a sample of one still converging.

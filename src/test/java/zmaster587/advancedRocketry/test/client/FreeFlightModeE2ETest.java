@@ -3,6 +3,7 @@ package zmaster587.advancedRocketry.test.client;
 import com.github.stannismod.forge.testing.TestTimeouts;
 import com.github.stannismod.forge.testing.junit.AbstractClientE2ETest;
 import com.google.gson.JsonObject;
+import org.junit.Before;
 import org.junit.FixMethodOrder;
 import org.junit.Test;
 import org.junit.runners.MethodSorters;
@@ -17,6 +18,7 @@ import zmaster587.advancedRocketry.test.Events;
 import zmaster587.advancedRocketry.test.FixtureSite;
 
 import zmaster587.advancedRocketry.test.Plot;
+import zmaster587.advancedRocketry.test.RocketList;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
@@ -84,10 +86,6 @@ public class FreeFlightModeE2ETest extends AbstractSharedClientE2ETest {
     /** How long the CLIENT is given to perform a seating or a release the server has already done,
      *  in ticks — a ceiling on one round trip. */
     private static final int SEAT_LINK_BUDGET_TICKS = 200;
-    /** One {@code rocket list} entry: id plus the x/y/z it stands at. */
-    private static final Pattern ROCKET_ENTRY = Pattern.compile(
-            "\\{\"id\":(-?\\d+),\"uuid\":\"[^\"]*\",\"dim\":-?\\d+,"
-                    + "\"pos\":\\[(-?[0-9.E\\-]+),(-?[0-9.E\\-]+),(-?[0-9.E\\-]+)]}");
     private static final Pattern MOTION_Y = Pattern.compile("\"motionY\":(-?[0-9.E\\-]+)");
     private static final Pattern POS_X = Pattern.compile("\"posX\":(-?[0-9.E\\-]+)");
     private static final Pattern POS_Y = Pattern.compile("\"posY\":(-?[0-9.E\\-]+)");
@@ -227,24 +225,40 @@ public class FreeFlightModeE2ETest extends AbstractSharedClientE2ETest {
      * answer is narrowed to the plot that built it — and an ambiguous answer is an ARRANGEMENT
      * failure naming what it saw, never a silently-picked candidate.</p>
      */
+    /**
+     * Every rocket the PREVIOUS scenario left flying goes, before this one builds its own.
+     *
+     * <p>A {@code @Before} rather than an {@code @After} for the reason the base gives for its whole
+     * reset: JUnit runs {@code @After} before the rules finish, so cleanup that must be visible to
+     * the next scenario belongs at the next scenario's start. It runs AFTER the base's
+     * {@code prepareScenario} because JUnit orders a superclass's {@code @Before} first.</p>
+     *
+     * <p><b>The plot does not cover this, and that is the finding.</b> The allocator hands each
+     * scenario its own patch of world and never recycles one, so nothing else ever looks there — for
+     * what stays put. Measured 2026-09-16, three loaded runs out of three: a rocket 93 ticks old, 120
+     * blocks up and 80 downrange of where it was built, standing inside the NEXT scenario's plot and
+     * making that scenario's own "exactly one rocket stands here" gate refuse. A craft leaves its
+     * owner's patch of world under its own power; allocation cannot prevent that, and only disposal
+     * can.</p>
+     */
+    @Before
+    public void clearRocketsLeftFlyingByTheLastScenario() throws Exception {
+        System.out.println("[reset] rockets cleared from this class's world: "
+                + RocketList.clearFrom(this::exec, 0));
+    }
+
     private int rocketIdInThisPlot() throws Exception {
         String list = exec("artest rocket list 0");
-        Matcher entry = ROCKET_ENTRY.matcher(list);
-        int found = -1;
-        int matches = 0;
-        StringBuilder seen = new StringBuilder();
-        while (entry.find()) {
-            int id = Integer.parseInt(entry.group(1));
-            double px = Double.parseDouble(entry.group(2));
-            double pz = Double.parseDouble(entry.group(4));
-            seen.append(" id=").append(id).append('@').append(px).append(',').append(pz);
-            if (plot().contains(px, pz)) {
-                found = id;
-                matches++;
-            }
-        }
+        java.util.List<RocketList.Entry> mine = RocketList.inPlot(list, plot());
+        // The AGE is in the message because it is what an ambiguous answer turns on: two craft here
+        // are either this scenario building twice (both young) or somebody else's craft that moved
+        // into this plot (one of them old). The coordinates alone cannot tell those apart, and the
+        // reading was made three times before anything carried the number that would have.
         scenario().requireArranged("exactly one rocket must stand in " + plot()
-                + " after assemble, found " + matches + " —" + seen, matches == 1);
+                + " after assemble, found " + mine.size() + " here —" + RocketList.describe(list)
+                + " (age is ticks existed: a craft this scenario just assembled is young, one an"
+                + " earlier scenario left behind is not)", mine.size() == 1);
+        int found = mine.get(0).id;
         scenario().record("rocketId", found);
         return found;
     }

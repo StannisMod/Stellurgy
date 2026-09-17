@@ -472,12 +472,9 @@ public abstract class AbstractSharedClientE2ETest {
             // rendered-dim assertion at the end of this method reads that world once; this is what
             // makes the read honest, where before it was backed by whatever the three settles in
             // between happened to add up to.
-            clientEvents().awaitMatching(transferMark, "client_dimension_changed",
-                    reply -> Events.countRecords(reply, "\"dim\":" + plot.dim + ",") > 0,
-                    "naming dim " + plot.dim,
-                    "the client must follow the between-scenario transfer into the plot's world;"
-                            + " a scenario that starts rendering the world it LEFT measures the"
-                            + " previous one's surroundings", DIM_LINK_BUDGET_TICKS);
+            awaitClientDim(transferMark, plot.dim,
+                    "a scenario that starts rendering the world it LEFT measures the previous"
+                            + " one's surroundings");
         }
         // Mark the event log HERE, one statement before the teleport, so that a plot miss can ask
         // the one question the diagnostic below could never answer: WHO wrote this body's position.
@@ -917,6 +914,20 @@ public abstract class AbstractSharedClientE2ETest {
     protected final void awaitClientPlacedNear(long mark, double x, double z, String what)
             throws Exception {
         ClientEvents.awaitPlacedNear(clientEvents(), mark, x, z, what, PLACEMENT_LINK_BUDGET_TICKS);
+    }
+
+    /**
+     * Wait until the CLIENT has been respawned into {@code expectedDim} — the far side of a transfer
+     * the server has already ordered ({@link ClientEvents#awaitDim}).
+     *
+     * <p>Offered here for the same reason as {@link #awaitClientPlacedNear}: a subclass that
+     * hand-rolls it grows the sixth private copy of one wait.</p>
+     *
+     * @param mark the CLIENT's own mark, taken BEFORE the command that transfers him
+     */
+    protected final void awaitClientDim(long mark, int expectedDim, String what) throws Exception {
+        ClientEvents.awaitDim(clientEvents(), mark, expectedDim, what, DIM_LINK_BUDGET_TICKS,
+                () -> "last weather report: " + bot().reportWeather());
     }
 
     /**

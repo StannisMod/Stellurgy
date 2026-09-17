@@ -7311,14 +7311,51 @@ public class TestProbeCommand extends CommandBase {
                     if (!(entity instanceof EntityRocket)) continue;
                     if (!first) builder.append(',');
                     first = false;
+                    // `age` is the discriminator a caller needs when the list answers with MORE
+                    // than one craft and has to say which of them it built: a rocket assembled a
+                    // moment ago carries tens of ticks, one left behind by an earlier scenario
+                    // carries thousands. Position alone cannot separate those, because a craft that
+                    // has moved and a craft built somewhere else look identical in a coordinate.
                     builder.append("{\"id\":").append(entity.getEntityId())
                             .append(",\"uuid\":\"").append(entity.getPersistentID().toString()).append("\"")
                             .append(",\"dim\":").append(world.provider.getDimension())
+                            .append(",\"age\":").append(entity.ticksExisted)
                             .append(",\"pos\":[").append(entity.posX).append(',').append(entity.posY).append(',').append(entity.posZ).append("]}");
                 }
             }
             builder.append("]}");
             send(sender, builder.toString());
+            return;
+        }
+        if ("clear".equalsIgnoreCase(args[0]) && args.length >= 2) {
+            // /artest rocket clear <dim> — remove every EntityRocket from one world.
+            //
+            // The sibling of `vs destroy-ships`, and it exists for the same measured reason: a craft
+            // a scenario walks away from goes on MOVING. Measured 2026-09-16 in a shared-world
+            // class — a rocket 93 ticks old, 120 blocks up and 80 blocks downrange of where it was
+            // built, standing in the next scenario's patch of world and making that scenario's "how
+            // many craft are here" question ambiguous. A patch of world keeps two scenarios apart
+            // only while what is in it stays put.
+            //
+            // Riders come off first: setDead on a ridden entity leaves the passenger falling from
+            // wherever the craft had got to, and the next scenario then begins with its bot in the
+            // air. What is NOT reclaimed is the rocket's StorageChunk — it is dropped with the
+            // entity and collected with the world, which is a per-class thing here; a caller that
+            // needs that storage back needs a different verb than this one.
+            int dim = parseIntOr(args[1], Integer.MIN_VALUE);
+            net.minecraft.world.WorldServer target = server.getWorld(dim);
+            if (target == null) {
+                send(sender, "{\"error\":\"world not loaded\",\"dim\":" + dim + "}");
+                return;
+            }
+            int cleared = 0;
+            for (Entity entity : new java.util.ArrayList<>(target.loadedEntityList)) {
+                if (!(entity instanceof EntityRocket)) continue;
+                entity.removePassengers();
+                entity.setDead();
+                cleared++;
+            }
+            send(sender, "{\"ok\":true,\"dim\":" + dim + ",\"cleared\":" + cleared + "}");
             return;
         }
         if ("assemble".equalsIgnoreCase(args[0]) && args.length >= 4) {

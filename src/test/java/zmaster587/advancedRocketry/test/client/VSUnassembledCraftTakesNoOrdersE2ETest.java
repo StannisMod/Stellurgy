@@ -194,8 +194,15 @@ public class VSUnassembledCraftTakesNoOrdersE2ETest extends AbstractSharedVsClie
             bot().releaseKey(Keyboard.KEY_R);
         }
 
+        // OFF, as the CLIENT renders him, and this is not tidying: leg 2's whole claim is that a
+        // craft it seats him on stays deaf, and a bot still riding leg 1's REAL ship would send its
+        // input to that seat and leave leg 2 green for the wrong reason. Ten ticks could only ever
+        // be too few, and when they were, nothing said so.
+        long offMark = clientEvents().mark();
         exec("artest player dismount");
-        bot().waitTicks(10);
+        awaitClientDismount(offMark, "leg 2 must start with him off the REAL ship — its silence is"
+                + " only evidence if there is no other seat his input could have reached",
+                SEAT_LINK_BUDGET_TICKS);
     }
 
     // ---- Leg 2: the subject ---------------------------------------------------------------------

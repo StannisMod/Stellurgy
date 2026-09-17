@@ -590,6 +590,39 @@ public final class Events {
     }
 
     /**
+     * Wait until some record of {@code type} since {@code mark} carries {@code field} equal to
+     * {@code value} — asked of the FIELD, not of a rendering of it.
+     *
+     * <p><b>This is the form to reach for, and {@link #awaitCarrying} is not.</b> A needle like
+     * {@code "\"dim\":9301,"} is a substring of gson's serialisation: it rides on the field order the
+     * writer happened to use and on the value being followed by a comma, so a producer that adds a
+     * field or reorders two breaks every caller at once and silently — the wait then expires and
+     * reports that the thing never happened, which is a statement about the world manufactured by a
+     * broken reader.</p>
+     *
+     * <p>Values are compared as TEXT, whatever the recorder wrote them as, for the reason
+     * {@link #text} gives: a caller asking for a field cannot be wrong about its shape.</p>
+     */
+    public String awaitField(long mark, String type, String field, Object value, String what,
+                             int tickBudget) throws Exception {
+        String wanted = String.valueOf(value);
+        return awaitMatching(mark, type, reply -> anyRecordHas(reply, field, wanted),
+                "carrying " + field + " = " + wanted, what, tickBudget);
+    }
+
+    /** Whether any record in a {@code since} reply carries {@code field} with this value, compared as
+     *  text. The field read is structural; nothing here matches a rendering of the record. */
+    public static boolean anyRecordHas(String sinceReply, String field, String value) {
+        for (JsonElement record : eventsOf(sinceReply)) {
+            String seen = primitive(record.getAsJsonObject(), field);
+            if (seen != null && seen.equals(value)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
      * Wait until the records of {@code type} since {@code mark} satisfy {@code holds}, or fail
      * naming the whole chain that did happen.
      *

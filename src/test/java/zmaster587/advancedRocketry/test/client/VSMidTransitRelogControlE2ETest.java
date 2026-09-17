@@ -158,10 +158,16 @@ public class VSMidTransitRelogControlE2ETest extends AbstractSharedVsClientE2ETe
         assertTrue("player health must echo the player name: " + health, nameM.find());
         String botName = nameM.group(1);
 
+        // The CLIENT's mark BEFORE the transfer is ordered: the twenty ticks that stood here were a
+        // guess at one round trip plus a world teardown, and the read below is the client's own.
+        long enterMark = clientEvents().mark();
         String enter = exec("artest space enter " + botName + " " + originDim
                 + " " + sx + " " + sy + " " + sz);
         assertTrue("space enter into the origin cell must succeed: " + enter, readBool(enter, "ok"));
-        bot().waitTicks(20);
+        awaitClientDim(enterMark, originDim,
+                "everything this scenario does next is aimed at a ship in that cell");
+        // The standing state, read ONCE after the link: the record says the respawn arrived, this
+        // says which world he renders now, and a disagreement between them is worth seeing.
         assertEquals("the client must have followed into the transit origin cell",
                 originDim, bot().reportWeather().get("dim").getAsInt());
 

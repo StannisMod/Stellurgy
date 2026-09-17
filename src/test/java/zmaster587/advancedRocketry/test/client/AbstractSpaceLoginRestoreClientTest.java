@@ -1517,9 +1517,9 @@ public abstract class AbstractSpaceLoginRestoreClientTest {
         // three failures the assertion below separates would be distinguishable then.
         // The trailing comma is not decoration: `"dim":5` is a prefix of `"dim":51`, and the record
         // always carries `via` after the dimension.
-        awaitClientEvent(clientEntryMark, "client_dimension_changed", "\"dim\":" + slotDim + ",",
-                "the pilot rode his ship across the seam, so his client must be put into the slot "
-                        + "dimension " + slotDim + " the entry chose. Server chain: " + entryChain,
+        ClientEvents.awaitDim(clientEvents(), clientEntryMark, slotDim,
+                "the pilot rode his ship across the seam, so the slot dimension the entry chose is"
+                        + " where his client must end up. Server chain: " + entryChain,
                 RESTORE_LINK_BUDGET_TICKS);
         int dim = clientDim();
         // WHERE he actually is, and whether he is still ON the thing that was supposed to carry

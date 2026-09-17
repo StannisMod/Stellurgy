@@ -282,28 +282,15 @@ public class SpawnPointReachesClientE2ETest {
     }
 
     /**
-     * The client is IN {@code expectedDim}, waited for as the RESPAWN packet that puts it there.
-     *
-     * <p>The record's TAIL is the first instant the client's own dimension IS this one; the poll it
-     * replaces read the rendered dimension every ten ticks and could only ever report that ten
-     * samples had not caught it yet — a statement about the machine, not about the transfer. The
-     * server sends that packet unconditionally, so this wait always has something to close on.</p>
+     * The client is IN {@code expectedDim}, waited for as the RESPAWN packet that puts it there —
+     * {@link ClientEvents#awaitDim}, which is where the wait and its narrative live.
      *
      * @param transferMark the CLIENT's own mark, taken BEFORE the command that transfers him
      */
     private void awaitClientDim(long transferMark, int expectedDim) throws Exception {
-        try {
-            clientEvents().awaitCarrying(transferMark, "client_dimension_changed",
-                    "\"dim\":" + expectedDim + ",",
-                    "the client must follow the transfer into dim " + expectedDim
-                            + ", or the spawn read below is the world he LEFT", DIM_LINK_BUDGET_TICKS);
-        } catch (AssertionError never) {
-            Events.assertInstrumentRan(clientEvents().since(transferMark, "client_dimension_changed"),
-                    "client_dimension_changed", "the client's own dimension changes must be observed"
-                            + " at all before an absent one can be read as a transfer that failed");
-            throw new AssertionError(never.getMessage() + " | last spawn report: "
-                    + clientHarness.bot().reportSpawn(), never);
-        }
+        ClientEvents.awaitDim(clientEvents(), transferMark, expectedDim,
+                "the spawn read below is otherwise the world he LEFT", DIM_LINK_BUDGET_TICKS,
+                () -> "last spawn report: " + clientHarness.bot().reportSpawn());
     }
 
     /** The CLIENT's own event log, behind the shared verbs. */

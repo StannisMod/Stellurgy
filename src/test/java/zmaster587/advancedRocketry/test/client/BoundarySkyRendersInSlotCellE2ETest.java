@@ -349,10 +349,9 @@ public class BoundarySkyRendersInSlotCellE2ETest extends AbstractSharedClientE2E
             // the slot the settle bound the cell to" is true. The fixed 20-tick wait this replaces
             // was the only gate before the assertion below, so under load a slow respawn read as
             // "the client renders the wrong world".
-            awaitClientLog(cellMark, "client_dimension_changed",
-                    reply -> anyRecord(reply, null, 0, "\"dim\":" + slotDim + ","),
-                    "the client must be carried into the slot world the settle bound this cell to"
-                            + " (dim " + slotDim + ") before any frame can be about that cell",
+            ClientEvents.awaitDim(clientEvents(), cellMark, slotDim,
+                    "no frame can be about the cell the settle bound this client to until he is IN"
+                            + " that world",
                     DIM_CHANGE_BUDGET_TICKS);
 
             JsonObject clientWorld = bot().reportWeather();
@@ -645,10 +644,9 @@ public class BoundarySkyRendersInSlotCellE2ETest extends AbstractSharedClientE2E
             exec("time set 18000");
             long cloudMark = clientMark();
             seat(slotDim, CELL_CAPTURE_Y);
-            awaitClientLog(cloudMark, "client_dimension_changed",
-                    reply -> anyRecord(reply, null, 0, "\"dim\":" + slotDim + ","),
-                    "the client must be carried into the cell the finder chose (dim " + slotDim
-                            + ") before any frame can be about that cell", DIM_CHANGE_BUDGET_TICKS);
+            ClientEvents.awaitDim(clientEvents(), cloudMark, slotDim,
+                    "no frame can be about the cell the finder chose until he is IN that world",
+                    DIM_CHANGE_BUDGET_TICKS);
 
             // Link 1, and this scenario never had it: the cell's sky REACHED this client. Without it
             // the single loop below folded "the broadcast never came" into "the renderer drew

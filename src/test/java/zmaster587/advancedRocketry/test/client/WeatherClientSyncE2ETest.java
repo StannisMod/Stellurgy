@@ -280,29 +280,15 @@ public class WeatherClientSyncE2ETest {
 
     /**
      * Wait for the CLIENT to be respawned into {@code expectedDim} — the far side of the transfer,
-     * read off its own record rather than sampled.
+     * read off its own record rather than sampled ({@link ClientEvents#awaitDim}).
      *
-     * <p>{@code mark} is taken BEFORE the transfer is ordered, which is the whole point: a poll on
-     * {@code mc.world.provider.getDimension()} cannot tell "the client is already there" from "it
-     * never went", and a client torn down and rebuilt twice between two samples shows one change or
-     * none. The needle ends at a field boundary ({@code "dim":9301,}) because a payload's numbers
-     * are not delimited on the right.</p>
+     * <p>{@code mark} is taken BEFORE the transfer is ordered, which is the whole point.</p>
      */
     private void awaitClientDim(Events events, long mark, int expectedDim) throws Exception {
-        String needle = "\"dim\":" + expectedDim + ",";
-        String reply = "";
-        for (int waited = 0; waited <= DIM_LINK_BUDGET_TICKS; waited += 10) {
-            reply = events.since(mark, "client_dimension_changed");
-            if (Events.countRecords(reply, needle) > 0) {
-                return;
-            }
-            clientHarness.bot().waitTicks(10);
-        }
-        throw new AssertionError("client never reached dim " + expectedDim
-                + " — no `client_dimension_changed` carrying " + needle + " within "
-                + DIM_LINK_BUDGET_TICKS + " ticks. What DID happen since the mark: "
-                + Events.typesOf(events.since(mark)) + " | raw: " + reply
-                + " | last weather report: " + clientHarness.bot().reportWeather());
+        ClientEvents.awaitDim(events, mark, expectedDim,
+                "the weather these scenarios read is the weather of the world he is IN",
+                DIM_LINK_BUDGET_TICKS,
+                () -> "last weather report: " + clientHarness.bot().reportWeather());
     }
 
     /**
