@@ -22,6 +22,7 @@ import org.lwjgl.input.Keyboard;
 import zmaster587.advancedRocketry.space.TerrainHeightFinder;
 import zmaster587.advancedRocketry.test.Chains;
 import zmaster587.advancedRocketry.test.Events;
+import zmaster587.advancedRocketry.test.PilotSeat;
 import zmaster587.advancedRocketry.test.Reply;
 import zmaster587.advancedRocketry.test.FixtureSite;
 import zmaster587.advancedRocketry.test.Plot;
@@ -359,13 +360,13 @@ public class M1PlanetToPlanetMilestoneE2ETest {
 
         // ---- LEG 3: the CLIENT sits down in the seat of the ship he just built. -----------------
         tLeg = System.currentTimeMillis();
-        String found = findSeat();
-        int[] seatSub = readTriple(found, "seatX", "seatY", "seatZ");
-        int[] afcSub = readTriple(found, "afcX", "afcY", "afcZ");
+        PilotSeat found = findSeat();
         requireArranged("the assembled ship must expose a pilot seat AND the flight computer "
                         + "it was linked to — the deck square the pilot works from is addressed from "
-                        + "that computer: " + found,
-                seatSub != null && afcSub != null);
+                        + "that computer; searched yard " + found.describeYard() + ": " + found.raw(),
+                found.found && found.hasAfc);
+        int[] seatSub = {found.seatX, found.seatY, found.seatZ};
+        int[] afcSub = {found.afcX, found.afcY, found.afcZ};
 
         // The craft's DURABLE name, read off its own flight computer while that computer is still
         // here to ask. The physics id captured at assembly dies at the first crossing, and this run
@@ -1299,6 +1300,9 @@ public class M1PlanetToPlanetMilestoneE2ETest {
      * re-ran it every attempt, so the ship under the crosshair could change identity mid-aim. What is
      * still retried is the crossing finishing, which is a fact about time.</p>
      */
+    // NOT on PilotSeat, and deliberately: this returns a `find-seat` reply on the happy path and a
+    // `vs ship-uuid` reply when the hull cannot be named, through one variable — two producers with
+    // one type, which is its own defect and not one to be rewritten blind while converting another.
     private String findSeatAboard(int dim, int budget) throws Exception {
         assertNotNull("the build must have named its ship before the arrival side can ask about it",
                 builtShipName);
@@ -1654,7 +1658,7 @@ public class M1PlanetToPlanetMilestoneE2ETest {
 
         for (int attempt = 0; attempt < budget; attempt++) {
             double[] shipAnchor = readTripleD(
-                    dim == 0 ? findSeat() : findSeatAboard(dim, budget),
+                    dim == 0 ? findSeat().raw() : findSeatAboard(dim, budget),
                     "shipWorldX", "shipWorldY", "shipWorldZ");
             if (shipAnchor == null) {
                 bot().waitTicks(5);
@@ -2050,10 +2054,10 @@ public class M1PlanetToPlanetMilestoneE2ETest {
      * The seat's subspace address, its flight computer's, and the ship's live world position — of
      * the craft this run BUILT, named by the registry record its assembly wrote.
      */
-    private String findSeat() throws Exception {
+    private PilotSeat findSeat() throws Exception {
         assertNotNull("the build must have named its ship before anything asks about that ship's"
                 + " seat", builtShipVsId);
-        return exec("artest vs find-seat 0 id " + builtShipVsId);
+        return PilotSeat.byId(this::exec, 0, builtShipVsId);
     }
 
     /**

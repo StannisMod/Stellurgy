@@ -21,6 +21,7 @@ import java.util.regex.Pattern;
 import zmaster587.advancedRocketry.space.CellWorldMapper;
 import zmaster587.advancedRocketry.space.GalacticCoord;
 import zmaster587.advancedRocketry.test.Reply;
+import zmaster587.advancedRocketry.test.PilotSeat;
 import zmaster587.advancedRocketry.test.Chains;
 import zmaster587.advancedRocketry.test.Events;
 import zmaster587.advancedRocketry.test.GameTicks;
@@ -1142,13 +1143,13 @@ public abstract class AbstractSpaceLoginRestoreClientTest {
         // told apart: `yard:null` is a ship with no chunk claim at all, a yard box with no seat in
         // it is a claim whose blocks have not arrived (or a craft that genuinely carries no pilot
         // seat), and the attempt count says whether the wait was ever real.
-        String seat = null;
-        String firstRefusal = null;
+        PilotSeat seat = null;
+        PilotSeat firstRefusal = null;
         int attempts = 0;
         for (int attempt = 0; attempt < 30; attempt++) {
-            seat = exec("artest vs find-seat " + slotDim + " id " + arrivedShipId);
+            seat = PilotSeat.byId(this::exec, slotDim, arrivedShipId);
             attempts++;
-            if (readBool(seat, "seatFound")) {
+            if (seat.found) {
                 break;
             }
             if (firstRefusal == null) {
@@ -1156,21 +1157,20 @@ public abstract class AbstractSpaceLoginRestoreClientTest {
             }
             bot().waitTicks(10);
         }
-        assertTrue("the pilot seat must survive the crossing and be locatable in the settled ship - "
-                + "without a seat there is nothing to be restored into. " + attempts
-                + " attempt(s) in dim " + slotDim + "; the `yard` field says WHICH fault this is: "
-                + "null = the ship resolved no chunk claim, a box with no seat in it = the claim's "
-                + "blocks never arrived or the craft has no seat. first refusal: " + firstRefusal
-                + "; last: " + seat,
-                readBool(seat, "seatFound"));
-        int seatX = readInt(seat, "seatX");
-        int seatY = readInt(seat, "seatY");
-        int seatZ = readInt(seat, "seatZ");
+        // The reader names the searched yard in its own refusal — which fault this is, not merely
+        // that there is one — so what this message adds is the part it cannot know: how many
+        // attempts were spent, and what the FIRST of them said.
+        seat.requireFound("the pilot seat must survive the crossing and be locatable in the settled"
+                + " ship - without a seat there is nothing to be restored into. " + attempts
+                + " attempt(s) in dim " + slotDim + "; first refusal: " + firstRefusal);
+        int seatX = seat.seatX;
+        int seatY = seat.seatY;
+        int seatZ = seat.seatZ;
 
         String enter = exec("artest space enter " + BOT + " " + slotDim
-                + " " + readDouble(seat, "shipWorldX")
-                + " " + readDouble(seat, "shipWorldY")
-                + " " + readDouble(seat, "shipWorldZ"));
+                + " " + seat.shipWorldX
+                + " " + seat.shipWorldY
+                + " " + seat.shipWorldZ);
         assertTrue("the client must be transferred into the ship's cell: " + enter,
                 readBool(enter, "ok"));
         bot().waitTicks(20);

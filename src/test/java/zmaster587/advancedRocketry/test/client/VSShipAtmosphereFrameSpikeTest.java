@@ -65,9 +65,6 @@ public class VSShipAtmosphereFrameSpikeTest extends AbstractSharedVsClientE2ETes
     private static final String WORLD_X = "worldX";
     private static final String WORLD_Y = "worldY";
     private static final String WORLD_Z = "worldZ";
-    private static final String SHIP_WORLD_X = "shipWorldX";
-    private static final String SHIP_WORLD_Y = "shipWorldY";
-    private static final String SHIP_WORLD_Z = "shipWorldZ";
 
     private static final String VARIANT = "with-pilot-seat";
 
@@ -341,16 +338,15 @@ public class VSShipAtmosphereFrameSpikeTest extends AbstractSharedVsClientE2ETes
         // ONE lookup, by name. This used to try four build-site coordinates in turn and take the
         // first that answered — a search whose success condition was "some ship's yard was reachable
         // from one of these points", which a neighbour's craft satisfies as readily as this one's.
-        String found = exec("artest vs find-seat 0 id " + scenarioShipId);
-        Reply pose = Reply.of("artest vs find-seat", found);
-        if (pose.has(SHIP_WORLD_X)) {
-            anchor = new int[]{(int) Math.floor(pose.number(SHIP_WORLD_X)),
-                    (int) Math.floor(pose.number(SHIP_WORLD_Y)),
-                    (int) Math.floor(pose.number(SHIP_WORLD_Z))};
+        PilotSeat pose = PilotSeat.byId(this::exec, 0, scenarioShipId);
+        if (!Double.isNaN(pose.shipWorldX)) {
+            anchor = new int[]{(int) Math.floor(pose.shipWorldX),
+                    (int) Math.floor(pose.shipWorldY),
+                    (int) Math.floor(pose.shipWorldZ)};
             return anchor;
         }
         throw new AssertionError("ARRANGEMENT: the ship " + scenarioShipId + " reports no world "
-                + "position for its seat — it is gone or was never loaded: " + found);
+                + "position for its seat — it is gone or was never loaded: " + pose.raw());
     }
 
     private double[] toWorld(int sx, int sy, int sz) throws Exception {

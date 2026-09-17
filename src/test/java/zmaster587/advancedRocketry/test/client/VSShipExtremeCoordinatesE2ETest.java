@@ -11,6 +11,7 @@ import java.util.regex.Pattern;
 import zmaster587.advancedRocketry.test.Events;
 import zmaster587.advancedRocketry.test.TransitSetup;
 import zmaster587.advancedRocketry.test.Reply;
+import zmaster587.advancedRocketry.test.PilotSeat;
 import zmaster587.advancedRocketry.test.ShipInfo;
 import zmaster587.advancedRocketry.test.FixtureSite;
 
@@ -80,9 +81,6 @@ public class VSShipExtremeCoordinatesE2ETest extends AbstractSharedVsClientE2ETe
     private static final String BUILDER_POS = "builderPos";
     private static final String DUMMY_ID = "dummyId";
     private static final String ORIGIN_DIM = "originDim";
-    private static final String SHIP_WORLD_X = "shipWorldX";
-    private static final String SHIP_WORLD_Y = "shipWorldY";
-    private static final String SHIP_WORLD_Z = "shipWorldZ";
 
     private static final String VARIANT = "with-pilot-seat";
     /**
@@ -188,13 +186,12 @@ public class VSShipExtremeCoordinatesE2ETest extends AbstractSharedVsClientE2ETe
 
         // Put the CLIENT in the cell too: every tracking assertion below is about what this client
         // renders, and a client in another world renders none of it.
-        String seat = exec("artest vs find-seat " + cellDim + " id " + shipId);
-        scenario().requireArranged("the pilot seat must be found in the assembled craft: " + seat,
-                seat.contains("\"seatFound\":true"));
+        PilotSeat seat = PilotSeat.byId(this::exec, cellDim, shipId)
+                .requireFound("the pilot seat must be found in the assembled craft");
         String enter = exec("artest space enter " + botName() + " " + cellDim
-                + " " + (int) Math.round(readDouble(seat, SHIP_WORLD_X))
-                + " " + (int) Math.round(readDouble(seat, SHIP_WORLD_Y))
-                + " " + (int) Math.round(readDouble(seat, SHIP_WORLD_Z)));
+                + " " + (int) Math.round(seat.shipWorldX)
+                + " " + (int) Math.round(seat.shipWorldY)
+                + " " + (int) Math.round(seat.shipWorldZ));
         scenario().requireArranged("space enter into the origin cell must succeed: " + enter,
                 enter.contains("\"ok\":true"));
         bot().waitTicks(20);

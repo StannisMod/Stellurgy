@@ -9,6 +9,7 @@ import org.junit.Test;
 import org.junit.runners.MethodSorters;
 
 import zmaster587.advancedRocketry.test.Reply;
+import zmaster587.advancedRocketry.test.PilotSeat;
 import zmaster587.advancedRocketry.test.ShipInfo;
 import zmaster587.advancedRocketry.test.Events;
 import zmaster587.advancedRocketry.test.FixtureSite;
@@ -72,12 +73,6 @@ public class VSAssembledShipRealRightClickBoardingE2ETest extends AbstractShared
 
     /** This scenario's ship, by identity — captured at its build site before anything moves. */
     private String shipUuid;
-    private static final String SEAT_X = "seatX";
-    private static final String SEAT_Y = "seatY";
-    private static final String SEAT_Z = "seatZ";
-    private static final String SHIP_WORLD_X = "shipWorldX";
-    private static final String SHIP_WORLD_Y = "shipWorldY";
-    private static final String SHIP_WORLD_Z = "shipWorldZ";
 
     /**
      * The decked variant, because the pilot must stand NEXT TO the seat rather than squint up at it
@@ -165,13 +160,11 @@ public class VSAssembledShipRealRightClickBoardingE2ETest extends AbstractShared
 
         // The seat's SUBSPACE address (stationary, what the raytrace should report) and its live
         // WORLD position (what the bot has to aim at). Both come from the same probe reading.
-        String found = findSeat();
-        Reply seatReply = Reply.of("artest vs find-seat", found);
-        scenario().requireArranged("find-seat must resolve the assembled ship's subspace seat: " + found,
-                seatReply.has(SEAT_X));
-        int seatSubX = seatReply.integer(SEAT_X);
-        int seatSubY = seatReply.integer(SEAT_Y);
-        int seatSubZ = seatReply.integer(SEAT_Z);
+        PilotSeat seatReply = findSeat()
+                .requireFound("find-seat must resolve the assembled ship's subspace seat");
+        int seatSubX = seatReply.seatX;
+        int seatSubY = seatReply.seatY;
+        int seatSubZ = seatReply.seatZ;
 
         // ---- ARRANGEMENT: an EMPTY hand, or a held stack consumes the press before the block. ----
         // A freshly joined player does not start empty-handed (mods hand out items on first join),
@@ -205,18 +198,17 @@ public class VSAssembledShipRealRightClickBoardingE2ETest extends AbstractShared
         // load-bearing — teleport first, aim last — since a teleport arrives as a pos-look packet
         // that vanilla applies with setPositionAndRotation, overwriting any aim set before it.
         JsonObject aim = null;
+        PilotSeat pose = null;
         double[] seatWorld = null;
         double distSq = Double.POSITIVE_INFINITY;
         double px = Double.NaN, py = Double.NaN, pz = Double.NaN;
         for (int attempt = 0; attempt < budget; attempt++) {
-            found = findSeat();
-            Reply pose = Reply.of("artest vs find-seat", found);
-            if (!pose.has(SHIP_WORLD_X)) {
+            pose = findSeat();
+            if (Double.isNaN(pose.shipWorldX)) {
                 bot().waitTicks(5);
                 continue;
             }
-            seatWorld = new double[]{pose.number(SHIP_WORLD_X),
-                    pose.number(SHIP_WORLD_Y), pose.number(SHIP_WORLD_Z)};
+            seatWorld = new double[]{pose.shipWorldX, pose.shipWorldY, pose.shipWorldZ};
 
             // Put the bot on the deck beside the seat, re-derived from the seat's LIVE position: a
             // freshly assembled ship settles for a while, and a stand computed once against a stale
@@ -255,7 +247,7 @@ public class VSAssembledShipRealRightClickBoardingE2ETest extends AbstractShared
                 + " seatWorld=" + java.util.Arrays.toString(seatWorld)
                 + " seatSubspace=(" + seatSubX + "," + seatSubY + "," + seatSubZ + ")"
                 + " buildSeat=(" + buildSeatX + "," + buildSeatY + "," + buildSeatZ + ")"
-                + " distSq=" + distSq + " mouseOver=" + aim + " findSeat=" + found;
+                + " distSq=" + distSq + " mouseOver=" + aim + " findSeat=" + pose;
 
         scenario().requireArranged("the bot must OBSERVABLY stand within the server's interaction reach "
                 + "of the seat, or the press is discarded before the seat block ever sees it."
@@ -351,8 +343,8 @@ public class VSAssembledShipRealRightClickBoardingE2ETest extends AbstractShared
     }
 
     /** The seat's subspace address + live world position, resolved from the craft's IDENTITY. */
-    private String findSeat() throws Exception {
-        return exec("artest vs find-seat 0 id " + shipUuid);
+    private PilotSeat findSeat() throws Exception {
+        return PilotSeat.byId(this::exec, 0, shipUuid);
     }
 
     private static boolean isWorldReady(JsonObject report) {

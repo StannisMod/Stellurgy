@@ -17,6 +17,7 @@ import javax.imageio.ImageIO;
 
 import zmaster587.advancedRocketry.test.Events;
 import zmaster587.advancedRocketry.test.Reply;
+import zmaster587.advancedRocketry.test.PilotSeat;
 import zmaster587.advancedRocketry.test.ShipInfo;
 import zmaster587.advancedRocketry.test.FixtureSite;
 
@@ -83,12 +84,6 @@ public class VSShipFlightTelemetryE2ETest extends AbstractSharedVsClientE2ETest 
     private static final String CRUISE_FWD = "cruiseForward";
     private static final String CRUISE_RIGHT = "cruiseRight";
     private static final String CRUISE_UP = "cruiseUp";
-    private static final String AFC_X = "afcX";
-    private static final String AFC_Y = "afcY";
-    private static final String AFC_Z = "afcZ";
-    private static final String SEAT_X = "seatX";
-    private static final String SEAT_Y = "seatY";
-    private static final String SEAT_Z = "seatZ";
     private static final String LOCAL_X = "localX";
     private static final String LOCAL_Y = "localY";
     private static final String LOCAL_Z = "localZ";
@@ -309,11 +304,11 @@ public class VSShipFlightTelemetryE2ETest extends AbstractSharedVsClientE2ETest 
         // dead instance still holding the pilot's last DEFLECTED input would command a turn forever
         // while the live one is handed the idle. That is the difference between "the brake is wrong"
         // and "something else is still pressing", which the rate alone cannot show.
-        String seatNow = exec("artest vs find-seat 0 id " + scenarioShipId);
-        String drivers = seatNow.contains("\"afcX\"")
-                ? exec("artest vs motion-trace 0 " + readInt(seatNow, AFC_X) + " "
-                        + readInt(seatNow, AFC_Y) + " " + readInt(seatNow, AFC_Z) + " 20000")
-                : "(no afc address in: " + seatNow + ")";
+        PilotSeat seatNow = PilotSeat.byId(this::exec, 0, scenarioShipId);
+        String drivers = seatNow.hasAfc
+                ? exec("artest vs motion-trace 0 " + seatNow.afcX + " "
+                        + seatNow.afcY + " " + seatNow.afcZ + " 20000")
+                : "(no afc address in: " + seatNow.raw() + ")";
         System.out.println("[tier2] omega spinning=" + spinning + " worstInHold=" + settled
                 + " worstCursorAfterCentring=" + worstCursor
                 + " settle=" + BRAKE_SETTLE_TICKS + "t hold=" + HOLD_SAMPLES + "x"
@@ -809,12 +804,11 @@ public class VSShipFlightTelemetryE2ETest extends AbstractSharedVsClientE2ETest 
         // By identity: the positional form resolves the yard of the ship NEAREST the base, over the
         // whole registry and with no distance bound, so a neighbour's craft answers it in the same
         // shape. This scenario was told which ship it built.
-        String seat = exec("artest vs find-seat 0 id " + scenarioShipId);
-        assertTrue("find-seat must locate the pilot seat inside THIS scenario's ship ("
-                + scenarioShipId + ", built at " + bx + "," + by + "," + bz + "): " + seat,
-                seat.contains("\"seatFound\":true"));
-        String mountInfo = exec("artest vs seat-mount-at 0 " + readInt(seat, SEAT_X) + " "
-                + readInt(seat, SEAT_Y) + " " + readInt(seat, SEAT_Z));
+        PilotSeat seat = PilotSeat.byId(this::exec, 0, scenarioShipId)
+                .requireFound("find-seat must locate the pilot seat inside THIS scenario's ship ("
+                        + scenarioShipId + ", built at " + bx + "," + by + "," + bz + ")");
+        String mountInfo = exec("artest vs seat-mount-at 0 " + seat.seatX + " "
+                + seat.seatY + " " + seat.seatZ);
         int dummyId = Reply.of("artest vs seat-mount-at", mountInfo).integer(DUMMY_ID);
         assertTrue("bot must mount the seat dummy: " + mountInfo,
                 exec("artest player mount-entity " + dummyId).contains("\"mounted\":true"));

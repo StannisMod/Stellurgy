@@ -9,6 +9,7 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 import zmaster587.advancedRocketry.test.Reply;
+import zmaster587.advancedRocketry.test.PilotSeat;
 import zmaster587.advancedRocketry.test.ArrangementFailure;
 import zmaster587.advancedRocketry.test.Events;
 import zmaster587.advancedRocketry.test.TransitSetup;
@@ -123,8 +124,8 @@ public class VSTransitCrewGroupE2ETest extends AbstractSharedVsClientE2ETest {
 
     /** {@code find-seat} keyed by identity: every scenario here builds at the SAME anchor in the
  *  SAME pooled slot, so the anchor is a question with several right answers. */
-    private String findSeat(int originDim, String shipId) throws Exception {
-        return exec("artest vs find-seat " + originDim + " id " + shipId);
+    private PilotSeat findSeat(int originDim, String shipId) throws Exception {
+        return PilotSeat.byId(this::exec, originDim, shipId);
     }
 
     /**
@@ -530,25 +531,27 @@ private boolean waitForRegisteredShip(int dim) throws Exception {
         // A syntactic scan for "a loop header value an assertion later reads" still counts this one,
         // because `seat` is concatenated into an assertion in ANOTHER method of this class. It is a
         // false positive, and this paragraph is the reason not to open the site again over it.
-        String seat = "";
-        for (int i = 0; i < 40 && !hasKey(seat, "shipWorldX"); i++) {
-            seat = execEnvelope("artest vs find-seat " + originDim + " id " + setup.requireShipId());
-            if (!hasKey(seat, "shipWorldX")) {
+        PilotSeat seat = null;
+        for (int i = 0; i < 40 && (seat == null || Double.isNaN(seat.shipWorldX)); i++) {
+            seat = PilotSeat.of(execEnvelope("artest vs find-seat " + originDim + " id "
+                    + setup.requireShipId()));
+            if (Double.isNaN(seat.shipWorldX)) {
                 bot().waitTicks(5);
             }
         }
-        if (!readBool(seat, "seatFound")) {
+        if (!seat.found) {
             // Witness sensitivity: without a located seat the whole "still riding on the far side"
             // observation is vacuous, so this is refused before anything is done to the ship.
             scenario().arrangementFailed("the pilot seat must be found in the assembled ship (else"
-                    + " the test is vacuous): " + seat);
+                    + " the test is vacuous); searched yard " + seat.describeYard() + ": "
+                    + seat.raw());
         }
-        if (!hasKey(seat, "shipWorldX")) {
+        if (Double.isNaN(seat.shipWorldX)) {
             scenario().arrangementFailed("the origin ship must resolve a world position with the bot"
                     + " beside it — nothing here force-loads it, so this is the proximity load"
-                    + " having taken, and it did not within 200 ticks: " + seat);
+                    + " having taken, and it did not within 200 ticks: " + seat.raw());
         }
-        int seatX = readInt(seat, "seatX"), seatY = readInt(seat, "seatY"), seatZ = readInt(seat, "seatZ");
+        int seatX = seat.seatX, seatY = seat.seatY, seatZ = seat.seatZ;
 
         mountTheSeatDummy(this::execEnvelope, originDim, seatX, seatY, seatZ);
 
@@ -654,16 +657,15 @@ private static final int SKY_RENDER_DISTANCE = 8;
 
     /** Put the bot in the origin cell and on the ship's pilot seat. */
 private void seatTheBot(int originDim, String shipId) throws Exception {
-        String seat = findSeat(originDim, shipId);
-        assertTrue("the pilot seat must be found in the assembled ship (else the test is vacuous): " + seat,
-                readBool(seat, "seatFound"));
-        int seatX = readInt(seat, "seatX"), seatY = readInt(seat, "seatY"), seatZ = readInt(seat, "seatZ");
+        PilotSeat seat = findSeat(originDim, shipId)
+                .requireFound("the pilot seat must be found in the assembled ship, or the test is vacuous");
+        int seatX = seat.seatX, seatY = seat.seatY, seatZ = seat.seatZ;
 
         String botName = botName(this::exec);
 
-        int sx = (int) Math.round(readDouble(seat, "shipWorldX"));
-        int sy = (int) Math.round(readDouble(seat, "shipWorldY"));
-        int sz = (int) Math.round(readDouble(seat, "shipWorldZ"));
+        int sx = (int) Math.round(seat.shipWorldX);
+        int sy = (int) Math.round(seat.shipWorldY);
+        int sz = (int) Math.round(seat.shipWorldZ);
         // The CLIENT's mark BEFORE the transfer is ordered — see the sibling arrangement above.
         long enterMark = clientEvents().mark();
         String enter = exec("artest space enter " + botName + " " + originDim + " " + sx + " " + sy + " " + sz);
@@ -1031,9 +1033,9 @@ private long readCounter(String className, String field) throws Exception {
         // same channel and the same way of deriving the key, asked of a ship that is plainly alive
         // in an ordinary cell. Without it, silence in hyperspace cannot be told from a key nobody
         // ever writes under - and the two ask for opposite investigations.
-        String cellSeat = findSeat(originDim, setup.requireShipId());
-        String cellAfcKey = originDim + " " + readInt(cellSeat, "afcX")
-                + " " + readInt(cellSeat, "afcY") + " " + readInt(cellSeat, "afcZ");
+        PilotSeat cellSeat = findSeat(originDim, setup.requireShipId());
+        String cellAfcKey = originDim + " " + cellSeat.afcX
+                + " " + cellSeat.afcY + " " + cellSeat.afcZ;
         long cellTileTicks = gameSeen(exec("artest vs motion-trace " + cellAfcKey));
         bot().waitTicks(20);
         long cellTileTicksAfter = gameSeen(exec("artest vs motion-trace " + cellAfcKey));
@@ -1114,10 +1116,10 @@ private long readCounter(String className, String field) throws Exception {
         // whenever the lanes are closer than the caller assumed.
         String hyperShipId = ShipIdentity.awaitPhysicsIdOf(this::exec, hyperDim, parkedHullName,
                 20, () -> bot().waitTicks(5));
-        String hyperSeat = findSeat(hyperDim, hyperShipId);
-        int afcX = readInt(hyperSeat, "afcX");
-        int afcY = readInt(hyperSeat, "afcY");
-        int afcZ = readInt(hyperSeat, "afcZ");
+        PilotSeat hyperSeat = findSeat(hyperDim, hyperShipId);
+        int afcX = hyperSeat.afcX;
+        int afcY = hyperSeat.afcY;
+        int afcZ = hyperSeat.afcZ;
         String afcKey = hyperDim + " " + afcX + " " + afcY + " " + afcZ;
         long tileTicksBefore = gameSeen(exec("artest vs motion-trace " + afcKey));
         bot().waitTicks(20);
@@ -1293,10 +1295,9 @@ private long readCounter(String className, String field) throws Exception {
 
         // Board the way every other scenario here boards (seat + its own control), then stand up.
         // The ship's world position is read for the stand-up arrangement's re-drop, not asserted on.
-        String seat = findSeat(originDim, setup.requireShipId());
+        PilotSeat seat = findSeat(originDim, setup.requireShipId());
         seatTheBot(originDim, setup.requireShipId());
-        String capture = standTheBotOnTheDeck(readDouble(seat, "shipWorldX"),
-                readDouble(seat, "shipWorldY"), readDouble(seat, "shipWorldZ"));
+        String capture = standTheBotOnTheDeck(seat.shipWorldX, seat.shipWorldY, seat.shipWorldZ);
 
         // ── CONTROLS, all three before the stimulus ─────────────────────────────────────────────
         // Each one can fail, and each failure would make the in-flight reading vacuous in its own
