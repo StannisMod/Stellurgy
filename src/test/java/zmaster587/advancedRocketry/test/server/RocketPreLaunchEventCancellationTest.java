@@ -8,8 +8,10 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 import zmaster587.advancedRocketry.test.FixtureSite;
+import zmaster587.advancedRocketry.test.RocketInfo;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 import static zmaster587.advancedRocketry.test.server.WorldCommandFixtures.exec;
 
@@ -56,7 +58,6 @@ public class RocketPreLaunchEventCancellationTest extends AbstractSharedServerTe
 
     private static final String BUILDER_POS = "builderPos";
     private static final String ENTITY_ID = "entityId";
-    private static final String LAUNCH_COUNTER = "launchCounter";
     private static final String OBSERVED = "observed";
     private static final String CANCELLED = "cancelled";
 
@@ -91,15 +92,14 @@ public class RocketPreLaunchEventCancellationTest extends AbstractSharedServerTe
                             + "cancelled: " + launch,
                     launch.contains("\"ok\":true") || launch.contains("\"entityId\":"));
 
-            String info = exec("artest rocket info " + entityId);
-            int counter = extract(info, LAUNCH_COUNTER);
+            RocketInfo info = RocketInfo.byId(WorldCommandFixtures::exec, entityId);
             assertEquals("cancelled prepareLaunch must leave LAUNCH_COUNTER "
                             + "at its default (-1) — countdown must NOT have "
-                            + "started: " + info,
-                    -1, counter);
-            assertTrue("isInFlight must remain false after cancelled launch: "
-                            + info,
-                    info.contains("\"isInFlight\":false"));
+                            + "started: " + info.raw(),
+                    -1, info.launchCounter);
+            assertFalse("isInFlight must remain false after cancelled launch: "
+                            + info.raw(),
+                    info.inFlight);
 
             // The listener must have observed the event and cancelled it —
             // proves the test toggle actually wired through.
@@ -125,11 +125,10 @@ public class RocketPreLaunchEventCancellationTest extends AbstractSharedServerTe
                         + launch,
                 launch.contains("\"ok\":true") || launch.contains("\"entityId\":"));
 
-        String info = exec("artest rocket info " + entityId);
-        int counter = extract(info, LAUNCH_COUNTER);
+        RocketInfo info = RocketInfo.byId(WorldCommandFixtures::exec, entityId);
         assertEquals("uncancelled prepareLaunch must seed LAUNCH_COUNTER to 200 "
-                        + "(the countdown tick budget): " + info,
-                200, counter);
+                        + "(the countdown tick budget): " + info.raw(),
+                200, info.launchCounter);
     }
 
     // ─── helpers ───────────────────────────────────────────────────────

@@ -1,6 +1,7 @@
 package zmaster587.advancedRocketry.test.server;
 
 import zmaster587.advancedRocketry.test.RocketList;
+import zmaster587.advancedRocketry.test.RocketInfo;
 import zmaster587.advancedRocketry.test.Reply;
 import org.junit.Test;
 
@@ -47,9 +48,10 @@ public class RocketAssemblerMiningDrillStatTest extends AbstractSharedServerTest
 
     private static final String BUILDER_POS = "builderPos";
     private static final String ROCKET_LIST_ID = "id";
-    /** drillingPower is serialised as a float — accept "drillingPower":0.0,
-     *  "drillingPower":0.02, etc. */
-    private static final String DRILLING_POWER = "drillingPower";
+    /** What the server says about one craft, read through the verb's own reader. */
+    private RocketInfo rocketInfo(int id) throws Exception {
+        return RocketInfo.byId(cmd -> String.join("\n", client().execute(cmd)), id);
+    }
 
     @Test
     public void rocketWithMiningDrillBlockAccumulatesDrillingPower() throws Exception {
@@ -57,19 +59,15 @@ public class RocketAssemblerMiningDrillStatTest extends AbstractSharedServerTest
         // drillingPower == 0 so the with-drill assertion below isn't
         // attributable to some other latent stat source on the chassis.
         int baselineId = buildAndAssemble(FixtureSite.openAir(0, 1500, 500), "simple");
-        String baselineInfo = String.join("\n",
-                client().execute("artest rocket info " + baselineId));
-        double baselineDp = extractDouble(baselineInfo, DRILLING_POWER);
-        assertEquals("simple fixture must produce drillingPower=0: " + baselineInfo,
-                0.0, baselineDp, 0.0);
+        RocketInfo baselineInfo = rocketInfo(baselineId);
+        assertEquals("simple fixture must produce drillingPower=0: " + baselineInfo.raw(),
+                0.0, baselineInfo.drillingPower, 0.0);
 
         // With drill — should flip to > 0.
         int withDrillId = buildAndAssemble(FixtureSite.openAir(0, 1600, 500), "with-mining-drill");
-        String drillInfo = String.join("\n",
-                client().execute("artest rocket info " + withDrillId));
-        double drillDp = extractDouble(drillInfo, DRILLING_POWER);
+        RocketInfo drillInfo = rocketInfo(withDrillId);
         assertTrue("with-mining-drill fixture must produce drillingPower > 0: "
-                        + drillInfo, drillDp > 0.0);
+                        + drillInfo.raw(), drillInfo.drillingPower > 0.0);
     }
 
     /** Mirror of RocketAssemblySmokeTest#buildAndAssemble — warmup chunks,
@@ -113,9 +111,4 @@ public class RocketAssemblerMiningDrillStatTest extends AbstractSharedServerTest
         return lastId;
     }
 
-    private static double extractDouble(String haystack, String field) {
-        double value = Reply.of(haystack).number(field);
-        assertTrue("field `" + field + "` not found in: " + haystack, !Double.isNaN(value));
-        return value;
-    }
 }

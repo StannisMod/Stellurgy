@@ -1,6 +1,7 @@
 package zmaster587.advancedRocketry.test.server;
 
 import zmaster587.advancedRocketry.test.RocketList;
+import zmaster587.advancedRocketry.test.RocketInfo;
 import zmaster587.advancedRocketry.test.Reply;
 import org.junit.Test;
 
@@ -27,13 +28,14 @@ import static org.junit.Assert.assertTrue;
 public class FreeFlightAssistsE2ETest extends AbstractSharedServerTest {
 
     private static final String BUILDER_POS = "builderPos";
-    private static final String MOTION_X = "motionX";
-    private static final String MOTION_Y = "motionY";
-    private static final String MOTION_Z = "motionZ";
-    private static final String ENGINE_POWER = "enginePower";
 
     private static String ok(java.util.List<String> resp) {
         return String.join("\n", resp);
+    }
+
+    /** What the server says about one craft, read through the verb's own reader. */
+    private RocketInfo rocketInfo(int id) throws Exception {
+        return RocketInfo.byId(cmd -> ok(client().execute(cmd)), id);
     }
 
     private int buildAndAssemble(FixtureSite site) throws Exception {
@@ -66,33 +68,25 @@ public class FreeFlightAssistsE2ETest extends AbstractSharedServerTest {
         return built.get(built.size() - 1).id;
     }
 
-    private static double parseDouble(String body, String field, String label) {
-        double value = Reply.of(body).number(field);
-        assertTrue("missing " + label + " in: " + body, !Double.isNaN(value));
-        return value;
-    }
-
     // -----------------------------------------------------------------
 
     @Test
     public void flightAssistDefaultsOnAndTogglesThroughProbe() throws Exception {
         int id = buildAndAssemble(FixtureSite.openAir(0, 4000, 500));
-        String info0 = ok(client().execute("artest rocket info " + id));
-        assertTrue("FA must default to true: " + info0,
-                info0.contains("\"flightAssistOn\":true"));
+        RocketInfo info0 = rocketInfo(id);
+        assertTrue("FA must default to true: " + info0.raw(), info0.flightAssistOn);
 
         String off = ok(client().execute("artest rocket set-flight-assist " + id + " off"));
         assertTrue("set-flight-assist off must succeed: " + off,
                 off.contains("\"ok\":true") && off.contains("\"flightAssistOn\":false"));
 
-        String info1 = ok(client().execute("artest rocket info " + id));
-        assertTrue("info must round-trip FA=false: " + info1,
-                info1.contains("\"flightAssistOn\":false"));
+        RocketInfo info1 = rocketInfo(id);
+        assertFalse("info must round-trip FA=false: " + info1.raw(), info1.flightAssistOn);
 
         ok(client().execute("artest rocket set-flight-assist " + id + " on"));
-        String info2 = ok(client().execute("artest rocket info " + id));
-        assertTrue("info must round-trip FA=true after flip-back: " + info2,
-                info2.contains("\"flightAssistOn\":true"));
+        RocketInfo info2 = rocketInfo(id);
+        assertTrue("info must round-trip FA=true after flip-back: " + info2.raw(),
+                info2.flightAssistOn);
     }
 
     @Test
@@ -118,9 +112,9 @@ public class FreeFlightAssistsE2ETest extends AbstractSharedServerTest {
         assertTrue("probe echoes cut=true: " + applied,
                 applied.contains("\"cut\":true"));
 
-        String info = ok(client().execute("artest rocket info " + id));
-        assertTrue("info must store ffInputCut=true: " + info,
-                info.contains("\"ffInputCut\":true"));
+        RocketInfo info = rocketInfo(id);
+        assertTrue("info must store ffInputCut=true: " + info.raw(),
+                info.freeFlightInput().cut);
     }
 
     @Test
@@ -142,12 +136,10 @@ public class FreeFlightAssistsE2ETest extends AbstractSharedServerTest {
         ok(client().execute("artest rocket free-flight-input " + id + " 0 0 0 0 0"));
         ok(client().execute("artest rocket free-flight-tick " + id + " 40"));
 
-        String info = ok(client().execute("artest rocket info " + id));
-        double mz = parseDouble(info, "motionZ", "motionZ");
-        assertTrue("released key must NOT bleed the cruise (motionZ=" + mz
-                + ", expected to keep cruising +Z): " + info, mz > 0.5);
-        assertTrue("setpoint must persist on the server: " + info,
-                info.contains("\"faSetpointFwd\""));
+        RocketInfo info = rocketInfo(id);
+        assertTrue("released key must NOT bleed the cruise (motionZ=" + info.motionZ
+                + ", expected to keep cruising +Z): " + info.raw(), info.motionZ > 0.5);
+        assertTrue("setpoint must persist on the server: " + info.raw(), info.hasFaSetpoint());
     }
 
     @Test
@@ -167,15 +159,12 @@ public class FreeFlightAssistsE2ETest extends AbstractSharedServerTest {
         ok(client().execute("artest rocket free-flight-input " + id + " 0 0 0 0 0 1"));
         ok(client().execute("artest rocket free-flight-tick " + id + " 60"));
 
-        String info = ok(client().execute("artest rocket info " + id));
-        double my = parseDouble(info, MOTION_Y, "motionY");
-        double mz = parseDouble(info, "motionZ", "motionZ");
-        assertTrue("cut must ease the cruise to a stop (motionZ=" + mz + ")",
-                Math.abs(mz) < 0.05);
-        assertTrue("cut must HOLD ALTITUDE, not drop the craft (motionY=" + my + ")",
-                Math.abs(my) < 0.05);
-        assertTrue("hovering craft must still be in flight: " + info,
-                info.contains("\"isInFlight\":true"));
+        RocketInfo info = rocketInfo(id);
+        assertTrue("cut must ease the cruise to a stop (motionZ=" + info.motionZ + ")",
+                Math.abs(info.motionZ) < 0.05);
+        assertTrue("cut must HOLD ALTITUDE, not drop the craft (motionY=" + info.motionY + ")",
+                Math.abs(info.motionY) < 0.05);
+        assertTrue("hovering craft must still be in flight: " + info.raw(), info.inFlight);
     }
 
     @Test
@@ -195,11 +184,10 @@ public class FreeFlightAssistsE2ETest extends AbstractSharedServerTest {
         ok(client().execute("artest rocket free-flight-input " + id + " 0 0 0 0 0"));
         ok(client().execute("artest rocket free-flight-tick " + id + " 40"));
 
-        String info = ok(client().execute("artest rocket info " + id));
-        double mx = parseDouble(info, "motionX", "motionX");
-        double mz = parseDouble(info, "motionZ", "motionZ");
-        assertTrue("after a 90° yaw the cruise must point -X (mx=" + mx + " mz=" + mz + ")",
-                mx < -0.5 && Math.abs(mz) < 0.35);
+        RocketInfo info = rocketInfo(id);
+        assertTrue("after a 90° yaw the cruise must point -X (mx=" + info.motionX
+                        + " mz=" + info.motionZ + ")",
+                info.motionX < -0.5 && Math.abs(info.motionZ) < 0.35);
     }
 
     @Test
@@ -238,8 +226,7 @@ public class FreeFlightAssistsE2ETest extends AbstractSharedServerTest {
         ok(client().execute("artest rocket free-flight-tick " + id + " 4"));
         ok(client().execute("artest rocket free-flight-input " + id + " 0 0 0 0 0"));
         ok(client().execute("artest rocket free-flight-tick " + id + " 2"));
-        double mzBefore = parseDouble(ok(client().execute("artest rocket info " + id)),
-                "motionZ", "motionZ");
+        double mzBefore = rocketInfo(id).motionZ;
         assertTrue("precondition: must be coasting (+Z), got " + mzBefore, mzBefore > 0.2);
         assertTrue("precondition: this leg tests the capture, so the cruise must be UNDER the assist "
                         + "ceiling (" + mzBefore + " vs 3.0) — above it the contract is the clamp below",
@@ -248,8 +235,7 @@ public class FreeFlightAssistsE2ETest extends AbstractSharedServerTest {
         // FA back on -> setpoint captured -> cruise continues, no jerk.
         ok(client().execute("artest rocket set-flight-assist " + id + " on"));
         ok(client().execute("artest rocket free-flight-tick " + id + " 20"));
-        double mzAfter = parseDouble(ok(client().execute("artest rocket info " + id)),
-                "motionZ", "motionZ");
+        double mzAfter = rocketInfo(id).motionZ;
         assertTrue("FA re-enable must keep the cruise (was " + mzBefore + ", now "
                 + mzAfter + ")", Math.abs(mzAfter - mzBefore) < 0.25);
     }
@@ -277,15 +263,13 @@ public class FreeFlightAssistsE2ETest extends AbstractSharedServerTest {
         ok(client().execute("artest rocket free-flight-tick " + id + " 8"));
         ok(client().execute("artest rocket free-flight-input " + id + " 0 0 0 0 0"));
         ok(client().execute("artest rocket free-flight-tick " + id + " 2"));
-        double mzBefore = parseDouble(ok(client().execute("artest rocket info " + id)),
-                "motionZ", "motionZ");
+        double mzBefore = rocketInfo(id).motionZ;
         assertTrue("precondition: the cruise must exceed the assist ceiling, got " + mzBefore,
                 mzBefore > 3.0);
 
         ok(client().execute("artest rocket set-flight-assist " + id + " on"));
         ok(client().execute("artest rocket free-flight-tick " + id + " 20"));
-        double mzAfter = parseDouble(ok(client().execute("artest rocket info " + id)),
-                "motionZ", "motionZ");
+        double mzAfter = rocketInfo(id).motionZ;
         assertTrue("the assist must bring an overfast craft DOWN toward its ceiling (was " + mzBefore
                 + ", now " + mzAfter + ")", mzAfter < mzBefore);
         assertTrue("and must not overshoot below it — it tracks the ceiling, it does not brake to a "
@@ -301,15 +285,13 @@ public class FreeFlightAssistsE2ETest extends AbstractSharedServerTest {
         ok(client().execute("artest rocket set-flight-assist " + id + " off"));
 
         ok(client().execute("artest rocket set-state " + id + " motionY=1.0"));
-        String before = ok(client().execute("artest rocket info " + id));
-        double myBefore = parseDouble(before, MOTION_Y, "motionY");
+        double myBefore = rocketInfo(id).motionY;
 
         // brake=1.0 (channel 4).
         ok(client().execute("artest rocket free-flight-input " + id + " 0 0 0 0 1 0 0"));
         ok(client().execute("artest rocket free-flight-tick " + id + " 1"));
 
-        String after = ok(client().execute("artest rocket info " + id));
-        double myAfter = parseDouble(after, MOTION_Y, "motionY");
+        double myAfter = rocketInfo(id).motionY;
         // Brake at FA off must still pull motion down (toward gravity-altered baseline).
         assertTrue("FA off + brake must still attenuate motionY (was "
                         + myBefore + ", now " + myAfter + ")",
@@ -332,9 +314,9 @@ public class FreeFlightAssistsE2ETest extends AbstractSharedServerTest {
         ok(client().execute("artest rocket free-flight-tick " + id + " 30"));
         ok(client().execute("artest rocket free-flight-input " + id + " 0 0 0 0 0 1")); // cut -> hover
         ok(client().execute("artest rocket free-flight-tick " + id + " 25"));
-        String hover = ok(client().execute("artest rocket info " + id));
-        double myHover  = parseDouble(hover, MOTION_Y, "motionY");
-        double powHover = parseDouble(hover, ENGINE_POWER, "enginePower");
+        RocketInfo hover = rocketInfo(id);
+        double myHover  = hover.motionY;
+        double powHover = hover.enginePower;
         assertTrue("hover thrust (no climb) must still register engine power for the sound "
                 + "(motionY=" + myHover + " enginePower=" + powHover + ")", powHover > 0.0);
 
@@ -342,8 +324,7 @@ public class FreeFlightAssistsE2ETest extends AbstractSharedServerTest {
         ok(client().execute("artest rocket set-flight-assist " + id + " off"));
         ok(client().execute("artest rocket free-flight-input " + id + " 0 0 0 0 0"));
         ok(client().execute("artest rocket free-flight-tick " + id + " 3"));
-        double powCoast = parseDouble(ok(client().execute("artest rocket info " + id)),
-                ENGINE_POWER, "enginePower");
+        double powCoast = rocketInfo(id).enginePower;
         assertTrue("coasting with no thrust must be silent (enginePower=" + powCoast + ")",
                 powCoast < 1e-3);
     }

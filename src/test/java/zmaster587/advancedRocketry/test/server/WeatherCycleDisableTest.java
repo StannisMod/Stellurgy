@@ -106,7 +106,7 @@ public class WeatherCycleDisableTest {
         // Anchor on the probe's named worldInfoClass field, not a bare substring
         // of the whole response.
         assertTrue("planet must be wrapped while custom weather is on: " + wrapped,
-                String.valueOf(Reply.of("artest dim info", wrapped).text("worldInfoClass"))
+                String.valueOf(Reply.of("artest weather get", wrapped).text("worldInfoClass"))
                         .endsWith("ARDimensionWorldInfo"));
 
         // Forced-clear marker (rain=-1, thunder=-1): the custom cycle, when it runs,

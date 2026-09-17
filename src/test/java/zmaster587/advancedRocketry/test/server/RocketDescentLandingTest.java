@@ -2,6 +2,7 @@ package zmaster587.advancedRocketry.test.server;
 
 import zmaster587.advancedRocketry.test.Reply;
 import org.junit.Test;
+import zmaster587.advancedRocketry.test.RocketInfo;
 import zmaster587.advancedRocketry.test.RocketList;
 import zmaster587.advancedRocketry.test.FixtureSite;
 import zmaster587.advancedRocketry.test.GameTicks;
@@ -44,12 +45,17 @@ public class RocketDescentLandingTest extends AbstractSharedServerTest {
 
     private static final String BUILDER_POS = "builderPos";
     private static final String ROCKET_LIST_ID = "id";
+    /** The field the TICK reply answers with — that verb's own, not {@code rocket info}'s. */
     private static final String TICKS_EXISTED = "ticksExisted";
     private static final String LANDED_COUNT = "landed";
-    private static final String POS_Y_FIELD = "posY";
 
     private static String ok(java.util.List<String> resp) {
         return String.join("\n", resp);
+    }
+
+    /** What the server says about one craft, read through the verb's own reader. */
+    private RocketInfo rocketInfo(int id) throws Exception {
+        return RocketInfo.byId(cmd -> ok(client().execute(cmd)), id);
     }
 
     private static int gi(String field, String s, String label) {
@@ -141,9 +147,9 @@ public class RocketDescentLandingTest extends AbstractSharedServerTest {
 
         GameTicks.advanceWorld(client(), 0, 5);
 
-        String info = ok(client().execute("artest rocket info " + id));
-        assertTrue("descent gate must flip isInFlight under real ticking: " + info,
-                info.contains("\"isInFlight\":true"));
+        RocketInfo info = rocketInfo(id);
+        assertTrue("descent gate must flip isInFlight under real ticking: " + info.raw(),
+                info.inFlight);
     }
 
     @Test
@@ -162,15 +168,15 @@ public class RocketDescentLandingTest extends AbstractSharedServerTest {
 
         GameTicks.advanceWorld(client(), 0, 5);
 
-        String info = ok(client().execute("artest rocket info " + id));
+        RocketInfo info = rocketInfo(id);
         // ticksExisted will have advanced by up to ~5 under real ticking;
         // the gate threshold (DESCENT_TIMER=40) is still not crossed, so
         // isInFlight remains false.
-        int t = gi(TICKS_EXISTED, info, "ticksExisted after");
         assertTrue("ticksExisted should remain below the descent timer "
-                + "(have " + t + ", DESCENT_TIMER=" + DESCENT_TIMER + ")", t <= DESCENT_TIMER);
-        assertTrue("isInFlight must NOT be set before descent timer expires: " + info,
-                info.contains("\"isInFlight\":false"));
+                + "(have " + info.ticksExisted + ", DESCENT_TIMER=" + DESCENT_TIMER + ")",
+                info.ticksExisted <= DESCENT_TIMER);
+        assertFalse("isInFlight must NOT be set before descent timer expires: " + info.raw(),
+                info.inFlight);
     }
 
     @Test
@@ -191,10 +197,7 @@ public class RocketDescentLandingTest extends AbstractSharedServerTest {
 
         GameTicks.advanceWorld(client(), 0, 5);
 
-        String info = ok(client().execute("artest rocket info " + id));
-        Reply mReply = Reply.of(info);
-        assertTrue("info must expose posY: " + info, mReply.has(POS_Y_FIELD));
-        double posYAfter = Double.parseDouble(mReply.text(POS_Y_FIELD));
+        double posYAfter = rocketInfo(id).posY;
         assertTrue("gravity must have pulled the rocket downwards under "
                 + "real ticking (posY=" + posYAfter + ", started at 300)",
                 posYAfter < 300.0);
@@ -237,11 +240,9 @@ public class RocketDescentLandingTest extends AbstractSharedServerTest {
         assertTrue("RocketLandedEvent must fire on ground collision under real ticks: "
                 + landedBefore + " -> " + landedAfter, landedAfter > landedBefore);
 
-        String info = ok(client().execute("artest rocket info " + id));
-        assertTrue("production must clear isInFlight on landing: " + info,
-                info.contains("\"isInFlight\":false"));
-        assertTrue("production must clear isInOrbit on landing: " + info,
-                info.contains("\"isInOrbit\":false"));
+        RocketInfo info = rocketInfo(id);
+        assertFalse("production must clear isInFlight on landing: " + info.raw(), info.inFlight);
+        assertFalse("production must clear isInOrbit on landing: " + info.raw(), info.inOrbit);
     }
 
     @Test
@@ -255,10 +256,7 @@ public class RocketDescentLandingTest extends AbstractSharedServerTest {
         final FixtureSite site = FixtureSite.openAir(0, 6500, 500);
         int id = buildAndAssemble(site);
 
-        String info = ok(client().execute("artest rocket info " + id));
-        Reply mYReply = Reply.of(info);
-        assertTrue("info must expose posY: " + info, mYReply.has(POS_Y_FIELD));
-        int posY = (int) Double.parseDouble(mYReply.text(POS_Y_FIELD));
+        int posY = (int) rocketInfo(id).posY;
 
         String dismantleResp = ok(client().execute("artest rocket dismantle " + id));
         assertTrue("dismantle must succeed: " + dismantleResp,

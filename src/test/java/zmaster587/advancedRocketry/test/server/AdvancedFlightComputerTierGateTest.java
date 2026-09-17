@@ -8,6 +8,7 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 import zmaster587.advancedRocketry.test.Reply;
+import zmaster587.advancedRocketry.test.RocketInfo;
 import zmaster587.advancedRocketry.test.FixtureSite;
 
 import static org.junit.Assert.assertTrue;
@@ -53,14 +54,15 @@ public class AdvancedFlightComputerTierGateTest extends AbstractSharedServerTest
         int entityId = extractInt(assemble, "entityId");
         assertTrue("assemble did not report a rocket entity id: " + assemble, entityId >= 0);
 
-        String info = String.join("\n", client().execute("artest rocket info " + entityId));
+        RocketInfo rocket = RocketInfo.of(String.join("\n",
+                client().execute("artest rocket info " + entityId)));
         // ... it has a storage chunk (real EntityRocket) ...
-        assertTrue("expected a normal rocket with a storage chunk: " + info,
-                info.contains("\"hasStorage\":true"));
+        assertTrue("expected a normal rocket with a storage chunk: " + rocket.raw(),
+                rocket.hasStorage);
         // ... and the Advanced Flight Computer rode along inside it, proving the
         // block was present yet did NOT reroute the build away from the rocket path.
-        assertTrue("advanced flight computer should be captured in the built rocket: " + info,
-                info.contains("\"advancedFlightComputerPresent\":true"));
+        assertTrue("advanced flight computer should be captured in the built rocket: "
+                + rocket.raw(), rocket.advancedFlightComputerPresent);
     }
 
     @Test

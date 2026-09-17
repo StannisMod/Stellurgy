@@ -1,6 +1,7 @@
 package zmaster587.advancedRocketry.test.server;
 
 // migrated to AbstractSharedServerTest
+import zmaster587.advancedRocketry.test.DimInfo;
 import zmaster587.advancedRocketry.test.Reply;
 import org.junit.Assume;
 import org.junit.Test;
@@ -10,6 +11,7 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertTrue;
 
@@ -67,41 +69,37 @@ public class PlanetDimensionLoadTest extends AbstractSharedServerTest {
         // so this assertion targets the first NON-overworld AR planet — the
         // ones that actually exercise AR's WorldProviderPlanet wiring.
         int arDim = firstNonOverworldArDimOrSkip();
-        String info = loadAndInfo(arDim);
-        assertTrue(
-                "dim " + arDim + " providerClass should be " + AR_PROVIDER_FQN + ": " + info,
-                info.contains("\"providerClass\":\"" + AR_PROVIDER_FQN + "\""));
+        DimInfo info = loadAndInfo(arDim);
+        assertEquals(
+                "dim " + arDim + " providerClass should be " + AR_PROVIDER_FQN + ": " + info.raw(),
+                AR_PROVIDER_FQN, info.providerClass());
     }
 
     @Test
     public void biomeProviderIsNonNull() throws Exception {
         int arDim = firstNonOverworldArDimOrSkip();
-        String info = loadAndInfo(arDim);
-        assertTrue("biomeProviderClass field missing from dim info: " + info,
-                info.contains("\"biomeProviderClass\":"));
-        assertTrue("biomeProviderClass reported null for AR dim " + arDim + ": " + info,
-                !info.contains("\"biomeProviderClass\":\"null\""));
+        // The reader REFUSES both an absent field and the producer's literal "null", which is
+        // exactly the pair of assertions this leg used to spell for itself.
+        DimInfo info = loadAndInfo(arDim);
+        assertFalse("biomeProviderClass reported null for AR dim " + arDim + ": " + info.raw(),
+                info.biomeProviderClass().isEmpty());
     }
 
     @Test
     public void chunkGeneratorIsNonNull() throws Exception {
         int arDim = firstNonOverworldArDimOrSkip();
-        String info = loadAndInfo(arDim);
-        assertTrue("chunkGeneratorClass field missing from dim info: " + info,
-                info.contains("\"chunkGeneratorClass\":"));
-        assertTrue("chunkGeneratorClass reported null for AR dim " + arDim + ": " + info,
-                !info.contains("\"chunkGeneratorClass\":\"null\""));
+        DimInfo info = loadAndInfo(arDim);
+        assertFalse("chunkGeneratorClass reported null for AR dim " + arDim + ": " + info.raw(),
+                info.chunkGeneratorClass().isEmpty());
     }
 
     @Test
     public void saveFolderResolvesToExpectedPath() throws Exception {
         int arDim = firstNonOverworldArDimOrSkip();
-        String info = loadAndInfo(arDim);
-        assertTrue("saveDir field missing from dim info: " + info,
-                info.contains("\"saveDir\":"));
+        DimInfo info = loadAndInfo(arDim);
         // WorldProviderPlanet.getSaveFolder() returns "advRocketry/" + super.getSaveFolder().
-        assertTrue("saveDir for AR planet " + arDim + " should be under advRocketry/: " + info,
-                info.contains("\"saveDir\":\"advRocketry/"));
+        assertTrue("saveDir for AR planet " + arDim + " should be under advRocketry/: " + info.raw(),
+                info.saveDir().startsWith("advRocketry/"));
     }
 
     @Test
@@ -177,9 +175,9 @@ public class PlanetDimensionLoadTest extends AbstractSharedServerTest {
         return found;
     }
 
-    private String loadAndInfo(int dim) throws Exception {
+    private DimInfo loadAndInfo(int dim) throws Exception {
         loadDim(dim);
-        return String.join("\n", client().execute("artest dim info " + dim));
+        return DimInfo.forDim(cmd -> String.join("\n", client().execute(cmd)), dim);
     }
 
     private void loadDim(int dim) throws Exception {

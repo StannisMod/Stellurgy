@@ -1,6 +1,7 @@
 package zmaster587.advancedRocketry.test.server;
 
 import zmaster587.advancedRocketry.test.RocketList;
+import zmaster587.advancedRocketry.test.RocketInfo;
 import zmaster587.advancedRocketry.test.Reply;
 import org.junit.Test;
 
@@ -40,11 +41,16 @@ public class FreeFlightCycleTest extends AbstractSharedServerTest {
     private static final String BUILDER_POS = "builderPos";
     private static final String MOTION_X = "motionX";
     private static final String MOTION_Z = "motionZ";
+    /** The field {@code free-flight-tick} answers with — that verb's own, not {@code rocket info}'s. */
     private static final String MOTION_Y = "motionY";
-    private static final String POS_Y = "posY";
 
     private static String ok(java.util.List<String> resp) {
         return String.join("\n", resp);
+    }
+
+    /** What the server says about one craft, read through the verb's own reader. */
+    private RocketInfo rocketInfo(int id) throws Exception {
+        return RocketInfo.byId(cmd -> ok(client().execute(cmd)), id);
     }
 
     private int buildAndAssemble(FixtureSite site) throws Exception {
@@ -107,9 +113,9 @@ public class FreeFlightCycleTest extends AbstractSharedServerTest {
     @Test
     public void freshRocketDefaultsToClassicLaunchMode() throws Exception {
         int id = buildAndAssemble(FixtureSite.openAir(0, 2000, 500));
-        String info = ok(client().execute("artest rocket info " + id));
-        assertTrue("default mode must be CLASSIC_LAUNCH: " + info,
-                info.contains("\"flightMode\":\"CLASSIC_LAUNCH\""));
+        RocketInfo info = rocketInfo(id);
+        assertEquals("default mode must be CLASSIC_LAUNCH: " + info.raw(),
+                RocketInfo.CLASSIC_LAUNCH, info.flightMode);
     }
 
     @Test
@@ -123,15 +129,15 @@ public class FreeFlightCycleTest extends AbstractSharedServerTest {
         assertTrue("set-flight-mode must echo mode: " + set,
                 set.contains("\"flightMode\":\"FREE_FLIGHT\""));
 
-        String info1 = ok(client().execute("artest rocket info " + id));
-        assertTrue("info must report FREE_FLIGHT after set: " + info1,
-                info1.contains("\"flightMode\":\"FREE_FLIGHT\""));
+        RocketInfo info1 = rocketInfo(id);
+        assertEquals("info must report FREE_FLIGHT after set: " + info1.raw(),
+                RocketInfo.FREE_FLIGHT, info1.flightMode);
 
         // And back to classic.
         ok(client().execute("artest rocket set-flight-mode " + id + " CLASSIC_LAUNCH"));
-        String info2 = ok(client().execute("artest rocket info " + id));
-        assertTrue("info must report CLASSIC_LAUNCH after flip-back: " + info2,
-                info2.contains("\"flightMode\":\"CLASSIC_LAUNCH\""));
+        RocketInfo info2 = rocketInfo(id);
+        assertEquals("info must report CLASSIC_LAUNCH after flip-back: " + info2.raw(),
+                RocketInfo.CLASSIC_LAUNCH, info2.flightMode);
     }
 
     @Test
@@ -157,11 +163,11 @@ public class FreeFlightCycleTest extends AbstractSharedServerTest {
         assertTrue("start-free-flight must flip isInFlight=true: " + start,
                 start.contains("\"isInFlight\":true"));
 
-        String info = ok(client().execute("artest rocket info " + id));
-        assertTrue("info must reflect in-flight after start-free-flight: " + info,
-                info.contains("\"isInFlight\":true"));
-        assertTrue("info must keep flightMode=FREE_FLIGHT: " + info,
-                info.contains("\"flightMode\":\"FREE_FLIGHT\""));
+        RocketInfo info = rocketInfo(id);
+        assertTrue("info must reflect in-flight after start-free-flight: " + info.raw(),
+                info.inFlight);
+        assertEquals("info must keep flightMode=FREE_FLIGHT: " + info.raw(),
+                RocketInfo.FREE_FLIGHT, info.flightMode);
     }
 
     @Test
@@ -174,9 +180,8 @@ public class FreeFlightCycleTest extends AbstractSharedServerTest {
         assertTrue("classic rocket must reject start-free-flight: " + resp,
                 resp.contains("\"error\":\"rocket not in FREE_FLIGHT\""));
 
-        String info = ok(client().execute("artest rocket info " + id));
-        assertTrue("rejected start must NOT flip isInFlight: " + info,
-                info.contains("\"isInFlight\":false"));
+        RocketInfo info = rocketInfo(id);
+        assertFalse("rejected start must NOT flip isInFlight: " + info.raw(), info.inFlight);
     }
 
     @Test
@@ -203,13 +208,10 @@ public class FreeFlightCycleTest extends AbstractSharedServerTest {
 
         // Info must round-trip the input — proves server-side storage path
         // is wired into the probe surface that clients/UI will read.
-        String info = ok(client().execute("artest rocket info " + id));
-        assertTrue("info must store ffInputFwd=1.0: " + info,
-                info.contains("\"ffInputFwd\":1.0"));
-        assertTrue("info must store ffInputVert=-0.5: " + info,
-                info.contains("\"ffInputVert\":-0.5"));
-        assertTrue("info must store ffInputBrake=0.75: " + info,
-                info.contains("\"ffInputBrake\":0.75"));
+        RocketInfo.FreeFlightInput stored = rocketInfo(id).freeFlightInput();
+        assertEquals("info must store ffInputFwd=1.0: " + stored, 1.0, stored.forward, 0.0);
+        assertEquals("info must store ffInputVert=-0.5: " + stored, -0.5, stored.vertical, 0.0);
+        assertEquals("info must store ffInputBrake=0.75: " + stored, 0.75, stored.brake, 0.0);
     }
 
     @Test
@@ -238,20 +240,17 @@ public class FreeFlightCycleTest extends AbstractSharedServerTest {
         // any takeoff kick and without auto-landing.
         int id = buildAndAssemble(FixtureSite.openAir(0, 2900, 500));
         ok(client().execute("artest rocket set-flight-mode " + id + " FREE_FLIGHT"));
-        String info0 = ok(client().execute("artest rocket info " + id));
-        double y0 = parseDouble(info0, POS_Y, "posY");
+        double y0 = rocketInfo(id).posY;
 
         ok(client().execute("artest rocket start-free-flight " + id));
         ok(client().execute("artest rocket free-flight-tick " + id + " 60"));
 
-        String info = ok(client().execute("artest rocket info " + id));
-        double y = parseDouble(info, POS_Y, "posY");
-        double my = parseDouble(info, MOTION_Y, "motionY");
-        assertTrue("engines-on craft must still be in flight (hovering): " + info,
-                info.contains("\"isInFlight\":true"));
+        RocketInfo info = rocketInfo(id);
+        assertTrue("engines-on craft must still be in flight (hovering): " + info.raw(),
+                info.inFlight);
         assertEquals("must hover ~1 block above the start height (y0=" + y0 + ")",
-                y0 + 1.0, y, 0.35);
-        assertEquals("hover must be near-stationary", 0.0, my, 0.05);
+                y0 + 1.0, info.posY, 0.35);
+        assertEquals("hover must be near-stationary", 0.0, info.motionY, 0.05);
     }
 
     @Test
@@ -267,11 +266,10 @@ public class FreeFlightCycleTest extends AbstractSharedServerTest {
         ok(client().execute("artest rocket free-flight-input " + id + " 0 -1.0 0 0 0"));
         ok(client().execute("artest rocket free-flight-tick " + id + " 80"));
 
-        String info = ok(client().execute("artest rocket info " + id));
-        assertTrue("touchdown must shut the engines off (isInFlight=false): " + info,
-                info.contains("\"isInFlight\":false"));
-        double my = parseDouble(info, MOTION_Y, "motionY");
-        assertEquals("landed craft must be stationary", 0.0, my, 0.01);
+        RocketInfo info = rocketInfo(id);
+        assertFalse("touchdown must shut the engines off (isInFlight=false): " + info.raw(),
+                info.inFlight);
+        assertEquals("landed craft must be stationary", 0.0, info.motionY, 0.01);
     }
 
     @Test
@@ -309,11 +307,12 @@ public class FreeFlightCycleTest extends AbstractSharedServerTest {
         assertTrue("classic-mode input must report applied=false: " + applied,
                 applied.contains("\"applied\":false"));
 
-        // info still shows zero current input (defensive).
-        String info = ok(client().execute("artest rocket info " + id));
-        assertTrue("classic rocket info must keep currentFreeFlightInput at zero: " + info,
-                info.contains("\"ffInputFwd\":0.0")
-                        || info.contains("\"ffInputFwd\":0"));
+        // info still shows zero current input (defensive). A craft with NO input block at all
+        // satisfies the same claim more strongly — nothing is holding its stick — so the two are
+        // read as one question rather than defaulted into each other.
+        RocketInfo info = rocketInfo(id);
+        assertTrue("classic rocket info must keep currentFreeFlightInput at zero: " + info.raw(),
+                !info.hasFreeFlightInput() || info.freeFlightInput().forward == 0.0);
     }
 
     @Test

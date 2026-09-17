@@ -1,5 +1,6 @@
 package zmaster587.advancedRocketry.test.server;
 
+import zmaster587.advancedRocketry.test.RocketInfo;
 import zmaster587.advancedRocketry.test.RocketList;
 import zmaster587.advancedRocketry.test.Reply;
 import org.junit.Test;
@@ -44,7 +45,6 @@ import static zmaster587.advancedRocketry.test.server.WorldCommandFixtures.exec;
  */
 public class UvAssemblerOutputEntityClassTest extends AbstractSharedServerTest {
 
-    private static final String ENTITY_CLASS = "entityClass";
     private static final String BUILDER_POS = "builderPos";
 
     /** Rocket-assembler fixture at x=5500; UV-assembler fixture at x=5700.
@@ -76,9 +76,8 @@ public class UvAssemblerOutputEntityClassTest extends AbstractSharedServerTest {
                 assemble.contains("\"ok\":true"));
 
         int entityId = lastRocketId();
-        String info = exec("artest rocket info " + entityId);
-        String entityClass = Reply.of("artest rocket info", info).text(ENTITY_CLASS);
-        assertTrue("info must surface entityClass: " + info, entityClass != null);
+        // The reader REFUSES a report with no entityClass, which is what the null check asserted.
+        String entityClass = RocketInfo.byId(WorldCommandFixtures::exec, entityId).entityClass;
         assertTrue("rocket assembler must spawn EntityRocket "
                         + "(not EntityStationDeployedRocket); got " + entityClass,
                 entityClass.endsWith(".EntityRocket"));
@@ -100,9 +99,7 @@ public class UvAssemblerOutputEntityClassTest extends AbstractSharedServerTest {
                 assemble.contains("\"ok\":true"));
 
         int entityId = lastRocketId();
-        String info = exec("artest rocket info " + entityId);
-        String entityClass = Reply.of("artest rocket info", info).text(ENTITY_CLASS);
-        assertTrue("info must surface entityClass: " + info, entityClass != null);
+        String entityClass = RocketInfo.byId(WorldCommandFixtures::exec, entityId).entityClass;
         assertTrue("UV assembler must spawn EntityStationDeployedRocket; got "
                         + entityClass,
                 entityClass.endsWith(".EntityStationDeployedRocket"));

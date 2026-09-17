@@ -1,6 +1,7 @@
 package zmaster587.advancedRocketry.test.server;
 
 import zmaster587.advancedRocketry.test.RocketList;
+import zmaster587.advancedRocketry.test.RocketInfo;
 import zmaster587.advancedRocketry.test.Reply;
 import org.junit.Test;
 
@@ -67,25 +68,22 @@ public class NuclearEngineRocketAssemblyTest extends AbstractSharedServerTest {
 
     private static final String BUILDER_POS = "builderPos";
     private static final String ROCKET_LIST_ID = "id";
-    private static final String THRUST = "thrust";
-    private static final String ENGINE_COUNT = "engineCount";
 
     @Test
     public void nuclearCoreAboveMotorContributesNuclearThrust() throws Exception {
         int entityId = buildAndAssemble(FixtureSite.openAir(0, 1700, 500), "with-nuclear-stack");
-        String info = String.join("\n",
-                client().execute("artest rocket info " + entityId));
+        RocketInfo info = RocketInfo.byId(
+                cmd -> String.join("\n", client().execute(cmd)), entityId);
         // Both nuclear motors must register in engineCount via the
         // IRocketEngine + air-below scan branch (BlockNuclearRocketMotor
         // extends BlockRocketMotor; with-nuclear-stack overrides BOTH
         // engine positions with nuclear motors).
-        assertEquals("with-nuclear-stack must register both nuclear motors: " + info,
-                2, extractInt(info, ENGINE_COUNT));
+        assertEquals("with-nuclear-stack must register both nuclear motors: " + info.raw(),
+                2, info.engineCount);
         // Positive-thrust contract — the cohesion check found cores above
         // motors, so nuclearReactorLimit > 0 and nuclearTotal > 0.
-        int thrust = extractInt(info, THRUST);
         assertTrue("nuclear stack with cohesion must yield thrust > 0: "
-                + info, thrust > 0);
+                + info.raw(), info.thrust > 0);
     }
 
     @Test
@@ -162,7 +160,4 @@ public class NuclearEngineRocketAssemblyTest extends AbstractSharedServerTest {
         return lastId;
     }
 
-    private static int extractInt(String haystack, String field) {
-        return Reply.of(haystack).integer(field);
-    }
 }

@@ -8,6 +8,7 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 import zmaster587.advancedRocketry.test.Events;
+import zmaster587.advancedRocketry.test.RocketInfo;
 import zmaster587.advancedRocketry.test.RocketList;
 import zmaster587.advancedRocketry.test.FixtureSite;
 
@@ -42,7 +43,6 @@ public class RocketFlightFailureModesTest extends AbstractSharedServerTest {
     private static final String BUILDER_POS = "builderPos";
     private static final String ROCKET_LIST_ID = "id";
     private static final String AR_DIMS_ARRAY = "arDimensions";
-    private static final String UUID_FIELD = "uuid";
     /** The craft's fuels, keyed by the registry's own type names: {@code "fuels":{"ION":{…}, …}}. */
     private static final String FUELS = "fuels";
     private static final String FUEL_AMOUNT = "amount";
@@ -94,9 +94,9 @@ public class RocketFlightFailureModesTest extends AbstractSharedServerTest {
         // dead. After dead it's no longer in the world.loadedEntityList
         // and findRocket(id) returns null.
         int id = buildAndAssemble(FixtureSite.openAir(0, 7000, 500));
-        String infoBefore = ok(client().execute("artest rocket info " + id));
-        assertTrue("no uuid in info: " + infoBefore,
-                Reply.of("artest rocket info", infoBefore).has(UUID_FIELD));
+        // The reader refuses an absent uuid, which is what "no uuid in info" asserted.
+        RocketInfo infoBefore = RocketInfo.byId(cmd -> ok(client().execute(cmd)), id);
+        assertFalse("no uuid in info: " + infoBefore.raw(), infoBefore.requireUuid().isEmpty());
 
         String explodeResp = ok(client().execute("artest rocket explode " + id));
         assertTrue("explode probe must succeed: " + explodeResp,
@@ -146,13 +146,16 @@ public class RocketFlightFailureModesTest extends AbstractSharedServerTest {
         // Tick a few times — production must NOT explode.
         ok(client().execute("artest rocket tick " + id + " 5"));
 
+        // Asked as `notFound` and not through the reader: a craft that HAS vanished is this test's
+        // failure — the product killed it — and the reader would call that an arrangement failure,
+        // which is a claim about the setup instead. `notFound` also refuses a reply that is neither
+        // shape, so the false below means "the server answered about a craft" and nothing weaker —
+        // which is what the second assertion here used to say separately.
         String info = ok(client().execute("artest rocket info " + id));
         assertFalse("out-of-fuel mid-flight must NOT auto-mark rocket dead "
                         + "(documents current contract; no production explode-on-empty path): "
                         + info,
-                info.contains("\"error\":\"rocket not found\""));
-        assertTrue("rocket should still be in-flight or descending — not vanished: " + info,
-                info.contains("\"entityId\":"));
+                RocketInfo.notFound(info));
     }
 
     @Test
@@ -168,10 +171,10 @@ public class RocketFlightFailureModesTest extends AbstractSharedServerTest {
         // launch with fillFuel=false to keep tanks empty.
         ok(client().execute("artest rocket launch " + id + " false instant"));
 
-        String info = ok(client().execute("artest rocket info " + id));
-        assertTrue("zero-fuel launch must be refused by the fuel gate "
-                        + "(isInFlight stays false): " + info,
-                info.contains("\"isInFlight\":false"));
+        RocketInfo info = RocketInfo.byId(cmd -> ok(client().execute(cmd)), id);
+        assertFalse("zero-fuel launch must be refused by the fuel gate "
+                        + "(isInFlight stays false): " + info.raw(),
+                info.inFlight);
     }
 
     @Test

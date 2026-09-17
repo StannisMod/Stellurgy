@@ -1,5 +1,6 @@
 package zmaster587.advancedRocketry.test.server;
 
+import zmaster587.advancedRocketry.test.DimInfo;
 import zmaster587.advancedRocketry.test.Reply;
 import org.junit.Assume;
 import org.junit.Test;
@@ -42,12 +43,17 @@ public class PlanetTerrainSourceE2ETest extends AbstractSharedServerTest {
     /** A flat preset no default world could produce, so "the options arrived" is visible in blocks. */
     private static final String FLAT_DIAMOND_PRESET = "3;minecraft:bedrock,3*minecraft:diamond_block;1";
 
+    /** The provider an AR planet runs — a class NAME, compared against the field that holds one. */
     private static final String AR_PLANET_PROVIDER =
-            "\"providerClass\":\"zmaster587.advancedRocketry.world.provider.WorldProviderPlanet\"";
+            "zmaster587.advancedRocketry.world.provider.WorldProviderPlanet";
 
     private static final String AR_DIMS_ARRAY = "arDimensions";
-    private static final String GRAVITY = "gravity";
     private static final String COUNT = "count";
+
+    /** What the server says about one dimension, read through the verb's own reader. */
+    private static DimInfo dimInfo(int dim) throws Exception {
+        return DimInfo.forDim(WorldCommandFixtures::exec, dim);
+    }
 
     @Test
     public void modWorldtypeUsesForeignGeneratorButStaysAnArPlanet() throws Exception {
@@ -57,20 +63,21 @@ public class PlanetTerrainSourceE2ETest extends AbstractSharedServerTest {
         assertTrue("create-terrain-dim must succeed: " + create, create.contains("\"ok\":true"));
 
         exec("artest dim load " + MOD_WT_DIM);
-        String info = exec("artest dim info " + MOD_WT_DIM);
+        DimInfo info = dimInfo(MOD_WT_DIM);
 
-        assertTrue("the loaded world must see the authored terrainSource: " + info,
-                info.contains("\"terrainSource\":\"MOD_WORLDTYPE\""));
-        assertTrue("MOD_WORLDTYPE dim must stay a WorldProviderPlanet: " + info,
-                info.contains(AR_PLANET_PROVIDER));
-        assertTrue("MOD_WORLDTYPE 'flat' must dispatch to the foreign ChunkGeneratorFlat: " + info,
-                info.contains("ChunkGeneratorFlat"));
+        assertEquals("the loaded world must see the authored terrainSource: " + info.raw(),
+                "MOD_WORLDTYPE", info.terrainSource());
+        assertEquals("MOD_WORLDTYPE dim must stay a WorldProviderPlanet: " + info.raw(),
+                AR_PLANET_PROVIDER, info.providerClass());
+        // Asked of the GENERATOR's field. The `contains` this replaces scanned the whole reply, in
+        // which four other fields also carry class names and paths.
+        assertTrue("MOD_WORLDTYPE 'flat' must dispatch to the foreign ChunkGeneratorFlat: "
+                        + info.raw(),
+                info.chunkGeneratorClass().endsWith("ChunkGeneratorFlat"));
 
         // Orthogonality: AR gravity is dim-keyed, so it must survive under the foreign generator.
-        Reply gReply = Reply.of(info);
-        assertTrue("dim info must report gravity: " + info, gReply.has(GRAVITY));
-        assertTrue("AR gravity must be preserved under MOD_WORLDTYPE, got " + gReply.text(GRAVITY),
-                Float.parseFloat(gReply.text(GRAVITY)) > 0f);
+        assertTrue("AR gravity must be preserved under MOD_WORLDTYPE, got " + info.gravity(),
+                info.gravity() > 0);
     }
 
     @Test
@@ -81,13 +88,14 @@ public class PlanetTerrainSourceE2ETest extends AbstractSharedServerTest {
         assertTrue("create-terrain-dim must succeed: " + create, create.contains("\"ok\":true"));
 
         exec("artest dim load " + TEMPLATE_DIM);
-        String info = exec("artest dim info " + TEMPLATE_DIM);
-        assertTrue("the loaded world must see the authored terrainSource: " + info,
-                info.contains("\"terrainSource\":\"TEMPLATE\""));
-        assertTrue("TEMPLATE dim must stay a WorldProviderPlanet: " + info,
-                info.contains(AR_PLANET_PROVIDER));
-        assertTrue("TEMPLATE must dispatch to ChunkProviderTemplate: " + info,
-                info.contains("zmaster587.advancedRocketry.world.ChunkProviderTemplate"));
+        DimInfo info = dimInfo(TEMPLATE_DIM);
+        assertEquals("the loaded world must see the authored terrainSource: " + info.raw(),
+                "TEMPLATE", info.terrainSource());
+        assertEquals("TEMPLATE dim must stay a WorldProviderPlanet: " + info.raw(),
+                AR_PLANET_PROVIDER, info.providerClass());
+        assertEquals("TEMPLATE must dispatch to ChunkProviderTemplate: " + info.raw(),
+                "zmaster587.advancedRocketry.world.ChunkProviderTemplate",
+                info.chunkGeneratorClass());
 
         // No source region files -> void: the scanned region has no fill (stone) blocks.
         String stats = exec("artest worldgen ore-stats " + TEMPLATE_DIM + " 0 0 2 minecraft:stone");
@@ -106,15 +114,18 @@ public class PlanetTerrainSourceE2ETest extends AbstractSharedServerTest {
         assertTrue("create-terrain-dim must succeed: " + create, create.contains("\"ok\":true"));
 
         exec("artest dim load " + FALLBACK_DIM);
-        String info = exec("artest dim info " + FALLBACK_DIM);
+        DimInfo info = dimInfo(FALLBACK_DIM);
 
-        assertTrue("fallback dim must stay a WorldProviderPlanet: " + info,
-                info.contains(AR_PLANET_PROVIDER));
-        assertTrue("an unregistered MOD_WORLDTYPE name must fall back to a native AR generator: " + info,
-                info.contains("advancedRocketry.world.ChunkProviderPlanet")
-                        || info.contains("advancedRocketry.world.ChunkProviderCavePlanet"));
-        assertFalse("the fallback must NOT use the foreign flat generator: " + info,
-                info.contains("ChunkGeneratorFlat"));
+        assertEquals("fallback dim must stay a WorldProviderPlanet: " + info.raw(),
+                AR_PLANET_PROVIDER, info.providerClass());
+        String generator = info.chunkGeneratorClass();
+        assertTrue("an unregistered MOD_WORLDTYPE name must fall back to a native AR generator: "
+                        + info.raw(),
+                generator.equals("zmaster587.advancedRocketry.world.ChunkProviderPlanet")
+                        || generator.equals(
+                                "zmaster587.advancedRocketry.world.ChunkProviderCavePlanet"));
+        assertFalse("the fallback must NOT use the foreign flat generator: " + info.raw(),
+                generator.endsWith("ChunkGeneratorFlat"));
     }
 
     /**
@@ -131,23 +142,24 @@ public class PlanetTerrainSourceE2ETest extends AbstractSharedServerTest {
     public void planetPublishesItsOwnWorldTypeThroughWorldInfo() throws Exception {
         int planet = firstTemplateArDimOrSkip();
         exec("artest dim load " + planet);
-        String info = exec("artest dim info " + planet);
+        DimInfo info = dimInfo(planet);
 
         assertTrue("the dim must be loaded, or every field below is about a world that is not there: "
-                + info, info.contains("\"loaded\":true"));
-        assertTrue("this case is about a NATIVE planet: " + info, info.contains("\"terrainSource\":\"NATIVE\""));
-        String published = field(info, "worldType");
-        String overworld = field(info, "overworldWorldType");
-
+                + info.raw(), info.loaded);
+        assertEquals("this case is about a NATIVE planet: " + info.raw(),
+                "NATIVE", info.terrainSource());
         // Both values must name something REAL before they are compared: two absences would read as
-        // agreement, and a comparison of two sources that are equal because neither exists cannot fail.
+        // agreement, and a comparison of two sources that are equal because neither exists cannot
+        // fail. The reader refuses the probe's "null" marker for either, which is that guarantee.
+        String published = info.worldType();
+        String overworld = info.overworldWorldType();
         assertNamesAWorldType("worldType", published);
         assertNamesAWorldType("overworldWorldType", overworld);
 
-        assertEquals("a NATIVE planet generates with AR's own world type and must say so: " + info,
-                AR_PLANET_WORLD_TYPE, published);
-        assertFalse("the planet must no longer be answering with the SAVE's world type: " + info,
-                overworld.equals(published));
+        assertEquals("a NATIVE planet generates with AR's own world type and must say so: "
+                        + info.raw(), AR_PLANET_WORLD_TYPE, published);
+        assertFalse("the planet must no longer be answering with the SAVE's world type: "
+                        + info.raw(), overworld.equals(published));
     }
 
     /**
@@ -168,18 +180,19 @@ public class PlanetTerrainSourceE2ETest extends AbstractSharedServerTest {
         assertTrue("create-terrain-dim must succeed: " + create, create.contains("\"ok\":true"));
 
         exec("artest dim load " + OPTIONS_DIM);
-        String info = exec("artest dim info " + OPTIONS_DIM);
+        DimInfo info = dimInfo(OPTIONS_DIM);
 
         assertTrue("the dim must actually be running the foreign generator, else there is no "
-                + "options channel to measure: " + info, info.contains("ChunkGeneratorFlat"));
-        assertNamesAWorldType("worldType", field(info, "worldType"));
-        assertEquals("a MOD_WORLDTYPE planet must publish the foreign world type it actually runs: " + info,
-                "flat", field(info, "worldType"));
-        assertEquals("the planet must publish its OWN generator options: " + info,
-                FLAT_DIAMOND_PRESET, field(info, "generatorOptions"));
+                        + "options channel to measure: " + info.raw(),
+                info.chunkGeneratorClass().endsWith("ChunkGeneratorFlat"));
+        assertNamesAWorldType("worldType", info.worldType());
+        assertEquals("a MOD_WORLDTYPE planet must publish the foreign world type it actually runs: "
+                        + info.raw(), "flat", info.worldType());
+        assertEquals("the planet must publish its OWN generator options: " + info.raw(),
+                FLAT_DIAMOND_PRESET, info.generatorOptions());
         assertEquals("the save-global options string must be untouched — this is a per-dimension "
-                        + "channel, not a write to the overworld: " + info,
-                "", field(info, "overworldGeneratorOptions"));
+                        + "channel, not a write to the overworld: " + info.raw(),
+                "", info.overworldGeneratorOptions());
 
         // The player-visible half: the authored preset is what the generator actually built.
         String stats = exec("artest worldgen ore-stats " + OPTIONS_DIM + " 0 0 2 minecraft:diamond_block");
@@ -194,12 +207,6 @@ public class PlanetTerrainSourceE2ETest extends AbstractSharedServerTest {
     private static void assertNamesAWorldType(String key, String value) {
         assertFalse(key + " must name a world type, got the probe's null marker", "null".equals(value));
         assertFalse(key + " must name a world type, got an empty string", value.isEmpty());
-    }
-
-    /** Reads a flat string field out of a probe's JSON answer. */
-    private static String field(String json, String key) {
-        assertTrue("probe answer has no string field '" + key + "': " + json, Reply.of(json).has(key));
-        return Reply.of(json).text(key);
     }
 
     /** A registered non-overworld AR planet to clone, excluding the dims this test creates. */

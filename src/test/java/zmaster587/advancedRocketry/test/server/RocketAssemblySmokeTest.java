@@ -2,6 +2,7 @@ package zmaster587.advancedRocketry.test.server;
 
 // migrated to AbstractSharedServerTest
 import zmaster587.advancedRocketry.test.RocketList;
+import zmaster587.advancedRocketry.test.RocketInfo;
 import zmaster587.advancedRocketry.test.Reply;
 import org.junit.Test;
 
@@ -11,6 +12,7 @@ import java.util.regex.Pattern;
 import zmaster587.advancedRocketry.test.FixtureSite;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
 /**
@@ -37,9 +39,8 @@ public class RocketAssemblySmokeTest extends AbstractSharedServerTest {
     @Test
     public void fixtureRocketAssemblesToLiveEntity() throws Exception {
         int entityId = buildAndAssemble(FixtureSite.openAir(0, 500, 500), "simple");
-        String rocketInfo = String.join("\n", client().execute("artest rocket info " + entityId));
-        assertTrue("rocket info missing hasStorage=true: " + rocketInfo,
-                rocketInfo.contains("\"hasStorage\":true"));
+        RocketInfo info = rocketInfo(entityId);
+        assertTrue("rocket info missing hasStorage=true: " + info.raw(), info.hasStorage);
     }
 
     /**
@@ -52,18 +53,19 @@ public class RocketAssemblySmokeTest extends AbstractSharedServerTest {
     @Test
     public void rocketStorageChunkMatchesScanFootprint() throws Exception {
         int entityId = buildAndAssemble(FixtureSite.openAir(0, 540, 500), "simple");
-        String info = String.join("\n", client().execute("artest rocket info " + entityId));
-        int sx = extractInt(info, "storageSizeX");
-        int sy = extractInt(info, "storageSizeY");
-        int sz = extractInt(info, "storageSizeZ");
-        int volume = extractInt(info, "storageChunkSize");
-        assertTrue("storage size axes must all be positive: " + info,
+        RocketInfo info = rocketInfo(entityId);
+        int sx = info.storageSizeX();
+        int sy = info.storageSizeY();
+        int sz = info.storageSizeZ();
+        assertTrue("storage size axes must all be positive: " + info.raw(),
                 sx > 0 && sy > 0 && sz > 0);
-        assertEquals("storageChunkSize must equal sx*sy*sz", sx * sy * sz, volume);
+        assertEquals("storageChunkSize must equal sx*sy*sz", sx * sy * sz, info.storageChunkSize());
         // Fixture geometry: rocket spans dx∈[-1,+1], dy∈[0,4], dz==0; bbCache
         // covers the pad — so the chunk encloses at least the placed blocks.
-        assertTrue("storage chunk must enclose the placed components (sx>=3): " + info, sx >= 3);
-        assertTrue("storage chunk must enclose the vertical extent (sy>=5): " + info, sy >= 5);
+        assertTrue("storage chunk must enclose the placed components (sx>=3): " + info.raw(),
+                sx >= 3);
+        assertTrue("storage chunk must enclose the vertical extent (sy>=5): " + info.raw(),
+                sy >= 5);
     }
 
     /**
@@ -77,23 +79,15 @@ public class RocketAssemblySmokeTest extends AbstractSharedServerTest {
     @Test
     public void statsRocketIsCalculatedFromComponents() throws Exception {
         int entityId = buildAndAssemble(FixtureSite.openAir(0, 580, 500), "simple");
-        String info = String.join("\n", client().execute("artest rocket info " + entityId));
-        int thrust = extractInt(info, "thrust");
-        assertTrue("thrust must be positive after assembling with 2 engines: " + info, thrust > 0);
-        // Weight is serialised as a float; match a generous regex.
-        Reply wmReply = Reply.of(info);
-        assertTrue("weight_no_fuel field missing: " + info, wmReply.has("weight_no_fuel"));
-        double weight = wmReply.number("weight_no_fuel");
-        assertTrue("weight_no_fuel must be > 0 with 6 tanks + 2 engines + guidance: " + info,
-                weight > 0);
+        RocketInfo info = rocketInfo(entityId);
+        assertTrue("thrust must be positive after assembling with 2 engines: " + info.raw(),
+                info.thrust > 0);
+        assertTrue("weight_no_fuel must be > 0 with 6 tanks + 2 engines + guidance: " + info.raw(),
+                info.weightNoFuel > 0);
         // At least one fuel type must have non-zero capacity (6 fuel tanks). The fuel types are the
-        // registry's, so they are asked for as "every entry" rather than by name.
-        long totalCap = 0;
-        for (String perType : wmReply.objectValues("fuel")) {
-            totalCap += (long) Reply.of("artest rocket info fuel entry", perType)
-                    .numberOr("capacity", 0);
-        }
-        assertTrue("aggregate fuel capacity across types must be > 0: " + info, totalCap > 0);
+        // registry's, so the reader is asked for the aggregate rather than for a type by name.
+        assertTrue("aggregate fuel capacity across types must be > 0: " + info.raw(),
+                info.fuelCapacityTotal() > 0);
     }
 
     /**
@@ -103,9 +97,9 @@ public class RocketAssemblySmokeTest extends AbstractSharedServerTest {
     @Test
     public void seatCountMatchesFixturePlacement() throws Exception {
         int entityId = buildAndAssemble(FixtureSite.openAir(0, 620, 500), "simple");
-        String info = String.join("\n", client().execute("artest rocket info " + entityId));
-        assertEquals("simple fixture must produce a 1-seat rocket: " + info,
-                1, extractInt(info, "seatCount"));
+        RocketInfo info = rocketInfo(entityId);
+        assertEquals("simple fixture must produce a 1-seat rocket: " + info.raw(),
+                1, info.seatCount);
     }
 
     /**
@@ -115,9 +109,8 @@ public class RocketAssemblySmokeTest extends AbstractSharedServerTest {
     @Test
     public void engineDetectionFindsAllEngines() throws Exception {
         int entityId = buildAndAssemble(FixtureSite.openAir(0, 660, 500), "simple");
-        String info = String.join("\n", client().execute("artest rocket info " + entityId));
-        assertEquals("simple fixture has 2 engines: " + info,
-                2, extractInt(info, "engineCount"));
+        RocketInfo info = rocketInfo(entityId);
+        assertEquals("simple fixture has 2 engines: " + info.raw(), 2, info.engineCount);
     }
 
     /**
@@ -127,9 +120,8 @@ public class RocketAssemblySmokeTest extends AbstractSharedServerTest {
     @Test
     public void fuelTankDetectionFindsAllTanks() throws Exception {
         int entityId = buildAndAssemble(FixtureSite.openAir(0, 700, 500), "simple");
-        String info = String.join("\n", client().execute("artest rocket info " + entityId));
-        assertEquals("simple fixture has 6 fuel tanks: " + info,
-                6, extractInt(info, "fuelTankCount"));
+        RocketInfo info = rocketInfo(entityId);
+        assertEquals("simple fixture has 6 fuel tanks: " + info.raw(), 6, info.fuelTankCount);
     }
 
     /**
@@ -144,11 +136,11 @@ public class RocketAssemblySmokeTest extends AbstractSharedServerTest {
     @Test
     public void guidanceComputerSlotPopulatedAfterChipInsert() throws Exception {
         int entityId = buildAndAssemble(FixtureSite.openAir(0, 740, 500), "simple");
-        String info = String.join("\n", client().execute("artest rocket info " + entityId));
-        assertTrue("guidance computer block must be present after assembly: " + info,
-                info.contains("\"guidanceComputerPresent\":true"));
-        assertTrue("guidance chip slot is empty in the bare fixture: " + info,
-                info.contains("\"guidanceComputerSlotOccupied\":false"));
+        RocketInfo info = rocketInfo(entityId);
+        assertTrue("guidance computer block must be present after assembly: " + info.raw(),
+                info.guidanceComputerPresent);
+        assertFalse("guidance chip slot is empty in the bare fixture: " + info.raw(),
+                info.guidanceComputerSlotOccupied);
     }
 
     /**
@@ -201,16 +193,12 @@ public class RocketAssemblySmokeTest extends AbstractSharedServerTest {
     @Test
     public void seatlessRocketStillAssemblesButReportsZeroSeats() throws Exception {
         int entityId = buildAndAssemble(FixtureSite.openAir(0, 820, 500), "invalid-no-seat");
-        String info = String.join("\n", client().execute("artest rocket info " + entityId));
-        assertEquals("seatless fixture must report 0 seats: " + info,
-                0, extractInt(info, "seatCount"));
+        RocketInfo info = rocketInfo(entityId);
+        assertEquals("seatless fixture must report 0 seats: " + info.raw(), 0, info.seatCount);
         // The rocket must still have engines + tanks + guidance.
-        assertEquals("engines unchanged: " + info,
-                2, extractInt(info, "engineCount"));
-        assertEquals("fuel tanks unchanged: " + info,
-                6, extractInt(info, "fuelTankCount"));
-        assertTrue("guidance still present: " + info,
-                info.contains("\"guidanceComputerPresent\":true"));
+        assertEquals("engines unchanged: " + info.raw(), 2, info.engineCount);
+        assertEquals("fuel tanks unchanged: " + info.raw(), 6, info.fuelTankCount);
+        assertTrue("guidance still present: " + info.raw(), info.guidanceComputerPresent);
     }
 
     /**
@@ -262,7 +250,8 @@ public class RocketAssemblySmokeTest extends AbstractSharedServerTest {
         return lastId;
     }
 
-    private static int extractInt(String haystack, String field) {
-        return Reply.of(haystack).integerOr(field, -1);
+    /** What the server says about one craft, read through the verb's own reader. */
+    private RocketInfo rocketInfo(int id) throws Exception {
+        return RocketInfo.byId(cmd -> String.join("\n", client().execute(cmd)), id);
     }
 }

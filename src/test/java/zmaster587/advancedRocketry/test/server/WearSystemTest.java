@@ -1,5 +1,6 @@
 package zmaster587.advancedRocketry.test.server;
 
+import zmaster587.advancedRocketry.test.RocketInfo;
 import zmaster587.advancedRocketry.test.RocketList;
 import zmaster587.advancedRocketry.test.Reply;
 import org.junit.Test;
@@ -64,10 +65,12 @@ public class WearSystemTest extends AbstractSharedServerTest {
     }
 
     private int thrustOf(int entityId) throws Exception {
-        String info = String.join("\n", client().execute("artest rocket info " + entityId));
-        Reply mReply = Reply.of(info);
-        assertTrue("no thrust in info: " + info, mReply.has("thrust"));
-        return mReply.integer("thrust");
+        return rocketInfo(entityId).thrust;
+    }
+
+    /** What the server says about one craft, read through the verb's own reader. */
+    private RocketInfo rocketInfo(int id) throws Exception {
+        return RocketInfo.byId(cmd -> String.join("\n", client().execute(cmd)), id);
     }
 
     @Test
@@ -108,10 +111,7 @@ public class WearSystemTest extends AbstractSharedServerTest {
     }
 
     private double breakingProbOf(int entityId) throws Exception {
-        String info = String.join("\n", client().execute("artest rocket info " + entityId));
-        Reply mReply = Reply.of(info);
-        assertTrue("no breakingProb in info: " + info, mReply.has("breakingProb"));
-        return mReply.number("breakingProb");
+        return rocketInfo(entityId).breakingProb;
     }
 
     @Test

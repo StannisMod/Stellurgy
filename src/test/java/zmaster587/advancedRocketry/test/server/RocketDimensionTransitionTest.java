@@ -7,6 +7,7 @@ import org.junit.Test;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import zmaster587.advancedRocketry.test.RocketInfo;
 import zmaster587.advancedRocketry.test.RocketList;
 import zmaster587.advancedRocketry.test.FixtureSite;
 
@@ -50,6 +51,9 @@ public class RocketDimensionTransitionTest extends AbstractSharedServerTest {
     private static final String BUILDER_POS = "builderPos";
     private static final String ROCKET_LIST_ID = "id";
     private static final String AR_DIMS_ARRAY = "arDimensions";
+    // What follows are `artest rocket find-by-uuid`'s OWN field names. They are spelled the same as
+    // `rocket info`'s and are a different verb's answer — the post-transition reads go through
+    // find-by-uuid deliberately (see the comment at that call site), and it has no reader yet.
     private static final String UUID_FIELD = "uuid";
     private static final String DIM_FIELD = "dim";
     private static final String ENTITY_ID_FIELD = "entityId";
@@ -60,6 +64,11 @@ public class RocketDimensionTransitionTest extends AbstractSharedServerTest {
 
     private static String ok(java.util.List<String> resp) {
         return String.join("\n", resp);
+    }
+
+    /** What the server says about one craft, read through the verb's own reader. */
+    private RocketInfo rocketInfo(int id) throws Exception {
+        return RocketInfo.byId(cmd -> ok(client().execute(cmd)), id);
     }
 
     private static String g(String field, String s, String label) {
@@ -112,9 +121,10 @@ public class RocketDimensionTransitionTest extends AbstractSharedServerTest {
         // list endpoints. A regression that drops the uuid field would
         // mask cause-effect failures in the harder tests.
         int id = buildAndAssemble(FixtureSite.openAir(0, 5000, 500));
-        String info = ok(client().execute("artest rocket info " + id));
-        assertTrue("rocket info must expose uuid: " + info,
-                Reply.of(info).has(UUID_FIELD));
+        // The reader REFUSES an absent uuid rather than answering one, and that refusal IS this
+        // assertion: the value travels into `find-by-uuid` in the legs below.
+        RocketInfo info = rocketInfo(id);
+        assertFalse("rocket info must expose uuid: " + info.raw(), info.requireUuid().isEmpty());
         // Asked of each ROCKET, because that is where the field lives — `uuid` is a member of the
         // `rockets` array's elements and never a field of the reply.
         String list = ok(client().execute("artest rocket list 0"));
@@ -143,8 +153,7 @@ public class RocketDimensionTransitionTest extends AbstractSharedServerTest {
         int id = buildAndAssemble(FixtureSite.openAir(0, 5100, 500));
 
         // Capture UUID before launch.
-        String infoBefore = ok(client().execute("artest rocket info " + id));
-        String uuid = g(UUID_FIELD, infoBefore, "uuid");
+        String uuid = rocketInfo(id).requireUuid();
 
         // Force-load the destination dim before transition. The shared
         // harness has no player to keep arbitrary AR dims hot, and Forge's
@@ -154,10 +163,10 @@ public class RocketDimensionTransitionTest extends AbstractSharedServerTest {
         ok(client().execute("artest rocket set-destination " + id + " " + destDim));
         ok(client().execute("artest rocket launch " + id + " true instant"));
 
-        String launchedInfo = ok(client().execute("artest rocket info " + id));
+        RocketInfo launchedInfo = rocketInfo(id);
         assertTrue("launch must set isInFlight=true (precondition for transition test): "
-                        + launchedInfo,
-                launchedInfo.contains("\"isInFlight\":true"));
+                        + launchedInfo.raw(),
+                launchedInfo.inFlight);
 
         // Force orbit reached -> triggers transition.
         ok(client().execute("artest rocket force-orbit-reached " + id));
@@ -181,13 +190,13 @@ public class RocketDimensionTransitionTest extends AbstractSharedServerTest {
         int destDim = firstNonOverworldArDimOrSkip();
         int id = buildAndAssemble(FixtureSite.openAir(0, 5200, 500));
 
-        String infoBefore = ok(client().execute("artest rocket info " + id));
-        String uuid = g(UUID_FIELD, infoBefore, "uuid");
-        int idBefore = Integer.parseInt(g(ENTITY_ID_FIELD, infoBefore, "entityId before"));
-        int sxBefore = Integer.parseInt(g(STORAGE_SIZE_X, infoBefore, "sizeX before"));
-        int syBefore = Integer.parseInt(g(STORAGE_SIZE_Y, infoBefore, "sizeY before"));
-        int szBefore = Integer.parseInt(g(STORAGE_SIZE_Z, infoBefore, "sizeZ before"));
-        int engBefore = Integer.parseInt(g(ENGINE_COUNT, infoBefore, "engines before"));
+        RocketInfo infoBefore = rocketInfo(id);
+        String uuid = infoBefore.requireUuid();
+        int idBefore = infoBefore.entityId;
+        int sxBefore = infoBefore.storageSizeX();
+        int syBefore = infoBefore.storageSizeY();
+        int szBefore = infoBefore.storageSizeZ();
+        int engBefore = infoBefore.engineCount;
 
         // Force-load the destination dim before transition. The shared
         // harness has no player to keep arbitrary AR dims hot, and Forge's
@@ -230,8 +239,7 @@ public class RocketDimensionTransitionTest extends AbstractSharedServerTest {
         // in dim 0 under its original UUID (no half-transitioned state).
         int id = buildAndAssemble(FixtureSite.openAir(0, 5300, 500));
 
-        String infoBefore = ok(client().execute("artest rocket info " + id));
-        String uuid = g(UUID_FIELD, infoBefore, "uuid");
+        String uuid = rocketInfo(id).requireUuid();
 
         // Launch needs a valid dim — use overworld self-route as a
         // pre-launch nudge, then force a bogus destDim AFTER launch.

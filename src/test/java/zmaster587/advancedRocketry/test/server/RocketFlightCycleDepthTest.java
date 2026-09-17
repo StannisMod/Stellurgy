@@ -6,6 +6,7 @@ import org.junit.Test;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import zmaster587.advancedRocketry.test.RocketInfo;
 import zmaster587.advancedRocketry.test.RocketList;
 import zmaster587.advancedRocketry.test.FixtureSite;
 
@@ -54,7 +55,6 @@ public class RocketFlightCycleDepthTest extends AbstractSharedServerTest {
     private static final String LAUNCH_COUNT = "launch";
     private static final String ORBIT_COUNT = "orbitReached";
     private static final String DISMANTLE_COUNT = "dismantle";
-    private static final String TICKS_EXISTED = "ticksExisted";
 
     private static String ok(java.util.List<String> resp) {
         return String.join("\n", resp);
@@ -218,11 +218,11 @@ public class RocketFlightCycleDepthTest extends AbstractSharedServerTest {
         // assertion belongs in the testClient e2e harness, where a
         // real player keeps the chunk hot.
         int id = buildAndAssemble(FixtureSite.openAir(0, 3400, 500));
-        String info = ok(client().execute("artest rocket info " + id));
-        assertTrue("rocket info must expose ticksExisted field: " + info,
-                info.contains("\"ticksExisted\":"));
-        int t = parseGroup(TICKS_EXISTED, info, "ticksExisted");
-        assertTrue("ticksExisted must be non-negative: " + t, t >= 0);
+        // The reader REFUSES a report without `ticksExisted` — a field the verb always writes —
+        // so constructing it is the "the field is exposed" half of this pin.
+        RocketInfo info = RocketInfo.byId(cmd -> ok(client().execute(cmd)), id);
+        assertTrue("ticksExisted must be non-negative: " + info.ticksExisted,
+                info.ticksExisted >= 0);
     }
 
     @Test
