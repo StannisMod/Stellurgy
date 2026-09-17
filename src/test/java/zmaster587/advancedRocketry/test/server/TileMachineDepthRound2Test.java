@@ -3,8 +3,10 @@ package zmaster587.advancedRocketry.test.server;
 // migrated to AbstractSharedServerTest
 import org.junit.Test;
 
+import zmaster587.advancedRocketry.test.EnergyStore;
 import zmaster587.advancedRocketry.test.FixtureSite;
 
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
 /**
@@ -42,6 +44,11 @@ public class TileMachineDepthRound2Test extends AbstractSharedServerTest {
         return String.join("\n", resp);
     }
 
+    /** What the Forge energy capability at one block reports — refusing a block that is not there. */
+    private EnergyStore energy(int x, int z) throws Exception {
+        return EnergyStore.at(cmd -> ok(client().execute(cmd)), DIM, x, Y, z);
+    }
+
     /** Same place() helper as round 1 — see {@link TileMachineDepthTest#place}
      *  for the air-pre-clear rationale. */
     private void place(String blockId, int x, int y, int z) throws Exception {
@@ -65,15 +72,15 @@ public class TileMachineDepthRound2Test extends AbstractSharedServerTest {
         // CapabilityEnergy — use it to pin the FQN. Suit workstation has NO
         // energy capability (it's a manual assembler), so hasEnergy=false is
         // the expected contract.
-        String stored = ok(client().execute(
-                "artest energy stored " + DIM + " " + x + " " + Y + " " + z));
-        assertTrue("suit work station tile must be present: " + stored,
-                !stored.contains("\"no tile entity\""));
-        assertTrue("tileClass should mention TileSuitWorkStation: " + stored,
-                stored.contains("TileSuitWorkStation"));
-        assertTrue("suit work station is a manual assembler — must NOT report energy cap: "
-                        + stored,
-                stored.contains("\"hasEnergy\":false"));
+        // The reader refuses the `no tile entity` reply, which is what the presence check stood
+        // for — and it has to, because THIS test's claim is `hasEnergy:false`, which that reply
+        // would satisfy by the block not being there at all.
+        EnergyStore stored = energy(x, z);
+        assertTrue("tileClass should mention TileSuitWorkStation: " + stored.raw(),
+                stored.tileClass().contains("TileSuitWorkStation"));
+        assertFalse("suit work station is a manual assembler — must NOT report energy cap: "
+                        + stored.raw(),
+                stored.hasEnergy);
 
         // The hatch-read probe is the IInventory contract gate; size must be
         // strictly positive (the GUI binds slots by index — 0 slots = the
@@ -96,19 +103,16 @@ public class TileMachineDepthRound2Test extends AbstractSharedServerTest {
         int x = BASE_X + 8, z = BASE_Z;
         place("advancedrocketry:deployableRocketBuilder", x, Y, z);
 
-        String stored = ok(client().execute(
-                "artest energy stored " + DIM + " " + x + " " + Y + " " + z));
-        assertTrue("UV assembler tile must be present: " + stored,
-                !stored.contains("\"no tile entity\""));
-        assertTrue("tileClass should mention TileUnmannedVehicleAssembler: " + stored,
-                stored.contains("TileUnmannedVehicleAssembler"));
+        EnergyStore stored = energy(x, z);
+        assertTrue("tileClass should mention TileUnmannedVehicleAssembler: " + stored.raw(),
+                stored.tileClass().contains("TileUnmannedVehicleAssembler"));
 
         // Round 1 pinned the rocket builder's energy contract; UV assembler
         // shares the same parent so it MUST also have an energy face. If the
         // parent ever drops the capability, this assertion surfaces it.
         assertTrue("UV assembler must expose CapabilityEnergy (inherits from "
-                        + "RocketAssemblingMachine): " + stored,
-                stored.contains("\"hasEnergy\":true"));
+                        + "RocketAssemblingMachine): " + stored.raw(),
+                stored.hasEnergy);
 
         String tickResp = ok(client().execute(
                 "artest tile force-tick " + DIM + " " + x + " " + Y + " " + z + " 3"));
@@ -128,12 +132,9 @@ public class TileMachineDepthRound2Test extends AbstractSharedServerTest {
         int x = BASE_X + 16, z = BASE_Z;
         place("advancedrocketry:landingPad", x, Y, z);
 
-        String stored = ok(client().execute(
-                "artest energy stored " + DIM + " " + x + " " + Y + " " + z));
-        assertTrue("landing pad tile must be present: " + stored,
-                !stored.contains("\"no tile entity\""));
-        assertTrue("tileClass should mention TileLandingPad: " + stored,
-                stored.contains("TileLandingPad"));
+        EnergyStore stored = energy(x, z);
+        assertTrue("tileClass should mention TileLandingPad: " + stored.raw(),
+                stored.tileClass().contains("TileLandingPad"));
 
         // TileInventoryHatch implements IInventory — the hatch-read probe
         // discriminates by IInventory, so its success here pins the
@@ -155,15 +156,12 @@ public class TileMachineDepthRound2Test extends AbstractSharedServerTest {
         int x = BASE_X + 24, z = BASE_Z;
         place("advancedrocketry:fuelingStation", x, Y, z);
 
-        String stored = ok(client().execute(
-                "artest energy stored " + DIM + " " + x + " " + Y + " " + z));
-        assertTrue("fueling station tile must be present: " + stored,
-                !stored.contains("\"no tile entity\""));
-        assertTrue("tileClass should mention TileFuelingStation: " + stored,
-                stored.contains("TileFuelingStation"));
+        EnergyStore stored = energy(x, z);
+        assertTrue("tileClass should mention TileFuelingStation: " + stored.raw(),
+                stored.tileClass().contains("TileFuelingStation"));
         assertTrue("fueling station must expose CapabilityEnergy (RF consumer): "
-                        + stored,
-                stored.contains("\"hasEnergy\":true"));
+                        + stored.raw(),
+                stored.hasEnergy);
 
         // The fluid probe surfaces IFluidHandler presence; its error path is
         // "no tile entity" / "tile has no IFluidHandler". Anything else
@@ -189,20 +187,17 @@ public class TileMachineDepthRound2Test extends AbstractSharedServerTest {
         int x = BASE_X + 32, z = BASE_Z;
         place("advancedrocketry:terraformer", x, Y, z);
 
-        String stored = ok(client().execute(
-                "artest energy stored " + DIM + " " + x + " " + Y + " " + z));
-        assertTrue("terraformer controller tile must be present: " + stored,
-                !stored.contains("\"no tile entity\""));
-        assertTrue("tileClass should mention TileAtmosphereTerraformer: " + stored,
-                stored.contains("TileAtmosphereTerraformer"));
+        EnergyStore stored = energy(x, z);
+        assertTrue("tileClass should mention TileAtmosphereTerraformer: " + stored.raw(),
+                stored.tileClass().contains("TileAtmosphereTerraformer"));
         // Contract surprise pinned here: a pre-assembly multiblock controller
         // is "cap-dark" — it has no IEnergyStorage until the structure forms.
         // If a refactor changes the polarity of `isComplete` and the
         // controller starts exposing the cap unconditionally, energy pipes
         // would happily inject RF into a phantom buffer that never updates.
-        assertTrue("pre-assembly terraformer controller must NOT expose "
-                        + "CapabilityEnergy (gated on isComplete): " + stored,
-                stored.contains("\"hasEnergy\":false"));
+        assertFalse("pre-assembly terraformer controller must NOT expose "
+                        + "CapabilityEnergy (gated on isComplete): " + stored.raw(),
+                stored.hasEnergy);
     }
 
     @Test

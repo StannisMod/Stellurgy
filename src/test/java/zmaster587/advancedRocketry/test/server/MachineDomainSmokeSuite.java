@@ -1,5 +1,6 @@
 package zmaster587.advancedRocketry.test.server;
 
+import zmaster587.advancedRocketry.test.EnergyStore;
 import zmaster587.advancedRocketry.test.Reply;
 import org.junit.Test;
 
@@ -57,8 +58,6 @@ public class MachineDomainSmokeSuite extends AbstractSharedServerTest {
 
     // ── Shared regex patterns ─────────────────────────────────────────────
 
-    private static final String ENERGY_STORED = "energyStored";
-    private static final String ENERGY_MAX = "energyMax";
     private static final String TICKED = "ticked";
     private static final String MULTIBLOCK_SAWBLADE_POS = "sawBladePos";
     private static final String VENT_SEALED = "isSealed";
@@ -245,7 +244,9 @@ public class MachineDomainSmokeSuite extends AbstractSharedServerTest {
         // can see the sky, and a fixed Y over generated terrain answers that question with the seed.
         // The battery's Y never mattered and moves with it so the two stay one decision.
         final int siteY = FixtureSite.OPEN_AIR_Y;
-        // 1. Empty-pos NPE guard.
+        // 1. Empty-pos NPE guard. LEFT RAW: the subject of this line IS the error shape, which
+        // `EnergyStore` refuses — and refuses precisely so the readings below cannot be satisfied
+        // by a block that is not there.
         String empty = join(client().execute("artest energy stored 0 1000 " + siteY + " 1000"));
         assertTrue("expected 'no tile entity' on empty pos: " + empty,
                 empty.contains("\"no tile entity\""));
@@ -254,11 +255,9 @@ public class MachineDomainSmokeSuite extends AbstractSharedServerTest {
         String placeBattery = join(client().execute(
                 "artest place 0 1000 " + siteY + " 1000 libvulpes:creativepowerbattery"));
         if (placeBattery.contains("\"placed\":true")) {
-            String bat = join(client().execute("artest energy stored 0 1000 " + siteY + " 1000"));
-            assertTrue("creative battery missing IEnergyStorage: " + bat,
-                    bat.contains("\"hasEnergy\":true"));
-            assertTrue("creative battery has zero capacity: " + bat,
-                    parseLong(ENERGY_MAX, bat) > 0L);
+            EnergyStore bat = energy(1000, siteY, 1000)
+                    .requireEnergy("creative battery missing IEnergyStorage");
+            assertTrue("creative battery has zero capacity: " + bat.raw(), bat.capacity() > 0L);
         }
 
         // 3. Solar panel real generation.
@@ -269,20 +268,18 @@ public class MachineDomainSmokeSuite extends AbstractSharedServerTest {
         assertTrue("could not place solarGenerator: " + placeSolar,
                 placeSolar.contains("\"placed\":true"));
 
-        String s0 = join(client().execute("artest energy stored 0 1100 " + siteY + " 1100"));
-        assertTrue("solarGenerator missing IEnergyStorage: " + s0,
-                s0.contains("\"hasEnergy\":true"));
-        long initial = parseLong(ENERGY_STORED, s0);
-        assertTrue("could not read initial energyStored: " + s0, initial >= 0L);
+        EnergyStore s0 = energy(1100, siteY, 1100)
+                .requireEnergy("solarGenerator missing IEnergyStorage");
+        long initial = s0.stored();
 
         String tick = join(client().execute(
                 "artest tile force-tick 0 1100 " + siteY + " 1100 100"));
         assertTrue("force-tick failed: " + tick, tick.contains("\"ok\":true"));
 
-        String s1 = join(client().execute("artest energy stored 0 1100 " + siteY + " 1100"));
-        long after = parseLong(ENERGY_STORED, s1);
+        EnergyStore s1 = energy(1100, siteY, 1100);
+        long after = s1.stored();
         assertTrue("solarGenerator did not accumulate energy: initial=" + initial
-                        + " after-100-ticks=" + after + " response=" + s1,
+                        + " after-100-ticks=" + after + " response=" + s1.raw(),
                 after > initial);
     }
 
@@ -577,8 +574,9 @@ public class MachineDomainSmokeSuite extends AbstractSharedServerTest {
         assertTrue("probe call failed: " + joined, joined.contains("\"ok\":true"));
     }
 
-    private static long parseLong(String field, String s) {
-        return (long) Reply.of(s).number(field);
+    /** What the Forge energy capability at one block reports — refusing a block that is not there. */
+    private EnergyStore energy(int x, int y, int z) throws Exception {
+        return EnergyStore.at(cmd -> join(client().execute(cmd)), 0, x, y, z);
     }
 
     private static String matchOrFail(String field, String s) {

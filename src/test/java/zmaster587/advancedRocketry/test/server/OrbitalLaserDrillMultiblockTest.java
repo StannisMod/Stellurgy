@@ -2,6 +2,7 @@ package zmaster587.advancedRocketry.test.server;
 
 import org.junit.Test;
 
+import zmaster587.advancedRocketry.test.EnergyStore;
 import zmaster587.advancedRocketry.test.FixtureSite;
 
 import static org.junit.Assert.assertTrue;
@@ -74,13 +75,11 @@ public class OrbitalLaserDrillMultiblockTest extends AbstractSharedServerTest {
         // and bound to controller batteries, its `getMaxEnergyStored` reports
         // the controller's pooled max (134_217_727 RF by default).
         int plugX = cx - 9, plugY = cy + 1, plugZ = cz;
-        String storedAtPlug = join(client().execute(
-                "artest energy stored 0 " + plugX + " " + plugY + " " + plugZ));
-        assertTrue("plug must expose Forge energy capability: " + storedAtPlug,
-                storedAtPlug.contains("\"hasEnergy\":true"));
-        long capMax = parseLongField(storedAtPlug, "energyMax");
+        EnergyStore storedAtPlug = energy(plugX, plugY, plugZ)
+                .requireEnergy("plug must expose Forge energy capability");
+        long capMax = storedAtPlug.capacity();
         assertTrue("plug must report a non-trivial max storage (got " + capMax + "): "
-                + storedAtPlug, capMax > 0);
+                + storedAtPlug.raw(), capMax > 0);
 
         // (b) Force-tick the controller 20x — must not throw. Production
         // update() pulls drill state, checks completeStructure, batteries,
@@ -94,10 +93,9 @@ public class OrbitalLaserDrillMultiblockTest extends AbstractSharedServerTest {
 
         // (c) Plug's energy capability still exposed after 20 ticks (no
         // capability loss from idle ticking).
-        String storedAfter = join(client().execute(
-                "artest energy stored 0 " + plugX + " " + plugY + " " + plugZ));
-        assertTrue("plug capability must persist after ticking: " + storedAfter,
-                storedAfter.contains("\"hasEnergy\":true"));
+        EnergyStore storedAfter = energy(plugX, plugY, plugZ);
+        assertTrue("plug capability must persist after ticking: " + storedAfter.raw(),
+                storedAfter.hasEnergy);
     }
 
     @Test
@@ -128,10 +126,8 @@ public class OrbitalLaserDrillMultiblockTest extends AbstractSharedServerTest {
         return String.join("\n", resp);
     }
 
-    private static long parseLongField(String json, String field) {
-        java.util.regex.Matcher m = java.util.regex.Pattern
-                .compile("\"" + field + "\":(-?\\d+)").matcher(json);
-        if (!m.find()) throw new AssertionError("missing field " + field + " in: " + json);
-        return Long.parseLong(m.group(1));
+    /** What the Forge energy capability at one block reports — refusing a block that is not there. */
+    private EnergyStore energy(int x, int y, int z) throws Exception {
+        return EnergyStore.at(cmd -> join(client().execute(cmd)), 0, x, y, z);
     }
 }

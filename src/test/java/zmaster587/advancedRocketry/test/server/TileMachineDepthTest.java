@@ -2,6 +2,7 @@ package zmaster587.advancedRocketry.test.server;
 
 import org.junit.Test;
 
+import zmaster587.advancedRocketry.test.EnergyStore;
 import zmaster587.advancedRocketry.test.FixtureSite;
 
 import static org.junit.Assert.assertTrue;
@@ -37,6 +38,11 @@ public class TileMachineDepthTest extends AbstractSharedServerTest {
     private static final int BASE_Z = 200;
     private static final int Y = FixtureSite.OPEN_AIR_Y; // above terrain to avoid stone overwrite quirks
 
+    /** What the Forge energy capability at one block reports — refusing a block that is not there. */
+    private EnergyStore energy(int x, int z) throws Exception {
+        return EnergyStore.at(cmd -> ok(client().execute(cmd)), DIM, x, Y, z);
+    }
+
     private static String ok(java.util.List<String> resp) {
         return String.join("\n", resp);
     }
@@ -65,12 +71,11 @@ public class TileMachineDepthTest extends AbstractSharedServerTest {
         int x = BASE_X, z = BASE_Z;
         place("advancedrocketry:solarGenerator", x, Y, z);
 
-        String stored = ok(client().execute(
-                "artest energy stored " + DIM + " " + x + " " + Y + " " + z));
-        assertTrue("solar generator must expose CapabilityEnergy: " + stored,
-                stored.contains("\"hasEnergy\":true"));
-        assertTrue("tileClass must mention TileSolarPanel: " + stored,
-                stored.contains("TileSolarPanel"));
+        EnergyStore stored = energy(x, z);
+        assertTrue("solar generator must expose CapabilityEnergy: " + stored.raw(),
+                stored.hasEnergy);
+        assertTrue("tileClass must mention TileSolarPanel: " + stored.raw(),
+                stored.tileClass().contains("TileSolarPanel"));
 
         // Force-tick — should not crash, even with no daylight on dim 0
         // at world spawn (production handles "no sky" gracefully).
@@ -99,10 +104,10 @@ public class TileMachineDepthTest extends AbstractSharedServerTest {
         // The tile should be TileFluidTank (or its TileFluidHatch parent).
         // tileClass is only emitted by the energy probe, so reuse that
         // to verify the tile lives.
-        String storedResp = ok(client().execute(
-                "artest energy stored " + DIM + " " + x + " " + Y + " " + z));
-        assertTrue("liquidTank must be a TileFluidTank-family class: " + storedResp,
-                storedResp.contains("FluidTank") || storedResp.contains("FluidHatch"));
+        EnergyStore storedResp = energy(x, z);
+        assertTrue("liquidTank must be a TileFluidTank-family class: " + storedResp.raw(),
+                storedResp.tileClass().contains("FluidTank")
+                        || storedResp.tileClass().contains("FluidHatch"));
     }
 
     @Test
@@ -133,13 +138,12 @@ public class TileMachineDepthTest extends AbstractSharedServerTest {
         int x = BASE_X + 12, z = BASE_Z;
         place("advancedrocketry:oxygenVent", x, Y, z);
 
-        String storedResp = ok(client().execute(
-                "artest energy stored " + DIM + " " + x + " " + Y + " " + z));
+        EnergyStore storedResp = energy(x, z);
         assertTrue("oxygenVent must expose CapabilityEnergy (RF consumer): "
-                        + storedResp,
-                storedResp.contains("\"hasEnergy\":true"));
-        assertTrue("tileClass should mention OxygenVent: " + storedResp,
-                storedResp.contains("OxygenVent"));
+                        + storedResp.raw(),
+                storedResp.hasEnergy);
+        assertTrue("tileClass should mention OxygenVent: " + storedResp.raw(),
+                storedResp.tileClass().contains("OxygenVent"));
 
         String tickResp = ok(client().execute(
                 "artest tile force-tick " + DIM + " " + x + " " + Y + " " + z + " 2"));
@@ -167,12 +171,10 @@ public class TileMachineDepthTest extends AbstractSharedServerTest {
         // The builder is a heavy machine (RF consumer + assembly slots).
         // Pin its tileClass via the energy probe so a rename surfaces here
         // before any GUI test fails.
-        String storedResp = ok(client().execute(
-                "artest energy stored " + DIM + " " + x + " " + Y + " " + z));
-        assertTrue("satellite builder tile not found: " + storedResp,
-                !storedResp.contains("\"no tile entity\""));
-        assertTrue("tileClass should mention SatelliteBuilder: " + storedResp,
-                storedResp.contains("SatelliteBuilder"));
+        // The reader refuses the `no tile entity` reply, which is what the not-found check stood for.
+        EnergyStore storedResp = energy(x, z);
+        assertTrue("tileClass should mention SatelliteBuilder: " + storedResp.raw(),
+                storedResp.tileClass().contains("SatelliteBuilder"));
     }
 
     @Test
@@ -184,6 +186,10 @@ public class TileMachineDepthTest extends AbstractSharedServerTest {
         // false, which would trip the helper's placed=true assertion;
         // here we just want to assert the *initial* state.
         int x = BASE_X + 100, z = BASE_Z + 100;
+        // LEFT RAW, and this is the one site that must be: the subject here IS the error shape.
+        // `EnergyStore` refuses that reply — correctly, since every other site in this tier would
+        // otherwise read it as a machine with no capability — so a reading of it cannot be the
+        // thing being asserted.
         String stored = ok(client().execute(
                 "artest energy stored " + DIM + " " + x + " " + Y + " " + z));
         assertTrue("virgin position must not have a tile entity: " + stored,

@@ -1,11 +1,9 @@
 package zmaster587.advancedRocketry.test.server;
 
 // migrated to AbstractSharedServerTest
+import zmaster587.advancedRocketry.test.EnergyStore;
 import zmaster587.advancedRocketry.test.Reply;
 import org.junit.Test;
-
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 import zmaster587.advancedRocketry.test.FixtureSite;
 
@@ -21,13 +19,12 @@ import static org.junit.Assert.assertTrue;
  */
 public class PipeNetworkSmokeTest extends AbstractSharedServerTest {
 
-    private static final String STORED = "energyStored";
-    private static final String MAX = "energyMax";
     private static final String ACCEPTED = "accepted";
     private static final String INJ_STORED = "stored";
 
     @Test
     public void forgeEnergyStorageContractMatches() throws Exception {
+        // LEFT RAW: the subject of this line IS the error shape, which `EnergyStore` refuses.
         String empty = String.join("\n", client().execute("artest energy stored 0 1200 64 1200"));
         assertTrue("expected 'no tile entity': " + empty, empty.contains("\"no tile entity\""));
 
@@ -36,12 +33,12 @@ public class PipeNetworkSmokeTest extends AbstractSharedServerTest {
         assertTrue("could not place libvulpes:forgepowerinput: " + place,
                 place.contains("\"placed\":true"));
 
-        String initial = String.join("\n", client().execute("artest energy stored 0 1200 64 1200"));
-        assertTrue("placed block missing IEnergyStorage: " + initial,
-                initial.contains("\"hasEnergy\":true"));
-        long storedInit = parseLong(STORED, initial);
-        long capacity = parseLong(MAX, initial);
-        assertTrue("placed block capacity unreasonable: " + initial, capacity > 0L);
+        EnergyStore initial = EnergyStore.at(
+                        cmd -> String.join("\n", client().execute(cmd)), 0, 1200, 64, 1200)
+                .requireEnergy("placed block missing IEnergyStorage");
+        long storedInit = initial.stored();
+        long capacity = initial.capacity();
+        assertTrue("placed block capacity unreasonable: " + initial.raw(), capacity > 0L);
 
         String inj1 = String.join("\n",
                 client().execute("artest energy inject 0 1200 64 1200 5000"));

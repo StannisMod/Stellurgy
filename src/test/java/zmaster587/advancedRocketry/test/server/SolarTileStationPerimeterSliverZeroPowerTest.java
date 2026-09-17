@@ -1,5 +1,6 @@
 package zmaster587.advancedRocketry.test.server;
 
+import zmaster587.advancedRocketry.test.EnergyStore;
 import zmaster587.advancedRocketry.test.Reply;
 import zmaster587.advancedRocketry.test.StationInfo;
 import com.github.stannismod.forge.testing.junit.AbstractHeadlessServerTest;
@@ -40,7 +41,6 @@ public class SolarTileStationPerimeterSliverZeroPowerTest extends AbstractHeadle
 
     private static final int SPACE_DIM = -2;
     private static final String ID = "id";
-    private static final String ENERGY = "energyStored";
 
     @Test
     public void perimeterSliverSolarOnRealStationGeneratesPower() throws Exception {
@@ -67,7 +67,8 @@ public class SolarTileStationPerimeterSliverZeroPowerTest extends AbstractHeadle
         long sliverDelta = powerDeltaOver100Ticks(sx, y, sz);
 
         assertTrue("control solar at the station center must generate power (>0); got " + controlDelta
-                        + " (station=" + stationId + " spawn=" + spawnX + "," + spawnZ + " info=" + info + ")",
+                        + " (station=" + stationId + " spawn=" + spawnX + "," + spawnZ
+                        + " info=" + info.raw() + ")",
                 controlDelta > 0);
         assertTrue("C076 grid-mapping fix: an identical solar panel on the +X perimeter sliver of the SAME "
                         + "real, powered station must ALSO generate power (>0). worldX=" + sx + " now maps back to "
@@ -85,11 +86,15 @@ public class SolarTileStationPerimeterSliverZeroPowerTest extends AbstractHeadle
                 + " advancedrocketry:solarGenerator");
         assertTrue("solar generator must place at " + x + "," + y + "," + z + ": " + place,
                 place.contains("\"ok\":true") || place.contains("\"placed\":true"));
-        long before = extractLong(ENERGY, exec("artest energy stored " + SPACE_DIM + " " + x + " " + y + " " + z));
+        // Through the reader: a panel that is not there answered a well-formed absence, and a delta
+        // between two absences is zero — which is exactly the claim this method's callers make.
+        long before = energy(x, y, z)
+                .requireEnergy("the placed panel must expose a store")
+                .stored();
         String tick = exec("artest tile force-tick " + SPACE_DIM + " " + x + " " + y + " " + z + " 100");
         assertTrue("force-tick must not throw (C076 crash-guard still holds): " + tick,
                 tick.contains("\"ok\":true"));
-        long after = extractLong(ENERGY, exec("artest energy stored " + SPACE_DIM + " " + x + " " + y + " " + z));
+        long after = energy(x, y, z).stored();
         return after - before;
     }
 
@@ -107,9 +112,8 @@ public class SolarTileStationPerimeterSliverZeroPowerTest extends AbstractHeadle
         return reply.integer(field);
     }
 
-    private static long extractLong(String field, String s) {
-        Reply reply = Reply.of(s);
-        assertTrue("field `" + field + "` not found in: " + s, reply.has(field));
-        return (long) reply.number(field);
+    /** What the Forge energy capability at one block reports — refusing a block that is not there. */
+    private EnergyStore energy(int x, int y, int z) throws Exception {
+        return EnergyStore.at(this::exec, SPACE_DIM, x, y, z);
     }
 }

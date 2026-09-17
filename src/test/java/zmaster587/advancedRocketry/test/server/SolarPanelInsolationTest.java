@@ -1,5 +1,6 @@
 package zmaster587.advancedRocketry.test.server;
 
+import zmaster587.advancedRocketry.test.EnergyStore;
 import zmaster587.advancedRocketry.test.Reply;
 import org.junit.Assume;
 import org.junit.Test;
@@ -43,15 +44,15 @@ import static org.junit.Assert.assertTrue;
  */
 public class SolarPanelInsolationTest extends AbstractSharedServerTest {
 
-    private static final String STORED = "energyStored";
     private static final String AR_DIMS_ARRAY = "arDimensions";
 
     private static String ok(java.util.List<String> resp) {
         return String.join("\n", resp);
     }
 
-    private static long parseLong(String field, String s) {
-        return (long) Reply.of(s).number(field);
+    /** What the Forge energy capability at one block reports — refusing a block that is not there. */
+    private EnergyStore energy(int dim, int x, int y, int z) throws Exception {
+        return EnergyStore.at(cmd -> ok(client().execute(cmd)), dim, x, y, z);
     }
 
     private int firstNonOverworldArDimOrSkip() throws Exception {
@@ -85,11 +86,12 @@ public class SolarPanelInsolationTest extends AbstractSharedServerTest {
         client().execute("time set day");
         client().execute("weather clear 100000");
 
-        String s0 = ok(client().execute(
-                "artest energy stored " + dim + " " + x + " " + y + " " + z));
-        long initial = parseLong(STORED, s0);
-        assertTrue("could not read initial energy in dim " + dim + ": " + s0,
-                initial >= 0);
+        // The reader refuses a block with no store, which is what the `initial >= 0` check stood
+        // for: the old parse answered NaN-cast-to-0 for a panel that was not there, and a delta
+        // taken from two of those is zero — indistinguishable from a panel that generated nothing.
+        long initial = energy(dim, x, y, z)
+                .requireEnergy("the placed panel must expose a store in dim " + dim)
+                .stored();
 
         String tick = ok(client().execute(
                 "artest tile force-tick " + dim + " " + x + " " + y + " " + z
@@ -97,9 +99,7 @@ public class SolarPanelInsolationTest extends AbstractSharedServerTest {
         assertTrue("force-tick failed in dim " + dim + ": " + tick,
                 tick.contains("\"ok\":true"));
 
-        String s1 = ok(client().execute(
-                "artest energy stored " + dim + " " + x + " " + y + " " + z));
-        long after = parseLong(STORED, s1);
+        long after = energy(dim, x, y, z).stored();
         return after - initial;
     }
 

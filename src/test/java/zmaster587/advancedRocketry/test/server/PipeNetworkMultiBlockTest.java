@@ -1,11 +1,8 @@
 package zmaster587.advancedRocketry.test.server;
 
-import zmaster587.advancedRocketry.test.Reply;
+import zmaster587.advancedRocketry.test.EnergyStore;
 import com.github.stannismod.forge.testing.junit.AbstractHeadlessServerTest;
 import org.junit.Test;
-
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 import zmaster587.advancedRocketry.test.FixtureSite;
 
@@ -31,8 +28,6 @@ import static org.junit.Assert.assertTrue;
  */
 public class PipeNetworkMultiBlockTest extends AbstractHeadlessServerTest {
 
-    private static final String STORED = "energyStored";
-    private static final String MAX = "energyMax";
 
     @Test
     public void generatorAndHatchCoexistAcrossTicks() throws Exception {
@@ -58,21 +53,17 @@ public class PipeNetworkMultiBlockTest extends AbstractHeadlessServerTest {
         assertTrue("hatch place failed: " + placeHatch, placeHatch.contains("\"placed\":true"));
 
         // Sanity — both tiles expose IEnergyStorage.
-        String genInfo = String.join("\n", client().execute(
-                "artest energy stored 0 " + gx + " " + gy + " " + gz));
-        assertTrue("generator must expose energy cap: " + genInfo,
-                genInfo.contains("\"hasEnergy\":true"));
-        long genCap = parseLong(MAX, genInfo);
-        assertTrue("generator capacity > 0: " + genInfo, genCap > 0);
+        EnergyStore genInfo = energy(gx, gy, gz)
+                .requireEnergy("generator must expose energy cap");
+        long genCap = genInfo.capacity();
+        assertTrue("generator capacity > 0: " + genInfo.raw(), genCap > 0);
 
-        String hatchInfo = String.join("\n", client().execute(
-                "artest energy stored 0 " + hx + " " + gy + " " + gz));
-        assertTrue("hatch must expose energy cap: " + hatchInfo,
-                hatchInfo.contains("\"hasEnergy\":true"));
-        long hatchCap = parseLong(MAX, hatchInfo);
-        assertTrue("hatch capacity > 0: " + hatchInfo, hatchCap > 0);
+        EnergyStore hatchInfo = energy(hx, gy, gz)
+                .requireEnergy("hatch must expose energy cap");
+        long hatchCap = hatchInfo.capacity();
+        assertTrue("hatch capacity > 0: " + hatchInfo.raw(), hatchCap > 0);
 
-        long hatchInitial = parseLong(STORED, hatchInfo);
+        long hatchInitial = hatchInfo.stored();
 
         // Tick the generator — must not crash even if it can't see sky from
         // its placement chunk (solar generation is sky-dependent and chunk-
@@ -83,19 +74,17 @@ public class PipeNetworkMultiBlockTest extends AbstractHeadlessServerTest {
         assertTrue("solar tick errored: " + tick, tick.contains("\"ok\":true"));
 
         // Generator must still resolve.
-        String genAfter = String.join("\n", client().execute(
-                "artest energy stored 0 " + gx + " " + gy + " " + gz));
-        long genFinal = parseLong(STORED, genAfter);
-        assertTrue("solar must still report stored value (no NPE): " + genAfter,
+        EnergyStore genAfter = energy(gx, gy, gz);
+        long genFinal = genAfter.stored();
+        assertTrue("solar must still report stored value (no NPE): " + genAfter.raw(),
                 genFinal >= 0 && genFinal <= genCap);
 
         // Hatch's stored may or may not change depending on libVulpes auto-push;
         // we don't depend on that. We DO depend on the value being a stable,
         // non-negative number (no NPE / wrap-around).
-        String hatchAfter = String.join("\n", client().execute(
-                "artest energy stored 0 " + hx + " " + gy + " " + gz));
-        long hatchFinal = parseLong(STORED, hatchAfter);
-        assertTrue("hatch stored must stay in [0, cap]: " + hatchAfter,
+        EnergyStore hatchAfter = energy(hx, gy, gz);
+        long hatchFinal = hatchAfter.stored();
+        assertTrue("hatch stored must stay in [0, cap]: " + hatchAfter.raw(),
                 hatchFinal >= 0 && hatchFinal <= hatchCap);
 
         // External inject MUST still work — independent of the generator.
@@ -103,9 +92,7 @@ public class PipeNetworkMultiBlockTest extends AbstractHeadlessServerTest {
                 "artest energy inject 0 " + hx + " " + gy + " " + gz + " 5000"));
         assertTrue("inject must succeed: " + inject, inject.contains("\"ok\":true"));
 
-        String hatchPostInject = String.join("\n", client().execute(
-                "artest energy stored 0 " + hx + " " + gy + " " + gz));
-        long hatchPostInjectStored = parseLong(STORED, hatchPostInject);
+        long hatchPostInjectStored = energy(hx, gy, gz).stored();
         assertTrue("hatch must accept injected energy: pre=" + hatchFinal
                         + " post=" + hatchPostInjectStored,
                 hatchPostInjectStored >= hatchFinal);
@@ -113,9 +100,7 @@ public class PipeNetworkMultiBlockTest extends AbstractHeadlessServerTest {
         // Tick the GENERATOR another 50 times — must not corrupt the hatch's
         // independent stored value.
         client().execute("artest tile force-tick 0 " + gx + " " + gy + " " + gz + " 50");
-        String hatchPostTick = String.join("\n", client().execute(
-                "artest energy stored 0 " + hx + " " + gy + " " + gz));
-        long hatchPostTickStored = parseLong(STORED, hatchPostTick);
+        long hatchPostTickStored = energy(hx, gy, gz).stored();
         // Either equal to post-inject (no auto-push), or higher (with auto-push).
         // We only assert the value didn't go DOWN spuriously and is still ≤ cap.
         assertTrue("hatch stored must not lose injected energy across ticks: pre-tick="
@@ -139,7 +124,8 @@ public class PipeNetworkMultiBlockTest extends AbstractHeadlessServerTest {
         return count;
     }
 
-    private static long parseLong(String field, String s) {
-        return (long) Reply.of(s).number(field);
+    /** What the Forge energy capability at one block reports — refusing a block that is not there. */
+    private EnergyStore energy(int x, int y, int z) throws Exception {
+        return EnergyStore.at(cmd -> String.join("\n", client().execute(cmd)), 0, x, y, z);
     }
 }

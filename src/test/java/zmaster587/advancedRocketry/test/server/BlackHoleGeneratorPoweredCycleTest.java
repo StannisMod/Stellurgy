@@ -1,5 +1,6 @@
 package zmaster587.advancedRocketry.test.server;
 
+import zmaster587.advancedRocketry.test.EnergyStore;
 import zmaster587.advancedRocketry.test.Reply;
 import zmaster587.advancedRocketry.test.StationInfo;
 import org.junit.After;
@@ -63,7 +64,6 @@ public class BlackHoleGeneratorPoweredCycleTest extends AbstractSharedServerTest
     private static final String CTRL_POS = "controllerPos";
     private static final String POWER_OUT_POS = "powerOutPos";
     private static final String ITEM_IN_POS = "itemInputPos";
-    private static final String ENERGY_STORED = "energyStored";
     private static final String STAR_BLACKHOLE = "isBlackHole";
 
     private boolean originalSolBlackHole;
@@ -108,9 +108,9 @@ public class BlackHoleGeneratorPoweredCycleTest extends AbstractSharedServerTest
         feedInputHatch(SPACE_DIM, fixture);
         enableMachine(SPACE_DIM, origin[0], origin[1], origin[2]);
 
-        int outputBefore = readEnergyStored(SPACE_DIM, powerOutPosFrom(fixture));
+        long outputBefore = readEnergyStored(SPACE_DIM, powerOutPosFrom(fixture));
         forceTick(SPACE_DIM, origin[0], origin[1], origin[2], 600);
-        int outputAfter = readEnergyStored(SPACE_DIM, powerOutPosFrom(fixture));
+        long outputAfter = readEnergyStored(SPACE_DIM, powerOutPosFrom(fixture));
 
         assertTrue("BHG around black-hole produced no energy"
                         + " (outputBefore=" + outputBefore + " outputAfter=" + outputAfter + ")",
@@ -128,9 +128,9 @@ public class BlackHoleGeneratorPoweredCycleTest extends AbstractSharedServerTest
         feedInputHatch(SPACE_DIM, fixture);
         enableMachine(SPACE_DIM, origin[0], origin[1], origin[2]);
 
-        int outputBefore = readEnergyStored(SPACE_DIM, powerOutPosFrom(fixture));
+        long outputBefore = readEnergyStored(SPACE_DIM, powerOutPosFrom(fixture));
         forceTick(SPACE_DIM, origin[0], origin[1], origin[2], 600);
-        int outputAfter = readEnergyStored(SPACE_DIM, powerOutPosFrom(fixture));
+        long outputAfter = readEnergyStored(SPACE_DIM, powerOutPosFrom(fixture));
 
         assertEquals("BHG without black-hole star produced energy anyway"
                         + " (outputBefore=" + outputBefore + " outputAfter=" + outputAfter + ")",
@@ -149,9 +149,9 @@ public class BlackHoleGeneratorPoweredCycleTest extends AbstractSharedServerTest
         feedInputHatch(OVERWORLD_DIM, fixture);
         enableMachine(OVERWORLD_DIM, OVERWORLD_CX, OVERWORLD_CY, OVERWORLD_CZ);
 
-        int outputBefore = readEnergyStored(OVERWORLD_DIM, powerOutPosFrom(fixture));
+        long outputBefore = readEnergyStored(OVERWORLD_DIM, powerOutPosFrom(fixture));
         forceTick(OVERWORLD_DIM, OVERWORLD_CX, OVERWORLD_CY, OVERWORLD_CZ, 600);
-        int outputAfter = readEnergyStored(OVERWORLD_DIM, powerOutPosFrom(fixture));
+        long outputAfter = readEnergyStored(OVERWORLD_DIM, powerOutPosFrom(fixture));
 
         assertEquals("BHG on overworld produced energy anyway"
                         + " — spaceDim gate leaked through"
@@ -233,12 +233,10 @@ public class BlackHoleGeneratorPoweredCycleTest extends AbstractSharedServerTest
         return parseTriple(fixture, POWER_OUT_POS);
     }
 
-    private int readEnergyStored(int dim, int[] pos) throws Exception {
-        String resp = exec("artest energy stored " + dim + " "
-                + pos[0] + " " + pos[1] + " " + pos[2]);
-        Reply energy = Reply.of("artest energy stored", resp);
-        assertTrue("no energyStored in response: " + resp, energy.has(ENERGY_STORED));
-        return energy.integer(ENERGY_STORED);
+    private long readEnergyStored(int dim, int[] pos) throws Exception {
+        return EnergyStore.at(WorldCommandFixtures::exec, dim, pos[0], pos[1], pos[2])
+                .requireEnergy("the plug must expose a store, or its reading is an absence")
+                .stored();
     }
 
     private static int[] parseTriple(String src, String field) {

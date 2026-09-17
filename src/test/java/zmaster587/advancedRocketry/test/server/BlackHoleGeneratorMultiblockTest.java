@@ -2,10 +2,7 @@ package zmaster587.advancedRocketry.test.server;
 
 import org.junit.Test;
 
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
-
-import zmaster587.advancedRocketry.test.Reply;
+import zmaster587.advancedRocketry.test.EnergyStore;
 import zmaster587.advancedRocketry.test.FixtureSite;
 
 import static org.junit.Assert.assertEquals;
@@ -131,17 +128,13 @@ public class BlackHoleGeneratorMultiblockTest extends AbstractSharedServerTest {
         // capacity through this plug; a regression that drops the energy-
         // capability wiring would silently make the BHG un-drainable.
         int px = cx + 1, py = cy, pz = cz + 1;
-        String energy = join(client().execute(
-                "artest energy stored 0 " + px + " " + py + " " + pz));
-        assertTrue("power output plug must expose IEnergyStorage: " + energy,
-                energy.contains("\"hasEnergy\":true"));
+        EnergyStore energy = energy(px, py, pz)
+                .requireEnergy("power output plug must expose IEnergyStorage");
         // Capacity is configured per-controller; just assert non-zero —
         // the exact value depends on AR config defaults.
-        Reply mReply = Reply.of(energy);
-        assertTrue("could not parse energyMax: " + energy, mReply.has("energyMax"));
-        long capacity = (long) mReply.number("energyMax");
+        long capacity = energy.capacity();
         assertTrue("formed BHG must have non-zero energy capacity at the "
-                        + "output plug; got energyMax=" + capacity + " response=" + energy,
+                        + "output plug; got energyMax=" + capacity + " response=" + energy.raw(),
                 capacity > 0L);
     }
 
@@ -174,14 +167,16 @@ public class BlackHoleGeneratorMultiblockTest extends AbstractSharedServerTest {
 
         // Energy stored at the output plug must remain 0 (no production).
         int px = cx + 1, py = cy, pz = cz + 1;
-        String energy = join(client().execute(
-                "artest energy stored 0 " + px + " " + py + " " + pz));
-        Reply mReply = Reply.of(energy);
-        assertTrue("could not parse energyStored: " + energy, mReply.has("energyStored"));
-        long stored = (long) mReply.number("energyStored");
+        EnergyStore energy = energy(px, py, pz)
+                .requireEnergy("the plug must expose a store, or its zero below is an absence");
         assertEquals("BHG in overworld must NOT produce power "
-                + "(isAroundBlackHole guard); response=" + energy,
-                0L, stored);
+                + "(isAroundBlackHole guard); response=" + energy.raw(),
+                0L, energy.stored());
+    }
+
+    /** What the Forge energy capability at one block reports — refusing a block that is not there. */
+    private EnergyStore energy(int x, int y, int z) throws Exception {
+        return EnergyStore.at(cmd -> join(client().execute(cmd)), 0, x, y, z);
     }
 
     private static String join(java.util.List<String> resp) {
