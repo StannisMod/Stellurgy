@@ -24,6 +24,7 @@ import zmaster587.advancedRocketry.test.Chains;
 import zmaster587.advancedRocketry.test.Events;
 import zmaster587.advancedRocketry.test.PilotSeat;
 import zmaster587.advancedRocketry.test.Reply;
+import zmaster587.advancedRocketry.test.CellInfo;
 import zmaster587.advancedRocketry.test.FixtureSite;
 import zmaster587.advancedRocketry.test.Plot;
 import zmaster587.advancedRocketry.test.client.ClientEvents;
@@ -776,11 +777,16 @@ public class M1PlanetToPlanetMilestoneE2ETest {
         // planet moves while the ship flies — that is precisely why the computer aims ahead of it.
         // A ship aimed at where the body WAS lands in a cell the body has left, which reads here as
         // an arrived cell whose own body list does not contain the destination.
-        String arrivedCellInfo = exec("artest space cell-info " + cellArgs(arrivedCell));
-        // The field is a JSON ARRAY; its text comes back bracketed, and every reader below asks
-        // whether a body id is IN it, so the brackets are stripped rather than matched around.
-        String arrivedBodies = String.valueOf(readString(arrivedCellInfo, CELL_BODIES))
-                .replace("[", "").replace("]", "");
+        CellInfo arrivedCellInfo = CellInfo.atKey(this::exec, arrivedCell);
+        // The AT-CELL list, read as a list. What stood here took the field's rendered text, stripped
+        // its brackets, and asked whether `"dim":N,` appeared in what was left — a substring of a
+        // rendering of an array, pinning that `dim` is written first in each body and followed by a
+        // comma. Neither is part of any contract.
+        boolean destinationIsHere = false;
+        for (CellInfo.Body body : arrivedCellInfo.cellBodies) {
+            destinationIsHere |= body.dim == targetDim;
+        }
+        String arrivedBodies = String.valueOf(arrivedCellInfo.cellBodies);
         assertTrue("…and the cell it arrives in must be the one the destination BODY is in when it "
                         + "gets there — a destination the pilot chose at the console is a promise the "
                         + "drive has to keep, and it is only kept if the planet is there on arrival. "
@@ -789,7 +795,7 @@ public class M1PlanetToPlanetMilestoneE2ETest {
                         + "with where the body actually is now. targetDim=" + targetDim
                         + " armedCell=" + targetCell + " arrivedCell=" + arrivedCell
                         + " arrived=" + arrivedCellInfo + " ledger=" + ledgerAfterJump,
-                arrivedBodies != null && arrivedBodies.contains("\"dim\":" + targetDim + ","));
+                destinationIsHere);
 
         // The pilot, observed from the CLIENT: same two questions leg 5 asks, because a jump is the
         // second world transition of the loop and a seat lost in it is lost just as silently.

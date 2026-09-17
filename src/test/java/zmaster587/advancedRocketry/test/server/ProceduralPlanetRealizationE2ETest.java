@@ -1,6 +1,7 @@
 package zmaster587.advancedRocketry.test.server;
 
 import zmaster587.advancedRocketry.test.Reply;
+import zmaster587.advancedRocketry.test.CellInfo;
 import com.github.stannismod.forge.testing.junit.AbstractHeadlessServerTest;
 
 import org.junit.After;
@@ -82,10 +83,9 @@ public class ProceduralPlanetRealizationE2ETest extends AbstractHeadlessServerTe
         // CONTROL. Nothing in that cell is a descent target yet — which is the defect this whole path
         // exists to fix, and without measuring it first "descendTarget is true afterwards" would be a
         // statement about a flag that might always have been true.
-        String before = exec("artest space cell-info " + cell);
-        assertTrue("cell-info must answer: " + before, before.contains("\"ok\":true"));
-        assertFalse("no procedural body may be a descent target before it is realized: " + before,
-                before.contains("\"descendTarget\":true"));
+        CellInfo before = CellInfo.atKey(this::exec, cell);
+        assertFalse("no procedural body may be a descent target before it is realized: "
+                + before.raw(), anyDescendTarget(before));
 
         // What the telescope would say, taken BEFORE anything is minted.
         String scan = exec("artest space derived " + cell);
@@ -187,12 +187,12 @@ public class ProceduralPlanetRealizationE2ETest extends AbstractHeadlessServerTe
         // CONTROL. Nothing in the family has a world yet, so the moon below is genuinely realized
         // FIRST - without this the test could pass on a parent that happened to be realized already,
         // which is the one arrangement the bug does not occur in.
-        String before = exec("artest space cell-info " + cell);
-        String beforeParent = exec("artest space cell-info " + parentCell);
-        assertFalse("no member of the family may hold a world before the moon is realized: " + before,
-                before.contains("\"descendTarget\":true"));
-        assertFalse("...the parent's cell included: " + beforeParent,
-                beforeParent.contains("\"descendTarget\":true"));
+        CellInfo before = CellInfo.atKey(this::exec, cell);
+        CellInfo beforeParent = CellInfo.atKey(this::exec, parentCell);
+        assertFalse("no member of the family may hold a world before the moon is realized: "
+                + before.raw(), anyDescendTarget(before));
+        assertFalse("...the parent's cell included: " + beforeParent.raw(),
+                anyDescendTarget(beforeParent));
 
         String moon = exec("artest space realize " + cell + " " + moonVariant);
         assertTrue("the moon must be realizable on its own account: " + moon,
@@ -257,12 +257,12 @@ public class ProceduralPlanetRealizationE2ETest extends AbstractHeadlessServerTe
         // not somewhere to land: it has no surface, so the descent flag every downstream consumer
         // reads stays false for it. Both halves matter; a fix that made the giant landable would pass
         // the moon assertions above and break the game.
-        String after = exec("artest space cell-info " + parentCell);
-        String giantEntry = bodyOfKind(after, "GAS_GIANT");
-        assertEquals("the giant must now hold the very dimension the moon calls its parent: " + after,
-                jsonInt(moon, "parent"), jsonInt(giantEntry, "dim"));
+        CellInfo after = CellInfo.atKey(this::exec, parentCell);
+        CellInfo.Body giantEntry = bodyOfKind(after, "GAS_GIANT");
+        assertEquals("the giant must now hold the very dimension the moon calls its parent: "
+                + after.raw(), jsonInt(moon, "parent"), giantEntry.dim);
         assertFalse("and it must still not be a descent target: " + giantEntry,
-                jsonBool(giantEntry, "descendTarget"));
+                giantEntry.descendTarget);
 
         // A descent aimed at the giant is still refused, which is what "not landable" MEANS here -
         // the flag above is a report, this is the behaviour.
@@ -280,13 +280,24 @@ public class ProceduralPlanetRealizationE2ETest extends AbstractHeadlessServerTe
      * satisfied by any OTHER member of it - an assertion about the wrong body reads exactly like an
      * assertion about the right one.</p>
      */
-    private static String bodyOfKind(String cellInfo, String kind) {
-        for (String body : Reply.of("artest space cell-info", cellInfo).objectArray("bodies")) {
-            if (kind.equals(Reply.of(body).text("kind"))) {
+    private static CellInfo.Body bodyOfKind(CellInfo cellInfo, String kind) {
+        for (CellInfo.Body body : cellInfo.systemBodies) {
+            if (kind.equals(body.kind)) {
                 return body;
             }
         }
-        throw new AssertionError("no body of kind " + kind + " in " + cellInfo);
+        throw new AssertionError("no body of kind " + kind + " in " + cellInfo.raw());
+    }
+
+    /** Whether ANY body of the reported family is a descent target — the family-wide control, said
+     *  as a read over the list rather than as a substring over the whole report. */
+    private static boolean anyDescendTarget(CellInfo cellInfo) {
+        for (CellInfo.Body body : cellInfo.systemBodies) {
+            if (body.descendTarget) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private static int jsonInt(String json, String key) {

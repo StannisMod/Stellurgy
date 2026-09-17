@@ -6,6 +6,7 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 import zmaster587.advancedRocketry.test.Reply;
+import zmaster587.advancedRocketry.test.CellInfo;
 import zmaster587.advancedRocketry.test.FixtureSite;
 
 import static org.junit.Assert.assertNotNull;
@@ -155,23 +156,19 @@ public class AimAndArrivalShareOneClockE2ETest extends AbstractSharedServerTest 
 
     /** The dimension id of the first MOON in the overworld body's own cell, or {@link Integer#MIN_VALUE}. */
     private int findAMoon() throws Exception {
-        String home = exec("artest space cell-info 0 0 0 0");
-        String dimCell = Reply.of("artest space cell-info", home).text("dimCell");
-        if (dimCell == null) {
+        CellInfo home = CellInfo.atSector(this::exec, 0, 0, 0, 0);
+        if (home.dimCell == null) {
             return Integer.MIN_VALUE;
         }
-        String[] sectors = dimCell.split("_");
-        if (sectors.length != 3) {
-            return Integer.MIN_VALUE;
-        }
-        String bodies = exec("artest space cell-info " + sectors[0] + " " + sectors[1] + " "
-                + sectors[2] + " 0");
+        // Asked by the registry's OWN key rather than by splitting it into three numbers: the key's
+        // shape is the registry's business, and a split that stops matching answers MIN_VALUE, which
+        // this method's callers read as "the shipped universe has no such body".
+        CellInfo cell = CellInfo.atKey(this::exec, home.dimCell, 0);
         // Each body as its own object. The regex this replaces matched `dim` and `kind` in one
         // expression, so it held only while the two stayed adjacent and in that order.
-        for (String body : Reply.of("artest space cell-info", bodies).objectArray("bodies")) {
-            Reply one = Reply.of(body);
-            if ("MOON".equals(one.text("kind"))) {
-                return one.integer("dim");
+        for (CellInfo.Body one : cell.systemBodies) {
+            if ("MOON".equals(one.kind)) {
+                return one.dim;
             }
         }
         return Integer.MIN_VALUE;

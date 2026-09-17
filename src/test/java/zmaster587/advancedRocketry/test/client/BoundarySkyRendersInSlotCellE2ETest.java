@@ -3,6 +3,7 @@ package zmaster587.advancedRocketry.test.client;
 import com.google.gson.JsonObject;
 import zmaster587.advancedRocketry.client.render.planet.ApparentSize;
 import zmaster587.advancedRocketry.test.Reply;
+import zmaster587.advancedRocketry.test.CellInfo;
 import zmaster587.advancedRocketry.test.Events;
 import org.junit.After;
 import org.junit.FixMethodOrder;
@@ -713,13 +714,13 @@ public class BoundarySkyRendersInSlotCellE2ETest extends AbstractSharedClientE2E
     private String findEmptyCell() throws Exception {
         StringBuilder tried = new StringBuilder();
         for (long sy = 4096L; sy > 0L && sy <= Integer.MAX_VALUE; sy *= 2L) {
-            String info = exec("artest space cell-info 0 " + sy + " 0");
-            assertTrue("cell-info must answer about the very cell it was asked about, or the sector"
+            CellInfo info = CellInfo.atSector(this::exec, 0L, sy, 0L);
+            assertEquals("cell-info must answer about the very cell it was asked about, or the sector"
                             + " overflowed the probe's int parse and it silently answered about the"
-                            + " origin: " + info,
-                    info.contains("\"cellKey\":\"0_" + sy + "_0\""));
-            int system = intField(info, "systemBodies");
-            int here = intField(info, "bodiesAt");
+                            + " origin: " + info.raw(),
+                    "0_" + sy + "_0", info.cellKey);
+            int system = info.systemBodyCount;
+            int here = info.bodiesAtCount;
             tried.append(" 0/").append(sy).append("/0=").append(system).append('+').append(here);
             if (system == 0 && here == 0) {
                 return "0 " + sy + " 0";

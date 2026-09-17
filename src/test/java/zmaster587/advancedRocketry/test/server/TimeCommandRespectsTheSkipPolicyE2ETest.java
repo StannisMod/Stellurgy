@@ -1,6 +1,7 @@
 package zmaster587.advancedRocketry.test.server;
 
 import zmaster587.advancedRocketry.test.Reply;
+import zmaster587.advancedRocketry.test.CellInfo;
 import org.junit.Test;
 
 import java.util.regex.Matcher;
@@ -39,25 +40,20 @@ public class TimeCommandRespectsTheSkipPolicyE2ETest extends AbstractSharedServe
 
     /** A planet dimension the shipped universe actually has, or {@link Integer#MIN_VALUE}. */
     private int findAPlanet() throws Exception {
-        String home = exec("artest space cell-info 0 0 0 0");
-        String dimCell = Reply.of("artest space cell-info", home).text("dimCell");
-        if (dimCell == null) {
+        CellInfo home = CellInfo.atSector(this::exec, 0, 0, 0, 0);
+        if (home.dimCell == null) {
             return Integer.MIN_VALUE;
         }
-        String[] sectors = dimCell.split("_");
-        if (sectors.length != 3) {
-            return Integer.MIN_VALUE;
-        }
-        String bodies = exec("artest space cell-info " + sectors[0] + " " + sectors[1] + " "
-                + sectors[2] + " 0");
+        // Asked by the registry's OWN key rather than by splitting it into three numbers: the key's
+        // shape is the registry's business, and a split that stops matching answers MIN_VALUE, which
+        // this method's callers read as "the shipped universe has no such body".
+        CellInfo cell = CellInfo.atKey(this::exec, home.dimCell, 0);
         // Any body with a real dimension behind it that is NOT the overworld. Each body is read as
         // its own object: the regex this replaces matched `dim` and `kind` in one expression and so
         // held only while the producer kept them adjacent and in that order.
-        for (String body : Reply.of("artest space cell-info", bodies).objectArray("bodies")) {
-            Reply one = Reply.of(body);
-            String kind = one.text("kind");
-            if (("PLANET".equals(kind) || "MOON".equals(kind)) && one.integer("dim") != 0) {
-                return one.integer("dim");
+        for (CellInfo.Body one : cell.systemBodies) {
+            if (("PLANET".equals(one.kind) || "MOON".equals(one.kind)) && one.dim != 0) {
+                return one.dim;
             }
         }
         return Integer.MIN_VALUE;
