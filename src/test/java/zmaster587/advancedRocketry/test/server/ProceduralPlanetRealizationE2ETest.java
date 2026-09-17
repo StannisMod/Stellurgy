@@ -114,19 +114,19 @@ public class ProceduralPlanetRealizationE2ETest extends AbstractHeadlessServerTe
         assertEquals("tidal locking must match the scan: " + scan + " vs " + realized.raw(),
                 jsonBool(scan, "locked"), realized.tidallyLocked);
         assertEquals("mass must match the scan: " + scan + " vs " + realized.raw(),
-                jsonDouble(scan, "mass"), (double) realized.mass, 1e-6d);
+                jsonDouble(scan, "mass"), realized.mass, 1e-6d);
         assertEquals("radius must match the scan: " + scan + " vs " + realized.raw(),
-                jsonDouble(scan, "radius"), (double) realized.radius, 1e-6d);
+                jsonDouble(scan, "radius"), realized.radius, 1e-6d);
         assertEquals("the star's metallicity must reach the world: " + scan + " vs " + realized.raw(),
-                jsonDouble(scan, "metallicity"), (double) realized.metallicity, 1e-6d);
+                jsonDouble(scan, "metallicity"), realized.metallicity, 1e-6d);
         assertEquals("the terrain source drawn for the type must be the one fixed on the world: "
                 + scan + " vs " + realized.raw(), jsonString(scan, "terrainSource"),
                 realized.terrainSource);
 
         // Gravity is DERIVED from the bulk properties, so the world must not merely carry a number that
         // happens to match — the relation has to hold on the world itself.
-        double mass = (double) realized.mass;
-        double radius = (double) realized.radius;
+        double mass = realized.mass;
+        double radius = realized.radius;
         assertTrue("a realized world must carry real bulk properties: " + realized.raw(),
                 mass > 0d && radius > 0d);
         double expected = Math.max(0.05d, Math.min(4d, mass / (radius * radius)));

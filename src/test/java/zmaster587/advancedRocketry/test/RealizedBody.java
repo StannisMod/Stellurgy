@@ -34,10 +34,19 @@ public final class RealizedBody {
     public final int dim;
     /** Its name, as AR holds it. */
     public final String name;
-    /** Where it sits, how big and how heavy it is, in AR's own units. */
+    /**
+     * Where it sits, how big and how heavy it is, in AR's own units.
+     *
+     * <p>{@code mass} and {@code radius} are DOUBLES, and were {@code long} until the server gate
+     * went red on 2026-09-17: {@code DimensionProperties.getMass()} / {@code getRadius()} are
+     * {@code double}, and a small barren body masses {@code 0.0079} at radius {@code 0.27} — both
+     * of which a {@code long} reads as ZERO. The test that caught it compares the realized body
+     * against the scan that described it and reported <i>"expected 0.007887010583939688 but was
+     * 0.0"</i> while BOTH replies in its own message carried the right number.</p>
+     */
     public final int orbitalDist;
-    public final long mass;
-    public final long radius;
+    public final double mass;
+    public final double radius;
     /** Surface gravity as a PERCENTAGE of Earth's — see the class note. */
     public final int gravityPercent;
     /** Atmosphere density in AR units, and the average surface temperature. */
@@ -46,8 +55,14 @@ public final class RealizedBody {
     /** Whether the atmosphere is breathable, and whether the body always shows one face to its star. */
     public final boolean oxygen;
     public final boolean tidallyLocked;
-    /** Ore richness, and whether the body is a gas giant (which has no surface to stand on). */
-    public final int metallicity;
+    /**
+     * Ore richness, and whether the body is a gas giant (which has no surface to stand on).
+     *
+     * <p>{@code metallicity} is a FRACTION — {@code BodyProfile.metallicity()} is a {@code double}
+     * and a real value is {@code 0.68} — so it was read as {@code 0} for the whole tier until the
+     * same red exposed it.</p>
+     */
+    public final double metallicity;
     public final boolean gasGiant;
     /** Which generator the body asked for: {@code NATIVE}, {@code TEMPLATE}, {@code MOD_WORLDTYPE}. */
     public final String terrainSource;
@@ -66,14 +81,14 @@ public final class RealizedBody {
         this.dim = reply.integer("dim");
         this.name = reply.text("name");
         this.orbitalDist = reply.integer("orbitalDist");
-        this.mass = (long) reply.number("mass");
-        this.radius = (long) reply.number("radius");
+        this.mass = reply.number("mass");
+        this.radius = reply.number("radius");
         this.gravityPercent = reply.integer("gravity");
         this.pressure = reply.integer("pressure");
         this.temperature = reply.integer("temperature");
         this.oxygen = reply.bool("oxygen", false);
         this.tidallyLocked = reply.bool("locked", false);
-        this.metallicity = reply.integer("metallicity");
+        this.metallicity = reply.number("metallicity");
         this.gasGiant = reply.bool("gasGiant", false);
         this.terrainSource = reply.text("terrainSource");
         this.moon = reply.bool("moon", false);
