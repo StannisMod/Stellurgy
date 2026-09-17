@@ -1,6 +1,7 @@
 package zmaster587.advancedRocketry.test.server;
 
 import zmaster587.advancedRocketry.test.LedgerEntry;
+import zmaster587.advancedRocketry.test.MaterializedCell;
 import zmaster587.advancedRocketry.test.Reply;
 import org.junit.After;
 import org.junit.Test;
@@ -88,9 +89,9 @@ public class SystemBodiesFeedFollowsTheCellE2ETest extends AbstractSharedServerT
         assertTrue("entry setup failed: " + setup, setup.contains("\"ok\":true"));
 
         // Hold the cell live with an occupant refcount and NO ship anywhere in the ledger.
-        String occupy = exec("artest space occupy " + CELL_NO_SHIP);
-        assertTrue("occupy must materialize the cell: " + occupy, occupy.contains("\"ok\":true"));
-        int slotDim = jsonInt(occupy, "slotDim");
+        int slotDim = MaterializedCell.at(this::exec, CELL_NO_SHIP)
+                .requireMaterialized("occupy must materialize the cell")
+                .slotDim();
 
         // CONTROL: the cell is live and its feed entry exists, but it holds nothing yet. A later
         // non-zero count is then attributable to the POI and to nothing else.

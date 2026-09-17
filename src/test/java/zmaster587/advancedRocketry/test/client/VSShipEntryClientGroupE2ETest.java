@@ -11,6 +11,7 @@ import org.junit.Test;
 import org.junit.runners.MethodSorters;
 import org.lwjgl.input.Keyboard;
 
+import zmaster587.advancedRocketry.test.MaterializedCell;
 import zmaster587.advancedRocketry.test.PlayerShipData;
 import zmaster587.advancedRocketry.test.SubsystemStatus;
 import zmaster587.advancedRocketry.test.SeatMount;
@@ -424,7 +425,7 @@ public class VSShipEntryClientGroupE2ETest extends AbstractSharedVsClientE2ETest
         //
         // The premise this scenario needs is therefore not "the pool says it is full" but "no slot
         // can be freed", and the only way to hold that is to be the occupant of every slot.
-        String occupy = "";
+        MaterializedCell occupy = null;
         java.util.Set<Integer> pool = slotDimsOfPool();
         scenario().requireArranged("the pool must report its slots before they can be held: " + pool,
                 !pool.isEmpty());
@@ -432,20 +433,21 @@ public class VSShipEntryClientGroupE2ETest extends AbstractSharedVsClientE2ETest
             if (slotsHeldByPressureCells().containsAll(pool)) {
                 break;
             }
-            occupy = exec("artest space occupy " + cell + " 0 0");
-            scenario().requireArranged("the pool must accept an occupant on cell " + cell
-                    + " or say it is exhausted; it said neither: " + occupy,
-                    occupy.contains("\"ok\":true") || occupy.contains("\"exhausted\":true"));
+            // The reader refuses the reply that says NEITHER — an unregistered subsystem, which is
+            // what the two-substring arrangement check was standing in for.
+            occupy = MaterializedCell.at(this::exec, cell + " 0 0");
         }
         java.util.Set<Integer> held = slotsHeldByPressureCells();
         scenario().requireArranged("EVERY slot must be held by one of this scenario's own cells, or"
                 + " the pool can still free one by evicting an idle neighbour and the entry below is"
                 + " granted for a reason that has nothing to do with the refusal path. pool=" + pool
-                + " heldByThisScenario=" + held + " lastOccupy=" + occupy, held.containsAll(pool));
-        String further = exec("artest space occupy " + PRESSURE_CELLS[PRESSURE_CELLS.length - 1] + " 0 0");
+                + " heldByThisScenario=" + held
+                + " lastOccupy=" + (occupy == null ? "none" : occupy.raw()), held.containsAll(pool));
+        MaterializedCell further = MaterializedCell.at(this::exec,
+                PRESSURE_CELLS[PRESSURE_CELLS.length - 1] + " 0 0");
         scenario().requireArranged("instrument control: with every slot held by an OCCUPIED cell, a"
                 + " further occupy must be REFUSED - else the pool is not actually exhausted and the"
-                + " entry would be granted: " + further, further.contains("\"exhausted\":true"));
+                + " entry would be granted: " + further.raw(), further.exhausted);
 
         int budget = 40;
         // Allocated, not chosen. The refused leg used to stand a hundred blocks from the granted

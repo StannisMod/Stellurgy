@@ -1,6 +1,7 @@
 package zmaster587.advancedRocketry.test.server;
 
 import zmaster587.advancedRocketry.test.GameTicks;
+import zmaster587.advancedRocketry.test.MaterializedCell;
 
 import org.junit.Test;
 
@@ -47,10 +48,10 @@ public class SpaceCellBindingSurvivesWorldUnloadE2ETest extends AbstractSharedSe
     @Test
     public void aBoundCellKeepsItsWorldAndARevisitRepairsOneThatWentAnyway() throws Exception {
         // ── Leg 1: the control. With the pool's hold cleared, Forge's sweep takes the world. ──
-        String occupied = exec("artest space occupy " + UNHELD_CELL);
-        assertTrue("the cell must materialize: " + occupied, occupied.contains("\"ok\":true"));
-        assertTrue("a freshly materialized cell must have a world: " + occupied,
-                occupied.contains("\"worldLoaded\":true"));
+        MaterializedCell occupied = MaterializedCell.at(this::exec, UNHELD_CELL)
+                .requireMaterialized("the cell must materialize");
+        assertTrue("a freshly materialized cell must have a world: " + occupied.raw(),
+                occupied.worldLoaded());
 
         String dropped = exec("artest space release " + UNHELD_CELL + " drop-hold");
         assertTrue("release must clear the hold: " + dropped, dropped.contains("\"holdDropped\":true"));
@@ -61,14 +62,16 @@ public class SpaceCellBindingSurvivesWorldUnloadE2ETest extends AbstractSharedSe
                 gone.contains("\"managerLoaded\":true"));
 
         // ── Leg 2: the repair. A binding whose world went away is live again on the next visit. ──
-        String revisit = exec("artest space occupy " + UNHELD_CELL);
+        MaterializedCell revisit = MaterializedCell.at(this::exec, UNHELD_CELL)
+                .requireMaterialized("the revisit must materialize the cell again");
         assertTrue("materializing a cell must leave it live in a world, whatever happened to the slot "
-                        + "while nobody was occupying it: " + revisit,
-                revisit.contains("\"worldLoaded\":true"));
+                        + "while nobody was occupying it: " + revisit.raw(),
+                revisit.worldLoaded());
 
         // ── Leg 3: the hold. Same sequence, hold left in place: the sweep must not get this one. ──
-        String held = exec("artest space occupy " + HELD_CELL);
-        assertTrue("the second cell must materialize: " + held, held.contains("\"worldLoaded\":true"));
+        MaterializedCell held = MaterializedCell.at(this::exec, HELD_CELL)
+                .requireMaterialized("the second cell must materialize");
+        assertTrue("and it must be live in a world: " + held.raw(), held.worldLoaded());
         exec("artest space release " + HELD_CELL);
 
         String stillThere = awaitWorld(HELD_CELL, true);

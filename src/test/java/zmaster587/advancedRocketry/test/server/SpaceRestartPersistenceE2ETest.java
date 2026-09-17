@@ -1,6 +1,7 @@
 package zmaster587.advancedRocketry.test.server;
 
 import zmaster587.advancedRocketry.test.LedgerEntry;
+import zmaster587.advancedRocketry.test.MaterializedCell;
 import zmaster587.advancedRocketry.test.SubsystemStatus;
 import zmaster587.advancedRocketry.test.Reply;
 import java.nio.file.Files;
@@ -208,15 +209,18 @@ public class SpaceRestartPersistenceE2ETest {
 
         // Take the ship's old slot with an unrelated cell BEFORE its own cell is made live, so the
         // ship's cell is forced onto a different slot than it held last session.
-        String decoy = exec("artest space occupy 1 1 1");
-        int decoySlot = jsonInt(decoy, "slotDim");
+        MaterializedCell decoy = MaterializedCell.at(this::exec, "1 1 1")
+                .requireMaterialized("the decoy cell must materialize");
         assertEquals("the decoy must land on the slot the ship's cell held before the reboot — that is "
-                + "what makes the ship's own cell move: " + decoy, slotBeforeReboot, decoySlot);
+                + "what makes the ship's own cell move: " + decoy.raw(),
+                slotBeforeReboot, decoy.slotDim());
 
-        String live = exec("artest space occupy " + SECTOR_X + " " + SECTOR_Y + " " + SECTOR_Z);
-        int liveSlot = jsonInt(live, "slotDim");
+        MaterializedCell live = MaterializedCell.at(this::exec,
+                        SECTOR_X + " " + SECTOR_Y + " " + SECTOR_Z)
+                .requireMaterialized("the ship's own cell must materialize");
+        int liveSlot = live.slotDim();
         assertNotEquals("the arrangement must actually move the ship's cell onto a different slot; "
-                + "if it did not, this test proves nothing about a stale id: " + live,
+                + "if it did not, this test proves nothing about a stale id: " + live.raw(),
                 slotBeforeReboot, liveSlot);
 
         LedgerEntry restored = ledger(SHIP_ID);
