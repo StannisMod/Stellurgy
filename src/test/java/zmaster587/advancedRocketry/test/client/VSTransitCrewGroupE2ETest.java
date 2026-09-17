@@ -9,6 +9,7 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 import zmaster587.advancedRocketry.test.Reply;
+import zmaster587.advancedRocketry.test.PlayerState;
 import zmaster587.advancedRocketry.test.PilotSeat;
 import zmaster587.advancedRocketry.test.ArrangementFailure;
 import zmaster587.advancedRocketry.test.Events;
@@ -116,10 +117,7 @@ public class VSTransitCrewGroupE2ETest extends AbstractSharedVsClientE2ETest {
      * makes a wait about THIS crew member.</p>
      */
     private static String botName(Events.Probe probe) throws Exception {
-        String health = probe.exec("artest player health");
-        Reply nameMReply = Reply.of(health);
-        assertTrue("player health must echo the player name: " + health, nameMReply.has(PLAYER_NAME));
-        return nameMReply.text(PLAYER_NAME);
+        return PlayerState.botName(probe::exec);
     }
 
     /** {@code find-seat} keyed by identity: every scenario here builds at the SAME anchor in the

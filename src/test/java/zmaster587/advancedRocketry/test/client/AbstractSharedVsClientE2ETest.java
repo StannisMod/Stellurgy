@@ -10,6 +10,7 @@ import org.lwjgl.input.Keyboard;
 import zmaster587.advancedRocketry.test.Events;
 import zmaster587.advancedRocketry.test.TransitStatus;
 import zmaster587.advancedRocketry.test.Reply;
+import zmaster587.advancedRocketry.test.PlayerState;
 import zmaster587.advancedRocketry.test.ShipInfo;
 
 import zmaster587.advancedRocketry.test.Plot;
@@ -610,7 +611,6 @@ public abstract class AbstractSharedVsClientE2ETest extends AbstractSharedClient
         return after;
     }
 
-    private static final String PLAYER_NAME = "player";
 
     /**
      * The bot's own player name, as the server knows it.
@@ -620,11 +620,7 @@ public abstract class AbstractSharedVsClientE2ETest extends AbstractSharedClient
      * about whoever moved next.</p>
      */
     protected final String botName() throws Exception {
-        String health = exec("artest player health");
-        String name = Reply.of("artest player health", health).text(PLAYER_NAME);
-        scenario().requireArranged("player health must echo the player name, or no wait on this tier"
-                + " can be filtered to this body: " + health, name != null);
-        return name;
+        return PlayerState.botName(this::exec);
     }
 
     /** The {@code "id"} field of a {@code ship-info} reply, or null when it carries none. */

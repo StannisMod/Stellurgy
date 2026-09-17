@@ -6,6 +6,7 @@ import org.junit.Test;
 import org.junit.runners.MethodSorters;
 
 import zmaster587.advancedRocketry.test.Reply;
+import zmaster587.advancedRocketry.test.PlayerState;
 import zmaster587.advancedRocketry.test.Events;
 
 import java.util.regex.Matcher;
@@ -44,7 +45,6 @@ import static org.junit.Assert.assertTrue;
 public class SpaceSubsystemClientSyncGroupE2ETest extends AbstractSharedClientE2ETest {
 
     private static final String POOL_DIMS = "dims";
-    private static final String PLAYER_NAME = "player";
     /** The slot the settle actually bound the cell to — the one place that decides it. */
     private static final String BOUND_DIM = "slotDim";
     private static final String CLIENT_BODIES_CLASS =
@@ -69,10 +69,7 @@ public class SpaceSubsystemClientSyncGroupE2ETest extends AbstractSharedClientE2
     }
 
     private String botName() throws Exception {
-        String health = exec("artest player health");
-        Reply mReply = Reply.of(health);
-        scenario().requireArranged("player health must echo the player name: " + health, mReply.has(PLAYER_NAME));
-        return mReply.text(PLAYER_NAME);
+        return PlayerState.botName(this::exec);
     }
 
     // ── the CLIENT's own event log ────────────────────────────────────────────

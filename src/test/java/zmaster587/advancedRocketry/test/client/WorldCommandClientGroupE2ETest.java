@@ -8,6 +8,7 @@ import org.junit.runners.MethodSorters;
 
 import zmaster587.advancedRocketry.test.Events;
 import zmaster587.advancedRocketry.test.Reply;
+import zmaster587.advancedRocketry.test.PlayerState;
 
 import java.util.HashSet;
 import java.util.Locale;
@@ -64,7 +65,6 @@ import static org.junit.Assert.assertTrue;
 public class WorldCommandClientGroupE2ETest extends AbstractSharedClientE2ETest {
 
     private static final Pattern DIM_LINE = Pattern.compile("DIM(\\d+):");
-    private static final String PLAYER_NAME = "player";
     private static final String STATION_ID = "id";
     private static final String POS_X = "posX";
 
@@ -89,10 +89,7 @@ public class WorldCommandClientGroupE2ETest extends AbstractSharedClientE2ETest 
     }
 
     private String botName() throws Exception {
-        String health = exec("artest player health");
-        Reply mReply = Reply.of(health);
-        scenario().requireArranged("player health must echo the player name: " + health, mReply.has(PLAYER_NAME));
-        return mReply.text(PLAYER_NAME);
+        return PlayerState.botName(this::exec);
     }
 
     private static int newDimFromDiff(String before, String after) {
