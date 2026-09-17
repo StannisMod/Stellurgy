@@ -95,6 +95,9 @@ public class SpaceLoginRestoreDeckCrewE2ETest extends AbstractSpaceLoginRestoreC
                         + "must still say he was aboard his ship, on his feet: " + loggedOut,
                 loggedOut.contains("\"tagged\":true")
                         && loggedOut.contains("\"posture\":\"STANDING\""));
+        // LEFT RAW: the subject here IS the error shape. `PlayerPosition` refuses it — it must,
+        // because read as a position that reply puts him at the origin of the overworld, and every
+        // other site in this family is asserting which world he is in.
         String offline = exec("artest player position-of " + BOT);
         requireArranged("the server must see him GONE after the disconnect, or nothing below "
                         + "is a relog: " + offline,

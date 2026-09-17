@@ -20,6 +20,7 @@ import java.util.regex.Pattern;
 import zmaster587.advancedRocketry.space.CellWorldMapper;
 import zmaster587.advancedRocketry.space.GalacticCoord;
 import zmaster587.advancedRocketry.test.LedgerEntry;
+import zmaster587.advancedRocketry.test.PlayerPosition;
 import zmaster587.advancedRocketry.test.SubsystemStatus;
 import zmaster587.advancedRocketry.test.SeatMount;
 import zmaster587.advancedRocketry.test.Reply;
@@ -354,18 +355,18 @@ public abstract class AbstractSpaceLoginRestoreClientTest {
         // player entity, and the two can disagree: the client keeps rendering the cell it was sent
         // to while the server has already put the entity somewhere else. A client-side check here
         // passes in exactly the case this assertion exists to catch.
-        String serverBeforeLogout = exec("artest player position-of " + BOT);
+        PlayerPosition serverBeforeLogout = PlayerPosition.of(this::exec, BOT);
         JsonObject ridingBeforeLogout = bot().reportRidingEntity();
         assertEquals("the SERVER must still have him in his ship's slot dimension when it writes him "
                         + "to disk - the login restore keys off the saved dimension, so if he is "
                         + "banked in the overworld here the reboot leg proves nothing: "
-                        + serverBeforeLogout + " clientRiding=" + ridingBeforeLogout,
-                slotDim, readInt(serverBeforeLogout, "playerDim"));
+                        + serverBeforeLogout.raw() + " clientRiding=" + ridingBeforeLogout,
+                slotDim, serverBeforeLogout.dim);
         // The dimension FIELD is what gets persisted, and it is maintained separately from the world
         // the entity ticks in. If it has drifted back to the overworld while he stands in the cell,
         // he is written to disk as an overworld player and the restore can never fire for him.
         assertEquals("the pilot's persisted dimension field must match the cell he is standing in: "
-                        + serverBeforeLogout, slotDim, readInt(serverBeforeLogout, "playerDimField"));
+                        + serverBeforeLogout.raw(), slotDim, serverBeforeLogout.dimField);
 
         // The pool's composition on this side of the restart, kept so the boot-2 assertions can say
         // whether the slot the pilot was banked in still means the same thing afterwards.
@@ -1207,11 +1208,12 @@ public abstract class AbstractSpaceLoginRestoreClientTest {
         // The SERVER's own view, taken here as well as just before the logout: these two samples
         // bracket the window in which the entity can drift back out of the cell, so a failure says
         // WHICH side of the mount lost him instead of merely that he was lost.
-        String serverAfterMount = exec("artest player position-of " + BOT);
+        PlayerPosition serverAfterMount = PlayerPosition.of(this::exec, BOT);
         assertEquals("the SERVER must agree the pilot is in the slot dimension right after he sits "
                         + "down - if it does not, the client and the server disagree from the very "
-                        + "start and nothing downstream is measuring the restore: " + serverAfterMount,
-                slotDim, readInt(serverAfterMount, "playerDim"));
+                        + "start and nothing downstream is measuring the restore: "
+                        + serverAfterMount.raw(),
+                slotDim, serverAfterMount.dim);
 
         // Sitting down aboard a ship in a cell is a CHAIN, and it is asserted as one: he takes the
         // seat, and the reconciler's next pass stamps the durable record. The order is production's
@@ -1536,9 +1538,9 @@ public abstract class AbstractSpaceLoginRestoreClientTest {
         assertTrue("and he must still be seated after the crossing: " + bot().reportRidingEntity(),
                 bot().reportRidingEntity().get("riding").getAsBoolean());
 
-        String serverAfterArrival = exec("artest player position-of " + BOT);
+        PlayerPosition serverAfterArrival = PlayerPosition.of(this::exec, BOT);
         assertEquals("the SERVER must agree he is in the slot dimension after the crossing: "
-                + serverAfterArrival, slotDim, readInt(serverAfterArrival, "playerDim"));
+                + serverAfterArrival.raw(), slotDim, serverAfterArrival.dim);
 
         // THE SUBJECT: he never sat down in a cell, so if the record is written only by the mount
         // transition there is nothing here - and the restart leg that follows would then put him back

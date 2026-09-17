@@ -8,6 +8,7 @@ import org.junit.Test;
 import zmaster587.advancedRocketry.space.CellWorldMapper;
 import zmaster587.advancedRocketry.space.GalacticCoord;
 import zmaster587.advancedRocketry.test.LedgerEntry;
+import zmaster587.advancedRocketry.test.PlayerPosition;
 import zmaster587.advancedRocketry.test.SubsystemStatus;
 import zmaster587.advancedRocketry.test.Events;
 
@@ -116,15 +117,15 @@ public class SpaceLoginRestoreRefusalE2ETest extends AbstractSpaceLoginRestoreCl
         // and call the placement broken. `playerDimField` is quoted alongside `playerDim` because they
         // are maintained separately and a placement that moved one but not the other is a real failure
         // this assertion should catch.
-        String serverPos = exec("artest player position-of " + BOT);
+        PlayerPosition serverPos = PlayerPosition.of(this::exec, BOT);
         JsonObject riding = bot().reportRidingEntity();
         assertEquals("the server must actually have placed him out of the cell, or the message is "
-                        + "describing something that did not happen: " + serverPos
+                        + "describing something that did not happen: " + serverPos.raw()
                         + " clientRiding=" + riding + " clientRenderedDim=" + clientDim(),
-                OVERWORLD_DIM, readInt(serverPos, "playerDim"));
+                OVERWORLD_DIM, serverPos.dim);
         assertEquals("and his persisted dimension field must agree, or the next login starts from a "
-                        + "world he is not in: " + serverPos,
-                OVERWORLD_DIM, readInt(serverPos, "playerDimField"));
+                        + "world he is not in: " + serverPos.raw(),
+                OVERWORLD_DIM, serverPos.dimField);
         assertFalse("and the client agrees he is riding nothing: " + riding + " server=" + serverPos,
                 riding.get("riding").getAsBoolean());
     }

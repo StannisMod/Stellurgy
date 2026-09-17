@@ -8,6 +8,7 @@ import org.junit.Test;
 import zmaster587.advancedRocketry.space.CellWorldMapper;
 import zmaster587.advancedRocketry.space.GalacticCoord;
 import zmaster587.advancedRocketry.test.LedgerEntry;
+import zmaster587.advancedRocketry.test.PlayerPosition;
 import zmaster587.advancedRocketry.test.SubsystemStatus;
 import zmaster587.advancedRocketry.test.DeckCapture;
 import zmaster587.advancedRocketry.test.Events;
@@ -124,9 +125,9 @@ public class SpaceLoginRestoreSeatedPilotE2ETest extends AbstractSpaceLoginResto
                         40, () -> bot().waitTicks(5)),
                 "the deck he is captured on must be the ship the STANDING record names");
 
-        String serverBeforeLogout = exec("artest player position-of " + BOT);
+        PlayerPosition serverBeforeLogout = PlayerPosition.of(this::exec, BOT);
         assertEquals("the SERVER must still have him in his ship's slot dimension when it writes him "
-                + "to disk: " + serverBeforeLogout, slotDim, readInt(serverBeforeLogout, "playerDim"));
+                + "to disk: " + serverBeforeLogout.raw(), slotDim, serverBeforeLogout.dim);
 
         closeBoth();
         keepBootLog("boot1-standing");

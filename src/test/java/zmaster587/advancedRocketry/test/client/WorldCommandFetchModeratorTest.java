@@ -10,6 +10,7 @@ import org.junit.Before;
 import org.junit.Test;
 
 import zmaster587.advancedRocketry.test.Events;
+import zmaster587.advancedRocketry.test.PlayerPosition;
 import zmaster587.advancedRocketry.test.Reply;
 
 import java.util.regex.Matcher;
@@ -58,8 +59,6 @@ public class WorldCommandFetchModeratorTest {
     private static final String BOT1_NAME = "ModBot1";
     private static final String BOT2_NAME = "ModBot2";
 
-    private static final String PLAYER_POS_X = "playerPosX";
-    private static final String PLAYER_POS_Z = "playerPosZ";
 
     private RealDedicatedServerHarness server;
     private RealClientHarness bot1Harness;
@@ -173,12 +172,12 @@ public class WorldCommandFetchModeratorTest {
         bot2Harness.bot().waitTicks(5);
 
         // Sanity-check pre-state: bots are at distinct positions.
-        String bot1Pre = exec("artest player position-of " + BOT1_NAME);
-        String bot2Pre = exec("artest player position-of " + BOT2_NAME);
-        double bot1PreX = extractDouble(bot1Pre, PLAYER_POS_X);
-        double bot1PreZ = extractDouble(bot1Pre, PLAYER_POS_Z);
-        double bot2PreX = extractDouble(bot2Pre, PLAYER_POS_X);
-        double bot2PreZ = extractDouble(bot2Pre, PLAYER_POS_Z);
+        PlayerPosition bot1Pre = PlayerPosition.of(this::exec, BOT1_NAME);
+        PlayerPosition bot2Pre = PlayerPosition.of(this::exec, BOT2_NAME);
+        double bot1PreX = bot1Pre.x;
+        double bot1PreZ = bot1Pre.z;
+        double bot2PreX = bot2Pre.x;
+        double bot2PreZ = bot2Pre.z;
         assertTrue("baseline: bot1 should be near (" + sx + "," + sz + "), got ("
                         + bot1PreX + "," + bot1PreZ + ")",
                 Math.abs(bot1PreX - (sx + 0.5)) < 2.0
@@ -242,14 +241,9 @@ public class WorldCommandFetchModeratorTest {
                 Math.abs(bot2PostX - bot2PreX) > 10.0);
 
         // Cross-side oracle: the server agrees about bot2's new position.
-        String bot2Post = exec("artest player position-of " + BOT2_NAME);
-        assertTrue("server must agree bot2 sits at bot1's pre-fetch X: " + bot2Post,
-                Math.abs(extractDouble(bot2Post, PLAYER_POS_X) - bot1PreX) < 1.5);
+        PlayerPosition bot2Post = PlayerPosition.of(this::exec, BOT2_NAME);
+        assertTrue("server must agree bot2 sits at bot1's pre-fetch X: " + bot2Post.raw(),
+                Math.abs(bot2Post.x - bot1PreX) < 1.5);
     }
 
-    private static double extractDouble(String src, String field) {
-        double value = Reply.of(src).number(field);
-        assertTrue("field `" + field + "` not found in: " + src, !Double.isNaN(value));
-        return value;
-    }
 }
