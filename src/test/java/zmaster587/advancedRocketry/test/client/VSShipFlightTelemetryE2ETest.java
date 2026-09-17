@@ -18,6 +18,7 @@ import zmaster587.advancedRocketry.test.PlayerShipData;
 import zmaster587.advancedRocketry.test.Events;
 import zmaster587.advancedRocketry.test.Reply;
 import zmaster587.advancedRocketry.test.PilotSeat;
+import zmaster587.advancedRocketry.test.ShipFrameCheck;
 import zmaster587.advancedRocketry.test.ShipInfo;
 import zmaster587.advancedRocketry.test.FixtureSite;
 
@@ -470,14 +471,14 @@ public class VSShipFlightTelemetryE2ETest extends AbstractSharedVsClientE2ETest 
         // handled and left at a -1.0 sentinel until it first ran — and -1.0 satisfies the "< 1e-6"
         // assertion below, so the pin could go green on an instrument that had never measured
         // anything. `ship-frame-check` takes the subject and answers about it or says it cannot.
-        String rolledStats = exec("artest vs ship-frame-check 0 " + crewId);
         // The stronger arrangement gate the on-demand form allows: not "the number is not the
-        // sentinel" but "the measurement ran, for this body".
-        scenario().requireArranged("the ship-frame check must MEASURE the two frames for this crew"
-                + " member before their agreement can mean anything: " + rolledStats,
-                !rolledStats.contains("\"available\":false"));
-        double tcUp = readDouble(rolledStats, "upDisagreement");
-        double tcFwd = readDouble(rolledStats, "fwdDisagreement");
+        // sentinel" but "the measurement ran, for this body" — which is the reader's own refusal,
+        // and it says which of the TWO states an `available:false` could be.
+        ShipFrameCheck rolledStats = ShipFrameCheck.byId(this::exec, 0, crewId)
+                .requireMeasured("the ship-frame check must MEASURE the two frames for this crew"
+                        + " member before their agreement can mean anything");
+        double tcUp = rolledStats.upDisagreement();
+        double tcFwd = rolledStats.fwdDisagreement();
         System.out.println("[tier2][TC] rolled-deck frame disagreement up=" + tcUp + " fwd=" + tcFwd);
         assertTrue("the movement frame and the camera frame must be ONE rotation on a 75-degree deck, so "
                 + "the keys/mouse inversion is the aim-frame (Path B), not a frame-source split "

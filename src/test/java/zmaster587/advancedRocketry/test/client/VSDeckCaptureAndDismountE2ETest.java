@@ -14,6 +14,7 @@ import zmaster587.advancedRocketry.test.Events;
 import zmaster587.advancedRocketry.test.Reply;
 import zmaster587.advancedRocketry.test.PilotSeat;
 import zmaster587.advancedRocketry.test.FixtureSite;
+import zmaster587.advancedRocketry.test.ShipFrameCheck;
 import zmaster587.advancedRocketry.test.ShipIdentity;
 import zmaster587.advancedRocketry.test.ShipInfo;
 import zmaster587.advancedRocketry.test.ShipReadiness;
@@ -1164,26 +1165,27 @@ public class VSDeckCaptureAndDismountE2ETest extends AbstractSharedVsClientE2ETe
         exec("tp @a " + sx + " " + (sy + 1) + " " + sz + " 0 0"); // inside the AABB so the probe resolves
         bot().waitTicks(2);
 
-        String tc = exec("artest vs ship-frame-check");
-        System.out.println("[deckcap] inverted transform-check=" + tc);
+        ShipFrameCheck tc = ShipFrameCheck.ofFirstPlayer(this::exec)
+                .requireMeasured("the frame check must run on the player standing on this deck");
+        System.out.println("[deckcap] inverted transform-check=" + tc.raw());
         // The attitude controller converges shy of a full 180 (axis-angle is singular there), settling
         // near 135deg - deck-up well past horizontal and pointing downward. That is a strongly non-trivial
         // attitude, which is all the consistency check needs.
-        assertTrue("ship must be strongly inverted (deck-up points well below horizontal): " + tc,
-                readDouble(tc, "upQuatY") < -0.5);
+        assertTrue("ship must be strongly inverted (deck-up points well below horizontal): "
+                + tc.raw(), tc.upQuatY() < -0.5);
 
         // THE decisive check: the MOVEMENT frame (VS vector rotate, used by ShipFrameTravel) and the
         // CAMERA/gravity frame (the attitude quaternion) must describe the SAME rotation. A disagreement
         // here is the root of "the inverted ship drags me through the deck while the camera never turns
         // over" - movement resolving in one frame, the camera reading another.
-        double upDis = readDouble(tc, "upDisagreement");
-        double fwdDis = readDouble(tc, "fwdDisagreement");
-        double posRt = readDouble(tc, "posRoundTripErr");
-        double rotRt = readDouble(tc, "rotRoundTripErr");
+        double upDis = tc.upDisagreement();
+        double fwdDis = tc.fwdDisagreement();
+        double posRt = tc.posRoundTripError();
+        double rotRt = tc.rotRoundTripError();
         System.out.println("[deckcap] inverted upDis=" + upDis + " fwdDis=" + fwdDis
                 + " posRt=" + posRt + " rotRt=" + rotRt);
         assertTrue("movement rotate and camera quaternion must agree on ship-up (disagree=" + upDis
-                + "): " + tc, upDis < 0.02);
+                + "): " + tc.raw(), upDis < 0.02);
         assertTrue("movement rotate and camera quaternion must agree on ship-forward (disagree=" + fwdDis
                 + ")", fwdDis < 0.02);
         assertTrue("world<->subspace position round-trip must be exact (err=" + posRt + ")", posRt < 0.02);
@@ -1323,12 +1325,6 @@ public class VSDeckCaptureAndDismountE2ETest extends AbstractSharedVsClientE2ETe
      */
     private boolean shipIsLoaded() throws Exception {
         return ShipInfo.isLoaded(shipInfoReply());
-    }
-
-    private double readDouble(String json, String field) {
-        double value = Reply.of(json).number(field);
-        assertTrue("expected a number `" + field + "` in: " + json, !Double.isNaN(value));
-        return value;
     }
 
     private int readInt(String json, String field) {
