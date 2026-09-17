@@ -1,5 +1,6 @@
 package zmaster587.advancedRocketry.test.server;
 
+import zmaster587.advancedRocketry.test.Reply;
 import zmaster587.advancedRocketry.test.GameTicks;
 
 import org.junit.Test;
@@ -28,7 +29,7 @@ public class HarnessMobSurvivalTest extends AbstractSharedServerTest {
     /** How much world the subject is given to survive, in ticks — the old "~6 s = 120 real ticks". */
     private static final int SURVIVAL_TICKS = 120;
 
-    private static final Pattern ENTITY_ID = Pattern.compile("\"entityId\":(-?\\d+)");
+    private static final String ENTITY_ID = "entityId";
 
     private String exec(String cmd) throws Exception {
         return String.join("\n", client().execute(cmd));
@@ -48,9 +49,9 @@ public class HarnessMobSurvivalTest extends AbstractSharedServerTest {
                 + (x + 0.5) + " " + y + " " + (z + 0.5));
         System.out.println("[mobsurv] spawn: " + spawned.replace('\n', ' '));
         assertTrue("subject must spawn: " + spawned, spawned.contains("\"ok\":true"));
-        Matcher m = ENTITY_ID.matcher(spawned);
-        assertTrue("spawn must report an entity id: " + spawned, m.find());
-        int id = Integer.parseInt(m.group(1));
+        Reply mReply = Reply.of(spawned);
+        assertTrue("spawn must report an entity id: " + spawned, mReply.has(ENTITY_ID));
+        int id = Integer.parseInt(mReply.text(ENTITY_ID));
 
         // The comment here already said what it meant: ~120 real ticks. Now it asks for them.
         GameTicks.advance(client(), GameTicks.server(), SURVIVAL_TICKS);

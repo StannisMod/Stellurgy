@@ -1,5 +1,6 @@
 package zmaster587.advancedRocketry.test.server;
 
+import zmaster587.advancedRocketry.test.Reply;
 import org.junit.Test;
 
 import java.util.regex.Matcher;
@@ -38,20 +39,18 @@ import static zmaster587.advancedRocketry.test.server.WorldCommandFixtures.exec;
  */
 public class UvAssemblerBoundsConstantsTest extends AbstractSharedServerTest {
 
-    private static final Pattern ROCKET_MAX_Y =
-            Pattern.compile("\"rocketAssemblerMaxY\":(-?\\d+)");
-    private static final Pattern UV_MAX_Y =
-            Pattern.compile("\"uvAssemblerMaxY\":(-?\\d+)");
+    private static final String ROCKET_MAX_Y = "rocketAssemblerMaxY";
+    private static final String UV_MAX_Y = "uvAssemblerMaxY";
 
     @Test
     public void rocketAssemblerAllowsTallerStructureThanUvAssembler() throws Exception {
         String resp = exec("artest assembler max-y");
-        Matcher rm = ROCKET_MAX_Y.matcher(resp);
-        Matcher um = UV_MAX_Y.matcher(resp);
-        assertTrue("probe must surface rocketAssemblerMaxY: " + resp, rm.find());
-        assertTrue("probe must surface uvAssemblerMaxY: " + resp, um.find());
-        int rocketMaxY = Integer.parseInt(rm.group(1));
-        int uvMaxY = Integer.parseInt(um.group(1));
+        Reply rmReply = Reply.of(resp);
+        Reply umReply = Reply.of(resp);
+        assertTrue("probe must surface rocketAssemblerMaxY: " + resp, rmReply.has(ROCKET_MAX_Y));
+        assertTrue("probe must surface uvAssemblerMaxY: " + resp, umReply.has(UV_MAX_Y));
+        int rocketMaxY = Integer.parseInt(rmReply.text(ROCKET_MAX_Y));
+        int uvMaxY = Integer.parseInt(umReply.text(UV_MAX_Y));
         assertTrue("rocket assembler MAX_SIZE_Y must exceed UV's so the two "
                         + "assemblers serve their distinct rocket-class roles "
                         + "(rocket=" + rocketMaxY + ", uv=" + uvMaxY + ")",
@@ -71,12 +70,12 @@ public class UvAssemblerBoundsConstantsTest extends AbstractSharedServerTest {
         // partial-cube UV rockets be assembled, which would mess with
         // station-bay docking. Pin the cube invariant explicitly.
         String resp = exec("artest assembler max-y");
-        Matcher uy = UV_MAX_Y.matcher(resp);
-        Matcher ux = Pattern.compile("\"uvAssemblerMaxXZ\":(-?\\d+)").matcher(resp);
-        assertTrue("probe must surface uvAssemblerMaxY: " + resp, uy.find());
-        assertTrue("probe must surface uvAssemblerMaxXZ: " + resp, ux.find());
-        int uvMaxY = Integer.parseInt(uy.group(1));
-        int uvMaxXZ = Integer.parseInt(ux.group(1));
+        Reply uyReply = Reply.of(resp);
+        Reply uxReply = Reply.of(resp);
+        assertTrue("probe must surface uvAssemblerMaxY: " + resp, uyReply.has(UV_MAX_Y));
+        assertTrue("probe must surface uvAssemblerMaxXZ: " + resp, uxReply.has("uvAssemblerMaxXZ"));
+        int uvMaxY = Integer.parseInt(uyReply.text(UV_MAX_Y));
+        int uvMaxXZ = uxReply.integer("uvAssemblerMaxXZ");
         assertTrue("UV's height cap must match its width cap "
                         + "(MAX_SIZE_Y=" + uvMaxY + ", MAX_SIZE=" + uvMaxXZ + ")",
                 uvMaxY == uvMaxXZ);

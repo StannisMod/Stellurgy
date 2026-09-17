@@ -8,6 +8,8 @@ import org.junit.runners.MethodSorters;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import zmaster587.advancedRocketry.test.Events;
+import zmaster587.advancedRocketry.test.Reply;
 import zmaster587.advancedRocketry.test.ShipIdentity;
 
 import static org.junit.Assert.assertFalse;
@@ -59,11 +61,10 @@ public class VSRiderKeepsHisMountAtCruiseE2ETest extends AbstractSharedVsClientE
         return "vs-rider-mount-at-cruise";
     }
 
-    private static final Pattern PLAYER_NAME = Pattern.compile("\"player\":\"([^\"]+)\"");
-    private static final Pattern BUILDER_POS =
-            Pattern.compile("\"builderPos\":\\[(-?\\d+),(-?\\d+),(-?\\d+)]");
-    private static final Pattern POS_X = Pattern.compile("\"posX\":(-?[0-9.E\\-]+)");
-    private static final Pattern POS_Z = Pattern.compile("\"posZ\":(-?[0-9.E\\-]+)");
+    private static final String PLAYER_NAME = "player";
+    private static final String BUILDER_POS = "builderPos";
+    private static final String POS_X = "posX";
+    private static final String POS_Z = "posZ";
 
     /**
      * The mount is registered with a tracking range of 16 blocks and an anchor republished every 20
@@ -93,20 +94,19 @@ public class VSRiderKeepsHisMountAtCruiseE2ETest extends AbstractSharedVsClientE
     private static final int OBSERVE_TICKS = 80;
     private static final int POLL_EVERY_TICKS = 2;
 
-    private static double readDouble(String json, Pattern p) {
-        Matcher m = p.matcher(json);
-        assertTrue("expected " + p.pattern() + " in: " + json, m.find());
-        return Double.parseDouble(m.group(1));
+    private static double readDouble(String json, String field) {
+        double value = Reply.of(json).number(field);
+        assertTrue("expected `" + field + "` in: " + json, !Double.isNaN(value));
+        return value;
     }
 
     private static int readInt(String json, String key) {
-        Matcher m = Pattern.compile("\"" + key + "\":(-?\\d+)").matcher(json);
-        assertTrue("expected \"" + key + "\" in: " + json, m.find());
-        return Integer.parseInt(m.group(1));
+        assertTrue("expected \"" + key + "\" in: " + json, Reply.of(json).has(key));
+        return Reply.of(json).integer(key);
     }
 
     private static boolean readBool(String json, String key) {
-        return Pattern.compile("\"" + key + "\":true").matcher(json).find();
+        return Reply.of(json).bool(key, false);
     }
 
     private boolean riding() throws Exception {
@@ -114,8 +114,7 @@ public class VSRiderKeepsHisMountAtCruiseE2ETest extends AbstractSharedVsClientE
     }
 
     private static int readIntOr(String json, String key, int fallback) {
-        Matcher m = Pattern.compile("\"" + key + "\":(-?\\d+)").matcher(json);
-        return m.find() ? Integer.parseInt(m.group(1)) : fallback;
+        return Reply.of(json).integerOr(key, fallback);
     }
 
     /** Poll for a loaded VS ship in {@code dim} (assembly is async; a headless server forces the load). */
@@ -162,10 +161,10 @@ public class VSRiderKeepsHisMountAtCruiseE2ETest extends AbstractSharedVsClientE
         String fixture = exec("artest fixture rocket " + dim + " " + bx + " " + by + " " + bz
                 + " with-pilot-seat");
         scenario().requireArranged("with-pilot-seat fixture failed: " + fixture, readBool(fixture, "ok"));
-        Matcher bp = BUILDER_POS.matcher(fixture);
-        scenario().requireArranged("fixture missing builderPos: " + fixture, bp.find());
+        int[] bp = Reply.of(fixture).blockPos(BUILDER_POS);
+        scenario().requireArranged("fixture missing builderPos: " + fixture, bp != null);
         String assembled = exec("artest rocket assemble " + dim
-                + " " + bp.group(1) + " " + bp.group(2) + " " + bp.group(3));
+                + " " + bp[0] + " " + bp[1] + " " + bp[2]);
         scenario().requireArranged("a with-pilot-seat build must route to a ship: " + assembled,
                 assembled.contains("\"rocketCount\":0"));
         scenario().requireArranged("the ship never assembled/loaded in the cell (dim " + dim + ")",
@@ -181,14 +180,14 @@ public class VSRiderKeepsHisMountAtCruiseE2ETest extends AbstractSharedVsClientE
         scenario().requireArranged("the pilot seat must be found (else the test is vacuous): " + seat,
                 readBool(seat, "seatFound"));
         int seatX = readInt(seat, "seatX"), seatY = readInt(seat, "seatY"), seatZ = readInt(seat, "seatZ");
-        int sx = (int) Math.round(readDouble(seat, Pattern.compile("\"shipWorldX\":(-?[0-9.E\\-]+)")));
-        int sy = (int) Math.round(readDouble(seat, Pattern.compile("\"shipWorldY\":(-?[0-9.E\\-]+)")));
-        int sz = (int) Math.round(readDouble(seat, Pattern.compile("\"shipWorldZ\":(-?[0-9.E\\-]+)")));
+        int sx = (int) Math.round(readDouble(seat, "shipWorldX"));
+        int sy = (int) Math.round(readDouble(seat, "shipWorldY"));
+        int sz = (int) Math.round(readDouble(seat, "shipWorldZ"));
 
         String health = exec("artest player health");
-        Matcher nameM = PLAYER_NAME.matcher(health);
-        assertTrue("player health must echo the player name: " + health, nameM.find());
-        String botName = nameM.group(1);
+        Reply nameMReply = Reply.of(health);
+        assertTrue("player health must echo the player name: " + health, nameMReply.has(PLAYER_NAME));
+        String botName = nameMReply.text(PLAYER_NAME);
 
         scenario().requireArranged("the bot must enter the cell",
                 readBool(exec("artest space enter " + botName + " " + dim
@@ -359,13 +358,13 @@ public class VSRiderKeepsHisMountAtCruiseE2ETest extends AbstractSharedVsClientE
             if (readBool(track, "seatedRider") && !readBool(track, "riderTracks")) {
                 riderUntracked++;
             }
-            Matcher lx = Pattern.compile("\"anchorLagX\":([0-9.E\\-]+)").matcher(track);
-            Matcher lz = Pattern.compile("\"anchorLagZ\":([0-9.E\\-]+)").matcher(track);
-            if (lx.find()) {
-                maxAnchorLag = Math.max(maxAnchorLag, Double.parseDouble(lx.group(1)));
+            double lagX = Events.number(track, "anchorLagX");
+            double lagZ = Events.number(track, "anchorLagZ");
+            if (!Double.isNaN(lagX)) {
+                maxAnchorLag = Math.max(maxAnchorLag, lagX);
             }
-            if (lz.find()) {
-                maxAnchorLag = Math.max(maxAnchorLag, Double.parseDouble(lz.group(1)));
+            if (!Double.isNaN(lagZ)) {
+                maxAnchorLag = Math.max(maxAnchorLag, lagZ);
             }
             if (!seated) {
                 notRiding++;

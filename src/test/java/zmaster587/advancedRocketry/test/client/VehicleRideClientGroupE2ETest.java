@@ -8,6 +8,7 @@ import org.junit.runners.MethodSorters;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import zmaster587.advancedRocketry.test.Reply;
 import zmaster587.advancedRocketry.test.Plot;
 
 import static org.junit.Assert.assertEquals;
@@ -72,10 +73,18 @@ public class VehicleRideClientGroupE2ETest extends AbstractSharedClientE2ETest {
     private static final int STAND_DZ = PAD_DZ + 4;
     private static final int VEHICLE_DZ = STAND_DZ + 2;
 
-    private static final Pattern ENTITY_ID = Pattern.compile("\"entityId\":(-?\\d+)");
-    private static final Pattern RIDING_ID = Pattern.compile("\"ridingEntityId(?:Now)?\":(-?\\d+)");
-    private static final Pattern POS_X = Pattern.compile("\"posX\":(-?\\d+(?:\\.\\d+)?(?:[eE][-+]?\\d+)?)");
-    private static final Pattern POS_Z = Pattern.compile("\"posZ\":(-?\\d+(?:\\.\\d+)?(?:[eE][-+]?\\d+)?)");
+    private static final String ENTITY_ID = "entityId";
+    /**
+     * Which entity the player is riding, as {@code artest player riding-entity} reports it.
+     *
+     * <p>The regex this replaces was {@code "ridingEntityId(?:Now)?"} — it matched EITHER this field
+     * or the {@code ridingEntityIdNow} that a different verb writes, so on a reply carrying both it
+     * read whichever came first in the text. Every call site here reads the one verb, and now says
+     * which field it means.</p>
+     */
+    private static final String RIDING_ID = "ridingEntityId";
+    private static final String POS_X = "posX";
+    private static final String POS_Z = "posZ";
 
     @Override
     protected String subsystem() {
@@ -119,9 +128,10 @@ public class VehicleRideClientGroupE2ETest extends AbstractSharedClientE2ETest {
                 + " " + vz + " " + entityId);
         scenario().requireArranged(entityId + " spawn must succeed: " + resp,
                 resp.contains("\"ok\":true") && resp.contains("\"spawned\":true"));
-        Matcher m = ENTITY_ID.matcher(resp);
-        scenario().requireArranged("spawn response must include entityId: " + resp, m.find());
-        int id = Integer.parseInt(m.group(1));
+        Reply spawn = Reply.of("artest entity spawn", resp);
+        scenario().requireArranged("spawn response must include entityId: " + resp,
+                spawn.has(ENTITY_ID));
+        int id = spawn.integer(ENTITY_ID);
         scenario().record("vehicleEntityId", id)
                 .describeOnFailureWith("artest entity info " + plot().dim + " " + id,
                         "artest player riding-entity");
@@ -150,16 +160,16 @@ public class VehicleRideClientGroupE2ETest extends AbstractSharedClientE2ETest {
                 + "; last report: " + last);
     }
 
-    private static int extract(String src, Pattern pattern) {
-        Matcher m = pattern.matcher(src);
-        assertTrue("pattern not found in: " + src, m.find());
-        return Integer.parseInt(m.group(1));
+    private static int extract(String src, String field) {
+        Reply reply = Reply.of(src);
+        assertTrue("field `" + field + "` not found in: " + src, reply.has(field));
+        return reply.integer(field);
     }
 
-    private static double extractDouble(String src, Pattern pattern) {
-        Matcher m = pattern.matcher(src);
-        assertTrue("pattern not found in: " + src, m.find());
-        return Double.parseDouble(m.group(1));
+    private static double extractDouble(String src, String field) {
+        double value = Reply.of(src).number(field);
+        assertTrue("field `" + field + "` not found in: " + src, !Double.isNaN(value));
+        return value;
     }
 
     // ── hovercraft ────────────────────────────────────────────────────────────

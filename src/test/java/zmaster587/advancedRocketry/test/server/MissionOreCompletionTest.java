@@ -1,5 +1,7 @@
 package zmaster587.advancedRocketry.test.server;
 
+import zmaster587.advancedRocketry.test.RocketList;
+import zmaster587.advancedRocketry.test.Reply;
 import org.junit.Test;
 
 import java.util.regex.Matcher;
@@ -33,10 +35,8 @@ import static org.junit.Assert.assertTrue;
  */
 public class MissionOreCompletionTest extends AbstractSharedServerTest {
 
-    private static final Pattern BUILDER_POS =
-            Pattern.compile("\"builderPos\":\\[(-?\\d+),(-?\\d+),(-?\\d+)]");
-    private static final Pattern ROCKET_LIST_ID = Pattern.compile("\"id\":(-?\\d+)");
-    private static final Pattern MISSION_ID = Pattern.compile("\"missionId\":(-?\\d+)");
+    private static final String BUILDER_POS = "builderPos";
+    private static final String MISSION_ID = "missionId";
 
     private static String ok(java.util.List<String> resp) {
         return String.join("\n", resp);
@@ -54,27 +54,25 @@ public class MissionOreCompletionTest extends AbstractSharedServerTest {
                 "the craft is built and flown in this volume");
         String fixture = ok(client().execute(
                 "artest fixture rocket 0 " + baseX + " " + baseY + " " + baseZ + " simple"));
-        Matcher bp = BUILDER_POS.matcher(fixture);
-        assertTrue("fixture missing builderPos: " + fixture, bp.find());
-        int bx = Integer.parseInt(bp.group(1));
-        int by = Integer.parseInt(bp.group(2));
-        int bz = Integer.parseInt(bp.group(3));
+        int[] bp = Reply.of(fixture).blockPos(BUILDER_POS);
+        assertTrue("fixture missing builderPos: " + fixture, bp != null);
+        int bx = bp[0];
+        int by = bp[1];
+        int bz = bp[2];
         ok(client().execute("artest rocket assemble 0 " + bx + " " + by + " " + bz));
         String list = ok(client().execute("artest rocket list 0"));
-        Matcher rim = ROCKET_LIST_ID.matcher(list);
-        int lastId = -1;
-        while (rim.find()) lastId = Integer.parseInt(rim.group(1));
-        assertTrue("no rocket after assemble: " + list, lastId >= 0);
-        return lastId;
+        java.util.List<RocketList.Entry> built = RocketList.of(list);
+        assertTrue("no rocket after assemble: " + list, !built.isEmpty());
+        return built.get(built.size() - 1).id;
     }
 
     private long startOreMission(int rocketId, long duration, float drillingPower) throws Exception {
         String start = ok(client().execute(
                 "artest mission start-ore 0 " + rocketId + " " + duration + " " + drillingPower));
         assertFalse("start-ore must not error: " + start, start.contains("\"error\""));
-        Matcher mm = MISSION_ID.matcher(start);
-        assertTrue("missing missionId in start response: " + start, mm.find());
-        return Long.parseLong(mm.group(1));
+        Reply mmReply = Reply.of(start);
+        assertTrue("missing missionId in start response: " + start, mmReply.has(MISSION_ID));
+        return Long.parseLong(mmReply.text(MISSION_ID));
     }
 
     /** Whether drillingPower is zero or not, the mission UNCONDITIONALLY
@@ -110,9 +108,9 @@ public class MissionOreCompletionTest extends AbstractSharedServerTest {
         // respawn-coords search returning multiple rockets if a prior
         // test in the same JVM placed one nearby (different Z origin
         // 700 keeps them apart but allow ≤ 2 for safety).
-        Matcher m = Pattern.compile("\"itemEntries\":(\\d+)").matcher(cargo);
-        assertTrue("itemEntries field missing in cargo: " + cargo, m.find());
-        int entries = Integer.parseInt(m.group(1));
+        Reply mReply = Reply.of(cargo);
+        assertTrue("itemEntries field missing in cargo: " + cargo, mReply.has("itemEntries"));
+        int entries = mReply.integer("itemEntries");
         assertTrue("drillingPower=0 -> only the refill chip (≤ 2 entries to allow "
                         + "a duplicate from a sibling test rocket); got " + entries
                         + "; resp=" + cargo,

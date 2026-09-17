@@ -1,5 +1,7 @@
 package zmaster587.advancedRocketry.test.server;
 
+import zmaster587.advancedRocketry.test.RocketList;
+import zmaster587.advancedRocketry.test.Reply;
 import org.junit.Test;
 
 import java.util.regex.Matcher;
@@ -38,11 +40,10 @@ import static org.junit.Assert.assertTrue;
  */
 public class MissionLifecyclePyramidTest extends AbstractSharedServerTest {
 
-    private static final Pattern BUILDER_POS =
-            Pattern.compile("\"builderPos\":\\[(-?\\d+),(-?\\d+),(-?\\d+)]");
-    private static final Pattern ROCKET_LIST_ID = Pattern.compile("\"id\":(-?\\d+)");
-    private static final Pattern MISSION_ID = Pattern.compile("\"missionId\":(-?\\d+)");
-    private static final Pattern PROGRESS = Pattern.compile("\"progress\":(-?\\d+\\.?\\d*(?:[eE]-?\\d+)?)");
+    private static final String BUILDER_POS = "builderPos";
+    private static final String ROCKET_LIST_ID = "id";
+    private static final String MISSION_ID = "missionId";
+    private static final String PROGRESS = "progress";
 
     private static String ok(java.util.List<String> resp) {
         return String.join("\n", resp);
@@ -60,33 +61,32 @@ public class MissionLifecyclePyramidTest extends AbstractSharedServerTest {
                 "the craft is built and flown in this volume");
         String fixture = ok(client().execute(
                 "artest fixture rocket 0 " + baseX + " " + baseY + " " + baseZ + " simple"));
-        Matcher bp = BUILDER_POS.matcher(fixture);
-        assertTrue("fixture missing builderPos: " + fixture, bp.find());
-        int bx = Integer.parseInt(bp.group(1));
-        int by = Integer.parseInt(bp.group(2));
-        int bz = Integer.parseInt(bp.group(3));
+        int[] bp = Reply.of(fixture).blockPos(BUILDER_POS);
+        assertTrue("fixture missing builderPos: " + fixture, bp != null);
+        int bx = bp[0];
+        int by = bp[1];
+        int bz = bp[2];
         ok(client().execute("artest rocket assemble 0 " + bx + " " + by + " " + bz));
 
         String list = ok(client().execute("artest rocket list 0"));
-        Matcher rim = ROCKET_LIST_ID.matcher(list);
-        int lastId = -1;
-        while (rim.find()) lastId = Integer.parseInt(rim.group(1));
-        assertTrue("no rocket after assemble: " + list, lastId >= 0);
+        java.util.List<RocketList.Entry> built = RocketList.of(list);
+        assertTrue("no rocket after assemble: " + list, !built.isEmpty());
+        int lastId = built.isEmpty() ? -1 : built.get(built.size() - 1).id;
 
         String start = ok(client().execute(
                 "artest mission start-gas 0 " + lastId + " " + duration + " water"));
         assertFalse("start-gas must not error: " + start, start.contains("\"error\""));
-        Matcher mm = MISSION_ID.matcher(start);
-        assertTrue("missing missionId in start response: " + start, mm.find());
-        return Long.parseLong(mm.group(1));
+        Reply mmReply = Reply.of(start);
+        assertTrue("missing missionId in start response: " + start, mmReply.has(MISSION_ID));
+        return Long.parseLong(mmReply.text(MISSION_ID));
     }
 
     private double progressFromAdvance(long missionId, long ticks) throws Exception {
         String r = ok(client().execute("artest mission advance " + missionId + " " + ticks));
         assertFalse("advance must not error: " + r, r.contains("\"error\""));
-        Matcher pm = PROGRESS.matcher(r);
-        assertTrue("missing progress in advance response: " + r, pm.find());
-        return Double.parseDouble(pm.group(1));
+        Reply pmReply = Reply.of(r);
+        assertTrue("missing progress in advance response: " + r, pmReply.has(PROGRESS));
+        return Double.parseDouble(pmReply.text(PROGRESS));
     }
 
     /** Progress fraction matches the (now - start) / duration ratio at

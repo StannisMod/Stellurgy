@@ -5,6 +5,7 @@ import org.junit.Test;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import zmaster587.advancedRocketry.test.Reply;
 import zmaster587.advancedRocketry.test.FixtureSite;
 
 import static org.junit.Assert.assertNotNull;
@@ -155,18 +156,25 @@ public class AimAndArrivalShareOneClockE2ETest extends AbstractSharedServerTest 
     /** The dimension id of the first MOON in the overworld body's own cell, or {@link Integer#MIN_VALUE}. */
     private int findAMoon() throws Exception {
         String home = exec("artest space cell-info 0 0 0 0");
-        Matcher cell = Pattern.compile("\"dimCell\":\"([^\"]+)\"").matcher(home);
-        if (!cell.find()) {
+        String dimCell = Reply.of("artest space cell-info", home).text("dimCell");
+        if (dimCell == null) {
             return Integer.MIN_VALUE;
         }
-        String[] sectors = cell.group(1).split("_");
+        String[] sectors = dimCell.split("_");
         if (sectors.length != 3) {
             return Integer.MIN_VALUE;
         }
         String bodies = exec("artest space cell-info " + sectors[0] + " " + sectors[1] + " "
                 + sectors[2] + " 0");
-        Matcher moon = Pattern.compile("\\{\"dim\":(-?\\d+),\"kind\":\"MOON\"").matcher(bodies);
-        return moon.find() ? Integer.parseInt(moon.group(1)) : Integer.MIN_VALUE;
+        // Each body as its own object. The regex this replaces matched `dim` and `kind` in one
+        // expression, so it held only while the two stayed adjacent and in that order.
+        for (String body : Reply.of("artest space cell-info", bodies).objectArray("bodies")) {
+            Reply one = Reply.of(body);
+            if ("MOON".equals(one.text("kind"))) {
+                return one.integer("dim");
+            }
+        }
+        return Integer.MIN_VALUE;
     }
 
     /**
@@ -178,11 +186,10 @@ public class AimAndArrivalShareOneClockE2ETest extends AbstractSharedServerTest 
      * moves — and this is the field that says so.</p>
      */
     private static long[] targetAbs(String status) {
-        Matcher m = Pattern.compile("\"targetAbs\":\\[(-?\\d+),(-?\\d+),(-?\\d+)\\]").matcher(status);
+        int[] aim = Reply.of("artest nav status", status).blockPos("targetAbs");
         assertTrue("the console reports no resolved aim, so there is nothing to measure: " + status,
-                m.find());
-        return new long[]{Long.parseLong(m.group(1)), Long.parseLong(m.group(2)),
-                Long.parseLong(m.group(3))};
+                aim != null);
+        return new long[]{aim[0], aim[1], aim[2]};
     }
 
     private static double distance(long[] a, long[] b) {
@@ -195,8 +202,7 @@ public class AimAndArrivalShareOneClockE2ETest extends AbstractSharedServerTest 
     }
 
     private static long jsonLong(String json, String field) {
-        Matcher m = Pattern.compile("\"" + Pattern.quote(field) + "\":(-?\\d+)").matcher(json);
-        assertTrue("probe response carries no numeric \"" + field + "\": " + json, m.find());
-        return Long.parseLong(m.group(1));
+        assertTrue("probe response carries no numeric \"" + field + "\": " + json, Reply.of(json).has(field));
+        return Reply.of(json).integer(field);
     }
 }

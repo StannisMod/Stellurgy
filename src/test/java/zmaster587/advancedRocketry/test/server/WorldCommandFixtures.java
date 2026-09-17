@@ -1,5 +1,6 @@
 package zmaster587.advancedRocketry.test.server;
 
+import zmaster587.advancedRocketry.test.Reply;
 import zmaster587.advancedRocketry.test.GameTicks;
 
 import java.util.List;
@@ -22,11 +23,6 @@ import java.util.regex.Pattern;
  * <p>Package-private — only the {@code /ar} test classes need it.</p>
  */
 final class WorldCommandFixtures {
-
-    private static final Pattern INT_FIELD =
-            Pattern.compile("\"%s\":(-?\\d+)");
-    private static final Pattern FLOAT_FIELD =
-            Pattern.compile("\"%s\":(-?\\d+(?:\\.\\d+)?(?:[eE][+-]?\\d+)?)");
 
     private WorldCommandFixtures() {}
 
@@ -109,12 +105,12 @@ final class WorldCommandFixtures {
     /** Read an integer field out of {@code /artest planet info <dim>}
      *  JSON. Asserts the field is present (matcher must find). */
     static int planetIntField(int dim, String field) throws Exception {
-        return Integer.parseInt(matchOrThrow(planetInfo(dim), field, INT_FIELD));
+        return Integer.parseInt(matchOrThrow(planetInfo(dim), field));
     }
 
     /** Read a float/double field out of {@code /artest planet info <dim>}. */
     static double planetFloatField(int dim, String field) throws Exception {
-        return Double.parseDouble(matchOrThrow(planetInfo(dim), field, FLOAT_FIELD));
+        return Double.parseDouble(matchOrThrow(planetInfo(dim), field));
     }
 
     /** True iff AR's planet registry knows the given dim, observed via
@@ -134,14 +130,20 @@ final class WorldCommandFixtures {
         return exec("artest planet info " + dim);
     }
 
-    private static String matchOrThrow(String src, String field, Pattern template) {
-        Pattern p = Pattern.compile(String.format(template.pattern(),
-                Pattern.quote(field)));
-        Matcher m = p.matcher(src);
-        if (!m.find()) {
+    /**
+     * One field of a planet-info reply, as text.
+     *
+     * <p>It used to build a regex out of a TEMPLATE — {@code "\"%s\":(-?\\d+)"} with the field name
+     * formatted into it — one template per Java type, so the reader's answer depended on which
+     * template the caller picked as well as on what the probe wrote. A field read by name needs
+     * neither.</p>
+     */
+    private static String matchOrThrow(String src, String field) {
+        String value = Reply.of("artest planet info", src).text(field);
+        if (value == null) {
             throw new AssertionError("field \"" + field + "\" not found in: " + src);
         }
-        return m.group(1);
+        return value;
     }
 
     /** First line that contains the substring, or {@code null}. Useful

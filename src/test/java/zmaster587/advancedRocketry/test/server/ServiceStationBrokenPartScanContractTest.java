@@ -1,5 +1,6 @@
 package zmaster587.advancedRocketry.test.server;
 
+import zmaster587.advancedRocketry.test.Reply;
 import org.junit.Test;
 
 import java.util.regex.Matcher;
@@ -61,15 +62,12 @@ import static zmaster587.advancedRocketry.test.server.WorldCommandFixtures.exec;
  */
 public class ServiceStationBrokenPartScanContractTest extends AbstractSharedServerTest {
 
-    private static final Pattern BUILDER_POS =
-            Pattern.compile("\"builderPos\":\\[(-?\\d+),(-?\\d+),(-?\\d+)]");
-    private static final Pattern ENTITY_ID = Pattern.compile("\"entityId\":(-?\\d+)");
-    private static final Pattern PART_POS =
-            Pattern.compile("\"partPos\":\\[(-?\\d+),(-?\\d+),(-?\\d+)]");
-    private static final Pattern PARTS_COUNT = Pattern.compile("\"partsToRepairCount\":(-?\\d+)");
-    private static final Pattern INITIAL_COUNT =
-            Pattern.compile("\"initialPartToRepairCount\":(-?\\d+)");
-    private static final Pattern STAGE = Pattern.compile("\"stage\":(-?\\d+)");
+    private static final String BUILDER_POS = "builderPos";
+    private static final String ENTITY_ID = "entityId";
+    private static final String PART_POS = "partPos";
+    private static final String PARTS_COUNT = "partsToRepairCount";
+    private static final String INITIAL_COUNT = "initialPartToRepairCount";
+    private static final String STAGE = "stage";
 
     // Isolation lanes — keep each test on its own block of coordinates so
     // parallel-fork chunk shuffling can't cross-contaminate.
@@ -90,8 +88,8 @@ public class ServiceStationBrokenPartScanContractTest extends AbstractSharedServ
         assertTrue("inject must succeed for advRocketmotor (simple variant has 2): "
                         + inject, inject.contains("\"ok\":true"));
         assertEquals("inject must report stage=5", 5, extract(inject, STAGE));
-        Matcher pp = PART_POS.matcher(inject);
-        assertTrue("inject must report partPos: " + inject, pp.find());
+        int[] pp = Reply.of(inject).blockPos(PART_POS);
+        assertTrue("inject must report partPos: " + inject, pp != null);
 
         // Place + link AFTER injection so updateRepairList() picks it up.
         int sx = CX_SINGLE + 10, sy = CY_PAD, sz = CZ_PAD;
@@ -185,16 +183,16 @@ public class ServiceStationBrokenPartScanContractTest extends AbstractSharedServ
                 + " " + CZ_PAD + " simple");
         assertTrue("rocket fixture must build: " + fixture,
                 fixture.contains("\"ok\":true"));
-        Matcher bp = BUILDER_POS.matcher(fixture);
-        assertTrue("fixture missing builderPos: " + fixture, bp.find());
+        int[] bp = Reply.of(fixture).blockPos(BUILDER_POS);
+        assertTrue("fixture missing builderPos: " + fixture, bp != null);
 
-        String assemble = exec("artest rocket assemble 0 " + bp.group(1) + " "
-                + bp.group(2) + " " + bp.group(3));
+        String assemble = exec("artest rocket assemble 0 " + bp[0] + " "
+                + bp[1] + " " + bp[2]);
         assertTrue("assemble must succeed: " + assemble,
                 assemble.contains("\"ok\":true"));
-        Matcher eim = ENTITY_ID.matcher(assemble);
-        assertTrue("no entityId in assemble: " + assemble, eim.find());
-        return new RocketFixture(Integer.parseInt(eim.group(1)));
+        Reply eimReply = Reply.of(assemble);
+        assertTrue("no entityId in assemble: " + assemble, eimReply.has(ENTITY_ID));
+        return new RocketFixture(Integer.parseInt(eimReply.text(ENTITY_ID)));
     }
 
     private void placeServiceStation(int sx, int sy, int sz) throws Exception {
@@ -211,9 +209,9 @@ public class ServiceStationBrokenPartScanContractTest extends AbstractSharedServ
                 link.contains("\"ok\":true"));
     }
 
-    private static int extract(String src, Pattern pattern) {
-        Matcher m = pattern.matcher(src);
-        assertTrue("pattern not found in: " + src, m.find());
-        return Integer.parseInt(m.group(1));
+    private static int extract(String src, String field) {
+        Reply reply = Reply.of(src);
+        assertTrue("field `" + field + "` not found in: " + src, reply.has(field));
+        return reply.integer(field);
     }
 }

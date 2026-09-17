@@ -1,5 +1,6 @@
 package zmaster587.advancedRocketry.test.server;
 
+import zmaster587.advancedRocketry.test.Reply;
 import org.junit.Test;
 
 import java.util.regex.Matcher;
@@ -44,8 +45,7 @@ public class PlanetAnalyserResearchContractTest extends AbstractSharedServerTest
     private static final int CY = FixtureSite.OPEN_AIR_Y;
     private static final int CZ = 6200;
 
-    private static final Pattern COMPOSITION_PAT =
-            Pattern.compile("\"composition\":(\\d+)");
+    private static final String COMPOSITION_PAT = "composition";
 
     /**
      * assembled analyser increments the chip's COMPOSITION
@@ -140,9 +140,9 @@ public class PlanetAnalyserResearchContractTest extends AbstractSharedServerTest
         return String.join("\n", client().execute(cmd));
     }
 
-    private static int extract(String src, Pattern pattern) {
-        Matcher m = pattern.matcher(src);
-        assertTrue("pattern not found in: " + src, m.find());
-        return Integer.parseInt(m.group(1));
+    private static int extract(String src, String field) {
+        Reply reply = Reply.of(src);
+        assertTrue("field `" + field + "` not found in: " + src, reply.has(field));
+        return reply.integer(field);
     }
 }

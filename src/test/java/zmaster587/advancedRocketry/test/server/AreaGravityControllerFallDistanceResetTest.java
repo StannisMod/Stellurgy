@@ -1,5 +1,6 @@
 package zmaster587.advancedRocketry.test.server;
 
+import zmaster587.advancedRocketry.test.Reply;
 import org.junit.Test;
 
 import java.util.regex.Matcher;
@@ -49,8 +50,7 @@ public class AreaGravityControllerFallDistanceResetTest extends AbstractSharedSe
     private static final int CY = FixtureSite.OPEN_AIR_Y;
     private static final int CZ = 5560;
 
-    private static final Pattern FALL_DIST =
-            Pattern.compile("\"fallDistance\":(-?[0-9.eE+-]+)");
+    private static final String FALL_DIST = "fallDistance";
 
     @Test
     public void controllerResetsFallDistanceInsideRadiusOnly() throws Exception {
@@ -110,9 +110,9 @@ public class AreaGravityControllerFallDistanceResetTest extends AbstractSharedSe
         String resp = exec("artest entity spawn 0 " + x + " " + y + " " + z
                 + " minecraft:armor_stand");
         assertTrue("entity spawn must succeed: " + resp, resp.contains("\"ok\":true"));
-        Matcher m = Pattern.compile("\"entityId\":(-?\\d+)").matcher(resp);
-        assertTrue("spawn must report entityId: " + resp, m.find());
-        int id = Integer.parseInt(m.group(1));
+        Reply mReply = Reply.of(resp);
+        assertTrue("spawn must report entityId: " + resp, mReply.has("entityId"));
+        int id = mReply.integer("entityId");
         // Pin it in mid-air so neither falling nor landing mutates fallDistance.
         ok("artest entity set-no-gravity 0 " + id + " true");
         return id;
@@ -120,9 +120,9 @@ public class AreaGravityControllerFallDistanceResetTest extends AbstractSharedSe
 
     private double readFallDistance(int id) throws Exception {
         String resp = exec("artest entity info 0 " + id);
-        Matcher m = FALL_DIST.matcher(resp);
-        assertTrue("entity info must include fallDistance: " + resp, m.find());
-        return Double.parseDouble(m.group(1));
+        Reply mReply = Reply.of(resp);
+        assertTrue("entity info must include fallDistance: " + resp, mReply.has(FALL_DIST));
+        return Double.parseDouble(mReply.text(FALL_DIST));
     }
 
     private String exec(String cmd) throws Exception {

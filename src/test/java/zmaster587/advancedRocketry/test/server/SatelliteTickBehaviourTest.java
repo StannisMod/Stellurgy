@@ -1,5 +1,6 @@
 package zmaster587.advancedRocketry.test.server;
 
+import zmaster587.advancedRocketry.test.Reply;
 import org.junit.Test;
 
 import java.util.regex.Matcher;
@@ -35,13 +36,13 @@ import static org.junit.Assert.assertTrue;
  */
 public class SatelliteTickBehaviourTest extends AbstractSharedServerTest {
 
-    private static final Pattern ID = Pattern.compile("\"id\":(\\d+)");
-    private static final Pattern PRE_STORED = Pattern.compile("\"preStored\":(-?\\d+)");
-    private static final Pattern POST_STORED = Pattern.compile("\"postStored\":(-?\\d+)");
-    private static final Pattern PRE_DATA = Pattern.compile("\"preData\":(-?\\d+)");
-    private static final Pattern POST_DATA = Pattern.compile("\"postData\":(-?\\d+)");
-    private static final Pattern BATT_MAX = Pattern.compile("\"max\":(-?\\d+)");
-    private static final Pattern MAX_DATA = Pattern.compile("\"maxData\":(-?\\d+)");
+    private static final String ID = "id";
+    private static final String PRE_STORED = "preStored";
+    private static final String POST_STORED = "postStored";
+    private static final String PRE_DATA = "preData";
+    private static final String POST_DATA = "postData";
+    private static final String BATT_MAX = "max";
+    private static final String MAX_DATA = "maxData";
 
     /** Pin: a pure SatelliteBase satellite (oreScanner has no
      *  tickEntity override) accrues energy at approximately {@code powerGen}
@@ -156,14 +157,14 @@ public class SatelliteTickBehaviourTest extends AbstractSharedServerTest {
                         + powerStorage + " " + maxData));
         assertTrue("satellite create (" + type + ") failed: " + resp,
                 resp.contains("\"ok\":true"));
-        Matcher m = ID.matcher(resp);
-        assertTrue("could not extract id from create response: " + resp, m.find());
-        return Long.parseLong(m.group(1));
+        Reply mReply = Reply.of(resp);
+        assertTrue("could not extract id from create response: " + resp, mReply.has(ID));
+        return Long.parseLong(mReply.text(ID));
     }
 
-    private long longField(Pattern p, String src, String name) {
-        Matcher m = p.matcher(src);
-        assertTrue("field " + name + " missing in: " + src, m.find());
-        return Long.parseLong(m.group(1));
+    private long longField(String field, String src, String name) {
+        Reply reply = Reply.of(src);
+        assertTrue("field " + name + " missing in: " + src, reply.has(field));
+        return (long) reply.integer(field);
     }
 }

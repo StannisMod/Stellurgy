@@ -1,6 +1,8 @@
 package zmaster587.advancedRocketry.test.server;
 
 // migrated to AbstractSharedServerTest
+import zmaster587.advancedRocketry.test.RocketList;
+import zmaster587.advancedRocketry.test.Reply;
 import org.junit.Test;
 
 import java.util.regex.Matcher;
@@ -28,9 +30,9 @@ import static org.junit.Assert.assertTrue;
  */
 public class RocketAssemblySmokeTest extends AbstractSharedServerTest {
 
-    private static final Pattern BUILDER_POS = Pattern.compile("\"builderPos\":\\[(-?\\d+),(-?\\d+),(-?\\d+)]");
-    private static final Pattern ROCKET_LIST_ID = Pattern.compile("\"id\":(-?\\d+)");
-    private static final Pattern STATUS = Pattern.compile("\"status\":\"([A-Z_]+)\"");
+    private static final String BUILDER_POS = "builderPos";
+    private static final String ROCKET_LIST_ID = "id";
+    private static final String STATUS = "status";
 
     @Test
     public void fixtureRocketAssemblesToLiveEntity() throws Exception {
@@ -51,10 +53,10 @@ public class RocketAssemblySmokeTest extends AbstractSharedServerTest {
     public void rocketStorageChunkMatchesScanFootprint() throws Exception {
         int entityId = buildAndAssemble(FixtureSite.openAir(0, 540, 500), "simple");
         String info = String.join("\n", client().execute("artest rocket info " + entityId));
-        int sx = extractInt(info, "\"storageSizeX\":(-?\\d+)");
-        int sy = extractInt(info, "\"storageSizeY\":(-?\\d+)");
-        int sz = extractInt(info, "\"storageSizeZ\":(-?\\d+)");
-        int volume = extractInt(info, "\"storageChunkSize\":(-?\\d+)");
+        int sx = extractInt(info, "storageSizeX");
+        int sy = extractInt(info, "storageSizeY");
+        int sz = extractInt(info, "storageSizeZ");
+        int volume = extractInt(info, "storageChunkSize");
         assertTrue("storage size axes must all be positive: " + info,
                 sx > 0 && sy > 0 && sz > 0);
         assertEquals("storageChunkSize must equal sx*sy*sz", sx * sy * sz, volume);
@@ -76,20 +78,21 @@ public class RocketAssemblySmokeTest extends AbstractSharedServerTest {
     public void statsRocketIsCalculatedFromComponents() throws Exception {
         int entityId = buildAndAssemble(FixtureSite.openAir(0, 580, 500), "simple");
         String info = String.join("\n", client().execute("artest rocket info " + entityId));
-        int thrust = extractInt(info, "\"thrust\":(-?\\d+)");
+        int thrust = extractInt(info, "thrust");
         assertTrue("thrust must be positive after assembling with 2 engines: " + info, thrust > 0);
         // Weight is serialised as a float; match a generous regex.
-        Matcher wm = Pattern.compile("\"weight_no_fuel\":(\\d+(?:\\.\\d+)?)").matcher(info);
-        assertTrue("weight_no_fuel field missing: " + info, wm.find());
-        double weight = Double.parseDouble(wm.group(1));
+        Reply wmReply = Reply.of(info);
+        assertTrue("weight_no_fuel field missing: " + info, wmReply.has("weight_no_fuel"));
+        double weight = wmReply.number("weight_no_fuel");
         assertTrue("weight_no_fuel must be > 0 with 6 tanks + 2 engines + guidance: " + info,
                 weight > 0);
-        // At least one fuel type must have non-zero capacity (6 fuel tanks).
-        // jsonMap serialises nested maps via Map.toString() (capacity=N) rather
-        // than nested JSON ("capacity":N), so accept both spellings.
-        Matcher cm = Pattern.compile("capacity[=:](\\d+)").matcher(info);
+        // At least one fuel type must have non-zero capacity (6 fuel tanks). The fuel types are the
+        // registry's, so they are asked for as "every entry" rather than by name.
         long totalCap = 0;
-        while (cm.find()) totalCap += Long.parseLong(cm.group(1));
+        for (String perType : wmReply.objectValues("fuel")) {
+            totalCap += (long) Reply.of("artest rocket info fuel entry", perType)
+                    .numberOr("capacity", 0);
+        }
         assertTrue("aggregate fuel capacity across types must be > 0: " + info, totalCap > 0);
     }
 
@@ -102,7 +105,7 @@ public class RocketAssemblySmokeTest extends AbstractSharedServerTest {
         int entityId = buildAndAssemble(FixtureSite.openAir(0, 620, 500), "simple");
         String info = String.join("\n", client().execute("artest rocket info " + entityId));
         assertEquals("simple fixture must produce a 1-seat rocket: " + info,
-                1, extractInt(info, "\"seatCount\":(-?\\d+)"));
+                1, extractInt(info, "seatCount"));
     }
 
     /**
@@ -114,7 +117,7 @@ public class RocketAssemblySmokeTest extends AbstractSharedServerTest {
         int entityId = buildAndAssemble(FixtureSite.openAir(0, 660, 500), "simple");
         String info = String.join("\n", client().execute("artest rocket info " + entityId));
         assertEquals("simple fixture has 2 engines: " + info,
-                2, extractInt(info, "\"engineCount\":(-?\\d+)"));
+                2, extractInt(info, "engineCount"));
     }
 
     /**
@@ -126,7 +129,7 @@ public class RocketAssemblySmokeTest extends AbstractSharedServerTest {
         int entityId = buildAndAssemble(FixtureSite.openAir(0, 700, 500), "simple");
         String info = String.join("\n", client().execute("artest rocket info " + entityId));
         assertEquals("simple fixture has 6 fuel tanks: " + info,
-                6, extractInt(info, "\"fuelTankCount\":(-?\\d+)"));
+                6, extractInt(info, "fuelTankCount"));
     }
 
     /**
@@ -166,19 +169,19 @@ public class RocketAssemblySmokeTest extends AbstractSharedServerTest {
         String fixture = String.join("\n", client().execute(
                 "artest fixture rocket 0 " + baseX + " " + baseY + " " + baseZ + " invalid-no-engine"));
         assertTrue("invalid-no-engine fixture failed: " + fixture, fixture.contains("\"ok\":true"));
-        Matcher bp = BUILDER_POS.matcher(fixture);
-        assertTrue("invalid fixture missing builderPos: " + fixture, bp.find());
-        int bx = Integer.parseInt(bp.group(1)),
-                by = Integer.parseInt(bp.group(2)),
-                bz = Integer.parseInt(bp.group(3));
+        int[] bp = Reply.of(fixture).blockPos(BUILDER_POS);
+        assertTrue("invalid fixture missing builderPos: " + fixture, bp != null);
+        int bx = bp[0],
+                by = bp[1],
+                bz = bp[2];
 
         String assemble = String.join("\n", client().execute(
                 "artest rocket assemble 0 " + bx + " " + by + " " + bz));
         assertTrue("assemble of engineless rocket must fail: " + assemble,
                 assemble.contains("\"error\""));
-        Matcher sm = STATUS.matcher(assemble);
-        assertTrue("error response must surface scan status name: " + assemble, sm.find());
-        String status = sm.group(1);
+        Reply smReply = Reply.of(assemble);
+        assertTrue("error response must surface scan status name: " + assemble, smReply.has(STATUS));
+        String status = smReply.text(STATUS);
         assertTrue("status for engineless rocket must indicate missing thrust "
                         + "(NOENGINES expected, got " + status + "): " + assemble,
                 "NOENGINES".equals(status) || "INVALIDBLOCK".equals(status));
@@ -200,12 +203,12 @@ public class RocketAssemblySmokeTest extends AbstractSharedServerTest {
         int entityId = buildAndAssemble(FixtureSite.openAir(0, 820, 500), "invalid-no-seat");
         String info = String.join("\n", client().execute("artest rocket info " + entityId));
         assertEquals("seatless fixture must report 0 seats: " + info,
-                0, extractInt(info, "\"seatCount\":(-?\\d+)"));
+                0, extractInt(info, "seatCount"));
         // The rocket must still have engines + tanks + guidance.
         assertEquals("engines unchanged: " + info,
-                2, extractInt(info, "\"engineCount\":(-?\\d+)"));
+                2, extractInt(info, "engineCount"));
         assertEquals("fuel tanks unchanged: " + info,
-                6, extractInt(info, "\"fuelTankCount\":(-?\\d+)"));
+                6, extractInt(info, "fuelTankCount"));
         assertTrue("guidance still present: " + info,
                 info.contains("\"guidanceComputerPresent\":true"));
     }
@@ -238,11 +241,11 @@ public class RocketAssemblySmokeTest extends AbstractSharedServerTest {
         String fixture = String.join("\n", client().execute(
                 "artest fixture rocket 0 " + baseX + " " + baseY + " " + baseZ + " " + variant));
         assertTrue("fixture (" + variant + ") failed: " + fixture, fixture.contains("\"ok\":true"));
-        Matcher bp = BUILDER_POS.matcher(fixture);
-        assertTrue("fixture (" + variant + ") missing builderPos: " + fixture, bp.find());
-        int bx = Integer.parseInt(bp.group(1)),
-                by = Integer.parseInt(bp.group(2)),
-                bz = Integer.parseInt(bp.group(3));
+        int[] bp = Reply.of(fixture).blockPos(BUILDER_POS);
+        assertTrue("fixture (" + variant + ") missing builderPos: " + fixture, bp != null);
+        int bx = bp[0],
+                by = bp[1],
+                bz = bp[2];
 
         String assemble = String.join("\n", client().execute(
                 "artest rocket assemble 0 " + bx + " " + by + " " + bz));
@@ -253,15 +256,13 @@ public class RocketAssemblySmokeTest extends AbstractSharedServerTest {
         // Pick the last id reported — rocket list grows as fixtures stack up
         // in the same JVM, so the most recently spawned rocket sits at the
         // end of the rocket array.
-        Matcher rim = ROCKET_LIST_ID.matcher(rocketList);
-        int lastId = -1;
-        while (rim.find()) lastId = Integer.parseInt(rim.group(1));
-        assertTrue("rocket list yielded no ids after assemble: " + rocketList, lastId >= 0);
+        java.util.List<RocketList.Entry> built = RocketList.of(rocketList);
+        assertTrue("rocket list yielded no ids after assemble: " + rocketList, !built.isEmpty());
+        int lastId = built.isEmpty() ? -1 : built.get(built.size() - 1).id;
         return lastId;
     }
 
-    private static int extractInt(String haystack, String regex) {
-        Matcher m = Pattern.compile(regex).matcher(haystack);
-        return m.find() ? Integer.parseInt(m.group(1)) : -1;
+    private static int extractInt(String haystack, String field) {
+        return Reply.of(haystack).integerOr(field, -1);
     }
 }

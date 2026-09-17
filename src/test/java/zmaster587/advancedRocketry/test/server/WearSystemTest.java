@@ -1,5 +1,7 @@
 package zmaster587.advancedRocketry.test.server;
 
+import zmaster587.advancedRocketry.test.RocketList;
+import zmaster587.advancedRocketry.test.Reply;
 import org.junit.Test;
 
 import java.util.regex.Matcher;
@@ -25,8 +27,7 @@ import static org.junit.Assert.assertTrue;
  */
 public class WearSystemTest extends AbstractSharedServerTest {
 
-    private static final Pattern BUILDER_POS = Pattern.compile("\"builderPos\":\\[(-?\\d+),(-?\\d+),(-?\\d+)]");
-    private static final Pattern ROCKET_LIST_ID = Pattern.compile("\"id\":(-?\\d+)");
+    private static final String BUILDER_POS = "builderPos";
 
     /**
      * FIRST link: the volume this craft is built in is EMPTY, and a failure names what was in it.
@@ -47,9 +48,9 @@ public class WearSystemTest extends AbstractSharedServerTest {
         String fixture = String.join("\n", client().execute(
                 "artest fixture rocket 0 " + baseX + " " + baseY + " " + baseZ + " simple"));
         assertTrue("fixture build failed: " + fixture, fixture.contains("\"ok\":true"));
-        Matcher bp = BUILDER_POS.matcher(fixture);
-        assertTrue("no builderPos: " + fixture, bp.find());
-        return new int[]{Integer.parseInt(bp.group(1)), Integer.parseInt(bp.group(2)), Integer.parseInt(bp.group(3))};
+        int[] bp = Reply.of(fixture).blockPos(BUILDER_POS);
+        assertTrue("no builderPos: " + fixture, bp != null);
+        return new int[]{bp[0], bp[1], bp[2]};
     }
 
     private int assembleAndGetId(int[] builderPos) throws Exception {
@@ -57,18 +58,16 @@ public class WearSystemTest extends AbstractSharedServerTest {
                 "artest rocket assemble 0 " + builderPos[0] + " " + builderPos[1] + " " + builderPos[2]));
         assertTrue("assemble failed: " + assemble, assemble.contains("\"ok\":true"));
         String list = String.join("\n", client().execute("artest rocket list 0"));
-        Matcher m = ROCKET_LIST_ID.matcher(list);
-        int id = -1;
-        while (m.find()) id = Integer.parseInt(m.group(1));
-        assertTrue("no rocket id after assemble: " + list, id >= 0);
-        return id;
+        java.util.List<RocketList.Entry> built = RocketList.of(list);
+        assertTrue("no rocket id after assemble: " + list, !built.isEmpty());
+        return built.get(built.size() - 1).id;
     }
 
     private int thrustOf(int entityId) throws Exception {
         String info = String.join("\n", client().execute("artest rocket info " + entityId));
-        Matcher m = Pattern.compile("\"thrust\":(-?\\d+)").matcher(info);
-        assertTrue("no thrust in info: " + info, m.find());
-        return Integer.parseInt(m.group(1));
+        Reply mReply = Reply.of(info);
+        assertTrue("no thrust in info: " + info, mReply.has("thrust"));
+        return mReply.integer("thrust");
     }
 
     @Test
@@ -103,16 +102,16 @@ public class WearSystemTest extends AbstractSharedServerTest {
         assertTrue("wear set failed: " + set, set.contains("\"ok\":true"));
 
         String get = String.join("\n", client().execute("artest wear get 0 " + ex + " " + ey + " " + ez));
-        Matcher m = Pattern.compile("\"stage\":(\\d+)").matcher(get);
-        assertTrue("no stage in get: " + get, m.find());
-        assertEquals("wear stage must persist", 7, Integer.parseInt(m.group(1)));
+        Reply mReply = Reply.of(get);
+        assertTrue("no stage in get: " + get, mReply.has("stage"));
+        assertEquals("wear stage must persist", 7, mReply.integer("stage"));
     }
 
     private double breakingProbOf(int entityId) throws Exception {
         String info = String.join("\n", client().execute("artest rocket info " + entityId));
-        Matcher m = Pattern.compile("\"breakingProb\":(-?\\d+(?:\\.\\d+)?(?:[eE][-+]?\\d+)?)").matcher(info);
-        assertTrue("no breakingProb in info: " + info, m.find());
-        return Double.parseDouble(m.group(1));
+        Reply mReply = Reply.of(info);
+        assertTrue("no breakingProb in info: " + info, mReply.has("breakingProb"));
+        return mReply.number("breakingProb");
     }
 
     @Test
@@ -191,10 +190,10 @@ public class WearSystemTest extends AbstractSharedServerTest {
         String status = String.join("\n", client().execute("artest wear rocket-status " + rocketId + " 0.7"));
         assertTrue("rocket-status must find the rocket: " + status, status.contains("\"found\":true"));
 
-        Matcher tanks = Pattern.compile("\"wornTankCount\":(\\d+)").matcher(status);
-        assertTrue("no wornTankCount: " + status, tanks.find());
+        Reply tanksReply = Reply.of(status);
+        assertTrue("no wornTankCount: " + status, tanksReply.has("wornTankCount"));
         assertTrue("a worn fuel tank must be surfaced for the launch gate: " + status,
-                Integer.parseInt(tanks.group(1)) >= 1);
+                tanksReply.integer("wornTankCount") >= 1);
         assertTrue("a critically-worn seat must be detected: " + status,
                 status.contains("\"hasCriticallyWornSeat\":true"));
     }

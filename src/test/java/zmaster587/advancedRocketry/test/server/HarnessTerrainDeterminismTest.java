@@ -1,5 +1,6 @@
 package zmaster587.advancedRocketry.test.server;
 
+import zmaster587.advancedRocketry.test.Reply;
 import com.github.stannismod.forge.testing.junit.AbstractHeadlessServerTest;
 import com.github.stannismod.forge.testing.server.RealDedicatedServerHarness;
 import org.junit.After;
@@ -46,9 +47,9 @@ public class HarnessTerrainDeterminismTest {
             {25, 18},
     };
 
-    private static final Pattern TOP_Y = Pattern.compile("\"topY\":(-?\\d+)");
-    private static final Pattern TOP_BLOCK = Pattern.compile("\"topBlock\":\"([^\"]+)\"");
-    private static final Pattern BIOME = Pattern.compile("\"biome\":\"([^\"]+)\"");
+    private static final String TOP_Y = "topY";
+    private static final String TOP_BLOCK = "topBlock";
+    private static final String BIOME = "biome";
 
     private Path firstDir;
     private Path secondDir;
@@ -103,11 +104,11 @@ public class HarnessTerrainDeterminismTest {
     }
 
     private static String surfaceOf(String resp, int[] chunk) {
-        Matcher y = TOP_Y.matcher(resp);
-        Matcher block = TOP_BLOCK.matcher(resp);
-        Matcher biome = BIOME.matcher(resp);
+        Reply yReply = Reply.of(resp);
+        Reply blockReply = Reply.of(resp);
+        Reply biomeReply = Reply.of(resp);
         assertTrue("sample of chunk [" + chunk[0] + "," + chunk[1] + "] malformed: " + resp,
-                y.find() && block.find() && biome.find());
-        return y.group(1) + "|" + block.group(1) + "|" + biome.group(1);
+                yReply.has(TOP_Y) && blockReply.has(TOP_BLOCK) && biomeReply.has(BIOME));
+        return yReply.text(TOP_Y) + "|" + blockReply.text(TOP_BLOCK) + "|" + biomeReply.text(BIOME);
     }
 }

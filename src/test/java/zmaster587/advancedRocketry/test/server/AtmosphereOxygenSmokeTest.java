@@ -8,7 +8,10 @@ import java.util.regex.Pattern;
 
 import zmaster587.advancedRocketry.test.FixtureSite;
 
+import zmaster587.advancedRocketry.test.Reply;
+
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 
 /**
@@ -46,7 +49,7 @@ public class AtmosphereOxygenSmokeTest extends AbstractHeadlessServerTest {
                 baseline.contains("\"breathable\":true"));
 
         String planet = String.join("\n", client().execute("artest planet info 0"));
-        int originalDensity = extractInt(planet, "\"atmosphereDensity\":(-?\\d+)");
+        int originalDensity = extractInt(planet, "atmosphereDensity");
         assertTrue("could not read Earth atmosphereDensity: " + planet, originalDensity >= 0);
 
         try {
@@ -91,7 +94,7 @@ public class AtmosphereOxygenSmokeTest extends AbstractHeadlessServerTest {
                 "artest atmosphere detector-output 0 " + bx + " " + by + " " + bz));
         assertTrue("pre-tick probe failed: " + pre, pre.contains("\"isDetector\":true"));
         assertEquals("detector should default to AIR mode: " + pre,
-                "air", matchOrFail(Pattern.compile("\"detectorMode\":\"([^\"]+)\""), pre));
+                "air", matchOrFail("detectorMode", pre));
 
         // Drive the sample loop directly via probe — TileAtmosphereDetector.update()
         // is gated by world.getWorldTime() % 10 == 0, which force-tick doesn't
@@ -108,7 +111,7 @@ public class AtmosphereOxygenSmokeTest extends AbstractHeadlessServerTest {
         assertTrue("detector should be POWERED after detecting AIR: " + postAir,
                 postAir.contains("\"powered\":true"));
         assertEquals("strongPower should be 15 when POWERED: " + postAir,
-                "15", matchOrFail(Pattern.compile("\"strongPower\":(\\d+)"), postAir));
+                "15", matchOrFail("strongPower", postAir));
 
         // Re-target detector to vacuum — there's no vacuum near here, so the
         // sample loop should report non-detect and the block should unpower.
@@ -128,7 +131,7 @@ public class AtmosphereOxygenSmokeTest extends AbstractHeadlessServerTest {
         assertTrue("detector should be UNPOWERED when looking for vacuum on Earth: "
                 + postVacuum, postVacuum.contains("\"powered\":false"));
         assertEquals("strongPower should be 0 when UNPOWERED: " + postVacuum,
-                "0", matchOrFail(Pattern.compile("\"strongPower\":(\\d+)"), postVacuum));
+                "0", matchOrFail("strongPower", postVacuum));
     }
 
     /**
@@ -168,8 +171,8 @@ public class AtmosphereOxygenSmokeTest extends AbstractHeadlessServerTest {
                 "artest scrubber consume 0 " + bx + " " + by + " " + bz));
         assertTrue("first consume should succeed: " + firstConsume,
                 firstConsume.contains("\"consumed\":true"));
-        int damageBefore = extractInt(firstConsume, "\"damageBefore\":(-?\\d+)");
-        int damageAfter = extractInt(firstConsume, "\"damageAfter\":(-?\\d+)");
+        int damageBefore = extractInt(firstConsume, "damageBefore");
+        int damageAfter = extractInt(firstConsume, "damageAfter");
         assertEquals("damage must increment by exactly 1 per consume — got "
                 + damageBefore + " -> " + damageAfter,
                 damageBefore + 1, damageAfter);
@@ -177,13 +180,13 @@ public class AtmosphereOxygenSmokeTest extends AbstractHeadlessServerTest {
         // Second consume — same contract, damage 1 -> 2.
         String secondConsume = String.join("\n", client().execute(
                 "artest scrubber consume 0 " + bx + " " + by + " " + bz));
-        int secondAfter = extractInt(secondConsume, "\"damageAfter\":(-?\\d+)");
+        int secondAfter = extractInt(secondConsume, "damageAfter");
         assertEquals("repeated consume must continue to increment by 1",
                 damageAfter + 1, secondAfter);
 
         // Comparator override drops in 2185-damage brackets — verify the
         // probe surfaces a non-negative override for an in-use cartridge.
-        int comp = extractInt(secondConsume, "\"comparatorOverride\":(\\d+)");
+        int comp = extractInt(secondConsume, "comparatorOverride");
         assertTrue("comparator override must be >= 0 when cartridge loaded: " + comp,
                 comp >= 0);
     }
@@ -216,17 +219,17 @@ public class AtmosphereOxygenSmokeTest extends AbstractHeadlessServerTest {
                 "artest fluid inject 0 " + bx + " " + by + " " + bz + " oxygen 4000"));
         assertTrue("oxygen inject into pad failed: " + inject,
                 inject.contains("\"ok\":true"));
-        int injected = extractInt(inject, "\"filled\":(\\d+)");
+        int injected = extractInt(inject, "filled");
         assertTrue("tank should accept some oxygen: " + inject, injected > 0);
 
         String resp = String.join("\n", client().execute(
                 "artest gascharge fill-suit 0 " + bx + " " + by + " " + bz));
         assertTrue("gascharge fill-suit failed: " + resp, resp.contains("\"ok\":true"));
-        int filled = extractInt(resp, "\"filled\":(\\d+)");
-        int airBefore = extractInt(resp, "\"airBefore\":(\\d+)");
-        int airAfter = extractInt(resp, "\"airAfter\":(\\d+)");
-        int tankBefore = extractInt(resp, "\"tankBefore\":(\\d+)");
-        int tankAfter = extractInt(resp, "\"tankAfter\":(\\d+)");
+        int filled = extractInt(resp, "filled");
+        int airBefore = extractInt(resp, "airBefore");
+        int airAfter = extractInt(resp, "airAfter");
+        int tankBefore = extractInt(resp, "tankBefore");
+        int tankAfter = extractInt(resp, "tankAfter");
 
         assertEquals("airBefore must be 0 — probe starts with empty suit", 0, airBefore);
         assertTrue("filled must be > 0 when tank has oxygen and suit is empty: " + resp,
@@ -353,14 +356,13 @@ public class AtmosphereOxygenSmokeTest extends AbstractHeadlessServerTest {
         assertTrue("probe call failed: " + joined, joined.contains("\"ok\":true"));
     }
 
-    private static String matchOrFail(Pattern p, String s) {
-        Matcher m = p.matcher(s);
-        assertTrue("pattern " + p + " did not match in: " + s, m.find());
-        return m.group(1);
+    private static String matchOrFail(String field, String s) {
+        String value = Reply.of(s).text(field);
+        assertNotNull("field `" + field + "` not found in: " + s, value);
+        return value;
     }
 
-    private static int extractInt(String haystack, String regex) {
-        Matcher m = Pattern.compile(regex).matcher(haystack);
-        return m.find() ? Integer.parseInt(m.group(1)) : -1;
+    private static int extractInt(String haystack, String field) {
+        return Reply.of(haystack).integerOr(field, -1);
     }
 }

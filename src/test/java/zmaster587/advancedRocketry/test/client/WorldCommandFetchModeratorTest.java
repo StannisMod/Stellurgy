@@ -10,6 +10,7 @@ import org.junit.Before;
 import org.junit.Test;
 
 import zmaster587.advancedRocketry.test.Events;
+import zmaster587.advancedRocketry.test.Reply;
 
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -57,8 +58,8 @@ public class WorldCommandFetchModeratorTest {
     private static final String BOT1_NAME = "ModBot1";
     private static final String BOT2_NAME = "ModBot2";
 
-    private static final Pattern PLAYER_POS_X = Pattern.compile("\"playerPosX\":(-?\\d+(?:\\.\\d+)?(?:[eE][-+]?\\d+)?)");
-    private static final Pattern PLAYER_POS_Z = Pattern.compile("\"playerPosZ\":(-?\\d+(?:\\.\\d+)?(?:[eE][-+]?\\d+)?)");
+    private static final String PLAYER_POS_X = "playerPosX";
+    private static final String PLAYER_POS_Z = "playerPosZ";
 
     private RealDedicatedServerHarness server;
     private RealClientHarness bot1Harness;
@@ -145,25 +146,6 @@ public class WorldCommandFetchModeratorTest {
     }
 
     /**
-     * Wait for a record of {@code type} that CARRIES {@code needle}, failing with the whole chain
-     * that DID happen.
-     */
-    private String awaitRecordCarrying(Events events, long mark, String type, String needle,
-                                       String what) throws Exception {
-        String reply = "";
-        for (int waited = 0; waited <= LINK_BUDGET_TICKS; waited += 10) {
-            reply = events.since(mark, type);
-            if (Events.countRecords(reply, needle) > 0) {
-                return reply;
-            }
-            bot2Harness.bot().waitTicks(10);
-        }
-        throw new AssertionError(what + " — no `" + type + "` carrying " + needle + " was recorded"
-                + " within " + LINK_BUDGET_TICKS + " ticks. What DID happen since the mark: "
-                + Events.typesOf(events.since(mark)) + " | raw: " + reply);
-    }
-
-    /**
      * How long one link of the fetch may take — a deadline for a discrete event, the same 200 ticks
      * the position poll it replaces was capped at.
      */
@@ -232,10 +214,9 @@ public class WorldCommandFetchModeratorTest {
         // lands; on bot2's own client the server's reposition is APPLIED. The old form re-read
         // bot2's rendered position on a tick budget and reported "got NaN" for a command that was
         // refused, a target the server could not resolve and a slow round trip alike.
-        String placed = awaitRecordCarrying(serverLog, serverMark, "teleporter_placed",
-                "\"who\":\"" + BOT2_NAME + "\"",
+        String placed = serverLog.awaitField(serverMark, "teleporter_placed", "who", BOT2_NAME,
                 "a moderator's /ar fetch must run the transfer on the TARGET: the teleporter places"
-                        + " his body");
+                        + " his body", LINK_BUDGET_TICKS);
         targetLog.await(targetMark, "client_pos_look_applied",
                 "the fetched player's OWN client must apply the move — that is what he sees on"
                         + " screen, and it is the contract this test is named for",
@@ -266,9 +247,9 @@ public class WorldCommandFetchModeratorTest {
                 Math.abs(extractDouble(bot2Post, PLAYER_POS_X) - bot1PreX) < 1.5);
     }
 
-    private static double extractDouble(String src, Pattern pattern) {
-        Matcher m = pattern.matcher(src);
-        assertTrue("pattern not found in: " + src, m.find());
-        return Double.parseDouble(m.group(1));
+    private static double extractDouble(String src, String field) {
+        double value = Reply.of(src).number(field);
+        assertTrue("field `" + field + "` not found in: " + src, !Double.isNaN(value));
+        return value;
     }
 }

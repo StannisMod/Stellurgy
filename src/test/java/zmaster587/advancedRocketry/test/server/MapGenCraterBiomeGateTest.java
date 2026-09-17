@@ -1,5 +1,6 @@
 package zmaster587.advancedRocketry.test.server;
 
+import zmaster587.advancedRocketry.test.Reply;
 import com.github.stannismod.forge.testing.junit.AbstractHeadlessServerTest;
 import org.junit.Assume;
 import org.junit.Test;
@@ -32,8 +33,8 @@ import static org.junit.Assert.assertTrue;
 public class MapGenCraterBiomeGateTest extends AbstractHeadlessServerTest {
 
     private static final int SPACE_DIM = -2;
-    private static final Pattern AR_DIMS = Pattern.compile("\"arDimensions\":\\[([^\\]]*)\\]");
-    private static final Pattern AIR = Pattern.compile("\"airBlocks\":(\\d+)");
+    private static final String AR_DIMS = "arDimensions";
+    private static final String AIR = "airBlocks";
 
     @Test
     public void craterGateRejectsNonCraterBiome() throws Exception {
@@ -65,14 +66,8 @@ public class MapGenCraterBiomeGateTest extends AbstractHeadlessServerTest {
 
     private int firstPlanetDim() throws Exception {
         String list = exec("artest dim list");
-        Matcher m = AR_DIMS.matcher(list);
-        if (m.find()) {
-            for (String s : m.group(1).split(",")) {
-                s = s.trim();
-                if (s.isEmpty()) continue;
-                int d = Integer.parseInt(s);
-                if (d != 0 && d != -1 && d != SPACE_DIM) return d;
-            }
+        for (int d : Reply.of("artest dim list", list).intArray(AR_DIMS)) {
+            if (d != 0 && d != -1 && d != SPACE_DIM) return d;
         }
         return Integer.MIN_VALUE;
     }
@@ -81,9 +76,9 @@ public class MapGenCraterBiomeGateTest extends AbstractHeadlessServerTest {
         return String.join("\n", client().execute(cmd));
     }
 
-    private static int extract(Pattern p, String s) {
-        Matcher m = p.matcher(s);
-        assertTrue("pattern " + p + " not found in: " + s, m.find());
-        return Integer.parseInt(m.group(1));
+    private static int extract(String field, String s) {
+        Reply reply = Reply.of(s);
+        assertTrue("field `" + field + "` not found in: " + s, reply.has(field));
+        return reply.integer(field);
     }
 }

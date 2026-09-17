@@ -1,5 +1,7 @@
 package zmaster587.advancedRocketry.test.server;
 
+import zmaster587.advancedRocketry.test.RocketList;
+import zmaster587.advancedRocketry.test.Reply;
 import org.junit.Test;
 
 import java.util.regex.Matcher;
@@ -63,10 +65,10 @@ import static org.junit.Assert.assertTrue;
  */
 public class NuclearEngineRocketAssemblyTest extends AbstractSharedServerTest {
 
-    private static final Pattern BUILDER_POS = Pattern.compile("\"builderPos\":\\[(-?\\d+),(-?\\d+),(-?\\d+)]");
-    private static final Pattern ROCKET_LIST_ID = Pattern.compile("\"id\":(-?\\d+)");
-    private static final Pattern THRUST = Pattern.compile("\"thrust\":(-?\\d+)");
-    private static final Pattern ENGINE_COUNT = Pattern.compile("\"engineCount\":(-?\\d+)");
+    private static final String BUILDER_POS = "builderPos";
+    private static final String ROCKET_LIST_ID = "id";
+    private static final String THRUST = "thrust";
+    private static final String ENGINE_COUNT = "engineCount";
 
     @Test
     public void nuclearCoreAboveMotorContributesNuclearThrust() throws Exception {
@@ -120,11 +122,11 @@ public class NuclearEngineRocketAssemblyTest extends AbstractSharedServerTest {
         String fixture = String.join("\n", client().execute(
                 "artest fixture rocket 0 " + baseX + " " + baseY + " " + baseZ + " " + variant));
         assertTrue("fixture (" + variant + ") failed: " + fixture, fixture.contains("\"ok\":true"));
-        Matcher bp = BUILDER_POS.matcher(fixture);
-        assertTrue("fixture (" + variant + ") missing builderPos: " + fixture, bp.find());
-        int bx = Integer.parseInt(bp.group(1)),
-                by = Integer.parseInt(bp.group(2)),
-                bz = Integer.parseInt(bp.group(3));
+        int[] bp = Reply.of(fixture).blockPos(BUILDER_POS);
+        assertTrue("fixture (" + variant + ") missing builderPos: " + fixture, bp != null);
+        int bx = bp[0],
+                by = bp[1],
+                bz = bp[2];
         return String.join("\n", client().execute(
                 "artest rocket assemble 0 " + bx + " " + by + " " + bz));
     }
@@ -142,11 +144,11 @@ public class NuclearEngineRocketAssemblyTest extends AbstractSharedServerTest {
         String fixture = String.join("\n", client().execute(
                 "artest fixture rocket 0 " + baseX + " " + baseY + " " + baseZ + " " + variant));
         assertTrue("fixture (" + variant + ") failed: " + fixture, fixture.contains("\"ok\":true"));
-        Matcher bp = BUILDER_POS.matcher(fixture);
-        assertTrue("fixture (" + variant + ") missing builderPos: " + fixture, bp.find());
-        int bx = Integer.parseInt(bp.group(1)),
-                by = Integer.parseInt(bp.group(2)),
-                bz = Integer.parseInt(bp.group(3));
+        int[] bp = Reply.of(fixture).blockPos(BUILDER_POS);
+        assertTrue("fixture (" + variant + ") missing builderPos: " + fixture, bp != null);
+        int bx = bp[0],
+                by = bp[1],
+                bz = bp[2];
 
         String assemble = String.join("\n", client().execute(
                 "artest rocket assemble 0 " + bx + " " + by + " " + bz));
@@ -154,15 +156,13 @@ public class NuclearEngineRocketAssemblyTest extends AbstractSharedServerTest {
                 assemble.contains("\"ok\":true"));
 
         String rocketList = String.join("\n", client().execute("artest rocket list 0"));
-        Matcher rim = ROCKET_LIST_ID.matcher(rocketList);
-        int lastId = -1;
-        while (rim.find()) lastId = Integer.parseInt(rim.group(1));
-        assertTrue("rocket list yielded no ids after assemble: " + rocketList, lastId >= 0);
+        java.util.List<RocketList.Entry> built = RocketList.of(rocketList);
+        assertTrue("rocket list yielded no ids after assemble: " + rocketList, !built.isEmpty());
+        int lastId = built.isEmpty() ? -1 : built.get(built.size() - 1).id;
         return lastId;
     }
 
-    private static int extractInt(String haystack, Pattern pattern) {
-        Matcher m = pattern.matcher(haystack);
-        return m.find() ? Integer.parseInt(m.group(1)) : -1;
+    private static int extractInt(String haystack, String field) {
+        return Reply.of(haystack).integer(field);
     }
 }

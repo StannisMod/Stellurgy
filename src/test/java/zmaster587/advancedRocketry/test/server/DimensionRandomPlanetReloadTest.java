@@ -1,5 +1,6 @@
 package zmaster587.advancedRocketry.test.server;
 
+import zmaster587.advancedRocketry.test.Reply;
 import com.github.stannismod.forge.testing.junit.AbstractHeadlessServerTest;
 import com.github.stannismod.forge.testing.server.RealDedicatedServerHarness;
 import org.junit.After;
@@ -39,7 +40,7 @@ import static zmaster587.advancedRocketry.test.ArrangementFailure.requireArrange
  */
 public class DimensionRandomPlanetReloadTest {
 
-    private static final Pattern AR_DIMS = Pattern.compile("\"arDimensions\":\\[([^\\]]*)]");
+    private static final String AR_DIMS = "arDimensions";
 
     private Path workDir;
     private RealDedicatedServerHarness firstBoot;
@@ -66,19 +67,17 @@ public class DimensionRandomPlanetReloadTest {
 
     private static int arDimCount(RealDedicatedServerHarness h) throws Exception {
         String list = ok(h.client().execute("artest dim list"));
-        Matcher m = AR_DIMS.matcher(list);
-        assertTrue("dim list missing arDimensions: " + list, m.find());
-        String body = m.group(1).trim();
-        if (body.isEmpty()) return 0;
-        return body.split(",").length;
+        Reply listed = Reply.of("artest dim list", list);
+        assertTrue("dim list missing arDimensions: " + list, listed.has(AR_DIMS));
+        return listed.intArray(AR_DIMS).length;
     }
 
     private static Path planetDefsPath(RealDedicatedServerHarness h) throws Exception {
         String save = ok(h.client().execute("artest server save-dimensions"));
         assertTrue("save-dimensions failed: " + save, save.contains("\"xmlExists\":true"));
-        Matcher m = Pattern.compile("\"xmlPath\":\"([^\"]*)\"").matcher(save);
-        assertTrue("save-dimensions missing xmlPath: " + save, m.find());
-        return Paths.get(m.group(1).replace("\\\\", "\\"));
+        String xmlPath = Reply.of("artest server save-dimensions", save).text("xmlPath");
+        assertTrue("save-dimensions missing xmlPath: " + save, xmlPath != null);
+        return Paths.get(xmlPath.replace("\\\\", "\\"));
     }
 
     @Test

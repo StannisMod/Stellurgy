@@ -1,5 +1,6 @@
 package zmaster587.advancedRocketry.test.server;
 
+import zmaster587.advancedRocketry.test.Reply;
 import org.junit.Test;
 
 import java.util.List;
@@ -29,8 +30,8 @@ public class ShieldImpactAbsorptionTest extends AbstractSharedServerTest {
     private static final int Y = FixtureSite.OPEN_AIR_Y;
     private static final int FE_PER_ITERATION = 4000;
     private static final int ENERGY_PROJECTILE_COST = 10_000; // ModConfig.energyProjectileImpactEnergy default
-    private static final Pattern STORED = Pattern.compile("\"shieldStored\":(-?\\d+)");
-    private static final Pattern ENTITY_ID = Pattern.compile("\"entityId\":(-?\\d+)");
+    private static final String STORED = "shieldStored";
+    private static final String ENTITY_ID = "entityId";
 
     @Test
     public void chargedCoilAbsorbsEnergyProjectileCostingMoreThanIntake() throws Exception {
@@ -164,9 +165,8 @@ public class ShieldImpactAbsorptionTest extends AbstractSharedServerTest {
     }
 
     private static double parseD(String json, String key) {
-        Matcher m = Pattern.compile("\"" + key + "\":(-?\\d+(?:\\.\\d+)?(?:[eE]-?\\d+)?)").matcher(json);
-        assertTrue("no " + key + " field in: " + json, m.find());
-        return Double.parseDouble(m.group(1));
+        assertTrue("no " + key + " field in: " + json, Reply.of(json).has(key));
+        return Reply.of(json).number(key);
     }
 
     private static double sq(double v) {
@@ -174,15 +174,15 @@ public class ShieldImpactAbsorptionTest extends AbstractSharedServerTest {
     }
 
     private static long readStored(String json) {
-        Matcher m = STORED.matcher(json);
-        assertTrue("no shieldStored field in probe response: " + json, m.find());
-        return Long.parseLong(m.group(1));
+        Reply mReply = Reply.of(json);
+        assertTrue("no shieldStored field in probe response: " + json, mReply.has(STORED));
+        return Long.parseLong(mReply.text(STORED));
     }
 
     private static int readEntityId(String json) {
-        Matcher m = ENTITY_ID.matcher(json);
-        assertTrue("no entityId in spawn response: " + json, m.find());
-        return Integer.parseInt(m.group(1));
+        Reply mReply = Reply.of(json);
+        assertTrue("no entityId in spawn response: " + json, mReply.has(ENTITY_ID));
+        return Integer.parseInt(mReply.text(ENTITY_ID));
     }
 
     private static String exec(String command) throws Exception {

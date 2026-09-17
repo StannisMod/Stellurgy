@@ -16,6 +16,7 @@ import org.junit.Before;
 import org.junit.Test;
 import org.lwjgl.input.Keyboard;
 
+import zmaster587.advancedRocketry.test.Reply;
 import zmaster587.advancedRocketry.test.Events;
 import zmaster587.advancedRocketry.test.FixtureSite;
 import zmaster587.advancedRocketry.test.Plot;
@@ -47,10 +48,9 @@ import static org.junit.Assert.assertTrue;
  */
 public class VSPilotKeysWithSpaceSubsystemE2ETest {
 
-    private static final Pattern BUILDER_POS =
-            Pattern.compile("\"builderPos\":\\[(-?\\d+),(-?\\d+),(-?\\d+)]");
-    private static final Pattern POS_Y = Pattern.compile("\"posY\":(-?[0-9.E\\-]+)");
-    private static final Pattern DUMMY_ID = Pattern.compile("\"dummyId\":(-?\\d+)");
+    private static final String BUILDER_POS = "builderPos";
+    private static final String POS_Y = "posY";
+    private static final String DUMMY_ID = "dummyId";
 
     private static final String VARIANT = "with-pilot-seat";
     /**
@@ -194,8 +194,7 @@ public class VSPilotKeysWithSpaceSubsystemE2ETest {
                         + " is, its physics are not stepped and every reading below describes a"
                         + " craft that cannot move", SHIP_LOAD_BUDGET_TICKS);
         String atBase = exec("artest vs ship-info 0 id " + shipUuid);
-        Matcher baseY = POS_Y.matcher(atBase);
-        double yBefore = baseY.find() ? Double.parseDouble(baseY.group(1)) : Double.NaN;
+        double yBefore = Reply.of("artest vs ship-info", atBase).number(POS_Y);
         assertTrue("the ship the registry named must LOAD with the client present within 200 ticks."
                         + " The lookup's own answer IS the diagnosis and this message used to throw"
                         + " it away: a reply carrying \"managed\":false means the physics mod does not"
@@ -204,10 +203,10 @@ public class VSPilotKeysWithSpaceSubsystemE2ETest {
                 !Double.isNaN(yBefore));
 
         String mountInfo = exec("artest vs seat-mount 0 id " + shipUuid);
-        Matcher dm = DUMMY_ID.matcher(mountInfo);
-        assertTrue("seat-mount must report a dummy id: " + mountInfo, dm.find());
+        Reply seatMount = Reply.of("artest vs seat-mount", mountInfo);
+        assertTrue("seat-mount must report a dummy id: " + mountInfo, seatMount.has(DUMMY_ID));
         long seatMark = clientLog.mark();
-        String mount = exec("artest player mount-entity " + dm.group(1));
+        String mount = exec("artest player mount-entity " + seatMount.integer(DUMMY_ID));
         assertTrue("bot must mount the seat dummy: " + mount, mount.contains("\"mounted\":true"));
         // The key below goes through the real client input path, and a client that is not yet
         // riding routes it somewhere else entirely — so the seating is a link, not ten ticks.
@@ -227,8 +226,9 @@ public class VSPilotKeysWithSpaceSubsystemE2ETest {
             // is unparseable), so the predicate holds only on a genuine climb.
             lift = ClientPoll.until(clientHarness.bot()::waitTicks,
                     () -> {
-                        Matcher m = POS_Y.matcher(exec("artest vs ship-info 0 id " + shipUuid));
-                        return m.find() ? Double.parseDouble(m.group(1)) : y0;
+                        double y = Reply.of("artest vs ship-info",
+                                exec("artest vs ship-info 0 id " + shipUuid)).number(POS_Y);
+                        return Double.isNaN(y) ? y0 : y;
                     },
                     y -> (y - y0) >= MIN_CLIMB, 5, 40);
         } finally {
@@ -270,8 +270,8 @@ public class VSPilotKeysWithSpaceSubsystemE2ETest {
                 "the hull, and the first blocks of the lane the pilot's key drives it up");
         String fixture = exec("artest fixture rocket 0 " + baseX + " " + baseY + " " + baseZ + " " + variant);
         assertTrue("fixture (" + variant + ") failed: " + fixture, fixture.contains("\"ok\":true"));
-        Matcher bp = BUILDER_POS.matcher(fixture);
-        assertTrue("fixture missing builderPos: " + fixture, bp.find());
-        return exec("artest rocket assemble 0 " + bp.group(1) + " " + bp.group(2) + " " + bp.group(3));
+        int[] bp = Reply.of(fixture).blockPos(BUILDER_POS);
+        assertTrue("fixture missing builderPos: " + fixture, bp != null);
+        return exec("artest rocket assemble 0 " + bp[0] + " " + bp[1] + " " + bp[2]);
     }
 }

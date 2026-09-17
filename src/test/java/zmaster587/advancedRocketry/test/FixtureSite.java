@@ -45,8 +45,8 @@ public final class FixtureSite {
     /** Edge of the launchpad the rocket fixture lays at the site, in blocks. */
     static final int PAD = 5;
 
-    private static final Pattern PLACED = Pattern.compile("\"placed\":(-?\\d+)");
-    private static final Pattern VOLUME = Pattern.compile("\"volume\":(-?\\d+)");
+    private static final String PLACED = "placed";
+    private static final String VOLUME = "volume";
 
     public final int dim;
     public final int x;
@@ -194,8 +194,7 @@ public final class FixtureSite {
                 + (isOnGround() ? " GROUND: " + groundIsTheSubject : " open air") + "]";
     }
 
-    private static int intOf(String reply, Pattern p) {
-        Matcher m = p.matcher(String.valueOf(reply));
-        return m.find() ? Integer.parseInt(m.group(1)) : Integer.MIN_VALUE;
+    private static int intOf(String reply, String field) {
+        return Reply.of(String.valueOf(reply)).integerOr(field, Integer.MIN_VALUE);
     }
 }

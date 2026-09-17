@@ -1,5 +1,6 @@
 package zmaster587.advancedRocketry.test.server;
 
+import zmaster587.advancedRocketry.test.FluidStored;
 import org.junit.Test;
 
 import java.util.regex.Matcher;
@@ -44,11 +45,6 @@ public class TilePumpFillsFromAdjacentWaterSourceTest extends AbstractSharedServ
     private static final int PY = FixtureSite.OPEN_AIR_Y;
     private static final int PZ = 6300;
 
-    // The pump's fluid-stored probe emits "fluid":"<name>","amount":<n>.
-    // Match the amount on any non-null fluid (band-pin: >0, not an exact
-    // mB count which would be an impl-detail pin).
-    private static final Pattern FLUID_AMOUNT =
-            Pattern.compile("\"fluid\":\"[^\"]+\",\"amount\":(\\d+)");
 
     @Test
     public void poweredPumpDrainsAdjacentFluidSource() throws Exception {
@@ -75,12 +71,20 @@ public class TilePumpFillsFromAdjacentWaterSourceTest extends AbstractSharedServ
         // Read pump's tank state via the standard fluid stored probe.
         String stored = exec("artest fluid stored 0 "
                 + PX + " " + PY + " " + PZ);
-        Matcher m = FLUID_AMOUNT.matcher(stored);
+        // The first tank holding any fluid at all: the band pinned below is "> 0", not a particular
+        // fluid, so the reader asks each tank rather than matching one expression across two fields.
+        FluidStored tanks = FluidStored.of(stored);
+        int amount = 0;
+        for (int i = 0; i < tanks.count(); i++) {
+            if (tanks.fluid(i) != null) {
+                amount = tanks.amount(i);
+                break;
+            }
+        }
         assertTrue("pump's tank must contain fluid after 60 ticks "
                         + "(the player-visible 'pump fills from adjacent "
                         + "fluid source' contract); stored=" + stored,
-                m.find());
-        int amount = Integer.parseInt(m.group(1));
+                amount > 0);
         assertTrue("fluid amount must be > 0; actual=" + amount,
                 amount > 0);
     }

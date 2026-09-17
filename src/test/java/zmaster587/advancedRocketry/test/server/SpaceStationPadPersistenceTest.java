@@ -1,5 +1,6 @@
 package zmaster587.advancedRocketry.test.server;
 
+import zmaster587.advancedRocketry.test.Reply;
 import com.github.stannismod.forge.testing.junit.AbstractHeadlessServerTest;
 import com.github.stannismod.forge.testing.server.RealDedicatedServerHarness;
 import org.junit.After;
@@ -44,8 +45,9 @@ import static org.junit.Assert.assertTrue;
  */
 public class SpaceStationPadPersistenceTest {
 
-    private static final Pattern STATION_ID =
-            Pattern.compile("\"id\":(-?\\d+),\"orbitingBody\":");
+    /** The station's own id. The regex this replaces anchored on the NEXT field so as not
+     *  to match some other `id`; reading by name needs no such anchor. */
+    private static final String STATION_ID = "id";
 
     private Path workDir;
     private RealDedicatedServerHarness firstBoot;
@@ -75,9 +77,9 @@ public class SpaceStationPadPersistenceTest {
         // --- Boot 1: create station with three pads, lock auto-land + dock B
         String createStation = String.join("\n",
                 firstBoot.client().execute("artest station create 0"));
-        Matcher sm = STATION_ID.matcher(createStation);
-        assertTrue("could not extract station id: " + createStation, sm.find());
-        stationId = Long.parseLong(sm.group(1));
+        Reply created = Reply.of("artest station create", createStation);
+        assertTrue("could not extract station id: " + createStation, created.has(STATION_ID));
+        stationId = created.integer(STATION_ID);
 
         ok(firstBoot, "artest station add-pad " + stationId + " 100 100 padA");
         ok(firstBoot, "artest station add-pad " + stationId + " 200 200 padB");
@@ -208,9 +210,9 @@ public class SpaceStationPadPersistenceTest {
         firstBoot = RealDedicatedServerHarness.startWith(workDir, /*cleanupOnClose=*/false);
         String createStation = String.join("\n",
                 firstBoot.client().execute("artest station create 0"));
-        Matcher sm = STATION_ID.matcher(createStation);
-        assertTrue("could not extract station id: " + createStation, sm.find());
-        long stationId = Long.parseLong(sm.group(1));
+        Reply created = Reply.of("artest station create", createStation);
+        assertTrue("could not extract station id: " + createStation, created.has(STATION_ID));
+        long stationId = created.integer(STATION_ID);
 
         // Add ONE pad and enable auto-land — but DO NOT dock it. occupied
         // stays false; the read-side bug forces allowAutoLand to false too.

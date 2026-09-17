@@ -8,6 +8,7 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 import zmaster587.advancedRocketry.test.Events;
+import zmaster587.advancedRocketry.test.Reply;
 import zmaster587.advancedRocketry.test.FixtureSite;
 
 import static org.junit.Assert.assertTrue;
@@ -43,10 +44,11 @@ public class VSShipFrameShieldE2ETest extends AbstractSharedVsClientE2ETest {
         return "vs-ship-frame-shield";
     }
 
-    private static final Pattern BUILDER_POS =
-            Pattern.compile("\"builderPos\":\\[(-?\\d+),(-?\\d+),(-?\\d+)]");
-    private static final Pattern EMITTER_COUNT = Pattern.compile("\"count\":(-?\\d+)");
-    private static final Pattern ENTITY_ID = Pattern.compile("\"entityId\":(-?\\d+)");
+    private static final String BUILDER_POS = "builderPos";
+    private static final String EMITTER_COUNT = "count";
+    /** The emitters of a {@code shield emitters} reply — every geometric field below is theirs. */
+    private static final String EMITTERS = "emitters";
+    private static final String ENTITY_ID = "entityId";
 
     private static final String VARIANT = "with-shield-emitter";
 
@@ -140,7 +142,7 @@ public class VSShipFrameShieldE2ETest extends AbstractSharedVsClientE2ETest {
         assertTrue("the frame log says a ship-framed emitter is ready, but the shield registry does"
                 + " not list one:\n" + emitters,
                 emitterCount(emitters) >= 1 && emitters.contains("\"shipFramed\":true"));
-        double wx1 = f(emitters, "worldX"), wy1 = f(emitters, "worldY"), wz1 = f(emitters, "worldZ");
+        double wx1 = e(emitters, "worldX"), wy1 = e(emitters, "worldY"), wz1 = e(emitters, "worldZ");
 
         // Check 1: the shell's world centre is at the loaded ship, FAR from the emitter's subspace pos
         // (VS relocates a ship's blocks thousands of blocks away into its shipyard).
@@ -204,8 +206,8 @@ public class VSShipFrameShieldE2ETest extends AbstractSharedVsClientE2ETest {
         }
         double[] ship2 = shipPos(shipId);
         String moved = exec("artest shield emitters 0");
-        double[] shell2 = new double[]{f(moved, "worldX"), f(moved, "worldY"), f(moved, "worldZ")};
-        double speed = Math.sqrt(sq(f(moved, "velX")) + sq(f(moved, "velY")) + sq(f(moved, "velZ")));
+        double[] shell2 = new double[]{e(moved, "worldX"), e(moved, "worldY"), e(moved, "worldZ")};
+        double speed = Math.sqrt(sq(e(moved, "velX")) + sq(e(moved, "velY")) + sq(e(moved, "velZ")));
         double shipMoved = dist(ship1, ship2);
         double shellMoved = dist(shell1, shell2);
         scenario().requireArranged("the hull must actually move to test tracking (shipMoved=" + shipMoved
@@ -237,19 +239,18 @@ public class VSShipFrameShieldE2ETest extends AbstractSharedVsClientE2ETest {
      * the reader of the log.</p>
      */
     private static String recordWithAll(String sinceReply, String... needles) {
-        java.util.List<String> matching = Events.recordsWithAll(sinceReply, needles);
+        java.util.List<String> matching = Events.recordsContainingAll(sinceReply, needles);
         return matching.isEmpty() ? null : matching.get(0);
     }
 
     private int emitterCount(String json) {
-        Matcher m = EMITTER_COUNT.matcher(json);
-        return m.find() ? Integer.parseInt(m.group(1)) : 0;
+        return Reply.of(json).integerOr(EMITTER_COUNT, 0);
     }
 
     private int entityId(String json) {
-        Matcher m = ENTITY_ID.matcher(json);
-        assertTrue("no entityId in: " + json, m.find());
-        return Integer.parseInt(m.group(1));
+        Reply reply = Reply.of(json);
+        assertTrue("no entityId in: " + json, reply.has(ENTITY_ID));
+        return reply.integer(ENTITY_ID);
     }
 
     /** Where THIS ship is — asked by identity, so it keeps answering about the same hull once the
@@ -261,7 +262,7 @@ public class VSShipFrameShieldE2ETest extends AbstractSharedVsClientE2ETest {
 
     private double[] shellCenter() throws Exception {
         String em = exec("artest shield emitters 0");
-        return new double[]{f(em, "worldX"), f(em, "worldY"), f(em, "worldZ")};
+        return new double[]{e(em, "worldX"), e(em, "worldY"), e(em, "worldZ")};
     }
 
     private static double dist(double[] a, double[] b) {
@@ -272,10 +273,25 @@ public class VSShipFrameShieldE2ETest extends AbstractSharedVsClientE2ETest {
         return "(" + a[0] + "," + a[1] + "," + a[2] + ")";
     }
 
+    /** A field of a FLAT reply — {@code shield read}, {@code entity info}, {@code vs ship-info}. */
     private double f(String json, String key) {
-        Matcher m = Pattern.compile("\"" + key + "\":(-?[0-9.E\\-]+)").matcher(json);
-        assertTrue("expected key " + key + " in: " + json, m.find());
-        return Double.parseDouble(m.group(1));
+        assertTrue("expected key " + key + " in: " + json, Reply.of(json).has(key));
+        return Reply.of(json).number(key);
+    }
+
+    /**
+     * A field of the FIRST emitter in a {@code shield emitters} reply.
+     *
+     * <p>Those fields belong to an EMITTER, not to the reply: the verb answers
+     * {@code {"dim":0,"count":1,"emitters":[{…}]}} and a dimension may hold several. Asked of the
+     * reply it reads as absent, and this scenario's every geometric claim is built on it.</p>
+     */
+    private double e(String json, String key) {
+        String[] listed = Reply.of("artest shield emitters", json).objectArray(EMITTERS);
+        assertTrue("expected at least one emitter in: " + json, listed.length >= 1);
+        Reply first = Reply.of("one shield emitter", listed[0]);
+        assertTrue("expected key " + key + " on the emitter in: " + json, first.has(key));
+        return first.number(key);
     }
 
     private static double dist(double x1, double y1, double z1, double x2, double y2, double z2) {
@@ -298,8 +314,8 @@ public class VSShipFrameShieldE2ETest extends AbstractSharedVsClientE2ETest {
                 "the hull, and the shell the emitter projects around it");
         String fixture = exec("artest fixture rocket 0 " + baseX + " " + baseY + " " + baseZ + " " + VARIANT);
         assertTrue("fixture (" + VARIANT + ") failed: " + fixture, fixture.contains("\"ok\":true"));
-        Matcher bp = BUILDER_POS.matcher(fixture);
-        assertTrue("fixture missing builderPos: " + fixture, bp.find());
-        return exec("artest rocket assemble 0 " + bp.group(1) + " " + bp.group(2) + " " + bp.group(3));
+        int[] bp = Reply.of(fixture).blockPos(BUILDER_POS);
+        assertTrue("fixture missing builderPos: " + fixture, bp != null);
+        return exec("artest rocket assemble 0 " + bp[0] + " " + bp[1] + " " + bp[2]);
     }
 }

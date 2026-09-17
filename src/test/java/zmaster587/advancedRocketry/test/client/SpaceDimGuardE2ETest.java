@@ -5,6 +5,7 @@ import org.junit.Test;
 import org.junit.runners.MethodSorters;
 
 import zmaster587.advancedRocketry.test.Events;
+import zmaster587.advancedRocketry.test.Reply;
 
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -44,14 +45,14 @@ import static org.junit.Assert.assertTrue;
 @FixMethodOrder(MethodSorters.NAME_ASCENDING)
 public class SpaceDimGuardE2ETest extends AbstractSharedClientE2ETest {
 
-    private static final Pattern DIM = Pattern.compile("\"dim\":(-?\\d+)");
-    private static final Pattern POS_X = Pattern.compile("\"posX\":(-?[0-9.eE+-]+)");
-    private static final Pattern POS_Y = Pattern.compile("\"posY\":(-?[0-9.eE+-]+)");
-    private static final Pattern POS_Z = Pattern.compile("\"posZ\":(-?[0-9.eE+-]+)");
-    private static final Pattern SPAWN_X = Pattern.compile("\"spawnX\":(-?\\d+)");
-    private static final Pattern SPAWN_Y = Pattern.compile("\"spawnY\":(-?\\d+)");
-    private static final Pattern SPAWN_Z = Pattern.compile("\"spawnZ\":(-?\\d+)");
-    private static final Pattern STATION_ID = Pattern.compile("\"id\":(-?\\d+)");
+    private static final String DIM = "dim";
+    private static final String POS_X = "posX";
+    private static final String POS_Y = "posY";
+    private static final String POS_Z = "posZ";
+    private static final String SPAWN_X = "spawnX";
+    private static final String SPAWN_Y = "spawnY";
+    private static final String SPAWN_Z = "spawnZ";
+    private static final String STATION_ID = "id";
 
     /** {@code ARConfiguration.spaceDimId}'s default. */
     private static final int SPACE_DIM = -2;
@@ -61,16 +62,16 @@ public class SpaceDimGuardE2ETest extends AbstractSharedClientE2ETest {
         return "space-dim-guard";
     }
 
-    private int intField(Pattern p, String src, String name) {
-        Matcher m = p.matcher(src);
-        assertTrue("field " + name + " missing in: " + src, m.find());
-        return Integer.parseInt(m.group(1));
+    private int intField(String field, String src, String name) {
+        Reply reply = Reply.of(src);
+        assertTrue("field " + name + " missing in: " + src, reply.has(field));
+        return reply.integer(field);
     }
 
-    private double doubleField(Pattern p, String src, String name) {
-        Matcher m = p.matcher(src);
-        assertTrue("field " + name + " missing in: " + src, m.find());
-        return Double.parseDouble(m.group(1));
+    private double doubleField(String field, String src, String name) {
+        double value = Reply.of(src).number(field);
+        assertTrue("field " + name + " missing in: " + src, !Double.isNaN(value));
+        return value;
     }
 
     // ── reading the two event logs ────────────────────────────────────────────
@@ -80,34 +81,6 @@ public class SpaceDimGuardE2ETest extends AbstractSharedClientE2ETest {
     // {@link #events()} reads the SERVER log and {@link #clientEvents()} the client's, both behind
     // the same reader — the same mark, the same "is anybody recording" assertion, the same failure
     // narrative on both sides.
-
-    /**
-     * Wait for a record of {@code type} that CARRIES {@code needle}, and fail naming the whole chain
-     * that DID happen.
-     *
-     * <p>{@link Events#await} waits for a TYPE, which is the right verb when one occurrence of the
-     * type is the link. Here it is not: one scenario produces two {@code teleporter_placed} records —
-     * the arrangement's transfer INTO the space dim and the guard's transfer back out of it — so the
-     * link is a record with a particular destination in it, not the first record of the type.</p>
-     *
-     * <p>{@code needle} must end at a field boundary ({@code "dim":0,} rather than {@code "dim":0}):
-     * a payload's numbers are not delimited on the right, so a needle without the comma matches every
-     * value it is a prefix of.</p>
-     */
-    private String awaitRecordCarrying(Events events, long mark, String type, String needle,
-                                       String what, int tickBudget) throws Exception {
-        String reply = "";
-        for (int waited = 0; waited <= tickBudget; waited += 5) {
-            reply = events.since(mark, type);
-            if (Events.countRecords(reply, needle) > 0) {
-                return reply;
-            }
-            bot().waitTicks(5);
-        }
-        throw new AssertionError(what + " — no `" + type + "` carrying " + needle + " was recorded"
-                + " within " + tickBudget + " ticks. What DID happen since the mark: "
-                + Events.typesOf(events.since(mark)) + " | raw: " + reply);
-    }
 
     /**
      * How long one link of the guard's chain may take. The guard runs on EVERY {@code
@@ -153,7 +126,7 @@ public class SpaceDimGuardE2ETest extends AbstractSharedClientE2ETest {
         // dim 0 (the no-station branch), and that teleporter's placement is the link. The
         // arrangement's own transfer records the same type with dim -2, which is why this waits for
         // a record CARRYING the destination rather than for the first record of the type.
-        String placed = awaitRecordCarrying(events, mark, "teleporter_placed", "\"dim\":0,",
+        String placed = events.awaitField(mark, "teleporter_placed", "dim", 0,
                 "a player who lands in the space dim with NO station registered must be put back in"
                         + " the overworld by the guard's own teleporter", GUARD_LINK_BUDGET_TICKS);
         scenario().record("guardPlacement", placed);
@@ -206,7 +179,7 @@ public class SpaceDimGuardE2ETest extends AbstractSharedClientE2ETest {
         // is issued or the whole scenario runs in the overworld at the right coordinates. The
         // teleporter that carries the transfer records where it put him.
         try {
-            awaitRecordCarrying(events, mark, "teleporter_placed", "\"dim\":" + SPACE_DIM + ",",
+            events.awaitField(mark, "teleporter_placed", "dim", SPACE_DIM,
                     "the arrangement's own transfer into the space dim must land before the body is"
                             + " moved 50 000 blocks WITHIN it", GUARD_LINK_BUDGET_TICKS);
         } catch (AssertionError arrangement) {
@@ -273,6 +246,6 @@ public class SpaceDimGuardE2ETest extends AbstractSharedClientE2ETest {
         assertEquals("a station exists, so the guard must take the teleport-to-station branch and"
                         + " never the overworld fallback; a placement into dim 0 since the mark is"
                         + " that fallback having fired: " + placements,
-                0, Events.countRecords(placements, "\"dim\":0,"));
+                0, Events.countRecords(placements, "dim", "0"));
     }
 }

@@ -1,5 +1,6 @@
 package zmaster587.advancedRocketry.test.server;
 
+import zmaster587.advancedRocketry.test.Reply;
 import org.junit.Test;
 
 import java.util.regex.Matcher;
@@ -43,21 +44,15 @@ public class StationControllersTickContractTest extends AbstractSharedServerTest
 
     private static final int SPACE_DIM = -2;
 
-    private static final Pattern STATION_ID = Pattern.compile("\"id\":(-?\\d+)");
-    private static final Pattern SPAWN_X = Pattern.compile("\"spawnX\":(-?\\d+)");
-    private static final Pattern SPAWN_Z = Pattern.compile("\"spawnZ\":(-?\\d+)");
-    private static final Pattern ORBITAL_DISTANCE =
-            Pattern.compile("\"orbitalDistance\":(-?[0-9]+\\.?[0-9]*(?:[eE][+-]?[0-9]+)?)");
-    private static final Pattern GRAVITY =
-            Pattern.compile("\"gravity\":(-?[0-9]+\\.?[0-9]*(?:[eE][+-]?[0-9]+)?)");
-    private static final Pattern ROT_EAST =
-            Pattern.compile("\"rotationEast\":(-?[0-9]+\\.?[0-9]*(?:[eE][+-]?[0-9]+)?)");
-    private static final Pattern TARGET_ORBITAL =
-            Pattern.compile("\"targetOrbitalDistance\":(-?\\d+)");
-    private static final Pattern TARGET_GRAVITY =
-            Pattern.compile("\"targetGravity\":(-?\\d+)");
-    private static final Pattern TARGET_RPH0 =
-            Pattern.compile("\"targetRPH0\":(-?\\d+)");
+    private static final String STATION_ID = "id";
+    private static final String SPAWN_X = "spawnX";
+    private static final String SPAWN_Z = "spawnZ";
+    private static final String ORBITAL_DISTANCE = "orbitalDistance";
+    private static final String GRAVITY = "gravity";
+    private static final String ROT_EAST = "rotationEast";
+    private static final String TARGET_ORBITAL = "targetOrbitalDistance";
+    private static final String TARGET_GRAVITY = "targetGravity";
+    private static final String TARGET_RPH0 = "targetRPH0";
 
     /**
      * Pin: altitude controller, given a target via the probe and
@@ -270,28 +265,28 @@ public class StationControllersTickContractTest extends AbstractSharedServerTest
         String create = exec("artest station create 0");
         assertTrue("station create failed: " + create,
                 create.contains("\"ok\":true"));
-        Matcher m = STATION_ID.matcher(create);
-        assertTrue("no station id in create response: " + create, m.find());
-        return Integer.parseInt(m.group(1));
+        Reply mReply = Reply.of(create);
+        assertTrue("no station id in create response: " + create, mReply.has(STATION_ID));
+        return Integer.parseInt(mReply.text(STATION_ID));
     }
 
     private int[] stationSpawn(int stationId) throws Exception {
         String info = exec("artest station info " + stationId);
-        Matcher x = SPAWN_X.matcher(info);
-        Matcher z = SPAWN_Z.matcher(info);
-        assertTrue("no spawn coords in station info: " + info, x.find() && z.find());
-        return new int[]{Integer.parseInt(x.group(1)), 128, Integer.parseInt(z.group(1))};
+        Reply xReply = Reply.of(info);
+        Reply zReply = Reply.of(info);
+        assertTrue("no spawn coords in station info: " + info, xReply.has(SPAWN_X) && zReply.has(SPAWN_Z));
+        return new int[]{Integer.parseInt(xReply.text(SPAWN_X)), 128, Integer.parseInt(zReply.text(SPAWN_Z))};
     }
 
-    private static int extract(String src, Pattern pattern) {
-        Matcher m = pattern.matcher(src);
-        assertTrue("pattern " + pattern + " not found in: " + src, m.find());
-        return Integer.parseInt(m.group(1));
+    private static int extract(String src, String field) {
+        Reply reply = Reply.of(src);
+        assertTrue("field `" + field + "` not found in: " + src, reply.has(field));
+        return reply.integer(field);
     }
 
-    private static double extractDouble(String src, Pattern pattern) {
-        Matcher m = pattern.matcher(src);
-        assertTrue("pattern " + pattern + " not found in: " + src, m.find());
-        return Double.parseDouble(m.group(1));
+    private static double extractDouble(String src, String field) {
+        double value = Reply.of(src).number(field);
+        assertTrue("field `" + field + "` not found in: " + src, !Double.isNaN(value));
+        return value;
     }
 }

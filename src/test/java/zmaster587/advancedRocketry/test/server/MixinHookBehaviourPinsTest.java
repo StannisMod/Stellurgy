@@ -1,5 +1,6 @@
 package zmaster587.advancedRocketry.test.server;
 
+import zmaster587.advancedRocketry.test.Reply;
 import org.junit.Assume;
 import org.junit.FixMethodOrder;
 import org.junit.Test;
@@ -86,17 +87,11 @@ import static org.junit.Assert.assertTrue;
 @FixMethodOrder(MethodSorters.NAME_ASCENDING)
 public class MixinHookBehaviourPinsTest extends AbstractSharedServerTest {
 
-    private static final Pattern AR_DIMS_ARRAY =
-            Pattern.compile("\"arDimensions\":\\[([^]]*)]");
-    private static final Pattern MOTION_Y =
-            Pattern.compile("\"motionY\":(-?[0-9.eE+-]+)");
-    private static final Pattern POS_Y =
-            Pattern.compile("\"posY\":(-?[0-9.eE+-]+)");
-    private static final Pattern ENTITY_ID =
-            Pattern.compile("\"entityId\":(-?\\d+)");
-    private static final Pattern IS_ALIVE_TRUE = Pattern.compile("\"isAlive\":true");
-    private static final Pattern ELAPSED_TICKS =
-            Pattern.compile("\"elapsedTicks\":(\\d+)");
+    private static final String AR_DIMS_ARRAY = "arDimensions";
+    private static final String MOTION_Y = "motionY";
+    private static final String POS_Y = "posY";
+    private static final String ENTITY_ID = "entityId";
+    private static final String ELAPSED_TICKS = "elapsedTicks";
 
     private static String ok(java.util.List<String> resp) {
         return String.join("\n", resp);
@@ -106,12 +101,9 @@ public class MixinHookBehaviourPinsTest extends AbstractSharedServerTest {
         String joined = ok(client().execute("artest dim list"));
         Assume.assumeFalse("No AR dimensions registered",
                 joined.contains("\"arDimensions\":[]"));
-        Matcher m = AR_DIMS_ARRAY.matcher(joined);
-        assertTrue("could not parse arDimensions array: " + joined, m.find());
-        for (String part : m.group(1).split(",")) {
-            String t = part.trim();
-            if (t.isEmpty()) continue;
-            int dim = Integer.parseInt(t);
+        Reply dims = Reply.of("artest dim list", joined);
+        assertTrue("could not parse arDimensions array: " + joined, dims.has(AR_DIMS_ARRAY));
+        for (int dim : dims.intArray(AR_DIMS_ARRAY)) {
             if (dim != 0) return dim;
         }
         Assume.assumeTrue("Only overworld is registered as AR planet", false);
@@ -150,19 +142,19 @@ public class MixinHookBehaviourPinsTest extends AbstractSharedServerTest {
                 + entityName + (extraArg == null ? "" : " " + extraArg);
         String resp = ok(client().execute(cmd));
         assertFalse("entity spawn must succeed: " + resp, resp.contains("\"error\""));
-        Matcher m = ENTITY_ID.matcher(resp);
-        assertTrue("spawn response missing entityId: " + resp, m.find());
-        return Integer.parseInt(m.group(1));
+        Reply mReply = Reply.of(resp);
+        assertTrue("spawn response missing entityId: " + resp, mReply.has(ENTITY_ID));
+        return Integer.parseInt(mReply.text(ENTITY_ID));
     }
 
     private String entityInfo(int dim, int id) throws Exception {
         return ok(client().execute("artest entity info " + dim + " " + id));
     }
 
-    private double doubleField(Pattern p, String src, String fieldName) {
-        Matcher m = p.matcher(src);
-        assertTrue("field " + fieldName + " missing in: " + src, m.find());
-        return Double.parseDouble(m.group(1));
+    private double doubleField(String field, String src, String fieldName) {
+        double value = Reply.of(src).number(field);
+        assertTrue("field " + fieldName + " missing in: " + src, !Double.isNaN(value));
+        return value;
     }
 
     /**

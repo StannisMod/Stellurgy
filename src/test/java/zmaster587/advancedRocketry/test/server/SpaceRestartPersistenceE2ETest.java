@@ -1,5 +1,6 @@
 package zmaster587.advancedRocketry.test.server;
 
+import zmaster587.advancedRocketry.test.Reply;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.UUID;
@@ -390,16 +391,14 @@ public class SpaceRestartPersistenceE2ETest {
 
     /** The value of a numeric JSON field in a probe response. Fails the test if it is absent. */
     private static int jsonInt(String json, String field) {
-        Matcher m = Pattern.compile("\"" + Pattern.quote(field) + "\"\\s*:\\s*(-?\\d+)").matcher(json);
-        assertTrue("probe response carries no numeric \"" + field + "\": " + json, m.find());
-        return Integer.parseInt(m.group(1));
+        assertTrue("probe response carries no numeric \"" + field + "\": " + json, Reply.of(json).has(field));
+        return Reply.of(json).integer(field);
     }
 
     /** The value of a string JSON field in a probe response. Fails the test if it is absent. */
     private static String jsonString(String json, String field) {
-        Matcher m = Pattern.compile("\"" + Pattern.quote(field) + "\"\\s*:\\s*\"([^\"]*)\"").matcher(json);
-        assertTrue("probe response carries no string \"" + field + "\": " + json, m.find());
-        return m.group(1);
+        assertTrue("probe response carries no string \"" + field + "\": " + json, Reply.of(json).has(field));
+        return Reply.of(json).text(field);
     }
 
     @Test

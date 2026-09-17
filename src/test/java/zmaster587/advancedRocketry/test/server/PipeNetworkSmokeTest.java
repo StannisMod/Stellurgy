@@ -1,6 +1,7 @@
 package zmaster587.advancedRocketry.test.server;
 
 // migrated to AbstractSharedServerTest
+import zmaster587.advancedRocketry.test.Reply;
 import org.junit.Test;
 
 import java.util.regex.Matcher;
@@ -20,10 +21,10 @@ import static org.junit.Assert.assertTrue;
  */
 public class PipeNetworkSmokeTest extends AbstractSharedServerTest {
 
-    private static final Pattern STORED = Pattern.compile("\"energyStored\":(\\d+)");
-    private static final Pattern MAX = Pattern.compile("\"energyMax\":(\\d+)");
-    private static final Pattern ACCEPTED = Pattern.compile("\"accepted\":(-?\\d+)");
-    private static final Pattern INJ_STORED = Pattern.compile("\"stored\":(\\d+)");
+    private static final String STORED = "energyStored";
+    private static final String MAX = "energyMax";
+    private static final String ACCEPTED = "accepted";
+    private static final String INJ_STORED = "stored";
 
     @Test
     public void forgeEnergyStorageContractMatches() throws Exception {
@@ -88,15 +89,15 @@ public class PipeNetworkSmokeTest extends AbstractSharedServerTest {
         String pre2 = String.join("\n", client().execute(
                 "artest pipe wireless-info 0 " + x2 + " " + y + " " + z));
         assertEquals("transceiver A starts unpaired (networkID=-1): " + pre1,
-                -1, extractInt(pre1, "\"networkID\":(-?\\d+)"));
+                -1, extractInt(pre1, "networkID"));
         assertEquals("transceiver B starts unpaired (networkID=-1): " + pre2,
-                -1, extractInt(pre2, "\"networkID\":(-?\\d+)"));
+                -1, extractInt(pre2, "networkID"));
 
         String pair = String.join("\n", client().execute(
                 "artest pipe wireless-pair 0 " + x1 + " " + y + " " + z + " "
                         + x2 + " " + y + " " + z));
         assertTrue("wireless-pair probe failed: " + pair, pair.contains("\"ok\":true"));
-        int sharedId = extractInt(pair, "\"sharedNetworkId\":(-?\\d+)");
+        int sharedId = extractInt(pair, "sharedNetworkId");
         // NetworkRegistry hashes network IDs and may return negative values;
         // the only invariant we care about is "not the unpaired sentinel".
         assertTrue("shared networkID must be assigned (not -1 sentinel): " + pair,
@@ -108,9 +109,9 @@ public class PipeNetworkSmokeTest extends AbstractSharedServerTest {
         String post2 = String.join("\n", client().execute(
                 "artest pipe wireless-info 0 " + x2 + " " + y + " " + z));
         assertEquals("A and B must share the same networkID after pairing",
-                sharedId, extractInt(post1, "\"networkID\":(-?\\d+)"));
+                sharedId, extractInt(post1, "networkID"));
         assertEquals("A and B must share the same networkID after pairing",
-                sharedId, extractInt(post2, "\"networkID\":(-?\\d+)"));
+                sharedId, extractInt(post2, "networkID"));
     }
 
     /**
@@ -164,7 +165,7 @@ public class PipeNetworkSmokeTest extends AbstractSharedServerTest {
         String injected = String.join("\n", client().execute(
                 "artest fluid inject 0 " + fx + " " + fy + " " + fz + " water 8000"));
         assertTrue("fluid inject must succeed: " + injected, injected.contains("\"ok\":true"));
-        int amount = extractInt(injected, "\"filled\":(\\d+)");
+        int amount = extractInt(injected, "filled");
         assertTrue("hatch must accept some water: " + injected, amount > 0);
 
         String stored = String.join("\n", client().execute(
@@ -175,14 +176,12 @@ public class PipeNetworkSmokeTest extends AbstractSharedServerTest {
                 stored.contains("\"amount\":" + amount));
     }
 
-    private static long parseLong(Pattern p, String s) {
-        Matcher m = p.matcher(s);
-        return m.find() ? Long.parseLong(m.group(1)) : -1L;
+    private static long parseLong(String field, String s) {
+        return (long) Reply.of(s).number(field);
     }
 
-    private static int extractInt(String haystack, String regex) {
-        Matcher m = Pattern.compile(regex).matcher(haystack);
-        return m.find() ? Integer.parseInt(m.group(1)) : -1;
+    private static int extractInt(String haystack, String field) {
+        return Reply.of(haystack).integerOr(field, -1);
     }
 
     private void ok(java.util.List<String> response) {

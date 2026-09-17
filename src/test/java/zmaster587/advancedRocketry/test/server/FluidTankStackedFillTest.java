@@ -1,9 +1,7 @@
 package zmaster587.advancedRocketry.test.server;
 
+import zmaster587.advancedRocketry.test.FluidStored;
 import org.junit.Test;
-
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 import zmaster587.advancedRocketry.test.FixtureSite;
 
@@ -37,10 +35,6 @@ import static org.junit.Assert.assertTrue;
  */
 public class FluidTankStackedFillTest extends AbstractSharedServerTest {
 
-    private static final Pattern AMOUNT_NTH =
-            Pattern.compile("\"amount\":(\\d+)");
-    private static final Pattern CAPACITY =
-            Pattern.compile("\"capacity\":(\\d+)");
 
     private static String join(java.util.List<String> resp) {
         return String.join("\n", resp);
@@ -79,9 +73,7 @@ public class FluidTankStackedFillTest extends AbstractSharedServerTest {
     private static int storedCapacity(int x, int y, int z) throws Exception {
         String resp = join(client().execute(
                 "artest fluid stored 0 " + x + " " + y + " " + z));
-        Matcher m = CAPACITY.matcher(resp);
-        assertTrue("capacity must be present: " + resp, m.find());
-        return Integer.parseInt(m.group(1));
+        return FluidStored.of(resp).capacity(0);
     }
 
     /** Return the {@code amount} field from the {@code fluid stored}
@@ -91,13 +83,8 @@ public class FluidTankStackedFillTest extends AbstractSharedServerTest {
                 "artest fluid stored 0 " + x + " " + y + " " + z));
         assertTrue("fluid stored must succeed: " + resp,
                 resp.contains("\"hasFluid\":true"));
-        if (resp.contains("\"fluid\":null")) {
-            return 0;
-        }
-        Matcher m = AMOUNT_NTH.matcher(resp);
-        assertTrue("amount field must be present when fluid is non-null: "
-                + resp, m.find());
-        return Integer.parseInt(m.group(1));
+        // An empty tank reports `"fluid":null` and no amount, which is a reading and not a failure.
+        return FluidStored.of(resp).amount(0);
     }
 
     @Test

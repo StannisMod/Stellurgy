@@ -1,5 +1,6 @@
 package zmaster587.advancedRocketry.test.server;
 
+import zmaster587.advancedRocketry.test.Reply;
 import org.junit.Test;
 
 import java.util.regex.Matcher;
@@ -56,14 +57,14 @@ public class DockingPortNbtAndPacketTest extends AbstractSharedServerTest {
     private static final int BASE_Y = FixtureSite.OPEN_AIR_Y;
     private static final int BASE_Z = 9000;
 
-    private static final Pattern MY_ID = Pattern.compile("\"myId\":\"([^\"]*)\"");
-    private static final Pattern TARGET_ID = Pattern.compile("\"targetId\":\"([^\"]*)\"");
-    private static final Pattern PEER_MY_ID = Pattern.compile("\"peerMyId\":\"([^\"]*)\"");
-    private static final Pattern PEER_TARGET_ID = Pattern.compile("\"peerTargetId\":\"([^\"]*)\"");
-    private static final Pattern HAS_MY_ID_KEY = Pattern.compile("\"hasMyIdKey\":(true|false)");
-    private static final Pattern HAS_TARGET_ID_KEY = Pattern.compile("\"hasTargetIdKey\":(true|false)");
-    private static final Pattern DECODED_ID = Pattern.compile("\"decodedId\":\"([^\"]*)\"");
-    private static final Pattern PACKET_BYTES = Pattern.compile("\"bytes\":(\\d+)");
+    private static final String MY_ID = "myId";
+    private static final String TARGET_ID = "targetId";
+    private static final String PEER_MY_ID = "peerMyId";
+    private static final String PEER_TARGET_ID = "peerTargetId";
+    private static final String HAS_MY_ID_KEY = "hasMyIdKey";
+    private static final String HAS_TARGET_ID_KEY = "hasTargetIdKey";
+    private static final String DECODED_ID = "decodedId";
+    private static final String PACKET_BYTES = "bytes";
 
     private static String join(java.util.List<String> resp) {
         return String.join("\n", resp);
@@ -92,14 +93,14 @@ public class DockingPortNbtAndPacketTest extends AbstractSharedServerTest {
                 resp.contains("\"placed\":true"));
     }
 
-    private static String extract(String src, Pattern pattern) {
-        Matcher m = pattern.matcher(src);
-        assertTrue("pattern " + pattern + " not found in: " + src, m.find());
-        return m.group(1);
+    private static String extract(String src, String field) {
+        String value = Reply.of(src).text(field);
+        assertTrue("field `" + field + "` not found in: " + src, value != null);
+        return value;
     }
 
-    private static boolean extractBool(String src, Pattern pattern) {
-        return Boolean.parseBoolean(extract(src, pattern));
+    private static boolean extractBool(String src, String field) {
+        return Reply.of(src).bool(field, false);
     }
 
     @Test

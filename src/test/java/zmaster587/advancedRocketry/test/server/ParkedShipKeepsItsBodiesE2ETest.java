@@ -1,5 +1,6 @@
 package zmaster587.advancedRocketry.test.server;
 
+import zmaster587.advancedRocketry.test.Reply;
 import org.junit.Test;
 
 import java.util.regex.Matcher;
@@ -155,17 +156,18 @@ public class ParkedShipKeepsItsBodiesE2ETest extends AbstractSharedServerTest {
 
     /** Element {@code index} of a numeric JSON array field. */
     private static long jsonArrayElement(String json, String field, int index) {
-        Matcher m = Pattern.compile("\"" + Pattern.quote(field) + "\":\\[([^\\]]*)\\]").matcher(json);
-        assertTrue("probe response carries no \"" + field + "\" array: " + json, m.find());
-        String[] parts = m.group(1).split(",");
-        assertTrue("\"" + field + "\" has no element " + index + ": " + json, parts.length > index);
-        return Long.parseLong(parts[index].trim());
+        Reply reply = Reply.of(json);
+        assertTrue("probe response carries no \"" + field + "\" array: " + json, reply.has(field)
+                || reply.intArray(field).length > 0);
+        int[] values = reply.intArray(field);
+        assertTrue("\"" + field + "\" has no element " + index + ": " + json, values.length > index);
+        return values[index];
     }
 
     private static String dimCell(String json) {
-        Matcher m = Pattern.compile("\"dimCell\":\"([^\"]+)\"").matcher(json);
-        assertTrue("probe response carries no \"dimCell\": " + json, m.find());
-        return m.group(1);
+        String cell = Reply.of(json).text("dimCell");
+        assertTrue("probe response carries no \"dimCell\": " + json, cell != null);
+        return cell;
     }
 
     private static int jsonInt(String json, String field) {
@@ -173,8 +175,7 @@ public class ParkedShipKeepsItsBodiesE2ETest extends AbstractSharedServerTest {
     }
 
     private static long jsonLong(String json, String field) {
-        Matcher m = Pattern.compile("\"" + Pattern.quote(field) + "\":(-?\\d+)").matcher(json);
-        assertTrue("probe response carries no numeric \"" + field + "\": " + json, m.find());
-        return Long.parseLong(m.group(1));
+        assertTrue("probe response carries no numeric \"" + field + "\": " + json, Reply.of(json).has(field));
+        return Reply.of(json).integer(field);
     }
 }

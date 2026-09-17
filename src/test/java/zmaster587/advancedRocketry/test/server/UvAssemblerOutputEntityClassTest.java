@@ -1,5 +1,7 @@
 package zmaster587.advancedRocketry.test.server;
 
+import zmaster587.advancedRocketry.test.RocketList;
+import zmaster587.advancedRocketry.test.Reply;
 import org.junit.Test;
 
 import java.util.regex.Matcher;
@@ -42,10 +44,8 @@ import static zmaster587.advancedRocketry.test.server.WorldCommandFixtures.exec;
  */
 public class UvAssemblerOutputEntityClassTest extends AbstractSharedServerTest {
 
-    private static final Pattern ROCKET_LIST_ID = Pattern.compile("\"id\":(-?\\d+)");
-    private static final Pattern ENTITY_CLASS = Pattern.compile("\"entityClass\":\"([^\"]+)\"");
-    private static final Pattern BUILDER_POS =
-            Pattern.compile("\"builderPos\":\\[(-?\\d+),(-?\\d+),(-?\\d+)]");
+    private static final String ENTITY_CLASS = "entityClass";
+    private static final String BUILDER_POS = "builderPos";
 
     /** Rocket-assembler fixture at x=5500; UV-assembler fixture at x=5700.
      *  Far enough apart to avoid scan-volume overlap (rocket bb ~6 wide × 8
@@ -77,9 +77,8 @@ public class UvAssemblerOutputEntityClassTest extends AbstractSharedServerTest {
 
         int entityId = lastRocketId();
         String info = exec("artest rocket info " + entityId);
-        Matcher m = ENTITY_CLASS.matcher(info);
-        assertTrue("info must surface entityClass: " + info, m.find());
-        String entityClass = m.group(1);
+        String entityClass = Reply.of("artest rocket info", info).text(ENTITY_CLASS);
+        assertTrue("info must surface entityClass: " + info, entityClass != null);
         assertTrue("rocket assembler must spawn EntityRocket "
                         + "(not EntityStationDeployedRocket); got " + entityClass,
                 entityClass.endsWith(".EntityRocket"));
@@ -102,9 +101,8 @@ public class UvAssemblerOutputEntityClassTest extends AbstractSharedServerTest {
 
         int entityId = lastRocketId();
         String info = exec("artest rocket info " + entityId);
-        Matcher m = ENTITY_CLASS.matcher(info);
-        assertTrue("info must surface entityClass: " + info, m.find());
-        String entityClass = m.group(1);
+        String entityClass = Reply.of("artest rocket info", info).text(ENTITY_CLASS);
+        assertTrue("info must surface entityClass: " + info, entityClass != null);
         assertTrue("UV assembler must spawn EntityStationDeployedRocket; got "
                         + entityClass,
                 entityClass.endsWith(".EntityStationDeployedRocket"));
@@ -113,20 +111,18 @@ public class UvAssemblerOutputEntityClassTest extends AbstractSharedServerTest {
     // ─── helpers ───────────────────────────────────────────────────────
 
     private static int[] parseBuilder(String fixture) {
-        Matcher m = BUILDER_POS.matcher(fixture);
-        assertTrue("fixture missing builderPos: " + fixture, m.find());
+        int[] m = Reply.of(fixture).blockPos(BUILDER_POS);
+        assertTrue("fixture missing builderPos: " + fixture, m != null);
         return new int[]{
-                Integer.parseInt(m.group(1)),
-                Integer.parseInt(m.group(2)),
-                Integer.parseInt(m.group(3))};
+                m[0],
+                m[1],
+                m[2]};
     }
 
     private static int lastRocketId() throws Exception {
         String list = exec("artest rocket list 0");
-        Matcher m = ROCKET_LIST_ID.matcher(list);
-        int last = -1;
-        while (m.find()) last = Integer.parseInt(m.group(1));
-        assertTrue("no rocket ids in list: " + list, last >= 0);
-        return last;
+        java.util.List<RocketList.Entry> built = RocketList.of(list);
+        assertTrue("no rocket ids in list: " + list, !built.isEmpty());
+        return built.get(built.size() - 1).id;
     }
 }

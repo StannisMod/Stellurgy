@@ -1,5 +1,6 @@
 package zmaster587.advancedRocketry.test.server;
 
+import zmaster587.advancedRocketry.test.Reply;
 import org.junit.Test;
 
 import java.util.List;
@@ -33,7 +34,7 @@ public class ShieldStrikeAbsorptionTest extends AbstractSharedServerTest {
     private static final int Y = FixtureSite.OPEN_AIR_Y;
     private static final int FE_PER_ITERATION = 4000;
     private static final double RADIUS = 4.0D;
-    private static final Pattern STORED = Pattern.compile("\"shieldStored\":(-?\\d+)");
+    private static final String STORED = "shieldStored";
 
     @Test
     public void chargedShieldFullyAbsorbsACooperativeStrike() throws Exception {
@@ -134,15 +135,14 @@ public class ShieldStrikeAbsorptionTest extends AbstractSharedServerTest {
     }
 
     private static long readStored(String json) {
-        Matcher m = STORED.matcher(json);
-        assertTrue("no shieldStored field in probe response: " + json, m.find());
-        return Long.parseLong(m.group(1));
+        Reply mReply = Reply.of(json);
+        assertTrue("no shieldStored field in probe response: " + json, mReply.has(STORED));
+        return Long.parseLong(mReply.text(STORED));
     }
 
     private static long readLong(String json, String key) {
-        Matcher m = Pattern.compile("\"" + key + "\":(-?\\d+)").matcher(json);
-        assertTrue("no " + key + " field in: " + json, m.find());
-        return Long.parseLong(m.group(1));
+        assertTrue("no " + key + " field in: " + json, Reply.of(json).has(key));
+        return Reply.of(json).integer(key);
     }
 
     private static String exec(String command) throws Exception {

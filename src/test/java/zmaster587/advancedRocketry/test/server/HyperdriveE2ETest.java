@@ -1,5 +1,6 @@
 package zmaster587.advancedRocketry.test.server;
 
+import zmaster587.advancedRocketry.test.Reply;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -35,9 +36,8 @@ public class HyperdriveE2ETest extends AbstractSharedServerTest {
     private static final String NAV_D = "0 2780 80 2780";
 
     private static long field(String json, String name) {
-        Matcher m = Pattern.compile("\"" + name + "\":(-?\\d+)").matcher(json);
-        assertTrue("expected a numeric field " + name + " in: " + json, m.find());
-        return Long.parseLong(m.group(1));
+        assertTrue("expected a numeric field " + name + " in: " + json, Reply.of(json).has(name));
+        return Reply.of(json).integer(name);
     }
 
     private String exec(String cmd) throws Exception {

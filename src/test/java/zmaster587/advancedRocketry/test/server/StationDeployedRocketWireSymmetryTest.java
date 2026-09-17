@@ -1,5 +1,6 @@
 package zmaster587.advancedRocketry.test.server;
 
+import zmaster587.advancedRocketry.test.Reply;
 import org.junit.Test;
 
 import java.util.regex.Matcher;
@@ -36,9 +37,9 @@ import static org.junit.Assert.assertTrue;
  */
 public class StationDeployedRocketWireSymmetryTest extends AbstractSharedServerTest {
 
-    private static final Pattern WRITTEN = Pattern.compile("\"written\":(-?\\d+)");
-    private static final Pattern READ = Pattern.compile("\"read\":(-?\\d+)");
-    private static final Pattern TRAILING = Pattern.compile("\"trailing\":(-?\\d+)");
+    private static final String WRITTEN = "written";
+    private static final String READ = "read";
+    private static final String TRAILING = "trailing";
 
     @Test
     public void inheritedSubPacketRoundTripsSymmetrically() throws Exception {
@@ -71,11 +72,10 @@ public class StationDeployedRocketWireSymmetryTest extends AbstractSharedServerT
                 0, intOf(TRAILING, resp));
     }
 
-    private static int intOf(Pattern pattern, String text) {
-        Matcher matcher = pattern.matcher(text);
-        assertTrue("probe response missing " + pattern.pattern() + ": " + text,
-                matcher.find());
-        return Integer.parseInt(matcher.group(1));
+    private static int intOf(String field, String text) {
+        Reply reply = Reply.of(text);
+        assertTrue("probe response missing `" + field + "`: " + text, reply.has(field));
+        return reply.integer(field);
     }
 
     private static String join(java.util.List<String> resp) {

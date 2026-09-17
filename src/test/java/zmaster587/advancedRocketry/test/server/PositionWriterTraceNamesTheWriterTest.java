@@ -1,5 +1,6 @@
 package zmaster587.advancedRocketry.test.server;
 
+import zmaster587.advancedRocketry.test.Reply;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.regex.Matcher;
@@ -41,9 +42,9 @@ import static org.junit.Assert.assertTrue;
  */
 public class PositionWriterTraceNamesTheWriterTest {
 
-    private static final Pattern TO = Pattern.compile("\"to\":(-?\\d+(?:\\.\\d+)?)");
-    private static final Pattern BY = Pattern.compile("\"by\":\"([^\"]*)\"");
-    private static final Pattern COUNT = Pattern.compile("\"count\":(-?\\d+)");
+    private static final String TO = "to";
+    private static final String BY = "by";
+    private static final String COUNT = "count";
 
     private Path workDir;
     private RealDedicatedServerHarness harness;
@@ -98,15 +99,16 @@ public class PositionWriterTraceNamesTheWriterTest {
         // proves the field is present, not that it names anything.
         System.out.println("[pos-writer calibration] " + reply);
 
-        Matcher to = TO.matcher(reply);
-        assertTrue("the record must carry where the write put him: " + reply, to.find());
+        String written = String.valueOf(Events.lastRecord(reply));
+        assertTrue("the record must carry where the write put him: " + reply,
+                !Double.isNaN(Events.number(written, TO)));
         assertEquals("the recorded destination must be the placement's own target; " + reply,
-                260.0, Double.parseDouble(to.group(1)), 0.5);
+                260.0, Events.number(written, TO), 0.5);
 
-        Matcher by = BY.matcher(reply);
-        assertTrue("the record must carry a caller trail: " + reply, by.find());
+        String trail = Events.text(written, BY);
+        assertTrue("the record must carry a caller trail: " + reply, trail != null);
         assertFalse("an empty caller trail names no writer, which is the whole value of the record;"
-                + " " + reply, by.group(1).trim().isEmpty());
+                + " " + reply, trail.trim().isEmpty());
     }
 
     /**
@@ -126,9 +128,9 @@ public class PositionWriterTraceNamesTheWriterTest {
         GameTicks.advanceWorld(harness.client(), 0, 20);
 
         String reply = exec("artest events since " + mark + " pos_jump");
-        Matcher count = COUNT.matcher(reply);
-        assertTrue("events since must report a count: " + reply, count.find());
+        Reply since = Reply.of("artest events since", reply);
+        assertTrue("events since must report a count: " + reply, since.has(COUNT));
         assertEquals("a 2-block move is motion, not a jump, and must leave the timeline alone; "
-                + reply, 0, Integer.parseInt(count.group(1)));
+                + reply, 0, since.integer(COUNT));
     }
 }

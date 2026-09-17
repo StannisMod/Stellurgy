@@ -1,5 +1,6 @@
 package zmaster587.advancedRocketry.test.server;
 
+import zmaster587.advancedRocketry.test.Reply;
 import com.github.stannismod.forge.testing.junit.AbstractHeadlessServerTest;
 import org.junit.Test;
 
@@ -37,10 +38,10 @@ import static org.junit.Assert.assertTrue;
 public class SolarTileStationPerimeterSliverZeroPowerTest extends AbstractHeadlessServerTest {
 
     private static final int SPACE_DIM = -2;
-    private static final Pattern ID = Pattern.compile("\"id\":(-?\\d+)");
-    private static final Pattern SPAWN_X = Pattern.compile("\"spawnX\":(-?\\d+)");
-    private static final Pattern SPAWN_Z = Pattern.compile("\"spawnZ\":(-?\\d+)");
-    private static final Pattern ENERGY = Pattern.compile("\"energyStored\":(-?\\d+)");
+    private static final String ID = "id";
+    private static final String SPAWN_X = "spawnX";
+    private static final String SPAWN_Z = "spawnZ";
+    private static final String ENERGY = "energyStored";
 
     @Test
     public void perimeterSliverSolarOnRealStationGeneratesPower() throws Exception {
@@ -101,15 +102,15 @@ public class SolarTileStationPerimeterSliverZeroPowerTest extends AbstractHeadle
         return resp;
     }
 
-    private static int extract(Pattern p, String s) {
-        Matcher m = p.matcher(s);
-        assertTrue("pattern " + p + " not found in: " + s, m.find());
-        return Integer.parseInt(m.group(1));
+    private static int extract(String field, String s) {
+        Reply reply = Reply.of(s);
+        assertTrue("field `" + field + "` not found in: " + s, reply.has(field));
+        return reply.integer(field);
     }
 
-    private static long extractLong(Pattern p, String s) {
-        Matcher m = p.matcher(s);
-        assertTrue("pattern " + p + " not found in: " + s, m.find());
-        return Long.parseLong(m.group(1));
+    private static long extractLong(String field, String s) {
+        Reply reply = Reply.of(s);
+        assertTrue("field `" + field + "` not found in: " + s, reply.has(field));
+        return (long) reply.number(field);
     }
 }

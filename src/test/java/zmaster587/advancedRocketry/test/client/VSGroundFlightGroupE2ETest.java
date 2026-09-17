@@ -12,6 +12,7 @@ import java.util.regex.Pattern;
 
 import zmaster587.advancedRocketry.api.FreeFlightPhysics;
 import zmaster587.advancedRocketry.test.Events;
+import zmaster587.advancedRocketry.test.Reply;
 import zmaster587.advancedRocketry.test.FixtureSite;
 import zmaster587.advancedRocketry.test.Plot;
 
@@ -77,9 +78,8 @@ public class VSGroundFlightGroupE2ETest extends AbstractSharedVsClientE2ETest {
         return new Plot.Lane(SHIP_LANE.originX, SHIP_LANE.originZ, 192, 192);
     }
 
-    private static final Pattern BUILDER_POS =
-            Pattern.compile("\"builderPos\":\\[(-?\\d+),(-?\\d+),(-?\\d+)]");
-    private static final Pattern POS_X = Pattern.compile("\"posX\":(-?[0-9.E\\-]+)");
+    private static final String BUILDER_POS = "builderPos";
+    private static final String POS_X = "posX";
     /**
      * The travel along {@code p} since {@code before}, or {@code null} when the ship is no longer
      * reporting a position at all.
@@ -99,9 +99,9 @@ public class VSGroundFlightGroupE2ETest extends AbstractSharedVsClientE2ETest {
      * from the one the assertion makes, which is the whole point — the maximum over the samples
      * taken is still falsifiable by a ship that never moved.</p>
      */
-    private static Double travelOrNull(String shipInfo, Pattern p, double before) {
-        Matcher m = p.matcher(shipInfo);
-        return m.find() ? Double.parseDouble(m.group(1)) - before : null;
+    private static Double travelOrNull(String shipInfo, String field, double before) {
+        double now = Reply.of("artest vs ship-info", shipInfo).number(field);
+        return Double.isNaN(now) ? null : now - before;
     }
 
     /**
@@ -147,7 +147,7 @@ public class VSGroundFlightGroupE2ETest extends AbstractSharedVsClientE2ETest {
      * {@link TestTimeouts#factor()} — so a frame-starved client under concurrent-fork load still
      * gets every tick it used to.</p>
      */
-    private double[] travelWindow(String shipId, int key, Pattern driven, Pattern other,
+    private double[] travelWindow(String shipId, int key, String driven, String other,
                                   double drivenBefore, double otherBefore) throws Exception {
         double best = 0.0;
         double otherThere = 0.0;
@@ -178,15 +178,15 @@ public class VSGroundFlightGroupE2ETest extends AbstractSharedVsClientE2ETest {
         return new double[] {best, otherThere};
     }
 
-    private static final Pattern POS_Y = Pattern.compile("\"posY\":(-?[0-9.E\\-]+)");
-    private static final Pattern POS_Z = Pattern.compile("\"posZ\":(-?[0-9.E\\-]+)");
-    private static final Pattern VEL_Y = Pattern.compile("\"velY\":(-?[0-9.E\\-]+)");
-    private static final Pattern QW = Pattern.compile("\"qw\":(-?[0-9.E\\-]+)");
-    private static final Pattern QX = Pattern.compile("\"qx\":(-?[0-9.E\\-]+)");
-    private static final Pattern QY = Pattern.compile("\"qy\":(-?[0-9.E\\-]+)");
-    private static final Pattern QZ = Pattern.compile("\"qz\":(-?[0-9.E\\-]+)");
-    private static final Pattern COUNT = Pattern.compile("\"count\":(-?\\d+)");
-    private static final Pattern DUMMY_ID = Pattern.compile("\"dummyId\":(-?\\d+)");
+    private static final String POS_Y = "posY";
+    private static final String POS_Z = "posZ";
+    private static final String VEL_Y = "velY";
+    private static final String QW = "qw";
+    private static final String QX = "qx";
+    private static final String QY = "qy";
+    private static final String QZ = "qz";
+    private static final String COUNT = "count";
+    private static final String DUMMY_ID = "dummyId";
 
     private static final String SEAT_VARIANT = "with-pilot-seat";
     private static final String AFC_VARIANT = "with-advanced-flight-computer";
@@ -661,15 +661,14 @@ public class VSGroundFlightGroupE2ETest extends AbstractSharedVsClientE2ETest {
         // NAMES — the anchored form resolved the yard nearest a point, which is a different ship
         // whenever a neighbour's is nearer — then mount that subspace block.
         String found = exec("artest vs find-seat 0 id " + shipId);
-        Matcher sm = Pattern.compile("\"seatX\":(-?\\d+),\"seatY\":(-?\\d+),\"seatZ\":(-?\\d+)")
-                .matcher(found);
-        assertTrue("find-seat must resolve THIS ship's subspace seat: " + found, sm.find());
-        String mountInfo = exec("artest vs seat-mount-at 0 " + sm.group(1) + " " + sm.group(2)
-                + " " + sm.group(3));
-        Matcher dm = DUMMY_ID.matcher(mountInfo);
-        assertTrue("seat-mount-at must report a dummy id: " + mountInfo, dm.find());
+        Reply seat = Reply.of("artest vs find-seat", found);
+        assertTrue("find-seat must resolve THIS ship's subspace seat: " + found,
+                seat.has("seatX") && seat.has("seatY") && seat.has("seatZ"));
+        String mountInfo = exec("artest vs seat-mount-at 0 " + seat.integer("seatX") + " "
+                + seat.integer("seatY") + " " + seat.integer("seatZ"));
+        int dummyId = Reply.of("artest vs seat-mount-at", mountInfo).integer(DUMMY_ID);
         long seatMark = clientEvents().mark();
-        String mount = exec("artest player mount-entity " + dm.group(1));
+        String mount = exec("artest player mount-entity " + dummyId);
         assertTrue("bot must mount the seat dummy: " + mount,
                 mount.contains("\"mounted\":true"));
         // "Let the mount replicate" is the right sentence and ten ticks were the wrong way to say
@@ -862,8 +861,8 @@ public class VSGroundFlightGroupE2ETest extends AbstractSharedVsClientE2ETest {
     }
 
     private int count(String sub) throws Exception {
-        Matcher m = COUNT.matcher(exec("artest vs " + sub + " 0"));
-        return m.find() ? Integer.parseInt(m.group(1)) : -1;
+        String command = "artest vs " + sub + " 0";
+        return Reply.of(command, exec(command)).integerOr(COUNT, -1);
     }
 
     private double[] readVec(String shipInfoJson) {
@@ -876,10 +875,10 @@ public class VSGroundFlightGroupE2ETest extends AbstractSharedVsClientE2ETest {
                 readDouble(shipInfoJson, QY), readDouble(shipInfoJson, QZ)};
     }
 
-    private double readDouble(String json, Pattern p) {
-        Matcher m = p.matcher(json);
-        assertTrue("expected a number in: " + json, m.find());
-        return Double.parseDouble(m.group(1));
+    private double readDouble(String json, String field) {
+        double value = Reply.of(json).number(field);
+        assertTrue("expected a number `" + field + "` in: " + json, !Double.isNaN(value));
+        return value;
     }
 
     private String assembleFixture(FixtureSite site, String variant) throws Exception {
@@ -893,8 +892,8 @@ public class VSGroundFlightGroupE2ETest extends AbstractSharedVsClientE2ETest {
         String fixture = exec("artest fixture rocket 0 " + baseX + " " + baseY + " " + baseZ
                 + " " + variant);
         assertTrue("fixture (" + variant + ") failed: " + fixture, fixture.contains("\"ok\":true"));
-        Matcher bp = BUILDER_POS.matcher(fixture);
-        assertTrue("fixture missing builderPos: " + fixture, bp.find());
-        return exec("artest rocket assemble 0 " + bp.group(1) + " " + bp.group(2) + " " + bp.group(3));
+        int[] bp = Reply.of(fixture).blockPos(BUILDER_POS);
+        assertTrue("fixture missing builderPos: " + fixture, bp != null);
+        return exec("artest rocket assemble 0 " + bp[0] + " " + bp[1] + " " + bp[2]);
     }
 }

@@ -17,6 +17,7 @@ import org.junit.rules.TestWatcher;
 import org.junit.runner.Description;
 import org.junit.runners.MethodSorters;
 
+import zmaster587.advancedRocketry.test.Reply;
 import zmaster587.advancedRocketry.test.Events;
 
 import java.util.HashMap;
@@ -673,9 +674,7 @@ public abstract class AbstractSharedClientE2ETest {
      */
     private int playerDimOnTheServer(int fallback) throws Exception {
         String reply = exec("artest oxygen player " + HARNESS_ACCOUNT);
-        java.util.regex.Matcher m =
-                java.util.regex.Pattern.compile("\"dim\":(-?\\d+)").matcher(reply);
-        return m.find() ? Integer.parseInt(m.group(1)) : fallback;
+        return Reply.of("artest oxygen player", reply).integerOr("dim", fallback);
     }
 
     /**
@@ -1172,16 +1171,16 @@ public abstract class AbstractSharedClientE2ETest {
     /** The {@code text} of the first record in a client chat reply containing {@code lowerNeedle},
      *  or null. The needle is matched against the line's own text, never against the envelope. */
     private static String firstChatTextContaining(String reply, String lowerNeedle) {
-        Matcher m = CHAT_TEXT.matcher(String.valueOf(reply));
-        while (m.find()) {
-            if (m.group(1).toLowerCase(Locale.ROOT).contains(lowerNeedle)) {
-                return m.group(1);
+        for (String record : Events.records(String.valueOf(reply))) {
+            String text = Events.text(record, CHAT_TEXT);
+            if (text != null && text.toLowerCase(Locale.ROOT).contains(lowerNeedle)) {
+                return text;
             }
         }
         return null;
     }
 
-    private static final Pattern CHAT_TEXT = Pattern.compile("\"text\":\"([^\"]*)\"");
+    private static final String CHAT_TEXT = "text";
 
     // ── internals ────────────────────────────────────────────────────────────
 

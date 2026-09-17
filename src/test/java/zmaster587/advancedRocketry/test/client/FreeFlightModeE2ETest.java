@@ -14,6 +14,7 @@ import java.util.regex.Pattern;
 
 import zmaster587.advancedRocketry.api.FreeFlightPhysics;
 import zmaster587.advancedRocketry.test.Events;
+import zmaster587.advancedRocketry.test.Reply;
 
 import zmaster587.advancedRocketry.test.FixtureSite;
 
@@ -79,22 +80,38 @@ import static org.junit.Assert.assertTrue;
 @FixMethodOrder(MethodSorters.NAME_ASCENDING)
 public class FreeFlightModeE2ETest extends AbstractSharedClientE2ETest {
 
-    private static final Pattern BUILDER_POS =
-            Pattern.compile("\"builderPos\":\\[(-?\\d+),(-?\\d+),(-?\\d+)]");
-    private static final Pattern ROCKET_ID = Pattern.compile("\"id\":(-?\\d+)");
+    private static final String BUILDER_POS = "builderPos";
+    private static final String ROCKET_ID = "id";
 
     /** How long the CLIENT is given to perform a seating or a release the server has already done,
      *  in ticks — a ceiling on one round trip. */
     private static final int SEAT_LINK_BUDGET_TICKS = 200;
-    private static final Pattern MOTION_Y = Pattern.compile("\"motionY\":(-?[0-9.E\\-]+)");
-    private static final Pattern POS_X = Pattern.compile("\"posX\":(-?[0-9.E\\-]+)");
-    private static final Pattern POS_Y = Pattern.compile("\"posY\":(-?[0-9.E\\-]+)");
-    private static final Pattern POS_Z = Pattern.compile("\"posZ\":(-?[0-9.E\\-]+)");
-    private static final Pattern YAW   = Pattern.compile("\"rotationYaw\":(-?[0-9.E\\-]+)");
-    private static final Pattern FF_PITCH = Pattern.compile("\"freeFlightPitch\":(-?[0-9.E\\-]+)");
-    private static final Pattern FF_ROLL  = Pattern.compile("\"freeFlightRoll\":(-?[0-9.E\\-]+)");
-    private static final Pattern FUEL_PRIMARY_AMOUNT =
-            Pattern.compile("\"primaryFuelType\":\"([^\"]+)\".*?\"\\1\":\\{\"amount\":(-?\\d+)");
+    private static final String MOTION_Y = "motionY";
+    private static final String POS_X = "posX";
+    private static final String POS_Y = "posY";
+    private static final String POS_Z = "posZ";
+    private static final String YAW = "rotationYaw";
+    private static final String FF_PITCH = "freeFlightPitch";
+    private static final String FF_ROLL = "freeFlightRoll";
+    /**
+     * How much of the fuel the rocket calls PRIMARY it is carrying, or {@code -1} when the reply
+     * names no primary fuel or holds no entry for it.
+     *
+     * <p>The reply is {@code {"primaryFuelType":"X","fuels":{"X":{"amount":…}}}} — a map keyed by
+     * the value of another field. The regex this replaces expressed that with a back-reference
+     * ({@code "\\1"}), which is exact only while the two are written in that order and adjacent;
+     * read structurally, the lookup is what it always was: one field naming a key in another.</p>
+     */
+    private static int primaryFuelAmount(String fuelReply) {
+        Reply reply = Reply.of("artest rocket fuel", fuelReply);
+        String primary = reply.text("primaryFuelType");
+        String fuels = reply.object("fuels");
+        if (primary == null || fuels == null) {
+            return -1;
+        }
+        String entry = Reply.of(fuels).object(primary);
+        return entry == null ? -1 : Reply.of(entry).integerOr("amount", -1);
+    }
 
     /**
      * The base Y for every fixture here: the OPEN-AIR band, not terrain.
@@ -193,11 +210,11 @@ public class FreeFlightModeE2ETest extends AbstractSharedClientE2ETest {
         String fixture = exec("artest fixture rocket 0 " + baseX + " " + baseY + " "
                 + baseZ + " simple");
         assertTrue("fixture failed: " + fixture, fixture.contains("\"ok\":true"));
-        Matcher bp = BUILDER_POS.matcher(fixture);
-        assertTrue("fixture response missing builderPos: " + fixture, bp.find());
-        int bx = Integer.parseInt(bp.group(1));
-        int by = Integer.parseInt(bp.group(2));
-        int bz = Integer.parseInt(bp.group(3));
+        int[] bp = Reply.of(fixture).blockPos(BUILDER_POS);
+        assertTrue("fixture response missing builderPos: " + fixture, bp != null);
+        int bx = bp[0];
+        int by = bp[1];
+        int bz = bp[2];
 
         // Pad-bounds detection occasionally races chunk/structure state on the
         // shared world; retry the assemble a couple of times before failing.
@@ -263,12 +280,12 @@ public class FreeFlightModeE2ETest extends AbstractSharedClientE2ETest {
         return found;
     }
 
-    private static double parseDouble(String body, Pattern p, String label) {
-        Matcher m = p.matcher(body);
-        if (!m.find()) {
+    private static double parseDouble(String body, String field, String label) {
+        double value = Reply.of(body).number(field);
+        if (Double.isNaN(value)) {
             throw new AssertionError("response missing " + label + ": " + body);
         }
-        return Double.parseDouble(m.group(1));
+        return value;
     }
 
     // ---- the rocket's engine state as EVENTS -------------------------------------------------
@@ -777,7 +794,7 @@ public class FreeFlightModeE2ETest extends AbstractSharedClientE2ETest {
         exec("artest player mount-entity " + rocketId);
         exec("artest rocket set-flight-mode " + rocketId + " FREE_FLIGHT");
         String hud = Events.text(Events.lastRecord(clientEvents().awaitMatching(hudMark, "ff_hud",
-                seen -> !Events.recordsWithAll(seen, "Free Flight Mode", "ENGINES OFF").isEmpty(),
+                seen -> !Events.recordsContainingAll(seen, "Free Flight Mode", "ENGINES OFF").isEmpty(),
                 "carrying the pre-launch title AND the engine-start hint",
                 "entering free-flight mode must draw the pre-launch HUD — its mode title and its"
                         + " ENGINES OFF hint — for the pilot who just sat down",
@@ -799,17 +816,15 @@ public class FreeFlightModeE2ETest extends AbstractSharedClientE2ETest {
         // rocketRequireFuel) while thrust is applied across real server ticks.
         int rocketId = mountFreshFreeFlightRocket();
 
-        Matcher mb = FUEL_PRIMARY_AMOUNT.matcher(exec("artest rocket fuel " + rocketId));
-        assertTrue("rocket must report a primary fuel amount", mb.find());
-        int fuelBefore = Integer.parseInt(mb.group(2));
+        int fuelBefore = primaryFuelAmount(exec("artest rocket fuel " + rocketId));
+        assertTrue("rocket must report a primary fuel amount", fuelBefore >= 0);
         assertTrue("start-free-flight must auto-fill fuel, got " + fuelBefore, fuelBefore > 0);
 
         exec("artest rocket free-flight-input " + rocketId + " 0 1 0 0 0");
         bot().waitTicks(20);
 
-        Matcher ma = FUEL_PRIMARY_AMOUNT.matcher(exec("artest rocket fuel " + rocketId));
-        assertTrue(ma.find());
-        int fuelAfter = Integer.parseInt(ma.group(2));
+        int fuelAfter = primaryFuelAmount(exec("artest rocket fuel " + rocketId));
+        assertTrue("rocket must still report a primary fuel amount", fuelAfter >= 0);
         assertTrue("FF thrust must drain primary fuel through the live loop; "
                         + "before=" + fuelBefore + " after=" + fuelAfter,
                 fuelAfter < fuelBefore);

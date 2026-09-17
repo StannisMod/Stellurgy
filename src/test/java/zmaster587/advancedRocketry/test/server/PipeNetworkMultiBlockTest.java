@@ -1,5 +1,6 @@
 package zmaster587.advancedRocketry.test.server;
 
+import zmaster587.advancedRocketry.test.Reply;
 import com.github.stannismod.forge.testing.junit.AbstractHeadlessServerTest;
 import org.junit.Test;
 
@@ -30,8 +31,8 @@ import static org.junit.Assert.assertTrue;
  */
 public class PipeNetworkMultiBlockTest extends AbstractHeadlessServerTest {
 
-    private static final Pattern STORED = Pattern.compile("\"energyStored\":(\\d+)");
-    private static final Pattern MAX = Pattern.compile("\"energyMax\":(\\d+)");
+    private static final String STORED = "energyStored";
+    private static final String MAX = "energyMax";
 
     @Test
     public void generatorAndHatchCoexistAcrossTicks() throws Exception {
@@ -138,8 +139,7 @@ public class PipeNetworkMultiBlockTest extends AbstractHeadlessServerTest {
         return count;
     }
 
-    private static long parseLong(Pattern p, String s) {
-        Matcher m = p.matcher(s);
-        return m.find() ? Long.parseLong(m.group(1)) : -1L;
+    private static long parseLong(String field, String s) {
+        return (long) Reply.of(s).number(field);
     }
 }

@@ -1,7 +1,5 @@
 package zmaster587.advancedRocketry.test;
 
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
@@ -58,8 +56,8 @@ public final class ShipIdentity {
      * nothing saying which.</p>
      */
     public static String nameFromAssembly(String assembleReply) {
-        Matcher m = Pattern.compile("\"shipId\":\"([^\"]*)\"").matcher(String.valueOf(assembleReply));
-        String durableId = m.find() ? m.group(1) : null;
+        String durableId = Reply.of("artest rocket assemble", String.valueOf(assembleReply))
+                .text("shipId");
         assertTrue("the assembler did not name the ship it built, so nothing downstream can be about"
                 + " one particular craft: " + assembleReply, durableId != null);
         assertTrue("the pad carried more than one flight computer, so the id names one of several"
@@ -83,9 +81,9 @@ public final class ShipIdentity {
         assertTrue("no loaded hull in dim " + dim + " carries the name " + durableShipId + ", so every"
                 + " later `vs` call would have to guess which craft is meant: " + reply,
                 reply.contains("\"found\":true"));
-        Matcher m = Pattern.compile("\"id\":\"([^\"]*)\"").matcher(reply);
-        assertTrue("the bridge reported found:true without an id: " + reply, m.find());
-        return m.group(1);
+        String id = Reply.of("artest vs ship-uuid", reply).text("id");
+        assertTrue("the bridge reported found:true without an id: " + reply, id != null);
+        return id;
     }
 
     /**
@@ -106,13 +104,14 @@ public final class ShipIdentity {
     public static boolean aLoadedShipIsAt(Probe probe, int dim, double x, double y, double z,
                                           double tolerance) throws Exception {
         String reply = probe.exec("artest vs ships-loaded " + dim);
-        Matcher each = Pattern.compile(
-                "\"posX\":(-?[0-9.E\\-]+),\"posY\":(-?[0-9.E\\-]+),\"posZ\":(-?[0-9.E\\-]+)")
-                .matcher(reply);
-        while (each.find()) {
-            double dx = Double.parseDouble(each.group(1)) - x;
-            double dy = Double.parseDouble(each.group(2)) - y;
-            double dz = Double.parseDouble(each.group(3)) - z;
+        // Each ship is read as its own object. The regex this replaces matched the three coordinate
+        // fields in ONE expression, which held only while they stayed adjacent and in that order —
+        // and would otherwise have paired one hull's x with another hull's z.
+        for (String ship : Reply.of("artest vs ships-loaded", reply).objectArray("ships")) {
+            Reply one = Reply.of(ship);
+            double dx = one.number("posX") - x;
+            double dy = one.number("posY") - y;
+            double dz = one.number("posZ") - z;
             if (Math.sqrt(dx * dx + dy * dy + dz * dz) <= tolerance) {
                 return true;
             }
@@ -135,14 +134,15 @@ public final class ShipIdentity {
      */
     public static String theOnlyLoadedShipIn(Probe probe, int dim) throws Exception {
         String counted = probe.exec("artest vs ship-count " + dim);
-        Matcher n = Pattern.compile("\"count\":(-?\\d+)").matcher(counted);
-        assertTrue("the ship count for dim " + dim + " is unreadable: " + counted, n.find());
+        Reply count = Reply.of("artest vs ship-count", counted);
+        assertTrue("the ship count for dim " + dim + " is unreadable: " + counted,
+                count.has("count"));
         assertEquals("dim " + dim + " must hold exactly ONE loaded ship for it to be nameable this"
                 + " way — with two, nothing here says which one a reading is about: " + counted,
-                1, Integer.parseInt(n.group(1)));
-        Matcher only = Pattern.compile("\"ships\":\\[\"([^\"]+)\"").matcher(counted);
-        assertTrue("the count says one ship but does not name it: " + counted, only.find());
-        return only.group(1);
+                1, count.integer("count"));
+        String[] named = count.textArray("ships");
+        assertTrue("the count says one ship but does not name it: " + counted, named.length >= 1);
+        return named[0];
     }
 
     /**
@@ -156,9 +156,9 @@ public final class ShipIdentity {
         String reply = "";
         for (int attempt = 0; attempt < attempts; attempt++) {
             reply = probe.exec("artest vs ship-uuid " + dim + " " + durableShipId);
-            Matcher m = Pattern.compile("\"id\":\"([^\"]*)\"").matcher(reply);
-            if (reply.contains("\"found\":true") && m.find()) {
-                return m.group(1);
+            String hullId = Reply.of("artest vs ship-uuid", reply).text("id");
+            if (reply.contains("\"found\":true") && hullId != null) {
+                return hullId;
             }
             between.await();
         }
@@ -171,9 +171,8 @@ public final class ShipIdentity {
      *  the reply says nobody holds it. Never absent from a reply: production emits the key with a
      *  null value, so a missing key means the reply is not a deck-capture answer at all. */
     public static String anchorOf(String deckCaptureReply) {
-        Matcher m = Pattern.compile("\"anchorShipId\":\"([^\"]*)\"")
-                .matcher(String.valueOf(deckCaptureReply));
-        return m.find() ? m.group(1) : null;
+        return Reply.of("artest vs deck-capture", String.valueOf(deckCaptureReply))
+                .text("anchorShipId");
     }
 
     /**
@@ -191,9 +190,10 @@ public final class ShipIdentity {
      * ship frame by containment and takes the first match, so the count names nobody.</p>
      */
     public static String containingShipsOf(String deckCaptureReply) {
-        Matcher m = Pattern.compile("\"containingShipIds\":(\\[[^\\]]*\\])")
-                .matcher(String.valueOf(deckCaptureReply));
-        return m.find() ? m.group(1) : null;
+        // The field is an ARRAY and every caller prints or compares it as one token, so it is handed
+        // back as the array's own text rather than as its members.
+        return Reply.of("artest vs deck-capture", String.valueOf(deckCaptureReply))
+                .text("containingShipIds");
     }
 
     /** The ship a {@code deck-capture} reply says would TAKE this body on first contact — the
@@ -201,9 +201,8 @@ public final class ShipIdentity {
      *  captured yet. Null when the reply describes a body that is already tracked (there the anchor
      *  is the identity) or one no hull supports. */
     public static String firstContactCandidateOf(String deckCaptureReply) {
-        Matcher m = Pattern.compile("\"firstContactCandidate\":\"([^\"]*)\"")
-                .matcher(String.valueOf(deckCaptureReply));
-        return m.find() ? m.group(1) : null;
+        return Reply.of("artest vs deck-capture", String.valueOf(deckCaptureReply))
+                .text("firstContactCandidate");
     }
 
     /**
@@ -234,9 +233,8 @@ public final class ShipIdentity {
      *  when it is inside none. Production emits the key with a null value beside {@code shipLoaded},
      *  so a missing key means the reply is not a player-ship-data answer at all. */
     public static String aboardShipOf(String playerShipDataReply) {
-        Matcher m = Pattern.compile("\"shipId\":\"([^\"]*)\"")
-                .matcher(String.valueOf(playerShipDataReply));
-        return m.find() ? m.group(1) : null;
+        return Reply.of("artest vs player-ship-data", String.valueOf(playerShipDataReply))
+                .text("shipId");
     }
 
     /**
@@ -339,8 +337,8 @@ public final class ShipIdentity {
      * ended.</p>
      */
     public static boolean endsCapturedBy(Events log, long mark, String shipId) throws Exception {
-        java.util.List<String> captures = Events.recordsWithAll(log.since(mark, "deck_entered"),
-                "\"ship\":\"" + shipId + "\"");
+        java.util.List<String> captures =
+                Events.recordsWhere(log.since(mark, "deck_entered"), "ship", shipId);
         if (captures.isEmpty()) {
             return false;
         }

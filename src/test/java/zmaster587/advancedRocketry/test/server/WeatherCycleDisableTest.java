@@ -1,5 +1,6 @@
 package zmaster587.advancedRocketry.test.server;
 
+import zmaster587.advancedRocketry.test.Reply;
 import com.github.stannismod.forge.testing.junit.AbstractHeadlessServerTest;
 import com.github.stannismod.forge.testing.server.RealDedicatedServerHarness;
 import org.junit.After;
@@ -105,8 +106,8 @@ public class WeatherCycleDisableTest {
         // Anchor on the probe's named worldInfoClass field, not a bare substring
         // of the whole response.
         assertTrue("planet must be wrapped while custom weather is on: " + wrapped,
-                Pattern.compile("\"worldInfoClass\":\"[^\"]*ARDimensionWorldInfo\"")
-                        .matcher(wrapped).find());
+                String.valueOf(Reply.of("artest dim info", wrapped).text("worldInfoClass"))
+                        .endsWith("ARDimensionWorldInfo"));
 
         // Forced-clear marker (rain=-1, thunder=-1): the custom cycle, when it runs,
         // drives this planet to clear regardless of what we set.

@@ -1,5 +1,6 @@
 package zmaster587.advancedRocketry.test.server;
 
+import zmaster587.advancedRocketry.test.Reply;
 import org.junit.After;
 import org.junit.Test;
 
@@ -39,16 +40,16 @@ import static org.junit.Assert.assertTrue;
  */
 public class SealDetectorDispatchTest extends AbstractSharedServerTest {
 
-    private static final Pattern BRANCH = Pattern.compile("\"branch\":\"([^\"]+)\"");
+    private static final String BRANCH = "branch";
     private static final int DIM = 0;
 
     private static String probe(int x, int y, int z) throws Exception {
         String resp = String.join("\n", client().execute(
                 "artest seal-detector check " + DIM + " " + x + " " + y + " " + z));
-        Matcher m = BRANCH.matcher(resp);
+        Reply mReply = Reply.of(resp);
         assertTrue("probe response must contain a branch field; got: " + resp,
-                m.find());
-        return m.group(1);
+                mReply.has(BRANCH));
+        return mReply.text(BRANCH);
     }
 
     private static void place(int x, int y, int z, String blockId) throws Exception {

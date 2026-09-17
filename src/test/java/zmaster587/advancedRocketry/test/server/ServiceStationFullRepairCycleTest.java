@@ -1,5 +1,6 @@
 package zmaster587.advancedRocketry.test.server;
 
+import zmaster587.advancedRocketry.test.Reply;
 import org.junit.Test;
 
 import java.util.regex.Matcher;
@@ -60,16 +61,13 @@ import static zmaster587.advancedRocketry.test.server.WorldCommandFixtures.exec;
  */
 public class ServiceStationFullRepairCycleTest extends AbstractSharedServerTest {
 
-    private static final Pattern BUILDER_POS =
-            Pattern.compile("\"builderPos\":\\[(-?\\d+),(-?\\d+),(-?\\d+)]");
-    private static final Pattern ENTITY_ID = Pattern.compile("\"entityId\":(-?\\d+)");
-    private static final Pattern PARTS_COUNT = Pattern.compile("\"partsToRepairCount\":(-?\\d+)");
-    private static final Pattern INITIAL_COUNT =
-            Pattern.compile("\"initialPartToRepairCount\":(-?\\d+)");
-    private static final Pattern ASM_COUNT = Pattern.compile("\"assemblersCount\":(-?\\d+)");
-    private static final Pattern PROC_COUNT = Pattern.compile("\"partsProcessingCount\":(-?\\d+)");
-    private static final Pattern OUTPUT_POS_LIST =
-            Pattern.compile("\"outputPositions\":\\[\\[(-?\\d+),(-?\\d+),(-?\\d+)]");
+    private static final String BUILDER_POS = "builderPos";
+    private static final String ENTITY_ID = "entityId";
+    private static final String PARTS_COUNT = "partsToRepairCount";
+    private static final String INITIAL_COUNT = "initialPartToRepairCount";
+    private static final String ASM_COUNT = "assemblersCount";
+    private static final String PROC_COUNT = "partsProcessingCount";
+    private static final String OUTPUT_POS_LIST = "outputPositions";
 
     // Use an isolated lane far from existing service-station tests so
     // parallel-fork chunk shuffling can't cross-contaminate.
@@ -96,12 +94,13 @@ public class ServiceStationFullRepairCycleTest extends AbstractSharedServerTest 
                 + FIXTURE_CX + " " + FIXTURE_CY + " " + FIXTURE_CZ);
         assertTrue("precision-assembler fixture must build: " + asmResp,
                 asmResp.contains("\"ok\":true"));
-        Matcher outM = OUTPUT_POS_LIST.matcher(asmResp);
+        int[][] outputs = Reply.of("artest fixture multiblock", asmResp)
+                .blockPosArray(OUTPUT_POS_LIST);
         assertTrue("fixture response must include outputPositions: " + asmResp,
-                outM.find());
-        int outX = Integer.parseInt(outM.group(1));
-        int outY = Integer.parseInt(outM.group(2));
-        int outZ = Integer.parseInt(outM.group(3));
+                outputs.length > 0);
+        int outX = outputs[0][0];
+        int outY = outputs[0][1];
+        int outZ = outputs[0][2];
 
         // Build + assemble rocket in its own lane so its launchpad
         // doesn't overlap the assembler footprint.
@@ -112,15 +111,15 @@ public class ServiceStationFullRepairCycleTest extends AbstractSharedServerTest 
                 + FIXTURE_CY + " " + ROCKET_CZ + " simple");
         assertTrue("rocket fixture must build: " + fix,
                 fix.contains("\"ok\":true"));
-        Matcher bp = BUILDER_POS.matcher(fix);
-        assertTrue("fixture missing builderPos: " + fix, bp.find());
-        String assemble = exec("artest rocket assemble 0 " + bp.group(1) + " "
-                + bp.group(2) + " " + bp.group(3));
+        int[] bp = Reply.of(fix).blockPos(BUILDER_POS);
+        assertTrue("fixture missing builderPos: " + fix, bp != null);
+        String assemble = exec("artest rocket assemble 0 " + bp[0] + " "
+                + bp[1] + " " + bp[2]);
         assertTrue("assemble must succeed: " + assemble,
                 assemble.contains("\"ok\":true"));
-        Matcher eim = ENTITY_ID.matcher(assemble);
-        assertTrue("no entityId: " + assemble, eim.find());
-        int rocketId = Integer.parseInt(eim.group(1));
+        Reply eimReply = Reply.of(assemble);
+        assertTrue("no entityId: " + assemble, eimReply.has(ENTITY_ID));
+        int rocketId = Integer.parseInt(eimReply.text(ENTITY_ID));
 
         // Mark one of the rocket's advRocketmotor TileBrokenParts as
         // stage 5.
@@ -218,9 +217,9 @@ public class ServiceStationFullRepairCycleTest extends AbstractSharedServerTest 
                 reInject.contains("\"ok\":true"));
     }
 
-    private static int extract(String src, Pattern pattern) {
-        Matcher m = pattern.matcher(src);
-        assertTrue("pattern not found in: " + src, m.find());
-        return Integer.parseInt(m.group(1));
+    private static int extract(String src, String field) {
+        Reply reply = Reply.of(src);
+        assertTrue("field `" + field + "` not found in: " + src, reply.has(field));
+        return reply.integer(field);
     }
 }

@@ -9,6 +9,7 @@ import org.lwjgl.input.Keyboard;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import zmaster587.advancedRocketry.test.Reply;
 import zmaster587.advancedRocketry.test.Events;
 import zmaster587.advancedRocketry.test.FixtureSite;
 
@@ -39,10 +40,9 @@ public class VSShipUnmannedCruiseE2ETest extends AbstractSharedVsClientE2ETest {
         return "vs-ship-unmanned-cruise";
     }
 
-    private static final Pattern BUILDER_POS =
-            Pattern.compile("\"builderPos\":\\[(-?\\d+),(-?\\d+),(-?\\d+)]");
-    private static final Pattern POS_Y = Pattern.compile("\"posY\":(-?[0-9.E\\-]+)");
-    private static final Pattern DUMMY_ID = Pattern.compile("\"dummyId\":(-?\\d+)");
+    private static final String BUILDER_POS = "builderPos";
+    private static final String POS_Y = "posY";
+    private static final String DUMMY_ID = "dummyId";
 
     private static final String VARIANT = "with-pilot-seat";
 
@@ -106,10 +106,10 @@ public class VSShipUnmannedCruiseE2ETest extends AbstractSharedVsClientE2ETest {
         String mountInfo = exec("artest vs seat-mount 0 id " + shipId);
         assertTrue("seat-mount must find the pilot seat: " + mountInfo,
                 mountInfo.contains("\"seatFound\":true"));
-        Matcher dm = DUMMY_ID.matcher(mountInfo);
-        assertTrue("seat-mount must report a dummy id: " + mountInfo, dm.find());
+        Reply dmReply = Reply.of(mountInfo);
+        assertTrue("seat-mount must report a dummy id: " + mountInfo, dmReply.has(DUMMY_ID));
         long seatMark = clientEvents().mark();
-        String mount = exec("artest player mount-entity " + dm.group(1));
+        String mount = exec("artest player mount-entity " + dmReply.text(DUMMY_ID));
         assertTrue("bot must mount the seat dummy: " + mount, mount.contains("\"mounted\":true"));
         // The deflection below is a real key on a client that must already be riding; the setpoint
         // ramp it drives is what the whole scenario measures.
@@ -185,9 +185,9 @@ public class VSShipUnmannedCruiseE2ETest extends AbstractSharedVsClientE2ETest {
                 remount.contains("\"seatFound\":true"));
         assertTrue("the re-mount must REUSE the seat's single dummy: " + remount,
                 remount.contains("\"reused\":true"));
-        Matcher rm = DUMMY_ID.matcher(remount);
-        assertTrue(remount, rm.find());
-        String mounted = exec("artest player mount-entity " + rm.group(1));
+        Reply rmReply = Reply.of(remount);
+        assertTrue(remount, rmReply.has(DUMMY_ID));
+        String mounted = exec("artest player mount-entity " + rmReply.text(DUMMY_ID));
         assertTrue("bot must re-mount the seat dummy: " + mounted,
                 mounted.contains("\"mounted\":true"));
         double yRemount = shipY();
@@ -258,10 +258,10 @@ public class VSShipUnmannedCruiseE2ETest extends AbstractSharedVsClientE2ETest {
         return n;
     }
 
-    private double readDouble(String json, Pattern p) {
-        Matcher m = p.matcher(json);
-        assertTrue("expected a number in: " + json, m.find());
-        return Double.parseDouble(m.group(1));
+    private double readDouble(String json, String field) {
+        double value = Reply.of(json).number(field);
+        assertTrue("field `" + field + "` not found in: " + json, !Double.isNaN(value));
+        return value;
     }
 
     private String assembleFixture(FixtureSite site) throws Exception {
@@ -276,8 +276,8 @@ public class VSShipUnmannedCruiseE2ETest extends AbstractSharedVsClientE2ETest {
         String fixture = exec("artest fixture rocket 0 " + baseX + " " + baseY + " " + baseZ
                 + " " + VARIANT);
         assertTrue("fixture (" + VARIANT + ") failed: " + fixture, fixture.contains("\"ok\":true"));
-        Matcher bp = BUILDER_POS.matcher(fixture);
-        assertTrue("fixture missing builderPos: " + fixture, bp.find());
-        return exec("artest rocket assemble 0 " + bp.group(1) + " " + bp.group(2) + " " + bp.group(3));
+        int[] bp = Reply.of(fixture).blockPos(BUILDER_POS);
+        assertTrue("fixture missing builderPos: " + fixture, bp != null);
+        return exec("artest rocket assemble 0 " + bp[0] + " " + bp[1] + " " + bp[2]);
     }
 }

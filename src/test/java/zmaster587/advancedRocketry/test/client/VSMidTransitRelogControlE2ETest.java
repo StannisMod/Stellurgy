@@ -15,6 +15,7 @@ import java.util.regex.Pattern;
 import zmaster587.advancedRocketry.space.CellSeam;
 import zmaster587.advancedRocketry.space.CellWorldMapper;
 import zmaster587.advancedRocketry.space.GalacticCoord;
+import zmaster587.advancedRocketry.test.Reply;
 import zmaster587.advancedRocketry.test.Events;
 import zmaster587.advancedRocketry.test.ShipIdentity;
 
@@ -63,8 +64,8 @@ public class VSMidTransitRelogControlE2ETest extends AbstractSharedVsClientE2ETe
         return "vs-mid-transit-relog-control";
     }
 
-    private static final Pattern PLAYER_NAME = Pattern.compile("\"player\":\"([^\"]+)\"");
-    private static final Pattern SHIP_ID = Pattern.compile("\"id\":\"([^\"]*)\"");
+    private static final String PLAYER_NAME = "player";
+    private static final String SHIP_ID = "id";
 
     /** A demonstrable held-key climb: well above settle jitter, cheap to reach. */
     private static final double MIN_CLIMB = 1.0;
@@ -109,10 +110,10 @@ public class VSMidTransitRelogControlE2ETest extends AbstractSharedVsClientE2ETe
                 + " with-pilot-seat");
         scenario().requireArranged("fixture (with-pilot-seat) failed: " + fixture,
                 fixture.contains("\"ok\":true"));
-        Matcher bp = Pattern.compile("\"builderPos\":\\[(-?\\d+),(-?\\d+),(-?\\d+)]").matcher(fixture);
-        scenario().requireArranged("fixture missing builderPos: " + fixture, bp.find());
+        int[] bp = Reply.of("artest fixture rocket", fixture).blockPos("builderPos");
+        scenario().requireArranged("fixture missing builderPos: " + fixture, bp != null);
         String assembled = exec("artest rocket assemble " + originDim
-                + " " + bp.group(1) + " " + bp.group(2) + " " + bp.group(3));
+                + " " + bp[0] + " " + bp[1] + " " + bp[2]);
         scenario().requireArranged("a with-pilot-seat build must route to a ship: " + assembled,
                 assembled.contains("\"rocketCount\":0"));
         assertTrue("the piloted origin ship never assembled/loaded in the pool cell (dim "
@@ -154,9 +155,9 @@ public class VSMidTransitRelogControlE2ETest extends AbstractSharedVsClientE2ETe
                         .contains("\"ok\":true"));
 
         String health = exec("artest player health");
-        Matcher nameM = PLAYER_NAME.matcher(health);
-        assertTrue("player health must echo the player name: " + health, nameM.find());
-        String botName = nameM.group(1);
+        Reply nameMReply = Reply.of(health);
+        assertTrue("player health must echo the player name: " + health, nameMReply.has(PLAYER_NAME));
+        String botName = nameMReply.text(PLAYER_NAME);
 
         // The CLIENT's mark BEFORE the transfer is ordered: the twenty ticks that stood here were a
         // guess at one round trip plus a world teardown, and the read below is the client's own.
@@ -505,10 +506,10 @@ public class VSMidTransitRelogControlE2ETest extends AbstractSharedVsClientE2ETe
         Events.assertInstrumentRan(gate, "ship_pilot_gate_events",
                 "this client's ship-control gate did, or did not, open while the key was held");
         String sent = clientEvents().since(mark, "pilot_input_sent");
-        return " client: gateOpen=" + Events.countRecords(gate, "\"open\":true")
-                + " gateClosed=" + Events.countRecords(gate, "\"open\":false")
-                + " onSeatMount=" + Events.countRecords(gate, "\"ridingDummy\":true")
-                + " inputsSent=" + Events.countRecords(sent, "\"seat\":")
+        return " client: gateOpen=" + Events.countRecords(gate, "open", "true")
+                + " gateClosed=" + Events.countRecords(gate, "open", "false")
+                + " onSeatMount=" + Events.countRecords(gate, "ridingDummy", "true")
+                + " inputsSent=" + Events.countRecordsWithField(sent, "seat")
                 + " lastSentSeat=" + Events.lastField(sent, "seat")
                 + " (gate=" + gate + " sent=" + sent + ")";
     }
@@ -535,30 +536,26 @@ public class VSMidTransitRelogControlE2ETest extends AbstractSharedVsClientE2ETe
     }
 
     private static int readInt(String json, String key) {
-        Matcher m = Pattern.compile("\"" + key + "\":(-?\\d+)").matcher(json);
-        assertTrue("expected int \"" + key + "\" in: " + json, m.find());
-        return Integer.parseInt(m.group(1));
+        assertTrue("expected int \"" + key + "\" in: " + json, Reply.of(json).has(key));
+        return Reply.of(json).integer(key);
     }
 
     private static int readIntOr(String json, String key, int def) {
-        Matcher m = Pattern.compile("\"" + key + "\":(-?\\d+)").matcher(json);
-        return m.find() ? Integer.parseInt(m.group(1)) : def;
+        return Reply.of(json).integerOr(key, def);
     }
 
     private static double readDouble(String json, String key) {
-        Matcher m = Pattern.compile("\"" + key + "\":(-?[0-9.E\\-]+)").matcher(json);
-        assertTrue("expected number \"" + key + "\" in: " + json, m.find());
-        return Double.parseDouble(m.group(1));
+        assertTrue("expected number \"" + key + "\" in: " + json, Reply.of(json).has(key));
+        return Reply.of(json).number(key);
     }
 
     /** As above, but ABSENCE is an answer: a diagnostic that refuses is worse than one that says
      *  the field was not there. Only for building a failure message — never for a verdict. */
     private static double readDoubleOr(String json, String key) {
-        Matcher m = Pattern.compile("\"" + key + "\":(-?[0-9.E\\-]+)").matcher(json);
-        return m.find() ? Double.parseDouble(m.group(1)) : Double.NaN;
+        return Reply.of(json).numberOr(key, Double.NaN);
     }
 
     private static boolean readBool(String json, String key) {
-        return Pattern.compile("\"" + key + "\":true").matcher(json).find();
+        return Reply.of(json).bool(key, false);
     }
 }

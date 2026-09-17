@@ -34,6 +34,12 @@ public final class RocketList {
     /** One rocket as the probe reported it. */
     public static final class Entry {
         public final int id;
+        /**
+         * The craft's persistent identity — the one thing a dimension change preserves, where the
+         * entity id does not. {@code null} when the probe did not report one, which is a reading:
+         * a caller asserting the surface exposes it must be able to see that it did not.
+         */
+        public final String uuid;
         public final int dim;
         /** Ticks this entity has existed — the age that separates a fresh build from a leftover. */
         public final int age;
@@ -43,6 +49,8 @@ public final class RocketList {
 
         Entry(JsonObject rocket) {
             this.id = rocket.get("id").getAsInt();
+            this.uuid = rocket.has("uuid") && !rocket.get("uuid").isJsonNull()
+                    ? rocket.get("uuid").getAsString() : null;
             this.dim = rocket.get("dim").getAsInt();
             this.age = rocket.get("age").getAsInt();
             JsonArray pos = rocket.getAsJsonArray("pos");

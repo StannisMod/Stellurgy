@@ -1,5 +1,7 @@
 package zmaster587.advancedRocketry.test.server;
 
+import zmaster587.advancedRocketry.test.RocketList;
+import zmaster587.advancedRocketry.test.Reply;
 import org.junit.Test;
 
 import java.util.regex.Matcher;
@@ -43,12 +45,11 @@ import static org.junit.Assert.assertTrue;
  */
 public class RocketAssemblerMiningDrillStatTest extends AbstractSharedServerTest {
 
-    private static final Pattern BUILDER_POS = Pattern.compile("\"builderPos\":\\[(-?\\d+),(-?\\d+),(-?\\d+)]");
-    private static final Pattern ROCKET_LIST_ID = Pattern.compile("\"id\":(-?\\d+)");
+    private static final String BUILDER_POS = "builderPos";
+    private static final String ROCKET_LIST_ID = "id";
     /** drillingPower is serialised as a float — accept "drillingPower":0.0,
      *  "drillingPower":0.02, etc. */
-    private static final Pattern DRILLING_POWER =
-            Pattern.compile("\"drillingPower\":(-?\\d+(?:\\.\\d+)?(?:E-?\\d+)?)");
+    private static final String DRILLING_POWER = "drillingPower";
 
     @Test
     public void rocketWithMiningDrillBlockAccumulatesDrillingPower() throws Exception {
@@ -94,11 +95,11 @@ public class RocketAssemblerMiningDrillStatTest extends AbstractSharedServerTest
         String fixture = String.join("\n", client().execute(
                 "artest fixture rocket 0 " + baseX + " " + baseY + " " + baseZ + " " + variant));
         assertTrue("fixture (" + variant + ") failed: " + fixture, fixture.contains("\"ok\":true"));
-        Matcher bp = BUILDER_POS.matcher(fixture);
-        assertTrue("fixture (" + variant + ") missing builderPos: " + fixture, bp.find());
-        int bx = Integer.parseInt(bp.group(1)),
-                by = Integer.parseInt(bp.group(2)),
-                bz = Integer.parseInt(bp.group(3));
+        int[] bp = Reply.of(fixture).blockPos(BUILDER_POS);
+        assertTrue("fixture (" + variant + ") missing builderPos: " + fixture, bp != null);
+        int bx = bp[0],
+                by = bp[1],
+                bz = bp[2];
 
         String assemble = String.join("\n", client().execute(
                 "artest rocket assemble 0 " + bx + " " + by + " " + bz));
@@ -106,16 +107,15 @@ public class RocketAssemblerMiningDrillStatTest extends AbstractSharedServerTest
                 assemble.contains("\"ok\":true"));
 
         String rocketList = String.join("\n", client().execute("artest rocket list 0"));
-        Matcher rim = ROCKET_LIST_ID.matcher(rocketList);
-        int lastId = -1;
-        while (rim.find()) lastId = Integer.parseInt(rim.group(1));
-        assertTrue("rocket list yielded no ids after assemble: " + rocketList, lastId >= 0);
+        java.util.List<RocketList.Entry> built = RocketList.of(rocketList);
+        assertTrue("rocket list yielded no ids after assemble: " + rocketList, !built.isEmpty());
+        int lastId = built.isEmpty() ? -1 : built.get(built.size() - 1).id;
         return lastId;
     }
 
-    private static double extractDouble(String haystack, Pattern pattern) {
-        Matcher m = pattern.matcher(haystack);
-        assertTrue("pattern not found in: " + haystack, m.find());
-        return Double.parseDouble(m.group(1));
+    private static double extractDouble(String haystack, String field) {
+        double value = Reply.of(haystack).number(field);
+        assertTrue("field `" + field + "` not found in: " + haystack, !Double.isNaN(value));
+        return value;
     }
 }

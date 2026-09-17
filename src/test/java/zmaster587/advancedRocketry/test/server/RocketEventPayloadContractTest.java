@@ -1,5 +1,6 @@
 package zmaster587.advancedRocketry.test.server;
 
+import zmaster587.advancedRocketry.test.Reply;
 import org.junit.Test;
 
 import zmaster587.advancedRocketry.test.GameTicks;
@@ -45,22 +46,21 @@ public class RocketEventPayloadContractTest extends AbstractSharedServerTest {
 
     private static final int DESCENT_TIMER = 40; // mirrors EntityRocket.DESCENT_TIMER
 
-    private static final Pattern BUILDER_POS =
-            Pattern.compile("\"builderPos\":\\[(-?\\d+),(-?\\d+),(-?\\d+)]");
-    private static final Pattern ENTITY_ID = Pattern.compile("\"entityId\":(-?\\d+)");
-    private static final Pattern PRELAUNCH_ID = Pattern.compile("\"preLaunchEntityId\":(-?\\d+)");
-    private static final Pattern PRELAUNCH_DIM = Pattern.compile("\"preLaunchDim\":(-?\\d+)");
-    private static final Pattern DISMANTLE_ID = Pattern.compile("\"dismantleEntityId\":(-?\\d+)");
-    private static final Pattern DISMANTLE_DIM = Pattern.compile("\"dismantleDim\":(-?\\d+)");
-    private static final Pattern LANDED_ID = Pattern.compile("\"landedEntityId\":(-?\\d+)");
-    private static final Pattern LANDED_DIM = Pattern.compile("\"landedDim\":(-?\\d+)");
-    private static final Pattern LANDED_COUNT = Pattern.compile("\"landed\":(-?\\d+)");
-    private static final Pattern DEORBIT_ID = Pattern.compile("\"deOrbitingEntityId\":(-?\\d+)");
-    private static final Pattern DEORBIT_DIM = Pattern.compile("\"deOrbitingDim\":(-?\\d+)");
-    private static final Pattern DEORBIT_COUNT = Pattern.compile("\"deOrbiting\":(-?\\d+)");
-    private static final Pattern ORBIT_REACHED_ID = Pattern.compile("\"orbitReachedEntityId\":(-?\\d+)");
-    private static final Pattern ORBIT_REACHED_DIM = Pattern.compile("\"orbitReachedDim\":(-?\\d+)");
-    private static final Pattern ORBIT_REACHED_COUNT = Pattern.compile("\"orbitReached\":(-?\\d+)");
+    private static final String BUILDER_POS = "builderPos";
+    private static final String ENTITY_ID = "entityId";
+    private static final String PRELAUNCH_ID = "preLaunchEntityId";
+    private static final String PRELAUNCH_DIM = "preLaunchDim";
+    private static final String DISMANTLE_ID = "dismantleEntityId";
+    private static final String DISMANTLE_DIM = "dismantleDim";
+    private static final String LANDED_ID = "landedEntityId";
+    private static final String LANDED_DIM = "landedDim";
+    private static final String LANDED_COUNT = "landed";
+    private static final String DEORBIT_ID = "deOrbitingEntityId";
+    private static final String DEORBIT_DIM = "deOrbitingDim";
+    private static final String DEORBIT_COUNT = "deOrbiting";
+    private static final String ORBIT_REACHED_ID = "orbitReachedEntityId";
+    private static final String ORBIT_REACHED_DIM = "orbitReachedDim";
+    private static final String ORBIT_REACHED_COUNT = "orbitReached";
 
     private static final int CY = FixtureSite.OPEN_AIR_Y;
     private static final int CZ = 8000;
@@ -289,20 +289,20 @@ public class RocketEventPayloadContractTest extends AbstractSharedServerTest {
         String fixture = exec("artest fixture rocket 0 " + baseX + " " + CY + " " + CZ
                 + " simple");
         assertTrue("fixture build failed: " + fixture, fixture.contains("\"ok\":true"));
-        Matcher bp = BUILDER_POS.matcher(fixture);
-        assertTrue("no builderPos: " + fixture, bp.find());
+        int[] bp = Reply.of(fixture).blockPos(BUILDER_POS);
+        assertTrue("no builderPos: " + fixture, bp != null);
         String assemble = exec("artest rocket assemble 0 "
-                + bp.group(1) + " " + bp.group(2) + " " + bp.group(3));
+                + bp[0] + " " + bp[1] + " " + bp[2]);
         assertTrue("assemble must succeed: " + assemble,
                 assemble.contains("\"ok\":true"));
-        Matcher eim = ENTITY_ID.matcher(assemble);
-        assertTrue("no entityId: " + assemble, eim.find());
-        return Integer.parseInt(eim.group(1));
+        Reply eimReply = Reply.of(assemble);
+        assertTrue("no entityId: " + assemble, eimReply.has(ENTITY_ID));
+        return Integer.parseInt(eimReply.text(ENTITY_ID));
     }
 
-    private static int extract(String src, Pattern pattern) {
-        Matcher m = pattern.matcher(src);
-        assertTrue("pattern not found in: " + src, m.find());
-        return Integer.parseInt(m.group(1));
+    private static int extract(String src, String field) {
+        Reply reply = Reply.of(src);
+        assertTrue("field `" + field + "` not found in: " + src, reply.has(field));
+        return reply.integer(field);
     }
 }

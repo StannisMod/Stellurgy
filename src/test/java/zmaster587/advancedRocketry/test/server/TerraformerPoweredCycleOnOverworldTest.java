@@ -1,5 +1,6 @@
 package zmaster587.advancedRocketry.test.server;
 
+import zmaster587.advancedRocketry.test.Reply;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
@@ -44,12 +45,11 @@ public class TerraformerPoweredCycleOnOverworldTest extends AbstractSharedServer
     private static final int CX_POSITIVE = 4000;
     private static final int CX_NEGATIVE = 4200;
 
-    private static final Pattern CONFIG_VALUE = Pattern.compile("\"value\":(true|false|-?\\d+(?:\\.\\d+)?)");
-    private static final Pattern CURRENT_ATMOS = Pattern.compile("\"currentAtmosphere\":(-?\\d+)");
-    private static final Pattern POWER_POS =
-            Pattern.compile("\"powerPos\":\\[(-?\\d+),(-?\\d+),(-?\\d+)]");
-    private static final Pattern LIQUID_TRIPLE =
-            Pattern.compile("\\[(-?\\d+),(-?\\d+),(-?\\d+)]");
+    private static final String CONFIG_VALUE = "value";
+    private static final String CURRENT_ATMOS = "currentAtmosphere";
+    private static final String POWER_POS = "powerPos";
+    /** All four 'L' hatches of the terraformer structure, as {@code [[x,y,z], …]}. */
+    private static final String LIQUID_INPUT_POSITIONS = "liquidInputPositions";
 
     private boolean originalAllowNonAR;
     private int originalDensity;
@@ -132,11 +132,11 @@ public class TerraformerPoweredCycleOnOverworldTest extends AbstractSharedServer
     }
 
     private void injectPower(String fixture, int amount) throws Exception {
-        Matcher m = POWER_POS.matcher(fixture);
-        assertTrue("no powerPos in fixture response: " + fixture, m.find());
-        int px = Integer.parseInt(m.group(1));
-        int py = Integer.parseInt(m.group(2));
-        int pz = Integer.parseInt(m.group(3));
+        int[] m = Reply.of(fixture).blockPos(POWER_POS);
+        assertTrue("no powerPos in fixture response: " + fixture, m != null);
+        int px = m[0];
+        int py = m[1];
+        int pz = m[2];
         String resp = exec("artest energy inject "
                 + DIM + " " + px + " " + py + " " + pz + " " + amount);
         assertTrue("energy inject failed: " + resp, resp.contains("\"ok\":true"));
@@ -164,18 +164,13 @@ public class TerraformerPoweredCycleOnOverworldTest extends AbstractSharedServer
 
     private void injectFluidAt(String fixture, int hatchIndex, String fluidName, int amount)
             throws Exception {
-        int sectionStart = fixture.indexOf("\"liquidInputPositions\"");
-        assertTrue("no liquidInputPositions in fixture response: " + fixture,
-                sectionStart >= 0);
-        Matcher m = LIQUID_TRIPLE.matcher(fixture);
-        m.region(sectionStart, fixture.length());
-        for (int i = 0; i <= hatchIndex; i++) {
-            assertTrue("liquidInputPositions has fewer than " + (hatchIndex + 1)
-                    + " hatches: " + fixture, m.find());
-        }
-        int lx = Integer.parseInt(m.group(1));
-        int ly = Integer.parseInt(m.group(2));
-        int lz = Integer.parseInt(m.group(3));
+        int[][] hatches = Reply.of("artest fixture machine", fixture)
+                .blockPosArray(LIQUID_INPUT_POSITIONS);
+        assertTrue("liquidInputPositions has fewer than " + (hatchIndex + 1)
+                + " hatches: " + fixture, hatchIndex < hatches.length);
+        int lx = hatches[hatchIndex][0];
+        int ly = hatches[hatchIndex][1];
+        int lz = hatches[hatchIndex][2];
         String resp = exec("artest fluid inject "
                 + DIM + " " + lx + " " + ly + " " + lz + " " + fluidName + " " + amount);
         assertTrue(fluidName + " inject failed at hatch " + hatchIndex + ": " + resp,
@@ -184,15 +179,15 @@ public class TerraformerPoweredCycleOnOverworldTest extends AbstractSharedServer
 
     private int readDensity() throws Exception {
         String info = exec("artest terraforming info " + DIM);
-        Matcher m = CURRENT_ATMOS.matcher(info);
-        assertTrue("no currentAtmosphere in terraforming info: " + info, m.find());
-        return Integer.parseInt(m.group(1));
+        Reply mReply = Reply.of(info);
+        assertTrue("no currentAtmosphere in terraforming info: " + info, mReply.has(CURRENT_ATMOS));
+        return Integer.parseInt(mReply.text(CURRENT_ATMOS));
     }
 
     private boolean readBoolConfig(String key) throws Exception {
         String resp = exec("artest config get " + key);
-        Matcher m = CONFIG_VALUE.matcher(resp);
-        assertTrue("config get " + key + " did not yield value: " + resp, m.find());
-        return Boolean.parseBoolean(m.group(1));
+        Reply mReply = Reply.of(resp);
+        assertTrue("config get " + key + " did not yield value: " + resp, mReply.has(CONFIG_VALUE));
+        return Boolean.parseBoolean(mReply.text(CONFIG_VALUE));
     }
 }

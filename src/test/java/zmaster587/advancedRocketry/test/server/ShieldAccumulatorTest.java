@@ -1,5 +1,6 @@
 package zmaster587.advancedRocketry.test.server;
 
+import zmaster587.advancedRocketry.test.Reply;
 import org.junit.Test;
 
 import java.util.List;
@@ -35,7 +36,7 @@ public class ShieldAccumulatorTest extends AbstractSharedServerTest {
     private static final int DIM = 0;
     private static final int Y = FixtureSite.OPEN_AIR_Y;
     private static final int FE_PER_ITERATION = 4000;
-    private static final Pattern STORED = Pattern.compile("\"shieldStored\":(-?\\d+)");
+    private static final String STORED = "shieldStored";
 
     @Test
     public void accumulatorBridgesGeneratorToEmitter() throws Exception {
@@ -141,9 +142,9 @@ public class ShieldAccumulatorTest extends AbstractSharedServerTest {
     }
 
     private static long readStored(String json) {
-        Matcher m = STORED.matcher(json);
-        assertTrue("no shieldStored field in probe response: " + json, m.find());
-        return Long.parseLong(m.group(1));
+        Reply mReply = Reply.of(json);
+        assertTrue("no shieldStored field in probe response: " + json, mReply.has(STORED));
+        return Long.parseLong(mReply.text(STORED));
     }
 
     private static String exec(String command) throws Exception {

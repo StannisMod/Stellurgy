@@ -1,5 +1,6 @@
 package zmaster587.advancedRocketry.test.server;
 
+import zmaster587.advancedRocketry.test.Reply;
 import com.github.stannismod.forge.testing.junit.AbstractHeadlessServerTest;
 import org.junit.Test;
 
@@ -34,7 +35,7 @@ import static org.junit.Assert.assertTrue;
  */
 public class BeaconLocationProbeSmokeTest extends AbstractHeadlessServerTest {
 
-    private static final Pattern COUNT = Pattern.compile("\"count\":(-?\\d+)");
+    private static final String COUNT = "count";
 
     @Test
     public void beaconListReportsEmptySetOnOverworld() throws Exception {
@@ -42,9 +43,9 @@ public class BeaconLocationProbeSmokeTest extends AbstractHeadlessServerTest {
         assertTrue("beacon list probe failed on overworld: " + resp,
                 !resp.contains("\"error\""));
 
-        Matcher m = COUNT.matcher(resp);
-        assertTrue("response must contain count: " + resp, m.find());
-        int count = Integer.parseInt(m.group(1));
+        Reply mReply = Reply.of(resp);
+        assertTrue("response must contain count: " + resp, mReply.has(COUNT));
+        int count = Integer.parseInt(mReply.text(COUNT));
 
         // Overworld starts with zero beacon locations because no beacon
         // multiblock has been enabled. A non-zero value would mean state

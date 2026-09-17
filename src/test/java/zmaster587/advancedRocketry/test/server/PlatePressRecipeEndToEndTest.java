@@ -4,6 +4,7 @@ import com.github.stannismod.forge.testing.server.TestClient;
 import org.junit.Test;
 
 import zmaster587.advancedRocketry.test.FixtureSite;
+import zmaster587.advancedRocketry.test.Reply;
 
 import static org.junit.Assert.assertTrue;
 
@@ -32,6 +33,9 @@ import static org.junit.Assert.assertTrue;
 public class PlatePressRecipeEndToEndTest extends AbstractSharedServerTest {
 
     private static final String FIXTURE_KEY = "plate-press";
+    /** What the fixture resolved the first recipe to — the ids this scenario is about. */
+    private static final String OUTPUT_ITEM = "outputItem";
+    private static final String INGREDIENT_BLOCK = "ingredientBlock";
     private static final String PRESS_FQN   = "zmaster587.advancedRocketry.block.BlockSmallPlatePress";
 
     @Test
@@ -67,16 +71,13 @@ public class PlatePressRecipeEndToEndTest extends AbstractSharedServerTest {
         assertTrue("fixture failed: " + fixture, fixture.contains("\"ok\":true"));
 
         // Extract the resolved output item + ingredient block ids.
-        java.util.regex.Matcher m = java.util.regex.Pattern.compile(
-                "\"outputItem\":\"([^\"]+)\"").matcher(fixture);
-        assertTrue("response missing outputItem: " + fixture, m.find());
-        String expectedOutputId = m.group(1);
+        Reply built = Reply.of("artest fixture machine", fixture);
+        assertTrue("response missing outputItem: " + fixture, built.has(OUTPUT_ITEM));
+        String expectedOutputId = built.text(OUTPUT_ITEM);
         assertTrue("first recipe has no output — can't end-to-end test",
                 !"null".equals(expectedOutputId));
-        java.util.regex.Matcher mb = java.util.regex.Pattern.compile(
-                "\"ingredientBlock\":\"([^\"]+)\"").matcher(fixture);
-        assertTrue("response missing ingredientBlock: " + fixture, mb.find());
-        String ingredientBlockId = mb.group(1);
+        assertTrue("response missing ingredientBlock: " + fixture, built.has(INGREDIENT_BLOCK));
+        String ingredientBlockId = built.text(INGREDIENT_BLOCK);
 
         // Activate: place a redstone block on top of the press. The press's
         // neighborChanged handler fires synchronously on setBlockState, runs

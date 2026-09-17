@@ -1,5 +1,6 @@
 package zmaster587.advancedRocketry.test.server;
 
+import zmaster587.advancedRocketry.test.Reply;
 import com.github.stannismod.forge.testing.junit.AbstractHeadlessServerTest;
 import com.github.stannismod.forge.testing.server.RealDedicatedServerHarness;
 import org.junit.After;
@@ -36,8 +37,8 @@ import static org.junit.Assert.assertTrue;
  */
 public class RocketInfrastructureLinkPersistenceTest {
 
-    private static final Pattern BUILDER_POS = Pattern.compile("\"builderPos\":\\[(-?\\d+),(-?\\d+),(-?\\d+)]");
-    private static final Pattern ENT_ID = Pattern.compile("\"entityId\":(-?\\d+)");
+    private static final String BUILDER_POS = "builderPos";
+    private static final String ENT_ID = "entityId";
 
     private Path workDir;
     private RealDedicatedServerHarness firstBoot;
@@ -74,18 +75,18 @@ public class RocketInfrastructureLinkPersistenceTest {
         String fx = String.join("\n", firstBoot.client().execute(
                 "artest fixture rocket 0 " + (sx + 20) + " 64 " + sz + " simple"));
         assertTrue("fixture rocket failed on first boot: " + fx, fx.contains("\"ok\":true"));
-        Matcher bp = BUILDER_POS.matcher(fx);
-        assertTrue("could not parse builderPos: " + fx, bp.find());
-        int bx = Integer.parseInt(bp.group(1)),
-                by = Integer.parseInt(bp.group(2)),
-                bz = Integer.parseInt(bp.group(3));
+        int[] bp = Reply.of(fx).blockPos(BUILDER_POS);
+        assertTrue("could not parse builderPos: " + fx, bp != null);
+        int bx = bp[0],
+                by = bp[1],
+                bz = bp[2];
 
         String assemble = String.join("\n", firstBoot.client().execute(
                 "artest rocket assemble 0 " + bx + " " + by + " " + bz));
         assertTrue("rocket assemble failed on first boot: " + assemble, assemble.contains("\"ok\":true"));
-        Matcher em = ENT_ID.matcher(assemble);
-        assertTrue("rocket entityId missing: " + assemble, em.find());
-        int rocketId = Integer.parseInt(em.group(1));
+        Reply emReply = Reply.of(assemble);
+        assertTrue("rocket entityId missing: " + assemble, emReply.has(ENT_ID));
+        int rocketId = Integer.parseInt(emReply.text(ENT_ID));
 
         String link = String.join("\n", firstBoot.client().execute(
                 "artest infra link 0 " + sx + " " + sy + " " + sz + " " + rocketId));

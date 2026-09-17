@@ -1,6 +1,7 @@
 package zmaster587.advancedRocketry.test.client;
 
 import zmaster587.advancedRocketry.test.Events;
+import zmaster587.advancedRocketry.test.Reply;
 import zmaster587.advancedRocketry.test.FixtureSite;
 import zmaster587.advancedRocketry.test.GameTicks;
 
@@ -10,8 +11,6 @@ import org.junit.FixMethodOrder;
 import org.junit.Test;
 import org.junit.runners.MethodSorters;
 
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
@@ -74,15 +73,16 @@ public class VSPilotSeatTakenWhileOfflineE2ETest extends AbstractSharedVsClientE
     // Nothing asks for it any more: the notice is a rendering, and what it announced is asserted off
     // the seat and the returning pilot's own position.
 
-    private static final Pattern BUILDER_POS =
-            Pattern.compile("\"builderPos\":\\[(-?\\d+),(-?\\d+),(-?\\d+)]");
-    private static final Pattern DUMMY_ID = Pattern.compile("\"dummyId\":(-?\\d+)");
-    private static final Pattern OCCUPANT_UUID = Pattern.compile("\"occupantUuid\":\"([^\"]+)\"");
-    private static final Pattern BOUND_COUNT = Pattern.compile("\"boundCount\":(-?\\d+)");
-    private static final Pattern SEAT_AT = Pattern.compile(
-            "\"seatX\":(-?\\d+),\"seatY\":(-?\\d+),\"seatZ\":(-?\\d+)");
-    private static final Pattern POS = Pattern.compile(
-            "\"posX\":(-?[0-9.E\\-]+),\"posY\":(-?[0-9.E\\-]+),\"posZ\":(-?[0-9.E\\-]+)");
+    private static final String BUILDER_POS = "builderPos";
+    private static final String DUMMY_ID = "dummyId";
+    private static final String OCCUPANT_UUID = "occupantUuid";
+    private static final String BOUND_COUNT = "boundCount";
+    private static final String SEAT_X = "seatX";
+    private static final String SEAT_Y = "seatY";
+    private static final String SEAT_Z = "seatZ";
+    private static final String POS_X = "posX";
+    private static final String POS_Y = "posY";
+    private static final String POS_Z = "posZ";
 
     private static final String VARIANT = "with-pilot-seat";
 
@@ -130,17 +130,17 @@ public class VSPilotSeatTakenWhileOfflineE2ETest extends AbstractSharedVsClientE
                 "every probe below is about a ship this client is standing over");
 
         String mountInfo = exec("artest vs seat-mount 0 id " + shipUuid);
-        Matcher dm = DUMMY_ID.matcher(mountInfo);
-        scenario().requireArranged("seat-mount must report a dummy id: " + mountInfo, dm.find());
-        Matcher sm = SEAT_AT.matcher(mountInfo);
+        Reply seatMount = Reply.of("artest vs seat-mount", mountInfo);
+        scenario().requireArranged("seat-mount must report a dummy id: " + mountInfo,
+                seatMount.has(DUMMY_ID));
         scenario().requireArranged("seat-mount must report the seat's block pos: " + mountInfo,
-                sm.find());
-        final int seatX = Integer.parseInt(sm.group(1));
-        final int seatY = Integer.parseInt(sm.group(2));
-        final int seatZ = Integer.parseInt(sm.group(3));
+                seatMount.has(SEAT_X));
+        final int seatX = seatMount.integer(SEAT_X);
+        final int seatY = seatMount.integer(SEAT_Y);
+        final int seatZ = seatMount.integer(SEAT_Z);
         // The CLIENT's own mark, one statement before the mount that produces the record.
         long seatMark = clientEvents().mark();
-        String mount = exec("artest player mount-entity " + dm.group(1));
+        String mount = exec("artest player mount-entity " + seatMount.integer(DUMMY_ID));
         scenario().requireArranged("bot must mount the seat dummy: " + mount,
                 mount.contains("\"mounted\":true"));
         // A LINK, where ten ticks used to stand: the server mounts him and the client PERFORMS the
@@ -205,9 +205,9 @@ public class VSPilotSeatTakenWhileOfflineE2ETest extends AbstractSharedVsClientE
         // the occupant holding the seat as `{"id":2651,"class":"EntityArmorStand"}` and the test
         // calling that a lost seat because it remembered him as 2650. Serially the chunk happened to
         // stay loaded. The identity that survives a reload is the UUID.
-        Matcher om = OCCUPANT_UUID.matcher(occupy);
-        scenario().requireArranged("seat-occupy must report the occupant's uuid: " + occupy, om.find());
-        final String occupantUuid = om.group(1);
+        Reply omReply = Reply.of(occupy);
+        scenario().requireArranged("seat-occupy must report the occupant's uuid: " + occupy, omReply.has(OCCUPANT_UUID));
+        final String occupantUuid = omReply.text(OCCUPANT_UUID);
         String occupancy = exec("artest vs seat-status 0 " + seatX + " " + seatY + " " + seatZ);
         scenario().requireArranged("the occupancy must HOLD before the pilot returns: " + occupancy,
                 occupancy.contains("\"uuid\":\"" + occupantUuid + "\""));
@@ -255,11 +255,11 @@ public class VSPilotSeatTakenWhileOfflineE2ETest extends AbstractSharedVsClientE
         // Vanilla re-spawns the returning pilot's persisted mount; unreconciled, that is a second
         // invisible dummy on the same seat, whose empty twin clears the ship's pilot input every
         // tick. The player-visible shape of that bug is a control tug-of-war nobody can attribute.
-        Matcher bc = BOUND_COUNT.matcher(seatAfter);
-        assertTrue("seat-status must report boundCount: " + seatAfter, bc.find());
+        Reply after = Reply.of("artest vs seat-status", seatAfter);
+        assertTrue("seat-status must report boundCount: " + seatAfter, after.has(BOUND_COUNT));
         assertEquals("a seat must keep exactly ONE bound mount dummy across its pilot's relog - "
                 + "a re-spawned duplicate fights the occupant for the ship's controls: " + observed,
-                1, Integer.parseInt(bc.group(1)));
+                1, after.integer(BOUND_COUNT));
 
         // ---- ASSERT 3: the returner is NOT seated — twice, so a late re-mount cannot hide. ------
         assertFalse("a pilot whose seat was taken while he was offline must NOT come back seated: "
@@ -304,14 +304,13 @@ public class VSPilotSeatTakenWhileOfflineE2ETest extends AbstractSharedVsClientE
      *  live world-frame oracle (the seat BLOCK's own coordinates are ship-subspace). */
     private double[] seatWorldPosition(int seatX, int seatY, int seatZ) throws Exception {
         String status = exec("artest vs seat-status 0 " + seatX + " " + seatY + " " + seatZ);
-        Matcher dm = DUMMY_ID.matcher(status);
+        Reply seat = Reply.of("artest vs seat-status", status);
         assertTrue("seat-status must expose the bound dummy for the position oracle: " + status,
-                dm.find());
-        String pos = exec("artest entity info 0 " + dm.group(1));
-        Matcher pm = POS.matcher(pos);
-        assertTrue("the entity-info probe must answer for the seat's dummy: " + pos, pm.find());
-        return new double[]{Double.parseDouble(pm.group(1)),
-                Double.parseDouble(pm.group(2)), Double.parseDouble(pm.group(3))};
+                seat.has(DUMMY_ID));
+        String pos = exec("artest entity info 0 " + seat.integer(DUMMY_ID));
+        Reply at = Reply.of("artest entity info", pos);
+        assertTrue("the entity-info probe must answer for the seat's dummy: " + pos, at.has(POS_X));
+        return new double[]{at.number(POS_X), at.number(POS_Y), at.number(POS_Z)};
     }
 
     private String assembleFixture(FixtureSite site) throws Exception {
@@ -325,9 +324,9 @@ public class VSPilotSeatTakenWhileOfflineE2ETest extends AbstractSharedVsClientE
         String fixture = exec("artest fixture rocket 0 " + baseX + " " + baseY + " " + baseZ + " " + VARIANT);
         scenario().requireArranged("fixture (" + VARIANT + ") failed: " + fixture,
                 fixture.contains("\"ok\":true"));
-        Matcher bp = BUILDER_POS.matcher(fixture);
-        scenario().requireArranged("fixture missing builderPos: " + fixture, bp.find());
-        return exec("artest rocket assemble 0 " + bp.group(1) + " " + bp.group(2) + " " + bp.group(3));
+        int[] bp = Reply.of(fixture).blockPos(BUILDER_POS);
+        scenario().requireArranged("fixture missing builderPos: " + fixture, bp != null);
+        return exec("artest rocket assemble 0 " + bp[0] + " " + bp[1] + " " + bp[2]);
     }
 
     private static boolean isRiding(JsonObject riding) {

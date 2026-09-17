@@ -12,6 +12,7 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 import zmaster587.advancedRocketry.test.Events;
+import zmaster587.advancedRocketry.test.Reply;
 
 import zmaster587.advancedRocketry.test.Plot;
 
@@ -102,15 +103,14 @@ public class VSRemoteBodyModelGateE2ETest extends AbstractSharedVsClientE2ETest 
         return "vs-remote-body-render";
     }
 
-    private static final Pattern BUILDER_POS =
-            Pattern.compile("\"builderPos\":\\[(-?\\d+),(-?\\d+),(-?\\d+)]");
-    private static final Pattern POS_X = Pattern.compile("\"posX\":(-?[0-9.E\\-]+)");
-    private static final Pattern POS_Y = Pattern.compile("\"posY\":(-?[0-9.E\\-]+)");
-    private static final Pattern POS_Z = Pattern.compile("\"posZ\":(-?[0-9.E\\-]+)");
-    private static final Pattern ENTITY_ID = Pattern.compile("\"entityId\":(-?\\d+)");
-    private static final Pattern OBSTACLES = Pattern.compile("\"shipSupportObstacles\":(-?\\d+)");
-    private static final Pattern Q_X = Pattern.compile("\"qx\":(-?[0-9.E\\-]+)");
-    private static final Pattern Q_Z = Pattern.compile("\"qz\":(-?[0-9.E\\-]+)");
+    private static final String BUILDER_POS = "builderPos";
+    private static final String POS_X = "posX";
+    private static final String POS_Y = "posY";
+    private static final String POS_Z = "posZ";
+    private static final String ENTITY_ID = "entityId";
+    private static final String OBSTACLES = "shipSupportObstacles";
+    private static final String Q_X = "qx";
+    private static final String Q_Z = "qz";
 
     private static final String VARIANT = "with-pilot-deck";
 
@@ -410,7 +410,7 @@ public class VSRemoteBodyModelGateE2ETest extends AbstractSharedVsClientE2ETest 
         boolean arrived = false;
         for (int waited = 0; waited <= SUBJECT_ARRIVAL_BUDGET_TICKS && !arrived; waited += 10) {
             arrivals = clientEvents().since(subjectSpawnMark, "entity_joined_world");
-            arrived = Events.countRecords(arrivals, "\"e\":" + subjectId + ",") > 0;
+            arrived = Events.countRecords(arrivals, "e", String.valueOf(subjectId)) > 0;
             if (!arrived) {
                 bot().waitTicks(10);
             }
@@ -492,9 +492,8 @@ public class VSRemoteBodyModelGateE2ETest extends AbstractSharedVsClientE2ETest 
     }
 
     private String blockAt(int x, int y, int z) throws Exception {
-        Matcher m = Pattern.compile("\"block\":\"([^\"]+)\"")
-                .matcher(exec("artest block at 0 " + x + " " + y + " " + z));
-        return m.find() ? m.group(1) : "?";
+        return Reply.of("artest block at",
+                exec("artest block at 0 " + x + " " + y + " " + z)).textOr("block", "?");
     }
 
     /** Whether the CLIENT world holds THIS subject, and where it puts it. Best effort: a probe
@@ -697,9 +696,7 @@ public class VSRemoteBodyModelGateE2ETest extends AbstractSharedVsClientE2ETest 
         System.out.println("[modelgate] spawn raw: " + spawned.replace('\n', ' '));
         assertTrue("the subject mob must spawn: " + spawned, spawned.contains("\"ok\":true"));
         bot().waitTicks(20);
-        Matcher m = ENTITY_ID.matcher(spawned);
-        assertTrue("spawn must report an entity id: " + spawned, m.find());
-        return Integer.parseInt(m.group(1));
+        return Reply.of("artest entity spawn", spawned).integer(ENTITY_ID);
     }
 
     /** Teleport beside a world position and aim at it. Used by the ship legs, where the camera has
@@ -824,9 +821,9 @@ public class VSRemoteBodyModelGateE2ETest extends AbstractSharedVsClientE2ETest 
                         .contains("\"ok\":true"));
         String fixture = exec("artest fixture rocket 0 " + baseX + " " + baseY + " " + baseZ + " " + VARIANT);
         assertTrue("fixture (" + VARIANT + ") failed: " + fixture, fixture.contains("\"ok\":true"));
-        Matcher bp = BUILDER_POS.matcher(fixture);
-        assertTrue("fixture missing builderPos: " + fixture, bp.find());
-        return exec("artest rocket assemble 0 " + bp.group(1) + " " + bp.group(2) + " " + bp.group(3));
+        int[] bp = Reply.of(fixture).blockPos(BUILDER_POS);
+        assertTrue("fixture missing builderPos: " + fixture, bp != null);
+        return exec("artest rocket assemble 0 " + bp[0] + " " + bp[1] + " " + bp[2]);
     }
 
     /** This scenario's ship, asked by identity — no distance term to be wrong about. */
@@ -847,16 +844,14 @@ public class VSRemoteBodyModelGateE2ETest extends AbstractSharedVsClientE2ETest 
         return clientEvents().mark();
     }
 
-    private double readDouble(String json, Pattern p) {
-        Matcher m = p.matcher(json);
-        assertTrue("expected a number in: " + json, m.find());
-        return Double.parseDouble(m.group(1));
+    private double readDouble(String json, String field) {
+        double value = Reply.of(json).number(field);
+        assertTrue("expected a number `" + field + "` in: " + json, !Double.isNaN(value));
+        return value;
     }
 
-    private int readInt(String json, Pattern p) {
-        Matcher m = p.matcher(json);
-        assertTrue("expected an integer in: " + json, m.find());
-        return Integer.parseInt(m.group(1));
+    private int readInt(String json, String field) {
+        return Reply.of(json).integer(field);
     }
 
 }

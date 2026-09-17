@@ -1,5 +1,6 @@
 package zmaster587.advancedRocketry.test.server;
 
+import zmaster587.advancedRocketry.test.Reply;
 import com.github.stannismod.forge.testing.junit.AbstractHeadlessServerTest;
 import org.junit.Test;
 
@@ -26,8 +27,8 @@ import static org.junit.Assert.assertTrue;
  */
 public class HovercraftEntitySmokeTest extends AbstractHeadlessServerTest {
 
-    private static final Pattern ENTITY_ID = Pattern.compile("\"entityId\":(\\d+)");
-    private static final Pattern POS_Y = Pattern.compile("\"posY\":(-?[\\d.]+)");
+    private static final String ENTITY_ID = "entityId";
+    private static final String POS_Y = "posY";
 
     @Test
     public void hovercraftSpawnsAndTicksWithoutCrash() throws Exception {
@@ -43,9 +44,9 @@ public class HovercraftEntitySmokeTest extends AbstractHeadlessServerTest {
         assertTrue("hovercraft spawn failed: " + spawn,
                 spawn.contains("\"ok\":true") && spawn.contains("\"spawned\":true"));
 
-        Matcher m = ENTITY_ID.matcher(spawn);
-        assertTrue("spawn response must carry entityId: " + spawn, m.find());
-        int entityId = Integer.parseInt(m.group(1));
+        Reply mReply = Reply.of(spawn);
+        assertTrue("spawn response must carry entityId: " + spawn, mReply.has(ENTITY_ID));
+        int entityId = Integer.parseInt(mReply.text(ENTITY_ID));
 
         // Verify entity registered and alive.
         String info1 = String.join("\n", client().execute(
@@ -78,9 +79,9 @@ public class HovercraftEntitySmokeTest extends AbstractHeadlessServerTest {
         // without NaN / underflow).
         String finalInfo = String.join("\n", client().execute(
                 "artest entity info 0 " + entityId));
-        Matcher py2 = POS_Y.matcher(finalInfo);
-        assertTrue("final posY must be readable: " + finalInfo, py2.find());
-        double finalY = Double.parseDouble(py2.group(1));
+        Reply py2Reply = Reply.of(finalInfo);
+        assertTrue("final posY must be readable: " + finalInfo, py2Reply.has(POS_Y));
+        double finalY = Double.parseDouble(py2Reply.text(POS_Y));
         assertTrue("hovercraft must not fall below world floor (got " + finalY + ")",
                 finalY > 0 && finalY < 256);
     }

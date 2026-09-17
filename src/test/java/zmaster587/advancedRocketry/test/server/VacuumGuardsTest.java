@@ -1,5 +1,6 @@
 package zmaster587.advancedRocketry.test.server;
 
+import zmaster587.advancedRocketry.test.Reply;
 import com.github.stannismod.forge.testing.junit.AbstractHeadlessServerTest;
 import com.github.stannismod.forge.testing.server.RealDedicatedServerHarness;
 import org.junit.After;
@@ -36,8 +37,8 @@ public class VacuumGuardsTest {
     private static final int DIM_VAC = 9611;
     private static final int DIM_AIR = 9612;
 
-    private static final Pattern SLEEP_RESULT = Pattern.compile("\"resultStatus\":\"([^\"]*)\"");
-    private static final Pattern CANCELED = Pattern.compile("\"canceled\":(true|false)");
+    private static final String SLEEP_RESULT = "resultStatus";
+    private static final String CANCELED = "canceled";
 
     private Path workDir;
     private RealDedicatedServerHarness harness;
@@ -91,10 +92,10 @@ public class VacuumGuardsTest {
         return String.join("\n", harness.client().execute(cmd));
     }
 
-    private String stringField(Pattern p, String src, String name) {
-        Matcher m = p.matcher(src);
-        assertTrue("field " + name + " missing in: " + src, m.find());
-        return m.group(1);
+    private String stringField(String field, String src, String name) {
+        Reply reply = Reply.of(src);
+        assertTrue("field " + name + " missing in: " + src, reply.has(field));
+        return reply.text(field);
     }
 
     /** Stations the fake player in the dim and lets the dim's

@@ -11,6 +11,7 @@ import org.junit.Test;
 import org.junit.runners.MethodSorters;
 
 import zmaster587.advancedRocketry.test.Events;
+import zmaster587.advancedRocketry.test.Reply;
 
 import java.util.Locale;
 import java.util.regex.Matcher;
@@ -84,8 +85,7 @@ public class MachineGuiClientGroupE2ETest extends AbstractSharedClientE2ETest {
     /** {@code zmaster587.advancedRocketry.api.Constants.STAR_ID_OFFSET}. */
     private static final int STAR_ID_OFFSET = 10000;
 
-    private static final Pattern BUILDER_POS =
-            Pattern.compile("\"builderPos\":\\[(-?\\d+),(-?\\d+),(-?\\d+)]");
+    private static final String BUILDER_POS = "builderPos";
 
     // Navigation console button ids — the console's own module ids, which libVulpes puts straight
     // on the GuiButton.
@@ -96,24 +96,24 @@ public class MachineGuiClientGroupE2ETest extends AbstractSharedClientE2ETest {
     private static final int SEEDED = 3;
     private static final int FIRST_SECTOR = 100;
 
-    private static final Pattern SHIP_COUNT = Pattern.compile("\"ship\":(\\d+)");
-    private static final Pattern SOURCE_COUNT = Pattern.compile("\"source\":(\\d+)");
-    private static final Pattern TARGET = Pattern.compile("\"target\":(null|\"[^\"]*\")");
-    private static final Pattern ARMED = Pattern.compile("\"armed\":(true|false)");
+    private static final String SHIP_COUNT = "ship";
+    private static final String SOURCE_COUNT = "source";
+    private static final String TARGET = "target";
+    private static final String ARMED = "armed";
 
     // Observatory region-scan probe fields.
-    private static final Pattern TELESCOPE_ORIGIN = Pattern.compile("\"origin\":\"([^\"]*)\"");
-    private static final Pattern TELESCOPE_AIM_DISTANCE = Pattern.compile("\"aimDistance\":(\\d+)");
+    private static final String TELESCOPE_ORIGIN = "origin";
+    private static final String TELESCOPE_AIM_DISTANCE = "aimDistance";
     /** What one step of the aim is worth in cells — the aim is counted in star territories. */
-    private static final Pattern TELESCOPE_STEP_CELLS = Pattern.compile("\"stepCells\":(\\d+)");
-    private static final Pattern TELESCOPE_ADDRESSES = Pattern.compile("\"addresses\":(-?\\d+)");
+    private static final String TELESCOPE_STEP_CELLS = "stepCells";
+    private static final String TELESCOPE_ADDRESSES = "addresses";
 
     // Railgun probe fields.
-    private static final Pattern FIRED = Pattern.compile("\"fired\":(true|false)");
-    private static final Pattern DEST_MATCHED = Pattern.compile("\"destMatched\":(\\d+)");
-    private static final Pattern SRC_REMAINING = Pattern.compile("\"srcInputRemaining\":(\\d+)");
-    private static final Pattern FIRE_STATUS = Pattern.compile("\"fireStatus\":\"([A-Z_]+)\"");
-    private static final Pattern DEST_LOADED = Pattern.compile("\"destLoaded\":(true|false)");
+    private static final String FIRED = "fired";
+    private static final String DEST_MATCHED = "destMatched";
+    private static final String SRC_REMAINING = "srcInputRemaining";
+    private static final String FIRE_STATUS = "fireStatus";
+    private static final String DEST_LOADED = "destLoaded";
 
     @Override
     protected String subsystem() {
@@ -207,7 +207,7 @@ public class MachineGuiClientGroupE2ETest extends AbstractSharedClientE2ETest {
         String displayed = "";
         try {
             displayed = clientEvents().awaitMatching(clientMark, "client_gui_opened",
-                    reply -> !Events.recordsWithAll(reply, "\"gui\":\"Gui").isEmpty(),
+                    reply -> !Events.recordsContainingAll(reply, "\"gui\":\"Gui").isEmpty(),
                     "carrying a Gui* screen",
                     "right-clicking the machine must open its GUI on the CLIENT", 6 * 60,
                     () -> bot().rightClickBlock(at[0], at[1], at[2], EnumFacing.UP,
@@ -251,7 +251,7 @@ public class MachineGuiClientGroupE2ETest extends AbstractSharedClientE2ETest {
      *
      * <p><b>The loop is gone.</b> This was a hand-rolled `awaitCarrying` — sample the log every five
      * ticks until a needle appears — and the shared reader has had that verb the whole time, plus a
-     * case-folding record matcher ({@code recordsWithAllIgnoringCase}, which exists because prose
+     * case-folding record matcher ({@code recordsContainingAllIgnoringCase}, which exists because prose
      * case belongs to a translation and not to a contract). What the copy left behind: no failure
      * narrative, no four-cause triage for an empty window, and its own budget arithmetic to keep
      * right. The old justification — "the shared base offers Events over the server probe only" —
@@ -260,13 +260,13 @@ public class MachineGuiClientGroupE2ETest extends AbstractSharedClientE2ETest {
     private String awaitClientRecords(long mark, String type, String needle, int tickBudget)
             throws Exception {
         return clientEvents().awaitMatching(mark, type,
-                reply -> !Events.recordsWithAllIgnoringCase(reply, needle).isEmpty(),
+                reply -> !Events.recordsContainingAllIgnoringCase(reply, needle).isEmpty(),
                 "carrying " + needle + " (case-folded)",
                 "the CLIENT must record a `" + type + "` carrying " + needle, tickBudget);
     }
 
-    private static int readInt(String json, Pattern p) {
-        return Integer.parseInt(readGroup(json, p));
+    private static int readInt(String json, String field) {
+        return Reply.of(json).integer(field);
     }
 
     /**
@@ -285,14 +285,15 @@ public class MachineGuiClientGroupE2ETest extends AbstractSharedClientE2ETest {
         return false;
     }
 
-    private static boolean readBoolean(String json, Pattern p) {
-        return Boolean.parseBoolean(readGroup(json, p));
+    private static boolean readBoolean(String json, String field) {
+        return Reply.of(json).bool(field, false);
     }
 
-    private static String readGroup(String json, Pattern p) {
-        Matcher m = p.matcher(json);
-        assertTrue("expected " + p.pattern() + " in: " + json, m.find());
-        return m.group(1);
+    /** {@code field} as the text the verb wrote, refusing when the reply carries none. */
+    private static String readGroup(String json, String field) {
+        String value = Reply.of(json).text(field);
+        assertTrue("expected `" + field + "` in: " + json, value != null);
+        return value;
     }
 
     // ── rocket assembler ──────────────────────────────────────────────────────
@@ -327,11 +328,11 @@ public class MachineGuiClientGroupE2ETest extends AbstractSharedClientE2ETest {
 
         String fixture = exec("artest fixture rocket " + dim + " " + baseX + " " + Y + " " + baseZ);
         scenario().requireArranged("fixture rocket failed: " + fixture, fixture.contains("\"ok\":true"));
-        Matcher bp = BUILDER_POS.matcher(fixture);
-        scenario().requireArranged("fixture response missing builderPos: " + fixture, bp.find());
-        int bx = Integer.parseInt(bp.group(1));
-        int by = Integer.parseInt(bp.group(2));
-        int bz = Integer.parseInt(bp.group(3));
+        int[] bp = Reply.of(fixture).blockPos(BUILDER_POS);
+        scenario().requireArranged("fixture response missing builderPos: " + fixture, bp != null);
+        int bx = bp[0];
+        int by = bp[1];
+        int bz = bp[2];
         String builder = dim + " " + bx + " " + by + " " + bz;
         scenario().record("builderPos", bx + "," + by + "," + bz)
                 .describeOnFailureWith("artest rocket list " + dim);
@@ -872,7 +873,7 @@ public class MachineGuiClientGroupE2ETest extends AbstractSharedClientE2ETest {
                 + Events.records(refusals));
         assertTrue("arming with nowhere to go must be refused FOR WANT OF A DESTINATION — the only"
                         + " meaning production's arm() has for false: " + refusals,
-                Events.countRecords(refusals, "\"outcome\":\"REFUSED_NO_TARGET\"") > 0);
+                Events.countRecords(refusals, "outcome", "REFUSED_NO_TARGET") > 0);
         String afterRefusal = exec("artest nav status " + where);
         assertFalse("arming with no destination chosen must leave the console UNARMED: "
                 + afterRefusal, readBoolean(afterRefusal, ARMED));
@@ -927,7 +928,7 @@ public class MachineGuiClientGroupE2ETest extends AbstractSharedClientE2ETest {
                 "nav_command_received", "nav_target_picked");
         String picked = events.since(pickMark, "nav_target_picked");
         String aimed = exec("artest nav status " + where);
-        String expected = "\"" + FIRST_SECTOR + "_0_0\"";
+        String expected = FIRST_SECTOR + "_0_0";
         assertEquals("clicking the first listed address must aim the ship at THAT address — the "
                 + "list's order is what the pilot picks by, so aiming at some other entry is the "
                 + "same defect as not aiming at all: " + aimed + " aims=" + picked,
@@ -948,7 +949,7 @@ public class MachineGuiClientGroupE2ETest extends AbstractSharedClientE2ETest {
                 "nav_command_received", "nav_arm_decided");
         String arms = events.since(armMark, "nav_arm_decided");
         assertTrue("clicking ARM with a destination chosen must ARM the console, not refuse it: "
-                        + arms, Events.countRecords(arms, "\"outcome\":\"ARMED\"") > 0);
+                        + arms, Events.countRecords(arms, "outcome", "ARMED") > 0);
         String armedStatus = exec("artest nav status " + where);
         assertTrue("arming a chosen destination must leave the console ARMED: " + armedStatus,
                 readBoolean(armedStatus, ARMED));
@@ -966,7 +967,7 @@ public class MachineGuiClientGroupE2ETest extends AbstractSharedClientE2ETest {
         // alone cannot see, because an unarmed console reads unarmed either way.
         assertTrue("the second click must be the console STANDING DOWN — a record of anything else"
                         + " means the first click did not leave it armed: " + disarms,
-                Events.countRecords(disarms, "\"outcome\":\"DISARMED\"") > 0);
+                Events.countRecords(disarms, "outcome", "DISARMED") > 0);
         String disarmedStatus = exec("artest nav status " + where);
         assertFalse("a disarmed console must not stay armed: " + disarmedStatus,
                 readBoolean(disarmedStatus, ARMED));
@@ -1094,7 +1095,7 @@ public class MachineGuiClientGroupE2ETest extends AbstractSharedClientE2ETest {
                         + " is the redirect having failed to answer true. events since the teleport: "
                         + sinceFar, 0,
                 Events.countRecords(events.since(farMark, "container_closed"),
-                        "\"type\":\"container_closed\""));
+                        "type", "container_closed"));
         assertEquals("with inv-bypass active, the chest GUI must remain open across a 200-block "
                 + "teleport (the mixin redirect should force canInteractWith -> true on every "
                 + "EntityPlayerMP.onUpdate tick); reportState=" + afterTpWithBypass

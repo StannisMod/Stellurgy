@@ -2,9 +2,11 @@ package zmaster587.advancedRocketry.test;
 
 import com.github.stannismod.forge.testing.server.TestClient;
 
+import com.google.gson.JsonElement;
+import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
+
 import java.time.Duration;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 /**
  * A wait that actually waits: budget in TICKS, and say which clock you mean.
@@ -63,8 +65,6 @@ public final class GameTicks {
     /** Floor for the net: a very short advance still gets room for a slow round-trip. */
     private static final Duration MIN_STALL_NET = Duration.ofSeconds(3);
 
-    private static final Pattern TICK_FIELD = Pattern.compile("\"tick\":(-?\\d+)");
-
     private GameTicks() { }
 
     // ------------------------------------------------------------------ clocks
@@ -118,14 +118,34 @@ public final class GameTicks {
         };
     }
 
+    /**
+     * The clock out of a {@code tick-count} reply, read BY NAME.
+     *
+     * <p>It used to be matched with {@code Pattern.compile("\"tick\":(-?\\d+)")}. A regex over JSON
+     * pins the writer's field order and its formatting, and when it stops matching it answers
+     * ABSENCE — here, <i>"did not report a clock (is the dimension loaded?)"</i>, a sentence about
+     * the WORLD produced by a broken reader. The clock is the one reading every tick-budgeted wait
+     * in the tree is built on, so that story would have been told by every wait at once.</p>
+     */
     private static long field(TestClient client, String command, String who) throws Exception {
         String reply = String.join("\n", client.execute(command));
-        Matcher matcher = TICK_FIELD.matcher(reply);
-        if (!matcher.find()) {
+        JsonElement parsed;
+        try {
+            parsed = new JsonParser().parse(reply);
+        } catch (RuntimeException notJson) {
+            throw new AssertionError(command + " did not answer JSON for " + who + " (" + notJson
+                    + "): " + reply);
+        }
+        if (parsed == null || !parsed.isJsonObject()) {
+            throw new AssertionError(command + " must answer one JSON object for " + who + ", not "
+                    + parsed + ": " + reply);
+        }
+        JsonObject answer = parsed.getAsJsonObject();
+        if (!answer.has("tick") || !answer.get("tick").isJsonPrimitive()) {
             throw new AssertionError(command + " did not report a clock for " + who
                     + " (is the dimension loaded?): " + reply);
         }
-        return Long.parseLong(matcher.group(1));
+        return answer.get("tick").getAsLong();
     }
 
     /** That clock, right now. */

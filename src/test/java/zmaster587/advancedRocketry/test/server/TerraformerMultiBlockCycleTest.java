@@ -62,7 +62,7 @@ public class TerraformerMultiBlockCycleTest extends AbstractHeadlessServerTest {
                 "artest tile force-tick 0 " + x + " " + y + " " + z + " 60"));
         assertTrue("force-tick errored: " + tick, tick.contains("\"ok\":true"));
         assertEquals("must tick all 60 iterations",
-                "60", extract(tick, "\"ticked\":(\\d+)"));
+                60, extractInt(tick, "ticked"));
 
         // Tile must still resolve.
         String postInfo = String.join("\n", client().execute(
@@ -80,8 +80,7 @@ public class TerraformerMultiBlockCycleTest extends AbstractHeadlessServerTest {
                 terraInfo.contains("\"proxyInitialized\""));
     }
 
-    private static String extract(String s, String regex) {
-        java.util.regex.Matcher m = java.util.regex.Pattern.compile(regex).matcher(s);
-        return m.find() ? m.group(1) : "";
+    private static int extractInt(String s, String field) {
+        return zmaster587.advancedRocketry.test.Reply.of(s).integerOr(field, -1);
     }
 }

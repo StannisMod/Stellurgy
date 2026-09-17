@@ -1,5 +1,6 @@
 package zmaster587.advancedRocketry.test.server;
 
+import zmaster587.advancedRocketry.test.Reply;
 import org.junit.Test;
 
 import java.util.List;
@@ -39,11 +40,11 @@ public class ShieldZoneThroughputTest extends AbstractSharedServerTest {
     private static final int DIM = 0;
     private static final int Y = FixtureSite.OPEN_AIR_Y;
     private static final int FE_PER_ITERATION = 4000;
-    private static final Pattern STORED = Pattern.compile("\"shieldStored\":(-?\\d+)");
-    private static final Pattern SHIELD_MAX = Pattern.compile("\"shieldMax\":(-?\\d+)");
-    private static final Pattern THROUGHPUT = Pattern.compile("\"throughput\":(-?\\d+)");
-    private static final Pattern REQUESTED = Pattern.compile("\"requested\":(-?\\d+)");
-    private static final Pattern TIER = Pattern.compile("\"tier\":(-?\\d+)");
+    private static final String STORED = "shieldStored";
+    private static final String SHIELD_MAX = "shieldMax";
+    private static final String THROUGHPUT = "throughput";
+    private static final String REQUESTED = "requested";
+    private static final String TIER = "tier";
 
     @Test
     public void throughputIsTierScaled() throws Exception {
@@ -202,10 +203,10 @@ public class ShieldZoneThroughputTest extends AbstractSharedServerTest {
                 resp.contains("\"placed\":true"));
     }
 
-    private static long readInt(Pattern pattern, String json) {
-        Matcher m = pattern.matcher(json);
-        assertTrue("no " + pattern.pattern() + " field in probe response: " + json, m.find());
-        return Long.parseLong(m.group(1));
+    private static long readInt(String field, String json) {
+        Reply reply = Reply.of(json);
+        assertTrue("field `" + field + "` not found in: " + json, reply.has(field));
+        return (long) reply.number(field);
     }
 
     private static String exec(String command) throws Exception {

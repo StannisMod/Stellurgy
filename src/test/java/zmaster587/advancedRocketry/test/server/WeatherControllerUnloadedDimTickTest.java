@@ -1,5 +1,6 @@
 package zmaster587.advancedRocketry.test.server;
 
+import zmaster587.advancedRocketry.test.Reply;
 import org.junit.Test;
 
 import java.util.regex.Matcher;
@@ -32,8 +33,8 @@ import static org.junit.Assert.assertTrue;
  */
 public class WeatherControllerUnloadedDimTickTest extends AbstractSharedServerTest {
 
-    private static final Pattern ID = Pattern.compile("\"id\":(\\d+)");
-    private static final Pattern LIST_AFTER = Pattern.compile("\"listSizeAfter\":(-?\\d+)");
+    private static final String ID = "id";
+    private static final String LIST_AFTER = "listSizeAfter";
 
     private static String ok(java.util.List<String> resp) {
         return String.join("\n", resp);
@@ -42,9 +43,9 @@ public class WeatherControllerUnloadedDimTickTest extends AbstractSharedServerTe
     private long createWeatherSat() throws Exception {
         String resp = ok(client().execute("artest satellite create 0 weatherController 100 1000 1000"));
         assertTrue("weather satellite create failed: " + resp, resp.contains("\"ok\":true"));
-        Matcher m = ID.matcher(resp);
-        assertTrue("no id in create response: " + resp, m.find());
-        return Long.parseLong(m.group(1));
+        Reply mReply = Reply.of(resp);
+        assertTrue("no id in create response: " + resp, mReply.has(ID));
+        return Long.parseLong(mReply.text(ID));
     }
 
     /**
@@ -67,9 +68,9 @@ public class WeatherControllerUnloadedDimTickTest extends AbstractSharedServerTe
         assertTrue("weather-tick-unloaded must succeed post-fix: " + resp,
                 resp.contains("\"ok\":true"));
 
-        Matcher m = LIST_AFTER.matcher(resp);
-        assertTrue("listSizeAfter missing: " + resp, m.find());
-        int after = Integer.parseInt(m.group(1));
+        Reply mReply = Reply.of(resp);
+        assertTrue("listSizeAfter missing: " + resp, mReply.has(LIST_AFTER));
+        int after = Integer.parseInt(mReply.text(LIST_AFTER));
         assertEquals("the null-world guard must return before consuming any queued "
                         + "position (the queue drains when the world reloads): " + resp,
                 1, after);

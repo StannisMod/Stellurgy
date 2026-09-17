@@ -5,6 +5,7 @@ import org.junit.FixMethodOrder;
 import org.junit.Test;
 import org.junit.runners.MethodSorters;
 
+import zmaster587.advancedRocketry.test.Reply;
 import zmaster587.advancedRocketry.test.Events;
 
 import java.util.regex.Matcher;
@@ -42,10 +43,10 @@ import static org.junit.Assert.assertTrue;
 @FixMethodOrder(MethodSorters.NAME_ASCENDING)
 public class SpaceSubsystemClientSyncGroupE2ETest extends AbstractSharedClientE2ETest {
 
-    private static final Pattern FIRST_DIM = Pattern.compile("\"dims\":\\[(-?\\d+)");
-    private static final Pattern PLAYER_NAME = Pattern.compile("\"player\":\"([^\"]+)\"");
+    private static final String POOL_DIMS = "dims";
+    private static final String PLAYER_NAME = "player";
     /** The slot the settle actually bound the cell to — the one place that decides it. */
-    private static final Pattern BOUND_DIM = Pattern.compile("\"slotDim\":(-?\\d+)");
+    private static final String BOUND_DIM = "slotDim";
     private static final String CLIENT_BODIES_CLASS =
             "zmaster587.advancedRocketry.network.PacketSystemBodiesSync";
     private static final String CLOCK = "zmaster587.advancedRocketry.space.SpaceClockSync";
@@ -69,9 +70,9 @@ public class SpaceSubsystemClientSyncGroupE2ETest extends AbstractSharedClientE2
 
     private String botName() throws Exception {
         String health = exec("artest player health");
-        Matcher m = PLAYER_NAME.matcher(health);
-        scenario().requireArranged("player health must echo the player name: " + health, m.find());
-        return m.group(1);
+        Reply mReply = Reply.of(health);
+        scenario().requireArranged("player health must echo the player name: " + health, mReply.has(PLAYER_NAME));
+        return mReply.text(PLAYER_NAME);
     }
 
     // ── the CLIENT's own event log ────────────────────────────────────────────
@@ -81,26 +82,18 @@ public class SpaceSubsystemClientSyncGroupE2ETest extends AbstractSharedClientE2
     // {@link #clientEvents()} rather than {@link #events()}, which is the server's log.
 
     /**
-     * Wait for a record of {@code type} that CARRIES {@code needle}, failing with the whole chain
-     * that DID happen.
+     * Wait for a {@code chunk_data_applied} record naming the chunk this scenario stands in.
      *
-     * <p>{@code needle} must end at a field boundary ({@code "dim":42,}): a payload's numbers are
-     * not delimited on the right, so a needle without the comma matches every value it is a prefix
-     * of.</p>
+     * <p>Two fields, so it is {@link Events#awaitMatching} rather than {@link Events#awaitField}:
+     * the record must carry BOTH coordinates, and a reply-wide match on each separately is satisfied
+     * by two different chunks.</p>
      */
-    private String awaitRecordCarrying(Events events, long mark, String type, String needle,
-                                       String what, int tickBudget) throws Exception {
-        String reply = "";
-        for (int waited = 0; waited <= tickBudget; waited += 5) {
-            reply = events.since(mark, type);
-            if (Events.countRecords(reply, needle) > 0) {
-                return reply;
-            }
-            bot().waitTicks(5);
-        }
-        throw new AssertionError(what + " — no `" + type + "` carrying " + needle + " was recorded"
-                + " within " + tickBudget + " ticks. What DID happen since the mark: "
-                + Events.typesOf(events.since(mark)) + " | raw: " + reply);
+    private String awaitChunkApplied(Events events, long mark, int cx, int cz,
+                                     String what, int tickBudget) throws Exception {
+        return events.awaitMatching(mark, "chunk_data_applied",
+                reply -> Events.recordsWhere(reply, "cx", String.valueOf(cx)).stream()
+                        .anyMatch(chunk -> String.valueOf(cz).equals(Events.text(chunk, "cz"))),
+                "carrying cx = " + cx + ", cz = " + cz, what, tickBudget);
     }
 
     /**
@@ -111,9 +104,9 @@ public class SpaceSubsystemClientSyncGroupE2ETest extends AbstractSharedClientE2
      * for dim 55.</p>
      */
     private static boolean carriesFeedFor(String sinceReply, int slotDim) {
-        Matcher m = Pattern.compile("\"slotDims\":\"([^\"]*)\"").matcher(String.valueOf(sinceReply));
-        while (m.find()) {
-            if (("," + m.group(1) + ",").contains("," + slotDim + ",")) {
+        for (String record : Events.records(String.valueOf(sinceReply))) {
+            String dims = Events.text(record, "slotDims");
+            if (dims != null && ("," + dims + ",").contains("," + slotDim + ",")) {
                 return true;
             }
         }
@@ -146,9 +139,9 @@ public class SpaceSubsystemClientSyncGroupE2ETest extends AbstractSharedClientE2
         String reply = "";
         for (int waited = 0; waited <= tickBudget; waited += 5) {
             reply = events.since(mark, "space_clock_synced");
-            Matcher m = Pattern.compile("\"serverTick\":(-?\\d+)").matcher(reply);
-            while (m.find()) {
-                if (Long.parseLong(m.group(1)) >= min) {
+            for (String record : Events.records(reply)) {
+                double tick = Events.number(record, "serverTick");
+                if (!Double.isNaN(tick) && (long) tick >= min) {
                     return reply;
                 }
             }
@@ -204,9 +197,10 @@ public class SpaceSubsystemClientSyncGroupE2ETest extends AbstractSharedClientE2
         scenario().arranging("register a pool slot while the client is online, and bind a cell");
         String botName = botName();
         String reg = exec("artest space pool-register 1");
-        Matcher dimM = FIRST_DIM.matcher(reg);
-        scenario().requireArranged("pool-register must return the new dim id: " + reg, dimM.find());
-        int slotDim = Integer.parseInt(dimM.group(1));
+        int[] pooled = Reply.of("artest space pool-register", reg).intArray(POOL_DIMS);
+        scenario().requireArranged("pool-register must return the new dim id: " + reg,
+                pooled.length > 0);
+        int slotDim = pooled[0];
         scenario().record("slotDim", slotDim);
         exec("artest space load " + slotDim + " e2ecell");
 
@@ -232,7 +226,7 @@ public class SpaceSubsystemClientSyncGroupE2ETest extends AbstractSharedClientE2
         // evicted from its 256-deep ring by the rest of the world load) is a fixture that did not
         // come up, not this scenario's contract failing.
         try {
-            awaitRecordCarrying(clientLog, entryMark, "chunk_data_applied", "\"cx\":0,\"cz\":0,",
+            awaitChunkApplied(clientLog, entryMark, 0, 0,
                     "the client must actually HAVE the chunk the platform is built in",
                     LINK_BUDGET_TICKS);
         } catch (AssertionError arrangement) {
@@ -292,7 +286,7 @@ public class SpaceSubsystemClientSyncGroupE2ETest extends AbstractSharedClientE2
                 "the client was never respawned out of the slot dim during the hold");
         assertEquals("a client that arrived in a slot dim must STAY there; a dimension change"
                         + " during the hold is it being thrown out: " + changes,
-                0, Events.countRecords(changes, "\"via\":"));
+                0, Events.countRecordsWithField(changes, "via"));
         assertEquals("the client must still be in the slot dim two seconds later",
                 slotDim, bot().reportWeather().get("dim").getAsInt());
 
@@ -319,8 +313,9 @@ public class SpaceSubsystemClientSyncGroupE2ETest extends AbstractSharedClientE2
         try {
             scenario().arranging("install the space stack and register a descend-target POI");
             String setup = exec("artest space entry-setup 1");
-            Matcher dimM = FIRST_DIM.matcher(setup);
-            scenario().requireArranged("entry-setup must return a slot dim: " + setup, dimM.find());
+            int[] pooled = Reply.of("artest space entry-setup", setup).intArray(POOL_DIMS);
+            scenario().requireArranged("entry-setup must return a slot dim: " + setup,
+                    pooled.length > 0);
 
             // A descend-target PLANET at cell (0,5000,0), local (1000,500,-300). sy=5000 dodges the
             // fallback stars (all at sy=sz=0), so bodiesAt returns ONLY this POI.
@@ -331,13 +326,13 @@ public class SpaceSubsystemClientSyncGroupE2ETest extends AbstractSharedClientE2
             // The dimension under test is the one the subsystem ACTUALLY bound the cell to, read
             // back from the settle. It is not the test's to choose: slot ids are minted per boot,
             // and a number picked here would only be a guess at the binding.
-            String settle = exec("artest space ledger-settle 0 5000 0 " + dimM.group(1));
+            String settle = exec("artest space ledger-settle 0 5000 0 " + pooled[0]);
             scenario().requireArranged("ledger-settle must succeed: " + settle,
                     settle.contains("\"ok\":true"));
-            Matcher boundM = BOUND_DIM.matcher(settle);
+            Reply boundMReply = Reply.of(settle);
             scenario().requireArranged("the settle must report which slot the cell was bound to: "
-                    + settle, boundM.find());
-            int slotDim = Integer.parseInt(boundM.group(1));
+                    + settle, boundMReply.has(BOUND_DIM));
+            int slotDim = Integer.parseInt(boundMReply.text(BOUND_DIM));
             scenario().record("slotDim", slotDim);
 
             // CONTROL, and it runs FIRST, while the player is still OUTSIDE the cell: a sky he is
@@ -494,8 +489,8 @@ public class SpaceSubsystemClientSyncGroupE2ETest extends AbstractSharedClientE2
 
     private long serverClock() throws Exception {
         String frame = exec("artest space frame 0 0 0");
-        Matcher m = Pattern.compile("\"clock\":(-?\\d+)").matcher(frame);
-        assertTrue("the probe reports no server clock: " + frame, m.find());
-        return Long.parseLong(m.group(1));
+        Reply space = Reply.of("artest space frame", frame);
+        assertTrue("the probe reports no server clock: " + frame, space.has("clock"));
+        return (long) space.number("clock");
     }
 }

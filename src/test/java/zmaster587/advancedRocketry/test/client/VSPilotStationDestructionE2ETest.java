@@ -6,10 +6,9 @@ import org.junit.Test;
 import org.junit.runners.MethodSorters;
 import org.lwjgl.input.Keyboard;
 
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 import zmaster587.advancedRocketry.test.Events;
+import zmaster587.advancedRocketry.test.Reply;
 import zmaster587.advancedRocketry.test.FixtureSite;
 
 import static org.junit.Assert.assertTrue;
@@ -50,14 +49,15 @@ public class VSPilotStationDestructionE2ETest extends AbstractSharedVsClientE2ET
         return "vs-pilot-station";
     }
 
-    private static final Pattern BUILDER_POS =
-            Pattern.compile("\"builderPos\":\\[(-?\\d+),(-?\\d+),(-?\\d+)]");
-    private static final Pattern POS_Y = Pattern.compile("\"posY\":(-?[0-9.E\\-]+)");
-    private static final Pattern DUMMY_ID = Pattern.compile("\"dummyId\":(-?\\d+)");
-    private static final Pattern SEAT_SUB = Pattern.compile(
-            "\"seatX\":(-?\\d+),\"seatY\":(-?\\d+),\"seatZ\":(-?\\d+)");
-    private static final Pattern AFC_SUB = Pattern.compile(
-            "\"afcX\":(-?\\d+),\"afcY\":(-?\\d+),\"afcZ\":(-?\\d+)");
+    private static final String BUILDER_POS = "builderPos";
+    private static final String POS_Y = "posY";
+    private static final String DUMMY_ID = "dummyId";
+    private static final String SEAT_X = "seatX";
+    private static final String SEAT_Y = "seatY";
+    private static final String SEAT_Z = "seatZ";
+    private static final String AFC_X = "afcX";
+    private static final String AFC_Y = "afcY";
+    private static final String AFC_Z = "afcZ";
 
     private static final String VARIANT = "with-pilot-seat";
 
@@ -243,16 +243,15 @@ public class VSPilotStationDestructionE2ETest extends AbstractSharedVsClientE2ET
         // Resolve the seat + computer SUBSPACE blocks now, while the ship still sits at its build
         // site (subspace addresses are stationary; the ship's world pose is about to change).
         String found = exec("artest vs find-seat 0 id " + ship.id);
-        Matcher sm = SEAT_SUB.matcher(found);
-        assertTrue("find-seat must resolve the ship's subspace seat: " + found, sm.find());
-        ship.seatX = Integer.parseInt(sm.group(1));
-        ship.seatY = Integer.parseInt(sm.group(2));
-        ship.seatZ = Integer.parseInt(sm.group(3));
-        Matcher am = AFC_SUB.matcher(found);
-        assertTrue("find-seat must resolve the seat's linked computer: " + found, am.find());
-        ship.afcX = Integer.parseInt(am.group(1));
-        ship.afcY = Integer.parseInt(am.group(2));
-        ship.afcZ = Integer.parseInt(am.group(3));
+        Reply seat = Reply.of("artest vs find-seat", found);
+        assertTrue("find-seat must resolve the ship's subspace seat: " + found, seat.has(SEAT_X));
+        ship.seatX = seat.integer(SEAT_X);
+        ship.seatY = seat.integer(SEAT_Y);
+        ship.seatZ = seat.integer(SEAT_Z);
+        assertTrue("find-seat must resolve the seat's linked computer: " + found, seat.has(AFC_X));
+        ship.afcX = seat.integer(AFC_X);
+        ship.afcY = seat.integer(AFC_Y);
+        ship.afcZ = seat.integer(AFC_Z);
 
         // Seat the bot and fly up on the REAL key path until the climb is unambiguous. The seat is
         // addressed by the subspace block find-seat just resolved FOR THIS SHIP: `vs seat-mount`
@@ -260,11 +259,9 @@ public class VSPilotStationDestructionE2ETest extends AbstractSharedVsClientE2ET
         // neighbour's ship once several scenarios share a world.
         String mountInfo = exec("artest vs seat-mount-at 0 " + ship.seatX + " " + ship.seatY
                 + " " + ship.seatZ);
-        Matcher dm = DUMMY_ID.matcher(mountInfo);
-        assertTrue("seat-mount-at must report a dummy id: " + mountInfo, dm.find());
-        ship.dummyId = Integer.parseInt(dm.group(1));
+        ship.dummyId = Reply.of("artest vs seat-mount-at", mountInfo).integer(DUMMY_ID);
         long seatMark = clientEvents().mark();
-        String mount = exec("artest player mount-entity " + dm.group(1));
+        String mount = exec("artest player mount-entity " + ship.dummyId);
         assertTrue("bot must mount the seat dummy: " + mount, mount.contains("\"mounted\":true"));
         // The lift below is commanded by a real key held on a client that must already be riding;
         // ten ticks were a bet on that, and this whole class is about what happens to a pilot.
@@ -311,7 +308,6 @@ public class VSPilotStationDestructionE2ETest extends AbstractSharedVsClientE2ET
     private static void assertRemovedThisScenariosDummy(Events events, long mark, int dummyId,
                                                         String log) throws Exception {
         String removals = events.since(mark, "entity_removed");
-        String needle = "\"e\":" + dummyId + ",";
         // Printed on a GREEN run, not only inside the failure: this record and its reader are both
         // new, and a defect in the READER cannot be found in a channel that opens only when the
         // SUBJECT breaks. It is also what tells the next reader what normal looks like here.
@@ -333,7 +329,7 @@ public class VSPilotStationDestructionE2ETest extends AbstractSharedVsClientE2ET
                         + " entity that was REMOVED on the " + log + " — a removal of something"
                         + " else satisfies the chain's type and says nothing about this seat: "
                         + removals,
-                Events.countRecords(removals, needle) > 0);
+                Events.countRecords(removals, "e", String.valueOf(dummyId)) > 0);
     }
 
     /**
@@ -374,10 +370,10 @@ public class VSPilotStationDestructionE2ETest extends AbstractSharedVsClientE2ET
         return readDouble(shipInfoById(shipId), POS_Y);
     }
 
-    private double readDouble(String json, Pattern p) {
-        Matcher m = p.matcher(json);
-        assertTrue("expected a number in: " + json, m.find());
-        return Double.parseDouble(m.group(1));
+    private double readDouble(String json, String field) {
+        double value = Reply.of(json).number(field);
+        assertTrue("expected a number `" + field + "` in: " + json, !Double.isNaN(value));
+        return value;
     }
 
     private String assembleFixture(FixtureSite site) throws Exception {
@@ -392,8 +388,8 @@ public class VSPilotStationDestructionE2ETest extends AbstractSharedVsClientE2ET
         String fixture = exec("artest fixture rocket 0 " + baseX + " " + baseY + " " + baseZ
                 + " " + VARIANT);
         assertTrue("fixture (" + VARIANT + ") failed: " + fixture, fixture.contains("\"ok\":true"));
-        Matcher bp = BUILDER_POS.matcher(fixture);
-        assertTrue("fixture missing builderPos: " + fixture, bp.find());
-        return exec("artest rocket assemble 0 " + bp.group(1) + " " + bp.group(2) + " " + bp.group(3));
+        int[] bp = Reply.of(fixture).blockPos(BUILDER_POS);
+        assertTrue("fixture missing builderPos: " + fixture, bp != null);
+        return exec("artest rocket assemble 0 " + bp[0] + " " + bp[1] + " " + bp[2]);
     }
 }

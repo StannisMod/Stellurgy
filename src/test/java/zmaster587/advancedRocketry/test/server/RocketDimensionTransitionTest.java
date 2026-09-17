@@ -1,11 +1,13 @@
 package zmaster587.advancedRocketry.test.server;
 
+import zmaster587.advancedRocketry.test.Reply;
 import org.junit.Assume;
 import org.junit.Test;
 
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import zmaster587.advancedRocketry.test.RocketList;
 import zmaster587.advancedRocketry.test.FixtureSite;
 
 import static org.junit.Assert.assertEquals;
@@ -45,40 +47,34 @@ import static org.junit.Assert.assertTrue;
  */
 public class RocketDimensionTransitionTest extends AbstractSharedServerTest {
 
-    private static final Pattern BUILDER_POS =
-            Pattern.compile("\"builderPos\":\\[(-?\\d+),(-?\\d+),(-?\\d+)]");
-    private static final Pattern ROCKET_LIST_ID = Pattern.compile("\"id\":(-?\\d+)");
-    private static final Pattern AR_DIMS_ARRAY =
-            Pattern.compile("\"arDimensions\":\\[([^]]*)]");
-    private static final Pattern UUID_FIELD =
-            Pattern.compile("\"uuid\":\"([0-9a-fA-F-]+)\"");
-    private static final Pattern DIM_FIELD = Pattern.compile("\"dim\":(-?\\d+)");
-    private static final Pattern ENTITY_ID_FIELD = Pattern.compile("\"entityId\":(-?\\d+)");
-    private static final Pattern STORAGE_SIZE_X = Pattern.compile("\"storageSizeX\":(-?\\d+)");
-    private static final Pattern STORAGE_SIZE_Y = Pattern.compile("\"storageSizeY\":(-?\\d+)");
-    private static final Pattern STORAGE_SIZE_Z = Pattern.compile("\"storageSizeZ\":(-?\\d+)");
-    private static final Pattern ENGINE_COUNT = Pattern.compile("\"engineCount\":(-?\\d+)");
+    private static final String BUILDER_POS = "builderPos";
+    private static final String ROCKET_LIST_ID = "id";
+    private static final String AR_DIMS_ARRAY = "arDimensions";
+    private static final String UUID_FIELD = "uuid";
+    private static final String DIM_FIELD = "dim";
+    private static final String ENTITY_ID_FIELD = "entityId";
+    private static final String STORAGE_SIZE_X = "storageSizeX";
+    private static final String STORAGE_SIZE_Y = "storageSizeY";
+    private static final String STORAGE_SIZE_Z = "storageSizeZ";
+    private static final String ENGINE_COUNT = "engineCount";
 
     private static String ok(java.util.List<String> resp) {
         return String.join("\n", resp);
     }
 
-    private static String g(Pattern p, String s, String label) {
-        Matcher m = p.matcher(s);
-        if (!m.find()) throw new AssertionError("could not parse " + label + ": " + s);
-        return m.group(1);
+    private static String g(String field, String s, String label) {
+        Reply reply = Reply.of(s);
+        assertTrue("could not parse " + label + ": " + s, reply.has(field));
+        return reply.text(field);
     }
 
     private int firstNonOverworldArDimOrSkip() throws Exception {
         String joined = ok(client().execute("artest dim list"));
         Assume.assumeFalse("No AR dimensions registered",
                 joined.contains("\"arDimensions\":[]"));
-        Matcher m = AR_DIMS_ARRAY.matcher(joined);
-        assertTrue("could not parse arDimensions array: " + joined, m.find());
-        for (String part : m.group(1).split(",")) {
-            String t = part.trim();
-            if (t.isEmpty()) continue;
-            int dim = Integer.parseInt(t);
+        Reply dims = Reply.of("artest dim list", joined);
+        assertTrue("could not parse arDimensions array: " + joined, dims.has(AR_DIMS_ARRAY));
+        for (int dim : dims.intArray(AR_DIMS_ARRAY)) {
             if (dim != 0) return dim;
         }
         Assume.assumeTrue("Only overworld is an AR planet", false);
@@ -97,18 +93,16 @@ public class RocketDimensionTransitionTest extends AbstractSharedServerTest {
                 "the craft is built and flown in this volume");
         String fixture = ok(client().execute(
                 "artest fixture rocket 0 " + baseX + " " + baseY + " " + baseZ + " simple"));
-        Matcher bp = BUILDER_POS.matcher(fixture);
-        assertTrue("fixture missing builderPos: " + fixture, bp.find());
-        int bx = Integer.parseInt(bp.group(1));
-        int by = Integer.parseInt(bp.group(2));
-        int bz = Integer.parseInt(bp.group(3));
+        int[] bp = Reply.of(fixture).blockPos(BUILDER_POS);
+        assertTrue("fixture missing builderPos: " + fixture, bp != null);
+        int bx = bp[0];
+        int by = bp[1];
+        int bz = bp[2];
         ok(client().execute("artest rocket assemble 0 " + bx + " " + by + " " + bz));
         String list = ok(client().execute("artest rocket list 0"));
-        Matcher rim = ROCKET_LIST_ID.matcher(list);
-        int lastId = -1;
-        while (rim.find()) lastId = Integer.parseInt(rim.group(1));
-        assertTrue("no rocket after assemble: " + list, lastId >= 0);
-        return lastId;
+        java.util.List<RocketList.Entry> built = RocketList.of(list);
+        assertTrue("no rocket after assemble: " + list, !built.isEmpty());
+        return built.get(built.size() - 1).id;
     }
 
     @Test
@@ -120,10 +114,17 @@ public class RocketDimensionTransitionTest extends AbstractSharedServerTest {
         int id = buildAndAssemble(FixtureSite.openAir(0, 5000, 500));
         String info = ok(client().execute("artest rocket info " + id));
         assertTrue("rocket info must expose uuid: " + info,
-                UUID_FIELD.matcher(info).find());
+                Reply.of(info).has(UUID_FIELD));
+        // Asked of each ROCKET, because that is where the field lives — `uuid` is a member of the
+        // `rockets` array's elements and never a field of the reply.
         String list = ok(client().execute("artest rocket list 0"));
-        assertTrue("rocket list must expose uuid: " + list,
-                UUID_FIELD.matcher(list).find());
+        java.util.List<RocketList.Entry> listed = RocketList.of(list);
+        assertTrue("rocket list must carry the craft just built, or it says nothing about uuid: "
+                + list, !listed.isEmpty());
+        for (RocketList.Entry listedRocket : listed) {
+            assertTrue("rocket list must expose uuid for " + listedRocket + ": " + list,
+                    listedRocket.uuid != null);
+        }
     }
 
     @Test

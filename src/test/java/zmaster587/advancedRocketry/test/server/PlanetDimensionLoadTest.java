@@ -1,6 +1,7 @@
 package zmaster587.advancedRocketry.test.server;
 
 // migrated to AbstractSharedServerTest
+import zmaster587.advancedRocketry.test.Reply;
 import org.junit.Assume;
 import org.junit.Test;
 
@@ -27,14 +28,11 @@ public class PlanetDimensionLoadTest extends AbstractSharedServerTest {
     private static final String AR_PROVIDER_FQN =
             "zmaster587.advancedRocketry.world.provider.WorldProviderPlanet";
 
-    private static final Pattern AR_DIM_PATTERN =
-            Pattern.compile("\"arDimensions\":\\[(-?\\d+)");
+    private static final String AR_DIM_PATTERN = "arDimensions";
 
-    private static final Pattern AR_DIMS_ARRAY_PATTERN =
-            Pattern.compile("\"arDimensions\":\\[([^]]*)\\]");
+    private static final String AR_DIMS_ARRAY_PATTERN = "arDimensions";
 
-    private static final Pattern ANGLE_PATTERN =
-            Pattern.compile("\"angle\":(-?[0-9.eE+-]+)");
+    private static final String ANGLE_PATTERN = "angle";
 
     @Test
     public void arPlanetsArePreloaded() throws Exception {
@@ -152,9 +150,9 @@ public class PlanetDimensionLoadTest extends AbstractSharedServerTest {
         Assume.assumeFalse(
                 "No AR dimensions registered — skipping (empty galaxy?)",
                 joined.contains("\"arDimensions\":[]"));
-        Matcher m = AR_DIM_PATTERN.matcher(joined);
-        assertTrue("could not parse first AR dim id from probe response: " + joined, m.find());
-        return Integer.parseInt(m.group(1));
+        int[] dims = Reply.of("artest dim list", joined).intArray(AR_DIM_PATTERN);
+        assertTrue("could not parse first AR dim id from probe response: " + joined, dims.length > 0);
+        return dims[0];
     }
 
     private int firstNonOverworldArDimOrSkip() throws Exception {
@@ -162,13 +160,11 @@ public class PlanetDimensionLoadTest extends AbstractSharedServerTest {
         Assume.assumeFalse(
                 "No AR dimensions registered — skipping (empty galaxy?)",
                 joined.contains("\"arDimensions\":[]"));
-        Matcher m = AR_DIMS_ARRAY_PATTERN.matcher(joined);
-        assertTrue("could not parse arDimensions array from probe response: " + joined, m.find());
+        Reply listed = Reply.of("artest dim list", joined);
+        assertTrue("could not parse arDimensions array from probe response: " + joined,
+                listed.has(AR_DIMS_ARRAY_PATTERN));
         Integer found = null;
-        for (String part : m.group(1).split(",")) {
-            String trimmed = part.trim();
-            if (trimmed.isEmpty()) continue;
-            int dim = Integer.parseInt(trimmed);
+        for (int dim : listed.intArray(AR_DIMS_ARRAY_PATTERN)) {
             if (dim != 0) {
                 found = dim;
                 break;
@@ -194,10 +190,10 @@ public class PlanetDimensionLoadTest extends AbstractSharedServerTest {
 
     private static double extractAngle(List<String> response) {
         String joined = String.join("\n", response);
-        Matcher m = ANGLE_PATTERN.matcher(joined);
-        if (!m.find()) {
+        Reply mReply = Reply.of(joined);
+        if (!mReply.has(ANGLE_PATTERN)) {
             throw new AssertionError("could not extract angle from probe response: " + joined);
         }
-        return Double.parseDouble(m.group(1));
+        return Double.parseDouble(mReply.text(ANGLE_PATTERN));
     }
 }

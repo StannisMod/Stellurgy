@@ -1,5 +1,6 @@
 package zmaster587.advancedRocketry.test.server;
 
+import zmaster587.advancedRocketry.test.Reply;
 import zmaster587.advancedRocketry.test.Events;
 import zmaster587.advancedRocketry.test.GameTicks;
 import zmaster587.advancedRocketry.test.ShipIdentity;
@@ -137,7 +138,7 @@ public class VSJumpDumpsTheCruiseE2ETest extends AbstractSharedServerTest {
         String begin = exec("artest space transit-begin " + originDim + " 1 64 1 " + speed);
         assertTrue("the jump must begin: " + begin, begin.contains("\"began\":true"));
 
-        String arrived = events.awaitCarrying(jumpMark, "ship_transit_ended",
+        String arrived = events.awaitRecordCarrying(jumpMark, "ship_transit_ended",
                 "\"route\":\"" + route + "\"",
                 "the ship never reached the target cell by the " + route + " route, so this leg has "
                         + "no arrival to read a cruise off; the durable record now reads "
@@ -151,7 +152,7 @@ public class VSJumpDumpsTheCruiseE2ETest extends AbstractSharedServerTest {
         // read worked only while an earlier scenario's hull unloaded itself once nobody was near it;
         // with a test server holding ships loaded, the target cell holds two and a count cannot say
         // which one this jump produced.
-        String durableId = Events.lastField(arrived, "ship");
+        String durableId = Events.text(arrived, "ship");
         assertTrue("the arrival must name the craft that made it, or the cruise read below is about"
                 + " whichever hull the cell happens to hold: " + arrived,
                 durableId != null && !durableId.trim().isEmpty());
@@ -176,12 +177,10 @@ public class VSJumpDumpsTheCruiseE2ETest extends AbstractSharedServerTest {
     }
 
     private static int extractInt(String json, String key) {
-        Matcher m = Pattern.compile("\"" + key + "\":(-?\\d+)").matcher(json);
-        return m.find() ? Integer.parseInt(m.group(1)) : Integer.MIN_VALUE;
+        return Reply.of(json).integerOr(key, Integer.MIN_VALUE);
     }
 
     private static double extractDouble(String json, String key) {
-        Matcher m = Pattern.compile("\"" + key + "\":(-?[0-9.eE+\\-]+)").matcher(json);
-        return m.find() ? Double.parseDouble(m.group(1)) : Double.NaN;
+        return Reply.of(json).numberOr(key, Double.NaN);
     }
 }

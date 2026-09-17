@@ -8,6 +8,7 @@ import org.junit.runners.MethodSorters;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import zmaster587.advancedRocketry.test.Reply;
 import zmaster587.advancedRocketry.test.ArrangementFailure;
 import zmaster587.advancedRocketry.test.Events;
 import zmaster587.advancedRocketry.test.ShipIdentity;
@@ -103,9 +104,9 @@ public class VSTransitCrewGroupE2ETest extends AbstractSharedVsClientE2ETest {
 
     // ---- shared arrangement helpers (byte-identical in all four sources) ----
 
-    private static final Pattern PLAYER_NAME = Pattern.compile("\"player\":\"([^\"]+)\"");
+    private static final String PLAYER_NAME = "player";
 
-    private static final Pattern SETUP_SHIP_ID = Pattern.compile("\"shipId\":\"([^\"]+)\"");
+    private static final String SETUP_SHIP_ID = "shipId";
 
     /**
      * The identity of the ship this scenario's setup just assembled.
@@ -119,14 +120,14 @@ public class VSTransitCrewGroupE2ETest extends AbstractSharedVsClientE2ETest {
      * had just been built, with the same yard box printed under two different slot dims.</p>
      */
     private static String setupShipId(String setup) {
-        Matcher m = SETUP_SHIP_ID.matcher(setup);
+        Reply mReply = Reply.of(setup);
         assertTrue("the piloted transit setup must name the ship it assembled — without it every"
                 + " later question about that ship is a nearest-ship guess in a dimension this class"
-                + " deliberately reuses: " + setup, m.find());
-        return m.group(1);
+                + " deliberately reuses: " + setup, mReply.has(SETUP_SHIP_ID));
+        return mReply.text(SETUP_SHIP_ID);
     }
 
-    private static final Pattern SETUP_DURABLE_ID = Pattern.compile("\"durableId\":\"([^\"]+)\"");
+    private static final String SETUP_DURABLE_ID = "durableId";
 
     /**
      * The craft's DURABLE NAME out of the same setup reply — the only identity that survives a
@@ -146,10 +147,10 @@ public class VSTransitCrewGroupE2ETest extends AbstractSharedVsClientE2ETest {
      * {@code found:false} — that is not a missing ship, it is the wrong question.</p>
      */
     private static String setupDurableId(String setup) {
-        Matcher m = SETUP_DURABLE_ID.matcher(setup);
+        Reply mReply = Reply.of(setup);
         assertTrue("the piloted transit setup must name the craft it minted, or nothing can address"
-                + " it after a crossing re-mints its physics id: " + setup, m.find());
-        return m.group(1);
+                + " it after a crossing re-mints its physics id: " + setup, mReply.has(SETUP_DURABLE_ID));
+        return mReply.text(SETUP_DURABLE_ID);
     }
 
     /**
@@ -161,9 +162,9 @@ public class VSTransitCrewGroupE2ETest extends AbstractSharedVsClientE2ETest {
      */
     private static String botName(Events.Probe probe) throws Exception {
         String health = probe.exec("artest player health");
-        Matcher nameM = PLAYER_NAME.matcher(health);
-        assertTrue("player health must echo the player name: " + health, nameM.find());
-        return nameM.group(1);
+        Reply nameMReply = Reply.of(health);
+        assertTrue("player health must echo the player name: " + health, nameMReply.has(PLAYER_NAME));
+        return nameMReply.text(PLAYER_NAME);
     }
 
     /** {@code find-seat} keyed by identity — see {@link #setupShipId} for why never by the anchor. */
@@ -243,11 +244,11 @@ private int waitForLoadedShip(int dim) throws Exception {
         // The hull in the lane, BY NAME. Production names it in the record it just wrote: the
         // crossing re-assembles the ship, so the physics id from the origin cell is dead here, and
         // the durable name is the only thing that crossed with it.
-        Matcher boardedShip = Pattern.compile("\"ship\":\"([^\"]+)\"").matcher(boarded);
+        String boardedShip = Events.lastField(boarded, "ship");
         scenario().requireArranged("the boarding record must name the ship it seated the crew on,"
                 + " or nothing in the corridor can be addressed to this craft: " + boarded,
-                boardedShip.find());
-        parkedHullName = boardedShip.group(1);
+                boardedShip != null && !boardedShip.isEmpty());
+        parkedHullName = boardedShip;
         int corridorDim = readInt(exec("artest space transit-status"), "hyperDim");
         // The server's half is appended on the FAILURE path only, because the two logs answer
         // different questions and the client's alone cannot say whether the jump got as far as the
@@ -261,24 +262,21 @@ private int waitForLoadedShip(int dim) throws Exception {
     }
 
     private static int readInt(String json, String key) {
-        Matcher m = Pattern.compile("\"" + key + "\":(-?\\d+)").matcher(json);
-        assertTrue("expected int \"" + key + "\" in: " + json, m.find());
-        return Integer.parseInt(m.group(1));
+        assertTrue("expected int \"" + key + "\" in: " + json, Reply.of(json).has(key));
+        return Reply.of(json).integer(key);
     }
 
     private static int readIntOr(String json, String key, int def) {
-        Matcher m = Pattern.compile("\"" + key + "\":(-?\\d+)").matcher(json);
-        return m.find() ? Integer.parseInt(m.group(1)) : def;
+        return Reply.of(json).integerOr(key, def);
     }
 
     private static double readDouble(String json, String key) {
-        Matcher m = Pattern.compile("\"" + key + "\":(-?[0-9.E\\-]+)").matcher(json);
-        assertTrue("expected number \"" + key + "\" in: " + json, m.find());
-        return Double.parseDouble(m.group(1));
+        assertTrue("expected number \"" + key + "\" in: " + json, Reply.of(json).has(key));
+        return Reply.of(json).number(key);
     }
 
     private static boolean readBool(String json, String key) {
-        return Pattern.compile("\"" + key + "\":true").matcher(json).find();
+        return Reply.of(json).bool(key, false);
     }
 
     /**
@@ -288,14 +286,21 @@ private int waitForLoadedShip(int dim) throws Exception {
      * PHYSICS channel, which is a different clock and a different claim.
      */
     private static long gameSeen(String traceJson) {
-        int at = traceJson.indexOf("\"game\":");
-        assertTrue("expected a \"game\" channel in the motion trace: " + traceJson, at >= 0);
+        // Taken as the NESTED OBJECT, not as the tail of the string from where its key appears: a
+        // slice of a JSON document is not a JSON document, and handing one to a parser fails with a
+        // syntax error about the world. (It did — measured on this very line, 2026-09-17.)
+        String game = Reply.of("artest motion trace", traceJson).object(GAME_CHANNEL);
+        assertTrue("expected a \"game\" channel in the motion trace: " + traceJson, game != null);
         // A key that was never driven has no ring, and the reply then carries no "seen" at all -
         // which is an ANSWER ("nothing ever ticked here"), not a malformed reply. Reading it as a
         // parse failure hides the finding behind the instrument: the first cut of this helper threw
         // on exactly the reading the leg exists to detect.
-        return readIntOr(traceJson.substring(at), "seen", 0);
+        return readIntOr(game, "seen", 0);
     }
+
+    /** The SERVER-tick channel of a motion trace. The reply carries several, each with its own
+     *  {@code seen}, so this must be named: a flat read answers with whichever came first. */
+    private static final String GAME_CHANNEL = "game";
 
     /** Blocks per tick for the jump. Slow enough that the ship stays parked for tens of ticks. */
     private static final long PARK_SPEED = HYPERSPACE_JUMP_SPEED;
@@ -360,9 +365,9 @@ private int waitForLoadedShip(int dim) throws Exception {
         // that delivered a stranger's hull with this crew re-seated on it looks exactly like a
         // successful one from the client's side, which is how the positional cut survived so long.
         String census = exec("artest vs arrival-trace");
-        Matcher cutM = ARRIVAL_CUT.matcher(census);
-        assertTrue("the arrival must leave a cut census behind: " + census, cutM.find());
-        String cut = cutM.group(1);
+        Reply cutMReply = Reply.of(census);
+        assertTrue("the arrival must leave a cut census behind: " + census, cutMReply.has(ARRIVAL_CUT));
+        String cut = cutMReply.text(ARRIVAL_CUT);
         String cutting = censusField(cut, "cutting");
         String byDurableId = censusField(cut, "byDurableId");
         String byPosition = censusField(cut, "byPosition");
@@ -388,9 +393,9 @@ private int waitForLoadedShip(int dim) throws Exception {
         assertTrue("a healthy jump is never REFUSED its own hull - a refusal here means the identity "
                 + "check fires on a case it cannot judge. census: " + cut, !"REFUSED".equals(cutting));
 
-        Matcher laneM = DEPART_LANE.matcher(census);
-        assertTrue("the departure must leave a lane census behind: " + census, laneM.find());
-        String lane = laneM.group(1);
+        Reply laneMReply = Reply.of(census);
+        assertTrue("the departure must leave a lane census behind: " + census, laneMReply.has(DEPART_LANE));
+        String lane = laneMReply.text(DEPART_LANE);
         assertTrue("the lane this jump departed into must have been EMPTY when it was handed out - a "
                         + "lane holding a second hull makes every later position lookup at that "
                         + "anchor ambiguous. census: " + lane,
@@ -450,8 +455,8 @@ private int waitForLoadedShip(int dim) throws Exception {
         // about to be seated (measured 2026-09-10: green on one run of this build, red on the next).
         try {
             clientEvents().awaitMatching(clientMark, "mount",
-                    seen -> !Events.recordsWithAll(seen, "\"who\":\"" + botName + "\"",
-                            "\"ok\":true").isEmpty(),
+                    seen -> Events.recordsWhere(seen, "who", botName).stream()
+                            .anyMatch(seating -> "true".equals(Events.text(seating, "ok"))),
                     "seating " + botName + " (ok:true)",
                     "a jump must not take the pilot out of his seat: his own client must re-seat him"
                             + " on the hull parked in the lane", JUMP_LINK_BUDGET_TICKS);
@@ -534,9 +539,9 @@ private boolean waitForRegisteredShip(int dim) throws Exception {
                 waitForRegisteredShip(originDim));
 
         String health = execEnvelope("artest player health");
-        Matcher nameM = PLAYER_NAME.matcher(health);
-        assertTrue("player health must echo the player name: " + health, nameM.find());
-        String botName = nameM.group(1);
+        Reply nameMReply = Reply.of(health);
+        assertTrue("player health must echo the player name: " + health, nameMReply.has(PLAYER_NAME));
+        String botName = nameMReply.text(PLAYER_NAME);
 
         // Put the bot in the origin cell FIRST, at the assembly anchor. That is what makes the origin ship
         // loaded — by a real player's proximity, VS's own mechanism — so even the arrangement needs no
@@ -962,9 +967,9 @@ private long readCounter(String className, String field) throws Exception {
     /** Forward, on the real client — the key a player walks with. */
     private static final int FORWARD_KEY = org.lwjgl.input.Keyboard.KEY_W;
 
-    private static final Pattern ARRIVAL_CUT = Pattern.compile("\"arrivalCut\":\"([^\"]*)\"");
+    private static final String ARRIVAL_CUT = "arrivalCut";
 
-    private static final Pattern DEPART_LANE = Pattern.compile("\"departLane\":\"([^\"]*)\"");
+    private static final String DEPART_LANE = "departLane";
 
     /**
      * How long the void gives a crew member who is aboard nothing before it takes him, in server

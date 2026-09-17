@@ -2,6 +2,7 @@ package zmaster587.advancedRocketry.test.client;
 
 import com.google.gson.JsonObject;
 import zmaster587.advancedRocketry.client.render.planet.ApparentSize;
+import zmaster587.advancedRocketry.test.Reply;
 import zmaster587.advancedRocketry.test.Events;
 import org.junit.After;
 import org.junit.FixMethodOrder;
@@ -17,8 +18,6 @@ import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
@@ -143,9 +142,13 @@ public class BoundarySkyRendersInSlotCellE2ETest extends AbstractSharedClientE2E
         exec("artest space entry-clear");
     }
 
-    private static final Pattern PLAYER_NAME = Pattern.compile("\"player\":\"([^\"]+)\"");
+    private static final String PLAYER_NAME = "player";
     /** The slot the settle actually bound the cell to — the one place that decides it. */
-    private static final Pattern BOUND_DIM = Pattern.compile("\"slotDim\":(-?\\d+)");
+    private static final String BOUND_DIM = "slotDim";
+    /** The feed, as the probe reports it straight off the production packet: one entry per cell. */
+    private static final String FEED = "feed";
+    private static final String SLOT_DIM = "slotDim";
+    private static final String BODY_COUNT = "bodyCount";
     private static final String CLIENT_BODIES_CLASS =
             "zmaster587.advancedRocketry.network.PacketSystemBodiesSync";
 
@@ -264,9 +267,9 @@ public class BoundarySkyRendersInSlotCellE2ETest extends AbstractSharedClientE2E
         exec("time set 6000");
 
         String health = exec("artest player health");
-        Matcher nameM = PLAYER_NAME.matcher(health);
-        assertTrue("player health must echo the player name: " + health, nameM.find());
-        botName = nameM.group(1);
+        Reply nameMReply = Reply.of(health);
+        assertTrue("player health must echo the player name: " + health, nameMReply.has(PLAYER_NAME));
+        botName = nameMReply.text(PLAYER_NAME);
 
         JsonObject rd = bot().setRenderDistance(SKY_RENDER_DISTANCE);
         int previousRenderDistance = rd.get("previous").getAsInt();
@@ -329,9 +332,9 @@ public class BoundarySkyRendersInSlotCellE2ETest extends AbstractSharedClientE2E
             cell = findEmptyCell();
             String settle = exec("artest space ledger-settle " + cell + " 0");
             assertTrue("ledger-settle must succeed: " + settle, settle.contains("\"ok\":true"));
-            Matcher boundM = BOUND_DIM.matcher(settle);
-            assertTrue("the settle must report which slot the cell was bound to: " + settle, boundM.find());
-            slotDim = Integer.parseInt(boundM.group(1));
+            Reply boundMReply = Reply.of(settle);
+            assertTrue("the settle must report which slot the cell was bound to: " + settle, boundMReply.has(BOUND_DIM));
+            slotDim = Integer.parseInt(boundMReply.text(BOUND_DIM));
 
             // Night, so the cell's fog clear is dark and a white starfield can be seen against it.
             exec("time set 18000");
@@ -607,9 +610,9 @@ public class BoundarySkyRendersInSlotCellE2ETest extends AbstractSharedClientE2E
         assertTrue("the sky pass gate must be open, read back off the client's own field: " + rd,
                 rd.get("skyPassEnabled").getAsBoolean());
         String health = exec("artest player health");
-        Matcher nameM = PLAYER_NAME.matcher(health);
-        assertTrue("player health must echo the player name: " + health, nameM.find());
-        botName = nameM.group(1);
+        Reply nameMReply = Reply.of(health);
+        assertTrue("player health must echo the player name: " + health, nameMReply.has(PLAYER_NAME));
+        botName = nameMReply.text(PLAYER_NAME);
         try {
             String setup = exec("artest space entry-setup 1");
             assertTrue("entry-setup must install the stack: " + setup, setup.contains("\"ok\":true"));
@@ -622,22 +625,22 @@ public class BoundarySkyRendersInSlotCellE2ETest extends AbstractSharedClientE2E
             String found = exec("artest space nebula-find 512 64");
             assertTrue("the generator must be able to name a cell with a cloud in reach: " + found,
                     found.contains("\"found\":true"));
-            Matcher sectorM = Pattern.compile("\"sectorX\":(-?\\d+)").matcher(found);
-            assertTrue("the find must report the cell it found: " + found, sectorM.find());
-            String cloudCell = sectorM.group(1) + " 0 0";
+            Reply sectorMReply = Reply.of(found);
+            assertTrue("the find must report the cell it found: " + found, sectorMReply.has("sectorX"));
+            String cloudCell = sectorMReply.text("sectorX") + " 0 0";
 
             String settle = exec("artest space ledger-settle " + cloudCell + " 0");
             assertTrue("ledger-settle must succeed: " + settle, settle.contains("\"ok\":true"));
-            Matcher boundM = BOUND_DIM.matcher(settle);
+            Reply boundMReply = Reply.of(settle);
             assertTrue("the settle must report which slot the cell was bound to: " + settle,
-                    boundM.find());
-            int slotDim = Integer.parseInt(boundM.group(1));
+                    boundMReply.has(BOUND_DIM));
+            int slotDim = Integer.parseInt(boundMReply.text(BOUND_DIM));
 
             // The server's own answer for that cell, as the cross-side oracle: what it will send.
             String feed = exec("artest space nebulae " + cloudCell);
-            Matcher drawnM = Pattern.compile("\"drawn\":(\\d+)").matcher(feed);
-            assertTrue("the probe must report the cell's sky: " + feed, drawnM.find());
-            int serverClouds = Integer.parseInt(drawnM.group(1));
+            Reply drawnMReply = Reply.of(feed);
+            assertTrue("the probe must report the cell's sky: " + feed, drawnMReply.has("drawn"));
+            int serverClouds = drawnMReply.integer("drawn");
             assertTrue("the cell the finder chose must actually have a cloud in its sky: " + feed,
                     serverClouds >= 1);
 
@@ -728,9 +731,8 @@ public class BoundarySkyRendersInSlotCellE2ETest extends AbstractSharedClientE2E
     }
 
     private static int intField(String json, String name) {
-        Matcher m = Pattern.compile("\"" + name + "\":(\\d+)").matcher(json);
-        assertTrue("cell-info must report " + name + ": " + json, m.find());
-        return Integer.parseInt(m.group(1));
+        assertTrue("cell-info must report " + name + ": " + json, Reply.of(json).has(name));
+        return Reply.of(json).integer(name);
     }
 
     // ------------------------------------------------- the CLIENT's own ordered event log ---------
@@ -790,14 +792,14 @@ public class BoundarySkyRendersInSlotCellE2ETest extends AbstractSharedClientE2E
      * Whether any RECORD in a {@code since} reply carries every one of {@code needles} and, when
      * {@code field} is non-null, an integer {@code field} at or above {@code atLeast}.
      *
-     * <p>The records come from {@link Events#recordsWithAll}, which reads the reply's parsed
+     * <p>The records come from {@link Events#recordsContainingAll}, which reads the reply's parsed
      * {@code events} array — so an envelope key ({@code count}, {@code from}, {@code dropped}) can
      * never be mistaken for a payload one. This class used to split the reply itself and skip the
      * leading chunk by hand; six other copies of that loop had no such guard.</p>
      */
     private static boolean anyRecord(String sinceReply, String field, int atLeast,
                                      String... needles) {
-        for (String record : Events.recordsWithAll(sinceReply, needles)) {
+        for (String record : Events.recordsContainingAll(sinceReply, needles)) {
             if (field == null) {
                 return true;
             }
@@ -813,18 +815,14 @@ public class BoundarySkyRendersInSlotCellE2ETest extends AbstractSharedClientE2E
      *  none does. Records are in order, and a sky frame is recorded only when what it drew CHANGED,
      *  so the last one is what the client is drawing now. */
     private static String lastRecordWith(String sinceReply, String... needles) {
-        java.util.List<String> matching = Events.recordsWithAll(sinceReply, needles);
+        java.util.List<String> matching = Events.recordsContainingAll(sinceReply, needles);
         return matching.isEmpty() ? "" : matching.get(matching.size() - 1);
     }
 
     /** The integer {@code field} of one record, or -1 when it carries none. */
     private static int lastInt(String record, String field) {
-        Matcher m = Pattern.compile("\"" + field + "\":(-?\\d+)").matcher(String.valueOf(record));
-        int last = -1;
-        while (m.find()) {
-            last = Integer.parseInt(m.group(1));
-        }
-        return last;
+        double value = Events.number(String.valueOf(record), field);
+        return Double.isNaN(value) ? -1 : (int) value;
     }
 
     // ------------------------------------------------------------------------------------ helpers
@@ -926,8 +924,13 @@ public class BoundarySkyRendersInSlotCellE2ETest extends AbstractSharedClientE2E
 
     /** How many bodies the SERVER's own feed carries for {@code slotDim}; -1 when the dim is absent. */
     private static int feedBodyCount(String json, int slotDim) {
-        Matcher m = Pattern.compile("\\{\"slotDim\":" + slotDim + ",\"bodyCount\":(\\d+)").matcher(json);
-        return m.find() ? Integer.parseInt(m.group(1)) : -1;
+        for (String entry : Reply.of("the system-bodies feed", json).objectArray(FEED)) {
+            Reply cell = Reply.of("one feed entry", entry);
+            if (cell.integerOr(SLOT_DIM, Integer.MIN_VALUE) == slotDim) {
+                return cell.integerOr(BODY_COUNT, -1);
+            }
+        }
+        return -1;
     }
 
     /** Put the player at a known altitude in {@code dim} through the production transfer path. */

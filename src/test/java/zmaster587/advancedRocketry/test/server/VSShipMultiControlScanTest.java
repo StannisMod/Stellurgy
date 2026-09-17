@@ -5,6 +5,7 @@ import org.junit.Test;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import zmaster587.advancedRocketry.test.Reply;
 import zmaster587.advancedRocketry.test.FixtureSite;
 
 import static org.junit.Assert.assertTrue;
@@ -29,8 +30,7 @@ import static org.junit.Assert.assertTrue;
  */
 public class VSShipMultiControlScanTest extends AbstractSharedServerTest {
 
-    private static final Pattern BUILDER_POS =
-            Pattern.compile("\"builderPos\":\\[(-?\\d+),(-?\\d+),(-?\\d+)]");
+    private static final String BUILDER_POS = "builderPos";
 
     @Test
     public void aSecondFlightComputerIsRejectedAtScan() throws Exception {
@@ -85,8 +85,8 @@ public class VSShipMultiControlScanTest extends AbstractSharedServerTest {
         String fixture = String.join("\n", client().execute(
                 "artest fixture rocket 0 " + baseX + " " + baseY + " " + baseZ + " " + variant));
         assertTrue("fixture (" + variant + ") failed: " + fixture, fixture.contains("\"ok\":true"));
-        Matcher bp = BUILDER_POS.matcher(fixture);
-        assertTrue("fixture (" + variant + ") missing builderPos: " + fixture, bp.find());
-        return bp.group(1) + " " + bp.group(2) + " " + bp.group(3);
+        int[] bp = Reply.of(fixture).blockPos(BUILDER_POS);
+        assertTrue("fixture (" + variant + ") missing builderPos: " + fixture, bp != null);
+        return bp[0] + " " + bp[1] + " " + bp[2];
     }
 }

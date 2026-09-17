@@ -182,8 +182,10 @@ public class PlanetBedSleepClientGroupE2ETest extends AbstractSharedClientE2ETes
         // file moves, it names no dimension, and a client that has scrolled past it reads identically
         // to one that was never sent.
         String decided = events.awaitMatching(mark, "time_skip_decided",
-                seen -> !zmaster587.advancedRocketry.test.Events.recordsWithAll(seen,
-                        "\"dim\":" + DIM_LOCKED + ",", "\"allowed\":false").isEmpty(),
+                seen -> zmaster587.advancedRocketry.test.Events
+                        .recordsWhere(seen, "dim", String.valueOf(DIM_LOCKED)).stream()
+                        .anyMatch(decision -> "false".equals(
+                                zmaster587.advancedRocketry.test.Events.text(decision, "allowed"))),
                 "refusing the skip on dim " + DIM_LOCKED,
                 "a bed on a time-locked planet must have its skip REFUSED by the policy — the lock"
                         + " withholds the morning, and this is the decision that withholds it",

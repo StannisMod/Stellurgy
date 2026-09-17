@@ -1,5 +1,7 @@
 package zmaster587.advancedRocketry.test.server;
 
+import zmaster587.advancedRocketry.test.FluidStored;
+import zmaster587.advancedRocketry.test.Reply;
 import org.junit.Test;
 
 import java.util.regex.Matcher;
@@ -44,17 +46,11 @@ import static org.junit.Assert.assertTrue;
  */
 public class FluidLoaderActiveTransferTest extends AbstractSharedServerTest {
 
-    private static final Pattern BUILDER_POS =
-            Pattern.compile("\"builderPos\":\\[(-?\\d+),(-?\\d+),(-?\\d+)]");
-    private static final Pattern ENT_ID = Pattern.compile("\"entityId\":(-?\\d+)");
-    private static final Pattern TOTAL_AMOUNT =
-            Pattern.compile("\"totalAmount\":(\\d+)");
-    private static final Pattern TILES_WITH_CAP =
-            Pattern.compile("\"tilesWithCapability\":(\\d+)");
-    private static final Pattern TOTAL_FILLED =
-            Pattern.compile("\"totalFilled\":(\\d+)");
-    private static final Pattern LOADER_TANK_AMOUNT =
-            Pattern.compile("\"fluid\":\"oxygen\",\"amount\":(\\d+)");
+    private static final String BUILDER_POS = "builderPos";
+    private static final String ENT_ID = "entityId";
+    private static final String TOTAL_AMOUNT = "totalAmount";
+    private static final String TILES_WITH_CAP = "tilesWithCapability";
+    private static final String TOTAL_FILLED = "totalFilled";
 
     /**
      * loader pre-loaded with oxygen actively transfers it into
@@ -89,7 +85,7 @@ public class FluidLoaderActiveTransferTest extends AbstractSharedServerTest {
                 + " oxygen 32000");
         assertTrue("loader fluid inject must succeed: " + inj,
                 inj.contains("\"ok\":true"));
-        int loaderFilled = extract(inj, Pattern.compile("\"filled\":(\\d+)"));
+        int loaderFilled = extract(inj, "filled");
         assertTrue("loader pre-fill must accept > 0 mB: " + inj,
                 loaderFilled > 0);
 
@@ -237,21 +233,21 @@ public class FluidLoaderActiveTransferTest extends AbstractSharedServerTest {
                 + " " + variant);
         assertTrue("fixture rocket (" + variant + ") failed: " + fx,
                 fx.contains("\"ok\":true"));
-        Matcher bp = BUILDER_POS.matcher(fx);
-        assertTrue("could not parse builderPos: " + fx, bp.find());
+        int[] bp = Reply.of(fx).blockPos(BUILDER_POS);
+        assertTrue("could not parse builderPos: " + fx, bp != null);
         String assemble = exec("artest rocket assemble 0 "
-                + bp.group(1) + " " + bp.group(2) + " " + bp.group(3));
+                + bp[0] + " " + bp[1] + " " + bp[2]);
         assertTrue("rocket assemble failed: " + assemble,
                 assemble.contains("\"ok\":true"));
-        Matcher em = ENT_ID.matcher(assemble);
-        assertTrue("rocket entityId missing: " + assemble, em.find());
-        return Integer.parseInt(em.group(1));
+        Reply emReply = Reply.of(assemble);
+        assertTrue("rocket entityId missing: " + assemble, emReply.has(ENT_ID));
+        return Integer.parseInt(emReply.text(ENT_ID));
     }
 
-    private static int extract(String src, Pattern pattern) {
-        Matcher m = pattern.matcher(src);
-        assertTrue("pattern not found in: " + src, m.find());
-        return Integer.parseInt(m.group(1));
+    private static int extract(String src, String field) {
+        Reply reply = Reply.of(src);
+        assertTrue("field `" + field + "` not found in: " + src, reply.has(field));
+        return reply.integer(field);
     }
 
     /**
@@ -260,7 +256,8 @@ public class FluidLoaderActiveTransferTest extends AbstractSharedServerTest {
      * missing) — that's a valid drained-tank state, not a parse error.
      */
     private static int parseOxygenAmountOrZero(String src) {
-        Matcher m = LOADER_TANK_AMOUNT.matcher(src);
-        return m.find() ? Integer.parseInt(m.group(1)) : 0;
+        // Read per TANK. The regex this replaces matched `fluid` and `amount` in one expression, so
+        // a tank that wrote them in the other order read as no oxygen at all.
+        return FluidStored.of(src).amountOf("oxygen");
     }
 }

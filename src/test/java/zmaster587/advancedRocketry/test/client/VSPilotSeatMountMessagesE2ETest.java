@@ -9,6 +9,7 @@ import java.util.Locale;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import zmaster587.advancedRocketry.test.Reply;
 import zmaster587.advancedRocketry.test.Events;
 
 import zmaster587.advancedRocketry.test.FixtureSite;
@@ -58,7 +59,7 @@ public class VSPilotSeatMountMessagesE2ETest extends AbstractSharedVsClientE2ETe
     private static final int SEAT_X = 4200, SEAT_Y = FixtureSite.OPEN_AIR_Y, SEAT_Z = 4200;
     /** Leg 4's own seat, clear of leg 3's NPC occupant so neither leg has to be torn down. */
     private static final int LINKED_X = SEAT_X + 2, LINKED_Z = SEAT_Z + 2;
-    private static final Pattern OCCUPANT_NAME = Pattern.compile("\"occupantName\":\"([^\"]+)\"");
+    private static final String OCCUPANT_NAME = "occupantName";
 
     /** The translation keys the seat answers with. A key is the message's IDENTITY — the lang file
      *  and any resource pack are keyed on it — where the rendered English is one translation of it. */
@@ -156,9 +157,9 @@ public class VSPilotSeatMountMessagesE2ETest extends AbstractSharedVsClientE2ETe
                 "clicking one's OWN occupied seat sends no status message");
         assertTrue("clicking one's OWN occupied seat must be a silent no-op — nothing may be queued"
                         + " for him within " + SILENCE_WINDOW_TICKS + " ticks of the click: "
-                        + selfQueued, Events.countRecords(selfQueued, "\"who\":\"" + BOT + "\"") == 0);
+                        + selfQueued, Events.countRecords(selfQueued, "who", BOT) == 0);
         assertTrue("...and nothing may be sent to him either: " + selfSent,
-                Events.countRecords(selfSent, "\"who\":\"" + BOT + "\"") == 0);
+                Events.countRecords(selfSent, "who", BOT) == 0);
         assertTrue("a self-click must not unseat the pilot", isRiding(bot().reportRidingEntity()));
 
         // ---- 3) Occupied refusal: no mount, one message naming the occupant. -------------------
@@ -166,9 +167,9 @@ public class VSPilotSeatMountMessagesE2ETest extends AbstractSharedVsClientE2ETe
         String occupy = exec("artest vs seat-occupy 0 " + SEAT_X + " " + SEAT_Y + " " + SEAT_Z);
         scenario().requireArranged("the seat-occupy probe must seat an NPC occupant: " + occupy,
                 occupy.contains("\"ok\":true") && occupy.contains("\"mounted\":true"));
-        Matcher nm = OCCUPANT_NAME.matcher(occupy);
-        scenario().requireArranged("seat-occupy must report the occupant's name: " + occupy, nm.find());
-        String occupantName = nm.group(1);
+        String occupantName = Reply.of("artest vs seat-occupy", occupy).text(OCCUPANT_NAME);
+        scenario().requireArranged("seat-occupy must report the occupant's name: " + occupy,
+                occupantName != null);
 
         standBesideTheSeat();
         // The occupancy must still HOLD at the moment of the click — measured server-side, not
@@ -209,14 +210,14 @@ public class VSPilotSeatMountMessagesE2ETest extends AbstractSharedVsClientE2ETe
                 "the occupied refusal wins over the unassembled notice");
         assertTrue("the occupied refusal must WIN over the unassembled notice — exactly one message"
                         + " per click, and the notice is the one that is queued: " + refusalQueued,
-                Events.countRecords(refusalQueued, "\"key\":\"" + KEY_NOT_ASSEMBLED + "\"") == 0);
+                Events.countRecords(refusalQueued, "key", KEY_NOT_ASSEMBLED) == 0);
 
         // ...and it must not MOUNT him. The absence means something because the click is recorded
         // above: the server saw it and chose not to seat him.
         String refusalMounts = events.since(refusalMark, "mount");
         assertTrue("a click on an occupied seat must NOT mount the clicker — the click reached the"
                         + " server (see the chain) and the seat refused it: " + refusalMounts,
-                Events.countRecords(refusalMounts, "\"who\":\"" + BOT + "\"") == 0);
+                Events.countRecords(refusalMounts, "who", BOT) == 0);
         JsonObject afterRefusal = bot().reportRidingEntity();
         assertTrue("...and the client must not render him seated either: " + afterRefusal,
                 !isRiding(afterRefusal));
@@ -267,7 +268,7 @@ public class VSPilotSeatMountMessagesE2ETest extends AbstractSharedVsClientE2ETe
     private static final String BOT = "ForgeTestClient";
 
     /** What the dismount probe reports he was riding BEFORE it acted; -1 when he was riding nothing. */
-    private static final Pattern WAS_RIDING_ID = Pattern.compile("\"wasRidingId\":(-?\\d+)");
+    private static final String WAS_RIDING_ID = "wasRidingId";
 
     /**
      * Get off the seat, and PROVE it. What this leg needs is a STATE — the bot is not the seat's
@@ -289,15 +290,15 @@ public class VSPilotSeatMountMessagesE2ETest extends AbstractSharedVsClientE2ETe
     private void dismountAndConfirm(Events events) throws Exception {
         long mark = events.markInstrumented();
         String probe = exec("artest player dismount");
-        Matcher was = WAS_RIDING_ID.matcher(probe);
+        Reply dismounted = Reply.of("artest player dismount", probe);
         scenario().requireArranged("the dismount probe must say what the bot was riding when it was"
                 + " asked — without that this cannot tell a dismount that was owed from one that was"
-                + " not: " + probe, was.find());
-        boolean wasSeated = Integer.parseInt(was.group(1)) >= 0;
+                + " not: " + probe, dismounted.has(WAS_RIDING_ID));
+        boolean wasSeated = dismounted.integer(WAS_RIDING_ID) >= 0;
         if (wasSeated) {
             events.await(mark, "dismount", "the probe must actually take the bot off the seat before"
                     + " a leg that measures somebody else's click can mean anything — it reported"
-                    + " him riding " + was.group(1) + " when asked (" + probe + ")",
+                    + " him riding " + dismounted.integer(WAS_RIDING_ID) + " when asked (" + probe + ")",
                     NOTICE_BUDGET_TICKS);
         }
         // CONDITIONAL on the same fact as the server half above, and for the same reason one line

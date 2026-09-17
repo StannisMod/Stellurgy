@@ -20,6 +20,7 @@ import java.util.regex.Pattern;
 
 import zmaster587.advancedRocketry.space.CellWorldMapper;
 import zmaster587.advancedRocketry.space.GalacticCoord;
+import zmaster587.advancedRocketry.test.Reply;
 import zmaster587.advancedRocketry.test.Chains;
 import zmaster587.advancedRocketry.test.Events;
 import zmaster587.advancedRocketry.test.GameTicks;
@@ -269,12 +270,11 @@ public abstract class AbstractSpaceLoginRestoreClientTest {
                     + "\\|c=(-?[0-9.E\\-]+)\\|in=(-?[0-9.]+)/(-?[0-9.]+)\\|d=(\\d)"
                     + "\\|s=(\\d)(\\d)/(-?\\d+)");
 
-    protected static final Pattern SHIP_ID = Pattern.compile("\"shipId\":\"([^\"]+)\"");
+    protected static final String SHIP_ID = "shipId";
     /** The PHYSICS id in a {@code vs ship-uuid} reply — the other half of a tier-2 craft's identity. */
-    protected static final Pattern SHIP_UUID = Pattern.compile("\"id\":\"([^\"]+)\"");
-    protected static final Pattern BUILDER_POS =
-            Pattern.compile("\"builderPos\":\\[(-?\\d+),(-?\\d+),(-?\\d+)]");
-    protected static final Pattern FORGE_DIMS = Pattern.compile("\"forgeDimensions\":\\[([^\\]]*)]");
+    protected static final String SHIP_UUID = "id";
+    protected static final String BUILDER_POS = "builderPos";
+    protected static final String FORGE_DIMS = "forgeDimensions";
 
     /** The ship production minted for the arranged pilot, and the cell production settled it in. */
     protected String arrangedShipId;
@@ -1031,7 +1031,7 @@ public abstract class AbstractSpaceLoginRestoreClientTest {
      * deliberately not counted here; it shows in the reply the caller prints.
      */
     protected static long guardReleases(String releases) {
-        return Events.countRecords(releases, "\"reason\":");
+        return Events.countRecordsWithField(releases, "reason");
     }
 
     /**
@@ -1806,15 +1806,12 @@ public abstract class AbstractSpaceLoginRestoreClientTest {
      */
     protected String[] awaitSettledShipSlot() throws Exception {
         String dims = exec("artest dim list");
-        Matcher list = FORGE_DIMS.matcher(dims);
-        assertTrue("could not read the registered dimensions: " + dims, list.find());
-        String[] ids = list.group(1).split(",");
+        Reply listed = Reply.of("artest dim list", dims);
+        assertTrue("could not read the registered dimensions: " + dims, listed.has(FORGE_DIMS));
+        int[] ids = listed.intArray(FORGE_DIMS);
         for (int attempt = 0; attempt < 30; attempt++) {
-            for (String id : ids) {
-                String trimmed = id.trim();
-                if (trimmed.isEmpty()) {
-                    continue;
-                }
+            for (int id : ids) {
+                String trimmed = String.valueOf(id);
                 // WHICH ship is asked for by name where the caller has one. This method is also the
                 // path that DISCOVERS the arranged ship in the first place — the scenario has just
                 // flown a craft up and does not yet know which slot took it — so on that first pass
@@ -1866,9 +1863,9 @@ public abstract class AbstractSpaceLoginRestoreClientTest {
             // one loaded ship is HIS, and the case where it is not is precisely the case where his
             // has failed to load and a neighbour's has. A name has no such gap.
             String hull = exec("artest vs ship-uuid " + dim + " " + arrangedShipId);
-            Matcher named = SHIP_UUID.matcher(hull);
-            if (hull.contains("\"found\":true") && named.find()) {
-                String info = exec("artest vs ship-info " + dim + " id " + named.group(1));
+            Reply namedReply = Reply.of(hull);
+            if (hull.contains("\"found\":true") && namedReply.has(SHIP_UUID)) {
+                String info = exec("artest vs ship-info " + dim + " id " + namedReply.text(SHIP_UUID));
                 if (info.contains("\"managed\":true")) {
                     return new double[]{readDouble(info, "posX"), readDouble(info, "posY"),
                             readDouble(info, "posZ")};
@@ -1921,26 +1918,24 @@ public abstract class AbstractSpaceLoginRestoreClientTest {
         String fixture = exec("artest fixture rocket " + LAUNCH_DIM
                 + " " + baseX + " " + baseY + " " + baseZ + " " + variant);
         assertTrue("fixture (" + variant + ") failed: " + fixture, fixture.contains("\"ok\":true"));
-        Matcher builder = BUILDER_POS.matcher(fixture);
-        assertTrue("fixture (" + variant + ") missing builderPos: " + fixture, builder.find());
-        return builder.group(1) + " " + builder.group(2) + " " + builder.group(3);
+        int[] builder = Reply.of(fixture).blockPos(BUILDER_POS);
+        assertTrue("fixture (" + variant + ") missing builderPos: " + fixture, builder != null);
+        return builder[0] + " " + builder[1] + " " + builder[2];
     }
 
     protected static String readShipId(String json) {
-        Matcher m = SHIP_ID.matcher(json);
-        assertTrue("expected a minted ship id in: " + json, m.find());
-        return m.group(1);
+        Reply mReply = Reply.of(json);
+        assertTrue("expected a minted ship id in: " + json, mReply.has(SHIP_ID));
+        return mReply.text(SHIP_ID);
     }
 
     protected static int readInt(String json, String key) {
-        Matcher m = Pattern.compile("\"" + key + "\":(-?\\d+)").matcher(json);
-        assertTrue("expected int \"" + key + "\" in: " + json, m.find());
-        return Integer.parseInt(m.group(1));
+        assertTrue("expected int \"" + key + "\" in: " + json, Reply.of(json).has(key));
+        return Reply.of(json).integer(key);
     }
 
     protected static int readIntOr(String json, String key, int def) {
-        Matcher m = Pattern.compile("\"" + key + "\":(-?\\d+)").matcher(json);
-        return m.find() ? Integer.parseInt(m.group(1)) : def;
+        return Reply.of(json).integerOr(key, def);
     }
 
     /**
@@ -1959,32 +1954,27 @@ public abstract class AbstractSpaceLoginRestoreClientTest {
     }
 
     protected static double readDouble(String json, String key) {
-        Matcher m = Pattern.compile("\"" + key + "\":(-?[0-9.E\\-]+)").matcher(json);
-        assertTrue("expected number \"" + key + "\" in: " + json, m.find());
-        return Double.parseDouble(m.group(1));
+        assertTrue("expected number \"" + key + "\" in: " + json, Reply.of(json).has(key));
+        return Reply.of(json).number(key);
     }
 
     protected static String readString(String json, String key) {
-        Matcher m = Pattern.compile("\"" + key + "\":\"([^\"]*)\"").matcher(json);
-        return m.find() ? m.group(1) : null;
+        return Reply.of(json).text(key);
     }
 
     /** The pool's slot dimension ids as reported by {@code space subsystem-status}. */
     protected static java.util.List<Integer> slotDimsOf(String json) {
-        Matcher m = Pattern.compile("\"slotDims\":\\[([^\\]]*)\\]").matcher(json);
-        assertTrue("expected \"slotDims\" in: " + json, m.find());
+        Reply status = Reply.of("artest space subsystem-status", json);
+        assertTrue("expected \"slotDims\" in: " + json, status.has("slotDims"));
         java.util.List<Integer> dims = new java.util.ArrayList<Integer>();
-        String body = m.group(1).trim();
-        if (!body.isEmpty()) {
-            for (String part : body.split(",")) {
-                dims.add(Integer.valueOf(part.trim()));
-            }
+        for (int dim : status.intArray("slotDims")) {
+            dims.add(dim);
         }
         return dims;
     }
 
     protected static boolean readBool(String json, String key) {
-        return Pattern.compile("\"" + key + "\":true").matcher(json).find();
+        return Reply.of(json).bool(key, false);
     }
 
     // --- the ordered event log ---------------------------------------------------------------------

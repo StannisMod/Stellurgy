@@ -13,6 +13,7 @@ import org.junit.runners.MethodSorters;
 import org.lwjgl.input.Keyboard;
 
 import zmaster587.advancedRocketry.test.Events;
+import zmaster587.advancedRocketry.test.Reply;
 import zmaster587.advancedRocketry.test.FixtureSite;
 
 import static org.junit.Assert.assertTrue;
@@ -72,11 +73,10 @@ public class VSShipEntryClientGroupE2ETest extends AbstractSharedVsClientE2ETest
         return "vs-ship-entry";
     }
 
-    private static final Pattern BUILDER_POS =
-            Pattern.compile("\"builderPos\":\\[(-?\\d+),(-?\\d+),(-?\\d+)]");
-    private static final Pattern POS_Y = Pattern.compile("\"posY\":(-?[0-9.E\\-]+)");
-    private static final Pattern DUMMY_ID = Pattern.compile("\"dummyId\":(-?\\d+)");
-    private static final Pattern LEDGER = Pattern.compile("\"ledger\":(-?\\d+)");
+    private static final String BUILDER_POS = "builderPos";
+    private static final String POS_Y = "posY";
+    private static final String DUMMY_ID = "dummyId";
+    private static final String LEDGER = "ledger";
 
     /**
      * The five links a GRANTED entry is, in the order production commits them: the hull is cut into
@@ -88,20 +88,20 @@ public class VSShipEntryClientGroupE2ETest extends AbstractSharedVsClientE2ETest
      * {@code MixinShipEntryControllerEvents}, {@code MixinVSShipCrossingOpsEvents}, {@code MixinShipLedgerEvents}).
      */
     private static final String[] ENTRY_CHAIN = zmaster587.advancedRocketry.test.Chains.GRANTED_ENTRY;
-    private static final Pattern SLOT_DIMS = Pattern.compile("\"slotDims\":\\[([0-9,\\-]*)]");
-    private static final Pattern SLOT_DIM = Pattern.compile("\"slotDim\":(-?\\d+)");
-    private static final Pattern AFC_X = Pattern.compile("\"afcX\":(-?\\d+)");
-    private static final Pattern AFC_Y = Pattern.compile("\"afcY\":(-?\\d+)");
-    private static final Pattern AFC_Z = Pattern.compile("\"afcZ\":(-?\\d+)");
-    private static final Pattern VEL_Y = Pattern.compile("\"velY\":(-?[0-9.E\\-]+)");
+    private static final String SLOT_DIMS = "slotDims";
+    private static final String SLOT_DIM = "slotDim";
+    private static final String AFC_X = "afcX";
+    private static final String AFC_Y = "afcY";
+    private static final String AFC_Z = "afcZ";
+    private static final String VEL_Y = "velY";
     /** The discriminator: the seat's own delivery counters, sampled across the climb. */
-    private static final Pattern RECEIVED = Pattern.compile("\"received\":(\\d+)");
-    private static final Pattern DELIVERED = Pattern.compile("\"delivered\":(\\d+)");
+    private static final String RECEIVED = "received";
+    private static final String DELIVERED = "delivered";
     /** The ship's own attitude, so a climb that goes nowhere can be told from one that goes SIDEWAYS. */
-    private static final Pattern Q_X = Pattern.compile("\"qx\":(-?[0-9.E\\-]+)");
-    private static final Pattern Q_Z = Pattern.compile("\"qz\":(-?[0-9.E\\-]+)");
-    private static final Pattern P_X = Pattern.compile("\"posX\":(-?[0-9.E\\-]+)");
-    private static final Pattern P_Z = Pattern.compile("\"posZ\":(-?[0-9.E\\-]+)");
+    private static final String Q_X = "qx";
+    private static final String Q_Z = "qz";
+    private static final String P_X = "posX";
+    private static final String P_Z = "posZ";
 
     /** The account every client harness launches under; the server keys his player data by it. */
     private static final String BOT = "ForgeTestClient";
@@ -265,9 +265,15 @@ public class VSShipEntryClientGroupE2ETest extends AbstractSharedVsClientE2ETest
 
         // ---- ARRIVAL: the three play-reported symptoms, measured from the client. -------------
         String statusAfter = exec("artest space subsystem-status");
-        Matcher sd = SLOT_DIMS.matcher(statusAfter);
-        scenario().requireArranged("subsystem-status must list slot dims: " + statusAfter, sd.find());
-        String slotDims = "," + sd.group(1) + ",";
+        int[] pooledDims = Reply.of("artest space subsystem-status", statusAfter)
+                .intArray(SLOT_DIMS);
+        scenario().requireArranged("subsystem-status must list slot dims: " + statusAfter,
+                pooledDims.length > 0);
+        StringBuilder joinedDims = new StringBuilder();
+        for (int dim : pooledDims) {
+            joinedDims.append(joinedDims.length() == 0 ? "" : ",").append(dim);
+        }
+        String slotDims = "," + joinedDims + ",";
 
         // (1) The client's OWN world is a slot dim (the client followed the crossing) — read off the
         // client's own record of its dimension changes since the mark, not sampled: a world rebuilt
@@ -279,7 +285,7 @@ public class VSShipEntryClientGroupE2ETest extends AbstractSharedVsClientE2ETest
         try {
             dimChanges = clientEvents().awaitMatching(clientMark, "client_dimension_changed",
                     seen -> slotDims.contains("," + lastDimOf(seen) + ","),
-                    "ending in one of the subsystem's slot dims [" + sd.group(1) + "]",
+                    "ending in one of the subsystem's slot dims [" + joinedDims + "]",
                     "after a granted entry the CLIENT itself must be in a space-cell dimension -"
                             + " the pilot follows his ship through the seam",
                     arrivalBudget * ARRIVAL_STEP_TICKS);
@@ -301,7 +307,7 @@ public class VSShipEntryClientGroupE2ETest extends AbstractSharedVsClientE2ETest
         // scenario with a second player on the same client would have to name him (`who`).
         try {
             clientEvents().awaitMatching(clientMark, "mount",
-                    seen -> Events.countRecords(seen, "\"ok\":true") > 0,
+                    seen -> Events.countRecords(seen, "ok", "true") > 0,
                     "seating him (ok:true)",
                     "the pilot who FLEW his ship into space must still be in his seat on arrival -"
                             + " a crossing must never stand him up",
@@ -544,10 +550,10 @@ public class VSShipEntryClientGroupE2ETest extends AbstractSharedVsClientE2ETest
                                 .append("/deliv=").append(firstGroupOr(DELIVERED, d, "?"))
                                 .append("/ledger=").append(firstGroupOr(LEDGER, spaceSample, "?"));
                     }
-                    Matcher py = POS_Y.matcher(s);
-                    Matcher vy = VEL_Y.matcher(s);
-                    if (py.find()) {
-                        double y = Double.parseDouble(py.group(1));
+                    Reply sample = Reply.of("artest vs ship-info", s);
+                    double sampledY = sample.number(POS_Y);
+                    if (!Double.isNaN(sampledY)) {
+                        double y = sampledY;
                         maxShipY = Math.max(maxShipY, y);
                         // A bounded timeline, not a last-value snapshot: a climb that stops is a
                         // shape, and the tick it changed shape at is the whole question. The
@@ -560,24 +566,22 @@ public class VSShipEntryClientGroupE2ETest extends AbstractSharedVsClientE2ETest
                         // travel is a ship flying SIDEWAYS, which is a different bug from a ship
                         // that is not being pushed at all - and the two are identical in a
                         // y/velY trace.
-                        Matcher qx = Q_X.matcher(s), qz = Q_Z.matcher(s);
-                        Matcher px = P_X.matcher(s), pz = P_Z.matcher(s);
+                        double ax = sample.number(Q_X), az = sample.number(Q_Z);
+                        double sx = sample.number(P_X), sz = sample.number(P_Z);
                         double upY = Double.NaN, horiz = Double.NaN;
-                        if (qx.find() && qz.find()) {
-                            double ax = Double.parseDouble(qx.group(1));
-                            double az = Double.parseDouble(qz.group(1));
+                        if (!Double.isNaN(ax) && !Double.isNaN(az)) {
                             upY = 1.0 - 2.0 * (ax * ax + az * az);
                         }
-                        if (px.find() && pz.find()) {
-                            double dx = Double.parseDouble(px.group(1)) - site.x;
-                            double dz = Double.parseDouble(pz.group(1)) - site.z;
+                        if (!Double.isNaN(sx) && !Double.isNaN(sz)) {
+                            double dx = sx - site.x;
+                            double dz = sz - site.z;
                             horiz = Math.sqrt(dx * dx + dz * dz);
                         }
                         if (climb.length() < 1400) {
                             climb.append(' ').append(attempt).append(':')
                                     .append(String.format(Locale.ROOT, "%.1f", y))
                                     .append('/')
-                                    .append(vy.find() ? vy.group(1) : "?")
+                                    .append(sample.textOr(VEL_Y, "?"))
                                     .append(String.format(Locale.ROOT, "/up=%.2f/horiz=%.1f",
                                             upY, horiz));
                         }
@@ -664,11 +668,11 @@ public class VSShipEntryClientGroupE2ETest extends AbstractSharedVsClientE2ETest
                         + " as a pilot who kept his seat");
         assertTrue("the pilot must have been seated on this client at all before 'he was never"
                         + " unseated' says anything: no successful mount was ever recorded here",
-                Events.countRecords(clientEvents().since(0, "mount"), "\"ok\":true") > 0);
+                Events.countRecords(clientEvents().since(0, "mount"), "ok", "true") > 0);
         assertTrue("a REFUSED entry must leave the pilot IN HIS SEAT - the crossing may unseat"
                         + " nobody until it is granted, and his client was told to take him off it: "
                         + dismounts + " delivery=" + exec("artest vs seat-delivery"),
-                Events.countRecords(dismounts, "\"who\":") == 0);
+                Events.countRecordsWithField(dismounts, "who") == 0);
         // ...and he is still on it now, read ONCE.
         JsonObject riding = bot().reportRidingEntity();
         assertTrue("a REFUSED entry must leave the pilot IN HIS SEAT. riding=" + riding
@@ -740,12 +744,11 @@ public class VSShipEntryClientGroupE2ETest extends AbstractSharedVsClientE2ETest
         // held. This read separates "assembly left it crooked" from "flying tilted it", which the
         // climb trace alone cannot.
         String atRest = shipInfoById(shipUuid);
-        Matcher aq = Q_X.matcher(atRest), az = Q_Z.matcher(atRest);
+        Reply rest = Reply.of("artest vs ship-info", atRest);
+        double restQx = rest.number(Q_X), restQz = rest.number(Q_Z);
         System.out.println("[vs-entry] attitude AT REST, pre-boarding: upY="
-                + (aq.find() && az.find()
-                    ? String.valueOf(1.0 - 2.0 * (Double.parseDouble(aq.group(1))
-                        * Double.parseDouble(aq.group(1))
-                        + Double.parseDouble(az.group(1)) * Double.parseDouble(az.group(1))))
+                + (!Double.isNaN(restQx) && !Double.isNaN(restQz)
+                    ? String.valueOf(1.0 - 2.0 * (restQx * restQx + restQz * restQz))
                     : "?")
                 + " :: " + atRest.replace('\n', ' '));
 
@@ -757,9 +760,10 @@ public class VSShipEntryClientGroupE2ETest extends AbstractSharedVsClientE2ETest
 
         // Board post-assembly (the proven path - boarding variants have their own test).
         String mountInfo = exec("artest vs seat-mount 0 id " + shipUuid);
-        Matcher dm = DUMMY_ID.matcher(mountInfo);
-        scenario().requireArranged("seat-mount must report a dummy id: " + mountInfo, dm.find());
-        String mount = exec("artest player mount-entity " + dm.group(1));
+        Reply seatMount = Reply.of("artest vs seat-mount", mountInfo);
+        scenario().requireArranged("seat-mount must report a dummy id: " + mountInfo,
+                seatMount.has(DUMMY_ID));
+        String mount = exec("artest player mount-entity " + seatMount.integer(DUMMY_ID));
         scenario().requireArranged("bot must mount the seat dummy: " + mount,
                 mount.contains("\"mounted\":true"));
         bot().waitTicks(10);
@@ -779,9 +783,9 @@ public class VSShipEntryClientGroupE2ETest extends AbstractSharedVsClientE2ETest
         String fixture = exec("artest fixture rocket 0 " + baseX + " " + baseY + " " + baseZ + " " + variant);
         scenario().requireArranged("fixture (" + variant + ") failed: " + fixture,
                 fixture.contains("\"ok\":true"));
-        Matcher bp = BUILDER_POS.matcher(fixture);
-        scenario().requireArranged("fixture missing builderPos: " + fixture, bp.find());
-        return exec("artest rocket assemble 0 " + bp.group(1) + " " + bp.group(2) + " " + bp.group(3));
+        int[] bp = Reply.of(fixture).blockPos(BUILDER_POS);
+        scenario().requireArranged("fixture missing builderPos: " + fixture, bp != null);
+        return exec("artest rocket assemble 0 " + bp[0] + " " + bp[1] + " " + bp[2]);
     }
 
     // ── observation helpers ─────────────────────────────────────────────────────────────────────
@@ -789,14 +793,9 @@ public class VSShipEntryClientGroupE2ETest extends AbstractSharedVsClientE2ETest
     /** The pool's own slot dimension ids, from the subsystem's report. */
     private java.util.Set<Integer> slotDimsOfPool() throws Exception {
         String status = exec("artest space subsystem-status");
-        Matcher sd = SLOT_DIMS.matcher(status);
         java.util.Set<Integer> dims = new java.util.LinkedHashSet<Integer>();
-        if (sd.find()) {
-            for (String piece : sd.group(1).split(",")) {
-                if (!piece.trim().isEmpty()) {
-                    dims.add(Integer.parseInt(piece.trim()));
-                }
-            }
+        for (int dim : Reply.of("artest space subsystem-status", status).intArray(SLOT_DIMS)) {
+            dims.add(dim);
         }
         return dims;
     }
@@ -815,9 +814,9 @@ public class VSShipEntryClientGroupE2ETest extends AbstractSharedVsClientE2ETest
             if (!reply.contains("\"managerLoaded\":true")) {
                 continue;
             }
-            Matcher m = SLOT_DIM.matcher(reply);
-            if (m.find()) {
-                held.add(Integer.parseInt(m.group(1)));
+            Reply slot = Reply.of("artest space slot-status", reply);
+            if (slot.has(SLOT_DIM)) {
+                held.add(slot.integer(SLOT_DIM));
             }
         }
         return held;
@@ -826,15 +825,15 @@ public class VSShipEntryClientGroupE2ETest extends AbstractSharedVsClientE2ETest
     /** How many craft the space ledger holds right now. */
     private int ledgerSize() throws Exception {
         String status = exec("artest space subsystem-status");
-        Matcher lm = LEDGER.matcher(status);
-        scenario().requireArranged("subsystem-status must report the ledger: " + status, lm.find());
-        return Integer.parseInt(lm.group(1));
+        Reply subsystem = Reply.of("artest space subsystem-status", status);
+        scenario().requireArranged("subsystem-status must report the ledger: " + status,
+                subsystem.has(LEDGER));
+        return subsystem.integer(LEDGER);
     }
 
     /** The NAMED ship's altitude, or {@code NaN} while it is reporting none (the cut, for instance). */
     private double shipY(String shipUuid) throws Exception {
-        Matcher m = POS_Y.matcher(shipInfoById(shipUuid));
-        return m.find() ? Double.parseDouble(m.group(1)) : Double.NaN;
+        return Reply.of("artest vs ship-info", shipInfoById(shipUuid)).number(POS_Y);
     }
 
     private double clientPlayerY() throws Exception {
@@ -879,21 +878,18 @@ public class VSShipEntryClientGroupE2ETest extends AbstractSharedVsClientE2ETest
      * is watching.
      */
     private String physDiag(String gateJson, String shipUuid) throws Exception {
-        Matcher ax = AFC_X.matcher(gateJson);
-        Matcher ay = AFC_Y.matcher(gateJson);
-        Matcher az = AFC_Z.matcher(gateJson);
-        if (!ax.find() || !ay.find() || !az.find()) {
+        Reply gate = Reply.of("the entry gate readout", gateJson);
+        if (!gate.has(AFC_X) || !gate.has(AFC_Y) || !gate.has(AFC_Z)) {
             return "(the gate readout named no flight computer, so its state cannot be read)";
         }
         return exec("artest vs phys-diag 0 " + shipUuid + " "
-                + ax.group(1) + " " + ay.group(1) + " " + az.group(1));
+                + gate.integer(AFC_X) + " " + gate.integer(AFC_Y) + " " + gate.integer(AFC_Z));
     }
 
-    /** First capture group of {@code p} in {@code s}, or {@code fallback} — a missing field must read
-     *  as "not answered" and never as a number, which is how a dead probe reads as a real zero. */
-    private static String firstGroupOr(Pattern p, String s, String fallback) {
-        Matcher m = p.matcher(s);
-        return m.find() ? m.group(1) : fallback;
+    /** {@code field} of a probe reply, or {@code fallback} — a missing field must read as "not
+     *  answered" and never as a number, which is how a dead probe reads as a real zero. */
+    private static String firstGroupOr(String field, String reply, String fallback) {
+        return Reply.of(reply).textOr(field, fallback);
     }
 
     private static boolean isRiding(JsonObject riding) {
@@ -911,9 +907,11 @@ public class VSShipEntryClientGroupE2ETest extends AbstractSharedVsClientE2ETest
      */
     private static int lastDimOf(String dimChangeReply) {
         int dim = Integer.MIN_VALUE;
-        Matcher dm = Pattern.compile("\"dim\":(-?\\d+)").matcher(String.valueOf(dimChangeReply));
-        while (dm.find()) {
-            dim = Integer.parseInt(dm.group(1));
+        for (String record : Events.records(String.valueOf(dimChangeReply))) {
+            double value = Events.number(record, "dim");
+            if (!Double.isNaN(value)) {
+                dim = (int) value;
+            }
         }
         return dim;
     }

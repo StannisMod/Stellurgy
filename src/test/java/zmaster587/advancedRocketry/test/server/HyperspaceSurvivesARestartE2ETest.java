@@ -12,6 +12,7 @@ import com.github.stannismod.forge.testing.server.RealDedicatedServerHarness;
 import org.junit.After;
 import org.junit.Assume;
 import org.junit.Before;
+import zmaster587.advancedRocketry.test.Reply;
 import zmaster587.advancedRocketry.test.GameTicks;
 
 import org.junit.Test;
@@ -79,7 +80,6 @@ public class HyperspaceSurvivesARestartE2ETest {
      */
     private static final long PARK_SPEED = 1L;
 
-    private static final Pattern INT = Pattern.compile("\"%s\":(-?\\d+)");
 
     /**
      * A per-world ship registry holding nothing weighs this on disk. Diagnostic only — it separates
@@ -122,18 +122,17 @@ public class HyperspaceSurvivesARestartE2ETest {
     }
 
     private static int readInt(String json, String key) {
-        Matcher m = Pattern.compile(String.format(INT.pattern(), key)).matcher(json);
-        assertTrue("expected int \"" + key + "\" in: " + json, m.find());
-        return Integer.parseInt(m.group(1));
+        Reply reply = Reply.of(json);
+        assertTrue("expected int \"" + key + "\" in: " + json, reply.has(key));
+        return reply.integer(key);
     }
 
     private static int readIntOr(String json, String key, int def) {
-        Matcher m = Pattern.compile(String.format(INT.pattern(), key)).matcher(json);
-        return m.find() ? Integer.parseInt(m.group(1)) : def;
+        return Reply.of(json).integerOr(key, def);
     }
 
     private static boolean readBool(String json, String key) {
-        return json.contains("\"" + key + "\":true");
+        return Reply.of(json).bool(key, false);
     }
 
     /** Poll for the ship the fixture assembles in its origin cell (VS assembly is asynchronous). */

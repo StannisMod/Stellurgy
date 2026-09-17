@@ -1,6 +1,7 @@
 package zmaster587.advancedRocketry.test.server;
 
 // migrated to AbstractSharedServerTest
+import zmaster587.advancedRocketry.test.Reply;
 import org.junit.Test;
 
 import java.util.regex.Matcher;
@@ -48,14 +49,14 @@ import static org.junit.Assert.assertTrue;
  */
 public class SpaceStationDockUndockTest extends AbstractSharedServerTest {
 
-    private static final Pattern ID_PATTERN = Pattern.compile("\"id\":(-?\\d+)");
+    private static final String ID_PATTERN = "id";
 
     private int createStation() throws Exception {
         String resp = String.join("\n", client().execute("artest station create 0"));
         assertTrue("station create failed: " + resp, resp.contains("\"ok\":true"));
-        Matcher m = ID_PATTERN.matcher(resp);
-        assertTrue("could not parse station id: " + resp, m.find());
-        return Integer.parseInt(m.group(1));
+        Reply mReply = Reply.of(resp);
+        assertTrue("could not parse station id: " + resp, mReply.has(ID_PATTERN));
+        return Integer.parseInt(mReply.text(ID_PATTERN));
     }
 
     private static String ok(java.util.List<String> resp) {

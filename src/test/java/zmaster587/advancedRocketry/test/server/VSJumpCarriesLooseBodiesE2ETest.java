@@ -1,5 +1,6 @@
 package zmaster587.advancedRocketry.test.server;
 
+import zmaster587.advancedRocketry.test.Reply;
 import zmaster587.advancedRocketry.test.Events;
 import zmaster587.advancedRocketry.test.ShipReadiness;
 import zmaster587.advancedRocketry.test.GameTicks;
@@ -94,7 +95,7 @@ public class VSJumpCarriesLooseBodiesE2ETest extends AbstractSharedServerTest {
         assertTrue("the transit must begin: " + begin, begin.contains("\"began\":true"));
 
         // No pump: the server advances the jump. Waited for as the arrival production announces.
-        String arrivedRecord = events.awaitCarrying(transitMark, "ship_transit_ended",
+        String arrivedRecord = events.awaitRecordCarrying(transitMark, "ship_transit_ended",
                 "\"route\":\"HYPERSPACE\"",
                 "the jump never completed; the transit now reads "
                         + exec("artest space transit-status"),
@@ -114,11 +115,11 @@ public class VSJumpCarriesLooseBodiesE2ETest extends AbstractSharedServerTest {
         final String[] arrived = {""};
         boolean carried = GameTicks.until(client(), GameTicks.server(), PLACEMENT_TICKS, () -> {
             String counted = exec("artest vs ship-count " + targetDim);
-            Matcher onlyShip = Pattern.compile("\"ships\":\\[\"([^\"]+)\"]").matcher(counted);
-            if (extractInt(counted, "count") != 1 || !onlyShip.find()) {
+            String[] named = Reply.of("artest vs ship-count", counted).textArray("ships");
+            if (extractInt(counted, "count") != 1 || named.length != 1) {
                 return false; // not arrived yet, or not alone — either way not a nameable answer
             }
-            arrived[0] = exec("artest vs ship-info " + targetDim + " id " + onlyShip.group(1));
+            arrived[0] = exec("artest vs ship-info " + targetDim + " id " + named[0]);
             if (!arrived[0].contains("\"posX\"")) {
                 return false;
             }
@@ -159,19 +160,16 @@ public class VSJumpCarriesLooseBodiesE2ETest extends AbstractSharedServerTest {
     }
 
     private static int extractInt(String json, String key) {
-        Matcher m = Pattern.compile("\"" + key + "\":(-?\\d+)").matcher(json);
-        return m.find() ? Integer.parseInt(m.group(1)) : -1;
+        return Reply.of(json).integerOr(key, -1);
     }
 
     private static String extractString(String json, String key) {
-        Matcher m = Pattern.compile("\"" + key + "\":\"([^\"]*)\"").matcher(json);
-        assertTrue("expected string \"" + key + "\" in: " + json, m.find());
-        return m.group(1);
+        assertTrue("expected string \"" + key + "\" in: " + json, Reply.of(json).has(key));
+        return Reply.of(json).text(key);
     }
 
     private static double extractDouble(String json, String key) {
-        Matcher m = Pattern.compile("\"" + key + "\":(-?[0-9.eE+\\-]+)").matcher(json);
-        assertTrue("expected number \"" + key + "\" in: " + json, m.find());
-        return Double.parseDouble(m.group(1));
+        assertTrue("expected number \"" + key + "\" in: " + json, Reply.of(json).has(key));
+        return Reply.of(json).number(key);
     }
 }

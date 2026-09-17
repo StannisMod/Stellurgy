@@ -1,5 +1,7 @@
 package zmaster587.advancedRocketry.test.server;
 
+import zmaster587.advancedRocketry.test.RocketList;
+import zmaster587.advancedRocketry.test.Reply;
 import org.junit.Test;
 
 import java.util.regex.Matcher;
@@ -35,15 +37,11 @@ import static org.junit.Assert.assertTrue;
  */
 public class FreeFlightCycleTest extends AbstractSharedServerTest {
 
-    private static final Pattern BUILDER_POS =
-            Pattern.compile("\"builderPos\":\\[(-?\\d+),(-?\\d+),(-?\\d+)]");
-    private static final Pattern ROCKET_LIST_ID = Pattern.compile("\"id\":(-?\\d+)");
-    private static final Pattern MOTION_X = Pattern.compile("\"motionX\":(-?[0-9.E\\-]+)");
-    private static final Pattern MOTION_Z = Pattern.compile("\"motionZ\":(-?[0-9.E\\-]+)");
-    private static final Pattern MOTION_Y = Pattern.compile("\"motionY\":(-?[0-9.E\\-]+)");
-    private static final Pattern POS_Y = Pattern.compile("\"posY\":(-?[0-9.E\\-]+)");
-    private static final Pattern FUEL_PRIMARY_AMOUNT =
-            Pattern.compile("\"primaryFuelType\":\"([^\"]+)\".*?\"\\1\":\\{\"amount\":(-?\\d+)");
+    private static final String BUILDER_POS = "builderPos";
+    private static final String MOTION_X = "motionX";
+    private static final String MOTION_Z = "motionZ";
+    private static final String MOTION_Y = "motionY";
+    private static final String POS_Y = "posY";
 
     private static String ok(java.util.List<String> resp) {
         return String.join("\n", resp);
@@ -63,39 +61,45 @@ public class FreeFlightCycleTest extends AbstractSharedServerTest {
         String fixture = ok(client().execute(
                 "artest fixture rocket 0 " + baseX + " " + baseY + " " + baseZ + " simple"));
         assertTrue("fixture failed: " + fixture, fixture.contains("\"ok\":true"));
-        Matcher bp = BUILDER_POS.matcher(fixture);
-        assertTrue("fixture missing builderPos: " + fixture, bp.find());
-        int bx = Integer.parseInt(bp.group(1));
-        int by = Integer.parseInt(bp.group(2));
-        int bz = Integer.parseInt(bp.group(3));
+        int[] bp = Reply.of(fixture).blockPos(BUILDER_POS);
+        assertTrue("fixture missing builderPos: " + fixture, bp != null);
+        int bx = bp[0];
+        int by = bp[1];
+        int bz = bp[2];
 
         String assemble = ok(client().execute(
                 "artest rocket assemble 0 " + bx + " " + by + " " + bz));
         assertTrue("assemble failed: " + assemble, assemble.contains("\"ok\":true"));
 
         String list = ok(client().execute("artest rocket list 0"));
-        Matcher rim = ROCKET_LIST_ID.matcher(list);
-        int lastId = -1;
-        while (rim.find()) lastId = Integer.parseInt(rim.group(1));
-        assertTrue("rocket list empty after assemble: " + list, lastId >= 0);
-        return lastId;
+        java.util.List<RocketList.Entry> built = RocketList.of(list);
+        assertTrue("rocket list empty after assemble: " + list, !built.isEmpty());
+        return built.get(built.size() - 1).id;
     }
 
-    private static double parseDouble(String body, Pattern p, String label) {
-        Matcher m = p.matcher(body);
-        if (!m.find()) {
-            throw new AssertionError("response missing " + label + ": " + body);
-        }
-        return Double.parseDouble(m.group(1));
+    private static double parseDouble(String body, String field, String label) {
+        double value = Reply.of(body).number(field);
+        assertTrue("missing " + label + " in: " + body, !Double.isNaN(value));
+        return value;
     }
 
+    /**
+     * How much of its PRIMARY fuel the rocket carries; 0 when it names none.
+     *
+     * <p>The reply is a map keyed by the value of another field
+     * ({@code {"primaryFuelType":"X","fuels":{"X":{"amount":…}}}}), which the regex this replaces
+     * expressed with a back-reference — exact only while the two are adjacent and in that order.</p>
+     */
     private static int parsePrimaryFuel(String fuelBody) {
-        Matcher m = FUEL_PRIMARY_AMOUNT.matcher(fuelBody);
-        if (!m.find()) {
+        Reply reply = Reply.of("artest rocket fuel", fuelBody);
+        String primary = reply.text("primaryFuelType");
+        String fuels = reply.object("fuels");
+        if (primary == null || fuels == null) {
             // Rocket may have no primary fuel type; treat as 0 for our purposes.
             return 0;
         }
-        return Integer.parseInt(m.group(2));
+        String entry = Reply.of(fuels).object(primary);
+        return entry == null ? 0 : Reply.of(entry).integerOr("amount", 0);
     }
 
     // ---------------------------------------------------------------------

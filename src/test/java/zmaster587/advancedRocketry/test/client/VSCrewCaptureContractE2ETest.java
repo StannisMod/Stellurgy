@@ -11,6 +11,7 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 import zmaster587.advancedRocketry.test.Events;
+import zmaster587.advancedRocketry.test.Reply;
 import zmaster587.advancedRocketry.test.FixtureSite;
 import zmaster587.advancedRocketry.test.ShipIdentity;
 
@@ -53,8 +54,7 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
         return "vs-crew-capture";
     }
 
-    private static final Pattern BUILDER_POS =
-            Pattern.compile("\"builderPos\":\\[(-?\\d+),(-?\\d+),(-?\\d+)]");
+    private static final String BUILDER_POS = "builderPos";
     /**
      * How far BELOW the hull the staging clearing reaches: far enough that a body which MISSES it
      * keeps falling, so a miss fails this scenario as a miss instead of as a hold that never
@@ -74,24 +74,22 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
     private static final int SHAFT_ABOVE_HULL = 12;
 
     /** The hull's angular rate, read beside a body that is supposed to be resting on it. */
-    private static final Pattern OMEGA_AT_HULL = Pattern.compile("\"omega\":(-?[0-9.E\\-]+)");
-    private static final Pattern BODY_SHIP_FRAME_Y =
-            Pattern.compile("\"bodyShipFrameY\":(-?[0-9.E\\-]+)");
+    private static final String OMEGA_AT_HULL = "omega";
+    private static final String BODY_SHIP_FRAME_Y = "bodyShipFrameY";
 
     /** The body's OWN motion and the velocity the substrate holds for it — the two candidate
      *  writers, read together because a body drifting for either reason looks the same. */
-    private static final Pattern MOTION_X = Pattern.compile("\"motionX\":(-?[0-9.E\\-]+)");
-    private static final Pattern MOTION_Y = Pattern.compile("\"motionY\":(-?[0-9.E\\-]+)");
-    private static final Pattern MOTION_Z = Pattern.compile("\"motionZ\":(-?[0-9.E\\-]+)");
-    private static final Pattern ADDED_X = Pattern.compile("\"addedVelX\":(-?[0-9.E\\-]+)");
-    private static final Pattern ADDED_Y = Pattern.compile("\"addedVelY\":(-?[0-9.E\\-]+)");
-    private static final Pattern ADDED_Z = Pattern.compile("\"addedVelZ\":(-?[0-9.E\\-]+)");
-    private static final Pattern TICKS_SINCE_TOUCHED =
-            Pattern.compile("\"ticksSinceTouchedShip\":(-?[0-9]+)");
+    private static final String MOTION_X = "motionX";
+    private static final String MOTION_Y = "motionY";
+    private static final String MOTION_Z = "motionZ";
+    private static final String ADDED_X = "addedVelX";
+    private static final String ADDED_Y = "addedVelY";
+    private static final String ADDED_Z = "addedVelZ";
+    private static final String TICKS_SINCE_TOUCHED = "ticksSinceTouchedShip";
 
-    private static final Pattern POS_X = Pattern.compile("\"posX\":(-?[0-9.E\\-]+)");
-    private static final Pattern POS_Y = Pattern.compile("\"posY\":(-?[0-9.E\\-]+)");
-    private static final Pattern POS_Z = Pattern.compile("\"posZ\":(-?[0-9.E\\-]+)");
+    private static final String POS_X = "posX";
+    private static final String POS_Y = "posY";
+    private static final String POS_Z = "posZ";
 
     private static final String VARIANT = "with-pilot-deck";
 
@@ -281,7 +279,7 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
                 + (jumpSteps == null ? "(the render seam sampled no aboard frame)" : jumpSteps)
                 + " posLookApplies=" + posLookD
                 + " capturesForThisShip=" + Events.countRecords(
-                        client.since(jumpMark, "deck_carry"), "\"ship\":\"" + scenarioShipId + "\"")
+                        client.since(jumpMark, "deck_carry"), "ship", scenarioShipId)
                 + " windowTicks=60");
         System.out.println("[crewcap] jump deckY=" + deckY + " apex=" + apex + " settledY=" + settledY
                 + " samples=" + samples + " :: " + trace
@@ -297,10 +295,10 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
         // filter has answered. The ship is the part that is not already known.
         assertTrue("the client must have been resolving this body ON THIS SHIP through the arc, or an"
                 + " empty release list below says nothing about the capture: " + held,
-                Events.countRecords(held, "\"ship\":\"" + scenarioShipId + "\"") > 0);
+                Events.countRecords(held, "ship", scenarioShipId) > 0);
         assertTrue("the capture must survive the whole jump arc, not release mid-air — every release"
                 + " since the key went down, with the gate that made it: " + releases + " :: " + trace,
-                Events.countRecords(releases, "\"type\":\"deck_released\"") == 0);
+                Events.countRecords(releases, "type", "deck_released") == 0);
         assertTrue("after the jump the player must be resolved back on the deck: " + capture,
                 capture.contains("\"verdict\":true"));
         assertTrue("the player must land back ON the deck, not through it: deckY=" + deckY
@@ -418,7 +416,7 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
                 "the ship frame was or was not asked about this walker at all");
         assertTrue("the ship frame must have been ASKED about the walker, or \"never captured\" is a"
                 + " statement about the arrangement and not about the gate: " + gate,
-                Events.countRecords(gate, "\"type\":\"deck_gate_explained\"") > 0);
+                Events.countRecords(gate, "type", "deck_gate_explained") > 0);
         assertTrue("a player walking on world terrain beside a parked ship must NEVER be captured "
                 + "into its frame (" + captured + "/" + samples + " samples captured): " + trace
                 + " :: the gate's own answers: " + gate,
@@ -431,10 +429,10 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
 
     private static final String SHIP_FRAME_TRAVEL =
             "zmaster587.advancedRocketry.integration.vs.ShipFrameTravel";
-    private static final Pattern DUMMY_ID = Pattern.compile("\"dummyId\":(-?\\d+)");
-    private static final Pattern SEAT_X = Pattern.compile("\"seatX\":(-?\\d+)");
-    private static final Pattern SEAT_Y = Pattern.compile("\"seatY\":(-?\\d+)");
-    private static final Pattern SEAT_Z = Pattern.compile("\"seatZ\":(-?\\d+)");
+    private static final String DUMMY_ID = "dummyId";
+    private static final String SEAT_X = "seatX";
+    private static final String SEAT_Y = "seatY";
+    private static final String SEAT_Z = "seatZ";
 
     @Test
     public void aStillCrewMemberOnASteeplyRolledDeckIsNotDraggedSideways() throws Exception {
@@ -467,8 +465,8 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
         // the ship really steeply rolled, and the CLIENT really resolving this body (all-zero
         // discriminator statics with a non-resolving client would be a vacuous pass).
         String info = shipInfo();
-        double qx = readDouble(info, Pattern.compile("\"qx\":(-?[0-9.E\\-]+)"));
-        double qz = readDouble(info, Pattern.compile("\"qz\":(-?[0-9.E\\-]+)"));
+        double qx = readDouble(info, "qx");
+        double qz = readDouble(info, "qz");
         double upY = 1.0 - 2.0 * (qx * qx + qz * qz);
         assertTrue("the ship must be steeply rolled for this test to mean anything (upY=" + upY + ")",
                 upY < -0.3);
@@ -497,10 +495,10 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
         double x1 = bot().reportState().get("playerX").getAsDouble();
         double z1 = bot().reportState().get("playerZ").getAsDouble();
         double drift = Math.sqrt((x1 - x0) * (x1 - x0) + (z1 - z0) * (z1 - z0));
-        long churn = Events.countRecords(releases, "\"reason\":");
+        long churn = Events.countRecordsWithField(releases, "reason");
         System.out.println("[crewcap] still-drift upY=" + upY + " drift=" + drift
                 + " clientDropChurn=" + churn + " capturesForThisShip="
-                + Events.countRecords(gate, "\"ship\":\"" + scenarioShipId + "\"")
+                + Events.countRecords(gate, "ship", scenarioShipId)
                 + " maxLateralShipMotion=" + maxLateral + " inputsSeen=("
                 + strafeSeen + "," + forwardSeen + ") :: " + trace
                 + "\n[crewcap] still-drift releases in window :: " + releases);
@@ -531,7 +529,7 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
         assertTrue("the client must be resolving the crew member through the stillness window —"
                 + " the ship frame's frame never committed a capture for this body. Capture"
                 + " records since the mark: " + gate,
-                Events.countRecords(gate, "\"ship\":\"" + scenarioShipId + "\"") > 0);
+                Events.countRecords(gate, "ship", scenarioShipId) > 0);
         // Setup sanity: the window really was input-free (the discriminator data is only meaningful
         // for a still body).
         assertTrue("the stillness window must be input-free (saw strafe=" + strafeSeen + " forward="
@@ -590,12 +588,12 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
         // where a cumulative counter delta could only say that something, some time, had happened.
         String releases = client.since(churnMark, "deck_released");
         String gate = client.since(churnMark, "deck_carry");
-        long churn = Events.countRecords(releases, "\"reason\":");
+        long churn = Events.countRecordsWithField(releases, "reason");
         double x1 = bot().reportState().get("playerX").getAsDouble();
         double z1 = bot().reportState().get("playerZ").getAsDouble();
         double drift = Math.sqrt((x1 - x0) * (x1 - x0) + (z1 - z0) * (z1 - z0));
         System.out.println("[crewcap] hover-drift drift=" + drift + " clientDropChurn=" + churn
-                + " capturesForThisShip=" + Events.countRecords(gate, "\"ship\":\"" + scenarioShipId + "\"")
+                + " capturesForThisShip=" + Events.countRecords(gate, "ship", scenarioShipId)
                 + " maxLateralShipMotion=" + maxLateral + " inputsSeen=(" + strafeSeen + ","
                 + forwardSeen + ") :: " + trace
                 + "\n[crewcap] hover-drift releases in window :: " + releases);
@@ -606,7 +604,7 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
         // so its delta said "some body was resolved", never "this one was".
         assertTrue("the client must be resolving the crew member through the window - the ship"
                 + " frame's frame never committed a capture for this body: " + gate,
-                Events.countRecords(gate, "\"ship\":\"" + scenarioShipId + "\"") > 0);
+                Events.countRecords(gate, "ship", scenarioShipId) > 0);
         assertTrue("the stillness window must be input-free (saw strafe=" + strafeSeen + " forward="
                 + forwardSeen + ")", strafeSeen == 0f && forwardSeen == 0f);
         assertTrue("a still crew member must not be dragged sideways on a hovering ship: drifted "
@@ -715,11 +713,11 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
         // only whether the reply is non-empty. See the sibling above.
         assertTrue("the client must have been resolving the jumper ON THIS SHIP through his arc, or an"
                 + " empty release list says nothing about the capture: " + jumpHeld,
-                Events.countRecords(jumpHeld, "\"ship\":\"" + scenarioShipId + "\"") > 0);
+                Events.countRecords(jumpHeld, "ship", scenarioShipId) > 0);
         assertTrue("a vertical jump on a hovering ship must land back on the deck, still captured —"
                 + " every release since the key went down, each with the gate that made it: "
                 + jumpReleases + " :: " + arc,
-                Events.countRecords(jumpReleases, "\"type\":\"deck_released\"") == 0);
+                Events.countRecords(jumpReleases, "type", "deck_released") == 0);
 
         // Then a tight walk square - SHORT legs (3 ticks ≈ 0.65 blocks): the fixture deck is only
         // ~3x5, and a longer leg walks the crew member clean off its edge, a legitimate release
@@ -764,16 +762,16 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
         String gate = client.since(releaseMark, "deck_carry");
         Events.assertInstrumentRan(releases, "deck_capture_events",
                 "the client's capture was or was not cycled during the activity");
-        long churn = Events.countRecords(releases, "\"reason\":");
+        long churn = Events.countRecordsWithField(releases, "reason");
         System.out.println("[crewcap] active-churn churn=" + churn + " capturesForThisShip="
-                + Events.countRecords(gate, "\"ship\":\"" + scenarioShipId + "\"") + " capture=" + capture
+                + Events.countRecords(gate, "ship", scenarioShipId) + " capture=" + capture
                 + "\n[crewcap] client releases in window :: " + releases);
 
         // Asked of the frame's own per-body capture commits. `resolvedTicks` was JVM-global and cumulative,
         // so its delta said "some body was resolved", never "this one was".
         assertTrue("the client must be resolving through the activity window - the ship frame's"
                 + " frame never committed a capture for this body: " + gate,
-                Events.countRecords(gate, "\"ship\":\"" + scenarioShipId + "\"") > 0);
+                Events.countRecords(gate, "ship", scenarioShipId) > 0);
         // The churn contract: activity on a hovering deck must not cycle the capture. It used to be
         // aimed at ONE release reason — the external-move guard, the drag war — with a second
         // assertion that the last release was not that reason. The guard is gone, so both would now
@@ -795,7 +793,7 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
         String judged = String.valueOf(boundEvents.since(boundMark));
         Events.assertInstrumentRan(judged, "deck_movement_bound",
                 "the server's movement bound was or was not asked about his steps");
-        long refused = Events.countRecords(judged, "\"accepted\":false");
+        long refused = Events.countRecords(judged, "accepted", "false");
         String frames = framesOfRefusals(judged);
         System.out.println("[crewcap] deck-bound after activity: refusedInWindow=" + refused
                 + " (bound is 2.0/tick plus the deck's carry) :: " + judged
@@ -821,7 +819,7 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
     private static String framesOfRefusals(String judgedReply) {
         StringBuilder sb = new StringBuilder();
         int n = 0;
-        for (String record : Events.recordsWithAll(judgedReply, "\"accepted\":false")) {
+        for (String record : Events.recordsWhere(judgedReply, "accepted", "false")) {
             double[] from = xyzField(record, "from");
             double[] to = xyzField(record, "to");
             if (from == null || to == null) {
@@ -848,11 +846,11 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
 
     /** A {@code "field":"x,y,z"} payload triple, or null when the record carries none. */
     private static double[] xyzField(String record, String field) {
-        Matcher m = Pattern.compile("\"" + field + "\":\"([^\"]*)\"").matcher(record);
-        if (!m.find()) {
+        String value = Events.text(record, field);
+        if (value == null) {
             return null;
         }
-        String[] parts = m.group(1).split(",");
+        String[] parts = value.split(",");
         if (parts.length != 3) {
             return null;
         }
@@ -1005,7 +1003,7 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
         String boundTrace = String.valueOf(serverEvents.since(boundMark));
         // What the bound REFUSED in this window: its own records since the mark, never a total.
         System.out.println("[crewcap] deck-bound shove: y " + startY + " -> " + endY
-                + " refusedInWindow=" + Events.countRecords(boundTrace, "\"accepted\":false")
+                + " refusedInWindow=" + Events.countRecords(boundTrace, "accepted", "false")
                 + " capture=" + capture + "\n[crewcap] deck-bound shove trace :: " + shoveTrace
                 + "\n[crewcap] deck-bound server trace :: " + boundTrace
                 + "\n[crewcap] deck-bound refusal frames :: " + framesOfRefusals(boundTrace));
@@ -1048,7 +1046,7 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
         // Printed, not asserted: the refusal count is the number the region's own leg would move,
         // and nothing here can move it without disabling the guard that fires first.
         System.out.println("[crewcap] deck-bound region refusals in this window: "
-                + Events.countRecords(boundTrace, "\"accepted\":false") + " (each with both endpoints"
+                + Events.countRecords(boundTrace, "accepted", "false") + " (each with both endpoints"
                 + " in the trace above)");
     }
 
@@ -1143,7 +1141,7 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
         // guard's share of those releases — the same fact the cumulative drop counter carried, minus
         // the guessing about which window it belonged to.
         String releases = client.since(flightMark, "deck_released");
-        long churn = Events.countRecords(releases, "\"reason\":");
+        long churn = Events.countRecordsWithField(releases, "reason");
         exec("gamemode survival @a"); // leave the shared world as the other tests expect it
         System.out.println("[crewcap] fly-window y0=" + y0 + " yMax=" + yMax + " maxDrop=" + maxDrop
                 + " trackedAtEnd=" + trackedAtEnd + " externalMoveReleases=" + churn + " :: " + win
@@ -1192,8 +1190,8 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
                         + Math.cos(h) + " " + Math.sin(h) + " 0.0 0.0").contains("\"commanded\":true"));
         bot().waitTicks(200);
         String info = shipInfo();
-        double qx = readDouble(info, Pattern.compile("\"qx\":(-?[0-9.E\\-]+)"));
-        double qz = readDouble(info, Pattern.compile("\"qz\":(-?[0-9.E\\-]+)"));
+        double qx = readDouble(info, "qx");
+        double qz = readDouble(info, "qz");
         double upY = 1.0 - 2.0 * (qx * qx + qz * qz);
         assertTrue("the ship must be steeply inverted for the hull-top to exist (upY=" + upY + ")",
                 upY < -0.3);
@@ -1228,7 +1226,7 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
                 land.append(String.format(java.util.Locale.ROOT,
                         "[t%d y=%.2f res=%d] ", i * 3, py,
                         Events.countRecords(client.since(encounterMark, "deck_carry"),
-                                "\"ship\":\"" + scenarioShipId + "\"")));
+                                "ship", scenarioShipId)));
             }
             settledY = py;
         }
@@ -1267,7 +1265,7 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
                 + "world-frame semantics)", !camActive);
         // (d) And the capture machinery must not churn against him — the client's own external-move
         // releases in THIS window, each naming the gate that fired.
-        long churn = Events.countRecords(releases, "\"reason\":");
+        long churn = Events.countRecordsWithField(releases, "reason");
         System.out.println("[crewcap] hull-top settledY=" + settledY + " shipY=" + sy
                 + " externalMoveReleases=" + churn + " camActive=" + camActive + " :: " + land
                 + "\n[crewcap] hull-top releases :: " + releases
@@ -1296,8 +1294,8 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
                         + Math.cos(h) + " " + Math.sin(h) + " 0.0 0.0").contains("\"commanded\":true"));
         bot().waitTicks(200);
         String info = shipInfo();
-        double qx = readDouble(info, Pattern.compile("\"qx\":(-?[0-9.E\\-]+)"));
-        double qz = readDouble(info, Pattern.compile("\"qz\":(-?[0-9.E\\-]+)"));
+        double qx = readDouble(info, "qx");
+        double qz = readDouble(info, "qz");
         double upY = 1.0 - 2.0 * (qx * qx + qz * qz);
         assertTrue("the ship must be steeply inverted for the hull-top to exist (upY=" + upY + ")",
                 upY < -0.3);
@@ -1439,7 +1437,7 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
                 clientEvents().since(clientDropMark, "ship_velocity_big"));
         String releases = client.since(encounterMark, "deck_released");
         String modes = client.since(encounterMark, "deck_mode_committed");
-        long churn = Events.countRecords(releases, "\"reason\":");
+        long churn = Events.countRecordsWithField(releases, "reason");
         // Printed on the PASSING path too, and with the horizontal numbers: this scenario passes
         // alone and fails when its class runs, so the only way to name the difference is to have the
         // same readings from both. A message that exists only on the failing path can describe a
@@ -1645,8 +1643,8 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
                         + Math.cos(h) + " " + Math.sin(h) + " 0.0 0.0").contains("\"commanded\":true"));
         bot().waitTicks(150);
         String info = shipInfo();
-        double qx = readDouble(info, Pattern.compile("\"qx\":(-?[0-9.E\\-]+)"));
-        double qz = readDouble(info, Pattern.compile("\"qz\":(-?[0-9.E\\-]+)"));
+        double qx = readDouble(info, "qx");
+        double qz = readDouble(info, "qz");
         double upY = 1.0 - 2.0 * (qx * qx + qz * qz);
         assertTrue("the ship must be steeply rolled for the eyes to diverge (upY=" + upY + ")",
                 upY < 0.7 && upY > 0.1);
@@ -1750,7 +1748,7 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
 
     /** The craft's own declared vertical velocity, blocks per second, as the SERVER reports it —
      *  the number the client is told and the one its carry has to equal. */
-    private static final Pattern VEL_Y = Pattern.compile("\"velY\":(-?[0-9.E\\-]+)");
+    private static final String VEL_Y = "velY";
 
     /** One game tick, in seconds — the factor between a declared velocity (blocks per second) and
      *  the carry a body receives for one tick of it. */
@@ -1910,12 +1908,12 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
         // reply, so a tick resolved against another hull in this window would put a carry into the
         // maximum that the craft named further down never declared — the two counts being equal is
         // what lets the reduction stay a reduction over the whole reply.
-        long onThisShip = Events.countRecords(captures, "\"ship\":\"" + scenarioShipId + "\"");
+        long onThisShip = Events.countRecords(captures, "ship", scenarioShipId);
         boolean captured = onThisShip > 0;
         scenario().requireArranged("every capture in the contact window must be by the craft this"
                 + " scenario flew, or the carry maximum below mixes two ships' numbers: "
-                + onThisShip + " of " + Events.countRecords(captures, "\"carry\":") + " :: " + captures,
-                onThisShip == Events.countRecords(captures, "\"carry\":"));
+                + onThisShip + " of " + Events.countRecordsWithField(captures, "carry") + " :: " + captures,
+                onThisShip == Events.countRecordsWithField(captures, "carry"));
         double maxHeldCarry = maxCarryY(captures);
 
         // The craft's DECLARED motion at the moment the body was on it — the server's own numbers,
@@ -2314,10 +2312,10 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
     /** The ship's attitude quat {w,x,y,z} from the server-side ship-info (the cross-side oracle). */
     private double[] shipQuatFromInfo(String info) {
         return new double[]{
-                readDouble(info, Pattern.compile("\"qw\":(-?[0-9.E\\-]+)")),
-                readDouble(info, Pattern.compile("\"qx\":(-?[0-9.E\\-]+)")),
-                readDouble(info, Pattern.compile("\"qy\":(-?[0-9.E\\-]+)")),
-                readDouble(info, Pattern.compile("\"qz\":(-?[0-9.E\\-]+)"))};
+                readDouble(info, "qw"),
+                readDouble(info, "qx"),
+                readDouble(info, "qy"),
+                readDouble(info, "qz")};
     }
 
     /** The ship's up axis in world coordinates, from the server-side ship-info quat (the oracle). */
@@ -2403,10 +2401,9 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
                 seat.contains("\"seatFound\":true"));
         String mountInfo = exec("artest vs seat-mount-at 0 " + readInt(seat, SEAT_X) + " "
                 + readInt(seat, SEAT_Y) + " " + readInt(seat, SEAT_Z));
-        Matcher dm = DUMMY_ID.matcher(mountInfo);
-        assertTrue("seat-mount-at must report a dummy id: " + mountInfo, dm.find());
+        int dummyId = Reply.of("artest vs seat-mount-at", mountInfo).integer(DUMMY_ID);
         assertTrue("bot must mount the seat dummy: " + mountInfo,
-                exec("artest player mount-entity " + dm.group(1)).contains("\"mounted\":true"));
+                exec("artest player mount-entity " + dummyId).contains("\"mounted\":true"));
         // The server says it mounted him; these two say the CLIENT did, and this class's whole
         // subject is what the client's resolver does with a body. The mount is his own `startRiding`;
         // the gate is the client's keybind tick deciding that the body it is holding is a ship's
@@ -2447,9 +2444,12 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
      */
     private static double maxCarryY(String sinceReply) {
         double max = 0.0;
-        Matcher m = Pattern.compile("\"carry\":\"([^\"]*)\"").matcher(String.valueOf(sinceReply));
-        while (m.find()) {
-            String[] parts = m.group(1).split(",");
+        for (String record : Events.records(String.valueOf(sinceReply))) {
+            String carry = Events.text(record, "carry");
+            if (carry == null) {
+                continue;
+            }
+            String[] parts = carry.split(",");
             if (parts.length != 3) {
                 continue;
             }
@@ -2477,8 +2477,8 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
      * reading that is missing for one sample must not end the scenario.</p>
      */
     private double jumperShipFrameY() throws Exception {
-        Matcher m = BODY_SHIP_FRAME_Y.matcher(exec("artest vs deck-capture"));
-        return m.find() ? Double.parseDouble(m.group(1)) : Double.NaN;
+        return Reply.of("artest vs deck-capture", exec("artest vs deck-capture"))
+                .number(BODY_SHIP_FRAME_Y);
     }
 
     private double clientDouble(String className, String field) throws Exception {
@@ -2567,9 +2567,9 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
                 "the hull, the deck a crew member walks and jumps on, and the air above it");
         String fixture = exec("artest fixture rocket 0 " + baseX + " " + baseY + " " + baseZ + " " + VARIANT);
         assertTrue("fixture (" + VARIANT + ") failed: " + fixture, fixture.contains("\"ok\":true"));
-        Matcher bp = BUILDER_POS.matcher(fixture);
-        assertTrue("fixture missing builderPos: " + fixture, bp.find());
-        return exec("artest rocket assemble 0 " + bp.group(1) + " " + bp.group(2) + " " + bp.group(3));
+        int[] bp = Reply.of(fixture).blockPos(BUILDER_POS);
+        assertTrue("fixture missing builderPos: " + fixture, bp != null);
+        return exec("artest rocket assemble 0 " + bp[0] + " " + bp[1] + " " + bp[2]);
     }
 
     /** This scenario's ship, asked by identity — no distance term to be wrong about. */
@@ -2578,16 +2578,14 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
         return shipInfoById(scenarioShipId);
     }
 
-    private double readDouble(String json, Pattern p) {
-        Matcher m = p.matcher(json);
-        assertTrue("expected a number in: " + json, m.find());
-        return Double.parseDouble(m.group(1));
+    private double readDouble(String json, String field) {
+        double value = Reply.of(json).number(field);
+        assertTrue("expected a number `" + field + "` in: " + json, !Double.isNaN(value));
+        return value;
     }
 
-    private int readInt(String json, Pattern p) {
-        Matcher m = p.matcher(json);
-        assertTrue("expected an integer in: " + json, m.find());
-        return Integer.parseInt(m.group(1));
+    private int readInt(String json, String field) {
+        return Reply.of(json).integer(field);
     }
 
     private static double distance(double[] a, double[] b) {
@@ -2630,9 +2628,7 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
 
     /** The subject's SUBSPACE feet position from a {@code subspace-census} reply, as "x,y,z". */
     private static String readSubPos(String census) {
-        java.util.regex.Matcher m =
-                Pattern.compile("\"subPos\"\\s*:\\s*\"([-0-9,]+)\"").matcher(census);
-        return m.find() ? m.group(1) : "";
+        return Reply.of("artest vs subspace-census", census).textOr("subPos", "");
     }
 
     /** {@code block - feet}, componentwise, for two "x,y,z" triples; "?" if either is unreadable. */

@@ -1,5 +1,6 @@
 package zmaster587.advancedRocketry.test.server;
 
+import zmaster587.advancedRocketry.test.Reply;
 import org.junit.Test;
 
 import java.util.regex.Matcher;
@@ -60,11 +61,11 @@ import static zmaster587.advancedRocketry.test.server.WorldCommandFixtures.exec;
  */
 public class TerraformingTerminalChipRecognitionTest extends AbstractSharedServerTest {
 
-    private static final Pattern WAS_ENABLED = Pattern.compile("\"wasEnabledLastTick\":(true|false)");
-    private static final Pattern BLOCK_ON = Pattern.compile("\"blockStateOn\":(true|false)");
-    private static final Pattern HAS_VALID = Pattern.compile("\"hasValidBiomeChanger\":(true|false)");
-    private static final Pattern REDSTONE = Pattern.compile("\"redstonePower\":(true|false)");
-    private static final Pattern SAT_ID = Pattern.compile("\"id\":(-?\\d+)");
+    private static final String WAS_ENABLED = "wasEnabledLastTick";
+    private static final String BLOCK_ON = "blockStateOn";
+    private static final String HAS_VALID = "hasValidBiomeChanger";
+    private static final String REDSTONE = "redstonePower";
+    private static final String SAT_ID = "id";
 
     private static final int CY = FixtureSite.OPEN_AIR_Y;
     private static final int CZ = 11000;
@@ -166,11 +167,11 @@ public class TerraformingTerminalChipRecognitionTest extends AbstractSharedServe
         String build = exec("artest satellite-builder build 0 biomeChanger");
         assertTrue("biomeChanger satellite build failed: " + build,
                 build.contains("\"ok\":true"));
-        Matcher m = SAT_ID.matcher(build);
-        if (!m.find()) {
+        Reply mReply = Reply.of(build);
+        if (!mReply.has(SAT_ID)) {
             return -1L;
         }
-        long satId = Long.parseLong(m.group(1));
+        long satId = Long.parseLong(mReply.text(SAT_ID));
 
         String load = exec("artest terraforming terminal-load-chip 0 " + x + " " + y + " " + z
                 + " " + satId);
@@ -178,9 +179,9 @@ public class TerraformingTerminalChipRecognitionTest extends AbstractSharedServe
         return satId;
     }
 
-    private static String extract(String src, Pattern pattern) {
-        Matcher m = pattern.matcher(src);
-        assertTrue("pattern not found in: " + src, m.find());
-        return m.group(1);
+    private static String extract(String src, String field) {
+        String value = Reply.of(src).text(field);
+        assertTrue("field `" + field + "` not found in: " + src, value != null);
+        return value;
     }
 }

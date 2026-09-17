@@ -1,5 +1,6 @@
 package zmaster587.advancedRocketry.test.server;
 
+import zmaster587.advancedRocketry.test.Reply;
 import org.junit.AfterClass;
 import org.junit.BeforeClass;
 import org.junit.Test;
@@ -64,8 +65,8 @@ public class BeaconEnableCycleTest extends AbstractSharedServerTest {
     private static final int CX_BREAK   = 300;
 
     private static final Pattern DIM_LINE = Pattern.compile("DIM(\\d+):");
-    private static final Pattern BEACON_TRIPLE =
-            Pattern.compile("\\[(-?\\d+),(-?\\d+),(-?\\d+)]");
+    /** The dim's beacon registry, as {@code "locations":[[x,y,z], …]}. */
+    private static final String LOCATIONS = "locations";
 
     private static int planetDim = -1;
 
@@ -196,11 +197,11 @@ public class BeaconEnableCycleTest extends AbstractSharedServerTest {
         // latter and reported "no mark was taken" — which is the guard below doing its job: it said
         // it could not speak rather than returning an empty string that reads as "the registry did
         // nothing", one of the three answers this method exists to tell apart.
-        Matcher m = Pattern.compile("\"seq\"\\s*:\\s*(\\d+)").matcher(markReply);
-        if (!m.find()) {
+        Reply mark = Reply.of("artest events mark", markReply);
+        if (!mark.has("seq")) {
             return "(no mark was taken, so nothing can be said about the sequence: " + markReply + ")";
         }
-        String records = exec("artest events since " + m.group(1));
+        String records = exec("artest events since " + mark.integer("seq"));
         return records.contains("beacon_") ? records
                 : "(no beacon record at all in " + records.length() + " bytes of events — either the "
                         + "break never reached production, or the recording mixins are not applied)";
@@ -211,15 +212,10 @@ public class BeaconEnableCycleTest extends AbstractSharedServerTest {
      *  array of {@code /artest beacon list}. */
     private static boolean beaconListContains(int x, int y, int z) throws Exception {
         String resp = readBeaconList();
-        int locsStart = resp.indexOf("\"locations\"");
-        assertTrue("beacon list response missing locations field: " + resp,
-                locsStart >= 0);
-        Matcher m = BEACON_TRIPLE.matcher(resp);
-        m.region(locsStart, resp.length());
-        while (m.find()) {
-            if (Integer.parseInt(m.group(1)) == x
-                    && Integer.parseInt(m.group(2)) == y
-                    && Integer.parseInt(m.group(3)) == z) {
+        Reply list = Reply.of("artest beacon list", resp);
+        assertTrue("beacon list response missing locations field: " + resp, list.has(LOCATIONS));
+        for (int[] at : list.blockPosArray(LOCATIONS)) {
+            if (at[0] == x && at[1] == y && at[2] == z) {
                 return true;
             }
         }

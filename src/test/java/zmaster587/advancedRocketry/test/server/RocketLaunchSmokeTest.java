@@ -1,5 +1,6 @@
 package zmaster587.advancedRocketry.test.server;
 
+import zmaster587.advancedRocketry.test.Reply;
 import com.github.stannismod.forge.testing.junit.AbstractHeadlessServerTest;
 import org.junit.Test;
 
@@ -21,8 +22,8 @@ import static org.junit.Assert.assertTrue;
  */
 public class RocketLaunchSmokeTest extends AbstractHeadlessServerTest {
 
-    private static final Pattern BUILDER_POS = Pattern.compile("\"builderPos\":\\[(-?\\d+),(-?\\d+),(-?\\d+)]");
-    private static final Pattern ENT_ID = Pattern.compile("\"entityId\":(-?\\d+)");
+    private static final String BUILDER_POS = "builderPos";
+    private static final String ENT_ID = "entityId";
 
     @Test
     public void assembledRocketTransitionsToFlight() throws Exception {
@@ -38,20 +39,20 @@ public class RocketLaunchSmokeTest extends AbstractHeadlessServerTest {
                 "artest fixture rocket 0 " + baseX + " " + baseY + " " + baseZ));
         assertTrue("fixture rocket failed: " + fixture, fixture.contains("\"ok\":true"));
 
-        Matcher bp = BUILDER_POS.matcher(fixture);
-        assertTrue("missing builderPos: " + fixture, bp.find());
-        int bx = Integer.parseInt(bp.group(1)),
-                by = Integer.parseInt(bp.group(2)),
-                bz = Integer.parseInt(bp.group(3));
+        int[] bp = Reply.of(fixture).blockPos(BUILDER_POS);
+        assertTrue("missing builderPos: " + fixture, bp != null);
+        int bx = bp[0],
+                by = bp[1],
+                bz = bp[2];
 
         String assemble = String.join("\n", client().execute(
                 "artest rocket assemble 0 " + bx + " " + by + " " + bz));
         assertTrue("assemble didn't produce a rocket: " + assemble,
                 assemble.contains("\"ok\":true") && !assemble.contains("\"entityId\":-1"));
 
-        Matcher em = ENT_ID.matcher(assemble);
-        assertTrue("assemble response missing entityId: " + assemble, em.find());
-        int entityId = Integer.parseInt(em.group(1));
+        Reply emReply = Reply.of(assemble);
+        assertTrue("assemble response missing entityId: " + assemble, emReply.has(ENT_ID));
+        int entityId = Integer.parseInt(emReply.text(ENT_ID));
         assertTrue("assemble succeeded but entityId=-1", entityId >= 0);
 
         // Try the real launch path first (instant — bypasses 200-tick countdown).

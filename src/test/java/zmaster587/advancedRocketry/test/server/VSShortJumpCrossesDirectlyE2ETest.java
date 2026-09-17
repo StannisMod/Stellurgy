@@ -1,5 +1,6 @@
 package zmaster587.advancedRocketry.test.server;
 
+import zmaster587.advancedRocketry.test.Reply;
 import zmaster587.advancedRocketry.test.Events;
 import zmaster587.advancedRocketry.test.ShipReadiness;
 import zmaster587.advancedRocketry.test.GameTicks;
@@ -98,7 +99,7 @@ public class VSShortJumpCrossesDirectlyE2ETest extends AbstractSharedServerTest 
      * server tick like any other — and if it stops being, this fails.</p>
      */
     private String arrivesInTheTargetCell(long mark, String route) throws Exception {
-        String arrived = events.awaitCarrying(mark, "ship_transit_ended",
+        String arrived = events.awaitRecordCarrying(mark, "ship_transit_ended",
                 "\"route\":\"" + route + "\"",
                 "the ship never reached the target cell by the " + route + " route; the durable"
                         + " record now reads " + exec("artest space transit-export"),
@@ -112,7 +113,7 @@ public class VSShortJumpCrossesDirectlyE2ETest extends AbstractSharedServerTest 
         // scenario's hull unloaded once nobody was near it, and stopped the day a test server began
         // holding ships loaded — the cell then held two and the read could not say which was this
         // jump's. A count is a premise about the cell; the record is an identity.
-        String durableId = Events.lastField(arrived, "ship");
+        String durableId = Events.text(arrived, "ship");
         assertTrue("the arrival must name the craft that made it, or nothing below is addressed to"
                 + " this jump's ship: " + arrived, durableId != null && !durableId.trim().isEmpty());
         String arrivedId = ShipIdentity.physicsIdOf(this::exec, targetDim, durableId.trim());
@@ -165,12 +166,10 @@ public class VSShortJumpCrossesDirectlyE2ETest extends AbstractSharedServerTest 
     }
 
     private static String extractString(String json, String key) {
-        Matcher m = Pattern.compile("\"" + key + "\":\"([^\"]*)\"").matcher(json);
-        return m.find() ? m.group(1) : null;
+        return Reply.of(json).text(key);
     }
 
     private static int extractInt(String json, String key) {
-        Matcher m = Pattern.compile("\"" + key + "\":(-?\\d+)").matcher(json);
-        return m.find() ? Integer.parseInt(m.group(1)) : Integer.MIN_VALUE;
+        return Reply.of(json).integerOr(key, Integer.MIN_VALUE);
     }
 }

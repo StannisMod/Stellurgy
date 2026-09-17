@@ -1,13 +1,11 @@
 package zmaster587.advancedRocketry.test.server;
 
+import zmaster587.advancedRocketry.test.Reply;
 import com.github.stannismod.forge.testing.server.TestClient;
 import zmaster587.advancedRocketry.test.GameTicks;
 
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 import static org.junit.Assert.assertTrue;
 
@@ -49,20 +47,7 @@ final class MachineRecipeEndToEndKit {
      */
     private static final int TICKS_BETWEEN_ATTEMPTS = 10;
 
-    private static final Pattern INPUT_POS         = Pattern.compile("\"inputPos\":\\[(-?\\d+),(-?\\d+),(-?\\d+)]");
-    private static final Pattern OUTPUT_POS        = Pattern.compile("\"outputPos\":\\[(-?\\d+),(-?\\d+),(-?\\d+)]");
-    private static final Pattern POWER_POS         = Pattern.compile("\"powerPos\":\\[(-?\\d+),(-?\\d+),(-?\\d+)]");
-    private static final Pattern LIQUID_INPUT_POS  = Pattern.compile("\"liquidInputPos\":\\[(-?\\d+),(-?\\d+),(-?\\d+)]");
-    private static final Pattern LIQUID_OUTPUT_POS = Pattern.compile("\"liquidOutputPos\":\\[(-?\\d+),(-?\\d+),(-?\\d+)]");
 
-    /** Captures every ingredient slot — slot index, item id, count, meta. */
-    private static final Pattern ANY_INGREDIENT =
-            Pattern.compile("\\{\"slot\":(\\d+),\"item\":\"([^\"]+)\",\"count\":(\\d+),\"meta\":(\\d+)");
-    /** Captures every output slot — slot index, item id (meta optional). */
-    private static final Pattern ANY_OUTPUT =
-            Pattern.compile("\\{\"slot\":(\\d+),\"item\":\"([^\"]+)\"");
-    private static final Pattern FLUID_INGREDIENT =
-            Pattern.compile("\\{\"fluid\":\"([^\"]+)\",\"amount\":(\\d+)\\}");
 
     private MachineRecipeEndToEndKit() {}
 
@@ -112,24 +97,10 @@ final class MachineRecipeEndToEndKit {
     /** Extract a list of "x y z" strings from a JSON field like
      *  {@code "<key>":[[x,y,z],[x,y,z]]}. Returns empty if key absent. */
     private static List<String> matchAllPos(String resp, String key) {
-        String marker = "\"" + key + "\":[";
-        int idx = resp.indexOf(marker);
-        if (idx < 0) return Collections.emptyList();
-        int start = idx + marker.length();
-        // Find matching ']' — scan until first ']' at the same nesting level.
-        // The contents are pure "[a,b,c],[d,e,f]" with no nested objects.
-        int depth = 1, end = -1;
-        for (int i = start; i < resp.length(); i++) {
-            char ch = resp.charAt(i);
-            if (ch == '[') depth++;
-            else if (ch == ']') { depth--; if (depth == 0) { end = i; break; } }
-        }
-        if (end < 0) return Collections.emptyList();
-        String section = resp.substring(start, end);
-        Pattern triple = Pattern.compile("\\[(-?\\d+),(-?\\d+),(-?\\d+)]");
-        Matcher m = triple.matcher(section);
         List<String> all = new ArrayList<>();
-        while (m.find()) all.add(m.group(1) + " " + m.group(2) + " " + m.group(3));
+        for (int[] at : Reply.of("a machine probe reply", resp).blockPosArray(key)) {
+            all.add(at[0] + " " + at[1] + " " + at[2]);
+        }
         return all;
     }
 
@@ -195,7 +166,7 @@ final class MachineRecipeEndToEndKit {
         }
     }
 
-    private static final Pattern TIME_FIELD = Pattern.compile("\"time\":(\\d+)");
+    private static final String TIME_FIELD = "time";
 
     static FirstRecipe resolveFirstRecipe(TestClient c, String tileShortName) throws Exception {
         String resp = String.join("\n",
@@ -203,30 +174,33 @@ final class MachineRecipeEndToEndKit {
         assertTrue("recipe-info errored for " + tileShortName + ": " + resp,
                 !resp.contains("\"error\""));
         int time = 0;
-        Matcher tm = TIME_FIELD.matcher(resp);
-        if (tm.find()) time = Integer.parseInt(tm.group(1));
+        Reply tmReply = Reply.of(resp);
+        if (tmReply.has(TIME_FIELD)) time = Integer.parseInt(tmReply.text(TIME_FIELD));
         return new FirstRecipe(
-                parseSection(resp, "\"ingredients\":[", ANY_INGREDIENT, 4),
-                parseSection(resp, "\"outputs\":[",     ANY_OUTPUT,     2),
-                parseSection(resp, "\"fluidIngredients\":[", FLUID_INGREDIENT, 2),
-                parseSection(resp, "\"fluidOutputs\":[",     FLUID_INGREDIENT, 2),
+                parseSection(resp, "ingredients", "slot", "item", "count", "meta"),
+                parseSection(resp, "outputs", "slot", "item"),
+                parseSection(resp, "fluidIngredients", "fluid", "amount"),
+                parseSection(resp, "fluidOutputs", "fluid", "amount"),
                 time, resp);
     }
 
-    private static List<String[]> parseSection(String resp, String key,
-                                               Pattern pattern, int groupCount) {
-        int idx = resp.indexOf(key);
-        if (idx < 0) return Collections.emptyList();
-        int start = idx + key.length();
-        int end = resp.indexOf(']', start);
-        if (end < 0) return Collections.emptyList();
-        String section = resp.substring(start, end);
-        Matcher m = pattern.matcher(section);
+    /**
+     * One array of the recipe reply, projected onto {@code fields} in order.
+     *
+     * <p>It used to find the key's text, cut the substring up to the next {@code ]}, and run a regex
+     * with one capture group per field over it — so a recipe whose item id contained a bracket, or a
+     * producer that reordered two fields, silently yielded an EMPTY recipe and every assertion below
+     * then described a machine that had been fed nothing.</p>
+     */
+    private static List<String[]> parseSection(String resp, String field, String... fields) {
         List<String[]> out = new ArrayList<>();
-        while (m.find()) {
-            String[] groups = new String[groupCount];
-            for (int i = 0; i < groupCount; i++) groups[i] = m.group(i + 1);
-            out.add(groups);
+        for (String element : Reply.of("artest machine recipe-info", resp).objectArray(field)) {
+            Reply one = Reply.of(element);
+            String[] values = new String[fields.length];
+            for (int i = 0; i < fields.length; i++) {
+                values[i] = one.text(fields[i]);
+            }
+            out.add(values);
         }
         return out;
     }
@@ -373,7 +347,7 @@ final class MachineRecipeEndToEndKit {
 
     // ---- helpers -----------------------------------------------------------
 
-    private static final Pattern INV_SIZE = Pattern.compile("\"size\":(\\d+)");
+    private static final String INV_SIZE = "size";
 
     private static void fillItemIngredients(TestClient c, String fixtureKey,
                                             FixturePositions p,
@@ -413,9 +387,9 @@ final class MachineRecipeEndToEndKit {
     /** Reads an input hatch's inventory size from a {@code hatch read}. */
     private static int readInventorySize(TestClient c, String pos) throws Exception {
         String resp = String.join("\n", c.execute("artest hatch read 0 " + pos));
-        Matcher m = INV_SIZE.matcher(resp);
-        assertTrue("could not read input-hatch size at " + pos + ": " + resp, m.find());
-        return Integer.parseInt(m.group(1));
+        Reply mReply = Reply.of(resp);
+        assertTrue("could not read input-hatch size at " + pos + ": " + resp, mReply.has(INV_SIZE));
+        return Integer.parseInt(mReply.text(INV_SIZE));
     }
 
     private static void fillFluidIngredients(TestClient c, String fixtureKey,

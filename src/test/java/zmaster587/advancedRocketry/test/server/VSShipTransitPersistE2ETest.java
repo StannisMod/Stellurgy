@@ -1,5 +1,6 @@
 package zmaster587.advancedRocketry.test.server;
 
+import zmaster587.advancedRocketry.test.Reply;
 import zmaster587.advancedRocketry.test.Events;
 import zmaster587.advancedRocketry.test.ShipReadiness;
 import zmaster587.advancedRocketry.test.GameTicks;
@@ -95,7 +96,7 @@ public class VSShipTransitPersistE2ETest extends AbstractSharedServerTest {
         // The RESTORED transit arrives on the server's own tick, like any other -- no pump. With no
         // live hyperspace ship it can only get there by pasting its snapshot into the target cell,
         // so the arrival production announces IS the proof that path ran.
-        String arrived = events.awaitCarrying(transitMark, "ship_transit_ended",
+        String arrived = events.awaitRecordCarrying(transitMark, "ship_transit_ended",
                 "\"route\":\"HYPERSPACE\"",
                 "the restored jump never completed; the durable record now reads "
                         + exec("artest space transit-export"),
@@ -144,7 +145,6 @@ public class VSShipTransitPersistE2ETest extends AbstractSharedServerTest {
     }
 
     private static int extractInt(String json, String key) {
-        Matcher m = Pattern.compile("\"" + key + "\":(-?\\d+)").matcher(json);
-        return m.find() ? Integer.parseInt(m.group(1)) : Integer.MIN_VALUE;
+        return Reply.of(json).integerOr(key, Integer.MIN_VALUE);
     }
 }

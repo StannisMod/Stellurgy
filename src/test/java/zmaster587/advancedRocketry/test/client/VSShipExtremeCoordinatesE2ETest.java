@@ -9,6 +9,7 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 import zmaster587.advancedRocketry.test.Events;
+import zmaster587.advancedRocketry.test.Reply;
 import zmaster587.advancedRocketry.test.FixtureSite;
 
 import static org.junit.Assert.assertTrue;
@@ -74,15 +75,14 @@ public class VSShipExtremeCoordinatesE2ETest extends AbstractSharedVsClientE2ETe
         return "vs-ship-extreme-coordinates";
     }
 
-    private static final Pattern BUILDER_POS =
-            Pattern.compile("\"builderPos\":\\[(-?\\d+),(-?\\d+),(-?\\d+)]");
-    private static final Pattern POS_X = Pattern.compile("\"posX\":(-?[0-9.E\\-]+)");
-    private static final Pattern POS_Y = Pattern.compile("\"posY\":(-?[0-9.E\\-]+)");
-    private static final Pattern DUMMY_ID = Pattern.compile("\"dummyId\":(-?\\d+)");
-    private static final Pattern ORIGIN_DIM = Pattern.compile("\"originDim\":(-?[0-9.E\\-]+)");
-    private static final Pattern SHIP_WORLD_X = Pattern.compile("\"shipWorldX\":(-?[0-9.E\\-]+)");
-    private static final Pattern SHIP_WORLD_Y = Pattern.compile("\"shipWorldY\":(-?[0-9.E\\-]+)");
-    private static final Pattern SHIP_WORLD_Z = Pattern.compile("\"shipWorldZ\":(-?[0-9.E\\-]+)");
+    private static final String BUILDER_POS = "builderPos";
+    private static final String POS_X = "posX";
+    private static final String POS_Y = "posY";
+    private static final String DUMMY_ID = "dummyId";
+    private static final String ORIGIN_DIM = "originDim";
+    private static final String SHIP_WORLD_X = "shipWorldX";
+    private static final String SHIP_WORLD_Y = "shipWorldY";
+    private static final String SHIP_WORLD_Z = "shipWorldZ";
 
     private static final String VARIANT = "with-pilot-seat";
     /**
@@ -208,8 +208,7 @@ public class VSShipExtremeCoordinatesE2ETest extends AbstractSharedVsClientE2ETe
         String mountInfo = exec("artest vs seat-mount " + cellDim + " id " + shipId);
         assertTrue("seat-mount must find the pilot seat: " + mountInfo,
                 mountInfo.contains("\"seatFound\":true"));
-        Matcher dm = DUMMY_ID.matcher(mountInfo);
-        assertTrue("seat-mount must report a dummy id: " + mountInfo, dm.find());
+        int dummyId = Reply.of("artest vs seat-mount-at", mountInfo).integer(DUMMY_ID);
         // The mark before the mount command, and then the CLIENT's own seating as a LINK. The ten
         // ticks this replaces were a guess at replication, and everything below rides on him being
         // aboard: measured 2026-09-16 in a full-tier pair, the same tree that had just run this
@@ -218,7 +217,7 @@ public class VSShipExtremeCoordinatesE2ETest extends AbstractSharedVsClientE2ETe
         // budget could only ever be too short, never wrong in a way that says so.
         long seatMountMark = clientEvents().mark();
         assertTrue("bot must mount the seat dummy",
-                exec("artest player mount-entity " + dm.group(1)).contains("\"mounted\":true"));
+                exec("artest player mount-entity " + dummyId).contains("\"mounted\":true"));
         awaitClientMount(seatMountMark, "the client must FOLLOW the seat boarding before anything"
                         + " below is asked of a pilot — every leg here is about what a SEATED body"
                         + " does when its craft moves", CLIENT_REMOUNT_BUDGET_TICKS,
@@ -457,9 +456,9 @@ public class VSShipExtremeCoordinatesE2ETest extends AbstractSharedVsClientE2ETe
         String last = "";
         for (int i = 0; i < 10; i++) {
             last = shipInfoById();
-            Matcher m = POS_Y.matcher(last);
-            if (m.find()) {
-                return Double.parseDouble(m.group(1));
+            double y = Reply.of("artest vs ship-info", last).number(POS_Y);
+            if (!Double.isNaN(y)) {
+                return y;
             }
             bot().waitTicks(2);
         }
@@ -467,10 +466,10 @@ public class VSShipExtremeCoordinatesE2ETest extends AbstractSharedVsClientE2ETe
                 + "; last reply: " + last);
     }
 
-    private double readDouble(String json, Pattern p) {
-        Matcher m = p.matcher(json);
-        assertTrue("expected a number in: " + json, m.find());
-        return Double.parseDouble(m.group(1));
+    private double readDouble(String json, String field) {
+        double value = Reply.of(json).number(field);
+        assertTrue("expected a number `" + field + "` in: " + json, !Double.isNaN(value));
+        return value;
     }
 
     private String assembleFixture(FixtureSite site, String variant)
@@ -486,9 +485,9 @@ public class VSShipExtremeCoordinatesE2ETest extends AbstractSharedVsClientE2ETe
         String fixture = exec("artest fixture rocket " + dim + " " + baseX + " " + baseY + " "
                 + baseZ + " " + variant);
         assertTrue("fixture (" + variant + ") failed: " + fixture, fixture.contains("\"ok\":true"));
-        Matcher bp = BUILDER_POS.matcher(fixture);
-        assertTrue("fixture missing builderPos: " + fixture, bp.find());
-        return exec("artest rocket assemble " + dim + " " + bp.group(1) + " " + bp.group(2)
-                + " " + bp.group(3));
+        int[] bp = Reply.of(fixture).blockPos(BUILDER_POS);
+        assertTrue("fixture missing builderPos: " + fixture, bp != null);
+        return exec("artest rocket assemble " + dim + " " + bp[0] + " " + bp[1]
+                + " " + bp[2]);
     }
 }

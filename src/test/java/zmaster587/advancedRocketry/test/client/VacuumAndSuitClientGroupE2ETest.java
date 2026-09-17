@@ -9,6 +9,7 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 import zmaster587.advancedRocketry.test.Events;
+import zmaster587.advancedRocketry.test.Reply;
 
 import zmaster587.advancedRocketry.test.Plot;
 
@@ -90,9 +91,9 @@ public class VacuumAndSuitClientGroupE2ETest extends AbstractSharedClientE2ETest
     private static final int STAND_DX = PAD_DX + 4;
     private static final int STAND_DZ = PAD_DZ + 4;
 
-    private static final Pattern DENSITY = Pattern.compile("\"atmosphereDensity\":(-?\\d+)");
-    private static final Pattern CHEST_AIR = Pattern.compile("\"chestAir\":(-?\\d+)");
-    private static final Pattern CLIENT_HEALTH = Pattern.compile("\"health\":(-?[0-9.]+)");
+    private static final String DENSITY = "atmosphereDensity";
+    private static final String CHEST_AIR = "chestAir";
+    private static final String CLIENT_HEALTH = "health";
 
     /**
      * How long one link of the atmosphere tick's chain may take. The vacuum damages on a shared
@@ -152,8 +153,7 @@ public class VacuumAndSuitClientGroupE2ETest extends AbstractSharedClientE2ETest
     /** Reads the dim's baseline density so {@link #restoreDim} can put it back. */
     private int snapshotDensity() throws Exception {
         String planet = exec("artest planet info " + plot().dim);
-        Matcher dm = DENSITY.matcher(planet);
-        return dm.find() ? Integer.parseInt(dm.group(1)) : 100;
+        return Reply.of("artest planet info", planet).integerOr(DENSITY, 100);
     }
 
     /**
@@ -197,9 +197,9 @@ public class VacuumAndSuitClientGroupE2ETest extends AbstractSharedClientE2ETest
     /** Server-side chest air via the static "air" NBT route ({@code ItemAirUtils}). */
     private int readChestAir() throws Exception {
         String resp = exec("artest player held-air");
-        Matcher m = CHEST_AIR.matcher(resp);
-        assertTrue("held-air response must include chestAir: " + resp, m.find());
-        return Integer.parseInt(m.group(1));
+        Reply held = Reply.of("artest player held-air", resp);
+        assertTrue("held-air response must include chestAir: " + resp, held.has(CHEST_AIR));
+        return held.integer(CHEST_AIR);
     }
 
     /**
@@ -209,9 +209,10 @@ public class VacuumAndSuitClientGroupE2ETest extends AbstractSharedClientE2ETest
      */
     private int readChestAirComponentRoute() throws Exception {
         String resp = exec("artest player held-air-component-route");
-        Matcher m = CHEST_AIR.matcher(resp);
-        assertTrue("held-air-component-route response must include chestAir: " + resp, m.find());
-        return Integer.parseInt(m.group(1));
+        Reply held = Reply.of("artest player held-air-component-route", resp);
+        assertTrue("held-air-component-route response must include chestAir: " + resp,
+                held.has(CHEST_AIR));
+        return held.integer(CHEST_AIR);
     }
 
     /**
@@ -288,11 +289,14 @@ public class VacuumAndSuitClientGroupE2ETest extends AbstractSharedClientE2ETest
 
     /** {@code {last health in the reply (NaN if none), how many of them were below threshold}}. */
     private static double[] healthsIn(String reply, double threshold) {
-        Matcher m = CLIENT_HEALTH.matcher(reply);
         double last = Double.NaN;
         int below = 0;
-        while (m.find()) {
-            last = Double.parseDouble(m.group(1));
+        for (String record : Events.records(reply)) {
+            double health = Events.number(record, CLIENT_HEALTH);
+            if (Double.isNaN(health)) {
+                continue;
+            }
+            last = health;
             if (last < threshold) below++;
         }
         return new double[]{last, below};
@@ -338,7 +342,7 @@ public class VacuumAndSuitClientGroupE2ETest extends AbstractSharedClientE2ETest
             String drains = events.since(mark, "suit_air_drained");
             assertEquals("a breathable atmosphere must never reach the suit's tank at all; drains"
                             + " recorded on the component route since the window opened: " + drains,
-                    0, Events.countRecords(drains, "\"route\":\"component\""));
+                    0, Events.countRecords(drains, "route", "component"));
             int chestAirAfter = readChestAirComponentRoute();
             assertEquals("chest air must hold steady when the atmosphere doesn't drain; before=1000"
                     + " after=" + chestAirAfter, 1000, chestAirAfter);
@@ -404,7 +408,7 @@ public class VacuumAndSuitClientGroupE2ETest extends AbstractSharedClientE2ETest
             assertTrue("the suit gate must be recorded turning the player DOWN — that flip is the"
                     + " contract, and a damage record without it would mean he was hurt for some"
                     + " other reason. Decisions since the flip: " + decisions,
-                    Events.countRecords(decisions, "\"immune\":false") >= 1);
+                    Events.countRecords(decisions, "immune", "false") >= 1);
 
             double current = awaitClientHealthBelow(clientMark, healthStart,
                     "the client must be TOLD the damage, not only the server hold it (he started"
@@ -472,8 +476,8 @@ public class VacuumAndSuitClientGroupE2ETest extends AbstractSharedClientE2ETest
         // found the player in its 1x2x1 box, one that found him with no deficit to fill, and one that
         // filled him while the client was never told.
         String fills = events.awaitMatching(mark, "suit_air_filled",
-                reply -> Events.countRecords(reply, "\"type\":\"suit_air_filled\"")
-                        - Events.countRecords(reply, "\"filled\":0") >= 1,
+                reply -> Events.countRecords(reply, "type", "suit_air_filled")
+                        - Events.countRecords(reply, "filled", "0") >= 1,
                 "whose \"filled\" is not 0",
                 "the pad must actually transfer oxygen into the suit — a request the chest"
                         + " answered with 0 is the pad finding nothing to fill, not a refill",
@@ -525,7 +529,7 @@ public class VacuumAndSuitClientGroupE2ETest extends AbstractSharedClientE2ETest
             String drains = events.since(mark, "suit_air_drained");
             assertEquals("a breathable atmosphere must never reach the enchanted suit's buffer;"
                             + " drains recorded on that route since the window opened: " + drains,
-                    0, Events.countRecords(drains, "\"route\":\"enchanted\""));
+                    0, Events.countRecords(drains, "route", "enchanted"));
             int chestAirAfter = readChestAir();
             scenario().record("chestAirAfter", chestAirAfter);
             assertEquals("client-rendered chest air must hold in breathable atmosphere",
@@ -581,11 +585,11 @@ public class VacuumAndSuitClientGroupE2ETest extends AbstractSharedClientE2ETest
             String decisions = events.since(mark, "suit_immunity_decided");
             assertEquals("a full enchanted suit must never be judged unprotected in vacuum;"
                     + " decisions since the flip: " + decisions,
-                    0, Events.countRecords(decisions, "\"immune\":false"));
+                    0, Events.countRecords(decisions, "immune", "false"));
             String hurts = events.since(mark, "living_hurt");
             assertEquals("a suited player must take no vacuum damage; what hurt him since the flip: "
                     + hurts + " | suit-diag " + exec("artest player suit-diag"),
-                    0, Events.countRecords(hurts, "\"source\":\"Vacuum\""));
+                    0, Events.countRecords(hurts, "source", "Vacuum"));
 
             int chestAirAfter = readChestAir();
             // The armour NBT reaches the client on its own packet, after the drain the event above
@@ -762,10 +766,10 @@ public class VacuumAndSuitClientGroupE2ETest extends AbstractSharedClientE2ETest
             String decisions = events.since(mark, "suit_immunity_decided");
             assertEquals("a full suit must never be judged unprotected while its tank has oxygen;"
                     + " decisions since the flip: " + decisions,
-                    0, Events.countRecords(decisions, "\"immune\":false"));
+                    0, Events.countRecords(decisions, "immune", "false"));
             String hurts = events.since(mark, "living_hurt");
             assertEquals("a suited player must take no vacuum damage; what hurt him since the flip: "
-                    + hurts, 0, Events.countRecords(hurts, "\"source\":\"Vacuum\""));
+                    + hurts, 0, Events.countRecords(hurts, "source", "Vacuum"));
 
             // The armour NBT reaches the client on its own packet — a persistent VALUE, read back
             // with a bounded poll rather than waited for as a link.

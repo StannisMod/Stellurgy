@@ -5,6 +5,7 @@ import org.junit.Test;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import zmaster587.advancedRocketry.test.Reply;
 import zmaster587.advancedRocketry.test.FixtureSite;
 
 import static org.junit.Assert.assertEquals;
@@ -136,9 +137,9 @@ public class BlackHoleGeneratorMultiblockTest extends AbstractSharedServerTest {
                 energy.contains("\"hasEnergy\":true"));
         // Capacity is configured per-controller; just assert non-zero —
         // the exact value depends on AR config defaults.
-        Matcher m = Pattern.compile("\"energyMax\":(\\d+)").matcher(energy);
-        assertTrue("could not parse energyMax: " + energy, m.find());
-        long capacity = Long.parseLong(m.group(1));
+        Reply mReply = Reply.of(energy);
+        assertTrue("could not parse energyMax: " + energy, mReply.has("energyMax"));
+        long capacity = (long) mReply.number("energyMax");
         assertTrue("formed BHG must have non-zero energy capacity at the "
                         + "output plug; got energyMax=" + capacity + " response=" + energy,
                 capacity > 0L);
@@ -175,9 +176,9 @@ public class BlackHoleGeneratorMultiblockTest extends AbstractSharedServerTest {
         int px = cx + 1, py = cy, pz = cz + 1;
         String energy = join(client().execute(
                 "artest energy stored 0 " + px + " " + py + " " + pz));
-        Matcher m = Pattern.compile("\"energyStored\":(\\d+)").matcher(energy);
-        assertTrue("could not parse energyStored: " + energy, m.find());
-        long stored = Long.parseLong(m.group(1));
+        Reply mReply = Reply.of(energy);
+        assertTrue("could not parse energyStored: " + energy, mReply.has("energyStored"));
+        long stored = (long) mReply.number("energyStored");
         assertEquals("BHG in overworld must NOT produce power "
                 + "(isAroundBlackHole guard); response=" + energy,
                 0L, stored);

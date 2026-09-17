@@ -1,5 +1,6 @@
 package zmaster587.advancedRocketry.test.server;
 
+import zmaster587.advancedRocketry.test.Reply;
 import com.github.stannismod.forge.testing.junit.AbstractHeadlessServerTest;
 import org.junit.Test;
 
@@ -16,7 +17,7 @@ import static org.junit.Assert.assertTrue;
  */
 public class SpaceStationLifecycleSmokeTest extends AbstractHeadlessServerTest {
 
-    private static final Pattern ID_PATTERN = Pattern.compile("\"id\":(-?\\d+)");
+    private static final String ID_PATTERN = "id";
 
     @Test
     public void stationCreateRegistersAndPersistsForList() throws Exception {
@@ -27,9 +28,9 @@ public class SpaceStationLifecycleSmokeTest extends AbstractHeadlessServerTest {
         String createResp = String.join("\n", client().execute("artest station create 0"));
         assertTrue("station create failed: " + createResp, createResp.contains("\"ok\":true"));
 
-        Matcher m = ID_PATTERN.matcher(createResp);
-        assertTrue("could not extract station id: " + createResp, m.find());
-        int stationId = Integer.parseInt(m.group(1));
+        Reply mReply = Reply.of(createResp);
+        assertTrue("could not extract station id: " + createResp, mReply.has(ID_PATTERN));
+        int stationId = Integer.parseInt(mReply.text(ID_PATTERN));
 
         String listAfter = String.join("\n", client().execute("artest station list"));
         assertTrue("created station " + stationId + " missing from list: " + listAfter,

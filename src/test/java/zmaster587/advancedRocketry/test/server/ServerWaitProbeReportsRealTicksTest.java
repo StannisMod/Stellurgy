@@ -1,6 +1,7 @@
 package zmaster587.advancedRocketry.test.server;
 
 import org.junit.Test;
+import zmaster587.advancedRocketry.test.Reply;
 import zmaster587.advancedRocketry.test.GameTicks;
 
 import java.util.regex.Matcher;
@@ -202,7 +203,6 @@ public class ServerWaitProbeReportsRealTicksTest extends AbstractSharedServerTes
     }
 
     private static int extractInt(String json, String key) {
-        Matcher m = Pattern.compile("\"" + key + "\":(-?\\d+)").matcher(json);
-        return m.find() ? Integer.parseInt(m.group(1)) : Integer.MIN_VALUE;
+        return Reply.of(json).integerOr(key, Integer.MIN_VALUE);
     }
 }

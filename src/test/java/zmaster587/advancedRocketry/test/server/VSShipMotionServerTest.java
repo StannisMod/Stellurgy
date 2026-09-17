@@ -1,5 +1,6 @@
 package zmaster587.advancedRocketry.test.server;
 
+import zmaster587.advancedRocketry.test.Reply;
 import zmaster587.advancedRocketry.test.FixtureSite;
 import zmaster587.advancedRocketry.test.GameTicks;
 import zmaster587.advancedRocketry.test.ShipIdentity;
@@ -35,9 +36,8 @@ import static org.junit.Assert.assertTrue;
  */
 public class VSShipMotionServerTest extends AbstractSharedServerTest {
 
-    private static final Pattern BUILDER_POS =
-            Pattern.compile("\"builderPos\":\\[(-?\\d+),(-?\\d+),(-?\\d+)]");
-    private static final Pattern POS_Z = Pattern.compile("\"posZ\":(-?[0-9.E\\-]+)");
+    private static final String BUILDER_POS = "builderPos";
+    private static final String POS_Z = "posZ";
 
     private static final String VARIANT = "with-advanced-flight-computer";
 
@@ -174,14 +174,14 @@ public class VSShipMotionServerTest extends AbstractSharedServerTest {
     }
 
     private int shipCount(String sub) throws Exception {
-        Matcher m = Pattern.compile("\"count\":(-?\\d+)").matcher(exec("artest vs " + sub + " 0"));
-        return m.find() ? Integer.parseInt(m.group(1)) : -1;
+        Reply mReply = Reply.of(exec("artest vs " + sub + " 0"));
+        return mReply.has("count") ? mReply.integer("count") : -1;
     }
 
     private double shipPosZ(String shipInfoJson) {
-        Matcher m = POS_Z.matcher(shipInfoJson);
-        assertTrue("ship-info must carry posZ: " + shipInfoJson, m.find());
-        return Double.parseDouble(m.group(1));
+        Reply mReply = Reply.of(shipInfoJson);
+        assertTrue("ship-info must carry posZ: " + shipInfoJson, mReply.has(POS_Z));
+        return Double.parseDouble(mReply.text(POS_Z));
     }
 
     /** Place the fixture on a pad and run scan+assemble; returns the raw assemble JSON. */
@@ -196,11 +196,11 @@ public class VSShipMotionServerTest extends AbstractSharedServerTest {
                 "the craft is built here and then driven horizontally out of this volume");
         String fixture = exec("artest fixture rocket 0 " + baseX + " " + baseY + " " + baseZ + " " + variant);
         assertTrue("fixture (" + variant + ") failed: " + fixture, fixture.contains("\"ok\":true"));
-        Matcher bp = BUILDER_POS.matcher(fixture);
-        assertTrue("fixture missing builderPos: " + fixture, bp.find());
-        int bx = Integer.parseInt(bp.group(1)),
-                by = Integer.parseInt(bp.group(2)),
-                bz = Integer.parseInt(bp.group(3));
+        int[] bp = Reply.of(fixture).blockPos(BUILDER_POS);
+        assertTrue("fixture missing builderPos: " + fixture, bp != null);
+        int bx = bp[0],
+                by = bp[1],
+                bz = bp[2];
         String assemble = exec("artest rocket assemble 0 " + bx + " " + by + " " + bz);
         assertTrue("assemble failed: " + assemble, assemble.contains("\"ok\":true"));
         return assemble;

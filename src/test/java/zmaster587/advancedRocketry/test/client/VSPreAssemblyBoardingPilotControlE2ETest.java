@@ -1,8 +1,6 @@
 package zmaster587.advancedRocketry.test.client;
 
 import java.util.Locale;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 import com.google.gson.JsonObject;
 
@@ -11,6 +9,7 @@ import org.junit.Test;
 import org.junit.runners.MethodSorters;
 import org.lwjgl.input.Keyboard;
 
+import zmaster587.advancedRocketry.test.Reply;
 import zmaster587.advancedRocketry.test.Events;
 import zmaster587.advancedRocketry.test.FixtureSite;
 
@@ -95,18 +94,18 @@ public class VSPreAssemblyBoardingPilotControlE2ETest extends AbstractSharedVsCl
         return "vs-pre-assembly-boarding";
     }
 
-    private static final Pattern BUILDER_POS =
-            Pattern.compile("\"builderPos\":\\[(-?\\d+),(-?\\d+),(-?\\d+)]");
-    private static final Pattern POS_Y = Pattern.compile("\"posY\":(-?[0-9.E\\-]+)");
+    private static final String BUILDER_POS = "builderPos";
+    private static final String POS_Y = "posY";
 
     /**
      * This scenario's ship, by identity — read off the assembly's own {@code ship_spawned} record
      * (the base's {@code awaitShipSpawned}), never re-derived from a position.
      */
     private String shipUuid;
-    private static final Pattern DUMMY_ID = Pattern.compile("\"dummyId\":(-?\\d+)");
-    private static final Pattern SEAT_POS = Pattern.compile(
-            "\"seatX\":(-?\\d+),\"seatY\":(-?\\d+),\"seatZ\":(-?\\d+)");
+    private static final String DUMMY_ID = "dummyId";
+    private static final String SEAT_X = "seatX";
+    private static final String SEAT_Y = "seatY";
+    private static final String SEAT_Z = "seatZ";
 
     private static final String VARIANT = "with-pilot-seat";
 
@@ -794,19 +793,19 @@ public class VSPreAssemblyBoardingPilotControlE2ETest extends AbstractSharedVsCl
 
         // The probe takes the first pilot seat it finds anywhere in the world; pin that it found
         // OUR seat, at the position the block measurement just verified.
-        Matcher sm = SEAT_POS.matcher(mountInfo);
+        Reply bound = Reply.of("artest vs seat-mount", mountInfo);
         scenario().requireArranged("seat-mount must report the seat position it bound: " + mountInfo,
-                sm.find());
+                bound.has(SEAT_X));
         scenario().requireArranged("the seat the probe bound must be the fixture's seat at (" + seatX
                         + "," + seatY + "," + seatZ + "), not some other pilot seat in the world: "
                         + mountInfo,
-                Integer.parseInt(sm.group(1)) == seatX
-                        && Integer.parseInt(sm.group(2)) == seatY
-                        && Integer.parseInt(sm.group(3)) == seatZ);
+                bound.integer(SEAT_X) == seatX
+                        && bound.integer(SEAT_Y) == seatY
+                        && bound.integer(SEAT_Z) == seatZ);
 
-        Matcher dm = DUMMY_ID.matcher(mountInfo);
-        scenario().requireArranged("seat-mount must report a dummy id: " + mountInfo, dm.find());
-        String mount = exec("artest player mount-entity " + dm.group(1));
+        Reply dmReply = Reply.of(mountInfo);
+        scenario().requireArranged("seat-mount must report a dummy id: " + mountInfo, dmReply.has(DUMMY_ID));
+        String mount = exec("artest player mount-entity " + dmReply.text(DUMMY_ID));
         scenario().requireArranged("the bot must mount the seat's dummy: " + mount,
                 mount.contains("\"mounted\":true"));
         bot().waitTicks(10);
@@ -824,8 +823,8 @@ public class VSPreAssemblyBoardingPilotControlE2ETest extends AbstractSharedVsCl
 
     /** The ship's world altitude, or {@code NaN} while it is not reporting one. */
     private double shipPosY() throws Exception {
-        Matcher m = POS_Y.matcher(shipInfo());
-        return m.find() ? Double.parseDouble(m.group(1)) : Double.NaN;
+        Reply mReply = Reply.of(shipInfo());
+        return mReply.has(POS_Y) ? Double.parseDouble(mReply.text(POS_Y)) : Double.NaN;
     }
 
     /** A settle attempt: the altitude it came to rest at ({@code NaN} if it never did), and why. */
@@ -1058,11 +1057,11 @@ public class VSPreAssemblyBoardingPilotControlE2ETest extends AbstractSharedVsCl
                 "the loose craft, and the air the player stands and clicks in beside it");
         String fixture = exec("artest fixture rocket 0 " + baseX + " " + baseY + " " + baseZ + " " + variant);
         scenario().requireArranged("fixture (" + variant + ") failed: " + fixture, fixture.contains("\"ok\":true"));
-        Matcher bp = BUILDER_POS.matcher(fixture);
-        scenario().requireArranged("fixture missing builderPos: " + fixture, bp.find());
-        builderX = Integer.parseInt(bp.group(1));
-        builderY = Integer.parseInt(bp.group(2));
-        builderZ = Integer.parseInt(bp.group(3));
+        int[] bp = Reply.of(fixture).blockPos(BUILDER_POS);
+        scenario().requireArranged("fixture missing builderPos: " + fixture, bp != null);
+        builderX = bp[0];
+        builderY = bp[1];
+        builderZ = bp[2];
     }
 
     /** Turns the loose blocks placed by {@link #buildLooseFixture} into a ship. */

@@ -1,5 +1,6 @@
 package zmaster587.advancedRocketry.test.server;
 
+import zmaster587.advancedRocketry.test.Reply;
 import com.github.stannismod.forge.testing.junit.AbstractHeadlessServerTest;
 import org.junit.Test;
 
@@ -25,8 +26,8 @@ public class WorldgenSmokeTest extends AbstractHeadlessServerTest {
     // iron count is zero and the AR oregen tripwire below would measure the preset, not the
     // generator.
 
-    private static final Pattern COUNT = Pattern.compile("\"count\":(-?\\d+)");
-    private static final Pattern CHUNKS = Pattern.compile("\"chunksScanned\":(-?\\d+)");
+    private static final String COUNT = "count";
+    private static final String CHUNKS = "chunksScanned";
 
     @Test
     public void earthChunkAndOreCountsLookSane() throws Exception {
@@ -50,8 +51,7 @@ public class WorldgenSmokeTest extends AbstractHeadlessServerTest {
                 ironCount > 0L);
     }
 
-    private static long parseLong(Pattern p, String s) {
-        Matcher m = p.matcher(s);
-        return m.find() ? Long.parseLong(m.group(1)) : -1L;
+    private static long parseLong(String field, String s) {
+        return (long) Reply.of(s).number(field);
     }
 }

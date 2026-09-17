@@ -6,6 +6,7 @@ import java.util.List;
 import org.junit.Test;
 
 import zmaster587.advancedRocketry.test.FixtureSite;
+import zmaster587.advancedRocketry.test.Reply;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
@@ -55,28 +56,22 @@ public class Tier1AimsAtWhatThisWorldKnowsE2ETest extends AbstractSharedServerTe
 
     /** A numeric field of a probe reply. */
     private static int intField(String json, String name) {
-        String key = "\"" + name + "\":";
-        int at = json.indexOf(key);
-        assertTrue("probe reply has no field " + name + ": " + json, at >= 0);
-        int from = at + key.length();
-        int to = from;
-        while (to < json.length() && "-0123456789".indexOf(json.charAt(to)) >= 0) {
-            to++;
-        }
-        return Integer.parseInt(json.substring(from, to));
+        Reply reply = Reply.of("this probe reply", json);
+        assertTrue("probe reply has no field " + name + ": " + json, reply.has(name));
+        return reply.integer(name);
     }
 
+    /**
+     * An integer array field, by name. The hand-rolled version this replaces located the key, sliced
+     * to the first {@code ]} and split the text on commas — which carried its own opinion about
+     * spaces, signs and an empty list, and answered a slice of a document to a parser.
+     */
     private static List<Integer> ints(String json, String field) {
-        String key = "\"" + field + "\":[";
-        int at = json.indexOf(key);
-        assertTrue("probe reply has no array " + field + ": " + json, at >= 0);
-        int end = json.indexOf(']', at);
-        String body = json.substring(at + key.length(), end).trim();
+        Reply reply = Reply.of("this probe reply", json);
+        assertTrue("probe reply has no array " + field + ": " + json, reply.has(field));
         List<Integer> out = new ArrayList<>();
-        if (!body.isEmpty()) {
-            for (String piece : body.split(",")) {
-                out.add(Integer.parseInt(piece.trim()));
-            }
+        for (int value : reply.intArray(field)) {
+            out.add(value);
         }
         return out;
     }

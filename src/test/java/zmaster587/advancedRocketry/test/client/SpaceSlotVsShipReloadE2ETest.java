@@ -3,6 +3,7 @@ package zmaster587.advancedRocketry.test.client;
 import com.github.stannismod.forge.testing.junit.AbstractClientE2ETest;
 import org.junit.Test;
 
+import zmaster587.advancedRocketry.test.Reply;
 import zmaster587.advancedRocketry.test.Events;
 
 import java.util.regex.Matcher;
@@ -24,8 +25,8 @@ import static org.junit.Assert.assertTrue;
  */
 public class SpaceSlotVsShipReloadE2ETest extends AbstractClientE2ETest {
 
-    private static final Pattern SLOT = Pattern.compile("\"slot\":(-?\\d+)");
-    private static final Pattern COUNT = Pattern.compile("\"count\":(-?\\d+)");
+    private static final String SLOT = "slot";
+    private static final String COUNT = "count";
 
     /** How long the client is given to FOLLOW a dimension transfer the server has performed — one
      *  round trip plus a world teardown and rebuild. */
@@ -47,8 +48,8 @@ public class SpaceSlotVsShipReloadE2ETest extends AbstractClientE2ETest {
         int c = -1;
         for (int i = 0; i < tries && c < 1; i++) {
             bot().waitTicks(5);
-            Matcher m = COUNT.matcher(exec("artest vs ship-count " + dim));
-            c = m.find() ? Integer.parseInt(m.group(1)) : -1;
+            Reply mReply = Reply.of(exec("artest vs ship-count " + dim));
+            c = mReply.has(COUNT) ? Integer.parseInt(mReply.text(COUNT)) : -1;
         }
         return c;
     }
@@ -58,14 +59,14 @@ public class SpaceSlotVsShipReloadE2ETest extends AbstractClientE2ETest {
 
         // Assemble a ship in a fresh pool slot (cell "deep").
         String asm = exec("artest space vs-assemble deep");
-        Matcher m = SLOT.matcher(asm);
-        assertTrue("vs-assemble must report a slot dim: " + asm, m.find());
-        int slot = Integer.parseInt(m.group(1));
+        Reply mReply = Reply.of(asm);
+        assertTrue("vs-assemble must report a slot dim: " + asm, mReply.has(SLOT));
+        int slot = Integer.parseInt(mReply.text(SLOT));
         bot().waitTicks(40); // let VS process the async spawn queue
 
         // Sanity: the ship must exist in VS's queryable registry (assembly succeeded).
-        Matcher cm = COUNT.matcher(exec("artest vs ship-count-all " + slot));
-        int queryable = cm.find() ? Integer.parseInt(cm.group(1)) : -1;
+        Reply cmReply = Reply.of(exec("artest vs ship-count-all " + slot));
+        int queryable = cmReply.has(COUNT) ? Integer.parseInt(cmReply.text(COUNT)) : -1;
         assertTrue("a ship must be created in the pool world's registry: count-all=" + queryable,
                 queryable >= 1);
 

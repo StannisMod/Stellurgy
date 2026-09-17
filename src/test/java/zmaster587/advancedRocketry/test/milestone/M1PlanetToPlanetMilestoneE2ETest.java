@@ -4,8 +4,6 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Locale;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 import com.github.stannismod.forge.testing.TestTimeouts;
 import com.github.stannismod.forge.testing.client.ClientBot;
@@ -24,6 +22,7 @@ import org.lwjgl.input.Keyboard;
 import zmaster587.advancedRocketry.space.TerrainHeightFinder;
 import zmaster587.advancedRocketry.test.Chains;
 import zmaster587.advancedRocketry.test.Events;
+import zmaster587.advancedRocketry.test.Reply;
 import zmaster587.advancedRocketry.test.FixtureSite;
 import zmaster587.advancedRocketry.test.Plot;
 import zmaster587.advancedRocketry.test.client.ClientEvents;
@@ -93,28 +92,21 @@ public class M1PlanetToPlanetMilestoneE2ETest {
      */
     private static final int SLOT_APPLIED_TICKS = 40;
 
-    private static final Pattern BUILDER_POS =
-            Pattern.compile("\"builderPos\":\\[(-?\\d+),(-?\\d+),(-?\\d+)]");
-    private static final Pattern COUNT = Pattern.compile("\"count\":(-?\\d+)");
-    private static final Pattern LEDGER = Pattern.compile("\"ledger\":(-?\\d+)");
-    private static final Pattern SLOT_DIMS = Pattern.compile("\"slotDims\":\\[([0-9,\\-]*)]");
-    private static final Pattern SEAT_SUB = Pattern.compile(
-            "\"seatX\":(-?\\d+),\"seatY\":(-?\\d+),\"seatZ\":(-?\\d+)");
-    private static final Pattern AFC_SUB = Pattern.compile(
-            "\"afcX\":(-?\\d+),\"afcY\":(-?\\d+),\"afcZ\":(-?\\d+)");
-    private static final Pattern SHIP_WORLD = Pattern.compile(
-            "\"shipWorldX\":(-?[0-9.E\\-]+),\"shipWorldY\":(-?[0-9.E\\-]+),\"shipWorldZ\":(-?[0-9.E\\-]+)");
-    private static final Pattern TO_WORLD = Pattern.compile(
-            "\"worldX\":(-?[0-9.E\\-]+),\"worldY\":(-?[0-9.E\\-]+),\"worldZ\":(-?[0-9.E\\-]+)");
-    private static final Pattern SHIP_ID = Pattern.compile("\"shipId\":\"([^\"]+)\"");
-    private static final Pattern CELL = Pattern.compile("\"cell\":\"([^\"]*)\"");
-    private static final Pattern NAV_TARGET = Pattern.compile("\"target\":(null|\"[^\"]*\")");
-    private static final Pattern NAV_ARMED = Pattern.compile("\"armed\":(true|false)");
-    private static final Pattern NAV_SHIP_ADDRESSES = Pattern.compile("\"ship\":(-?\\d+)");
-    /** One body of a {@code space bodies} ship entry, in the order the probe writes its keys. */
-    private static final Pattern BODY = Pattern.compile(
-            "\\{\"dim\":(-?\\d+),\"kind\":\"([A-Z_]+)\",\"descendTarget\":(true|false),"
-                    + "\"bearing\":\\[(-?\\d+),(-?\\d+),(-?\\d+)],\"distance\":(\\d+)}");
+    private static final String BUILDER_POS = "builderPos";
+    private static final String COUNT = "count";
+    private static final String LEDGER = "ledger";
+    private static final String SLOT_DIMS = "slotDims";
+    private static final String SHIP_ID = "shipId";
+    private static final String CELL = "cell";
+    private static final String NAV_TARGET = "target";
+    private static final String NAV_ARMED = "armed";
+    private static final String NAV_SHIP_ADDRESSES = "ship";
+    /** One body of a {@code space bodies} ship entry, by the names the probe writes. */
+    private static final String SHIPS = "ships";
+    private static final String BODY_DIM = "dim";
+    private static final String BODY_DESCEND_TARGET = "descendTarget";
+    private static final String BODY_BEARING = "bearing";
+    private static final String BODY_DISTANCE = "distance";
     /**
      * The console is aimed at somewhere a ship can put down: the BODY it names may be descended to,
      * and its dimension is a real world rather than one of the space subsystem's own slot worlds.
@@ -125,16 +117,22 @@ public class M1PlanetToPlanetMilestoneE2ETest {
      * that body will be when the ship arrives, so the cell is empty right now and will be empty
      * again later; the body is what the pilot picked and what he expects to find.</p>
      */
-    private static final Pattern LANDABLE = Pattern.compile(
-            "\"targetDescendTarget\":true,\"targetSlotWorld\":false");
+    private static final String NAV_TARGET_DESCEND_TARGET = "targetDescendTarget";
+    private static final String NAV_TARGET_SLOT_WORLD = "targetSlotWorld";
+
+    /** Whether {@code nav status} is aimed at a body a ship can actually put down on. */
+    private static boolean isLandable(String navStatus) {
+        Reply aim = Reply.of("artest nav status", navStatus);
+        return aim.bool(NAV_TARGET_DESCEND_TARGET, false)
+                && !aim.bool(NAV_TARGET_SLOT_WORLD, true);
+    }
 
     /** The body the console is aimed at, from {@code nav status}. */
-    private static final Pattern NAV_TARGET_DIM = Pattern.compile("\"targetDim\":(-?\\d+)");
+    private static final String NAV_TARGET_DIM = "targetDim";
     /** The bodies of ONE cell, from {@code space cell-info} (not the whole system's list). */
-    private static final Pattern CELL_BODIES = Pattern.compile("\"cellBodies\":\\[(.*?)]");
+    private static final String CELL_BODIES = "cellBodies";
     /** Slot dimension ids that Advanced Rocketry also holds a body for — always empty. */
-    private static final Pattern SLOT_DIMS_ALSO_BODIES =
-            Pattern.compile("\"slotDimsAlsoBodies\":\\[([0-9,\\-]*)]");
+    private static final String SLOT_DIMS_ALSO_BODIES = "slotDimsAlsoBodies";
 
     /** A jump-capable craft with a walkable deck: the ship this milestone is about. */
     private static final String VARIANT = "with-jump-drive";
@@ -326,14 +324,16 @@ public class M1PlanetToPlanetMilestoneE2ETest {
         // will; a body is a place the universe registry describes, a crystal can name and a ship can
         // be flown to. One id doing both makes the registry's description a lie — it advertises a
         // planet whose world is empty space — and the descent that follows lands the ship nowhere.
-        Matcher collided = SLOT_DIMS_ALSO_BODIES.matcher(status);
+        Reply subsystem = Reply.of("artest space subsystem-status", status);
         requireArranged("subsystem-status must report the slot/body id overlap: " + status,
-                collided.find());
+                subsystem.has(SLOT_DIMS_ALSO_BODIES));
+        int[] collided = subsystem.intArray(SLOT_DIMS_ALSO_BODIES);
         assertTrue("no space-slot dimension may also be an Advanced Rocketry body. Forge's free-id "
                         + "scan cannot see AR's own body ids (a surface-less body is never registered "
                         + "with Forge), so the pool can take one unless it asks AR too. "
-                        + "slotDimsAlsoBodies=[" + collided.group(1) + "] status=" + status,
-                collided.group(1).isEmpty());
+                        + "slotDimsAlsoBodies=" + java.util.Arrays.toString(collided)
+                        + " status=" + status,
+                collided.length == 0);
         System.out.println("[M1] leg 0 (config + subsystem) " + elapsed(tLeg) + " status=" + status);
 
         // ---- LEG 1: stand the craft up on a pad. Blocks only — no interaction happens here. -----
@@ -360,8 +360,8 @@ public class M1PlanetToPlanetMilestoneE2ETest {
         // ---- LEG 3: the CLIENT sits down in the seat of the ship he just built. -----------------
         tLeg = System.currentTimeMillis();
         String found = findSeat();
-        int[] seatSub = readTriple(found, SEAT_SUB);
-        int[] afcSub = readTriple(found, AFC_SUB);
+        int[] seatSub = readTriple(found, "seatX", "seatY", "seatZ");
+        int[] afcSub = readTriple(found, "afcX", "afcY", "afcZ");
         requireArranged("the assembled ship must expose a pilot seat AND the flight computer "
                         + "it was linked to — the deck square the pilot works from is addressed from "
                         + "that computer: " + found,
@@ -470,9 +470,10 @@ public class M1PlanetToPlanetMilestoneE2ETest {
 
         // ---- LEG 5: the arrival, measured from the CLIENT. --------------------------------------
         tLeg = System.currentTimeMillis();
-        Matcher sd = SLOT_DIMS.matcher(statusAfter);
-        requireArranged("subsystem-status must list its slot dims: " + statusAfter, sd.find());
-        String slotDims = "," + sd.group(1) + ",";
+        Reply after = Reply.of("artest space subsystem-status", statusAfter);
+        requireArranged("subsystem-status must list its slot dims: " + statusAfter,
+                after.has(SLOT_DIMS));
+        String slotDims = "," + joinInts(after.intArray(SLOT_DIMS)) + ",";
 
         // (1) The client's OWN world is a space cell — the pilot followed his ship through the seam
         // or he did not, and nothing server-side can answer that for him. Read off the client's own
@@ -481,7 +482,7 @@ public class M1PlanetToPlanetMilestoneE2ETest {
         int clientDim = awaitClientWorld(entryClientMark, slotDims,
                 "after the crossing the CLIENT itself must be in a space-cell dimension — a pilot "
                         + "whose ship left without him is the exact failure this leg exists to catch."
-                        + " slotDims=[" + sd.group(1) + "] status=" + statusAfter,
+                        + " slotDims=[" + slotDims + "] status=" + statusAfter,
                 budget * 5);
 
         // (2) Still seated — and the crossing's own seat chain says how.
@@ -518,7 +519,7 @@ public class M1PlanetToPlanetMilestoneE2ETest {
         // Read while he is still SEATED, so the ship's own world point is on record before the one
         // moment in this loop when the pilot is not a reliable pointer to his craft.
         String seatProbe = findSeatAboard(slotDim, budget);
-        int[] navAfcSub = readTriple(seatProbe, AFC_SUB);
+        int[] navAfcSub = readTriple(seatProbe, "afcX", "afcY", "afcZ");
         requireArranged("the arrived ship must still expose the seat and the flight computer "
                         + "it is linked to — the console the pilot reaches for is addressed from that "
                         + "computer: " + seatProbe,
@@ -626,7 +627,7 @@ public class M1PlanetToPlanetMilestoneE2ETest {
             if (cell.isEmpty() || "null".equals(cell) || cell.equals(launchCell)) {
                 continue;
             }
-            if (LANDABLE.matcher(picked).find()) {
+            if (isLandable(picked)) {
                 pickIndex = candidate;
                 targetCell = cell;
                 targetDim = readInt(picked, NAV_TARGET_DIM, Integer.MIN_VALUE);
@@ -756,7 +757,7 @@ public class M1PlanetToPlanetMilestoneE2ETest {
         String settled = events.await(jumpMark, "ledger_settled", "a jump the pilot armed and fired"
                 + " must end with the ledger told where the ship now is — the arrival's own commit",
                 2000);
-        for (String record : Events.recordsWithAll(settled, "\"ship\":\"" + shipId + "\"")) {
+        for (String record : Events.recordsWhere(settled, "ship", shipId)) {
             String cell = Events.text(record, "cell");
             if (cell != null && !cell.isEmpty()) {
                 arrivedCell = cell;
@@ -776,7 +777,10 @@ public class M1PlanetToPlanetMilestoneE2ETest {
         // A ship aimed at where the body WAS lands in a cell the body has left, which reads here as
         // an arrived cell whose own body list does not contain the destination.
         String arrivedCellInfo = exec("artest space cell-info " + cellArgs(arrivedCell));
-        String arrivedBodies = readString(arrivedCellInfo, CELL_BODIES);
+        // The field is a JSON ARRAY; its text comes back bracketed, and every reader below asks
+        // whether a body id is IN it, so the brackets are stripped rather than matched around.
+        String arrivedBodies = String.valueOf(readString(arrivedCellInfo, CELL_BODIES))
+                .replace("[", "").replace("]", "");
         assertTrue("…and the cell it arrives in must be the one the destination BODY is in when it "
                         + "gets there — a destination the pilot chose at the console is a promise the "
                         + "drive has to keep, and it is only kept if the planet is there on arrival. "
@@ -790,14 +794,14 @@ public class M1PlanetToPlanetMilestoneE2ETest {
         // The pilot, observed from the CLIENT: same two questions leg 5 asks, because a jump is the
         // second world transition of the loop and a seat lost in it is lost just as silently.
         String statusAfterJump = exec("artest space subsystem-status");
-        Matcher sdj = SLOT_DIMS.matcher(statusAfterJump);
+        Reply afterJump = Reply.of("artest space subsystem-status", statusAfterJump);
         requireArranged("subsystem-status must list its slot dims: " + statusAfterJump,
-                sdj.find());
-        String jumpSlotDims = "," + sdj.group(1) + ",";
+                afterJump.has(SLOT_DIMS));
+        String jumpSlotDims = "," + joinInts(afterJump.intArray(SLOT_DIMS)) + ",";
         int jumpDim = awaitClientWorld(jumpClientMark, jumpSlotDims,
                 "the pilot who fired the jump must come out of it in a space cell too — a drive "
                         + "that carries the hull and leaves the crew behind has not moved the SHIP. "
-                        + "slotDims=[" + sdj.group(1) + "] ledger=" + ledgerAfterJump
+                        + "slotDims=[" + jumpSlotDims + "] ledger=" + ledgerAfterJump
                         + " status=" + statusAfterJump,
                 budget * 5);
 
@@ -1021,7 +1025,7 @@ public class M1PlanetToPlanetMilestoneE2ETest {
                         + "subsystem's own slot worlds are empty voids that exist to hold a cell; a "
                         + "descent that ends in one has landed the ship nowhere, and the pilot who flew "
                         + "across a system to reach a planet steps out into nothing. clientDim="
-                        + descentDim + " slotDims=[" + sdj.group(1) + "] nearestBodyDim=" + nearestDim
+                        + descentDim + " slotDims=[" + jumpSlotDims + "] nearestBodyDim=" + nearestDim
                         + " dimLoad=" + loaded + " bodies=" + bodies,
                 !jumpSlotDims.contains("," + descentDim + ","));
         assertTrue("…and the world he steps out onto must be the PLANET HE PICKED at the console. "
@@ -1109,7 +1113,7 @@ public class M1PlanetToPlanetMilestoneE2ETest {
                         + "line once. A dim that flipped to a space cell here is that bounce: the "
                         + "pilot crossed a system to reach this body and was thrown back off it "
                         + "without touching anything. dimAfterArrival=" + bounceDim
-                        + " arrivedDim=" + descentDim + " slotDims=[" + sdj.group(1) + "]"
+                        + " arrivedDim=" + descentDim + " slotDims=[" + jumpSlotDims + "]"
                         + " arrivalY=" + arrivalY + " orbitLine=" + ORBIT_LINE
                         + " client world changes while he flew: " + bounceChanges,
                 bounceDim == descentDim);
@@ -1148,7 +1152,7 @@ public class M1PlanetToPlanetMilestoneE2ETest {
                             + "landed on a planet has to be able to leave it. If this stays on the "
                             + "planet the hold never released and the descent has stranded him "
                             + "instead of bouncing him. arrivedDim=" + descentDim + " slotDims=["
-                            + sdj.group(1) + "] downY=" + downY + " orbitLine=" + ORBIT_LINE,
+                            + jumpSlotDims + "] downY=" + downY + " orbitLine=" + ORBIT_LINE,
                     budget * 10);
         } finally {
             bot().releaseKey(Keyboard.KEY_R);
@@ -1301,9 +1305,9 @@ public class M1PlanetToPlanetMilestoneE2ETest {
                 builtShipName);
         for (int attempt = 0; attempt < budget; attempt++) {
             String hull = exec("artest vs ship-uuid " + dim + " " + builtShipName);
-            Matcher named = Pattern.compile("\"id\":\"([^\"]+)\"").matcher(hull);
-            if (hull.contains("\"found\":true") && named.find()) {
-                lastSeatProbe = exec("artest vs find-seat " + dim + " id " + named.group(1));
+            String hullId = Reply.of("artest vs ship-uuid", hull).text("id");
+            if (hull.contains("\"found\":true") && hullId != null) {
+                lastSeatProbe = exec("artest vs find-seat " + dim + " id " + hullId);
                 if (rememberAnchor(lastSeatProbe)) {
                     return lastSeatProbe;
                 }
@@ -1317,7 +1321,7 @@ public class M1PlanetToPlanetMilestoneE2ETest {
 
     /** Keep the ship's live world position from a successful probe; false when it found nothing. */
     private boolean rememberAnchor(String probe) {
-        double[] anchor = readTripleD(probe, SHIP_WORLD);
+        double[] anchor = readTripleD(probe, "shipWorldX", "shipWorldY", "shipWorldZ");
         if (anchor == null) {
             return false;
         }
@@ -1352,20 +1356,36 @@ public class M1PlanetToPlanetMilestoneE2ETest {
      * be descended into another.</p>
      */
     private static int nearestDescendTargetDim(String bodies) {
-        Matcher m = BODY.matcher(bodies);
         int best = Integer.MIN_VALUE;
         long bestDistance = Long.MAX_VALUE;
-        while (m.find()) {
-            if (!"true".equals(m.group(3))) {
-                continue;
-            }
-            long distance = Long.parseLong(m.group(7));
+        for (String body : descendTargets(bodies)) {
+            Reply b = Reply.of("one cell body", body);
+            long distance = (long) b.number(BODY_DISTANCE);
             if (distance < bestDistance) {
                 bestDistance = distance;
-                best = Integer.parseInt(m.group(1));
+                best = b.integer(BODY_DIM);
             }
         }
         return best;
+    }
+
+    /**
+     * Every descend-target body of every ship's cell in a {@code space bodies} reply.
+     *
+     * <p>The nesting is walked rather than flattened by one expression over the whole reply: bodies
+     * belong to a CELL and the reply carries them per ship, so a scan of the raw text pools one
+     * ship's cell with another's the moment two are ledgered.</p>
+     */
+    private static java.util.List<String> descendTargets(String bodies) {
+        java.util.List<String> out = new java.util.ArrayList<>();
+        for (String ship : Reply.of("artest space bodies", bodies).objectArray(SHIPS)) {
+            for (String body : Reply.of("one ship's cell", ship).objectArray(CELL_BODIES)) {
+                if (Reply.of("one cell body", body).bool(BODY_DESCEND_TARGET, false)) {
+                    out.add(body);
+                }
+            }
+        }
+        return out;
     }
 
     /**
@@ -1379,16 +1399,14 @@ public class M1PlanetToPlanetMilestoneE2ETest {
      * scalar is the one thing he cannot do.</p>
      */
     private static long[] nearestDescendTargetVector(String bodies) {
-        Matcher m = BODY.matcher(bodies);
         long[] best = null;
-        while (m.find()) {
-            if (!"true".equals(m.group(3))) {
-                continue;
-            }
-            long distance = Long.parseLong(m.group(7));
+        for (String body : descendTargets(bodies)) {
+            Reply b = Reply.of("one cell body", body);
+            long distance = (long) b.number(BODY_DISTANCE);
             if (best == null || distance < best[3]) {
-                best = new long[]{Long.parseLong(m.group(4)), Long.parseLong(m.group(5)),
-                        Long.parseLong(m.group(6)), distance};
+                best = new long[]{(long) b.arrayNumber(BODY_BEARING, 0),
+                        (long) b.arrayNumber(BODY_BEARING, 1),
+                        (long) b.arrayNumber(BODY_BEARING, 2), distance};
             }
         }
         return best;
@@ -1517,13 +1535,13 @@ public class M1PlanetToPlanetMilestoneE2ETest {
             bot().clickButtonById(BUTTON_BUILD);
             bot().waitTicks(40);
             String spawned = spawnEvents.since(spawnMark, "ship_spawned");
-            ships = Events.countRecords(spawned, "\"vsShip\":");
+            ships = Events.countRecordsWithField(spawned, "vsShip");
             // WHICH ship. The record names it and this loop was counting the records and throwing the
             // name away — after which every later question about "the ship" went back to a position
             // or to "the first settled row in the cell". It is kept from the moment of creation now.
-            Matcher spawnedShip = Pattern.compile("\"vsShip\":\"([^\"]+)\"").matcher(spawned);
-            if (spawnedShip.find()) {
-                builtShipVsId = spawnedShip.group(1);
+            String namedShip = Events.lastField(spawned, "vsShip");
+            if (namedShip != null && !namedShip.isEmpty()) {
+                builtShipVsId = namedShip;
             }
         }
         bot().closeScreen();
@@ -1637,7 +1655,8 @@ public class M1PlanetToPlanetMilestoneE2ETest {
 
         for (int attempt = 0; attempt < budget; attempt++) {
             double[] shipAnchor = readTripleD(
-                    dim == 0 ? findSeat() : findSeatAboard(dim, budget), SHIP_WORLD);
+                    dim == 0 ? findSeat() : findSeatAboard(dim, budget),
+                    "shipWorldX", "shipWorldY", "shipWorldZ");
             if (shipAnchor == null) {
                 bot().waitTicks(5);
                 continue;
@@ -1746,10 +1765,10 @@ public class M1PlanetToPlanetMilestoneE2ETest {
         String fixture = exec("artest fixture rocket 0 " + bx + " " + by + " " + bz + " " + VARIANT);
         requireArranged("fixture (" + VARIANT + ") failed: " + fixture,
                 fixture.contains("\"ok\":true"));
-        Matcher bp = BUILDER_POS.matcher(fixture);
-        requireArranged("fixture missing builderPos: " + fixture, bp.find());
-        return new int[]{Integer.parseInt(bp.group(1)), Integer.parseInt(bp.group(2)),
-                Integer.parseInt(bp.group(3))};
+        int[] bp = Reply.of(fixture).blockPos(BUILDER_POS);
+        requireArranged("fixture missing builderPos: " + fixture, bp != null);
+        return new int[]{bp[0], bp[1],
+                bp[2]};
     }
 
     /**
@@ -1987,7 +2006,7 @@ public class M1PlanetToPlanetMilestoneE2ETest {
             throws Exception {
         try {
             clientEvents().awaitMatching(clientMark, "mount",
-                    seen -> Events.countRecords(seen, "\"ok\":true") > 0,
+                    seen -> Events.countRecords(seen, "ok", "true") > 0,
                     "a mount the client's own startRiding accepted (ok:true)", what, budget * 5);
         } catch (AssertionError never) {
             Events.assertInstrumentRan(clientEvents().since(clientMark, "mount"),
@@ -2053,14 +2072,14 @@ public class M1PlanetToPlanetMilestoneE2ETest {
             return null;
         }
         String hull = exec("artest vs ship-uuid " + dim + " " + builtShipName);
-        Matcher named = Pattern.compile("\"id\":\"([^\"]+)\"").matcher(hull);
-        if (!hull.contains("\"found\":true") || !named.find()) {
+        String namedHull = Reply.of("artest vs ship-uuid", hull).text("id");
+        if (!hull.contains("\"found\":true") || namedHull == null) {
             lastToWorldProbe = hull;
             return null;
         }
-        lastToWorldProbe = exec("artest vs to-world " + dim + " id " + named.group(1)
+        lastToWorldProbe = exec("artest vs to-world " + dim + " id " + namedHull
                 + " " + (sub[0] + dx) + " " + (sub[1] + dy) + " " + (sub[2] + dz));
-        return readTripleD(lastToWorldProbe, TO_WORLD);
+        return readTripleD(lastToWorldProbe, "worldX", "worldY", "worldZ");
     }
 
     /** The last subspace-to-world mapping answer, so a null world point can name what refused it. */
@@ -2107,9 +2126,8 @@ public class M1PlanetToPlanetMilestoneE2ETest {
         return cellKey;
     }
 
-    private static String readString(String json, Pattern p) {
-        Matcher m = p.matcher(json);
-        return m.find() ? m.group(1) : null;
+    private static String readString(String json, String field) {
+        return Reply.of(json).text(field);
     }
 
     /** A probe field that may come back quoted or as a bare {@code null}, as a plain string. */
@@ -2117,26 +2135,46 @@ public class M1PlanetToPlanetMilestoneE2ETest {
         return raw == null ? "" : raw.replace("\"", "");
     }
 
-    private static int readInt(String json, Pattern p, int fallback) {
-        Matcher m = p.matcher(json);
-        return m.find() ? Integer.parseInt(m.group(1)) : fallback;
+    private static int readInt(String json, String field, int fallback) {
+        return Reply.of(json).integerOr(field, fallback);
     }
 
-    private static int[] readTriple(String json, Pattern p) {
-        Matcher m = p.matcher(json);
-        if (!m.find()) {
+    /**
+     * Three coordinate fields of one reply, read by NAME.
+     *
+     * <p>The regex this replaces matched all three in one expression — {@code
+     * "seatX":…,"seatY":…,"seatZ":…} — so it held only while the producer kept them adjacent and in
+     * that order, and answered "no seat" the moment anything was written between them.</p>
+     */
+    private static int[] readTriple(String json, String xField, String yField, String zField) {
+        Reply reply = Reply.of(json);
+        if (!reply.has(xField) || !reply.has(yField) || !reply.has(zField)) {
             return null;
         }
-        return new int[]{Integer.parseInt(m.group(1)), Integer.parseInt(m.group(2)),
-                Integer.parseInt(m.group(3))};
+        return new int[]{reply.integer(xField), reply.integer(yField), reply.integer(zField)};
     }
 
-    private static double[] readTripleD(String json, Pattern p) {
-        Matcher m = p.matcher(json);
-        if (!m.find()) {
+    /** A slot-dim list as the comma-joined text the membership checks here are written against. */
+    private static String joinInts(int[] values) {
+        StringBuilder out = new StringBuilder();
+        for (int i = 0; i < values.length; i++) {
+            if (i > 0) {
+                out.append(',');
+            }
+            out.append(values[i]);
+        }
+        return out.toString();
+    }
+
+    /** @see #readTriple */
+    private static double[] readTripleD(String json, String xField, String yField, String zField) {
+        Reply reply = Reply.of(json);
+        double x = reply.number(xField);
+        double y = reply.number(yField);
+        double z = reply.number(zField);
+        if (Double.isNaN(x) || Double.isNaN(y) || Double.isNaN(z)) {
             return null;
         }
-        return new double[]{Double.parseDouble(m.group(1)), Double.parseDouble(m.group(2)),
-                Double.parseDouble(m.group(3))};
+        return new double[]{x, y, z};
     }
 }

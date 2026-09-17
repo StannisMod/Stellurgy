@@ -1,5 +1,6 @@
 package zmaster587.advancedRocketry.test.server;
 
+import zmaster587.advancedRocketry.test.Reply;
 import com.github.stannismod.forge.testing.junit.AbstractHeadlessServerTest;
 import org.junit.Test;
 
@@ -29,8 +30,8 @@ import static org.junit.Assert.assertTrue;
  */
 public class ModEntitySpawnResolutionTest extends AbstractHeadlessServerTest {
 
-    private static final Pattern CHECKED = Pattern.compile("\"checked\":(\\d+)");
-    private static final Pattern MISMATCH_COUNT = Pattern.compile("\"mismatchCount\":(\\d+)");
+    private static final String CHECKED = "checked";
+    private static final String MISMATCH_COUNT = "mismatchCount";
 
     /**
      * The floor below which the scan is not evidence. This jar registers ten entities of its own
@@ -44,17 +45,17 @@ public class ModEntitySpawnResolutionTest extends AbstractHeadlessServerTest {
         String report = String.join("\n", client().execute("artest entity registry"));
         assertTrue("the registry probe must answer: " + report, report.contains("\"ok\":true"));
 
-        Matcher scanned = CHECKED.matcher(report);
-        assertTrue("the probe must report how many entities it examined: " + report, scanned.find());
-        int checked = Integer.parseInt(scanned.group(1));
+        Reply scannedReply = Reply.of(report);
+        assertTrue("the probe must report how many entities it examined: " + report, scannedReply.has(CHECKED));
+        int checked = Integer.parseInt(scannedReply.text(CHECKED));
         assertTrue("the scan must cover at least this mod's own entities (saw " + checked
                 + ", expected >= " + MIN_SCANNED + "): " + report, checked >= MIN_SCANNED);
 
-        Matcher mismatches = MISMATCH_COUNT.matcher(report);
-        assertTrue("the probe must report a mismatch count: " + report, mismatches.find());
+        Reply mismatchesReply = Reply.of(report);
+        assertTrue("the probe must report a mismatch count: " + report, mismatchesReply.has(MISMATCH_COUNT));
         assertEquals("every registered entity must resolve back to itself through the spawn path;"
                         + " a listed mismatch is an entity that arrives at the client as another"
                         + " class and corrupts its synced data: " + report,
-                0, Integer.parseInt(mismatches.group(1)));
+                0, Integer.parseInt(mismatchesReply.text(MISMATCH_COUNT)));
     }
 }

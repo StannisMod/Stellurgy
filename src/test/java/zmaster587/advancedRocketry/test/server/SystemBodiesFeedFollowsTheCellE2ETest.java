@@ -1,12 +1,11 @@
 package zmaster587.advancedRocketry.test.server;
 
+import zmaster587.advancedRocketry.test.Reply;
 import org.junit.After;
 import org.junit.Test;
 
 import zmaster587.advancedRocketry.universe.GalaxyGenConfig;
 
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
@@ -64,6 +63,11 @@ public class SystemBodiesFeedFollowsTheCellE2ETest extends AbstractSharedServerT
 
     /** A body a few thousand blocks out, i.e. the geometry a pilot has to fly at to descend. */
     private static final String BODY_LOCAL = "2900 0 -1200";
+
+    /** The feed, as the probe reports it straight off the production packet: one entry per cell. */
+    private static final String FEED = "feed";
+    private static final String SLOT_DIM = "slotDim";
+    private static final String BODY_COUNT = "bodyCount";
 
     private String exec(String cmd) throws Exception {
         return String.join("\n", client().execute(cmd));
@@ -147,20 +151,22 @@ public class SystemBodiesFeedFollowsTheCellE2ETest extends AbstractSharedServerT
      * world is not in the feed" are the two halves a blank sky splits into.
      */
     private static int feedBodyCount(String json, int slotDim) {
-        Matcher m = Pattern.compile("\\{\"slotDim\":" + slotDim + ",\"bodyCount\":(\\d+)")
-                .matcher(json);
-        return m.find() ? Integer.parseInt(m.group(1)) : -1;
+        for (String entry : Reply.of("the system-bodies feed", json).objectArray(FEED)) {
+            Reply cell = Reply.of("one feed entry", entry);
+            if (cell.integerOr(SLOT_DIM, Integer.MIN_VALUE) == slotDim) {
+                return cell.integerOr(BODY_COUNT, -1);
+            }
+        }
+        return -1;
     }
 
     private static int jsonInt(String json, String field) {
-        Matcher m = Pattern.compile("\"" + Pattern.quote(field) + "\":(-?\\d+)").matcher(json);
-        assertTrue("probe response carries no numeric \"" + field + "\": " + json, m.find());
-        return Integer.parseInt(m.group(1));
+        assertTrue("probe response carries no numeric \"" + field + "\": " + json, Reply.of(json).has(field));
+        return Reply.of(json).integer(field);
     }
 
     private static String jsonString(String json, String field) {
-        Matcher m = Pattern.compile("\"" + Pattern.quote(field) + "\":\"([^\"]*)\"").matcher(json);
-        assertTrue("probe response carries no string \"" + field + "\": " + json, m.find());
-        return m.group(1);
+        assertTrue("probe response carries no string \"" + field + "\": " + json, Reply.of(json).has(field));
+        return Reply.of(json).text(field);
     }
 }

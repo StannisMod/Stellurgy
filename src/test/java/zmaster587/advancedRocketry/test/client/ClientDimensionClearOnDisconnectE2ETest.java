@@ -15,8 +15,6 @@ import zmaster587.advancedRocketry.test.Events;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
@@ -142,33 +140,17 @@ public class ClientDimensionClearOnDisconnectE2ETest {
         return ClientEvents.of(clientHarness.bot());
     }
 
-    /**
-     * Wait for a record of {@code type} that CARRIES {@code needle}, failing with the whole chain
-     * that DID happen.
-     *
-     * <p>{@code needle} must end at a field boundary ({@code "dim":9701,}): a payload's numbers are
-     * not delimited on the right, so a needle without the comma matches every value it is a prefix
-     * of.</p>
-     */
-    private String awaitRecordCarrying(Events events, long mark, String type, String needle,
-                                       String what, int tickBudget) throws Exception {
-        String reply = "";
-        for (int waited = 0; waited <= tickBudget; waited += 5) {
-            reply = events.since(mark, type);
-            if (Events.countRecords(reply, needle) > 0) {
-                return reply;
-            }
-            clientHarness.bot().waitTicks(5);
-        }
-        throw new AssertionError(what + " — no `" + type + "` carrying " + needle + " was recorded"
-                + " within " + tickBudget + " ticks. What DID happen since the mark: "
-                + Events.typesOf(events.since(mark)) + " | raw: " + reply);
-    }
-
     /** The first integer {@code field} of a {@code since} reply, or {@code Integer.MIN_VALUE}. */
     private static int firstInt(String reply, String field) {
-        Matcher m = Pattern.compile("\"" + field + "\":(-?\\d+)").matcher(String.valueOf(reply));
-        return m.find() ? Integer.parseInt(m.group(1)) : Integer.MIN_VALUE;
+        String first = Events.firstField(reply, field);
+        if (first == null || first.isEmpty()) {
+            return Integer.MIN_VALUE;
+        }
+        try {
+            return Integer.parseInt(first.trim());
+        } catch (NumberFormatException notANumber) {
+            return Integer.MIN_VALUE;
+        }
     }
 
     /**
@@ -196,10 +178,10 @@ public class ClientDimensionClearOnDisconnectE2ETest {
         // waited for "a count above zero", which a build that synced one of the two would satisfy —
         // and the contract below ("the registry is cleared") would then be measured on a registry
         // smaller than the fixture.
-        awaitRecordCarrying(client, 0L, "client_dim_registered", "\"dim\":" + DIM_A + ",",
+        client.awaitField(0L, "client_dim_registered", "dim", DIM_A,
                 "a joining client must be told the server's planets: PlanetA (" + DIM_A + ")",
                 LINK_BUDGET_TICKS);
-        awaitRecordCarrying(client, 0L, "client_dim_registered", "\"dim\":" + DIM_B + ",",
+        client.awaitField(0L, "client_dim_registered", "dim", DIM_B,
                 "a joining client must be told the server's planets: PlanetB (" + DIM_B + ")",
                 LINK_BUDGET_TICKS);
         int before = clientArDimCount();

@@ -1,5 +1,6 @@
 package zmaster587.advancedRocketry.test.server;
 
+import zmaster587.advancedRocketry.test.Reply;
 import com.github.stannismod.forge.testing.junit.AbstractHeadlessServerTest;
 import com.github.stannismod.forge.testing.server.RealDedicatedServerHarness;
 import org.junit.After;
@@ -26,7 +27,7 @@ import static org.junit.Assert.assertTrue;
  */
 public class SatelliteIdChipPersistenceTest {
 
-    private static final Pattern ID = Pattern.compile("\"id\":(\\d+)");
+    private static final String ID = "id";
 
     private Path workDir;
     private RealDedicatedServerHarness firstBoot;
@@ -55,9 +56,9 @@ public class SatelliteIdChipPersistenceTest {
                 "artest satellite create 0 composition 200 4000 2048"));
         assertTrue("satellite create failed on first boot: " + create,
                 create.contains("\"ok\":true"));
-        Matcher m = ID.matcher(create);
-        assertTrue("create response missing satellite id: " + create, m.find());
-        long satId = Long.parseLong(m.group(1));
+        Reply mReply = Reply.of(create);
+        assertTrue("create response missing satellite id: " + create, mReply.has(ID));
+        long satId = Long.parseLong(mReply.text(ID));
 
         String preStop = String.join("\n", firstBoot.client().execute(
                 "artest satellite info 0 " + satId));

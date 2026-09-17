@@ -6,6 +6,7 @@ import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import zmaster587.advancedRocketry.test.Reply;
 import zmaster587.advancedRocketry.test.FixtureSite;
 
 import static org.junit.Assert.assertEquals;
@@ -136,15 +137,14 @@ public class ShieldPriorityGroupControlTest extends AbstractSharedServerTest {
 
     private int readPriority(int x, int z) throws Exception {
         String json = read(x, z);
-        Matcher m = Pattern.compile("\"priority\":(-?\\d+)").matcher(json);
-        assertTrue("no priority in probe response: " + json, m.find());
-        return Integer.parseInt(m.group(1));
+        Reply mReply = Reply.of(json);
+        assertTrue("no priority in probe response: " + json, mReply.has("priority"));
+        return mReply.integer("priority");
     }
 
     private static String readString(String json, String key) {
-        Matcher m = Pattern.compile("\"" + key + "\":\"([^\"]*)\"").matcher(json);
-        assertTrue("no " + key + " field in: " + json, m.find());
-        return m.group(1);
+        assertTrue("no " + key + " field in: " + json, Reply.of(json).has(key));
+        return Reply.of(json).text(key);
     }
 
     private void place(String block, int x, int z) throws Exception {

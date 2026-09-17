@@ -1,5 +1,6 @@
 package zmaster587.advancedRocketry.test.server;
 
+import zmaster587.advancedRocketry.test.Reply;
 import org.junit.Test;
 
 import java.util.regex.Matcher;
@@ -34,9 +35,8 @@ import static org.junit.Assert.assertTrue;
  */
 public class RocketRequireFuelDisableAssemblesTest extends AbstractSharedServerTest {
 
-    private static final Pattern BUILDER_POS =
-            Pattern.compile("\"builderPos\":\\[(-?\\d+),(-?\\d+),(-?\\d+)]");
-    private static final Pattern STATUS = Pattern.compile("\"status\":\"([A-Z_]+)\"");
+    private static final String BUILDER_POS = "builderPos";
+    private static final String STATUS = "status";
 
     private String cmd(String c) throws Exception {
         return String.join("\n", client().execute(c));
@@ -58,15 +58,15 @@ public class RocketRequireFuelDisableAssemblesTest extends AbstractSharedServerT
                 "the craft is built and flown in this volume");
         String fixture = cmd("artest fixture rocket 0 " + baseX + " " + baseY + " " + baseZ + " simple");
         assertTrue("fixture build failed: " + fixture, fixture.contains("\"ok\":true"));
-        Matcher bp = BUILDER_POS.matcher(fixture);
-        assertTrue("no builderPos: " + fixture, bp.find());
+        int[] bp = Reply.of(fixture).blockPos(BUILDER_POS);
+        assertTrue("no builderPos: " + fixture, bp != null);
         return cmd("artest rocket assemble 0 "
-                + bp.group(1) + " " + bp.group(2) + " " + bp.group(3));
+                + bp[0] + " " + bp[1] + " " + bp[2]);
     }
 
     private static String status(String assembleResponse) {
-        Matcher m = STATUS.matcher(assembleResponse);
-        return m.find() ? m.group(1) : "<none>";
+        Reply mReply = Reply.of(assembleResponse);
+        return mReply.has(STATUS) ? mReply.text(STATUS) : "<none>";
     }
 
     @Test

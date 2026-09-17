@@ -254,15 +254,56 @@ public final class Events {
     }
 
     /**
-     * How many RECORDS in a {@code since} reply carry {@code needle} — a payload fragment such as
-     * {@code "accepted":false}.
+     * How many RECORDS in a {@code since} reply carry {@code field} with this value, compared as
+     * text — the counting sibling of {@link #anyRecordHas}.
+     *
+     * <p><b>This is the form to reach for.</b> The field read is structural: it survives a producer
+     * adding a field, reordering two, or changing how gson renders one. Its substring cousin below
+     * survives none of those, and when it breaks it answers ZERO — a count, which reads as a finding
+     * about the world rather than as a reader that stopped matching.</p>
+     */
+    public static int countRecords(String sinceReply, String field, String value) {
+        int n = 0;
+        for (JsonElement record : eventsOf(sinceReply)) {
+            String seen = primitive(record.getAsJsonObject(), field);
+            if (seen != null && seen.equals(value)) {
+                n++;
+            }
+        }
+        return n;
+    }
+
+    /**
+     * How many RECORDS in a {@code since} reply carry {@code field} at all, whatever its value.
+     *
+     * <p>For the question a needle like {@code "\"reason\":"} was asking: not <i>which</i> reason,
+     * but whether the producer wrote one. Ask it by NAME — the substring form also matched a
+     * {@code reason} appearing inside some other field's text.</p>
+     */
+    public static int countRecordsWithField(String sinceReply, String field) {
+        int n = 0;
+        for (JsonElement record : eventsOf(sinceReply)) {
+            if (primitive(record.getAsJsonObject(), field) != null) {
+                n++;
+            }
+        }
+        return n;
+    }
+
+    /**
+     * How many RECORDS in a {@code since} reply CONTAIN {@code needle} anywhere in their own JSON.
+     *
+     * <p><b>The name says {@code Containing} on purpose: this reads a RENDERING.</b> It pins the
+     * writer's field order and formatting, so it is for the one question the two verbs above cannot
+     * express — a fragment that is genuinely not one field's value — and for nothing else. Prefer
+     * {@link #countRecords(String, String, String)} or {@link #countRecordsWithField}.</p>
      *
      * <p>Matched against each record's own JSON and nothing else. It used to be matched against the
      * reply split on the {@code seq} prefix, which included the ENVELOPE — and the envelope carries
      * the {@code instruments} array, so a needle naming an observation point counted a record that
      * did not exist.</p>
      */
-    public static int countRecords(String sinceReply, String needle) {
+    public static int countRecordsContaining(String sinceReply, String needle) {
         int n = 0;
         for (JsonElement record : eventsOf(sinceReply)) {
             if (record.toString().contains(needle)) {
@@ -316,7 +357,12 @@ public final class Events {
     }
 
     /**
-     * The records carrying EVERY one of {@code needles}, oldest first.
+     * The records whose own JSON CONTAINS every one of {@code needles}, oldest first.
+     *
+     * <p><b>{@code Containing} is in the name because this matches a RENDERING</b>, and a rendering
+     * is the writer's field order and formatting rather than the contract. Where a needle is really
+     * one field's value, {@link #countRecords(String, String, String)} and {@link #anyRecordHas}
+     * ask for it by name and survive the producer changing shape.</p>
      *
      * <p>The verb seven classes had grown a private copy of, each splitting the reply on the
      * envelope's own prefix. Two of the copies carried a hand-rolled guard against counting the
@@ -328,7 +374,25 @@ public final class Events {
      * this ship AND this verdict, and a whole-reply {@code contains} is satisfied by two different
      * records, or by one record's two different moments.</p>
      */
-    public static List<String> recordsWithAll(String sinceReply, String... needles) {
+    /**
+     * The records carrying {@code field} with this value, oldest first — the filtering sibling of
+     * {@link #anyRecordHas}, and the form to reach for when a needle was really one field's value.
+     *
+     * <p>Each comes back as its own JSON text, so a caller reads a field off it with {@link #number}
+     * or {@link #text} and prints the whole record in a failure message.</p>
+     */
+    public static List<String> recordsWhere(String sinceReply, String field, String value) {
+        List<String> out = new ArrayList<>();
+        for (JsonElement record : eventsOf(sinceReply)) {
+            String seen = primitive(record.getAsJsonObject(), field);
+            if (seen != null && seen.equals(value)) {
+                out.add(record.toString());
+            }
+        }
+        return out;
+    }
+
+    public static List<String> recordsContainingAll(String sinceReply, String... needles) {
         List<String> out = new ArrayList<>();
         for (String record : records(sinceReply)) {
             boolean all = true;
@@ -345,7 +409,7 @@ public final class Events {
     /** As above, matched without case — for prose. A chat line's capitalisation belongs to the
      *  translation, never to the contract, so a test that pinned it would fail on a language file
      *  edit that broke nothing. */
-    public static List<String> recordsWithAllIgnoringCase(String sinceReply, String... needles) {
+    public static List<String> recordsContainingAllIgnoringCase(String sinceReply, String... needles) {
         List<String> out = new ArrayList<>();
         for (String record : records(sinceReply)) {
             String lower = record.toLowerCase(java.util.Locale.ROOT);
@@ -585,8 +649,36 @@ public final class Events {
     /** As above, driving {@code stimulus} between reads — see {@link Stimulus}. */
     public String awaitCarrying(long mark, String type, String needle, String what, int tickBudget,
                                 Stimulus stimulus) throws Exception {
-        return awaitMatching(mark, type, reply -> countRecords(reply, needle) > 0,
+        return awaitMatching(mark, type, reply -> countRecordsContaining(reply, needle) > 0,
                 "carrying " + needle, what, tickBudget, stimulus);
+    }
+
+    /**
+     * As {@link #awaitCarrying}, answering the RECORD that satisfied the wait rather than the REPLY
+     * it arrived in.
+     *
+     * <p><b>This is the form to take when the caller wants a FIELD of what happened.</b> Every wait
+     * in this class answers the whole {@code events since} envelope — an object whose own fields are
+     * {@code ok}, {@code count}, {@code instruments} and {@code events} — so asking it for
+     * {@code dim} is asking the postmark for the letter's address. A regex could not tell the two
+     * apart and did not have to: it matched {@code "dim":4} wherever it sat. A reader that asks by
+     * name gets the truthful answer, which is that the envelope has no {@code dim} — and five
+     * transit scenarios then reported <i>"the arrival was announced but names no dimension"</i>
+     * while printing the arrival, with its dimension, in the same sentence (measured 2026-09-17).</p>
+     *
+     * <p>The LAST matching record, because a wait that expires and one that matched on its first
+     * read see different numbers of them, and the newest is the one the wait was about.</p>
+     */
+    public String awaitRecordCarrying(long mark, String type, String needle, String what,
+                                      int tickBudget) throws Exception {
+        String reply = awaitCarrying(mark, type, needle, what, tickBudget);
+        List<String> matching = recordsContainingAll(reply, needle);
+        if (matching.isEmpty()) {
+            throw new AssertionError(what + " — the wait for a `" + type + "` carrying " + needle
+                    + " returned, yet no record of the reply carries it. This is a reader fault,"
+                    + " not a statement about the world: " + reply);
+        }
+        return matching.get(matching.size() - 1);
     }
 
     /**

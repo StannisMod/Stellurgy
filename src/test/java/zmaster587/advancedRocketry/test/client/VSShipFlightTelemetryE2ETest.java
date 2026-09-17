@@ -16,6 +16,7 @@ import java.util.regex.Pattern;
 import javax.imageio.ImageIO;
 
 import zmaster587.advancedRocketry.test.Events;
+import zmaster587.advancedRocketry.test.Reply;
 import zmaster587.advancedRocketry.test.FixtureSite;
 
 import static org.junit.Assert.assertNotNull;
@@ -51,13 +52,12 @@ public class VSShipFlightTelemetryE2ETest extends AbstractSharedVsClientE2ETest 
         return "vs-flight-telemetry";
     }
 
-    private static final Pattern BUILDER_POS =
-            Pattern.compile("\"builderPos\":\\[(-?\\d+),(-?\\d+),(-?\\d+)]");
-    private static final Pattern POS_X = Pattern.compile("\"posX\":(-?[0-9.E\\-]+)");
-    private static final Pattern POS_Y = Pattern.compile("\"posY\":(-?[0-9.E\\-]+)");
-    private static final Pattern POS_Z = Pattern.compile("\"posZ\":(-?[0-9.E\\-]+)");
-    private static final Pattern VEL_Y = Pattern.compile("\"velY\":(-?[0-9.E\\-]+)");
-    private static final Pattern OMEGA = Pattern.compile("\"omega\":(-?[0-9.E\\-]+)");
+    private static final String BUILDER_POS = "builderPos";
+    private static final String POS_X = "posX";
+    private static final String POS_Y = "posY";
+    private static final String POS_Z = "posZ";
+    private static final String VEL_Y = "velY";
+    private static final String OMEGA = "omega";
 
     /**
      * Client ticks the brake is given to act before anything is judged.
@@ -83,20 +83,20 @@ public class VSShipFlightTelemetryE2ETest extends AbstractSharedVsClientE2ETest 
     private static final int HOLD_SAMPLES = 10;
     /** @see #HOLD_SAMPLES */
     private static final int HOLD_TICKS_BETWEEN = 10;
-    private static final Pattern DUMMY_ID = Pattern.compile("\"dummyId\":(-?\\d+)");
-    private static final Pattern CRUISE_FWD = Pattern.compile("\"cruiseForward\":(-?[0-9.E\\-]+)");
-    private static final Pattern CRUISE_RIGHT = Pattern.compile("\"cruiseRight\":(-?[0-9.E\\-]+)");
-    private static final Pattern CRUISE_UP = Pattern.compile("\"cruiseUp\":(-?[0-9.E\\-]+)");
-    private static final Pattern AFC_X = Pattern.compile("\"afcX\":(-?\\d+)");
-    private static final Pattern AFC_Y = Pattern.compile("\"afcY\":(-?\\d+)");
-    private static final Pattern AFC_Z = Pattern.compile("\"afcZ\":(-?\\d+)");
-    private static final Pattern SEAT_X = Pattern.compile("\"seatX\":(-?\\d+)");
-    private static final Pattern SEAT_Y = Pattern.compile("\"seatY\":(-?\\d+)");
-    private static final Pattern SEAT_Z = Pattern.compile("\"seatZ\":(-?\\d+)");
-    private static final Pattern LOCAL_X = Pattern.compile("\"localX\":(-?[0-9.E\\-]+)");
-    private static final Pattern LOCAL_Y = Pattern.compile("\"localY\":(-?[0-9.E\\-]+)");
-    private static final Pattern LOCAL_Z = Pattern.compile("\"localZ\":(-?[0-9.E\\-]+)");
-    private static final Pattern ENTITY_ID = Pattern.compile("\"entityId\":(-?\\d+)");
+    private static final String DUMMY_ID = "dummyId";
+    private static final String CRUISE_FWD = "cruiseForward";
+    private static final String CRUISE_RIGHT = "cruiseRight";
+    private static final String CRUISE_UP = "cruiseUp";
+    private static final String AFC_X = "afcX";
+    private static final String AFC_Y = "afcY";
+    private static final String AFC_Z = "afcZ";
+    private static final String SEAT_X = "seatX";
+    private static final String SEAT_Y = "seatY";
+    private static final String SEAT_Z = "seatZ";
+    private static final String LOCAL_X = "localX";
+    private static final String LOCAL_Y = "localY";
+    private static final String LOCAL_Z = "localZ";
+    private static final String ENTITY_ID = "entityId";
 
     /** The deck-capture recorder's instrument name — what proves an EMPTY release log was listening. */
     private static final String DECK_INSTRUMENT = "deck_capture_events";
@@ -486,8 +486,8 @@ public class VSShipFlightTelemetryE2ETest extends AbstractSharedVsClientE2ETest 
         scenario().requireArranged("the ship-frame check must MEASURE the two frames for this crew"
                 + " member before their agreement can mean anything: " + rolledStats,
                 !rolledStats.contains("\"available\":false"));
-        double tcUp = readDouble(rolledStats, Pattern.compile("\"upDisagreement\":(-?[0-9.E\\-]+)"));
-        double tcFwd = readDouble(rolledStats, Pattern.compile("\"fwdDisagreement\":(-?[0-9.E\\-]+)"));
+        double tcUp = readDouble(rolledStats, "upDisagreement");
+        double tcFwd = readDouble(rolledStats, "fwdDisagreement");
         System.out.println("[tier2][TC] rolled-deck frame disagreement up=" + tcUp + " fwd=" + tcFwd);
         assertTrue("the movement frame and the camera frame must be ONE rotation on a 75-degree deck, so "
                 + "the keys/mouse inversion is the aim-frame (Path B), not a frame-source split "
@@ -597,7 +597,7 @@ public class VSShipFlightTelemetryE2ETest extends AbstractSharedVsClientE2ETest 
         // mislabel the settle — it moves the baseline the grounded-deck claim is measured from.
         zmaster587.advancedRocketry.test.ShipIdentity.assertAboardShip(onDeck, scenarioShipId,
                 "the body must have settled on the deck of the ship this scenario built");
-        double deckY = readDouble(onDeck, Pattern.compile("\"playerY\":(-?[0-9.E\\-]+)"));
+        double deckY = readDouble(onDeck, "playerY");
         assertTrue("a body on the deck must be resolved in the ship frame: "
                 + exec("artest vs would-take-over 0 " + standId),
                 exec("artest vs would-take-over 0 " + standId).contains("\"handles\":true"));
@@ -631,7 +631,7 @@ public class VSShipFlightTelemetryE2ETest extends AbstractSharedVsClientE2ETest 
                 matchingRecords(releases, "\"e\":" + standId + ",", "steppedOntoTerrain") == 0);
 
         String afterFloor = exec("artest vs player-ship-data 0 " + standId);
-        double yAfter = readDouble(afterFloor, Pattern.compile("\"playerY\":(-?[0-9.E\\-]+)"));
+        double yAfter = readDouble(afterFloor, "playerY");
         String handles = exec("artest vs would-take-over 0 " + standId);
         System.out.println("[tier2] grounded-deck: deckY=" + deckY + " afterFloor y=" + yAfter
                 + " floorTop=" + (fy + 1) + " would-take-over=" + handles);
@@ -820,10 +820,9 @@ public class VSShipFlightTelemetryE2ETest extends AbstractSharedVsClientE2ETest 
                 seat.contains("\"seatFound\":true"));
         String mountInfo = exec("artest vs seat-mount-at 0 " + readInt(seat, SEAT_X) + " "
                 + readInt(seat, SEAT_Y) + " " + readInt(seat, SEAT_Z));
-        Matcher dm = DUMMY_ID.matcher(mountInfo);
-        assertTrue("seat-mount-at must report a dummy id: " + mountInfo, dm.find());
+        int dummyId = Reply.of("artest vs seat-mount-at", mountInfo).integer(DUMMY_ID);
         assertTrue("bot must mount the seat dummy: " + mountInfo,
-                exec("artest player mount-entity " + dm.group(1)).contains("\"mounted\":true"));
+                exec("artest player mount-entity " + dummyId).contains("\"mounted\":true"));
         bot().waitTicks(10); // let the mount replicate and the client recognise the pilot seat
         return ship;
     }
@@ -1020,11 +1019,12 @@ public class VSShipFlightTelemetryE2ETest extends AbstractSharedVsClientE2ETest 
      * string-valued fields and answers {@code null} for a record's own tick.
      */
     private static String lastNumericField(String sinceReply, String field) {
-        Matcher m = Pattern.compile("\"" + field + "\":(-?[0-9.E\\-]+)")
-                .matcher(String.valueOf(sinceReply));
         String last = null;
-        while (m.find()) {
-            last = m.group(1);
+        for (String record : Events.records(String.valueOf(sinceReply))) {
+            double value = Events.number(record, field);
+            if (!Double.isNaN(value)) {
+                last = Events.text(record, field);
+            }
         }
         return last == null ? "none" : last;
     }
@@ -1040,14 +1040,12 @@ public class VSShipFlightTelemetryE2ETest extends AbstractSharedVsClientE2ETest 
      * mistaken for "the cursor was at zero".</p>
      */
     private static double maxAbsField(String sinceReply, String field) {
-        Matcher m = Pattern.compile("\"" + field + "\":(-?[0-9.E\\-]+)")
-                .matcher(String.valueOf(sinceReply));
         double worst = -1.0;
-        while (m.find()) {
-            try {
-                worst = Math.max(worst, Math.abs(Double.parseDouble(m.group(1))));
-            } catch (NumberFormatException ignored) {
-                // A field that is not a number is not this reading; the -1 below still says so.
+        for (String record : Events.records(String.valueOf(sinceReply))) {
+            double value = Events.number(record, field);
+            if (!Double.isNaN(value)) {
+                // A field that is not a number is not this reading; the -1 above still says so.
+                worst = Math.max(worst, Math.abs(value));
             }
         }
         return worst;
@@ -1107,16 +1105,14 @@ public class VSShipFlightTelemetryE2ETest extends AbstractSharedVsClientE2ETest 
         return crewId;
     }
 
-    private double readDouble(String json, Pattern p) {
-        Matcher m = p.matcher(json);
-        assertTrue("expected a number in: " + json, m.find());
-        return Double.parseDouble(m.group(1));
+    private double readDouble(String json, String field) {
+        double value = Reply.of(json).number(field);
+        assertTrue("expected a number `" + field + "` in: " + json, !Double.isNaN(value));
+        return value;
     }
 
-    private int readInt(String json, Pattern p) {
-        Matcher m = p.matcher(json);
-        assertTrue("expected an integer in: " + json, m.find());
-        return Integer.parseInt(m.group(1));
+    private int readInt(String json, String field) {
+        return Reply.of(json).integer(field);
     }
 
     private String assembleFixture(FixtureSite site) throws Exception {
@@ -1137,8 +1133,8 @@ public class VSShipFlightTelemetryE2ETest extends AbstractSharedVsClientE2ETest 
                 "the hull, the deck a body rides, and the air the craft rolls and climbs through");
         String fixture = exec("artest fixture rocket 0 " + baseX + " " + baseY + " " + baseZ + " " + VARIANT);
         assertTrue("fixture (" + VARIANT + ") failed: " + fixture, fixture.contains("\"ok\":true"));
-        Matcher bp = BUILDER_POS.matcher(fixture);
-        assertTrue("fixture missing builderPos: " + fixture, bp.find());
-        return exec("artest rocket assemble 0 " + bp.group(1) + " " + bp.group(2) + " " + bp.group(3));
+        int[] bp = Reply.of(fixture).blockPos(BUILDER_POS);
+        assertTrue("fixture missing builderPos: " + fixture, bp != null);
+        return exec("artest rocket assemble 0 " + bp[0] + " " + bp[1] + " " + bp[2]);
     }
 }

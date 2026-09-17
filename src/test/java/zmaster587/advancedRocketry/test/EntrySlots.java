@@ -34,7 +34,7 @@ public final class EntrySlots {
         String exec(String command) throws Exception;
     }
 
-    private static final Pattern DIMS = Pattern.compile("\"dims\":\\[([^\\]]*)]");
+    private static final String DIMS = "dims";
 
     /**
      * Queue a ship load in every slot world the {@code entry-setup} reply named.
@@ -51,16 +51,13 @@ public final class EntrySlots {
 
     /** The slot dimension ids an {@code entry-setup} reply reported, in the order it reported them. */
     public static List<String> dimsOf(String entrySetupReply) {
-        Matcher m = DIMS.matcher(String.valueOf(entrySetupReply));
+        Reply setup = Reply.of("artest space entry-setup", String.valueOf(entrySetupReply));
         assertTrue("the entry arrangement named no slot worlds, so nothing can be kept loaded and"
                 + " every wait below would run its whole budget against a ship nobody is loading: "
-                + entrySetupReply, m.find());
+                + entrySetupReply, setup.has(DIMS));
         List<String> dims = new ArrayList<>();
-        for (String raw : m.group(1).split(",")) {
-            String dim = raw.trim();
-            if (!dim.isEmpty()) {
-                dims.add(dim);
-            }
+        for (int dim : setup.intArray(DIMS)) {
+            dims.add(String.valueOf(dim));
         }
         assertTrue("the entry arrangement reported an EMPTY slot list: " + entrySetupReply,
                 !dims.isEmpty());

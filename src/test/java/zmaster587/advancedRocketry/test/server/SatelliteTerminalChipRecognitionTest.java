@@ -1,5 +1,6 @@
 package zmaster587.advancedRocketry.test.server;
 
+import zmaster587.advancedRocketry.test.Reply;
 import org.junit.Test;
 
 import java.util.regex.Matcher;
@@ -68,13 +69,13 @@ import static zmaster587.advancedRocketry.test.server.WorldCommandFixtures.exec;
  */
 public class SatelliteTerminalChipRecognitionTest extends AbstractSharedServerTest {
 
-    private static final Pattern STATUS = Pattern.compile("\"status\":(-?\\d+)");
-    private static final Pattern POWER_PER_TICK = Pattern.compile("\"powerPerTick\":(-?\\d+)");
-    private static final Pattern MAX_DATA = Pattern.compile("\"maxData\":(-?\\d+)");
-    private static final Pattern SAT_ID = Pattern.compile("\"id\":(-?\\d+)");
-    private static final Pattern PRE_REGISTERED = Pattern.compile("\"preSatRegistered\":(true|false)");
-    private static final Pattern POST_REGISTERED = Pattern.compile("\"postSatRegistered\":(true|false)");
-    private static final Pattern POST_NBT_NULL = Pattern.compile("\"postNbtNull\":(true|false)");
+    private static final String STATUS = "status";
+    private static final String POWER_PER_TICK = "powerPerTick";
+    private static final String MAX_DATA = "maxData";
+    private static final String SAT_ID = "id";
+    private static final String PRE_REGISTERED = "preSatRegistered";
+    private static final String POST_REGISTERED = "postSatRegistered";
+    private static final String POST_NBT_NULL = "postNbtNull";
 
     private static final int CY = FixtureSite.OPEN_AIR_Y;
     private static final int CZ = 13000;
@@ -169,11 +170,11 @@ public class SatelliteTerminalChipRecognitionTest extends AbstractSharedServerTe
         String build = exec("artest satellite-builder build 0 optical");
         assertTrue("optical satellite build failed: " + build,
                 build.contains("\"ok\":true"));
-        Matcher m = SAT_ID.matcher(build);
-        if (!m.find()) {
+        Reply mReply = Reply.of(build);
+        if (!mReply.has(SAT_ID)) {
             return -1L;
         }
-        long satId = Long.parseLong(m.group(1));
+        long satId = Long.parseLong(mReply.text(SAT_ID));
         String load = exec("artest satellite-terminal load-chip 0 " + x + " " + y + " " + z
                 + " " + satId);
         assertTrue("chip load failed: " + load, load.contains("\"ok\":true"));
@@ -189,9 +190,9 @@ public class SatelliteTerminalChipRecognitionTest extends AbstractSharedServerTe
         assertTrue("energy inject must succeed: " + result, result.contains("\"ok\":true"));
     }
 
-    private static String extract(String src, Pattern pattern) {
-        Matcher m = pattern.matcher(src);
-        assertTrue("pattern not found in: " + src, m.find());
-        return m.group(1);
+    private static String extract(String src, String field) {
+        String value = Reply.of(src).text(field);
+        assertTrue("field `" + field + "` not found in: " + src, value != null);
+        return value;
     }
 }

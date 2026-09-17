@@ -1,10 +1,12 @@
 package zmaster587.advancedRocketry.test.server;
 
+import zmaster587.advancedRocketry.test.Reply;
 import org.junit.Test;
 
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import zmaster587.advancedRocketry.test.RocketList;
 import zmaster587.advancedRocketry.test.FixtureSite;
 
 import static org.junit.Assert.assertEquals;
@@ -46,24 +48,22 @@ import static org.junit.Assert.assertTrue;
  */
 public class RocketFlightCycleDepthTest extends AbstractSharedServerTest {
 
-    private static final Pattern BUILDER_POS =
-            Pattern.compile("\"builderPos\":\\[(-?\\d+),(-?\\d+),(-?\\d+)]");
-    private static final Pattern ROCKET_LIST_ID = Pattern.compile("\"id\":(-?\\d+)");
-    private static final Pattern AR_DIMS_ARRAY =
-            Pattern.compile("\"arDimensions\":\\[([^]]*)]");
-    private static final Pattern LAUNCH_COUNT = Pattern.compile("\"launch\":(-?\\d+)");
-    private static final Pattern ORBIT_COUNT = Pattern.compile("\"orbitReached\":(-?\\d+)");
-    private static final Pattern DISMANTLE_COUNT = Pattern.compile("\"dismantle\":(-?\\d+)");
-    private static final Pattern TICKS_EXISTED = Pattern.compile("\"ticksExisted\":(-?\\d+)");
+    private static final String BUILDER_POS = "builderPos";
+    private static final String ROCKET_LIST_ID = "id";
+    private static final String AR_DIMS_ARRAY = "arDimensions";
+    private static final String LAUNCH_COUNT = "launch";
+    private static final String ORBIT_COUNT = "orbitReached";
+    private static final String DISMANTLE_COUNT = "dismantle";
+    private static final String TICKS_EXISTED = "ticksExisted";
 
     private static String ok(java.util.List<String> resp) {
         return String.join("\n", resp);
     }
 
-    private static int parseGroup(Pattern p, String s, String label) {
-        Matcher m = p.matcher(s);
-        if (!m.find()) throw new AssertionError("could not parse " + label + " from: " + s);
-        return Integer.parseInt(m.group(1));
+    private static int parseGroup(String field, String s, String label) {
+        Reply reply = Reply.of(s);
+        assertTrue("could not parse " + label + ": " + s, reply.has(field));
+        return reply.integer(field);
     }
 
     private int buildAndAssemble(FixtureSite site) throws Exception {
@@ -80,22 +80,20 @@ public class RocketFlightCycleDepthTest extends AbstractSharedServerTest {
         String fixture = ok(client().execute(
                 "artest fixture rocket 0 " + baseX + " " + baseY + " " + baseZ + " simple"));
         assertTrue("fixture failed: " + fixture, fixture.contains("\"ok\":true"));
-        Matcher bp = BUILDER_POS.matcher(fixture);
-        assertTrue("fixture missing builderPos: " + fixture, bp.find());
-        int bx = Integer.parseInt(bp.group(1));
-        int by = Integer.parseInt(bp.group(2));
-        int bz = Integer.parseInt(bp.group(3));
+        int[] bp = Reply.of(fixture).blockPos(BUILDER_POS);
+        assertTrue("fixture missing builderPos: " + fixture, bp != null);
+        int bx = bp[0];
+        int by = bp[1];
+        int bz = bp[2];
 
         String assemble = ok(client().execute(
                 "artest rocket assemble 0 " + bx + " " + by + " " + bz));
         assertTrue("assemble failed: " + assemble, assemble.contains("\"ok\":true"));
 
         String list = ok(client().execute("artest rocket list 0"));
-        Matcher rim = ROCKET_LIST_ID.matcher(list);
-        int lastId = -1;
-        while (rim.find()) lastId = Integer.parseInt(rim.group(1));
-        assertTrue("rocket list empty after assemble: " + list, lastId >= 0);
-        return lastId;
+        java.util.List<RocketList.Entry> built = RocketList.of(list);
+        assertTrue("rocket list empty after assemble: " + list, !built.isEmpty());
+        return built.get(built.size() - 1).id;
     }
 
     @Test
@@ -168,13 +166,10 @@ public class RocketFlightCycleDepthTest extends AbstractSharedServerTest {
         // in isInFlight but would skip mission/advancement subscribers.
         // Need a destination dim for the real launch path to succeed.
         String dimList = ok(client().execute("artest dim list"));
-        Matcher arM = AR_DIMS_ARRAY.matcher(dimList);
-        org.junit.Assume.assumeTrue(arM.find());
+        Reply listed = Reply.of("artest dim list", dimList);
+        org.junit.Assume.assumeTrue(listed.has(AR_DIMS_ARRAY));
         int destDim = -1;
-        for (String part : arM.group(1).split(",")) {
-            String t = part.trim();
-            if (t.isEmpty()) continue;
-            int d = Integer.parseInt(t);
+        for (int d : listed.intArray(AR_DIMS_ARRAY)) {
             if (d != 0) { destDim = d; break; }
         }
         org.junit.Assume.assumeTrue(destDim != -1);

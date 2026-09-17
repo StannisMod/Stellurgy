@@ -11,6 +11,7 @@ import org.lwjgl.input.Keyboard;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import zmaster587.advancedRocketry.test.Reply;
 import zmaster587.advancedRocketry.test.Events;
 
 import zmaster587.advancedRocketry.test.Plot;
@@ -54,9 +55,8 @@ public class VSPilotSeatRelogControlE2ETest extends AbstractSharedVsClientE2ETes
         return "vs-pilot-seat-relog-control";
     }
 
-    private static final Pattern BUILDER_POS =
-            Pattern.compile("\"builderPos\":\\[(-?\\d+),(-?\\d+),(-?\\d+)]");
-    private static final Pattern DUMMY_ID = Pattern.compile("\"dummyId\":(-?\\d+)");
+    private static final String BUILDER_POS = "builderPos";
+    private static final String DUMMY_ID = "dummyId";
 
     private static final String VARIANT = "with-pilot-seat";
     // The surveyed-clean ground of the pinned seed. The old 7200/7200 was inside a mountain whose
@@ -142,10 +142,10 @@ public class VSPilotSeatRelogControlE2ETest extends AbstractSharedVsClientE2ETes
         liftClearOfThePad(shipId, PAD_CLEARANCE_BLOCKS);
 
         String mountInfo = exec("artest vs seat-mount 0 id " + shipId);
-        Matcher dm = DUMMY_ID.matcher(mountInfo);
-        scenario().requireArranged("seat-mount must report a dummy id: " + mountInfo, dm.find());
+        Reply dmReply = Reply.of(mountInfo);
+        scenario().requireArranged("seat-mount must report a dummy id: " + mountInfo, dmReply.has(DUMMY_ID));
         long seatMark = clientEvents().mark();
-        String mount = exec("artest player mount-entity " + dm.group(1));
+        String mount = exec("artest player mount-entity " + dmReply.text(DUMMY_ID));
         scenario().requireArranged("bot must mount the seat dummy: " + mount,
                 mount.contains("\"mounted\":true"));
         // The control leg below asks whether the chain works BEFORE the relog; a client that has not
@@ -222,7 +222,7 @@ public class VSPilotSeatRelogControlE2ETest extends AbstractSharedVsClientE2ETes
                         + " way this chain breaks, and it looks exactly like a dead key from the"
                         + " altitude alone. client sends since the mark: " + clientSends
                         + " | " + after,
-                Events.countRecords(clientSends, "\"seat\":\"") > 0);
+                Events.countRecordsWithField(clientSends, "seat") > 0);
         events.await(flyMark, "pilot_input_delivered", "after the relog the restored seat must still"
                 + " hand the pilot's input to the ship's flight computer - a re-seated pilot whose"
                 + " seat no longer resolves its computer is the second way this chain breaks",
@@ -306,15 +306,13 @@ public class VSPilotSeatRelogControlE2ETest extends AbstractSharedVsClientE2ETes
     private String shipPose() {
         try {
             String info = shipInfoById(shipId);
-            Matcher qx = Pattern.compile("\"qx\":(-?[0-9.E\\-]+)").matcher(info);
-            Matcher qz = Pattern.compile("\"qz\":(-?[0-9.E\\-]+)").matcher(info);
-            Matcher py = Pattern.compile("\"posY\":(-?[0-9.E\\-]+)").matcher(info);
-            if (!(qx.find() && qz.find() && py.find())) {
+            Reply pose = Reply.of("artest vs ship-info", info);
+            double ax = pose.number("qx"), az = pose.number("qz"), py = pose.number("posY");
+            if (Double.isNaN(ax) || Double.isNaN(az) || Double.isNaN(py)) {
                 return "NO-POSE-FOR-" + shipId + " " + info.replace('\n', ' ');
             }
-            double ax = Double.parseDouble(qx.group(1)), az = Double.parseDouble(qz.group(1));
             return String.format(java.util.Locale.ROOT, "shipY=%.2f up=%.2f",
-                    Double.parseDouble(py.group(1)), 1.0 - 2.0 * (ax * ax + az * az));
+                    py, 1.0 - 2.0 * (ax * ax + az * az));
         } catch (Exception e) {
             return "ship-pose-failed: " + e;
         }
@@ -342,9 +340,9 @@ public class VSPilotSeatRelogControlE2ETest extends AbstractSharedVsClientE2ETes
         String fixture = exec("artest fixture rocket 0 " + baseX + " " + baseY + " " + baseZ + " " + VARIANT);
         scenario().requireArranged("fixture (" + VARIANT + ") failed: " + fixture,
                 fixture.contains("\"ok\":true"));
-        Matcher bp = BUILDER_POS.matcher(fixture);
-        scenario().requireArranged("fixture missing builderPos: " + fixture, bp.find());
-        return exec("artest rocket assemble 0 " + bp.group(1) + " " + bp.group(2) + " " + bp.group(3));
+        int[] bp = Reply.of(fixture).blockPos(BUILDER_POS);
+        scenario().requireArranged("fixture missing builderPos: " + fixture, bp != null);
+        return exec("artest rocket assemble 0 " + bp[0] + " " + bp[1] + " " + bp[2]);
     }
 
 }

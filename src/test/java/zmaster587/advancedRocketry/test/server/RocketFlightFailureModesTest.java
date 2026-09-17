@@ -1,11 +1,14 @@
 package zmaster587.advancedRocketry.test.server;
 
+import zmaster587.advancedRocketry.test.Reply;
 import org.junit.Assume;
 import org.junit.Test;
 
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import zmaster587.advancedRocketry.test.Events;
+import zmaster587.advancedRocketry.test.RocketList;
 import zmaster587.advancedRocketry.test.FixtureSite;
 
 import static org.junit.Assert.assertEquals;
@@ -36,15 +39,13 @@ import static org.junit.Assert.assertTrue;
  */
 public class RocketFlightFailureModesTest extends AbstractSharedServerTest {
 
-    private static final Pattern BUILDER_POS =
-            Pattern.compile("\"builderPos\":\\[(-?\\d+),(-?\\d+),(-?\\d+)]");
-    private static final Pattern ROCKET_LIST_ID = Pattern.compile("\"id\":(-?\\d+)");
-    private static final Pattern AR_DIMS_ARRAY =
-            Pattern.compile("\"arDimensions\":\\[([^]]*)]");
-    private static final Pattern UUID_FIELD =
-            Pattern.compile("\"uuid\":\"([0-9a-fA-F-]+)\"");
-    private static final Pattern FUEL_AMOUNT =
-            Pattern.compile("\"amount\":(-?\\d+)");
+    private static final String BUILDER_POS = "builderPos";
+    private static final String ROCKET_LIST_ID = "id";
+    private static final String AR_DIMS_ARRAY = "arDimensions";
+    private static final String UUID_FIELD = "uuid";
+    /** The craft's fuels, keyed by the registry's own type names: {@code "fuels":{"ION":{…}, …}}. */
+    private static final String FUELS = "fuels";
+    private static final String FUEL_AMOUNT = "amount";
 
     private static String ok(java.util.List<String> resp) {
         return String.join("\n", resp);
@@ -54,12 +55,9 @@ public class RocketFlightFailureModesTest extends AbstractSharedServerTest {
         String joined = ok(client().execute("artest dim list"));
         Assume.assumeFalse("No AR dimensions registered",
                 joined.contains("\"arDimensions\":[]"));
-        Matcher m = AR_DIMS_ARRAY.matcher(joined);
-        assertTrue("could not parse arDimensions array: " + joined, m.find());
-        for (String part : m.group(1).split(",")) {
-            String t = part.trim();
-            if (t.isEmpty()) continue;
-            int dim = Integer.parseInt(t);
+        Reply dims = Reply.of("artest dim list", joined);
+        assertTrue("could not parse arDimensions array: " + joined, dims.has(AR_DIMS_ARRAY));
+        for (int dim : dims.intArray(AR_DIMS_ARRAY)) {
             if (dim != 0) return dim;
         }
         Assume.assumeTrue("Only overworld is an AR planet", false);
@@ -78,18 +76,16 @@ public class RocketFlightFailureModesTest extends AbstractSharedServerTest {
                 "the craft is built and flown in this volume");
         String fixture = ok(client().execute(
                 "artest fixture rocket 0 " + baseX + " " + baseY + " " + baseZ + " simple"));
-        Matcher bp = BUILDER_POS.matcher(fixture);
-        assertTrue("fixture missing builderPos: " + fixture, bp.find());
-        int bx = Integer.parseInt(bp.group(1));
-        int by = Integer.parseInt(bp.group(2));
-        int bz = Integer.parseInt(bp.group(3));
+        int[] bp = Reply.of(fixture).blockPos(BUILDER_POS);
+        assertTrue("fixture missing builderPos: " + fixture, bp != null);
+        int bx = bp[0];
+        int by = bp[1];
+        int bz = bp[2];
         ok(client().execute("artest rocket assemble 0 " + bx + " " + by + " " + bz));
         String list = ok(client().execute("artest rocket list 0"));
-        Matcher rim = ROCKET_LIST_ID.matcher(list);
-        int lastId = -1;
-        while (rim.find()) lastId = Integer.parseInt(rim.group(1));
-        assertTrue("no rocket after assemble: " + list, lastId >= 0);
-        return lastId;
+        java.util.List<RocketList.Entry> built = RocketList.of(list);
+        assertTrue("no rocket after assemble: " + list, !built.isEmpty());
+        return built.get(built.size() - 1).id;
     }
 
     @Test
@@ -99,8 +95,8 @@ public class RocketFlightFailureModesTest extends AbstractSharedServerTest {
         // and findRocket(id) returns null.
         int id = buildAndAssemble(FixtureSite.openAir(0, 7000, 500));
         String infoBefore = ok(client().execute("artest rocket info " + id));
-        Matcher um = UUID_FIELD.matcher(infoBefore);
-        assertTrue("no uuid in info: " + infoBefore, um.find());
+        assertTrue("no uuid in info: " + infoBefore,
+                Reply.of("artest rocket info", infoBefore).has(UUID_FIELD));
 
         String explodeResp = ok(client().execute("artest rocket explode " + id));
         assertTrue("explode probe must succeed: " + explodeResp,
@@ -136,9 +132,15 @@ public class RocketFlightFailureModesTest extends AbstractSharedServerTest {
 
         // Verify fuel is actually zero.
         String fuelResp = ok(client().execute("artest rocket fuel " + id));
-        Matcher fm = FUEL_AMOUNT.matcher(fuelResp);
-        while (fm.find()) {
-            assertEquals("all fuel types must be drained", 0, Integer.parseInt(fm.group(1)));
+        // Every fuel type the probe reports. The types are the registry's, so they are asked for as
+        // "every entry" of the reply's `fuels` object rather than by name; the old form walked the
+        // rendered reply with a regex and would have passed silently on a reply that named none.
+        Reply fuels = Reply.of("artest rocket fuel", fuelResp);
+        assertTrue("the fuel probe must report the craft's fuel types at all: " + fuelResp,
+                fuels.has(FUELS));
+        for (String perType : fuels.objectValues(FUELS)) {
+            assertEquals("all fuel types must be drained: " + fuelResp, 0.0,
+                    Reply.of("one fuel entry", perType).numberOr(FUEL_AMOUNT, Double.NaN), 0.0);
         }
 
         // Tick a few times — production must NOT explode.

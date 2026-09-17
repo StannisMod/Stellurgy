@@ -1,5 +1,6 @@
 package zmaster587.advancedRocketry.test.server;
 
+import zmaster587.advancedRocketry.test.Reply;
 import org.junit.Test;
 
 import java.util.regex.Matcher;
@@ -28,10 +29,10 @@ import static zmaster587.advancedRocketry.test.server.WorldCommandFixtures.exec;
 public class AltitudeControllerRedstoneSelectsLowAltitudeTest extends AbstractSharedServerTest {
 
     private static final int SPACE_DIM = -2;
-    private static final Pattern STATION_ID = Pattern.compile("\"id\":(-?\\d+)");
-    private static final Pattern SPAWN_X = Pattern.compile("\"spawnX\":(-?\\d+)");
-    private static final Pattern SPAWN_Z = Pattern.compile("\"spawnZ\":(-?\\d+)");
-    private static final Pattern TARGET_ORBITAL = Pattern.compile("\"targetOrbitalDistance\":(-?\\d+)");
+    private static final String STATION_ID = "id";
+    private static final String SPAWN_X = "spawnX";
+    private static final String SPAWN_Z = "spawnZ";
+    private static final String TARGET_ORBITAL = "targetOrbitalDistance";
 
     @Test
     public void redstoneOnWithNoSignalSelectsLowAltitudeNotFloored190() throws Exception {
@@ -68,9 +69,9 @@ public class AltitudeControllerRedstoneSelectsLowAltitudeTest extends AbstractSh
                 target < 190);
     }
 
-    private static int extract(Pattern p, String s) {
-        Matcher m = p.matcher(s);
-        assertTrue("pattern " + p + " not found in: " + s, m.find());
-        return Integer.parseInt(m.group(1));
+    private static int extract(String field, String s) {
+        Reply reply = Reply.of(s);
+        assertTrue("field `" + field + "` not found in: " + s, reply.has(field));
+        return reply.integer(field);
     }
 }

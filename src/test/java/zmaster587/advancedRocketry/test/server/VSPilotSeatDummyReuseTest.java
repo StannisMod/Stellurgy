@@ -1,5 +1,6 @@
 package zmaster587.advancedRocketry.test.server;
 
+import zmaster587.advancedRocketry.test.Reply;
 import org.junit.Test;
 
 import java.util.regex.Matcher;
@@ -22,7 +23,7 @@ import static org.junit.Assert.assertTrue;
  */
 public class VSPilotSeatDummyReuseTest extends AbstractSharedServerTest {
 
-    private static final Pattern DUMMY_ID = Pattern.compile("\"dummyId\":(-?\\d+)");
+    private static final String DUMMY_ID = "dummyId";
 
     @Test
     public void theSeatMountProbeReusesTheSeatsSingleDummy() throws Exception {
@@ -53,8 +54,8 @@ public class VSPilotSeatDummyReuseTest extends AbstractSharedServerTest {
     }
 
     private int dummyId(String json) {
-        Matcher m = DUMMY_ID.matcher(json);
-        assertTrue("expected a dummyId in: " + json, m.find());
-        return Integer.parseInt(m.group(1));
+        Reply mReply = Reply.of(json);
+        assertTrue("expected a dummyId in: " + json, mReply.has(DUMMY_ID));
+        return Integer.parseInt(mReply.text(DUMMY_ID));
     }
 }

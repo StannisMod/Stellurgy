@@ -1,5 +1,6 @@
 package zmaster587.advancedRocketry.test.server;
 
+import zmaster587.advancedRocketry.test.Reply;
 import org.junit.Test;
 
 import java.util.LinkedHashMap;
@@ -56,16 +57,15 @@ public class MachineDomainSmokeSuite extends AbstractSharedServerTest {
 
     // ── Shared regex patterns ─────────────────────────────────────────────
 
-    private static final Pattern ENERGY_STORED = Pattern.compile("\"energyStored\":(\\d+)");
-    private static final Pattern ENERGY_MAX = Pattern.compile("\"energyMax\":(\\d+)");
-    private static final Pattern TICKED = Pattern.compile("\"ticked\":(\\d+)");
-    private static final Pattern MULTIBLOCK_SAWBLADE_POS =
-            Pattern.compile("\"sawBladePos\":\\[(-?\\d+),(-?\\d+),(-?\\d+)]");
-    private static final Pattern VENT_SEALED = Pattern.compile("\"isSealed\":(true|false)");
-    private static final Pattern VENT_BLOB_SIZE = Pattern.compile("\"blobSize\":(-?\\d+)");
-    private static final Pattern VENT_FLUID_AMT = Pattern.compile("\"fluidAmount\":(\\d+)");
-    private static final Pattern VENT_BREATHABLE = Pattern.compile("\"breathable\":(true|false)");
-    private static final Pattern PLANET_DENSITY = Pattern.compile("\"atmosphereDensity\":(-?\\d+)");
+    private static final String ENERGY_STORED = "energyStored";
+    private static final String ENERGY_MAX = "energyMax";
+    private static final String TICKED = "ticked";
+    private static final String MULTIBLOCK_SAWBLADE_POS = "sawBladePos";
+    private static final String VENT_SEALED = "isSealed";
+    private static final String VENT_BLOB_SIZE = "blobSize";
+    private static final String VENT_FLUID_AMT = "fluidAmount";
+    private static final String VENT_BREATHABLE = "breathable";
+    private static final String PLANET_DENSITY = "atmosphereDensity";
 
     // ── Machine block-id -> expected Tile* short class name ─
 
@@ -145,8 +145,8 @@ public class MachineDomainSmokeSuite extends AbstractSharedServerTest {
                 failures.append(blockId).append("=TICK_FAILED(").append(tick).append(");\n");
                 continue;
             }
-            Matcher tm = TICKED.matcher(tick);
-            if (!tm.find() || Integer.parseInt(tm.group(1)) != 20) {
+            Reply tmReply = Reply.of(tick);
+            if (!tmReply.has(TICKED) || Integer.parseInt(tmReply.text(TICKED)) != 20) {
                 failures.append(blockId).append("=INCOMPLETE_TICK(").append(tick).append(");\n");
                 continue;
             }
@@ -159,8 +159,7 @@ public class MachineDomainSmokeSuite extends AbstractSharedServerTest {
                 continue;
             }
 
-            Pattern p = Pattern.compile("\"" + tileClass + "\":(-?\\d+|\"[^\"]+\")");
-            if (!p.matcher(summary).find()) {
+            if (!Reply.of("artest machine recipes-summary", summary).has(tileClass)) {
                 failures.append(blockId).append("=NOT_IN_RECIPE_SUMMARY;\n");
                 continue;
             }
@@ -196,11 +195,10 @@ public class MachineDomainSmokeSuite extends AbstractSharedServerTest {
         assertTrue("fixture machine cutting failed: " + fixture,
                 fixture.contains("\"ok\":true"));
 
-        Matcher m = MULTIBLOCK_SAWBLADE_POS.matcher(fixture);
-        assertTrue("could not parse sawBladePos: " + fixture, m.find());
-        int sx = Integer.parseInt(m.group(1)),
-                sy = Integer.parseInt(m.group(2)),
-                sz = Integer.parseInt(m.group(3));
+        int[] sawBlade = Reply.of("artest fixture multiblock", fixture)
+                .blockPos(MULTIBLOCK_SAWBLADE_POS);
+        assertTrue("could not parse sawBladePos: " + fixture, sawBlade != null);
+        int sx = sawBlade[0], sy = sawBlade[1], sz = sawBlade[2];
 
         // Step 2 — try-complete on the controller -> isComplete=true.
         String complete = join(client().execute(
@@ -334,7 +332,7 @@ public class MachineDomainSmokeSuite extends AbstractSharedServerTest {
         String fueled = join(client().execute(
                 "artest vent info 0 " + bx + " " + by + " " + bz));
         assertTrue("vent should report fluid after inject: " + fueled,
-                VENT_FLUID_AMT.matcher(fueled).find()
+                Reply.of(fueled).has(VENT_FLUID_AMT)
                         && Integer.parseInt(matchOrFail(VENT_FLUID_AMT, fueled)) > 0);
 
         client().execute("artest tile force-tick 0 " + bx + " " + by + " " + bz + " 1");
@@ -410,8 +408,8 @@ public class MachineDomainSmokeSuite extends AbstractSharedServerTest {
         // 3. Vacuum precondition: Earth -> density 0 -> non-breathable.
         // Snapshot original so we restore it after.
         String planet = join(client().execute("artest planet info 0"));
-        Matcher dm = PLANET_DENSITY.matcher(planet);
-        int originalDensity = dm.find() ? Integer.parseInt(dm.group(1)) : 100;
+        Reply dmReply = Reply.of(planet);
+        int originalDensity = dmReply.has(PLANET_DENSITY) ? Integer.parseInt(dmReply.text(PLANET_DENSITY)) : 100;
 
         try {
             String setVac = join(client().execute(
@@ -525,7 +523,7 @@ public class MachineDomainSmokeSuite extends AbstractSharedServerTest {
                 "artest tile force-tick 0 " + xC + " " + y + " " + zC + " 40"));
         assertTrue("force-tick errored: " + tick, tick.contains("\"ok\":true"));
         assertEquals("must tick all 40 iterations",
-                "40", extract(tick, "\"ticked\":(\\d+)"));
+                40, extractInt(tick, "ticked"));
 
         String postInfo = join(client().execute(
                 "artest machine info 0 " + xC + " " + y + " " + zC));
@@ -559,7 +557,7 @@ public class MachineDomainSmokeSuite extends AbstractSharedServerTest {
                 "artest tile force-tick 0 " + x + " " + y + " " + z + " 50"));
         assertTrue("force-tick errored: " + tick, tick.contains("\"ok\":true"));
         assertEquals("must tick all 50 iterations",
-                "50", extract(tick, "\"ticked\":(\\d+)"));
+                50, extractInt(tick, "ticked"));
 
         String postInfo = join(client().execute(
                 "artest machine info 0 " + x + " " + y + " " + z));
@@ -579,19 +577,17 @@ public class MachineDomainSmokeSuite extends AbstractSharedServerTest {
         assertTrue("probe call failed: " + joined, joined.contains("\"ok\":true"));
     }
 
-    private static long parseLong(Pattern p, String s) {
-        Matcher m = p.matcher(s);
-        return m.find() ? Long.parseLong(m.group(1)) : -1L;
+    private static long parseLong(String field, String s) {
+        return (long) Reply.of(s).number(field);
     }
 
-    private static String matchOrFail(Pattern p, String s) {
-        Matcher m = p.matcher(s);
-        assertTrue("pattern " + p + " did not match in: " + s, m.find());
-        return m.group(1);
+    private static String matchOrFail(String field, String s) {
+        String value = Reply.of(s).text(field);
+        assertTrue("field `" + field + "` not found in: " + s, value != null);
+        return value;
     }
 
-    private static String extract(String s, String regex) {
-        Matcher m = Pattern.compile(regex).matcher(s);
-        return m.find() ? m.group(1) : "";
+    private static int extractInt(String s, String field) {
+        return Reply.of(s).integerOr(field, -1);
     }
 }

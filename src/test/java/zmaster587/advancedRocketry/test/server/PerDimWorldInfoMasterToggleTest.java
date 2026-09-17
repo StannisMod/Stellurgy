@@ -1,5 +1,6 @@
 package zmaster587.advancedRocketry.test.server;
 
+import zmaster587.advancedRocketry.test.Reply;
 import com.github.stannismod.forge.testing.junit.AbstractHeadlessServerTest;
 import com.github.stannismod.forge.testing.server.RealDedicatedServerHarness;
 import org.junit.After;
@@ -43,8 +44,14 @@ import static org.junit.Assert.assertTrue;
 public class PerDimWorldInfoMasterToggleTest {
 
     private static final int FIXTURE_DIM = 9311;
-    private static final Pattern WRAPPED =
-            Pattern.compile("\"worldInfoClass\":\"[^\"]*ARDimensionWorldInfo\"");
+    /** The class a wrapped world reports; asked of the FIELD rather than matched in the
+     *  reply, so a class name mentioned anywhere else cannot answer for it. */
+    private static final String WORLD_INFO_CLASS = "worldInfoClass";
+
+    private static boolean isWrapped(String info) {
+        return String.valueOf(Reply.of("artest dim info", info).text(WORLD_INFO_CLASS))
+                .endsWith("ARDimensionWorldInfo");
+    }
 
     private Path workDir;
     private RealDedicatedServerHarness harness;
@@ -113,7 +120,7 @@ public class PerDimWorldInfoMasterToggleTest {
         String info = cmd("artest weather get " + FIXTURE_DIM); // first load
         assertFalse("with perDimWorldInfo OFF a freshly-loaded planet must NOT be "
                 + "wrapped (vanilla shared-overworld WorldInfo) — got " + info,
-                WRAPPED.matcher(info).find());
+                isWrapped(info));
     }
 
     @Test
@@ -130,13 +137,13 @@ public class PerDimWorldInfoMasterToggleTest {
         String info = cmd("artest weather get " + FIXTURE_DIM); // first load
         assertTrue("perDimWorldInfo ON + weather OFF must STILL wrap the planet "
                 + "(per-dim time rides the wrapper) — got " + info,
-                WRAPPED.matcher(info).find());
+                isWrapped(info));
 
         // Tie the contract to TIME explicitly: the per-dim clock probe sees the
         // wrapper with weather off (proves the time mechanism was not collateral
         // damage of disabling weather).
         String time = cmd("artest dim time " + FIXTURE_DIM);
         assertTrue("dim-time probe must report the per-dim wrapper with weather "
-                + "OFF — got " + time, WRAPPED.matcher(time).find());
+                + "OFF — got " + time, isWrapped(time));
     }
 }

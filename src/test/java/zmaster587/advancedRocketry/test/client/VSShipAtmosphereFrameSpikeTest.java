@@ -4,9 +4,8 @@ import org.junit.FixMethodOrder;
 import org.junit.Test;
 import org.junit.runners.MethodSorters;
 
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
+import zmaster587.advancedRocketry.test.Reply;
 import zmaster587.advancedRocketry.test.Events;
 import zmaster587.advancedRocketry.test.FixtureSite;
 import zmaster587.advancedRocketry.test.Plot;
@@ -57,18 +56,20 @@ public class VSShipAtmosphereFrameSpikeTest extends AbstractSharedVsClientE2ETes
         return "vs-ship-atmosphere-frame";
     }
 
-    private static final Pattern BUILDER_POS =
-            Pattern.compile("\"builderPos\":\\[(-?\\d+),(-?\\d+),(-?\\d+)]");
-    private static final Pattern COUNT = Pattern.compile("\"count\":(-?\\d+)");
-    private static final Pattern ATM_TYPE = Pattern.compile("\"type\":\"([^\"]*)\"");
-    private static final Pattern CACHED_ATM = Pattern.compile("\"cachedAtmosphere\":\"([^\"]*)\"");
-    private static final Pattern BLOB_SIZE = Pattern.compile("\"blobSize\":(-?\\d+)");
-    private static final Pattern SEAT_SUB = Pattern.compile(
-            "\"seatX\":(-?\\d+),\"seatY\":(-?\\d+),\"seatZ\":(-?\\d+)");
-    private static final Pattern WORLD_XYZ = Pattern.compile(
-            "\"worldX\":(-?[0-9.E\\-]+),\"worldY\":(-?[0-9.E\\-]+),\"worldZ\":(-?[0-9.E\\-]+)");
-    private static final Pattern SHIP_WORLD = Pattern.compile(
-            "\"shipWorldX\":(-?[0-9.E\\-]+),\"shipWorldY\":(-?[0-9.E\\-]+),\"shipWorldZ\":(-?[0-9.E\\-]+)");
+    private static final String BUILDER_POS = "builderPos";
+    private static final String COUNT = "count";
+    private static final String ATM_TYPE = "type";
+    private static final String CACHED_ATM = "cachedAtmosphere";
+    private static final String BLOB_SIZE = "blobSize";
+    private static final String SEAT_X = "seatX";
+    private static final String SEAT_Y = "seatY";
+    private static final String SEAT_Z = "seatZ";
+    private static final String WORLD_X = "worldX";
+    private static final String WORLD_Y = "worldY";
+    private static final String WORLD_Z = "worldZ";
+    private static final String SHIP_WORLD_X = "shipWorldX";
+    private static final String SHIP_WORLD_Y = "shipWorldY";
+    private static final String SHIP_WORLD_Z = "shipWorldZ";
 
     private static final String VARIANT = "with-pilot-seat";
 
@@ -180,12 +181,12 @@ public class VSShipAtmosphereFrameSpikeTest extends AbstractSharedVsClientE2ETes
                 ShipIdentity.nameFromAssembly(assemble), 40, () -> bot().waitTicks(5));
 
         String found = exec("artest vs find-seat 0 id " + scenarioShipId);
-        Matcher sm = SEAT_SUB.matcher(found);
+        Reply seat = Reply.of("artest vs find-seat", found);
         scenario().requireArranged("find-seat must resolve the ship's subspace seat: " + found,
-                sm.find());
-        int sx = Integer.parseInt(sm.group(1));
-        int sy = Integer.parseInt(sm.group(2));
-        int sz = Integer.parseInt(sm.group(3));
+                seat.has(SEAT_X));
+        int sx = seat.integer(SEAT_X);
+        int sy = seat.integer(SEAT_Y);
+        int sz = seat.integer(SEAT_Z);
         System.out.println("[S1/ship] seatSubspace=" + sx + "," + sy + "," + sz);
 
         // The cabin goes beside the seat, in the ship's own (subspace) addresses.
@@ -276,9 +277,9 @@ public class VSShipAtmosphereFrameSpikeTest extends AbstractSharedVsClientE2ETes
 
     private String atmosphereAt(int x, int y, int z) throws Exception {
         String info = exec("artest atmosphere get 0 " + x + " " + y + " " + z);
-        Matcher m = ATM_TYPE.matcher(info);
-        assertTrue("atmosphere type not found in: " + info, m.find());
-        return m.group(1);
+        Reply mReply = Reply.of(info);
+        assertTrue("atmosphere type not found in: " + info, mReply.has(ATM_TYPE));
+        return mReply.text(ATM_TYPE);
     }
 
     /**
@@ -321,8 +322,8 @@ public class VSShipAtmosphereFrameSpikeTest extends AbstractSharedVsClientE2ETes
         // the pair separates "he was moved into a different atmosphere" from "he is in the same one
         // he was in", which is exactly the difference between this test's two legs.
         String resp = exec("artest atmosphere cached-for-player");
-        Matcher m = CACHED_ATM.matcher(resp);
-        String cached = m.find() ? m.group(1) : "";
+        Reply mReply = Reply.of(resp);
+        String cached = mReply.has(CACHED_ATM) ? mReply.text(CACHED_ATM) : "";
         System.out.println("[S1/gate] at (" + x + "," + y + "," + z + ") cached=" + cached
                 + " changes=" + changes);
         return cached;
@@ -345,11 +346,11 @@ public class VSShipAtmosphereFrameSpikeTest extends AbstractSharedVsClientE2ETes
         // first that answered — a search whose success condition was "some ship's yard was reachable
         // from one of these points", which a neighbour's craft satisfies as readily as this one's.
         String found = exec("artest vs find-seat 0 id " + scenarioShipId);
-        Matcher m = SHIP_WORLD.matcher(found);
-        if (m.find()) {
-            anchor = new int[]{(int) Math.floor(Double.parseDouble(m.group(1))),
-                    (int) Math.floor(Double.parseDouble(m.group(2))),
-                    (int) Math.floor(Double.parseDouble(m.group(3)))};
+        Reply pose = Reply.of("artest vs find-seat", found);
+        if (pose.has(SHIP_WORLD_X)) {
+            anchor = new int[]{(int) Math.floor(pose.number(SHIP_WORLD_X)),
+                    (int) Math.floor(pose.number(SHIP_WORLD_Y)),
+                    (int) Math.floor(pose.number(SHIP_WORLD_Z))};
             return anchor;
         }
         throw new AssertionError("ARRANGEMENT: the ship " + scenarioShipId + " reports no world "
@@ -363,24 +364,23 @@ public class VSShipAtmosphereFrameSpikeTest extends AbstractSharedVsClientE2ETes
         int[] a = refreshAnchor();
         String resp = exec("artest vs to-world 0 id " + scenarioShipId
                 + " " + sx + " " + sy + " " + sz);
-        Matcher m = WORLD_XYZ.matcher(resp);
+        Reply mapped = Reply.of("artest vs to-world", resp);
         scenario().requireArranged("subspace->world mapping failed (anchor=" + a[0] + "," + a[1] + ","
-                + a[2] + "): " + resp, m.find());
-        return new double[]{Double.parseDouble(m.group(1)), Double.parseDouble(m.group(2)),
-                Double.parseDouble(m.group(3))};
+                + a[2] + "): " + resp, mapped.has(WORLD_X));
+        return new double[]{mapped.number(WORLD_X), mapped.number(WORLD_Y), mapped.number(WORLD_Z)};
     }
 
     // ── plumbing ──────────────────────────────────────────────────────────────────────────
 
-    private int readInt(String json, Pattern p) {
-        Matcher m = p.matcher(json);
-        assertTrue("expected a number in: " + json, m.find());
-        return Integer.parseInt(m.group(1));
+    private int readInt(String json, String field) {
+        Reply reply = Reply.of(json);
+        assertTrue("field `" + field + "` not found in: " + json, reply.has(field));
+        return reply.integer(field);
     }
 
     private int count(String sub) throws Exception {
-        Matcher m = COUNT.matcher(exec("artest vs " + sub + " 0"));
-        return m.find() ? Integer.parseInt(m.group(1)) : -1;
+        Reply mReply = Reply.of(exec("artest vs " + sub + " 0"));
+        return mReply.has(COUNT) ? Integer.parseInt(mReply.text(COUNT)) : -1;
     }
 
     private String assembleFixture(FixtureSite site) throws Exception {
@@ -395,8 +395,8 @@ public class VSShipAtmosphereFrameSpikeTest extends AbstractSharedVsClientE2ETes
         String fixture = exec("artest fixture rocket 0 " + baseX + " " + baseY + " " + baseZ
                 + " " + VARIANT);
         assertTrue("fixture (" + VARIANT + ") failed: " + fixture, fixture.contains("\"ok\":true"));
-        Matcher bp = BUILDER_POS.matcher(fixture);
-        assertTrue("fixture missing builderPos: " + fixture, bp.find());
-        return exec("artest rocket assemble 0 " + bp.group(1) + " " + bp.group(2) + " " + bp.group(3));
+        int[] bp = Reply.of(fixture).blockPos(BUILDER_POS);
+        assertTrue("fixture missing builderPos: " + fixture, bp != null);
+        return exec("artest rocket assemble 0 " + bp[0] + " " + bp[1] + " " + bp[2]);
     }
 }

@@ -1,6 +1,7 @@
 package zmaster587.advancedRocketry.test.server;
 
 // migrated to AbstractSharedServerTest
+import zmaster587.advancedRocketry.test.Reply;
 import org.junit.Test;
 
 import java.util.regex.Matcher;
@@ -30,7 +31,7 @@ import static org.junit.Assert.assertTrue;
  */
 public class SatelliteLifecycleSmokeTest extends AbstractSharedServerTest {
 
-    private static final Pattern ID_PATTERN = Pattern.compile("\"id\":(\\d+)");
+    private static final String ID_PATTERN = "id";
 
     @Test
     public void satelliteCreatePopulatesDimensionProperties() throws Exception {
@@ -109,9 +110,9 @@ public class SatelliteLifecycleSmokeTest extends AbstractSharedServerTest {
         String resp = String.join("\n", client().execute(
                 "artest satellite-builder build 0 optical"));
         assertTrue("builder build failed: " + resp, resp.contains("\"ok\":true"));
-        Matcher m = ID_PATTERN.matcher(resp);
-        assertTrue("builder response missing id: " + resp, m.find());
-        long satId = Long.parseLong(m.group(1));
+        Reply mReply = Reply.of(resp);
+        assertTrue("builder response missing id: " + resp, mReply.has(ID_PATTERN));
+        long satId = Long.parseLong(mReply.text(ID_PATTERN));
 
         String info = String.join("\n", client().execute("artest satellite info 0 " + satId));
         assertTrue("builder-created satellite not registered: " + info,
@@ -191,9 +192,9 @@ public class SatelliteLifecycleSmokeTest extends AbstractSharedServerTest {
                 "artest satellite create 0 " + type + " " + powerGen + " " + powerStorage + " " + maxData));
         assertTrue("satellite create (" + type + ") failed: " + create,
                 create.contains("\"ok\":true"));
-        Matcher m = ID_PATTERN.matcher(create);
-        assertTrue("could not extract satellite id from: " + create, m.find());
-        return Long.parseLong(m.group(1));
+        Reply mReply = Reply.of(create);
+        assertTrue("could not extract satellite id from: " + create, mReply.has(ID_PATTERN));
+        return Long.parseLong(mReply.text(ID_PATTERN));
     }
 
     private void ok(java.util.List<String> response) {

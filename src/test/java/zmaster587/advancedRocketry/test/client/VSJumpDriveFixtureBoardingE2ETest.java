@@ -1,8 +1,6 @@
 package zmaster587.advancedRocketry.test.client;
 
 import java.util.Locale;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 import com.github.stannismod.forge.testing.TestTimeouts;
 import com.google.gson.JsonObject;
@@ -14,6 +12,7 @@ import org.lwjgl.input.Keyboard;
 
 import zmaster587.advancedRocketry.hyperdrive.DriveTuning;
 import zmaster587.advancedRocketry.test.Events;
+import zmaster587.advancedRocketry.test.Reply;
 import zmaster587.advancedRocketry.test.FixtureSite;
 
 import static org.junit.Assert.assertTrue;
@@ -66,22 +65,18 @@ public class VSJumpDriveFixtureBoardingE2ETest extends AbstractSharedVsClientE2E
         return "vs-jump-drive-boarding";
     }
 
-    private static final Pattern BUILDER_POS =
-            Pattern.compile("\"builderPos\":\\[(-?\\d+),(-?\\d+),(-?\\d+)]");
-    private static final Pattern POS_Y = Pattern.compile("\"posY\":(-?[0-9.E\\-]+)");
-    private static final Pattern SEAT_SUB = Pattern.compile(
-            "\"seatX\":(-?\\d+),\"seatY\":(-?\\d+),\"seatZ\":(-?\\d+)");
-    private static final Pattern AFC_SUB = Pattern.compile(
-            "\"afcX\":(-?\\d+),\"afcY\":(-?\\d+),\"afcZ\":(-?\\d+)");
-    private static final Pattern SHIP_WORLD = Pattern.compile(
-            "\"shipWorldX\":(-?[0-9.E\\-]+),\"shipWorldY\":(-?[0-9.E\\-]+),\"shipWorldZ\":(-?[0-9.E\\-]+)");
-    private static final Pattern TO_WORLD = Pattern.compile(
-            "\"worldX\":(-?[0-9.E\\-]+),\"worldY\":(-?[0-9.E\\-]+),\"worldZ\":(-?[0-9.E\\-]+)");
-    private static final Pattern BLOCK_ID = Pattern.compile("\"block\":\"([^\"]*)\"");
-    private static final Pattern IS_AIR = Pattern.compile("\"isAir\":(true|false)");
+    private static final String BUILDER_POS = "builderPos";
+    private static final String POS_Y = "posY";
+    /** Field-name PREFIXES: each names a triple the probe writes as {@code <prefix>X/Y/Z}. */
+    private static final String SEAT_SUB = "seat";
+    private static final String AFC_SUB = "afc";
+    private static final String SHIP_WORLD = "shipWorld";
+    private static final String TO_WORLD = "world";
+    private static final String BLOCK_ID = "block";
+    private static final String IS_AIR = "isAir";
     /** The client event log's envelope count. It is emitted before the records, so the FIRST match
      *  in a reply is always the envelope's and never a record's own field. */
-    private static final Pattern CLIENT_EVENT_COUNT = Pattern.compile("\"count\":(-?\\d+)");
+    private static final String CLIENT_EVENT_COUNT = "count";
 
     private static final String VARIANT = "with-jump-drive";
 
@@ -177,9 +172,9 @@ public class VSJumpDriveFixtureBoardingE2ETest extends AbstractSharedVsClientE2E
         double yRest = Double.NaN;
         for (int attempt = 0; attempt < budget && Double.isNaN(yRest); attempt++) {
             bot().waitTicks(5);
-            Matcher m = POS_Y.matcher(shipInfoAtBase());
-            if (m.find()) {
-                yRest = Double.parseDouble(m.group(1));
+            double y = Reply.of("artest vs ship-info", shipInfoAtBase()).number(POS_Y);
+            if (!Double.isNaN(y)) {
+                yRest = y;
             }
         }
         scenario().requireArranged("the ship must LOAD with the client present: " + shipInfoAtBase(),
@@ -632,9 +627,9 @@ public class VSJumpDriveFixtureBoardingE2ETest extends AbstractSharedVsClientE2E
                 + " " + VARIANT);
         scenario().requireArranged("fixture (" + VARIANT + ") failed: " + fixture,
                 fixture.contains("\"ok\":true"));
-        Matcher bp = BUILDER_POS.matcher(fixture);
-        scenario().requireArranged("fixture missing builderPos: " + fixture, bp.find());
-        return exec("artest rocket assemble 0 " + bp.group(1) + " " + bp.group(2) + " " + bp.group(3));
+        int[] bp = Reply.of(fixture).blockPos(BUILDER_POS);
+        scenario().requireArranged("fixture missing builderPos: " + fixture, bp != null);
+        return exec("artest rocket assemble 0 " + bp[0] + " " + bp[1] + " " + bp[2]);
     }
 
     // ---- tiny parsing ---------------------------------------------------------------------------
@@ -660,31 +655,38 @@ public class VSJumpDriveFixtureBoardingE2ETest extends AbstractSharedVsClientE2E
         return Math.sqrt(dx * dx + dz * dz);
     }
 
-    private static int[] readTriple(String json, Pattern p) {
-        Matcher m = p.matcher(json);
-        if (!m.find()) {
+    /**
+     * The coordinate triple a probe writes as {@code <prefix>X} / {@code <prefix>Y} /
+     * {@code <prefix>Z}, or {@code null} when the reply carries none of it.
+     *
+     * <p>Read by NAME rather than by one expression spanning all three: matched as a run, the three
+     * have to stay adjacent and in that order forever, and a writer that inserts a fourth field
+     * between them turns the read into an absence.</p>
+     */
+    private static int[] readTriple(String json, String prefix) {
+        Reply reply = Reply.of(json);
+        if (!reply.has(prefix + "X")) {
             return null;
         }
-        return new int[]{Integer.parseInt(m.group(1)), Integer.parseInt(m.group(2)),
-                Integer.parseInt(m.group(3))};
+        return new int[]{reply.integer(prefix + "X"), reply.integer(prefix + "Y"),
+                reply.integer(prefix + "Z")};
     }
 
-    private static double[] readTripleD(String json, Pattern p) {
-        Matcher m = p.matcher(json);
-        if (!m.find()) {
+    /** The same triple read as doubles. */
+    private static double[] readTripleD(String json, String prefix) {
+        Reply reply = Reply.of(json);
+        if (!reply.has(prefix + "X")) {
             return null;
         }
-        return new double[]{Double.parseDouble(m.group(1)), Double.parseDouble(m.group(2)),
-                Double.parseDouble(m.group(3))};
+        return new double[]{reply.number(prefix + "X"), reply.number(prefix + "Y"),
+                reply.number(prefix + "Z")};
     }
 
     private static long readLong(String json, String key) {
-        Matcher m = Pattern.compile("\"" + key + "\":(-?\\d+)").matcher(json);
-        return m.find() ? Long.parseLong(m.group(1)) : Long.MIN_VALUE;
+        return (long) Reply.of(json).numberOr(key, Long.MIN_VALUE);
     }
 
-    private static String readGroup(String json, Pattern p) {
-        Matcher m = p.matcher(json);
-        return m.find() ? m.group(1) : "";
+    private static String readGroup(String json, String field) {
+        return Reply.of(json).textOr(field, "");
     }
 }

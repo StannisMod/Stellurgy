@@ -4,6 +4,7 @@ import com.github.stannismod.forge.testing.junit.AbstractClientE2ETest;
 import com.google.gson.JsonObject;
 
 import org.junit.Test;
+import zmaster587.advancedRocketry.test.Reply;
 import zmaster587.advancedRocketry.test.GameTicks;
 
 import java.util.ArrayList;
@@ -106,9 +107,9 @@ public class SpikeSubBlockPositionGranularityTest extends AbstractClientE2ETest 
         bot().setRenderDistance(4);
 
         String health = exec("artest player health");
-        Matcher nm = Pattern.compile("\"player\"\\s*:\\s*\"([^\"]+)\"").matcher(health);
-        assertTrue("player health must echo the player name: " + health, nm.find());
-        botName = nm.group(1);
+        String named = Reply.of("artest player health", health).text("player");
+        assertTrue("player health must echo the player name: " + health, named != null);
+        botName = named;
 
         List<String> report = new ArrayList<>();
         List<String> inconclusive = new ArrayList<>();
@@ -276,8 +277,7 @@ public class SpikeSubBlockPositionGranularityTest extends AbstractClientE2ETest 
     }
 
     private static double field(String json, String key) {
-        Matcher m = Pattern.compile("\"" + key + "\"\\s*:\\s*([-0-9.eE]+)").matcher(json);
-        return m.find() ? Double.parseDouble(m.group(1)) : Double.NaN;
+        return Reply.of(json).number(key);
     }
 
     /** The report is the deliverable, so it also lands on disk and survives a truncated console. */

@@ -17929,6 +17929,14 @@ public class TestProbeCommand extends CommandBase {
                     builder.append(arr[i]);
                 }
                 builder.append(']');
+            } else if (v instanceof Map) {
+                // A nested map is JSON, not a Java toString. Without this branch it fell through
+                // to the quoted-string case below and was emitted as "{A={amount=0, capacity=0}}"
+                // — a reply that says it is JSON while carrying a rendering of a HashMap, which
+                // no JSON reader can read and which a caller could only reach by regex.
+                @SuppressWarnings("unchecked")
+                Map<String, ?> nested = (Map<String, ?>) v;
+                builder.append(jsonMap(nested));
             } else if (v instanceof java.util.List) {
                 builder.append('[');
                 boolean firstItem = true;

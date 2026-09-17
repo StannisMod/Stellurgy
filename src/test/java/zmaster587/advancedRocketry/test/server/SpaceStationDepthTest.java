@@ -1,6 +1,7 @@
 package zmaster587.advancedRocketry.test.server;
 
 // migrated to AbstractSharedServerTest
+import zmaster587.advancedRocketry.test.Reply;
 import org.junit.Test;
 
 import java.util.regex.Matcher;
@@ -20,25 +21,23 @@ import static org.junit.Assert.assertTrue;
  */
 public class SpaceStationDepthTest extends AbstractSharedServerTest {
 
-    private static final Pattern ID_PATTERN = Pattern.compile("\"id\":(-?\\d+)");
-    private static final Pattern AFTER_PATTERN = Pattern.compile("\"after\":(-?\\d+)");
-    private static final Pattern MAX_PATTERN = Pattern.compile("\"max\":(-?\\d+)");
-    private static final Pattern RETURNED_PATTERN = Pattern.compile("\"returned\":(-?\\d+)");
+    private static final String ID_PATTERN = "id";
+    private static final String AFTER_PATTERN = "after";
+    private static final String MAX_PATTERN = "max";
+    private static final String RETURNED_PATTERN = "returned";
 
     private int createStation(int orbitingDim) throws Exception {
         String resp = String.join("\n", client().execute("artest station create " + orbitingDim));
         assertTrue("station create failed: " + resp, resp.contains("\"ok\":true"));
-        Matcher m = ID_PATTERN.matcher(resp);
-        assertTrue("could not parse station id from create response: " + resp, m.find());
-        return Integer.parseInt(m.group(1));
+        Reply mReply = Reply.of(resp);
+        assertTrue("could not parse station id from create response: " + resp, mReply.has(ID_PATTERN));
+        return Integer.parseInt(mReply.text(ID_PATTERN));
     }
 
-    private static int parseGroup(Pattern pattern, String resp, String label) {
-        Matcher m = pattern.matcher(resp);
-        if (!m.find()) {
-            throw new AssertionError("could not parse " + label + " from response: " + resp);
-        }
-        return Integer.parseInt(m.group(1));
+    private static int parseGroup(String field, String resp, String label) {
+        Reply reply = Reply.of(resp);
+        assertTrue("could not parse " + label + ": " + resp, reply.has(field));
+        return reply.integer(field);
     }
 
     @Test

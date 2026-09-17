@@ -1,5 +1,6 @@
 package zmaster587.advancedRocketry.test.server;
 
+import zmaster587.advancedRocketry.test.Reply;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
@@ -46,8 +47,8 @@ import static zmaster587.advancedRocketry.test.server.WorldCommandFixtures.exec;
  */
 public class OxygenVentBoundedByBlobCapTest extends AbstractSharedServerTest {
 
-    private static final Pattern CFG_VALUE = Pattern.compile("\"value\":(-?\\d+)");
-    private static final Pattern ATM_TYPE  = Pattern.compile("\"type\":\"([^\"]*)\"");
+    private static final String CFG_VALUE = "value";
+    private static final String ATM_TYPE = "type";
 
     private static final int DIM = 0;
     private static final int CY = FixtureSite.OPEN_AIR_Y;
@@ -113,9 +114,9 @@ public class OxygenVentBoundedByBlobCapTest extends AbstractSharedServerTest {
 
     private int readConfigInt(String key) throws Exception {
         String resp = exec("artest config get " + key);
-        Matcher m = CFG_VALUE.matcher(resp);
-        assertTrue("could not read config " + key + ": " + resp, m.find());
-        return Integer.parseInt(m.group(1));
+        Reply mReply = Reply.of(resp);
+        assertTrue("could not read config " + key + ": " + resp, mReply.has(CFG_VALUE));
+        return Integer.parseInt(mReply.text(CFG_VALUE));
     }
 
     private void setConfig(String key, int value) throws Exception {
@@ -147,8 +148,8 @@ public class OxygenVentBoundedByBlobCapTest extends AbstractSharedServerTest {
 
     private String atmosphereTypeAt(int x, int y, int z) throws Exception {
         String info = exec("artest atmosphere get " + DIM + " " + x + " " + y + " " + z);
-        Matcher m = ATM_TYPE.matcher(info);
-        assertTrue("atmosphere type not found in: " + info, m.find());
-        return m.group(1);
+        Reply mReply = Reply.of(info);
+        assertTrue("atmosphere type not found in: " + info, mReply.has(ATM_TYPE));
+        return mReply.text(ATM_TYPE);
     }
 }

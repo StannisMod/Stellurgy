@@ -1,5 +1,6 @@
 package zmaster587.advancedRocketry.test.server;
 
+import zmaster587.advancedRocketry.test.Reply;
 import org.junit.Test;
 
 import java.util.regex.Matcher;
@@ -41,11 +42,11 @@ import static org.junit.Assert.assertTrue;
  */
 public class SatelliteCoverageGapsTest extends AbstractSharedServerTest {
 
-    private static final Pattern ID = Pattern.compile("\"id\":(\\d+)");
-    private static final Pattern BLOCK = Pattern.compile("\"block\":\"([^\"]*)\"");
-    private static final Pattern BIOME = Pattern.compile("\"biome\":\"([^\"]*)\"");
-    private static final Pattern TICKING_IDS = Pattern.compile("\"ids\":\\[([^\\]]*)\\]");
-    private static final Pattern CAN_TICK = Pattern.compile("\"canTick\":(true|false)");
+    private static final String ID = "id";
+    private static final String BLOCK = "block";
+    private static final String BIOME = "biome";
+    private static final String TICKING_IDS = "ids";
+    private static final String CAN_TICK = "canTick";
 
     /** Pin: WeatherController mode 1 (drain) — a queued water-block
      *  position becomes air after one tick. */
@@ -247,9 +248,9 @@ public class SatelliteCoverageGapsTest extends AbstractSharedServerTest {
         String resp = String.join("\n", client().execute(
                 "artest satellite create-spy-telescope 0"));
         assertTrue("create-spy-telescope failed: " + resp, resp.contains("\"ok\":true"));
-        Matcher m = ID.matcher(resp);
-        assertTrue("could not extract id from create response: " + resp, m.find());
-        long spyId = Long.parseLong(m.group(1));
+        Reply mReply = Reply.of(resp);
+        assertTrue("could not extract id from create response: " + resp, mReply.has(ID));
+        long spyId = Long.parseLong(mReply.text(ID));
         assertEquals("SpyTelescope MUST report canTick=false (the registration "
                 + "gate that protects DimensionProperties.tick from ticking "
                 + "non-ticking satellites); " + resp,
@@ -264,7 +265,10 @@ public class SatelliteCoverageGapsTest extends AbstractSharedServerTest {
         // ...but NOT in the tickingSatellites map.
         String ticking = String.join("\n", client().execute(
                 "artest satellite ticking-list 0"));
-        String ids = stringField(TICKING_IDS, ticking, "ids");
+        // The field is a JSON ARRAY; its text comes back bracketed and the reader below asks whether
+        // an id is IN it, so the brackets go rather than being matched around.
+        String ids = String.valueOf(stringField(TICKING_IDS, ticking, "ids"))
+                .replace("[", "").replace("]", "");
         // ids is a comma-joined list of longs (or empty). Match the
         // exact id as a token to avoid false positives via substring.
         boolean inTicking = (',' + ids + ',').contains("," + spyId + ",");
@@ -310,14 +314,14 @@ public class SatelliteCoverageGapsTest extends AbstractSharedServerTest {
                         + powerStorage + " " + maxData));
         assertTrue("satellite create (" + type + ") failed: " + resp,
                 resp.contains("\"ok\":true"));
-        Matcher m = ID.matcher(resp);
-        assertTrue("could not extract id from create response: " + resp, m.find());
-        return Long.parseLong(m.group(1));
+        Reply mReply = Reply.of(resp);
+        assertTrue("could not extract id from create response: " + resp, mReply.has(ID));
+        return Long.parseLong(mReply.text(ID));
     }
 
-    private String stringField(Pattern p, String src, String name) {
-        Matcher m = p.matcher(src);
-        assertTrue("field " + name + " missing in: " + src, m.find());
-        return m.group(1);
+    private String stringField(String field, String src, String name) {
+        Reply reply = Reply.of(src);
+        assertTrue("field " + name + " missing in: " + src, reply.has(field));
+        return reply.text(field);
     }
 }

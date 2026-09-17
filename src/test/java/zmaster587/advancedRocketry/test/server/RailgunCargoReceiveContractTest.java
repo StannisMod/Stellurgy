@@ -1,5 +1,6 @@
 package zmaster587.advancedRocketry.test.server;
 
+import zmaster587.advancedRocketry.test.Reply;
 import org.junit.Test;
 
 import java.util.regex.Matcher;
@@ -44,10 +45,8 @@ public class RailgunCargoReceiveContractTest extends AbstractSharedServerTest {
     private static final int CY = FixtureSite.OPEN_AIR_Y;
     private static final int CZ = 4700;
 
-    private static final Pattern MATCHED_COUNT =
-            Pattern.compile("\"matchedCount\":(\\d+)");
-    private static final Pattern OUT_PORT_COUNT =
-            Pattern.compile("\"outPortCount\":(\\d+)");
+    private static final String MATCHED_COUNT = "matchedCount";
+    private static final String OUT_PORT_COUNT = "outPortCount";
 
     /**
      * assembled railgun's {@code onReceiveCargo} deposits
@@ -105,9 +104,9 @@ public class RailgunCargoReceiveContractTest extends AbstractSharedServerTest {
         return String.join("\n", client().execute(cmd));
     }
 
-    private static int extract(String src, Pattern pattern) {
-        Matcher m = pattern.matcher(src);
-        assertTrue("pattern not found in: " + src, m.find());
-        return Integer.parseInt(m.group(1));
+    private static int extract(String src, String field) {
+        Reply reply = Reply.of(src);
+        assertTrue("field `" + field + "` not found in: " + src, reply.has(field));
+        return reply.integer(field);
     }
 }

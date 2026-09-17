@@ -1,5 +1,6 @@
 package zmaster587.advancedRocketry.test.server;
 
+import zmaster587.advancedRocketry.test.Reply;
 import org.junit.Test;
 
 import java.util.regex.Matcher;
@@ -42,13 +43,13 @@ import static org.junit.Assert.assertTrue;
  */
 public class WirelessTransceiverContractTest extends AbstractSharedServerTest {
 
-    private static final Pattern NET_ID = Pattern.compile("\"networkID\":(-?\\d+)");
-    private static final Pattern SHARED_ID = Pattern.compile("\"sharedNetworkId\":(-?\\d+)");
-    private static final Pattern MODE = Pattern.compile("\"mode\":\"(extract|inject)\"");
-    private static final Pattern ENABLED = Pattern.compile("\"enabled\":(true|false)");
-    private static final Pattern IS_SOURCE = Pattern.compile("\"isSource\":(true|false)");
-    private static final Pattern IS_SINK = Pattern.compile("\"isSink\":(true|false)");
-    private static final Pattern NETWORK_EXISTS = Pattern.compile("\"networkExists\":(true|false)");
+    private static final String NET_ID = "networkID";
+    private static final String SHARED_ID = "sharedNetworkId";
+    private static final String MODE = "mode";
+    private static final String ENABLED = "enabled";
+    private static final String IS_SOURCE = "isSource";
+    private static final String IS_SINK = "isSink";
+    private static final String NETWORK_EXISTS = "networkExists";
 
     // Each test method picks a unique BASE_X offset per the
     // AbstractSharedServerTest position-isolation contract. 50 blocks of
@@ -363,20 +364,20 @@ public class WirelessTransceiverContractTest extends AbstractSharedServerTest {
     }
 
     private static String extractMode(String haystack) {
-        Matcher m = MODE.matcher(haystack);
-        if (!m.find()) throw new AssertionError("no mode in: " + haystack);
-        return m.group(1);
+        Reply mReply = Reply.of(haystack);
+        if (!mReply.has(MODE)) throw new AssertionError("no mode in: " + haystack);
+        return mReply.text(MODE);
     }
 
-    private static int extractInt(Pattern p, String haystack) {
-        Matcher m = p.matcher(haystack);
-        if (!m.find()) throw new AssertionError("pattern " + p + " did not match: " + haystack);
-        return Integer.parseInt(m.group(1));
+    private static int extractInt(String field, String haystack) {
+        Reply reply = Reply.of(haystack);
+        assertTrue("probe response missing `" + field + "`: " + haystack, reply.has(field));
+        return reply.integer(field);
     }
 
-    private static boolean extractBool(Pattern p, String haystack) {
-        Matcher m = p.matcher(haystack);
-        if (!m.find()) throw new AssertionError("pattern " + p + " did not match: " + haystack);
-        return Boolean.parseBoolean(m.group(1));
+    private static boolean extractBool(String field, String haystack) {
+        Reply reply = Reply.of(haystack);
+        assertTrue("probe response missing `" + field + "`: " + haystack, reply.has(field));
+        return reply.bool(field, false);
     }
 }

@@ -1,5 +1,6 @@
 package zmaster587.advancedRocketry.test.client;
 
+import zmaster587.advancedRocketry.test.Reply;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 import org.junit.FixMethodOrder;
@@ -42,7 +43,7 @@ public class ClientBootBaselineGroupE2ETest extends AbstractSharedClientE2ETest 
      *  the 200 ticks the readback poll it replaces allowed. */
     private static final int MUTE_BUDGET_TICKS = 200;
 
-    private static final Pattern MASTER = Pattern.compile("\"master\":(-?[0-9.eE+-]+)");
+    private static final String MASTER = "master";
 
     @Override
     protected String subsystem() {
@@ -131,15 +132,15 @@ public class ClientBootBaselineGroupE2ETest extends AbstractSharedClientE2ETest 
         // be empty however long it waited. Nothing can have evicted the record — the ring is bounded
         // PER TYPE and production reaches this seam at most once per client session, so this type
         // cannot overrun its own ring whatever the rest of the log is doing.
-        String muted = clientEvents().awaitCarrying(0L, "test_client_muted", "\"master\"",
+        String muted = clientEvents().awaitRecordCarrying(0L, "test_client_muted", "\"master\"",
                 "a harness-spawned client must mute its master sound level on the first client tick"
                         + " with the sound handler up (instrument: client_proxy_events)",
                 MUTE_BUDGET_TICKS);
 
-        Matcher m = MASTER.matcher(muted);
+        Reply mReply = Reply.of(muted);
         assertTrue("a test_client_muted record must carry the level the mute left behind: " + muted,
-                m.find());
-        float master = Float.parseFloat(m.group(1));
+                mReply.has(MASTER));
+        float master = Float.parseFloat(mReply.text(MASTER));
         scenario().record("testClientMasterVolume", master);
         assertEquals("a harness test client must have master sound muted to 0",
                 0.0f, master, 1e-6f);

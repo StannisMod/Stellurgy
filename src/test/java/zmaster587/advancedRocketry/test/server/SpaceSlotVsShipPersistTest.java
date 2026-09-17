@@ -1,5 +1,6 @@
 package zmaster587.advancedRocketry.test.server;
 
+import zmaster587.advancedRocketry.test.Reply;
 import zmaster587.advancedRocketry.test.GameTicks;
 
 import org.junit.Test;
@@ -24,9 +25,9 @@ public class SpaceSlotVsShipPersistTest extends AbstractSharedServerTest {
     /** Ticks each of a caller's "tries" is worth - the old 500 ms per attempt. */
     private static final int TICKS_PER_TRY = 10;
 
-    private static final Pattern SLOT = Pattern.compile("\"slot\":(-?\\d+)");
-    private static final Pattern COUNT = Pattern.compile("\"count\":(-?\\d+)");
-    private static final Pattern COUNT_AFTER = Pattern.compile("\"countAfterReload\":(-?\\d+)");
+    private static final String SLOT = "slot";
+    private static final String COUNT = "count";
+    private static final String COUNT_AFTER = "countAfterReload";
 
     private String exec(String cmd) throws Exception {
         return String.join("\n", client().execute(cmd));
@@ -39,8 +40,8 @@ public class SpaceSlotVsShipPersistTest extends AbstractSharedServerTest {
         // VS drains its spawn queue on the server tick, so the budget is ticks of it: tries x the old
         // 500 ms, said in the units of the thing that has to happen.
         GameTicks.until(client(), GameTicks.server(), tries * TICKS_PER_TRY, () -> {
-            Matcher m = COUNT.matcher(exec("artest space vs-count " + dim));
-            c[0] = m.find() ? Integer.parseInt(m.group(1)) : -1;
+            Reply mReply = Reply.of(exec("artest space vs-count " + dim));
+            c[0] = mReply.has(COUNT) ? Integer.parseInt(mReply.text(COUNT)) : -1;
             return c[0] >= want;
         });
         return c[0];
@@ -50,9 +51,9 @@ public class SpaceSlotVsShipPersistTest extends AbstractSharedServerTest {
     public void vsShipDataSurvivesSlotUnloadReload() throws Exception {
 
         String asm = exec("artest space vs-assemble deep");
-        Matcher m = SLOT.matcher(asm);
-        assertTrue("vs-assemble must report a slot dim: " + asm, m.find());
-        int slot = Integer.parseInt(m.group(1));
+        Reply mReply = Reply.of(asm);
+        assertTrue("vs-assemble must report a slot dim: " + asm, mReply.has(SLOT));
+        int slot = Integer.parseInt(mReply.text(SLOT));
 
         int before = pollCount(slot, 1, 20);
         assertTrue("a VS ship must enter the pool world's registry (count=" + before + ")", before >= 1);
@@ -62,8 +63,8 @@ public class SpaceSlotVsShipPersistTest extends AbstractSharedServerTest {
         // world unloading between calls.
         String reload = exec("artest space reload " + slot + " deep");
         assertTrue("slot must reload after a VS-ship unload: " + reload, reload.contains("\"present\":true"));
-        Matcher rm = COUNT_AFTER.matcher(reload);
-        int after = rm.find() ? Integer.parseInt(rm.group(1)) : -99;
+        Reply rmReply = Reply.of(reload);
+        int after = rmReply.has(COUNT_AFTER) ? Integer.parseInt(rmReply.text(COUNT_AFTER)) : -99;
         assertTrue("the VS ship's data must survive the slot unload/reload: " + reload, after >= 1);
     }
 }

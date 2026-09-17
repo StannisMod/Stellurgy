@@ -7,6 +7,7 @@ import org.junit.Test;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import zmaster587.advancedRocketry.test.Reply;
 import zmaster587.advancedRocketry.test.FixtureSite;
 
 import static org.junit.Assert.assertTrue;
@@ -32,8 +33,7 @@ import static org.junit.Assert.assertTrue;
  */
 public class AdvancedFlightComputerTierGateTest extends AbstractSharedServerTest {
 
-    private static final Pattern BUILDER_POS =
-            Pattern.compile("\"builderPos\":\\[(-?\\d+),(-?\\d+),(-?\\d+)]");
+    private static final String BUILDER_POS = "builderPos";
 
     private static final String VARIANT = "with-advanced-flight-computer";
 
@@ -50,7 +50,7 @@ public class AdvancedFlightComputerTierGateTest extends AbstractSharedServerTest
         // A rocket WAS built (fallback taken) ...
         assertTrue("expected exactly one rocket from the fallback path: " + assemble,
                 assemble.contains("\"rocketCount\":1"));
-        int entityId = extractInt(assemble, "\"entityId\":(-?\\d+)");
+        int entityId = extractInt(assemble, "entityId");
         assertTrue("assemble did not report a rocket entity id: " + assemble, entityId >= 0);
 
         String info = String.join("\n", client().execute("artest rocket info " + entityId));
@@ -138,13 +138,12 @@ public class AdvancedFlightComputerTierGateTest extends AbstractSharedServerTest
         String fixture = String.join("\n", client().execute(
                 "artest fixture rocket 0 " + baseX + " " + baseY + " " + baseZ + " " + variant));
         assertTrue("fixture (" + variant + ") failed: " + fixture, fixture.contains("\"ok\":true"));
-        Matcher bp = BUILDER_POS.matcher(fixture);
-        assertTrue("fixture (" + variant + ") missing builderPos: " + fixture, bp.find());
-        return bp.group(1) + " " + bp.group(2) + " " + bp.group(3);
+        int[] bp = Reply.of(fixture).blockPos(BUILDER_POS);
+        assertTrue("fixture (" + variant + ") missing builderPos: " + fixture, bp != null);
+        return bp[0] + " " + bp[1] + " " + bp[2];
     }
 
-    private static int extractInt(String haystack, String regex) {
-        Matcher m = Pattern.compile(regex).matcher(haystack);
-        return m.find() ? Integer.parseInt(m.group(1)) : -1;
+    private static int extractInt(String haystack, String field) {
+        return Reply.of(haystack).integerOr(field, -1);
     }
 }

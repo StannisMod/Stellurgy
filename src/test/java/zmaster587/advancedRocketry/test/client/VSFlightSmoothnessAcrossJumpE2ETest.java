@@ -9,9 +9,8 @@ import org.junit.Test;
 import org.junit.runners.MethodSorters;
 import org.lwjgl.input.Keyboard;
 
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
+import zmaster587.advancedRocketry.test.Reply;
 import zmaster587.advancedRocketry.test.Events;
 import zmaster587.advancedRocketry.test.ShipIdentity;
 
@@ -54,6 +53,9 @@ public class VSFlightSmoothnessAcrossJumpE2ETest extends AbstractSharedVsClientE
 
 
     private static final String MOTION_TRACE = "zmaster587.advancedRocketry.command.test.MotionTrace";
+
+    /** A channel's net displacement over the window, as an {@code [x,y,z]} array. */
+    private static final String NET_MOVE = "netMove";
 
     /**
      * How long one measured leg holds the key. Long enough that the Flight-Assist setpoint has
@@ -212,10 +214,10 @@ public class VSFlightSmoothnessAcrossJumpE2ETest extends AbstractSharedVsClientE
                 + " with-pilot-seat");
         scenario().requireArranged("fixture (with-pilot-seat) failed: " + fixture,
                 fixture.contains("\"ok\":true"));
-        Matcher bp = Pattern.compile("\"builderPos\":\\[(-?\\d+),(-?\\d+),(-?\\d+)]").matcher(fixture);
-        scenario().requireArranged("fixture missing builderPos: " + fixture, bp.find());
-        String assembled = exec("artest rocket assemble " + originDim + " " + bp.group(1) + " "
-                + bp.group(2) + " " + bp.group(3));
+        int[] bp = Reply.of("artest fixture rocket", fixture).blockPos("builderPos");
+        scenario().requireArranged("fixture missing builderPos: " + fixture, bp != null);
+        String assembled = exec("artest rocket assemble " + originDim + " " + bp[0] + " "
+                + bp[1] + " " + bp[2]);
         scenario().requireArranged("a with-pilot-seat build must route to a ship: " + assembled,
                 assembled.contains("\"rocketCount\":0"));
         scenario().requireArranged("the origin ship never assembled/loaded in dim " + originDim,
@@ -693,14 +695,13 @@ public class VSFlightSmoothnessAcrossJumpE2ETest extends AbstractSharedVsClientE
 
     /** The length of a channel's {@code netMove} vector, or 0 when it reported none. */
     private static double netMoveLength(String json) {
-        Matcher m = Pattern.compile(
-                "\"netMove\":\\[(-?[0-9.E\\-]+),(-?[0-9.E\\-]+),(-?[0-9.E\\-]+)]").matcher(json);
-        if (!m.find()) {
+        Reply channel = Reply.of("a smoothness channel", json);
+        if (!channel.has(NET_MOVE)) {
             return 0.0;
         }
-        double x = Double.parseDouble(m.group(1));
-        double y = Double.parseDouble(m.group(2));
-        double z = Double.parseDouble(m.group(3));
+        double x = channel.arrayNumber(NET_MOVE, 0);
+        double y = channel.arrayNumber(NET_MOVE, 1);
+        double z = channel.arrayNumber(NET_MOVE, 2);
         return Math.sqrt(x * x + y * y + z * z);
     }
 
@@ -779,29 +780,24 @@ public class VSFlightSmoothnessAcrossJumpE2ETest extends AbstractSharedVsClientE
     }
 
     private static boolean readBool(String json, String key) {
-        Matcher m = Pattern.compile("\"" + key + "\":(true|false)").matcher(json);
-        return m.find() && "true".equals(m.group(1));
+        return Reply.of(json).bool(key, false);
     }
 
     private static int readInt(String json, String key) {
-        Matcher m = Pattern.compile("\"" + key + "\":(-?\\d+)").matcher(json);
-        assertTrue("expected int \"" + key + "\" in: " + json, m.find());
-        return Integer.parseInt(m.group(1));
+        assertTrue("expected int \"" + key + "\" in: " + json, Reply.of(json).has(key));
+        return Reply.of(json).integer(key);
     }
 
     private static int readIntOr(String json, String key, int def) {
-        Matcher m = Pattern.compile("\"" + key + "\":(-?\\d+)").matcher(json);
-        return m.find() ? Integer.parseInt(m.group(1)) : def;
+        return Reply.of(json).integerOr(key, def);
     }
 
     private static double readDouble(String json, String key) {
-        Matcher m = Pattern.compile("\"" + key + "\":(-?[0-9.E\\-]+)").matcher(json);
-        assertTrue("expected number \"" + key + "\" in: " + json, m.find());
-        return Double.parseDouble(m.group(1));
+        assertTrue("expected number \"" + key + "\" in: " + json, Reply.of(json).has(key));
+        return Reply.of(json).number(key);
     }
 
     private static double readDoubleOr(String json, String key, double def) {
-        Matcher m = Pattern.compile("\"" + key + "\":(-?[0-9.E\\-]+)").matcher(json);
-        return m.find() ? Double.parseDouble(m.group(1)) : def;
+        return Reply.of(json).numberOr(key, def);
     }
 }

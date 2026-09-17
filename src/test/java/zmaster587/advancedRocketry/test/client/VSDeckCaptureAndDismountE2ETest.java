@@ -9,6 +9,7 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 import zmaster587.advancedRocketry.test.Events;
+import zmaster587.advancedRocketry.test.Reply;
 import zmaster587.advancedRocketry.test.FixtureSite;
 import zmaster587.advancedRocketry.test.ShipIdentity;
 import zmaster587.advancedRocketry.test.ShipReadiness;
@@ -56,18 +57,17 @@ public class VSDeckCaptureAndDismountE2ETest extends AbstractSharedVsClientE2ETe
         return "vs-deck-capture";
     }
 
-    private static final Pattern BUILDER_POS =
-            Pattern.compile("\"builderPos\":\\[(-?\\d+),(-?\\d+),(-?\\d+)]");
-    private static final Pattern POS_X = Pattern.compile("\"posX\":(-?[0-9.E\\-]+)");
-    private static final Pattern POS_Y = Pattern.compile("\"posY\":(-?[0-9.E\\-]+)");
-    private static final Pattern POS_Z = Pattern.compile("\"posZ\":(-?[0-9.E\\-]+)");
-    private static final Pattern VEL_Y = Pattern.compile("\"velY\":(-?[0-9.E\\-]+)");
-    private static final Pattern PLAYER_Y = Pattern.compile("\"playerY\":(-?[0-9.E\\-]+)");
-    private static final Pattern OBSTACLES = Pattern.compile("\"shipSupportObstacles\":(-?\\d+)");
-    private static final Pattern DUMMY_ID = Pattern.compile("\"dummyId\":(-?\\d+)");
-    private static final Pattern SEAT_X = Pattern.compile("\"seatX\":(-?\\d+)");
-    private static final Pattern SEAT_Y = Pattern.compile("\"seatY\":(-?\\d+)");
-    private static final Pattern SEAT_Z = Pattern.compile("\"seatZ\":(-?\\d+)");
+    private static final String BUILDER_POS = "builderPos";
+    private static final String POS_X = "posX";
+    private static final String POS_Y = "posY";
+    private static final String POS_Z = "posZ";
+    private static final String VEL_Y = "velY";
+    private static final String PLAYER_Y = "playerY";
+    private static final String OBSTACLES = "shipSupportObstacles";
+    private static final String DUMMY_ID = "dummyId";
+    private static final String SEAT_X = "seatX";
+    private static final String SEAT_Y = "seatY";
+    private static final String SEAT_Z = "seatZ";
 
     private static final String VARIANT = "with-pilot-deck";
 
@@ -103,7 +103,7 @@ public class VSDeckCaptureAndDismountE2ETest extends AbstractSharedVsClientE2ETe
         String reply = "";
         for (int waited = 0; waited <= DECK_LINK_BUDGET_TICKS; waited += 5) {
             reply = events.since(mark, type);
-            if (Events.countRecords(reply, "\"vsShip\":\"" + scenarioShipId + "\"") > 0) {
+            if (Events.countRecords(reply, "vsShip", scenarioShipId) > 0) {
                 return reply;
             }
             bot().waitTicks(5);
@@ -210,7 +210,7 @@ public class VSDeckCaptureAndDismountE2ETest extends AbstractSharedVsClientE2ETe
                 + clientYLater, clientY - clientYLater < 1.5);
         assertTrue("the client must not let go of a player standing still on a grounded deck; a"
                 + " release here names the gate that dropped him: " + sinkReleases,
-                Events.countRecords(sinkReleases, "\"reason\"") == 0);
+                Events.countRecordsWithField(sinkReleases, "reason") == 0);
     }
 
     // ---- Bug: dismounting mid-hover drops the ship and the pilot --------------------------------
@@ -248,7 +248,7 @@ public class VSDeckCaptureAndDismountE2ETest extends AbstractSharedVsClientE2ETe
         bot().holdKey(Keyboard.KEY_LSHIFT);
         for (int i = 0; i < 40 && !dismounted; i++) {
             bot().waitTicks(2);
-            dismounted = Events.countRecords(events.since(dismountMark, "dismount"), "\"mount\"") > 0;
+            dismounted = Events.countRecordsWithField(events.since(dismountMark, "dismount"), "mount") > 0;
         }
         bot().releaseKey(Keyboard.KEY_LSHIFT);
         String serverDismount = "";
@@ -391,7 +391,7 @@ public class VSDeckCaptureAndDismountE2ETest extends AbstractSharedVsClientE2ETe
                 "the unloaded ship survived in the registry rather than being removed from it");
         assertTrue("the unloaded ship must survive in the registry (a saved ship is unloaded, never"
                         + " removed): " + removals,
-                Events.countRecords(removals, "\"vsShip\":\"" + scenarioShipId + "\"") == 0);
+                Events.countRecords(removals, "vsShip", scenarioShipId) == 0);
 
         // Return to the ship exactly as re-entering a docked ship from a saved world, and stand on
         // it. Two links, and each one names a different fault: the ship comes back
@@ -513,7 +513,7 @@ public class VSDeckCaptureAndDismountE2ETest extends AbstractSharedVsClientE2ETe
         assertTrue("a player flying through a ship's airspace, not standing on its deck, must keep his "
                 + "own view; the deck camera must not hijack it (active=" + flyInCam + " roll="
                 + flyInRoll + " edges=" + flyInCamEdges + ")",
-                !flyInCam && Events.countRecords(flyInCamEdges, "\"active\":true") == 0);
+                !flyInCam && Events.countRecords(flyInCamEdges, "active", "true") == 0);
 
         // POSITIVE control: level the ship and land him ON the deck. Now the deck camera SHOULD engage -
         // so the negative above is a real on-deck/off-deck discrimination, not the camera never firing.
@@ -651,9 +651,9 @@ public class VSDeckCaptureAndDismountE2ETest extends AbstractSharedVsClientE2ETe
     // ---- Bug: entering / leaving the seat on a truly INVERTED ship (the maintainer's live scenario) --
 
     private static final String KEY_BINDINGS = "zmaster587.advancedRocketry.client.KeyBindings";
-    private static final Pattern OMEGA = Pattern.compile("\"omega\":(-?[0-9.E\\-]+)");
-    private static final Pattern QX = Pattern.compile("\"qx\":(-?[0-9.E\\-]+)");
-    private static final Pattern QZ = Pattern.compile("\"qz\":(-?[0-9.E\\-]+)");
+    private static final String OMEGA = "omega";
+    private static final String QX = "qx";
+    private static final String QZ = "qz";
 
     private double shipUpYFromInfo(String info) {
         double qx = readDouble(info, QX), qz = readDouble(info, QZ);
@@ -839,7 +839,7 @@ public class VSDeckCaptureAndDismountE2ETest extends AbstractSharedVsClientE2ETe
         double serverY = readDouble(exec("artest vs player-ship-data"), PLAYER_Y);
         System.out.println("[deckcap] dismount-then-roll " + label + " upY=" + tilted + " shipPosY="
                 + shipPosY + " settledMin=" + settledMin + " osc=" + osc + " seed=" + seeded
-                + " capturesOnRoll=" + Events.countRecords(rollCaptures, "\"ship\"")
+                + " capturesOnRoll=" + Events.countRecordsWithField(rollCaptures, "ship")
                 + " releasesOnRoll=" + rollReleases
                 + " capture=" + capture + " clientY=" + clientY + " serverY=" + serverY + " Ytraj=" + traj);
 
@@ -1132,7 +1132,7 @@ public class VSDeckCaptureAndDismountE2ETest extends AbstractSharedVsClientE2ETe
 
         assertTrue("capture must stay STABLE on a held tilted deck, not flicker - the client released"
                 + " it, and the record names the gate: " + flickers + " :: " + trace,
-                Events.countRecords(flickers, "\"reason\"") == 0);
+                Events.countRecordsWithField(flickers, "reason") == 0);
         assertTrue("capture must stay STABLE on a held tilted deck, not flicker (captured " + captured
                 + "/" + n + "): " + trace, captured == n);
         // The camera's DISENGAGE is not recordable — production drops `shipCamActive` directly in the
@@ -1180,16 +1180,16 @@ public class VSDeckCaptureAndDismountE2ETest extends AbstractSharedVsClientE2ETe
         // near 135deg - deck-up well past horizontal and pointing downward. That is a strongly non-trivial
         // attitude, which is all the consistency check needs.
         assertTrue("ship must be strongly inverted (deck-up points well below horizontal): " + tc,
-                readDouble(tc, Pattern.compile("\"upQuatY\":(-?[0-9.E\\-]+)")) < -0.5);
+                readDouble(tc, "upQuatY") < -0.5);
 
         // THE decisive check: the MOVEMENT frame (VS vector rotate, used by ShipFrameTravel) and the
         // CAMERA/gravity frame (the attitude quaternion) must describe the SAME rotation. A disagreement
         // here is the root of "the inverted ship drags me through the deck while the camera never turns
         // over" - movement resolving in one frame, the camera reading another.
-        double upDis = readDouble(tc, Pattern.compile("\"upDisagreement\":(-?[0-9.E\\-]+)"));
-        double fwdDis = readDouble(tc, Pattern.compile("\"fwdDisagreement\":(-?[0-9.E\\-]+)"));
-        double posRt = readDouble(tc, Pattern.compile("\"posRoundTripErr\":(-?[0-9.E\\-]+)"));
-        double rotRt = readDouble(tc, Pattern.compile("\"rotRoundTripErr\":(-?[0-9.E\\-]+)"));
+        double upDis = readDouble(tc, "upDisagreement");
+        double fwdDis = readDouble(tc, "fwdDisagreement");
+        double posRt = readDouble(tc, "posRoundTripErr");
+        double rotRt = readDouble(tc, "rotRoundTripErr");
         System.out.println("[deckcap] inverted upDis=" + upDis + " fwdDis=" + fwdDis
                 + " posRt=" + posRt + " rotRt=" + rotRt);
         assertTrue("movement rotate and camera quaternion must agree on ship-up (disagree=" + upDis
@@ -1288,10 +1288,9 @@ public class VSDeckCaptureAndDismountE2ETest extends AbstractSharedVsClientE2ETe
                 seat.contains("\"seatFound\":true"));
         String mountInfo = exec("artest vs seat-mount-at 0 " + readInt(seat, SEAT_X) + " "
                 + readInt(seat, SEAT_Y) + " " + readInt(seat, SEAT_Z));
-        Matcher dm = DUMMY_ID.matcher(mountInfo);
-        assertTrue("seat-mount-at must report a dummy id: " + mountInfo, dm.find());
+        int dummyId = Reply.of("artest vs seat-mount-at", mountInfo).integer(DUMMY_ID);
         assertTrue("bot must mount the seat dummy: " + mountInfo,
-                exec("artest player mount-entity " + dm.group(1)).contains("\"mounted\":true"));
+                exec("artest player mount-entity " + dummyId).contains("\"mounted\":true"));
     }
 
     private String assembleFixture(FixtureSite site) throws Exception {
@@ -1309,9 +1308,9 @@ public class VSDeckCaptureAndDismountE2ETest extends AbstractSharedVsClientE2ETe
                 "the hull, the deck a pilot dismounts onto, and the air he jumps into above it");
         String fixture = exec("artest fixture rocket 0 " + baseX + " " + baseY + " " + baseZ + " " + VARIANT);
         assertTrue("fixture (" + VARIANT + ") failed: " + fixture, fixture.contains("\"ok\":true"));
-        Matcher bp = BUILDER_POS.matcher(fixture);
-        assertTrue("fixture missing builderPos: " + fixture, bp.find());
-        return exec("artest rocket assemble 0 " + bp.group(1) + " " + bp.group(2) + " " + bp.group(3));
+        int[] bp = Reply.of(fixture).blockPos(BUILDER_POS);
+        assertTrue("fixture missing builderPos: " + fixture, bp != null);
+        return exec("artest rocket assemble 0 " + bp[0] + " " + bp[1] + " " + bp[2]);
     }
 
     /** This scenario's ship, asked by identity. */
@@ -1332,15 +1331,13 @@ public class VSDeckCaptureAndDismountE2ETest extends AbstractSharedVsClientE2ETe
         return shipInfo().contains("\"managed\":true");
     }
 
-    private double readDouble(String json, Pattern p) {
-        Matcher m = p.matcher(json);
-        assertTrue("expected a number in: " + json, m.find());
-        return Double.parseDouble(m.group(1));
+    private double readDouble(String json, String field) {
+        double value = Reply.of(json).number(field);
+        assertTrue("expected a number `" + field + "` in: " + json, !Double.isNaN(value));
+        return value;
     }
 
-    private int readInt(String json, Pattern p) {
-        Matcher m = p.matcher(json);
-        assertTrue("expected an integer in: " + json, m.find());
-        return Integer.parseInt(m.group(1));
+    private int readInt(String json, String field) {
+        return Reply.of(json).integer(field);
     }
 }

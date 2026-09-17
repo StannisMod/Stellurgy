@@ -1,6 +1,7 @@
 package zmaster587.advancedRocketry.test.server;
 
 // migrated to AbstractSharedServerTest
+import zmaster587.advancedRocketry.test.Reply;
 import org.junit.Assume;
 import zmaster587.advancedRocketry.test.GameTicks;
 
@@ -52,21 +53,18 @@ public class PlayerEventHandlerWiringTest extends AbstractSharedServerTest {
      */
     private static final int OBSERVED_TICKS = 10;
 
-    private static final Pattern TIME_PATTERN = Pattern.compile("\"time\":(\\d+)");
-    private static final Pattern WORLD_TIME_PATTERN =
-            Pattern.compile("\"worldTotalTime\":(-?\\d+)");
-    private static final Pattern AR_DIMS_ARRAY = Pattern.compile("\"arDimensions\":\\[([^]]*)]");
+    private static final String TIME_PATTERN = "time";
+    private static final String WORLD_TIME_PATTERN = "worldTotalTime";
+    private static final String AR_DIMS_ARRAY = "arDimensions";
 
     private static String ok(java.util.List<String> resp) {
         return String.join("\n", resp);
     }
 
-    private static long parseGroup(Pattern pattern, String resp, String label) {
-        Matcher m = pattern.matcher(resp);
-        if (!m.find()) {
-            throw new AssertionError("could not parse " + label + " from response: " + resp);
-        }
-        return Long.parseLong(m.group(1));
+    private static long parseGroup(String field, String resp, String label) {
+        Reply reply = Reply.of(resp);
+        assertTrue("could not parse " + label + ": " + resp, reply.has(field));
+        return (long) reply.integer(field);
     }
 
     private int firstArDimOrSkip() throws Exception {
@@ -74,12 +72,9 @@ public class PlayerEventHandlerWiringTest extends AbstractSharedServerTest {
         Assume.assumeFalse(
                 "No AR dimensions registered — skipping",
                 joined.contains("\"arDimensions\":[]"));
-        Matcher m = AR_DIMS_ARRAY.matcher(joined);
-        assertTrue("could not parse arDimensions array: " + joined, m.find());
-        for (String part : m.group(1).split(",")) {
-            String t = part.trim();
-            if (t.isEmpty()) continue;
-            int dim = Integer.parseInt(t);
+        Reply dims = Reply.of("artest dim list", joined);
+        assertTrue("could not parse arDimensions array: " + joined, dims.has(AR_DIMS_ARRAY));
+        for (int dim : dims.intArray(AR_DIMS_ARRAY)) {
             if (dim != 0) return dim;
         }
         Assume.assumeTrue(
@@ -183,12 +178,11 @@ public class PlayerEventHandlerWiringTest extends AbstractSharedServerTest {
         // fixture set, so we can't use dim 0 here; pick the first non-AR
         // forge dim that's NOT in the arDimensions array.
         String dimList = ok(client().execute("artest dim list"));
-        Matcher arM = AR_DIMS_ARRAY.matcher(dimList);
-        Assume.assumeTrue("dim list missing arDimensions array", arM.find());
+        Reply listed = Reply.of("artest dim list", dimList);
+        Assume.assumeTrue("dim list missing arDimensions array", listed.has(AR_DIMS_ARRAY));
         java.util.Set<Integer> arDims = new java.util.HashSet<>();
-        for (String part : arM.group(1).split(",")) {
-            String t = part.trim();
-            if (!t.isEmpty()) arDims.add(Integer.parseInt(t));
+        for (int d : listed.intArray(AR_DIMS_ARRAY)) {
+            arDims.add(d);
         }
         // Try nether (-1) then end (1). Skip if both happen to be AR (the
         // fixture doesn't currently register them, but be defensive).

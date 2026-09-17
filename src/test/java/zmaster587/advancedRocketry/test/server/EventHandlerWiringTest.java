@@ -2,6 +2,8 @@ package zmaster587.advancedRocketry.test.server;
 
 // migrated to AbstractSharedServerTest
 import org.junit.Assume;
+
+import zmaster587.advancedRocketry.test.Reply;
 import org.junit.Test;
 
 import java.util.regex.Matcher;
@@ -37,20 +39,16 @@ import static org.junit.Assert.assertTrue;
  */
 public class EventHandlerWiringTest extends AbstractSharedServerTest {
 
-    private static final Pattern AR_DIMS_ARRAY_PATTERN =
-            Pattern.compile("\"arDimensions\":\\[([^]]*)]");
+    private static final String AR_DIMS_ARRAY_PATTERN = "arDimensions";
 
     private int firstNonOverworldArDimOrSkip() throws Exception {
         String joined = String.join("\n", client().execute("artest dim list"));
         Assume.assumeFalse(
                 "No AR dimensions registered — skipping (empty galaxy?)",
                 joined.contains("\"arDimensions\":[]"));
-        Matcher m = AR_DIMS_ARRAY_PATTERN.matcher(joined);
-        assertTrue("could not parse arDimensions array: " + joined, m.find());
-        for (String part : m.group(1).split(",")) {
-            String t = part.trim();
-            if (t.isEmpty()) continue;
-            int dim = Integer.parseInt(t);
+        Reply dims = Reply.of("artest dim list", joined);
+        assertTrue("could not parse arDimensions array: " + joined, dims.has(AR_DIMS_ARRAY_PATTERN));
+        for (int dim : dims.intArray(AR_DIMS_ARRAY_PATTERN)) {
             if (dim != 0) return dim;
         }
         Assume.assumeTrue(

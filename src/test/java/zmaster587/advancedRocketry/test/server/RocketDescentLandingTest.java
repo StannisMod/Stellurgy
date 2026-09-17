@@ -1,6 +1,8 @@
 package zmaster587.advancedRocketry.test.server;
 
+import zmaster587.advancedRocketry.test.Reply;
 import org.junit.Test;
+import zmaster587.advancedRocketry.test.RocketList;
 import zmaster587.advancedRocketry.test.FixtureSite;
 import zmaster587.advancedRocketry.test.GameTicks;
 
@@ -40,21 +42,20 @@ public class RocketDescentLandingTest extends AbstractSharedServerTest {
 
     private static final int DESCENT_TIMER = 40; // mirrors EntityRocket.DESCENT_TIMER
 
-    private static final Pattern BUILDER_POS =
-            Pattern.compile("\"builderPos\":\\[(-?\\d+),(-?\\d+),(-?\\d+)]");
-    private static final Pattern ROCKET_LIST_ID = Pattern.compile("\"id\":(-?\\d+)");
-    private static final Pattern TICKS_EXISTED = Pattern.compile("\"ticksExisted\":(-?\\d+)");
-    private static final Pattern LANDED_COUNT = Pattern.compile("\"landed\":(-?\\d+)");
-    private static final Pattern POS_Y_FIELD = Pattern.compile("\"posY\":(-?[0-9.E]+)");
+    private static final String BUILDER_POS = "builderPos";
+    private static final String ROCKET_LIST_ID = "id";
+    private static final String TICKS_EXISTED = "ticksExisted";
+    private static final String LANDED_COUNT = "landed";
+    private static final String POS_Y_FIELD = "posY";
 
     private static String ok(java.util.List<String> resp) {
         return String.join("\n", resp);
     }
 
-    private static int gi(Pattern p, String s, String label) {
-        Matcher m = p.matcher(s);
-        if (!m.find()) throw new AssertionError("could not parse " + label + ": " + s);
-        return Integer.parseInt(m.group(1));
+    private static int gi(String field, String s, String label) {
+        Reply reply = Reply.of(s);
+        assertTrue("could not parse " + label + ": " + s, reply.has(field));
+        return reply.integer(field);
     }
 
     // No per-test cleanup of chunk tickets: releasing a Forge chunk
@@ -75,18 +76,16 @@ public class RocketDescentLandingTest extends AbstractSharedServerTest {
                 "the craft is built in this volume and then teleported to its descent altitude");
         String fixture = ok(client().execute(
                 "artest fixture rocket 0 " + baseX + " " + baseY + " " + baseZ + " simple"));
-        Matcher bp = BUILDER_POS.matcher(fixture);
-        assertTrue("fixture missing builderPos: " + fixture, bp.find());
-        int bx = Integer.parseInt(bp.group(1));
-        int by = Integer.parseInt(bp.group(2));
-        int bz = Integer.parseInt(bp.group(3));
+        int[] bp = Reply.of(fixture).blockPos(BUILDER_POS);
+        assertTrue("fixture missing builderPos: " + fixture, bp != null);
+        int bx = bp[0];
+        int by = bp[1];
+        int bz = bp[2];
         ok(client().execute("artest rocket assemble 0 " + bx + " " + by + " " + bz));
         String list = ok(client().execute("artest rocket list 0"));
-        Matcher rim = ROCKET_LIST_ID.matcher(list);
-        int lastId = -1;
-        while (rim.find()) lastId = Integer.parseInt(rim.group(1));
-        assertTrue("no rocket after assemble: " + list, lastId >= 0);
-        return lastId;
+        java.util.List<RocketList.Entry> built = RocketList.of(list);
+        assertTrue("no rocket after assemble: " + list, !built.isEmpty());
+        return built.get(built.size() - 1).id;
     }
 
     /** Force-load a 3×3 grid of chunks centered on (worldX, worldZ) in
@@ -193,9 +192,9 @@ public class RocketDescentLandingTest extends AbstractSharedServerTest {
         GameTicks.advanceWorld(client(), 0, 5);
 
         String info = ok(client().execute("artest rocket info " + id));
-        Matcher m = POS_Y_FIELD.matcher(info);
-        assertTrue("info must expose posY: " + info, m.find());
-        double posYAfter = Double.parseDouble(m.group(1));
+        Reply mReply = Reply.of(info);
+        assertTrue("info must expose posY: " + info, mReply.has(POS_Y_FIELD));
+        double posYAfter = Double.parseDouble(mReply.text(POS_Y_FIELD));
         assertTrue("gravity must have pulled the rocket downwards under "
                 + "real ticking (posY=" + posYAfter + ", started at 300)",
                 posYAfter < 300.0);
@@ -257,9 +256,9 @@ public class RocketDescentLandingTest extends AbstractSharedServerTest {
         int id = buildAndAssemble(site);
 
         String info = ok(client().execute("artest rocket info " + id));
-        Matcher mY = POS_Y_FIELD.matcher(info);
-        assertTrue("info must expose posY: " + info, mY.find());
-        int posY = (int) Double.parseDouble(mY.group(1));
+        Reply mYReply = Reply.of(info);
+        assertTrue("info must expose posY: " + info, mYReply.has(POS_Y_FIELD));
+        int posY = (int) Double.parseDouble(mYReply.text(POS_Y_FIELD));
 
         String dismantleResp = ok(client().execute("artest rocket dismantle " + id));
         assertTrue("dismantle must succeed: " + dismantleResp,

@@ -9,6 +9,7 @@ import java.util.Locale;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import zmaster587.advancedRocketry.test.Reply;
 import zmaster587.advancedRocketry.test.Events;
 
 import zmaster587.advancedRocketry.test.Plot;
@@ -79,8 +80,8 @@ public class ItemRightClickClientGroupE2ETest extends AbstractSharedClientE2ETes
     private static final int FIXTURE_DX = 20;
     private static final int FIXTURE_DZ = 20;
 
-    private static final Pattern SAT_ID = Pattern.compile("\"satId\":(-?\\d+)");
-    private static final Pattern POSLIST_SIZE = Pattern.compile("\"posListSize\":(-?\\d+)");
+    private static final String SAT_ID = "satId";
+    private static final String POSLIST_SIZE = "posListSize";
 
     /**
      * How long one link of a right-click's answer may take. The old per-scenario budgets were 100
@@ -172,10 +173,10 @@ public class ItemRightClickClientGroupE2ETest extends AbstractSharedClientE2ETes
      */
     private static final int HELD_LINK_BUDGET_TICKS = 200;
 
-    private static int extractInt(String src, Pattern pattern) {
-        Matcher m = pattern.matcher(src);
-        assertTrue("pattern " + pattern.pattern() + " not found in: " + src, m.find());
-        return Integer.parseInt(m.group(1));
+    private static int extractInt(String src, String field) {
+        Reply reply = Reply.of(src);
+        assertTrue("field `" + field + "` not found in: " + src, reply.has(field));
+        return reply.integer(field);
     }
 
     // ── waiting on a log, either side ─────────────────────────────────────────
@@ -212,10 +213,28 @@ public class ItemRightClickClientGroupE2ETest extends AbstractSharedClientE2ETes
         return reply;
     }
 
+    /**
+     * How many {@code client_gui_opened} records name a screen whose class carries {@code name}.
+     *
+     * <p>The recorder writes {@code gui} as the screen's simple class name, so the question is asked
+     * of that FIELD and the substring lives inside its value — a screen "named after ore mapping" is
+     * the contract, and the old form matched the same letters anywhere in the record.</p>
+     */
+    private static int guisNamed(String sinceReply, String name) {
+        int n = 0;
+        for (String record : Events.records(sinceReply)) {
+            String gui = Events.text(record, "gui");
+            if (gui != null && gui.contains(name)) {
+                n++;
+            }
+        }
+        return n;
+    }
+
     /** How many records of a {@code since} reply carry BOTH needles — case-insensitively, because a
      *  chat line is prose and its capitalisation is the translation's business, not the contract's. */
     private static int recordsWithBoth(String sinceReply, String first, String second) {
-        return Events.recordsWithAllIgnoringCase(sinceReply, first, second).size();
+        return Events.recordsContainingAllIgnoringCase(sinceReply, first, second).size();
     }
 
     // ── atmosphere analyser: the answer is two lines of chat ──────────────────
@@ -299,9 +318,9 @@ public class ItemRightClickClientGroupE2ETest extends AbstractSharedClientE2ETes
         String equip = exec("artest player equip-biomechanger " + plot().dim);
         scenario().requireArranged("equip-biomechanger must succeed: " + equip,
                 equip.contains("\"ok\":true"));
-        Matcher satM = SAT_ID.matcher(equip);
-        scenario().requireArranged("equip response must carry satId: " + equip, satM.find());
-        long satId = Long.parseLong(satM.group(1));
+        Reply satMReply = Reply.of(equip);
+        scenario().requireArranged("equip response must carry satId: " + equip, satMReply.has(SAT_ID));
+        long satId = Long.parseLong(satMReply.text(SAT_ID));
         scenario().record("satId", satId)
                 .describeOnFailureWith("artest satellite poslist-size " + plot().dim + " " + satId);
 
@@ -387,7 +406,7 @@ public class ItemRightClickClientGroupE2ETest extends AbstractSharedClientE2ETes
         String opened = clientEvents().since(clientMark, "client_gui_opened");
         assertEquals("empty-satellite right-click must open no screen on the client; screens the"
                         + " client was asked to display since the click: " + opened,
-                0, Events.countRecords(opened, "OreMapping"));
+                0, guisNamed(opened, "OreMapping"));
         assertEquals("empty-satellite right-click must not leave a screen open",
                 "", bot().reportState().get("screen").getAsString());
     }
@@ -518,14 +537,14 @@ public class ItemRightClickClientGroupE2ETest extends AbstractSharedClientE2ETes
         String spawnedOnServer = events.since(mark, "entity_joined_world");
         assertEquals("the server must spawn exactly one EntityHoverCraft for one click; entities"
                         + " that joined the server world since it: " + spawnedOnServer,
-                1, Events.countRecords(spawnedOnServer, "EntityHoverCraft"));
+                1, Events.countRecords(spawnedOnServer, "cls", "EntityHoverCraft"));
 
         String spawnedOnClient = awaitRecord(
                 () -> clientEvents().since(clientMark, "entity_joined_world"),
                 "entityhovercraft", LINK_BUDGET_TICKS);
         Events.assertInstrumentRan(spawnedOnClient, "client_entity_join_events",
                 "the client received the spawned hovercraft");
-        int seen = Events.countRecords(spawnedOnClient, "\"cls\":\"EntityHoverCraft\"");
+        int seen = Events.countRecords(spawnedOnClient, "cls", "EntityHoverCraft");
         // Read the stack whatever the entity count said: together the two separate "production
         // returned PASS/FAIL and spawned nothing" (stack intact) from "it spawned and the client
         // never saw it" (stack consumed). One of those is a client-sync bug and the other is not.
@@ -594,7 +613,7 @@ public class ItemRightClickClientGroupE2ETest extends AbstractSharedClientE2ETes
         String joined = events.since(mark, "entity_joined_world");
         assertEquals("no hovercraft must be spawned on an empty ray-trace; entities that joined the"
                         + " server world since the click: " + joined,
-                0, Events.countRecords(joined, "EntityHoverCraft"));
+                0, Events.countRecords(joined, "cls", "EntityHoverCraft"));
         assertEquals("no hovercraft must spawn on an empty ray-trace",
                 0, bot().reportEntities("EntityHoverCraft", 32).get("count").getAsInt());
         JsonObject held = bot().reportPlayerItems().getAsJsonObject("held");

@@ -1,5 +1,6 @@
 package zmaster587.advancedRocketry.test.server;
 
+import zmaster587.advancedRocketry.test.Reply;
 import org.junit.Test;
 
 import java.util.regex.Matcher;
@@ -36,13 +37,10 @@ import static org.junit.Assert.assertTrue;
  */
 public class RocketItemUnloaderActiveTransferTest extends AbstractSharedServerTest {
 
-    private static final Pattern BUILDER_POS =
-            Pattern.compile("\"builderPos\":\\[(-?\\d+),(-?\\d+),(-?\\d+)]");
-    private static final Pattern ENT_ID = Pattern.compile("\"entityId\":(-?\\d+)");
-    private static final Pattern TOTAL_PLACED =
-            Pattern.compile("\"totalPlaced\":(\\d+)");
-    private static final Pattern TILES_WITH_CAP =
-            Pattern.compile("\"tilesWithCapability\":(\\d+)");
+    private static final String BUILDER_POS = "builderPos";
+    private static final String ENT_ID = "entityId";
+    private static final String TOTAL_PLACED = "totalPlaced";
+    private static final String TILES_WITH_CAP = "tilesWithCapability";
 
     /**
      * unloader pre-linked to a rocket actively drains the
@@ -135,20 +133,20 @@ public class RocketItemUnloaderActiveTransferTest extends AbstractSharedServerTe
                 + " " + variant);
         assertTrue("fixture rocket (" + variant + ") failed: " + fx,
                 fx.contains("\"ok\":true"));
-        Matcher bp = BUILDER_POS.matcher(fx);
-        assertTrue("could not parse builderPos: " + fx, bp.find());
+        int[] bp = Reply.of(fx).blockPos(BUILDER_POS);
+        assertTrue("could not parse builderPos: " + fx, bp != null);
         String assemble = exec("artest rocket assemble 0 "
-                + bp.group(1) + " " + bp.group(2) + " " + bp.group(3));
+                + bp[0] + " " + bp[1] + " " + bp[2]);
         assertTrue("rocket assemble failed: " + assemble,
                 assemble.contains("\"ok\":true"));
-        Matcher em = ENT_ID.matcher(assemble);
-        assertTrue("rocket entityId missing: " + assemble, em.find());
-        return Integer.parseInt(em.group(1));
+        Reply emReply = Reply.of(assemble);
+        assertTrue("rocket entityId missing: " + assemble, emReply.has(ENT_ID));
+        return Integer.parseInt(emReply.text(ENT_ID));
     }
 
-    private static int extract(String src, Pattern pattern) {
-        Matcher m = pattern.matcher(src);
-        assertTrue("pattern not found in: " + src, m.find());
-        return Integer.parseInt(m.group(1));
+    private static int extract(String src, String field) {
+        Reply reply = Reply.of(src);
+        assertTrue("field `" + field + "` not found in: " + src, reply.has(field));
+        return reply.integer(field);
     }
 }

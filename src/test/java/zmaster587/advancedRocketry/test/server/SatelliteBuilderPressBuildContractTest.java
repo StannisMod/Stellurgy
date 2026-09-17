@@ -1,5 +1,6 @@
 package zmaster587.advancedRocketry.test.server;
 
+import zmaster587.advancedRocketry.test.Reply;
 import org.junit.Test;
 
 import java.util.regex.Matcher;
@@ -59,13 +60,13 @@ import static zmaster587.advancedRocketry.test.server.WorldCommandFixtures.exec;
  */
 public class SatelliteBuilderPressBuildContractTest extends AbstractSharedServerTest {
 
-    private static final Pattern CHASSIS_EMPTY = Pattern.compile("\"chassisEmpty\":(true|false)");
-    private static final Pattern OUTPUT_EMPTY = Pattern.compile("\"outputEmpty\":(true|false)");
-    private static final Pattern HOLDING_ITEM = Pattern.compile("\"holdingItem\":\"([^\"]*)\"");
-    private static final Pattern CHIP_ITEM = Pattern.compile("\"chipItem\":\"([^\"]*)\"");
-    private static final Pattern HOLDING_SAT_ID = Pattern.compile("\"holdingSatId\":(-?\\d+)");
-    private static final Pattern CHIP_SAT_ID = Pattern.compile("\"chipSatId\":(-?\\d+)");
-    private static final Pattern PRIMARY_META = Pattern.compile("\"primaryMeta\":(-?\\d+)");
+    private static final String CHASSIS_EMPTY = "chassisEmpty";
+    private static final String OUTPUT_EMPTY = "outputEmpty";
+    private static final String HOLDING_ITEM = "holdingItem";
+    private static final String CHIP_ITEM = "chipItem";
+    private static final String HOLDING_SAT_ID = "holdingSatId";
+    private static final String CHIP_SAT_ID = "chipSatId";
+    private static final String PRIMARY_META = "primaryMeta";
 
     private static final int CY = FixtureSite.OPEN_AIR_Y;
     private static final int CZ = 9700;
@@ -156,17 +157,17 @@ public class SatelliteBuilderPressBuildContractTest extends AbstractSharedServer
                 -1, extractInt(resp, PRIMARY_META));
     }
 
-    private static String extract(String src, Pattern pattern) {
-        Matcher m = pattern.matcher(src);
-        assertTrue("pattern not found in: " + src, m.find());
-        return m.group(1);
+    private static String extract(String src, String field) {
+        String value = Reply.of(src).text(field);
+        assertTrue("field `" + field + "` not found in: " + src, value != null);
+        return value;
     }
 
-    private static int extractInt(String src, Pattern pattern) {
-        return Integer.parseInt(extract(src, pattern));
+    private static int extractInt(String src, String field) {
+        return Integer.parseInt(extract(src, field));
     }
 
-    private static long extractLong(String src, Pattern pattern) {
-        return Long.parseLong(extract(src, pattern));
+    private static long extractLong(String src, String field) {
+        return Long.parseLong(extract(src, field));
     }
 }

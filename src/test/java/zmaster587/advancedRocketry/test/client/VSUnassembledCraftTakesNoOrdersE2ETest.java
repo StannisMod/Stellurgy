@@ -11,6 +11,7 @@ import java.util.regex.Pattern;
 import com.google.gson.JsonObject;
 
 import zmaster587.advancedRocketry.test.Events;
+import zmaster587.advancedRocketry.test.Reply;
 
 import zmaster587.advancedRocketry.test.FixtureSite;
 
@@ -64,10 +65,9 @@ public class VSUnassembledCraftTakesNoOrdersE2ETest extends AbstractSharedVsClie
         return "vs-unassembled-craft-orders";
     }
 
-    private static final Pattern BUILDER_POS =
-            Pattern.compile("\"builderPos\":\\[(-?\\d+),(-?\\d+),(-?\\d+)]");
-    private static final Pattern DUMMY_ID = Pattern.compile("\"dummyId\":(-?\\d+)");
-    private static final Pattern COUNT = Pattern.compile("\"count\":(-?\\d+)");
+    private static final String BUILDER_POS = "builderPos";
+    private static final String DUMMY_ID = "dummyId";
+    private static final String COUNT = "count";
 
     /** The control ship's build site. */
     /** How long the CLIENT is given to PERFORM a seating the server has already done, in ticks. */
@@ -150,10 +150,11 @@ public class VSUnassembledCraftTakesNoOrdersE2ETest extends AbstractSharedVsClie
         String mountInfo = exec("artest vs seat-mount 0 id " + controlShipId);
         scenario().requireArranged("seat-mount must find the ship's pilot seat: " + mountInfo,
                 mountInfo.contains("\"seatFound\":true"));
-        Matcher dm = DUMMY_ID.matcher(mountInfo);
-        scenario().requireArranged("seat-mount must report a dummy id: " + mountInfo, dm.find());
+        Reply seatMount = Reply.of("artest vs seat-mount", mountInfo);
+        scenario().requireArranged("seat-mount must report a dummy id: " + mountInfo,
+                seatMount.has(DUMMY_ID));
         long seatMark = clientEvents().mark();
-        String mount = exec("artest player mount-entity " + dm.group(1));
+        String mount = exec("artest player mount-entity " + seatMount.integer(DUMMY_ID));
         scenario().requireArranged("the bot must mount the seat dummy: " + mount,
                 mount.contains("\"mounted\":true"));
         // "Let the mount replicate" is a record on the client's own log. The control below presses a
@@ -265,7 +266,7 @@ public class VSUnassembledCraftTakesNoOrdersE2ETest extends AbstractSharedVsClie
         assertTrue("the seat must have decided that NO ship manages this craft — with a ship"
                         + " managing it the whole leg below would be measuring a real ship's"
                         + " refusals, and every silence it reads would mean something else: " + sat,
-                Events.countRecords(sat, "\"managed\":false") > 0);
+                Events.countRecords(sat, "managed", "false") > 0);
 
         // The client PERFORMS the mount — his own link, off the mark taken before the click. An
         // ARRANGEMENT claim: a player his client never seated cannot exercise the gate below.
@@ -295,7 +296,7 @@ public class VSUnassembledCraftTakesNoOrdersE2ETest extends AbstractSharedVsClie
                         + "flight state that does not exist). The same seam recorded the control "
                         + "leg's jump on a real ship, so this silence is a refusal and not a dead "
                         + "instrument: " + commands,
-                Events.countRecords(commands, "\"who\":\"" + BOT + "\"") == 0);
+                Events.countRecords(commands, "who", BOT) == 0);
 
         // ...and steer it: hold the same flight keys that lift a real ship, for long enough that
         // the client's per-tick sampler has run many times over.
@@ -319,7 +320,7 @@ public class VSUnassembledCraftTakesNoOrdersE2ETest extends AbstractSharedVsClie
         assertTrue("the client's own pilot gate must have been consulted while he sat on this craft"
                         + " and answered CLOSED — a silence from the server below means nothing if"
                         + " the client never sampled its keys at all: " + gate,
-                Events.countRecords(gate, "\"open\":false") > 0
+                Events.countRecords(gate, "open", "false") > 0
                         && gate.contains("\"ridingDummy\":true"));
 
         String clientSends = clientEvents().since(deafClientMark, "pilot_input_sent");
@@ -328,7 +329,7 @@ public class VSUnassembledCraftTakesNoOrdersE2ETest extends AbstractSharedVsClie
         assertTrue("a craft that never became a ship must not be STEERED: the CLIENT put pilot input"
                         + " on the wire for it. The same send seam fired in the control leg on a"
                         + " real ship, so its silence here is the gate refusing: " + clientSends,
-                Events.countRecords(clientSends, "\"seat\":\"") == 0);
+                Events.countRecordsWithField(clientSends, "seat") == 0);
 
         String received = events.since(deafMark, "pilot_input_received");
         Events.assertInstrumentRan(received, "pilot_seat_events",
@@ -336,7 +337,7 @@ public class VSUnassembledCraftTakesNoOrdersE2ETest extends AbstractSharedVsClie
         assertTrue("...and nothing may have reached a seat on the server either. The seat's link is"
                         + " a build-time intention that survives a rejected assembly; it is not a"
                         + " ship: " + received,
-                Events.countRecords(received, "\"who\":\"" + BOT + "\"") == 0);
+                Events.countRecords(received, "who", BOT) == 0);
 
         // Two more absences stood here — no `action_bar_queued` and no `status_message_sent` for him
         // after the keys — i.e. "the craft answers none of the keys pressed at it". They are gone
@@ -413,9 +414,9 @@ public class VSUnassembledCraftTakesNoOrdersE2ETest extends AbstractSharedVsClie
         String fixture = exec("artest fixture rocket 0 " + SHIP_X + " " + SHIP_Y + " " + SHIP_Z
                 + " with-pilot-seat");
         assertTrue("fixture (with-pilot-seat) failed: " + fixture, fixture.contains("\"ok\":true"));
-        Matcher bp = BUILDER_POS.matcher(fixture);
-        assertTrue("fixture missing builderPos: " + fixture, bp.find());
-        return exec("artest rocket assemble 0 " + bp.group(1) + " " + bp.group(2) + " " + bp.group(3));
+        int[] bp = Reply.of(fixture).blockPos(BUILDER_POS);
+        assertTrue("fixture missing builderPos: " + fixture, bp != null);
+        return exec("artest rocket assemble 0 " + bp[0] + " " + bp[1] + " " + bp[2]);
     }
 
     // ---- Observation helpers ---------------------------------------------------------------------
@@ -430,8 +431,8 @@ public class VSUnassembledCraftTakesNoOrdersE2ETest extends AbstractSharedVsClie
     }
 
     private int count(String sub) throws Exception {
-        Matcher m = COUNT.matcher(exec("artest vs " + sub + " 0"));
-        return m.find() ? Integer.parseInt(m.group(1)) : -1;
+        String command = "artest vs " + sub + " 0";
+        return Reply.of(command, exec(command)).integerOr(COUNT, -1);
     }
 
 }

@@ -1,5 +1,6 @@
 package zmaster587.advancedRocketry.test.server;
 
+import zmaster587.advancedRocketry.test.Reply;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
@@ -44,17 +45,11 @@ import static zmaster587.advancedRocketry.test.server.WorldCommandFixtures.exec;
 public class TerraformerPoweredCycleOnArPlanetTest extends AbstractSharedServerTest {
 
     private static final Pattern DIM_LINE = Pattern.compile("DIM(\\d+):");
-    private static final Pattern CURRENT_ATMOS =
-            Pattern.compile("\"currentAtmosphere\":(-?\\d+)");
-    private static final Pattern POWER_POS =
-            Pattern.compile("\"powerPos\":\\[(-?\\d+),(-?\\d+),(-?\\d+)]");
-    private static final Pattern LIQUID_INPUT_POS =
-            Pattern.compile("\"liquidInputPos\":\\[(-?\\d+),(-?\\d+),(-?\\d+)]");
-    /** Captures each {@code [x,y,z]} triple inside
-     *  {@code "liquidInputPositions":[...]}. Iterating `find()` enumerates
-     *  all four 'L' hatches in the terraformer structure. */
-    private static final Pattern LIQUID_TRIPLE =
-            Pattern.compile("\\[(-?\\d+),(-?\\d+),(-?\\d+)]");
+    private static final String CURRENT_ATMOS = "currentAtmosphere";
+    private static final String POWER_POS = "powerPos";
+    private static final String LIQUID_INPUT_POS = "liquidInputPos";
+    /** All four 'L' hatches of the terraformer structure, as {@code [[x,y,z], …]}. */
+    private static final String LIQUID_INPUT_POSITIONS = "liquidInputPositions";
 
     /** Each method picks distinct controller coords so per-method planets
      *  don't collide if a future refactor moves to class-scope. */
@@ -243,11 +238,11 @@ public class TerraformerPoweredCycleOnArPlanetTest extends AbstractSharedServerT
     }
 
     private void injectPower(String fixture, int amount) throws Exception {
-        Matcher m = POWER_POS.matcher(fixture);
-        assertTrue("no powerPos in fixture response: " + fixture, m.find());
-        int px = Integer.parseInt(m.group(1));
-        int py = Integer.parseInt(m.group(2));
-        int pz = Integer.parseInt(m.group(3));
+        int[] m = Reply.of(fixture).blockPos(POWER_POS);
+        assertTrue("no powerPos in fixture response: " + fixture, m != null);
+        int px = m[0];
+        int py = m[1];
+        int pz = m[2];
         String resp = exec("artest energy inject "
                 + newDim + " " + px + " " + py + " " + pz + " " + amount);
         assertTrue("energy inject failed: " + resp, resp.contains("\"ok\":true"));
@@ -288,22 +283,14 @@ public class TerraformerPoweredCycleOnArPlanetTest extends AbstractSharedServerT
     /** Scans the fixture response's {@code liquidInputPositions} array
      *  for the n-th triple. */
     private static int[] nthLiquidInputPos(String fixture, int n) {
-        // Slice the substring starting at "liquidInputPositions" so we
-        // don't accidentally pick up the back-compat single
-        // "liquidInputPos" or unrelated position lists.
-        int sectionStart = fixture.indexOf("\"liquidInputPositions\"");
-        assertTrue("no liquidInputPositions in fixture response: " + fixture,
-                sectionStart >= 0);
-        Matcher m = LIQUID_TRIPLE.matcher(fixture);
-        m.region(sectionStart, fixture.length());
-        for (int i = 0; i <= n; i++) {
-            assertTrue("liquidInputPositions has fewer than " + (n + 1)
-                    + " hatches: " + fixture, m.find());
-        }
-        return new int[]{
-                Integer.parseInt(m.group(1)),
-                Integer.parseInt(m.group(2)),
-                Integer.parseInt(m.group(3))};
+        // Asked for by NAME, which is also what keeps it clear of the back-compat single
+        // `liquidInputPos` and of every other position list in the same reply — the slice-then-scan
+        // this replaces had to know where the section started to get that right.
+        int[][] hatches = Reply.of("artest fixture machine", fixture)
+                .blockPosArray(LIQUID_INPUT_POSITIONS);
+        assertTrue("liquidInputPositions has fewer than " + (n + 1) + " hatches: " + fixture,
+                n < hatches.length);
+        return hatches[n];
     }
 
     private void enableMachine(int cx) throws Exception {
@@ -320,9 +307,9 @@ public class TerraformerPoweredCycleOnArPlanetTest extends AbstractSharedServerT
 
     private int readDensity() throws Exception {
         String info = exec("artest terraforming info " + newDim);
-        Matcher m = CURRENT_ATMOS.matcher(info);
-        assertTrue("no currentAtmosphere in terraforming info: " + info, m.find());
-        return Integer.parseInt(m.group(1));
+        Reply mReply = Reply.of(info);
+        assertTrue("no currentAtmosphere in terraforming info: " + info, mReply.has(CURRENT_ATMOS));
+        return Integer.parseInt(mReply.text(CURRENT_ATMOS));
     }
 
     private static Set<Integer> arDims() throws Exception {

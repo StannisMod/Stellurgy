@@ -6,6 +6,7 @@ import org.junit.Test;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import zmaster587.advancedRocketry.test.Reply;
 import zmaster587.advancedRocketry.test.FixtureSite;
 
 import static org.junit.Assert.assertTrue;
@@ -33,13 +34,9 @@ import static org.junit.Assert.assertTrue;
  */
 public class MachineRecipeIntegrationTest extends AbstractHeadlessServerTest {
 
-    private static final Pattern INPUT_POS = Pattern.compile("\"inputPos\":\\[(-?\\d+),(-?\\d+),(-?\\d+)]");
-    private static final Pattern OUTPUT_POS = Pattern.compile("\"outputPos\":\\[(-?\\d+),(-?\\d+),(-?\\d+)]");
-    private static final Pattern POWER_POS = Pattern.compile("\"powerPos\":\\[(-?\\d+),(-?\\d+),(-?\\d+)]");
-    private static final Pattern FIRST_INGREDIENT_ITEM =
-            Pattern.compile("\"ingredients\":\\[\\{\"slot\":0,\"item\":\"([^\"]+)\",\"count\":(\\d+),\"meta\":(\\d+)");
-    private static final Pattern FIRST_OUTPUT_ITEM =
-            Pattern.compile("\"outputs\":\\[\\{\"slot\":0,\"item\":\"([^\"]+)\"");
+    private static final String INPUT_POS = "inputPos";
+    private static final String OUTPUT_POS = "outputPos";
+    private static final String POWER_POS = "powerPos";
 
     @Test
     public void probeWiringStillHealthy() throws Exception {
@@ -66,10 +63,9 @@ public class MachineRecipeIntegrationTest extends AbstractHeadlessServerTest {
         };
         StringBuilder failures = new StringBuilder();
         for (String name : requiredMachines) {
-            Pattern p = Pattern.compile("\"" + name + "\":(-?\\d+)");
-            Matcher m = p.matcher(summary);
-            if (!m.find()) { failures.append(name).append("=NOT_REPORTED;"); continue; }
-            if (Integer.parseInt(m.group(1)) <= 0) failures.append(name).append("=0;");
+            Reply counts = Reply.of("artest machine recipes-summary", summary);
+            if (!counts.has(name)) { failures.append(name).append("=NOT_REPORTED;"); continue; }
+            if (counts.integer(name) <= 0) failures.append(name).append("=0;");
         }
         assertTrue("machine recipe counts: " + failures + " full=" + summary,
                 failures.length() == 0);
@@ -84,14 +80,14 @@ public class MachineRecipeIntegrationTest extends AbstractHeadlessServerTest {
         assertTrue("fixture machine cutting failed: " + fixture,
                 fixture.contains("\"ok\":true"));
 
-        Matcher ipm = INPUT_POS.matcher(fixture);
-        Matcher opm = OUTPUT_POS.matcher(fixture);
-        Matcher ppm = POWER_POS.matcher(fixture);
+        int[] ipm = Reply.of(fixture).blockPos(INPUT_POS);
+        int[] opm = Reply.of(fixture).blockPos(OUTPUT_POS);
+        int[] ppm = Reply.of(fixture).blockPos(POWER_POS);
         assertTrue("fixture didn't return input/output/power positions: " + fixture,
-                ipm.find() && opm.find() && ppm.find());
-        String inPos = ipm.group(1) + " " + ipm.group(2) + " " + ipm.group(3);
-        String outPos = opm.group(1) + " " + opm.group(2) + " " + opm.group(3);
-        String pwrPos = ppm.group(1) + " " + ppm.group(2) + " " + ppm.group(3);
+                ipm != null && opm != null && ppm != null);
+        String inPos = ipm[0] + " " + ipm[1] + " " + ipm[2];
+        String outPos = opm[0] + " " + opm[1] + " " + opm[2];
+        String pwrPos = ppm[0] + " " + ppm[1] + " " + ppm[2];
 
         // 2. Validate multiblock. Use the kit's retry helper — under
         //    parallel-fork pressure `attemptCompleteStructure` rarely loses
@@ -106,18 +102,23 @@ public class MachineRecipeIntegrationTest extends AbstractHeadlessServerTest {
         String recipe = String.join("\n",
                 client().execute("artest machine recipe-info TileCuttingMachine 0"));
         assertTrue("recipe-info errored: " + recipe, !recipe.contains("\"error\""));
-        Matcher im = FIRST_INGREDIENT_ITEM.matcher(recipe);
-        Matcher om = FIRST_OUTPUT_ITEM.matcher(recipe);
-        assertTrue("recipe-info missing first ingredient: " + recipe, im.find());
-        assertTrue("recipe-info missing first output: " + recipe, om.find());
-        String ingredientItem = im.group(1);
-        int ingredientCount = Integer.parseInt(im.group(2));
+        // The FIRST entry of each list, read as an object. The regex this replaces pinned the whole
+        // prefix — `"ingredients":[{"slot":0,"item":…` — so it matched only while slot 0 came first
+        // AND the three fields stayed in that order, and answered "no ingredient" otherwise.
+        Reply info = Reply.of("artest machine recipe-info", recipe);
+        String[] ingredients = info.objectArray("ingredients");
+        String[] outputs = info.objectArray("outputs");
+        assertTrue("recipe-info missing first ingredient: " + recipe, ingredients.length > 0);
+        assertTrue("recipe-info missing first output: " + recipe, outputs.length > 0);
+        Reply firstIngredient = Reply.of(ingredients[0]);
+        String ingredientItem = firstIngredient.text("item");
+        int ingredientCount = firstIngredient.integer("count");
         // Meta matters: oredict ingredients like `bouleSilicon` resolve to a
         // libVulpes meta-item (productboule) at the material-specific meta, not
         // meta 0. Filling without the meta inserts the wrong variant and the
         // recipe never matches.
-        int ingredientMeta = Integer.parseInt(im.group(3));
-        String expectedOutput = om.group(1);
+        int ingredientMeta = firstIngredient.integer("meta");
+        String expectedOutput = Reply.of(outputs[0]).text("item");
 
         // 4. Stuff input hatch.
         String hatchFill = String.join("\n", client().execute(

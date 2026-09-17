@@ -1,5 +1,6 @@
 package zmaster587.advancedRocketry.test.server;
 
+import zmaster587.advancedRocketry.test.Reply;
 import org.junit.Test;
 
 import java.util.regex.Matcher;
@@ -29,7 +30,7 @@ import static org.junit.Assert.assertTrue;
  */
 public class WeightSystemTest extends AbstractSharedServerTest {
 
-    private static final Pattern WEIGHT = Pattern.compile("\"weight\":(-?\\d+(?:\\.\\d+)?(?:[eE][-+]?\\d+)?)");
+    private static final String WEIGHT = "weight";
 
     private void reset() throws Exception {
         String r = String.join("\n", client().execute("artest weight reset"));
@@ -39,17 +40,17 @@ public class WeightSystemTest extends AbstractSharedServerTest {
     private double itemWeight(String id, int count) throws Exception {
         String r = String.join("\n", client().execute("artest weight item " + id + " " + count));
         assertTrue("item " + id + " not registered: " + r, r.contains("\"registered\":true"));
-        Matcher m = WEIGHT.matcher(r);
-        assertTrue("no weight field for " + id + ": " + r, m.find());
-        return Double.parseDouble(m.group(1));
+        Reply mReply = Reply.of(r);
+        assertTrue("no weight field for " + id + ": " + r, mReply.has(WEIGHT));
+        return Double.parseDouble(mReply.text(WEIGHT));
     }
 
     private double fluidWeight(String name, int amount) throws Exception {
         String r = String.join("\n", client().execute("artest weight fluid " + name + " " + amount));
         assertTrue("fluid " + name + " not registered: " + r, r.contains("\"registered\":true"));
-        Matcher m = WEIGHT.matcher(r);
-        assertTrue("no weight field for fluid " + name + ": " + r, m.find());
-        return Double.parseDouble(m.group(1));
+        Reply mReply = Reply.of(r);
+        assertTrue("no weight field for fluid " + name + ": " + r, mReply.has(WEIGHT));
+        return Double.parseDouble(mReply.text(WEIGHT));
     }
 
     @Test

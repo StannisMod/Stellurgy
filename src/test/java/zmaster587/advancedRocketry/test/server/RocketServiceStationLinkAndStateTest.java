@@ -1,5 +1,6 @@
 package zmaster587.advancedRocketry.test.server;
 
+import zmaster587.advancedRocketry.test.Reply;
 import org.junit.Test;
 
 import java.util.regex.Matcher;
@@ -46,11 +47,10 @@ import static zmaster587.advancedRocketry.test.server.WorldCommandFixtures.exec;
  */
 public class RocketServiceStationLinkAndStateTest extends AbstractSharedServerTest {
 
-    private static final Pattern BUILDER_POS =
-            Pattern.compile("\"builderPos\":\\[(-?\\d+),(-?\\d+),(-?\\d+)]");
-    private static final Pattern ENTITY_ID = Pattern.compile("\"entityId\":(-?\\d+)");
-    private static final Pattern LINKED_ID = Pattern.compile("\"linkedRocketId\":(-?\\d+)");
-    private static final Pattern PARTS_COUNT = Pattern.compile("\"partsToRepairCount\":(-?\\d+)");
+    private static final String BUILDER_POS = "builderPos";
+    private static final String ENTITY_ID = "entityId";
+    private static final String LINKED_ID = "linkedRocketId";
+    private static final String PARTS_COUNT = "partsToRepairCount";
 
     private static final int CY_PAD       = 64;
     private static final int CZ_PAD       = 7000;
@@ -108,16 +108,16 @@ public class RocketServiceStationLinkAndStateTest extends AbstractSharedServerTe
         String fixture = exec("artest fixture rocket 0 " + CX_WITH_LINK + " "
                 + CY_PAD + " " + CZ_PAD + " simple");
         assertTrue("fixture must build: " + fixture, fixture.contains("\"ok\":true"));
-        Matcher bp = BUILDER_POS.matcher(fixture);
-        assertTrue("fixture missing builderPos: " + fixture, bp.find());
+        int[] bp = Reply.of(fixture).blockPos(BUILDER_POS);
+        assertTrue("fixture missing builderPos: " + fixture, bp != null);
 
         String assemble = exec("artest rocket assemble 0 "
-                + bp.group(1) + " " + bp.group(2) + " " + bp.group(3));
+                + bp[0] + " " + bp[1] + " " + bp[2]);
         assertTrue("assemble must succeed: " + assemble,
                 assemble.contains("\"ok\":true"));
-        Matcher eim = ENTITY_ID.matcher(assemble);
-        assertTrue("no entityId in assemble: " + assemble, eim.find());
-        int rocketId = Integer.parseInt(eim.group(1));
+        Reply eimReply = Reply.of(assemble);
+        assertTrue("no entityId in assemble: " + assemble, eimReply.has(ENTITY_ID));
+        int rocketId = Integer.parseInt(eimReply.text(ENTITY_ID));
 
         // Place service station near the launchpad (not on it — the pad
         // is occupied). Position-isolated from CX_NO_LINK.
@@ -147,9 +147,9 @@ public class RocketServiceStationLinkAndStateTest extends AbstractSharedServerTe
                 0, extract(state, PARTS_COUNT));
     }
 
-    private static int extract(String src, Pattern pattern) {
-        Matcher m = pattern.matcher(src);
-        assertTrue("pattern not found in: " + src, m.find());
-        return Integer.parseInt(m.group(1));
+    private static int extract(String src, String field) {
+        Reply reply = Reply.of(src);
+        assertTrue("field `" + field + "` not found in: " + src, reply.has(field));
+        return reply.integer(field);
     }
 }

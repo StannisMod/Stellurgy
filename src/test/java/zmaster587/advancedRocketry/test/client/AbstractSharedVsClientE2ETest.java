@@ -8,6 +8,7 @@ import java.util.regex.Pattern;
 import org.lwjgl.input.Keyboard;
 
 import zmaster587.advancedRocketry.test.Events;
+import zmaster587.advancedRocketry.test.Reply;
 
 import zmaster587.advancedRocketry.test.Plot;
 
@@ -89,10 +90,10 @@ public abstract class AbstractSharedVsClientE2ETest extends AbstractSharedClient
     // the neighbour. The positional form is now removed outright; a scenario names its ship from the
     // `ship_spawned` record its own assembly wrote, and asks by id thereafter.
 
-    private static final Pattern SHIP_ID = Pattern.compile("\"id\":\"([^\"]*)\"");
+    private static final String SHIP_ID = "id";
     /** The two quaternion components an upright test needs; see {@link #upYOf}. */
-    private static final Pattern Q_X = Pattern.compile("\"qx\":(-?[0-9.E\\-]+)");
-    private static final Pattern Q_Z = Pattern.compile("\"qz\":(-?[0-9.E\\-]+)");
+    private static final String Q_X = "qx";
+    private static final String Q_Z = "qz";
 
     /**
      * Wait until the ship this scenario already NAMES is USABLE — the physics loop will step it.
@@ -331,13 +332,12 @@ public abstract class AbstractSharedVsClientE2ETest extends AbstractSharedClient
 
     /** The world-frame Y of a ship's OWN up, from a {@code ship-info} reply, or NaN if unreported. */
     protected static double upYOf(String shipInfoJson) {
-        Matcher qx = Q_X.matcher(shipInfoJson);
-        Matcher qz = Q_Z.matcher(shipInfoJson);
-        if (!qx.find() || !qz.find()) {
+        Reply info = Reply.of("artest vs ship-info", shipInfoJson);
+        double ax = info.number(Q_X);
+        double az = info.number(Q_Z);
+        if (Double.isNaN(ax) || Double.isNaN(az)) {
             return Double.NaN;
         }
-        double ax = Double.parseDouble(qx.group(1));
-        double az = Double.parseDouble(qz.group(1));
         return 1.0 - 2.0 * (ax * ax + az * az);
     }
 
@@ -606,7 +606,7 @@ public abstract class AbstractSharedVsClientE2ETest extends AbstractSharedClient
         return after;
     }
 
-    private static final Pattern PLAYER_NAME = Pattern.compile("\"player\":\"([^\"]+)\"");
+    private static final String PLAYER_NAME = "player";
 
     /**
      * The bot's own player name, as the server knows it.
@@ -617,25 +617,24 @@ public abstract class AbstractSharedVsClientE2ETest extends AbstractSharedClient
      */
     protected final String botName() throws Exception {
         String health = exec("artest player health");
-        Matcher name = PLAYER_NAME.matcher(health);
+        String name = Reply.of("artest player health", health).text(PLAYER_NAME);
         scenario().requireArranged("player health must echo the player name, or no wait on this tier"
-                + " can be filtered to this body: " + health, name.find());
-        return name.group(1);
+                + " can be filtered to this body: " + health, name != null);
+        return name;
     }
 
-    private static final Pattern POS_X = Pattern.compile("\"posX\":(-?[0-9.E\\-]+)");
-    private static final Pattern POS_Y = Pattern.compile("\"posY\":(-?[0-9.E\\-]+)");
-    private static final Pattern POS_Z = Pattern.compile("\"posZ\":(-?[0-9.E\\-]+)");
+    private static final String POS_X = "posX";
+    private static final String POS_Y = "posY";
+    private static final String POS_Z = "posZ";
 
-    private static double readDoubleOr(String json, Pattern p, double fallback) {
-        Matcher m = p.matcher(json);
-        return m.find() ? Double.parseDouble(m.group(1)) : fallback;
+    private static double readDoubleOr(String json, String field, double fallback) {
+        return Reply.of("artest vs ship-info", json).numberOr(field, fallback);
     }
 
     /** The {@code "id"} field of a {@code ship-info} reply, or null when it carries none. */
     protected static String readShipId(String shipInfoJson) {
-        Matcher m = SHIP_ID.matcher(shipInfoJson);
-        return m.find() && !m.group(1).isEmpty() ? m.group(1) : null;
+        String id = Reply.of("artest vs ship-info", shipInfoJson).text(SHIP_ID);
+        return id == null || id.isEmpty() ? null : id;
     }
 
     @Override
@@ -829,7 +828,7 @@ public abstract class AbstractSharedVsClientE2ETest extends AbstractSharedClient
      */
     protected final String awaitShipSpawned(Events events, long mark, String what) throws Exception {
         String reply = events.await(mark, "ship_spawned", what, 200);
-        int spawned = Events.countRecords(reply, "\"vsShip\":");
+        int spawned = Events.countRecordsWithField(reply, "vsShip");
         scenario().requireArranged("exactly ONE ship may be spawned in this scenario's window, or"
                 + " nothing here can say which is its own — " + spawned + " were: " + reply,
                 spawned == 1);
@@ -883,13 +882,12 @@ public abstract class AbstractSharedVsClientE2ETest extends AbstractSharedClient
         // READ, not a tick: this runs once the chain says the jump has settled, so advancing
         // anything here would drive a mechanism whose completion has already been asserted.
         String tick = probe.exec("artest space transit-status");
-        Matcher inTransit = Pattern.compile("\"inTransit\":(-?\\d+)").matcher(tick);
-        assertTrue("the transit probe must report inTransit: " + tick, inTransit.find());
+        Reply transit = Reply.of("artest space transit-tick", tick);
+        assertTrue("the transit probe must report inTransit: " + tick, transit.has("inTransit"));
         assertEquals("the chain said the transit settled, so the probe must agree it is over: " + tick,
-                0, Integer.parseInt(inTransit.group(1)));
-        Matcher target = Pattern.compile("\"targetDim\":(-?\\d+)").matcher(tick);
-        assertTrue("the transit probe must report targetDim: " + tick, target.find());
-        int targetDim = Integer.parseInt(target.group(1));
+                0, transit.integer("inTransit"));
+        assertTrue("the transit probe must report targetDim: " + tick, transit.has("targetDim"));
+        int targetDim = transit.integer("targetDim");
         assertTrue("a settled transit must name the target cell's slot dimension: " + tick, targetDim >= 0);
         return targetDim;
     }
@@ -923,11 +921,11 @@ public abstract class AbstractSharedVsClientE2ETest extends AbstractSharedClient
      */
     protected final int openDeckGateWindow(int recordsEach) throws Exception {
         String reply = exec("artest vs deck-capture");
-        Matcher id = Pattern.compile("\"entityId\":(-?\\d+)").matcher(String.valueOf(reply));
+        Reply capture = Reply.of("artest vs deck-capture", String.valueOf(reply));
         assertTrue("the deck-capture reply must carry entityId, or the gate window cannot be armed"
                 + " on a named body — and a window armed on the wrong body is silent in exactly the"
-                + " way a body nobody asked about is: " + reply, id.find());
-        int entityId = Integer.parseInt(id.group(1));
+                + " way a body nobody asked about is: " + reply, capture.has("entityId"));
+        int entityId = capture.integer("entityId");
         bot().invokeStaticInt(DECK_GATE_WINDOW, "open", entityId, recordsEach);
         return entityId;
     }

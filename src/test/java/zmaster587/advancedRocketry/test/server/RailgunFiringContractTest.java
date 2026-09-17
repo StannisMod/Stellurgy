@@ -1,5 +1,6 @@
 package zmaster587.advancedRocketry.test.server;
 
+import zmaster587.advancedRocketry.test.Reply;
 import org.junit.Assume;
 import org.junit.Test;
 
@@ -54,20 +55,13 @@ public class RailgunFiringContractTest extends AbstractSharedServerTest {
 
     private static final int CARGO = 16;
 
-    private static final Pattern FIRED =
-            Pattern.compile("\"fired\":(true|false)");
-    private static final Pattern DEST_MATCHED =
-            Pattern.compile("\"destMatched\":(\\d+)");
-    private static final Pattern SRC_REMAINING =
-            Pattern.compile("\"srcInputRemaining\":(\\d+)");
-    private static final Pattern FIRE_STATUS =
-            Pattern.compile("\"fireStatus\":\"([A-Z_]+)\"");
-    private static final Pattern DEST_LOADED_BEFORE =
-            Pattern.compile("\"destLoadedBefore\":(true|false)");
-    private static final Pattern DEST_LOADED =
-            Pattern.compile("\"destLoaded\":(true|false)");
-    private static final Pattern AR_DIMS_ARRAY =
-            Pattern.compile("\"arDimensions\":\\[([^]]*)]");
+    private static final String FIRED = "fired";
+    private static final String DEST_MATCHED = "destMatched";
+    private static final String SRC_REMAINING = "srcInputRemaining";
+    private static final String FIRE_STATUS = "fireStatus";
+    private static final String DEST_LOADED_BEFORE = "destLoadedBefore";
+    private static final String DEST_LOADED = "destLoaded";
+    private static final String AR_DIMS_ARRAY = "arDimensions";
 
     /**
      * Same-dimension shot fires: cargo leaves the source input and arrives at
@@ -177,12 +171,9 @@ public class RailgunFiringContractTest extends AbstractSharedServerTest {
         String joined = exec("artest dim list");
         Assume.assumeFalse("No AR dimensions registered — skipping",
                 joined.contains("\"arDimensions\":[]"));
-        Matcher m = AR_DIMS_ARRAY.matcher(joined);
-        assertTrue("could not parse arDimensions: " + joined, m.find());
-        for (String part : m.group(1).split(",")) {
-            String t = part.trim();
-            if (t.isEmpty()) continue;
-            int dim = Integer.parseInt(t);
+        Reply dims = Reply.of("artest dim list", joined);
+        assertTrue("could not parse arDimensions: " + joined, dims.has(AR_DIMS_ARRAY));
+        for (int dim : dims.intArray(AR_DIMS_ARRAY)) {
             if (dim != 0 && dim != FRESH_DIM) return dim;
         }
         Assume.assumeTrue("Only overworld registered — skipping", false);
@@ -205,13 +196,13 @@ public class RailgunFiringContractTest extends AbstractSharedServerTest {
         return String.join("\n", client().execute(cmd));
     }
 
-    private static String extractStr(String src, Pattern pattern) {
-        Matcher m = pattern.matcher(src);
-        assertTrue("pattern " + pattern + " not found in: " + src, m.find());
-        return m.group(1);
+    private static String extractStr(String src, String field) {
+        String value = Reply.of(src).text(field);
+        assertTrue("field `" + field + "` not found in: " + src, value != null);
+        return value;
     }
 
-    private static int extractInt(String src, Pattern pattern) {
-        return Integer.parseInt(extractStr(src, pattern));
+    private static int extractInt(String src, String field) {
+        return Integer.parseInt(extractStr(src, field));
     }
 }

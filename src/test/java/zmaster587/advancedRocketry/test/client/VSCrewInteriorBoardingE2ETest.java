@@ -10,6 +10,7 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 import zmaster587.advancedRocketry.test.Events;
+import zmaster587.advancedRocketry.test.Reply;
 import zmaster587.advancedRocketry.test.FixtureSite;
 import zmaster587.advancedRocketry.test.ShipIdentity;
 
@@ -37,15 +38,14 @@ public class VSCrewInteriorBoardingE2ETest extends AbstractSharedVsClientE2ETest
         return "vs-crew-boarding";
     }
 
-    private static final Pattern BUILDER_POS =
-            Pattern.compile("\"builderPos\":\\[(-?\\d+),(-?\\d+),(-?\\d+)]");
-    private static final Pattern POS_X = Pattern.compile("\"posX\":(-?[0-9.E\\-]+)");
-    private static final Pattern POS_Y = Pattern.compile("\"posY\":(-?[0-9.E\\-]+)");
-    private static final Pattern POS_Z = Pattern.compile("\"posZ\":(-?[0-9.E\\-]+)");
-    private static final Pattern DUMMY_ID = Pattern.compile("\"dummyId\":(\\d+)");
-    private static final Pattern SEAT_X = Pattern.compile("\"seatX\":(-?\\d+)");
-    private static final Pattern SEAT_Y = Pattern.compile("\"seatY\":(-?\\d+)");
-    private static final Pattern SEAT_Z = Pattern.compile("\"seatZ\":(-?\\d+)");
+    private static final String BUILDER_POS = "builderPos";
+    private static final String POS_X = "posX";
+    private static final String POS_Y = "posY";
+    private static final String POS_Z = "posZ";
+    private static final String DUMMY_ID = "dummyId";
+    private static final String SEAT_X = "seatX";
+    private static final String SEAT_Y = "seatY";
+    private static final String SEAT_Z = "seatZ";
 
     private static final String VARIANT = "with-pilot-deck";
 
@@ -629,7 +629,7 @@ public class VSCrewInteriorBoardingE2ETest extends AbstractSharedVsClientE2ETest
         assertTrue("starting flight on the deck must NOT release the capture - a flyer the deck"
                 + " already owns keeps deck semantics, and `creativeFlight` is the gate that would"
                 + " have taken it away: " + releasesInFlight + " :: " + trace,
-                Events.countRecords(releasesInFlight, "\"reason\"") == 0);
+                Events.countRecordsWithField(releasesInFlight, "reason") == 0);
         assertTrue("starting flight on the deck must NOT release the capture (tracked "
                 + trackedSeen + "/" + samples + "): " + trace, trackedSeen == samples);
         assertTrue("the ship camera must stay engaged for a flying-aboard body (cam " + camSeen
@@ -735,10 +735,8 @@ public class VSCrewInteriorBoardingE2ETest extends AbstractSharedVsClientE2ETest
         return buildAndBoardShip(site, VARIANT);
     }
 
-    private int readIntFrom(String json, Pattern p) {
-        Matcher m = p.matcher(json);
-        assertTrue("expected an integer in: " + json, m.find());
-        return Integer.parseInt(m.group(1));
+    private int readIntFrom(String json, String field) {
+        return Reply.of(json).integer(field);
     }
 
     private double[] buildAndBoardShip(FixtureSite site, String variant) throws Exception {
@@ -757,13 +755,12 @@ public class VSCrewInteriorBoardingE2ETest extends AbstractSharedVsClientE2ETest
                 seat.contains("\"seatFound\":true"));
         String mountInfo = exec("artest vs seat-mount-at 0 " + readIntFrom(seat, SEAT_X) + " "
                 + readIntFrom(seat, SEAT_Y) + " " + readIntFrom(seat, SEAT_Z));
-        Matcher dm = DUMMY_ID.matcher(mountInfo);
-        assertTrue("seat-mount-at must report a dummy id: " + mountInfo, dm.find());
+        int dummyId = Reply.of("artest vs seat-mount-at", mountInfo).integer(DUMMY_ID);
         // The CLIENT's mark before the mount, because the reply above is the SERVER's receipt and
         // every caller of this helper goes on to drive the bot as a seated pilot.
         long seatClientMark = clientEvents().mark();
         assertTrue("bot must mount the seat dummy: " + mountInfo,
-                exec("artest player mount-entity " + dm.group(1)).contains("\"mounted\":true"));
+                exec("artest player mount-entity " + dummyId).contains("\"mounted\":true"));
         awaitClientMount(seatClientMark, "the bot must be seated as HIS OWN CLIENT renders him"
                 + " before this helper hands the ship back — the server reporting a mount is the"
                 + " other process", DECK_LINK_BUDGET_TICKS, " mountInfo=" + mountInfo);
@@ -884,9 +881,9 @@ public class VSCrewInteriorBoardingE2ETest extends AbstractSharedVsClientE2ETest
                         + " assembly flood can escape into");
         String fixture = exec("artest fixture rocket 0 " + baseX + " " + baseY + " " + baseZ + " " + variant);
         assertTrue("fixture (" + variant + ") failed: " + fixture, fixture.contains("\"ok\":true"));
-        Matcher bp = BUILDER_POS.matcher(fixture);
-        assertTrue("fixture missing builderPos: " + fixture, bp.find());
-        return exec("artest rocket assemble 0 " + bp.group(1) + " " + bp.group(2) + " " + bp.group(3));
+        int[] bp = Reply.of(fixture).blockPos(BUILDER_POS);
+        assertTrue("fixture missing builderPos: " + fixture, bp != null);
+        return exec("artest rocket assemble 0 " + bp[0] + " " + bp[1] + " " + bp[2]);
     }
 
     /** This scenario's ship, asked by identity — no distance term to be wrong about. */
@@ -922,14 +919,10 @@ public class VSCrewInteriorBoardingE2ETest extends AbstractSharedVsClientE2ETest
             return "";
         }
         // One accessor for all three shapes the census carries — quoted text, a JSON number and a
-        // bare boolean — because the caller asks for a column, not for a type.
-        Matcher m = Pattern.compile("\"" + Pattern.quote(field) + "\":(\"[^\"]*\"|[^,}]+)")
-                .matcher(latestCensus);
-        if (!m.find()) {
-            return "";
-        }
-        String raw = m.group(1).trim();
-        return raw.startsWith("\"") ? raw.substring(1, raw.length() - 1) : raw;
+        // bare boolean — because the caller asks for a column, not for a type. The regex this
+        // replaces spelled that alternation out and then had to strip the quotes back off; a parsed
+        // primitive knows its own type.
+        return Reply.of("artest vs subspace-census", latestCensus).textOr(field, "");
     }
 
     /** Whether a census "x,y,z" block position lies inside a census "x,y,z..x,y,z" region. */
@@ -951,10 +944,10 @@ public class VSCrewInteriorBoardingE2ETest extends AbstractSharedVsClientE2ETest
         }
     }
 
-    private double readDouble(String json, Pattern p) {
-        Matcher m = p.matcher(json);
-        assertTrue("expected a number in: " + json, m.find());
-        return Double.parseDouble(m.group(1));
+    private double readDouble(String json, String field) {
+        double value = Reply.of(json).number(field);
+        assertTrue("expected a number `" + field + "` in: " + json, !Double.isNaN(value));
+        return value;
     }
 
     private static double distance(double[] a, double[] b) {

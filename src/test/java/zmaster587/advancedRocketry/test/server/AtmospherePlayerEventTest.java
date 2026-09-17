@@ -1,5 +1,6 @@
 package zmaster587.advancedRocketry.test.server;
 
+import zmaster587.advancedRocketry.test.Reply;
 import com.github.stannismod.forge.testing.junit.AbstractHeadlessServerTest;
 import com.github.stannismod.forge.testing.server.RealDedicatedServerHarness;
 import org.junit.After;
@@ -44,8 +45,8 @@ public class AtmospherePlayerEventTest {
     private static final int DIM_VAC = 9411;
     private static final int DIM_AIR = 9412;
 
-    private static final Pattern HAS_CACHED = Pattern.compile("\"hasCachedAtmosphere\":(true|false)");
-    private static final Pattern CACHED_ATMOS = Pattern.compile("\"cachedAtmosphere\":\"([^\"]*)\"");
+    private static final String HAS_CACHED = "hasCachedAtmosphere";
+    private static final String CACHED_ATMOS = "cachedAtmosphere";
 
     private Path workDir;
     private RealDedicatedServerHarness harness;
@@ -110,10 +111,10 @@ public class AtmospherePlayerEventTest {
         GameTicks.advance(harness.client(), GameTicks.server(), ticks + TICK_SLACK);
     }
 
-    private String field(Pattern p, String src) {
-        Matcher m = p.matcher(src);
-        assertTrue("field " + p.pattern() + " missing in: " + src, m.find());
-        return m.group(1);
+    private String field(String field, String src) {
+        String value = Reply.of(src).text(field);
+        assertTrue("field `" + field + "` not found in: " + src, value != null);
+        return value;
     }
 
     /** Overworld baseline: no AR atmosphere may be cached for the player. */

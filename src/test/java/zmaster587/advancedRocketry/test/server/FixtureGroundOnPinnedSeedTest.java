@@ -1,5 +1,6 @@
 package zmaster587.advancedRocketry.test.server;
 
+import zmaster587.advancedRocketry.test.Reply;
 import com.github.stannismod.forge.testing.junit.AbstractHeadlessServerTest;
 import org.junit.Test;
 import zmaster587.advancedRocketry.test.Plot;
@@ -72,11 +73,11 @@ public class FixtureGroundOnPinnedSeedTest extends AbstractHeadlessServerTest {
     // have, and the row failed while the test it was supposed to protect passed. A fixture belongs
     // in this table when its MECHANIC touches the ground, not merely because it has coordinates.
 
-    private static final Pattern RELIEF = Pattern.compile("\"relief\":(-?\\d+)");
-    private static final Pattern MODE_TOP = Pattern.compile("\"modeTopY\":(-?\\d+)");
-    private static final Pattern MODE_SHARE = Pattern.compile("\"modeTopShare\":([0-9.]+)");
-    private static final Pattern LIQUID = Pattern.compile("\"liquidColumns\":(\\d+)");
-    private static final Pattern SOLID = Pattern.compile("\"solidObstructedColumns\":(\\d+)");
+    private static final String RELIEF = "relief";
+    private static final String MODE_TOP = "modeTopY";
+    private static final String MODE_SHARE = "modeTopShare";
+    private static final String LIQUID = "liquidColumns";
+    private static final String SOLID = "solidObstructedColumns";
 
     @Test
     public void everyGroundFixtureStandsOnTheSurfaceItWasCalibratedTo() throws Exception {
@@ -111,15 +112,15 @@ public class FixtureGroundOnPinnedSeedTest extends AbstractHeadlessServerTest {
                 0, intField(SOLID, survey));
     }
 
-    private static int intField(Pattern pattern, String text) {
-        Matcher m = pattern.matcher(text);
-        assertTrue("survey reply is missing " + pattern.pattern() + ": " + text, m.find());
-        return Integer.parseInt(m.group(1));
+    private static int intField(String field, String text) {
+        Reply reply = Reply.of(text);
+        assertTrue("field `" + field + "` not found in: " + text, reply.has(field));
+        return reply.integer(field);
     }
 
-    private static String stringField(Pattern pattern, String text) {
-        Matcher m = pattern.matcher(text);
-        assertTrue("survey reply is missing " + pattern.pattern() + ": " + text, m.find());
-        return m.group(1);
+    private static String stringField(String field, String text) {
+        String value = Reply.of(text).text(field);
+        assertTrue("field `" + field + "` not found in: " + text, value != null);
+        return value;
     }
 }

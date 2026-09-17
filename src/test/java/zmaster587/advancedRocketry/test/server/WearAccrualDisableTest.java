@@ -1,5 +1,7 @@
 package zmaster587.advancedRocketry.test.server;
 
+import zmaster587.advancedRocketry.test.RocketList;
+import zmaster587.advancedRocketry.test.Reply;
 import org.junit.Test;
 
 import java.util.regex.Matcher;
@@ -23,11 +25,8 @@ import static org.junit.Assert.assertTrue;
  */
 public class WearAccrualDisableTest extends AbstractSharedServerTest {
 
-    private static final Pattern BUILDER_POS =
-            Pattern.compile("\"builderPos\":\\[(-?\\d+),(-?\\d+),(-?\\d+)]");
-    private static final Pattern ROCKET_LIST_ID = Pattern.compile("\"id\":(-?\\d+)");
-    private static final Pattern BREAKING_PROB =
-            Pattern.compile("\"breakingProb\":(-?\\d+(?:\\.\\d+)?(?:[eE][-+]?\\d+)?)");
+    private static final String BUILDER_POS = "builderPos";
+    private static final String BREAKING_PROB = "breakingProb";
 
     private String cmd(String c) throws Exception {
         return String.join("\n", client().execute(c));
@@ -50,25 +49,23 @@ public class WearAccrualDisableTest extends AbstractSharedServerTest {
         requireClearSite(site);
         String fixture = cmd("artest fixture rocket 0 " + baseX + " " + baseY + " " + baseZ + " simple");
         assertTrue("fixture build failed: " + fixture, fixture.contains("\"ok\":true"));
-        Matcher bp = BUILDER_POS.matcher(fixture);
-        assertTrue("no builderPos: " + fixture, bp.find());
+        int[] bp = Reply.of(fixture).blockPos(BUILDER_POS);
+        assertTrue("no builderPos: " + fixture, bp != null);
         String assemble = cmd("artest rocket assemble 0 "
-                + bp.group(1) + " " + bp.group(2) + " " + bp.group(3));
+                + bp[0] + " " + bp[1] + " " + bp[2]);
         assertTrue("assemble failed: " + assemble, assemble.contains("\"ok\":true"));
         String list = cmd("artest rocket list 0");
-        Matcher m = ROCKET_LIST_ID.matcher(list);
-        int id = -1;
-        while (m.find()) id = Integer.parseInt(m.group(1));
-        assertTrue("no rocket id after assemble: " + list, id >= 0);
-        return id;
+        java.util.List<RocketList.Entry> built = RocketList.of(list);
+        assertTrue("no rocket id after assemble: " + list, !built.isEmpty());
+        return built.get(built.size() - 1).id;
     }
 
     private double damagePartsAndReadProb(int rocketId, int iterations) throws Exception {
         String r = cmd("artest wear damage-parts " + rocketId + " " + iterations);
         assertTrue("damage-parts must find the rocket: " + r, r.contains("\"found\":true"));
-        Matcher m = BREAKING_PROB.matcher(r);
-        assertTrue("no breakingProb in damage-parts response: " + r, m.find());
-        return Double.parseDouble(m.group(1));
+        double prob = Reply.of("artest wear damage-parts", r).number(BREAKING_PROB);
+        assertTrue("no breakingProb in damage-parts response: " + r, !Double.isNaN(prob));
+        return prob;
     }
 
     @Test

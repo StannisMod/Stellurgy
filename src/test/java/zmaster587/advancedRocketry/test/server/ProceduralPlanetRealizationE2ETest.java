@@ -1,5 +1,6 @@
 package zmaster587.advancedRocketry.test.server;
 
+import zmaster587.advancedRocketry.test.Reply;
 import com.github.stannismod.forge.testing.junit.AbstractHeadlessServerTest;
 
 import org.junit.After;
@@ -280,34 +281,35 @@ public class ProceduralPlanetRealizationE2ETest extends AbstractHeadlessServerTe
      * assertion about the right one.</p>
      */
     private static String bodyOfKind(String cellInfo, String kind) {
-        Matcher m = Pattern.compile("\\{[^{}]*\"kind\"\\s*:\\s*\"" + Pattern.quote(kind) + "\"[^{}]*\\}")
-                .matcher(cellInfo);
-        assertTrue("no body of kind " + kind + " in " + cellInfo, m.find());
-        return m.group();
+        for (String body : Reply.of("artest space cell-info", cellInfo).objectArray("bodies")) {
+            if (kind.equals(Reply.of(body).text("kind"))) {
+                return body;
+            }
+        }
+        throw new AssertionError("no body of kind " + kind + " in " + cellInfo);
     }
 
     private static int jsonInt(String json, String key) {
-        Matcher m = Pattern.compile("\"" + Pattern.quote(key) + "\"\\s*:\\s*(-?\\d+)").matcher(json);
-        assertTrue("missing int '" + key + "' in " + json, m.find());
-        return Integer.parseInt(m.group(1));
+        Reply reply = Reply.of(json);
+        assertTrue("missing int '" + key + "' in " + json, reply.has(key));
+        return reply.integer(key);
     }
 
     private static double jsonDouble(String json, String key) {
-        Matcher m = Pattern.compile("\"" + Pattern.quote(key) + "\"\\s*:\\s*(-?[\\d.eE+-]+)")
-                .matcher(json);
-        assertTrue("missing number '" + key + "' in " + json, m.find());
-        return Double.parseDouble(m.group(1));
+        double value = Reply.of(json).number(key);
+        assertTrue("missing number '" + key + "' in " + json, !Double.isNaN(value));
+        return value;
     }
 
     private static boolean jsonBool(String json, String key) {
-        Matcher m = Pattern.compile("\"" + Pattern.quote(key) + "\"\\s*:\\s*(true|false)").matcher(json);
-        assertTrue("missing boolean '" + key + "' in " + json, m.find());
-        return Boolean.parseBoolean(m.group(1));
+        Reply reply = Reply.of(json);
+        assertTrue("missing boolean '" + key + "' in " + json, reply.has(key));
+        return reply.bool(key, false);
     }
 
     private static String jsonString(String json, String key) {
-        Matcher m = Pattern.compile("\"" + Pattern.quote(key) + "\"\\s*:\\s*\"([^\"]*)\"").matcher(json);
-        assertTrue("missing string '" + key + "' in " + json, m.find());
-        return m.group(1);
+        String value = Reply.of(json).text(key);
+        assertTrue("missing string '" + key + "' in " + json, value != null);
+        return value;
     }
 }

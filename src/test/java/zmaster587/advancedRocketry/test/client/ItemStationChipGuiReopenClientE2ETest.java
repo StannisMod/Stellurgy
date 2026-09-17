@@ -208,7 +208,7 @@ public class ItemStationChipGuiReopenClientE2ETest extends AbstractClientE2ETest
         assertEquals("...and it must not answer NULL for it. That null was the whole of C010: Forge"
                         + " sends no gui packet for a null container, so the screen stayed shut with"
                         + " nothing logged anywhere. handlerAnswers=" + served,
-                0, Events.countRecords(served, "\"container\":\"null\""));
+                0, Events.countRecords(served, "container", "null"));
 
         // The player's own screen is the end of the chain, not the whole of it. Matched on the
         // event's exact `gui` field rather than by substring, so the centered GuiModular the chip

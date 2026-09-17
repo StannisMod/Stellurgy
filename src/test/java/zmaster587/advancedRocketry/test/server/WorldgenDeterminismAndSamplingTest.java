@@ -1,6 +1,7 @@
 package zmaster587.advancedRocketry.test.server;
 
 // migrated to AbstractSharedServerTest
+import zmaster587.advancedRocketry.test.Reply;
 import org.junit.Assume;
 import org.junit.Test;
 
@@ -35,23 +36,19 @@ import static org.junit.Assert.assertTrue;
  */
 public class WorldgenDeterminismAndSamplingTest extends AbstractSharedServerTest {
 
-    private static final Pattern AR_DIMS_ARRAY_PATTERN =
-            Pattern.compile("\"arDimensions\":\\[([^]]*)]");
-    private static final Pattern TOP_Y_PATTERN = Pattern.compile("\"topY\":(-?\\d+)");
-    private static final Pattern BIOME_PATTERN = Pattern.compile("\"biome\":\"([^\"]+)\"");
-    private static final Pattern TOP_BLOCK_PATTERN = Pattern.compile("\"topBlock\":\"([^\"]+)\"");
+    private static final String AR_DIMS_ARRAY_PATTERN = "arDimensions";
+    private static final String TOP_Y_PATTERN = "topY";
+    private static final String BIOME_PATTERN = "biome";
+    private static final String TOP_BLOCK_PATTERN = "topBlock";
 
     private int firstNonOverworldArDimOrSkip() throws Exception {
         String joined = String.join("\n", client().execute("artest dim list"));
         Assume.assumeFalse(
                 "No AR dimensions registered — skipping (empty galaxy?)",
                 joined.contains("\"arDimensions\":[]"));
-        Matcher m = AR_DIMS_ARRAY_PATTERN.matcher(joined);
-        assertTrue("could not parse arDimensions array: " + joined, m.find());
-        for (String part : m.group(1).split(",")) {
-            String t = part.trim();
-            if (t.isEmpty()) continue;
-            int dim = Integer.parseInt(t);
+        Reply dims = Reply.of("artest dim list", joined);
+        assertTrue("could not parse arDimensions array: " + joined, dims.has(AR_DIMS_ARRAY_PATTERN));
+        for (int dim : dims.intArray(AR_DIMS_ARRAY_PATTERN)) {
             if (dim != 0) return dim;
         }
         Assume.assumeTrue(
@@ -60,10 +57,10 @@ public class WorldgenDeterminismAndSamplingTest extends AbstractSharedServerTest
         return -1;
     }
 
-    private static String group(Pattern p, String resp, String label) {
-        Matcher m = p.matcher(resp);
-        assertTrue("could not parse " + label + " from response: " + resp, m.find());
-        return m.group(1);
+    private static String group(String field, String resp, String label) {
+        Reply reply = Reply.of(resp);
+        assertTrue("could not parse " + label + ": " + resp, reply.has(field));
+        return reply.text(field);
     }
 
     @Test

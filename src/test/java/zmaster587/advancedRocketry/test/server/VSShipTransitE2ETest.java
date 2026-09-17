@@ -1,5 +1,6 @@
 package zmaster587.advancedRocketry.test.server;
 
+import zmaster587.advancedRocketry.test.Reply;
 import zmaster587.advancedRocketry.test.Events;
 import zmaster587.advancedRocketry.test.ShipReadiness;
 import zmaster587.advancedRocketry.test.GameTicks;
@@ -65,7 +66,7 @@ public class VSShipTransitE2ETest extends AbstractSharedServerTest {
         // the server drives a transit (the old loop drove it by hand and could not have noticed if
         // production stopped), and the record proves the arrival happened rather than that a sample
         // caught a moment.
-        String arrived = events.awaitCarrying(transitMark, "ship_transit_ended",
+        String arrived = events.awaitRecordCarrying(transitMark, "ship_transit_ended",
                 "\"route\":\"HYPERSPACE\"",
                 "the jump never completed; the durable record now reads "
                         + exec("artest space transit-export"),
@@ -116,7 +117,6 @@ public class VSShipTransitE2ETest extends AbstractSharedServerTest {
     }
 
     private static int extractInt(String json, String key) {
-        Matcher m = Pattern.compile("\"" + key + "\":(-?\\d+)").matcher(json);
-        return m.find() ? Integer.parseInt(m.group(1)) : Integer.MIN_VALUE;
+        return Reply.of(json).integerOr(key, Integer.MIN_VALUE);
     }
 }

@@ -1,5 +1,6 @@
 package zmaster587.advancedRocketry.test.server;
 
+import zmaster587.advancedRocketry.test.Reply;
 import com.github.stannismod.forge.testing.junit.AbstractHeadlessServerTest;
 import com.github.stannismod.forge.testing.server.RealDedicatedServerHarness;
 import org.junit.After;
@@ -39,9 +40,9 @@ import static org.junit.Assert.assertTrue;
  */
 public class StarKeepsItsPlanetsAcrossARestartTest {
 
-    private static final Pattern PLANETS = Pattern.compile("\"planets\":(\\d+)");
-    private static final Pattern NAMING = Pattern.compile("\"dimsNamingThisStar\":(\\d+)");
-    private static final Pattern RETINUE = Pattern.compile("\"maxRetinue\":(-?\\d+)");
+    private static final String PLANETS = "planets";
+    private static final String NAMING = "dimsNamingThisStar";
+    private static final String RETINUE = "maxRetinue";
 
     /** Two authored planets under Sol, well clear of the ids the stock world uses. */
     private static final int DIM_A = 480, DIM_B = 481;
@@ -108,10 +109,10 @@ public class StarKeepsItsPlanetsAcrossARestartTest {
                 + "        </planet>\n";
     }
 
-    private static int intField(Pattern p, String json, String what) {
-        Matcher m = p.matcher(json);
-        assertTrue("probe answered without " + what + ": " + json, m.find());
-        return Integer.parseInt(m.group(1));
+    private static int intField(String field, String json, String what) {
+        Reply reply = Reply.of(json);
+        assertTrue("could not parse " + what + ": " + json, reply.has(field));
+        return reply.integer(field);
     }
 
     private static String starGet(RealDedicatedServerHarness boot) throws Exception {

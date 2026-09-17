@@ -1,10 +1,12 @@
 package zmaster587.advancedRocketry.test.server;
 
+import zmaster587.advancedRocketry.test.Reply;
 import org.junit.Test;
 
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import zmaster587.advancedRocketry.test.RocketList;
 import zmaster587.advancedRocketry.test.FixtureSite;
 
 import static org.junit.Assert.assertTrue;
@@ -32,10 +34,9 @@ import static org.junit.Assert.assertTrue;
  */
 public class RocketSendPlanetDataNullGuidanceTest extends AbstractSharedServerTest {
 
-    private static final Pattern BUILDER_POS =
-            Pattern.compile("\"builderPos\":\\[(-?\\d+),(-?\\d+),(-?\\d+)]");
-    private static final Pattern ROCKET_LIST_ID = Pattern.compile("\"id\":(-?\\d+)");
-    private static final Pattern THROWN = Pattern.compile("\"thrown\":\"([^\"]*)\"");
+    private static final String BUILDER_POS = "builderPos";
+    private static final String ROCKET_LIST_ID = "id";
+    private static final String THROWN = "thrown";
 
     private static String ok(java.util.List<String> resp) {
         return String.join("\n", resp);
@@ -53,18 +54,16 @@ public class RocketSendPlanetDataNullGuidanceTest extends AbstractSharedServerTe
                 "the craft is built and flown in this volume");
         String fixture = ok(client().execute(
                 "artest fixture rocket 0 " + baseX + " " + baseY + " " + baseZ + " simple"));
-        Matcher bp = BUILDER_POS.matcher(fixture);
-        assertTrue("fixture missing builderPos: " + fixture, bp.find());
-        int bx = Integer.parseInt(bp.group(1));
-        int by = Integer.parseInt(bp.group(2));
-        int bz = Integer.parseInt(bp.group(3));
+        int[] bp = Reply.of(fixture).blockPos(BUILDER_POS);
+        assertTrue("fixture missing builderPos: " + fixture, bp != null);
+        int bx = bp[0];
+        int by = bp[1];
+        int bz = bp[2];
         ok(client().execute("artest rocket assemble 0 " + bx + " " + by + " " + bz));
         String list = ok(client().execute("artest rocket list 0"));
-        Matcher rim = ROCKET_LIST_ID.matcher(list);
-        int lastId = -1;
-        while (rim.find()) lastId = Integer.parseInt(rim.group(1));
-        assertTrue("no rocket after assemble: " + list, lastId >= 0);
-        return lastId;
+        java.util.List<RocketList.Entry> built = RocketList.of(list);
+        assertTrue("no rocket after assemble: " + list, !built.isEmpty());
+        return built.get(built.size() - 1).id;
     }
 
     /** Bug A: confirming a destination on a rocket with no guidance computer
@@ -81,11 +80,11 @@ public class RocketSendPlanetDataNullGuidanceTest extends AbstractSharedServerTe
         String resp = ok(client().execute("artest rocket send-planet-data " + rid + " 0"));
         assertTrue("send-planet-data failed: " + resp, resp.contains("\"ok\":true"));
 
-        Matcher m = THROWN.matcher(resp);
-        assertTrue("thrown field missing: " + resp, m.find());
+        Reply mReply = Reply.of(resp);
+        assertTrue("thrown field missing: " + resp, mReply.has(THROWN));
         assertTrue("a SENDPLANETDATA packet for a guidance-computer-less rocket "
-                        + "must not throw (Bug A); got " + m.group(1) + ": " + resp,
-                "null".equals(m.group(1)));
+                        + "must not throw (Bug A); got " + mReply.text(THROWN) + ": " + resp,
+                "null".equals(mReply.text(THROWN)));
     }
 
     /** Bug B: the SENDPLANETDATA reader must tolerate an empty payload without
@@ -97,10 +96,10 @@ public class RocketSendPlanetDataNullGuidanceTest extends AbstractSharedServerTe
         String resp = ok(client().execute("artest rocket planet-data-read-empty " + rid));
         assertTrue("planet-data-read-empty failed: " + resp, resp.contains("\"ok\":true"));
 
-        Matcher m = THROWN.matcher(resp);
-        assertTrue("thrown field missing: " + resp, m.find());
+        Reply mReply = Reply.of(resp);
+        assertTrue("thrown field missing: " + resp, mReply.has(THROWN));
         assertTrue("reading a SENDPLANETDATA packet with an empty payload must not "
-                        + "underflow the buffer (Bug B); got " + m.group(1) + ": " + resp,
-                "null".equals(m.group(1)));
+                        + "underflow the buffer (Bug B); got " + mReply.text(THROWN) + ": " + resp,
+                "null".equals(mReply.text(THROWN)));
     }
 }

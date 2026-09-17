@@ -39,7 +39,7 @@ public final class ShipReadiness {
     private ShipReadiness() {
     }
 
-    private static final Pattern COUNT = Pattern.compile("\"count\":(-?\\d+)");
+    private static final String COUNT = "count";
 
     /**
      * Clear the craft this scenario built out of {@code dim} — every registered ship in that world
@@ -62,10 +62,10 @@ public final class ShipReadiness {
      */
     public static int clearCraftFrom(Events.Probe probe, int dim) throws Exception {
         String reply = probe.exec("artest vs destroy-ships " + dim);
-        Matcher m = Pattern.compile("\"marked\":(-?\\d+)").matcher(String.valueOf(reply));
+        Reply mReply = Reply.of(String.valueOf(reply));
         assertTrue("the cleanup verb must answer how many craft it marked, or a scenario cannot say"
-                + " whether it left anything behind: " + reply, m.find());
-        return Integer.parseInt(m.group(1));
+                + " whether it left anything behind: " + reply, mReply.has("marked"));
+        return mReply.integer("marked");
     }
 
     /**
@@ -170,7 +170,7 @@ public final class ShipReadiness {
 
     /** The {@code count} of a probe reply, or {@link Integer#MIN_VALUE} when it carries none. */
     private static int countOf(String reply) {
-        Matcher m = COUNT.matcher(String.valueOf(reply));
-        return m.find() ? Integer.parseInt(m.group(1)) : Integer.MIN_VALUE;
+        Reply mReply = Reply.of(String.valueOf(reply));
+        return mReply.has(COUNT) ? Integer.parseInt(mReply.text(COUNT)) : Integer.MIN_VALUE;
     }
 }

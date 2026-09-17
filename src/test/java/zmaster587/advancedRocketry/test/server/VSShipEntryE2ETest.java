@@ -1,5 +1,6 @@
 package zmaster587.advancedRocketry.test.server;
 
+import zmaster587.advancedRocketry.test.Reply;
 import zmaster587.advancedRocketry.test.ShipReadiness;
 import zmaster587.advancedRocketry.space.CellSeam;
 import zmaster587.advancedRocketry.space.CellWorldMapper;
@@ -39,8 +40,7 @@ import static zmaster587.advancedRocketry.test.server.WorldCommandFixtures.await
  */
 public class VSShipEntryE2ETest extends AbstractSharedServerTest {
 
-    private static final Pattern BUILDER_POS =
-            Pattern.compile("\"builderPos\":\\[(-?\\d+),(-?\\d+),(-?\\d+)]");
+    private static final String BUILDER_POS = "builderPos";
 
     /**
      * How much WORLD an async crossing is allowed in order to finish settling, in server ticks.
@@ -278,6 +278,8 @@ public class VSShipEntryE2ETest extends AbstractSharedServerTest {
         // (0,200,0) in the arrival slot", which is an address no craft was ever put at.
         String arrivedVsId = ShipIdentity.physicsIdOf(this::exec, arrivedSlot, durableId);
         final String[] pose = {""};
+        /** How many ships the cell held at the instant the pose was sampled — for a failure only. */
+        final int[] loadedInCell = {-1};
         // The ledger's own coordinate for this craft, kept from the last sample: the pose witness
         // below compares the ship against WHERE THE LEDGER SAYS IT IS, and both are read inside the
         // same window.
@@ -301,14 +303,19 @@ public class VSShipEntryE2ETest extends AbstractSharedServerTest {
                     // sample with whatever else is loaded rather than with a miss.
                     String poseNow = exec("artest vs ship-info " + arrivedSlot + " id " + arrivedVsId);
                     // The count travels WITH the pose rather than gating on it: the reader of a
-                    // failure needs to know whether he is looking at an unloaded sample.
-                    pose[0] = poseNow + " loadedShipsInCell="
-                            + extractInt(exec("artest vs ship-count " + arrivedSlot), "count");
+                    // failure needs to know whether he is looking at an unloaded sample. It is kept
+                    // BESIDE the reply and not appended to it — a reply with a word glued onto the
+                    // end is no longer the JSON it claims to be, and every reader of it then fails
+                    // with a parse error about the world.
+                    pose[0] = poseNow;
+                    loadedInCell[0] = extractInt(exec("artest vs ship-count " + arrivedSlot),
+                            "count");
                     String held = exec("artest space entry-status id " + durableId);
                     ledgerRow[0] = held;
                     assertEquals("the arrived ship's address drifted out of the cell it flew to once"
                                     + " its flight computer began self-reporting its position;"
-                                    + " status=" + held + " ship=" + pose[0],
+                                    + " status=" + held + " ship=" + pose[0]
+                                    + " loadedShipsInCell=" + loadedInCell[0],
                             targetCell, extractString(held, "cellKey"));
                 });
         // And the same fact read off the SHIP rather than off the ledger — the two compared where
@@ -321,7 +328,8 @@ public class VSShipEntryE2ETest extends AbstractSharedServerTest {
         // pose band on 2026-09-11 put a settled ship at its cell's centre on world Y 0, which no
         // magnitude test can tell from anything. Comparing against the ledger's own coordinate is
         // what the check meant all along, and it survives the next change of mapping too.
-        assertTrue("the arrived ship was never loaded in its destination cell: " + pose[0],
+        assertTrue("the arrived ship was never loaded in its destination cell: " + pose[0]
+                        + " loadedShipsInCell=" + loadedInCell[0],
                 pose[0].contains("\"managed\":true"));
         double[] expected = CellWorldMapper.poseWorldOf(GalacticCoord.ofSectorLocal(0L, 0L, 0L,
                 (long) extractDouble(ledgerRow[0], "lx"),
@@ -337,6 +345,7 @@ public class VSShipEntryE2ETest extends AbstractSharedServerTest {
                             + " reached the coordinate the jump was aimed at. axis " + axis
                             + ": ship " + actual[axis] + " vs ledger " + expected[axis]
                             + " (tolerance " + CellSeam.CARRY_MARGIN + "). ship=" + pose[0]
+                            + " loadedShipsInCell=" + loadedInCell[0]
                             + " ledger=" + ledgerRow[0],
                     Math.abs(actual[axis] - expected[axis]) <= CellSeam.CARRY_MARGIN);
         }
@@ -383,23 +392,20 @@ public class VSShipEntryE2ETest extends AbstractSharedServerTest {
     private String placeFixture(int baseX, int baseY, int baseZ, String variant) throws Exception {
         String fixture = exec("artest fixture rocket 0 " + baseX + " " + baseY + " " + baseZ + " " + variant);
         assertTrue("fixture (" + variant + ") failed: " + fixture, fixture.contains("\"ok\":true"));
-        Matcher bp = BUILDER_POS.matcher(fixture);
-        assertTrue("fixture (" + variant + ") missing builderPos: " + fixture, bp.find());
-        return bp.group(1) + " " + bp.group(2) + " " + bp.group(3);
+        int[] bp = Reply.of(fixture).blockPos(BUILDER_POS);
+        assertTrue("fixture (" + variant + ") missing builderPos: " + fixture, bp != null);
+        return bp[0] + " " + bp[1] + " " + bp[2];
     }
 
     private static int extractInt(String json, String key) {
-        Matcher m = Pattern.compile("\"" + key + "\":(-?\\d+)").matcher(json);
-        return m.find() ? Integer.parseInt(m.group(1)) : Integer.MIN_VALUE;
+        return Reply.of(json).integerOr(key, Integer.MIN_VALUE);
     }
 
     private static double extractDouble(String json, String key) {
-        Matcher m = Pattern.compile("\"" + key + "\":(-?\\d+(?:\\.\\d+)?(?:[eE][-+]?\\d+)?)").matcher(json);
-        return m.find() ? Double.parseDouble(m.group(1)) : 0.0;
+        return Reply.of(json).numberOr(key, 0.0);
     }
 
     private static String extractString(String json, String key) {
-        Matcher m = Pattern.compile("\"" + key + "\":\"([^\"]*)\"").matcher(json);
-        return m.find() ? m.group(1) : null;
+        return Reply.of(json).text(key);
     }
 }

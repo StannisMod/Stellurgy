@@ -6,8 +6,7 @@ import org.junit.FixMethodOrder;
 import org.junit.Test;
 import org.junit.runners.MethodSorters;
 
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
+import zmaster587.advancedRocketry.test.Reply;
 
 import zmaster587.advancedRocketry.test.FixtureSite;
 
@@ -44,8 +43,10 @@ public class VSChairMountArrivesAsItselfE2ETest extends AbstractSharedVsClientE2
         return "vs-chair-mount-identity";
     }
 
-    private static final Pattern SERVER_ENTITY =
-            Pattern.compile("\\{\"id\":(-?\\d+),\"class\":\"([^\"]+)\"");
+    /** The server's own entity report: {@code "entities":[{"id":…,"class":…,"x":…}, …]}. */
+    private static final String ENTITIES = "entities";
+    private static final String ENTITY_ID = "id";
+    private static final String ENTITY_CLASS = "class";
 
     /** Far from every other fixture's build site, and high enough to be clear of any terrain. */
     private static final int FX = 7700, FY = FixtureSite.OPEN_AIR_Y, FZ = 7700;
@@ -110,11 +111,11 @@ public class VSChairMountArrivesAsItselfE2ETest extends AbstractSharedVsClientE2
         String serverSide = exec("artest entity near 0 " + CX + " " + CY + " " + CZ + " 8");
         int chairEntityId = -1;
         String chairEntityClass = null;
-        Matcher m = SERVER_ENTITY.matcher(serverSide);
-        while (m.find()) {
-            if (m.group(2).equals(CHAIR_ENTITY)) {
-                chairEntityId = Integer.parseInt(m.group(1));
-                chairEntityClass = m.group(2);
+        for (String near : Reply.of("artest entity near", serverSide).objectArray(ENTITIES)) {
+            Reply entity = Reply.of("one nearby entity", near);
+            if (CHAIR_ENTITY.equals(entity.textOr(ENTITY_CLASS, null))) {
+                chairEntityId = entity.integer(ENTITY_ID);
+                chairEntityClass = entity.text(ENTITY_CLASS);
             }
         }
         scenario().requireArranged("sitting on the chair must give the server a mount entity -"

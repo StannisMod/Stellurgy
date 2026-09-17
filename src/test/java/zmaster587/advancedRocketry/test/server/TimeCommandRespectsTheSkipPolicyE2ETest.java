@@ -1,5 +1,6 @@
 package zmaster587.advancedRocketry.test.server;
 
+import zmaster587.advancedRocketry.test.Reply;
 import org.junit.Test;
 
 import java.util.regex.Matcher;
@@ -39,22 +40,24 @@ public class TimeCommandRespectsTheSkipPolicyE2ETest extends AbstractSharedServe
     /** A planet dimension the shipped universe actually has, or {@link Integer#MIN_VALUE}. */
     private int findAPlanet() throws Exception {
         String home = exec("artest space cell-info 0 0 0 0");
-        Matcher cell = Pattern.compile("\"dimCell\":\"([^\"]+)\"").matcher(home);
-        if (!cell.find()) {
+        String dimCell = Reply.of("artest space cell-info", home).text("dimCell");
+        if (dimCell == null) {
             return Integer.MIN_VALUE;
         }
-        String[] sectors = cell.group(1).split("_");
+        String[] sectors = dimCell.split("_");
         if (sectors.length != 3) {
             return Integer.MIN_VALUE;
         }
         String bodies = exec("artest space cell-info " + sectors[0] + " " + sectors[1] + " "
                 + sectors[2] + " 0");
-        // Any body with a real dimension behind it that is NOT the overworld.
-        Matcher body = Pattern.compile("\\{\"dim\":(\\d+),\"kind\":\"(?:PLANET|MOON)\"").matcher(bodies);
-        while (body.find()) {
-            int dim = Integer.parseInt(body.group(1));
-            if (dim != 0) {
-                return dim;
+        // Any body with a real dimension behind it that is NOT the overworld. Each body is read as
+        // its own object: the regex this replaces matched `dim` and `kind` in one expression and so
+        // held only while the producer kept them adjacent and in that order.
+        for (String body : Reply.of("artest space cell-info", bodies).objectArray("bodies")) {
+            Reply one = Reply.of(body);
+            String kind = one.text("kind");
+            if (("PLANET".equals(kind) || "MOON".equals(kind)) && one.integer("dim") != 0) {
+                return one.integer("dim");
             }
         }
         return Integer.MIN_VALUE;
@@ -127,8 +130,8 @@ public class TimeCommandRespectsTheSkipPolicyE2ETest extends AbstractSharedServe
     /** The per-dimension day-cycle clock, straight off the probe that reads each world's own. */
     private long dimTime(int dim) throws Exception {
         String raw = exec("artest dim time " + dim);
-        Matcher m = Pattern.compile("\"worldTime\":(-?\\d+)").matcher(raw);
-        assertTrue("the dim-time probe reports no worldTime for dim " + dim + ": " + raw, m.find());
-        return Long.parseLong(m.group(1));
+        Reply mReply = Reply.of(raw);
+        assertTrue("the dim-time probe reports no worldTime for dim " + dim + ": " + raw, mReply.has("worldTime"));
+        return (long) mReply.number("worldTime");
     }
 }

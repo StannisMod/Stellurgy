@@ -1,5 +1,6 @@
 package zmaster587.advancedRocketry.test.server;
 
+import zmaster587.advancedRocketry.test.Reply;
 import org.junit.Test;
 
 import java.util.regex.Matcher;
@@ -27,9 +28,9 @@ import static org.junit.Assert.assertTrue;
  */
 public class WeatherControllerPacketValidationTest extends AbstractSharedServerTest {
 
-    private static final Pattern ID = Pattern.compile("\"id\":(\\d+)");
-    private static final Pattern MODE = Pattern.compile("\"mode_id\":(-?\\d+)");
-    private static final Pattern FLOOD = Pattern.compile("\"floodlevel\":(-?\\d+)");
+    private static final String ID = "id";
+    private static final String MODE = "mode_id";
+    private static final String FLOOD = "floodlevel";
 
     private static String ok(java.util.List<String> resp) {
         return String.join("\n", resp);
@@ -38,15 +39,15 @@ public class WeatherControllerPacketValidationTest extends AbstractSharedServerT
     private long createWeatherSat() throws Exception {
         String resp = ok(client().execute("artest satellite create 0 weatherController 100 1000 1000"));
         assertTrue("weather satellite create failed: " + resp, resp.contains("\"ok\":true"));
-        Matcher m = ID.matcher(resp);
-        assertTrue("no id in create response: " + resp, m.find());
-        return Long.parseLong(m.group(1));
+        Reply mReply = Reply.of(resp);
+        assertTrue("no id in create response: " + resp, mReply.has(ID));
+        return Long.parseLong(mReply.text(ID));
     }
 
-    private static int intField(Pattern p, String src, String name) {
-        Matcher m = p.matcher(src);
-        assertTrue(name + " missing in: " + src, m.find());
-        return Integer.parseInt(m.group(1));
+    private static int intField(String field, String src, String name) {
+        Reply reply = Reply.of(src);
+        assertTrue("could not parse " + name + ": " + src, reply.has(field));
+        return reply.integer(field);
     }
 
     /** An out-of-range flood level (and an out-of-range mode) from the wire

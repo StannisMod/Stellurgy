@@ -1,5 +1,6 @@
 package zmaster587.advancedRocketry.test.server;
 
+import zmaster587.advancedRocketry.test.Reply;
 import com.github.stannismod.forge.testing.junit.AbstractHeadlessServerTest;
 import com.github.stannismod.forge.testing.server.RealDedicatedServerHarness;
 import org.junit.After;
@@ -24,9 +25,11 @@ import static org.junit.Assert.assertTrue;
  */
 public class PersistenceRestartSmokeTest {
 
-    private static final Pattern STATION_ID = Pattern.compile("\"id\":(-?\\d+),\"orbitingBody\":");
-    private static final Pattern SAT_ID_FALLBACK = Pattern.compile("\"id\":(\\d+)");
-    private static final Pattern ATM_DENSITY = Pattern.compile("\"atmosphereDensity\":(-?\\d+)");
+    /** The station's own id. The regex this replaces anchored on the NEXT field so as not
+     *  to match some other `id`; reading by name needs no such anchor. */
+    private static final String STATION_ID = "id";
+    private static final String SAT_ID_FALLBACK = "id";
+    private static final String ATM_DENSITY = "atmosphereDensity";
 
     private Path workDir;
     private RealDedicatedServerHarness firstBoot;
@@ -62,16 +65,16 @@ public class PersistenceRestartSmokeTest {
 
         // Mutation A: station orbiting Earth.
         String createStation = String.join("\n", firstBoot.client().execute("artest station create 0"));
-        Matcher sm = STATION_ID.matcher(createStation);
-        assertTrue("could not extract station id: " + createStation, sm.find());
-        stationId = Long.parseLong(sm.group(1));
+        Reply created = Reply.of("artest station create", createStation);
+        assertTrue("could not extract station id: " + createStation, created.has(STATION_ID));
+        stationId = created.integer(STATION_ID);
 
         // Mutation B: satellite on Earth.
         String createSat = String.join("\n", firstBoot.client().execute(
                 "artest satellite create 0 mass 300 6000 2048"));
-        Matcher sat = SAT_ID_FALLBACK.matcher(createSat);
-        assertTrue("could not extract satellite id: " + createSat, sat.find());
-        satelliteId = Long.parseLong(sat.group(1));
+        Reply satReply = Reply.of(createSat);
+        assertTrue("could not extract satellite id: " + createSat, satReply.has(SAT_ID_FALLBACK));
+        satelliteId = Long.parseLong(satReply.text(SAT_ID_FALLBACK));
 
         // Mutation C: atmosphere density.
         firstBoot.client().execute("artest atmosphere set-density 0 " + targetDensity);
@@ -110,10 +113,10 @@ public class PersistenceRestartSmokeTest {
                 satInfo.contains("\"type\":\"mass\""));
 
         String planet = String.join("\n", secondBoot.client().execute("artest planet info 0"));
-        Matcher am = ATM_DENSITY.matcher(planet);
-        assertTrue("planet info missing atmosphereDensity: " + planet, am.find());
+        Reply amReply = Reply.of(planet);
+        assertTrue("planet info missing atmosphereDensity: " + planet, amReply.has(ATM_DENSITY));
         assertEquals("atmosphereDensity did not survive",
-                targetDensity, Integer.parseInt(am.group(1)));
+                targetDensity, Integer.parseInt(amReply.text(ATM_DENSITY)));
     }
 
     private static int[] extractCounts(String json, String... keys) {

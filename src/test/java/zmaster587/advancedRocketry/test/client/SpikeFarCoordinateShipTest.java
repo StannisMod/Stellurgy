@@ -4,6 +4,7 @@ import com.github.stannismod.forge.testing.junit.AbstractClientE2ETest;
 
 import org.junit.Test;
 import org.lwjgl.input.Keyboard;
+import zmaster587.advancedRocketry.test.Reply;
 import zmaster587.advancedRocketry.test.GameTicks;
 import zmaster587.advancedRocketry.test.ShipIdentity;
 
@@ -62,13 +63,12 @@ import static org.junit.Assert.assertTrue;
  */
 public class SpikeFarCoordinateShipTest extends AbstractClientE2ETest {
 
-    private static final Pattern BUILDER_POS =
-            Pattern.compile("\"builderPos\":\\[(-?\\d+),(-?\\d+),(-?\\d+)]");
-    private static final Pattern POS_Y = Pattern.compile("\"posY\":(-?[0-9.E\\-]+)");
-    private static final Pattern COUNT = Pattern.compile("\"count\":(-?\\d+)");
-    private static final Pattern DUMMY_ID = Pattern.compile("\"dummyId\":(-?\\d+)");
-    private static final Pattern POS_X = Pattern.compile("\"posX\":(-?[0-9.E\\-]+)");
-    private static final Pattern POS_Z = Pattern.compile("\"posZ\":(-?[0-9.E\\-]+)");
+    private static final String BUILDER_POS = "builderPos";
+    private static final String POS_Y = "posY";
+    private static final String COUNT = "count";
+    private static final String DUMMY_ID = "dummyId";
+    private static final String POS_X = "posX";
+    private static final String POS_Z = "posZ";
 
     /** One command, then this many samples this many ticks apart, watching for motion to cease. */
     private static final int SURVIVAL_SAMPLES = 40;
@@ -209,12 +209,13 @@ public class SpikeFarCoordinateShipTest extends AbstractClientE2ETest {
                     verdicts.put(x, "the pilot seat was not findable: " + oneLine(mountInfo));
                     continue;
                 }
-                Matcher dm = DUMMY_ID.matcher(mountInfo);
-                if (!dm.find()) {
+                Reply seatMount = Reply.of("artest vs seat-mount", mountInfo);
+                if (!seatMount.has(DUMMY_ID)) {
                     verdicts.put(x, "seat-mount reported no dummy id: " + oneLine(mountInfo));
                     continue;
                 }
-                String mounted = exec("artest player mount-entity " + dm.group(1));
+                String mounted = exec("artest player mount-entity "
+                        + seatMount.integer(DUMMY_ID));
                 if (!mounted.contains("\"mounted\":true")) {
                     verdicts.put(x, "the bot could not mount the seat dummy: " + oneLine(mounted));
                     continue;
@@ -223,7 +224,7 @@ public class SpikeFarCoordinateShipTest extends AbstractClientE2ETest {
                 // so wait until the CLIENT agrees it is riding — the first run of this leg read the
                 // rider's posY one tick too early and died on a missing field, which reads exactly
                 // like a coordinate failure and is not one.
-                String riding = awaitRiding(Integer.parseInt(dm.group(1)));
+                String riding = awaitRiding(seatMount.integer(DUMMY_ID));
                 if (riding != null) {
                     verdicts.put(x, riding + " (server said " + oneLine(mounted) + ")");
                     continue;
@@ -362,11 +363,10 @@ public class SpikeFarCoordinateShipTest extends AbstractClientE2ETest {
             // subspace measures nothing, and the id was already resolved three lines up.
             String mountInfo = exec("artest vs seat-mount 0 id " + shipId);
             assertTrue("no seat: " + oneLine(mountInfo), mountInfo.contains("\"seatFound\":true"));
-            Matcher dm = DUMMY_ID.matcher(mountInfo);
-            assertTrue("no dummy id", dm.find());
+            int dummyId = Reply.of("artest vs seat-mount", mountInfo).integer(DUMMY_ID);
             assertTrue("could not mount",
-                    exec("artest player mount-entity " + dm.group(1)).contains("\"mounted\":true"));
-            String riding = awaitRiding(Integer.parseInt(dm.group(1)));
+                    exec("artest player mount-entity " + dummyId).contains("\"mounted\":true"));
+            String riding = awaitRiding(dummyId);
             assertTrue("the client never began riding: " + riding, riding == null);
 
             // ONE command. Forward throttle rather than vertical: horizontal travel has no ceiling to
@@ -424,11 +424,10 @@ public class SpikeFarCoordinateShipTest extends AbstractClientE2ETest {
         for (int i = 0; i < 10; i++) {
             try {
                 last = exec("artest vs ship-info 0 id " + shipId);
-                Matcher mx = POS_X.matcher(last);
-                Matcher mz = POS_Z.matcher(last);
-                if (mx.find() && mz.find()) {
-                    return new double[] {Double.parseDouble(mx.group(1)),
-                            Double.parseDouble(mz.group(1))};
+                Reply info = Reply.of("artest vs ship-info", last);
+                double px = info.number(POS_X), pz = info.number(POS_Z);
+                if (!Double.isNaN(px) && !Double.isNaN(pz)) {
+                    return new double[] {px, pz};
                 }
                 bot().waitTicks(2);
             } catch (Exception e) {
@@ -550,13 +549,13 @@ public class SpikeFarCoordinateShipTest extends AbstractClientE2ETest {
             System.out.println("[SPIKE ship] fixture at x=" + x + " failed: " + oneLine(fixture));
             return null;
         }
-        Matcher bp = BUILDER_POS.matcher(fixture);
-        if (!bp.find()) {
+        int[] bp = Reply.of(fixture).blockPos(BUILDER_POS);
+        if (bp == null) {
             System.out.println("[SPIKE ship] fixture at x=" + x + " gave no builderPos: "
                     + oneLine(fixture));
             return null;
         }
-        return exec("artest rocket assemble 0 " + bp.group(1) + " " + bp.group(2) + " " + bp.group(3));
+        return exec("artest rocket assemble 0 " + bp[0] + " " + bp[1] + " " + bp[2]);
     }
 
     /**
@@ -599,9 +598,9 @@ public class SpikeFarCoordinateShipTest extends AbstractClientE2ETest {
         for (int i = 0; i < 10; i++) {
             try {
                 last = exec("artest vs ship-info 0 id " + shipId);
-                Matcher m = POS_Y.matcher(last);
-                if (m.find()) {
-                    return Double.parseDouble(m.group(1));
+                double py = Reply.of("artest vs ship-info", last).number(POS_Y);
+                if (!Double.isNaN(py)) {
+                    return py;
                 }
                 bot().waitTicks(2);
             } catch (Exception e) {
@@ -612,19 +611,18 @@ public class SpikeFarCoordinateShipTest extends AbstractClientE2ETest {
     }
 
     private int count(String sub) throws Exception {
-        Matcher m = COUNT.matcher(exec("artest vs " + sub + " 0"));
-        return m.find() ? Integer.parseInt(m.group(1)) : -1;
+        String command = "artest vs " + sub + " 0";
+        return Reply.of(command, exec(command)).integerOr(COUNT, -1);
     }
 
     private double readDouble(String json) {
-        Matcher m = POS_Y.matcher(json);
-        assertTrue("expected a posY in: " + json, m.find());
-        return Double.parseDouble(m.group(1));
+        double value = Reply.of("artest vs ship-info", json).number(POS_Y);
+        assertTrue("expected a posY in: " + json, !Double.isNaN(value));
+        return value;
     }
 
     private static double field(String json, String key) {
-        Matcher m = Pattern.compile("\"" + key + "\"\\s*:\\s*([-0-9.eE]+)").matcher(json);
-        return m.find() ? Double.parseDouble(m.group(1)) : Double.NaN;
+        return Reply.of(json).numberOr(key, Double.NaN);
     }
 
     /** The report is the deliverable, so it also lands on disk and survives a truncated console. */

@@ -11,6 +11,7 @@ import java.util.regex.Pattern;
 
 import zmaster587.advancedRocketry.test.ArrangementFailure;
 import zmaster587.advancedRocketry.test.Events;
+import zmaster587.advancedRocketry.test.Reply;
 import zmaster587.advancedRocketry.test.ShipIdentity;
 
 import zmaster587.advancedRocketry.test.Plot;
@@ -53,16 +54,15 @@ import static org.junit.Assert.assertTrue;
  */
 public class VSShipRenderPoseSkewE2ETest extends AbstractClientE2ETest {
 
-    private static final Pattern BUILDER_POS =
-            Pattern.compile("\"builderPos\":\\[(-?\\d+),(-?\\d+),(-?\\d+)]");
-    private static final Pattern POS_X = Pattern.compile("\"posX\":(-?[0-9.E\\-]+)");
-    private static final Pattern POS_Y = Pattern.compile("\"posY\":(-?[0-9.E\\-]+)");
-    private static final Pattern POS_Z = Pattern.compile("\"posZ\":(-?[0-9.E\\-]+)");
-    private static final Pattern Q_X = Pattern.compile("\"qx\":(-?[0-9.E\\-]+)");
-    private static final Pattern Q_Z = Pattern.compile("\"qz\":(-?[0-9.E\\-]+)");
-    private static final Pattern WORLD_X = Pattern.compile("\"worldX\":(-?[0-9.E\\-]+)");
-    private static final Pattern WORLD_Y = Pattern.compile("\"worldY\":(-?[0-9.E\\-]+)");
-    private static final Pattern WORLD_Z = Pattern.compile("\"worldZ\":(-?[0-9.E\\-]+)");
+    private static final String BUILDER_POS = "builderPos";
+    private static final String POS_X = "posX";
+    private static final String POS_Y = "posY";
+    private static final String POS_Z = "posZ";
+    private static final String Q_X = "qx";
+    private static final String Q_Z = "qz";
+    private static final String WORLD_X = "worldX";
+    private static final String WORLD_Y = "worldY";
+    private static final String WORLD_Z = "worldZ";
 
     private static final String VARIANT = "with-pilot-deck";
 
@@ -512,7 +512,7 @@ public class VSShipRenderPoseSkewE2ETest extends AbstractClientE2ETest {
         // Exactly ONE record in the window, then its ship. `lastField` takes the LAST record, so a
         // second assembly landing inside this mark would silently re-point every question below and
         // the id would look exactly as legitimate as the right one.
-        int spawnedCount = Events.countRecords(spawned, "\"vsShip\":");
+        int spawnedCount = Events.countRecordsWithField(spawned, "vsShip");
         ArrangementFailure.requireArranged("exactly ONE ship may be spawned in this scenario's"
                 + " window, or nothing here can say which is its own — " + spawnedCount + " were: "
                 + spawned, spawnedCount == 1);
@@ -561,9 +561,9 @@ public class VSShipRenderPoseSkewE2ETest extends AbstractClientE2ETest {
                         .contains("\"ok\":true"));
         String fixture = exec("artest fixture rocket 0 " + baseX + " " + baseY + " " + baseZ + " " + VARIANT);
         assertTrue("fixture (" + VARIANT + ") failed: " + fixture, fixture.contains("\"ok\":true"));
-        Matcher bp = BUILDER_POS.matcher(fixture);
-        assertTrue("fixture missing builderPos: " + fixture, bp.find());
-        return exec("artest rocket assemble 0 " + bp.group(1) + " " + bp.group(2) + " " + bp.group(3));
+        int[] bp = Reply.of(fixture).blockPos(BUILDER_POS);
+        assertTrue("fixture missing builderPos: " + fixture, bp != null);
+        return exec("artest rocket assemble 0 " + bp[0] + " " + bp[1] + " " + bp[2]);
     }
 
     /** This scenario's ship, asked by identity — no distance term to be wrong about. */
@@ -600,10 +600,10 @@ public class VSShipRenderPoseSkewE2ETest extends AbstractClientE2ETest {
         return clientEvents().mark();
     }
 
-    private double readDouble(String json, Pattern p) {
-        Matcher m = p.matcher(json);
-        assertTrue("expected a number in: " + json, m.find());
-        return Double.parseDouble(m.group(1));
+    private double readDouble(String json, String field) {
+        double value = Reply.of(json).number(field);
+        assertTrue("expected a number `" + field + "` in: " + json, !Double.isNaN(value));
+        return value;
     }
 
     private static double distance(double[] a, double[] b) {

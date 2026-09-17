@@ -1,5 +1,6 @@
 package zmaster587.advancedRocketry.test.server;
 
+import zmaster587.advancedRocketry.test.Reply;
 import org.junit.Test;
 
 import java.util.regex.Matcher;
@@ -35,10 +36,9 @@ import static org.junit.Assert.assertTrue;
  */
 public class AssemblerStatusNbtRoundtripTest extends AbstractSharedServerTest {
 
-    private static final Pattern BUILDER_POS =
-            Pattern.compile("\"builderPos\":\\[(-?\\d+),(-?\\d+),(-?\\d+)]");
-    private static final Pattern THREW = Pattern.compile("\"threw\":\"([^\"]*)\"");
-    private static final Pattern PEER_STATUS = Pattern.compile("\"peerStatus\":\"([^\"]*)\"");
+    private static final String BUILDER_POS = "builderPos";
+    private static final String THREW = "threw";
+    private static final String PEER_STATUS = "peerStatus";
 
     private static String ok(java.util.List<String> resp) {
         return String.join("\n", resp);
@@ -56,18 +56,18 @@ public class AssemblerStatusNbtRoundtripTest extends AbstractSharedServerTest {
                 "the craft is built and flown in this volume");
         String fixture = ok(client().execute(
                 "artest fixture rocket 0 " + baseX + " " + baseY + " " + baseZ + " simple"));
-        Matcher bp = BUILDER_POS.matcher(fixture);
-        assertTrue("fixture missing builderPos: " + fixture, bp.find());
+        int[] bp = Reply.of(fixture).blockPos(BUILDER_POS);
+        assertTrue("fixture missing builderPos: " + fixture, bp != null);
         return new int[]{
-                Integer.parseInt(bp.group(1)),
-                Integer.parseInt(bp.group(2)),
-                Integer.parseInt(bp.group(3))};
+                bp[0],
+                bp[1],
+                bp[2]};
     }
 
-    private static String field(Pattern p, String src, String name) {
-        Matcher m = p.matcher(src);
-        assertTrue(name + " missing in: " + src, m.find());
-        return m.group(1);
+    private static String field(String field, String src, String name) {
+        Reply reply = Reply.of(src);
+        assertTrue("could not parse " + name + ": " + src, reply.has(field));
+        return reply.text(field);
     }
 
     /** A save with no persisted status must load the neutral idle verdict

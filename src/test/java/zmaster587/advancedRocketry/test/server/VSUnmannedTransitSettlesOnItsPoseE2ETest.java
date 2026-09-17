@@ -1,5 +1,6 @@
 package zmaster587.advancedRocketry.test.server;
 
+import zmaster587.advancedRocketry.test.Reply;
 import zmaster587.advancedRocketry.test.Events;
 import zmaster587.advancedRocketry.test.GameTicks;
 import zmaster587.advancedRocketry.test.ShipReadiness;
@@ -87,9 +88,8 @@ public class VSUnmannedTransitSettlesOnItsPoseE2ETest extends AbstractSharedServ
         // answered nothing — which is the opposite of what we mean to assert.
         // Control first: the target world must actually hold a ship, or "its position is not X" below
         // would pass on a run where the ship had vanished — the opposite of what this asserts.
-        Matcher ships = Pattern.compile("\"ships\":\"([^\"]*)\"").matcher(lastTick);
-        assertTrue("the probe reported no ships field at all: " + lastTick, ships.find());
-        String positions = ships.group(1);
+        String positions = Reply.of("artest space transit-tick", lastTick).text("ships");
+        assertTrue("the probe reported no ships field at all: " + lastTick, positions != null);
         assertTrue("the target world holds no ship, so nothing below measures the arrival: " + lastTick,
                 !positions.isEmpty());
 
@@ -134,7 +134,6 @@ public class VSUnmannedTransitSettlesOnItsPoseE2ETest extends AbstractSharedServ
     }
 
     private static int extractInt(String json, String key) {
-        Matcher m = Pattern.compile("\"" + key + "\":(-?\\d+)").matcher(json);
-        return m.find() ? Integer.parseInt(m.group(1)) : Integer.MIN_VALUE;
+        return Reply.of(json).integerOr(key, Integer.MIN_VALUE);
     }
 }

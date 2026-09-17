@@ -1,7 +1,5 @@
 package zmaster587.advancedRocketry.test.client;
 
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 import com.github.stannismod.forge.testing.TestTimeouts;
 import com.google.gson.JsonObject;
@@ -10,6 +8,7 @@ import org.junit.FixMethodOrder;
 import org.junit.Test;
 import org.junit.runners.MethodSorters;
 
+import zmaster587.advancedRocketry.test.Reply;
 import zmaster587.advancedRocketry.test.Events;
 import zmaster587.advancedRocketry.test.FixtureSite;
 
@@ -68,16 +67,17 @@ public class VSAssembledShipRealRightClickBoardingE2ETest extends AbstractShared
         return "vs-assembled-ship-right-click-boarding";
     }
 
-    private static final Pattern BUILDER_POS =
-            Pattern.compile("\"builderPos\":\\[(-?\\d+),(-?\\d+),(-?\\d+)]");
-    private static final Pattern POS_Y = Pattern.compile("\"posY\":(-?[0-9.E\\-]+)");
+    private static final String BUILDER_POS = "builderPos";
+    private static final String POS_Y = "posY";
 
     /** This scenario's ship, by identity — captured at its build site before anything moves. */
     private String shipUuid;
-    private static final Pattern SEAT_SUB = Pattern.compile(
-            "\"seatX\":(-?\\d+),\"seatY\":(-?\\d+),\"seatZ\":(-?\\d+)");
-    private static final Pattern SHIP_WORLD = Pattern.compile(
-            "\"shipWorldX\":(-?[0-9.E\\-]+),\"shipWorldY\":(-?[0-9.E\\-]+),\"shipWorldZ\":(-?[0-9.E\\-]+)");
+    private static final String SEAT_X = "seatX";
+    private static final String SEAT_Y = "seatY";
+    private static final String SEAT_Z = "seatZ";
+    private static final String SHIP_WORLD_X = "shipWorldX";
+    private static final String SHIP_WORLD_Y = "shipWorldY";
+    private static final String SHIP_WORLD_Z = "shipWorldZ";
 
     /**
      * The decked variant, because the pilot must stand NEXT TO the seat rather than squint up at it
@@ -156,9 +156,9 @@ public class VSAssembledShipRealRightClickBoardingE2ETest extends AbstractShared
         for (int attempt = 0; attempt < budget && Double.isNaN(yRest); attempt++) {
             bot().waitTicks(5);
             atBase = shipInfoAtBase();
-            Matcher m = POS_Y.matcher(atBase);
-            if (m.find()) {
-                yRest = Double.parseDouble(m.group(1));
+            Reply mReply = Reply.of(atBase);
+            if (mReply.has(POS_Y)) {
+                yRest = Double.parseDouble(mReply.text(POS_Y));
             }
         }
         scenario().requireArranged("the ship must LOAD with the client present: " + atBase,
@@ -167,12 +167,12 @@ public class VSAssembledShipRealRightClickBoardingE2ETest extends AbstractShared
         // The seat's SUBSPACE address (stationary, what the raytrace should report) and its live
         // WORLD position (what the bot has to aim at). Both come from the same probe reading.
         String found = findSeat();
-        Matcher sm = SEAT_SUB.matcher(found);
+        Reply seatReply = Reply.of("artest vs find-seat", found);
         scenario().requireArranged("find-seat must resolve the assembled ship's subspace seat: " + found,
-                sm.find());
-        int seatSubX = Integer.parseInt(sm.group(1));
-        int seatSubY = Integer.parseInt(sm.group(2));
-        int seatSubZ = Integer.parseInt(sm.group(3));
+                seatReply.has(SEAT_X));
+        int seatSubX = seatReply.integer(SEAT_X);
+        int seatSubY = seatReply.integer(SEAT_Y);
+        int seatSubZ = seatReply.integer(SEAT_Z);
 
         // ---- ARRANGEMENT: an EMPTY hand, or a held stack consumes the press before the block. ----
         // A freshly joined player does not start empty-handed (mods hand out items on first join),
@@ -211,13 +211,13 @@ public class VSAssembledShipRealRightClickBoardingE2ETest extends AbstractShared
         double px = Double.NaN, py = Double.NaN, pz = Double.NaN;
         for (int attempt = 0; attempt < budget; attempt++) {
             found = findSeat();
-            Matcher wm = SHIP_WORLD.matcher(found);
-            if (!wm.find()) {
+            Reply pose = Reply.of("artest vs find-seat", found);
+            if (!pose.has(SHIP_WORLD_X)) {
                 bot().waitTicks(5);
                 continue;
             }
-            seatWorld = new double[]{Double.parseDouble(wm.group(1)),
-                    Double.parseDouble(wm.group(2)), Double.parseDouble(wm.group(3))};
+            seatWorld = new double[]{pose.number(SHIP_WORLD_X),
+                    pose.number(SHIP_WORLD_Y), pose.number(SHIP_WORLD_Z)};
 
             // Put the bot on the deck beside the seat, re-derived from the seat's LIVE position: a
             // freshly assembled ship settles for a while, and a stand computed once against a stale
@@ -385,8 +385,8 @@ public class VSAssembledShipRealRightClickBoardingE2ETest extends AbstractShared
         String fixture = exec("artest fixture rocket 0 " + baseX + " " + baseY + " " + baseZ + " " + variant);
         scenario().requireArranged("fixture (" + variant + ") failed: " + fixture,
                 fixture.contains("\"ok\":true"));
-        Matcher bp = BUILDER_POS.matcher(fixture);
-        scenario().requireArranged("fixture missing builderPos: " + fixture, bp.find());
-        return exec("artest rocket assemble 0 " + bp.group(1) + " " + bp.group(2) + " " + bp.group(3));
+        int[] bp = Reply.of(fixture).blockPos(BUILDER_POS);
+        scenario().requireArranged("fixture missing builderPos: " + fixture, bp != null);
+        return exec("artest rocket assemble 0 " + bp[0] + " " + bp[1] + " " + bp[2]);
     }
 }

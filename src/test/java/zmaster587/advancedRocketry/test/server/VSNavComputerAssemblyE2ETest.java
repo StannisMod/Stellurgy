@@ -5,6 +5,7 @@ import java.util.regex.Pattern;
 
 import org.junit.Test;
 
+import zmaster587.advancedRocketry.test.Reply;
 import zmaster587.advancedRocketry.test.FixtureSite;
 
 import static org.junit.Assert.assertTrue;
@@ -43,8 +44,7 @@ public class VSNavComputerAssemblyE2ETest extends AbstractSharedServerTest {
     // Do not "fix" this by lifting it and chasing the red, and do not re-read the old note that
     // said the Y here "does not care". It cared.
     private static final int BASE_X = 7200, BASE_Y = 80, BASE_Z = 7200;
-    private static final Pattern BUILDER_POS =
-            Pattern.compile("\"builderPos\":\\[(-?\\d+),(-?\\d+),(-?\\d+)\\]");
+    private static final String BUILDER_POS = "builderPos";
 
     @Test
     public void aBuiltNavigationComputerIsLinkedToItsShipByTheAssembler() throws Exception {
@@ -52,8 +52,8 @@ public class VSNavComputerAssemblyE2ETest extends AbstractSharedServerTest {
         String fixture = exec("artest fixture rocket 0 " + BASE_X + " " + BASE_Y + " " + BASE_Z
                 + " with-nav-computer");
         assertTrue("the with-nav-computer fixture must build: " + fixture, fixture.contains("\"ok\":true"));
-        Matcher bp = BUILDER_POS.matcher(fixture);
-        assertTrue("fixture missing builderPos: " + fixture, bp.find());
+        int[] bp = Reply.of(fixture).blockPos(BUILDER_POS);
+        assertTrue("fixture missing builderPos: " + fixture, bp != null);
 
         // The fixture builds its craft at (baseX+3, baseY+1, baseZ+3); the flight computer sits one
         // west and three up from that origin, and the navigation computer one further along Z.
@@ -65,7 +65,7 @@ public class VSNavComputerAssemblyE2ETest extends AbstractSharedServerTest {
                         + " the test could not tell assembly apart from doing nothing: " + before,
                 before.contains("\"linked\":false"));
 
-        String asm = exec("artest rocket assemble 0 " + bp.group(1) + " " + bp.group(2) + " " + bp.group(3));
+        String asm = exec("artest rocket assemble 0 " + bp[0] + " " + bp[1] + " " + bp[2]);
         assertTrue("with the physics mod an AFC-bearing build must become a ship, not a rocket: " + asm,
                 asm.contains("\"rocketCount\":0"));
 

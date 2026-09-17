@@ -1,5 +1,6 @@
 package zmaster587.advancedRocketry.test.server;
 
+import zmaster587.advancedRocketry.test.FluidStored;
 import com.github.stannismod.forge.testing.junit.AbstractHeadlessServerTest;
 import com.github.stannismod.forge.testing.server.RealDedicatedServerHarness;
 import org.junit.After;
@@ -9,9 +10,6 @@ import org.junit.Test;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
-
 import zmaster587.advancedRocketry.test.FixtureSite;
 
 import static org.junit.Assert.assertEquals;
@@ -36,8 +34,6 @@ import static org.junit.Assert.assertTrue;
  */
 public class FluidTankNBTRoundTripsAcrossRestartTest {
 
-    private static final Pattern FLUID_NAME = Pattern.compile("\"fluid\":\"([^\"]+)\"");
-    private static final Pattern FLUID_AMOUNT = Pattern.compile("\"amount\":(\\d+)");
 
     /** Tank position — far enough from spawn that no other tile collides. */
     private static final int TX = 2400;
@@ -89,9 +85,8 @@ public class FluidTankNBTRoundTripsAcrossRestartTest {
         // Verify the inject landed in-memory before we save the world.
         String storedBefore = String.join("\n", firstBoot.client().execute(
                 "artest fluid stored 0 " + TX + " " + TY + " " + TZ));
-        String fluidBefore = matchOrFail(FLUID_NAME, storedBefore, "fluidName (boot 1)");
-        int amountBefore = Integer.parseInt(
-                matchOrFail(FLUID_AMOUNT, storedBefore, "amount (boot 1)"));
+        String fluidBefore = fluidOrFail(storedBefore, "fluidName (boot 1)");
+        int amountBefore = theTank(storedBefore, "amount (boot 1)").amount(0);
         assertTrue("expected non-empty oxygen tank after inject — fluid=" + fluidBefore
                         + " amount=" + amountBefore + " response=" + storedBefore,
                 fluidBefore.toLowerCase().contains("oxygen") && amountBefore > 0);
@@ -113,9 +108,8 @@ public class FluidTankNBTRoundTripsAcrossRestartTest {
         assertTrue("liquidTank must still expose IFluidHandler after restart: " + storedAfter,
                 storedAfter.contains("\"hasFluid\":true"));
 
-        String fluidAfter = matchOrFail(FLUID_NAME, storedAfter, "fluidName (boot 2)");
-        int amountAfter = Integer.parseInt(
-                matchOrFail(FLUID_AMOUNT, storedAfter, "amount (boot 2)"));
+        String fluidAfter = fluidOrFail(storedAfter, "fluidName (boot 2)");
+        int amountAfter = theTank(storedAfter, "amount (boot 2)").amount(0);
 
         // Exact-match: NBT format must round-trip lossless.
         assertEquals("fluid name lost across restart (was " + fluidBefore + "): " + storedAfter,
@@ -124,9 +118,20 @@ public class FluidTankNBTRoundTripsAcrossRestartTest {
                 amountBefore, amountAfter);
     }
 
-    private static String matchOrFail(Pattern p, String s, String label) {
-        Matcher m = p.matcher(s);
-        assertTrue("could not parse " + label + " from response: " + s, m.find());
-        return m.group(1);
+    /**
+     * The tile's ONE tank — a liquidTank block reports exactly one, and the fluid fields live on
+     * the tank rather than on the reply.
+     */
+    private static FluidStored theTank(String s, String label) {
+        FluidStored stored = FluidStored.of(s);
+        assertTrue("could not read " + label + " — no tank in the response: " + s,
+                stored.count() >= 1);
+        return stored;
+    }
+
+    private static String fluidOrFail(String s, String label) {
+        String value = theTank(s, label).fluid(0);
+        assertTrue("could not parse " + label + " from response: " + s, value != null);
+        return value;
     }
 }

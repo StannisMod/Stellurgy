@@ -7,6 +7,7 @@ import org.junit.Test;
 import org.junit.runners.MethodSorters;
 
 import zmaster587.advancedRocketry.test.Events;
+import zmaster587.advancedRocketry.test.Reply;
 
 import java.util.HashSet;
 import java.util.Locale;
@@ -63,9 +64,9 @@ import static org.junit.Assert.assertTrue;
 public class WorldCommandClientGroupE2ETest extends AbstractSharedClientE2ETest {
 
     private static final Pattern DIM_LINE = Pattern.compile("DIM(\\d+):");
-    private static final Pattern PLAYER_NAME = Pattern.compile("\"player\":\"([^\"]+)\"");
-    private static final Pattern STATION_ID = Pattern.compile("\"id\":(-?\\d+)");
-    private static final Pattern POS_X = Pattern.compile("\"posX\":(-?\\d+(?:\\.\\d+)?(?:[eE][-+]?\\d+)?)");
+    private static final String PLAYER_NAME = "player";
+    private static final String STATION_ID = "id";
+    private static final String POS_X = "posX";
 
     /** The space dim, where {@code /ar goto station} lands the player. */
     private static final int SPACE_DIM = -2;
@@ -89,9 +90,9 @@ public class WorldCommandClientGroupE2ETest extends AbstractSharedClientE2ETest 
 
     private String botName() throws Exception {
         String health = exec("artest player health");
-        Matcher m = PLAYER_NAME.matcher(health);
-        scenario().requireArranged("player health must echo the player name: " + health, m.find());
-        return m.group(1);
+        Reply mReply = Reply.of(health);
+        scenario().requireArranged("player health must echo the player name: " + health, mReply.has(PLAYER_NAME));
+        return mReply.text(PLAYER_NAME);
     }
 
     private static int newDimFromDiff(String before, String after) {
@@ -117,29 +118,6 @@ public class WorldCommandClientGroupE2ETest extends AbstractSharedClientE2ETest 
      * discrete event, in the same ballpark as the 100/200-tick polls it replaces.
      */
     private static final int REPLY_BUDGET_TICKS = 200;
-
-    /**
-     * Wait for a record of {@code type} that CARRIES {@code needle}, failing with the whole chain
-     * that DID happen.
-     *
-     * <p>{@code needle} must end at a field boundary ({@code "dim":42,}) wherever it names a number:
-     * a payload's numbers are not delimited on the right, so a needle without the comma matches
-     * every value it is a prefix of.</p>
-     */
-    private String awaitRecordCarrying(Events events, long mark, String type, String needle,
-                                       String what) throws Exception {
-        String reply = "";
-        for (int waited = 0; waited <= REPLY_BUDGET_TICKS; waited += 10) {
-            reply = events.since(mark, type);
-            if (Events.countRecords(reply, needle) > 0) {
-                return reply;
-            }
-            bot().waitTicks(10);
-        }
-        throw new AssertionError(what + " — no `" + type + "` carrying " + needle + " was recorded"
-                + " within " + REPLY_BUDGET_TICKS + " ticks. What DID happen since the mark: "
-                + Events.typesOf(events.since(mark)) + " | raw: " + reply);
-    }
 
     /**
      * Wait for a chat line carrying {@code needle} to reach the client's HUD, from a mark taken
@@ -181,10 +159,10 @@ public class WorldCommandClientGroupE2ETest extends AbstractSharedClientE2ETest 
         return count;
     }
 
-    private static double extractDouble(String src, Pattern pattern) {
-        Matcher m = pattern.matcher(src);
-        assertTrue("pattern not found in: " + src, m.find());
-        return Double.parseDouble(m.group(1));
+    private static double extractDouble(String src, String field) {
+        double value = Reply.of(src).number(field);
+        assertTrue("field `" + field + "` not found in: " + src, !Double.isNaN(value));
+        return value;
     }
 
     // ── /ar addSealant ────────────────────────────────────────────────────────
@@ -240,9 +218,10 @@ public class WorldCommandClientGroupE2ETest extends AbstractSharedClientE2ETest 
         scenario().arranging("op the bot and create a station for the chip to bind to");
         opTheBot();
         String create = exec("artest station create " + plot().dim);
-        Matcher idM = STATION_ID.matcher(create);
-        scenario().requireArranged("station create response must include id: " + create, idM.find());
-        int stationId = Integer.parseInt(idM.group(1));
+        Reply created = Reply.of("artest station create", create);
+        scenario().requireArranged("station create response must include id: " + create,
+                created.has(STATION_ID));
+        int stationId = created.integer(STATION_ID);
         scenario().record("stationId", stationId);
 
         // The shared reset clears the inventory, so this is a control rather than a hope: a chip
@@ -261,9 +240,10 @@ public class WorldCommandClientGroupE2ETest extends AbstractSharedClientE2ETest 
         // THE LINK: the server wrote the chip into a slot and the client APPLIED that write. The old
         // form re-counted the rendered inventory on a tick budget and reported "client count=0" for
         // a command that was refused, a slot packet that never came and a slow round trip alike.
-        String slotWrites = awaitRecordCarrying(clientLog, mark, "client_slot_set",
-                "\"item\":\"advancedrocketry:spacestationchip\"",
-                "/ar station give must put a station chip into a slot the client draws");
+        String slotWrites = clientLog.awaitField(mark, "client_slot_set",
+                "item", "advancedrocketry:spacestationchip",
+                "/ar station give must put a station chip into a slot the client draws",
+                REPLY_BUDGET_TICKS);
         scenario().record("slotWrite", slotWrites);
 
         int count = countClientItems("advancedrocketry:spacestationchip");
@@ -376,9 +356,10 @@ public class WorldCommandClientGroupE2ETest extends AbstractSharedClientE2ETest 
         scenario().arranging("op the bot and create a station to travel to");
         opTheBot();
         String create = exec("artest station create " + plot().dim);
-        Matcher idM = STATION_ID.matcher(create);
-        scenario().requireArranged("station create must succeed: " + create, idM.find());
-        int stationId = Integer.parseInt(idM.group(1));
+        Reply created = Reply.of("artest station create", create);
+        scenario().requireArranged("station create must succeed: " + create,
+                created.has(STATION_ID));
+        int stationId = created.integer(STATION_ID);
         scenario().record("stationId", stationId);
 
         exec("artest dim load " + SPACE_DIM);
@@ -448,9 +429,9 @@ public class WorldCommandClientGroupE2ETest extends AbstractSharedClientE2ETest 
         long clientMark = clientLog.mark();
         bot().sendChat("/ar fetch " + botName);
 
-        String placed = awaitRecordCarrying(serverLog, serverMark, "teleporter_placed",
-                "\"who\":\"" + botName + "\"",
-                "a self-fetch must still run the transfer: the teleporter places the body");
+        String placed = serverLog.awaitField(serverMark, "teleporter_placed", "who", botName,
+                "a self-fetch must still run the transfer: the teleporter places the body",
+                REPLY_BUDGET_TICKS);
         scenario().record("selfFetchPlacement", placed);
         awaitClientDim(clientMark, plot().dim,
                 "the rendered position read below belongs to the world he ends in");

@@ -1,5 +1,6 @@
 package zmaster587.advancedRocketry.test.server;
 
+import zmaster587.advancedRocketry.test.Reply;
 import com.github.stannismod.forge.testing.junit.AbstractHeadlessServerTest;
 import com.github.stannismod.forge.testing.server.RealDedicatedServerHarness;
 import org.junit.After;
@@ -39,7 +40,7 @@ public class AdvancementsTriggerTest {
     private static final int DIM_LUNA = 9511;
     private static final int DIM_OTHER = 9512;
     private static final String ADV_WENT = "advancedrocketry:normal/wenttothemoon";
-    private static final Pattern IS_DONE = Pattern.compile("\"isDone\":(true|false)");
+    private static final String IS_DONE = "isDone";
 
     private Path workDir;
     private RealDedicatedServerHarness harness;
@@ -110,9 +111,9 @@ public class AdvancementsTriggerTest {
     }
 
     private boolean isDone(String src) {
-        Matcher m = IS_DONE.matcher(src);
-        assertTrue("isDone field missing in: " + src, m.find());
-        return Boolean.parseBoolean(m.group(1));
+        Reply mReply = Reply.of(src);
+        assertTrue("isDone field missing in: " + src, mReply.has(IS_DONE));
+        return Boolean.parseBoolean(mReply.text(IS_DONE));
     }
 
     /** Standing on Luna within the distance gate grants WENT_TO_THE_MOON

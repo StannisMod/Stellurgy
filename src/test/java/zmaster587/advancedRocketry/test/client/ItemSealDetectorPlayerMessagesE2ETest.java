@@ -8,6 +8,7 @@ import java.util.Locale;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import zmaster587.advancedRocketry.test.Reply;
 import zmaster587.advancedRocketry.test.Events;
 
 import zmaster587.advancedRocketry.test.Plot;
@@ -85,7 +86,7 @@ public class ItemSealDetectorPlayerMessagesE2ETest extends AbstractSharedClientE
     private static final int FIXTURE_DZ = 32;
     private static final int PERCH_DZ = FIXTURE_DZ - 2;
 
-    private static final Pattern BRANCH = Pattern.compile("\"branch\":\"([^\"]+)\"");
+    private static final String BRANCH = "branch";
 
     /** How long one link of the detector's answer may take. The old chat poll allowed 200 ticks for
      *  the whole round trip; each link gets that budget, and a red now says which one is missing. */
@@ -106,10 +107,10 @@ public class ItemSealDetectorPlayerMessagesE2ETest extends AbstractSharedClientE
         }
     }
 
-    private String fieldOf(Pattern p, String src, String label) {
-        Matcher m = p.matcher(src);
-        assertTrue("expected " + label + " field in: " + src, m.find());
-        return m.group(1);
+    private String fieldOf(String field, String src, String label) {
+        String value = Reply.of(src).text(field);
+        assertTrue("expected " + label + " field in: " + src, value != null);
+        return value;
     }
 
     /**

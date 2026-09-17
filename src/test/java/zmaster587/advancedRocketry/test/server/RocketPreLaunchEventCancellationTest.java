@@ -1,5 +1,6 @@
 package zmaster587.advancedRocketry.test.server;
 
+import zmaster587.advancedRocketry.test.Reply;
 import org.junit.After;
 import org.junit.Test;
 
@@ -53,13 +54,11 @@ import static zmaster587.advancedRocketry.test.server.WorldCommandFixtures.exec;
  */
 public class RocketPreLaunchEventCancellationTest extends AbstractSharedServerTest {
 
-    private static final Pattern BUILDER_POS =
-            Pattern.compile("\"builderPos\":\\[(-?\\d+),(-?\\d+),(-?\\d+)]");
-    private static final Pattern ENTITY_ID = Pattern.compile("\"entityId\":(-?\\d+)");
-    private static final Pattern LAUNCH_COUNTER =
-            Pattern.compile("\"launchCounter\":(-?\\d+)");
-    private static final Pattern OBSERVED = Pattern.compile("\"observed\":(-?\\d+)");
-    private static final Pattern CANCELLED = Pattern.compile("\"cancelled\":(-?\\d+)");
+    private static final String BUILDER_POS = "builderPos";
+    private static final String ENTITY_ID = "entityId";
+    private static final String LAUNCH_COUNTER = "launchCounter";
+    private static final String OBSERVED = "observed";
+    private static final String CANCELLED = "cancelled";
 
     private static final int CY = FixtureSite.OPEN_AIR_Y;
     /** Two well-separated rocket fixtures so the cancel test and the
@@ -149,22 +148,22 @@ public class RocketPreLaunchEventCancellationTest extends AbstractSharedServerTe
                 + " simple");
         assertTrue("fixture build failed: " + fixture,
                 fixture.contains("\"ok\":true"));
-        Matcher bp = BUILDER_POS.matcher(fixture);
-        assertTrue("fixture missing builderPos: " + fixture, bp.find());
+        int[] bp = Reply.of(fixture).blockPos(BUILDER_POS);
+        assertTrue("fixture missing builderPos: " + fixture, bp != null);
 
         String assemble = exec("artest rocket assemble 0 "
-                + bp.group(1) + " " + bp.group(2) + " " + bp.group(3));
+                + bp[0] + " " + bp[1] + " " + bp[2]);
         assertTrue("assemble must succeed: " + assemble,
                 assemble.contains("\"ok\":true"));
 
-        Matcher eim = ENTITY_ID.matcher(assemble);
-        assertTrue("no entityId in assemble response: " + assemble, eim.find());
-        return Integer.parseInt(eim.group(1));
+        Reply eimReply = Reply.of(assemble);
+        assertTrue("no entityId in assemble response: " + assemble, eimReply.has(ENTITY_ID));
+        return Integer.parseInt(eimReply.text(ENTITY_ID));
     }
 
-    private static int extract(String src, Pattern pattern) {
-        Matcher m = pattern.matcher(src);
-        assertTrue("pattern not found in: " + src, m.find());
-        return Integer.parseInt(m.group(1));
+    private static int extract(String src, String field) {
+        Reply reply = Reply.of(src);
+        assertTrue("field `" + field + "` not found in: " + src, reply.has(field));
+        return reply.integer(field);
     }
 }

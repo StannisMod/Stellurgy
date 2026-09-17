@@ -1,5 +1,6 @@
 package zmaster587.advancedRocketry.test.server;
 
+import zmaster587.advancedRocketry.test.Reply;
 import org.junit.Test;
 
 import java.util.regex.Matcher;
@@ -7,6 +8,7 @@ import java.util.regex.Pattern;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 import static zmaster587.advancedRocketry.test.server.WorldCommandFixtures.exec;
 
@@ -45,9 +47,9 @@ import static zmaster587.advancedRocketry.test.server.WorldCommandFixtures.exec;
  */
 public class OxygenVentRequiresFuelAndPowerTest extends AbstractSharedServerTest {
 
-    private static final Pattern VENT_SEALED = Pattern.compile("\"isSealed\":(true|false)");
-    private static final Pattern VENT_BLOB_SIZE = Pattern.compile("\"blobSize\":(-?\\d+)");
-    private static final Pattern VENT_ENERGY = Pattern.compile("\"energyStored\":(-?\\d+)");
+    private static final String VENT_SEALED = "isSealed";
+    private static final String VENT_BLOB_SIZE = "blobSize";
+    private static final String VENT_ENERGY = "energyStored";
 
     private static final int CY_BASE = 64;
     private static final int CZ_BASE = 2000;
@@ -193,16 +195,15 @@ public class OxygenVentRequiresFuelAndPowerTest extends AbstractSharedServerTest
         return exec("artest vent info 0 " + cx + " " + CY_BASE + " " + CZ_BASE);
     }
 
-    private static int extract(String src, Pattern pattern) {
-        Matcher m = pattern.matcher(src);
-        assertTrue("pattern not found in: " + src, m.find());
-        return Integer.parseInt(m.group(1));
+    private static int extract(String src, String field) {
+        Reply reply = Reply.of(src);
+        assertTrue("field `" + field + "` not found in: " + src, reply.has(field));
+        return reply.integer(field);
     }
 
-    private static String matchOrFail(Pattern pattern, String src) {
-        Matcher m = pattern.matcher(src);
-        assertFalse("pattern " + pattern.pattern() + " not found in: " + src,
-                !m.find());
-        return m.group(1);
+    private static String matchOrFail(String field, String src) {
+        String value = Reply.of(src).text(field);
+        assertNotNull("field `" + field + "` not found in: " + src, value);
+        return value;
     }
 }

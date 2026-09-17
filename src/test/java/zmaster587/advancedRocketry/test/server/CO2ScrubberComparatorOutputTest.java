@@ -1,5 +1,6 @@
 package zmaster587.advancedRocketry.test.server;
 
+import zmaster587.advancedRocketry.test.Reply;
 import org.junit.Test;
 
 import java.util.regex.Matcher;
@@ -36,8 +37,7 @@ public class CO2ScrubberComparatorOutputTest extends AbstractSharedServerTest {
     private static final int PY = FixtureSite.OPEN_AIR_Y;
     private static final int PZ = 6400;
 
-    private static final Pattern VALUE_PAT =
-            Pattern.compile("\"value\":(-?\\d+)");
+    private static final String VALUE_PAT = "value";
 
     @Test
     public void emptyScrubberReportsZeroComparatorOutput() throws Exception {
@@ -86,8 +86,8 @@ public class CO2ScrubberComparatorOutputTest extends AbstractSharedServerTest {
     }
 
     private static int extract(String src) {
-        Matcher m = VALUE_PAT.matcher(src);
-        assertTrue("value missing in: " + src, m.find());
-        return Integer.parseInt(m.group(1));
+        Reply mReply = Reply.of(src);
+        assertTrue("value missing in: " + src, mReply.has(VALUE_PAT));
+        return Integer.parseInt(mReply.text(VALUE_PAT));
     }
 }

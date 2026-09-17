@@ -1,5 +1,6 @@
 package zmaster587.advancedRocketry.test.server;
 
+import zmaster587.advancedRocketry.test.Reply;
 import org.junit.AfterClass;
 import org.junit.Before;
 import org.junit.Test;
@@ -52,15 +53,11 @@ import static org.junit.Assert.assertTrue;
  */
 public class RocketMonitoringStationLaunchTriggerTest extends AbstractSharedServerTest {
 
-    private static final Pattern BUILDER_POS =
-            Pattern.compile("\"builderPos\":\\[(-?\\d+),(-?\\d+),(-?\\d+)]");
-    private static final Pattern ENT_ID = Pattern.compile("\"entityId\":(-?\\d+)");
-    private static final Pattern OBSERVED =
-            Pattern.compile("\"observed\":(\\d+)");
-    private static final Pattern WAS_POWERED =
-            Pattern.compile("\"wasPowered\":(true|false)");
-    private static final Pattern EQUIVALENT_POWER =
-            Pattern.compile("\"equivalentPower\":(true|false)");
+    private static final String BUILDER_POS = "builderPos";
+    private static final String ENT_ID = "entityId";
+    private static final String OBSERVED = "observed";
+    private static final String WAS_POWERED = "wasPowered";
+    private static final String EQUIVALENT_POWER = "equivalentPower";
 
     @Before
     public void armPreLaunchCanceller() throws Exception {
@@ -99,9 +96,9 @@ public class RocketMonitoringStationLaunchTriggerTest extends AbstractSharedServ
     private static int observedPreLaunchEvents() throws Exception {
         String resp = join(client().execute(
                 "artest rocket prelaunch-cancel-counts"));
-        Matcher m = OBSERVED.matcher(resp);
-        assertTrue("observed count must be present: " + resp, m.find());
-        return Integer.parseInt(m.group(1));
+        Reply mReply = Reply.of(resp);
+        assertTrue("observed count must be present: " + resp, mReply.has(OBSERVED));
+        return Integer.parseInt(mReply.text(OBSERVED));
     }
 
     /** Run a single update() tick on the monitoring station tile. */
@@ -112,17 +109,17 @@ public class RocketMonitoringStationLaunchTriggerTest extends AbstractSharedServ
     private static boolean monitorWasPowered(int x, int y, int z) throws Exception {
         String resp = join(client().execute(
                 "artest infra monitor-info 0 " + x + " " + y + " " + z));
-        Matcher m = WAS_POWERED.matcher(resp);
-        assertTrue("monitor-info must include wasPowered: " + resp, m.find());
-        return Boolean.parseBoolean(m.group(1));
+        Reply mReply = Reply.of(resp);
+        assertTrue("monitor-info must include wasPowered: " + resp, mReply.has(WAS_POWERED));
+        return Boolean.parseBoolean(mReply.text(WAS_POWERED));
     }
 
     private static boolean monitorEquivalentPower(int x, int y, int z) throws Exception {
         String resp = join(client().execute(
                 "artest infra monitor-info 0 " + x + " " + y + " " + z));
-        Matcher m = EQUIVALENT_POWER.matcher(resp);
-        assertTrue("monitor-info must include equivalentPower: " + resp, m.find());
-        return Boolean.parseBoolean(m.group(1));
+        Reply mReply = Reply.of(resp);
+        assertTrue("monitor-info must include equivalentPower: " + resp, mReply.has(EQUIVALENT_POWER));
+        return Boolean.parseBoolean(mReply.text(EQUIVALENT_POWER));
     }
 
     /** Place a redstone block adjacent (east) to the monitor — this
@@ -150,17 +147,17 @@ public class RocketMonitoringStationLaunchTriggerTest extends AbstractSharedServ
         String fx = join(client().execute("artest fixture rocket 0 " + baseX
                 + " " + baseY + " " + baseZ + " simple"));
         assertTrue("fixture rocket failed: " + fx, fx.contains("\"ok\":true"));
-        Matcher bp = BUILDER_POS.matcher(fx);
-        assertTrue("builderPos missing: " + fx, bp.find());
-        int bx = Integer.parseInt(bp.group(1));
-        int by = Integer.parseInt(bp.group(2));
-        int bz = Integer.parseInt(bp.group(3));
+        int[] bp = Reply.of(fx).blockPos(BUILDER_POS);
+        assertTrue("builderPos missing: " + fx, bp != null);
+        int bx = bp[0];
+        int by = bp[1];
+        int bz = bp[2];
         String assemble = join(client().execute("artest rocket assemble 0 "
                 + bx + " " + by + " " + bz));
         assertTrue("rocket assemble failed: " + assemble, assemble.contains("\"ok\":true"));
-        Matcher em = ENT_ID.matcher(assemble);
-        assertTrue("entityId missing: " + assemble, em.find());
-        return Integer.parseInt(em.group(1));
+        Reply emReply = Reply.of(assemble);
+        assertTrue("entityId missing: " + assemble, emReply.has(ENT_ID));
+        return Integer.parseInt(emReply.text(ENT_ID));
     }
 
     @Test
