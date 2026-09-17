@@ -1,5 +1,6 @@
 package zmaster587.advancedRocketry.test.server;
 
+import zmaster587.advancedRocketry.test.MissionCompletion;
 import zmaster587.advancedRocketry.test.RocketList;
 import zmaster587.advancedRocketry.test.Reply;
 import org.junit.Test;
@@ -133,14 +134,14 @@ public class MissionLifecyclePyramidTest extends AbstractSharedServerTest {
     @Test
     public void completionFiresAtProgressOne() throws Exception {
         long mid = buildRocketAndStartGasMission(7300, 1000);
-        String resp = ok(client().execute("artest mission complete-now " + mid));
-        assertFalse("complete-now must not error: " + resp, resp.contains("\"error\""));
-        assertTrue("complete-now must report transition (wasDeadBefore=false): " + resp,
-                resp.contains("\"wasDeadBefore\":false"));
-        assertTrue("complete-now must mark mission dead: " + resp,
-                resp.contains("\"isDeadAfter\":true"));
-        assertTrue("complete-now must report completion fired: " + resp,
-                resp.contains("\"completed\":true"));
+        MissionCompletion resp = MissionCompletion.now(
+                cmd -> ok(client().execute(cmd)), mid);
+        assertTrue("complete-now must report transition (wasDeadBefore=false): " + resp.raw(),
+                !resp.wasDeadBefore);
+        assertTrue("complete-now must mark mission dead: " + resp.raw(),
+                resp.isDeadAfter);
+        assertTrue("complete-now must report completion fired: " + resp.raw(),
+                resp.completed);
     }
 
     /** After completion, the DimensionProperties.tick loop removes the
@@ -154,9 +155,10 @@ public class MissionLifecyclePyramidTest extends AbstractSharedServerTest {
     @Test
     public void completionPrunesMissionFromSatelliteRegistry() throws Exception {
         long mid = buildRocketAndStartGasMission(7400, 1000);
-        String complete = ok(client().execute("artest mission complete-now " + mid));
-        assertTrue("complete-now must succeed: " + complete,
-                complete.contains("\"completed\":true"));
+        MissionCompletion complete = MissionCompletion.now(
+                cmd -> ok(client().execute(cmd)), mid);
+        assertTrue("complete-now must succeed: " + complete.raw(),
+                complete.completed);
 
         String state = "n/a";
         boolean pruned = false;

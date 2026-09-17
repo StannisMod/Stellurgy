@@ -1,5 +1,6 @@
 package zmaster587.advancedRocketry.test.server;
 
+import zmaster587.advancedRocketry.test.MissionCompletion;
 import zmaster587.advancedRocketry.test.RocketList;
 import zmaster587.advancedRocketry.test.Reply;
 import org.junit.Test;
@@ -94,12 +95,12 @@ public class MissionGasCompletionTest extends AbstractSharedServerTest {
     public void gasCompletionWithIntakeAboveZeroCompletesWithoutCrash() throws Exception {
         int rid = buildAndAssembleRocket(8000);
         long mid = startGasMission(rid, 1000, "oxygen", 10);
-        String cargo = ok(client().execute("artest mission complete-now " + mid));
-        assertFalse("complete-now must not error: " + cargo, cargo.contains("\"error\""));
-        assertTrue("completion must mark mission dead: " + cargo,
-                cargo.contains("\"isDeadAfter\":true"));
-        assertTrue("completion must report fired (wasDeadBefore=false): " + cargo,
-                cargo.contains("\"wasDeadBefore\":false") && cargo.contains("\"completed\":true"));
+        MissionCompletion cargo = MissionCompletion.now(
+                cmd -> ok(client().execute(cmd)), mid);
+        assertTrue("completion must mark mission dead: " + cargo.raw(),
+                cargo.isDeadAfter);
+        assertTrue("completion must report fired (wasDeadBefore=false): " + cargo.raw(),
+                !cargo.wasDeadBefore && cargo.completed);
     }
 
     /** Production gate: if `(int)stats.getStatTag("intakePower") > 0`
@@ -109,13 +110,13 @@ public class MissionGasCompletionTest extends AbstractSharedServerTest {
     public void gasCompletionDoesNotFillFluidWhenIntakePowerZero() throws Exception {
         int rid = buildAndAssembleRocket(8100);
         long mid = startGasMission(rid, 1000, "water", 0);
-        String cargo = ok(client().execute("artest mission complete-now " + mid));
-        assertFalse("complete-now must not error: " + cargo, cargo.contains("\"error\""));
+        MissionCompletion cargo = MissionCompletion.now(
+                cmd -> ok(client().execute(cmd)), mid);
         // Either no rocket re-spawned, or no fluid entries — both
         // represent the no-fill branch (production also spawns the
         // rocket entity in this path; we pin the empty-fluid invariant).
-        assertTrue("intakePower=0 -> no fluid entries: " + cargo,
-                cargo.contains("\"fluidEntries\":0"));
+        assertTrue("intakePower=0 -> no fluid entries: " + cargo.raw(),
+                cargo.fluidEntries == 0);
     }
 
     /** The gas completion path constructs an EntityStationDeployedRocket
@@ -126,15 +127,15 @@ public class MissionGasCompletionTest extends AbstractSharedServerTest {
     public void gasCompletionRespawnsRocketInLaunchDim() throws Exception {
         int rid = buildAndAssembleRocket(8200);
         long mid = startGasMission(rid, 1000, "water", 10);
-        String cargo = ok(client().execute("artest mission complete-now " + mid));
-        assertFalse("complete-now must not error: " + cargo, cargo.contains("\"error\""));
+        MissionCompletion cargo = MissionCompletion.now(
+                cmd -> ok(client().execute(cmd)), mid);
         // rocketCount > 0 confirms at least one rocket entity is in
         // the launch dim near the launch coords post-completion. The
         // type discrimination (StationDeployed vs plain) is checked
         // via the ore counter-test in MissionOreCompletionTest.
         assertTrue("at least one rocket entity must exist near launch coords after gas completion: "
-                        + cargo,
-                cargo.contains("\"rocketCount\":") && !cargo.contains("\"rocketCount\":0"));
+                        + cargo.raw(),
+                cargo.rocketCount > 0);
     }
 
     /** Strong contract: with intakePower>0 AND a rocket carrying fluid
@@ -149,18 +150,18 @@ public class MissionGasCompletionTest extends AbstractSharedServerTest {
     public void gasCompletionFillsRocketFluidTilesWithConfiguredFluid() throws Exception {
         int rid = buildAndAssembleRocket(8300, "with-fluid-cargo");
         long mid = startGasMission(rid, 1000, "oxygen", 10);
-        String cargo = ok(client().execute("artest mission complete-now " + mid));
-        assertFalse("complete-now must not error: " + cargo, cargo.contains("\"error\""));
+        MissionCompletion cargo = MissionCompletion.now(
+                cmd -> ok(client().execute(cmd)), mid);
         // fluidEntries > 0 — fill loop ran on at least one TE. Exact
         // count depends on whether the original EntityRocket still
         // lingers next to the freshly spawned StationDeployedRocket
         // (both share the same StorageChunk via reference). Loose pin
         // avoids that ambiguity.
-        assertFalse("fluidEntries must be > 0 (production filled fluid tiles): " + cargo,
-                cargo.contains("\"fluidEntries\":0"));
+        assertFalse("fluidEntries must be > 0 (production filled fluid tiles): " + cargo.raw(),
+                cargo.fluidEntries == 0);
         // Each filled tile holds 64000 mB of oxygen — production literal
         // at MissionGasCollection.java:50 (FluidStack(type, 64000)).
-        assertTrue("fluid contents must include oxygen 64000 mB: " + cargo,
-                cargo.contains("\"type\":\"oxygen\"") && cargo.contains("\"amount\":64000"));
+        assertTrue("fluid contents must include oxygen 64000 mB: " + cargo.raw(),
+                cargo.fluidAmount("oxygen") == 64000);
     }
 }

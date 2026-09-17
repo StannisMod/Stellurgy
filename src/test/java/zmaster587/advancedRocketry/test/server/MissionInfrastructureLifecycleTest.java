@@ -1,5 +1,6 @@
 package zmaster587.advancedRocketry.test.server;
 
+import zmaster587.advancedRocketry.test.MissionCompletion;
 import zmaster587.advancedRocketry.test.RocketList;
 import zmaster587.advancedRocketry.test.Reply;
 import org.junit.Test;
@@ -155,9 +156,9 @@ public class MissionInfrastructureLifecycleTest extends AbstractSharedServerTest
         assertTrue("pre-completion infra must report hasMission=true: " + preState,
                 preState.contains("\"hasMission\":true"));
 
-        String cargo = ok(client().execute("artest mission complete-now " + mid));
-        assertFalse("complete-now must not error: " + cargo, cargo.contains("\"error\""));
-        assertTrue("completion must fire: " + cargo, cargo.contains("\"completed\":true"));
+        MissionCompletion cargo = MissionCompletion.now(
+                cmd -> ok(client().execute(cmd)), mid);
+        assertTrue("completion must fire: " + cargo.raw(), cargo.completed);
 
         // Post-completion tile.mission cleared by production's unlinkMission().
         String postState = ok(client().execute("artest mission infra-state 0 "
@@ -196,8 +197,9 @@ public class MissionInfrastructureLifecycleTest extends AbstractSharedServerTest
                 + " 0 " + ipos[0] + " " + ipos[1] + " " + ipos[2]));
         assertTrue("setup link-infra must succeed: " + link, link.contains("\"linked\":true"));
 
-        String cargo = ok(client().execute("artest mission complete-now " + mid));
-        assertTrue("completion must fire: " + cargo, cargo.contains("\"completed\":true"));
+        MissionCompletion cargo = MissionCompletion.now(
+                cmd -> ok(client().execute(cmd)), mid);
+        assertTrue("completion must fire: " + cargo.raw(), cargo.completed);
 
         String relink = ok(client().execute("artest mission rocket-relink-state 0"));
         assertFalse("rocket-relink-state must not error: " + relink,

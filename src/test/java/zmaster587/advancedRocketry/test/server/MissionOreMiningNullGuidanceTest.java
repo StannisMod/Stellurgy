@@ -1,5 +1,6 @@
 package zmaster587.advancedRocketry.test.server;
 
+import zmaster587.advancedRocketry.test.MissionCompletion;
 import zmaster587.advancedRocketry.test.RocketList;
 import zmaster587.advancedRocketry.test.Reply;
 import org.junit.Test;
@@ -84,13 +85,13 @@ public class MissionOreMiningNullGuidanceTest extends AbstractSharedServerTest {
         assertTrue("guidance computer must be gone: " + strip,
                 strip.contains("\"hasGuidanceComputer\":false"));
 
-        String complete = ok(client().execute("artest mission complete-now " + mid));
+        MissionCompletion complete = MissionCompletion.now(
+                cmd -> ok(client().execute(cmd)), mid);
         assertFalse("completing an ore mission with a missing guidance computer "
-                        + "must not NPE the server tick (C049): " + complete,
-                complete.contains("NullPointerException"));
-        assertFalse("complete-now must not error: " + complete, complete.contains("\"error\""));
-        assertTrue("complete-now must report success: " + complete,
-                complete.contains("\"ok\":true"));
+                        + "must not NPE the server tick (C049): " + complete.raw(),
+                complete.raw().contains("NullPointerException"));
+        assertTrue("complete-now must report success: " + complete.raw(),
+                complete.isDeadAfter);
     }
 
     /** Control: the sibling branch (drillingPower != 0 with a null guidance
@@ -104,10 +105,11 @@ public class MissionOreMiningNullGuidanceTest extends AbstractSharedServerTest {
         String strip = ok(client().execute("artest mission strip-guidance " + mid));
         assertTrue("strip-guidance failed: " + strip, strip.contains("\"ok\":true"));
 
-        String complete = ok(client().execute("artest mission complete-now " + mid));
-        assertFalse("completing with a missing guidance computer must not NPE: " + complete,
-                complete.contains("NullPointerException"));
-        assertTrue("complete-now must report success: " + complete,
-                complete.contains("\"ok\":true"));
+        MissionCompletion complete = MissionCompletion.now(
+                cmd -> ok(client().execute(cmd)), mid);
+        assertFalse("completing with a missing guidance computer must not NPE: " + complete.raw(),
+                complete.raw().contains("NullPointerException"));
+        assertTrue("complete-now must report success: " + complete.raw(),
+                complete.isDeadAfter);
     }
 }

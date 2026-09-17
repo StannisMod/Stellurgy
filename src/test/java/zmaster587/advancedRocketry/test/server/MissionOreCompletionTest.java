@@ -1,5 +1,6 @@
 package zmaster587.advancedRocketry.test.server;
 
+import zmaster587.advancedRocketry.test.MissionCompletion;
 import zmaster587.advancedRocketry.test.RocketList;
 import zmaster587.advancedRocketry.test.Reply;
 import org.junit.Test;
@@ -84,13 +85,13 @@ public class MissionOreCompletionTest extends AbstractSharedServerTest {
     public void oreCompletionAlwaysRefillsGuidanceWithBlankAsteroidChip() throws Exception {
         int rid = buildAndAssembleRocket(9000);
         long mid = startOreMission(rid, 1000, 1.0f);
-        String cargo = ok(client().execute("artest mission complete-now " + mid));
-        assertFalse("complete-now must not error: " + cargo, cargo.contains("\"error\""));
+        MissionCompletion cargo = MissionCompletion.now(
+                cmd -> ok(client().execute(cmd)), mid);
         // Refilled chip lands in the respawned rocket's guidance
         // computer (storage chunk inventory tile). It's a fresh chip
         // with no NBT — registry name match is enough.
-        assertTrue("respawned rocket must carry an asteroid chip post-completion: " + cargo,
-                cargo.contains("advancedrocketry:asteroidchip"));
+        assertTrue("respawned rocket must carry an asteroid chip post-completion: " + cargo.raw(),
+                cargo.carriesItem("advancedrocketry:asteroidchip"));
     }
 
     /** Production gate: with {@code drillingPower == 0f} the entire
@@ -101,19 +102,17 @@ public class MissionOreCompletionTest extends AbstractSharedServerTest {
     public void oreCompletionSkipsHarvestWhenDrillingPowerZero() throws Exception {
         int rid = buildAndAssembleRocket(9100);
         long mid = startOreMission(rid, 1000, 0.0f);
-        String cargo = ok(client().execute("artest mission complete-now " + mid));
-        assertFalse("complete-now must not error: " + cargo, cargo.contains("\"error\""));
+        MissionCompletion cargo = MissionCompletion.now(
+                cmd -> ok(client().execute(cmd)), mid);
         // The blank refill chip (line 118) is the only item expected
         // — extract a count and pin upper bound. Tolerant of the
         // respawn-coords search returning multiple rockets if a prior
         // test in the same JVM placed one nearby (different Z origin
         // 700 keeps them apart but allow ≤ 2 for safety).
-        Reply mReply = Reply.of(cargo);
-        assertTrue("itemEntries field missing in cargo: " + cargo, mReply.has("itemEntries"));
-        int entries = mReply.integer("itemEntries");
+        int entries = cargo.itemEntries;
         assertTrue("drillingPower=0 -> only the refill chip (≤ 2 entries to allow "
                         + "a duplicate from a sibling test rocket); got " + entries
-                        + "; resp=" + cargo,
+                        + "; resp=" + cargo.raw(),
                 entries >= 1 && entries <= 2);
     }
 
@@ -128,10 +127,10 @@ public class MissionOreCompletionTest extends AbstractSharedServerTest {
     public void oreCompletionRespawnsRocketInLaunchDim() throws Exception {
         int rid = buildAndAssembleRocket(9200);
         long mid = startOreMission(rid, 1000, 1.0f);
-        String cargo = ok(client().execute("artest mission complete-now " + mid));
-        assertFalse("complete-now must not error: " + cargo, cargo.contains("\"error\""));
+        MissionCompletion cargo = MissionCompletion.now(
+                cmd -> ok(client().execute(cmd)), mid);
         assertTrue("at least one rocket entity must exist near launch coords after ore completion: "
-                        + cargo,
-                cargo.contains("\"rocketCount\":") && !cargo.contains("\"rocketCount\":0"));
+                        + cargo.raw(),
+                cargo.rocketCount > 0);
     }
 }
