@@ -12,6 +12,7 @@ import zmaster587.advancedRocketry.test.Reply;
 import zmaster587.advancedRocketry.test.PilotSeat;
 import zmaster587.advancedRocketry.test.ArrangementFailure;
 import zmaster587.advancedRocketry.test.Events;
+import zmaster587.advancedRocketry.test.TransitStatus;
 import zmaster587.advancedRocketry.test.TransitSetup;
 import zmaster587.advancedRocketry.test.ShipIdentity;
 
@@ -88,13 +89,12 @@ public class VSTransitCrewGroupE2ETest extends AbstractSharedVsClientE2ETest {
      * from no reset — with the bound taken from the longest flight this class ever starts.</p>
      */
     private void flyOutAnyJumpLeftInTheAir() throws Exception {
-        String status = exec("artest space transit-status");
-        if (readIntOr(status, "inTransit", 0) == 0) {
+        if (TransitStatus.read(this::exec).inTransit == 0) {
             return;
         }
         boolean flownOut = false;
         for (int i = 0; i < LIVABLE_FLIGHT_TICKS / 10L && !flownOut; i++) {
-            flownOut = readInt(exec("artest space transit-tick 10"), "inTransit") == 0;
+            flownOut = TransitStatus.tick(this::exec, 10).inTransit == 0;
         }
         // An ARRANGEMENT failure: a leftover jump this reset could not fly out has disproved nothing
         // about transits — it is the world the next scenario needs not having been put back.
@@ -205,7 +205,7 @@ private int waitForLoadedShip(int dim) throws Exception {
                 + " or nothing in the corridor can be addressed to this craft: " + boarded,
                 boardedShip != null && !boardedShip.isEmpty());
         parkedHullName = boardedShip;
-        int corridorDim = readInt(exec("artest space transit-status"), "hyperDim");
+        int corridorDim = TransitStatus.read(this::exec).hyperDim;
         // The server's half is appended on the FAILURE path only, because the two logs answer
         // different questions and the client's alone cannot say whether the jump got as far as the
         // lane; on the happy path it would be a probe call per wait.
@@ -436,14 +436,14 @@ private int waitForLoadedShip(int dim) throws Exception {
         // in the air — and that is stated rather than assumed, after the last of those readings. One
         // status reply, read once: the premise and the subsystem's own oracle for where this crew
         // belongs are two fields of the SAME record, so nothing can drift between them.
-        String inFlight = exec("artest space transit-status");
+        TransitStatus inFlight = TransitStatus.read(this::exec);
         scenario().requireArranged("the jump must still be IN FLIGHT when the seat is read, or this"
                 + " reads the ARRIVAL — where the crew is re-seated for a different reason entirely."
-                + " transit-status=" + inFlight, readInt(inFlight, "inTransit") >= 1);
+                + " transit-status=" + inFlight.raw(), inFlight.inTransit >= 1);
         assertEquals("mid-flight the subsystem must place this crew in the hyperspace world"
                 + " (crewDim vs hyperDim); the client was carried into dim " + hyperDim
-                + "; tick=" + inFlight,
-                readInt(inFlight, "hyperDim"), readInt(inFlight, "crewDim"));
+                + "; tick=" + inFlight.raw(),
+                inFlight.hyperDim, inFlight.crewDim);
     }
 
     // ---- migrated: VSCrewedArrivalReseatsWithNobodyToLoadTheShipE2ETest ----
@@ -802,11 +802,11 @@ private long readCounter(String className, String field) throws Exception {
         // being drawn at all, so both readings above would be about the far end. The loop this
         // replaces guarded the same straddle by re-reading the status mid-iteration, and it was a red
         // 3 runs in 4 before that guard existed.
-        String stillFlying = exec("artest space transit-status");
+        TransitStatus stillFlying = TransitStatus.read(this::exec);
         scenario().requireArranged("the jump must still be IN FLIGHT after the render window, or the"
                         + " HUD and corridor readings above belong to the ARRIVED craft rather than"
                         + " to the flight: transit-status=" + stillFlying,
-                readInt(stillFlying, "inTransit") >= 1);
+                stillFlying.inTransit >= 1);
 
         assertTrue("the HUD must name the jump phase while the ship is in flight, so a pilot with no "
                         + "controls can tell a flight from a hang - HUD read: " + hudInFlight,
@@ -1151,11 +1151,11 @@ private long readCounter(String className, String field) throws Exception {
         // window the jump can finish inside — and an arrival that lands here takes the deck out from
         // under him, which reads at `deck-capture` as exactly the same "not tracked" the void would
         // produce. Two opposite investigations behind one message; this line separates them.
-        String stillFlying = exec("artest space transit-status");
+        TransitStatus stillFlying = TransitStatus.read(this::exec);
         scenario().requireArranged("the jump must still be IN FLIGHT after the void's whole budget,"
                 + " or this leg is reading an ARRIVAL rather than the void — the ship left with the"
-                + " deck he was standing on. transit-status=" + stillFlying,
-                readInt(stillFlying, "inTransit") >= 1);
+                + " deck he was standing on. transit-status=" + stillFlying.raw(),
+                stillFlying.inTransit >= 1);
         JsonObject aboardState = bot().reportState();
         String aboardCapture = exec("artest vs deck-capture");
         assertTrue("a crew member standing on his own deck in hyperspace must not be taken by the"
@@ -1341,14 +1341,14 @@ private long readCounter(String className, String field) throws Exception {
         // far end is the second crossing's subject and it re-establishes him for entirely different
         // reasons. One status reply, read once: the premise and the subsystem's own oracle for where
         // this crew belongs are two fields of the SAME record.
-        String inFlight = exec("artest space transit-status");
+        TransitStatus inFlight = TransitStatus.read(this::exec);
         scenario().requireArranged("the jump must still be IN FLIGHT when his posture is read, or"
-                + " this reads the ARRIVAL rather than the carry: transit-status=" + inFlight,
-                readInt(inFlight, "inTransit") >= 1);
+                + " this reads the ARRIVAL rather than the carry: transit-status=" + inFlight.raw(),
+                inFlight.inTransit >= 1);
         assertEquals("mid-flight the subsystem must place this crew in the hyperspace world"
                 + " (crewDim vs hyperDim); the client was carried into dim " + hyperDim
-                + "; tick=" + inFlight,
-                readInt(inFlight, "hyperDim"), readInt(inFlight, "crewDim"));
+                + "; tick=" + inFlight.raw(),
+                inFlight.hyperDim, inFlight.crewDim);
 
         // ...and he arrives in the posture he left in: carried, not quietly seated on the way.
         //

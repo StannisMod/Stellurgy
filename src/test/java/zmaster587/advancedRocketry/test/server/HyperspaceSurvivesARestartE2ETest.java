@@ -13,6 +13,7 @@ import org.junit.After;
 import org.junit.Assume;
 import org.junit.Before;
 import zmaster587.advancedRocketry.test.Reply;
+import zmaster587.advancedRocketry.test.TransitStatus;
 import zmaster587.advancedRocketry.test.TransitSetup;
 import zmaster587.advancedRocketry.test.GameTicks;
 
@@ -159,8 +160,9 @@ public class HyperspaceSurvivesARestartE2ETest {
         // goes down, and the server is now advancing it on its own tick -- so a pump here would
         // be pushing this test's own subject towards the exit for the sake of a field read.
         String tick = exec("artest space transit-status");
-        int hyperDimBefore = readInt(tick, "hyperDim");
-        int inTransit = readInt(tick, "inTransit");
+        TransitStatus parked = TransitStatus.of(tick);
+        int hyperDimBefore = parked.hyperDim;
+        int inTransit = parked.inTransit;
         requireArranged("the jump must still be in flight when the server goes down, or"
                 + " nothing is parked to survive anything: " + tick, inTransit >= 1);
 
@@ -211,7 +213,7 @@ public class HyperspaceSurvivesARestartE2ETest {
         // boot by a free-id scan, and the whole point of naming the folder after the world is that
         // the content no longer depends on which id the scan lands on.
         TransitSetup.piloted(this::exec); // the probe stack must come up on boot 2, or nothing below reads anything
-        int hyperDimAfter = readInt(exec("artest space transit-status"), "hyperDim");
+        int hyperDimAfter = TransitStatus.read(this::exec).hyperDim;
 
         int parkedAfter = readIntOr(exec("artest vs ship-count-all " + hyperDimAfter), "count", -1);
         assertEquals("a ship parked in hyperspace must still be parked in hyperspace after a real"

@@ -8,6 +8,7 @@ import java.util.regex.Pattern;
 import org.lwjgl.input.Keyboard;
 
 import zmaster587.advancedRocketry.test.Events;
+import zmaster587.advancedRocketry.test.TransitStatus;
 import zmaster587.advancedRocketry.test.Reply;
 import zmaster587.advancedRocketry.test.ShipInfo;
 
@@ -876,14 +877,14 @@ public abstract class AbstractSharedVsClientE2ETest extends AbstractSharedClient
     protected static int arrivedTargetDim(Events.Probe probe) throws Exception {
         // READ, not a tick: this runs once the chain says the jump has settled, so advancing
         // anything here would drive a mechanism whose completion has already been asserted.
-        String tick = probe.exec("artest space transit-status");
-        Reply transit = Reply.of("artest space transit-tick", tick);
-        assertTrue("the transit probe must report inTransit: " + tick, transit.has("inTransit"));
-        assertEquals("the chain said the transit settled, so the probe must agree it is over: " + tick,
-                0, transit.integer("inTransit"));
-        assertTrue("the transit probe must report targetDim: " + tick, transit.has("targetDim"));
-        int targetDim = transit.integer("targetDim");
-        assertTrue("a settled transit must name the target cell's slot dimension: " + tick, targetDim >= 0);
+        // The reader names the verb it is reading; the `Reply.of` here named `transit-tick` on a
+        // `transit-status` reply, so every refusal it raised pointed at the wrong probe.
+        TransitStatus transit = TransitStatus.read(probe::exec);
+        assertEquals("the chain said the transit settled, so the probe must agree it is over: "
+                + transit.raw(), 0, transit.inTransit);
+        int targetDim = transit.targetDim;
+        assertTrue("a settled transit must name the target cell's slot dimension: " + transit.raw(),
+                targetDim >= 0);
         return targetDim;
     }
 

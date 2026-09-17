@@ -17,6 +17,7 @@ import zmaster587.advancedRocketry.space.CellWorldMapper;
 import zmaster587.advancedRocketry.space.GalacticCoord;
 import zmaster587.advancedRocketry.test.Reply;
 import zmaster587.advancedRocketry.test.Events;
+import zmaster587.advancedRocketry.test.TransitStatus;
 import zmaster587.advancedRocketry.test.PilotSeat;
 import zmaster587.advancedRocketry.test.TransitSetup;
 import zmaster587.advancedRocketry.test.ShipIdentity;
@@ -325,7 +326,7 @@ public class VSMidTransitRelogControlE2ETest extends AbstractSharedVsClientE2ETe
         String firstTick = exec("artest space transit-status");
         assertTrue("the ship must actually be IN TRANSIT when the pilot relogs — otherwise this "
                 + "pins an ordinary relog, not the mid-transit one: " + firstTick,
-                readInt(firstTick, "inTransit") >= 1);
+                TransitStatus.of(firstTick).inTransit >= 1);
 
         // ---- ACT 2: the real mid-transit relog. The transit is probe-driven, so the park waits
         // out the relog deterministically — no race between the login and the arrival. -----------

@@ -2,6 +2,7 @@ package zmaster587.advancedRocketry.test.server;
 
 import zmaster587.advancedRocketry.test.Reply;
 import zmaster587.advancedRocketry.test.Events;
+import zmaster587.advancedRocketry.test.TransitStatus;
 import zmaster587.advancedRocketry.test.TransitSetup;
 import zmaster587.advancedRocketry.test.GameTicks;
 import zmaster587.advancedRocketry.test.ShipReadiness;
@@ -98,8 +99,8 @@ public class VSUnmannedTransitSettlesOnItsPoseE2ETest extends AbstractSharedServ
         // off" — it is a different world region, and its address inverts through the pose mapping into a
         // neighbouring cell. Compared as text on purpose: these are exact integers, and a tolerance here
         // would quietly accept the paste band on some future cell whose pose happens to be low.
-        String expected = extractInt(lastTick, "poseX") + "," + extractInt(lastTick, "poseY") + ","
-                + extractInt(lastTick, "poseZ");
+        TransitStatus settled = TransitStatus.of(lastTick);
+        String expected = settled.poseX + "," + settled.poseY + "," + settled.poseZ;
         assertTrue("an unmanned arrival must settle ON the pose realizing its target coordinate; expected "
                 + "a ship at " + expected + " but the world holds " + positions + ": " + lastTick,
                 positions.contains(expected));
