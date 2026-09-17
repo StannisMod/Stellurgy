@@ -1,10 +1,8 @@
 package zmaster587.advancedRocketry.test.server;
 
 import zmaster587.advancedRocketry.test.Reply;
+import zmaster587.advancedRocketry.test.StationInfo;
 import org.junit.Test;
-
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 import static org.junit.Assert.assertTrue;
 import static zmaster587.advancedRocketry.test.server.WorldCommandFixtures.exec;
@@ -30,9 +28,6 @@ public class AltitudeControllerRedstoneSelectsLowAltitudeTest extends AbstractSh
 
     private static final int SPACE_DIM = -2;
     private static final String STATION_ID = "id";
-    private static final String SPAWN_X = "spawnX";
-    private static final String SPAWN_Z = "spawnZ";
-    private static final String TARGET_ORBITAL = "targetOrbitalDistance";
 
     @Test
     public void redstoneOnWithNoSignalSelectsLowAltitudeNotFloored190() throws Exception {
@@ -42,8 +37,8 @@ public class AltitudeControllerRedstoneSelectsLowAltitudeTest extends AbstractSh
         assertTrue("station must create: " + create, create.contains("\"ok\":true"));
         int stationId = extract(STATION_ID, create);
 
-        String info = exec("artest station info " + stationId);
-        int cx = extract(SPAWN_X, info), cy = 128, cz = extract(SPAWN_Z, info);
+        StationInfo info = station(stationId);
+        int cx = info.spawnX(), cy = 128, cz = info.spawnZ();
 
         exec("artest fill " + SPACE_DIM + " " + (cx - 1) + " " + cy + " " + (cz - 1)
                 + " " + (cx + 1) + " " + cy + " " + (cz + 1) + " minecraft:air");
@@ -60,13 +55,18 @@ public class AltitudeControllerRedstoneSelectsLowAltitudeTest extends AbstractSh
         // A few ticks: the redstone branch writes targetOrbitalDistance = f(power=0) each tick.
         exec("artest tile force-tick " + SPACE_DIM + " " + cx + " " + cy + " " + cz + " 3");
 
-        String postInfo = exec("artest station info " + stationId);
-        int target = extract(TARGET_ORBITAL, postInfo);
+        StationInfo postInfo = station(stationId);
+        int target = postInfo.targetOrbitalDistance();
 
         assertTrue("C142: with redstone ON and no signal (power 0), the altitude target must be "
                         + "a LOW altitude (Math.min gives 4), not floored to the GUI max 190 by the old "
-                        + "Math.max. Got targetOrbitalDistance=" + target + " info=" + postInfo,
+                        + "Math.max. Got targetOrbitalDistance=" + target + " info=" + postInfo.raw(),
                 target < 190);
+    }
+
+    /** What the server says about one station. */
+    private static StationInfo station(int stationId) throws Exception {
+        return StationInfo.byId(WorldCommandFixtures::exec, stationId);
     }
 
     private static int extract(String field, String s) {

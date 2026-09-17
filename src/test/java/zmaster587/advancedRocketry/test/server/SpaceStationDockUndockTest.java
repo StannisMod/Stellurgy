@@ -2,12 +2,11 @@ package zmaster587.advancedRocketry.test.server;
 
 // migrated to AbstractSharedServerTest
 import zmaster587.advancedRocketry.test.Reply;
+import zmaster587.advancedRocketry.test.StationInfo;
 import org.junit.Test;
 
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
-
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertTrue;
 
@@ -68,8 +67,10 @@ public class SpaceStationDockUndockTest extends AbstractSharedServerTest {
         int id = createStation();
         String add = ok(client().execute("artest station add-pad " + id + " 10 20 alpha"));
         assertTrue("add-pad must succeed: " + add, add.contains("\"ok\":true"));
-        assertTrue("padCount should be 1 after first add: " + add,
-                add.contains("\"padCount\":1"));
+        // `add-pad` writes its own `padCount`, so it is read as ITS reply and not as a station
+        // reading — and as a NUMBER: the substring form was a prefix, satisfied by 10 pads.
+        assertEquals("padCount should be 1 after first add: " + add,
+                1, Reply.of("artest station add-pad", add).integer("padCount"));
 
         String pads = ok(client().execute("artest station pads " + id));
         assertTrue("pads probe must list the new pad: " + pads,
@@ -175,8 +176,8 @@ public class SpaceStationDockUndockTest extends AbstractSharedServerTest {
         String second = ok(client().execute(
                 "artest station add-pad " + id + " 90 90 second"));
         // padCount stays 1 even after the duplicate add.
-        assertTrue("duplicate add at same (x,z) must NOT grow padCount: " + second,
-                second.contains("\"padCount\":1"));
+        assertEquals("duplicate add at same (x,z) must NOT grow padCount: " + second,
+                1, Reply.of("artest station add-pad", second).integer("padCount"));
     }
 
     @Test
@@ -188,8 +189,8 @@ public class SpaceStationDockUndockTest extends AbstractSharedServerTest {
         String remove = ok(client().execute("artest station remove-pad " + id + " 100 100"));
         assertTrue("remove-pad must succeed and report removed=1: " + remove,
                 remove.contains("\"ok\":true") && remove.contains("\"removed\":1"));
-        assertTrue("padCount must drop to 1 after remove: " + remove,
-                remove.contains("\"padCount\":1"));
+        assertEquals("padCount must drop to 1 after remove: " + remove,
+                1, Reply.of("artest station remove-pad", remove).integer("padCount"));
 
         // The remaining pad's coords must still be reachable.
         String pads = ok(client().execute("artest station pads " + id));
@@ -228,21 +229,26 @@ public class SpaceStationDockUndockTest extends AbstractSharedServerTest {
         // Pin the info probe's pad-related fields; downstream tooling
         // (rocket launch UI, station-finder satellite) reads these.
         int id = createStation();
-        String empty = ok(client().execute("artest station info " + id));
-        assertEquals("empty station: padCount=0", true,
-                empty.contains("\"padCount\":0"));
-        assertEquals("empty station: hasFreePad=false (no pads at all)", true,
-                empty.contains("\"hasFreePad\":false"));
+        StationInfo empty = station(id);
+        assertEquals("empty station: padCount=0 — read as a number, because the substring form was"
+                + " also satisfied by a station holding 0 pads out of 10: " + empty.raw(),
+                0, empty.padCount());
+        assertFalse("empty station: hasFreePad=false (no pads at all): " + empty.raw(),
+                empty.hasFreePad());
 
         ok(client().execute("artest station add-pad " + id + " 400 400 p1"));
-        String oneOccupied = ok(client().execute("artest station info " + id));
-        assertTrue("after add: padCount=1: " + oneOccupied,
-                oneOccupied.contains("\"padCount\":1"));
+        StationInfo oneOccupied = station(id);
+        assertEquals("after add: padCount=1: " + oneOccupied.raw(), 1, oneOccupied.padCount());
         // hasFreeLandingPad checks for ANY pad with occupied=false, NOT
         // gating on auto-land. So even a non-auto-land pad reports
         // hasFreePad=true. Pin this contract — it's a separate axis from
         // dock-allocation.
         assertTrue("pad just added (not occupied) -> hasFreePad=true: "
-                + oneOccupied, oneOccupied.contains("\"hasFreePad\":true"));
+                + oneOccupied.raw(), oneOccupied.hasFreePad());
+    }
+
+    /** What the server says about one station. */
+    private StationInfo station(int stationId) throws Exception {
+        return StationInfo.byId(cmd -> ok(client().execute(cmd)), stationId);
     }
 }

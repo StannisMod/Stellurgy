@@ -2,6 +2,7 @@ package zmaster587.advancedRocketry.test.server;
 
 import zmaster587.advancedRocketry.test.DimInfo;
 import zmaster587.advancedRocketry.test.Reply;
+import zmaster587.advancedRocketry.test.StationInfo;
 import com.github.stannismod.forge.testing.junit.AbstractHeadlessServerTest;
 import com.github.stannismod.forge.testing.server.RealDedicatedServerHarness;
 import org.junit.After;
@@ -101,10 +102,10 @@ public class PersistenceRestartSmokeTest {
         String stations = String.join("\n", secondBoot.client().execute("artest station list"));
         assertTrue("station " + stationId + " did NOT survive restart: " + stations,
                 stations.contains("\"id\":" + stationId));
-        String stationInfo = String.join("\n",
-                secondBoot.client().execute("artest station info " + stationId));
-        assertTrue("station's orbitingPlanetId did not survive: " + stationInfo,
-                stationInfo.contains("\"orbitingPlanetId\":0"));
+        StationInfo stationInfo = StationInfo.byId(
+                cmd -> String.join("\n", secondBoot.client().execute(cmd)), (int) stationId);
+        assertEquals("station's orbitingPlanetId did not survive: " + stationInfo.raw(),
+                0, stationInfo.orbitingPlanetId);
 
         String sats = String.join("\n", secondBoot.client().execute("artest satellite list 0"));
         assertTrue("satellite " + satelliteId + " did NOT survive restart: " + sats,

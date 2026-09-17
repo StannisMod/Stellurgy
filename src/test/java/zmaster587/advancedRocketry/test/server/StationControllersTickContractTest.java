@@ -1,10 +1,8 @@
 package zmaster587.advancedRocketry.test.server;
 
 import zmaster587.advancedRocketry.test.Reply;
+import zmaster587.advancedRocketry.test.StationInfo;
 import org.junit.Test;
-
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertTrue;
@@ -45,14 +43,6 @@ public class StationControllersTickContractTest extends AbstractSharedServerTest
     private static final int SPACE_DIM = -2;
 
     private static final String STATION_ID = "id";
-    private static final String SPAWN_X = "spawnX";
-    private static final String SPAWN_Z = "spawnZ";
-    private static final String ORBITAL_DISTANCE = "orbitalDistance";
-    private static final String GRAVITY = "gravity";
-    private static final String ROT_EAST = "rotationEast";
-    private static final String TARGET_ORBITAL = "targetOrbitalDistance";
-    private static final String TARGET_GRAVITY = "targetGravity";
-    private static final String TARGET_RPH0 = "targetRPH0";
 
     /**
      * Pin: altitude controller, given a target via the probe and
@@ -83,8 +73,7 @@ public class StationControllersTickContractTest extends AbstractSharedServerTest
                 place.contains("\"placed\":true"));
 
         // Snapshot pre-tick orbital distance.
-        String preInfo = exec("artest station info " + stationId);
-        double preDist = extractDouble(preInfo, ORBITAL_DISTANCE);
+        double preDist = station(stationId).orbitalDistance;
 
         // Set target via the new probe — pick a value definitely
         // different from the current orbital distance.
@@ -95,8 +84,7 @@ public class StationControllersTickContractTest extends AbstractSharedServerTest
                 setTarget.contains("\"ok\":true"));
 
         // Sanity: station info now reports the target.
-        String midInfo = exec("artest station info " + stationId);
-        int actualTarget = extract(midInfo, TARGET_ORBITAL);
+        int actualTarget = station(stationId).targetOrbitalDistance();
         assertTrue("station's targetOrbitalDistance must reflect the "
                         + "controller-set-target write; target=" + target
                         + " actualTarget=" + actualTarget,
@@ -108,8 +96,7 @@ public class StationControllersTickContractTest extends AbstractSharedServerTest
         exec("artest tile force-tick " + SPACE_DIM + " " + cx + " " + cy + " " + cz
                 + " 200");
 
-        String postInfo = exec("artest station info " + stationId);
-        double postDist = extractDouble(postInfo, ORBITAL_DISTANCE);
+        double postDist = station(stationId).orbitalDistance;
 
         assertNotEquals("station's actual orbitalDistance must have moved "
                         + "from baseline after 200 controller ticks "
@@ -184,8 +171,8 @@ public class StationControllersTickContractTest extends AbstractSharedServerTest
         exec("artest tile force-tick " + SPACE_DIM + " " + cx + " " + cy + " " + cz
                 + " 2000");
 
-        String postInfo = exec("artest station info " + stationId);
-        double postGravity = extractDouble(postInfo, GRAVITY);
+        StationInfo postInfo = station(stationId);
+        double postGravity = postInfo.gravity();
 
         // End-state contract: gravity has moved measurably below the
         // default-station gravity of 1.0 — proving the controller's
@@ -196,7 +183,7 @@ public class StationControllersTickContractTest extends AbstractSharedServerTest
                         + "default (1.0) after 2000 controller ticks "
                         + "(the player-visible 'gravity controller does "
                         + "something' contract); postGravity=" + postGravity
-                        + " postInfo=" + postInfo,
+                        + " postInfo=" + postInfo.raw(),
                 postGravity < 0.9);
     }
 
@@ -225,8 +212,7 @@ public class StationControllersTickContractTest extends AbstractSharedServerTest
         assertTrue("orientation controller must place: " + place,
                 place.contains("\"placed\":true"));
 
-        String preInfo = exec("artest station info " + stationId);
-        double preRotEast = extractDouble(preInfo, ROT_EAST);
+        double preRotEast = station(stationId).rotationEast();
 
         // setProgress(0, 100) -> targetRotationsPerHour[0] = 100 - 60 = 40
         // -> angular velocity target = 40/72000 ~ 5.5e-4. Default ~0 ->
@@ -237,8 +223,7 @@ public class StationControllersTickContractTest extends AbstractSharedServerTest
         assertTrue("controller-set-target must succeed: " + setTarget,
                 setTarget.contains("\"ok\":true"));
 
-        String midInfo = exec("artest station info " + stationId);
-        int actualTargetRph0 = extract(midInfo, TARGET_RPH0);
+        int actualTargetRph0 = station(stationId).targetRotationsPerHour(0);
         // targetRotationsPerHour[0] = progress - 60 = 40.
         assertTrue("station's targetRPH0 must reflect controller-set-target "
                         + "write; progress=" + progress
@@ -250,8 +235,7 @@ public class StationControllersTickContractTest extends AbstractSharedServerTest
         exec("artest tile force-tick " + SPACE_DIM + " " + cx + " " + cy + " " + cz
                 + " 400");
 
-        String postInfo = exec("artest station info " + stationId);
-        double postRotEast = extractDouble(postInfo, ROT_EAST);
+        double postRotEast = station(stationId).rotationEast();
 
         assertNotEquals("station's rotation around EAST must move from "
                         + "baseline after 400 controller ticks; preRotEast="
@@ -270,23 +254,13 @@ public class StationControllersTickContractTest extends AbstractSharedServerTest
         return Integer.parseInt(mReply.text(STATION_ID));
     }
 
+    /** What the server says about one station. */
+    private static StationInfo station(int stationId) throws Exception {
+        return StationInfo.byId(WorldCommandFixtures::exec, stationId);
+    }
+
     private int[] stationSpawn(int stationId) throws Exception {
-        String info = exec("artest station info " + stationId);
-        Reply xReply = Reply.of(info);
-        Reply zReply = Reply.of(info);
-        assertTrue("no spawn coords in station info: " + info, xReply.has(SPAWN_X) && zReply.has(SPAWN_Z));
-        return new int[]{Integer.parseInt(xReply.text(SPAWN_X)), 128, Integer.parseInt(zReply.text(SPAWN_Z))};
-    }
-
-    private static int extract(String src, String field) {
-        Reply reply = Reply.of(src);
-        assertTrue("field `" + field + "` not found in: " + src, reply.has(field));
-        return reply.integer(field);
-    }
-
-    private static double extractDouble(String src, String field) {
-        double value = Reply.of(src).number(field);
-        assertTrue("field `" + field + "` not found in: " + src, !Double.isNaN(value));
-        return value;
+        StationInfo info = station(stationId);
+        return new int[]{info.spawnX(), 128, info.spawnZ()};
     }
 }

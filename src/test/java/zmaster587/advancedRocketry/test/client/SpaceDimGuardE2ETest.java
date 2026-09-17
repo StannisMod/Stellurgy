@@ -7,6 +7,7 @@ import org.junit.runners.MethodSorters;
 import zmaster587.advancedRocketry.test.Events;
 import zmaster587.advancedRocketry.test.Reply;
 import zmaster587.advancedRocketry.test.PlayerState;
+import zmaster587.advancedRocketry.test.StationInfo;
 
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -49,9 +50,6 @@ public class SpaceDimGuardE2ETest extends AbstractSharedClientE2ETest {
     private static final String POS_X = "posX";
     private static final String POS_Y = "posY";
     private static final String POS_Z = "posZ";
-    private static final String SPAWN_X = "spawnX";
-    private static final String SPAWN_Y = "spawnY";
-    private static final String SPAWN_Z = "spawnZ";
     private static final String STATION_ID = "id";
 
     /** {@code ARConfiguration.spaceDimId}'s default. */
@@ -157,10 +155,10 @@ public class SpaceDimGuardE2ETest extends AbstractSharedClientE2ETest {
         int stationId = intField(STATION_ID, createResp, "station id");
         scenario().record("stationId", stationId);
 
-        String info = exec("artest station info " + stationId);
-        int spawnX = intField(SPAWN_X, info, "spawnX");
-        int spawnY = intField(SPAWN_Y, info, "spawnY");
-        int spawnZ = intField(SPAWN_Z, info, "spawnZ");
+        StationInfo info = StationInfo.byId(this::exec, stationId);
+        int spawnX = info.spawnX();
+        int spawnY = info.spawnY();
+        int spawnZ = info.spawnZ();
         scenario().record("stationSpawn", spawnX + "," + spawnY + "," + spawnZ);
 
         // The default space-dim spawn lands in station-id-1's slot (the spiral indexing puts the

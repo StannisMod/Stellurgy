@@ -1,6 +1,7 @@
 package zmaster587.advancedRocketry.test.server;
 
 import zmaster587.advancedRocketry.test.Reply;
+import zmaster587.advancedRocketry.test.StationInfo;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
@@ -59,8 +60,6 @@ public class BlackHoleGeneratorPoweredCycleTest extends AbstractSharedServerTest
     private static final int OVERWORLD_CZ = 5000;
 
     private static final String STATION_ID = "id";
-    private static final String SPAWN_X = "spawnX";
-    private static final String SPAWN_Z = "spawnZ";
     private static final String CTRL_POS = "controllerPos";
     private static final String POWER_OUT_POS = "powerOutPos";
     private static final String ITEM_IN_POS = "itemInputPos";
@@ -178,11 +177,10 @@ public class BlackHoleGeneratorPoweredCycleTest extends AbstractSharedServerTest
         assertTrue("no station id in create response: " + create, created.has(STATION_ID));
         stationId = created.integer(STATION_ID);
 
-        String info = exec("artest station info " + stationId);
-        Reply station = Reply.of("artest station info", info);
-        assertTrue("no spawn coords in station info: " + info,
-                station.has(SPAWN_X) && station.has(SPAWN_Z));
-        return new int[]{station.integer(SPAWN_X), 128, station.integer(SPAWN_Z)};
+        // The reader refuses a station the manager does not hold, and its spawn accessors refuse a
+        // station that has no spawn — which is what the two-field has-check stood for.
+        StationInfo station = StationInfo.byId(WorldCommandFixtures::exec, stationId);
+        return new int[]{station.spawnX(), 128, station.spawnZ()};
     }
 
     private String buildFixture(int dim, int cx, int cy, int cz) throws Exception {

@@ -1,6 +1,7 @@
 package zmaster587.advancedRocketry.test.server;
 
 import zmaster587.advancedRocketry.test.Reply;
+import zmaster587.advancedRocketry.test.StationInfo;
 import com.github.stannismod.forge.testing.junit.AbstractHeadlessServerTest;
 import org.junit.Test;
 
@@ -31,9 +32,6 @@ import static org.junit.Assert.assertTrue;
 public class SpaceStationCentreCellNoFalseStationTest extends AbstractHeadlessServerTest {
 
     private static final String ID = "id";
-    private static final String SPAWN_X = "spawnX";
-    private static final String SPAWN_Y = "spawnY";
-    private static final String SPAWN_Z = "spawnZ";
 
     @Test
     public void centreGridCellResolvesToNoStationNotFalselyStationOne() throws Exception {
@@ -41,10 +39,10 @@ public class SpaceStationCentreCellNoFalseStationTest extends AbstractHeadlessSe
         assertTrue("station must create: " + create, create.contains("\"ok\":true"));
         int stationId = extract(ID, create);
 
-        String info = exec("artest station info " + stationId);
-        int spawnX = extract(SPAWN_X, info);
-        int spawnY = extract(SPAWN_Y, info);
-        int spawnZ = extract(SPAWN_Z, info);
+        StationInfo info = StationInfo.byId(this::exec, stationId);
+        int spawnX = info.spawnX();
+        int spawnY = info.spawnY();
+        int spawnZ = info.spawnZ();
 
         // Control: the station's own spawn must resolve back to it — proves the
         // reverse map still finds real on-station positions after the radius-0 fix.

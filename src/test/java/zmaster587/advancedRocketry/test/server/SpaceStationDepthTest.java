@@ -2,6 +2,7 @@ package zmaster587.advancedRocketry.test.server;
 
 // migrated to AbstractSharedServerTest
 import zmaster587.advancedRocketry.test.Reply;
+import zmaster587.advancedRocketry.test.StationInfo;
 import org.junit.Test;
 
 import java.util.regex.Matcher;
@@ -71,9 +72,9 @@ public class SpaceStationDepthTest extends AbstractSharedServerTest {
         int expected = Math.min(500, max);
         assertEquals("fuel set did not produce expected after value", expected, after);
 
-        String info = String.join("\n", client().execute("artest station info " + id));
-        assertTrue("info must reflect the fuel amount we just set: " + info,
-                info.contains("\"fuelAmount\":" + expected));
+        StationInfo info = station(id);
+        assertEquals("info must reflect the fuel amount we just set: " + info.raw(),
+                expected, info.fuelAmount());
     }
 
     @Test
@@ -130,8 +131,12 @@ public class SpaceStationDepthTest extends AbstractSharedServerTest {
         assertEquals("useFuel(60) on 100 stock must leave 40", 40, after);
         assertEquals("useFuel(60) must return 60 consumed", 60, returned);
 
-        String info = String.join("\n", client().execute("artest station info " + id));
-        assertTrue("info must reflect the partial drain: " + info,
-                info.contains("\"fuelAmount\":40"));
+        StationInfo info = station(id);
+        assertEquals("info must reflect the partial drain: " + info.raw(), 40, info.fuelAmount());
+    }
+
+    /** What the server says about one station. */
+    private StationInfo station(int stationId) throws Exception {
+        return StationInfo.byId(cmd -> String.join("\n", client().execute(cmd)), stationId);
     }
 }

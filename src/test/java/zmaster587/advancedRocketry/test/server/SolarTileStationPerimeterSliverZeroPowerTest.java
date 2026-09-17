@@ -1,6 +1,7 @@
 package zmaster587.advancedRocketry.test.server;
 
 import zmaster587.advancedRocketry.test.Reply;
+import zmaster587.advancedRocketry.test.StationInfo;
 import com.github.stannismod.forge.testing.junit.AbstractHeadlessServerTest;
 import org.junit.Test;
 
@@ -39,8 +40,6 @@ public class SolarTileStationPerimeterSliverZeroPowerTest extends AbstractHeadle
 
     private static final int SPACE_DIM = -2;
     private static final String ID = "id";
-    private static final String SPAWN_X = "spawnX";
-    private static final String SPAWN_Z = "spawnZ";
     private static final String ENERGY = "energyStored";
 
     @Test
@@ -55,9 +54,9 @@ public class SolarTileStationPerimeterSliverZeroPowerTest extends AbstractHeadle
         String setParent = exec("artest station set-parent " + stationId + " 0");
         assertTrue("station set-parent must succeed: " + setParent, setParent.contains("\"ok\":true"));
 
-        String info = exec("artest station info " + stationId);
-        int spawnX = extract(SPAWN_X, info);
-        int spawnZ = extract(SPAWN_Z, info);
+        StationInfo info = StationInfo.byId(this::exec, stationId);
+        int spawnX = info.spawnX();
+        int spawnZ = info.spawnZ();
         int gridX = Math.round(spawnX / 2048f);
 
         int cx = spawnX, cz = spawnZ;                 // control = station center

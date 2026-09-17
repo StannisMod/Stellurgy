@@ -1,12 +1,11 @@
 package zmaster587.advancedRocketry.test.server;
 
 import zmaster587.advancedRocketry.test.Reply;
+import zmaster587.advancedRocketry.test.StationInfo;
 import com.github.stannismod.forge.testing.junit.AbstractHeadlessServerTest;
 import org.junit.Test;
 
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
-
+import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
 /**
@@ -36,10 +35,13 @@ public class SpaceStationLifecycleSmokeTest extends AbstractHeadlessServerTest {
         assertTrue("created station " + stationId + " missing from list: " + listAfter,
                 listAfter.contains("\"id\":" + stationId));
 
-        String info = String.join("\n", client().execute("artest station info " + stationId));
-        assertTrue("station info wrong orbitingPlanetId: " + info,
-                info.contains("\"orbitingPlanetId\":0"));
-        assertTrue("station info wrong default fuelAmount: " + info,
-                info.contains("\"fuelAmount\":0"));
+        // Read as NUMBERS: the substring form was a prefix, so `"orbitingPlanetId":0` was also
+        // satisfied by a station orbiting dim 9701 and `"fuelAmount":0` by one holding 1000.
+        StationInfo info = StationInfo.byId(
+                cmd -> String.join("\n", client().execute(cmd)), stationId);
+        assertEquals("station info wrong orbitingPlanetId: " + info.raw(),
+                0, info.orbitingPlanetId);
+        assertEquals("station info wrong default fuelAmount: " + info.raw(),
+                0, info.fuelAmount());
     }
 }
