@@ -3,6 +3,7 @@ package zmaster587.advancedRocketry.test.server;
 // migrated to AbstractSharedServerTest
 import zmaster587.advancedRocketry.test.Reply;
 import zmaster587.advancedRocketry.test.StationInfo;
+import zmaster587.advancedRocketry.test.StationPads;
 import org.junit.Test;
 
 import static org.junit.Assert.assertEquals;
@@ -72,18 +73,15 @@ public class SpaceStationDockUndockTest extends AbstractSharedServerTest {
         assertEquals("padCount should be 1 after first add: " + add,
                 1, Reply.of("artest station add-pad", add).integer("padCount"));
 
-        String pads = ok(client().execute("artest station pads " + id));
-        assertTrue("pads probe must list the new pad: " + pads,
-                pads.contains("\"x\":10") && pads.contains("\"z\":20"));
+        // Read as ONE pad addressed by its position. The `x`-and-`z` substring pair this replaces
+        // is satisfied by a station holding (10, 99) and (77, 20), i.e. by no such pad at all.
+        StationPads.Pad pad = pads(id).at(10, 20);
         // Default state contract — pad starts unoccupied AND not opted into
         // auto-landing. A refactor that flips either default would silently
         // change the dock-allocation semantics.
-        assertTrue("new pad must start occupied=false: " + pads,
-                pads.contains("\"occupied\":false"));
-        assertTrue("new pad must start allowAutoLand=false: " + pads,
-                pads.contains("\"allowAutoLand\":false"));
-        assertTrue("new pad must carry the supplied name: " + pads,
-                pads.contains("\"name\":\"alpha\""));
+        assertFalse("new pad must start occupied=false: " + pad.raw(), pad.occupied);
+        assertFalse("new pad must start allowAutoLand=false: " + pad.raw(), pad.allowAutoLand);
+        assertEquals("new pad must carry the supplied name: " + pad.raw(), "alpha", pad.name());
     }
 
     @Test
@@ -111,10 +109,9 @@ public class SpaceStationDockUndockTest extends AbstractSharedServerTest {
         assertTrue("dock response must echo the chosen pad coords: " + dock,
                 dock.contains("\"x\":30") && dock.contains("\"z\":40"));
 
-        // After dock with commit=true, the pad's occupied flag must flip.
-        String pads = ok(client().execute("artest station pads " + id));
-        assertTrue("dock must mark the pad occupied=true: " + pads,
-                pads.contains("\"occupied\":true"));
+        // After dock with commit=true, THE pad's occupied flag must flip — asked of the pad at
+        // (30, 40) rather than of the list, which would answer for any occupied pad.
+        assertTrue("dock must mark the pad occupied=true", pads(id).at(30, 40).occupied);
 
         // A second dock against the only pad MUST return no-free-pad.
         String dock2 = ok(client().execute("artest station dock " + id));
@@ -130,17 +127,15 @@ public class SpaceStationDockUndockTest extends AbstractSharedServerTest {
         ok(client().execute("artest station dock " + id));  // consume
 
         // Pre-undock: the pad reports occupied=true.
-        String pre = ok(client().execute("artest station pads " + id));
-        assertTrue("pre-undock pad must read occupied=true: " + pre,
-                pre.contains("\"occupied\":true"));
+        StationPads.Pad pre = pads(id).at(50, 60);
+        assertTrue("pre-undock pad must read occupied=true: " + pre.raw(), pre.occupied);
 
         String undock = ok(client().execute("artest station undock " + id + " 50 60"));
         assertTrue("undock must succeed: " + undock, undock.contains("\"ok\":true"));
 
         // Post-undock: pad is free again.
-        String post = ok(client().execute("artest station pads " + id));
-        assertTrue("post-undock pad must read occupied=false: " + post,
-                post.contains("\"occupied\":false"));
+        StationPads.Pad post = pads(id).at(50, 60);
+        assertFalse("post-undock pad must read occupied=false: " + post.raw(), post.occupied);
 
         // And the next dock call must successfully reclaim it.
         String reclaim = ok(client().execute("artest station dock " + id));
@@ -161,9 +156,9 @@ public class SpaceStationDockUndockTest extends AbstractSharedServerTest {
         assertTrue("preview dock must report ok and the pad coords: " + preview,
                 preview.contains("\"ok\":true") && preview.contains("\"x\":70"));
 
-        String pads = ok(client().execute("artest station pads " + id));
-        assertTrue("preview dock must NOT mark the pad occupied: " + pads,
-                pads.contains("\"occupied\":false"));
+        StationPads.Pad previewed = pads(id).at(70, 80);
+        assertFalse("preview dock must NOT mark the pad occupied: " + previewed.raw(),
+                previewed.occupied);
     }
 
     @Test
@@ -192,12 +187,11 @@ public class SpaceStationDockUndockTest extends AbstractSharedServerTest {
         assertEquals("padCount must drop to 1 after remove: " + remove,
                 1, Reply.of("artest station remove-pad", remove).integer("padCount"));
 
-        // The remaining pad's coords must still be reachable.
-        String pads = ok(client().execute("artest station pads " + id));
-        assertTrue("remaining pad must still be listed: " + pads,
-                pads.contains("\"x\":110") && pads.contains("\"z\":110"));
-        assertTrue("removed pad must be gone from list: " + pads,
-                !(pads.contains("\"x\":100") && pads.contains("\"z\":100")));
+        // The remaining pad's coords must still be reachable. Asked as PADS: the two substring
+        // pairs this replaces could each be satisfied by the other pad's coordinates.
+        StationPads pads = pads(id);
+        assertTrue("remaining pad must still be listed: " + pads.raw(), pads.has(110, 110));
+        assertFalse("removed pad must be gone from list: " + pads.raw(), pads.has(100, 100));
     }
 
     @Test
@@ -212,16 +206,14 @@ public class SpaceStationDockUndockTest extends AbstractSharedServerTest {
         ok(client().execute("artest station add-pad " + a + " 200 200 a1"));
         ok(client().execute("artest station add-pad " + b + " 300 300 b1"));
 
-        String padsA = ok(client().execute("artest station pads " + a));
-        String padsB = ok(client().execute("artest station pads " + b));
-        assertTrue("station A must have its pad: " + padsA,
-                padsA.contains("\"x\":200"));
-        assertTrue("station A must NOT have station B's pad: " + padsA,
-                !padsA.contains("\"x\":300"));
-        assertTrue("station B must have its pad: " + padsB,
-                padsB.contains("\"x\":300"));
-        assertTrue("station B must NOT have station A's pad: " + padsB,
-                !padsB.contains("\"x\":200"));
+        StationPads padsA = pads(a);
+        StationPads padsB = pads(b);
+        assertTrue("station A must have its pad: " + padsA.raw(), padsA.has(200, 200));
+        assertFalse("station A must NOT have station B's pad: " + padsA.raw(),
+                padsA.has(300, 300));
+        assertTrue("station B must have its pad: " + padsB.raw(), padsB.has(300, 300));
+        assertFalse("station B must NOT have station A's pad: " + padsB.raw(),
+                padsB.has(200, 200));
     }
 
     @Test
@@ -250,5 +242,10 @@ public class SpaceStationDockUndockTest extends AbstractSharedServerTest {
     /** What the server says about one station. */
     private StationInfo station(int stationId) throws Exception {
         return StationInfo.byId(cmd -> ok(client().execute(cmd)), stationId);
+    }
+
+    /** Every landing pad the station holds, addressable by position. */
+    private StationPads pads(int stationId) throws Exception {
+        return StationPads.byId(cmd -> ok(client().execute(cmd)), stationId);
     }
 }

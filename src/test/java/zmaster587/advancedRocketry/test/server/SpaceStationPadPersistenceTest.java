@@ -8,12 +8,13 @@ import org.junit.Assume;
 import org.junit.Before;
 import org.junit.Test;
 
+import zmaster587.advancedRocketry.test.StationPads;
+
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
 /**
@@ -93,14 +94,10 @@ public class SpaceStationPadPersistenceTest {
                 dock.contains("\"ok\":true") && dock.contains("\"x\":200"));
 
         // Sanity dump before restart.
-        String padsBefore = String.join("\n",
-                firstBoot.client().execute("artest station pads " + stationId));
-        assertTrue("padA must be in boot1 dump: " + padsBefore,
-                padsBefore.contains("\"x\":100"));
-        assertTrue("padB must be in boot1 dump: " + padsBefore,
-                padsBefore.contains("\"x\":200"));
-        assertTrue("padC must be in boot1 dump: " + padsBefore,
-                padsBefore.contains("\"x\":300"));
+        StationPads padsBefore = pads(firstBoot, stationId);
+        assertTrue("padA must be in boot1 dump: " + padsBefore.raw(), padsBefore.has(100, 100));
+        assertTrue("padB must be in boot1 dump: " + padsBefore.raw(), padsBefore.has(200, 200));
+        assertTrue("padC must be in boot1 dump: " + padsBefore.raw(), padsBefore.has(300, 300));
 
         // /save-all to force the world to flush before close — same as the
         // existing PersistenceRestartSmokeTest pattern.
@@ -116,39 +113,31 @@ public class SpaceStationPadPersistenceTest {
         assertTrue("station " + stationId + " did NOT survive restart: " + stations,
                 stations.contains("\"id\":" + stationId));
 
-        String padsAfter = String.join("\n",
-                secondBoot.client().execute("artest station pads " + stationId));
-        assertTrue("padA must survive restart: " + padsAfter,
-                padsAfter.contains("\"x\":100"));
-        assertTrue("padB must survive restart: " + padsAfter,
-                padsAfter.contains("\"x\":200"));
-        assertTrue("padC must survive restart: " + padsAfter,
-                padsAfter.contains("\"x\":300"));
+        StationPads padsAfter = pads(secondBoot, stationId);
+        assertTrue("padA must survive restart: " + padsAfter.raw(), padsAfter.has(100, 100));
+        assertTrue("padB must survive restart: " + padsAfter.raw(), padsAfter.has(200, 200));
+        assertTrue("padC must survive restart: " + padsAfter.raw(), padsAfter.has(300, 300));
 
-        // Per-pad state assertions are extracted via substring isolation
-        // (pads is a flat array of LinkedList-ordered objects).
-        String padAObj = extractObjectContaining(padsAfter, "\"x\":100");
-        String padBObj = extractObjectContaining(padsAfter, "\"x\":200");
-        String padCObj = extractObjectContaining(padsAfter, "\"x\":300");
+        // Per-pad state, asked of each pad BY POSITION. What stood here walked the reply's braces
+        // by hand to slice out the object containing `"x":100` — a JSON parser written inside a
+        // test, and one that would have sliced the wrong pad the moment a pad's NAME held the
+        // marker text.
+        StationPads.Pad padA = padsAfter.at(100, 100);
+        StationPads.Pad padB = padsAfter.at(200, 200);
+        StationPads.Pad padC = padsAfter.at(300, 300);
 
         // occupied: padB is the only one that should be true (we docked it
         // pre-restart). A and C stay free.
-        assertTrue("padB's occupied=true must survive restart: " + padBObj,
-                padBObj.contains("\"occupied\":true"));
-        assertTrue("padA must restore to occupied=false: " + padAObj,
-                padAObj.contains("\"occupied\":false"));
-        assertTrue("padC must restore to occupied=false: " + padCObj,
-                padCObj.contains("\"occupied\":false"));
+        assertTrue("padB's occupied=true must survive restart: " + padB.raw(), padB.occupied);
+        assertFalse("padA must restore to occupied=false: " + padA.raw(), padA.occupied);
+        assertFalse("padC must restore to occupied=false: " + padC.raw(), padC.occupied);
 
         // pad name field — writeToNBT.setString("name", …) + readFromNbt
         // reads it back via tag.getString("name"). All three names must
         // survive verbatim.
-        assertTrue("padA name must survive restart (\"padA\"): " + padAObj,
-                padAObj.contains("\"name\":\"padA\""));
-        assertTrue("padB name must survive restart (\"padB\"): " + padBObj,
-                padBObj.contains("\"name\":\"padB\""));
-        assertTrue("padC name must survive restart (\"padC\"): " + padCObj,
-                padCObj.contains("\"name\":\"padC\""));
+        assertEquals("padA name must survive restart: " + padA.raw(), "padA", padA.name());
+        assertEquals("padB name must survive restart: " + padB.raw(), "padB", padB.name());
+        assertEquals("padC name must survive restart: " + padC.raw(), "padC", padC.name());
 
         // -- allowAutoLand: surface the known bug at
         //    SpaceStationObject.java:801. The write side correctly writes
@@ -171,13 +160,13 @@ public class SpaceStationPadPersistenceTest {
         // future read-side fix is forced to update this test.
         assertTrue("padB allowAutoLand reads true after restart (lucky path "
                         + "— SpaceStationObject:801 reads from \"occupied\" "
-                        + "key, and padB IS occupied): " + padBObj,
-                padBObj.contains("\"allowAutoLand\":true"));
-        assertTrue("padA allowAutoLand reads FALSE after restart (whatever "
+                        + "key, and padB IS occupied): " + padB.raw(),
+                padB.allowAutoLand);
+        assertFalse("padA allowAutoLand reads FALSE after restart (whatever "
                         + "the original write was — read side ignores the "
                         + "\"autoLand\" key, SpaceStationObject:801 bug): "
-                        + padAObj,
-                padAObj.contains("\"allowAutoLand\":false"));
+                        + padA.raw(),
+                padA.allowAutoLand);
 
         // Behavioural check: undock B -> next dock must reclaim B again.
         String undock = String.join("\n", secondBoot.client().execute(
@@ -219,61 +208,33 @@ public class SpaceStationPadPersistenceTest {
         ok(firstBoot, "artest station add-pad " + stationId + " 999 999 lonely");
         ok(firstBoot, "artest station set-autoland " + stationId + " 999 999 true");
 
-        // Sanity in boot1: the in-memory state correctly reports both flags.
-        String padsBefore = String.join("\n",
-                firstBoot.client().execute("artest station pads " + stationId));
-        assertTrue("boot1 padA must report allowAutoLand=true in memory: " + padsBefore,
-                padsBefore.contains("\"allowAutoLand\":true"));
-        assertTrue("boot1 padA must report occupied=false: " + padsBefore,
-                padsBefore.contains("\"occupied\":false"));
+        // Sanity in boot1: the in-memory state correctly reports both flags. Asked of the lonely
+        // pad itself — this station holds exactly one, and the substring form would have been
+        // satisfied by any pad in a station that held more.
+        StationPads.Pad lonelyBefore = pads(firstBoot, stationId).at(999, 999);
+        assertTrue("boot1 padA must report allowAutoLand=true in memory: " + lonelyBefore.raw(),
+                lonelyBefore.allowAutoLand);
+        assertFalse("boot1 padA must report occupied=false: " + lonelyBefore.raw(),
+                lonelyBefore.occupied);
 
         firstBoot.client().execute("save-all flush");
         firstBoot.close();
         firstBoot = null;
 
         secondBoot = RealDedicatedServerHarness.startWith(workDir, /*cleanupOnClose=*/true);
-        String padsAfter = String.join("\n",
-                secondBoot.client().execute("artest station pads " + stationId));
+        StationPads.Pad lonelyAfter = pads(secondBoot, stationId).at(999, 999);
         assertTrue("padA allowAutoLand must be true after restart — "
                         + "SpaceStationObject:801 now reads from the same "
                         + "\"autoLand\" key the write side writes. pads dump: "
-                        + padsAfter,
-                padsAfter.contains("\"allowAutoLand\":true"));
+                        + lonelyAfter.raw(),
+                lonelyAfter.allowAutoLand);
     }
 
-    /**
-     * Extract the JSON object that contains the given marker from a flat
-     * JSON array of objects. Used to assert per-pad fields when the array
-     * has multiple peer objects with different `x` values.
-     */
-    private static String extractObjectContaining(String json, String marker) {
-        int markerIdx = json.indexOf(marker);
-        assertTrue("marker not found: " + marker + " in " + json, markerIdx >= 0);
-        // Walk back to the opening `{`.
-        int start = markerIdx;
-        int depth = 0;
-        while (start >= 0) {
-            char c = json.charAt(start);
-            if (c == '}') depth++;
-            else if (c == '{') {
-                if (depth == 0) break;
-                depth--;
-            }
-            start--;
-        }
-        // Walk forward to the matching closing `}`.
-        int end = markerIdx;
-        depth = 0;
-        while (end < json.length()) {
-            char c = json.charAt(end);
-            if (c == '{') depth++;
-            else if (c == '}') {
-                depth--;
-                if (depth == 0) { end++; break; }
-            }
-            end++;
-        }
-        return json.substring(start, Math.min(end, json.length()));
+    /** Every landing pad the station holds on one of the two boots, addressable by position. */
+    private static StationPads pads(RealDedicatedServerHarness boot, long stationId)
+            throws Exception {
+        return StationPads.byId(cmd -> String.join("\n", boot.client().execute(cmd)),
+                (int) stationId);
     }
 
     private static void ok(RealDedicatedServerHarness harness, String cmd) throws Exception {

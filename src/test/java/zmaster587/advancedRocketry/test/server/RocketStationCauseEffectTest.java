@@ -2,14 +2,14 @@ package zmaster587.advancedRocketry.test.server;
 
 // migrated to AbstractSharedServerTest
 import zmaster587.advancedRocketry.test.Reply;
+import zmaster587.advancedRocketry.test.StationPads;
 import org.junit.Test;
-
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 import zmaster587.advancedRocketry.test.RocketList;
 import zmaster587.advancedRocketry.test.FixtureSite;
 
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
 /**
@@ -106,9 +106,9 @@ public class RocketStationCauseEffectTest extends AbstractSharedServerTest {
         ok(client().execute("artest station set-autoland " + stationId + " 50 50 true"));
 
         // Sanity: pad starts free.
-        String padsBefore = ok(client().execute("artest station pads " + stationId));
-        assertTrue("pad alpha must start free: " + padsBefore,
-                padsBefore.contains("\"x\":50") && padsBefore.contains("\"occupied\":false"));
+        // Asked of PAD ALPHA. The `x`-and-`occupied` substring pair this replaces is satisfied by
+        // pad alpha being occupied as long as SOME other pad is free.
+        assertFalse("pad alpha must start free", pads(stationId).at(50, 50).occupied);
 
         // Build a rocket. The rocket itself stays on overworld; we just
         // need its guidance computer to invoke overrideLandingStation.
@@ -128,10 +128,9 @@ public class RocketStationCauseEffectTest extends AbstractSharedServerTest {
         // regression moved or removed the setOccupied call in
         // getStationLocation, this fails — even though SpaceStationDockUndockTest
         // (which talks to setPadStatus directly) still passes.
-        String padsAfter = ok(client().execute("artest station pads " + stationId));
-        assertTrue("after override-landing, pad alpha MUST be occupied=true: " + padsAfter,
-                padsAfter.contains("\"x\":50")
-                        && padsAfter.contains("\"occupied\":true"));
+        StationPads.Pad alpha = pads(stationId).at(50, 50);
+        assertTrue("after override-landing, pad alpha MUST be occupied=true: " + alpha.raw(),
+                alpha.occupied);
     }
 
     @Test
@@ -147,13 +146,12 @@ public class RocketStationCauseEffectTest extends AbstractSharedServerTest {
         int rocketId = buildAndAssemble(FixtureSite.openAir(0, 2100, 500));
         ok(client().execute("artest rocket override-landing " + rocketId + " " + stationId));
 
-        String padsAfter = ok(client().execute("artest station pads " + stationId));
         // Pad beta must STILL be occupied=false because no auto-land
         // candidate was available.
-        assertTrue("override-landing on station with no auto-land pads must NOT "
-                        + "mark beta occupied: " + padsAfter,
-                padsAfter.contains("\"x\":60")
-                        && padsAfter.contains("\"occupied\":false"));
+        StationPads.Pad beta = pads(stationId).at(60, 60);
+        assertFalse("override-landing on station with no auto-land pads must NOT "
+                        + "mark beta occupied: " + beta.raw(),
+                beta.occupied);
     }
 
     @Test
@@ -171,14 +169,20 @@ public class RocketStationCauseEffectTest extends AbstractSharedServerTest {
         int rocketId = buildAndAssemble(FixtureSite.openAir(0, 2200, 500));
         ok(client().execute("artest rocket override-landing " + rocketId + " " + stationId));
 
-        String pads = ok(client().execute("artest station pads " + stationId));
-        // Count occupied=true occurrences within the pads array. The
-        // probe's output format is stable enough for a substring count
-        // to be a reliable proxy.
-        int occupiedCount = countSubstring(pads, "\"occupied\":true");
-        assertTrue("exactly one pad must flip occupied — observed " + occupiedCount
-                        + " in: " + pads,
-                occupiedCount == 1);
+        // Counted over the PARSED pads. What stood here counted the substring `"occupied":true`
+        // in the reply text and said so out loud — "the probe's output format is stable enough for
+        // a substring count to be a reliable proxy" — which is a count of renderings, and it is
+        // also the number a pad NAMED "occupied" would change.
+        StationPads pads = pads(stationId);
+        int occupiedCount = 0;
+        for (StationPads.Pad pad : pads.all()) {
+            if (pad.occupied) {
+                occupiedCount++;
+            }
+        }
+        assertEquals("exactly one pad must flip occupied — observed " + occupiedCount
+                        + " in: " + pads.raw(),
+                1, occupiedCount);
     }
 
     @Test
@@ -211,13 +215,8 @@ public class RocketStationCauseEffectTest extends AbstractSharedServerTest {
                 resp.contains("\"error\":\"rocket not found\""));
     }
 
-    private static int countSubstring(String haystack, String needle) {
-        int count = 0;
-        int idx = 0;
-        while ((idx = haystack.indexOf(needle, idx)) != -1) {
-            count++;
-            idx += needle.length();
-        }
-        return count;
+    /** Every landing pad the station holds, addressable by position. */
+    private StationPads pads(int stationId) throws Exception {
+        return StationPads.byId(cmd -> ok(client().execute(cmd)), stationId);
     }
 }
