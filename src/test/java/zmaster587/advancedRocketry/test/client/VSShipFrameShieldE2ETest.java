@@ -9,6 +9,7 @@ import java.util.regex.Pattern;
 
 import zmaster587.advancedRocketry.test.Events;
 import zmaster587.advancedRocketry.test.Reply;
+import zmaster587.advancedRocketry.test.ShipInfo;
 import zmaster587.advancedRocketry.test.FixtureSite;
 
 import static org.junit.Assert.assertTrue;
@@ -256,8 +257,8 @@ public class VSShipFrameShieldE2ETest extends AbstractSharedVsClientE2ETest {
     /** Where THIS ship is — asked by identity, so it keeps answering about the same hull once the
      *  push has carried it away from the spot it was built on. */
     private double[] shipPos(String shipId) throws Exception {
-        String si = exec("artest vs ship-info 0 id " + shipId);
-        return new double[]{f(si, "posX"), f(si, "posY"), f(si, "posZ")};
+        ShipInfo si = ShipInfo.byId(this::exec, 0, shipId);
+        return new double[]{si.x, si.y, si.z};
     }
 
     private double[] shellCenter() throws Exception {
@@ -273,7 +274,7 @@ public class VSShipFrameShieldE2ETest extends AbstractSharedVsClientE2ETest {
         return "(" + a[0] + "," + a[1] + "," + a[2] + ")";
     }
 
-    /** A field of a FLAT reply — {@code shield read}, {@code entity info}, {@code vs ship-info}. */
+    /** A field of a FLAT reply — {@code shield read}, {@code entity info}. */
     private double f(String json, String key) {
         assertTrue("expected key " + key + " in: " + json, Reply.of(json).has(key));
         return Reply.of(json).number(key);

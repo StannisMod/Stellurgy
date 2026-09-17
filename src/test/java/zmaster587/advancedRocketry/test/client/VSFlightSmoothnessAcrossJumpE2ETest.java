@@ -13,6 +13,7 @@ import org.lwjgl.input.Keyboard;
 import zmaster587.advancedRocketry.test.Reply;
 import zmaster587.advancedRocketry.test.Events;
 import zmaster587.advancedRocketry.test.ShipIdentity;
+import zmaster587.advancedRocketry.test.ShipInfo;
 
 import static zmaster587.advancedRocketry.test.AdvancedRocketryTestConstants.HYPERSPACE_JUMP_SPEED;
 import static org.junit.Assert.assertTrue;
@@ -262,9 +263,7 @@ public class VSFlightSmoothnessAcrossJumpE2ETest extends AbstractSharedVsClientE
         // BY IDENTITY: the control leg above LIFTS the ship clear of the ground, so its berth is
         // exactly the place it is no longer at. A bounded read there answers managed:false and an
         // unbounded one answers about whatever else is loaded; neither is this ship.
-        String shipNow = exec("artest vs ship-info " + originDim + " id " + shipId);
-        scenario().requireArranged("the ship must still be managed at its berth: " + shipNow,
-                shipNow.contains("\"managed\":true"));
+        ShipInfo shipNow = ShipInfo.byId(this::exec, originDim, shipId);
         // The mark before the departure, so every link of the jump is in the log in order — and the
         // CLIENT's own beside it, for the remount his client performs when the arrival tells it who
         // is riding what.
@@ -272,9 +271,9 @@ public class VSFlightSmoothnessAcrossJumpE2ETest extends AbstractSharedVsClientE
         long mark = events.markInstrumented();
         long clientMark = clientEvents().mark();
         String begin = exec("artest space transit-begin " + originDim
-                + " " + (int) Math.round(readDouble(shipNow, "posX"))
-                + " " + (int) Math.round(readDouble(shipNow, "posY"))
-                + " " + (int) Math.round(readDouble(shipNow, "posZ"))
+                + " " + (int) Math.round(shipNow.x)
+                + " " + (int) Math.round(shipNow.y)
+                + " " + (int) Math.round(shipNow.z)
                 + " " + HYPERSPACE_JUMP_SPEED);
         scenario().requireArranged("the transit must begin (departure crossing): " + begin,
                 readBool(begin, "began"));

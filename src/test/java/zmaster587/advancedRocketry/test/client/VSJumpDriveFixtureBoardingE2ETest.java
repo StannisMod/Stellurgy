@@ -13,6 +13,7 @@ import org.lwjgl.input.Keyboard;
 import zmaster587.advancedRocketry.hyperdrive.DriveTuning;
 import zmaster587.advancedRocketry.test.Events;
 import zmaster587.advancedRocketry.test.Reply;
+import zmaster587.advancedRocketry.test.ShipInfo;
 import zmaster587.advancedRocketry.test.FixtureSite;
 
 import static org.junit.Assert.assertTrue;
@@ -66,7 +67,6 @@ public class VSJumpDriveFixtureBoardingE2ETest extends AbstractSharedVsClientE2E
     }
 
     private static final String BUILDER_POS = "builderPos";
-    private static final String POS_Y = "posY";
     /** Field-name PREFIXES: each names a triple the probe writes as {@code <prefix>X/Y/Z}. */
     private static final String SEAT_SUB = "seat";
     private static final String AFC_SUB = "afc";
@@ -172,9 +172,9 @@ public class VSJumpDriveFixtureBoardingE2ETest extends AbstractSharedVsClientE2E
         double yRest = Double.NaN;
         for (int attempt = 0; attempt < budget && Double.isNaN(yRest); attempt++) {
             bot().waitTicks(5);
-            double y = Reply.of("artest vs ship-info", shipInfoAtBase()).number(POS_Y);
-            if (!Double.isNaN(y)) {
-                yRest = y;
+            String sample = shipInfoAtBase();
+            if (ShipInfo.isLoaded(sample)) {
+                yRest = ShipInfo.of(sample).y;
             }
         }
         scenario().requireArranged("the ship must LOAD with the client present: " + shipInfoAtBase(),

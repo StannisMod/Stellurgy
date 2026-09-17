@@ -12,6 +12,7 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 import zmaster587.advancedRocketry.test.Reply;
+import zmaster587.advancedRocketry.test.ShipInfo;
 import zmaster587.advancedRocketry.test.Events;
 
 import zmaster587.advancedRocketry.test.Plot;
@@ -306,13 +307,11 @@ public class VSPilotSeatRelogControlE2ETest extends AbstractSharedVsClientE2ETes
     private String shipPose() {
         try {
             String info = shipInfoById(shipId);
-            Reply pose = Reply.of("artest vs ship-info", info);
-            double ax = pose.number("qx"), az = pose.number("qz"), py = pose.number("posY");
-            if (Double.isNaN(ax) || Double.isNaN(az) || Double.isNaN(py)) {
+            if (!ShipInfo.isLoaded(info)) {
                 return "NO-POSE-FOR-" + shipId + " " + info.replace('\n', ' ');
             }
-            return String.format(java.util.Locale.ROOT, "shipY=%.2f up=%.2f",
-                    py, 1.0 - 2.0 * (ax * ax + az * az));
+            ShipInfo pose = ShipInfo.of(info);
+            return String.format(java.util.Locale.ROOT, "shipY=%.2f up=%.2f", pose.y, pose.upY());
         } catch (Exception e) {
             return "ship-pose-failed: " + e;
         }

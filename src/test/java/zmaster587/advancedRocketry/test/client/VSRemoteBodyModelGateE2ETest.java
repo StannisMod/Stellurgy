@@ -13,6 +13,7 @@ import java.util.regex.Pattern;
 
 import zmaster587.advancedRocketry.test.Events;
 import zmaster587.advancedRocketry.test.Reply;
+import zmaster587.advancedRocketry.test.ShipInfo;
 
 import zmaster587.advancedRocketry.test.Plot;
 
@@ -797,9 +798,9 @@ public class VSRemoteBodyModelGateE2ETest extends AbstractSharedVsClientE2ETest 
         for (int i = 0; i < loadIters && where == null; i++) {
             bot().waitTicks(5);
             info = shipInfo();
-            if (info.contains("\"managed\":true")) {
-                where = new double[]{
-                        readDouble(info, POS_X), readDouble(info, POS_Y), readDouble(info, POS_Z)};
+            if (ShipInfo.isLoaded(info)) {
+                ShipInfo pose = ShipInfo.of(info);
+                where = new double[]{pose.x, pose.y, pose.z};
             }
         }
         scenario().requireArranged("the ship this scenario assembled (" + scenarioShipId + ") must"

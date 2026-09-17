@@ -13,6 +13,7 @@ import zmaster587.advancedRocketry.test.ArrangementFailure;
 import zmaster587.advancedRocketry.test.Events;
 import zmaster587.advancedRocketry.test.Reply;
 import zmaster587.advancedRocketry.test.ShipIdentity;
+import zmaster587.advancedRocketry.test.ShipInfo;
 
 import zmaster587.advancedRocketry.test.Plot;
 
@@ -55,11 +56,6 @@ import static org.junit.Assert.assertTrue;
 public class VSShipRenderPoseSkewE2ETest extends AbstractClientE2ETest {
 
     private static final String BUILDER_POS = "builderPos";
-    private static final String POS_X = "posX";
-    private static final String POS_Y = "posY";
-    private static final String POS_Z = "posZ";
-    private static final String Q_X = "qx";
-    private static final String Q_Z = "qz";
     private static final String WORLD_X = "worldX";
     private static final String WORLD_Y = "worldY";
     private static final String WORLD_Z = "worldZ";
@@ -184,15 +180,14 @@ public class VSShipRenderPoseSkewE2ETest extends AbstractClientE2ETest {
         // arrived, so there is no link to await here — but the hold KEEPS the attitude once reached,
         // so giving the slew its ticks and then measuring reads the same state a longer wait would.
         bot().waitTicks(ROLL_WINDOW_TICKS);
-        String info = shipInfo();
-        double qx = readDouble(info, Q_X), qz = readDouble(info, Q_Z);
+        ShipInfo info = shipInfo();
         // The ship's own up, world-frame, from the attitude quaternion the probe reports.
-        double upY = 1.0 - 2.0 * (qx * qx + qz * qz);
+        double upY = info.upY();
         System.out.println("[poseskew] upY after " + ROLL_WINDOW_TICKS + " ticks: " + upY
                 + " (the gate is < -0.3)");
         assertTrue("the ship must reach the steep inversion before the hull leg (upY=" + upY
                 + " after " + ROLL_WINDOW_TICKS + " ticks of a commanded 160-degree roll): "
-                + info, upY < -0.3);
+                + info.raw(), upY < -0.3);
         // The drop point must be FREE AIR, and nothing here guaranteed that it was. The fixture is
         // assembled into a 10-block band cleared inside whatever ground the base sits in, and the
         // rolled ship then sinks, so shipY+7 can land INSIDE the world's own terrain. Measured once:
@@ -201,14 +196,14 @@ public class VSShipRenderPoseSkewE2ETest extends AbstractClientE2ETest {
         // Clear the column the body must fall THROUGH. The ship's blocks live in the shipyard
         // subspace, so this removes world terrain only — the hull is untouched, and so is the
         // ground BELOW the ship, which is whatever its descent rests against.
-        clearDropColumn(readDouble(info, POS_X), readDouble(info, POS_Y), readDouble(info, POS_Z));
+        clearDropColumn(info.x, info.y, info.z);
         bot().waitTicks(20);
         info = shipInfo(); // re-read: the ship may settle once the terrain above it is gone
-        double sx = readDouble(info, POS_X), sy = readDouble(info, POS_Y), sz = readDouble(info, POS_Z);
+        double sx = info.x, sy = info.y, sz = info.z;
         String dropBlock = exec("artest block at 0 " + (int) Math.floor(sx) + " "
                 + (int) Math.floor(sy + 7) + " " + (int) Math.floor(sz));
         assertTrue("the drop point must be free air — otherwise this leg measures the ground rather"
-                        + " than the hull: " + dropBlock + " ship=" + info,
+                        + " than the hull: " + dropBlock + " ship=" + info.raw(),
                 dropBlock.contains("\"isAir\":true"));
 
         // Drop the bot onto the world-top of the inverted hull. Two marks, one per side: the SERVER's
@@ -313,7 +308,7 @@ public class VSShipRenderPoseSkewE2ETest extends AbstractClientE2ETest {
                 worstSolid = record;
             }
         }
-        String omega = shipInfo();
+        ShipInfo omega = shipInfo();
         System.out.println("[poseskew] hull " + hull + " crossMax=" + hullCrossMax
                 + " restMax=" + rest.max + " :: " + hullTrace);
         System.out.println("[poseskew] hull solid sweeps=" + solidSweeps + " offsetMax="
@@ -345,12 +340,12 @@ public class VSShipRenderPoseSkewE2ETest extends AbstractClientE2ETest {
                 bot().waitTicks(7);
             }
             Skew moving = Skew.of(clientEvents().since(moveMark, "render_pose_skew"), null);
-            String after = shipInfo();
+            ShipInfo after = shipInfo();
             System.out.println(String.format(Locale.ROOT,
                     "[poseskew] moving climb=%.1f %s crossMax=%.4f crossMean=%.4f (n=%d)"
                             + " :: %s", climb, moving, moveCrossMax,
                     moveCrossN == 0 ? -1.0 : moveCrossSum / moveCrossN, moveCrossN, moveTrace));
-            System.out.println("[poseskew] moving ship-info=" + after);
+            System.out.println("[poseskew] moving ship-info=" + after.raw());
         }
         exec("artest vs force-clear-by-id 0 " + shipId);
 
@@ -541,9 +536,8 @@ public class VSShipRenderPoseSkewE2ETest extends AbstractClientE2ETest {
                 "the ship this scenario assembled (" + shipId + ") must become USABLE — the physics"
                         + " loop steps it — before its pose can be asked about",
                 SHIP_SPAWN_BUDGET_TICKS);
-        String info = shipInfo();
-        double[] where = new double[]{
-                readDouble(info, POS_X), readDouble(info, POS_Y), readDouble(info, POS_Z)};
+        ShipInfo info = shipInfo();
+        double[] where = new double[]{info.x, info.y, info.z};
         System.out.println("[poseskew] ship at (" + bx + "," + by + "," + bz + ") -> "
                 + java.util.Arrays.toString(where));
         return where;
@@ -567,9 +561,9 @@ public class VSShipRenderPoseSkewE2ETest extends AbstractClientE2ETest {
     }
 
     /** This scenario's ship, asked by identity — no distance term to be wrong about. */
-    private String shipInfo() throws Exception {
+    private ShipInfo shipInfo() throws Exception {
         assertTrue("shipInfo() before buildShip() captured an identity", shipId != null);
-        return exec("artest vs ship-info 0 id " + shipId);
+        return ShipInfo.byId(this::exec, 0, shipId);
     }
 
     private String exec(String cmd) throws Exception {

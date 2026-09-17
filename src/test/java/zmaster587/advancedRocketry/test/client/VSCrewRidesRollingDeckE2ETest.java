@@ -12,6 +12,7 @@ import zmaster587.advancedRocketry.test.Events;
 import zmaster587.advancedRocketry.test.Reply;
 import zmaster587.advancedRocketry.test.FixtureSite;
 import zmaster587.advancedRocketry.test.ShipIdentity;
+import zmaster587.advancedRocketry.test.ShipInfo;
 
 /**
  * A crew member who is NOT seated rides a tier-2 ship's deck.
@@ -45,9 +46,6 @@ public class VSCrewRidesRollingDeckE2ETest extends AbstractSharedVsClientE2ETest
 
     private static final String COUNT = "count";
     private static final String BUILDER_POS = "builderPos";
-    private static final String POS_X = "posX";
-    private static final String POS_Y = "posY";
-    private static final String POS_Z = "posZ";
     private static final String LOCAL_X = "localX";
     private static final String LOCAL_Y = "localY";
     private static final String LOCAL_Z = "localZ";
@@ -136,12 +134,10 @@ public class VSCrewRidesRollingDeckE2ETest extends AbstractSharedVsClientE2ETest
 
         // The ship does not stay at the pad base — which is exactly why it is asked for by NAME.
         // Find it, then drop the bot ONTO it: standing next to a ship would prove nothing.
-        String where = exec("artest vs ship-info 0 id " + shipId);
-        assertTrue("ship must be managed: " + where, where.contains("\"managed\":true"));
+        ShipInfo where = ShipInfo.byId(this::exec, 0, shipId);
         long dropMark = clientEvents().mark();
-        exec("tp @a " + readDouble(where, POS_X) + " " + (readDouble(where, POS_Y) + 4)
-                + " " + readDouble(where, POS_Z) + " 0 0");
-        awaitClientPlacedNear(dropMark, readDouble(where, POS_X), readDouble(where, POS_Z),
+        exec("tp @a " + where.x + " " + (where.y + 4) + " " + where.z + " 0 0");
+        awaitClientPlacedNear(dropMark, where.x, where.z,
                 "the drop onto the deck is the client's fall, so the client must first BE over the"
                         + " deck — the ticks below are for the fall, not for the teleport");
         bot().waitTicks(80); // the fall itself: four blocks of it, and it is a value converging

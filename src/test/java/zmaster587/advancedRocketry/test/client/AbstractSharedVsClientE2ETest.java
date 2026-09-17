@@ -9,6 +9,7 @@ import org.lwjgl.input.Keyboard;
 
 import zmaster587.advancedRocketry.test.Events;
 import zmaster587.advancedRocketry.test.Reply;
+import zmaster587.advancedRocketry.test.ShipInfo;
 
 import zmaster587.advancedRocketry.test.Plot;
 
@@ -91,9 +92,6 @@ public abstract class AbstractSharedVsClientE2ETest extends AbstractSharedClient
     // `ship_spawned` record its own assembly wrote, and asks by id thereafter.
 
     private static final String SHIP_ID = "id";
-    /** The two quaternion components an upright test needs; see {@link #upYOf}. */
-    private static final String Q_X = "qx";
-    private static final String Q_Z = "qz";
 
     /**
      * Wait until the ship this scenario already NAMES is USABLE — the physics loop will step it.
@@ -332,13 +330,7 @@ public abstract class AbstractSharedVsClientE2ETest extends AbstractSharedClient
 
     /** The world-frame Y of a ship's OWN up, from a {@code ship-info} reply, or NaN if unreported. */
     protected static double upYOf(String shipInfoJson) {
-        Reply info = Reply.of("artest vs ship-info", shipInfoJson);
-        double ax = info.number(Q_X);
-        double az = info.number(Q_Z);
-        if (Double.isNaN(ax) || Double.isNaN(az)) {
-            return Double.NaN;
-        }
-        return 1.0 - 2.0 * (ax * ax + az * az);
+        return ShipInfo.upYOrNaN(shipInfoJson);
     }
 
     /**
@@ -457,13 +449,14 @@ public abstract class AbstractSharedVsClientE2ETest extends AbstractSharedClient
         // its window, with the gate reporting afcResolved=false. What holds it is no longer said
         // here: a test server keeps its ships loaded from the moment the probes register.
         String before = shipInfoById(dim, shipId);
-        double x = readDoubleOr(before, POS_X, Double.NaN);
-        double fromY = readDoubleOr(before, POS_Y, Double.NaN);
-        double z = readDoubleOr(before, POS_Z, Double.NaN);
         scenario().requireArranged("the craft must report a position in dim " + dim + " before it"
                 + " can be lifted off its pad — a reply carrying managed:false here is as likely to"
                 + " mean the craft is in a DIFFERENT world as that it has unloaded: " + before,
-                !Double.isNaN(x) && !Double.isNaN(fromY) && !Double.isNaN(z));
+                ShipInfo.isLoaded(before));
+        ShipInfo onThePad = ShipInfo.of(before);
+        double x = onThePad.x;
+        double fromY = onThePad.y;
+        double z = onThePad.z;
 
         // WHERE THE CLEARANCE IS MEASURED FROM: the craft's own reported altitude, which is the pad
         // it was assembled on. Read here rather than passed in, so a fixture that moves — into the
@@ -491,7 +484,7 @@ public abstract class AbstractSharedVsClientE2ETest extends AbstractSharedClient
         bot().waitTicks(10);
 
         String after = shipInfoById(dim, shipId);
-        double y = readDoubleOr(after, POS_Y, Double.NaN);
+        double y = ShipInfo.isLoaded(after) ? ShipInfo.of(after).y : Double.NaN;
         scenario().requireArranged("the lifted craft must still be loaded and report its new"
                 + " altitude (asked BY IDENTITY, so this cannot be a neighbour): " + after,
                 !Double.isNaN(y) && Math.abs(y - toY) < 20.0);
@@ -566,9 +559,9 @@ public abstract class AbstractSharedVsClientE2ETest extends AbstractSharedClient
      */
     protected final String hoverOnPilotThrust(String shipId, double gainBlocks) throws Exception {
         String before = shipInfoById(shipId);
-        final double y0 = readDoubleOr(before, POS_Y, Double.NaN);
         scenario().requireArranged("the craft must report an altitude before a climb from it can be"
-                + " measured: " + before, !Double.isNaN(y0));
+                + " measured: " + before, ShipInfo.isLoaded(before));
+        final double y0 = ShipInfo.of(before).y;
 
         Events events = events();
         long liftMark = events.markInstrumented();
@@ -577,7 +570,10 @@ public abstract class AbstractSharedVsClientE2ETest extends AbstractSharedClient
         bot().holdKey(Keyboard.KEY_R);
         try {
             lift = ClientPoll.until(bot()::waitTicks,
-                    () -> readDoubleOr(shipInfoById(shipId), POS_Y, y0),
+                    () -> {
+                        String sample = shipInfoById(shipId);
+                        return ShipInfo.isLoaded(sample) ? ShipInfo.of(sample).y : y0;
+                    },
                     y -> y - y0 >= holdTo, 2, HOVER_LIFT_BUDGET_TICKS / 2);
         } finally {
             bot().releaseKey(Keyboard.KEY_R);
@@ -592,7 +588,7 @@ public abstract class AbstractSharedVsClientE2ETest extends AbstractSharedClient
         // The state the scenario will actually use: read AFTER the thrust is cut, not the sample the
         // window exited on. A craft still under its pilot's key is not the hover the callers arrange.
         String after = shipInfoById(shipId);
-        double y = readDoubleOr(after, POS_Y, Double.NaN);
+        double y = ShipInfo.isLoaded(after) ? ShipInfo.of(after).y : Double.NaN;
         scenario().record("hoverGain", y - y0);
         // The journal prints on failure only, and the number worth having is the one a GREEN run
         // leaves behind: how much of the margin above survives the thrust being cut.
@@ -621,14 +617,6 @@ public abstract class AbstractSharedVsClientE2ETest extends AbstractSharedClient
         scenario().requireArranged("player health must echo the player name, or no wait on this tier"
                 + " can be filtered to this body: " + health, name != null);
         return name;
-    }
-
-    private static final String POS_X = "posX";
-    private static final String POS_Y = "posY";
-    private static final String POS_Z = "posZ";
-
-    private static double readDoubleOr(String json, String field, double fallback) {
-        return Reply.of("artest vs ship-info", json).numberOr(field, fallback);
     }
 
     /** The {@code "id"} field of a {@code ship-info} reply, or null when it carries none. */

@@ -11,6 +11,7 @@ import java.util.regex.Pattern;
 import zmaster587.advancedRocketry.test.Events;
 import zmaster587.advancedRocketry.test.Reply;
 import zmaster587.advancedRocketry.test.ShipIdentity;
+import zmaster587.advancedRocketry.test.ShipInfo;
 
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertEquals;
@@ -63,8 +64,6 @@ public class VSRiderKeepsHisMountAtCruiseE2ETest extends AbstractSharedVsClientE
 
     private static final String PLAYER_NAME = "player";
     private static final String BUILDER_POS = "builderPos";
-    private static final String POS_X = "posX";
-    private static final String POS_Z = "posZ";
 
     /**
      * The mount is registered with a tracking range of 16 blocks and an anchor republished every 20
@@ -302,9 +301,8 @@ public class VSRiderKeepsHisMountAtCruiseE2ETest extends AbstractSharedVsClientE
         // re-derived here from a bounded read at the seat's reported spot — a second answer to a
         // question already answered, and one a neighbour's craft can give.
         String shipId = scenarioShipId;
-        String atSeat = exec("artest vs ship-info " + dim + " id " + shipId);
-        scenario().requireArranged("this scenario's ship must be managed before it is commanded: "
-                + atSeat, atSeat.contains("\"managed\":true"));
+        scenario().requireArranged("this scenario's ship must be managed before it is commanded;"
+                + " id=" + shipId, ShipInfo.loadedIn(this::exec, dim, shipId));
 
         String commanded = exec("artest vs force-vel-by-id " + dim + " " + shipId
                 + " " + COMMANDED_SPEED_BLOCKS_PER_SECOND + " 0 0");
@@ -313,12 +311,10 @@ public class VSRiderKeepsHisMountAtCruiseE2ETest extends AbstractSharedVsClientE
 
         double steady = Double.NaN, prev = Double.NaN;
         for (int attempt = 0; attempt < 60 && Double.isNaN(steady); attempt++) {
-            String s0 = exec("artest vs ship-info " + dim + " id " + shipId);
-            double ax = readDouble(s0, POS_X), az = readDouble(s0, POS_Z);
+            ShipInfo s0 = ShipInfo.byId(this::exec, dim, shipId);
             bot().waitTicks(SETTLE_SAMPLE_TICKS);
-            String s1 = exec("artest vs ship-info " + dim + " id " + shipId);
-            double speed = Math.hypot(readDouble(s1, POS_X) - ax, readDouble(s1, POS_Z) - az)
-                    / SETTLE_SAMPLE_TICKS;
+            ShipInfo s1 = ShipInfo.byId(this::exec, dim, shipId);
+            double speed = Math.hypot(s1.x - s0.x, s1.z - s0.z) / SETTLE_SAMPLE_TICKS;
             if (speed > EVICTION_THRESHOLD_BLOCKS_PER_TICK
                     && !Double.isNaN(prev) && Math.abs(speed - prev) < STEADY_EPSILON) {
                 steady = speed;
@@ -331,8 +327,8 @@ public class VSRiderKeepsHisMountAtCruiseE2ETest extends AbstractSharedVsClientE
                 + " so an unsettled ship makes this leg unfalsifiable. Last speed sample: " + prev,
                 !Double.isNaN(steady));
 
-        String before = exec("artest vs ship-info " + dim + " id " + shipId);
-        double x0 = readDouble(before, POS_X), z0 = readDouble(before, POS_Z);
+        ShipInfo before = ShipInfo.byId(this::exec, dim, shipId);
+        double x0 = before.x, z0 = before.z;
         double px0 = bot().reportState().get("playerX").getAsDouble();
         double pz0 = bot().reportState().get("playerZ").getAsDouble();
 
@@ -377,8 +373,8 @@ public class VSRiderKeepsHisMountAtCruiseE2ETest extends AbstractSharedVsClientE
         System.out.println("[#163] seated/mount trace ('.' seated+mount present, 'x' unseated,"
                 + " 'M' mount gone, 'X' both): " + trace);
 
-        String after = exec("artest vs ship-info " + dim + " id " + shipId);
-        double shipDX = readDouble(after, POS_X) - x0, shipDZ = readDouble(after, POS_Z) - z0;
+        ShipInfo after = ShipInfo.byId(this::exec, dim, shipId);
+        double shipDX = after.x - x0, shipDZ = after.z - z0;
         double shipTravel = Math.hypot(shipDX, shipDZ);
         double perTickX = Math.abs(shipDX) / OBSERVE_TICKS;
         double perTickZ = Math.abs(shipDZ) / OBSERVE_TICKS;

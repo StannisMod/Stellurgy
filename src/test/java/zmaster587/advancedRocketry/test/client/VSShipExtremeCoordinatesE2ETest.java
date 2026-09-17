@@ -10,6 +10,7 @@ import java.util.regex.Pattern;
 
 import zmaster587.advancedRocketry.test.Events;
 import zmaster587.advancedRocketry.test.Reply;
+import zmaster587.advancedRocketry.test.ShipInfo;
 import zmaster587.advancedRocketry.test.FixtureSite;
 
 import static org.junit.Assert.assertTrue;
@@ -76,8 +77,6 @@ public class VSShipExtremeCoordinatesE2ETest extends AbstractSharedVsClientE2ETe
     }
 
     private static final String BUILDER_POS = "builderPos";
-    private static final String POS_X = "posX";
-    private static final String POS_Y = "posY";
     private static final String DUMMY_ID = "dummyId";
     private static final String ORIGIN_DIM = "originDim";
     private static final String SHIP_WORLD_X = "shipWorldX";
@@ -258,7 +257,7 @@ public class VSShipExtremeCoordinatesE2ETest extends AbstractSharedVsClientE2ETe
         scenario().requireArranged("the craft must still be THIS craft in THIS cell after the"
                 + " teleport — a crossing here would replace it with a new identity and everything"
                 + " below would describe a different ship: " + stayed,
-                stayed.contains("\"managed\":true"));
+                ShipInfo.isLoaded(stayed));
         String unparked = exec("artest vs unpark-by-id " + cellDim + " " + shipId);
         assertTrue("the teleport leaves the ship PARKED by VS's own recipe, and a parked ship cannot"
                 + " be flown — the unpark must take: " + unparked, unparked.contains("\"ok\":true"));
@@ -266,14 +265,14 @@ public class VSShipExtremeCoordinatesE2ETest extends AbstractSharedVsClientE2ETe
         String serverInfoAfterTp = shipInfoById();
         scenario().requireArranged("the teleported ship must still be loaded, or there is no server "
                         + "pose for the rider to be compared against: " + serverInfoAfterTp,
-                serverInfoAfterTp.contains("\"managed\":true"));
+                ShipInfo.isLoaded(serverInfoAfterTp));
 
         // THE CONTRACT, and it names no coordinate: a rider is glued to his ship, so wherever the
         // ship ends up the client must render him THERE. Asserting he reached a particular altitude
         // instead would pin the arrangement's own request — and did: the old form compared him to a
         // hard-coded destination, so it could fail either because the rider came adrift or because
         // the ship never went where it was sent, and the message could not tell the two apart.
-        double shipYAfterTp = readDouble(serverInfoAfterTp, POS_Y);
+        double shipYAfterTp = ShipInfo.of(serverInfoAfterTp).y;
         // IS HE STILL ABOARD AT ALL — asked before he is measured, because the two are different
         // questions and only one of them has an answer shaped like a number. A bare
         // `reportRidingEntity().get("posY")` raised a NullPointerException here with no message at
@@ -328,10 +327,10 @@ public class VSShipExtremeCoordinatesE2ETest extends AbstractSharedVsClientE2ETe
         // THE MOVE ITSELF, before anything is asked about flying. A craft that did not arrive cannot
         // disprove anything about a craft that did, and the two reds read identically at the climb.
         scenario().requireArranged("the craft must still be THIS craft in THIS cell after the second"
-                + " teleport: " + afterSecond, afterSecond.contains("\"managed\":true"));
+                + " teleport: " + afterSecond, ShipInfo.isLoaded(afterSecond));
         assertTrue("the second teleport must leave the craft where it was sent: commanded X "
                         + (BX + SECOND_RELOCATION_X) + " ship=" + afterSecond,
-                Math.abs(readDouble(afterSecond, POS_X) - (BX + SECOND_RELOCATION_X)) < 200);
+                Math.abs(ShipInfo.of(afterSecond).x - (BX + SECOND_RELOCATION_X)) < 200);
         requireStillAboard("after the craft's SECOND relocation", secondMark, secondServerMark);
 
         // The subject: does he still fly it? `climbLeg` holds the real vertical key, asserts the
@@ -443,22 +442,29 @@ public class VSShipExtremeCoordinatesE2ETest extends AbstractSharedVsClientE2ETe
     }
 
     /**
-     * The server ship's posY, tolerant of unrelated console lines interleaving with the probe's JSON
-     * reply (at extreme coordinates a VS collision mixin spams STDERR lines, which can arrive inside
-     * the captured console window) — retry until a parseable reply comes back.
+     * The server ship's posY, retried while the craft is not loaded here.
      *
      * <p>A ship that has UNLOADED answers {@code managed:false} and carries no {@code posY}, so it
      * exhausts the retries and fails naming the reply. That is the intended report: "this ship is
      * not loaded" is a different fact from "the ship near this point moved", and the positional form
      * this replaced could not tell them apart.</p>
+     *
+     * <p>It is NOT tolerant of a mangled reply, and the note claiming otherwise was removed rather
+     * than kept: at extreme coordinates a VS collision mixin spams STDERR into the captured console
+     * window, and the retry was written for that — but the parse under it has refused a non-JSON
+     * reply outright since it moved onto the shared reader, so the loop never saw a second chance.
+     * A reply that is not this verb's now fails here, loudly, instead of being retried nine times
+     * and then reported as a ship that would not load.</p>
      */
     private double shipY() throws Exception {
         String last = "";
         for (int i = 0; i < 10; i++) {
             last = shipInfoById();
-            double y = Reply.of("artest vs ship-info", last).number(POS_Y);
-            if (!Double.isNaN(y)) {
-                return y;
+            if (ShipInfo.isLoaded(last)) {
+                double y = ShipInfo.of(last).y;
+                if (!Double.isNaN(y)) {
+                    return y;
+                }
             }
             bot().waitTicks(2);
         }

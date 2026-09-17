@@ -2,6 +2,7 @@ package zmaster587.advancedRocketry.test.client;
 
 import zmaster587.advancedRocketry.test.Events;
 import zmaster587.advancedRocketry.test.ShipIdentity;
+import zmaster587.advancedRocketry.test.ShipInfo;
 
 import com.google.gson.JsonObject;
 
@@ -256,8 +257,6 @@ public class SpaceLoginRestoreDeckCrewE2ETest extends AbstractSpaceLoginRestoreC
      * {@code 1.0} for a ship that had rolled about a different axis.
      */
     private double shipUpY(String shipInfoJson) {
-        double qx = readDouble(shipInfoJson, "qx");
-        double qz = readDouble(shipInfoJson, "qz");
-        return 1.0 - 2.0 * (qx * qx + qz * qz);
+        return ShipInfo.upYOrNaN(shipInfoJson);
     }
 }

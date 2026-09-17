@@ -4,6 +4,7 @@ import zmaster587.advancedRocketry.test.Reply;
 import zmaster587.advancedRocketry.test.FixtureSite;
 import zmaster587.advancedRocketry.test.GameTicks;
 import zmaster587.advancedRocketry.test.ShipIdentity;
+import zmaster587.advancedRocketry.test.ShipInfo;
 
 import org.junit.After;
 import org.junit.Test;
@@ -37,7 +38,6 @@ import static org.junit.Assert.assertTrue;
 public class VSShipMotionServerTest extends AbstractSharedServerTest {
 
     private static final String BUILDER_POS = "builderPos";
-    private static final String POS_Z = "posZ";
 
     private static final String VARIANT = "with-advanced-flight-computer";
 
@@ -126,10 +126,10 @@ public class VSShipMotionServerTest extends AbstractSharedServerTest {
                 return false;
             }
             String info = exec("artest vs ship-info 0 id " + shipId[0]);
-            if (!info.contains("\"managed\":true")) {
+            if (!ShipInfo.isLoaded(info)) {
                 return false;
             }
-            z[0] = shipPosZ(info);
+            z[0] = ShipInfo.of(info).z;
             return !Double.isNaN(z[0]);
         });
         zBefore = z[0];
@@ -147,7 +147,7 @@ public class VSShipMotionServerTest extends AbstractSharedServerTest {
         String setpoint = exec("artest vs push-ship-by-id 0 " + shipId[0] + " 0 0 " + COMMANDED_VZ);
         assertTrue("push-ship-by-id must find the ship: " + setpoint, setpoint.contains("\"pushed\":true"));
         GameTicks.advance(client(), GameTicks.server(), DRIVE_TICKS);
-        double zAfterSetpoint = shipPosZ(exec("artest vs ship-info 0 id " + shipId[0]));
+        double zAfterSetpoint = ShipInfo.byId(this::exec, 0, shipId[0]).z;
         assertTrue("a raw velocity setpoint must NOT be mistaken for a working drive: the ship moved "
                         + (zAfterSetpoint - zBefore) + " blocks on a bare setpoint, which means this"
                         + " control has stopped controlling and the test below no longer proves the"
@@ -162,7 +162,7 @@ public class VSShipMotionServerTest extends AbstractSharedServerTest {
         assertTrue("the command must reach THIS ship's own flight computer: " + drive,
                 drive.contains("\"afcResolved\":true"));
         GameTicks.advance(client(), GameTicks.server(), DRIVE_TICKS);
-        double zAfter = shipPosZ(exec("artest vs ship-info 0 id " + shipId[0]));
+        double zAfter = ShipInfo.byId(this::exec, 0, shipId[0]).z;
 
         // A strict displacement, not merely "changed": it pins that VS integrated the commanded
         // motion into position. A substrate that ignored the command, or damped it to zero, would
@@ -176,12 +176,6 @@ public class VSShipMotionServerTest extends AbstractSharedServerTest {
     private int shipCount(String sub) throws Exception {
         Reply mReply = Reply.of(exec("artest vs " + sub + " 0"));
         return mReply.has("count") ? mReply.integer("count") : -1;
-    }
-
-    private double shipPosZ(String shipInfoJson) {
-        Reply mReply = Reply.of(shipInfoJson);
-        assertTrue("ship-info must carry posZ: " + shipInfoJson, mReply.has(POS_Z));
-        return Double.parseDouble(mReply.text(POS_Z));
     }
 
     /** Place the fixture on a pad and run scan+assemble; returns the raw assemble JSON. */

@@ -14,6 +14,7 @@ import org.lwjgl.input.Keyboard;
 
 import zmaster587.advancedRocketry.test.Events;
 import zmaster587.advancedRocketry.test.Reply;
+import zmaster587.advancedRocketry.test.ShipInfo;
 import zmaster587.advancedRocketry.test.FixtureSite;
 
 import static org.junit.Assert.assertTrue;
@@ -74,7 +75,6 @@ public class VSShipEntryClientGroupE2ETest extends AbstractSharedVsClientE2ETest
     }
 
     private static final String BUILDER_POS = "builderPos";
-    private static final String POS_Y = "posY";
     private static final String DUMMY_ID = "dummyId";
     private static final String LEDGER = "ledger";
 
@@ -93,15 +93,9 @@ public class VSShipEntryClientGroupE2ETest extends AbstractSharedVsClientE2ETest
     private static final String AFC_X = "afcX";
     private static final String AFC_Y = "afcY";
     private static final String AFC_Z = "afcZ";
-    private static final String VEL_Y = "velY";
     /** The discriminator: the seat's own delivery counters, sampled across the climb. */
     private static final String RECEIVED = "received";
     private static final String DELIVERED = "delivered";
-    /** The ship's own attitude, so a climb that goes nowhere can be told from one that goes SIDEWAYS. */
-    private static final String Q_X = "qx";
-    private static final String Q_Z = "qz";
-    private static final String P_X = "posX";
-    private static final String P_Z = "posZ";
 
     /** The account every client harness launches under; the server keys his player data by it. */
     private static final String BOT = "ForgeTestClient";
@@ -550,10 +544,9 @@ public class VSShipEntryClientGroupE2ETest extends AbstractSharedVsClientE2ETest
                                 .append("/deliv=").append(firstGroupOr(DELIVERED, d, "?"))
                                 .append("/ledger=").append(firstGroupOr(LEDGER, spaceSample, "?"));
                     }
-                    Reply sample = Reply.of("artest vs ship-info", s);
-                    double sampledY = sample.number(POS_Y);
-                    if (!Double.isNaN(sampledY)) {
-                        double y = sampledY;
+                    ShipInfo sample = ShipInfo.isLoaded(s) ? ShipInfo.of(s) : null;
+                    if (sample != null) {
+                        double y = sample.y;
                         maxShipY = Math.max(maxShipY, y);
                         // A bounded timeline, not a last-value snapshot: a climb that stops is a
                         // shape, and the tick it changed shape at is the whole question. The
@@ -566,22 +559,15 @@ public class VSShipEntryClientGroupE2ETest extends AbstractSharedVsClientE2ETest
                         // travel is a ship flying SIDEWAYS, which is a different bug from a ship
                         // that is not being pushed at all - and the two are identical in a
                         // y/velY trace.
-                        double ax = sample.number(Q_X), az = sample.number(Q_Z);
-                        double sx = sample.number(P_X), sz = sample.number(P_Z);
-                        double upY = Double.NaN, horiz = Double.NaN;
-                        if (!Double.isNaN(ax) && !Double.isNaN(az)) {
-                            upY = 1.0 - 2.0 * (ax * ax + az * az);
-                        }
-                        if (!Double.isNaN(sx) && !Double.isNaN(sz)) {
-                            double dx = sx - site.x;
-                            double dz = sz - site.z;
-                            horiz = Math.sqrt(dx * dx + dz * dz);
-                        }
+                        double upY = sample.upY();
+                        double dx = sample.x - site.x;
+                        double dz = sample.z - site.z;
+                        double horiz = Math.sqrt(dx * dx + dz * dz);
                         if (climb.length() < 1400) {
                             climb.append(' ').append(attempt).append(':')
                                     .append(String.format(Locale.ROOT, "%.1f", y))
                                     .append('/')
-                                    .append(sample.textOr(VEL_Y, "?"))
+                                    .append(sample.velY)
                                     .append(String.format(Locale.ROOT, "/up=%.2f/horiz=%.1f",
                                             upY, horiz));
                         }
@@ -744,12 +730,9 @@ public class VSShipEntryClientGroupE2ETest extends AbstractSharedVsClientE2ETest
         // held. This read separates "assembly left it crooked" from "flying tilted it", which the
         // climb trace alone cannot.
         String atRest = shipInfoById(shipUuid);
-        Reply rest = Reply.of("artest vs ship-info", atRest);
-        double restQx = rest.number(Q_X), restQz = rest.number(Q_Z);
+        double restUpY = ShipInfo.upYOrNaN(atRest);
         System.out.println("[vs-entry] attitude AT REST, pre-boarding: upY="
-                + (!Double.isNaN(restQx) && !Double.isNaN(restQz)
-                    ? String.valueOf(1.0 - 2.0 * (restQx * restQx + restQz * restQz))
-                    : "?")
+                + (Double.isNaN(restUpY) ? "?" : String.valueOf(restUpY))
                 + " :: " + atRest.replace('\n', ' '));
 
         // OFF THE PAD before anyone flies. Both legs of this class are about altitude — one climbs
@@ -833,7 +816,8 @@ public class VSShipEntryClientGroupE2ETest extends AbstractSharedVsClientE2ETest
 
     /** The NAMED ship's altitude, or {@code NaN} while it is reporting none (the cut, for instance). */
     private double shipY(String shipUuid) throws Exception {
-        return Reply.of("artest vs ship-info", shipInfoById(shipUuid)).number(POS_Y);
+        String reply = shipInfoById(shipUuid);
+        return ShipInfo.isLoaded(reply) ? ShipInfo.of(reply).y : Double.NaN;
     }
 
     private double clientPlayerY() throws Exception {

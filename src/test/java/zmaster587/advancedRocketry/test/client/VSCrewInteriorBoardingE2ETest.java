@@ -11,6 +11,7 @@ import java.util.regex.Pattern;
 
 import zmaster587.advancedRocketry.test.Events;
 import zmaster587.advancedRocketry.test.Reply;
+import zmaster587.advancedRocketry.test.ShipInfo;
 import zmaster587.advancedRocketry.test.FixtureSite;
 import zmaster587.advancedRocketry.test.ShipIdentity;
 
@@ -39,9 +40,6 @@ public class VSCrewInteriorBoardingE2ETest extends AbstractSharedVsClientE2ETest
     }
 
     private static final String BUILDER_POS = "builderPos";
-    private static final String POS_X = "posX";
-    private static final String POS_Y = "posY";
-    private static final String POS_Z = "posZ";
     private static final String DUMMY_ID = "dummyId";
     private static final String SEAT_X = "seatX";
     private static final String SEAT_Y = "seatY";
@@ -819,9 +817,8 @@ public class VSCrewInteriorBoardingE2ETest extends AbstractSharedVsClientE2ETest
         // not the state it needs. The mark is `spawnMark`, taken before the assembly: readiness is an
         // EDGE that fires once, so a mark taken here could miss it entirely.
         awaitShipUsable(events, spawnMark, scenarioShipId);
-        String info = exec("artest vs ship-info 0 id " + scenarioShipId);
-        double[] where = new double[]{readDouble(info, POS_X), readDouble(info, POS_Y),
-                readDouble(info, POS_Z)};
+        ShipInfo info = ShipInfo.byId(this::exec, 0, scenarioShipId);
+        double[] where = new double[]{info.x, info.y, info.z};
 
         // Fixture completeness by measurement: how many blocks did the assembled ship actually
         // get (region census + the ship's own blockPositions count + iron in the grown

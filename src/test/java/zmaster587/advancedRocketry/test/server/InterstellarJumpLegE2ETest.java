@@ -8,6 +8,7 @@ import org.junit.After;
 import zmaster587.advancedRocketry.test.GameTicks;
 import zmaster587.advancedRocketry.test.EntrySlots;
 import zmaster587.advancedRocketry.test.ShipIdentity;
+import zmaster587.advancedRocketry.test.ShipInfo;
 
 import org.junit.Test;
 
@@ -123,11 +124,10 @@ public class InterstellarJumpLegE2ETest extends AbstractSharedServerTest {
         String durableId = ShipIdentity.nameFromAssembly(asm);
         String shipId = ShipIdentity.physicsIdOf(this::exec, 0, durableId);
 
-        String srcInfo = exec("artest vs ship-info 0 id " + shipId);
-        assertTrue("source ship not managed by VS: " + srcInfo, srcInfo.contains("\"managed\":true"));
-        int sx = (int) extractDouble(srcInfo, "posX");
-        int sy = (int) extractDouble(srcInfo, "posY");
-        int sz = (int) extractDouble(srcInfo, "posZ");
+        ShipInfo src = ShipInfo.byId(this::exec, 0, shipId);
+        int sx = (int) src.x;
+        int sy = (int) src.y;
+        int sz = (int) src.z;
         String held = exec("artest vs ff-input-by-id 0 " + shipId + " 0 1 0 0 0 0");
         assertTrue("the held input must reach this ship's flight computer: " + held,
                 held.contains("\"afcResolved\":true"));

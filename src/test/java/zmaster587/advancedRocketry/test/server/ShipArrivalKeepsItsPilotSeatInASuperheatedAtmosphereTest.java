@@ -4,6 +4,7 @@ import zmaster587.advancedRocketry.test.Reply;
 import zmaster587.advancedRocketry.test.ShipReadiness;
 import org.junit.After;
 import zmaster587.advancedRocketry.test.ShipIdentity;
+import zmaster587.advancedRocketry.test.ShipInfo;
 
 import org.junit.Test;
 
@@ -81,9 +82,8 @@ public class ShipArrivalKeepsItsPilotSeatInASuperheatedAtmosphereTest extends Ab
         // been caught reading a loose control seat that never crossed anything.
         String durableId = ShipIdentity.nameFromAssembly(asm);
         String srcShipId = ShipIdentity.physicsIdOf(this::exec, 0, durableId);
-        String srcInfo = exec("artest vs ship-info 0 id " + srcShipId);
-        assertTrue("source ship not managed by VS before the crossing: " + srcInfo,
-                srcInfo.contains("\"managed\":true"));
+        assertTrue("source ship not managed by VS before the crossing; id=" + srcShipId,
+                ShipInfo.loadedIn(this::exec, 0, srcShipId));
 
         String pre = exec("artest vs seat-input-by-id 0 " + srcShipId + " 0 0 0 0 0 0");
         assertTrue("before the crossing the ship must have a pilot seat to lose: " + pre,
@@ -123,14 +123,11 @@ public class ShipArrivalKeepsItsPilotSeatInASuperheatedAtmosphereTest extends Ab
         String control = placedHot;
 
         // SUBJECT: the same atmosphere, but the seat arrives as part of a crossing structure.
-        String srcLive = exec("artest vs ship-info 0 id " + srcShipId);
-        assertTrue("source ship not managed by VS before the crossing: " + srcLive,
-                srcLive.contains("\"managed\":true"));
+        ShipInfo srcLive = ShipInfo.byId(this::exec, 0, srcShipId);
         // The crossing CUTS a ship, so it is told which one. The source pose is still passed — the
         // riders aboard are gathered around it — but it no longer decides whose blocks are taken.
         String cross = exec("artest vs ship-repack 0 id " + srcShipId + " "
-                + (int) extractDouble(srcLive, "posX") + " " + (int) extractDouble(srcLive, "posY")
-                + " " + (int) extractDouble(srcLive, "posZ")
+                + (int) srcLive.x + " " + (int) srcLive.y + " " + (int) srcLive.z
                 + " " + DST_X + " " + DST_Y + " " + DST_Z);
         assertTrue("the crossing itself failed, so the seat question was never asked: " + cross,
                 cross.contains("\"ok\":true"));
@@ -142,9 +139,8 @@ public class ShipArrivalKeepsItsPilotSeatInASuperheatedAtmosphereTest extends Ab
         // new identity, so this deliberately is not srcShipId, and it is equally deliberately not
         // "whatever seat the world lists first".
         String dstShipId = ShipIdentity.physicsIdOf(this::exec, 0, durableId);
-        String dstInfo = exec("artest vs ship-info 0 id " + dstShipId);
-        assertTrue("the arrived ship is not managed by VS at the destination: " + dstInfo,
-                dstInfo.contains("\"managed\":true"));
+        assertTrue("the arrived ship is not managed by VS at the destination; id=" + dstShipId,
+                ShipInfo.loadedIn(this::exec, 0, dstShipId));
         String post = exec("artest vs seat-input-by-id 0 " + dstShipId + " 0 0 0 0 0 0");
         assertTrue("the arrived ship has NO pilot seat - it burned on the way in, and its crew has "
                         + "nowhere to sit. control=" + control + " post=" + post,

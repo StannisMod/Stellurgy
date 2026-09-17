@@ -5,6 +5,7 @@ import zmaster587.advancedRocketry.test.ShipReadiness;
 import zmaster587.advancedRocketry.test.GameTicks;
 import zmaster587.advancedRocketry.test.EntrySlots;
 import zmaster587.advancedRocketry.test.ShipIdentity;
+import zmaster587.advancedRocketry.test.ShipInfo;
 
 import org.junit.After;
 import org.junit.Test;
@@ -100,10 +101,8 @@ public class VSUnpilotedEntryE2ETest extends AbstractSharedServerTest {
         String durableId = ShipIdentity.nameFromAssembly(asm);
         String vsId = ShipIdentity.physicsIdOf(this::exec, 0, durableId);
 
-        String srcInfo = exec("artest vs ship-info 0 id " + vsId);
-        assertTrue("source ship not managed by VS: " + srcInfo, srcInfo.contains("\"managed\":true"));
-        double sx = extractDouble(srcInfo, "posX"), sy = extractDouble(srcInfo, "posY"),
-                sz = extractDouble(srcInfo, "posZ");
+        ShipInfo src = ShipInfo.byId(this::exec, 0, vsId);
+        double sx = src.x, sy = src.y, sz = src.z;
 
         // THE ONE DIFFERENCE from the piloted leg, and it is ASSERTED rather than assumed: this ship's
         // own flight computer holds no pilot input. The probe reports the state it left behind, so

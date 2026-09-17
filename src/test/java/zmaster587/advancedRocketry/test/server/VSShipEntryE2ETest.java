@@ -8,6 +8,7 @@ import zmaster587.advancedRocketry.space.GalacticCoord;
 import zmaster587.advancedRocketry.test.GameTicks;
 import zmaster587.advancedRocketry.test.EntrySlots;
 import zmaster587.advancedRocketry.test.ShipIdentity;
+import zmaster587.advancedRocketry.test.ShipInfo;
 
 import org.junit.After;
 import org.junit.Test;
@@ -116,10 +117,8 @@ public class VSShipEntryE2ETest extends AbstractSharedServerTest {
         String durableId = ShipIdentity.nameFromAssembly(asm);
         String shipId = ShipIdentity.physicsIdOf(this::exec, 0, durableId);
 
-        String srcInfo = exec("artest vs ship-info 0 id " + shipId);
-        assertTrue("source ship not managed by VS: " + srcInfo, srcInfo.contains("\"managed\":true"));
-        double sx = extractDouble(srcInfo, "posX"), sy = extractDouble(srcInfo, "posY"),
-                sz = extractDouble(srcInfo, "posZ");
+        ShipInfo src = ShipInfo.byId(this::exec, 0, shipId);
+        double sx = src.x, sy = src.y, sz = src.z;
 
         // A held throttle on THIS ship's own flight computer => a pilot is flying. Addressed by ship,
         // and the resolution is asserted: an input that reached nothing would leave the climb below
@@ -197,10 +196,8 @@ public class VSShipEntryE2ETest extends AbstractSharedServerTest {
         String durableId = ShipIdentity.nameFromAssembly(asm);
         String shipId = ShipIdentity.physicsIdOf(this::exec, 0, durableId);
 
-        String srcInfo = exec("artest vs ship-info 0 id " + shipId);
-        assertTrue("source ship not managed by VS: " + srcInfo, srcInfo.contains("\"managed\":true"));
-        double sx = extractDouble(srcInfo, "posX"), sy = extractDouble(srcInfo, "posY"),
-                sz = extractDouble(srcInfo, "posZ");
+        ShipInfo src = ShipInfo.byId(this::exec, 0, shipId);
+        double sx = src.x, sy = src.y, sz = src.z;
         String heldInput = exec("artest vs ff-input-by-id 0 " + shipId + " 0 1 0 0 0 0");
         assertTrue("the held input must reach this ship's flight computer: " + heldInput,
                 heldInput.contains("\"afcResolved\":true"));
@@ -330,13 +327,13 @@ public class VSShipEntryE2ETest extends AbstractSharedServerTest {
         // what the check meant all along, and it survives the next change of mapping too.
         assertTrue("the arrived ship was never loaded in its destination cell: " + pose[0]
                         + " loadedShipsInCell=" + loadedInCell[0],
-                pose[0].contains("\"managed\":true"));
+                ShipInfo.isLoaded(pose[0]));
+        ShipInfo arrivedPose = ShipInfo.of(pose[0]);
         double[] expected = CellWorldMapper.poseWorldOf(GalacticCoord.ofSectorLocal(0L, 0L, 0L,
                 (long) extractDouble(ledgerRow[0], "lx"),
                 (long) extractDouble(ledgerRow[0], "ly"),
                 (long) extractDouble(ledgerRow[0], "lz")));
-        double[] actual = {extractDouble(pose[0], "posX"), extractDouble(pose[0], "posY"),
-                extractDouble(pose[0], "posZ")};
+        double[] actual = {arrivedPose.x, arrivedPose.y, arrivedPose.z};
         for (int axis = 0; axis < 3; axis++) {
             // CARRY_MARGIN as the tolerance, because it is production's OWN answer to "still at this
             // coordinate as far as the cell is concerned" — the distance a craft may sit past a face

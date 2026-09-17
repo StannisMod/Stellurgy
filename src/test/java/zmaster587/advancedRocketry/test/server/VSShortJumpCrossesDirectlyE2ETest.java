@@ -5,6 +5,7 @@ import zmaster587.advancedRocketry.test.Events;
 import zmaster587.advancedRocketry.test.ShipReadiness;
 import zmaster587.advancedRocketry.test.GameTicks;
 import zmaster587.advancedRocketry.test.ShipIdentity;
+import zmaster587.advancedRocketry.test.ShipInfo;
 
 import org.junit.Test;
 
@@ -117,9 +118,8 @@ public class VSShortJumpCrossesDirectlyE2ETest extends AbstractSharedServerTest 
         assertTrue("the arrival must name the craft that made it, or nothing below is addressed to"
                 + " this jump's ship: " + arrived, durableId != null && !durableId.trim().isEmpty());
         String arrivedId = ShipIdentity.physicsIdOf(this::exec, targetDim, durableId.trim());
-        String dstInfo = exec("artest vs ship-info " + targetDim + " id " + arrivedId);
-        assertTrue("the arrived ship is not VS-managed in the target cell: " + dstInfo,
-                dstInfo.contains("\"managed\":true"));
+        assertTrue("the arrived ship is not VS-managed in the target cell; id=" + arrivedId,
+                ShipInfo.loadedIn(this::exec, targetDim, arrivedId));
         return arrived;
     }
 

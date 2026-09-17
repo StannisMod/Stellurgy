@@ -4,6 +4,7 @@ import zmaster587.advancedRocketry.test.Reply;
 import zmaster587.advancedRocketry.test.ShipReadiness;
 import zmaster587.advancedRocketry.test.GameTicks;
 import zmaster587.advancedRocketry.test.ShipIdentity;
+import zmaster587.advancedRocketry.test.ShipInfo;
 
 import org.junit.After;
 import org.junit.Test;
@@ -118,9 +119,9 @@ public class VSRelocatedBodyIsNotFlungByItsLastShipE2ETest extends AbstractShare
         assertTrue("VS could not resolve a state for this ship at its own build site: " + info
                 + " countAll=" + exec("artest vs ship-count-all 0")
                 + " loaded=" + exec("artest vs ship-count 0"),
-                info.contains("\"managed\":true"));
-        double sx = extractDouble(info, "posX"), sy = extractDouble(info, "posY"),
-                sz = extractDouble(info, "posZ");
+                ShipInfo.isLoaded(info));
+        ShipInfo atBuildSite = ShipInfo.of(info);
+        double sx = atBuildSite.x, sy = atBuildSite.y, sz = atBuildSite.z;
 
         // The destination is prepared BEFORE the subject exists, because everything after the touch
         // is spent against the 20-tick association window. Warming it keeps the relocated subject a
@@ -182,14 +183,14 @@ public class VSRelocatedBodyIsNotFlungByItsLastShipE2ETest extends AbstractShare
         // One reading at the end is enough for the verdict: a fling is a DISPLACEMENT, and a body
         // that has been thrown does not come back.
         String after = exec("artest vs player-ship-data 0 " + subjectId);
-        String lastShip = exec("artest vs ship-info 0 id " + shipId);
+        ShipInfo lastShip = ShipInfo.byId(this::exec, 0, shipId);
         double drift = Math.hypot(extractDouble(after, "playerX") - beforeX,
                 extractDouble(after, "playerZ") - beforeZ);
-        double omega = extractDouble(lastShip, "omega");
-        double leverArm = Math.abs(extractDouble(lastShip, "posX") - beforeX);
+        double omega = lastShip.omega;
+        double leverArm = Math.abs(lastShip.x - beforeX);
         String evidence = " sinceAtHazard=" + sinceAtHazard + " leverArm=" + leverArm + " omega="
                 + omega + " before=(" + beforeX + "," + beforeZ + ") after=" + after
-                + " ship=" + lastShip;
+                + " ship=" + lastShip.raw();
 
         // CONTROL 2 — a lever arm exists: the subject really was carried clear of the hull.
         assertTrue("sensitivity control — the subject did not move away, so no distance could amplify"

@@ -17,6 +17,7 @@ import javax.imageio.ImageIO;
 
 import zmaster587.advancedRocketry.test.Events;
 import zmaster587.advancedRocketry.test.Reply;
+import zmaster587.advancedRocketry.test.ShipInfo;
 import zmaster587.advancedRocketry.test.FixtureSite;
 
 import static org.junit.Assert.assertNotNull;
@@ -53,11 +54,6 @@ public class VSShipFlightTelemetryE2ETest extends AbstractSharedVsClientE2ETest 
     }
 
     private static final String BUILDER_POS = "builderPos";
-    private static final String POS_X = "posX";
-    private static final String POS_Y = "posY";
-    private static final String POS_Z = "posZ";
-    private static final String VEL_Y = "velY";
-    private static final String OMEGA = "omega";
 
     /**
      * Client ticks the brake is given to act before anything is judged.
@@ -167,7 +163,7 @@ public class VSShipFlightTelemetryE2ETest extends AbstractSharedVsClientE2ETest 
             // ceiling + early exit. A fixed 100-iteration budget under-lifts a frame-starved client
             // under concurrent-fork load and reds a healthy climb.
             lift = ClientPoll.until(bot()::waitTicks,
-                    () -> readDouble(shipInfo(), POS_Y),
+                    () -> shipInfo().y,
                     y -> y - ship[1] > 2.0, 2, 100);
         } finally {
             bot().releaseKey(Keyboard.KEY_R);
@@ -204,7 +200,7 @@ public class VSShipFlightTelemetryE2ETest extends AbstractSharedVsClientE2ETest 
         // where "has it fallen below the line" can be true for one sample of a rate that is rising,
         // and an early exit is therefore a way to miss the subject rather than a way to save ticks.
         ClientPoll.Result<Double> spin = ClientPoll.until(bot()::waitTicks,
-                () -> readDouble(shipInfo(), OMEGA),
+                () -> shipInfo().omega,
                 o -> o >= 0.05, 2, 60);
         double spinning = spin.value;
         assertTrue("a deflected flight cursor must actually spin the ship (omega=" + spinning + ")",
@@ -276,7 +272,7 @@ public class VSShipFlightTelemetryE2ETest extends AbstractSharedVsClientE2ETest 
 
         bot().waitTicks(BRAKE_SETTLE_TICKS);
         java.util.List<Double> hold = ClientPoll.observe(bot()::waitTicks,
-                () -> readDouble(shipInfo(), OMEGA), HOLD_SAMPLES, HOLD_TICKS_BETWEEN);
+                () -> shipInfo().omega, HOLD_SAMPLES, HOLD_TICKS_BETWEEN);
         StringBuilder omegaTrace = new StringBuilder();
         double settled = 0.0;
         for (int i = 0; i < hold.size(); i++) {
@@ -467,7 +463,7 @@ public class VSShipFlightTelemetryE2ETest extends AbstractSharedVsClientE2ETest 
         // An attitude SLEW is a value converging, so it stays a wait — but the value it converges to
         // is recorded here, because "he barely moved across the deck" is vacuous on a deck that never
         // rolled and nothing in this scenario said which of the two happened.
-        scenario().record("upYAfterRoll", upYOf(shipInfo()));
+        scenario().record("upYAfterRoll", shipInfo().upY());
 
         double[] afterRoll = localOf(crewId);
 
@@ -677,7 +673,7 @@ public class VSShipFlightTelemetryE2ETest extends AbstractSharedVsClientE2ETest 
             // Event-gated hover-lift (load-scaled ceiling + early exit): a fixed 100-iteration budget
             // under-lifts a frame-starved client under concurrent-fork load and reds a healthy climb.
             lift = ClientPoll.until(bot()::waitTicks,
-                    () -> readDouble(shipInfo(), POS_Y),
+                    () -> shipInfo().y,
                     y -> y - ship[1] > 2.0, 2, 100);
         } finally {
             bot().releaseKey(Keyboard.KEY_R);
@@ -721,16 +717,16 @@ public class VSShipFlightTelemetryE2ETest extends AbstractSharedVsClientE2ETest 
                 matchingRecords(hold, "\"held\":true") > 0);
         bot().waitTicks(60); // let the controller brake the climb out and settle onto the hold
 
-        double yStart = readDouble(shipInfo(), POS_Y);
+        double yStart = shipInfo().y;
         double worstVelY = 0.0;
         for (int i = 0; i < 40; i++) {
             bot().waitTicks(3);
-            double velY = readDouble(shipInfo(), VEL_Y);
+            double velY = shipInfo().velY;
             if (Math.abs(velY) > Math.abs(worstVelY)) {
                 worstVelY = velY;
             }
         }
-        double yEnd = readDouble(shipInfo(), POS_Y);
+        double yEnd = shipInfo().y;
         System.out.println("[tier2][STATIONKEEP] yStart=" + yStart + " yEnd=" + yEnd
                 + " drift=" + (yEnd - yStart) + " worstVelY=" + worstVelY);
 
@@ -795,9 +791,8 @@ public class VSShipFlightTelemetryE2ETest extends AbstractSharedVsClientE2ETest 
         // flies, spins and drops it. The mark is `spawnMark`, taken before the assembly: readiness is
         // an EDGE that fires once, so a mark taken here could miss it entirely.
         awaitShipUsable(events, spawnMark, scenarioShipId);
-        String info = shipInfo();
-        double[] where = new double[]{
-                readDouble(info, POS_X), readDouble(info, POS_Y), readDouble(info, POS_Z)};
+        ShipInfo info = shipInfo();
+        double[] where = new double[]{info.x, info.y, info.z};
         System.out.println("[tier2] ship at base (" + bx + "," + by + "," + bz + ") -> "
                 + java.util.Arrays.toString(where));
         return where;
@@ -956,9 +951,9 @@ public class VSShipFlightTelemetryE2ETest extends AbstractSharedVsClientE2ETest 
     }
 
     /** This scenario's ship, asked by identity — captured once by {@link #buildShip}. */
-    private String shipInfo() throws Exception {
+    private ShipInfo shipInfo() throws Exception {
         assertTrue("shipInfo() before buildShip() captured an identity", scenarioShipId != null);
-        return exec("artest vs ship-info 0 id " + scenarioShipId);
+        return ShipInfo.byId(this::exec, 0, scenarioShipId);
     }
 
     private double[] localOf(int entityId) throws Exception {

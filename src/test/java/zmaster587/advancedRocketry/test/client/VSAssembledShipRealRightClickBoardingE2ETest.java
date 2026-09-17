@@ -9,6 +9,7 @@ import org.junit.Test;
 import org.junit.runners.MethodSorters;
 
 import zmaster587.advancedRocketry.test.Reply;
+import zmaster587.advancedRocketry.test.ShipInfo;
 import zmaster587.advancedRocketry.test.Events;
 import zmaster587.advancedRocketry.test.FixtureSite;
 
@@ -68,7 +69,6 @@ public class VSAssembledShipRealRightClickBoardingE2ETest extends AbstractShared
     }
 
     private static final String BUILDER_POS = "builderPos";
-    private static final String POS_Y = "posY";
 
     /** This scenario's ship, by identity — captured at its build site before anything moves. */
     private String shipUuid;
@@ -156,9 +156,8 @@ public class VSAssembledShipRealRightClickBoardingE2ETest extends AbstractShared
         for (int attempt = 0; attempt < budget && Double.isNaN(yRest); attempt++) {
             bot().waitTicks(5);
             atBase = shipInfoAtBase();
-            Reply mReply = Reply.of(atBase);
-            if (mReply.has(POS_Y)) {
-                yRest = Double.parseDouble(mReply.text(POS_Y));
+            if (ShipInfo.isLoaded(atBase)) {
+                yRest = ShipInfo.of(atBase).y;
             }
         }
         scenario().requireArranged("the ship must LOAD with the client present: " + atBase,

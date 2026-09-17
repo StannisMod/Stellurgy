@@ -5,6 +5,7 @@ import zmaster587.advancedRocketry.test.Events;
 import zmaster587.advancedRocketry.test.ShipReadiness;
 import zmaster587.advancedRocketry.test.GameTicks;
 import zmaster587.advancedRocketry.test.ShipIdentity;
+import zmaster587.advancedRocketry.test.ShipInfo;
 
 import org.junit.Test;
 
@@ -84,9 +85,8 @@ public class VSShipTransitE2ETest extends AbstractSharedServerTest {
         // "exactly one ship here" and "and this is it" are one reading instead of a count followed by
         // a nearest-ship lookup that could answer about the other one.
         String arrivedId = ShipIdentity.theOnlyLoadedShipIn(this::exec, targetDim);
-        String dstInfo = exec("artest vs ship-info " + targetDim + " id " + arrivedId);
-        assertTrue("arrived ship is not VS-managed in the target cell (transit did not re-VS): " + dstInfo,
-                dstInfo.contains("\"managed\":true"));
+        assertTrue("arrived ship is not VS-managed in the target cell (transit did not re-VS);"
+                + " id=" + arrivedId, ShipInfo.loadedIn(this::exec, targetDim, arrivedId));
     }
 
     @org.junit.After

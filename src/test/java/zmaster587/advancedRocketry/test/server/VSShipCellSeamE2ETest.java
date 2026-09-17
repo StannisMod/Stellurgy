@@ -7,6 +7,7 @@ import zmaster587.advancedRocketry.space.CellSeam;
 import zmaster587.advancedRocketry.space.GalacticCoord;
 import zmaster587.advancedRocketry.test.GameTicks;
 import zmaster587.advancedRocketry.test.EntrySlots;
+import zmaster587.advancedRocketry.test.ShipInfo;
 
 import org.junit.After;
 import org.junit.FixMethodOrder;
@@ -185,9 +186,9 @@ public class VSShipCellSeamE2ETest extends AbstractSharedServerTest {
         assertTrue("the carried ship has no bound slot: " + afterMove,
                 carriedSlot > Integer.MIN_VALUE);
         assertTrue("the neighbour's cell world never came up", loadedShips(carriedSlot) >= 1);
-        String arrived = arrivedShip(carriedSlot, arShipId);
-        double ax = extractDouble(arrived, "posX");
-        assertFalse("the arrived ship's pose could not be read: " + arrived, Double.isNaN(ax));
+        ShipInfo arrived = arrivedShip(carriedSlot, arShipId);
+        double ax = arrived.x;
+        assertFalse("the arrived ship's pose could not be read: " + arrived.raw(), Double.isNaN(ax));
         double expectedX = -(double) GalacticCoord.HALF_CELL + CellSeam.REENTRY_DEPTH;
         assertEquals("the ship must arrive the re-entry depth inside the face it came in by, not on it",
                 expectedX, ax, ARRIVAL_TOLERANCE);
@@ -320,9 +321,9 @@ public class VSShipCellSeamE2ETest extends AbstractSharedServerTest {
 
         // The ARRIVED ship's VS id — a new body, so a new id, traded for the durable one. Asking with
         // the source's would answer "not aboard" for a body sitting perfectly on the deck.
-        String arrived = arrivedShip(carriedSlot, arranged.arShipId);
-        String dstVsId = extractString(arrived, "id");
-        assertTrue("the arrived ship reported no VS id: " + arrived, dstVsId != null);
+        ShipInfo arrived = arrivedShip(carriedSlot, arranged.arShipId);
+        String dstVsId = arrived.id;
+        assertTrue("the arrived ship reported no VS id: " + arrived.raw(), dstVsId != null);
 
         assertEquals("the carry bound a different slot than the one whose deck was held before it, so "
                 + "the body was never protected where it landed", destSlot, carriedSlot);
@@ -369,7 +370,7 @@ public class VSShipCellSeamE2ETest extends AbstractSharedServerTest {
                         + "production's own aboard predicate still refuses it after "
                         + SETTLE_TICKS + " ticks. body=" + found[0]
                         + " ship-now=" + arrivedShip(carriedSlot, arranged.arShipId)
-                        + " ship-at-arrival=" + arrived,
+                        + " ship-at-arrival=" + arrived.raw(),
                 carried);
     }
 
@@ -477,9 +478,9 @@ public class VSShipCellSeamE2ETest extends AbstractSharedServerTest {
         int carriedSlot = extractInt(afterMove, "slotDim");
         assertTrue("the carried ship has no bound slot: " + afterMove,
                 carriedSlot > Integer.MIN_VALUE);
-        String arrived = arrivedShip(carriedSlot, arranged.arShipId);
-        String dstVsId = extractString(arrived, "id");
-        assertTrue("the arrived ship reported no VS id: " + arrived, dstVsId != null);
+        ShipInfo arrived = arrivedShip(carriedSlot, arranged.arShipId);
+        String dstVsId = arrived.id;
+        assertTrue("the arrived ship reported no VS id: " + arrived.raw(), dstVsId != null);
 
         final String[] found = {""};
         boolean landedAboard = GameTicks.until(client(), GameTicks.world(carriedSlot), SETTLE_TICKS,
@@ -517,10 +518,10 @@ public class VSShipCellSeamE2ETest extends AbstractSharedServerTest {
                         < 1e-9);
 
         // Let the craft fly on.
-        double beforeY = extractDouble(arrivedShip(carriedSlot, arranged.arShipId), "posY");
+        double beforeY = arrivedShip(carriedSlot, arranged.arShipId).y;
         GameTicks.advanceWorld(client(), carriedSlot, KEEPS_ABOARD_TICKS);
-        String shipAfter = arrivedShip(carriedSlot, arranged.arShipId);
-        double afterY = extractDouble(shipAfter, "posY");
+        ShipInfo shipAfter = arrivedShip(carriedSlot, arranged.arShipId);
+        double afterY = shipAfter.y;
 
         // THE CONTROL, AND IT COMES FIRST. "Still aboard" says nothing unless the deck actually WENT
         // somewhere: a craft that did not move carries anything, including a body it has no hold on.
@@ -531,7 +532,7 @@ public class VSShipCellSeamE2ETest extends AbstractSharedServerTest {
                         + "craft went from posY=" + beforeY + " to " + afterY + " in "
                         + KEEPS_ABOARD_TICKS + " ticks, less than the " + DECK_MUST_TRAVEL
                         + " blocks this test needs to have left an unheld body behind. ship="
-                        + shipAfter,
+                        + shipAfter.raw(),
                 Math.abs(afterY - beforeY) > DECK_MUST_TRAVEL);
 
         // THE WITNESS. A body that was merely PUT DOWN satisfies the aboard read above and fails
@@ -540,7 +541,7 @@ public class VSShipCellSeamE2ETest extends AbstractSharedServerTest {
                 + dstVsId);
         assertTrue("the cargo was put down on the deck and then left behind by its own ship: the "
                         + "craft travelled " + Math.abs(afterY - beforeY) + " blocks and the body is "
-                        + still + "; ship=" + shipAfter,
+                        + still + "; ship=" + shipAfter.raw(),
                 still.contains("\"found\":true") && still.contains("\"aboard\":true"));
     }
 
@@ -584,10 +585,8 @@ public class VSShipCellSeamE2ETest extends AbstractSharedServerTest {
         // either side with the other's id answers "not found" and reads exactly like the mechanic
         // being broken.
         String srcVsId = vsIdOf(0, arShipId);
-        String srcInfo = exec("artest vs ship-info 0 id " + srcVsId);
-        assertTrue("source ship not managed by VS: " + srcInfo, srcInfo.contains("\"managed\":true"));
-        double sx = extractDouble(srcInfo, "posX"), sy = extractDouble(srcInfo, "posY"),
-                sz = extractDouble(srcInfo, "posZ");
+        ShipInfo srcInfo = ShipInfo.byId(this::exec, 0, srcVsId);
+        double sx = srcInfo.x, sy = srcInfo.y, sz = srcInfo.z;
 
         String heldInput = exec("artest vs ff-input-by-id 0 " + srcVsId + " 0 1 0 0 0 0");
         assertTrue("the held input must reach this ship's flight computer: " + heldInput,
@@ -787,12 +786,9 @@ public class VSShipCellSeamE2ETest extends AbstractSharedServerTest {
         // --- Act: put the ship past the +X face of its cell --------------------------------------
         // The SAME durable craft, under the physics id translated above: entry is itself a crossing,
         // so the body that reached the cell is not the one that was built.
-        String inCell = exec("artest vs ship-info " + sourceSlot + " id " + settledVsId);
-        assertTrue("the settled ship is not managed in its slot: " + inCell,
-                inCell.contains("\"managed\":true"));
-        double cx = extractDouble(inCell, "posX"), cy = extractDouble(inCell, "posY"),
-                cz = extractDouble(inCell, "posZ");
-        assertFalse("the ship's in-cell pose could not be read: " + inCell,
+        ShipInfo inCell = ShipInfo.byId(this::exec, sourceSlot, settledVsId);
+        double cx = inCell.x, cy = inCell.y, cz = inCell.z;
+        assertFalse("the ship's in-cell pose could not be read: " + inCell.raw(),
                 Double.isNaN(cx) || Double.isNaN(cy) || Double.isNaN(cz));
 
         String outward = exec("artest vs teleport-ship-by-id " + sourceSlot + " " + settledVsId + " "
@@ -804,16 +800,16 @@ public class VSShipCellSeamE2ETest extends AbstractSharedServerTest {
         // the face": a clamp, a refused transform or a Y-limit would all report ok and leave the ship
         // inside its cell, and the carry would then be correctly not firing — a green mechanic
         // reported as a red one.
-        String moved = exec("artest vs ship-info " + sourceSlot + " id " + settledVsId);
-        double mx = extractDouble(moved, "posX");
-        assertFalse("the moved ship's pose could not be read: " + moved, Double.isNaN(mx));
+        ShipInfo moved = ShipInfo.byId(this::exec, sourceSlot, settledVsId);
+        double mx = moved.x;
+        assertFalse("the moved ship's pose could not be read: " + moved.raw(), Double.isNaN(mx));
         assertTrue("the ship is not actually past the cell face after the move — it is at x=" + mx
                         + ", and the carry threshold is " + (GalacticCoord.HALF_CELL
-                        + CellSeam.CARRY_MARGIN) + "; the test moved nothing: " + moved,
+                        + CellSeam.CARRY_MARGIN) + "; the test moved nothing: " + moved.raw(),
                 mx > GalacticCoord.HALF_CELL + CellSeam.CARRY_MARGIN);
 
         return new ShipPastItsFace(setup, arShipId, sourceCell, sourceSlot,
-                mx, extractDouble(moved, "posY"), extractDouble(moved, "posZ"), settledVsId);
+                mx, moved.y, moved.z, settledVsId);
     }
 
     /**
@@ -934,12 +930,8 @@ public class VSShipCellSeamE2ETest extends AbstractSharedServerTest {
      * is then asked BY that id. Nothing here is a search: no anchor, no radius, no "the one ship in
      * this slot".</p>
      */
-    private String arrivedShip(int slotDim, String durableShipId) throws Exception {
-        String vsId = vsIdOf(slotDim, durableShipId);
-        String info = exec("artest vs ship-info " + slotDim + " id " + vsId);
-        assertTrue("the arrived ship " + vsId + " is not managed in slot " + slotDim + ": " + info,
-                info.contains("\"managed\":true"));
-        return info;
+    private ShipInfo arrivedShip(int slotDim, String durableShipId) throws Exception {
+        return ShipInfo.byId(this::exec, slotDim, vsIdOf(slotDim, durableShipId));
     }
 
     private String vsIdOf(int slotDim, String durableShipId) throws Exception {

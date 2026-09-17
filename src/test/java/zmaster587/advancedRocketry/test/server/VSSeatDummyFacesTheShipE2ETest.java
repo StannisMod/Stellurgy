@@ -4,6 +4,7 @@ import zmaster587.advancedRocketry.test.Reply;
 import zmaster587.advancedRocketry.test.ShipReadiness;
 import zmaster587.advancedRocketry.test.GameTicks;
 import zmaster587.advancedRocketry.test.ShipIdentity;
+import zmaster587.advancedRocketry.test.ShipInfo;
 
 import org.junit.After;
 import org.junit.Test;
@@ -81,10 +82,7 @@ public class VSSeatDummyFacesTheShipE2ETest extends AbstractSharedServerTest {
         // id resolved above: a lookup at the build site was defended as "the one positional lookup
         // this scenario can defend — the ship has not moved", but not having moved is a fact about
         // THIS craft and says nothing about how many others are standing there.
-        String infoBefore = exec("artest vs ship-info 0 id " + shipId);
-        assertTrue("the ship must be managed for its attitude to be readable: " + infoBefore,
-                infoBefore.contains("\"managed\":true"));
-        double shipYawBefore = shipYawOf(infoBefore);
+        double shipYawBefore = shipYawOf(ShipInfo.byId(this::exec, 0, shipId));
         double mountYawBefore = mountYaw(seatX, seatY, seatZ);
 
         // ── TURN THE SHIP ───────────────────────────────────────────────────────────────────────
@@ -97,7 +95,7 @@ public class VSSeatDummyFacesTheShipE2ETest extends AbstractSharedServerTest {
         // The slew runs on the attitude controller's tick, so the budget is that controller's world.
         final double[] yaw = {shipYawBefore};
         GameTicks.until(client(), GameTicks.server(), SLEW_TICKS, () -> {
-            yaw[0] = shipYawOf(exec("artest vs ship-info 0 id " + shipId));
+            yaw[0] = shipYawOf(ShipInfo.byId(this::exec, 0, shipId));
             return Math.abs(wrapDegrees(yaw[0] - shipYawBefore)) > 45.0;
         });
         double shipYawAfter = yaw[0];
@@ -137,10 +135,8 @@ public class VSSeatDummyFacesTheShipE2ETest extends AbstractSharedServerTest {
     }
 
     /** The ship's own heading, out of the attitude quaternion VS reports for it. */
-    private double shipYawOf(String shipInfo) {
-        FreeFlightPhysics.Quat q = new FreeFlightPhysics.Quat(
-                extractDouble(shipInfo, "qw"), extractDouble(shipInfo, "qx"),
-                extractDouble(shipInfo, "qy"), extractDouble(shipInfo, "qz"));
+    private double shipYawOf(ShipInfo ship) {
+        FreeFlightPhysics.Quat q = new FreeFlightPhysics.Quat(ship.qw, ship.qx, ship.qy, ship.qz);
         return FreeFlightPhysics.eulerFromQuat(q)[0];
     }
 

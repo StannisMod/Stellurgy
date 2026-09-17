@@ -25,6 +25,7 @@ import zmaster587.advancedRocketry.test.Chains;
 import zmaster587.advancedRocketry.test.Events;
 import zmaster587.advancedRocketry.test.GameTicks;
 import zmaster587.advancedRocketry.test.ShipIdentity;
+import zmaster587.advancedRocketry.test.ShipInfo;
 
 import zmaster587.advancedRocketry.test.FixtureSite;
 
@@ -1281,12 +1282,10 @@ public abstract class AbstractSpaceLoginRestoreClientTest {
         // shares, and a neighbour's craft answers it in the same shape.
         String durableShipId = ShipIdentity.nameFromAssembly(assembled);
         String srcVsId = ShipIdentity.physicsIdOf(this::exec, LAUNCH_DIM, durableShipId);
-        String srcInfo = exec("artest vs ship-info " + LAUNCH_DIM + " id " + srcVsId);
-        assertTrue("the assembled build is not a physics ship: " + srcInfo,
-                srcInfo.contains("\"managed\":true"));
-        int sx = (int) Math.round(readDouble(srcInfo, "posX"));
-        int sy = (int) Math.round(readDouble(srcInfo, "posY"));
-        int sz = (int) Math.round(readDouble(srcInfo, "posZ"));
+        ShipInfo srcInfo = ShipInfo.byId(this::exec, LAUNCH_DIM, srcVsId);
+        int sx = (int) Math.round(srcInfo.x);
+        int sy = (int) Math.round(srcInfo.y);
+        int sz = (int) Math.round(srcInfo.z);
 
         // No throttle. Crossing an atmosphere does not ask who is at the controls - the climb past the
         // dimension's orbit ceiling is the whole trigger - and `VSUnpilotedEntryE2ETest` pins exactly
@@ -1407,12 +1406,10 @@ public abstract class AbstractSpaceLoginRestoreClientTest {
         String durableShipId = ShipIdentity.nameFromAssembly(assembled);
         String groundShipId = ShipIdentity.physicsIdOf(this::exec, LAUNCH_DIM, durableShipId);
 
-        String srcInfo = exec("artest vs ship-info " + LAUNCH_DIM + " id " + groundShipId);
-        assertTrue("the assembled build is not a physics ship: " + srcInfo,
-                srcInfo.contains("\"managed\":true"));
-        int sx = (int) Math.round(readDouble(srcInfo, "posX"));
-        int sy = (int) Math.round(readDouble(srcInfo, "posY"));
-        int sz = (int) Math.round(readDouble(srcInfo, "posZ"));
+        ShipInfo srcInfo = ShipInfo.byId(this::exec, LAUNCH_DIM, groundShipId);
+        int sx = (int) Math.round(srcInfo.x);
+        int sy = (int) Math.round(srcInfo.y);
+        int sz = (int) Math.round(srcInfo.z);
 
         // Board on the ground. The client has to be standing at the ship for its seat to be a loaded
         // tile at all, which is what the mount probe searches.
@@ -1866,9 +1863,9 @@ public abstract class AbstractSpaceLoginRestoreClientTest {
             Reply namedReply = Reply.of(hull);
             if (hull.contains("\"found\":true") && namedReply.has(SHIP_UUID)) {
                 String info = exec("artest vs ship-info " + dim + " id " + namedReply.text(SHIP_UUID));
-                if (info.contains("\"managed\":true")) {
-                    return new double[]{readDouble(info, "posX"), readDouble(info, "posY"),
-                            readDouble(info, "posZ")};
+                if (ShipInfo.isLoaded(info)) {
+                    ShipInfo pose = ShipInfo.of(info);
+                    return new double[]{pose.x, pose.y, pose.z};
                 }
             }
             exec("artest vs load-ships " + dim);

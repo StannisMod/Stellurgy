@@ -411,7 +411,7 @@ public class M1PlanetToPlanetMilestoneE2ETest {
         assertTrue("…and the seat must know it belongs to a SHIP. An unmanaged seat is a chair: it "
                         + "seats him and carries no flight input at all, which is a green boarding "
                         + "followed by a craft that will not answer its controls. decision="
-                        + sitDecision, sitDecision.contains("\"managed\":true"));
+                        + sitDecision, Boolean.parseBoolean(Events.text(sitDecision, "managed")));
 
         JsonObject riding = awaitClientMount(seatClientMark,
                 "a real use-key press aimed at the ship's PILOT SEAT must seat the pilot, as the "
@@ -1216,7 +1216,7 @@ public class M1PlanetToPlanetMilestoneE2ETest {
                 budget * 5);
         assertTrue("…and the seat must still know it belongs to a ship: an unmanaged seat carries no "
                         + "flight input, so the jump he is about to fire would go nowhere. decision="
-                        + decision, decision.contains("\"managed\":true"));
+                        + decision, Boolean.parseBoolean(Events.text(decision, "managed")));
         return awaitClientMount(sitClientMark,
                 "the pilot must be back in his seat on the CLIENT before he fires the drive — the "
                         + "jump key is routed through the seat he occupies, and a seating that only "

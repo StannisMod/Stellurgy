@@ -14,6 +14,7 @@ import zmaster587.advancedRocketry.test.Events;
 import zmaster587.advancedRocketry.test.Reply;
 import zmaster587.advancedRocketry.test.FixtureSite;
 import zmaster587.advancedRocketry.test.ShipIdentity;
+import zmaster587.advancedRocketry.test.ShipInfo;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
@@ -73,8 +74,6 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
      *  spare, so the body is never released inside a block. */
     private static final int SHAFT_ABOVE_HULL = 12;
 
-    /** The hull's angular rate, read beside a body that is supposed to be resting on it. */
-    private static final String OMEGA_AT_HULL = "omega";
     private static final String BODY_SHIP_FRAME_Y = "bodyShipFrameY";
 
     /** The body's OWN motion and the velocity the substrate holds for it — the two candidate
@@ -86,10 +85,6 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
     private static final String ADDED_Y = "addedVelY";
     private static final String ADDED_Z = "addedVelZ";
     private static final String TICKS_SINCE_TOUCHED = "ticksSinceTouchedShip";
-
-    private static final String POS_X = "posX";
-    private static final String POS_Y = "posY";
-    private static final String POS_Z = "posZ";
 
     private static final String VARIANT = "with-pilot-deck";
 
@@ -323,16 +318,16 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
                 exec("artest vs point-by-id 0 " + scenarioShipId + " "
                         + Math.cos(h) + " 0.0 0.0 " + Math.sin(h)).contains("\"commanded\":true"));
         bot().waitTicks(120);
-        String info = shipInfo();
+        ShipInfo info = shipInfo();
         // The TILT is the premise, and until now nothing checked that it took: a run in which
         // `point-by-id` silently did nothing, or the hold never slewed, passes the negative below
         // identically. The bound is loose on purpose — the commanded 45 degrees reads upY 0.71 and
         // any real tilt is far under this — because what it refuses is an UPRIGHT ship, where the
         // aliasing this scenario exists to forbid barely arises.
         scenario().requireArranged("the parked ship must actually be tilted before a ground walker"
-                + " can alias into its frame at all (upY=" + upYOf(info) + ", level is 1.0): " + info,
-                upYOf(info) < 0.95);
-        double sx = readDouble(info, POS_X), sz = readDouble(info, POS_Z);
+                + " can alias into its frame at all (upY=" + info.upY() + ", level is 1.0): "
+                + info.raw(), info.upY() < 0.95);
+        double sx = info.x, sz = info.z;
 
         // Put the REAL client player on the GROUND beside the hull, inside the grown world box, and
         // WALK him along it with the real forward key. He stands on terra firma the whole way. The
@@ -464,10 +459,8 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
         // The subject must be in the regime the symptom lives in, and the instrument must fire:
         // the ship really steeply rolled, and the CLIENT really resolving this body (all-zero
         // discriminator statics with a non-resolving client would be a vacuous pass).
-        String info = shipInfo();
-        double qx = readDouble(info, "qx");
-        double qz = readDouble(info, "qz");
-        double upY = 1.0 - 2.0 * (qx * qx + qz * qz);
+        ShipInfo info = shipInfo();
+        double upY = info.upY();
         assertTrue("the ship must be steeply rolled for this test to mean anything (upY=" + upY + ")",
                 upY < -0.3);
         // Stillness window: NO input at all. Sample the client's own drift and the walk
@@ -1189,13 +1182,11 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
                 exec("artest vs point-by-id 0 " + scenarioShipId + " "
                         + Math.cos(h) + " " + Math.sin(h) + " 0.0 0.0").contains("\"commanded\":true"));
         bot().waitTicks(200);
-        String info = shipInfo();
-        double qx = readDouble(info, "qx");
-        double qz = readDouble(info, "qz");
-        double upY = 1.0 - 2.0 * (qx * qx + qz * qz);
+        ShipInfo info = shipInfo();
+        double upY = info.upY();
         assertTrue("the ship must be steeply inverted for the hull-top to exist (upY=" + upY + ")",
                 upY < -0.3);
-        double sx = readDouble(info, POS_X), sy = readDouble(info, POS_Y), sz = readDouble(info, POS_Z);
+        double sx = info.x, sy = info.y, sz = info.z;
 
         // Fall onto the world-top of the inverted hull from a few blocks up.
         exec("tp @a " + sx + " " + (sy + 7) + " " + sz + " 0 0");
@@ -1293,13 +1284,11 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
                 exec("artest vs point-by-id 0 " + scenarioShipId + " "
                         + Math.cos(h) + " " + Math.sin(h) + " 0.0 0.0").contains("\"commanded\":true"));
         bot().waitTicks(200);
-        String info = shipInfo();
-        double qx = readDouble(info, "qx");
-        double qz = readDouble(info, "qz");
-        double upY = 1.0 - 2.0 * (qx * qx + qz * qz);
+        ShipInfo info = shipInfo();
+        double upY = info.upY();
         assertTrue("the ship must be steeply inverted for the hull-top to exist (upY=" + upY + ")",
                 upY < -0.3);
-        double sx = readDouble(info, POS_X), sy = readDouble(info, POS_Y), sz = readDouble(info, POS_Z);
+        double sx = info.x, sy = info.y, sz = info.z;
 
         // Mark the position-write recorder one statement before the drop. The landing trace showed
         // this body 10.8 blocks away three ticks after it began falling, with its OWN motion and the
@@ -1422,7 +1411,7 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
                 enc.append(String.format(java.util.Locale.ROOT,
                         "[t%d y=%.2f z=%.1f cap=%b hull=%b w=%.3f] ",
                         i * 3, settledY, bot().reportState().get("playerZ").getAsDouble(),
-                        tracked, hull, readDouble(shipInfo(), OMEGA_AT_HULL)));
+                        tracked, hull, shipInfo().omega));
             }
         }
         // Read once and held, because each is asserted on below as well as printed: a diagnostic read
@@ -1642,10 +1631,8 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
                 exec("artest vs point-by-id 0 " + scenarioShipId + " "
                         + Math.cos(h) + " " + Math.sin(h) + " 0.0 0.0").contains("\"commanded\":true"));
         bot().waitTicks(150);
-        String info = shipInfo();
-        double qx = readDouble(info, "qx");
-        double qz = readDouble(info, "qz");
-        double upY = 1.0 - 2.0 * (qx * qx + qz * qz);
+        ShipInfo info = shipInfo();
+        double upY = info.upY();
         assertTrue("the ship must be steeply rolled for the eyes to diverge (upY=" + upY + ")",
                 upY < 0.7 && upY > 0.1);
         String capNow = deckCaptureOfThisShip(scenarioShipId,
@@ -1746,10 +1733,6 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
 
     // ---- A deck that manoeuvred unwatched does not carry the body that arrives after -----------
 
-    /** The craft's own declared vertical velocity, blocks per second, as the SERVER reports it —
-     *  the number the client is told and the one its carry has to equal. */
-    private static final String VEL_Y = "velY";
-
     /** One game tick, in seconds — the factor between a declared velocity (blocks per second) and
      *  the carry a body receives for one tick of it. */
     private static final double SECONDS_PER_TICK = 0.05;
@@ -1830,11 +1813,10 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
                 "deck_entered", "deck_released");
         bot().waitTicks(40);
 
-        String before = shipInfo();
-        scenario().requireArranged("the craft must still be LOADED and managed with the body"
-                + " standing off it, or nothing below manoeuvres: " + before,
-                before.contains("\"posY\""));
-        double yBefore = readDouble(before, POS_Y);
+        // The craft must still be LOADED and managed with the body standing off it, or nothing below
+        // manoeuvres — and that refusal is the reader's own, by identity, naming the world it asked.
+        ShipInfo before = shipInfo();
+        double yBefore = before.y;
 
         // THE UNWATCHED MANOEUVRE: a commanded ROLL, held. Attitude is deck motion as much as
         // altitude is, and it is the manoeuvre this fixture can actually perform with nobody
@@ -1842,7 +1824,7 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
         // the craft inside its own launch structure, where a body meets world blocks instead of a
         // deck. The command sets an attitude TARGET and the craft's own controller flies to it,
         // exactly as a pilot's would; nothing here writes a transform.
-        double upBefore = upYOf(before);
+        double upBefore = before.upY();
         double half = Math.toRadians(40.0) / 2.0;
         String commanded = exec("artest vs point-by-id 0 " + scenarioShipId + " "
                 + Math.cos(half) + " " + Math.sin(half) + " 0.0 0.0");
@@ -1854,18 +1836,18 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
         // What the deck is ACTUALLY doing now, measured rather than assumed. A craft can be told to
         // stop moving but never to stop turning, so this is a small residual rather than zero — and
         // it is the number the carry a body receives has to match.
-        String after = shipInfo();
-        double upAfter = upYOf(after);
-        double settledOmega = readDouble(after, OMEGA_AT_HULL);
-        double ySettleStart = readDouble(after, POS_Y);
+        ShipInfo after = shipInfo();
+        double upAfter = after.upY();
+        double settledOmega = after.omega;
+        double ySettleStart = after.y;
         bot().waitTicks(20);
-        double ySettleEnd = readDouble(shipInfo(), POS_Y);
+        double ySettleEnd = shipInfo().y;
         double settledPerTick = Math.abs(ySettleEnd - ySettleStart) / 20.0;
         double climbed = Math.abs(ySettleEnd - yBefore);
         int driveIterations = 200;
 
-        String si = shipInfo();
-        double sx = readDouble(si, POS_X), sy = readDouble(si, POS_Y), sz = readDouble(si, POS_Z);
+        ShipInfo si = shipInfo();
+        double sx = si.x, sy = si.y, sz = si.z;
         // A CLEARING, not a pit, and cut around the CRAFT rather than the build base. The shared
         // fixture pre-clear is anchored at a hard-coded y and the surface at this plot sits above
         // it, so what it opens is a shaft whose rim is higher than the deck a body is aimed at: the
@@ -1918,8 +1900,8 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
 
         // The craft's DECLARED motion at the moment the body was on it — the server's own numbers,
         // which is what the client is supposed to have been told and what its carry must equal.
-        String atContact = shipInfo();
-        double declaredVelY = readDouble(atContact, VEL_Y);
+        ShipInfo atContact = shipInfo();
+        double declaredVelY = atContact.velY;
         double declaredCarryY = Math.abs(declaredVelY) * 0.05;
         // The average the interval WOULD have produced, had anyone derived a rate across it: the
         // number a body used to be handed here, kept as the counterfactual this scenario is about.
@@ -2183,10 +2165,9 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
             bot().waitTicks(1); // one tick, so the window below cannot be empty by construction
             double heldDeckYaw = Events.number(
                     deckLookIn(lookMarkLeg, "before walking leg " + dir), "deckYawDeg");
-            String infoW0 = shipInfo();
+            ShipInfo infoW0 = shipInfo();
             double[] p0 = clientPos();
-            double[] s0 = {readDouble(infoW0, POS_X), readDouble(infoW0, POS_Y),
-                    readDouble(infoW0, POS_Z)};
+            double[] s0 = {infoW0.x, infoW0.y, infoW0.z};
             try {
                 for (int i = 0; i < 8; i++) {
                     bot().holdKey(Keyboard.KEY_W); // re-asserted per tick against key-state churn
@@ -2197,9 +2178,8 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
             }
             bot().waitTicks(4);
             double[] p1 = clientPos();
-            String infoW1 = shipInfo();
-            double[] s1 = {readDouble(infoW1, POS_X), readDouble(infoW1, POS_Y),
-                    readDouble(infoW1, POS_Z)};
+            ShipInfo infoW1 = shipInfo();
+            double[] s1 = {infoW1.x, infoW1.y, infoW1.z};
             boolean stillAboard = Boolean.parseBoolean(Events.text(
                     deckLookIn(lookMarkLeg, "at the end of walking leg " + dir), "active"));
             // The walk displacement, with the ship's own drift removed, in the DECK frame.
@@ -2310,16 +2290,12 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
     }
 
     /** The ship's attitude quat {w,x,y,z} from the server-side ship-info (the cross-side oracle). */
-    private double[] shipQuatFromInfo(String info) {
-        return new double[]{
-                readDouble(info, "qw"),
-                readDouble(info, "qx"),
-                readDouble(info, "qy"),
-                readDouble(info, "qz")};
+    private double[] shipQuatFromInfo(ShipInfo info) {
+        return new double[]{info.qw, info.qx, info.qy, info.qz};
     }
 
     /** The ship's up axis in world coordinates, from the server-side ship-info quat (the oracle). */
-    private double[] shipUpFromInfo(String info) {
+    private double[] shipUpFromInfo(ShipInfo info) {
         double[] q = shipQuatFromInfo(info);
         double qw = q[0], qx = q[1], qy = q[2], qz = q[3];
         return new double[]{
@@ -2533,8 +2509,8 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
         // The event record names the ship and its dimension and carries NO position, so the pos comes
         // from a ship-info asked BY IDENTITY afterwards — no distance term to be wrong about however
         // far these scenarios then jump, roll, hover or drop the hull.
-        String si = shipInfoById(scenarioShipId);
-        double[] where = {readDouble(si, POS_X), readDouble(si, POS_Y), readDouble(si, POS_Z)};
+        ShipInfo si = ShipInfo.of(shipInfoById(scenarioShipId));
+        double[] where = {si.x, si.y, si.z};
         System.out.println("[crewcap] ship at (" + bx + "," + by + "," + bz + ") -> "
                 + java.util.Arrays.toString(where));
         return where;
@@ -2573,9 +2549,9 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
     }
 
     /** This scenario's ship, asked by identity — no distance term to be wrong about. */
-    private String shipInfo() throws Exception {
+    private ShipInfo shipInfo() throws Exception {
         assertTrue("shipInfo() before buildShip() captured an identity", scenarioShipId != null);
-        return shipInfoById(scenarioShipId);
+        return ShipInfo.of(shipInfoById(scenarioShipId));
     }
 
     private double readDouble(String json, String field) {

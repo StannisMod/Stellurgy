@@ -17,6 +17,7 @@ import org.junit.Test;
 import org.lwjgl.input.Keyboard;
 
 import zmaster587.advancedRocketry.test.Reply;
+import zmaster587.advancedRocketry.test.ShipInfo;
 import zmaster587.advancedRocketry.test.Events;
 import zmaster587.advancedRocketry.test.FixtureSite;
 import zmaster587.advancedRocketry.test.Plot;
@@ -49,7 +50,6 @@ import static org.junit.Assert.assertTrue;
 public class VSPilotKeysWithSpaceSubsystemE2ETest {
 
     private static final String BUILDER_POS = "builderPos";
-    private static final String POS_Y = "posY";
     private static final String DUMMY_ID = "dummyId";
 
     private static final String VARIANT = "with-pilot-seat";
@@ -194,7 +194,7 @@ public class VSPilotKeysWithSpaceSubsystemE2ETest {
                         + " is, its physics are not stepped and every reading below describes a"
                         + " craft that cannot move", SHIP_LOAD_BUDGET_TICKS);
         String atBase = exec("artest vs ship-info 0 id " + shipUuid);
-        double yBefore = Reply.of("artest vs ship-info", atBase).number(POS_Y);
+        double yBefore = ShipInfo.isLoaded(atBase) ? ShipInfo.of(atBase).y : Double.NaN;
         assertTrue("the ship the registry named must LOAD with the client present within 200 ticks."
                         + " The lookup's own answer IS the diagnosis and this message used to throw"
                         + " it away: a reply carrying \"managed\":false means the physics mod does not"
@@ -226,9 +226,8 @@ public class VSPilotKeysWithSpaceSubsystemE2ETest {
             // is unparseable), so the predicate holds only on a genuine climb.
             lift = ClientPoll.until(clientHarness.bot()::waitTicks,
                     () -> {
-                        double y = Reply.of("artest vs ship-info",
-                                exec("artest vs ship-info 0 id " + shipUuid)).number(POS_Y);
-                        return Double.isNaN(y) ? y0 : y;
+                        String sample = exec("artest vs ship-info 0 id " + shipUuid);
+                        return ShipInfo.isLoaded(sample) ? ShipInfo.of(sample).y : y0;
                     },
                     y -> (y - y0) >= MIN_CLIMB, 5, 40);
         } finally {

@@ -7,6 +7,7 @@ import org.lwjgl.input.Keyboard;
 import zmaster587.advancedRocketry.test.Reply;
 import zmaster587.advancedRocketry.test.GameTicks;
 import zmaster587.advancedRocketry.test.ShipIdentity;
+import zmaster587.advancedRocketry.test.ShipInfo;
 
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -64,11 +65,8 @@ import static org.junit.Assert.assertTrue;
 public class SpikeFarCoordinateShipTest extends AbstractClientE2ETest {
 
     private static final String BUILDER_POS = "builderPos";
-    private static final String POS_Y = "posY";
     private static final String COUNT = "count";
     private static final String DUMMY_ID = "dummyId";
-    private static final String POS_X = "posX";
-    private static final String POS_Z = "posZ";
 
     /** One command, then this many samples this many ticks apart, watching for motion to cease. */
     private static final int SURVIVAL_SAMPLES = 40;
@@ -175,8 +173,8 @@ public class SpikeFarCoordinateShipTest extends AbstractClientE2ETest {
                 for (int i = 0; i < 40 && Double.isNaN(y0); i++) {
                     bot().waitTicks(5);
                     lastInfo = exec("artest vs ship-info 0 id " + shipId);
-                    if (lastInfo.contains("\"managed\":true")) {
-                        y0 = readDouble(lastInfo);
+                    if (ShipInfo.isLoaded(lastInfo)) {
+                        y0 = ShipInfo.of(lastInfo).y;
                     }
                 }
                 if (Double.isNaN(y0)) {
@@ -424,10 +422,11 @@ public class SpikeFarCoordinateShipTest extends AbstractClientE2ETest {
         for (int i = 0; i < 10; i++) {
             try {
                 last = exec("artest vs ship-info 0 id " + shipId);
-                Reply info = Reply.of("artest vs ship-info", last);
-                double px = info.number(POS_X), pz = info.number(POS_Z);
-                if (!Double.isNaN(px) && !Double.isNaN(pz)) {
-                    return new double[] {px, pz};
+                if (ShipInfo.isLoaded(last)) {
+                    ShipInfo info = ShipInfo.of(last);
+                    if (!Double.isNaN(info.x) && !Double.isNaN(info.z)) {
+                        return new double[] {info.x, info.z};
+                    }
                 }
                 bot().waitTicks(2);
             } catch (Exception e) {
@@ -598,9 +597,11 @@ public class SpikeFarCoordinateShipTest extends AbstractClientE2ETest {
         for (int i = 0; i < 10; i++) {
             try {
                 last = exec("artest vs ship-info 0 id " + shipId);
-                double py = Reply.of("artest vs ship-info", last).number(POS_Y);
-                if (!Double.isNaN(py)) {
-                    return py;
+                if (ShipInfo.isLoaded(last)) {
+                    double py = ShipInfo.of(last).y;
+                    if (!Double.isNaN(py)) {
+                        return py;
+                    }
                 }
                 bot().waitTicks(2);
             } catch (Exception e) {
@@ -613,12 +614,6 @@ public class SpikeFarCoordinateShipTest extends AbstractClientE2ETest {
     private int count(String sub) throws Exception {
         String command = "artest vs " + sub + " 0";
         return Reply.of(command, exec(command)).integerOr(COUNT, -1);
-    }
-
-    private double readDouble(String json) {
-        double value = Reply.of("artest vs ship-info", json).number(POS_Y);
-        assertTrue("expected a posY in: " + json, !Double.isNaN(value));
-        return value;
     }
 
     private static double field(String json, String key) {

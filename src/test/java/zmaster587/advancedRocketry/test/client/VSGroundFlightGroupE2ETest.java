@@ -13,6 +13,7 @@ import java.util.regex.Pattern;
 import zmaster587.advancedRocketry.api.FreeFlightPhysics;
 import zmaster587.advancedRocketry.test.Events;
 import zmaster587.advancedRocketry.test.Reply;
+import zmaster587.advancedRocketry.test.ShipInfo;
 import zmaster587.advancedRocketry.test.FixtureSite;
 import zmaster587.advancedRocketry.test.Plot;
 
@@ -79,9 +80,8 @@ public class VSGroundFlightGroupE2ETest extends AbstractSharedVsClientE2ETest {
     }
 
     private static final String BUILDER_POS = "builderPos";
-    private static final String POS_X = "posX";
     /**
-     * The travel along {@code p} since {@code before}, or {@code null} when the ship is no longer
+     * The travel along {@code axis} since {@code before}, or {@code null} when the ship is no longer
      * reporting a position at all.
      *
      * <h2>Why every driving window needs this, measured the hard way</h2>
@@ -99,9 +99,11 @@ public class VSGroundFlightGroupE2ETest extends AbstractSharedVsClientE2ETest {
      * from the one the assertion makes, which is the whole point — the maximum over the samples
      * taken is still falsifiable by a ship that never moved.</p>
      */
-    private static Double travelOrNull(String shipInfo, String field, double before) {
-        double now = Reply.of("artest vs ship-info", shipInfo).number(field);
-        return Double.isNaN(now) ? null : now - before;
+    private static Double travelOrNull(String shipInfo, Axis axis, double before) {
+        if (!ShipInfo.isLoaded(shipInfo)) {
+            return null;
+        }
+        return axis.of(ShipInfo.of(shipInfo)) - before;
     }
 
     /**
@@ -147,7 +149,7 @@ public class VSGroundFlightGroupE2ETest extends AbstractSharedVsClientE2ETest {
      * {@link TestTimeouts#factor()} — so a frame-starved client under concurrent-fork load still
      * gets every tick it used to.</p>
      */
-    private double[] travelWindow(String shipId, int key, String driven, String other,
+    private double[] travelWindow(String shipId, int key, Axis driven, Axis other,
                                   double drivenBefore, double otherBefore) throws Exception {
         double best = 0.0;
         double otherThere = 0.0;
@@ -178,13 +180,6 @@ public class VSGroundFlightGroupE2ETest extends AbstractSharedVsClientE2ETest {
         return new double[] {best, otherThere};
     }
 
-    private static final String POS_Y = "posY";
-    private static final String POS_Z = "posZ";
-    private static final String VEL_Y = "velY";
-    private static final String QW = "qw";
-    private static final String QX = "qx";
-    private static final String QY = "qy";
-    private static final String QZ = "qz";
     private static final String COUNT = "count";
     private static final String DUMMY_ID = "dummyId";
 
@@ -283,10 +278,11 @@ public class VSGroundFlightGroupE2ETest extends AbstractSharedVsClientE2ETest {
         String byIdA = shipInfoById(idA);
         scenario().record("byIdA", byIdA);
         assertTrue("an id-keyed lookup must still answer about the ship it names after that ship "
-                + "has moved: " + byIdA, byIdA.contains("\"managed\":true"));
+                + "has moved: " + byIdA, ShipInfo.isLoaded(byIdA));
+        ShipInfo shipA = ShipInfo.of(byIdA);
         assertTrue("…and the id in the reply must be the one asked for: " + byIdA,
-                idA.equals(readShipId(byIdA)));
-        double aY = readDouble(byIdA, POS_Y);
+                idA.equals(shipA.id));
+        double aY = shipA.y;
         assertTrue("…and it must report where A IS now, not where it was built (posY=" + aY + ")",
                 aY > ay + 20);
 
@@ -305,9 +301,13 @@ public class VSGroundFlightGroupE2ETest extends AbstractSharedVsClientE2ETest {
         // somebody's craft.
         String positional = exec("artest vs ship-info 0 " + ax + " " + ay + " " + az);
         scenario().record("positionalRefused", positional);
+        // Asked as a FIELD and not as a substring: what makes a reply a ship report is that it
+        // carries `managed` at all, so the absence of that field is the claim — and this must not go
+        // through `ShipInfo`, whose job is to REFUSE a reply that is not this verb's, which is
+        // exactly the reply this leg is asserting it got.
         assertTrue("asking for a ship BY POSITION must be refused, not answered: the reply must not "
                 + "look like a ship report. reply=" + positional,
-                !positional.contains("\"managed\":true"));
+                !Reply.of("artest vs ship-info", positional).has("managed"));
     }
 
     // ── migrated: VSShipClientLoadE2ETest ────────────────────────────────────
@@ -361,7 +361,7 @@ public class VSGroundFlightGroupE2ETest extends AbstractSharedVsClientE2ETest {
         awaitShipUsable(events, spawnMark, shipId);
         // The event record names the ship and its dimension but carries NO position, so the
         // baseline coordinate still comes from an id-keyed ship-info.
-        double zBefore = readDouble(shipInfoById(shipId), POS_Z);
+        double zBefore = ShipInfo.of(shipInfoById(shipId)).z;
         assertTrue("a VS ship must LOAD with a client present", !Double.isNaN(zBefore));
 
         // Now that it is loaded + physics-enabled, command a straight-UP velocity realized
@@ -370,7 +370,7 @@ public class VSGroundFlightGroupE2ETest extends AbstractSharedVsClientE2ETest {
         // deadbeat force (F = mass·accel, clamped to thrust authority) exceeds it. Re-command
         // each tick and POLL for the climb — VS's physics-thread activation after a load can
         // lag a few ticks, so drive until it rises (bounded) rather than a fixed window.
-        double yBefore = readDouble(shipInfoById(shipId), POS_Y);
+        double yBefore = ShipInfo.of(shipInfoById(shipId)).y;
         double yAfter = yBefore;
         double maxClimb = 0.0;
         double velY = 0.0;
@@ -384,9 +384,9 @@ public class VSGroundFlightGroupE2ETest extends AbstractSharedVsClientE2ETest {
             assertTrue("force-vel must reach THIS ship's own flight computer: " + cmd,
                     cmd.contains("\"commanded\":true"));
             bot().waitTicks(1);
-            String info = shipInfoById(shipId);
-            yAfter = readDouble(info, POS_Y);
-            velY = readDouble(info, VEL_Y);
+            ShipInfo info = ShipInfo.of(shipInfoById(shipId));
+            yAfter = info.y;
+            velY = info.velY;
             maxClimb = Math.max(maxClimb, yAfter - yBefore);
         }
 
@@ -531,7 +531,7 @@ public class VSGroundFlightGroupE2ETest extends AbstractSharedVsClientE2ETest {
         awaitShipUsable(events, spawnMark, shipId, 300);
         assertTrue("a VS ship assembled under a nearby observer must load without VS faulting "
                         + "(id=" + shipId + ", registry: " + events.since(spawnMark, "ship_spawned") + ")",
-                shipInfoById(shipId).contains("\"managed\":true"));
+                ShipInfo.isLoaded(shipInfoById(shipId)));
     }
 
     // ── migrated: VSShipSeatDriveE2ETest ─────────────────────────────────────
@@ -573,7 +573,7 @@ public class VSGroundFlightGroupE2ETest extends AbstractSharedVsClientE2ETest {
         // mark would wait for an edge that has already gone by.
         awaitShipUsable(events, spawnMark, shipId);
         // The event record carries no position; the baseline comes from an id-keyed ship-info.
-        double yBefore = readDouble(shipInfoById(shipId), POS_Y);
+        double yBefore = ShipInfo.of(shipInfoById(shipId)).y;
 
         // Server-side seat drive: the seat must resolve its AFC, and a full-up throttle through
         // the seat->AFC per-tile path must lift the ship (isolates ground friction: up only).
@@ -593,7 +593,7 @@ public class VSGroundFlightGroupE2ETest extends AbstractSharedVsClientE2ETest {
                             + "after VS relocation): " + lastSeat,
                     lastSeat.contains("\"afcResolved\":true"));
             bot().waitTicks(1);
-            yAfter = readDouble(shipInfoById(shipId), POS_Y);
+            yAfter = ShipInfo.of(shipInfoById(shipId)).y;
             maxSeatClimb = Math.max(maxSeatClimb, yAfter - yBefore);
         }
         assertTrue("a throttle driven through the pilot seat -> AFC -> force path must lift the ship "
@@ -654,7 +654,7 @@ public class VSGroundFlightGroupE2ETest extends AbstractSharedVsClientE2ETest {
         // The event record carries no position, so the at-rest pose — the climb's baseline, and what
         // gets recorded for the report — still comes from an id-keyed ship-info.
         String atRest = shipInfoById(shipId);
-        double yBefore = readDouble(atRest, POS_Y);
+        double yBefore = ShipInfo.of(atRest).y;
         scenario().record("shipAtRest", atRest);
 
         // Sit the bot on THIS ship's pilot seat: resolve the seat inside the ship this scenario
@@ -707,7 +707,7 @@ public class VSGroundFlightGroupE2ETest extends AbstractSharedVsClientE2ETest {
             int ceiling = (int) Math.ceil(2 * 100 * TestTimeouts.factor());
             for (int spent = 0; spent < ceiling && maxLift <= 1.5; spent += 2) {
                 bot().waitTicks(2);
-                Double climbed = travelOrNull(shipInfoById(shipId), POS_Y, yBefore);
+                Double climbed = travelOrNull(shipInfoById(shipId), Y, yBefore);
                 if (climbed == null) {
                     scenario().record("liftEndedBy", "ship no longer reporting a position at "
                             + spent + " ticks; maxLift=" + maxLift);
@@ -733,7 +733,7 @@ public class VSGroundFlightGroupE2ETest extends AbstractSharedVsClientE2ETest {
         // the ship departs, so these client deltas would be ~0 even though the server ship moved.
         bot().waitTicks(6); // let the client ship transform settle at the new altitude
         String afterSettle = shipInfoById(shipId);
-        double serverYAfter = readDouble(afterSettle, POS_Y);
+        double serverYAfter = ShipInfo.of(afterSettle).y;
         double riderYAfter = bot().reportRidingEntity().get("posY").getAsDouble();
         double camYAfter = bot().reportState().get("playerY").getAsDouble();
         scenario().record("shipAfterSettle", afterSettle)
@@ -772,15 +772,15 @@ public class VSGroundFlightGroupE2ETest extends AbstractSharedVsClientE2ETest {
         bot().releaseKey(Keyboard.KEY_R);
         cutAndSettle();
 
-        final double xBeforeNose = readDouble(shipInfoById(shipId), POS_X);
-        final double zBeforeNose = readDouble(shipInfoById(shipId), POS_Z);
+        final double xBeforeNose = ShipInfo.of(shipInfoById(shipId)).x;
+        final double zBeforeNose = ShipInfo.of(shipInfoById(shipId)).z;
         // A WINDOW, and the axis pair is taken from ONE reply per sample. Two changes, both about
         // what the old form could not say: the poll exited on `dz > 2.0` while the first assertion
         // claimed `dz > 1.0`, so that half could not fail; and the dominance check compared a dz
         // from the poll's exit against a dx read afterwards, attributing one moment's travel to
         // another's. The sample kept is the one with the largest |dz|, and its dx comes off the same
         // ship-info as its dz.
-        double[] nose = travelWindow(shipId, Keyboard.KEY_W, POS_Z, POS_X, zBeforeNose, xBeforeNose);
+        double[] nose = travelWindow(shipId, Keyboard.KEY_W, Z, X, zBeforeNose, xBeforeNose);
         cutAndSettle();
         assertTrue("holding the FORWARD key while seated must drive the ship along its NOSE — world "
                         + "+Z on an identity-attitude ship — through the full client path. "
@@ -791,10 +791,10 @@ public class VSGroundFlightGroupE2ETest extends AbstractSharedVsClientE2ETest {
                         + nose[0] + " dx=" + nose[1],
                 Math.abs(nose[0]) > Math.abs(nose[1]));
 
-        final double xBeforeStrafe = readDouble(shipInfoById(shipId), POS_X);
-        final double zBeforeStrafe = readDouble(shipInfoById(shipId), POS_Z);
+        final double xBeforeStrafe = ShipInfo.of(shipInfoById(shipId)).x;
+        final double zBeforeStrafe = ShipInfo.of(shipInfoById(shipId)).z;
         // The same window, with the axes the other way round.
-        double[] strafe = travelWindow(shipId, Keyboard.KEY_Q, POS_X, POS_Z,
+        double[] strafe = travelWindow(shipId, Keyboard.KEY_Q, X, Z,
                 xBeforeStrafe, zBeforeStrafe);
         cutAndSettle();
         assertTrue("holding the STRAFE key while seated must drive the ship along its LATERAL axis — "
@@ -847,12 +847,22 @@ public class VSGroundFlightGroupE2ETest extends AbstractSharedVsClientE2ETest {
         bot().waitTicks(10);
     }
 
+    /** One world axis of a ship's pose, named by what it IS rather than by the producer's field
+     *  spelling — so a window can be told which axis it drives without re-quoting the reply. */
+    private interface Axis {
+        double of(ShipInfo ship);
+    }
+
+    private static final Axis X = ship -> ship.x;
+    private static final Axis Y = ship -> ship.y;
+    private static final Axis Z = ship -> ship.z;
+
     /** The ship nose heading (MC yaw, degrees) from the attitude quaternion in {@code vs ship-info},
      *  using the SAME quat&rarr;Euler conversion the production camera lock uses (no convention drift). */
     private float shipNoseYaw(String shipInfoJson) {
-        return FreeFlightPhysics.eulerFromQuat(new FreeFlightPhysics.Quat(
-                readDouble(shipInfoJson, QW), readDouble(shipInfoJson, QX),
-                readDouble(shipInfoJson, QY), readDouble(shipInfoJson, QZ)))[0];
+        ShipInfo ship = ShipInfo.of(shipInfoJson);
+        return FreeFlightPhysics.eulerFromQuat(
+                new FreeFlightPhysics.Quat(ship.qw, ship.qx, ship.qy, ship.qz))[0];
     }
 
     /** Wrapped angular distance on the circle, degrees in [0, 180]. */
@@ -866,13 +876,13 @@ public class VSGroundFlightGroupE2ETest extends AbstractSharedVsClientE2ETest {
     }
 
     private double[] readVec(String shipInfoJson) {
-        return new double[]{readDouble(shipInfoJson, POS_X), readDouble(shipInfoJson, POS_Y),
-                readDouble(shipInfoJson, POS_Z)};
+        ShipInfo ship = ShipInfo.of(shipInfoJson);
+        return new double[]{ship.x, ship.y, ship.z};
     }
 
     private double[] readQuat(String shipInfoJson) {
-        return new double[]{readDouble(shipInfoJson, QW), readDouble(shipInfoJson, QX),
-                readDouble(shipInfoJson, QY), readDouble(shipInfoJson, QZ)};
+        ShipInfo ship = ShipInfo.of(shipInfoJson);
+        return new double[]{ship.qw, ship.qx, ship.qy, ship.qz};
     }
 
     private double readDouble(String json, String field) {

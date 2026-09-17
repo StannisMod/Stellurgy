@@ -5,6 +5,7 @@ import zmaster587.advancedRocketry.test.Events;
 import zmaster587.advancedRocketry.test.ShipReadiness;
 import zmaster587.advancedRocketry.test.GameTicks;
 import zmaster587.advancedRocketry.test.ShipIdentity;
+import zmaster587.advancedRocketry.test.ShipInfo;
 
 import org.junit.Test;
 
@@ -113,9 +114,9 @@ public class VSShipTransitPersistE2ETest extends AbstractSharedServerTest {
         // "exactly one ship is here" and "and this is it" are one reading. The nearest-ship lookup
         // this replaced would answer in the same shape if the cell held two.
         String arrivedId = ShipIdentity.theOnlyLoadedShipIn(this::exec, targetDim);
-        String dstInfo = exec("artest vs ship-info " + targetDim + " id " + arrivedId);
-        assertTrue("the restored ship is not VS-managed in the target cell (snapshot paste/assembly failed): "
-                + dstInfo, dstInfo.contains("\"managed\":true"));
+        assertTrue("the restored ship is not VS-managed in the target cell (snapshot paste/assembly"
+                + " failed); id=" + arrivedId,
+                ShipInfo.loadedIn(this::exec, targetDim, arrivedId));
     }
 
     @org.junit.After

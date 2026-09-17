@@ -5,6 +5,7 @@ import zmaster587.advancedRocketry.test.ShipReadiness;
 import zmaster587.advancedRocketry.test.GameTicks;
 import zmaster587.advancedRocketry.test.EntrySlots;
 import zmaster587.advancedRocketry.test.ShipIdentity;
+import zmaster587.advancedRocketry.test.ShipInfo;
 
 import org.junit.After;
 import org.junit.Test;
@@ -71,11 +72,8 @@ public class VSShipAutoTakeoffE2ETest extends AbstractSharedServerTest {
         String durableId = ShipIdentity.nameFromAssembly(asm);
         String shipId = ShipIdentity.physicsIdOf(this::exec, 0, durableId);
 
-        String srcInfo = exec("artest vs ship-info 0 id " + shipId);
-        assertTrue("the source ship must be managed before its pose is read: " + srcInfo,
-                srcInfo.contains("\"managed\":true"));
-        double sx = extractDouble(srcInfo, "posX"), sy = extractDouble(srcInfo, "posY"),
-                sz = extractDouble(srcInfo, "posZ");
+        ShipInfo src = ShipInfo.byId(this::exec, 0, shipId);
+        double sx = src.x, sy = src.y, sz = src.z;
 
         // ---- DECLINE leg: put a solid slab directly overhead, engage, expect a self-disengage. ----
         // The corridor is a 45-degree diagonal, so it moves ~1 block sideways per block of climb; a

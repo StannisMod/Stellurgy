@@ -1,6 +1,7 @@
 package zmaster587.advancedRocketry.test.server;
 
 import zmaster587.advancedRocketry.test.Reply;
+import zmaster587.advancedRocketry.test.ShipInfo;
 import zmaster587.advancedRocketry.test.Events;
 import zmaster587.advancedRocketry.test.ShipReadiness;
 import zmaster587.advancedRocketry.test.GameTicks;
@@ -120,12 +121,13 @@ public class VSJumpCarriesLooseBodiesE2ETest extends AbstractSharedServerTest {
                 return false; // not arrived yet, or not alone — either way not a nameable answer
             }
             arrived[0] = exec("artest vs ship-info " + targetDim + " id " + named[0]);
-            if (!arrived[0].contains("\"posX\"")) {
-                return false;
+            if (!ShipInfo.isLoaded(arrived[0])) {
+                return false; // the craft is not in this world yet — keep waiting, do not read a pose
             }
-            double px = extractDouble(arrived[0], "posX");
-            double py = extractDouble(arrived[0], "posY");
-            double pz = extractDouble(arrived[0], "posZ");
+            ShipInfo ship = ShipInfo.of(arrived[0]);
+            double px = ship.x;
+            double py = ship.y;
+            double pz = ship.z;
             return extractInt(exec("artest space loose-body-count " + targetDim + " " + px + " "
                     + py + " " + pz + " " + ABOARD_RADIUS), "count") >= 1;
         });

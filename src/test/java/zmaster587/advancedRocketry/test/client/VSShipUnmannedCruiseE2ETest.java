@@ -10,6 +10,7 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 import zmaster587.advancedRocketry.test.Reply;
+import zmaster587.advancedRocketry.test.ShipInfo;
 import zmaster587.advancedRocketry.test.Events;
 import zmaster587.advancedRocketry.test.FixtureSite;
 
@@ -89,8 +90,8 @@ public class VSShipUnmannedCruiseE2ETest extends AbstractSharedVsClientE2ETest {
         for (int i = 0; i < 40 && Double.isNaN(y0); i++) {
             bot().waitTicks(5);
             lastLookup = shipInfoById(shipId);
-            if (lastLookup.contains("\"managed\":true")) {
-                y0 = readDouble(lastLookup, POS_Y);
+            if (ShipInfo.isLoaded(lastLookup)) {
+                y0 = ShipInfo.of(lastLookup).y;
             }
         }
         // An ARRANGEMENT failure, and typed as one: a ship that never loaded has disproved nothing

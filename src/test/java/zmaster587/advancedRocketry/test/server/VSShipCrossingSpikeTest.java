@@ -3,6 +3,7 @@ package zmaster587.advancedRocketry.test.server;
 import zmaster587.advancedRocketry.test.Reply;
 import zmaster587.advancedRocketry.test.ShipReadiness;
 import zmaster587.advancedRocketry.test.ShipIdentity;
+import zmaster587.advancedRocketry.test.ShipInfo;
 
 import org.junit.Test;
 
@@ -75,8 +76,8 @@ public class VSShipCrossingSpikeTest extends AbstractSharedServerTest {
         // name is the one thing that spans them, and it is what the destination is found by.
         String durableId = ShipIdentity.nameFromAssembly(asm);
         String srcShipId = ShipIdentity.physicsIdOf(this::exec, 0, durableId);
-        String srcInfo = exec("artest vs ship-info 0 id " + srcShipId);
-        assertTrue("source ship not managed by VS before crossing: " + srcInfo, srcInfo.contains("\"managed\":true"));
+        assertTrue("source ship not managed by VS before crossing",
+                ShipInfo.loadedIn(this::exec, 0, srcShipId));
 
         // BASELINE: the seat resolves its flight computer, and we record the RELATIVE offset between them
         // (invariant under any rigid relocation — the number the crossing must preserve).
@@ -91,9 +92,8 @@ public class VSShipCrossingSpikeTest extends AbstractSharedServerTest {
         assertTrue("could not seat a rider on the source ship: " + mount, mount.contains("\"seatFound\":true"));
 
         // Locate the ship's live world position, by identity, then cross it to the destination.
-        String srcLive = exec("artest vs ship-info 0 id " + srcShipId);
-        assertTrue("source ship not managed by VS before crossing: " + srcLive, srcLive.contains("\"managed\":true"));
-        double sx = extractDouble(srcLive, "posX"), sy = extractDouble(srcLive, "posY"), sz = extractDouble(srcLive, "posZ");
+        ShipInfo srcLive = ShipInfo.byId(this::exec, 0, srcShipId);
+        double sx = srcLive.x, sy = srcLive.y, sz = srcLive.z;
 
         // The crossing CUTS a ship, so it is told which one; the source pose still travels with the
         // call because the riders aboard are gathered around it, but it no longer decides whose
@@ -118,9 +118,8 @@ public class VSShipCrossingSpikeTest extends AbstractSharedServerTest {
         // that is what a crossing does — but the name in the flight computer's NBT rode across
         // verbatim, so the destination is identified rather than approached.
         String dstShipId = ShipIdentity.physicsIdOf(this::exec, 0, durableId);
-        String dstInfo = exec("artest vs ship-info 0 id " + dstShipId);
-        assertTrue("re-assembled ship is not managed by VS at the destination (crossing did not re-VS): "
-                + dstInfo, dstInfo.contains("\"managed\":true"));
+        assertTrue("re-assembled ship is not managed by VS at the destination (crossing did not"
+                + " re-VS); id=" + dstShipId, ShipInfo.loadedIn(this::exec, 0, dstShipId));
 
         // POST: the seat still resolves its AFC, at the SAME relative offset — the linked-TE state and the
         // ship's internal geometry survived the pack/paste round-trip. Asked of the ARRIVED ship by its

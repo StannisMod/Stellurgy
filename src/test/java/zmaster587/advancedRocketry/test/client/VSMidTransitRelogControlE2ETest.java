@@ -18,6 +18,7 @@ import zmaster587.advancedRocketry.space.GalacticCoord;
 import zmaster587.advancedRocketry.test.Reply;
 import zmaster587.advancedRocketry.test.Events;
 import zmaster587.advancedRocketry.test.ShipIdentity;
+import zmaster587.advancedRocketry.test.ShipInfo;
 
 import static zmaster587.advancedRocketry.test.AdvancedRocketryTestConstants.HYPERSPACE_JUMP_SPEED;
 import static org.junit.Assert.assertEquals;
@@ -302,12 +303,10 @@ public class VSMidTransitRelogControlE2ETest extends AbstractSharedVsClientE2ETe
         bot().waitTicks(30); // let the station-hold settle before the departure snapshot
 
         // The climb moved the ship: the departure anchor is its CURRENT pose, never the build pose.
-        String shipNow = shipInfoById(originDim, shipId);
-        assertTrue("the ship must still be managed at its berth: " + shipNow,
-                shipNow.contains("\"managed\":true"));
-        int ax = (int) Math.round(readDouble(shipNow, "posX"));
-        int ay = (int) Math.round(readDouble(shipNow, "posY"));
-        int az = (int) Math.round(readDouble(shipNow, "posZ"));
+        ShipInfo shipNow = ShipInfo.of(shipInfoById(originDim, shipId));
+        int ax = (int) Math.round(shipNow.x);
+        int ay = (int) Math.round(shipNow.y);
+        int az = (int) Math.round(shipNow.z);
 
         // ---- ACT 1: depart into hyperspace. The reduced speed sizes the park at ~40 probe-driven
         // ticks (the cells sit one 4M-block sector apart), so the relog lands INSIDE the transit
@@ -393,7 +392,12 @@ public class VSMidTransitRelogControlE2ETest extends AbstractSharedVsClientE2ETe
         String serverPlayer = exec("artest player health");
         String arrivedShip = shipInfoById(targetDim, shipId);
         double ridingY = riding.has("posY") ? riding.get("posY").getAsDouble() : Double.NaN;
-        String altitudes = "shipOnServer=" + readDoubleOr(arrivedShip, "posY")
+        // "not loaded" rather than NaN: a ship the destination world does not hold has no altitude,
+        // and a blank in this list must say WHICH of the four subjects is missing, not merely that
+        // one number could not be read.
+        String shipOnServer = ShipInfo.isLoaded(arrivedShip)
+                ? String.valueOf(ShipInfo.of(arrivedShip).y) : "not-loaded-in-" + targetDim;
+        String altitudes = "shipOnServer=" + shipOnServer
                 + " playerOnServer=" + readDoubleOr(serverPlayer, "posY")
                 + " dummyOnClient=" + ridingY
                 + " playerOnClient=" + arrivedY;
