@@ -1,12 +1,11 @@
 package zmaster587.advancedRocketry.test.server;
 
+import zmaster587.advancedRocketry.test.EntityState;
 import zmaster587.advancedRocketry.test.ShieldTile;
 import zmaster587.advancedRocketry.test.Reply;
 import org.junit.Test;
 
 import java.util.List;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 import zmaster587.advancedRocketry.test.FixtureSite;
 
@@ -64,10 +63,10 @@ public class ShieldImpactAbsorptionTest extends AbstractSharedServerTest {
         // One deterministic emitter tick: containUnauthorizedEntities runs and absorbs the bolt.
         exec("artest tile force-tick " + DIM + " " + ex + " " + Y + " " + gz + " 1");
 
-        String boltInfo = exec("artest entity info " + DIM + " " + boltId);
+        EntityState boltInfo = entity(boltId);
         assertTrue("the powered coil did not absorb the energy projectile (it survived): a full coil "
-                        + "cannot block a hit larger than its per-tick intake:\n" + boltInfo,
-                boltInfo.contains("\"isAlive\":false") || boltInfo.contains("\"isDead\":true"));
+                        + "cannot block a hit larger than its per-tick intake:\n" + boltInfo.raw(),
+                boltInfo.goneOrDying());
 
         long storedAfter = read(ex, gz).shieldStored();
         long drop = storedBefore - storedAfter;
@@ -139,14 +138,15 @@ public class ShieldImpactAbsorptionTest extends AbstractSharedServerTest {
         exec("artest entity tick " + DIM + " " + arrowId + " 1");
         exec("artest tile force-tick " + DIM + " " + ex + " " + Y + " " + gz + " 1");
 
-        String info = exec("artest entity info " + DIM + " " + arrowId);
+        EntityState info = entity(arrowId);
         assertTrue("the arrow is gone (absorbed/dead), not deflected — a kinetic projectile should be "
-                        + "pushed back, not consumed:\n" + info,
-                info.contains("\"isAlive\":true") && info.contains("\"isDead\":false"));
-        double px = parseD(info, "posX"), py = parseD(info, "posY"), pz = parseD(info, "posZ");
-        double dist = Math.sqrt(sq(px - centerX) + sq(py - centerY) + sq(pz - centerZ));
+                        + "pushed back, not consumed:\n" + info.raw(),
+                info.alive && !info.dead());
+        double dist = Math.sqrt(sq(info.posX() - centerX) + sq(info.posY() - centerY)
+                + sq(info.posZ() - centerZ));
         assertTrue("the arrow ended up inside the shell (dist=" + dist + " <= radius " + radius
-                        + "): it was not deflected back outside the shield:\n" + info, dist > radius);
+                        + "): it was not deflected back outside the shield:\n" + info.raw(),
+                dist > radius);
     }
 
     private ShieldTile read(int x, int z) throws Exception {
@@ -165,9 +165,9 @@ public class ShieldImpactAbsorptionTest extends AbstractSharedServerTest {
         exec("artest shield tick " + DIM);
     }
 
-    private static double parseD(String json, String key) {
-        assertTrue("no " + key + " field in: " + json, Reply.of(json).has(key));
-        return Reply.of(json).number(key);
+    /** What the server says about one entity in this test's dimension. */
+    private static EntityState entity(int entityId) throws Exception {
+        return EntityState.byId(ShieldImpactAbsorptionTest::exec, DIM, entityId);
     }
 
     private static double sq(double v) {

@@ -7,6 +7,7 @@ import org.junit.runners.MethodSorters;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import zmaster587.advancedRocketry.test.EntityState;
 import zmaster587.advancedRocketry.test.ShieldTile;
 import zmaster587.advancedRocketry.test.Events;
 import zmaster587.advancedRocketry.test.Reply;
@@ -172,7 +173,7 @@ public class VSShipFrameShieldE2ETest extends AbstractSharedVsClientE2ETest {
         exec("artest entity set-motion 0 " + arrowId + " 0 0 -0.4");
         exec("artest entity tick 0 " + arrowId + " 1");
         exec("artest tile force-tick 0 " + spX + " " + spY + " " + spZ + " 1");
-        String arrow = exec("artest entity info 0 " + arrowId);
+        EntityState arrow = EntityState.byId(this::exec, 0, arrowId);
         // Re-read the centre once more; the deflection is measured against where the shell is now.
         double ncx = ShieldTile.at(this::exec, 0, spX, spY, spZ).worldX();
         double dcx = ncx - cx; // how far the hull drifted while we set this up
@@ -180,12 +181,11 @@ public class VSShipFrameShieldE2ETest extends AbstractSharedVsClientE2ETest {
         // kinetic path must REFLECT, and a dead arrow has no position to measure. (This assertion
         // used to sit below a guard that made the distance check conditional on the same fact.)
         assertTrue("the arrow was consumed, not deflected — the kinetic path should reflect it off the "
-                + "ship's shell:\n" + arrow, arrow.contains("\"isAlive\":true"));
-        double ax = f(arrow, "posX"), ay = f(arrow, "posY"), az = f(arrow, "posZ");
-        double d = dist(ax, ay, az, cx + dcx, cy, cz);
+                + "ship's shell:\n" + arrow.raw(), arrow.alive);
+        double d = dist(arrow.posX(), arrow.posY(), arrow.posZ(), cx + dcx, cy, cz);
         assertTrue("the arrow ended up inside the ship's shell (dist=" + d + " <= radius " + radius
-                + ") — a charged shield on a VS ship did not deflect it off the hull:\n" + arrow,
-                d > radius);
+                + ") — a charged shield on a VS ship did not deflect it off the hull:\n"
+                + arrow.raw(), d > radius);
 
         // Check 2: the shell rides the hull as it MOVES, and its surface velocity is live (the
         // relative-velocity input). A just-assembled free hull drifts under its own physics; we perturb
@@ -273,12 +273,6 @@ public class VSShipFrameShieldE2ETest extends AbstractSharedVsClientE2ETest {
 
     private static String str(double[] a) {
         return "(" + a[0] + "," + a[1] + "," + a[2] + ")";
-    }
-
-    /** A field of a FLAT reply — {@code shield read}, {@code entity info}. */
-    private double f(String json, String key) {
-        assertTrue("expected key " + key + " in: " + json, Reply.of(json).has(key));
-        return Reply.of(json).number(key);
     }
 
     /**

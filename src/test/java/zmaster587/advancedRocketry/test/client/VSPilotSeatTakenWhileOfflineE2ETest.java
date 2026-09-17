@@ -1,5 +1,6 @@
 package zmaster587.advancedRocketry.test.client;
 
+import zmaster587.advancedRocketry.test.EntityState;
 import zmaster587.advancedRocketry.test.SeatMount;
 import zmaster587.advancedRocketry.test.Events;
 import zmaster587.advancedRocketry.test.Reply;
@@ -81,9 +82,6 @@ public class VSPilotSeatTakenWhileOfflineE2ETest extends AbstractSharedVsClientE
     private static final String SEAT_X = "seatX";
     private static final String SEAT_Y = "seatY";
     private static final String SEAT_Z = "seatZ";
-    private static final String POS_X = "posX";
-    private static final String POS_Y = "posY";
-    private static final String POS_Z = "posZ";
 
     private static final String VARIANT = "with-pilot-seat";
 
@@ -303,10 +301,11 @@ public class VSPilotSeatTakenWhileOfflineE2ETest extends AbstractSharedVsClientE
         Reply seat = Reply.of("artest vs seat-status", status);
         assertTrue("seat-status must expose the bound dummy for the position oracle: " + status,
                 seat.has(DUMMY_ID));
-        String pos = exec("artest entity info 0 " + seat.integer(DUMMY_ID));
-        Reply at = Reply.of("artest entity info", pos);
-        assertTrue("the entity-info probe must answer for the seat's dummy: " + pos, at.has(POS_X));
-        return new double[]{at.number(POS_X), at.number(POS_Y), at.number(POS_Z)};
+        // The reader refuses a dummy the world no longer holds, which is what the `has` check stood
+        // for: an absent position is not the origin, and this method's callers compare coordinates.
+        EntityState at = EntityState.byId(this::exec, 0, seat.integer(DUMMY_ID))
+                .requireAlive("the seat's bound dummy must still exist to locate the seat");
+        return new double[]{at.posX(), at.posY(), at.posZ()};
     }
 
     private String assembleFixture(FixtureSite site) throws Exception {

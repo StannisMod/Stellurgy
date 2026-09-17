@@ -147,10 +147,6 @@ public class MixinHookBehaviourPinsTest extends AbstractSharedServerTest {
         return Integer.parseInt(mReply.text(ENTITY_ID));
     }
 
-    private String entityInfo(int dim, int id) throws Exception {
-        return ok(client().execute("artest entity info " + dim + " " + id));
-    }
-
     private double doubleField(String field, String src, String fieldName) {
         double value = Reply.of(src).number(field);
         assertTrue("field " + fieldName + " missing in: " + src, !Double.isNaN(value));

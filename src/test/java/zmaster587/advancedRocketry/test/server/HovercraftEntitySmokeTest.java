@@ -1,14 +1,13 @@
 package zmaster587.advancedRocketry.test.server;
 
+import zmaster587.advancedRocketry.test.EntityState;
 import zmaster587.advancedRocketry.test.Reply;
 import com.github.stannismod.forge.testing.junit.AbstractHeadlessServerTest;
 import org.junit.Test;
 
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
-
 import zmaster587.advancedRocketry.test.FixtureSite;
 
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
 /**
@@ -28,7 +27,6 @@ import static org.junit.Assert.assertTrue;
 public class HovercraftEntitySmokeTest extends AbstractHeadlessServerTest {
 
     private static final String ENTITY_ID = "entityId";
-    private static final String POS_Y = "posY";
 
     @Test
     public void hovercraftSpawnsAndTicksWithoutCrash() throws Exception {
@@ -44,19 +42,18 @@ public class HovercraftEntitySmokeTest extends AbstractHeadlessServerTest {
         assertTrue("hovercraft spawn failed: " + spawn,
                 spawn.contains("\"ok\":true") && spawn.contains("\"spawned\":true"));
 
-        Reply mReply = Reply.of(spawn);
-        assertTrue("spawn response must carry entityId: " + spawn, mReply.has(ENTITY_ID));
-        int entityId = Integer.parseInt(mReply.text(ENTITY_ID));
+        // `entity spawn` is its own producer and refuses on its own: `integer` names the field and
+        // throws when it is absent, which is what the has-check stood for.
+        int entityId = Reply.of("artest entity spawn", spawn).integer(ENTITY_ID);
 
         // Verify entity registered and alive.
-        String info1 = String.join("\n", client().execute(
-                "artest entity info 0 " + entityId));
-        assertTrue("entity must be alive immediately after spawn: " + info1,
-                info1.contains("\"isAlive\":true"));
-        assertTrue("entity class must be EntityHoverCraft: " + info1,
-                info1.contains("EntityHoverCraft"));
-        assertTrue("entity must NOT be dead-flagged after spawn: " + info1,
-                info1.contains("\"isDead\":false"));
+        EntityState info1 = entity(entityId);
+        assertTrue("entity must be alive immediately after spawn: " + info1.raw(), info1.alive);
+        // Asked of the `entityClass` FIELD: the old `contains` over the whole reply would also have
+        // been satisfied by the class name turning up in any other field of it.
+        assertTrue("entity class must be EntityHoverCraft: " + info1.raw(),
+                info1.entityClass().contains("EntityHoverCraft"));
+        assertFalse("entity must NOT be dead-flagged after spawn: " + info1.raw(), info1.dead());
 
         // The hovercraft uses ITickable-equivalent World.tick path, not a tile
         // entity tick — we exercise stability by querying state across server
@@ -67,22 +64,22 @@ public class HovercraftEntitySmokeTest extends AbstractHeadlessServerTest {
         // state). Spam a series of state queries to give the server's update
         // loop room to fire.
         for (int i = 0; i < 10; i++) {
-            String poll = String.join("\n", client().execute(
-                    "artest entity info 0 " + entityId));
-            assertTrue("entity must stay alive across poll " + i + ": " + poll,
-                    poll.contains("\"isAlive\":true"));
-            assertTrue("entity must not crash with isDead=true: " + poll,
-                    poll.contains("\"isDead\":false"));
+            EntityState poll = entity(entityId);
+            assertTrue("entity must stay alive across poll " + i + ": " + poll.raw(), poll.alive);
+            assertFalse("entity must not crash with isDead=true: " + poll.raw(), poll.dead());
         }
 
         // Confirm posY is within sane bounds (gravity / hover physics applied
-        // without NaN / underflow).
-        String finalInfo = String.join("\n", client().execute(
-                "artest entity info 0 " + entityId));
-        Reply py2Reply = Reply.of(finalInfo);
-        assertTrue("final posY must be readable: " + finalInfo, py2Reply.has(POS_Y));
-        double finalY = Double.parseDouble(py2Reply.text(POS_Y));
+        // without NaN / underflow). The reader refuses a gone entity, which is what the
+        // "posY must be readable" check stood for.
+        double finalY = entity(entityId).requireAlive("the hovercraft must still exist to be"
+                + " measured").posY();
         assertTrue("hovercraft must not fall below world floor (got " + finalY + ")",
                 finalY > 0 && finalY < 256);
+    }
+
+    /** What the server says about one entity in the overworld. */
+    private EntityState entity(int entityId) throws Exception {
+        return EntityState.byId(cmd -> String.join("\n", client().execute(cmd)), 0, entityId);
     }
 }

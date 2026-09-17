@@ -8,6 +8,7 @@ import org.junit.runners.MethodSorters;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import zmaster587.advancedRocketry.test.EntityState;
 import zmaster587.advancedRocketry.test.Reply;
 import zmaster587.advancedRocketry.test.Plot;
 
@@ -83,8 +84,6 @@ public class VehicleRideClientGroupE2ETest extends AbstractSharedClientE2ETest {
      * which field it means.</p>
      */
     private static final String RIDING_ID = "ridingEntityId";
-    private static final String POS_X = "posX";
-    private static final String POS_Z = "posZ";
 
     @Override
     protected String subsystem() {
@@ -166,10 +165,16 @@ public class VehicleRideClientGroupE2ETest extends AbstractSharedClientE2ETest {
         return reply.integer(field);
     }
 
-    private static double extractDouble(String src, String field) {
-        double value = Reply.of(src).number(field);
-        assertTrue("field `" + field + "` not found in: " + src, !Double.isNaN(value));
-        return value;
+    /**
+     * What the SERVER says about the craft, refusing one the world no longer holds.
+     *
+     * <p>The reader is why the {@code isNaN} check the position reads used to carry is gone: a
+     * vehicle that despawned answers no position at all, and {@code NaN} in a distance then reads
+     * as a craft that did not move.</p>
+     */
+    private EntityState craft(int craftId) throws Exception {
+        return EntityState.byId(this::exec, plot().dim, craftId)
+                .requireAlive("the craft must still exist to be measured");
     }
 
     // ── hovercraft ────────────────────────────────────────────────────────────
@@ -264,9 +269,9 @@ public class VehicleRideClientGroupE2ETest extends AbstractSharedClientE2ETest {
                         + " after=(" + xAfter + "," + zAfter + ")",
                 lateralDist > 0.1);
 
-        String postInfo = exec("artest entity info " + plot().dim + " " + craftId);
-        assertTrue("server craft X must agree with the client view: " + postInfo,
-                Math.abs(extractDouble(postInfo, POS_X) - xAfter) < 4.0);
+        EntityState postInfo = craft(craftId);
+        assertTrue("server craft X must agree with the client view: " + postInfo.raw(),
+                Math.abs(postInfo.posX() - xAfter) < 4.0);
 
         exec("artest player dismount");
     }
@@ -283,16 +288,16 @@ public class VehicleRideClientGroupE2ETest extends AbstractSharedClientE2ETest {
         assertNotEquals("baseline: player must NOT be riding the craft (spawn doesn't auto-mount)",
                 craftId, extract(riding, RIDING_ID));
 
-        String preInfo = exec("artest entity info " + plot().dim + " " + craftId);
-        double xBefore = extractDouble(preInfo, POS_X);
-        double zBefore = extractDouble(preInfo, POS_Z);
+        EntityState preInfo = craft(craftId);
+        double xBefore = preInfo.posX();
+        double zBefore = preInfo.posZ();
 
         scenario().asserting("40 ticks with no passenger move it nowhere laterally");
         exec("artest entity tick " + plot().dim + " " + craftId + " 40");
 
-        String postInfo = exec("artest entity info " + plot().dim + " " + craftId);
-        double xAfter = extractDouble(postInfo, POS_X);
-        double zAfter = extractDouble(postInfo, POS_Z);
+        EntityState postInfo = craft(craftId);
+        double xAfter = postInfo.posX();
+        double zAfter = postInfo.posZ();
         double lateralDrift = Math.sqrt(Math.pow(xAfter - xBefore, 2) + Math.pow(zAfter - zBefore, 2));
         scenario().record("lateralDrift", lateralDrift);
         // Tolerance: the craft's motion damping (x0.9 per tick) lets any latent motion bleed off

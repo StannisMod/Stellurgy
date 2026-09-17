@@ -3,7 +3,9 @@ package zmaster587.advancedRocketry.test.server;
 import com.github.stannismod.forge.testing.junit.AbstractHeadlessServerTest;
 
 import org.junit.Test;
+import zmaster587.advancedRocketry.test.EntityState;
 import zmaster587.advancedRocketry.test.GameTicks;
+import zmaster587.advancedRocketry.test.Reply;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -139,15 +141,15 @@ public class SpikeFarCoordinateIntegrityTest extends AbstractHeadlessServerTest 
     private String spawnAndRead(double x) throws Exception {
         String spawned = exec("artest vs drop-stand " + OVERWORLD + " "
                 + String.format(java.util.Locale.ROOT, "%.4f", x) + " 150 0.5");
-        java.util.regex.Matcher idm = java.util.regex.Pattern
-                .compile("\"entityId\"\\s*:\\s*(-?\\d+)").matcher(spawned);
-        if (!idm.find()) {
+        Reply drop = Reply.of("artest vs drop-stand", spawned);
+        if (!drop.has("entityId")) {
             return "NO-SPAWN:" + oneLine(spawned);
         }
-        String info = exec("artest entity info " + OVERWORLD + " " + idm.group(1));
-        java.util.regex.Matcher xm = java.util.regex.Pattern
-                .compile("\"posX\"\\s*:\\s*([-0-9.eE]+)").matcher(info);
-        return xm.find() ? xm.group(1) : ("UNREADABLE:" + oneLine(info));
+        EntityState stand = EntityState.byId(this::exec, OVERWORLD, drop.integer("entityId"));
+        if (!stand.alive) {
+            return "UNREADABLE:" + oneLine(stand.raw());
+        }
+        return String.valueOf(stand.posX());
     }
 
     private static String oneLine(String s) {

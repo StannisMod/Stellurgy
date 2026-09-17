@@ -1,10 +1,8 @@
 package zmaster587.advancedRocketry.test.server;
 
+import zmaster587.advancedRocketry.test.EntityState;
 import zmaster587.advancedRocketry.test.Reply;
 import org.junit.Test;
-
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 import zmaster587.advancedRocketry.test.FixtureSite;
 
@@ -49,8 +47,6 @@ public class AreaGravityControllerFallDistanceResetTest extends AbstractSharedSe
     private static final int CX = 5560;
     private static final int CY = FixtureSite.OPEN_AIR_Y;
     private static final int CZ = 5560;
-
-    private static final String FALL_DIST = "fallDistance";
 
     @Test
     public void controllerResetsFallDistanceInsideRadiusOnly() throws Exception {
@@ -118,11 +114,18 @@ public class AreaGravityControllerFallDistanceResetTest extends AbstractSharedSe
         return id;
     }
 
+    /**
+     * How far entity {@code id} has fallen without landing.
+     *
+     * <p>The reader REFUSES an entity the world no longer holds, which is what the has-check stood
+     * for and could not do: an absent {@code fallDistance} parses as nothing, and the value this
+     * test's subject PRODUCES is zero — so "the stand is gone" and "the controller reset it" were
+     * one reading.</p>
+     */
     private double readFallDistance(int id) throws Exception {
-        String resp = exec("artest entity info 0 " + id);
-        Reply mReply = Reply.of(resp);
-        assertTrue("entity info must include fallDistance: " + resp, mReply.has(FALL_DIST));
-        return Double.parseDouble(mReply.text(FALL_DIST));
+        return EntityState.byId(this::exec, 0, id)
+                .requireAlive("the pinned stand must still exist to have a fall distance")
+                .fallDistance();
     }
 
     private String exec(String cmd) throws Exception {
