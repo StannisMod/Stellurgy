@@ -97,8 +97,7 @@ public class VSShipTransitPersistE2ETest extends AbstractSharedServerTest {
         // The RESTORED transit arrives on the server's own tick, like any other -- no pump. With no
         // live hyperspace ship it can only get there by pasting its snapshot into the target cell,
         // so the arrival production announces IS the proof that path ran.
-        String arrived = events.awaitRecordCarrying(transitMark, "ship_transit_ended",
-                "\"route\":\"HYPERSPACE\"",
+        String arrived = events.awaitRecordWithField(transitMark, "ship_transit_ended","route", "HYPERSPACE",
                 "the restored jump never completed; the durable record now reads "
                         + exec("artest space transit-export"),
                 ARRIVAL_TICKS);

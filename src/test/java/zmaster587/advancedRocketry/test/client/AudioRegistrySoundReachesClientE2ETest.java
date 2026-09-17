@@ -78,8 +78,7 @@ public class AudioRegistrySoundReachesClientE2ETest extends AbstractClientE2ETes
         // Contract: the sound reaches the real client's SoundManager — the client records the play
         // request it was handed, and a failure prints everything the client DID play since the mark
         // (and which observation points ran) instead of one stale ring read.
-        clientEvents().awaitCarrying(soundMark, "client_sound_played",
-                "\"location\":\"" + COMBUSTION + "\"",
+        clientEvents().awaitField(soundMark, "client_sound_played","location", COMBUSTION,
                 "a registered AR sound played by the server must reach the real client's"
                         + " SoundManager (this type also carries vanilla ambience and music, so a"
                         + " non-zero droppedByType entry for it means the ring turned over)",

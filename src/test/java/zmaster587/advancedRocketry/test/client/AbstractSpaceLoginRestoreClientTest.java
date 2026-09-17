@@ -446,14 +446,14 @@ public abstract class AbstractSpaceLoginRestoreClientTest {
         // by game tick, and cross-side order within one tick is undefined. Zero is the mark because
         // this client JVM is BRAND NEW: the fact wanted here is recorded at handleJoinGame, inside
         // startClient, before any mark could have been taken.
-        String joined = awaitClientEvent(CLIENT_SESSION_START, "client_dimension_changed", null,
+        String joined = awaitClientEvent(CLIENT_SESSION_START, "client_dimension_changed",
                 "the restored client must end up IN a world" + chain, RESTORE_LINK_BUDGET_TICKS);
         // The server has put him back on the mount; the CLIENT still has to PERFORM it. That is a
         // link, not a round trip to be sampled - his own `startRiding` - and it is waited for as
         // one. A bounded poll of `reportRidingEntity` stood here, justified as "not a link this
         // test owns"; the record it could have read was already being printed three lines below,
         // into this method's own failure text.
-        awaitClientEvent(CLIENT_SESSION_START, "mount", "\"ok\":true",
+        awaitClientEventWithField(CLIENT_SESSION_START, "mount", "ok", true,
                 "the restored client must PERFORM the mount the login put him back on" + chain,
                 RESTORE_LINK_BUDGET_TICKS);
         // Read once, now that the link says it happened: a settled state.
@@ -2026,11 +2026,23 @@ public abstract class AbstractSpaceLoginRestoreClientTest {
      * server chain and never inside one — which is why this family has a client wait of its own
      * rather than adding links to {@link Events#assertChain}.</p>
      */
-    protected String awaitClientEvent(long mark, String type, String needle, String what,
-                                      int tickBudget) throws Exception {
-        return needle == null
-                ? clientEvents().await(mark, type, what, tickBudget)
-                : clientEvents().awaitCarrying(mark, type, needle, what, tickBudget);
+    protected String awaitClientEvent(long mark, String type, String what, int tickBudget)
+            throws Exception {
+        return clientEvents().await(mark, type, what, tickBudget);
+    }
+
+    /**
+     * The same, narrowed to a record whose {@code field} equals {@code value}.
+     *
+     * <p>Two methods rather than one taking a nullable needle: the nullable form decided between two
+     * different waits — any record of the type, or one particular record — on the shape of an
+     * argument, which is a branch a caller cannot see at the call site. It also took the narrowing
+     * as a RENDERING, so a recorder that reordered two fields would turn "this one" back into "any
+     * of them" silently.</p>
+     */
+    protected String awaitClientEventWithField(long mark, String type, String field, Object value,
+                                               String what, int tickBudget) throws Exception {
+        return clientEvents().awaitField(mark, type, field, value, what, tickBudget);
     }
 
     /**

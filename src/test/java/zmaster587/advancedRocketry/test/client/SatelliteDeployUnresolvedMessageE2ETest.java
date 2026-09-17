@@ -73,14 +73,19 @@ public class SatelliteDeployUnresolvedMessageE2ETest extends AbstractClientE2ETe
         // Link 1 (server): production chose to tell the pilot, and told him THIS message. Carrying,
         // not the type alone: a chat line was sent either way, and any other message in the window
         // would satisfy a type-only wait.
-        events.awaitCarrying(serverMark, "chat_message_sent",
-                "\"key\":\"" + DEPLOY_FAILED_KEY + "\"",
+        events.awaitField(serverMark, "chat_message_sent","key", DEPLOY_FAILED_KEY,
                 "an unresolvable satellite chassis must make the rocket TELL its pilot rather than"
                         + " fail silently (C151)", MESSAGE_BUDGET_TICKS);
 
         // Link 2 (client): the pilot's own client was handed the line, i18n already resolved — the
         // player-visible half, and the one that also proves the key has a translation at all.
-        clientEvents().awaitCarrying(clientMark, "client_chat_received", DEPLOY_FAILED_TEXT,
+        // A substring of the `text` FIELD, not of the record: the line the player sees is assembled
+        // by the game — a prefix, a name, the translation resolved on his client — so pinning the
+        // whole string would pin the formatting. The field is still taken by name, so a recorder
+        // that renames it fails loudly here instead of matching a fragment sitting elsewhere.
+        clientEvents().awaitMatching(clientMark, "client_chat_received",
+                reply -> Events.anyRecordFieldContains(reply, "text", DEPLOY_FAILED_TEXT),
+                "whose text carries \"" + DEPLOY_FAILED_TEXT + "\"",
                 "the notice production sent must reach the pilot's chat as readable text",
                 MESSAGE_BUDGET_TICKS);
     }

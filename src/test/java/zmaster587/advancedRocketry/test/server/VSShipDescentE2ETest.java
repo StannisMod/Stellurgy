@@ -146,7 +146,7 @@ public class VSShipDescentE2ETest extends AbstractSharedServerTest {
         // and was unloaded again before this read"; the record can, and on failure it prints the
         // chain instead of a number. The `descent-status` poll this replaces was a pure read of a
         // counter -- diagnostic only, so nothing is lost by dropping it.
-        events.awaitCarrying(descentMark, "ship_entered_planet", "\"ship\":\"" + shipId + "\"",
+        events.awaitField(descentMark, "ship_entered_planet","ship", shipId,
                 "the ship never crossed into the planet's dimension via the descent; countAll="
                         + exec("artest vs ship-count-all " + TARGET_DIM),
                 SETTLE_TICKS);

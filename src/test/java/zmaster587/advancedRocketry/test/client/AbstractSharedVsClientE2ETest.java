@@ -120,10 +120,17 @@ public abstract class AbstractSharedVsClientE2ETest extends AbstractSharedClient
             throws Exception {
         // Filtered on the SHIP, not merely on the type: on a shared world every neighbouring
         // scenario's craft becomes usable in the same log, and a type-only wait is satisfied by the
-        // first of them. The substrate id is what `ship_usable` carries as `vsShip`, and it is the
-        // same value as the durable name (one ship, one identity), so either spelling of the id
-        // matches the record this scenario is waiting for.
-        String reply = events.awaitCarrying(mark, "ship_usable", "\"" + shipId + "\"",
+        // first of them.
+        //
+        // Matched against BOTH id fields, because `ship_usable` carries two and they are NOT the
+        // same value: `ship` is the craft's durable AR name, taken off its own record, and `vsShip`
+        // is the substrate's opaque key — minted in different places, and a caller arrives holding
+        // whichever its own chain produced. The comment here claimed until 2026-09-17 that they were
+        // "the same value (one ship, one identity)"; `ShipLoadedAnnouncer` posts
+        // `ShipLoadedEvent(world, durable, substrateKey)` from two separate sources, so they are not.
+        String reply = events.awaitMatching(mark, "ship_usable",
+                sinceReply -> Events.anyRecordHasAnyOf(sinceReply, shipId, "ship", "vsShip"),
+                "carrying ship or vsShip = " + shipId,
                 "this scenario's ship " + shipId + " must become USABLE — the physics loop steps it —"
                         + " before anything can be asked of it", tickBudget);
         scenario().record("shipUsable_" + shipId, reply);

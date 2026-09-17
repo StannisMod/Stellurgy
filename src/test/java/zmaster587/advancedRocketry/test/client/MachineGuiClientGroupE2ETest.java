@@ -257,12 +257,11 @@ public class MachineGuiClientGroupE2ETest extends AbstractSharedClientE2ETest {
      * right. The old justification — "the shared base offers Events over the server probe only" —
      * was already false: {@code clientEvents()} is on the base and this method called it.</p>
      */
-    private String awaitClientRecords(long mark, String type, String needle, int tickBudget)
-            throws Exception {
-        return clientEvents().awaitMatching(mark, type,
-                reply -> !Events.recordsContainingAllIgnoringCase(reply, needle).isEmpty(),
-                "carrying " + needle + " (case-folded)",
-                "the CLIENT must record a `" + type + "` carrying " + needle, tickBudget);
+    private String awaitClientRecords(long mark, String type, String field, Object value,
+                                      int tickBudget) throws Exception {
+        return clientEvents().awaitField(mark, type, field, value,
+                "the CLIENT must record a `" + type + "` whose " + field + " is " + value,
+                tickBudget);
     }
 
     private static int readInt(String json, String field) {
@@ -410,8 +409,8 @@ public class MachineGuiClientGroupE2ETest extends AbstractSharedClientE2ETest {
         // the client keeps — its ring holds the last 256 of them. That is what makes the loop's EARLY
         // EXIT above load-bearing rather than merely tidy: it returns on the tick the rocket appears,
         // so only a few hundred ticks of joins can sit between the spawn and this read.
-        String joined = awaitClientRecords(clientMark, "entity_joined_world", "\"cls\":\"EntityRocket\"",
-                200);
+        String joined = awaitClientRecords(clientMark, "entity_joined_world",
+                "cls", "EntityRocket", 200);
         assertTrue("the assembled rocket must arrive in the CLIENT's world - a rocket only the"
                         + " server knows about is not one the player can board. Entities the client"
                         + " saw join since the first click: " + joined,
@@ -1057,7 +1056,7 @@ public class MachineGuiClientGroupE2ETest extends AbstractSharedClientE2ETest {
                 + " none open there is nothing for vanilla's distance check to close and both legs"
                 + " below would be measuring an empty screen", 100);
         String displayed = awaitClientRecords(openOnClient, "client_gui_opened",
-                "\"gui\":\"GuiChest\"", 200);
+                "gui", "GuiChest", 200);
         scenario().requireArranged("the real client must DISPLAY the chest GUI — this scenario is"
                 + " about a screen surviving a distance, so a screen that never arrived is an"
                 + " arrangement failure, not a verdict on the redirect. openResp=" + open
@@ -1122,7 +1121,7 @@ public class MachineGuiClientGroupE2ETest extends AbstractSharedClientE2ETest {
         // The wait IS the assertion now: it fails carrying every screen the client recorded, which
         // is what the `assertTrue` below it used to print after re-checking the wait's own exit
         // condition.
-        awaitClientRecords(closeOnClient, "client_gui_opened", "\"gui\":\"none\"", 200);
+        awaitClientRecords(closeOnClient, "client_gui_opened", "gui", "none", 200);
         assertEquals("after removing inv-bypass, vanilla's distance check must close the chest "
                 + "GUI; final screen=" + screenOf(bot().reportState()), "",
                 screenOf(bot().reportState()));

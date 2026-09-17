@@ -189,7 +189,7 @@ public class VSPilotKeysWithSpaceSubsystemE2ETest {
         // wait is that record for THIS ship, and the position is read once afterwards — a poll of
         // the probe could only say that a lookup eventually answered, never when the craft became
         // usable, and on expiry it reported the last empty reply as though that were the finding.
-        events.awaitCarrying(spawnMark, "ship_usable", "\"vsShip\":\"" + shipUuid + "\"",
+        events.awaitField(spawnMark, "ship_usable","vsShip", shipUuid,
                 "the ship the registry named must become USABLE with the client present — until it"
                         + " is, its physics are not stepped and every reading below describes a"
                         + " craft that cannot move", SHIP_LOAD_BUDGET_TICKS);

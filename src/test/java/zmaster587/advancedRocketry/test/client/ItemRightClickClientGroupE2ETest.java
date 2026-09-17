@@ -133,8 +133,7 @@ public class ItemRightClickClientGroupE2ETest extends AbstractSharedClientE2ETes
         String held = heldOnClient();
         if (!itemId.equals(held)) {
             try {
-                clientEvents().awaitCarrying(equipMark, "client_slot_set",
-                        "\"item\":\"" + itemId + "\"",
+                clientEvents().awaitField(equipMark, "client_slot_set","item", itemId,
                         "the equip must REACH the client — the right-click below is dispatched from"
                                 + " the hand the client renders, so an item that never arrived makes"
                                 + " it a click with an empty hand", HELD_LINK_BUDGET_TICKS);

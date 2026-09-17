@@ -96,8 +96,7 @@ public class VSJumpCarriesLooseBodiesE2ETest extends AbstractSharedServerTest {
         assertTrue("the transit must begin: " + begin, begin.contains("\"began\":true"));
 
         // No pump: the server advances the jump. Waited for as the arrival production announces.
-        String arrivedRecord = events.awaitRecordCarrying(transitMark, "ship_transit_ended",
-                "\"route\":\"HYPERSPACE\"",
+        String arrivedRecord = events.awaitRecordWithField(transitMark, "ship_transit_ended","route", "HYPERSPACE",
                 "the jump never completed; the transit now reads "
                         + exec("artest space transit-status"),
                 ARRIVAL_TICKS);

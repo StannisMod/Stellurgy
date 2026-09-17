@@ -129,8 +129,7 @@ public class ItemSealDetectorPlayerMessagesE2ETest extends AbstractSharedClientE
             return;
         }
         try {
-            clientEvents().awaitCarrying(equipMark, "client_slot_set",
-                    "\"item\":\"" + itemId + "\"",
+            clientEvents().awaitField(equipMark, "client_slot_set","item", itemId,
                     "the equip must REACH the client: every branch below is dispatched from the hand"
                             + " the client renders", HELD_LINK_BUDGET_TICKS);
         } catch (AssertionError never) {

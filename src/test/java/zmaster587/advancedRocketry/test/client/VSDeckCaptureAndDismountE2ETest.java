@@ -315,8 +315,7 @@ public class VSDeckCaptureAndDismountE2ETest extends AbstractSharedVsClientE2ETe
         // RIDING body is excluded from capture (`isExcludedFromCapture`), so it holds none while he
         // is seated and standing up has to produce an entry. Where a body may already be held at the
         // mark, this wait would have nothing to close on and `awaitCaptureHeldBy` is the form.
-        clientEvents.awaitCarrying(clientDismountMark, "deck_entered",
-                "\"ship\":\"" + scenarioShipId + "\"",
+        clientEvents.awaitField(clientDismountMark, "deck_entered","ship", scenarioShipId,
                 "the ex-pilot's OWN client must take him onto THIS ship's deck when he stands up"
                         + " mid-hover", DECK_LINK_BUDGET_TICKS);
         assertTrue("the dismounted pilot must be resolved on the deck, not handed to vanilla: " + capture,
@@ -697,8 +696,7 @@ public class VSDeckCaptureAndDismountE2ETest extends AbstractSharedVsClientE2ETe
         Events clientEvents = clientEvents();
         long dismountMark = clientEvents.mark();
         exec("artest player dismount");
-        String seeded = clientEvents.awaitCarrying(dismountMark, "deck_entered",
-                "\"ship\":\"" + scenarioShipId + "\"",
+        String seeded = clientEvents.awaitField(dismountMark, "deck_entered","ship", scenarioShipId,
                 "standing up on THIS tilted deck must leave the ex-pilot captured ON THE CLIENT — the"
                         + " seed is what puts him there, and without it the heights below are"
                         + " measuring a body vanilla owns", DECK_LINK_BUDGET_TICKS);
@@ -787,8 +785,7 @@ public class VSDeckCaptureAndDismountE2ETest extends AbstractSharedVsClientE2ETe
         Events clientEvents = clientEvents();
         long dismountMark = clientEvents.mark();
         exec("artest player dismount");
-        String seeded = clientEvents.awaitCarrying(dismountMark, "deck_entered",
-                "\"ship\":\"" + scenarioShipId + "\"",
+        String seeded = clientEvents.awaitField(dismountMark, "deck_entered","ship", scenarioShipId,
                 "the fresh dismount must engage the ship-frame capture on THIS ship's level deck",
                 DECK_LINK_BUDGET_TICKS);
 

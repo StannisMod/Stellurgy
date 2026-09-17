@@ -100,8 +100,7 @@ public class VSShortJumpCrossesDirectlyE2ETest extends AbstractSharedServerTest 
      * server tick like any other — and if it stops being, this fails.</p>
      */
     private String arrivesInTheTargetCell(long mark, String route) throws Exception {
-        String arrived = events.awaitRecordCarrying(mark, "ship_transit_ended",
-                "\"route\":\"" + route + "\"",
+        String arrived = events.awaitRecordWithField(mark, "ship_transit_ended","route", route,
                 "the ship never reached the target cell by the " + route + " route; the durable"
                         + " record now reads " + exec("artest space transit-export"),
                 ARRIVAL_TICKS);

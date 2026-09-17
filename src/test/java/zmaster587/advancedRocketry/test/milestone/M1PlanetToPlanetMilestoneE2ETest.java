@@ -714,7 +714,7 @@ public class M1PlanetToPlanetMilestoneE2ETest {
         // This used to be decided by looking for the words "spooling" and "confirm" in the client's
         // chat. That is a rendering of this verdict: it moves with the language file, it cannot see
         // a line the ring has dropped, and it made the milestone's own control flow depend on prose.
-        String pressed = events.awaitCarrying(jumpMark, "jump_press_decided", "\"phase\":\"press\"",
+        String pressed = events.awaitField(jumpMark, "jump_press_decided","phase", "press",
                 "the jump key, pressed by a seated pilot of an ARMED ship, must be ANSWERED — the"
                         + " trigger decides something for every press, and a silence here means the"
                         + " press never reached the ship at all",
@@ -733,8 +733,7 @@ public class M1PlanetToPlanetMilestoneE2ETest {
             jumpBranch = "confirm-then-commit";
             long confirmMark = events.mark();
             pressJumpKey();
-            String confirmed = events.awaitCarrying(confirmMark, "jump_press_decided",
-                    "\"phase\":\"press\"",
+            String confirmed = events.awaitField(confirmMark, "jump_press_decided","phase", "press",
                     "the CONFIRMING press must reach the trigger too", JUMP_PRESS_BUDGET_TICKS);
             assertEquals("…and the CONFIRMING press must spool the drive: the gate's advisory is an"
                             + " 'are you sure', not a refusal, so a second press has to carry the"

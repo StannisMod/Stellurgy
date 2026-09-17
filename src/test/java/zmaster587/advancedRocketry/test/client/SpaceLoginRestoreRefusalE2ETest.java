@@ -97,8 +97,7 @@ public class SpaceLoginRestoreRefusalE2ETest extends AbstractSpaceLoginRestoreCl
         // it moves when the language file moves, it depends on how deep the client's ring is and on
         // whether the line had been drawn yet, and it cannot distinguish "no such ship" from any
         // other orphan cause, which `reason` does by construction.
-        String restored = events.awaitCarrying(mark, "login_restored",
-                "\"reason\":\"" + REASON_SHIP_UNKNOWN + "\"",
+        String restored = events.awaitField(mark, "login_restored","reason", REASON_SHIP_UNKNOWN,
                 "a pilot whose ship the server cannot find must be ORPHANED by the restore, on that"
                         + " ground and not on some other, rather than silently appearing at his spawn"
                         + " point", RESTORE_VERDICT_BUDGET_TICKS);

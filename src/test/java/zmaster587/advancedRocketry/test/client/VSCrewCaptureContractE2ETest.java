@@ -447,7 +447,7 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
         Events client = clientEvents();
         long dismountMark = client.mark();
         exec("artest player dismount");
-        client.awaitCarrying(dismountMark, "deck_entered", "\"ship\":\"" + scenarioShipId + "\"",
+        client.awaitField(dismountMark, "deck_entered","ship", scenarioShipId,
                 "the dismount seed must put the ex-pilot on THIS ship's"
                 + " deck before the stillness window means anything", CAPTURE_LINK_BUDGET_TICKS);
 
@@ -558,7 +558,7 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
         Events client = clientEvents();
         long dismountMark = client.mark();
         exec("artest player dismount");
-        client.awaitCarrying(dismountMark, "deck_entered", "\"ship\":\"" + scenarioShipId + "\"",
+        client.awaitField(dismountMark, "deck_entered","ship", scenarioShipId,
                 "the dismount seed must put the ex-pilot on THIS ship's"
                 + " hovering deck before the stillness window means anything",
                 CAPTURE_LINK_BUDGET_TICKS);
@@ -627,7 +627,7 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
         Events client = clientEvents();
         long dismountMark = client.mark();
         exec("artest player dismount");
-        client.awaitCarrying(dismountMark, "deck_entered", "\"ship\":\"" + scenarioShipId + "\"",
+        client.awaitField(dismountMark, "deck_entered","ship", scenarioShipId,
                 "the dismount seed must put the ex-pilot on THIS ship's"
                 + " hovering deck before any activity on it can churn a capture",
                 CAPTURE_LINK_BUDGET_TICKS);
@@ -690,7 +690,7 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
             arc.append(String.format(java.util.Locale.ROOT, "[t%d y=%.2f sub=%.2f] ",
                     t * 2, bot().reportState().get("playerY").getAsDouble(), jumperShipFrameY()));
         }
-        client.awaitCarrying(jumpMark, "deck_contact", "\"ship\":\"" + scenarioShipId + "\"",
+        client.awaitField(jumpMark, "deck_contact","ship", scenarioShipId,
                 "a vertical jump on a hovering ship must LAND BACK on this ship's deck — the "
                         + "resolver's own contact edge is what says he did, and the arc sampled so "
                         + "far is " + arc, JUMP_LANDING_BUDGET_TICKS);
@@ -1198,7 +1198,7 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
         // alive" answers "not yet" identically to a body that is simply not falling fast.
         Events client = clientEvents();
         long tickingMark = client.mark();
-        client.awaitCarrying(tickingMark, "ship_frame_tick", "\"who\":\"" + botName() + "\"",
+        client.awaitField(tickingMark, "ship_frame_tick","who", botName(),
                 "the teleported client must be ticking the falling body before the encounter window"
                         + " opens, or every sample below is of a frozen body",
                 CAPTURE_LINK_BUDGET_TICKS);
@@ -1338,7 +1338,7 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
         // displacement was the wrong instrument for it.
         Events client = clientEvents();
         long tickingMark = client.mark();
-        client.awaitCarrying(tickingMark, "ship_frame_tick", "\"who\":\"" + botName() + "\"",
+        client.awaitField(tickingMark, "ship_frame_tick","who", botName(),
                 "the teleported client must be ticking the falling body before the encounter window"
                         + " opens, or every sample below is of a frozen body",
                 CAPTURE_LINK_BUDGET_TICKS);
@@ -2384,10 +2384,10 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
         // subject is what the client's resolver does with a body. The mount is his own `startRiding`;
         // the gate is the client's keybind tick deciding that the body it is holding is a ship's
         // pilot, which is the state every caller's stimulus is issued into.
-        boarding.awaitCarrying(boardMark, "mount", "\"ok\":true",
+        boarding.awaitField(boardMark, "mount","ok", true,
                 "the client must PERFORM the mount the server reported, or the scenario below drives "
                         + "a body that is not in the seat it thinks it is", CAPTURE_LINK_BUDGET_TICKS);
-        boarding.awaitCarrying(boardMark, "ship_pilot_gate_decided", "\"open\":true",
+        boarding.awaitField(boardMark, "ship_pilot_gate_decided","open", true,
                 "the client's pilot gate must OPEN on the seated body, or a scenario that commands "
                         + "the craft from this seat is commanding nothing", CAPTURE_LINK_BUDGET_TICKS);
         return ship;

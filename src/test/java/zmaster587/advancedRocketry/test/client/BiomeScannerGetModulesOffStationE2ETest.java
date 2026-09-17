@@ -73,8 +73,12 @@ public class BiomeScannerGetModulesOffStationE2ETest extends AbstractClientE2ETe
         // that is why one link was not enough: measured 2026-09-15, the placement link alone left
         // the read answering "no tile at pos" — the honest answer to a question asked of a client
         // that did not have the blocks yet.
-        clientLog.awaitCarrying(standMark, "chunk_data_applied",
-                "\"cx\":" + (X >> 4) + ",\"cz\":" + (Z >> 4),
+        // BOTH coordinates, on ONE record: `cx` alone is satisfied by any chunk in that column, and
+        // two separate field waits would be satisfied by two different records.
+        clientLog.awaitMatching(standMark, "chunk_data_applied",
+                reply -> Events.anyRecordHasAll(reply,
+                        "cx", String.valueOf(X >> 4), "cz", String.valueOf(Z >> 4)),
+                "carrying cx = " + (X >> 4) + " and cz = " + (Z >> 4),
                 "the client must hold the scanner's own chunk before its tile is asked for a GUI",
                 PLACEMENT_LINK_BUDGET_TICKS);
 

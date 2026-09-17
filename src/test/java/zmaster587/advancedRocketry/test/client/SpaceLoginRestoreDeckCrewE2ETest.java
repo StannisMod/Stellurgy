@@ -113,7 +113,8 @@ public class SpaceLoginRestoreDeckCrewE2ETest extends AbstractSpaceLoginRestoreC
                 "a crew member who logged out standing on his ship in a cell must be RESTORED by the "
                         + "login hook - an ordinary login would leave him wherever vanilla puts him",
                 RESTORE_LINK_BUDGET_TICKS);
-        String joined = awaitClientEvent(clientMark, "client_dimension_changed", "\"via\":\"join\"",
+        String joined = awaitClientEventWithField(clientMark, "client_dimension_changed",
+                "via", "join",
                 "the reconnected client must be given a world. Server verdict: " + restored,
                 RESTORE_LINK_BUDGET_TICKS);
         int dim = clientDim();
@@ -237,7 +238,8 @@ public class SpaceLoginRestoreDeckCrewE2ETest extends AbstractSpaceLoginRestoreC
                 "a crew member who logged out standing on his INVERTED ship in a cell must be "
                         + "RESTORED by the login hook, exactly as an upright one is",
                 RESTORE_LINK_BUDGET_TICKS);
-        String joined = awaitClientEvent(clientMark, "client_dimension_changed", "\"via\":\"join\"",
+        String joined = awaitClientEventWithField(clientMark, "client_dimension_changed",
+                "via", "join",
                 "the reconnected client must be given a world. Server verdict: " + restored,
                 RESTORE_LINK_BUDGET_TICKS);
         int dim = clientDim();

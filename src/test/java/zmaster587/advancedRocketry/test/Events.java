@@ -291,29 +291,6 @@ public final class Events {
     }
 
     /**
-     * How many RECORDS in a {@code since} reply CONTAIN {@code needle} anywhere in their own JSON.
-     *
-     * <p><b>The name says {@code Containing} on purpose: this reads a RENDERING.</b> It pins the
-     * writer's field order and formatting, so it is for the one question the two verbs above cannot
-     * express — a fragment that is genuinely not one field's value — and for nothing else. Prefer
-     * {@link #countRecords(String, String, String)} or {@link #countRecordsWithField}.</p>
-     *
-     * <p>Matched against each record's own JSON and nothing else. It used to be matched against the
-     * reply split on the {@code seq} prefix, which included the ENVELOPE — and the envelope carries
-     * the {@code instruments} array, so a needle naming an observation point counted a record that
-     * did not exist.</p>
-     */
-    public static int countRecordsContaining(String sinceReply, String needle) {
-        int n = 0;
-        for (JsonElement record : eventsOf(sinceReply)) {
-            if (record.toString().contains(needle)) {
-                n++;
-            }
-        }
-        return n;
-    }
-
-    /**
      * Every record's string {@code field} in a {@code since} reply, oldest first, one per line.
      *
      * <p>For a record type that carries a whole preformatted line — a per-tick trace, say — this
@@ -626,66 +603,11 @@ public final class Events {
             + " and the thing never happened";
 
     /**
-     * Wait for one event of {@code type} whose payload CARRIES {@code needle}, or fail naming the
-     * whole chain that did happen.
-     *
-     * <p>{@link #await} matches on the type alone, which on a shared world is a wait any subject can
-     * satisfy: every neighbouring scenario's ship crosses the same seams and its records land in the
-     * same log. Where more than one body can produce the type, the wait has to name WHICH one, and
-     * this is that form — the needle is a fragment of the record's own payload, e.g.
-     * {@code "\"ship\":\"" + shipId + "\""}.</p>
-     *
-     * <p>Measured 2026-09-06: a readiness wait built on {@link #await} was described in three
-     * javadocs as "asked by id" while matching on type only, so a neighbour's ship satisfied it. The
-     * id was in the failure message and nowhere else.</p>
-     *
-     * @param needle a substring of the payload that identifies the subject
-     */
-    public String awaitCarrying(long mark, String type, String needle, String what, int tickBudget)
-            throws Exception {
-        return awaitCarrying(mark, type, needle, what, tickBudget, null);
-    }
-
-    /** As above, driving {@code stimulus} between reads — see {@link Stimulus}. */
-    public String awaitCarrying(long mark, String type, String needle, String what, int tickBudget,
-                                Stimulus stimulus) throws Exception {
-        return awaitMatching(mark, type, reply -> countRecordsContaining(reply, needle) > 0,
-                "carrying " + needle, what, tickBudget, stimulus);
-    }
-
-    /**
-     * As {@link #awaitCarrying}, answering the RECORD that satisfied the wait rather than the REPLY
-     * it arrived in.
-     *
-     * <p><b>This is the form to take when the caller wants a FIELD of what happened.</b> Every wait
-     * in this class answers the whole {@code events since} envelope — an object whose own fields are
-     * {@code ok}, {@code count}, {@code instruments} and {@code events} — so asking it for
-     * {@code dim} is asking the postmark for the letter's address. A regex could not tell the two
-     * apart and did not have to: it matched {@code "dim":4} wherever it sat. A reader that asks by
-     * name gets the truthful answer, which is that the envelope has no {@code dim} — and five
-     * transit scenarios then reported <i>"the arrival was announced but names no dimension"</i>
-     * while printing the arrival, with its dimension, in the same sentence (measured 2026-09-17).</p>
-     *
-     * <p>The LAST matching record, because a wait that expires and one that matched on its first
-     * read see different numbers of them, and the newest is the one the wait was about.</p>
-     */
-    public String awaitRecordCarrying(long mark, String type, String needle, String what,
-                                      int tickBudget) throws Exception {
-        String reply = awaitCarrying(mark, type, needle, what, tickBudget);
-        List<String> matching = recordsContainingAll(reply, needle);
-        if (matching.isEmpty()) {
-            throw new AssertionError(what + " — the wait for a `" + type + "` carrying " + needle
-                    + " returned, yet no record of the reply carries it. This is a reader fault,"
-                    + " not a statement about the world: " + reply);
-        }
-        return matching.get(matching.size() - 1);
-    }
-
-    /**
      * Wait until some record of {@code type} since {@code mark} carries {@code field} equal to
      * {@code value} — asked of the FIELD, not of a rendering of it.
      *
-     * <p><b>This is the form to reach for, and {@link #awaitCarrying} is not.</b> A needle like
+     * <p><b>This is the form to reach for.</b> The substring verbs this replaced are gone
+     * (2026-09-17, at zero call sites); what they took was a needle like
      * {@code "\"dim\":9301,"} is a substring of gson's serialisation: it rides on the field order the
      * writer happened to use and on the value being followed by a comma, so a producer that adds a
      * field or reorders two breaks every caller at once and silently — the wait then expires and
@@ -697,9 +619,43 @@ public final class Events {
      */
     public String awaitField(long mark, String type, String field, Object value, String what,
                              int tickBudget) throws Exception {
+        return awaitField(mark, type, field, value, what, tickBudget, null);
+    }
+
+    /** As above, driving {@code stimulus} between reads — see {@link Stimulus}. */
+    public String awaitField(long mark, String type, String field, Object value, String what,
+                             int tickBudget, Stimulus stimulus) throws Exception {
         String wanted = String.valueOf(value);
         return awaitMatching(mark, type, reply -> anyRecordHas(reply, field, wanted),
-                "carrying " + field + " = " + wanted, what, tickBudget);
+                "carrying " + field + " = " + wanted, what, tickBudget, stimulus);
+    }
+
+    /**
+     * As {@link #awaitField}, answering the RECORD that satisfied the wait rather than the REPLY it
+     * arrived in — the form to take when the caller wants a FIELD of what happened.
+     *
+     * <p>Every wait in this class answers the whole {@code events since} envelope, whose own fields
+     * are {@code ok}, {@code count}, {@code instruments} and {@code events}. Asking THAT for
+     * {@code dim} is asking the postmark for the letter's address, and it truthfully answers "no
+     * such field" — after which five transit scenarios reported <i>"the arrival was announced but
+     * names no dimension"</i> while printing the arrival, with its dimension, in the same sentence
+     * (measured 2026-09-17).</p>
+     *
+     * <p>The LAST matching record: a wait that
+     * expires and one that matched on its first read see different numbers of them, and the newest
+     * is the one the wait was about.</p>
+     */
+    public String awaitRecordWithField(long mark, String type, String field, Object value,
+                                       String what, int tickBudget) throws Exception {
+        String wanted = String.valueOf(value);
+        String reply = awaitField(mark, type, field, wanted, what, tickBudget);
+        List<String> matching = recordsWhere(reply, field, wanted);
+        if (matching.isEmpty()) {
+            throw new AssertionError(what + " — the wait for a `" + type + "` carrying " + field
+                    + " = " + wanted + " returned, yet no record of the reply carries it. This is a"
+                    + " reader fault, not a statement about the world: " + reply);
+        }
+        return matching.get(matching.size() - 1);
     }
 
     /** Whether any record in a {@code since} reply carries {@code field} with this value, compared as
@@ -708,6 +664,84 @@ public final class Events {
         for (JsonElement record : eventsOf(sinceReply)) {
             String seen = primitive(record.getAsJsonObject(), field);
             if (seen != null && seen.equals(value)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Whether ONE record carries every one of {@code fieldsAndValues}, given as
+     * {@code field, value, field, value, …}.
+     *
+     * <p>For a subject that takes two fields to name — a chunk is {@code cx} AND {@code cz}, a
+     * lookup is its type AND its outcome. Two separate {@link #anyRecordHas} calls would be
+     * satisfied by two DIFFERENT records, which is the same defect as reading two probe replies a
+     * moment apart and calling the pair one instant.</p>
+     *
+     * <p>Refuses an odd argument count rather than dropping the last one: a mis-paired call would
+     * otherwise narrow by one field fewer than the caller wrote and pass more often, which is the
+     * direction a broken reader must never fail in.</p>
+     */
+    public static boolean anyRecordHasAll(String sinceReply, String... fieldsAndValues) {
+        if (fieldsAndValues.length == 0 || fieldsAndValues.length % 2 != 0) {
+            throw new AssertionError("anyRecordHasAll takes field, value pairs and was given "
+                    + fieldsAndValues.length + " argument(s): "
+                    + java.util.Arrays.toString(fieldsAndValues));
+        }
+        for (JsonElement record : eventsOf(sinceReply)) {
+            JsonObject one = record.getAsJsonObject();
+            boolean all = true;
+            for (int i = 0; i < fieldsAndValues.length && all; i += 2) {
+                String seen = primitive(one, fieldsAndValues[i]);
+                all = seen != null && seen.equals(fieldsAndValues[i + 1]);
+            }
+            if (all) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Whether any record carries {@code value} in ANY of {@code fields}.
+     *
+     * <p>For a subject that HAS more than one identity and a caller who holds one of them without
+     * knowing which. The live case is {@code ship_usable}, which carries a craft's durable AR name
+     * as {@code ship} and the substrate's opaque key as {@code vsShip} — <b>two different values for
+     * one ship</b>, minted in different places, and a scenario arrives holding whichever its own
+     * chain produced.</p>
+     *
+     * <p>This is still a FIELD read: the value is compared against named fields and never against a
+     * rendering of the record. What it will not do is tell the caller WHICH identity matched, so a
+     * caller that needs to know must ask for the field it means.</p>
+     */
+    public static boolean anyRecordHasAnyOf(String sinceReply, String value, String... fields) {
+        for (JsonElement record : eventsOf(sinceReply)) {
+            JsonObject one = record.getAsJsonObject();
+            for (String field : fields) {
+                String seen = primitive(one, field);
+                if (seen != null && seen.equals(value)) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Whether any record's {@code field} CONTAINS {@code fragment}.
+     *
+     * <p>The one place a substring is the honest test, and it is a substring of a VALUE rather than
+     * of the record: a chat line the player was shown is assembled by the game — a prefix, a name,
+     * a translation resolved on the client — so a test that pins the whole string pins the
+     * formatting. The field is still taken by name, so a producer that renames or reorders anything
+     * breaks LOUDLY here instead of matching a fragment that happens to sit elsewhere in the JSON.</p>
+     */
+    public static boolean anyRecordFieldContains(String sinceReply, String field, String fragment) {
+        for (JsonElement record : eventsOf(sinceReply)) {
+            String seen = primitive(record.getAsJsonObject(), field);
+            if (seen != null && seen.contains(fragment)) {
                 return true;
             }
         }

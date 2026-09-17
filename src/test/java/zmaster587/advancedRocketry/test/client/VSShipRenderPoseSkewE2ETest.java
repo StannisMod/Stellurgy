@@ -255,7 +255,7 @@ public class VSShipRenderPoseSkewE2ETest extends AbstractClientE2ETest {
         try {
             // Carrying, not the type alone: this seam answers more than one verdict and the wait is
             // about one of them.
-            hullCommit = events.awaitCarrying(hullMark, "deck_mode_committed", "\"mode\":\"hull\"",
+            hullCommit = events.awaitField(hullMark, "deck_mode_committed","mode", "hull",
                     "the encounter must engage the HULL-STAND hold before sampling",
                     DECK_LINK_BUDGET_TICKS);
         } catch (AssertionError missed) {
@@ -532,7 +532,11 @@ public class VSShipRenderPoseSkewE2ETest extends AbstractClientE2ETest {
         // Written out rather than called: this class pays its own harness and does not extend the VS
         // base that offers `awaitShipUsable`. Filtered on the SHIP, because on a shared world every
         // neighbour's craft becomes usable in the same log.
-        events.awaitCarrying(spawnMark, "ship_usable", "\"" + shipId + "\"",
+        // Against BOTH id fields: `ship_usable` carries the craft's durable AR name as `ship` and the
+        // substrate's opaque key as `vsShip`, and they are different values.
+        events.awaitMatching(spawnMark, "ship_usable",
+                sinceReply -> Events.anyRecordHasAnyOf(sinceReply, shipId, "ship", "vsShip"),
+                "carrying ship or vsShip = " + shipId,
                 "the ship this scenario assembled (" + shipId + ") must become USABLE — the physics"
                         + " loop steps it — before its pose can be asked about",
                 SHIP_SPAWN_BUDGET_TICKS);

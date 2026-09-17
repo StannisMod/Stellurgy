@@ -86,9 +86,9 @@ public class ItemStationChipGuiReopenClientE2ETest extends AbstractClientE2ETest
      * success or re-check the last sample of a timeout. The shared wait fails where the claim is
      * disproved instead, and prints the whole chain that did happen.</p>
      */
-    private String awaitClientRecords(long mark, String type, String needle, String what,
-                                      int tickBudget) throws Exception {
-        return clientEvents().awaitCarrying(mark, type, needle, what, tickBudget);
+    private String awaitClientRecords(long mark, String type, String field, Object value,
+                                      String what, int tickBudget) throws Exception {
+        return clientEvents().awaitField(mark, type, field, value, what, tickBudget);
     }
 
     /**
@@ -112,8 +112,7 @@ public class ItemStationChipGuiReopenClientE2ETest extends AbstractClientE2ETest
             return;
         }
         try {
-            clientEvents().awaitCarrying(equipMark, "client_slot_set",
-                    "\"item\":\"" + itemId + "\"",
+            clientEvents().awaitField(equipMark, "client_slot_set","item", itemId,
                     "ARRANGEMENT: the equip must REACH the client, or the sneak-right-click below"
                             + " uses an empty hand", HELD_LINK_BUDGET_TICKS);
         } catch (AssertionError never) {
@@ -166,8 +165,7 @@ public class ItemStationChipGuiReopenClientE2ETest extends AbstractClientE2ETest
             events.assertChain(openMark, "a sneak-right-click with the chip in hand must REACH the"
                             + " server and make it open the chip's own container", 200,
                     "right_click_item", "container_opened");
-            awaitClientRecords(openOnClient, "client_gui_opened",
-                    "\"gui\":\"GuiModular\"",
+            awaitClientRecords(openOnClient, "client_gui_opened", "gui", "GuiModular",
                     "the chip GUI must open on sneak-right-click, on the player's OWN screen — the"
                             + " server answered the press, so what is missing is the client being"
                             + " asked to display anything for it", 200);
@@ -213,7 +211,7 @@ public class ItemStationChipGuiReopenClientE2ETest extends AbstractClientE2ETest
         // The player's own screen is the end of the chain, not the whole of it. Matched on the
         // event's exact `gui` field rather than by substring, so the centered GuiModular the chip
         // opened first cannot satisfy a test about GuiModularFullScreen.
-        awaitClientRecords(pressOnClient, "client_gui_opened", "\"gui\":\"GuiModularFullScreen\"",
+        awaitClientRecords(pressOnClient, "client_gui_opened", "gui", "GuiModularFullScreen",
                 "pressing a Space-Station-Chip button must re-open the GUI as GuiModularFullScreen"
                         + " — the GuiHandler delegates MODULARFULLSCREEN to the libVulpes handler"
                         + " instead of returning null, and a screen that never opens is that null"

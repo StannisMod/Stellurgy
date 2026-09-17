@@ -161,7 +161,7 @@ public class SpaceLoginRestoreSeatedPilotE2ETest extends AbstractSpaceLoginResto
                 RESTORE_LINK_BUDGET_TICKS);
         // And the client's own side of it. Zero is the mark: this client JVM is brand new, so its
         // log starts empty and the join is recorded inside startClient, before a mark could exist.
-        String joined = awaitClientEvent(CLIENT_SESSION_START, "client_dimension_changed", null,
+        String joined = awaitClientEvent(CLIENT_SESSION_START, "client_dimension_changed",
                 "the restored client must end up IN a world. Server verdict: " + restored,
                 RESTORE_LINK_BUDGET_TICKS);
 

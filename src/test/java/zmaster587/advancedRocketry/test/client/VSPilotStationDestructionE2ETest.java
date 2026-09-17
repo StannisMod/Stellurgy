@@ -342,8 +342,7 @@ public class VSPilotStationDestructionE2ETest extends AbstractSharedVsClientE2ET
      * and its zero is equally produced by a client that never had the entity at all.</p>
      */
     private void awaitDummyRemovedOnClient(long clientMark, int dummyId) throws Exception {
-        String seen = clientEvents().awaitCarrying(clientMark, "entity_removed",
-                "\"e\":" + dummyId + ",",
+        String seen = clientEvents().awaitField(clientMark, "entity_removed","e", dummyId,
                 "the destroyed station's mount dummy (e=" + dummyId + ") must be removed from the"
                         + " CLIENT's world too — the server's removal is on the chain above, so an"
                         + " expiry here is a replication statement and not an open question about"

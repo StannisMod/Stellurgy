@@ -304,8 +304,12 @@ public class VSPreAssemblyBoardingPilotControlE2ETest extends AbstractSharedVsCl
         // would spend its whole budget learning that.
         JsonObject seatBlock = bot().blockState(seatX, seatY, seatZ);
         if (!(seatBlock.has("loaded") && seatBlock.get("loaded").getAsBoolean())) {
-            clientEvents().awaitCarrying(standMark, "chunk_data_applied",
-                    "\"cx\":" + (seatX >> 4) + ",\"cz\":" + (seatZ >> 4) + ",",
+            // BOTH coordinates, on ONE record: `cx` alone is satisfied by any chunk in that column,
+            // and two separate field waits would be satisfied by two different records.
+            clientEvents().awaitMatching(standMark, "chunk_data_applied",
+                    reply -> Events.anyRecordHasAll(reply,
+                            "cx", String.valueOf(seatX >> 4), "cz", String.valueOf(seatZ >> 4)),
+                    "carrying cx = " + (seatX >> 4) + " and cz = " + (seatZ >> 4),
                     "the seat's chunk must reach the client before its block can be measured",
                     CLIENT_TERRAIN_BUDGET_TICKS);
             seatBlock = bot().blockState(seatX, seatY, seatZ);
@@ -528,7 +532,7 @@ public class VSPreAssemblyBoardingPilotControlE2ETest extends AbstractSharedVsCl
         String queue;
         String gaveUp;
         try {
-            events.awaitCarrying(assemblyMark, "crew_rebind_decided", "\"outcome\":\"REBOUND\"",
+            events.awaitField(assemblyMark, "crew_rebind_decided","outcome", "REBOUND",
                     "the crew rebind must decide REBOUND for the pilot whose ship was just"
                             + " assembled", rebindBudget);
         } catch (AssertionError never) {

@@ -165,7 +165,7 @@ public class VSShipCellSeamE2ETest extends AbstractSharedServerTest {
         // instead of one last blob. `awaitCarrying` names THIS ship: a shared server carries other
         // scenarios' craft across the same seams, and a wait on the type alone is one any of them
         // satisfies.
-        events.awaitCarrying(carryMark, "ship_entered_cell", "\"ship\":\"" + arShipId + "\"",
+        events.awaitField(carryMark, "ship_entered_cell","ship", arShipId,
                 "the carry started (" + carry + "), so THIS ship must settle in the neighbouring"
                         + " cell it left through; source=" + sourceCell + " shipX=" + mx,
                 SETTLE_TICKS);
@@ -306,8 +306,7 @@ public class VSShipCellSeamE2ETest extends AbstractSharedServerTest {
                 heldDst.contains("\"ok\":true"));
 
         // The event production publishes when the carry completes -- see the sibling scenario.
-        events.awaitCarrying(carryMark, "ship_entered_cell",
-                "\"ship\":\"" + arranged.arShipId + "\"",
+        events.awaitField(carryMark, "ship_entered_cell","ship", arranged.arShipId,
                 "the ship itself never settled in the neighbour, so nothing can be concluded about"
                         + " what it was carrying", SETTLE_TICKS);
         String afterMove = exec("artest space ledger-get " + arranged.arShipId);
@@ -470,8 +469,7 @@ public class VSShipCellSeamE2ETest extends AbstractSharedServerTest {
         assertTrue("the arrival deck's chunks could not be held: " + heldDst,
                 heldDst.contains("\"ok\":true"));
 
-        events.awaitCarrying(carryMark, "ship_entered_cell",
-                "\"ship\":\"" + arranged.arShipId + "\"",
+        events.awaitField(carryMark, "ship_entered_cell","ship", arranged.arShipId,
                 "the ship itself never settled in the neighbour, so nothing can be concluded about "
                         + "what it was carrying", SETTLE_TICKS);
         String afterMove = exec("artest space ledger-get " + arranged.arShipId);

@@ -67,8 +67,7 @@ public class VSShipTransitE2ETest extends AbstractSharedServerTest {
         // the server drives a transit (the old loop drove it by hand and could not have noticed if
         // production stopped), and the record proves the arrival happened rather than that a sample
         // caught a moment.
-        String arrived = events.awaitRecordCarrying(transitMark, "ship_transit_ended",
-                "\"route\":\"HYPERSPACE\"",
+        String arrived = events.awaitRecordWithField(transitMark, "ship_transit_ended","route", "HYPERSPACE",
                 "the jump never completed; the durable record now reads "
                         + exec("artest space transit-export"),
                 ARRIVAL_TICKS);

@@ -89,8 +89,11 @@ public class SatelliteUnknownTypeClientE2ETest extends AbstractClientE2ETest {
         // PRESENCE: the packet reached this client and its registry lookup came back empty — the
         // exact branch the contract is about. Without this the absence below is also satisfied by a
         // packet that was never delivered or never decoded.
-        clientEvents().awaitCarrying(clientMark, "satellite_nbt_resolved",
-                "\"dataType\":\"" + BOGUS_TYPE + "\",\"resolved\":false",
+        // BOTH fields, on ONE record: the type alone would be satisfied by a lookup that RESOLVED,
+        // and the outcome alone by any other type failing to resolve. The pair is the branch.
+        clientEvents().awaitMatching(clientMark, "satellite_nbt_resolved",
+                reply -> Events.anyRecordHasAll(reply, "dataType", BOGUS_TYPE, "resolved", "false"),
+                "carrying dataType = " + BOGUS_TYPE + " and resolved = false",
                 "an unknown satellite type must be LOOKED UP on the client and come back"
                         + " unresolved — that is the branch readClient must then drop",
                 DECODE_BUDGET_TICKS);

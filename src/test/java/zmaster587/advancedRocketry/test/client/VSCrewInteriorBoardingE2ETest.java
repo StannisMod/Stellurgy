@@ -688,7 +688,11 @@ public class VSCrewInteriorBoardingE2ETest extends AbstractSharedVsClientE2ETest
         // probe readings whose exit condition (`seated`) was re-asserted verbatim afterwards — so
         // that assertion could only ever fail by the poll running out, and its message blamed deck
         // gravity for a budget.
-        String landing = clientEvents.awaitCarrying(flightOffMark, "deck_contact", "\"ship\"",
+        // Narrowed to THIS craft. The needle that stood here asked only that the record carry a
+        // `ship` field at all, which every `deck_contact` does — including one written for a body
+        // landing on a neighbour's hull, and including the literal "hull" the recorder writes for a
+        // craft with no durable name. Naming the ship is what makes this a wait for this scenario.
+        String landing = clientEvents.awaitField(flightOffMark, "deck_contact", "ship", scenarioShipId,
                 "turning flight off must hand the body to deck gravity and put it in CONTACT with"
                         + " the ship's geometry — a body merely hovering at the right height was"
                         + " never seated by anything", DECK_LINK_BUDGET_TICKS);

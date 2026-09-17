@@ -138,8 +138,7 @@ public class VSJumpDumpsTheCruiseE2ETest extends AbstractSharedServerTest {
         String begin = exec("artest space transit-begin " + originDim + " 1 64 1 " + speed);
         assertTrue("the jump must begin: " + begin, begin.contains("\"began\":true"));
 
-        String arrived = events.awaitRecordCarrying(jumpMark, "ship_transit_ended",
-                "\"route\":\"" + route + "\"",
+        String arrived = events.awaitRecordWithField(jumpMark, "ship_transit_ended","route", route,
                 "the ship never reached the target cell by the " + route + " route, so this leg has "
                         + "no arrival to read a cruise off; the durable record now reads "
                         + exec("artest space transit-export"),

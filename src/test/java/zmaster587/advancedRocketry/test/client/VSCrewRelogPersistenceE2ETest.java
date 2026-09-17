@@ -834,7 +834,7 @@ public class VSCrewRelogPersistenceE2ETest extends AbstractSharedVsClientE2ETest
                         + " where it put him", CAPTURE_BUDGET_TICKS);
         // Carrying HIS ship's name — the message already says "on something that is not this deck",
         // and a type-only wait cannot tell that case from a pass.
-        events.awaitCarrying(relogMark, "deck_entered", "\"ship\":\"" + scenarioShipId + "\"",
+        events.awaitField(relogMark, "deck_entered","ship", scenarioShipId,
                 "after the relog HIS deck must TAKE him again -"
                 + " otherwise the drift windows below measure a body vanilla and the physics mod"
                 + " are holding, on something that is not this deck", CAPTURE_BUDGET_TICKS);

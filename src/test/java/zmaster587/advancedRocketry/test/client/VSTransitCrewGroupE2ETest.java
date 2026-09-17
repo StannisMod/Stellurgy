@@ -918,7 +918,7 @@ private long readCounter(String className, String field) throws Exception {
                 + bot().reportRidingEntity(),
                 !bot().reportRidingEntity().get("riding").getAsBoolean());
         // The DROP is a stimulus and the capture is a LINK, so the two go into the pair built for
-        // that: `awaitCarrying(…, stimulus)` re-drops him between reads until his own client
+        // that: `awaitField(…, stimulus)` re-drops him between reads until his own client
         // records the deck taking him. What stood here re-read `deck-capture` after each drop and
         // handed the last reading back for a caller to assert on — the same reading the loop had
         // just exited on.
@@ -1262,8 +1262,7 @@ private long readCounter(String className, String field) throws Exception {
         // rather than checked afterwards against prose in a chat ring.
         //
         // The deadline is the void's own grace plus the same margin the livable leg was given.
-        String death = events.awaitCarrying(deathMark, "player_died",
-                "\"source\":\"" + VOID_DAMAGE_TYPE + "\"",
+        String death = events.awaitField(deathMark, "player_died", "source", VOID_DAMAGE_TYPE,
                 "leaving your ship in hyperspace must kill you, and the VOID must be what took him —"
                         + " the same body survived the same span aboard, so this is the step off the"
                         + " hull and not the flight",
@@ -1307,8 +1306,7 @@ private long readCounter(String className, String field) throws Exception {
         // five ticks of budget and each stimulus accelerates ten, so half of LIVABLE_FLIGHT_TICKS of
         // budget delivers the whole flight the scenario asked for.
         try {
-            events.awaitCarrying(mark, "transit_settled",
-                    "\"ship\":\"" + setupDurableId(setup) + "\"",
+            events.awaitField(mark, "transit_settled", "ship", setupDurableId(setup),
                     "the jump must be flown out before this scenario returns: it shares its"
                             + " hyperspace with every other scenario in this class, and a transit"
                             + " left running parks a hull there with a crew record for a player who"

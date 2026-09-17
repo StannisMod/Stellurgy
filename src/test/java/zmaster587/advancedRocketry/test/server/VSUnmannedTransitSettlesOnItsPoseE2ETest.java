@@ -76,8 +76,7 @@ public class VSUnmannedTransitSettlesOnItsPoseE2ETest extends AbstractSharedServ
                 begin.contains("\"began\":true"));
 
         // No pump: the server advances the jump. Waited for as the arrival production announces.
-        String arrivedRecord = events.awaitCarrying(transitMark, "ship_transit_ended",
-                "\"route\":\"HYPERSPACE\"",
+        String arrivedRecord = events.awaitField(transitMark, "ship_transit_ended","route", "HYPERSPACE",
                 "the ship never arrived at all; the transit now reads "
                         + exec("artest space transit-status"),
                 ARRIVAL_TICKS);
