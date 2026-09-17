@@ -5,6 +5,7 @@ import com.google.gson.JsonObject;
 
 import org.junit.Test;
 import zmaster587.advancedRocketry.test.Reply;
+import zmaster587.advancedRocketry.test.PlayerState;
 import zmaster587.advancedRocketry.test.GameTicks;
 
 import java.util.ArrayList;
@@ -138,10 +139,7 @@ public class SpikeVerticalSubBlockRoundTripTest extends AbstractClientE2ETest {
         exec("weather clear");
         bot().setRenderDistance(4);
 
-        String health = exec("artest player health");
-        String named = Reply.of("artest player health", health).text("player");
-        assertTrue("player health must echo the player name: " + health, named != null);
-        botName = named;
+        botName = PlayerState.botName(this::exec);
 
         // The hold. Spectator is the only hover a command can ask for, and without it every reading
         // past the first tick is of a falling player.
@@ -272,7 +270,7 @@ public class SpikeVerticalSubBlockRoundTripTest extends AbstractClientE2ETest {
     // ─── instruments ────────────────────────────────────────────────────────────
 
     private double serverY() throws Exception {
-        return field(exec("artest player health"), "posY");
+        return PlayerState.read(this::exec).y;
     }
 
     /** The CLIENT's own record of how high it thinks it is — the far end of the round trip. */

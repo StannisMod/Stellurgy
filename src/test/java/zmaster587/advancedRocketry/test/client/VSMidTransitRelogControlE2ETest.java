@@ -16,6 +16,7 @@ import zmaster587.advancedRocketry.space.CellSeam;
 import zmaster587.advancedRocketry.space.CellWorldMapper;
 import zmaster587.advancedRocketry.space.GalacticCoord;
 import zmaster587.advancedRocketry.test.Reply;
+import zmaster587.advancedRocketry.test.PlayerState;
 import zmaster587.advancedRocketry.test.Events;
 import zmaster587.advancedRocketry.test.EntryStatus;
 import zmaster587.advancedRocketry.test.TransitStatus;
@@ -69,7 +70,6 @@ public class VSMidTransitRelogControlE2ETest extends AbstractSharedVsClientE2ETe
         return "vs-mid-transit-relog-control";
     }
 
-    private static final String PLAYER_NAME = "player";
     private static final String SHIP_ID = "id";
 
     /** A demonstrable held-key climb: well above settle jitter, cheap to reach. */
@@ -156,10 +156,7 @@ public class VSMidTransitRelogControlE2ETest extends AbstractSharedVsClientE2ETe
                         + " " + (sx + 12) + " " + (sy - 8) + " " + (sz + 12) + " minecraft:stone")
                         .contains("\"ok\":true"));
 
-        String health = exec("artest player health");
-        Reply nameMReply = Reply.of(health);
-        assertTrue("player health must echo the player name: " + health, nameMReply.has(PLAYER_NAME));
-        String botName = nameMReply.text(PLAYER_NAME);
+        String botName = PlayerState.botName(this::exec);
 
         // The CLIENT's mark BEFORE the transfer is ordered: the twenty ticks that stood here were a
         // guess at one round trip plus a world teardown, and the read below is the client's own.
@@ -390,7 +387,7 @@ public class VSMidTransitRelogControlE2ETest extends AbstractSharedVsClientE2ETe
         // renders it, and the client's own player. A break between any two adjacent pair names the
         // hop; all four agreeing on a wrong number is a different bug from the client alone being
         // wrong, and this assertion used to report only the last of them.
-        String serverPlayer = exec("artest player health");
+        PlayerState serverPlayer = PlayerState.read(this::exec);
         String arrivedShip = shipInfoById(targetDim, shipId);
         double ridingY = riding.has("posY") ? riding.get("posY").getAsDouble() : Double.NaN;
         // "not loaded" rather than NaN: a ship the destination world does not hold has no altitude,
@@ -399,7 +396,7 @@ public class VSMidTransitRelogControlE2ETest extends AbstractSharedVsClientE2ETe
         String shipOnServer = ShipInfo.isLoaded(arrivedShip)
                 ? String.valueOf(ShipInfo.of(arrivedShip).y) : "not-loaded-in-" + targetDim;
         String altitudes = "shipOnServer=" + shipOnServer
-                + " playerOnServer=" + readDoubleOr(serverPlayer, "posY")
+                + " playerOnServer=" + serverPlayer.y
                 + " dummyOnClient=" + ridingY
                 + " playerOnClient=" + arrivedY;
         scenario().record("arrivalAltitudes", altitudes);

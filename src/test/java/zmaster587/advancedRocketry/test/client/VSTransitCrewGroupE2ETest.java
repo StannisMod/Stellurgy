@@ -107,7 +107,6 @@ public class VSTransitCrewGroupE2ETest extends AbstractSharedVsClientE2ETest {
 
     // ---- shared arrangement helpers (byte-identical in all four sources) ----
 
-    private static final String PLAYER_NAME = "player";
 
     /**
      * The bot's own username, off the server's own answer.
@@ -489,10 +488,7 @@ private boolean waitForRegisteredShip(int dim) throws Exception {
         assertTrue("the piloted origin ship never assembled in the pool cell (dim " + originDim + ")",
                 waitForRegisteredShip(originDim));
 
-        String health = execEnvelope("artest player health");
-        Reply nameMReply = Reply.of(health);
-        assertTrue("player health must echo the player name: " + health, nameMReply.has(PLAYER_NAME));
-        String botName = nameMReply.text(PLAYER_NAME);
+        String botName = PlayerState.botName(this::execEnvelope);
 
         // Put the bot in the origin cell FIRST, at the assembly anchor. That is what makes the origin ship
         // loaded — by a real player's proximity, VS's own mechanism — so even the arrangement needs no
@@ -678,11 +674,11 @@ private void seatTheBot(int originDim, String shipId) throws Exception {
         // and then looked up in whatever world the server has the player in. Measured 2026-09-08 —
         // dummy alive in dim 3, player in dim 4, five retries against a lookup that could never
         // succeed. Read here so an arrangement that did not build says so as an arrangement.
-        String serverSide = exec("artest player health");
+        PlayerState serverSide = PlayerState.read(this::exec);
         scenario().requireArranged("the SERVER must have the player in the transit origin cell too —"
                 + " the client says " + originDim + " and the seat dummy is spawned there, so a"
                 + " server-side dim that differs makes the mount below unreachable rather than"
-                + " flaky: " + serverSide, readInt(serverSide, "dim") == originDim);
+                + " flaky: " + serverSide.raw(), serverSide.dim == originDim);
 
         mountTheSeatDummy(this::exec, originDim, seatX, seatY, seatZ);
         assertTrue("the bot must be seated on the ship BEFORE the jump (control): "
