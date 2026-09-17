@@ -7,6 +7,7 @@ import org.junit.Test;
 
 import zmaster587.advancedRocketry.space.CellWorldMapper;
 import zmaster587.advancedRocketry.space.GalacticCoord;
+import zmaster587.advancedRocketry.test.LedgerEntry;
 import zmaster587.advancedRocketry.test.SubsystemStatus;
 import zmaster587.advancedRocketry.test.Events;
 
@@ -161,10 +162,10 @@ public class SpaceLoginRestoreRefusalE2ETest extends AbstractSpaceLoginRestoreCl
         SubsystemStatus statusAfter = SubsystemStatus.read(this::exec);
         assertTrue("the production subsystem must come up again on boot 2: " + statusAfter.raw(),
                 statusAfter.registered);
-        String ledger = exec("artest space ledger-get " + arrangedShipId);
+        LedgerEntry ledger = LedgerEntry.forShip(this::exec, arrangedShipId);
         assertTrue("the ship must still be ledgered - a restore with nothing to restore ONTO would "
-                + "leave him in the overworld for the wrong reason: " + ledger,
-                ledger.contains("\"found\":true"));
+                + "leave him in the overworld for the wrong reason: " + ledger.raw(),
+                ledger.found);
 
         startClient();
         bot().waitForWorld();

@@ -19,6 +19,7 @@ import java.util.regex.Pattern;
 
 import zmaster587.advancedRocketry.space.CellWorldMapper;
 import zmaster587.advancedRocketry.space.GalacticCoord;
+import zmaster587.advancedRocketry.test.LedgerEntry;
 import zmaster587.advancedRocketry.test.SubsystemStatus;
 import zmaster587.advancedRocketry.test.SeatMount;
 import zmaster587.advancedRocketry.test.Reply;
@@ -395,14 +396,14 @@ public abstract class AbstractSpaceLoginRestoreClientTest {
         // connects: a restore that finds no ledgered ship resolves "ship unknown" and drops the
         // pilot at an ordinary spawn, and that failure must be attributable to the ledger rather
         // than to the login hook.
-        String ledger = exec("artest space ledger-get " + arrangedShipId);
+        LedgerEntry ledger = LedgerEntry.forShip(this::exec, arrangedShipId);
         assertTrue("the settled ship must survive the shutdown save and come back in the ledger - "
-                + "without it there is nothing for the restore to restore him onto: " + ledger,
-                ledger.contains("\"found\":true"));
-        assertEquals("and it must come back SETTLED in the same cell it entered: " + ledger,
-                arrangedCellKey, readString(ledger, "cell"));
+                + "without it there is nothing for the restore to restore him onto: " + ledger.raw(),
+                ledger.found);
+        assertEquals("and it must come back SETTLED in the same cell it entered: " + ledger.raw(),
+                arrangedCellKey, ledger.cellKey());
         assertEquals("a ship that came back in some other ledger state would send the restore down "
-                + "a different branch entirely: " + ledger, "SETTLED", readString(ledger, "state"));
+                + "a different branch entirely: " + ledger.raw(), "SETTLED", ledger.state());
 
         // Issued BEFORE the client connects: the restore fires on his connection, and a headless
         // server has nobody standing near the ship to hold it loaded for the re-seating.
@@ -1333,14 +1334,13 @@ public abstract class AbstractSpaceLoginRestoreClientTest {
         arrangedShipId = slot[1];
         arrangedAfcPos = slot[2] + " " + slot[3] + " " + slot[4];
 
-        String ledgerEntry = exec("artest space ledger-get " + arrangedShipId);
-        assertTrue("the entered ship must be in the production ledger: " + ledgerEntry,
-                ledgerEntry.contains("\"found\":true"));
-        assertEquals("and it must be settled, not mid-jump: " + ledgerEntry,
-                "SETTLED", readString(ledgerEntry, "state"));
-        arrangedCellKey = readString(ledgerEntry, "cell");
-        assertNotNull("the ledger reported no cell for the entered ship: " + ledgerEntry,
-                arrangedCellKey);
+        // The reader refuses a ship the ledger has no entry for, and refuses to answer a cell for
+        // one — which is what the has-check and the notNull below it each stood for.
+        LedgerEntry ledgerEntry = LedgerEntry.forShip(this::exec, arrangedShipId)
+                .requireFound("the entered ship must be in the production ledger");
+        assertEquals("and it must be settled, not mid-jump: " + ledgerEntry.raw(),
+                "SETTLED", ledgerEntry.state());
+        arrangedCellKey = ledgerEntry.cellKey();
 
         // AND SAY THAT IT HAS BEEN FLOWN. This is not decoration, and it is the one thing the deleted
         // throttle was silently doing for the rest of the scenario: an all-zero input is still an
@@ -1493,14 +1493,13 @@ public abstract class AbstractSpaceLoginRestoreClientTest {
         arrangedShipId = slot[1];
         arrangedAfcPos = slot[2] + " " + slot[3] + " " + slot[4];
 
-        String ledgerEntry = exec("artest space ledger-get " + arrangedShipId);
-        assertTrue("the entered ship must be in the production ledger: " + ledgerEntry,
-                ledgerEntry.contains("\"found\":true"));
-        assertEquals("and it must be settled, not mid-jump: " + ledgerEntry,
-                "SETTLED", readString(ledgerEntry, "state"));
-        arrangedCellKey = readString(ledgerEntry, "cell");
-        assertNotNull("the ledger reported no cell for the entered ship: " + ledgerEntry,
-                arrangedCellKey);
+        // The reader refuses a ship the ledger has no entry for, and refuses to answer a cell for
+        // one — which is what the has-check and the notNull below it each stood for.
+        LedgerEntry ledgerEntry = LedgerEntry.forShip(this::exec, arrangedShipId)
+                .requireFound("the entered ship must be in the production ledger");
+        assertEquals("and it must be settled, not mid-jump: " + ledgerEntry.raw(),
+                "SETTLED", ledgerEntry.state());
+        arrangedCellKey = ledgerEntry.cellKey();
 
         // The setpoint his long climb ramped is parked to a hover on the ship that came out of the
         // crossing, and that ship is marked flown. Full deflection saturates the setpoint at the

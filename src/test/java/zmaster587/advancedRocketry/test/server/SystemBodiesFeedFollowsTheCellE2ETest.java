@@ -1,5 +1,6 @@
 package zmaster587.advancedRocketry.test.server;
 
+import zmaster587.advancedRocketry.test.LedgerEntry;
 import zmaster587.advancedRocketry.test.Reply;
 import org.junit.After;
 import org.junit.Test;
@@ -138,7 +139,7 @@ public class SystemBodiesFeedFollowsTheCellE2ETest extends AbstractSharedServerT
         assertTrue("the arrangement must really have a non-settled ship in this cell; " + bodies,
                 bodies.contains("\"state\":\"IN_TRANSIT\""));
         assertEquals("the cell is still bound to the same slot world; " + bodies,
-                slotDim, jsonInt(exec("artest space ledger-get " + shipId), "slotDim"));
+                slotDim, LedgerEntry.forShip(this::exec, shipId).slotDim());
         assertEquals("a cell's bodies must not vanish from its sky because a ship in it is mid-jump; "
                 + bodies, 1, feedBodyCount(bodies, slotDim));
     }

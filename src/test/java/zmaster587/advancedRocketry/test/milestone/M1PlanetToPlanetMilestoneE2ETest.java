@@ -23,6 +23,7 @@ import zmaster587.advancedRocketry.test.SubsystemStatus;
 import zmaster587.advancedRocketry.test.Chains;
 import zmaster587.advancedRocketry.test.Events;
 import zmaster587.advancedRocketry.test.PilotSeat;
+import zmaster587.advancedRocketry.test.LedgerEntry;
 import zmaster587.advancedRocketry.test.Reply;
 import zmaster587.advancedRocketry.test.CellInfo;
 import zmaster587.advancedRocketry.test.FixtureSite;
@@ -99,7 +100,6 @@ public class M1PlanetToPlanetMilestoneE2ETest {
     private static final String LEDGER = "ledger";
     private static final String SLOT_DIMS = "slotDims";
     private static final String SHIP_ID = "shipId";
-    private static final String CELL = "cell";
     private static final String NAV_TARGET = "target";
     private static final String NAV_ARMED = "armed";
     private static final String NAV_SHIP_ADDRESSES = "ship";
@@ -506,11 +506,14 @@ public class M1PlanetToPlanetMilestoneE2ETest {
                         + "means the arrival left no body behind: " + afcProbe,
                 afcProbe.contains("\"found\":true"));
         String shipId = readString(afcProbe, SHIP_ID);
-        String launchCell = readString(exec("artest space ledger-get " + shipId), CELL);
-        requireArranged("the ledger must name the cell the jump departs FROM — without it "
-                        + "the arrival assertion below cannot tell a jump from a no-op. shipId="
-                        + shipId + " ledger=" + exec("artest space ledger-get " + shipId),
-                launchCell != null && !launchCell.isEmpty());
+        // The reader refuses a ship the ledger has no entry for, and refuses to answer a cell for
+        // one — which is what this arrangement check stood for, and it no longer has to ask the
+        // probe a second time to say so.
+        String launchCell = LedgerEntry.forShip(this::exec, shipId)
+                .requireFound("the ledger must name the cell the jump departs FROM — without it the"
+                        + " arrival assertion below cannot tell a jump from a no-op. shipId="
+                        + shipId)
+                .cellKey();
 
         // Read while he is still SEATED, so the ship's own world point is on record before the one
         // moment in this loop when the pilot is not a reliable pointer to his craft.

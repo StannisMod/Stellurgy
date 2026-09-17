@@ -1,5 +1,6 @@
 package zmaster587.advancedRocketry.test.server;
 
+import zmaster587.advancedRocketry.test.LedgerEntry;
 import zmaster587.advancedRocketry.test.Reply;
 import zmaster587.advancedRocketry.test.Events;
 import zmaster587.advancedRocketry.test.ShipReadiness;
@@ -21,6 +22,7 @@ import zmaster587.advancedRocketry.test.FixtureSite;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
@@ -169,10 +171,12 @@ public class VSShipCellSeamE2ETest extends AbstractSharedServerTest {
                 "the carry started (" + carry + "), so THIS ship must settle in the neighbouring"
                         + " cell it left through; source=" + sourceCell + " shipX=" + mx,
                 SETTLE_TICKS);
-        String afterMove = exec("artest space ledger-get " + arShipId);
-        String carriedCell = extractString(afterMove, "cell");
-        assertTrue("the ship settled but the ledger does not name a cell for it: " + afterMove,
-                carriedCell != null && !sourceCell.equals(carriedCell));
+        LedgerEntry afterMove = ledger(arShipId);
+        String carriedCell = afterMove
+                .requireFound("the ship settled but the ledger has no entry for it")
+                .cellKey();
+        assertNotEquals("the ship settled but the ledger still names the cell it left: "
+                + afterMove.raw(), sourceCell, carriedCell);
 
         long[] from = cellSectors(sourceCell);
         long[] to = cellSectors(carriedCell);
@@ -182,9 +186,8 @@ public class VSShipCellSeamE2ETest extends AbstractSharedServerTest {
 
         // It arrived INSIDE the neighbour's opposite face, not on it. This is the hysteresis as the
         // world sees it: the expected world X is the local offset itself (XZ realize directly).
-        int carriedSlot = extractInt(afterMove, "slotDim");
-        assertTrue("the carried ship has no bound slot: " + afterMove,
-                carriedSlot > Integer.MIN_VALUE);
+        assertTrue("the carried ship has no bound slot: " + afterMove.raw(), afterMove.slotBound);
+        int carriedSlot = afterMove.slotDim();
         assertTrue("the neighbour's cell world never came up", loadedShips(carriedSlot) >= 1);
         ShipInfo arrived = arrivedShip(carriedSlot, arShipId);
         double ax = arrived.x;
@@ -199,9 +202,9 @@ public class VSShipCellSeamE2ETest extends AbstractSharedServerTest {
         // ticks on a loaded box, so a ping-pong slower than the sampling was simply not looked at —
         // and an observation window that goes blind reports stability, which is the silent direction.
         GameTicks.observe(client(), GameTicks.world(carriedSlot), 8, PING_PONG_TICKS_BETWEEN, () -> {
-            String held = exec("artest space ledger-get " + arShipId);
-            assertEquals("the carried ship bounced back across the face (ping-pong): " + held,
-                    carriedCell, extractString(held, "cell"));
+            LedgerEntry held = ledger(arShipId);
+            assertEquals("the carried ship bounced back across the face (ping-pong): "
+                    + held.raw(), carriedCell, held.cellKey());
         });
     }
 
@@ -309,13 +312,12 @@ public class VSShipCellSeamE2ETest extends AbstractSharedServerTest {
         events.awaitField(carryMark, "ship_entered_cell","ship", arranged.arShipId,
                 "the ship itself never settled in the neighbour, so nothing can be concluded about"
                         + " what it was carrying", SETTLE_TICKS);
-        String afterMove = exec("artest space ledger-get " + arranged.arShipId);
-        assertTrue("the ship settled but the ledger does not name a new cell for it: " + afterMove,
-                extractString(afterMove, "cell") != null
-                        && !arranged.sourceCell.equals(extractString(afterMove, "cell")));
-        int carriedSlot = extractInt(afterMove, "slotDim");
-        assertTrue("the carried ship has no bound slot: " + afterMove,
-                carriedSlot > Integer.MIN_VALUE);
+        LedgerEntry afterMove = ledger(arranged.arShipId)
+                .requireFound("the ship settled but the ledger has no entry for it");
+        assertNotEquals("the ship settled but the ledger still names the cell it left: "
+                + afterMove.raw(), arranged.sourceCell, afterMove.cellKey());
+        assertTrue("the carried ship has no bound slot: " + afterMove.raw(), afterMove.slotBound);
+        int carriedSlot = afterMove.slotDim();
         assertTrue("the neighbour's cell world never came up", loadedShips(carriedSlot) >= 1);
 
         // The ARRIVED ship's VS id — a new body, so a new id, traded for the durable one. Asking with
@@ -472,10 +474,9 @@ public class VSShipCellSeamE2ETest extends AbstractSharedServerTest {
         events.awaitField(carryMark, "ship_entered_cell","ship", arranged.arShipId,
                 "the ship itself never settled in the neighbour, so nothing can be concluded about "
                         + "what it was carrying", SETTLE_TICKS);
-        String afterMove = exec("artest space ledger-get " + arranged.arShipId);
-        int carriedSlot = extractInt(afterMove, "slotDim");
-        assertTrue("the carried ship has no bound slot: " + afterMove,
-                carriedSlot > Integer.MIN_VALUE);
+        LedgerEntry afterMove = ledger(arranged.arShipId);
+        assertTrue("the carried ship has no bound slot: " + afterMove.raw(), afterMove.slotBound);
+        int carriedSlot = afterMove.slotDim();
         ShipInfo arrived = arrivedShip(carriedSlot, arranged.arShipId);
         String dstVsId = arrived.id;
         assertTrue("the arrived ship reported no VS id: " + arrived.raw(), dstVsId != null);
@@ -571,9 +572,8 @@ public class VSShipCellSeamE2ETest extends AbstractSharedServerTest {
 
         // CONTROL: this ship is not in the ledger before it climbs, so the settle read below is a
         // real observation and not a first reading of something that was already there.
-        String before = exec("artest space ledger-get " + arShipId);
-        assertTrue("this ship is ledgered before it has flown: " + before,
-                before.contains("\"found\":false"));
+        LedgerEntry before = ledger(arShipId);
+        assertFalse("this ship is ledgered before it has flown: " + before.raw(), before.found);
         assertTrue("the source VS ship never loaded", loadedShips(0) >= 1);
 
         // TWO IDENTITIES, deliberately kept apart, and NEITHER of them is searched for. The DURABLE
@@ -690,13 +690,12 @@ public class VSShipCellSeamE2ETest extends AbstractSharedServerTest {
         }
 
         // Waited on BY ID: the ledger is asked about this craft, not about how many ships it holds.
-        final String[] status = {""};
+        final LedgerEntry[] status = new LedgerEntry[1];
         final int[] polls = {0};
         boolean settled = GameTicks.until(client(), GameTicks.server(), SETTLE_TICKS,
                 () -> {
-                    status[0] = exec("artest space ledger-get " + arShipId);
-                    return status[0].contains("\"found\":true")
-                            && "SETTLED".equals(extractString(status[0], "state"));
+                    status[0] = ledger(arShipId);
+                    return status[0].stateIs("SETTLED");
                 },
                 () -> {
                     loadAllEntrySlots(setup);
@@ -726,15 +725,15 @@ public class VSShipCellSeamE2ETest extends AbstractSharedServerTest {
             // from entryCeiling(), the pose from the same VS call the trigger makes), plus what the
             // controller last decided and for which ship — so "never asked" is distinguishable from
             // "asked and refused" in the same reply.
-            fail("the ship never reached space through the entry path; last ledger=" + status[0]
+            fail("the ship never reached space through the entry path; last ledger="
+                    + (status[0] == null ? "never read" : status[0].raw())
                     + " | entry gate: " + entryGate(srcVsId)
                     + " | gate trace, oldest first: " + gateTrace
                     + " | cell claims since this scenario began: " + claimsSince(claimMark));
         }
-        String sourceCell = extractString(status[0], "cell");
-        assertTrue("the settled ship names no cell: " + status[0], sourceCell != null);
-        int sourceSlot = extractInt(status[0], "slotDim");
-        assertTrue("settled ship has no bound slot: " + status[0], sourceSlot > Integer.MIN_VALUE);
+        String sourceCell = status[0].cellKey();
+        assertTrue("settled ship has no bound slot: " + status[0].raw(), status[0].slotBound);
+        int sourceSlot = status[0].slotDim();
         assertTrue("the settled ship's cell world is not live", loadedShips(sourceSlot) >= 1);
 
         // LET GO OF THE STICK. The climb held full up to get past the entry ceiling, and the flight
@@ -908,6 +907,11 @@ public class VSShipCellSeamE2ETest extends AbstractSharedServerTest {
 
     private String exec(String cmd) throws Exception {
         return String.join("\n", client().execute(cmd));
+    }
+
+    /** What the production ledger holds about one craft, by its DURABLE id. */
+    private LedgerEntry ledger(String arShipId) throws Exception {
+        return LedgerEntry.forShip(this::exec, arShipId);
     }
 
     /**

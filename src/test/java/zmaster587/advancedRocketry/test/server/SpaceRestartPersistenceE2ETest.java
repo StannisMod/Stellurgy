@@ -1,12 +1,11 @@
 package zmaster587.advancedRocketry.test.server;
 
+import zmaster587.advancedRocketry.test.LedgerEntry;
 import zmaster587.advancedRocketry.test.SubsystemStatus;
 import zmaster587.advancedRocketry.test.Reply;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.UUID;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 import com.github.stannismod.forge.testing.junit.AbstractHeadlessServerTest;
 import com.github.stannismod.forge.testing.server.RealDedicatedServerHarness;
@@ -19,6 +18,7 @@ import zmaster587.advancedRocketry.test.GameTicks;
 import org.junit.Test;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertTrue;
 
@@ -125,9 +125,9 @@ public class SpaceRestartPersistenceE2ETest {
         assertTrue("the ship must be recorded in the production ledger: " + settled,
                 settled.contains("\"ok\":true"));
 
-        String beforeSave = exec("artest space ledger-get " + SHIP_ID);
+        LedgerEntry beforeSave = ledger(SHIP_ID);
         assertTrue("sanity: the ledger must hold the ship BEFORE the reboot, or a green result "
-                + "after it would prove nothing: " + beforeSave, beforeSave.contains("\"found\":true"));
+                + "after it would prove nothing: " + beforeSave.raw(), beforeSave.found);
 
         // Deliberately NO explicit save here. The ship is recorded and the server is then simply
         // stopped, which is what an operator does and the harshest honest case: the shutdown save is
@@ -147,14 +147,16 @@ public class SpaceRestartPersistenceE2ETest {
         assertTrue("the production subsystem must come up again on boot 2: " + statusAfter.raw(),
                 statusAfter.registered);
 
-        String restored = exec("artest space ledger-get " + SHIP_ID);
+        LedgerEntry restored = ledger(SHIP_ID);
         assertTrue("a ship settled before the reboot must still be known after it — this is the "
-                + "contract that a player's ship is not lost by restarting the server: " + restored,
-                restored.contains("\"found\":true"));
-        assertTrue("it must come back at the SAME galactic address, not merely exist: " + restored,
-                restored.contains("\"cell\":\"" + SECTOR_X + "_" + SECTOR_Y + "_" + SECTOR_Z + "\""));
-        assertTrue("and it must come back settled, not in some default state: " + restored,
-                restored.contains("\"state\":\"SETTLED\""));
+                + "contract that a player's ship is not lost by restarting the server: "
+                + restored.raw(),
+                restored.found);
+        assertEquals("it must come back at the SAME galactic address, not merely exist: "
+                        + restored.raw(),
+                SECTOR_X + "_" + SECTOR_Y + "_" + SECTOR_Z, restored.cellKey());
+        assertEquals("and it must come back settled, not in some default state: " + restored.raw(),
+                "SETTLED", restored.state());
     }
 
     /**
@@ -217,18 +219,18 @@ public class SpaceRestartPersistenceE2ETest {
                 + "if it did not, this test proves nothing about a stale id: " + live,
                 slotBeforeReboot, liveSlot);
 
-        String restored = exec("artest space ledger-get " + SHIP_ID);
-        assertTrue("a ship settled before the reboot must still be known after it: " + restored,
-                restored.contains("\"found\":true"));
+        LedgerEntry restored = ledger(SHIP_ID);
+        assertTrue("a ship settled before the reboot must still be known after it: "
+                + restored.raw(), restored.found);
         assertEquals("the slot dim attributed to the restored ship must be the one its cell is live "
                 + "in now, not the one it happened to occupy last session — a departure resolves its "
-                + "origin world from this id: " + restored,
-                liveSlot, jsonInt(restored, "slotDim"));
+                + "origin world from this id: " + restored.raw(),
+                liveSlot, restored.slotDim());
         assertEquals("and that dimension must be bound to the ship's OWN cell. This is the assertion "
                 + "that fails loudest in play: a stale id can still resolve to a live world, and the "
                 + "crossing would then cut a ship out of a cell belonging to somebody else: "
-                + restored,
-                SECTOR_X + "_" + SECTOR_Y + "_" + SECTOR_Z, jsonString(restored, "slotCell"));
+                + restored.raw(),
+                SECTOR_X + "_" + SECTOR_Y + "_" + SECTOR_Z, restored.slotCell());
     }
 
     /**
@@ -299,12 +301,13 @@ public class SpaceRestartPersistenceE2ETest {
         assertTrue("the production subsystem must come up again on boot 2: " + statusAfter.raw(),
                 statusAfter.registered);
 
-        String restored = exec("artest space ledger-get " + SHIP_ID);
+        LedgerEntry restored = ledger(SHIP_ID);
         assertTrue("the ship must survive a save point that could not record it — a save is allowed to "
-                + "be one cycle stale, never to erase a fleet: " + restored,
-                restored.contains("\"found\":true"));
-        assertTrue("and it must come back at the address the last GOOD save recorded: " + restored,
-                restored.contains("\"cell\":\"" + SECTOR_X + "_" + SECTOR_Y + "_" + SECTOR_Z + "\""));
+                + "be one cycle stale, never to erase a fleet: " + restored.raw(),
+                restored.found);
+        assertEquals("and it must come back at the address the last GOOD save recorded: "
+                        + restored.raw(),
+                SECTOR_X + "_" + SECTOR_Y + "_" + SECTOR_Z, restored.cellKey());
     }
 
     /**
@@ -383,23 +386,22 @@ public class SpaceRestartPersistenceE2ETest {
         harness = null;
         harness = RealDedicatedServerHarness.startWith(root, false);
 
-        String restored = exec("artest space ledger-get " + SHIP_ID);
-        assertTrue("and the ship the failing save was holding must still be there: " + restored,
-                restored.contains("\"found\":true"));
-        assertTrue("at its own address: " + restored,
-                restored.contains("\"cell\":\"" + SECTOR_X + "_" + SECTOR_Y + "_" + SECTOR_Z + "\""));
+        LedgerEntry restored = ledger(SHIP_ID);
+        assertTrue("and the ship the failing save was holding must still be there: "
+                + restored.raw(), restored.found);
+        assertEquals("at its own address: " + restored.raw(),
+                SECTOR_X + "_" + SECTOR_Y + "_" + SECTOR_Z, restored.cellKey());
+    }
+
+    /** What the production ledger holds about one ship, refusing a reply that is not a reading. */
+    private LedgerEntry ledger(String shipId) throws Exception {
+        return LedgerEntry.forShip(this::exec, shipId);
     }
 
     /** The value of a numeric JSON field in a probe response. Fails the test if it is absent. */
     private static int jsonInt(String json, String field) {
         assertTrue("probe response carries no numeric \"" + field + "\": " + json, Reply.of(json).has(field));
         return Reply.of(json).integer(field);
-    }
-
-    /** The value of a string JSON field in a probe response. Fails the test if it is absent. */
-    private static String jsonString(String json, String field) {
-        assertTrue("probe response carries no string \"" + field + "\": " + json, Reply.of(json).has(field));
-        return Reply.of(json).text(field);
     }
 
     @Test
@@ -430,8 +432,8 @@ public class SpaceRestartPersistenceE2ETest {
         SubsystemStatus status = SubsystemStatus.read(this::exec);
         assertTrue("production subsystem must be live: " + status.raw(), status.registered);
 
-        String missing = exec("artest space ledger-get " + UUID.randomUUID());
-        assertTrue("a ship that was never settled must read back as absent: " + missing,
-                missing.contains("\"found\":false"));
+        LedgerEntry missing = ledger(UUID.randomUUID().toString());
+        assertFalse("a ship that was never settled must read back as absent: " + missing.raw(),
+                missing.found);
     }
 }
