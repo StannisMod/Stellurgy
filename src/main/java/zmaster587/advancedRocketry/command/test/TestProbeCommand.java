@@ -6003,8 +6003,15 @@ public class TestProbeCommand extends CommandBase {
                 appendCellInfoBody(out, b);
             }
             out.append(']');
-            if (args.length >= 5) {
-                int dimId = parseIntOr(args[4], Integer.MIN_VALUE);
+            // WHICH ARGUMENT CARRIES THE DIM DEPENDS ON THE FORM THE CALLER USED, and reading it
+            // from a fixed index is how the by-key form came to drop it silently. `cell-info
+            // <sx> <sy> <sz> [dim]` puts it at args[4]; `cell-info <key> [dim]` puts it at args[2].
+            // Until 2026-09-17 only the first index was read, so `cell-info 19_0_0 14` answered a
+            // reply with no `dimCell` at all -- and a caller asking where the dim sits then had to
+            // conclude the registry places it nowhere. A server-tier test did exactly that.
+            int dimArg = cellInfoByKey ? 2 : 4;
+            if (args.length > dimArg) {
+                int dimId = parseIntOr(args[dimArg], Integer.MIN_VALUE);
                 java.util.Optional<zmaster587.advancedRocketry.space.GalacticCoord> forDim =
                         reg.coordForPlanet(dimId);
                 out.append(",\"dim\":").append(dimId).append(",\"dimCell\":")
