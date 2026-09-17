@@ -16,6 +16,7 @@ import org.junit.Before;
 import org.junit.Test;
 import org.lwjgl.input.Keyboard;
 
+import zmaster587.advancedRocketry.test.SeatMount;
 import zmaster587.advancedRocketry.test.Reply;
 import zmaster587.advancedRocketry.test.ShipInfo;
 import zmaster587.advancedRocketry.test.Events;
@@ -202,11 +203,10 @@ public class VSPilotKeysWithSpaceSubsystemE2ETest {
                         + " reply=" + atBase.replace('\n', ' '),
                 !Double.isNaN(yBefore));
 
-        String mountInfo = exec("artest vs seat-mount 0 id " + shipUuid);
-        Reply seatMount = Reply.of("artest vs seat-mount", mountInfo);
-        assertTrue("seat-mount must report a dummy id: " + mountInfo, seatMount.has(DUMMY_ID));
+        SeatMount mountInfo = SeatMount.onShip(this::exec, 0, shipUuid);
+        // The reader REFUSES a reply with no bound dummy, which is what this asserted.
         long seatMark = clientLog.mark();
-        String mount = exec("artest player mount-entity " + seatMount.integer(DUMMY_ID));
+        String mount = exec("artest player mount-entity " + mountInfo.requireDummyId());
         assertTrue("bot must mount the seat dummy: " + mount, mount.contains("\"mounted\":true"));
         // The key below goes through the real client input path, and a client that is not yet
         // riding routes it somewhere else entirely — so the seating is a link, not ten ticks.

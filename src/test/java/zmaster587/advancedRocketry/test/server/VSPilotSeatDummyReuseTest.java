@@ -1,5 +1,6 @@
 package zmaster587.advancedRocketry.test.server;
 
+import zmaster587.advancedRocketry.test.SeatMount;
 import zmaster587.advancedRocketry.test.Reply;
 import org.junit.Test;
 
@@ -36,26 +37,21 @@ public class VSPilotSeatDummyReuseTest extends AbstractSharedServerTest {
                 + " advancedrocketry:pilotSeat"));
         assertTrue("placing the pilot seat failed: " + place, place.contains("\"ok\":true"));
 
-        String first = String.join("\n", client().execute("artest vs seat-mount 0"));
-        assertTrue("seat-mount must find the pilot seat: " + first,
-                first.contains("\"seatFound\":true"));
-        int firstId = dummyId(first);
+        // The bare form is right here and nowhere else: this test PLACES the only pilot seat in the
+        // world two statements above, and the reader's seat count is what says so in a failure.
+        SeatMount first = SeatMount.firstLoadedSeat(
+                cmd -> String.join("\n", client().execute(cmd)), 0);
+        first.requireSeatFound("seat-mount must find the pilot seat just placed");
 
-        String second = String.join("\n", client().execute("artest vs seat-mount 0"));
-        assertTrue("seat-mount must find the pilot seat again: " + second,
-                second.contains("\"seatFound\":true"));
-        int secondId = dummyId(second);
+        SeatMount second = SeatMount.firstLoadedSeat(
+                cmd -> String.join("\n", client().execute(cmd)), 0);
+        second.requireSeatFound("seat-mount must find that same pilot seat again");
 
         assertEquals("a second mount on the same seat must REUSE its bound dummy, not spawn a "
-                        + "twin (first=" + first + " second=" + second + ")",
-                firstId, secondId);
-        assertTrue("the second response must say the dummy was reused: " + second,
-                second.contains("\"reused\":true"));
+                        + "twin (first=" + first.raw() + " second=" + second.raw() + ")",
+                first.requireDummyId(), second.requireDummyId());
+        assertTrue("the second response must say the dummy was reused: " + second.raw(),
+                second.reused);
     }
 
-    private int dummyId(String json) {
-        Reply mReply = Reply.of(json);
-        assertTrue("expected a dummyId in: " + json, mReply.has(DUMMY_ID));
-        return Integer.parseInt(mReply.text(DUMMY_ID));
-    }
 }

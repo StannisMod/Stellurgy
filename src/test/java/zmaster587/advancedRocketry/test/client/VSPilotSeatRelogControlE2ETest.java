@@ -10,6 +10,7 @@ import org.lwjgl.input.Keyboard;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import zmaster587.advancedRocketry.test.SeatMount;
 import zmaster587.advancedRocketry.test.Reply;
 import zmaster587.advancedRocketry.test.ShipInfo;
 import zmaster587.advancedRocketry.test.Events;
@@ -141,11 +142,9 @@ public class VSPilotSeatRelogControlE2ETest extends AbstractSharedVsClientE2ETes
         awaitShipUsable(events, spawnMark, shipId, budget * 5);
         liftClearOfThePad(shipId, PAD_CLEARANCE_BLOCKS);
 
-        String mountInfo = exec("artest vs seat-mount 0 id " + shipId);
-        Reply dmReply = Reply.of(mountInfo);
-        scenario().requireArranged("seat-mount must report a dummy id: " + mountInfo, dmReply.has(DUMMY_ID));
+        SeatMount mountInfo = SeatMount.onShip(this::exec, 0, shipId);
         long seatMark = clientEvents().mark();
-        String mount = exec("artest player mount-entity " + dmReply.text(DUMMY_ID));
+        String mount = exec("artest player mount-entity " + mountInfo.requireDummyId());
         scenario().requireArranged("bot must mount the seat dummy: " + mount,
                 mount.contains("\"mounted\":true"));
         // The control leg below asks whether the chain works BEFORE the relog; a client that has not

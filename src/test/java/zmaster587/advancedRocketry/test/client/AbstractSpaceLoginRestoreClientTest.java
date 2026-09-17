@@ -19,6 +19,7 @@ import java.util.regex.Pattern;
 
 import zmaster587.advancedRocketry.space.CellWorldMapper;
 import zmaster587.advancedRocketry.space.GalacticCoord;
+import zmaster587.advancedRocketry.test.SeatMount;
 import zmaster587.advancedRocketry.test.Reply;
 import zmaster587.advancedRocketry.test.PilotSeat;
 import zmaster587.advancedRocketry.test.Chains;
@@ -1045,13 +1046,13 @@ public abstract class AbstractSpaceLoginRestoreClientTest {
             // On THIS pilot's own ship. The bare form mounts the first pilot seat in the world's
             // loaded-tile list, and this method does not merely observe — it seats the bot — so an
             // unaddressed mount would put him on a neighbour's craft and then measure that.
-            String seat = exec("artest vs seat-mount " + dim + " id "
-                    + ShipIdentity.awaitPhysicsIdOf(this::exec, dim, arrangedShipId, 20,
+            SeatMount seat = SeatMount.onShip(this::exec, dim,
+                    ShipIdentity.awaitPhysicsIdOf(this::exec, dim, arrangedShipId, 20,
                             () -> bot().waitTicks(5)));
-            if (!readBool(seat, "seatFound")) {
-                return "<no seat to re-capture through: " + seat + ">";
+            if (!seat.seatFound) {
+                return "<no seat to re-capture through: " + seat.raw() + ">";
             }
-            String mount = exec("artest player mount-entity " + readInt(seat, "dummyId"));
+            String mount = exec("artest player mount-entity " + seat.requireDummyId());
             if (!readBool(mount, "mounted")) {
                 return "<could not re-seat: " + mount + ">";
             }
@@ -1186,6 +1187,8 @@ public abstract class AbstractSpaceLoginRestoreClientTest {
         // The CLIENT's own mark for the same mount, beside the server's: the seating this scenario
         // depends on is one the CLIENT has to perform, and that is a record rather than a delay.
         long seatClientMark = clientEvents().mark();
+        // `seat-mount-at` is a DIFFERENT verb from `seat-mount` — it puts an armour stand in the
+        // seat — and has no reader yet, so its own field is read by name here.
         String mount = exec("artest player mount-entity " + readInt(mountAt, "dummyId"));
         assertTrue("the client must take the pilot seat: " + mount, readBool(mount, "mounted"));
         // Measured 2026-09-15 in a full-tier gate: these ten ticks were not enough under four client
@@ -1422,11 +1425,11 @@ public abstract class AbstractSpaceLoginRestoreClientTest {
         // On the ship this scenario built, by the id resolved from its own name. The bare form takes
         // the first pilot seat in the world's loaded-tile list — an arrival order — and this mounts
         // the bot on whatever it finds.
-        String seatMount = exec("artest vs seat-mount " + LAUNCH_DIM + " id " + groundShipId);
-        assertTrue("the ground-side pilot seat must offer a mount: " + seatMount,
-                readBool(seatMount, "seatFound"));
+        SeatMount seatMount = SeatMount.onShip(this::exec, LAUNCH_DIM, groundShipId);
+        assertTrue("the ground-side pilot seat must offer a mount: " + seatMount.raw(),
+                seatMount.seatFound);
         long groundSeatMark = clientEvents().mark();
-        String mount = exec("artest player mount-entity " + readInt(seatMount, "dummyId"));
+        String mount = exec("artest player mount-entity " + seatMount.requireDummyId());
         assertTrue("the client must take the pilot seat while still on the ground: " + mount,
                 readBool(mount, "mounted"));
         // The same replication lag the restart-side seating hit, and the red it produced was in both

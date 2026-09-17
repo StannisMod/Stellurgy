@@ -9,6 +9,7 @@ import org.junit.Test;
 import org.junit.runners.MethodSorters;
 import org.lwjgl.input.Keyboard;
 
+import zmaster587.advancedRocketry.test.SeatMount;
 import zmaster587.advancedRocketry.test.Reply;
 import zmaster587.advancedRocketry.test.Events;
 import zmaster587.advancedRocketry.test.FixtureSite;
@@ -790,29 +791,24 @@ public class VSPreAssemblyBoardingPilotControlE2ETest extends AbstractSharedVsCl
      * this variant possible at all.
      */
     private String boardByProbe() throws Exception {
-        String mountInfo = exec("artest vs seat-mount 0");
+        SeatMount mountInfo = SeatMount.firstLoadedSeat(this::exec, 0);
         scenario().requireArranged("the seat probe must FIND the loose pilot seat before assembly: "
-                + mountInfo, mountInfo.contains("\"seatFound\":true"));
+                + mountInfo.raw(), mountInfo.seatFound);
 
         // The probe takes the first pilot seat it finds anywhere in the world; pin that it found
         // OUR seat, at the position the block measurement just verified.
-        Reply bound = Reply.of("artest vs seat-mount", mountInfo);
-        scenario().requireArranged("seat-mount must report the seat position it bound: " + mountInfo,
-                bound.has(SEAT_X));
         scenario().requireArranged("the seat the probe bound must be the fixture's seat at (" + seatX
                         + "," + seatY + "," + seatZ + "), not some other pilot seat in the world: "
-                        + mountInfo,
-                bound.integer(SEAT_X) == seatX
-                        && bound.integer(SEAT_Y) == seatY
-                        && bound.integer(SEAT_Z) == seatZ);
+                        + mountInfo.raw(),
+                mountInfo.seatX() == seatX
+                        && mountInfo.seatY() == seatY
+                        && mountInfo.seatZ() == seatZ);
 
-        Reply dmReply = Reply.of(mountInfo);
-        scenario().requireArranged("seat-mount must report a dummy id: " + mountInfo, dmReply.has(DUMMY_ID));
-        String mount = exec("artest player mount-entity " + dmReply.text(DUMMY_ID));
+        String mount = exec("artest player mount-entity " + mountInfo.requireDummyId());
         scenario().requireArranged("the bot must mount the seat's dummy: " + mount,
                 mount.contains("\"mounted\":true"));
         bot().waitTicks(10);
-        return "seatMount=" + mountInfo + " mount=" + mount;
+        return "seatMount=" + mountInfo.raw() + " mount=" + mount;
     }
 
     // ---- Observation helpers -----------------------------------------------------------------

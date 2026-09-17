@@ -1,5 +1,6 @@
 package zmaster587.advancedRocketry.test.client;
 
+import zmaster587.advancedRocketry.test.SeatMount;
 import zmaster587.advancedRocketry.test.Events;
 import zmaster587.advancedRocketry.test.Reply;
 import zmaster587.advancedRocketry.test.FixtureSite;
@@ -129,18 +130,13 @@ public class VSPilotSeatTakenWhileOfflineE2ETest extends AbstractSharedVsClientE
         awaitClientPlacedNear(approachMark, bx + 0.5, bz + 0.5,
                 "every probe below is about a ship this client is standing over");
 
-        String mountInfo = exec("artest vs seat-mount 0 id " + shipUuid);
-        Reply seatMount = Reply.of("artest vs seat-mount", mountInfo);
-        scenario().requireArranged("seat-mount must report a dummy id: " + mountInfo,
-                seatMount.has(DUMMY_ID));
-        scenario().requireArranged("seat-mount must report the seat's block pos: " + mountInfo,
-                seatMount.has(SEAT_X));
-        final int seatX = seatMount.integer(SEAT_X);
-        final int seatY = seatMount.integer(SEAT_Y);
-        final int seatZ = seatMount.integer(SEAT_Z);
+        SeatMount mountInfo = SeatMount.onShip(this::exec, 0, shipUuid);
+        final int seatX = mountInfo.seatX();
+        final int seatY = mountInfo.seatY();
+        final int seatZ = mountInfo.seatZ();
         // The CLIENT's own mark, one statement before the mount that produces the record.
         long seatMark = clientEvents().mark();
-        String mount = exec("artest player mount-entity " + seatMount.integer(DUMMY_ID));
+        String mount = exec("artest player mount-entity " + mountInfo.requireDummyId());
         scenario().requireArranged("bot must mount the seat dummy: " + mount,
                 mount.contains("\"mounted\":true"));
         // A LINK, where ten ticks used to stand: the server mounts him and the client PERFORMS the

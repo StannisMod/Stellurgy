@@ -8,6 +8,7 @@ import org.lwjgl.input.Keyboard;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import zmaster587.advancedRocketry.test.SeatMount;
 import zmaster587.advancedRocketry.test.Events;
 import zmaster587.advancedRocketry.test.TransitSetup;
 import zmaster587.advancedRocketry.test.Reply;
@@ -199,10 +200,12 @@ public class VSShipExtremeCoordinatesE2ETest extends AbstractSharedVsClientE2ETe
                         + cellDim + ")",
                 bot().reportWeather().get("dim").getAsInt() == cellDim);
 
-        String mountInfo = exec("artest vs seat-mount " + cellDim + " id " + shipId);
-        assertTrue("seat-mount must find the pilot seat: " + mountInfo,
-                mountInfo.contains("\"seatFound\":true"));
-        int dummyId = Reply.of("artest vs seat-mount-at", mountInfo).integer(DUMMY_ID);
+        SeatMount mountInfo = SeatMount.onShip(this::exec, cellDim, shipId);
+        assertTrue("seat-mount must find the pilot seat: " + mountInfo.raw(),
+                mountInfo.seatFound);
+        // The reader's own id. The `Reply` this replaces was labelled `seat-mount-at` while reading
+        // a `seat-mount` answer, so every refusal it could raise named a verb nobody had asked.
+        int dummyId = mountInfo.requireDummyId();
         // The mark before the mount command, and then the CLIENT's own seating as a LINK. The ten
         // ticks this replaces were a guess at replication, and everything below rides on him being
         // aboard: measured 2026-09-16 in a full-tier pair, the same tree that had just run this
@@ -215,7 +218,7 @@ public class VSShipExtremeCoordinatesE2ETest extends AbstractSharedVsClientE2ETe
         awaitClientMount(seatMountMark, "the client must FOLLOW the seat boarding before anything"
                         + " below is asked of a pilot — every leg here is about what a SEATED body"
                         + " does when its craft moves", CLIENT_REMOUNT_BUDGET_TICKS,
-                " | the server's own seat-mount reply was: " + mountInfo);
+                " | the server's own seat-mount reply was: " + mountInfo.raw());
 
         // SUSPECT FINDING (1), and it is kept as a WORKAROUND here rather than re-taken: after a
         // rigid teleport to extreme Y, VS's load controller was seen unloading the physics object

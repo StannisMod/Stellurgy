@@ -8,6 +8,7 @@ import org.lwjgl.input.Keyboard;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import zmaster587.advancedRocketry.test.SeatMount;
 import zmaster587.advancedRocketry.test.Reply;
 import zmaster587.advancedRocketry.test.ShipInfo;
 import zmaster587.advancedRocketry.test.Events;
@@ -103,13 +104,11 @@ public class VSShipUnmannedCruiseE2ETest extends AbstractSharedVsClientE2ETest {
 
         // Seat the bot, ramp a vertical cruise with the REAL key (Flight Assist is on by default:
         // holding the throttle ramps the setpoint; ~3 s of full deflection reaches cruise speed).
-        String mountInfo = exec("artest vs seat-mount 0 id " + shipId);
-        assertTrue("seat-mount must find the pilot seat: " + mountInfo,
-                mountInfo.contains("\"seatFound\":true"));
-        Reply dmReply = Reply.of(mountInfo);
-        assertTrue("seat-mount must report a dummy id: " + mountInfo, dmReply.has(DUMMY_ID));
+        SeatMount mountInfo = SeatMount.onShip(this::exec, 0, shipId);
+        assertTrue("seat-mount must find the pilot seat: " + mountInfo.raw(),
+                mountInfo.seatFound);
         long seatMark = clientEvents().mark();
-        String mount = exec("artest player mount-entity " + dmReply.text(DUMMY_ID));
+        String mount = exec("artest player mount-entity " + mountInfo.requireDummyId());
         assertTrue("bot must mount the seat dummy: " + mount, mount.contains("\"mounted\":true"));
         // The deflection below is a real key on a client that must already be riding; the setpoint
         // ramp it drives is what the whole scenario measures.
@@ -178,14 +177,12 @@ public class VSShipUnmannedCruiseE2ETest extends AbstractSharedVsClientE2ETest {
 
         // Re-mounting must not interrupt (or reset) the executing cruise: the seat's dummy is
         // REUSED and the ship flies on while the returned pilot holds no key.
-        String remount = exec("artest vs seat-mount 0 id " + shipId);
-        assertTrue("seat-mount must still find the seat: " + remount,
-                remount.contains("\"seatFound\":true"));
-        assertTrue("the re-mount must REUSE the seat's single dummy: " + remount,
-                remount.contains("\"reused\":true"));
-        Reply rmReply = Reply.of(remount);
-        assertTrue(remount, rmReply.has(DUMMY_ID));
-        String mounted = exec("artest player mount-entity " + rmReply.text(DUMMY_ID));
+        SeatMount remount = SeatMount.onShip(this::exec, 0, shipId);
+        assertTrue("seat-mount must still find the seat: " + remount.raw(),
+                remount.seatFound);
+        assertTrue("the re-mount must REUSE the seat's single dummy: " + remount.raw(),
+                remount.reused);
+        String mounted = exec("artest player mount-entity " + remount.requireDummyId());
         assertTrue("bot must re-mount the seat dummy: " + mounted,
                 mounted.contains("\"mounted\":true"));
         double yRemount = shipY();

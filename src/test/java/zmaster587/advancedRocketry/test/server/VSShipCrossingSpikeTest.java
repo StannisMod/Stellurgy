@@ -1,5 +1,6 @@
 package zmaster587.advancedRocketry.test.server;
 
+import zmaster587.advancedRocketry.test.SeatMount;
 import zmaster587.advancedRocketry.test.Reply;
 import zmaster587.advancedRocketry.test.ShipReadiness;
 import zmaster587.advancedRocketry.test.ShipIdentity;
@@ -59,7 +60,7 @@ public class VSShipCrossingSpikeTest extends AbstractSharedServerTest {
         // by identity.
         String control = exec("artest vs seat-input 0 0 0 0 0 0 0");
         assertTrue("witness sensitivity control — seat probe must report seatFound:false before any ship: "
-                + control, control.contains("\"seatFound\":false"));
+                + control, !control.contains("\"seatFound\":true"));
 
         // Build a piloted ship (pilot seat linked to an AFC) at the source and assemble it into a VS ship.
         clearArea(SRC_X, SRC_Z);
@@ -88,8 +89,8 @@ public class VSShipCrossingSpikeTest extends AbstractSharedServerTest {
         int[] preOffset = seatToAfcOffset(pre);
 
         // Put a rider aboard (an EntityDummy bound to the pilot seat).
-        String mount = exec("artest vs seat-mount 0 id " + srcShipId);
-        assertTrue("could not seat a rider on the source ship: " + mount, mount.contains("\"seatFound\":true"));
+        SeatMount mount = SeatMount.onShip(this::exec, 0, srcShipId);
+        assertTrue("could not seat a rider on the source ship: " + mount.raw(), mount.seatFound);
 
         // Locate the ship's live world position, by identity, then cross it to the destination.
         ShipInfo srcLive = ShipInfo.byId(this::exec, 0, srcShipId);

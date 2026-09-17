@@ -4,6 +4,7 @@ import com.github.stannismod.forge.testing.junit.AbstractClientE2ETest;
 
 import org.junit.Test;
 import org.lwjgl.input.Keyboard;
+import zmaster587.advancedRocketry.test.SeatMount;
 import zmaster587.advancedRocketry.test.Reply;
 import zmaster587.advancedRocketry.test.GameTicks;
 import zmaster587.advancedRocketry.test.ShipIdentity;
@@ -202,18 +203,17 @@ public class SpikeFarCoordinateShipTest extends AbstractClientE2ETest {
                 // the rest of the positional resolves, and this rung is the sharpest argument for
                 // why: a bound chosen against how far apart the rungs are BUILT says nothing on a
                 // ladder whose whole subject is distance. The id is in hand two lines up.
-                String mountInfo = exec("artest vs seat-mount 0 id " + shipId);
-                if (!mountInfo.contains("\"seatFound\":true")) {
-                    verdicts.put(x, "the pilot seat was not findable: " + oneLine(mountInfo));
+                SeatMount mountInfo = SeatMount.onShip(this::exec, 0, shipId);
+                if (!mountInfo.seatFound) {
+                    verdicts.put(x, "the pilot seat was not findable: " + oneLine(mountInfo.raw()));
                     continue;
                 }
-                Reply seatMount = Reply.of("artest vs seat-mount", mountInfo);
-                if (!seatMount.has(DUMMY_ID)) {
-                    verdicts.put(x, "seat-mount reported no dummy id: " + oneLine(mountInfo));
+                if (!mountInfo.seatFound) {
+                    verdicts.put(x, "seat-mount reported no dummy id: " + oneLine(mountInfo.raw()));
                     continue;
                 }
                 String mounted = exec("artest player mount-entity "
-                        + seatMount.integer(DUMMY_ID));
+                        + mountInfo.requireDummyId());
                 if (!mounted.contains("\"mounted\":true")) {
                     verdicts.put(x, "the bot could not mount the seat dummy: " + oneLine(mounted));
                     continue;
@@ -222,7 +222,7 @@ public class SpikeFarCoordinateShipTest extends AbstractClientE2ETest {
                 // so wait until the CLIENT agrees it is riding — the first run of this leg read the
                 // rider's posY one tick too early and died on a missing field, which reads exactly
                 // like a coordinate failure and is not one.
-                String riding = awaitRiding(seatMount.integer(DUMMY_ID));
+                String riding = awaitRiding(mountInfo.requireDummyId());
                 if (riding != null) {
                     verdicts.put(x, riding + " (server said " + oneLine(mounted) + ")");
                     continue;
@@ -233,8 +233,8 @@ public class SpikeFarCoordinateShipTest extends AbstractClientE2ETest {
                 // blocks actually live. Recording it makes the magnitude the ship's own math runs on
                 // visible in the report, which is the only number that changes if the shipyard moves.
                 report.add("x=" + x + " ship=" + shipId + " shipY0=" + fmt(y0)
-                        + " subspaceSeatX=" + fmt(field(mountInfo, "seatX"))
-                        + " subspaceSeatZ=" + fmt(field(mountInfo, "seatZ"))
+                        + " subspaceSeatX=" + fmt((double) mountInfo.seatX())
+                        + " subspaceSeatZ=" + fmt((double) mountInfo.seatZ())
                         + " " + flight);
                 verdicts.put(x, flight.startsWith("OK") ? null : flight);
 
@@ -359,9 +359,9 @@ public class SpikeFarCoordinateShipTest extends AbstractClientE2ETest {
             // By ID. The `near <x> <y> <z> <maxDist>` form this used went with the rest of the
             // positional resolves on 2026-09-14: a distance to a craft whose blocks live in its
             // subspace measures nothing, and the id was already resolved three lines up.
-            String mountInfo = exec("artest vs seat-mount 0 id " + shipId);
-            assertTrue("no seat: " + oneLine(mountInfo), mountInfo.contains("\"seatFound\":true"));
-            int dummyId = Reply.of("artest vs seat-mount", mountInfo).integer(DUMMY_ID);
+            SeatMount mountInfo = SeatMount.onShip(this::exec, 0, shipId);
+            assertTrue("no seat: " + oneLine(mountInfo.raw()), mountInfo.seatFound);
+            int dummyId = mountInfo.requireDummyId();
             assertTrue("could not mount",
                     exec("artest player mount-entity " + dummyId).contains("\"mounted\":true"));
             String riding = awaitRiding(dummyId);
@@ -374,8 +374,8 @@ public class SpikeFarCoordinateShipTest extends AbstractClientE2ETest {
             // world lists" is the least trustworthy address there is, and the id is already in hand.
             String commanded = exec("artest vs seat-input-by-id 0 " + shipId + " 1 0 0 0 0 0");
             out.append("  commanded once: ").append(oneLine(commanded)).append('\n');
-            out.append("  subspaceSeat=(").append(fmt(field(mountInfo, "seatX"))).append(',')
-                    .append(fmt(field(mountInfo, "seatZ"))).append(")\n");
+            out.append("  subspaceSeat=(").append(fmt((double) mountInfo.seatX())).append(',')
+                    .append(fmt((double) mountInfo.seatZ())).append(")\n");
 
             double lastDist = 0d;
             int stoppedAtTick = -1;

@@ -11,6 +11,7 @@ import org.junit.Test;
 import org.junit.runners.MethodSorters;
 import org.lwjgl.input.Keyboard;
 
+import zmaster587.advancedRocketry.test.SeatMount;
 import zmaster587.advancedRocketry.test.Events;
 import zmaster587.advancedRocketry.test.Reply;
 import zmaster587.advancedRocketry.test.ShipInfo;
@@ -740,11 +741,8 @@ public class VSShipEntryClientGroupE2ETest extends AbstractSharedVsClientE2ETest
         liftClearOfThePad(shipUuid, PAD_CLEARANCE_BLOCKS);
 
         // Board post-assembly (the proven path - boarding variants have their own test).
-        String mountInfo = exec("artest vs seat-mount 0 id " + shipUuid);
-        Reply seatMount = Reply.of("artest vs seat-mount", mountInfo);
-        scenario().requireArranged("seat-mount must report a dummy id: " + mountInfo,
-                seatMount.has(DUMMY_ID));
-        String mount = exec("artest player mount-entity " + seatMount.integer(DUMMY_ID));
+        SeatMount mountInfo = SeatMount.onShip(this::exec, 0, shipUuid);
+        String mount = exec("artest player mount-entity " + mountInfo.requireDummyId());
         scenario().requireArranged("bot must mount the seat dummy: " + mount,
                 mount.contains("\"mounted\":true"));
         bot().waitTicks(10);

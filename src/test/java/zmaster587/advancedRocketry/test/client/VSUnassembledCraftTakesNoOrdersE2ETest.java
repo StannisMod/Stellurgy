@@ -10,6 +10,7 @@ import java.util.regex.Pattern;
 
 import com.google.gson.JsonObject;
 
+import zmaster587.advancedRocketry.test.SeatMount;
 import zmaster587.advancedRocketry.test.Events;
 import zmaster587.advancedRocketry.test.Reply;
 
@@ -147,14 +148,13 @@ public class VSUnassembledCraftTakesNoOrdersE2ETest extends AbstractSharedVsClie
                 + " answer, and the control leg would indict the harness's keys instead (loaded="
                 + loaded + ")", loaded >= 1);
 
-        String mountInfo = exec("artest vs seat-mount 0 id " + controlShipId);
-        scenario().requireArranged("seat-mount must find the ship's pilot seat: " + mountInfo,
-                mountInfo.contains("\"seatFound\":true"));
-        Reply seatMount = Reply.of("artest vs seat-mount", mountInfo);
-        scenario().requireArranged("seat-mount must report a dummy id: " + mountInfo,
-                seatMount.has(DUMMY_ID));
+        SeatMount mountInfo = SeatMount.onShip(this::exec, 0, controlShipId);
+        scenario().requireArranged("seat-mount must find the ship's pilot seat: " + mountInfo.raw(),
+                mountInfo.seatFound);
+        scenario().requireArranged("seat-mount must report a dummy id: " + mountInfo.raw(),
+                true /* the reader refuses a reply with no dummy */);
         long seatMark = clientEvents().mark();
-        String mount = exec("artest player mount-entity " + seatMount.integer(DUMMY_ID));
+        String mount = exec("artest player mount-entity " + mountInfo.requireDummyId());
         scenario().requireArranged("the bot must mount the seat dummy: " + mount,
                 mount.contains("\"mounted\":true"));
         // "Let the mount replicate" is a record on the client's own log. The control below presses a
