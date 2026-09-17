@@ -7,10 +7,13 @@ import org.junit.Assume;
 import org.junit.Before;
 import org.junit.Test;
 
+import zmaster587.advancedRocketry.test.DimWeather;
+
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 
+import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
@@ -93,24 +96,23 @@ public class WeatherBaselineTest {
         String setOver = String.join("\n", harness.client().execute("artest weather set 0 rain 12000"));
         assertTrue("weather set on overworld failed: " + setOver, setOver.contains("\"ok\":true"));
 
-        String w0 = String.join("\n", harness.client().execute("artest weather get 0"));
-        String wA = String.join("\n", harness.client().execute("artest weather get " + FIXTURE_DIM_A));
-        String wB = String.join("\n", harness.client().execute("artest weather get " + FIXTURE_DIM_B));
-        boolean overRaining = w0.contains("\"isRaining\":true");
-        boolean aRaining = wA.contains("\"isRaining\":true");
-        boolean bRaining = wB.contains("\"isRaining\":true");
+        DimWeather w0 = weather(0);
+        DimWeather wA = weather(FIXTURE_DIM_A);
+        DimWeather wB = weather(FIXTURE_DIM_B);
 
-        assertTrue("overworld failed to start raining after set: " + w0, overRaining);
+        assertTrue("overworld failed to start raining after set: " + w0.raw(), w0.raining);
 
-        if (aRaining || bRaining) {
+        if (wA.raining || wB.raining) {
             fail("expected per-dimension isolation but AR dim followed overworld\n"
-                    + "  overworld=" + w0 + "\n  A=" + wA + "\n  B=" + wB);
+                    + "  overworld=" + w0.raw() + "\n  A=" + wA.raw() + "\n  B=" + wB.raw());
         }
         // AR planet WorldInfo MUST be the B1 wrapper. If it isn't, the
         // isolation assertion above passed for the wrong reason (e.g. server
         // tick simply didn't propagate weather yet), and we'd ship a regression.
-        assertTrue("planet A is NOT wrapped: " + wA, wA.contains("ARDimensionWorldInfo"));
-        assertTrue("planet B is NOT wrapped: " + wB, wB.contains("ARDimensionWorldInfo"));
+        // Asked of the `worldInfoClass` FIELD: the old `contains` over the whole reply would also
+        // have been satisfied by the name turning up anywhere else in it.
+        assertTrue("planet A is NOT wrapped: " + wA.raw(), wA.usesARWorldInfo());
+        assertTrue("planet B is NOT wrapped: " + wB.raw(), wB.usesARWorldInfo());
 
         // Strength must match the wrapped per-dim state from tick one. Both
         // planet worlds were lazily constructed by the `weather get` probes
@@ -119,13 +121,22 @@ public class WeatherBaselineTest {
         // (the overworld's flag). Without the post-wrap reseed in
         // wrapWorldInfoIfNeeded these worlds are born at strength 1.0 and
         // stream a ~5 s phantom-rain fade to every arriving player.
-        assertTrue("planet A born with non-zero rainStrength (seeded from raining overworld): " + wA,
-                wA.contains("\"rainStrength\":0.0,"));
-        assertTrue("planet B born with non-zero rainStrength (seeded from raining overworld): " + wB,
-                wB.contains("\"rainStrength\":0.0,"));
-        assertTrue("planet A born with non-zero thunderStrength: " + wA,
-                wA.contains("\"thunderStrength\":0.0"));
-        assertTrue("planet B born with non-zero thunderStrength: " + wB,
-                wB.contains("\"thunderStrength\":0.0"));
+        // Read as NUMBERS. The substring form these four replace pinned the rendering: the rain one
+        // carried a trailing comma, i.e. it asserted that `rainStrength` is not the last field the
+        // producer writes; and the thunder one was a PREFIX of `0.05`, so "born with no thunder"
+        // passed for any strength below a tenth.
+        assertEquals("planet A born with non-zero rainStrength (seeded from raining overworld): "
+                + wA.raw(), 0d, wA.rainStrength, 0d);
+        assertEquals("planet B born with non-zero rainStrength (seeded from raining overworld): "
+                + wB.raw(), 0d, wB.rainStrength, 0d);
+        assertEquals("planet A born with non-zero thunderStrength: " + wA.raw(),
+                0d, wA.thunderStrength, 0d);
+        assertEquals("planet B born with non-zero thunderStrength: " + wB.raw(),
+                0d, wB.thunderStrength, 0d);
+    }
+
+    private DimWeather weather(int dim) throws Exception {
+        return DimWeather.forDim(cmd -> String.join("\n", harness.client().execute(cmd)), dim)
+                .requireDim(dim);
     }
 }

@@ -10,6 +10,7 @@ import org.junit.Assume;
 import org.junit.Before;
 import org.junit.Test;
 
+import zmaster587.advancedRocketry.test.DimWeather;
 import zmaster587.advancedRocketry.test.Events;
 
 import java.nio.charset.StandardCharsets;
@@ -158,18 +159,15 @@ public class WeatherClientSyncE2ETest {
         // isolation assertion below could pass for the wrong reason (e.g.
         // vanilla shared weather happened to differ on the two dims this
         // sample tick).
-        String getA = String.join("\n",
-                serverHarness.client().execute("artest weather get " + DIM_A));
-        String getB = String.join("\n",
-                serverHarness.client().execute("artest weather get " + DIM_B));
-        assertTrue("dim A WorldInfo class should be ARDimensionWorldInfo: " + getA,
-                getA.contains("ARDimensionWorldInfo"));
-        assertTrue("dim B WorldInfo class should be ARDimensionWorldInfo: " + getB,
-                getB.contains("ARDimensionWorldInfo"));
-        assertTrue("dim A should be raining after explicit set: " + getA,
-                getA.contains("\"isRaining\":true"));
-        assertFalse("dim B should NOT be raining after explicit clear: " + getB,
-                getB.contains("\"isRaining\":true"));
+        DimWeather getA = serverWeather(DIM_A);
+        DimWeather getB = serverWeather(DIM_B);
+        assertTrue("dim A WorldInfo class should be ARDimensionWorldInfo: " + getA.raw(),
+                getA.usesARWorldInfo());
+        assertTrue("dim B WorldInfo class should be ARDimensionWorldInfo: " + getB.raw(),
+                getB.usesARWorldInfo());
+        assertTrue("dim A should be raining after explicit set: " + getA.raw(), getA.raining);
+        assertFalse("dim B should NOT be raining after explicit clear: " + getB.raw(),
+                getB.raining);
 
         // Teleport the client to dim A. Vanilla 1.12 /tp doesn't cross dims,
         // and /advancedrocketry goto needs an Entity sender (unreachable from
@@ -215,12 +213,11 @@ public class WeatherClientSyncE2ETest {
                 0f, onB.get("rainStrength").getAsFloat(), 0f);
 
         // Server-side wrapper guarantees on dim B persist too.
-        String getBAgain = String.join("\n",
-                serverHarness.client().execute("artest weather get " + DIM_B));
-        assertTrue("dim B wrapper must persist across teleports: " + getBAgain,
-                getBAgain.contains("ARDimensionWorldInfo"));
-        assertFalse("server-side dim B must remain clear: " + getBAgain,
-                getBAgain.contains("\"isRaining\":true"));
+        DimWeather getBAgain = serverWeather(DIM_B);
+        assertTrue("dim B wrapper must persist across teleports: " + getBAgain.raw(),
+                getBAgain.usesARWorldInfo());
+        assertFalse("server-side dim B must remain clear: " + getBAgain.raw(),
+                getBAgain.raining);
 
         // ── Phantom-fade regression: fresh world constructed under overworld
         // rain. Vanilla /weather (and our artest equivalent) flags the
@@ -262,10 +259,15 @@ public class WeatherClientSyncE2ETest {
 
         // The overworld itself must still be raining — dim C staying dry must
         // come from per-dim isolation, not from the rain set having failed.
-        String overAfter = String.join("\n",
-                serverHarness.client().execute("artest weather get 0"));
-        assertTrue("overworld should still be raining: " + overAfter,
-                overAfter.contains("\"isRaining\":true"));
+        DimWeather overAfter = serverWeather(0);
+        assertTrue("overworld should still be raining: " + overAfter.raw(), overAfter.raining);
+    }
+
+    /** What the SERVER says one world's sky is doing, as opposed to what the client is shown. */
+    private DimWeather serverWeather(int dim) throws Exception {
+        return DimWeather.forDim(
+                        cmd -> String.join("\n", serverHarness.client().execute(cmd)), dim)
+                .requireDim(dim);
     }
 
     // ── the CLIENT's own event log ────────────────────────────────────────────

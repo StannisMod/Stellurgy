@@ -5,6 +5,7 @@ import com.github.stannismod.forge.testing.server.RealDedicatedServerHarness;
 import org.junit.After;
 import org.junit.Assume;
 import org.junit.Before;
+import zmaster587.advancedRocketry.test.DimWeather;
 import zmaster587.advancedRocketry.test.GameTicks;
 
 import org.junit.Test;
@@ -13,6 +14,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
 /**
@@ -116,27 +118,26 @@ public class PlanetWeatherGateTest {
         // Read the live state of each planet. The three claims are not the same SHAPE, so they are
         // not read the same way: the thick planet MUST reach rain, which is a state to wait for and
         // to stop waiting at; the other two must never reach it, which nothing can confirm early.
-        String thick  = weatherOnce(DIM_THICK_RAIN, "\"isRaining\":true");
-        String thin   = weatherAfterWindow(DIM_THIN_RAIN);
-        String dry    = weatherAfterWindow(DIM_DRY_THUNDER);
+        DimWeather thick = weatherUntilRaining(DIM_THICK_RAIN);
+        DimWeather thin  = weatherAfterWindow(DIM_THIN_RAIN);
+        DimWeather dry   = weatherAfterWindow(DIM_DRY_THUNDER);
 
         // Contrast: same rainMarker=1, opposite atmosphere -> opposite rain state.
-        assertTrue("thick-atmosphere planet with rainMarker=1 must rain (gate baseline): " + thick,
-                thick.contains("\"isRaining\":true"));
-        assertTrue("thin-atmosphere planet must stay clear despite rainMarker=1 "
-                        + "(atmosphere gate): " + thin,
-                thin.contains("\"isRaining\":false"));
+        assertTrue("thick-atmosphere planet with rainMarker=1 must rain (gate baseline): "
+                + thick.raw(), thick.raining);
+        assertFalse("thin-atmosphere planet must stay clear despite rainMarker=1 "
+                        + "(atmosphere gate): " + thin.raw(),
+                thin.raining);
 
         // Thunder cannot exist without rain: dry planet (rainMarker=-1) must not thunder.
-        assertTrue("dry planet (rainMarker=-1) must not rain: " + dry,
-                dry.contains("\"isRaining\":false"));
-        assertTrue("thunderMarker=1 with no rain must NOT thunder (vanilla couples them): " + dry,
-                dry.contains("\"isThundering\":false"));
+        assertFalse("dry planet (rainMarker=-1) must not rain: " + dry.raw(), dry.raining);
+        assertFalse("thunderMarker=1 with no rain must NOT thunder (vanilla couples them): "
+                + dry.raw(), dry.thundering);
     }
 
     /**
-     * The live weather of {@code dim}, once {@code wanted} appears in the reply or the budget runs
-     * out — the POSITIVE form, for a state the cycle is supposed to reach.
+     * The live weather of {@code dim}, once it is RAINING or the budget runs out — the POSITIVE
+     * form, for a state the cycle is supposed to reach.
      *
      * <p>A single helper used to serve all three planets by reading five times with a fixed advance
      * between reads, testing nothing. Its own javadoc named the condition — "so the server has
@@ -148,11 +149,11 @@ public class PlanetWeatherGateTest {
      * {@code initDimension} before answering, so it is what makes the world exist and tick. A
      * version that advanced first would be ticking a world nobody had constructed.</p>
      */
-    private String weatherOnce(int dim, String wanted) throws Exception {
-        String[] last = {String.join("\n", harness.client().execute("artest weather get " + dim))};
+    private DimWeather weatherUntilRaining(int dim) throws Exception {
+        final DimWeather[] last = {weather(dim)};
         GameTicks.until(harness.client(), GameTicks.server(), SETTLE_BUDGET_TICKS, () -> {
-            last[0] = String.join("\n", harness.client().execute("artest weather get " + dim));
-            return last[0].contains(wanted);
+            last[0] = weather(dim);
+            return last[0].raining;
         });
         return last[0];
     }
@@ -165,11 +166,19 @@ public class PlanetWeatherGateTest {
      * be wrong about "it never rained" is to look too soon, so this one spends its whole budget on
      * purpose. That is the difference between the two helpers, and it is why there are two.</p>
      */
-    private String weatherAfterWindow(int dim) throws Exception {
+    private DimWeather weatherAfterWindow(int dim) throws Exception {
         // The constructing read: its VALUE is discarded, its side effect is the point — this is
         // what pins the dimension and calls initDimension, so the window below ticks a real world.
-        harness.client().execute("artest weather get " + dim);
+        // Read through the reader even so: a world that could not be brought up must fail HERE and
+        // not as "it never rained", which is what this helper's callers would otherwise report.
+        weather(dim);
         GameTicks.advance(harness.client(), GameTicks.server(), SETTLE_BUDGET_TICKS);
-        return String.join("\n", harness.client().execute("artest weather get " + dim));
+        return weather(dim);
+    }
+
+    /** One world's sky, refusing the {@code world not loaded} reply and the wrong dimension. */
+    private DimWeather weather(int dim) throws Exception {
+        return DimWeather.forDim(cmd -> String.join("\n", harness.client().execute(cmd)), dim)
+                .requireDim(dim);
     }
 }

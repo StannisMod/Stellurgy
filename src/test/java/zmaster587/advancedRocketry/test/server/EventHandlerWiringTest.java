@@ -3,12 +3,11 @@ package zmaster587.advancedRocketry.test.server;
 // migrated to AbstractSharedServerTest
 import org.junit.Assume;
 
+import zmaster587.advancedRocketry.test.DimWeather;
 import zmaster587.advancedRocketry.test.Reply;
 import org.junit.Test;
 
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
-
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
 /**
@@ -68,10 +67,10 @@ public class EventHandlerWiringTest extends AbstractSharedServerTest {
         assertTrue("dim load probe did not report loaded=true: " + loaded,
                 loaded.contains("\"loaded\":true"));
 
-        String weather = String.join("\n", client().execute("artest weather get " + dim));
+        DimWeather weather = weather(dim);
         assertTrue("WeatherEventHandler did not install the B1 wrapper on AR dim load: "
-                        + weather,
-                weather.contains("ARDimensionWorldInfo"));
+                        + weather.raw(),
+                weather.usesARWorldInfo());
     }
 
     @Test
@@ -80,10 +79,16 @@ public class EventHandlerWiringTest extends AbstractSharedServerTest {
         // (The wrapping decision lives in PlanetWeatherManager.shouldWrap,
         // and this fixes the polarity of that gate.)
         client().execute("artest dim load 0");
-        String weather = String.join("\n", client().execute("artest weather get 0"));
+        DimWeather weather = weather(0);
         // Vanilla overworld WorldInfo class — neither ARDimensionWorldInfo
         // nor anything that contains "ARWeather".
-        assertTrue("overworld was incorrectly wrapped — wrapping gate broken: " + weather,
-                !weather.contains("ARDimensionWorldInfo"));
+        assertFalse("overworld was incorrectly wrapped — wrapping gate broken: " + weather.raw(),
+                weather.usesARWorldInfo());
+    }
+
+    /** One world's sky, refusing a world the probe could not bring up. */
+    private DimWeather weather(int dim) throws Exception {
+        return DimWeather.forDim(cmd -> String.join("\n", client().execute(cmd)), dim)
+                .requireDim(dim);
     }
 }

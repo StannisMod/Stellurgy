@@ -1,5 +1,6 @@
 package zmaster587.advancedRocketry.test.client;
 
+import zmaster587.advancedRocketry.test.DimWeather;
 import zmaster587.advancedRocketry.test.Events;
 
 import com.github.stannismod.forge.testing.client.RealClientHarness;
@@ -137,12 +138,10 @@ public class WeatherCommandRedirectE2ETest {
         // load + pin the planet dim before the teleport.
         serverHarness.client().execute("artest weather set 0 clear 12000");
         serverHarness.client().execute("artest weather set " + DIM + " clear 12000");
-        String before = String.join("\n",
-                serverHarness.client().execute("artest weather get " + DIM));
-        assertTrue("planet must be wrapped before the command test: " + before,
-                before.contains("ARDimensionWorldInfo"));
-        assertFalse("planet must start clear: " + before,
-                before.contains("\"isRaining\":true"));
+        DimWeather before = serverWeather(DIM);
+        assertTrue("planet must be wrapped before the command test: " + before.raw(),
+                before.usesARWorldInfo());
+        assertFalse("planet must start clear: " + before.raw(), before.raining);
 
         long transferMark = clientEvents().mark();
         serverHarness.client().execute("artest tp " + DIM);
@@ -152,19 +151,18 @@ public class WeatherCommandRedirectE2ETest {
         clientHarness.bot().sendChat("/weather rain 600");
 
         // Server truth: the PLANET's per-dim state flips to raining...
-        JsonObject planetAfter = waitForServerRaining(DIM, true);
+        DimWeather planetAfter = waitForServerRaining(DIM, true);
         assertTrue("planet did not start raining after player /weather rain "
-                        + "(redirect to /advancedrocketry weather missing?): " + planetAfter,
-                planetAfter.get("raw").getAsString().contains("\"isRaining\":true"));
+                        + "(redirect to /advancedrocketry weather missing?): " + planetAfter.raw(),
+                planetAfter.raining);
 
         // ...and the OVERWORLD stays clear. Without the redirect vanilla
         // CommandWeather writes to server.worlds[0] — this is the assertion
         // that fails on the unfixed build.
-        String overworld = String.join("\n",
-                serverHarness.client().execute("artest weather get 0"));
+        DimWeather overworld = serverWeather(0);
         assertFalse("player /weather rain on a planet leaked to the overworld "
-                        + "(vanilla worlds[0] path, redirect not applied): " + overworld,
-                overworld.contains("\"isRaining\":true"));
+                        + "(vanilla worlds[0] path, redirect not applied): " + overworld.raw(),
+                overworld.raining);
 
         // Player truth: the client in the planet dim renders the rain the
         // command asked for. Strength streams per tick (code 7); the
@@ -183,10 +181,16 @@ public class WeatherCommandRedirectE2ETest {
         // planet (and the overworld stays untouched — still clear).
         clientHarness.bot().sendChat("/weather clear 600");
         waitForServerRaining(DIM, false);
-        String overworldAfterClear = String.join("\n",
-                serverHarness.client().execute("artest weather get 0"));
+        DimWeather overworldAfterClear = serverWeather(0);
         assertFalse("overworld must remain clear after planet /weather clear: "
-                + overworldAfterClear, overworldAfterClear.contains("\"isRaining\":true"));
+                + overworldAfterClear.raw(), overworldAfterClear.raining);
+    }
+
+    /** What the SERVER says one world's sky is doing, as opposed to what the client is shown. */
+    private DimWeather serverWeather(int dim) throws Exception {
+        return DimWeather.forDim(
+                        cmd -> String.join("\n", serverHarness.client().execute(cmd)), dim)
+                .requireDim(dim);
     }
 
     /**
@@ -225,20 +229,17 @@ public class WeatherCommandRedirectE2ETest {
      * flipped and flipped BACK inside one ten-tick gap is invisible to it. The fix is a recorder on
      * the weather write, not a longer budget.</p>
      */
-    private JsonObject waitForServerRaining(int dim, boolean raining) throws Exception {
-        String raw = "";
+    private DimWeather waitForServerRaining(int dim, boolean raining) throws Exception {
+        DimWeather last = null;
         for (int waited = 0; waited < 200; waited += 10) {
-            raw = String.join("\n",
-                    serverHarness.client().execute("artest weather get " + dim));
-            if (raw.contains("\"isRaining\":" + raining)) {
-                JsonObject out = new JsonObject();
-                out.addProperty("raw", raw);
-                return out;
+            last = serverWeather(dim);
+            if (last.raining == raining) {
+                return last;
             }
             clientHarness.bot().waitTicks(10);
         }
         throw new AssertionError("server dim " + dim + " never reached isRaining="
-                + raining + "; last probe: " + raw);
+                + raining + "; last probe: " + (last == null ? "none" : last.raw()));
     }
 
     /**

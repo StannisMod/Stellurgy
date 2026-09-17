@@ -4,9 +4,9 @@ import com.github.stannismod.forge.testing.junit.AbstractHeadlessServerTest;
 import org.junit.Test;
 
 import zmaster587.advancedRocketry.test.DimInfo;
+import zmaster587.advancedRocketry.test.DimWeather;
 
 import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
 
 /**
  * vanilla / non-AR dimension isolation.
@@ -39,24 +39,28 @@ public class NonARDimensionIsolationTest extends AbstractHeadlessServerTest {
 
     @Test
     public void overworldAndVanillaDimsAreNotWrapped() throws Exception {
-        String overworld = String.join("\n", client().execute("artest weather get 0"));
-        assertFalse("overworld must NOT have the AR weather wrapper installed: " + overworld,
-                overworld.contains("ARDimensionWorldInfo"));
+        // The sanity check the three claims below used to need — that the reply really is a weather
+        // reading and not the probe's `{"error":"world not loaded"}` — is now the read itself, and
+        // it covers all three rather than only the overworld: a NEGATED substring over the whole
+        // reply is satisfied by a world that does not exist, which is how each of these could have
+        // passed while proving nothing.
+        DimWeather overworld = weather(0);
+        assertFalse("overworld must NOT have the AR weather wrapper installed: " + overworld.raw(),
+                overworld.usesARWorldInfo());
 
-        String nether = String.join("\n", client().execute("artest weather get -1"));
-        assertFalse("nether must NOT have the AR weather wrapper installed: " + nether,
-                nether.contains("ARDimensionWorldInfo"));
+        DimWeather nether = weather(-1);
+        assertFalse("nether must NOT have the AR weather wrapper installed: " + nether.raw(),
+                nether.usesARWorldInfo());
 
-        String end = String.join("\n", client().execute("artest weather get 1"));
-        assertFalse("end must NOT have the AR weather wrapper installed: " + end,
-                end.contains("ARDimensionWorldInfo"));
+        DimWeather end = weather(1);
+        assertFalse("end must NOT have the AR weather wrapper installed: " + end.raw(),
+                end.usesARWorldInfo());
+    }
 
-        // Sanity check — these three vanilla dims still respond and look
-        // like real WorldInfo (the wrapper would say "ARDimensionWorldInfo",
-        // a missing world would say "error", a misconfigured probe would
-        // say neither — make sure we're observing real worldInfoClass data).
-        assertTrue("overworld weather get must return a worldInfoClass field: " + overworld,
-                overworld.contains("\"worldInfoClass\":"));
+    /** One world's sky, refusing a world the probe could not bring up. */
+    private DimWeather weather(int dim) throws Exception {
+        return DimWeather.forDim(cmd -> String.join("\n", client().execute(cmd)), dim)
+                .requireDim(dim);
     }
 
     /** What the server says about one dimension, read through the verb's own reader. */

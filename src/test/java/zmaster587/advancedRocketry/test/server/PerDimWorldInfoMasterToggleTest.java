@@ -1,5 +1,6 @@
 package zmaster587.advancedRocketry.test.server;
 
+import zmaster587.advancedRocketry.test.DimWeather;
 import zmaster587.advancedRocketry.test.Reply;
 import com.github.stannismod.forge.testing.junit.AbstractHeadlessServerTest;
 import com.github.stannismod.forge.testing.server.RealDedicatedServerHarness;
@@ -11,7 +12,6 @@ import org.junit.Test;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.regex.Pattern;
 
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
@@ -49,20 +49,25 @@ public class PerDimWorldInfoMasterToggleTest {
     private static final String WORLD_INFO_CLASS = "worldInfoClass";
 
     /**
-     * Whether the world this reply is about carries AR's own {@code WorldInfo} wrapper.
+     * Whether the world a {@code dim time} reply is about carries AR's own {@code WorldInfo}.
      *
-     * <p>Takes the VERB that produced the reply. Two different probes answer
-     * {@code worldInfoClass} — {@code weather get} and {@code dim time} — and this helper is fed
-     * both; it named a third ({@code dim info}, which does not answer the field at all), so every
-     * refusal it could raise pointed at a probe nobody had asked.</p>
+     * <p>Two probes answer {@code worldInfoClass} — {@code weather get} and {@code dim time} — and
+     * this helper used to be fed both, under a verb parameter. The {@code weather get} half is now
+     * {@link DimWeather#usesARWorldInfo()}; what is left is the clock probe, which owes a reader of
+     * its own and does not have one yet, so this stays and names the one verb it serves.</p>
      */
-    private static boolean isWrapped(String verb, String reply) {
-        String worldInfoClass = Reply.of(verb, reply).text(WORLD_INFO_CLASS);
+    private static boolean dimTimeIsWrapped(String reply) {
+        String worldInfoClass = Reply.of("artest dim time", reply).text(WORLD_INFO_CLASS);
         if (worldInfoClass == null) {
-            throw new AssertionError(verb + " must report `" + WORLD_INFO_CLASS + "`, or nothing"
-                    + " here says which WorldInfo the world carries: " + reply);
+            throw new AssertionError("`artest dim time` must report `" + WORLD_INFO_CLASS + "`, or"
+                    + " nothing here says which WorldInfo the world carries: " + reply);
         }
         return worldInfoClass.endsWith("ARDimensionWorldInfo");
+    }
+
+    /** One world's sky, refusing a world the probe could not bring up. */
+    private DimWeather weather(int dim) throws Exception {
+        return DimWeather.forDim(this::cmd, dim).requireDim(dim);
     }
 
     private Path workDir;
@@ -129,10 +134,10 @@ public class PerDimWorldInfoMasterToggleTest {
         // out, so the first load keeps the vanilla DerivedWorldInfo.
         assertTrue(cmd("artest config set perDimWorldInfo false").contains("\"ok\":true"));
 
-        String info = cmd("artest weather get " + FIXTURE_DIM); // first load
+        DimWeather info = weather(FIXTURE_DIM); // first load
         assertFalse("with perDimWorldInfo OFF a freshly-loaded planet must NOT be "
-                + "wrapped (vanilla shared-overworld WorldInfo) — got " + info,
-                isWrapped("artest weather get", info));
+                + "wrapped (vanilla shared-overworld WorldInfo) — got " + info.raw(),
+                info.usesARWorldInfo());
     }
 
     @Test
@@ -146,16 +151,16 @@ public class PerDimWorldInfoMasterToggleTest {
         assertTrue(cmd("artest config set perDimWorldInfo true").contains("\"ok\":true"));
         assertTrue(cmd("artest config set enableCustomPlanetWeather false").contains("\"ok\":true"));
 
-        String info = cmd("artest weather get " + FIXTURE_DIM); // first load
+        DimWeather info = weather(FIXTURE_DIM); // first load
         assertTrue("perDimWorldInfo ON + weather OFF must STILL wrap the planet "
-                + "(per-dim time rides the wrapper) — got " + info,
-                isWrapped("artest weather get", info));
+                + "(per-dim time rides the wrapper) — got " + info.raw(),
+                info.usesARWorldInfo());
 
         // Tie the contract to TIME explicitly: the per-dim clock probe sees the
         // wrapper with weather off (proves the time mechanism was not collateral
         // damage of disabling weather).
         String time = cmd("artest dim time " + FIXTURE_DIM);
         assertTrue("dim-time probe must report the per-dim wrapper with weather "
-                + "OFF — got " + time, isWrapped("artest dim time", time));
+                + "OFF — got " + time, dimTimeIsWrapped(time));
     }
 }

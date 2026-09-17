@@ -7,6 +7,8 @@ import org.junit.Assume;
 import org.junit.Before;
 import org.junit.Test;
 
+import zmaster587.advancedRocketry.test.DimWeather;
+
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -85,12 +87,11 @@ public class WeatherPersistenceTest {
         // First boot: set rain on the planet, verify the wrapper is in place.
         firstBoot = RealDedicatedServerHarness.startWith(workDir, /*cleanupOnClose=*/false);
         firstBoot.client().execute("artest weather set " + FIXTURE_DIM + " rain 12000");
-        String beforeStop = String.join("\n",
-                firstBoot.client().execute("artest weather get " + FIXTURE_DIM));
-        assertTrue("rain didn't take effect on first boot: " + beforeStop,
-                beforeStop.contains("\"isRaining\":true"));
-        assertTrue("wrapper not installed on first boot: " + beforeStop,
-                beforeStop.contains("ARDimensionWorldInfo"));
+        DimWeather beforeStop = weather(firstBoot, FIXTURE_DIM);
+        assertTrue("rain didn't take effect on first boot: " + beforeStop.raw(),
+                beforeStop.raining);
+        assertTrue("wrapper not installed on first boot: " + beforeStop.raw(),
+                beforeStop.usesARWorldInfo());
 
         // Stop cleanly — saved-data must flush via vanilla MapStorage save.
         firstBoot.close();
@@ -100,11 +101,15 @@ public class WeatherPersistenceTest {
         // re-reads state from advancedrocketry_planet_weather saved-data on
         // the overworld MapStorage.
         secondBoot = RealDedicatedServerHarness.startWith(workDir, /*cleanupOnClose=*/true);
-        String after = String.join("\n",
-                secondBoot.client().execute("artest weather get " + FIXTURE_DIM));
-        assertTrue("planet rain DID NOT persist across restart: " + after,
-                after.contains("\"isRaining\":true"));
-        assertTrue("wrapper should still be installed after restart: " + after,
-                after.contains("ARDimensionWorldInfo"));
+        DimWeather after = weather(secondBoot, FIXTURE_DIM);
+        assertTrue("planet rain DID NOT persist across restart: " + after.raw(), after.raining);
+        assertTrue("wrapper should still be installed after restart: " + after.raw(),
+                after.usesARWorldInfo());
+    }
+
+    /** One world's sky on one of the two boots, refusing a world that did not come up. */
+    private static DimWeather weather(RealDedicatedServerHarness boot, int dim) throws Exception {
+        return DimWeather.forDim(cmd -> String.join("\n", boot.client().execute(cmd)), dim)
+                .requireDim(dim);
     }
 }
