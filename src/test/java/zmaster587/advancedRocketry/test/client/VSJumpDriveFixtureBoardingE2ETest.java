@@ -10,6 +10,7 @@ import org.junit.runners.MethodSorters;
 import org.lwjgl.input.Keyboard;
 
 import zmaster587.advancedRocketry.hyperdrive.DriveTuning;
+import zmaster587.advancedRocketry.test.DriveInfo;
 import zmaster587.advancedRocketry.test.NavStatus;
 import zmaster587.advancedRocketry.test.Events;
 import zmaster587.advancedRocketry.test.Reply;
@@ -216,19 +217,21 @@ public class VSJumpDriveFixtureBoardingE2ETest extends AbstractSharedVsClientE2E
         // A block that rode into subspace but never got welded to the flight computer is invisible to
         // its own ship: the drive resolves its machines from the computer outward, so this leg is
         // what says the assembler did its welding rather than merely its moving.
-        String drive = exec("artest drive info 0 " + afcSub[0] + " " + afcSub[1] + " " + afcSub[2]);
+        DriveInfo drive = DriveInfo.at(this::exec,
+                "0 " + afcSub[0] + " " + afcSub[1] + " " + afcSub[2]);
         assertTrue("the assembled ship must have a FIELD GENERATOR aboard — drivePower is measured "
-                        + "off the generator, so a zero here is a generator the ship cannot see: " + drive,
-                readLong(drive, "drivePower") > 0L);
+                        + "off the generator, so a zero here is a generator the ship cannot see: "
+                        + drive.raw(),
+                drive.drivePower > 0L);
         assertTrue("…a CAPACITOR standing against that generator — a bank counts only while it "
                         + "touches the generator's footprint, so this also pins that the two arrived "
-                        + "adjacent: " + drive,
-                readLong(drive, "capacitors") >= 1L);
-        assertTrue("…a HULL EMITTER: " + drive, readLong(drive, "emitters") >= 1L);
+                        + "adjacent: " + drive.raw(),
+                drive.capacitors >= 1);
+        assertTrue("…a HULL EMITTER: " + drive.raw(), drive.emitters >= 1);
         assertTrue("…and a measured HULL — the assembler is the only thing that ever measures the "
                         + "craft's extent, so an unmeasured hull means the ship route did not run: "
-                        + drive,
-                drive.contains("\"hullMeasured\":true"));
+                        + drive.raw(),
+                drive.hullMeasured);
         // The heat sinks have no tile entity of their own, so nothing links them and nothing counts
         // them by name: what says they are aboard is that the bank they cool recovers FASTER than a
         // bare controller could. Drain it and read the recovery rate back out of the cooldown, then
@@ -236,9 +239,10 @@ public class VSJumpDriveFixtureBoardingE2ETest extends AbstractSharedVsClientE2E
         // no balance number pinned on either side of the comparison.
         String emptied = exec("artest drive charge 0 " + afcSub[0] + " " + afcSub[1] + " "
                 + afcSub[2] + " empty");
-        String cooled = exec("artest drive info 0 " + afcSub[0] + " " + afcSub[1] + " " + afcSub[2]);
-        long cooldown = readLong(cooled, "cooldownTicks");
-        long burst = readLong(cooled, "burstCost");
+        DriveInfo cooled = DriveInfo.at(this::exec,
+                "0 " + afcSub[0] + " " + afcSub[1] + " " + afcSub[2]);
+        long cooldown = cooled.cooldownTicks;
+        long burst = cooled.burstCost;
         // The cooldown is now burst / the bank's ACCEPT rate — a best case at full inflow — and heat
         // sinks are what raise that ceiling. So the shape under test is unchanged: read the implied
         // throughput back out and compare it against what a bare controller alone would allow.
@@ -247,7 +251,7 @@ public class VSJumpDriveFixtureBoardingE2ETest extends AbstractSharedVsClientE2E
                         + "at " + observedRate + "/tick (burst " + burst + " over " + cooldown
                         + " ticks) is what an uncooled controller alone allows — the sinks rode into "
                         + "subspace but the bank is not walking to them. emptied=" + emptied
-                        + " info=" + cooled,
+                        + " info=" + cooled.raw(),
                 cooldown >= 0L && burst > 0L
                         && observedRate > DriveTuning.CAPACITOR_BASE_ACCEPT_RATE * 2L);
 
@@ -680,10 +684,6 @@ public class VSJumpDriveFixtureBoardingE2ETest extends AbstractSharedVsClientE2E
         }
         return new double[]{reply.number(prefix + "X"), reply.number(prefix + "Y"),
                 reply.number(prefix + "Z")};
-    }
-
-    private static long readLong(String json, String key) {
-        return (long) Reply.of(json).numberOr(key, Long.MIN_VALUE);
     }
 
     private static String readGroup(String json, String field) {

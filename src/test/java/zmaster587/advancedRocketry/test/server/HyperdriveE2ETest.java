@@ -1,8 +1,7 @@
 package zmaster587.advancedRocketry.test.server;
 
+import zmaster587.advancedRocketry.test.DriveInfo;
 import zmaster587.advancedRocketry.test.Reply;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 import org.junit.Test;
 
@@ -35,13 +34,13 @@ public class HyperdriveE2ETest extends AbstractSharedServerTest {
     private static final String NAV_C = "0 2720 80 2720";
     private static final String NAV_D = "0 2780 80 2780";
 
-    private static long field(String json, String name) {
-        assertTrue("expected a numeric field " + name + " in: " + json, Reply.of(json).has(name));
-        return Reply.of(json).integer(name);
-    }
-
     private String exec(String cmd) throws Exception {
         return String.join("\n", client().execute(cmd));
+    }
+
+    /** What the drive standing at {@code afc} is, as the ship's own answer. */
+    private DriveInfo drive(String afc) throws Exception {
+        return DriveInfo.at(this::exec, "0 " + afc);
     }
 
     private String buildDrive(String afc, int coils, int cells, int sinks,
@@ -55,10 +54,10 @@ public class HyperdriveE2ETest extends AbstractSharedServerTest {
     @Test
     public void aBiggerGeneratorIsAStrongerDrive() throws Exception {
         buildDrive(SHIP_A, 2, 2, 1, 0, 0);
-        long small = field(exec("artest drive info 0 " + SHIP_A), "drivePower");
+        long small = drive(SHIP_A).drivePower;
 
         buildDrive(SHIP_A, 8, 2, 1, 0, 0);
-        long large = field(exec("artest drive info 0 " + SHIP_A), "drivePower");
+        long large = drive(SHIP_A).drivePower;
 
         assertTrue("welding more coils to the generator must make the ship's drive stronger: "
                 + small + " -> " + large, large > small);
@@ -67,37 +66,36 @@ public class HyperdriveE2ETest extends AbstractSharedServerTest {
     @Test
     public void aStrongerDriveIsFasterAndCostsMoreToStart() throws Exception {
         buildDrive(SHIP_A, 2, 8, 1, 0, 0);
-        String weak = exec("artest drive info 0 " + SHIP_A);
+        DriveInfo weak = drive(SHIP_A);
 
         buildDrive(SHIP_A, 10, 8, 1, 0, 0);
-        String strong = exec("artest drive info 0 " + SHIP_A);
+        DriveInfo strong = drive(SHIP_A);
 
         assertTrue("a bigger drive crosses faster",
-                field(strong, "speedBlocksPerTick") > field(weak, "speedBlocksPerTick"));
+                strong.speedBlocksPerTick > weak.speedBlocksPerTick);
         assertTrue("and asks for a bigger burst to open the window",
-                field(strong, "burstCost") > field(weak, "burstCost"));
+                strong.burstCost > weak.burstCost);
         assertTrue("and draws more while it holds the window open",
-                field(strong, "inFlightDraw") > field(weak, "inFlightDraw"));
+                strong.inFlightDraw > weak.inFlightDraw);
     }
 
     @Test
     public void moreCellsIsMoreBankAndMoreSinksIsAShorterWait() throws Exception {
         buildDrive(SHIP_A, 4, 1, 1, 0, 0);
-        String lean = exec("artest drive info 0 " + SHIP_A);
+        DriveInfo lean = drive(SHIP_A);
 
         buildDrive(SHIP_A, 4, 6, 1, 0, 0);
-        String bigBank = exec("artest drive info 0 " + SHIP_A);
+        DriveInfo bigBank = drive(SHIP_A);
 
-        assertTrue("cells are what the bank holds",
-                field(bigBank, "capacity") > field(lean, "capacity"));
+        assertTrue("cells are what the bank holds", bigBank.capacity > lean.capacity);
 
         // Same drive, same bank, more cooling: the wait for the next window must shrink. The
         // cooldown is not a timer anywhere - it is how long this bank takes to reach this burst.
         exec("artest drive charge 0 " + SHIP_A + " empty");
-        long slowCooldown = field(exec("artest drive info 0 " + SHIP_A), "cooldownTicks");
+        long slowCooldown = drive(SHIP_A).cooldownTicks;
         buildDrive(SHIP_A, 4, 6, 6, 0, 0);
         exec("artest drive charge 0 " + SHIP_A + " empty");
-        long fastCooldown = field(exec("artest drive info 0 " + SHIP_A), "cooldownTicks");
+        long fastCooldown = drive(SHIP_A).cooldownTicks;
 
         assertTrue("precondition: an empty bank really does have a wait", slowCooldown > 0L);
         assertTrue("heat sinks are the whole of the cooling system: " + slowCooldown
@@ -109,12 +107,10 @@ public class HyperdriveE2ETest extends AbstractSharedServerTest {
         buildDrive(SHIP_A, 4, 8, 2, 0, 0);
         exec("artest drive charge 0 " + SHIP_A + " full");
 
-        String info = exec("artest drive info 0 " + SHIP_A);
+        DriveInfo info = drive(SHIP_A);
 
-        assertEquals("a ship ready to jump is not waiting for anything", 0L,
-                field(info, "cooldownTicks"));
-        assertTrue("and its bank holds at least the burst",
-                field(info, "charge") >= field(info, "burstCost"));
+        assertEquals("a ship ready to jump is not waiting for anything", 0L, info.cooldownTicks);
+        assertTrue("and its bank holds at least the burst", info.charge >= info.burstCost);
     }
 
     @Test
@@ -124,8 +120,8 @@ public class HyperdriveE2ETest extends AbstractSharedServerTest {
         buildDrive(SHIP_A, 6, 6, 2, 0, 0);
         buildDrive(SHIP_B, 1, 1, 1, 0, 0);
 
-        long a = field(exec("artest drive info 0 " + SHIP_A), "drivePower");
-        long b = field(exec("artest drive info 0 " + SHIP_B), "drivePower");
+        long a = drive(SHIP_A).drivePower;
+        long b = drive(SHIP_B).drivePower;
 
         assertTrue("the big ship keeps its own power", a > b);
         assertTrue("and the small one gains nothing from the neighbour", b > 0L);
@@ -139,11 +135,12 @@ public class HyperdriveE2ETest extends AbstractSharedServerTest {
         // A starter craft: a couple of blocks either side of the generator.
         exec("artest drive hull 0 " + SHIP_C + " 0 0 0 3 1 1");
 
-        String info = exec("artest drive info 0 " + SHIP_C);
+        DriveInfo info = drive(SHIP_C);
 
+        assertTrue("the hull's coverage must have been measured, or the count below is a"
+                + " placeholder: " + info.raw(), info.hullMeasured);
         assertEquals("a first ship with no emitters at all must still be able to jump", 0L,
-                field(info, "hullOutsideWindow"));
-        assertTrue(info.contains("\"hullMeasured\":true"));
+                info.hullOutsideWindow());
     }
 
     @Test
@@ -156,25 +153,25 @@ public class HyperdriveE2ETest extends AbstractSharedServerTest {
         // A hull far longer than a bare generator can wrap.
         exec("artest drive hull 0 " + SHIP_C + " -30 -4 -4 30 4 4");
 
-        String info = exec("artest drive info 0 " + SHIP_C);
+        DriveInfo info = drive(SHIP_C);
 
-        assertTrue("part of this hull is outside the window: " + info,
-                field(info, "hullOutsideWindow") > 0L);
+        assertTrue("part of this hull is outside the window: " + info.raw(),
+                info.hullOutsideWindow() > 0L);
         assertTrue("which is a warning, never a veto - leaving part of the ship behind is the "
-                + "pilot's decision to make: " + info, info.contains("\"allowed\":true"));
-        assertTrue("and he is told before he makes it: " + info,
-                info.contains("\"confirm\":true"));
-        assertTrue(info.contains("msg.jumpgate.windowundersized"));
+                + "pilot's decision to make: " + info.raw(), info.allowed);
+        assertTrue("and he is told before he makes it: " + info.raw(), info.confirm);
+        assertTrue("and told THAT, in the gate's own message: " + info.raw(),
+                info.messageIs("msg.jumpgate.windowundersized"));
     }
 
     @Test
     public void emittersAreWhatMakeALongHullFit() throws Exception {
         buildDrive(SHIP_C, 4, 8, 2, 0, 0);
         exec("artest drive hull 0 " + SHIP_C + " -30 -4 -4 30 4 4");
-        long bare = field(exec("artest drive info 0 " + SHIP_C), "hullOutsideWindow");
+        long bare = drive(SHIP_C).hullOutsideWindow();
 
         buildDrive(SHIP_C, 4, 8, 2, 6, 0);
-        long withEmitters = field(exec("artest drive info 0 " + SHIP_C), "hullOutsideWindow");
+        long withEmitters = drive(SHIP_C).hullOutsideWindow();
 
         assertTrue("precondition: the bare generator leaves this hull sticking out", bare > 0L);
         assertTrue("emitters are an extension for a big hull, and this is what they buy: "
@@ -224,10 +221,10 @@ public class HyperdriveE2ETest extends AbstractSharedServerTest {
         exec("artest nav target " + NAV_D + " 7 0 0");
         exec("artest drive arm 0 " + SHIP_D + " on");
 
-        long chargeBefore = field(exec("artest drive info 0 " + SHIP_D), "charge");
+        long chargeBefore = drive(SHIP_D).charge;
         exec("artest drive press 0 " + SHIP_D);
         String aborted = exec("artest drive press 0 " + SHIP_D);
-        long chargeAfter = field(exec("artest drive info 0 " + SHIP_D), "charge");
+        long chargeAfter = drive(SHIP_D).charge;
 
         assertTrue("a second press during the wind-up stops it: " + aborted,
                 aborted.contains("\"spooling\":false"));
@@ -247,9 +244,9 @@ public class HyperdriveE2ETest extends AbstractSharedServerTest {
         exec("artest drive arm 0 " + SHIP_D + " on");
         exec("artest nav cleartarget " + NAV_D);
 
-        long before = field(exec("artest drive info 0 " + SHIP_D), "charge");
+        long before = drive(SHIP_D).charge;
         String pressed = exec("artest drive press 0 " + SHIP_D);
-        long after = field(exec("artest drive info 0 " + SHIP_D), "charge");
+        long after = drive(SHIP_D).charge;
 
         assertTrue("a ship with no destination does not wind up: " + pressed,
                 pressed.contains("\"spooling\":false"));
@@ -280,11 +277,11 @@ public class HyperdriveE2ETest extends AbstractSharedServerTest {
     public void dampenersAreFoundAndReportPowered() throws Exception {
         buildDrive(SHIP_A, 4, 4, 2, 0, 3);
 
-        String info = exec("artest drive info 0 " + SHIP_A);
+        DriveInfo info = drive(SHIP_A);
 
-        assertEquals("all three belong to this ship", 3L, field(info, "dampeners"));
+        assertEquals("all three belong to this ship", 3, info.dampeners);
         assertEquals("and a dampener with power in its buffer is one that will protect somebody",
-                3L, field(info, "poweredDampeners"));
+                3, info.poweredDampeners);
     }
 
     // ─── The bank is filled by the SHIP, not by the clock ──────────────────────
@@ -301,16 +298,15 @@ public class HyperdriveE2ETest extends AbstractSharedServerTest {
         buildDrive(SHIP_E, 4, 8, 4, 0, 0);
         exec("artest drive charge 0 " + SHIP_E + " empty");
 
-        long before = field(exec("artest drive info 0 " + SHIP_E), "charge");
+        long before = drive(SHIP_E).charge;
         assertEquals("a drained bank starts empty", 0L, before);
 
         zmaster587.advancedRocketry.test.GameTicks.advanceWorld(client(), 0, 100);
 
-        String after = exec("artest drive info 0 " + SHIP_E);
+        DriveInfo after = drive(SHIP_E);
         assertEquals("100 ticks of a running server must not have put a single unit into a bank that"
-                        + " nothing is feeding: " + after, 0L, field(after, "charge"));
-        assertTrue("and it must still WANT charge, or this proves nothing",
-                field(after, "burstCost") > 0L);
+                        + " nothing is feeding: " + after.raw(), 0L, after.charge);
+        assertTrue("and it must still WANT charge, or this proves nothing", after.burstCost > 0L);
     }
 
     @Test
@@ -321,22 +317,25 @@ public class HyperdriveE2ETest extends AbstractSharedServerTest {
         buildDrive(SHIP_E, 4, 8, 4, 0, 0);
         exec("artest drive charge 0 " + SHIP_E + " empty");
 
-        String pushed = exec("artest drive push 0 " + SHIP_E + " 1000000000");
+        // `push` answers what the PORTS did, not what the drive is, so it is read as its own
+        // three-field reply rather than as a drive reading.
+        Reply pushed = Reply.of("artest drive push",
+                exec("artest drive push 0 " + SHIP_E + " 1000000000"));
         assertTrue("the bank must expose an energy port for the ship to push into: " + pushed,
-                field(pushed, "ports") > 0L);
-        long accepted = field(pushed, "accepted");
+                pushed.longInteger("ports") > 0L);
+        long accepted = pushed.longInteger("accepted");
         assertTrue("and it must have taken some of it: " + pushed, accepted > 0L);
-        assertEquals("what it took is what it holds", accepted,
-                field(exec("artest drive info 0 " + SHIP_E), "charge"));
+        DriveInfo filled = drive(SHIP_E);
+        assertEquals("what it took is what it holds", accepted, filled.charge);
 
         // One push is one tick's worth: the accept rate is a THROUGHPUT ceiling, so a billion offered
         // at once does not fill a bank that a hundred pushes would.
-        long capacity = field(exec("artest drive info 0 " + SHIP_E), "capacity");
         assertTrue("a single tick of inflow must not fill the whole bank (" + accepted + " of "
-                + capacity + ")", capacity <= 0L || accepted < capacity);
+                + filled.capacity + ")", filled.capacity <= 0L || accepted < filled.capacity);
 
-        String again = exec("artest drive push 0 " + SHIP_E + " 1000000000");
-        assertTrue("a second push must add more", field(again, "charge") > accepted);
+        Reply again = Reply.of("artest drive push",
+                exec("artest drive push 0 " + SHIP_E + " 1000000000"));
+        assertTrue("a second push must add more", again.longInteger("charge") > accepted);
     }
 
     @Test
@@ -346,7 +345,7 @@ public class HyperdriveE2ETest extends AbstractSharedServerTest {
         // collected rather than that its NBT round-trips. `chunk cycle` saves, drops and reads back.
         buildDrive(SHIP_E, 4, 8, 4, 0, 0);
         exec("artest drive charge 0 " + SHIP_E + " full");
-        long before = field(exec("artest drive info 0 " + SHIP_E), "charge");
+        long before = drive(SHIP_E).charge;
         assertTrue("the fixture needs a bank with something in it", before > 0L);
 
         int cx = 2840 >> 4;
@@ -355,8 +354,8 @@ public class HyperdriveE2ETest extends AbstractSharedServerTest {
         assertTrue("the chunk must really have left memory, or nothing was read back from disk: "
                 + cycled, cycled.contains("\"dropped\":true"));
 
-        String after = exec("artest drive info 0 " + SHIP_E);
-        assertEquals("a bank that came back from disk holds what it held: " + after, before,
-                field(after, "charge"));
+        DriveInfo after = drive(SHIP_E);
+        assertEquals("a bank that came back from disk holds what it held: " + after.raw(), before,
+                after.charge);
     }
 }

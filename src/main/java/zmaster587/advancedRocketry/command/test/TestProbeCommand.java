@@ -3340,6 +3340,11 @@ public class TestProbeCommand extends CommandBase {
             zmaster587.advancedRocketry.navigation.JumpGate.Verdict verdict =
                     zmaster587.advancedRocketry.navigation.JumpGate.check(nav);
             Map<String, Object> info = new LinkedHashMap<>();
+            // Whether there is a SHIP at the position asked about at all. Without it every field
+            // below answers a well-formed zero for an empty block — no drive, no bank, no cooldown,
+            // nothing outside the window — which is indistinguishable from a real craft that has
+            // been built badly, and is the stronger-looking of the two readings.
+            info.put("afc", afcTe instanceof zmaster587.advancedRocketry.tile.TileAdvancedFlightComputer);
             info.put("drivePower", stats.drivePower());
             info.put("inFlightDraw", stats.inFlightDraw());
             info.put("burstCost", stats.burstCost());
