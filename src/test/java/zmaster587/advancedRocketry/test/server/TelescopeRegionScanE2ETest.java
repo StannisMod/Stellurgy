@@ -7,7 +7,7 @@ import org.junit.Test;
 import zmaster587.advancedRocketry.test.FixtureSite;
 import zmaster587.advancedRocketry.test.NavStatus;
 import zmaster587.advancedRocketry.test.Reply;
-import zmaster587.advancedRocketry.test.TelescopeScan;
+import zmaster587.advancedRocketry.test.TelescopeReading;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
@@ -70,13 +70,13 @@ public class TelescopeRegionScanE2ETest extends AbstractSharedServerTest {
     }
 
     /** What the instrument is doing right now. */
-    private TelescopeScan scope(int x) throws Exception {
-        return TelescopeScan.at(this::exec, where(x));
+    private TelescopeReading scope(int x) throws Exception {
+        return TelescopeReading.at(this::exec, where(x));
     }
 
     /** How far apart, in cells, the looks of a directed survey stand in THIS server's universe. */
     private long stride(int x) throws Exception {
-        long stride = TelescopeScan.of(exec("artest telescope scan " + where(x) + " 1 0 0 1"))
+        long stride = TelescopeReading.of(exec("artest telescope scan " + where(x) + " 1 0 0 1"))
                 .requireOk("could not aim the instrument to read its stride")
                 .stride();
         exec("artest telescope abort " + where(x));
@@ -116,8 +116,8 @@ public class TelescopeRegionScanE2ETest extends AbstractSharedServerTest {
     }
 
     /** Poll the machine until its survey is finished. Bounded in the ticks a survey advances on. */
-    private TelescopeScan awaitSurveyComplete(int x) throws Exception {
-        final TelescopeScan[] info = new TelescopeScan[1];
+    private TelescopeReading awaitSurveyComplete(int x) throws Exception {
+        final TelescopeReading[] info = new TelescopeReading[1];
         boolean finished = GameTicks.until(client(), GameTicks.server(), SURVEY_TICKS, () -> {
             info[0] = scope(x);
             return !info[0].scanning;
@@ -135,10 +135,10 @@ public class TelescopeRegionScanE2ETest extends AbstractSharedServerTest {
         long[] home = observatoryWithCrystal(x);
         systemNearTheLookAt(x, home, 4);
 
-        TelescopeScan.of(exec("artest telescope scan " + where(x) + " 1 0 0 4"))
+        TelescopeReading.of(exec("artest telescope scan " + where(x) + " 1 0 0 4"))
                 .requireOk("the survey did not start");
 
-        TelescopeScan done = awaitSurveyComplete(x);
+        TelescopeReading done = awaitSurveyComplete(x);
         assertTrue("the crystal learned nothing from a region holding a system: " + done.raw(),
                 done.addressesOnCrystal() >= 1);
         assertTrue("and the machine must report what it discovered: " + done.raw(),
@@ -156,7 +156,7 @@ public class TelescopeRegionScanE2ETest extends AbstractSharedServerTest {
         surveySetup(true, 1, 3);
         observatoryWithCrystal(x);
 
-        TelescopeScan started = TelescopeScan.of(exec("artest telescope scan " + where(x) + " 1 0 0 4"))
+        TelescopeReading started = TelescopeReading.of(exec("artest telescope scan " + where(x) + " 1 0 0 4"))
                 .requireOk("the survey did not start");
         assertTrue("a region worth sweeping must hold more than one cell: " + started.raw(),
                 started.cells() > 1);
@@ -165,7 +165,7 @@ public class TelescopeRegionScanE2ETest extends AbstractSharedServerTest {
         long total = started.cells();
         final long[] seen = {0};
         GameTicks.until(client(), GameTicks.server(), SWEEP_TICKS, () -> {
-            TelescopeScan info = scope(x);
+            TelescopeReading info = scope(x);
             if (!info.scanning) {
                 seen[0] = total;
                 return true;
@@ -188,12 +188,12 @@ public class TelescopeRegionScanE2ETest extends AbstractSharedServerTest {
         systemNearTheLookAt(x, home, 3);
 
         exec("artest telescope scan " + where(x) + " 1 0 0 3");
-        TelescopeScan before = scope(x);
+        TelescopeReading before = scope(x);
         assertTrue("the survey must be running before it can be stopped: " + before.raw(),
                 before.scanning);
         long learned = before.addressesOnCrystal();
 
-        TelescopeScan stopped = TelescopeScan.of(exec("artest telescope abort " + where(x)))
+        TelescopeReading stopped = TelescopeReading.of(exec("artest telescope abort " + where(x)))
                 .requireOk("stopping must be free and immediate");
         assertFalse("the instrument must be idle after a stop: " + stopped.raw(), stopped.scanning);
         assertTrue("stopping must not take back what was already resolved: " + stopped.raw(),
@@ -206,11 +206,11 @@ public class TelescopeRegionScanE2ETest extends AbstractSharedServerTest {
         surveySetup(true, 1, 180);
         observatoryWithCrystal(x);
 
-        TelescopeScan first = TelescopeScan.of(exec("artest telescope scan " + where(x) + " 1 0 0 3"))
+        TelescopeReading first = TelescopeReading.of(exec("artest telescope scan " + where(x) + " 1 0 0 3"))
                 .requireOk("the first survey did not start");
         long learned = first.addressesOnCrystal();
 
-        TelescopeScan second = TelescopeScan.of(exec("artest telescope scan " + where(x) + " 0 0 1 5"))
+        TelescopeReading second = TelescopeReading.of(exec("artest telescope scan " + where(x) + " 0 0 1 5"))
                 .requireOk("re-aiming mid-survey must be allowed");
         // The DIRECTION and not the corners. A pointing's bounding box is its apex plus its reach
         // on every axis, so re-aiming the same instrument leaves min/max exactly where they were —
@@ -227,7 +227,7 @@ public class TelescopeRegionScanE2ETest extends AbstractSharedServerTest {
         surveySetup(false, 4, 120);
         long[] home = observatoryWithCrystal(x);
 
-        TelescopeScan passive = TelescopeScan.of(exec("artest telescope passive " + where(x)))
+        TelescopeReading passive = TelescopeReading.of(exec("artest telescope passive " + where(x)))
                 .requireOk("the local radar did not start");
         assertTrue("the local radar is a mode of the machine, not a survey of somewhere else: "
                 + passive.raw(), passive.passive);
@@ -246,7 +246,7 @@ public class TelescopeRegionScanE2ETest extends AbstractSharedServerTest {
         // An observatory stands on a PLANET, never on its own star. Under the gate this test was
         // written against, the cell it is standing in reported empty and the machine could not name
         // the system it was sitting in.
-        TelescopeScan done = awaitSurveyComplete(x);
+        TelescopeReading done = awaitSurveyComplete(x);
         assertTrue("the radar must resolve the system the observatory is standing in: " + done.raw(),
                 done.addressesOnCrystal() >= 1);
     }
@@ -259,13 +259,13 @@ public class TelescopeRegionScanE2ETest extends AbstractSharedServerTest {
         surveySetup(true, 1, 30);
         observatoryWithCrystal(x);
 
-        TelescopeScan.of(exec("artest telescope scan " + where(x) + " 1 0 0 3"))
+        TelescopeReading.of(exec("artest telescope scan " + where(x) + " 1 0 0 3"))
                 .requireOk("the survey did not start");
         // A survey advances per TICK, so how far it gets is a number of ticks. The old wall-clock
         // pause gave it fewer of them on a busy box - which made "still scanning" easier to satisfy
         // exactly when the machine was slowest, i.e. the test got weaker under load.
         GameTicks.advance(client(), GameTicks.server(), MID_SURVEY_TICKS);
-        TelescopeScan before = scope(x);
+        TelescopeReading before = scope(x);
         assertTrue("the survey must still be running to be interrupted: " + before.raw(),
                 before.scanning);
         long doneBefore = before.cellsDone();
@@ -275,7 +275,7 @@ public class TelescopeRegionScanE2ETest extends AbstractSharedServerTest {
         assertTrue("the chunk was never actually dropped, so nothing was proven: " + cycled,
                 cycled.contains("\"dropped\":true") && cycled.contains("\"reloaded\":true"));
 
-        TelescopeScan after = scope(x);
+        TelescopeReading after = scope(x);
         assertTrue("the survey did not come back with the chunk: " + after.raw(), after.scanning);
         assertEquals("it must come back looking at the same region", region, after.regionMin());
         assertTrue("and must not have forgotten the cells it had already surveyed: was "
@@ -291,11 +291,11 @@ public class TelescopeRegionScanE2ETest extends AbstractSharedServerTest {
         exec("artest config set telescopeSurveyDataPerStep 50");
         try {
             observatoryWithCrystal(x);
-            TelescopeScan.of(exec("artest telescope scan " + where(x) + " 1 0 0 2"))
+            TelescopeReading.of(exec("artest telescope scan " + where(x) + " 1 0 0 2"))
                     .requireOk("the survey did not start");
 
             GameTicks.advance(client(), GameTicks.server(), STARVED_SURVEY_TICKS);
-            TelescopeScan after = scope(x);
+            TelescopeReading after = scope(x);
             assertTrue("an instrument with no data must still be waiting, not finished: "
                     + after.raw(), after.scanning);
             assertEquals("and must not have resolved a single cell on credit",
@@ -313,7 +313,7 @@ public class TelescopeRegionScanE2ETest extends AbstractSharedServerTest {
         systemNearTheLookAt(x, home, 3);
 
         exec("artest telescope scan " + where(x) + " 1 0 0 3");
-        TelescopeScan surveyed = awaitSurveyComplete(x);
+        TelescopeReading surveyed = awaitSurveyComplete(x);
         assertTrue("the survey must have written something to hand over: " + surveyed.raw(),
                 surveyed.addressesOnCrystal() >= 1);
 
@@ -342,13 +342,13 @@ public class TelescopeRegionScanE2ETest extends AbstractSharedServerTest {
         surveySetup(false, 4, 3);
         observatoryWithCrystal(x);
 
-        TelescopeScan idle = scope(x);
+        TelescopeReading idle = scope(x);
         assertTrue("a telescope's horizon must reach other stars, in light years: " + idle.reachLy,
                 idle.reachLy >= 4d);
         assertTrue("and must buy more than one star's territory: " + idle.reachSteps,
                 idle.reachSteps >= 2);
 
-        TelescopeScan aimed = TelescopeScan.of(
+        TelescopeReading aimed = TelescopeReading.of(
                         exec("artest telescope scan " + where(x) + " 1 0 0 " + idle.reachSteps))
                 .requireOk("the survey did not start");
         assertTrue("an aim at the horizon must land an interstellar distance away: "
@@ -363,12 +363,12 @@ public class TelescopeRegionScanE2ETest extends AbstractSharedServerTest {
         surveySetup(true, 2, 40);
         observatoryWithCrystal(x);
 
-        long nearTicks = TelescopeScan.of(exec("artest telescope scan " + where(x) + " 1 0 0 2"))
+        long nearTicks = TelescopeReading.of(exec("artest telescope scan " + where(x) + " 1 0 0 2"))
                 .requireOk("the near survey did not start")
                 .estimatedTicks();
         exec("artest telescope abort " + where(x));
 
-        long farTicks = TelescopeScan.of(exec("artest telescope scan " + where(x) + " 1 0 0 20"))
+        long farTicks = TelescopeReading.of(exec("artest telescope scan " + where(x) + " 1 0 0 20"))
                 .requireOk("the far survey did not start")
                 .estimatedTicks();
         exec("artest telescope abort " + where(x));

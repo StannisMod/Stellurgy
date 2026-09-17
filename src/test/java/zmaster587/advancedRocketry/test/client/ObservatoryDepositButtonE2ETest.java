@@ -7,7 +7,7 @@ import org.junit.runners.MethodSorters;
 import zmaster587.advancedRocketry.test.FixtureSite;
 import zmaster587.advancedRocketry.test.RealizedBody;
 import zmaster587.advancedRocketry.test.Reply;
-import zmaster587.advancedRocketry.test.TelescopeScan;
+import zmaster587.advancedRocketry.test.TelescopeReading;
 
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
@@ -80,7 +80,7 @@ public class ObservatoryDepositButtonE2ETest extends AbstractSharedClientE2ETest
         String crystal = exec("artest telescope crystal " + where + " " + fresh);
         assertEquals("the machine must hold a crystal naming exactly that world: " + crystal,
                 1, Reply.of("artest telescope crystal", crystal).integer("addresses"));
-        TelescopeScan info = TelescopeScan.at(this::exec, where);
+        TelescopeReading info = TelescopeReading.at(this::exec, where);
         assertArrayEquals("and the probe must see it there without depositing anything: "
                 + info.raw(), new int[]{fresh}, info.crystalDims());
 

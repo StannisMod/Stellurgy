@@ -46,7 +46,7 @@ package zmaster587.advancedRocketry.test;
  * rule {@code GalacticCoord.fromCellKey} reads by. Splitting the whole key on {@code _} answers
  * {@code zone.sx} as the first sector coordinate.</p>
  */
-public final class TelescopeScan {
+public final class TelescopeReading {
 
     /** How this reader reaches the probe. The callers sit under three different bases. */
     @FunctionalInterface
@@ -94,7 +94,7 @@ public final class TelescopeScan {
     private final Reply reply;
     private final String raw;
 
-    private TelescopeScan(Reply reply, String raw) {
+    private TelescopeReading(Reply reply, String raw) {
         this.reply = reply;
         this.raw = raw;
         this.ok = reply.bool("ok", false);
@@ -123,7 +123,7 @@ public final class TelescopeScan {
      * a single field below: read as this reply they say the instrument is idle, holds no crystal and
      * has resolved nothing, which is a description of a working machine that found nothing.</p>
      */
-    public static TelescopeScan of(String telescopeReply) {
+    public static TelescopeReading of(String telescopeReply) {
         String text = String.valueOf(telescopeReply);
         Reply reply = Reply.of("artest telescope info|scan|passive|abort", text);
         if (reply.has("error")) {
@@ -136,16 +136,16 @@ public final class TelescopeScan {
                     + " reason and no state at all, and read as one it says the instrument is idle"
                     + " and empty: " + text);
         }
-        return new TelescopeScan(reply, text);
+        return new TelescopeReading(reply, text);
     }
 
     /** Ask an observatory what it is doing. {@code where} is {@code <dim> <x> <y> <z>}. */
-    public static TelescopeScan at(Probe probe, String where) throws Exception {
+    public static TelescopeReading at(Probe probe, String where) throws Exception {
         return of(probe.exec("artest telescope info " + where));
     }
 
     /** This reading, refusing when the verb that produced it did not take. */
-    public TelescopeScan requireOk(String what) {
+    public TelescopeReading requireOk(String what) {
         if (!ok) {
             ArrangementFailure.arrangementFailed(what + " — the instrument refused: " + raw);
         }

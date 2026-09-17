@@ -8,7 +8,7 @@ import org.junit.Test;
 import zmaster587.advancedRocketry.test.RealizedBody;
 import zmaster587.advancedRocketry.test.FixtureSite;
 import zmaster587.advancedRocketry.test.Reply;
-import zmaster587.advancedRocketry.test.TelescopeScan;
+import zmaster587.advancedRocketry.test.TelescopeReading;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
@@ -158,9 +158,9 @@ public class Tier1AimsAtWhatThisWorldKnowsE2ETest extends AbstractSharedServerTe
 
         // The instrument watching its own neighbourhood: what it resolves are the bodies of the
         // system this observatory is standing in, which are the ones that have worlds to fly to.
-        TelescopeScan.of(exec("artest telescope passive " + where()))
+        TelescopeReading.of(exec("artest telescope passive " + where()))
                 .requireOk("the passive sweep did not start");
-        TelescopeScan afterSweep = TelescopeScan.at(this::exec, where());
+        TelescopeReading afterSweep = TelescopeReading.at(this::exec, where());
         assertFalse("the sweep must be finished with research off: " + afterSweep.raw(),
                 afterSweep.scanning);
         exec("artest config set planetsMustBeDiscovered true");

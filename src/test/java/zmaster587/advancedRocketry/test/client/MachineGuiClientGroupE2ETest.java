@@ -20,7 +20,7 @@ import java.util.regex.Pattern;
 
 import zmaster587.advancedRocketry.test.Plot;
 import zmaster587.advancedRocketry.test.RocketList;
-import zmaster587.advancedRocketry.test.TelescopeScan;
+import zmaster587.advancedRocketry.test.TelescopeReading;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
@@ -668,7 +668,7 @@ public class MachineGuiClientGroupE2ETest extends AbstractSharedClientE2ETest {
 
         // The reader REFUSES a world with no galactic address, so the arrangement check that used to
         // stand here — a `contains` on the rendered `"origin":"` — is the read itself.
-        TelescopeScan before = TelescopeScan.at(this::exec, where);
+        TelescopeReading before = TelescopeReading.at(this::exec, where);
         long[] home = before.originSectors();
         scenario().record("origin", before.originCellKey());
 
@@ -688,7 +688,7 @@ public class MachineGuiClientGroupE2ETest extends AbstractSharedClientE2ETest {
         bot().clickButtonById(5);
         bot().waitTicks(15);
 
-        TelescopeScan aimed = TelescopeScan.at(this::exec, where);
+        TelescopeReading aimed = TelescopeReading.at(this::exec, where);
         long aimDistance = aimed.aimDistance;
         assertTrue("clicking the distance button twice must move the aim out from 1: " + aimed.raw(),
                 aimDistance > 1);
@@ -732,7 +732,7 @@ public class MachineGuiClientGroupE2ETest extends AbstractSharedClientE2ETest {
                 "carrying a non-zero discovery count",
                 "a survey driven entirely from the GUI must resolve at least one look into a"
                         + " discovery before the crystal can hold an address", 400);
-        TelescopeScan done = TelescopeScan.at(this::exec, where);
+        TelescopeReading done = TelescopeReading.at(this::exec, where);
         assertTrue("a survey driven entirely from the GUI left the crystal empty: " + done.raw()
                         + " surveySteps=" + events.since(scanMark, "region_scan_advanced"),
                 done.addressesOnCrystal() >= 1);
