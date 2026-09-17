@@ -4,6 +4,7 @@ import zmaster587.advancedRocketry.test.Reply;
 import zmaster587.advancedRocketry.test.ShipReadiness;
 import zmaster587.advancedRocketry.test.GameTicks;
 import zmaster587.advancedRocketry.test.EntrySlots;
+import zmaster587.advancedRocketry.test.EntryStatus;
 import zmaster587.advancedRocketry.test.ShipIdentity;
 import zmaster587.advancedRocketry.test.ShipInfo;
 
@@ -82,9 +83,9 @@ public class VSUnpilotedEntryE2ETest extends AbstractSharedServerTest {
         String setup = exec("artest space entry-setup 2");
         assertTrue("entry setup failed: " + setup, setup.contains("\"ok\":true"));
 
-        String control = exec("artest space entry-status");
+        EntryStatus control = EntryStatus.wholeLedger(this::exec);
         assertEquals("witness sensitivity control — no ship must be ledgered before the climb: " + control,
-                0, extractInt(control, "ships"));
+                0, control.ships);
 
         clearArea(SRC_X, SRC_Z);
         String coords = placeFixture(SRC_X, SRC_Y, SRC_Z, "with-pilot-seat");
@@ -118,19 +119,18 @@ public class VSUnpilotedEntryE2ETest extends AbstractSharedServerTest {
         assertTrue("climb teleport failed: " + tp, tp.contains("\"ok\":true"));
         exec("artest vs unpark-by-id 0 " + vsId);
 
-        final String[] status = {""};
+        final EntryStatus[] status = new EntryStatus[1];
         boolean settled = GameTicks.until(client(), GameTicks.server(), SETTLE_TICKS,
                 () -> {
-                    status[0] = exec("artest space entry-status id " + durableId);
-                    return status[0].contains("\"found\":true")
-                            && "SETTLED".equals(extractString(status[0], "state"));
+                    status[0] = EntryStatus.forShip(this::exec, durableId);
+                    return status[0].found && status[0].settled();
                 },
                 () -> loadAllEntrySlots(setup));
         assertTrue("a ship with NOBODY at the controls must still cross out of the atmosphere — the"
                 + " crossing is world plus geometry, and an atmosphere does not check whose hands are"
                 + " on the stick; last status=" + status[0], settled);
         assertEquals("entry settled in a different cell than the launch resolver answers", expectedCell,
-                extractString(status[0], "cellKey"));
+                status[0].cellKey);
     }
 
     // --- helpers (byte-identical to VSShipEntryE2ETest's, as the server-tier classes keep them) ------

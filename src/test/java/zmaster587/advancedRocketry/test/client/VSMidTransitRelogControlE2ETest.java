@@ -17,6 +17,7 @@ import zmaster587.advancedRocketry.space.CellWorldMapper;
 import zmaster587.advancedRocketry.space.GalacticCoord;
 import zmaster587.advancedRocketry.test.Reply;
 import zmaster587.advancedRocketry.test.Events;
+import zmaster587.advancedRocketry.test.EntryStatus;
 import zmaster587.advancedRocketry.test.TransitStatus;
 import zmaster587.advancedRocketry.test.PilotSeat;
 import zmaster587.advancedRocketry.test.TransitSetup;
@@ -404,11 +405,9 @@ public class VSMidTransitRelogControlE2ETest extends AbstractSharedVsClientE2ETe
         scenario().record("arrivalAltitudes", altitudes);
         System.out.println("[relog] arrival altitudes :: " + altitudes
                 + " || ship=" + arrivedShip + " || server=" + serverPlayer);
-        String ledgerRow = exec("artest space entry-status id " + durableId);
+        EntryStatus ledgerRow = EntryStatus.forShip(this::exec, durableId);
         double[] settled = CellWorldMapper.poseWorldOf(GalacticCoord.ofSectorLocal(0L, 0L, 0L,
-                (long) readDoubleOr(ledgerRow, "lx"),
-                (long) readDoubleOr(ledgerRow, "ly"),
-                (long) readDoubleOr(ledgerRow, "lz")));
+                ledgerRow.lx, ledgerRow.ly, ledgerRow.lz));
         scenario().record("settledPose", java.util.Arrays.toString(settled));
         // CARRY_MARGIN as the tolerance, because it is production's OWN answer to "still at this
         // coordinate as far as the cell is concerned" — the distance a craft may sit past a face

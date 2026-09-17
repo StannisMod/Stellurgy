@@ -7,6 +7,7 @@ import zmaster587.advancedRocketry.space.CellWorldMapper;
 import zmaster587.advancedRocketry.space.GalacticCoord;
 import zmaster587.advancedRocketry.test.GameTicks;
 import zmaster587.advancedRocketry.test.EntrySlots;
+import zmaster587.advancedRocketry.test.EntryStatus;
 import zmaster587.advancedRocketry.test.ShipIdentity;
 import zmaster587.advancedRocketry.test.ShipInfo;
 
@@ -92,9 +93,9 @@ public class VSShipEntryE2ETest extends AbstractSharedServerTest {
         assertTrue("entry setup failed: " + setup, setup.contains("\"ok\":true"));
 
         // CONTROL: nothing is ledgered before the climb — a later "settled" is then a real observation.
-        String control = exec("artest space entry-status");
+        EntryStatus control = EntryStatus.wholeLedger(this::exec);
         assertEquals("witness sensitivity control — no ship must be ledgered before the climb: " + control,
-                0, extractInt(control, "ships"));
+                0, control.ships);
 
         // Build a piloted tier-2 ship in the overworld and assemble it into a VS ship.
         clearArea(SRC_X, SRC_Z);
@@ -140,21 +141,20 @@ public class VSShipEntryE2ETest extends AbstractSharedServerTest {
         // an idle one does.
         boolean settled = awaitWithinTicks(SETTLE_TICKS,
                 () -> {
-                    String seen = exec("artest space entry-status id " + durableId);
-                    return seen.contains("\"found\":true")
-                            && "SETTLED".equals(extractString(seen, "state"));
+                    EntryStatus seen = EntryStatus.forShip(this::exec, durableId);
+                    return seen.found && seen.settled();
                 },
                 // Keep the destination slots' ships load-queued (headless has no player to auto-load
                 // them). This is work the wait has to keep doing, not part of what is being waited for.
                 () -> loadAllEntrySlots(setup));
-        String status = exec("artest space entry-status id " + durableId);
+        EntryStatus status = EntryStatus.forShip(this::exec, durableId);
         assertTrue("ship never entered space via the flight-computer tick (not SETTLED); last status="
                 + status, settled);
 
         // The entry landed in the launch body's OWN cell — the C-1 resolution, matched gen-agnostically.
         assertEquals("entry settled in a different cell than the launch resolver answers", expectedCell,
-                extractString(status, "cellKey"));
-        int slotDim = extractInt(status, "slotDim");
+                status.cellKey);
+        int slotDim = status.slotDim;
         assertTrue("settled slot dim not reported: " + status, slotDim > Integer.MIN_VALUE);
         assertTrue("the settled ship's cell world is not live in a slot; status=" + status
                 + " countAll=" + exec("artest vs ship-count-all " + slotDim),
@@ -207,16 +207,15 @@ public class VSShipEntryE2ETest extends AbstractSharedServerTest {
 
         boolean settled = awaitWithinTicks(SETTLE_TICKS,
                 () -> {
-                    String seen = exec("artest space entry-status id " + durableId);
-                    return seen.contains("\"found\":true")
-                            && "SETTLED".equals(extractString(seen, "state"));
+                    EntryStatus seen = EntryStatus.forShip(this::exec, durableId);
+                    return seen.found && seen.settled();
                 },
                 () -> loadAllEntrySlots(setup));
-        String status = exec("artest space entry-status id " + durableId);
+        EntryStatus status = EntryStatus.forShip(this::exec, durableId);
         assertTrue("precondition: the ship never entered space, so there is nothing to jump; last status="
                 + status, settled);
-        int slotDim = extractInt(status, "slotDim");
-        String originCell = extractString(status, "cellKey");
+        int slotDim = status.slotDim;
+        String originCell = status.cellKey;
         assertTrue("the entered ship's cell world is not live in a slot; status=" + status,
                 loadedShips(slotDim) >= 1);
 

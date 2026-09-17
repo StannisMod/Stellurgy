@@ -7,6 +7,7 @@ import com.github.stannismod.forge.testing.TestTimeouts;
 import org.junit.After;
 import zmaster587.advancedRocketry.test.GameTicks;
 import zmaster587.advancedRocketry.test.EntrySlots;
+import zmaster587.advancedRocketry.test.EntryStatus;
 import zmaster587.advancedRocketry.test.ShipIdentity;
 import zmaster587.advancedRocketry.test.ShipInfo;
 
@@ -135,13 +136,14 @@ public class InterstellarJumpLegE2ETest extends AbstractSharedServerTest {
                 + sx + " " + ABOVE_CEILING_Y + " " + sz).contains("\"ok\":true"));
         exec("artest vs unpark-by-id 0 " + shipId);
 
-        String status = waitForState("SETTLED", null, setup, SETTLE_TICKS, durableId);
+        EntryStatus status = waitForState("SETTLED", null, setup, SETTLE_TICKS, durableId);
         assertTrue("precondition: the ship never entered space, so there is nothing to jump; last="
-                + status, "SETTLED".equals(extractString(status, "state")));
-        int slotDim = extractInt(status, "slotDim");
-        String originCell = extractString(status, "cellKey");
+                + status.raw(), status.settled());
+        int slotDim = status.slotDim;
+        String originCell = status.cellKey;
         Matcher origin = CELL_KEY.matcher(originCell == null ? "" : originCell);
-        assertTrue("entry-status reported no decodable origin cell key: " + status, origin.matches());
+        assertTrue("entry-status reported no decodable origin cell key: " + status.raw(),
+                origin.matches());
         long osx = Long.parseLong(origin.group(1));
         String osy = origin.group(2), osz = origin.group(3);
 
@@ -150,11 +152,11 @@ public class InterstellarJumpLegE2ETest extends AbstractSharedServerTest {
         requireArranged("a one-sector hop must arrive, or nothing below is about distance."
                 + " Fix the scaffolding before reading the far leg.", hopTicks >= 0);
 
-        String afterHop = exec("artest space entry-status id " + durableId);
-        String hopCell = extractString(afterHop, "cellKey");
-        int hopSlot = extractInt(afterHop, "slotDim");
+        EntryStatus afterHop = EntryStatus.forShip(this::exec, durableId);
+        String hopCell = afterHop.cellKey;
+        int hopSlot = afterHop.slotDim;
         Matcher hopOrigin = CELL_KEY.matcher(hopCell == null ? "" : hopCell);
-        assertTrue("no decodable cell key after the hop: " + afterHop, hopOrigin.matches());
+        assertTrue("no decodable cell key after the hop: " + afterHop.raw(), hopOrigin.matches());
 
         // ---- THE SUBJECT: the same ship, the same stack, 537 sectors instead of one. ---------------
         long farTicks = flyTo(Long.parseLong(hopOrigin.group(1)) + INTERSTELLAR_SECTORS,
@@ -193,11 +195,12 @@ public class InterstellarJumpLegE2ETest extends AbstractSharedServerTest {
                 + " nothing: " + fromCell + " -> " + targetCell, !targetCell.equals(fromCell));
 
         long departed = clock();
-        String arrived = waitForState("SETTLED", targetCell, setup, ARRIVAL_TICKS, durableId);
+        EntryStatus arrived = waitForState("SETTLED", targetCell, setup, ARRIVAL_TICKS, durableId);
         long elapsed = clock() - departed;
-        if (!targetCell.equals(extractString(arrived, "cellKey"))) {
+        if (!targetCell.equals(arrived.cellKey)) {
             System.out.println("[interstellar-leg] " + label + " NEVER ARRIVED after " + elapsed
-                    + " ticks; last=" + arrived + " subsystem=" + exec("artest space subsystem-status"));
+                    + " ticks; last=" + arrived.raw()
+                    + " subsystem=" + exec("artest space subsystem-status"));
             return -1L;
         }
         assertEquals("[" + label + "] nothing may still be in transit once the ledger reports arrival",
@@ -217,14 +220,14 @@ public class InterstellarJumpLegE2ETest extends AbstractSharedServerTest {
      * iterates first, so on a stack holding two craft the wait can be satisfied by a ship that never
      * left, and the leg's measured duration would then be somebody else's.
      */
-    private String waitForState(String state, String cell, String setup, int budgetTicks,
-                                String durableId) throws Exception {
-        final String[] status = {""};
+    private EntryStatus waitForState(String state, String cell, String setup, int budgetTicks,
+                                     String durableId) throws Exception {
+        final EntryStatus[] status = new EntryStatus[1];
         GameTicks.until(client(), GameTicks.server(), budgetTicks,
                 () -> {
-                    status[0] = exec("artest space entry-status id " + durableId);
-                    return state.equals(extractString(status[0], "state"))
-                            && (cell == null || cell.equals(extractString(status[0], "cellKey")));
+                    status[0] = EntryStatus.forShip(this::exec, durableId);
+                    return state.equals(status[0].state)
+                            && (cell == null || cell.equals(status[0].cellKey));
                 },
                 () -> loadAllEntrySlots(setup));
         return status[0];

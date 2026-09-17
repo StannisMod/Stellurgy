@@ -5,6 +5,7 @@ import zmaster587.advancedRocketry.test.Events;
 import zmaster587.advancedRocketry.test.ShipReadiness;
 import zmaster587.advancedRocketry.test.GameTicks;
 import zmaster587.advancedRocketry.test.EntrySlots;
+import zmaster587.advancedRocketry.test.EntryStatus;
 import zmaster587.advancedRocketry.test.ShipIdentity;
 import zmaster587.advancedRocketry.test.ShipInfo;
 
@@ -85,18 +86,18 @@ public class VSShipDescentE2ETest extends AbstractSharedServerTest {
         exec("artest vs unpark-by-id 0 " + vsId);
 
         String status = "";
-        final String[] entryStatus = {""};
+        final EntryStatus[] entryStatus = new EntryStatus[1];
         boolean settled = GameTicks.until(client(), GameTicks.server(), SETTLE_TICKS,
                 () -> {
-                    entryStatus[0] = exec("artest space entry-status id " + shipId);
-                    return entryStatus[0].contains("\"found\":true")
-                            && "SETTLED".equals(extractString(entryStatus[0], "state"));
+                    entryStatus[0] = EntryStatus.forShip(this::exec, shipId);
+                    return entryStatus[0].found && entryStatus[0].settled();
                 },
                 () -> loadAllEntrySlots(setup));
         assertTrue("precondition: ship never entered space to descend from; last status="
                 + entryStatus[0], settled);
-        int slotDim = extractInt(entryStatus[0], "slotDim");
-        assertTrue("settled slot dim not reported: " + entryStatus[0], slotDim > Integer.MIN_VALUE);
+        int slotDim = entryStatus[0].slotDim;
+        assertTrue("settled slot dim not reported: " + entryStatus[0].raw(),
+                slotDim > Integer.MIN_VALUE);
 
         // --- Phase 2: DESCEND that settled ship into the overworld. ---
         // CONTROL: the overworld holds no VS ship now (entry cut the source out) — a later "1" is the descent.
@@ -138,7 +139,7 @@ public class VSShipDescentE2ETest extends AbstractSharedServerTest {
 
         // The cut dropped the ship from the ledger at once (it has left the subsystem).
         assertEquals("the descending ship leaves the ledger on the cut", 0,
-                extractInt(exec("artest space entry-status"), "ships"));
+                EntryStatus.wholeLedger(this::exec).ships);
 
         // The crossing re-assembles the ship in the planet's world asynchronously, and production
         // announces when it has: this waits for THAT, by id, instead of sampling the loaded count

@@ -4,6 +4,7 @@ import zmaster587.advancedRocketry.test.Reply;
 import zmaster587.advancedRocketry.test.ShipReadiness;
 import zmaster587.advancedRocketry.test.GameTicks;
 import zmaster587.advancedRocketry.test.EntrySlots;
+import zmaster587.advancedRocketry.test.EntryStatus;
 import zmaster587.advancedRocketry.test.ShipIdentity;
 import zmaster587.advancedRocketry.test.ShipInfo;
 
@@ -110,15 +111,14 @@ public class VSShipAutoTakeoffE2ETest extends AbstractSharedServerTest {
                 reEngage.contains("\"engaged\":true"));
 
         boolean settled = false;
-        final String[] entry = {""};
+        final EntryStatus[] entry = new EntryStatus[1];
         settled = GameTicks.until(client(), GameTicks.server(), CLIMB_TICKS,
                 () -> {
                     // THIS ship's ledger row, not "somebody settled": the bare form reports whichever
                     // row the ledger's iterator hands over first, and a slot the entry stack has
                     // ledgered twice satisfies `ships >= 1` with a neighbour's SETTLED state.
-                    entry[0] = exec("artest space entry-status id " + durableId);
-                    return entry[0].contains("\"found\":true")
-                            && "SETTLED".equals(extractString(entry[0], "state"));
+                    entry[0] = EntryStatus.forShip(this::exec, durableId);
+                    return entry[0].found && entry[0].settled();
                 },
                 () -> loadAllEntrySlots(setup));
         assertTrue("auto-takeoff never climbed the ship into space (not SETTLED); last=" + entry[0],
