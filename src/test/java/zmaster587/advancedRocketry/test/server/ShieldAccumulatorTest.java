@@ -1,5 +1,6 @@
 package zmaster587.advancedRocketry.test.server;
 
+import zmaster587.advancedRocketry.test.ShieldTile;
 import zmaster587.advancedRocketry.test.Reply;
 import org.junit.Test;
 
@@ -52,10 +53,10 @@ public class ShieldAccumulatorTest extends AbstractSharedServerTest {
             chargeIteration(gx, gz);
         }
 
-        String emitter = read(ex, gz);
+        ShieldTile emitter = read(ex, gz);
         assertTrue("emitter behind an accumulator (G-A-E, no cable) never powered — the accumulator "
-                        + "did not bridge generator to emitter as a dual-role store:\n" + emitter,
-                emitter.contains("\"powered\":true"));
+                        + "did not bridge generator to emitter as a dual-role store:\n" + emitter.raw(),
+                emitter.powered());
     }
 
     @Test
@@ -71,12 +72,12 @@ public class ShieldAccumulatorTest extends AbstractSharedServerTest {
             chargeIteration(gx, gz);
         }
 
-        String acc = read(ax, gz);
-        long stored = readStored(acc);
+        ShieldTile acc = read(ax, gz);
+        long stored = acc.shieldStored();
         // 60 iterations of 4000 FE -> shield is 240k of supply; a generator's own buffer is a small
         // fraction of that. The reserve must be genuinely bulk, not a smoothing buffer.
         assertTrue("accumulator failed to build a bulk reserve (stored=" + stored + "): it is not "
-                        + "storing the network's surplus:\n" + acc, stored > 100_000L);
+                        + "storing the network's surplus:\n" + acc.raw(), stored > 100_000L);
     }
 
     @Test
@@ -94,7 +95,7 @@ public class ShieldAccumulatorTest extends AbstractSharedServerTest {
         for (int i = 0; i < 80; i++) {
             chargeIteration(gx, gz);
         }
-        long reserveBefore = readStored(read(ax, gz));
+        long reserveBefore = read(ax, gz).shieldStored();
         assertTrue("precondition: accumulator did not charge (stored=" + reserveBefore + ")",
                 reserveBefore > 150_000L);
 
@@ -111,11 +112,11 @@ public class ShieldAccumulatorTest extends AbstractSharedServerTest {
             exec("artest shield tick " + DIM);
         }
 
-        String emitter = read(ax, ez);
-        assertTrue("emitter did not power from the accumulator's reserve:\n" + emitter,
-                emitter.contains("\"powered\":true"));
+        ShieldTile emitter = read(ax, ez);
+        assertTrue("emitter did not power from the accumulator's reserve:\n" + emitter.raw(),
+                emitter.powered());
 
-        long reserveAfter = readStored(read(ax, gz));
+        long reserveAfter = read(ax, gz).shieldStored();
         // Conserved: the coil intakes at most a few thousand per tick, so ~26 drain ticks cost well
         // under 100k; the reserve stays comfortably above 120k. The leaking bug would have emptied a
         // 150k+ reserve within a handful of ticks.
@@ -131,8 +132,8 @@ public class ShieldAccumulatorTest extends AbstractSharedServerTest {
         exec("artest shield tick " + DIM);
     }
 
-    private String read(int x, int z) throws Exception {
-        return exec("artest shield read " + DIM + " " + x + " " + Y + " " + z);
+    private ShieldTile read(int x, int z) throws Exception {
+        return ShieldTile.at(cmd -> exec(cmd), DIM, x, Y, z);
     }
 
     private void place(String block, int x, int z) throws Exception {

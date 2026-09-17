@@ -1,5 +1,6 @@
 package zmaster587.advancedRocketry.test.server;
 
+import zmaster587.advancedRocketry.test.ShieldTile;
 import zmaster587.advancedRocketry.test.Reply;
 import org.junit.Test;
 
@@ -45,8 +46,8 @@ public class ShieldStrikeAbsorptionTest extends AbstractSharedServerTest {
         for (int i = 0; i < 15; i++) {
             chargeIteration(gx, gz);
         }
-        assertTrue("emitter never powered:\n" + read(ex, gz), read(ex, gz).contains("\"powered\":true"));
-        long storedBefore = readStored(read(ex, gz));
+        assertTrue("emitter never powered:\n" + read(ex, gz), read(ex, gz).powered());
+        long storedBefore = read(ex, gz).shieldStored();
 
         // A RADIANT beam of 2000 declared energy, fired from outside the +Z shell straight inward. At the
         // default absorption rate 1.0, kind multiplier 1.0 (bias 0.5) and Tier 0 efficiency, cost == 2000
@@ -59,7 +60,7 @@ public class ShieldStrikeAbsorptionTest extends AbstractSharedServerTest {
                 + result, result.contains("\"fullyAbsorbed\":true"));
         assertTrue("expected zero residual on a full absorb:\n" + result, result.contains("\"residual\":0"));
 
-        long storedAfter = readStored(read(ex, gz));
+        long storedAfter = read(ex, gz).shieldStored();
         long drop = storedBefore - storedAfter;
         // Corroborate energy actually moved (anti false-green), and that a cheap strike spent only a
         // fraction — NOT the whole reserve (that would be the graceful-penetration case, not a full pay).
@@ -85,8 +86,8 @@ public class ShieldStrikeAbsorptionTest extends AbstractSharedServerTest {
         for (int i = 0; i < 15; i++) {
             chargeIteration(gx, gz);
         }
-        assertTrue("emitter never powered:\n" + read(ex, gz), read(ex, gz).contains("\"powered\":true"));
-        long storedBefore = readStored(read(ex, gz));
+        assertTrue("emitter never powered:\n" + read(ex, gz), read(ex, gz).powered());
+        long storedBefore = read(ex, gz).shieldStored();
 
         // A strike whose cost is triple the stored charge: the shield spends all it has, the remainder
         // passes, and the coil drops toward zero (graceful penetration, "shields fall").
@@ -106,7 +107,7 @@ public class ShieldStrikeAbsorptionTest extends AbstractSharedServerTest {
                 + storedBefore + "): an overmatching strike must drain what the coil holds.",
                 absorbed > storedBefore / 2L && absorbed <= storedBefore);
 
-        long storedAfter = readStored(read(ex, gz));
+        long storedAfter = read(ex, gz).shieldStored();
         assertTrue("the coil was not drained toward zero by the overmatching strike (after=" + storedAfter
                 + " before=" + storedBefore + "):\n" + result, storedAfter < storedBefore / 4L);
     }
@@ -118,8 +119,8 @@ public class ShieldStrikeAbsorptionTest extends AbstractSharedServerTest {
                 + " 0 0 -1 10 " + impactEnergy + " " + kind);
     }
 
-    private String read(int x, int z) throws Exception {
-        return exec("artest shield read " + DIM + " " + x + " " + Y + " " + z);
+    private ShieldTile read(int x, int z) throws Exception {
+        return ShieldTile.at(cmd -> exec(cmd), DIM, x, Y, z);
     }
 
     private void place(String block, int x, int z) throws Exception {

@@ -7,6 +7,7 @@ import org.junit.runners.MethodSorters;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import zmaster587.advancedRocketry.test.ShieldTile;
 import zmaster587.advancedRocketry.test.Events;
 import zmaster587.advancedRocketry.test.Reply;
 import zmaster587.advancedRocketry.test.ShipInfo;
@@ -158,12 +159,12 @@ public class VSShipFrameShieldE2ETest extends AbstractSharedVsClientE2ETest {
         // Check 3 (before pushing, while the ship is roughly settled): charge the emitter and deflect an
         // inbound arrow off the ship-framed shell. Re-read the world centre immediately so the arrow is
         // aimed at where the shell actually is this instant.
-        String read = exec("artest shield read 0 " + spX + " " + spY + " " + spZ);
-        int radius = (int) f(read, "radius");
+        ShieldTile shell = ShieldTile.at(this::exec, 0, spX, spY, spZ);
+        int radius = shell.radius();
         exec("artest shield charge 0 " + spX + " " + spY + " " + spZ + " 40000");
-        String reRead = exec("artest shield read 0 " + spX + " " + spY + " " + spZ);
-        assertTrue("charged emitter did not power:\n" + reRead, reRead.contains("\"powered\":true"));
-        double cx = f(reRead, "worldX"), cy = f(reRead, "worldY"), cz = f(reRead, "worldZ");
+        ShieldTile reRead = ShieldTile.at(this::exec, 0, spX, spY, spZ);
+        assertTrue("charged emitter did not power:\n" + reRead.raw(), reRead.powered());
+        double cx = reRead.worldX(), cy = reRead.worldY(), cz = reRead.worldZ();
 
         double sx = cx, sy = cy, sz = cz + radius; // on the +Z shell, aimed inward at the centre
         String spawn = exec("artest entity spawn 0 " + sx + " " + sy + " " + sz + " minecraft:arrow");
@@ -173,7 +174,7 @@ public class VSShipFrameShieldE2ETest extends AbstractSharedVsClientE2ETest {
         exec("artest tile force-tick 0 " + spX + " " + spY + " " + spZ + " 1");
         String arrow = exec("artest entity info 0 " + arrowId);
         // Re-read the centre once more; the deflection is measured against where the shell is now.
-        double ncx = f(exec("artest shield read 0 " + spX + " " + spY + " " + spZ), "worldX");
+        double ncx = ShieldTile.at(this::exec, 0, spX, spY, spZ).worldX();
         double dcx = ncx - cx; // how far the hull drifted while we set this up
         // Survival first, then geometry: an absorbed arrow is a shield interaction too, but the
         // kinetic path must REFLECT, and a dead arrow has no position to measure. (This assertion

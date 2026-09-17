@@ -4,6 +4,7 @@ import org.junit.Test;
 
 import java.util.List;
 
+import zmaster587.advancedRocketry.test.ShieldTile;
 import zmaster587.advancedRocketry.test.FixtureSite;
 
 import static org.junit.Assert.assertTrue;
@@ -42,10 +43,10 @@ public class ShieldTwoBlockFloorTest extends AbstractSharedServerTest {
 
         chargeAndSolve(gx, gz);
 
-        String emitter = exec("artest shield read " + DIM + " " + ex + " " + Y + " " + ez);
+        ShieldTile emitter = ShieldTile.at(cmd -> exec(cmd), DIM, ex, Y, ez);
         assertTrue("adjacent generator+emitter (no cable) failed to power — the cable-less edge did not "
-                        + "carry shield energy:\n" + emitter,
-                emitter.contains("\"powered\":true"));
+                        + "carry shield energy:\n" + emitter.raw(),
+                emitter.powered());
     }
 
     @Test
@@ -58,10 +59,10 @@ public class ShieldTwoBlockFloorTest extends AbstractSharedServerTest {
 
         chargeAndSolve(gx, gz);
 
-        String emitter = exec("artest shield read " + DIM + " " + ex + " " + Y + " " + ez);
+        ShieldTile emitter = ShieldTile.at(cmd -> exec(cmd), DIM, ex, Y, ez);
         assertTrue("disconnected emitter (one-block gap, no cable) powered anyway — a spurious edge is "
-                        + "carrying energy across the gap:\n" + emitter,
-                emitter.contains("\"powered\":false"));
+                        + "carrying energy across the gap:\n" + emitter.raw(),
+                !emitter.powered());
     }
 
     /** Feed the generator FE and run one network solve per iteration. */

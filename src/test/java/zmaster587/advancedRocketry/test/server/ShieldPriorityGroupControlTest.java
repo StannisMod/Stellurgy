@@ -6,6 +6,7 @@ import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import zmaster587.advancedRocketry.test.ShieldTile;
 import zmaster587.advancedRocketry.test.Reply;
 import zmaster587.advancedRocketry.test.FixtureSite;
 
@@ -48,7 +49,7 @@ public class ShieldPriorityGroupControlTest extends AbstractSharedServerTest {
 
         assertEquals("group priority must be pushed into member emitter 1", 7, readPriority(e1, z));
         assertEquals("group priority must be pushed into member emitter 2", 7, readPriority(e2, z));
-        assertEquals("the emitter must report the group that lists it", "aft", readString(read(e1, z), "group"));
+        assertEquals("the emitter must report the group that lists it", "aft", read(e1, z).group());
 
         // One edit retunes the whole group — the D134-5 point ("all power to the rear shields").
         assertTrue(exec(group(console, z, "priority aft 3")).contains("\"ok\":true"));
@@ -61,7 +62,7 @@ public class ShieldPriorityGroupControlTest extends AbstractSharedServerTest {
                 3, readPriority(e1, z));
         assertEquals("deleting the group silently retuned emitter 2 — the setting is emitter-owned",
                 3, readPriority(e2, z));
-        assertEquals("a deleted group must no longer own the emitter", "", readString(read(e1, z), "group"));
+        assertEquals("a deleted group must no longer own the emitter", "", read(e1, z).group());
     }
 
     @Test
@@ -108,7 +109,7 @@ public class ShieldPriorityGroupControlTest extends AbstractSharedServerTest {
 
         assertTrue(exec(group(console, z, "create hull 4")).contains("\"ok\":true"));
         assertTrue(exec(group(console, z, "assign hull " + emitter + " " + Y + " " + z)).contains("\"ok\":true"));
-        String codeBefore = readString(read(emitter, z), "accessCode");
+        String codeBefore = read(emitter, z).accessCode();
 
         String rotated = exec("artest shield rotate-code " + DIM + " " + console + " " + Y + " " + z);
         assertTrue("rotation failed:\n" + rotated, rotated.contains("\"ok\":true"));
@@ -117,12 +118,12 @@ public class ShieldPriorityGroupControlTest extends AbstractSharedServerTest {
         assertFalse("rotation produced the same code as before (" + newCode + ") — a leaked code would "
                 + "still work", newCode.equals(codeBefore));
 
-        String afterRotation = read(emitter, z);
+        ShieldTile afterRotation = read(emitter, z);
         assertEquals("the new credential was not written to the emitter", newCode,
-                readString(afterRotation, "accessCode"));
+                afterRotation.accessCode());
         // Layer 3 (credential) and Layer 2/4 (grouping) are orthogonal: rotating one must not disturb the other.
         assertEquals("rotating the access code disturbed the emitter's group membership",
-                "hull", readString(afterRotation, "group"));
+                "hull", afterRotation.group());
         assertEquals("rotating the access code disturbed the redistribution priority",
                 4, readPriority(emitter, z));
     }
@@ -131,15 +132,12 @@ public class ShieldPriorityGroupControlTest extends AbstractSharedServerTest {
         return "artest shield group " + DIM + " " + x + " " + Y + " " + z + " " + opAndArgs;
     }
 
-    private String read(int x, int z) throws Exception {
-        return exec("artest shield read " + DIM + " " + x + " " + Y + " " + z);
+    private ShieldTile read(int x, int z) throws Exception {
+        return ShieldTile.at(cmd -> exec(cmd), DIM, x, Y, z);
     }
 
     private int readPriority(int x, int z) throws Exception {
-        String json = read(x, z);
-        Reply mReply = Reply.of(json);
-        assertTrue("no priority in probe response: " + json, mReply.has("priority"));
-        return mReply.integer("priority");
+        return read(x, z).priority();
     }
 
     private static String readString(String json, String key) {

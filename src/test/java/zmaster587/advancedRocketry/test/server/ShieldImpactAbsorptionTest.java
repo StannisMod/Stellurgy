@@ -1,5 +1,6 @@
 package zmaster587.advancedRocketry.test.server;
 
+import zmaster587.advancedRocketry.test.ShieldTile;
 import zmaster587.advancedRocketry.test.Reply;
 import org.junit.Test;
 
@@ -47,10 +48,10 @@ public class ShieldImpactAbsorptionTest extends AbstractSharedServerTest {
             exec("artest tile force-tick " + DIM + " " + gx + " " + Y + " " + gz + " 1");
             exec("artest shield tick " + DIM);
         }
-        String before = read(ex, gz);
-        assertTrue("emitter never powered — cannot test absorption:\n" + before,
-                before.contains("\"powered\":true"));
-        long storedBefore = readStored(before);
+        ShieldTile before = read(ex, gz);
+        assertTrue("emitter never powered — cannot test absorption:\n" + before.raw(),
+                before.powered());
+        long storedBefore = before.shieldStored();
         assertTrue("precondition: coil not charged above one bolt's cost (stored=" + storedBefore + ")",
                 storedBefore > ENERGY_PROJECTILE_COST + 5_000L);
 
@@ -68,7 +69,7 @@ public class ShieldImpactAbsorptionTest extends AbstractSharedServerTest {
                         + "cannot block a hit larger than its per-tick intake:\n" + boltInfo,
                 boltInfo.contains("\"isAlive\":false") || boltInfo.contains("\"isDead\":true"));
 
-        long storedAfter = readStored(read(ex, gz));
+        long storedAfter = read(ex, gz).shieldStored();
         long drop = storedBefore - storedAfter;
         // Corroborate the bolt died to the shield, not to some incidental collision: the coil must have
         // actually paid roughly the projectile's cost. (Guards against a false green where the bolt
@@ -99,17 +100,17 @@ public class ShieldImpactAbsorptionTest extends AbstractSharedServerTest {
         for (int i = 0; i < 15; i++) {
             chargeIteration(gx, gz);
         }
-        assertTrue("emitter never powered:\n" + read(ex, gz), read(ex, gz).contains("\"powered\":true"));
+        assertTrue("emitter never powered:\n" + read(ex, gz), read(ex, gz).powered());
 
         int px = ex + 2, pz = gz; // inside the emitter's radius-4 field
         place("minecraft:glass", px, pz);
-        long storedBefore = readStored(read(ex, gz));
+        long storedBefore = read(ex, gz).shieldStored();
         exec("artest shield explode " + DIM + " " + (px + 0.5D) + " " + (Y + 1.5D) + " " + (pz + 0.5D) + " 4");
 
         String shieldedBlock = exec("artest block at " + DIM + " " + px + " " + Y + " " + pz);
         assertTrue("a glass block inside a powered shield was destroyed by an explosion — the field did "
                         + "not protect it:\n" + shieldedBlock, shieldedBlock.contains("minecraft:glass"));
-        long storedAfter = readStored(read(ex, gz));
+        long storedAfter = read(ex, gz).shieldStored();
         assertTrue("shield energy did not drop while absorbing the explosion (before=" + storedBefore
                         + " after=" + storedAfter + "): the block may have survived for another reason.",
                 storedAfter < storedBefore);
@@ -124,7 +125,7 @@ public class ShieldImpactAbsorptionTest extends AbstractSharedServerTest {
         for (int i = 0; i < 15; i++) {
             chargeIteration(gx, gz);
         }
-        assertTrue("emitter never powered:\n" + read(ex, gz), read(ex, gz).contains("\"powered\":true"));
+        assertTrue("emitter never powered:\n" + read(ex, gz), read(ex, gz).powered());
 
         double centerX = ex + 0.5D, centerY = Y + 0.5D, centerZ = gz + 0.5D;
         double radius = 4.0D;
@@ -148,8 +149,8 @@ public class ShieldImpactAbsorptionTest extends AbstractSharedServerTest {
                         + "): it was not deflected back outside the shield:\n" + info, dist > radius);
     }
 
-    private String read(int x, int z) throws Exception {
-        return exec("artest shield read " + DIM + " " + x + " " + Y + " " + z);
+    private ShieldTile read(int x, int z) throws Exception {
+        return ShieldTile.at(cmd -> exec(cmd), DIM, x, Y, z);
     }
 
     private void place(String block, int x, int z) throws Exception {

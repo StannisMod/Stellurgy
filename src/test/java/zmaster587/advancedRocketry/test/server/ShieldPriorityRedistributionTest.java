@@ -1,5 +1,6 @@
 package zmaster587.advancedRocketry.test.server;
 
+import zmaster587.advancedRocketry.test.ShieldTile;
 import zmaster587.advancedRocketry.test.Reply;
 import org.junit.Test;
 
@@ -62,15 +63,15 @@ public class ShieldPriorityRedistributionTest extends AbstractSharedServerTest {
 
     private void assertPoweredAndStarved(String fedName, int fedX, String starvedName, int starvedX, int z)
             throws Exception {
-        String fed = read(fedX, z);
-        String starved = read(starvedX, z);
-        long fedStored = readStored(fed);
-        long starvedStored = readStored(starved);
+        ShieldTile fed = read(fedX, z);
+        ShieldTile starved = read(starvedX, z);
+        long fedStored = fed.shieldStored();
+        long starvedStored = starved.shieldStored();
         assertTrue("the higher-priority emitter " + fedName + " was not powered under the deficit — the "
-                + "scarce supply did not go to it first:\n" + fed, fed.contains("\"powered\":true"));
+                + "scarce supply did not go to it first:\n" + fed.raw(), fed.powered());
         assertTrue("the lower-priority emitter " + starvedName + " should starve while " + fedName
                 + " is fed (fed=" + fedStored + " starved=" + starvedStored + "): priority did not "
-                + "redistribute the deficit:\n" + starved, fedStored > starvedStored + 15_000L);
+                + "redistribute the deficit:\n" + starved.raw(), fedStored > starvedStored + 15_000L);
     }
 
     private void chargeBoth(int gx, int gz, int iterations) throws Exception {
@@ -87,8 +88,8 @@ public class ShieldPriorityRedistributionTest extends AbstractSharedServerTest {
                 resp.contains("\"priority\":" + value));
     }
 
-    private String read(int x, int z) throws Exception {
-        return exec("artest shield read " + DIM + " " + x + " " + Y + " " + z);
+    private ShieldTile read(int x, int z) throws Exception {
+        return ShieldTile.at(cmd -> exec(cmd), DIM, x, Y, z);
     }
 
     private void place(String block, int x, int z) throws Exception {
