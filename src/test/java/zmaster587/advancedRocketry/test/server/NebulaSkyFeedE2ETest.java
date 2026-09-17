@@ -5,6 +5,10 @@ import com.github.stannismod.forge.testing.junit.AbstractHeadlessServerTest;
 import org.junit.After;
 import org.junit.Test;
 
+import zmaster587.advancedRocketry.test.NebulaSearch;
+import zmaster587.advancedRocketry.test.Reply;
+import zmaster587.advancedRocketry.test.SkyNebulae;
+
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
@@ -36,16 +40,10 @@ public class NebulaSkyFeedE2ETest extends AbstractHeadlessServerTest {
         }
     }
 
-    private static long field(String json, String name) {
-        String key = "\"" + name + "\":";
-        int at = json.indexOf(key);
-        assertTrue("probe reply has no field " + name + ": " + json, at >= 0);
-        int from = at + key.length();
-        int to = from;
-        while (to < json.length() && "-0123456789".indexOf(json.charAt(to)) >= 0) {
-            to++;
-        }
-        return Long.parseLong(json.substring(from, to));
+    /** Walk out for a cell with a cloud in its sky, refusing a walk that found none. */
+    private NebulaSearch findACloud() throws Exception {
+        return NebulaSearch.walk(this::exec, 512, 64)
+                .requireFound("a dense galaxy must have a cloud somewhere in it");
     }
 
     @Test
@@ -54,17 +52,16 @@ public class NebulaSkyFeedE2ETest extends AbstractHeadlessServerTest {
         assertTrue("the procedural generator must install: " + installed,
                 installed.contains("\"ok\":true"));
 
-        String found = exec("artest space nebula-find 512 64");
-        assertTrue("a dense galaxy must have a cloud somewhere in it: " + found,
-                found.contains("\"found\":true"));
-
-        long sectorX = field(found, "sectorX");
-        String feed = exec("artest space nebulae " + sectorX + " 0 0");
-        assertTrue("the cell the finder named must report its sky: " + feed, feed.contains("\"ok\":true"));
-        assertTrue("and that sky must hold the cloud the finder found: " + feed,
-                field(feed, "drawn") >= 1);
-        assertTrue("a cloud that is drawn must cover something of the sky: " + feed,
-                feed.contains("\"angularRadius\":"));
+        SkyNebulae feed = SkyNebulae.at(this::exec, findACloud().sectorX(), 0, 0);
+        assertTrue("and that sky must hold the cloud the finder found: " + feed.raw(),
+                feed.drawn >= 1);
+        // Read as the CLOUDS. What stood here asserted that the reply contains the characters
+        // `"angularRadius":`, which is satisfied by the field being present at any value — the
+        // claim is that a drawn cloud covers something, so it is about the value.
+        for (SkyNebulae.Cloud cloud : feed.clouds()) {
+            assertTrue("a cloud that is drawn must cover something of the sky: " + cloud.raw(),
+                    cloud.angularRadius > 0d);
+        }
     }
 
     @Test
@@ -75,24 +72,21 @@ public class NebulaSkyFeedE2ETest extends AbstractHeadlessServerTest {
         String reset = exec("artest space gen-reset");
         assertTrue("the default generator must be restorable: " + reset, reset.contains("\"ok\":true"));
 
-        String feed = exec("artest space nebulae 0 0 0");
-        assertTrue("the probe must still answer: " + feed, feed.contains("\"ok\":true"));
-        assertEquals("a universe with no clusters must seat no clouds: " + feed, 0L,
-                field(feed, "seated"));
-        assertEquals("and must draw none: " + feed, 0L, field(feed, "drawn"));
+        SkyNebulae feed = SkyNebulae.at(this::exec, 0, 0, 0);
+        assertEquals("a universe with no clusters must seat no clouds: " + feed.raw(),
+                0, feed.seated);
+        assertEquals("and must draw none: " + feed.raw(), 0, feed.drawn);
     }
 
-    /** The value of a decimal JSON field in a probe reply. */
+    /**
+     * A decimal field of the {@code space extinction} reply — which has no reader of its own yet
+     * (one class reads it) and is read by NAME rather than by scanning the text for digits.
+     */
     private static double decimal(String json, String name) {
-        String key = "\"" + name + "\":";
-        int at = json.indexOf(key);
-        assertTrue("probe reply has no field " + name + ": " + json, at >= 0);
-        int from = at + key.length();
-        int to = from;
-        while (to < json.length() && "-+.eE0123456789".indexOf(json.charAt(to)) >= 0) {
-            to++;
-        }
-        return Double.parseDouble(json.substring(from, to));
+        double value = Reply.of("artest space extinction", json).number(name);
+        assertTrue("probe reply has no numeric field " + name + ": " + json,
+                !Double.isNaN(value));
+        return value;
     }
 
     @Test
@@ -104,17 +98,16 @@ public class NebulaSkyFeedE2ETest extends AbstractHeadlessServerTest {
         assertTrue("the procedural generator must install: " + installed,
                 installed.contains("\"ok\":true"));
 
-        String found = exec("artest space nebula-find 512 64");
-        assertTrue("a dense galaxy must have a cloud somewhere in it: " + found,
-                found.contains("\"found\":true"));
+        NebulaSearch found = findACloud();
         // A sight line THROUGH the cloud's core: from two radii short of its centre to two radii
         // past it, along X. Built from where the generator says the cloud IS — the first version of
         // this used the cell the finder was standing in, which was the origin, so the "line" had
-        // zero length and measured nothing.
-        long centreX = field(found, "centreX");
-        long centreY = field(found, "centreY");
-        long centreZ = field(found, "centreZ");
-        long radius = field(found, "radiusCells");
+        // zero length and measured nothing. The reader refuses an absent centre for exactly that
+        // reason: a missing coordinate here builds the zero-length line back.
+        long centreX = found.centreX();
+        long centreY = found.centreY();
+        long centreZ = found.centreZ();
+        long radius = found.radiusCells();
         String near = (centreX - 2 * radius) + " " + centreY + " " + centreZ;
         String far = (centreX + 2 * radius) + " " + centreY + " " + centreZ;
 
@@ -141,17 +134,16 @@ public class NebulaSkyFeedE2ETest extends AbstractHeadlessServerTest {
         String installed = exec(GEN_INSTALL);
         assertTrue("the procedural generator must install: " + installed,
                 installed.contains("\"ok\":true"));
-        String found = exec("artest space nebula-find 512 64");
-        assertTrue("a dense galaxy must have a cloud somewhere in it: " + found,
-                found.contains("\"found\":true"));
+        NebulaSearch found = findACloud();
         // A sight line THROUGH the cloud's core: from two radii short of its centre to two radii
         // past it, along X. Built from where the generator says the cloud IS — the first version of
         // this used the cell the finder was standing in, which was the origin, so the "line" had
-        // zero length and measured nothing.
-        long centreX = field(found, "centreX");
-        long centreY = field(found, "centreY");
-        long centreZ = field(found, "centreZ");
-        long radius = field(found, "radiusCells");
+        // zero length and measured nothing. The reader refuses an absent centre for exactly that
+        // reason: a missing coordinate here builds the zero-length line back.
+        long centreX = found.centreX();
+        long centreY = found.centreY();
+        long centreZ = found.centreZ();
+        long radius = found.radiusCells();
         String near = (centreX - 2 * radius) + " " + centreY + " " + centreZ;
         String far = (centreX + 2 * radius) + " " + centreY + " " + centreZ;
 
@@ -181,12 +173,9 @@ public class NebulaSkyFeedE2ETest extends AbstractHeadlessServerTest {
         assertTrue("the procedural generator must install: " + installed,
                 installed.contains("\"ok\":true"));
 
-        String found = exec("artest space nebula-find 512 64");
-        assertTrue("a dense galaxy must have a cloud somewhere in it: " + found,
-                found.contains("\"found\":true"));
-        String feed = exec("artest space nebulae " + field(found, "sectorX") + " 0 0");
+        SkyNebulae feed = SkyNebulae.at(this::exec, findACloud().sectorX(), 0, 0);
 
-        assertTrue("what is drawn may never exceed what is seated: " + feed,
-                field(feed, "drawn") <= field(feed, "seated"));
+        assertTrue("what is drawn may never exceed what is seated: " + feed.raw(),
+                feed.drawn <= feed.seated);
     }
 }

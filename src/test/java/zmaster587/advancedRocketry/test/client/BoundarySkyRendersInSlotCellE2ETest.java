@@ -2,7 +2,9 @@ package zmaster587.advancedRocketry.test.client;
 
 import com.google.gson.JsonObject;
 import zmaster587.advancedRocketry.client.render.planet.ApparentSize;
+import zmaster587.advancedRocketry.test.NebulaSearch;
 import zmaster587.advancedRocketry.test.Reply;
+import zmaster587.advancedRocketry.test.SkyNebulae;
 import zmaster587.advancedRocketry.test.PlayerState;
 import zmaster587.advancedRocketry.test.CellInfo;
 import zmaster587.advancedRocketry.test.Events;
@@ -617,12 +619,11 @@ public class BoundarySkyRendersInSlotCellE2ETest extends AbstractSharedClientE2E
             String gen = exec("artest space gen-install 0.9 8");
             assertTrue("the procedural generator must install: " + gen, gen.contains("\"ok\":true"));
 
-            String found = exec("artest space nebula-find 512 64");
-            assertTrue("the generator must be able to name a cell with a cloud in reach: " + found,
-                    found.contains("\"found\":true"));
-            Reply sectorMReply = Reply.of(found);
-            assertTrue("the find must report the cell it found: " + found, sectorMReply.has("sectorX"));
-            String cloudCell = sectorMReply.text("sectorX") + " 0 0";
+            // The reader refuses a walk that found nothing, and refuses to answer a sector for one
+            // — which is what the two checks this replaces each stood for.
+            NebulaSearch found = NebulaSearch.walk(this::exec, 512, 64)
+                    .requireFound("the generator must be able to name a cell with a cloud in reach");
+            String cloudCell = found.sectorX() + " 0 0";
 
             String settle = exec("artest space ledger-settle " + cloudCell + " 0");
             assertTrue("ledger-settle must succeed: " + settle, settle.contains("\"ok\":true"));
@@ -632,12 +633,10 @@ public class BoundarySkyRendersInSlotCellE2ETest extends AbstractSharedClientE2E
             int slotDim = Integer.parseInt(boundMReply.text(BOUND_DIM));
 
             // The server's own answer for that cell, as the cross-side oracle: what it will send.
-            String feed = exec("artest space nebulae " + cloudCell);
-            Reply drawnMReply = Reply.of(feed);
-            assertTrue("the probe must report the cell's sky: " + feed, drawnMReply.has("drawn"));
-            int serverClouds = drawnMReply.integer("drawn");
-            assertTrue("the cell the finder chose must actually have a cloud in its sky: " + feed,
-                    serverClouds >= 1);
+            SkyNebulae feed = SkyNebulae.at(this::exec, found.sectorX(), 0, 0);
+            int serverClouds = feed.drawn;
+            assertTrue("the cell the finder chose must actually have a cloud in its sky: "
+                    + feed.raw(), serverClouds >= 1);
 
             exec("time set 18000");
             long cloudMark = clientMark();
