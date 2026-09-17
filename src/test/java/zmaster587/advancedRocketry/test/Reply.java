@@ -95,6 +95,36 @@ public final class Reply {
         return (int) value;
     }
 
+    /**
+     * {@code field} as a long, refusing when the reply does not carry one.
+     *
+     * <p>Not {@code (long) number(field)}, and both halves of that matter. An ABSENT field answers
+     * {@code NaN} there, and {@code (long) Double.NaN} is {@code 0} — so a field the producer
+     * renamed reads as a bank holding nothing, a drive costing nothing, a clock at tick zero. And
+     * an energy bank, a capacity or a world clock outgrows an {@code int}, so {@link #integer}
+     * cannot carry one either: it truncates at {@code 2^31} without saying so.</p>
+     *
+     * <p>The digits are read as a long where the producer wrote a whole number, and only a decimal
+     * rendering falls through to {@code double} — which is where a long would lose its last digits
+     * anyway.</p>
+     */
+    public long longInteger(String field) {
+        String value = primitiveOf(field);
+        if (value == null) {
+            throw new AssertionError(command + " did not report `" + field + "`: " + raw);
+        }
+        try {
+            return Long.parseLong(value.trim());
+        } catch (NumberFormatException notAWholeNumber) {
+            double asDouble = number(field);
+            if (Double.isNaN(asDouble)) {
+                throw new AssertionError(command + "'s `" + field + "` is `" + value + "`, which is"
+                        + " not a number: " + raw);
+            }
+            return (long) asDouble;
+        }
+    }
+
     /** {@code field} as an int, or {@code fallback} when absent. */
     public int integerOr(String field, int fallback) {
         double value = number(field);

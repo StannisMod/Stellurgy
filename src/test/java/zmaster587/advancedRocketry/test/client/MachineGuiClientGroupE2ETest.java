@@ -20,6 +20,7 @@ import java.util.regex.Pattern;
 
 import zmaster587.advancedRocketry.test.Plot;
 import zmaster587.advancedRocketry.test.RocketList;
+import zmaster587.advancedRocketry.test.TelescopeScan;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
@@ -101,13 +102,6 @@ public class MachineGuiClientGroupE2ETest extends AbstractSharedClientE2ETest {
     private static final String SOURCE_COUNT = "source";
     private static final String TARGET = "target";
     private static final String ARMED = "armed";
-
-    // Observatory region-scan probe fields.
-    private static final String TELESCOPE_ORIGIN = "origin";
-    private static final String TELESCOPE_AIM_DISTANCE = "aimDistance";
-    /** What one step of the aim is worth in cells — the aim is counted in star territories. */
-    private static final String TELESCOPE_STEP_CELLS = "stepCells";
-    private static final String TELESCOPE_ADDRESSES = "addresses";
 
     // Railgun probe fields.
     private static final String FIRED = "fired";
@@ -672,11 +666,11 @@ public class MachineGuiClientGroupE2ETest extends AbstractSharedClientE2ETest {
         scenario().requireArranged("could not put a crystal in the observatory: " + crystal,
                 crystal.contains("\"ok\":true"));
 
-        String before = exec("artest telescope info " + where);
-        scenario().requireArranged("the observatory's world must have a galactic address: " + before,
-                before.contains("\"origin\":\""));
-        String[] home = readGroup(before, TELESCOPE_ORIGIN).split("_");
-        scenario().record("origin", readGroup(before, TELESCOPE_ORIGIN));
+        // The reader REFUSES a world with no galactic address, so the arrangement check that used to
+        // stand here — a `contains` on the rendered `"origin":"` — is the read itself.
+        TelescopeScan before = TelescopeScan.at(this::exec, where);
+        long[] home = before.originSectors();
+        scenario().record("origin", before.originCellKey());
 
         scenario().arranging("open the observatory and switch to its region-scan tab");
         String screen = openMachineGui(at);
@@ -694,18 +688,18 @@ public class MachineGuiClientGroupE2ETest extends AbstractSharedClientE2ETest {
         bot().clickButtonById(5);
         bot().waitTicks(15);
 
-        String aimed = exec("artest telescope info " + where);
-        long aimDistance = readInt(aimed, TELESCOPE_AIM_DISTANCE);
-        assertTrue("clicking the distance button twice must move the aim out from 1: " + aimed,
+        TelescopeScan aimed = TelescopeScan.at(this::exec, where);
+        long aimDistance = aimed.aimDistance;
+        assertTrue("clicking the distance button twice must move the aim out from 1: " + aimed.raw(),
                 aimDistance > 1);
 
         // Put a system where the operator has it pointed — the default aim is +X, and the distance is
         // whatever his clicks produced. The aim is counted in STEPS of one star's territory, so the
         // cell it lands on is that many strides out; the seat is offset inside the territory, since
         // what a look must find is the system that OWNS the cell and not a star standing on it.
-        long stepCells = readInt(aimed, TELESCOPE_STEP_CELLS);
+        long stepCells = aimed.stepCells;
         String system = exec("artest telescope system "
-                + (Long.parseLong(home[0]) + aimDistance * stepCells + 13L)
+                + (home[0] + aimDistance * stepCells + 13L)
                 + " " + home[1] + " " + home[2]);
         scenario().requireArranged("could not place a system to be found: " + system,
                 system.contains("\"ok\":true"));
@@ -738,10 +732,10 @@ public class MachineGuiClientGroupE2ETest extends AbstractSharedClientE2ETest {
                 "carrying a non-zero discovery count",
                 "a survey driven entirely from the GUI must resolve at least one look into a"
                         + " discovery before the crystal can hold an address", 400);
-        String done = exec("artest telescope info " + where);
-        assertTrue("a survey driven entirely from the GUI left the crystal empty: " + done
+        TelescopeScan done = TelescopeScan.at(this::exec, where);
+        assertTrue("a survey driven entirely from the GUI left the crystal empty: " + done.raw()
                         + " surveySteps=" + events.since(scanMark, "region_scan_advanced"),
-                readInt(done, TELESCOPE_ADDRESSES) >= 1);
+                done.addressesOnCrystal() >= 1);
 
         bot().closeScreen();
     }

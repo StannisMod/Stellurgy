@@ -8,6 +8,7 @@ import org.junit.Test;
 import zmaster587.advancedRocketry.test.RealizedBody;
 import zmaster587.advancedRocketry.test.FixtureSite;
 import zmaster587.advancedRocketry.test.Reply;
+import zmaster587.advancedRocketry.test.TelescopeScan;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
@@ -152,15 +153,16 @@ public class Tier1AimsAtWhatThisWorldKnowsE2ETest extends AbstractSharedServerTe
         String placed = exec("artest telescope place " + where());
         assertTrue("could not place an observatory: " + placed, placed.contains("\"ok\":true"));
         String crystal = exec("artest telescope crystal " + where());
-        assertTrue("the crystal must start blank: " + crystal, crystal.contains("\"addresses\":0"));
+        assertEquals("the crystal must start blank: " + crystal,
+                0, Reply.of("artest telescope crystal", crystal).integer("addresses"));
 
         // The instrument watching its own neighbourhood: what it resolves are the bodies of the
         // system this observatory is standing in, which are the ones that have worlds to fly to.
-        String swept = exec("artest telescope passive " + where());
-        assertTrue("the passive sweep did not start: " + swept, swept.contains("\"ok\":true"));
-        String afterSweep = exec("artest telescope info " + where());
-        assertFalse("the sweep must be finished with research off: " + afterSweep,
-                afterSweep.contains("\"scanning\":true"));
+        TelescopeScan.of(exec("artest telescope passive " + where()))
+                .requireOk("the passive sweep did not start");
+        TelescopeScan afterSweep = TelescopeScan.at(this::exec, where());
+        assertFalse("the sweep must be finished with research off: " + afterSweep.raw(),
+                afterSweep.scanning);
         exec("artest config set planetsMustBeDiscovered true");
 
         String deposited = exec("artest telescope deposit " + where());

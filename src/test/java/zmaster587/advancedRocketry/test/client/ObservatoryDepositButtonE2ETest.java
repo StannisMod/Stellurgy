@@ -6,7 +6,11 @@ import org.junit.runners.MethodSorters;
 
 import zmaster587.advancedRocketry.test.FixtureSite;
 import zmaster587.advancedRocketry.test.RealizedBody;
+import zmaster587.advancedRocketry.test.Reply;
+import zmaster587.advancedRocketry.test.TelescopeScan;
 
+import static org.junit.Assert.assertArrayEquals;
+import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 import static zmaster587.advancedRocketry.test.client.ClientGuiTestSupport.openGuiByRightClick;
 
@@ -74,11 +78,11 @@ public class ObservatoryDepositButtonE2ETest extends AbstractSharedClientE2ETest
         String built = exec("artest fixture multiblock observatory 0 " + X + " " + Y + " " + Z);
         assertTrue("could not build an observatory: " + built, built.contains("\"ok\":true"));
         String crystal = exec("artest telescope crystal " + where + " " + fresh);
-        assertTrue("the machine must hold a crystal naming exactly that world: " + crystal,
-                crystal.contains("\"addresses\":1"));
-        String info = exec("artest telescope info " + where);
-        assertTrue("and the probe must see it there without depositing anything: " + info,
-                info.contains("\"crystalDims\":[" + fresh + "]"));
+        assertEquals("the machine must hold a crystal naming exactly that world: " + crystal,
+                1, Reply.of("artest telescope crystal", crystal).integer("addresses"));
+        TelescopeScan info = TelescopeScan.at(this::exec, where);
+        assertArrayEquals("and the probe must see it there without depositing anything: "
+                + info.raw(), new int[]{fresh}, info.crystalDims());
 
         // Stand at the machine and open its GUI the way a player does. The right-click below is
         // dispatched by the CLIENT and reach-checked against where it stands, so the placement is
@@ -108,16 +112,8 @@ public class ObservatoryDepositButtonE2ETest extends AbstractSharedClientE2ETest
                 after.contains("\"global\":false"));
     }
 
-    /** A numeric field of a probe reply. */
+    /** A numeric field of a probe reply, refusing when the reply does not carry it. */
     private static int intOf(String json, String name) {
-        String key = "\"" + name + "\":";
-        int at = json.indexOf(key);
-        assertTrue("probe reply has no field " + name + ": " + json, at >= 0);
-        int from = at + key.length();
-        int to = from;
-        while (to < json.length() && "-0123456789".indexOf(json.charAt(to)) >= 0) {
-            to++;
-        }
-        return Integer.parseInt(json.substring(from, to));
+        return Reply.of(json).integer(name);
     }
 }
