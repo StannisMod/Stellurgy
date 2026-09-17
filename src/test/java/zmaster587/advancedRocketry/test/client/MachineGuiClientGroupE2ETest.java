@@ -10,6 +10,7 @@ import org.junit.FixMethodOrder;
 import org.junit.Test;
 import org.junit.runners.MethodSorters;
 
+import zmaster587.advancedRocketry.test.NavStatus;
 import zmaster587.advancedRocketry.test.Events;
 import zmaster587.advancedRocketry.test.Reply;
 
@@ -833,10 +834,10 @@ public class MachineGuiClientGroupE2ETest extends AbstractSharedClientE2ETest {
         String shipCrystal = exec("artest nav crystal " + where + " 1 0");
         scenario().requireArranged("the ship slot must hold a (blank) crystal to copy INTO: "
                 + shipCrystal, shipCrystal.contains("\"addresses\":0"));
-        String before = exec("artest nav status " + where);
+        NavStatus before = NavStatus.of(exec("artest nav status " + where));
         scenario().requireArranged("ARRANGEMENT CONTROL: the ship's own crystal must start EMPTY, "
                 + "or the copy leg below cannot tell a successful copy from a pre-loaded console: "
-                + before, readInt(before, SHIP_COUNT) == 0);
+                + before.raw(), before.shipCrystals == 0);
 
         emptyTheHand();
         String screen = openMachineGui(at);
@@ -873,9 +874,9 @@ public class MachineGuiClientGroupE2ETest extends AbstractSharedClientE2ETest {
         assertTrue("arming with nowhere to go must be refused FOR WANT OF A DESTINATION — the only"
                         + " meaning production's arm() has for false: " + refusals,
                 Events.countRecords(refusals, "outcome", "REFUSED_NO_TARGET") > 0);
-        String afterRefusal = exec("artest nav status " + where);
+        NavStatus afterRefusal = NavStatus.of(exec("artest nav status " + where));
         assertFalse("arming with no destination chosen must leave the console UNARMED: "
-                + afterRefusal, readBoolean(afterRefusal, ARMED));
+                + afterRefusal.raw(), afterRefusal.armed);
 
         // ---- 2) Copy the brought crystal into the ship's own. ---------------------------------
         scenario().asserting("COPY writes the addresses across and leaves the source holding them");
@@ -889,11 +890,11 @@ public class MachineGuiClientGroupE2ETest extends AbstractSharedClientE2ETest {
         String copies = events.since(copyMark, "crystal_copied");
         assertTrue("the console must have had a ship crystal to copy INTO, or the counts below are"
                 + " measuring the arrangement: " + copies, copies.contains("\"shipCrystal\":true"));
-        String copied = exec("artest nav status " + where);
+        NavStatus copied = NavStatus.of(exec("artest nav status " + where));
         assertEquals("clicking COPY must write the brought crystal's addresses into the ship's own "
-                + "crystal: " + copied + " copies=" + copies, SEEDED, readInt(copied, SHIP_COUNT));
+                + "crystal: " + copied.raw() + " copies=" + copies, SEEDED, copied.shipCrystals);
         assertEquals("and the brought crystal must KEEP them — the console exchanges knowledge, it "
-                + "does not move it: " + copied, SEEDED, readInt(copied, SOURCE_COUNT));
+                + "does not move it: " + copied.raw(), SEEDED, copied.sourceCrystals);
 
         // ---- 3) The console lists what the ship now knows. -------------------------------------
         // Reopened, because the address list is built when the screen is. The close is waited for as
@@ -926,12 +927,12 @@ public class MachineGuiClientGroupE2ETest extends AbstractSharedClientE2ETest {
                         + " null looks the same as a slow round trip", 150,
                 "nav_command_received", "nav_target_picked");
         String picked = events.since(pickMark, "nav_target_picked");
-        String aimed = exec("artest nav status " + where);
+        NavStatus aimed = NavStatus.of(exec("artest nav status " + where));
         String expected = FIRST_SECTOR + "_0_0";
         assertEquals("clicking the first listed address must aim the ship at THAT address — the "
                 + "list's order is what the pilot picks by, so aiming at some other entry is the "
-                + "same defect as not aiming at all: " + aimed + " aims=" + picked,
-                expected, readGroup(aimed, TARGET));
+                + "same defect as not aiming at all: " + aimed.raw() + " aims=" + picked,
+                expected, aimed.targetCell());
 
         // ---- 5) Arm, and stand down again. Both answered. ---------------------------------------
         scenario().asserting("arming a chosen destination is accepted, confirmed, and real");
@@ -949,9 +950,9 @@ public class MachineGuiClientGroupE2ETest extends AbstractSharedClientE2ETest {
         String arms = events.since(armMark, "nav_arm_decided");
         assertTrue("clicking ARM with a destination chosen must ARM the console, not refuse it: "
                         + arms, Events.countRecords(arms, "outcome", "ARMED") > 0);
-        String armedStatus = exec("artest nav status " + where);
-        assertTrue("arming a chosen destination must leave the console ARMED: " + armedStatus,
-                readBoolean(armedStatus, ARMED));
+        NavStatus armedStatus = NavStatus.of(exec("artest nav status " + where));
+        assertTrue("arming a chosen destination must leave the console ARMED: " + armedStatus.raw(),
+                armedStatus.armed);
 
         scenario().asserting("pressing the same button again stands the jump down, and says so");
         long disarmMark = events.markInstrumented();
@@ -967,9 +968,9 @@ public class MachineGuiClientGroupE2ETest extends AbstractSharedClientE2ETest {
         assertTrue("the second click must be the console STANDING DOWN — a record of anything else"
                         + " means the first click did not leave it armed: " + disarms,
                 Events.countRecords(disarms, "outcome", "DISARMED") > 0);
-        String disarmedStatus = exec("artest nav status " + where);
-        assertFalse("a disarmed console must not stay armed: " + disarmedStatus,
-                readBoolean(disarmedStatus, ARMED));
+        NavStatus disarmedStatus = NavStatus.of(exec("artest nav status " + where));
+        assertFalse("a disarmed console must not stay armed: " + disarmedStatus.raw(),
+                disarmedStatus.armed);
 
         bot().closeScreen();
     }

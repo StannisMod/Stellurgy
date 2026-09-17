@@ -10,6 +10,7 @@ import org.junit.runners.MethodSorters;
 import org.lwjgl.input.Keyboard;
 
 import zmaster587.advancedRocketry.hyperdrive.DriveTuning;
+import zmaster587.advancedRocketry.test.NavStatus;
 import zmaster587.advancedRocketry.test.Events;
 import zmaster587.advancedRocketry.test.Reply;
 import zmaster587.advancedRocketry.test.ShipInfo;
@@ -257,9 +258,9 @@ public class VSJumpDriveFixtureBoardingE2ETest extends AbstractSharedVsClientE2E
                 gate.contains("\"navComputer\":true"));
 
         int[] navSub = add(afcSub, OFF_NAV);
-        String navStatus = exec("artest nav status 0 " + navSub[0] + " " + navSub[1] + " " + navSub[2]);
-        assertTrue("and the console itself must report that link: " + navStatus,
-                navStatus.contains("\"linked\":true"));
+        NavStatus navStatus = NavStatus.at(this::exec, 0, navSub[0], navSub[1], navSub[2]);
+        assertTrue("and the console itself must report that link: " + navStatus.raw(),
+                navStatus.linked);
 
         // ---- ARRANGEMENT: an EMPTY hand, or a held stack consumes the press before the block. ----
         emptyTheHand();

@@ -5,6 +5,7 @@ import java.util.regex.Pattern;
 
 import org.junit.Test;
 
+import zmaster587.advancedRocketry.test.NavStatus;
 import zmaster587.advancedRocketry.test.Reply;
 import zmaster587.advancedRocketry.test.FixtureSite;
 
@@ -71,10 +72,10 @@ public class VSNavComputerAssemblyE2ETest extends AbstractSharedServerTest {
 
         // The assembly lifts the craft one block before handing it to the physics mod, so the
         // computer's world position moves up with it.
-        String after = exec("artest nav status 0 " + navX + " " + (navY + 1) + " " + navZ);
-        assertTrue("the assembler must link the navigation computer it found in the build: " + after
+        NavStatus after = NavStatus.at(this::exec, 0, navX, navY + 1, navZ);
+        assertTrue("the assembler must link the navigation computer it found in the build: " + after.raw()
                         + " (pre-assembly state was " + before + ")",
-                after.contains("\"linked\":true"));
+                after.linked);
     }
 
     private String exec(String cmd) throws Exception {

@@ -2,6 +2,7 @@ package zmaster587.advancedRocketry.test.server;
 
 import org.junit.Test;
 
+import zmaster587.advancedRocketry.test.NavStatus;
 import static org.junit.Assert.assertTrue;
 
 /**
@@ -49,12 +50,12 @@ public class NavigationComputerE2ETest extends AbstractSharedServerTest {
         exec("artest nav copy " + A);
 
         String erased = exec("artest nav erase " + A);
-        String status = exec("artest nav status " + A);
+        NavStatus status = NavStatus.of(exec("artest nav status " + A));
 
         assertTrue("the source must be blank after an erase: " + erased,
                 erased.contains("\"source\":0"));
-        assertTrue("erasing the source must not touch what the ship knows: " + status,
-                status.contains("\"ship\":5"));
+        assertTrue("erasing the source must not touch what the ship knows: " + status.raw(),
+                status.shipCrystals == 5);
     }
 
     @Test
@@ -159,16 +160,16 @@ public class NavigationComputerE2ETest extends AbstractSharedServerTest {
         stock(B, 1, 2, 700);
 
         String synced = exec("artest nav sync " + A + " 42");
-        String peerBefore = exec("artest nav status " + B);
+        NavStatus peerBefore = NavStatus.of(exec("artest nav status " + B));
         exec("artest nav sync " + B + " 42");
-        String peer = exec("artest nav status " + B);
-        String self = exec("artest nav status " + A);
+        NavStatus peer = NavStatus.of(exec("artest nav status " + B));
+        NavStatus self = NavStatus.of(exec("artest nav status " + A));
 
         assertTrue("the sync must report moving addresses: " + synced,
                 synced.contains("\"changed\":"));
-        assertTrue("both computers must end up holding all five addresses; A=" + self
-                        + " B=" + peer + " (B before its own sync: " + peerBefore + ")",
-                self.contains("\"ship\":5") && peer.contains("\"ship\":5"));
+        assertTrue("both computers must end up holding all five addresses; A=" + self.raw()
+                        + " B=" + peer.raw() + " (B before its own sync: " + peerBefore.raw() + ")",
+                self.shipCrystals == 5 && peer.shipCrystals == 5);
     }
 
     @Test
@@ -179,11 +180,11 @@ public class NavigationComputerE2ETest extends AbstractSharedServerTest {
         stock(B, 1, 2, 900);
 
         String synced = exec("artest nav sync " + A + " 0");
-        String self = exec("artest nav status " + A);
+        NavStatus self = NavStatus.of(exec("artest nav status " + A));
 
         assertTrue("channel 0 must move nothing: " + synced, synced.contains("\"changed\":0"));
-        assertTrue("a computer nobody put on a channel must not pool its knowledge: " + self,
-                self.contains("\"ship\":3"));
+        assertTrue("a computer nobody put on a channel must not pool its knowledge: " + self.raw(),
+                self.shipCrystals == 3);
     }
 
     private void placeComputer(String at) throws Exception {
