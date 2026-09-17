@@ -49,8 +49,7 @@ public final class TestClient implements Closeable {
      * a failed test instead of a hung suite.</p>
      */
     void attachBridge(Socket socket, BufferedReader reader, BufferedWriter writer) throws IOException {
-        socket.setSoTimeout(com.github.stannismod.forge.testing.TestTimeouts
-                .scaledMillis(TimeUnit.SECONDS.toMillis(60)));
+        socket.setSoTimeout((int) TimeUnit.SECONDS.toMillis(60));
         synchronized (bridgeLock) {
             this.bridgeSocket = socket;
             this.bridgeReader = reader;

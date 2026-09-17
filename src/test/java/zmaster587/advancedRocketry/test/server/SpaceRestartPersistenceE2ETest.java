@@ -7,7 +7,6 @@ import java.util.UUID;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-import com.github.stannismod.forge.testing.TestTimeouts;
 import com.github.stannismod.forge.testing.junit.AbstractHeadlessServerTest;
 import com.github.stannismod.forge.testing.server.RealDedicatedServerHarness;
 
@@ -60,8 +59,8 @@ public class SpaceRestartPersistenceE2ETest {
      */
     /**
      * World an armed autosave fault is given to fire in: 3 000 server ticks - three and a bit
-     * autosave intervals at vanilla's 900. The old form was 150 s x the fork factor, two facts about
-     * the machine standing in for "a few autosaves".
+     * autosave intervals at vanilla's 900. The old form was 150 s of wall clock, a fact about the
+     * machine standing in for "a few autosaves".
      */
     private static final int AUTOSAVE_WAIT_TICKS = 3_000;
 

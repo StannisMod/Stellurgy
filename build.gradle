@@ -465,11 +465,6 @@ def configureHarnessTest = { Test t, boolean enableClient ->
     t.forkEvery 1L
     t.minHeapSize = '256m'
     t.maxHeapSize = '512m'
-    // One wall-clock multiplier for every hard harness ceiling (boot, handshake, waitTicks,
-    // command round-trips): N concurrent MC pairs stretch the effective tick rate, and fixed
-    // ceilings would turn that contention into spurious reds. See TestTimeouts.
-    t.systemProperty 'forge.test.timeout.factor', String.valueOf(1.0d + harnessForks / 4.0d)
-
     // Harness worlds are generated from a FIXED seed so terrain under a fixture's coordinates is
     // the same every run (an unpinned seed made every fixed-coordinate fixture a coin flip).
     // -PlevelSeed=<value> re-rolls it deliberately; -PlevelSeed=random restores vanilla's

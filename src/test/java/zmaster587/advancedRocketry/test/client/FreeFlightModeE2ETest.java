@@ -1,6 +1,5 @@
 package zmaster587.advancedRocketry.test.client;
 
-import com.github.stannismod.forge.testing.TestTimeouts;
 import com.github.stannismod.forge.testing.junit.AbstractClientE2ETest;
 import com.google.gson.JsonObject;
 import org.junit.Before;
@@ -19,6 +18,7 @@ import zmaster587.advancedRocketry.test.Reply;
 import zmaster587.advancedRocketry.test.FixtureSite;
 
 import zmaster587.advancedRocketry.test.Plot;
+import zmaster587.advancedRocketry.test.RocketInfo;
 import zmaster587.advancedRocketry.test.RocketList;
 
 import static org.junit.Assert.assertEquals;
@@ -86,13 +86,6 @@ public class FreeFlightModeE2ETest extends AbstractSharedClientE2ETest {
     /** How long the CLIENT is given to perform a seating or a release the server has already done,
      *  in ticks — a ceiling on one round trip. */
     private static final int SEAT_LINK_BUDGET_TICKS = 200;
-    private static final String MOTION_Y = "motionY";
-    private static final String POS_X = "posX";
-    private static final String POS_Y = "posY";
-    private static final String POS_Z = "posZ";
-    private static final String YAW = "rotationYaw";
-    private static final String FF_PITCH = "freeFlightPitch";
-    private static final String FF_ROLL = "freeFlightRoll";
     /**
      * How much of the fuel the rocket calls PRIMARY it is carrying, or {@code -1} when the reply
      * names no primary fuel or holds no entry for it.
@@ -280,12 +273,9 @@ public class FreeFlightModeE2ETest extends AbstractSharedClientE2ETest {
         return found;
     }
 
-    private static double parseDouble(String body, String field, String label) {
-        double value = Reply.of(body).number(field);
-        if (Double.isNaN(value)) {
-            throw new AssertionError("response missing " + label + ": " + body);
-        }
-        return value;
+    /** What the server says about one craft, read through the verb's own reader. */
+    private RocketInfo rocketInfo(int id) throws Exception {
+        return RocketInfo.byId(this::exec, id);
     }
 
     // ---- the rocket's engine state as EVENTS -------------------------------------------------
@@ -324,11 +314,7 @@ public class FreeFlightModeE2ETest extends AbstractSharedClientE2ETest {
         String reply = "";
         // This budget is a DEADLINE for a discrete commit with an early exit — how patient the test
         // is, never how far the world moves: the loop returns the moment the record appears, and
-        // reaching the end of it is a failure either way. So it is scaled like the ClientPoll
-        // ceilings beside it, because several of these links are driven by the CLIENT (a 60-tick key
-        // hold, a descent under a held key) and a frame-starved client under concurrent-fork load
-        // spends more of OUR ticks reaching the same commit.
-        tickBudget = (int) Math.ceil(tickBudget * TestTimeouts.factor());
+        // reaching the end of it is a failure either way.
         for (int waited = 0; waited <= tickBudget; waited += 5) {
             reply = events.since(mark, type);
             if (matchingRecords(reply, needles) > 0) {
@@ -356,19 +342,16 @@ public class FreeFlightModeE2ETest extends AbstractSharedClientE2ETest {
      * was the test; the assertion was its echo.</p>
      *
      * <p>So the shape is now: drive the stimulus, wait a WINDOW, read, assert. The window is
-     * {@code stepTicks × baseIterations × factor()} — <b>exactly the poll's own ceiling</b>, which is
+     * {@code stepTicks × baseIterations} — <b>exactly the poll's own ceiling</b>, which is
      * what makes the change safe in the only direction that matters: any run the poll would have
      * passed had at most this long to converge, so the physical claim now gets the whole of that
      * budget every time instead of exiting early. What is lost is the early exit (a few seconds of
      * wall clock per scenario on an idle box); what is gained is an assertion that can go red.</p>
      *
-     * <p>A window is not a poll: it does not ask, it bounds. It still scales by
-     * {@link TestTimeouts#factor()}, because a frame-starved client under concurrent-fork load
-     * spends more of our ticks reaching the same physical state — that part of the polls' design was
-     * measured and is kept.</p>
+     * <p>A window is not a poll: it does not ask, it bounds.</p>
      */
     private int windowTicks(int stepTicks, int baseIterations) {
-        return (int) Math.ceil(stepTicks * baseIterations * TestTimeouts.factor());
+        return stepTicks * baseIterations;
     }
 
     /** How many records of a {@code since} reply carry EVERY one of {@code needles}. */
@@ -436,9 +419,9 @@ public class FreeFlightModeE2ETest extends AbstractSharedClientE2ETest {
         // Snapshot info IMMEDIATELY (the real tick loop will drain motionY
         // on the test fixture's low-thrust rocket; what we pin here is that
         // the datawatcher saw isInFlight=true at least once).
-        String info = exec("artest rocket info " + rocketId);
-        assertTrue("info must report flightMode=FREE_FLIGHT after toggle: " + info,
-                info.contains("\"flightMode\":\"FREE_FLIGHT\""));
+        RocketInfo info = rocketInfo(rocketId);
+        assertEquals("info must report flightMode=FREE_FLIGHT after toggle: " + info.raw(),
+                RocketInfo.FREE_FLIGHT, info.flightMode);
 
         // Bot is still riding the rocket — FF tick must not dismount the pilot.
         String riding = exec("artest player riding-entity");
@@ -470,15 +453,13 @@ public class FreeFlightModeE2ETest extends AbstractSharedClientE2ETest {
                 inputResp.contains("\"applied\":true"));
 
         // Snapshot motion BEFORE ticks (right after start).
-        String infoBefore = exec("artest rocket info " + rocketId);
-        double myBefore = parseDouble(infoBefore, MOTION_Y, "motionY");
+        double myBefore = rocketInfo(rocketId).motionY;
 
         // Let the REAL server tick loop run — onUpdate->tickFreeFlight runs
         // every server tick because the rocket is in FF + isInFlight.
         bot().waitTicks(20);
 
-        String infoAfter = exec("artest rocket info " + rocketId);
-        double myAfter = parseDouble(infoAfter, MOTION_Y, "motionY");
+        double myAfter = rocketInfo(rocketId).motionY;
 
         // After 20 ticks of commanded vertical-up thrust motionY must be net
         // UPWARD relative to the start — thrust ≫ gravity for the simple fixture.
@@ -511,21 +492,21 @@ public class FreeFlightModeE2ETest extends AbstractSharedClientE2ETest {
 
         int rocketId = buildAndAssemble();
 
-        String info0 = exec("artest rocket info " + rocketId);
-        assertTrue("default mode must be CLASSIC_LAUNCH: " + info0,
-                info0.contains("\"flightMode\":\"CLASSIC_LAUNCH\""));
+        RocketInfo info0 = rocketInfo(rocketId);
+        assertEquals("default mode must be CLASSIC_LAUNCH: " + info0.raw(),
+                RocketInfo.CLASSIC_LAUNCH, info0.flightMode);
 
         exec("artest rocket set-flight-mode " + rocketId + " FREE_FLIGHT");
         bot().waitTicks(5);
-        String info1 = exec("artest rocket info " + rocketId);
-        assertTrue("after toggle, info must report FREE_FLIGHT: " + info1,
-                info1.contains("\"flightMode\":\"FREE_FLIGHT\""));
+        RocketInfo info1 = rocketInfo(rocketId);
+        assertEquals("after toggle, info must report FREE_FLIGHT: " + info1.raw(),
+                RocketInfo.FREE_FLIGHT, info1.flightMode);
 
         exec("artest rocket set-flight-mode " + rocketId + " CLASSIC_LAUNCH");
         bot().waitTicks(5);
-        String info2 = exec("artest rocket info " + rocketId);
-        assertTrue("flip-back must restore CLASSIC_LAUNCH: " + info2,
-                info2.contains("\"flightMode\":\"CLASSIC_LAUNCH\""));
+        RocketInfo info2 = rocketInfo(rocketId);
+        assertEquals("flip-back must restore CLASSIC_LAUNCH: " + info2.raw(),
+                RocketInfo.CLASSIC_LAUNCH, info2.flightMode);
     }
 
     // ===== FF flight controls (TWR-based thrust) =========================
@@ -552,14 +533,15 @@ public class FreeFlightModeE2ETest extends AbstractSharedClientE2ETest {
         // same pattern as the assemble retry above. (The
         // engine-start hover removes the kick and this crutch with it.)
         for (int attempt = 0; attempt < 3; attempt++) {
-            if (exec("artest rocket info " + rocketId).contains("\"isInFlight\":true")) {
+            if (rocketInfo(rocketId).inFlight) {
                 return rocketId;
             }
             exec("artest rocket start-free-flight " + rocketId);
             bot().waitTicks(2);
         }
-        String last = exec("artest rocket info " + rocketId);
-        if (last.contains("\"isInFlight\":true")) {
+        RocketInfo lastInfo = rocketInfo(rocketId);
+        String last = lastInfo.raw();
+        if (lastInfo.inFlight) {
             return rocketId;
         }
         // ARRANGEMENT, and typed as one: a scenario whose rocket re-landed before it began has not
@@ -583,16 +565,16 @@ public class FreeFlightModeE2ETest extends AbstractSharedClientE2ETest {
         String inputResp = exec("artest rocket free-flight-input " + rocketId + " 0 1 0 0 0");
         assertTrue("vertical input must apply: " + inputResp, inputResp.contains("\"applied\":true"));
 
-        double yBefore = parseDouble(exec("artest rocket info " + rocketId), POS_Y, "posY");
+        double yBefore = rocketInfo(rocketId).posY;
         bot().waitTicks(30);
-        String after = exec("artest rocket info " + rocketId);
-        double yAfter = parseDouble(after, POS_Y, "posY");
+        RocketInfo after = rocketInfo(rocketId);
+        double yAfter = after.posY;
 
         assertTrue("FF rocket must gain real altitude under vertical thrust "
                         + "(yBefore=" + yBefore + " yAfter=" + yAfter + ")",
                 yAfter - yBefore > 2.0);
-        assertTrue("rocket must still be in flight while climbing: " + after,
-                after.contains("\"isInFlight\":true"));
+        assertTrue("rocket must still be in flight while climbing: " + after.raw(),
+                after.inFlight);
 
         exec("artest rocket free-flight-input " + rocketId + " 0 0 0 0 0");
         exec("artest player dismount");
@@ -604,9 +586,9 @@ public class FreeFlightModeE2ETest extends AbstractSharedClientE2ETest {
         // airborne (doesn't auto-land mid-test).
         int rocketId = mountFreshFreeFlightRocket();
 
-        String before = exec("artest rocket info " + rocketId);
-        final double xb = parseDouble(before, POS_X, "posX");
-        final double zb = parseDouble(before, POS_Z, "posZ");
+        RocketInfo before = rocketInfo(rocketId);
+        final double xb = before.posX;
+        final double zb = before.posZ;
         exec("artest rocket free-flight-input " + rocketId + " 1 1 0 0 0");
         // A WINDOW, not a poll-until-travelled: the poll exited on "moved more than a block", which
         // is the assertion below, so the displacement could only ever be confirmed or timed out.
@@ -615,13 +597,13 @@ public class FreeFlightModeE2ETest extends AbstractSharedClientE2ETest {
         // ACCEPTED here — this leg drives the input through `free-flight-input` rather than a key,
         // so there is no delivery question left for a link to answer.
         bot().waitTicks(windowTicks(6, 10));
-        String moved = exec("artest rocket info " + rocketId);
-        double xa = parseDouble(moved, POS_X, "posX");
-        double za = parseDouble(moved, POS_Z, "posZ");
+        RocketInfo moved = rocketInfo(rocketId);
+        double xa = moved.posX;
+        double za = moved.posZ;
 
         double horiz = Math.sqrt((xa - xb) * (xa - xb) + (za - zb) * (za - zb));
         assertTrue("forward thrust must move the rocket horizontally "
-                        + "(horiz=" + horiz + "; " + moved + ")", horiz > 1.0);
+                        + "(horiz=" + horiz + "; " + moved.raw() + ")", horiz > 1.0);
         assertTrue("forward at yaw=0 must be predominantly +Z, got dz=" + (za - zb),
                 (za - zb) > 0);
 
@@ -636,9 +618,9 @@ public class FreeFlightModeE2ETest extends AbstractSharedClientE2ETest {
         int rocketId = mountFreshFreeFlightRocket();
 
         exec("artest rocket free-flight-input " + rocketId + " 0 1 1 0 0");
-        double yawBefore = parseDouble(exec("artest rocket info " + rocketId), YAW, "rotationYaw");
+        double yawBefore = rocketInfo(rocketId).rotationYaw;
         bot().waitTicks(8);
-        double yawAfter = parseDouble(exec("artest rocket info " + rocketId), YAW, "rotationYaw");
+        double yawAfter = rocketInfo(rocketId).rotationYaw;
 
         assertTrue("yaw input must rotate heading over 8 ticks "
                         + "(before=" + yawBefore + " after=" + yawAfter + ")",
@@ -671,7 +653,7 @@ public class FreeFlightModeE2ETest extends AbstractSharedClientE2ETest {
         // Hold the real climb key. No artest free-flight-input here on purpose.
         bot().holdKey(Keyboard.KEY_R);
 
-        double svrYBefore = parseDouble(exec("artest rocket info " + rocketId), POS_Y, "posY");
+        double svrYBefore = rocketInfo(rocketId).posY;
         // The LINK: the held climb key must reach THIS rocket's free-flight input on the server.
         // This leg's point is that a REAL key does what the probe does, so "the key arrived" is
         // half of its subject and must be asserted as itself rather than inferred from altitude.
@@ -679,8 +661,8 @@ public class FreeFlightModeE2ETest extends AbstractSharedClientE2ETest {
                 "holding the real climb key must deliver a free-flight input to this rocket", 100,
                 "\"e\":" + rocketId + ",");
         bot().waitTicks(windowTicks(4, 10));
-        String svrInfo = exec("artest rocket info " + rocketId);
-        double svrYAfter = parseDouble(svrInfo, POS_Y, "posY");
+        RocketInfo svrInfo = rocketInfo(rocketId);
+        double svrYAfter = svrInfo.posY;
 
         JsonObject ride = bot().reportRidingEntity();
         assertTrue("client must still be riding the rocket: " + ride,
@@ -693,8 +675,8 @@ public class FreeFlightModeE2ETest extends AbstractSharedClientE2ETest {
         assertTrue("holding real R must drive a server-side climb via the packet path "
                         + "(before=" + svrYBefore + " after=" + svrYAfter + ")",
                 svrYAfter - svrYBefore > 2.0);
-        assertTrue("rocket must stay in flight while climbing: " + svrInfo,
-                svrInfo.contains("\"isInFlight\":true"));
+        assertTrue("rocket must stay in flight while climbing: " + svrInfo.raw(),
+                svrInfo.inFlight);
 
         // 2) Client render tracks server — would be ~150 blocks behind with the old
         //    ct=50 poscorrection smoothing that this fix bypasses for FF.
@@ -894,7 +876,7 @@ public class FreeFlightModeE2ETest extends AbstractSharedClientE2ETest {
         int rocketId = mountFreshFreeFlightRocket();
         assertEquals("precondition: no GUI open while piloting", "", currentScreen());
 
-        double xBefore = parseDouble(exec("artest rocket info " + rocketId), POS_X, "posX");
+        double xBefore = rocketInfo(rocketId).posX;
 
         // Hold vertical-up (R, keeps it airborne so the FF tick keeps running) AND
         // the inventory key (E). On foot E opens the inventory; here it must
@@ -915,8 +897,8 @@ public class FreeFlightModeE2ETest extends AbstractSharedClientE2ETest {
         bot().waitTicks(windowTicks(5, 5));
 
         String screenDuring = currentScreen();
-        String info = exec("artest rocket info " + rocketId);
-        double xAfter = parseDouble(info, POS_X, "posX");
+        RocketInfo info = rocketInfo(rocketId);
+        double xAfter = info.posX;
 
         bot().releaseKey(KEY_INVENTORY);
         bot().releaseKey(Keyboard.KEY_R);
@@ -926,8 +908,8 @@ public class FreeFlightModeE2ETest extends AbstractSharedClientE2ETest {
         assertTrue("inventory key must instead strafe the craft (-X at yaw 0) while piloting "
                         + "(xBefore=" + xBefore + " xAfter=" + xAfter + ")",
                 xAfter - xBefore < -1.0);
-        assertTrue("rocket must stay in flight (override must not have frozen control): " + info,
-                info.contains("\"isInFlight\":true"));
+        assertTrue("rocket must stay in flight (override must not have frozen control): "
+                + info.raw(), info.inFlight);
 
         exec("artest rocket free-flight-input " + rocketId + " 0 0 0 0 0");
         exec("artest player dismount");
@@ -940,7 +922,7 @@ public class FreeFlightModeE2ETest extends AbstractSharedClientE2ETest {
         // strafe-left key must push the craft toward +X to feel correct (the raw
         // body-right mapping felt inverted in playtest). E is the mirror.
         int rocketId = mountFreshFreeFlightRocket();
-        double xBefore = parseDouble(exec("artest rocket info " + rocketId), POS_X, "posX");
+        double xBefore = rocketInfo(rocketId).posX;
 
         Events qEvents = events();
         long qMark = qEvents.markInstrumented();
@@ -956,7 +938,7 @@ public class FreeFlightModeE2ETest extends AbstractSharedClientE2ETest {
                 "the held keys must deliver a free-flight input to this rocket", 100,
                 "\"e\":" + rocketId + ",");
         bot().waitTicks(windowTicks(5, 5));
-        double xAfter = parseDouble(exec("artest rocket info " + rocketId), POS_X, "posX");
+        double xAfter = rocketInfo(rocketId).posX;
         bot().releaseKey(Keyboard.KEY_Q);
         bot().releaseKey(Keyboard.KEY_R);
 
@@ -974,12 +956,12 @@ public class FreeFlightModeE2ETest extends AbstractSharedClientE2ETest {
         // to the climb's accumulated upward inertia, which a position check is not).
         int rocketId = mountFreshFreeFlightRocket();
 
-        double y0 = parseDouble(exec("artest rocket info " + rocketId), POS_Y, "posY");
+        double y0 = rocketInfo(rocketId).posY;
         bot().holdKey(Keyboard.KEY_R);
         bot().waitTicks(20);
-        String climbInfo = exec("artest rocket info " + rocketId);
-        double y1 = parseDouble(climbInfo, POS_Y, "posY");
-        double myUp = parseDouble(climbInfo, MOTION_Y, "motionY");
+        RocketInfo climbInfo = rocketInfo(rocketId);
+        double y1 = climbInfo.posY;
+        double myUp = climbInfo.motionY;
         bot().releaseKey(Keyboard.KEY_R);
         assertTrue("R must climb (y0=" + y0 + " y1=" + y1 + ")", y1 - y0 > 2.0);
 
@@ -988,7 +970,7 @@ public class FreeFlightModeE2ETest extends AbstractSharedClientE2ETest {
         // A WINDOW, not a poll-until-braked: the poll's predicate was `my < myUp - 0.05` and the
         // assertion below is the same expression, so nothing here could fail except the ceiling.
         bot().waitTicks(windowTicks(5, 2));
-        double myDown = parseDouble(exec("artest rocket info " + rocketId), MOTION_Y, "motionY");
+        double myDown = rocketInfo(rocketId).motionY;
         bot().releaseKey(Keyboard.KEY_F);
         assertTrue("F must reduce vertical velocity vs the climb (myUp=" + myUp
                 + " myDown=" + myDown + ")", myDown < myUp - 0.05);
@@ -1006,7 +988,7 @@ public class FreeFlightModeE2ETest extends AbstractSharedClientE2ETest {
         // Establish a climb.
         bot().holdKey(Keyboard.KEY_R);
         bot().waitTicks(12);
-        double myClimb = parseDouble(exec("artest rocket info " + rocketId), MOTION_Y, "motionY");
+        double myClimb = rocketInfo(rocketId).motionY;
         assertTrue("precondition: R must be producing upward motion, got " + myClimb,
                 myClimb > 0.01);
 
@@ -1014,7 +996,7 @@ public class FreeFlightModeE2ETest extends AbstractSharedClientE2ETest {
         // craft no longer accelerates upward (motionY stops growing).
         bot().holdKey(Keyboard.KEY_X);
         bot().waitTicks(12);
-        double myCut = parseDouble(exec("artest rocket info " + rocketId), MOTION_Y, "motionY");
+        double myCut = rocketInfo(rocketId).motionY;
         bot().releaseKey(Keyboard.KEY_X);
         bot().releaseKey(Keyboard.KEY_R);
 
@@ -1035,15 +1017,15 @@ public class FreeFlightModeE2ETest extends AbstractSharedClientE2ETest {
         bot().holdKey(Keyboard.KEY_R);
         bot().waitTicks(15);
         bot().releaseKey(Keyboard.KEY_R);
-        String preInfo = exec("artest rocket info " + rocketId);
-        double myMoving = parseDouble(preInfo, MOTION_Y, "motionY");
+        RocketInfo preInfo = rocketInfo(rocketId);
+        double myMoving = preInfo.motionY;
         if (!(Math.abs(myMoving) > 0.02)) {
             // Diagnose before failing: one SYNCHRONOUS physics step shows whether
             // the physics produces thrust and what immediately eats it.
             String singleStep = exec("artest rocket free-flight-tick " + rocketId + " 1");
-            String postStep = exec("artest rocket info " + rocketId);
+            String postStep = rocketInfo(rocketId).raw();
             throw new AssertionError("precondition: rocket must be climbing before the cut, got "
-                    + myMoving + "\n  state: " + preInfo
+                    + myMoving + "\n  state: " + preInfo.raw()
                     + "\n  single-step: " + singleStep
                     + "\n  after-step: " + postStep);
         }
@@ -1051,14 +1033,13 @@ public class FreeFlightModeE2ETest extends AbstractSharedClientE2ETest {
         bot().holdKey(Keyboard.KEY_X);
         // A WINDOW: the poll's predicate was `|my| < 0.05`, which is the assertion below.
         bot().waitTicks(windowTicks(5, 8));
-        String info = exec("artest rocket info " + rocketId);
-        double myCut = parseDouble(info, MOTION_Y, "motionY");
+        RocketInfo info = rocketInfo(rocketId);
+        double myCut = info.motionY;
         bot().releaseKey(Keyboard.KEY_X);
 
         assertTrue("cut must brake the climb into a hover (was " + myMoving
                 + ", now " + myCut + ")", Math.abs(myCut) < 0.05);
-        assertTrue("the hover must hold altitude, not land: " + info,
-                info.contains("\"isInFlight\":true"));
+        assertTrue("the hover must hold altitude, not land: " + info.raw(), info.inFlight);
 
         exec("artest rocket free-flight-input " + rocketId + " 0 0 0 0 0");
         exec("artest player dismount");
@@ -1090,10 +1071,9 @@ public class FreeFlightModeE2ETest extends AbstractSharedClientE2ETest {
     @Test
     public void realSpaceHoldStartsEnginesAndHoversOneBlock() throws Exception {
         int rocketId = mountColdFreeFlightRocket();
-        String before = exec("artest rocket info " + rocketId);
-        assertTrue("precondition: engines off before the hold: " + before,
-                before.contains("\"isInFlight\":false"));
-        double y0 = parseDouble(before, POS_Y, "posY");
+        RocketInfo before = rocketInfo(rocketId);
+        assertFalse("precondition: engines off before the hold: " + before.raw(), before.inFlight);
+        double y0 = before.posY;
 
         // The start ritual ENDS in a commit — the client's 60-tick hold completes, the server's
         // gate accepts it, and the engines are lit by writing the in-flight flag. Wait for that
@@ -1112,11 +1092,11 @@ public class FreeFlightModeE2ETest extends AbstractSharedClientE2ETest {
         }
         bot().waitTicks(40);             // let the liftoff hover settle — a value, not a link
 
-        String info = exec("artest rocket info " + rocketId);
-        assertTrue("3 s Space hold must start the engines (isInFlight=true): " + info,
-                info.contains("\"isInFlight\":true"));
-        double y = parseDouble(info, POS_Y, "posY");
-        double my = parseDouble(info, MOTION_Y, "motionY");
+        RocketInfo info = rocketInfo(rocketId);
+        assertTrue("3 s Space hold must start the engines (isInFlight=true): " + info.raw(),
+                info.inFlight);
+        double y = info.posY;
+        double my = info.motionY;
         assertTrue("craft must hover ~1 block above the pad (y0=" + y0 + " y=" + y + ")",
                 y > y0 + 0.5 && y < y0 + 1.6);
         assertTrue("hover must be near-stationary (motionY=" + my + ")",
@@ -1148,9 +1128,9 @@ public class FreeFlightModeE2ETest extends AbstractSharedClientE2ETest {
         bot().releaseKey(Keyboard.KEY_SPACE);
         bot().waitTicks(20);
 
-        String info = exec("artest rocket info " + rocketId);
-        assertTrue("early release must cancel the start (still not in flight): " + info,
-                info.contains("\"isInFlight\":false"));
+        RocketInfo info = rocketInfo(rocketId);
+        assertFalse("early release must cancel the start (still not in flight): " + info.raw(),
+                info.inFlight);
         // The state read above is the end state; the CONTRACT is that the engines never lit at all,
         // and only the log can say that — a start that lit and re-landed inside the window leaves
         // exactly the same isInFlight=false behind. The silence means something because the HUD
@@ -1373,7 +1353,7 @@ public class FreeFlightModeE2ETest extends AbstractSharedClientE2ETest {
             // moment apart attribute the camera's yaw to whatever the server's heading was when IT
             // was read.
             settledErr = angDiff(bot().reportState().get("playerYaw").getAsDouble(),
-                    parseDouble(exec("artest rocket info " + rocketId), YAW, "rotationYaw"));
+                    rocketInfo(rocketId).rotationYaw);
             convErr = Math.min(convErr, settledErr);
         }
         System.out.println("[ff-camera] yaw residual: min over the window=" + convErr
@@ -1420,8 +1400,7 @@ public class FreeFlightModeE2ETest extends AbstractSharedClientE2ETest {
                           st.get("playerPitch").getAsFloat() + 6f);
             bot().waitTicks(1);
         }
-        double nosePitch = parseDouble(exec("artest rocket info " + rocketId),
-                FF_PITCH, "freeFlightPitch");
+        double nosePitch = rocketInfo(rocketId).freeFlightPitch;
         // Printed because a green now says only "past 20°"; the margin the fixed drive actually
         // leaves is what a tighter pin would have to be built from, and one run is not a
         // distribution.
@@ -1600,13 +1579,13 @@ public class FreeFlightModeE2ETest extends AbstractSharedClientE2ETest {
     public void rollChannelIntegratesAndClientRendersWithoutCrash() throws Exception {
         int rocketId = mountFreshFreeFlightRocket();
         bot().waitTicks(20);
-        double roll0 = parseDouble(exec("artest rocket info " + rocketId), FF_ROLL, "freeFlightRoll");
+        double roll0 = rocketInfo(rocketId).freeFlightRoll;
 
         // Command a steady bank-right: probe args are
         // id fwd vert yaw pitch brake cut strafe roll -> roll = last (=+1).
         exec("artest rocket free-flight-input " + rocketId + " 0 0 0 0 0 0 0 1");
         bot().waitTicks(10);
-        double roll1 = parseDouble(exec("artest rocket info " + rocketId), FF_ROLL, "freeFlightRoll");
+        double roll1 = rocketInfo(rocketId).freeFlightRoll;
 
         // Stop and let the client keep rendering the banked craft a moment.
         exec("artest rocket free-flight-input " + rocketId + " 0 0 0 0 0 0 0 0");

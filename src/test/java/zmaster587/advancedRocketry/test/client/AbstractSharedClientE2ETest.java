@@ -1186,7 +1186,7 @@ public abstract class AbstractSharedClientE2ETest {
 
     /**
      * Liveness ceiling for the failure-path ping. Deliberately NOT the command channel's own
-     * timeout, which is two minutes scaled by the fork factor — six minutes at eight forks. That is
+     * timeout, which is two minutes. That is
      * the right budget for a command and a terrible one for "should the rest of this class run",
      * because a HUNG client (socket open, nobody answering) would cost it once per scenario.
      *
@@ -1199,8 +1199,7 @@ public abstract class AbstractSharedClientE2ETest {
         if (sharedClient == null) {
             return false;
         }
-        return sharedClient.bot().isAlive(
-                com.github.stannismod.forge.testing.TestTimeouts.scaledMillis(PING_TIMEOUT_MS));
+        return sharedClient.bot().isAlive(PING_TIMEOUT_MS);
     }
 
     private String renderStateBundle(Scenario s) {

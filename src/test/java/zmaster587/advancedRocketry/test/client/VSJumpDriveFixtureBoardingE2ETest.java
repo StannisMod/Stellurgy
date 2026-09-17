@@ -2,7 +2,6 @@ package zmaster587.advancedRocketry.test.client;
 
 import java.util.Locale;
 
-import com.github.stannismod.forge.testing.TestTimeouts;
 import com.google.gson.JsonObject;
 
 import org.junit.FixMethodOrder;
@@ -132,7 +131,7 @@ public class VSJumpDriveFixtureBoardingE2ETest extends AbstractSharedVsClientE2E
         // THE MULTIPLIER STAYS. What it waits on is VS building the ship on its OWN thread, off the
         // game loop: that work finishes in wall-clock time, so a busy box genuinely needs more game
         // ticks to elapse before it is done. Measured at 8 forks on the sibling gate test.
-        int budget = (int) (40 * TestTimeouts.factor());
+        int budget = 40;
 
         // ---- ARRANGEMENT: build the craft and let the assembler turn it into a ship. -------------
         // WHERE THIS SCENARIO STANDS IS ASKED FOR, NOT CHOSEN: the plot is this scenario's own, and

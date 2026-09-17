@@ -1,6 +1,5 @@
 package com.github.stannismod.forge.testing.server.bridge;
 
-import com.github.stannismod.forge.testing.TestTimeouts;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
@@ -144,12 +143,12 @@ public final class ForgeTestServerBootstrap {
     /**
      * Dial the harness's already-bound control port, retrying while it is still starting up.
      *
-     * <p>Load-scaled like the client half: under concurrent forks the test JVM that must accept the
-     * connection is itself contended.</p>
+     * <p>Retried for up to two minutes, like the client half: under concurrent forks the test JVM
+     * that must accept the connection is itself contended.</p>
      */
     private static Socket connectWithRetry(int port) throws IOException {
         IOException last = null;
-        long deadline = System.nanoTime() + TestTimeouts.scaledNanos(TimeUnit.MINUTES.toNanos(2));
+        long deadline = System.nanoTime() + TimeUnit.MINUTES.toNanos(2);
 
         while (System.nanoTime() < deadline) {
             try {
@@ -213,7 +212,7 @@ public final class ForgeTestServerBootstrap {
         server.addScheduledTask(task);
 
         try {
-            task.get(TestTimeouts.scaledMillis(TimeUnit.SECONDS.toMillis(30)), TimeUnit.MILLISECONDS);
+            task.get(TimeUnit.SECONDS.toMillis(30), TimeUnit.MILLISECONDS);
         } catch (TimeoutException timeout) {
             task.cancel(false);
             return error("Timed out waiting for the server thread to run: " + command);

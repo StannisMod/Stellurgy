@@ -220,8 +220,8 @@ public class VSPilotKeysWithSpaceSubsystemE2ETest {
         clientHarness.bot().holdKey(Keyboard.KEY_R); // flightVerticalUp
         ClientPoll.Result<Double> lift;
         try {
-            // Event-gated hover-lift (load-scaled ceiling + early exit): a fixed 40-iteration budget
-            // under-lifts a frame-starved client under concurrent-fork load and reds a healthy climb.
+            // Event-gated hover-lift (bounded ceiling + early exit): the loop returns the moment the
+            // ship has climbed, so the ceiling is patience and not how far it flies.
             // The probe keeps the tolerant nullable ship-info parse (returns the baseline when a reply
             // is unparseable), so the predicate holds only on a genuine climb.
             lift = ClientPoll.until(clientHarness.bot()::waitTicks,

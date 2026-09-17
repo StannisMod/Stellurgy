@@ -515,7 +515,7 @@ public class VSPreAssemblyBoardingPilotControlE2ETest extends AbstractSharedVsCl
         // from the other method rebinding inside this window would read here as this pilot's. Only a
         // give-up record naming the queue entry (player + stale mount id) would let the counters
         // become an assertion again; there is none, so they stay in the failure message.
-        int rebindBudget = (int) (240 * com.github.stannismod.forge.testing.TestTimeouts.factor());
+        int rebindBudget = 240;
         // The shared wait, keyed on the outcome, instead of a sample loop that re-read three things
         // per iteration to build a message it might never print. Two of those three — the probe's
         // seat-delivery state and the queue's own log — are DIAGNOSTICS, and a diagnostic belongs on
@@ -635,10 +635,9 @@ public class VSPreAssemblyBoardingPilotControlE2ETest extends AbstractSharedVsCl
         bot().holdKey(Keyboard.KEY_R); // flightVerticalUp
         ClientPoll.Result<Double> lift;
         try {
-            // Event-gated hover-lift (load-scaled ceiling + early exit): a fixed MEASURE_SAMPLES budget
-            // under-lifts a frame-starved client under concurrent-fork load and reds a healthy climb.
-            // Only the EXPERIMENT ceiling scales; the control leg's fixed drift window stays fixed. The
-            // probe keeps the NaN-tolerant read (returns the baseline when shipPosY is unparseable).
+            // Event-gated hover-lift (bounded ceiling + early exit): the loop returns the moment the
+            // ship has climbed, so the ceiling is patience and not how far it flies. The probe keeps
+            // the NaN-tolerant read (returns the baseline when shipPosY is unparseable).
             lift = ClientPoll.until(bot()::waitTicks,
                     () -> { double y = shipPosY(); return Double.isNaN(y) ? y0 : y; },
                     y -> (y - y0) >= MIN_CLIMB, TICKS_PER_SAMPLE, MEASURE_SAMPLES);

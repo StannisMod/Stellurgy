@@ -4,7 +4,6 @@ import java.util.Locale;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-import com.github.stannismod.forge.testing.TestTimeouts;
 import com.google.gson.JsonObject;
 
 import org.junit.FixMethodOrder;
@@ -135,9 +134,8 @@ public class VSShipEntryClientGroupE2ETest extends AbstractSharedVsClientE2ETest
     private static final int CLIMB_STEP_TICKS = 5;
 
     /**
-     * How many of those readings a control climb gets on an UNLOADED box, before
-     * {@code TestTimeouts.factor()} stretches it — the shared poll scales this itself, which is half
-     * the reason the hand-rolled loops became calls to it.
+     * How many of those readings a control climb gets — the shared poll's iteration ceiling, which
+     * is half the reason the hand-rolled loops became calls to it.
      */
     private static final int CONTROL_CLIMB_POLLS = 40;
 
@@ -204,7 +202,7 @@ public class VSShipEntryClientGroupE2ETest extends AbstractSharedVsClientE2ETest
         scenario().requireArranged("the production space subsystem must be REGISTERED - the seeded "
                 + "config opts it in: " + status, status.contains("\"registered\":true"));
 
-        int budget = (int) (40 * TestTimeouts.factor());
+        int budget = 40;
         // Allocated, not chosen: the granted leg's ground is this scenario's own plot.
         final FixtureSite site = site();
         String shipUuid = boardAssembledCraftAt(site, budget);
@@ -217,8 +215,8 @@ public class VSShipEntryClientGroupE2ETest extends AbstractSharedVsClientE2ETest
         // A POLL and not a wait for a record, deliberately: an altitude climbing is a physical value
         // converging, not a link production announces, and a longer budget samples it more without
         // changing whether the assertion can hold. What it is NOT is a hand-rolled one — the shared
-        // helper scales its own ceiling by the fork factor and reports the iterations it took beside
-        // the value it ended on, which is the diagnosis a red on a loaded box needs.
+        // helper reports the iterations it took beside the value it ended on, which is the diagnosis
+        // a red on a loaded box needs.
         long entryMark;
         long clientMark;
         bot().holdKey(Keyboard.KEY_R);
@@ -245,7 +243,7 @@ public class VSShipEntryClientGroupE2ETest extends AbstractSharedVsClientE2ETest
             Events events = events();
             entryMark = events.markInstrumented();
             clientMark = clientEvents().mark();
-            int climbBudget = (int) (4000 * TestTimeouts.factor());
+            int climbBudget = 4000;
             events.assertChain(entryMark, "a ship climbing under its own power past the orbit line ("
                     + ORBIT_LINE + ") must be taken by the entry crossing and SETTLE in a cell - the"
                     + " whole on-ramp a real player flies", climbBudget, ENTRY_CHAIN);
@@ -274,7 +272,7 @@ public class VSShipEntryClientGroupE2ETest extends AbstractSharedVsClientE2ETest
         // twice between two samples shows one change or none, and the records show both, in order.
         // THE MULTIPLIER STAYS. This waits for state the SERVER restores on login to arrive at the
         // client and be applied - a round trip whose latency is the machine's, not the game's.
-        int arrivalBudget = (int) (40 * TestTimeouts.factor());
+        int arrivalBudget = 40;
         String dimChanges;
         try {
             dimChanges = clientEvents().awaitMatching(clientMark, "client_dimension_changed",
@@ -447,7 +445,7 @@ public class VSShipEntryClientGroupE2ETest extends AbstractSharedVsClientE2ETest
                 + " further occupy must be REFUSED - else the pool is not actually exhausted and the"
                 + " entry would be granted: " + further, further.contains("\"exhausted\":true"));
 
-        int budget = (int) (40 * TestTimeouts.factor());
+        int budget = 40;
         // Allocated, not chosen. The refused leg used to stand a hundred blocks from the granted
         // one by hand; the allocator's stride is what keeps them apart now, and it is checked.
         final FixtureSite site = site();
@@ -476,7 +474,7 @@ public class VSShipEntryClientGroupE2ETest extends AbstractSharedVsClientE2ETest
         bot().holdKey(Keyboard.KEY_R);
         try {
             // Same shape as the granted leg's control: an altitude converging is a physical value,
-            // so it stays a poll — through the shared, load-scaled, self-reporting one. BY IDENTITY,
+            // so it stays a poll — through the shared, self-reporting one. BY IDENTITY,
             // because this leg's whole subject is a ship LEAVING the base, so the base is the one
             // point it is guaranteed not to be at by the end.
             ClientPoll.Result<Double> control = ClientPoll.until(bot()::waitTicks,
@@ -502,7 +500,7 @@ public class VSShipEntryClientGroupE2ETest extends AbstractSharedVsClientE2ETest
             // wait is the trace the failure reports — the altitude the craft actually reached, which
             // no record carries and which a shared `awaitMatching` deliberately cannot collect (its
             // stimulus parameter is for work a headless test must DO, never for an observation).
-            int climbBudget = (int) (800 * TestTimeouts.factor());
+            int climbBudget = 800;
             for (int attempt = 0; attempt < climbBudget && decided == null; attempt++) {
                 bot().waitTicks(5);
                 // The FIRST decision, not the last: a refusal arms a cooldown, and the gate then answers

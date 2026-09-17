@@ -1,6 +1,5 @@
 package zmaster587.advancedRocketry.test.client;
 
-import com.github.stannismod.forge.testing.TestTimeouts;
 
 import org.junit.FixMethodOrder;
 import org.junit.Test;
@@ -581,11 +580,10 @@ public class VSCrewInteriorBoardingE2ETest extends AbstractSharedVsClientE2ETest
         // start the +2 target tops out well below that edge.
         bot().holdKey(org.lwjgl.input.Keyboard.KEY_SPACE);
         try {
-            // Scale the climb-sampling ceiling by the fork factor (load-tail): under client
-            // frame-starvation the held-SPACE climb reaches the +2 target in more client ticks. This
-            // loop also accumulates the per-sample tracked/cam invariants, so scale the COUNT in place
-            // (early-exit on the +2 target kept) rather than threshold-poll it (it double-duties).
-            int climbIters = (int) Math.ceil(10 * TestTimeouts.factor());
+            // The climb-sampling ceiling is a COUNT in place, with the early exit on the +2 target
+            // kept, rather than a threshold poll: this loop also accumulates the per-sample
+            // tracked/cam invariants, so it double-duties.
+            int climbIters = 10;
             for (int i = 0; i < climbIters && subEnd[1] - subFly[1] < 2.0; i++) {
                 bot().waitTicks(2);
                 samples++;
@@ -641,7 +639,7 @@ public class VSCrewInteriorBoardingE2ETest extends AbstractSharedVsClientE2ETest
         // below is not this contract's). The descend leg also pins the OTHER vertical intent:
         // sneak sinks along the deck normal exactly as space climbs it.
         double[] subHigh = subEnd;
-        // Event-gated descend (load-scaled ceiling + early exit): hold sneak until the body has sunk
+        // Event-gated descend (bounded ceiling + early exit): hold sneak until the body has sunk
         // along the deck normal, instead of a fixed 14-tick budget a frame-starved client can under-sink
         // under concurrent-fork load. Census-Y is block-floored, so the predicate is a strict drop below
         // the captured start height.

@@ -274,10 +274,6 @@ public final class RealClientHarness implements AutoCloseable {
         javaArgs.add("-Dfml.noGrab=true");
         javaArgs.add("-Dforge.test.client=true");
         javaArgs.add("-Dforge.test.client.port=" + controlPort);
-        // Forward the wall-clock multiplier so the client-side ceilings (waitTicks, waitForWorld,
-        // client-thread task get) stretch with the fork count exactly like the test JVM's.
-        javaArgs.add("-D" + com.github.stannismod.forge.testing.TestTimeouts.PROP_FACTOR + "="
-                + com.github.stannismod.forge.testing.TestTimeouts.factor());
         javaArgs.add("-Djava.library.path=" + nativesDir.toAbsolutePath());
         javaArgs.add("-Dorg.lwjgl.librarypath=" + nativesDir.toAbsolutePath());
         javaArgs.add("-Dforge.test.client.logFile=" + clientLogFile.toAbsolutePath());
@@ -409,10 +405,7 @@ public final class RealClientHarness implements AutoCloseable {
     }
 
     private static ClientBot awaitClientBot(java.net.ServerSocket serverSocket) throws IOException {
-        // Load-scaled: the client JVM's boot (GL init + mod load + jar copying) is the slowest
-        // single phase and stretches most under concurrent forks.
-        serverSocket.setSoTimeout(com.github.stannismod.forge.testing.TestTimeouts
-                .scaledMillis(TimeUnit.MINUTES.toMillis(2)));
+        serverSocket.setSoTimeout((int) TimeUnit.MINUTES.toMillis(2));
         java.net.Socket socket = serverSocket.accept();
         return new ClientBot(socket);
     }

@@ -264,8 +264,8 @@ public class VSPilotStationDestructionE2ETest extends AbstractSharedVsClientE2ET
 
         final double baseY = y0;
         bot().holdKey(Keyboard.KEY_R);
-        // Event-gated hover-lift (load-scaled ceiling + early exit): a fixed 100-iteration budget
-        // under-lifts a frame-starved client under concurrent-fork load and reds a healthy climb.
+        // Event-gated hover-lift (bounded ceiling + early exit): the loop returns the moment the
+        // ship has climbed, so the ceiling is patience and not how far it flies.
         // NOTE: this leg returns with KEY_R still HELD — the caller releases it, so no finally here.
         ClientPoll.Result<Double> lift = ClientPoll.until(bot()::waitTicks,
                 () -> shipY(ship.id),

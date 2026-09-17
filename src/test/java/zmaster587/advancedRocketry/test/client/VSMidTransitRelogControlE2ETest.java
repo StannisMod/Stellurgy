@@ -1,6 +1,5 @@
 package zmaster587.advancedRocketry.test.client;
 
-import com.github.stannismod.forge.testing.TestTimeouts;
 import com.google.gson.JsonObject;
 
 import org.junit.After;
@@ -77,8 +76,8 @@ public class VSMidTransitRelogControlE2ETest extends AbstractSharedVsClientE2ETe
 
     /** Ticks the attitude hold is given to bring the hull level after the lift. The slew ceiling is
      *  2.0 rad/s and it ramps at 4.0 rad/s^2, so a half-turn is about 45 ticks; this is four times
-     *  that, and NOT load-scaled, because the slew advances per TICK — the number says how far the
-     *  hull turns, not how long we are willing to wait. */
+     *  that. The slew advances per TICK, so the number says how far the hull turns, not how long
+     *  we are willing to wait. */
     private static final int LEVEL_WINDOW_TICKS = 400;
 
     /** How long the CLIENT is given to perform a seating the server has already done, in ticks —
@@ -448,7 +447,7 @@ public class VSMidTransitRelogControlE2ETest extends AbstractSharedVsClientE2ETe
         // box stretches the climb through the client's TICK rate. Wall-clock-bound work, which is the
         // one shape a fork scale measures. (NOT "once per rendered frame": that was the standing
         // explanation until 2026-08-21 and it is false.)
-        int budget = (int) (40 * TestTimeouts.factor());
+        int budget = 40;
         double last = from;
         bot().holdKey(key);
         try {

@@ -1,6 +1,5 @@
 package zmaster587.advancedRocketry.test.client;
 
-import com.github.stannismod.forge.testing.TestTimeouts;
 import com.google.gson.JsonObject;
 
 import org.junit.FixMethodOrder;
@@ -59,13 +58,13 @@ public class VSShipFlightTelemetryE2ETest extends AbstractSharedVsClientE2ETest 
     /**
      * Client ticks the brake is given to act before anything is judged.
      *
-     * <p>300 is the budget this scenario has always given it — the replaced poll's single-fork
-     * ceiling was 150 iterations two ticks apart. It is kept unchanged on purpose: the instrument is
+     * <p>300 is the budget this scenario has always given it — the replaced poll's ceiling was 150
+     * iterations two ticks apart. It is kept unchanged on purpose: the instrument is
      * what is being fixed here, and moving the allowance in the same change would confound "the
      * question is now askable" with "the question got easier".</p>
      *
-     * <p>A TICK COUNT, so it is never scaled by the harness's load factor. It says how much WORLD the
-     * brake gets, not how long we are willing to wait for an answer.</p>
+     * <p>A TICK COUNT: it says how much WORLD the brake gets, not how long we are willing to wait
+     * for an answer.</p>
      */
     private static final int BRAKE_SETTLE_TICKS = 300;
 
@@ -154,9 +153,8 @@ public class VSShipFlightTelemetryE2ETest extends AbstractSharedVsClientE2ETest 
             awaitRecord(events, throttleMark, "pilot_input_set",
                     "the real held throttle must reach a ship's flight computer at all", 100,
                     "\"input\":\"set\"");
-            // Event-gated hover-lift: hold vertical-up until the ship has climbed, with a load-scaled
-            // ceiling + early exit. A fixed 100-iteration budget under-lifts a frame-starved client
-            // under concurrent-fork load and reds a healthy climb.
+            // Event-gated hover-lift: hold vertical-up until the ship has climbed, with a bounded
+            // ceiling + early exit.
             lift = ClientPoll.until(bot()::waitTicks,
                     () -> shipInfo().y,
                     y -> y - ship[1] > 2.0, 2, 100);
@@ -169,8 +167,8 @@ public class VSShipFlightTelemetryE2ETest extends AbstractSharedVsClientE2ETest 
 
         // The client's own velocity readout must be non-zero while the ship is moving. Read it from the
         // rendered HUD text: that is the string the pilot is looking at, not an internal field.
-        // Event-gated: poll the rendered HUD until it shows a non-zero speed (load-scaled ceiling +
-        // early exit; a fixed 30-iteration budget can miss a slow client under concurrent-fork load).
+        // Event-gated: poll the rendered HUD until it shows a non-zero speed (bounded ceiling +
+        // early exit).
         ClientPoll.Result<String> hud = ClientPoll.until(bot()::waitTicks,
                 this::freeFlightHud,
                 VSShipFlightTelemetryE2ETest::hasNonZeroSpeedReadout, 2, 30);
@@ -665,8 +663,8 @@ public class VSShipFlightTelemetryE2ETest extends AbstractSharedVsClientE2ETest 
             awaitRecord(events, throttleMark, "pilot_input_set",
                     "the real held throttle must reach a ship's flight computer at all", 100,
                     "\"input\":\"set\"");
-            // Event-gated hover-lift (load-scaled ceiling + early exit): a fixed 100-iteration budget
-            // under-lifts a frame-starved client under concurrent-fork load and reds a healthy climb.
+            // Event-gated hover-lift (bounded ceiling + early exit): the loop returns the moment the
+            // ship has climbed, so the ceiling is patience and not how far it flies.
             lift = ClientPoll.until(bot()::waitTicks,
                     () -> shipInfo().y,
                     y -> y - ship[1] > 2.0, 2, 100);
@@ -984,10 +982,7 @@ public class VSShipFlightTelemetryE2ETest extends AbstractSharedVsClientE2ETest 
         String reply = "";
         // This budget is a DEADLINE for a discrete commit with an early exit — how patient the test
         // is, never how far the world moves: the loop returns the moment the record appears, and
-        // reaching the end of it is a failure either way. Scaled like the ClientPoll ceilings beside
-        // it, because the pilot links are driven by the CLIENT and a frame-starved client under
-        // concurrent-fork load spends more of OUR ticks reaching the same commit.
-        tickBudget = (int) Math.ceil(tickBudget * TestTimeouts.factor());
+        // reaching the end of it is a failure either way.
         for (int waited = 0; waited <= tickBudget; waited += 5) {
             reply = events.since(mark, type);
             if (matchingRecords(reply, needles) > 0) {

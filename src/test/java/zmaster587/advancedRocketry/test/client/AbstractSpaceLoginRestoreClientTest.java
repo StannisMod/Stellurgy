@@ -1,6 +1,5 @@
 package zmaster587.advancedRocketry.test.client;
 
-import com.github.stannismod.forge.testing.TestTimeouts;
 import com.github.stannismod.forge.testing.client.ClientBot;
 import com.github.stannismod.forge.testing.client.RealClientHarness;
 import com.github.stannismod.forge.testing.junit.AbstractClientE2ETest;
@@ -183,8 +182,8 @@ public abstract class AbstractSpaceLoginRestoreClientTest {
      *
      * <p>Not a budget: the mount itself is a link and is awaited as one. What remains afterwards is
      * the rider's position being written each tick, which nothing publishes — so it is measured
-     * through a window, and this is the window. Unscaled by the load factor for the usual reason:
-     * the resolution advances per tick, so this number says how much the world does.</p>
+     * through a window, and this is the window. The resolution advances per tick, so this number
+     * says how much the world does.</p>
      */
     protected static final int SEAT_SETTLE_TICKS = 40;
 
@@ -1666,7 +1665,7 @@ public abstract class AbstractSpaceLoginRestoreClientTest {
 
     /**
      * Hold {@code key} until the client-rendered rider altitude climbs {@link #MIN_CLIMB} over
-     * {@code from} (bounded, early-exit, load-scaled), and FAIL HERE if it does not. Same
+     * {@code from} (bounded, early-exit), and FAIL HERE if it does not. Same
      * stimulus/observation pair as the planet-side relog-control pin: the REAL key in, the client's
      * own rendered player altitude out.
      *
@@ -1696,7 +1695,7 @@ public abstract class AbstractSpaceLoginRestoreClientTest {
         // work a fork scale measures correctly. The frame story was refuted 2026-08-21 by arithmetic
         // on a red: 111 packets over ~2150 ticks is exactly the 20-tick re-assert, i.e. no starvation
         // at all - so a climb that stalls is NOT explained by this budget and must not be read that way.
-        int budget = (int) (40 * TestTimeouts.factor());
+        int budget = 40;
         double last = from;
         bot().holdKey(key);
         try {
@@ -1709,7 +1708,7 @@ public abstract class AbstractSpaceLoginRestoreClientTest {
         }
         if ((last - from) < MIN_CLIMB) {
             String why = what + " — the client's own rendered rider altitude went from " + from
-                    + " to " + last + " over " + (budget * 5) + " ticks (load-scaled) with the key"
+                    + " to " + last + " over " + (budget * 5) + " ticks with the key"
                     + " held, which is " + (last - from) + " against the " + MIN_CLIMB
                     + " this needs. delivery=" + exec("artest vs seat-delivery");
             // This class types its arrangement failures through `ArrangementFailure`, not through a

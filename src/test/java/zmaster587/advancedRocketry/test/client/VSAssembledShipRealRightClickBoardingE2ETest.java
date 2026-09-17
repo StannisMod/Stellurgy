@@ -1,7 +1,6 @@
 package zmaster587.advancedRocketry.test.client;
 
 
-import com.github.stannismod.forge.testing.TestTimeouts;
 import com.google.gson.JsonObject;
 
 import org.junit.FixMethodOrder;
@@ -113,7 +112,7 @@ public class VSAssembledShipRealRightClickBoardingE2ETest extends AbstractShared
         // THE MULTIPLIER STAYS. What it waits on is VS building the ship on its OWN thread, off the
         // game loop: that work finishes in wall-clock time, so a busy box genuinely needs more game
         // ticks to elapse before it is done. Measured at 8 forks on the sibling gate test.
-        int budget = (int) (40 * TestTimeouts.factor());
+        int budget = 40;
 
         // ---- ARRANGEMENT: build, assemble, and get the ship LOADED with the client present. ------
         // WHERE THIS SCENARIO STANDS IS ASKED FOR, NOT CHOSEN: the plot is this scenario's own, and

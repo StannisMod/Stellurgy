@@ -1,7 +1,6 @@
 package zmaster587.advancedRocketry.test.client;
 
 import com.google.gson.JsonObject;
-import com.github.stannismod.forge.testing.TestTimeouts;
 
 import org.junit.After;
 import org.junit.FixMethodOrder;
@@ -66,9 +65,7 @@ public class VSFlightSmoothnessAcrossJumpE2ETest extends AbstractSharedVsClientE
      * settled cruise rather than one still accelerating — a ramp is a legitimately uneven
      * displacement and would read as roughness that is not the subject.
      *
-     * <p>A GAME-TICK count, deliberately not scaled by the fork factor: scaling it would change how
-     * far the ship flies rather than how long the test waits, making the experiment itself a
-     * function of machine load.</p>
+     * <p>A GAME-TICK count: it says how far the ship flies, not how long the test waits.</p>
      */
     private static final int FLY_TICKS = 140;
 

@@ -1,6 +1,5 @@
 package zmaster587.advancedRocketry.test.client;
 
-import com.github.stannismod.forge.testing.TestTimeouts;
 import org.junit.FixMethodOrder;
 import org.junit.Test;
 import org.junit.runners.MethodSorters;
@@ -131,11 +130,9 @@ public class VSShipUnmannedCruiseE2ETest extends AbstractSharedVsClientE2ETest {
             awaitRecord(events, rampMark, "pilot_input_set",
                     "the real held key must reach the ship's flight computer at all", 100,
                     "\"input\":\"set\"");
-            // Scale the ramp hold by the fork factor (load-tail): the setpoint ramp is driven by the
-            // CLIENT re-sending the held key each tick, so under frame-starvation fewer ramp steps land
-            // in a fixed 60 ticks. Scale the DURATION - no early-exit, the ramp needs the full hold and
-            // a position early-exit would release before the setpoint is ramped (audit: not poll-able).
-            int rampIters = (int) Math.ceil(30 * TestTimeouts.factor());
+            // The ramp needs the FULL hold: no early exit, because a position early-exit would
+            // release the key before the setpoint has ramped (audit: not poll-able).
+            int rampIters = 30;
             for (int i = 0; i < rampIters; i++) {
                 bot().waitTicks(2);
             }
@@ -221,10 +218,7 @@ public class VSShipUnmannedCruiseE2ETest extends AbstractSharedVsClientE2ETest {
         String reply = "";
         // This budget is a DEADLINE for a discrete commit with an early exit — how patient the test
         // is, never how far the world moves: the loop returns the moment the record appears, and
-        // reaching the end of it is a failure either way. Scaled by the fork factor for the same
-        // reason the ramp hold above is: both links are driven by the CLIENT, and a frame-starved
-        // client under concurrent-fork load spends more of OUR ticks reaching the same commit.
-        tickBudget = (int) Math.ceil(tickBudget * TestTimeouts.factor());
+        // reaching the end of it is a failure either way.
         for (int waited = 0; waited <= tickBudget; waited += 5) {
             reply = events.since(mark, type);
             if (matchingRecords(reply, needles) > 0) {

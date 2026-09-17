@@ -122,9 +122,7 @@ public final class RealDedicatedServerHarness implements AutoCloseable {
             startBridgeAcceptor(controlSocket, client);
             BootOutcome outcome;
             try {
-                // Load-scaled: N concurrent modded boots contend on disk + CPU.
-                outcome = awaitReadyOrBindFailure(process, transcript,
-                        com.github.stannismod.forge.testing.TestTimeouts.scaled(Duration.ofMinutes(3)));
+                outcome = awaitReadyOrBindFailure(process, transcript, Duration.ofMinutes(3));
             } catch (RuntimeException | InterruptedException failure) {
                 destroyAndJoin(process, readerThread);
                 closeQuietly(controlSocket);
@@ -352,8 +350,6 @@ public final class RealDedicatedServerHarness implements AutoCloseable {
         // reaches from the test source set INTO the product, and a shipped game, which never sets
         // this property and never carries the class, pays nothing for it.
         command.add("-Dfml.coreMods.load=com.github.stannismod.forge.testing.mixin.ForgeTestCoreMod");
-        command.add("-D" + com.github.stannismod.forge.testing.TestTimeouts.PROP_FACTOR + "="
-                + com.github.stannismod.forge.testing.TestTimeouts.factor());
         command.add("-cp");
         command.add(Objects.requireNonNull(System.getProperty("java.class.path"), "java.class.path"));
         command.add(launcherClass);
@@ -415,7 +411,7 @@ public final class RealDedicatedServerHarness implements AutoCloseable {
 
     /**
      * System property (milliseconds) bounding how long {@code start} waits after the ready marker
-     * for the child's bridge to dial back. Default 15 s, load-scaled.
+     * for the child's bridge to dial back. Default 15 s.
      *
      * <p>It bounds the wait; it cannot WAIVE it. There is no server this harness starts that has no
      * bridge — the child opens it from its own test-mode registration — so an escape hatch here
@@ -447,10 +443,7 @@ public final class RealDedicatedServerHarness implements AutoCloseable {
     private static void startBridgeAcceptor(java.net.ServerSocket controlSocket, TestClient client) {
         Thread acceptor = new Thread(() -> {
             try {
-                // Load-scaled like the client bot's handshake: a contended child reaches its
-                // server-starting handlers late.
-                controlSocket.setSoTimeout(com.github.stannismod.forge.testing.TestTimeouts
-                        .scaledMillis(TimeUnit.MINUTES.toMillis(2)));
+                controlSocket.setSoTimeout((int) TimeUnit.MINUTES.toMillis(2));
                 java.net.Socket socket = controlSocket.accept();
                 BufferedReader reader = new BufferedReader(
                         new InputStreamReader(socket.getInputStream(), StandardCharsets.UTF_8));
@@ -497,8 +490,8 @@ public final class RealDedicatedServerHarness implements AutoCloseable {
      * carries the mod that opens one. A branch no caller reaches is not a fallback.
      */
     private static void awaitBridge(TestClient client) throws InterruptedException, IOException {
-        long budgetMillis = Math.max(1_000L, com.github.stannismod.forge.testing.TestTimeouts
-                .scaledMillis(Long.getLong(PROP_BRIDGE_WAIT_MILLIS, 15_000L).longValue()));
+        long budgetMillis = Math.max(1_000L,
+                Long.getLong(PROP_BRIDGE_WAIT_MILLIS, 15_000L).longValue());
         long deadline = System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(budgetMillis);
         while (System.nanoTime() < deadline) {
             if (client.hasBridge()) {

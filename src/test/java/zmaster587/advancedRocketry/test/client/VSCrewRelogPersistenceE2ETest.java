@@ -284,12 +284,10 @@ public class VSCrewRelogPersistenceE2ETest extends AbstractSharedVsClientE2ETest
      * about two and a half times that. Two legs command the same 170-degree roll and both wait
      * exactly this long, because it is a property of the hold and not of either occasion.</p>
      *
-     * <p><b>Deliberately NOT scaled by the load factor.</b> That factor stretches wall clock, and
-     * this number does not denote how long we are willing to wait — it denotes how far the craft
-     * turns, which is a fixed amount per tick. Scaling it would turn the ship further on a loaded
-     * box and make the same test a different experiment per machine. What protects the wait under
-     * load is the other half of the arrangement: the attitude is ADOPTED and then HELD, so a
-     * window longer than the slew reads the same state as one exactly its length.</p>
+     * <p>This number does not denote how long we are willing to wait — it denotes how far the craft
+     * turns, which is a fixed amount per tick. What protects the wait under load is the other half
+     * of the arrangement: the attitude is ADOPTED and then HELD, so a window longer than the slew
+     * reads the same state as one exactly its length.</p>
      */
     private static final int ROLL_WINDOW_TICKS = 80;
 
@@ -670,8 +668,7 @@ public class VSCrewRelogPersistenceE2ETest extends AbstractSharedVsClientE2ETest
         // condition is the gate below, which is the one shape question 2 does not license however
         // physical the value: its green says "some sample was inverted". The same window as the
         // roll leg above, for the same reason: the hold slews at ~2 rad/s, half a turn is ~31
-        // ticks, and the attitude is HELD once reached. NOT scaled by the load factor, for the
-        // reason given there.
+        // ticks, and the attitude is HELD once reached.
         //
         // Read through the shared upYOf, which uses the full expression: the single-axis shortcut
         // this leg carried (1 - 2*qx^2) answers a confident 1.0 for a ship that rolled about a

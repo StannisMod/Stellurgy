@@ -111,7 +111,7 @@ public class VSCrewRidesRollingDeckE2ETest extends AbstractSharedVsClientE2ETest
         assertTrue("a with-pilot-seat build must route to a ship: " + assemble,
                 assemble.contains("\"rocketCount\":0"));
 
-        // Event-gated async-VS assembly barrier (load-scaled ceiling + early exit): AWAIT the SPAWNED
+        // Event-gated async-VS assembly barrier (bounded ceiling + early exit): AWAIT the SPAWNED
         // stage instead of a fixed tick budget that reds a healthy spawn under concurrent-fork load.
         ClientPoll.Result<Integer> spawned = ClientPoll.until(bot()::waitTicks,
                 () -> count("ship-count-all"), n -> n >= 1, 5, 40);
@@ -126,7 +126,7 @@ public class VSCrewRidesRollingDeckE2ETest extends AbstractSharedVsClientE2ETest
                 ShipIdentity.nameFromAssembly(assemble), 40, () -> bot().waitTicks(5));
 
         exec("tp @a " + (bx + 0.5) + " " + (by + 8) + " " + (bz + 0.5) + " 0 0");
-        // Await the ship LOADING near the client (same event-gated barrier, load-scaled + early exit).
+        // Await the ship LOADING near the client (same event-gated barrier, bounded + early exit).
         ClientPoll.Result<Integer> loadedShips = ClientPoll.until(bot()::waitTicks,
                 () -> count("ship-count"), n -> n >= 1, 5, 40);
         int loaded = loadedShips.value;

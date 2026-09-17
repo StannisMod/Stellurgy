@@ -2,7 +2,6 @@ package zmaster587.advancedRocketry.test.server;
 
 import zmaster587.advancedRocketry.test.Reply;
 import zmaster587.advancedRocketry.test.ShipReadiness;
-import com.github.stannismod.forge.testing.TestTimeouts;
 
 import org.junit.After;
 import zmaster587.advancedRocketry.test.GameTicks;
@@ -94,7 +93,7 @@ public class InterstellarJumpLegE2ETest extends AbstractSharedServerTest {
     private static final String BUILDER_POS = "builderPos";
     private static final Pattern CELL_KEY = Pattern.compile("^(-?\\d+)_(-?\\d+)_(-?\\d+)$");
 
-    /** Poll iterations for the CLIMB into space (250 ms apart), stretched by the fork factor. */
+    /** Server ticks the CLIMB into space is given. */
     private static final int SETTLE_TICKS = 600;
 
     /** The same, for a ship becoming loadable in its slot - the old 40 x 250 ms. */

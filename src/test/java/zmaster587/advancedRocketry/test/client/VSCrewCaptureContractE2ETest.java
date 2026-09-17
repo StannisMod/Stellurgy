@@ -898,9 +898,7 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
         // SIXTY TICKS, unscaled. This is how long the stick is held, not how long the test is
         // willing to wait: `waitTicks(1)` advances one game tick whatever the wall clock is doing,
         // so sixty of them produce sixty per-tick records on an idle box and on a loaded one alike.
-        // It used to be multiplied by the harness load factor, which drove the craft three times as
-        // far at eight forks — a different experiment on every machine, for no gain: the only
-        // assertion below is that the trace has per-tick content.
+        // The only assertion below is that the trace has per-tick content.
         for (int i = 0; i < 60; i++) {
             exec("artest vs seat-input-by-id 0 " + scenarioShipId + " 0 1 0 0 0 0");
             bot().waitTicks(1);

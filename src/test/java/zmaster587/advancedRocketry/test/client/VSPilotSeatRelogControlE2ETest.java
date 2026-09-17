@@ -1,6 +1,5 @@
 package zmaster587.advancedRocketry.test.client;
 
-import com.github.stannismod.forge.testing.TestTimeouts;
 import com.google.gson.JsonObject;
 
 import org.junit.FixMethodOrder;
@@ -107,7 +106,7 @@ public class VSPilotSeatRelogControlE2ETest extends AbstractSharedVsClientE2ETes
         // added, since a mark taken before the assembly was queued, is THIS scenario's ship by
         // construction, where the count it replaces is answered by every neighbour that ever
         // assembled one.
-        int budget = (int) (40 * TestTimeouts.factor());
+        int budget = 40;
         Events events = events();
         long spawnMark = events.markInstrumented();
         String assemble = assembleFixture(BX, BY, BZ);
@@ -191,7 +190,7 @@ public class VSPilotSeatRelogControlE2ETest extends AbstractSharedVsClientE2ETes
         // when or how often the seat changed hands in between. THE MULTIPLIER STAYS in the budget:
         // this waits for state the SERVER restores on login to reach the client and be applied, a
         // round trip whose latency is the machine's, not the game's.
-        int rejoinBudget = (int) (60 * TestTimeouts.factor());
+        int rejoinBudget = 60;
         JsonObject riding = awaitClientMount(relogOnClient,
                 "a pilot who logged out SEATED must log back in SEATED - no re-board, and his own"
                         + " client must perform the mount the login restored",

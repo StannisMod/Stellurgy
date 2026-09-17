@@ -1,6 +1,5 @@
 package zmaster587.advancedRocketry.test.client;
 
-import com.github.stannismod.forge.testing.TestTimeouts;
 import com.google.gson.JsonObject;
 import org.junit.FixMethodOrder;
 import org.junit.Test;
@@ -146,9 +145,7 @@ public class VSGroundFlightGroupE2ETest extends AbstractSharedVsClientE2ETest {
      * must stop on its own claim, at least one assertion has to read a fact the stop did not
      * settle, or the leg is back to asserting its own exit condition.</p>
      *
-     * <p>The ceiling is the poll's own — 2 ticks × 60 iterations, scaled by
-     * {@link TestTimeouts#factor()} — so a frame-starved client under concurrent-fork load still
-     * gets every tick it used to.</p>
+     * <p>The ceiling is the poll's own — 2 ticks × 60 iterations.</p>
      */
     private double[] travelWindow(String shipId, int key, Axis driven, Axis other,
                                   double drivenBefore, double otherBefore) throws Exception {
@@ -157,7 +154,7 @@ public class VSGroundFlightGroupE2ETest extends AbstractSharedVsClientE2ETest {
         String endedBy = "window";
         bot().holdKey(key);
         try {
-            int ceiling = (int) Math.ceil(2 * 60 * TestTimeouts.factor());
+            int ceiling = 2 * 60;
             for (int spent = 0; spent < ceiling && Math.abs(best) <= 2.0; spent += 2) {
                 bot().waitTicks(2);
                 String info = shipInfoById(shipId);
@@ -703,7 +700,7 @@ public class VSGroundFlightGroupE2ETest extends AbstractSharedVsClientE2ETest {
         double yAfter = yBefore;
         bot().holdKey(Keyboard.KEY_R); // flightVerticalUp
         try {
-            int ceiling = (int) Math.ceil(2 * 100 * TestTimeouts.factor());
+            int ceiling = 2 * 100;
             for (int spent = 0; spent < ceiling && maxLift <= 1.5; spent += 2) {
                 bot().waitTicks(2);
                 Double climbed = travelOrNull(shipInfoById(shipId), Y, yBefore);

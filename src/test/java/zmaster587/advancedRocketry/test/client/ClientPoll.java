@@ -2,10 +2,9 @@ package zmaster587.advancedRocketry.test.client;
 
 import java.util.function.Predicate;
 
-import com.github.stannismod.forge.testing.TestTimeouts;
 
 /**
- * Deterministic, load-scaled "poll a client stimulus until the EVENT it is waiting for actually
+ * Deterministic "poll a client stimulus until the EVENT it is waiting for actually
  * happens" — the reusable form of the ad-hoc early-exit loops scattered across the VS client e2e
  * suite.
  *
@@ -16,10 +15,9 @@ import com.github.stannismod.forge.testing.TestTimeouts;
  * lands on the pre-state and the test goes red <em>though nothing is broken</em>. That is the
  * false-positive class this helper removes.</p>
  *
- * <p>The fix mirrors the harness's own convention (see {@link TestTimeouts}): a ceiling that scales
- * by the same {@code forge.test.timeout.factor} the rest of the framework uses, and an EARLY EXIT
- * the moment the predicate holds — so an idle machine exits at the same iteration it always did, a
- * loaded one gets the iterations it actually needs. It advances real CLIENT ticks through the caller's
+ * <p>The fix is a fixed iteration ceiling with an EARLY EXIT the moment the predicate holds — the
+ * same budget on every box, so a run that needed a busier machine's extra patience is a red about
+ * the wait rather than about the machine. It advances real CLIENT ticks through the caller's
  * stepper (a {@code ClientBot::waitTicks} reference), honouring the rule that a client stimulus is
  * driven by the real client; and it reads whatever the caller observes — a client
  * static / {@code reportState} for a client-observed threshold (the continuous-threshold member), or
@@ -68,9 +66,8 @@ public final class ClientPoll {
      *
      * <p>Samples immediately, so the first reading costs no ticks — the window is then at least
      * {@code (samples - 1) * ticksBetween} client ticks, and more on a slow box, which is the
-     * harmless direction. The tick counts are how much WORLD the window covers and are therefore
-     * NEVER scaled by the harness's load factor: scaling them would make the same test a different
-     * experiment on every machine.</p>
+     * harmless direction. The tick counts are how much WORLD the window covers, and they are the
+     * same on every machine.</p>
      */
     public static <T> java.util.List<T> observe(Step step, Probe<T> probe,
                                                 int samples, int ticksBetween) throws Exception {
@@ -101,7 +98,7 @@ public final class ClientPoll {
         public final boolean satisfied;
         /** Number of {@code step} iterations actually run — 0 if already satisfied on entry. */
         public final int iterations;
-        /** The load-scaled iteration ceiling this poll was allowed. */
+        /** The iteration ceiling this poll was allowed. */
         public final int ceiling;
         /** The last value the probe returned. */
         public final T value;
@@ -122,13 +119,13 @@ public final class ClientPoll {
 
     /**
      * Poll {@code probe} every {@code stepTicks} client ticks until {@code predicate} holds, giving up
-     * after {@code baseIterations} scaled by {@link TestTimeouts#factor()}.
+     * after {@code baseIterations}.
      *
      * @param step           advances client ticks (real client stimulus)
      * @param probe          reads the observed value each iteration
      * @param predicate      the event being waited for
      * @param stepTicks      client ticks to advance per iteration (the old {@code waitTicks(N)} N)
-     * @param baseIterations single-fork iteration ceiling (the old fixed loop count); scaled by factor()
+     * @param baseIterations the iteration ceiling (the old fixed loop count)
      * @return the outcome; callers assert on {@link Result#satisfied} and read {@link Result#value}
      */
     public static <T> Result<T> until(Step step, Probe<T> probe, Predicate<T> predicate,
@@ -139,9 +136,7 @@ public final class ClientPoll {
         if (baseIterations <= 0) {
             throw new IllegalArgumentException("baseIterations must be > 0, was " + baseIterations);
         }
-        // Never below the single-fork budget (factor() clamps to >= 1); round up so a fractional
-        // factor never SHRINKS the ceiling below its base.
-        int ceiling = (int) Math.ceil(baseIterations * TestTimeouts.factor());
+        int ceiling = baseIterations;
 
         T last = probe.read();
         int iterations = 0;

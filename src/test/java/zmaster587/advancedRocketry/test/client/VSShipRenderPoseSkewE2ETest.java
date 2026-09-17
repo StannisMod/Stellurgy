@@ -78,8 +78,8 @@ public class VSShipRenderPoseSkewE2ETest extends AbstractClientE2ETest {
      * 2.79 rad turn is about 45 ticks end to end, and the gate this leg checks (an up-Y below -0.3,
      * i.e. past 107 degrees) is crossed inside the first 30. This is roughly three times that.</p>
      *
-     * <p>NOT scaled by the load factor, and that is the point of the form: the slew advances per
-     * TICK, so the number says how far the craft turns, not how long we are willing to wait. What
+     * <p>The slew advances per TICK, so the number says how far the craft turns, not how long we
+     * are willing to wait. What
      * makes a window safe here is that the attitude is HELD once reached — a longer window reads the
      * same state — which is exactly what a loop exiting on the assertion below it cannot claim.</p>
      */
@@ -220,14 +220,14 @@ public class VSShipRenderPoseSkewE2ETest extends AbstractClientE2ETest {
                 + " on the client before its fall can be watched", POS_LOOK_BUDGET_TICKS);
         double preY = bot().reportState().get("playerY").getAsDouble();
         long preTicks = bot().reportState().get("ticks").getAsLong();
-        // Event-gated fall detection (load-scaled ceiling + early exit): a fixed 60-iteration budget can
-        // miss a slow chunk-stream / tick start under concurrent-fork load and red a healthy encounter.
+        // Event-gated fall detection (bounded ceiling + early exit): the loop returns the moment the
+        // body has fallen, so the ceiling is patience and not how far it falls.
         ClientPoll.Result<Double> fall = ClientPoll.until(bot()::waitTicks,
                 () -> bot().reportState().get("playerY").getAsDouble(),
                 y -> Math.abs(y - preY) > 0.4, 2, 60);
         // WHAT THIS FAILURE MAY NOT BLAME - three candidates are now excluded BY CONSTRUCTION.
         // (1) "client tick/chunk-stream stall": the poll advances through waitTicks, which ERRORS on
-        // its own load-scaled timeout, so a completed poll is proof the client ticked - the delta is
+        // its own timeout, so a completed poll is proof the client ticked - the delta is
         // printed rather than asserted so the proof travels with the red. (2) "the teleport never
         // landed": the client's own record of applying it was awaited above, and preY was read only
         // afterwards. (3) "the world's ground caught him": the column above the ship was filled with

@@ -323,8 +323,7 @@ public final class ForgeTestClientBootstrap {
 
     private static Socket connectWithRetry(int port) throws IOException {
         IOException last = null;
-        long deadline = System.nanoTime() + com.github.stannismod.forge.testing.TestTimeouts
-                .scaledNanos(TimeUnit.MINUTES.toNanos(2));
+        long deadline = System.nanoTime() + TimeUnit.MINUTES.toNanos(2);
 
         while (System.nanoTime() < deadline) {
             try {
@@ -1641,10 +1640,7 @@ public final class ForgeTestClientBootstrap {
     private static JsonObject waitTicks(JsonObject request) {
         int ticks = boundedInt(request, "ticks", 0, 1000000);
         long start = CLIENT_TICKS.get();
-        // Load-scaled: under concurrent forks the effective client tick rate drops and a fixed
-        // wall-clock ceiling would turn a tick-counted wait into a spurious timeout.
-        long deadline = System.nanoTime() + com.github.stannismod.forge.testing.TestTimeouts
-                .scaledNanos(TimeUnit.MINUTES.toNanos(2));
+        long deadline = System.nanoTime() + TimeUnit.MINUTES.toNanos(2);
 
         while (CLIENT_TICKS.get() - start < ticks) {
             if (System.nanoTime() > deadline) {
@@ -1661,8 +1657,7 @@ public final class ForgeTestClientBootstrap {
     }
 
     private static void waitForWorld() {
-        long deadline = System.nanoTime() + com.github.stannismod.forge.testing.TestTimeouts
-                .scaledNanos(TimeUnit.MINUTES.toNanos(2));
+        long deadline = System.nanoTime() + TimeUnit.MINUTES.toNanos(2);
         while (System.nanoTime() < deadline) {
             try {
                 Boolean ready = runOnClientThread(() -> {
@@ -1688,8 +1683,7 @@ public final class ForgeTestClientBootstrap {
         FutureTask<T> task = new FutureTask<>(callable);
         mc.addScheduledTask(task);
         try {
-            return task.get(com.github.stannismod.forge.testing.TestTimeouts
-                    .scaledMillis(TimeUnit.MINUTES.toMillis(2)), TimeUnit.MILLISECONDS);
+            return task.get(TimeUnit.MINUTES.toMillis(2), TimeUnit.MILLISECONDS);
         } catch (Exception exception) {
             throw new RuntimeException(exception);
         }

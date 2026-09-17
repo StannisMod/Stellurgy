@@ -5,7 +5,6 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Locale;
 
-import com.github.stannismod.forge.testing.TestTimeouts;
 import com.github.stannismod.forge.testing.client.ClientBot;
 import com.github.stannismod.forge.testing.client.RealClientHarness;
 import com.github.stannismod.forge.testing.junit.AbstractClientE2ETest;
@@ -294,7 +293,7 @@ public class M1PlanetToPlanetMilestoneE2ETest {
         // THE MULTIPLIER STAYS. What it waits on is VS building the ship on its OWN thread, off the
         // game loop: that work finishes in wall-clock time, so a busy box genuinely needs more game
         // ticks to elapse before it is done. Measured at 8 forks on the sibling gate test.
-        int budget = (int) (40 * TestTimeouts.factor());
+        int budget = 40;
         // The server's ordered log, opened at the top of the loop rather than at leg 4. Every leg
         // from the boarding onward reads it now — the seat's verdict, the console's, the crossings'
         // — and a reader that only exists from halfway down is one more reason for the early legs to
@@ -452,7 +451,7 @@ public class M1PlanetToPlanetMilestoneE2ETest {
         // 4 000 ticks is the old 800 polls of 5.
         long entryMark = events.markInstrumented();
         long entryClientMark = clientEvents().mark();
-        int climbBudget = (int) (4000 * TestTimeouts.factor());
+        int climbBudget = 4000;
         bot().holdKey(Keyboard.KEY_R);
         try {
             events.assertChain(entryMark, "a ship climbing under its own power past the orbit line ("
@@ -912,10 +911,8 @@ public class M1PlanetToPlanetMilestoneE2ETest {
         // moves is simply a body whose bearing has changed, and the chase converges for the same
         // reason the foot race does.
         //
-        // The burst is a count of GAME ticks, sized from the component it is flying. {@code
-        // TestTimeouts.factor()} stretches WALL-CLOCK ceilings so concurrent forks do not time out; a
-        // tick count is not one. Scaling the burst by it made each step three times LONGER on an
-        // 8-fork box than on a 1-fork box — it made this leg's geometry a function of machine load.
+        // The burst is a count of GAME ticks, sized from the component it is flying, and it is the
+        // same count on every box.
         //
         // What that does NOT remove: the ship is integrated on the physics mod's own wall-clock
         // thread while the body's position advances on server ticks, so how far a burst of N client
@@ -1531,7 +1528,7 @@ public class M1PlanetToPlanetMilestoneE2ETest {
         // THE MULTIPLIER STAYS. What it waits on is VS building the ship on its OWN thread, off the
         // game loop: that work finishes in wall-clock time, so a busy box genuinely needs more game
         // ticks to elapse before it is done. Measured at 8 forks on the sibling gate test.
-        int assembleBudget = (int) (90 * TestTimeouts.factor());
+        int assembleBudget = 90;
         for (int attempt = 0; attempt < assembleBudget && ships < 1; attempt++) {
             // The screen can be knocked shut (a chunk reload, a stray escape); re-open it rather
             // than clicking into nothing, so a red names the machine and not a lost window.

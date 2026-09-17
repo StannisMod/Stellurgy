@@ -59,11 +59,9 @@ public class VSUnpilotedEntryE2ETest extends AbstractSharedServerTest {
 
     private static final String BUILDER_POS = "builderPos";
 
-    /** Poll iterations (250 ms apart) for the async crossing, stretched by the build's fork factor. */
     /**
      * Budgets in SERVER TICKS: 600 is the thirty seconds the old 120 x 250 ms meant on an idle box,
-     * 200 the ten of 40 x 250 ms. The fork multiplier is deleted rather than re-tuned - it said how
-     * much of the machine this test shares, and a crossing needs ticks, not a share of a box.
+     * 200 the ten of 40 x 250 ms. A crossing needs ticks, not a share of a box.
      */
     private static final int SETTLE_TICKS = 600;
 

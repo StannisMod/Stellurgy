@@ -1,6 +1,5 @@
 package zmaster587.advancedRocketry.test.client;
 
-import com.github.stannismod.forge.testing.TestTimeouts;
 
 import com.google.gson.JsonObject;
 
@@ -165,9 +164,9 @@ public class VSRemoteBodyModelGateE2ETest extends AbstractSharedVsClientE2ETest 
      *
      * <p>The hold slews at about 2 rad/s, so this turn is roughly 28 ticks of slewing; this is about
      * four times that, which is slack for a craft that has to start from wherever the previous leg
-     * left it. It is NOT scaled by the load factor: the slew advances per tick, so the number says
-     * how far the craft turns rather than how long we are willing to wait, and what protects it
-     * under load is that the attitude is HELD once reached. The reached value is printed on every
+     * left it. The slew advances per tick, so the number says how far the craft turns rather than
+     * how long we are willing to wait, and what protects it under load is that the attitude is HELD
+     * once reached. The reached value is printed on every
      * run, so the size can be re-argued from a measurement.</p>
      *
      * <p>Measured on the run that introduced this form, in both scenarios of the class:
@@ -285,7 +284,7 @@ public class VSRemoteBodyModelGateE2ETest extends AbstractSharedVsClientE2ETest 
         System.out.println("[modelgate] legA staging summary: "
                 + (legWindow != null ? "DREW after " + drawAttempts + " draw-attempt(s)" : "NEVER DREW")
                 + " | " + staging);
-        assertTrue("the staged body was never DRAWN by the client within the load-scaled window, so "
+        assertTrue("the staged body was never DRAWN by the client within the window, so "
                         + "nothing below can be concluded about the model gate's DECISION. The "
                         + "diagnostic names the dead stage and reports both sides of the subject "
                         + "(alive on the server? held by the client?) and what the camera is standing "
@@ -794,7 +793,7 @@ public class VSRemoteBodyModelGateE2ETest extends AbstractSharedVsClientE2ETest 
         // neighbour.
         String info = "";
         double[] where = null;
-        int loadIters = (int) Math.ceil(40 * TestTimeouts.factor());
+        int loadIters = 40;
         for (int i = 0; i < loadIters && where == null; i++) {
             bot().waitTicks(5);
             info = shipInfo();

@@ -24,12 +24,10 @@ public final class ClientBot implements Closeable {
     ClientBot(Socket socket) throws IOException {
         this.socket = socket;
         this.socket.setTcpNoDelay(true);
-        // Load-scaled: a starved client thread queue stretches every command round-trip.
-        this.socket.setSoTimeout(com.github.stannismod.forge.testing.TestTimeouts
-                .scaledMillis(Duration.ofMinutes(2).toMillis()));
+        this.socket.setSoTimeout((int) Duration.ofMinutes(2).toMillis());
         this.reader = new BufferedReader(new java.io.InputStreamReader(socket.getInputStream(), StandardCharsets.UTF_8));
         this.writer = new BufferedWriter(new java.io.OutputStreamWriter(socket.getOutputStream(), StandardCharsets.UTF_8));
-        awaitReady(com.github.stannismod.forge.testing.TestTimeouts.scaled(Duration.ofMinutes(2)));
+        awaitReady(Duration.ofMinutes(2));
     }
 
     public void waitForWorld() throws IOException {
@@ -689,9 +687,9 @@ public final class ClientBot implements Closeable {
     /**
      * Is the client still answering? Answers within {@code timeoutMillis} whatever the client does.
      *
-     * <p>This exists because the command channel's own read timeout is <b>two minutes, scaled by
-     * the fork factor</b> ({@link #ClientBot} sets it) — six minutes at eight forks. That is right
-     * for a command: a starved client thread queue genuinely takes a long time. It is wrong for a
+     * <p>This exists because the command channel's own read timeout is <b>two minutes</b>
+     * ({@link #ClientBot} sets it). That is right for a command: a starved client thread queue
+     * genuinely takes a long time. It is wrong for a
      * liveness question asked on a failure path, and the two death modes are not alike:</p>
      *
      * <ul>
@@ -705,7 +703,7 @@ public final class ClientBot implements Closeable {
      * in both. So this borrows the socket with its own short timeout and restores the original.</p>
      *
      * <p><b>Trade, stated:</b> a merely SLOW client can be reported dead. A normal round trip is
-     * milliseconds, so pass something generous (seconds, scaled by the fork factor) — never a value
+     * milliseconds, so pass something generous (seconds) — never a value
      * close to a real round trip, or a loaded box starts declaring corpses.</p>
      *
      * @return true if the client answered a trivial command in time; false on ANY failure
