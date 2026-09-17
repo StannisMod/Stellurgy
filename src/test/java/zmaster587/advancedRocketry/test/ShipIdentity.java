@@ -20,6 +20,11 @@ import static org.junit.Assert.assertTrue;
  * {@code verdict} / {@code hullStand}. So this is not a new capability; it is spending one that was
  * already being thrown away.</p>
  *
+ * <p><b>That reply is read by {@link DeckCapture}, not here</b> (2026-09-17): the anchor, the
+ * containing hulls and the first-contact candidate are fields of ONE producer, and its reader owns
+ * them together with the branch rules that say when each exists. What stays in this class is
+ * identity BRIDGING — a durable name to a physics id and back — which is not one verb's answer.</p>
+ *
  * <p>Kept out of any base class deliberately: the classes that need it sit under three different
  * bases ({@code AbstractSharedVsClientE2ETest}, {@code AbstractSpaceLoginRestoreClientTest}, the
  * harness's own per-method base), and a helper that only some of them can reach is how the same ten
@@ -165,68 +170,6 @@ public final class ShipIdentity {
         throw new AssertionError("ARRANGEMENT: no hull in dim " + dim + " ever carried the name "
                 + durableShipId + " within " + attempts + " attempts, so nothing below could be"
                 + " addressed to this scenario's own craft; last reply: " + reply);
-    }
-
-    /** The ship holding the capture described by a {@code deck-capture} reply, or {@code null} when
-     *  the reply says nobody holds it. Never absent from a reply: production emits the key with a
-     *  null value, so a missing key means the reply is not a deck-capture answer at all. */
-    public static String anchorOf(String deckCaptureReply) {
-        return Reply.of("artest vs deck-capture", String.valueOf(deckCaptureReply))
-                .text("anchorShipId");
-    }
-
-    /**
-     * Every loaded hull whose world box contains the body a {@code deck-capture} reply is about, as
-     * the reply's own JSON array text (e.g. {@code ["a1"]}), or {@code null} when the reply carries
-     * no such key.
-     *
-     * <p>Returned as TEXT, including its brackets, on purpose: the size is the part a caller has to
-     * assert, and a helper that handed back "the first one" would rebuild at the reading end exactly
-     * the first-match ambiguity the list exists to expose. Compare against {@code "[\"" + shipId +
-     * "\"]"} to say "this ship, and no other hull is here".</p>
-     *
-     * <p>This is the identity behind {@code shipSupportObstacles} on the reply's GATED branch — the
-     * one taken for a body that cannot steer (a mob, a stand, an item), where production resolves the
-     * ship frame by containment and takes the first match, so the count names nobody.</p>
-     */
-    public static String containingShipsOf(String deckCaptureReply) {
-        // The field is an ARRAY and every caller prints or compares it as one token, so it is handed
-        // back as the array's own text rather than as its members.
-        return Reply.of("artest vs deck-capture", String.valueOf(deckCaptureReply))
-                .text("containingShipIds");
-    }
-
-    /** The ship a {@code deck-capture} reply says would TAKE this body on first contact — the
-     *  identity behind {@code shipSupportObstacles} / {@code supportedByShip} for a body nothing has
-     *  captured yet. Null when the reply describes a body that is already tracked (there the anchor
-     *  is the identity) or one no hull supports. */
-    public static String firstContactCandidateOf(String deckCaptureReply) {
-        return Reply.of("artest vs deck-capture", String.valueOf(deckCaptureReply))
-                .text("firstContactCandidate");
-    }
-
-    /**
-     * Fail unless the capture in {@code deckCaptureReply} is held by {@code expectedShipId}.
-     *
-     * <p>Asserted BESIDE the caller's own flag check rather than instead of it: "he is held" and "he
-     * is held by this ship" are different claims and a scenario usually means both. The failure
-     * prints the whole reply, because the interesting case is not "no anchor" but an anchor that
-     * names a craft the reader has to recognise as a neighbour.</p>
-     *
-     * @param what the scenario's own sentence for what the capture means, used in the failure
-     */
-    public static void assertCaptureAnchoredOn(String deckCaptureReply, String expectedShipId,
-                                               String what) {
-        assertTrue("this assertion cannot mean anything without the scenario's own ship id — it was"
-                + " null, so nothing distinguishes this craft from a neighbour's: " + deckCaptureReply,
-                expectedShipId != null);
-        String anchor = anchorOf(deckCaptureReply);
-        assertTrue(what + " — the reply names NO ship holding this body, so \"" + what + "\" cannot"
-                + " be read out of it: " + deckCaptureReply, anchor != null && !anchor.isEmpty());
-        assertEquals(what + " — the body is held, but by a DIFFERENT craft than this scenario's."
-                + " On a world this class shares with its siblings that is the whole failure mode,"
-                + " and every flag in the reply reads the same either way: " + deckCaptureReply,
-                expectedShipId, anchor);
     }
 
     /** The ship an {@code artest vs player-ship-data} reply says the body is inside, or {@code null}

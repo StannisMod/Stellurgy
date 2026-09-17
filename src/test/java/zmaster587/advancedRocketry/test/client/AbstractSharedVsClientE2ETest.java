@@ -7,6 +7,7 @@ import java.util.regex.Pattern;
 
 import org.lwjgl.input.Keyboard;
 
+import zmaster587.advancedRocketry.test.DeckCapture;
 import zmaster587.advancedRocketry.test.Events;
 import zmaster587.advancedRocketry.test.TransitStatus;
 import zmaster587.advancedRocketry.test.Reply;
@@ -768,10 +769,11 @@ public abstract class AbstractSharedVsClientE2ETest extends AbstractSharedClient
      * @param what   the scenario's sentence for what the capture means, used in the failure
      * @return the single reply, for the caller's own flag assertions and failure messages
      */
-    protected final String deckCaptureOfThisShip(String shipId, String what) throws Exception {
-        String reply = exec("artest vs deck-capture");
+    protected final DeckCapture deckCaptureOfThisShip(String shipId, String what) throws Exception {
+        DeckCapture capture = DeckCapture.read(this::exec);
+        String reply = capture.raw();
         try {
-            zmaster587.advancedRocketry.test.ShipIdentity.assertCaptureAnchoredOn(reply, shipId, what);
+            capture.requireAnchoredOn(shipId, what);
         } catch (AssertionError notHeld) {
             // WHERE THE SHIP IS, beside the verdict that nobody is holding this body. The reply
             // already says "no hull contains him"; it cannot say whether that is because the body is
@@ -798,7 +800,7 @@ public abstract class AbstractSharedVsClientE2ETest extends AbstractSharedClient
                     // names only the ones that matched — never the ones that were asked.
                     + " | every loaded hull: " + exec("artest vs ships-loaded 0"), notHeld);
         }
-        return reply;
+        return capture;
     }
 
     /**
@@ -912,12 +914,10 @@ public abstract class AbstractSharedVsClientE2ETest extends AbstractSharedClient
      * @return the entity id it armed
      */
     protected final int openDeckGateWindow(int recordsEach) throws Exception {
-        String reply = exec("artest vs deck-capture");
-        Reply capture = Reply.of("artest vs deck-capture", String.valueOf(reply));
-        assertTrue("the deck-capture reply must carry entityId, or the gate window cannot be armed"
-                + " on a named body — and a window armed on the wrong body is silent in exactly the"
-                + " way a body nobody asked about is: " + reply, capture.has("entityId"));
-        int entityId = capture.integer("entityId");
+        // The reader REFUSES a reply carrying no entityId, which is what this method's own check
+        // asserted: a window armed on the wrong body is silent in exactly the way a body nobody
+        // asked about is.
+        int entityId = DeckCapture.read(this::exec).entityId;
         bot().invokeStaticInt(DECK_GATE_WINDOW, "open", entityId, recordsEach);
         return entityId;
     }

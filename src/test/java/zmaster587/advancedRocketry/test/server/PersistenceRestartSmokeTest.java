@@ -1,5 +1,6 @@
 package zmaster587.advancedRocketry.test.server;
 
+import zmaster587.advancedRocketry.test.DimInfo;
 import zmaster587.advancedRocketry.test.Reply;
 import com.github.stannismod.forge.testing.junit.AbstractHeadlessServerTest;
 import com.github.stannismod.forge.testing.server.RealDedicatedServerHarness;
@@ -92,9 +93,10 @@ public class PersistenceRestartSmokeTest {
                     firstCounts[i], secondCounts[i]);
         }
 
-        String dimInfo = String.join("\n", secondBoot.client().execute("artest dim info 0"));
-        assertTrue("Earth lost AR-managed status after restart: " + dimInfo,
-                dimInfo.contains("\"isARPlanet\":true"));
+        DimInfo dimInfo = DimInfo.forDim(
+                cmd -> String.join("\n", secondBoot.client().execute(cmd)), 0);
+        assertTrue("Earth lost AR-managed status after restart: " + dimInfo.raw(),
+                dimInfo.arPlanet);
 
         String stations = String.join("\n", secondBoot.client().execute("artest station list"));
         assertTrue("station " + stationId + " did NOT survive restart: " + stations,

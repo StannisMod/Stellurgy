@@ -10,6 +10,7 @@ import java.util.regex.Pattern;
 
 import com.google.gson.JsonObject;
 
+import zmaster587.advancedRocketry.test.DeckCapture;
 import zmaster587.advancedRocketry.test.Events;
 import zmaster587.advancedRocketry.test.Reply;
 import zmaster587.advancedRocketry.test.FixtureSite;
@@ -122,11 +123,11 @@ public class VSCrewRelogPersistenceE2ETest extends AbstractSharedVsClientE2ETest
         // Read ONCE, and proved to be about THIS ship: the two execs this replaces
         // printed one sample and asserted a second, and neither said which craft
         // held the body.
-        String deckCapture = deckCaptureOfThisShip(scenarioShipId,
+        DeckCapture deckCapture = deckCaptureOfThisShip(scenarioShipId,
                 "the capture this assertion reads must be on this scenario's own ship");
         scenario().requireArranged("he must be captured on the deck before anything rotates: "
-                        + deckCapture,
-                deckCapture.contains("\"alreadyTracked\":true"));
+                        + deckCapture.raw(),
+                deckCapture.alreadyTracked);
 
         // CONTROL: a still ship must produce no releases and no travel. Without it, a nonzero count
         // during the roll could belong to the arrangement (the walk onto the deck, the settle) rather
@@ -341,11 +342,11 @@ public class VSCrewRelogPersistenceE2ETest extends AbstractSharedVsClientE2ETest
         // Read ONCE, and proved to be about THIS ship: the two execs this replaces
         // printed one sample and asserted a second, and neither said which craft
         // held the body.
-        String deckCapture2 = deckCaptureOfThisShip(scenarioShipId,
+        DeckCapture deckCapture2 = deckCaptureOfThisShip(scenarioShipId,
                 "the capture this assertion reads must be on this scenario's own ship");
         scenario().requireArranged("he must be captured on the deck before he walks (" + where + "): "
-                        + deckCapture2,
-                deckCapture2.contains("\"alreadyTracked\":true"));
+                        + deckCapture2.raw(),
+                deckCapture2.alreadyTracked);
 
         // CONTROL, same body, same deck, same window length, stimulus absent. Counted off the
         // client's own release records - see the roll leg for why a difference of two counter reads
@@ -369,7 +370,7 @@ public class VSCrewRelogPersistenceE2ETest extends AbstractSharedVsClientE2ETest
         int resolvedWalk = resolvedSince(walkHistory, walkMark);
         int inputTicks = inputTicksSince(walkHistory, walkMark);
         int offDeckTicks = offDeckTicksSince(walkHistory, walkMark);
-        String capAfter = exec("artest vs deck-capture");
+        DeckCapture capAfter = DeckCapture.read(this::exec);
 
         String observed = "\n  " + where
                 + "\n  idle (control): drops=" + dropsIdle + " resolved=" + resolvedIdle
@@ -378,7 +379,7 @@ public class VSCrewRelogPersistenceE2ETest extends AbstractSharedVsClientE2ETest
                 + " walked=" + walked
                 + "\n  releases while idle:    " + idleReleases
                 + "\n  releases while walking: " + walkReleases
-                + "\n  capture after=" + capAfter
+                + "\n  capture after=" + capAfter.raw()
                 + "\n" + mover()
                 + "\n  CLIENT per-tick record:\n" + walkHistory;
         System.out.println("[walk-hold]" + observed);
@@ -394,11 +395,11 @@ public class VSCrewRelogPersistenceE2ETest extends AbstractSharedVsClientE2ETest
                 + "walked off the edge is measuring the edge, not the guard" + observed,
                 offDeckTicks == 0);
         scenario().requireArranged("he must still be captured ABOARD at the end" + observed,
-                capAfter.contains("\"alreadyTracked\":true") && !capAfter.contains("\"hullStand\":true"));
+                capAfter.alreadyTracked && !capAfter.hullStand);
         scenario().requireArranged("...and ABOARD THE DECK HE WALKED ON — a body that ended the walk"
                 + " held by a neighbouring hull satisfies the line above, and the drop counts below"
                 + " would then be about a deck he is no longer on" + observed,
-                scenarioShipId.equals(ShipIdentity.anchorOf(capAfter)));
+                capAfter.anchoredOn(scenarioShipId));
         assertEquals("CONTROL: the guard must be quiet while he stands still - otherwise the count "
                 + "during the walk is not attributable to the walk" + observed, 0L, dropsIdle);
 
@@ -473,11 +474,11 @@ public class VSCrewRelogPersistenceE2ETest extends AbstractSharedVsClientE2ETest
         // Read ONCE, and proved to be about THIS ship: the two execs this replaces
         // printed one sample and asserted a second, and neither said which craft
         // held the body.
-        String deckCapture3 = deckCaptureOfThisShip(scenarioShipId,
+        DeckCapture deckCapture3 = deckCaptureOfThisShip(scenarioShipId,
                 "the capture this assertion reads must be on this scenario's own ship");
         scenario().requireArranged("he must be captured on the deck before the server stalls: "
-                        + deckCapture3,
-                deckCapture3.contains("\"alreadyTracked\":true"));
+                        + deckCapture3.raw(),
+                deckCapture3.alreadyTracked);
 
         // CONTROL: the same body, the same deck, the same walk - without the stall. The walking leg
         // measures this too, but it has to be in THIS run: a control from another boot has a
@@ -542,7 +543,7 @@ public class VSCrewRelogPersistenceE2ETest extends AbstractSharedVsClientE2ETest
         long dropsAfterStall = guardReleases(stallReleases);
         int resolvedAfterStall = resolvedSince(stallHistory, stallMark);
         int offDeckAfterStall = offDeckTicksSince(stallHistory, stallMark);
-        String capAfter = exec("artest vs deck-capture");
+        DeckCapture capAfter = DeckCapture.read(this::exec);
 
         String observed = "\n  control A, walk, no stall:   drops=" + dropsControl + " resolved="
                 + resolvedControl + " walked=" + controlWalked
@@ -555,7 +556,7 @@ public class VSCrewRelogPersistenceE2ETest extends AbstractSharedVsClientE2ETest
                 + "\n  releases, control A:      " + controlReleases
                 + "\n  releases, control B:      " + idleStallReleases
                 + "\n  releases across the walk: " + stallReleases
-                + "\n  capture after=" + capAfter
+                + "\n  capture after=" + capAfter.raw()
                 + "\n" + mover();
         System.out.println("[tick-burst]" + observed);
 
@@ -653,11 +654,11 @@ public class VSCrewRelogPersistenceE2ETest extends AbstractSharedVsClientE2ETest
         // Read ONCE, and proved to be about THIS ship: the two execs this replaces
         // printed one sample and asserted a second, and neither said which craft
         // held the body.
-        String deckCapture4 = deckCaptureOfThisShip(scenarioShipId,
+        DeckCapture deckCapture4 = deckCaptureOfThisShip(scenarioShipId,
                 "the capture this assertion reads must be on this scenario's own ship");
         assertTrue("the player must be captured on the deck before the roll: "
-                + deckCapture4,
-                deckCapture4.contains("\"alreadyTracked\":true"));
+                + deckCapture4.raw(),
+                deckCapture4.alreadyTracked);
 
         double h = Math.toRadians(170.0) / 2.0;
         assertTrue("attitude hold must accept the inversion",
@@ -687,12 +688,12 @@ public class VSCrewRelogPersistenceE2ETest extends AbstractSharedVsClientE2ETest
                 + " ticks). If those two are equal the attitude hold never started and the window is"
                 + " innocent; if they differ it was still slewing and the window is short.",
                 upY < -0.9);
-        String capBefore = exec("artest vs deck-capture");
+        DeckCapture capBefore = DeckCapture.read(this::exec);
         assertTrue("the player must still be captured on the inverted deck before the relog: "
-                + capBefore, capBefore.contains("\"alreadyTracked\":true"));
+                + capBefore.raw(), capBefore.alreadyTracked);
         // The BEFORE half of "his capture came back on his ship" — pinned here so the after half has
         // something to be equal to, rather than merely being captured by whatever is around.
-        ShipIdentity.assertCaptureAnchoredOn(capBefore, scenarioShipId,
+        capBefore.requireAnchoredOn( scenarioShipId,
                 "the capture the relog must restore is the one on THIS scenario's inverted deck");
         double preY = bot().reportState().get("playerY").getAsDouble();
 
@@ -722,11 +723,11 @@ public class VSCrewRelogPersistenceE2ETest extends AbstractSharedVsClientE2ETest
         String modes = awaitCommittedAboardOnHisShip(events, relogMark,
                 "after a relog on an inverted deck the player must be captured ABOARD again, not"
                         + " held with world semantics wherever the inverted hull stopped him");
-        String capNow = exec("artest vs deck-capture");
+        DeckCapture capNow = DeckCapture.read(this::exec);
         double postY = bot().reportState().get("playerY").getAsDouble();
         System.out.println("[relog] preY=" + preY + " postY=" + postY + " dY=" + (postY - preY)
                 + " modes=" + modes);
-        System.out.println("[relog] cap=" + capNow);
+        System.out.println("[relog] cap=" + capNow.raw());
         // What the client DID with the deck hold's restore seed - APPLY, KEEP_PREEXISTING,
         // ALREADY_SEEDED, EXPIRE or WAIT. The five-way verdict is the difference between "he was
         // put back on his deck point" and "the hold expired and vanilla had him", and nothing else
@@ -737,7 +738,7 @@ public class VSCrewRelogPersistenceE2ETest extends AbstractSharedVsClientE2ETest
         // of modes production committed — so what is left is the other half: he is still AT the
         // deck spot he logged out on, never handed to world gravity for a visible fall.
         assertTrue("after a relog the player must still be AT his deck spot, not fallen off "
-                + "(preY=" + preY + " postY=" + postY + "): " + capNow,
+                + "(preY=" + preY + " postY=" + postY + "): " + capNow.raw(),
                 Math.abs(postY - preY) < 1.5);
     }
 
@@ -775,11 +776,11 @@ public class VSCrewRelogPersistenceE2ETest extends AbstractSharedVsClientE2ETest
         // Read ONCE, and proved to be about THIS ship: the two execs this replaces
         // printed one sample and asserted a second, and neither said which craft
         // held the body.
-        String deckCapture5 = deckCaptureOfThisShip(scenarioShipId,
+        DeckCapture deckCapture5 = deckCaptureOfThisShip(scenarioShipId,
                 "the capture this assertion reads must be on this scenario's own ship");
         assertTrue("the player must be captured on the deck before he walks: "
-                + deckCapture5,
-                deckCapture5.contains("\"alreadyTracked\":true"));
+                + deckCapture5.raw(),
+                deckCapture5.alreadyTracked);
 
         // CONTROL, before anything is done to him: does a settled crew member creep along this deck
         // ANYWAY? The ship holds station rather than standing still, and a station-keeping deck is
@@ -965,17 +966,17 @@ public class VSCrewRelogPersistenceE2ETest extends AbstractSharedVsClientE2ETest
      * derived from the body's own coordinates every time it is asked.</p>
      */
     private double[] deckPoint() throws Exception {
-        String cap = exec("artest vs deck-capture");
-        assertTrue("the deck capture must be live to report a ship-frame point: " + cap,
-                cap.contains("\"alreadyTracked\":true"));
+        DeckCapture cap = DeckCapture.read(this::exec);
+        assertTrue("the deck capture must be live to report a ship-frame point: " + cap.raw(),
+                cap.alreadyTracked);
         // In WHOSE ship frame. The three numbers below are subspace coordinates of the ANCHOR ship,
         // so a capture that has moved to a neighbouring hull does not make this reading wrong-looking
         // — it silently re-expresses it in another frame, and every drift the callers compute across
         // two such samples is then a difference between two different coordinate systems.
-        ShipIdentity.assertCaptureAnchoredOn(cap, scenarioShipId,
+        cap.requireAnchoredOn( scenarioShipId,
                 "a ship-frame point is only comparable while it stays in ONE ship's frame");
-        return new double[]{readDouble(cap, SHIP_FRAME_X), readDouble(cap, SHIP_FRAME_Y),
-                readDouble(cap, SHIP_FRAME_Z)};
+        return new double[]{cap.bodyShipFrameX(), cap.bodyShipFrameY(),
+                cap.bodyShipFrameZ()};
     }
 
     /**

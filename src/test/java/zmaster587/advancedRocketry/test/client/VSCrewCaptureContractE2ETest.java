@@ -10,6 +10,7 @@ import org.valkyrienskies.mod.common.ships.chunk_claims.ShipChunkAllocator;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import zmaster587.advancedRocketry.test.DeckCapture;
 import zmaster587.advancedRocketry.test.Events;
 import zmaster587.advancedRocketry.test.Reply;
 import zmaster587.advancedRocketry.test.PilotSeat;
@@ -211,13 +212,13 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
         // printed one sample and asserted a second, and neither said which craft
         // held the body. Still under the open gate window — the wait buys a CLIENT capture and this
         // read asks the SERVER, which is where the two have been seen to disagree.
-        String deckCapture;
+        DeckCapture deckCapture;
         try {
             deckCapture = deckCaptureOfThisShip(scenarioShipId,
                     "the capture this assertion reads must be on this scenario's own ship");
             scenario().requireArranged("the client player must be captured on the deck before the"
-                    + " jump: " + deckCapture,
-                    deckCapture.contains("\"verdict\":true"));
+                    + " jump: " + deckCapture.raw(),
+                    deckCapture.verdict);
         } catch (AssertionError noCapture) {
             throw new AssertionError(noCapture.getMessage() + " | " + deckGateTrail(arrivalMark,
                     arrivalServerMark), noCapture);
@@ -257,7 +258,7 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
         bot().waitTicks(40); // land and settle: a body's height converging is a value, not a link
         // "Back on the deck" is only the claim this test means if it is the SAME deck he jumped from.
         // A jump that ended on a sibling scenario's hull satisfies `verdict:true` and reads as a pass.
-        String capture = deckCaptureOfThisShip(scenarioShipId,
+        DeckCapture capture = deckCaptureOfThisShip(scenarioShipId,
                 "after the jump the player must be resolved back on the deck he jumped from");
         double settledY = bot().reportState().get("playerY").getAsDouble();
         // The two halves of the arc, read off the client's own log: every release since the mark,
@@ -280,7 +281,7 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
         System.out.println("[crewcap] jump deckY=" + deckY + " apex=" + apex + " settledY=" + settledY
                 + " samples=" + samples + " :: " + trace
                 + "\n[crewcap] jump releases in the arc :: " + releases);
-        System.out.println("[crewcap] jump capture=" + capture);
+        System.out.println("[crewcap] jump capture=" + capture.raw());
 
         Events.assertInstrumentRan(releases, "deck_capture_events",
                 "the capture was or was not released somewhere in the jump arc");
@@ -295,8 +296,8 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
         assertTrue("the capture must survive the whole jump arc, not release mid-air — every release"
                 + " since the key went down, with the gate that made it: " + releases + " :: " + trace,
                 Events.countRecords(releases, "type", "deck_released") == 0);
-        assertTrue("after the jump the player must be resolved back on the deck: " + capture,
-                capture.contains("\"verdict\":true"));
+        assertTrue("after the jump the player must be resolved back on the deck: " + capture.raw(),
+                capture.verdict);
         assertTrue("the player must land back ON the deck, not through it: deckY=" + deckY
                 + " settledY=" + settledY, Math.abs(settledY - deckY) < 1.5);
     }
@@ -384,9 +385,9 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
             for (int i = 0; i < 12; i++) {
                 bot().waitTicks(4);
                 samples++;
-                String cap = exec("artest vs deck-capture");
-                boolean t = cap.contains("\"alreadyTracked\":true");
-                boolean terrain = cap.contains("\"supportedByWorldTerrain\":true");
+                DeckCapture cap = DeckCapture.read(this::exec);
+                boolean t = cap.alreadyTracked;
+                boolean terrain = cap.supportedByWorldTerrain;
                 if (t) captured++;
                 double y = bot().reportState().get("playerY").getAsDouble();
                 yMin = Math.min(yMin, y);
@@ -747,7 +748,7 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
         bot().waitTicks(20);
         System.out.println("[crewcap] active-legs " + legs);
 
-        String capture = exec("artest vs deck-capture");
+        DeckCapture capture = DeckCapture.read(this::exec);
         // The client's releases in THIS window, each with the gate that released it.
         String releases = client.since(releaseMark, "deck_released");
         String gate = client.since(releaseMark, "deck_carry");
@@ -755,7 +756,7 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
                 "the client's capture was or was not cycled during the activity");
         long churn = Events.countRecordsWithField(releases, "reason");
         System.out.println("[crewcap] active-churn churn=" + churn + " capturesForThisShip="
-                + Events.countRecords(gate, "ship", scenarioShipId) + " capture=" + capture
+                + Events.countRecords(gate, "ship", scenarioShipId) + " capture=" + capture.raw()
                 + "\n[crewcap] client releases in window :: " + releases);
 
         // Asked of the frame's own per-body capture commits. `resolvedTicks` was JVM-global and cumulative,
@@ -880,11 +881,11 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
         // Read ONCE, and proved to be about THIS ship: the two execs this replaces
         // printed one sample and asserted a second, and neither said which craft
         // held the body.
-        String deckCapture2 = deckCaptureOfThisShip(scenarioShipId,
+        DeckCapture deckCapture2 = deckCaptureOfThisShip(scenarioShipId,
                 "the capture this assertion reads must be on this scenario's own ship");
         scenario().requireArranged("a body must be on the deck, or the guard columns of this trace"
-                + " are empty and half the reading is missing: " + deckCapture2,
-                deckCapture2.contains("\"alreadyTracked\":true"));
+                + " are empty and half the reading is missing: " + deckCapture2.raw(),
+                deckCapture2.alreadyTracked);
 
         long mark = clientEvents().mark();
         com.google.gson.JsonObject armed = bot().invokeStaticInt(
@@ -943,11 +944,11 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
         // Read ONCE, and proved to be about THIS ship: the two execs this replaces
         // printed one sample and asserted a second, and neither said which craft
         // held the body.
-        String deckCapture3 = deckCaptureOfThisShip(scenarioShipId,
+        DeckCapture deckCapture3 = deckCaptureOfThisShip(scenarioShipId,
                 "the capture this assertion reads must be on this scenario's own ship");
         scenario().requireArranged("the body must be captured on the deck before the server can be"
-                + " asked what it accepts FROM a deck: " + deckCapture3,
-                deckCapture3.contains("\"alreadyTracked\":true"));
+                + " asked what it accepts FROM a deck: " + deckCapture3.raw(),
+                deckCapture3.alreadyTracked);
 
         double startY = bot().reportState().get("playerY").getAsDouble();
         long shoveMark = client.mark();
@@ -981,7 +982,7 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
         // "He still holds his deck after all of that" — HIS deck. A forty-block step that ended with
         // the body captured by a neighbouring hull is the failure this scenario exists to catch, and
         // `alreadyTracked` reads the same for it.
-        String capture = deckCaptureOfThisShip(scenarioShipId,
+        DeckCapture capture = deckCaptureOfThisShip(scenarioShipId,
                 "the body must still hold the deck of the ship it was shoved on");
         // The shove's own record, so a refusal that did not happen has one reading and not two: the
         // step was never applied, or it was applied and the server let it stand. Re-read after the
@@ -993,7 +994,7 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
         // What the bound REFUSED in this window: its own records since the mark, never a total.
         System.out.println("[crewcap] deck-bound shove: y " + startY + " -> " + endY
                 + " refusedInWindow=" + Events.countRecords(boundTrace, "accepted", "false")
-                + " capture=" + capture + "\n[crewcap] deck-bound shove trace :: " + shoveTrace
+                + " capture=" + capture.raw() + "\n[crewcap] deck-bound shove trace :: " + shoveTrace
                 + "\n[crewcap] deck-bound server trace :: " + boundTrace
                 + "\n[crewcap] deck-bound refusal frames :: " + framesOfRefusals(boundTrace));
         Events.assertInstrumentRan(shoveTrace, "ship_frame_travel_shove",
@@ -1022,8 +1023,8 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
         assertTrue("a forty-block client-side step must not reach the server as a declared position:"
                 + " it arrived as y " + startY + " -> " + endY + " :: " + boundTrace,
                 Math.abs(endY - startY) < 4.0);
-        assertTrue("the body must still hold its deck after all of that: " + capture,
-                capture.contains("\"alreadyTracked\":true"));
+        assertTrue("the body must still hold its deck after all of that: " + capture.raw(),
+                capture.alreadyTracked);
         // "The bound was consulted while he stood on the deck" is the `assertInstrumentRan` above and
         // nothing else. A third assertion used to sit here reading `boundTrace.contains(
         // "deck_movement_bound")` — satisfied by the INSTRUMENT NAME the reply's envelope carries,
@@ -1114,11 +1115,11 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
                 double y = bot().reportState().get("playerY").getAsDouble();
                 maxDrop = Math.max(maxDrop, yMax - y);
                 yMax = Math.max(yMax, y);
-                String capSample = exec("artest vs deck-capture");
+                DeckCapture capSample = DeckCapture.read(this::exec);
                 // Held BY THIS SHIP: the flag alone is satisfied by a body the flight carried past
                 // a sibling's hull and left in its frame, which is the loss this window watches for.
-                trackedAtEnd = capSample.contains("\"alreadyTracked\":true")
-                        && scenarioShipId.equals(ShipIdentity.anchorOf(capSample));
+                trackedAtEnd = capSample.alreadyTracked
+                        && capSample.anchoredOn(scenarioShipId);
                 win.append(String.format(java.util.Locale.ROOT, "[t%d y=%.2f cap=%b] ",
                         i * 2, y, trackedAtEnd));
             }
@@ -1234,15 +1235,15 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
         // so a legitimate hull-stand re-capture records "aboard". The records are printed because
         // their ORDER is worth reading; asserting "no aboard commit" on them would pin the recorder's
         // known blind spot instead of the contract.
-        String cap = exec("artest vs deck-capture");
+        DeckCapture cap = DeckCapture.read(this::exec);
         assertTrue("a body on the OUTER hull must keep world-frame semantics - held as HULL-STAND, "
-                + "never ABOARD: " + cap + " :: mode commits in the window: " + modes,
-                !cap.contains("\"alreadyTracked\":true") || cap.contains("\"hullStand\":true"));
+                + "never ABOARD: " + cap.raw() + " :: mode commits in the window: " + modes,
+                !cap.alreadyTracked || cap.hullStand);
         // The disjunct above is satisfied by a body held on SOMEBODY ELSE's hull, in either arm. So
         // where it IS held, say by whom: an aboard-mode capture on a neighbour would read here as a
         // legitimate hull-stand on this one and the mode contract would go untested.
-        if (cap.contains("\"alreadyTracked\":true")) {
-            ShipIdentity.assertCaptureAnchoredOn(cap, scenarioShipId,
+        if (cap.alreadyTracked) {
+            cap.requireAnchoredOn( scenarioShipId,
                     "the hull stand must be on the hull this scenario put him on");
         }
         // (c) His camera stays his own - the deck-levelled view never engages for a hull stander.
@@ -1352,13 +1353,13 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
         for (int i = 0; i < 30; i++) {
             bot().waitTicks(3);
             samples++;
-            String cap = exec("artest vs deck-capture");
+            DeckCapture cap = DeckCapture.read(this::exec);
             // Counted only while the capture is anchored on THIS scenario's craft: the split between
             // aboard-mode and hull-stand samples below is a statement about one body on one hull, and
             // a sample taken against a neighbour's belongs in neither column.
-            boolean tracked = cap.contains("\"alreadyTracked\":true")
-                    && scenarioShipId.equals(ShipIdentity.anchorOf(cap));
-            boolean hull = cap.contains("\"hullStand\":true");
+            boolean tracked = cap.alreadyTracked
+                    && cap.anchoredOn(scenarioShipId);
+            boolean hull = cap.hullStand;
             if (tracked && !hull) aboardSeen++;
             if (tracked && hull) hullSeen++;
             settledY = bot().reportState().get("playerY").getAsDouble();
@@ -1581,11 +1582,11 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
         // Read ONCE, and proved to be about THIS ship: the two execs this replaces
         // printed one sample and asserted a second, and neither said which craft
         // held the body.
-        String deckCapture5 = deckCaptureOfThisShip(scenarioShipId,
+        DeckCapture deckCapture5 = deckCaptureOfThisShip(scenarioShipId,
                 "the capture this assertion reads must be on this scenario's own ship");
         scenario().requireArranged("the ex-pilot must be captured on the deck: "
-                + deckCapture5,
-                deckCapture5.contains("\"alreadyTracked\":true"));
+                + deckCapture5.raw(),
+                deckCapture5.alreadyTracked);
 
         long lookMarkLevel = clientEvents().mark();
         exec("tp @a ~ ~ ~ 0 90"); // look straight down at the deck underfoot
@@ -1631,10 +1632,10 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
         double upY = info.upY();
         assertTrue("the ship must be steeply rolled for the eyes to diverge (upY=" + upY + ")",
                 upY < 0.7 && upY > 0.1);
-        String capNow = deckCaptureOfThisShip(scenarioShipId,
+        DeckCapture capNow = deckCaptureOfThisShip(scenarioShipId,
                 "the crew member must still be captured by the ship that rolled under him");
-        assertTrue("the crew member must still be captured after the roll: " + capNow,
-                capNow.contains("\"alreadyTracked\":true"));
+        assertTrue("the crew member must still be captured after the roll: " + capNow.raw(),
+                capNow.alreadyTracked);
 
         long lookMarkRolled = clientEvents().mark();
         exec("tp @a ~ ~ ~ 0 90");
@@ -1770,12 +1771,12 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
                 () -> exec("tp @a " + ship[0] + " " + (ship[1] + 3) + " " + ship[2] + " 0 0"));
         // Still under the open gate window — see the sibling scenario: the wait buys a CLIENT
         // capture and THIS read asks the SERVER, which is where the two have been seen to disagree.
-        String seeded;
+        DeckCapture seeded;
         try {
-            seeded = exec("artest vs deck-capture");
+            seeded = DeckCapture.read(this::exec);
             scenario().requireArranged("the body must stand on the deck ONCE before the manoeuvre,"
                     + " or the client holds no earlier observation and the interval under test does"
-                    + " not exist: " + seeded, seeded.contains("\"alreadyTracked\":true"));
+                    + " not exist: " + seeded.raw(), seeded.alreadyTracked);
         } catch (AssertionError noCapture) {
             throw new AssertionError(noCapture.getMessage() + " | " + deckGateTrail(seedMark,
                     seedServerMark), noCapture);
@@ -1786,8 +1787,8 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
         // neighbouring hull is an observation of a craft that stands still for the whole interval,
         // which is the one arrangement under which this scenario's contract holds trivially.
         scenario().requireArranged("the earlier observation must be of this scenario's own craft,"
-                + " which is the one the manoeuvre below is performed on: " + seeded,
-                scenarioShipId.equals(ShipIdentity.anchorOf(seeded)));
+                + " which is the one the manoeuvre below is performed on: " + seeded.raw(),
+                seeded.anchoredOn(scenarioShipId));
 
         // NOW off the craft, but still in sight of it. The derivation runs only while the client is
         // handling a body on a deck, so a body standing on the ground nearby observes nothing —
@@ -1870,7 +1871,7 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
         StringBuilder contact = new StringBuilder();
         for (int i = 0; i < 25; i++) {
             bot().waitTicks(1);
-            boolean tracked = exec("artest vs deck-capture").contains("\"alreadyTracked\":true");
+            boolean tracked = DeckCapture.read(this::exec).alreadyTracked;
             if (i % 4 == 0 || tracked) {
                 contact.append(String.format(java.util.Locale.ROOT, "[t%d cap=%b y=%.2f] ",
                         i, tracked, bot().reportState().get("playerY").getAsDouble()));
@@ -1972,11 +1973,11 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
         // Read ONCE, and proved to be about THIS ship: the two execs this replaces
         // printed one sample and asserted a second, and neither said which craft
         // held the body.
-        String deckCapture6 = deckCaptureOfThisShip(scenarioShipId,
+        DeckCapture deckCapture6 = deckCaptureOfThisShip(scenarioShipId,
                 "the capture this assertion reads must be on this scenario's own ship");
         scenario().requireArranged("the ex-pilot must be captured on the deck: "
-                + deckCapture6,
-                deckCapture6.contains("\"alreadyTracked\":true"));
+                + deckCapture6.raw(),
+                deckCapture6.alreadyTracked);
         // Out of the cockpit pocket onto the OPEN top deck while the ship is still upright (the
         // dismount leaves the body beside the seat, walled in on all four sides - the walk legs
         // below need runway). The capture then carries this open-deck spot through the rolls.
@@ -1995,11 +1996,11 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
         // Read ONCE, and proved to be about THIS ship: the two execs this replaces
         // printed one sample and asserted a second, and neither said which craft
         // held the body.
-        String deckCapture7 = deckCaptureOfThisShip(scenarioShipId,
+        DeckCapture deckCapture7 = deckCaptureOfThisShip(scenarioShipId,
                 "the capture this assertion reads must be on this scenario's own ship");
         scenario().requireArranged("the crew member must be captured on the OPEN deck before the"
-                + " roll: " + deckCapture7,
-                deckCapture7.contains("\"alreadyTracked\":true"));
+                + " roll: " + deckCapture7.raw(),
+                deckCapture7.alreadyTracked);
 
         // Roll the ship to ~60 degrees about X and hold it there.
         double h = Math.toRadians(60.0) / 2.0;
@@ -2013,11 +2014,11 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
         // Read ONCE, and proved to be about THIS ship: the two execs this replaces
         // printed one sample and asserted a second, and neither said which craft
         // held the body.
-        String deckCapture8 = deckCaptureOfThisShip(scenarioShipId,
+        DeckCapture deckCapture8 = deckCaptureOfThisShip(scenarioShipId,
                 "the capture this assertion reads must be on this scenario's own ship");
         assertTrue("the crew member must still be captured after the roll: "
-                + deckCapture8,
-                deckCapture8.contains("\"alreadyTracked\":true"));
+                + deckCapture8.raw(),
+                deckCapture8.alreadyTracked);
 
         // Baseline aim (a server re-aim, which must RE-SEED the deck look, not fight it).
         long lookMarkAim = clientEvents().mark();
@@ -2085,11 +2086,11 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
         // Read ONCE, and proved to be about THIS ship: the two execs this replaces
         // printed one sample and asserted a second, and neither said which craft
         // held the body.
-        String deckCapture9 = deckCaptureOfThisShip(scenarioShipId,
+        DeckCapture deckCapture9 = deckCaptureOfThisShip(scenarioShipId,
                 "the capture this assertion reads must be on this scenario's own ship");
         assertTrue("the crew member must still be captured on the further-rolled deck: "
-                + deckCapture9,
-                deckCapture9.contains("\"alreadyTracked\":true"));
+                + deckCapture9.raw(),
+                deckCapture9.alreadyTracked);
         double[] lookAfter = clientLook();
         double coneAfter = dot(up2, lookAfter);
         double aimTurned = Math.toDegrees(Math.acos(clampUnit(dot(lookBefore, lookAfter))));
@@ -2448,8 +2449,7 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
      * reading that is missing for one sample must not end the scenario.</p>
      */
     private double jumperShipFrameY() throws Exception {
-        return Reply.of("artest vs deck-capture", exec("artest vs deck-capture"))
-                .number(BODY_SHIP_FRAME_Y);
+        return DeckCapture.read(this::exec).bodyShipFrameYOrNaN();
     }
 
     private double clientDouble(String className, String field) throws Exception {

@@ -10,6 +10,7 @@ import org.junit.runners.MethodSorters;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import zmaster587.advancedRocketry.test.DeckCapture;
 import zmaster587.advancedRocketry.test.Events;
 import zmaster587.advancedRocketry.test.Reply;
 import zmaster587.advancedRocketry.test.ShipInfo;
@@ -209,13 +210,13 @@ public class VSRemoteBodyModelGateE2ETest extends AbstractSharedVsClientE2ETest 
             spot[1] = Math.floor(spot[1]);
             standingSpot(spot);
             int candidate = spawnSubject(spot[0], spot[1], spot[2]);
-            String probe = exec("artest vs deck-capture 0 " + candidate);
-            boolean contained = probe.contains("\"aboardByContainment\":true");
-            boolean unsupported = readInt(probe, OBSTACLES) == 0;
-            boolean onTerrain = probe.contains("\"supportedByWorldTerrain\":true");
+            DeckCapture probe = DeckCapture.byId(this::exec, 0, candidate);
+            boolean contained = probe.aboardByContainment;
+            boolean unsupported = probe.shipSupportObstacles == 0;
+            boolean onTerrain = probe.supportedByWorldTerrain;
             tried.append(String.format(java.util.Locale.ROOT,
                     "[%.1f,%.1f,%.1f contain=%s obst=%d terr=%s]", spot[0], spot[1], spot[2],
-                    contained, readInt(probe, OBSTACLES), onTerrain));
+                    contained, probe.shipSupportObstacles, onTerrain));
             if (contained && unsupported && onTerrain) {
                 valid.add(spot);
             }
@@ -254,8 +255,8 @@ public class VSRemoteBodyModelGateE2ETest extends AbstractSharedVsClientE2ETest 
             // entity the assertions speak about. VS jitters a ship's world box between the collect loop
             // and here, so a spot valid a moment ago can drift off precondition - skip it WITHOUT
             // spending a draw attempt (no render was staged), a green here would be vacuous.
-            String contact = exec("artest vs deck-capture 0 " + subject);
-            if (!(contact.contains("\"aboardByContainment\":true") && readInt(contact, OBSTACLES) == 0)) {
+            DeckCapture contact = DeckCapture.byId(this::exec, 0, subject);
+            if (!(contact.aboardByContainment && contact.shipSupportObstacles == 0)) {
                 staging.append(String.format(java.util.Locale.ROOT,
                         "[%.1f,%.1f,%.1f precondition-drifted]", spot[0], spot[1], spot[2]));
                 System.out.println(String.format(java.util.Locale.ROOT,
@@ -321,9 +322,9 @@ public class VSRemoteBodyModelGateE2ETest extends AbstractSharedVsClientE2ETest 
         int subject = spawnSubjectOnDeck(bx, by, bz);
         rollShip(bx, by, bz);
 
-        String contact = exec("artest vs deck-capture 0 " + subject);
-        assertTrue("the subject must be CARRIED by the ship for the control to mean anything: " + contact,
-                readInt(contact, OBSTACLES) > 0);
+        DeckCapture contact = DeckCapture.byId(this::exec, 0, subject);
+        assertTrue("the subject must be CARRIED by the ship for the control to mean anything: " + contact.raw(),
+                contact.shipSupportObstacles > 0);
         // "The ship" — this one, and no other. The subject is a mob, so the probe answers on its
         // GATED branch (`canPassengerSteer:false`), where the support count is resolved by
         // containment-first-match and names nobody: `shipSupportObstacles:2` is a number about one of
@@ -332,9 +333,9 @@ public class VSRemoteBodyModelGateE2ETest extends AbstractSharedVsClientE2ETest 
         // unambiguous, two mean it is a coin toss reading as a clean number either way.
         assertEquals("the hull carrying the subject must be the ship this leg rolled, and it must be"
                         + " the ONLY hull containing it — the support count beside this names no ship"
-                        + " at all: " + contact,
+                        + " at all: " + contact.raw(),
                 "[\"" + scenarioShipId + "\"]",
-                zmaster587.advancedRocketry.test.ShipIdentity.containingShipsOf(contact));
+                java.util.Arrays.toString(contact.containingShipIds()));
 
         lookAt(ship[0], ship[1], ship[2]);
         Sampling s = awaitRemoteSampling(subject);
@@ -668,8 +669,8 @@ public class VSRemoteBodyModelGateE2ETest extends AbstractSharedVsClientE2ETest 
         for (double y : new double[]{by + 5, by + 5.2, by + 6, by + 4.5, by + 7}) {
             exec("kill @e[type=cow]");
             int candidate = spawnSubject(cx, y, cz);
-            String probe = exec("artest vs deck-capture 0 " + candidate);
-            int obst = readInt(probe, OBSTACLES);
+            DeckCapture probe = DeckCapture.byId(this::exec, 0, candidate);
+            int obst = probe.shipSupportObstacles;
             tried.append(String.format(java.util.Locale.ROOT, "[y=%.1f obst=%d]", y, obst));
             if (obst > 0) {
                 chosen = candidate;

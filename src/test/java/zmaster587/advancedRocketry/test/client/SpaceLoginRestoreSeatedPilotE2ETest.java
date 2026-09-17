@@ -7,6 +7,7 @@ import org.junit.Test;
 
 import zmaster587.advancedRocketry.space.CellWorldMapper;
 import zmaster587.advancedRocketry.space.GalacticCoord;
+import zmaster587.advancedRocketry.test.DeckCapture;
 import zmaster587.advancedRocketry.test.Events;
 import zmaster587.advancedRocketry.test.ShipIdentity;
 
@@ -108,15 +109,15 @@ public class SpaceLoginRestoreSeatedPilotE2ETest extends AbstractSpaceLoginResto
                 + " (entered ship " + arrangedShipId + ")", tag.contains(arrangedShipId));
         // He must really be resolved on the DECK, in the ship's own frame, before the restart: that
         // is what produces the record asserted above, and a hull-stand catch is not it.
-        String capBefore = exec("artest vs deck-capture");
+        DeckCapture capBefore = DeckCapture.read(this::exec);
         requireArranged("he must be captured ABOARD the deck after standing up, or the record "
-                + "above describes something other than a crew member on his feet: " + capBefore,
-                capBefore.contains("\"alreadyTracked\":true")
-                        && !capBefore.contains("\"hullStand\":true"));
+                + "above describes something other than a crew member on his feet: " + capBefore.raw(),
+                capBefore.alreadyTracked
+                        && !capBefore.hullStand);
         // The record asserted above names `arrangedShipId`; this line makes the capture name it too.
         // Without it the two claims are about possibly different craft and the sentence "the record
         // describes this crew member on this deck" is not established by either of them.
-        ShipIdentity.assertCaptureAnchoredOn(capBefore,
+        capBefore.requireAnchoredOn(
                 ShipIdentity.awaitPhysicsIdOf(this::exec, slotDim, arrangedShipId,
                         40, () -> bot().waitTicks(5)),
                 "the deck he is captured on must be the ship the STANDING record names");

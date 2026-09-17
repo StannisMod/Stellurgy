@@ -1,5 +1,6 @@
 package zmaster587.advancedRocketry.test.client;
 
+import zmaster587.advancedRocketry.test.DeckCapture;
 import zmaster587.advancedRocketry.test.Events;
 import zmaster587.advancedRocketry.test.ShipIdentity;
 import zmaster587.advancedRocketry.test.ShipInfo;
@@ -64,14 +65,14 @@ public class SpaceLoginRestoreDeckCrewE2ETest extends AbstractSpaceLoginRestoreC
         String tag = standUpAndAwaitTheStandingRecord(events());
         requireArranged("standing up must keep him aboard as a STANDING record: " + tag,
                 tag.contains("\"tagged\":true") && tag.contains("\"posture\":\"STANDING\""));
-        String capBefore = exec("artest vs deck-capture");
+        DeckCapture capBefore = DeckCapture.read(this::exec);
         requireArranged("he must be captured ABOARD the deck before the relog, or the leg is "
-                        + "not about a restored deck capture at all: " + capBefore,
-                capBefore.contains("\"alreadyTracked\":true")
-                        && !capBefore.contains("\"hullStand\":true"));
+                        + "not about a restored deck capture at all: " + capBefore.raw(),
+                capBefore.alreadyTracked
+                        && !capBefore.hullStand);
         // On HIS deck. The capture's anchor is the PHYSICS id, and this scenario holds the durable
         // one, so the two are bridged by name rather than by asking what is standing at his feet.
-        ShipIdentity.assertCaptureAnchoredOn(capBefore,
+        capBefore.requireAnchoredOn(
                 ShipIdentity.awaitPhysicsIdOf(this::exec, slotDim, arrangedShipId,
                         40, () -> bot().waitTicks(5)),
                 "the capture the relog must restore is the one on THIS scenario's own deck");
@@ -153,11 +154,11 @@ public class SpaceLoginRestoreDeckCrewE2ETest extends AbstractSpaceLoginRestoreC
                 tag.contains("\"tagged\":true") && tag.contains("\"posture\":\"STANDING\""));
         // Read ONCE: the two-exec idiom this replaces diagnosed from a different sample than the one
         // that decided the line, and under load the two disagree.
-        String capUpright = exec("artest vs deck-capture");
+        DeckCapture capUpright = DeckCapture.read(this::exec);
         requireArranged("he must be captured on the deck while the ship is still upright: "
-                        + capUpright,
-                capUpright.contains("\"alreadyTracked\":true"));
-        ShipIdentity.assertCaptureAnchoredOn(capUpright,
+                        + capUpright.raw(),
+                capUpright.alreadyTracked);
+        capUpright.requireAnchoredOn(
                 ShipIdentity.awaitPhysicsIdOf(this::exec, slotDim, arrangedShipId,
                         40, () -> bot().waitTicks(5)),
                 "the deck he stands on before the roll must be his own ship's");
@@ -203,13 +204,13 @@ public class SpaceLoginRestoreDeckCrewE2ETest extends AbstractSpaceLoginRestoreC
         String info = jsonOf(exec("artest vs ship-info " + slotDim + " id " + rolledShipId));
         requireArranged("the ship must be (near-)inverted before the relog, or this leg is "
                 + "silently the upright one again (upY=" + upY + "): " + info, upY < -0.9);
-        String capInverted = exec("artest vs deck-capture");
-        requireArranged("he must still be captured on the INVERTED deck: " + capInverted,
-                capInverted.contains("\"alreadyTracked\":true"));
+        DeckCapture capInverted = DeckCapture.read(this::exec);
+        requireArranged("he must still be captured on the INVERTED deck: " + capInverted.raw(),
+                capInverted.alreadyTracked);
         // The INVERTED one — this ship, the one the roll above was addressed to. A capture that
         // moved to any other hull in the slot is by construction on an upright deck, which is the
         // arrangement this leg exists to leave behind.
-        ShipIdentity.assertCaptureAnchoredOn(capInverted, rolledShipId,
+        capInverted.requireAnchoredOn( rolledShipId,
                 "the deck he is held on must be the ship this leg rolled");
 
         // Both marks before the disconnect - see the upright leg for why the client's own log needs

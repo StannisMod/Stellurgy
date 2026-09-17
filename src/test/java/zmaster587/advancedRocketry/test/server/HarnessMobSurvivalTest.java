@@ -1,5 +1,6 @@
 package zmaster587.advancedRocketry.test.server;
 
+import zmaster587.advancedRocketry.test.DeckCapture;
 import zmaster587.advancedRocketry.test.Reply;
 import zmaster587.advancedRocketry.test.GameTicks;
 
@@ -10,6 +11,7 @@ import java.util.regex.Pattern;
 
 import zmaster587.advancedRocketry.test.FixtureSite;
 
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
 /**
@@ -60,9 +62,11 @@ public class HarnessMobSurvivalTest extends AbstractSharedServerTest {
         String after = exec("artest vs deck-capture 0 " + id);
         System.out.println("[mobsurv] after: " + after.replace('\n', ' '));
 
-        assertTrue("a persistent, no-AI mob must survive >=100 ticks in the harness world "
+        // Asked of the reader: a `contains` over the whole reply would also answer true for a reply
+        // that merely MENTIONS the phrase, and false for any other way of saying the mob is gone.
+        assertFalse("a persistent, no-AI mob must survive >=100 ticks in the harness world "
                         + "(WorldServer culls every EntityAnimal while canSpawnAnimals() is false); "
                         + "after=" + after,
-                !after.contains("entity not found"));
+                DeckCapture.entityMissing(after));
     }
 }

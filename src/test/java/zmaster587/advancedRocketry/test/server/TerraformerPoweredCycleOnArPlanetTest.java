@@ -1,5 +1,6 @@
 package zmaster587.advancedRocketry.test.server;
 
+import zmaster587.advancedRocketry.test.DimInfo;
 import zmaster587.advancedRocketry.test.Reply;
 import org.junit.After;
 import org.junit.Before;
@@ -254,13 +255,13 @@ public class TerraformerPoweredCycleOnArPlanetTest extends AbstractSharedServerT
      *  dim-load handshake has regressed and the powered-cycle assertions
      *  below would fail for an irrelevant reason. */
     private void assertDimIsNativeArPlanet() throws Exception {
-        String info = exec("artest dim info " + newDim);
-        assertTrue("dim info missing isARPlanet:true — " + info,
-                info.contains("\"isARPlanet\":true"));
-        // The terraformer gate also needs WorldProviderPlanet; the dim
-        // info verb reports providerClass.
-        assertTrue("dim provider is not WorldProviderPlanet — " + info,
-                info.contains("WorldProviderPlanet"));
+        DimInfo info = DimInfo.forDim(WorldCommandFixtures::exec, newDim);
+        assertTrue("dim info missing isARPlanet:true — " + info.raw(), info.arPlanet);
+        // The terraformer gate also needs WorldProviderPlanet, asked of the field that names the
+        // provider: the `contains` this replaces would have been answered by the save folder or by
+        // the chunk generator's own class name.
+        assertTrue("dim provider is not WorldProviderPlanet — " + info.raw(),
+                info.providerClass().endsWith("WorldProviderPlanet"));
     }
 
     /** Injects {@code amount} mB of {@code fluidName} into the

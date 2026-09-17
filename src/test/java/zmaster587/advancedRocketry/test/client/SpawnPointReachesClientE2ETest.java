@@ -14,6 +14,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 
+import zmaster587.advancedRocketry.test.DimInfo;
 import zmaster587.advancedRocketry.test.Events;
 import zmaster587.advancedRocketry.test.FixtureSite;
 
@@ -168,12 +169,12 @@ public class SpawnPointReachesClientE2ETest {
         // list that broadcast reaches nobody, so the login path is left as the
         // only possible carrier of this value to the client.
         String set = exec("setworldspawn " + SPAWN_A_X + " " + SPAWN_A_Y + " " + SPAWN_A_Z);
-        String oracle = exec("artest dim info 0");
+        DimInfo oracle = DimInfo.forDim(this::exec, 0);
         assertTrue("server-side overworld spawn must be the value we set"
-                        + " (setworldspawn output=" + set + "): " + oracle,
-                oracle.contains("\"spawnX\":" + SPAWN_A_X)
-                        && oracle.contains("\"spawnY\":" + SPAWN_A_Y)
-                        && oracle.contains("\"spawnZ\":" + SPAWN_A_Z));
+                        + " (setworldspawn output=" + set + "): " + oracle.raw(),
+                oracle.spawnX() == SPAWN_A_X
+                        && oracle.spawnY() == SPAWN_A_Y
+                        && oracle.spawnZ() == SPAWN_A_Z);
 
         startClient();
         clientHarness.bot().waitForWorld();
@@ -235,11 +236,11 @@ public class SpawnPointReachesClientE2ETest {
         String load = exec("artest dim load " + PLANET_DIM);
         assertTrue("destination dim must load before it can be inspected: " + load,
                 load.contains("\"ok\":true") || load.contains("\"loaded\":true"));
-        String destOracle = exec("artest dim info " + PLANET_DIM);
-        assertTrue("destination server-side spawn must be B: " + destOracle,
-                destOracle.contains("\"spawnX\":" + SPAWN_B_X)
-                        && destOracle.contains("\"spawnY\":" + SPAWN_B_Y)
-                        && destOracle.contains("\"spawnZ\":" + SPAWN_B_Z));
+        DimInfo destOracle = DimInfo.forDim(this::exec, PLANET_DIM);
+        assertTrue("destination server-side spawn must be B: " + destOracle.raw(),
+                destOracle.spawnX() == SPAWN_B_X
+                        && destOracle.spawnY() == SPAWN_B_Y
+                        && destOracle.spawnZ() == SPAWN_B_Z);
 
         // Real cross-dimension transfer through PlayerList.transferPlayerToDimension.
         long toPlanet = clientEvents().mark();

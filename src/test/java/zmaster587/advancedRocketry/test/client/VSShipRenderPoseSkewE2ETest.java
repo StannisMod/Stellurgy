@@ -9,6 +9,7 @@ import java.util.Locale;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import zmaster587.advancedRocketry.test.DeckCapture;
 import zmaster587.advancedRocketry.test.ArrangementFailure;
 import zmaster587.advancedRocketry.test.Events;
 import zmaster587.advancedRocketry.test.Reply;
@@ -135,11 +136,11 @@ public class VSShipRenderPoseSkewE2ETest extends AbstractClientE2ETest {
         // One sample, and proved to be about this scenario's craft: the skew measured below is the
         // render pose of the ANCHOR ship against the body it carries, so a capture taken by a
         // neighbouring hull would still produce numbers — about the wrong pair.
-        String parkedCapture = exec("artest vs deck-capture");
+        DeckCapture parkedCapture = DeckCapture.read(this::exec);
         assertTrue("the client player must be captured on the parked deck before sampling: "
-                        + parkedCapture,
-                parkedCapture.contains("\"verdict\":true"));
-        ShipIdentity.assertCaptureAnchoredOn(parkedCapture, shipId,
+                        + parkedCapture.raw(),
+                parkedCapture.verdict);
+        parkedCapture.requireAnchoredOn( shipId,
                 "the client player must be captured on the parked deck this scenario built");
         // ONE window, read once at its end — not twenty polls of a static. Every commit production
         // makes on this client is a record, so the maximum below is over every sample it produced;

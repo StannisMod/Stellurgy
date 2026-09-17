@@ -1,5 +1,6 @@
 package zmaster587.advancedRocketry.test.server;
 
+import zmaster587.advancedRocketry.test.DimInfo;
 import zmaster587.advancedRocketry.test.Reply;
 import com.github.stannismod.forge.testing.junit.AbstractHeadlessServerTest;
 import com.github.stannismod.forge.testing.server.RealDedicatedServerHarness;
@@ -128,9 +129,9 @@ public class DimensionSplitBrainReconcileTest {
                         + " missing from " + after,
                 after.contains(target));
 
-        String info = ok(secondBoot.client().execute("artest dim info " + target));
+        DimInfo info = DimInfo.forDim(cmd -> ok(secondBoot.client().execute(cmd)), target);
         assertTrue("dim " + target + " must be an AR planet after reload, not the "
-                        + "overworld fallback: " + info,
-                info.contains("\"isARPlanet\":true"));
+                        + "overworld fallback: " + info.raw(),
+                info.arPlanet);
     }
 }

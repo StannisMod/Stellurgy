@@ -3,6 +3,8 @@ package zmaster587.advancedRocketry.test.server;
 import com.github.stannismod.forge.testing.junit.AbstractHeadlessServerTest;
 import org.junit.Test;
 
+import zmaster587.advancedRocketry.test.DimInfo;
+
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
@@ -28,13 +30,11 @@ public class NonARDimensionIsolationTest extends AbstractHeadlessServerTest {
 
     @Test
     public void netherAndEndAreNotARPlanets() throws Exception {
-        String nether = String.join("\n", client().execute("artest dim info -1"));
-        assertFalse("nether is mis-classified as an AR planet: " + nether,
-                nether.contains("\"isARPlanet\":true"));
+        DimInfo nether = dimInfo(-1);
+        assertFalse("nether is mis-classified as an AR planet: " + nether.raw(), nether.arPlanet);
 
-        String end = String.join("\n", client().execute("artest dim info 1"));
-        assertFalse("end is mis-classified as an AR planet: " + end,
-                end.contains("\"isARPlanet\":true"));
+        DimInfo end = dimInfo(1);
+        assertFalse("end is mis-classified as an AR planet: " + end.raw(), end.arPlanet);
     }
 
     @Test
@@ -57,5 +57,10 @@ public class NonARDimensionIsolationTest extends AbstractHeadlessServerTest {
         // say neither — make sure we're observing real worldInfoClass data).
         assertTrue("overworld weather get must return a worldInfoClass field: " + overworld,
                 overworld.contains("\"worldInfoClass\":"));
+    }
+
+    /** What the server says about one dimension, read through the verb's own reader. */
+    private DimInfo dimInfo(int dim) throws Exception {
+        return DimInfo.forDim(cmd -> String.join("\n", client().execute(cmd)), dim);
     }
 }

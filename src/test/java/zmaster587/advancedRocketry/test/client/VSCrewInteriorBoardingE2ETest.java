@@ -8,6 +8,7 @@ import org.junit.runners.MethodSorters;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import zmaster587.advancedRocketry.test.DeckCapture;
 import zmaster587.advancedRocketry.test.Events;
 import zmaster587.advancedRocketry.test.Reply;
 import zmaster587.advancedRocketry.test.PilotSeat;
@@ -228,14 +229,14 @@ public class VSCrewInteriorBoardingE2ETest extends AbstractSharedVsClientE2ETest
         // moved about inside a ship you are on does not throw you off it — and it is a stronger
         // contract than the re-claim ever was, because a re-claim can only be observed after a drop
         // the player should never have experienced.
-        String stillHeld = deckCaptureOfThisShip(scenarioShipId,
+        DeckCapture stillHeld = deckCaptureOfThisShip(scenarioShipId,
                 "a body teleported WITHIN the hull that holds it must still be held by that hull:"
                         + " moving inside a craft is not leaving it");
         scenario().requireArranged("the body must remain aboard across a teleport inside the hull,"
-                + " with no release at all: " + stillHeld
+                + " with no release at all: " + stillHeld.raw()
                 + " | releases in the window (there should be none): "
                 + clientEvents.since(releaseMark, "deck_released"),
-                stillHeld.contains("\"verdict\":true"));
+                stillHeld.verdict);
 
         // THE SUBJECT MOVED WITH THE PREMISE, and the wait that stood here is gone rather than
         // renamed. It awaited a RE-capture: the teleport dropped the body, and the deck was supposed
@@ -286,20 +287,20 @@ public class VSCrewInteriorBoardingE2ETest extends AbstractSharedVsClientE2ETest
         // The claim was never about a transition. It is that the body ends up under DECK semantics
         // rather than pinned to the cavity's world floor by the outer-hull fallback, and that is a
         // STATE: `hullStand` false on a live capture. Read it, do not wait for an edge that says it.
-        String modesAfter = deckCaptureOfThisShip(scenarioShipId,
+        DeckCapture modesAfter = deckCaptureOfThisShip(scenarioShipId,
                 "the body in the cavity must still be held by THIS craft");
         assertTrue("the body inside the hull must be held under DECK semantics, not demoted to the"
-                + " outer-hull mode that pins it to the cavity's world floor: " + modesAfter,
-                modesAfter.contains("\"hullStand\":false"));
+                + " outer-hull mode that pins it to the cavity's world floor: " + modesAfter.raw(),
+                !modesAfter.hullStand);
         // Since the TELEPORT, not since a re-claim that no longer happens: the window this leg cares
         // about is "did anything let go of him while he was being moved about inside the hull", and
         // the honest answer is that there should be nothing in it at all.
         String releasesAfter = clientEvents.since(releaseMark, "deck_released");
         boolean shipCam = Boolean.parseBoolean(deckCameraText("active"));
         double settledY = bot().reportState().get("playerY").getAsDouble();
-        String capEnd = exec("artest vs deck-capture");
+        DeckCapture capEnd = DeckCapture.read(this::exec);
         System.out.println("[interior] shipCamActive=" + shipCam + " preY=" + preY + " settledY="
-                + settledY + " reclaim=" + reclaimed + " modes=" + modesAfter
+                + settledY + " reclaim=" + reclaimed + " modes=" + modesAfter.raw()
                 + " releasesSinceReclaim=" + releasesAfter
                 + " censusEnd(server)=" + exec("artest vs subspace-census")
                 + " :: " + trace);
@@ -312,19 +313,19 @@ public class VSCrewInteriorBoardingE2ETest extends AbstractSharedVsClientE2ETest
         // episode is unbroken through this whole leg, so nothing transitions and no mode record is
         // written. `hullStand` false IS "held with deck semantics"; it is production's own
         // distinction, asked of the state rather than of a history of changes to it.
-        String modesSettled = deckCaptureOfThisShip(scenarioShipId,
+        DeckCapture modesSettled = deckCaptureOfThisShip(scenarioShipId,
                 "the settled body must still be held by THIS craft");
         assertTrue("a body moved about inside the ship must stay held with DECK semantics, not with"
-                + " world semantics on the outer hull (" + modesSettled + ", releases in this"
+                + " world semantics on the outer hull (" + modesSettled.raw() + ", releases in this"
                 + " window: " + releasesAfter + "): " + trace,
-                modesSettled.contains("\"hullStand\":false"));
+                !modesSettled.hullStand);
         assertTrue("the body must stay WITH the inverted ship at its deck spot, not fall out "
-                + "(preY=" + preY + " settledY=" + settledY + ", cap=" + capEnd + "): " + trace,
-                Math.abs(settledY - preY) < 2.5 && capEnd.contains("\"alreadyTracked\":true"));
+                + "(preY=" + preY + " settledY=" + settledY + ", cap=" + capEnd.raw() + "): " + trace,
+                Math.abs(settledY - preY) < 2.5 && capEnd.alreadyTracked);
         // ...and by THIS ship. "He is held" and "he is held by the craft this scenario built"
         // are different claims, and on a world three scenarios share only the second one is the
         // contract. The id is in the reply already.
-        ShipIdentity.assertCaptureAnchoredOn(capEnd, scenarioShipId,
+        capEnd.requireAnchoredOn( scenarioShipId,
                 "the body must stay with the INVERTED ship it was released inside");
         assertTrue("the client camera must engage for the re-seated interior body "
                 + "(shipCamActive=" + shipCam + ")", shipCam);
@@ -466,22 +467,22 @@ public class VSCrewInteriorBoardingE2ETest extends AbstractSharedVsClientE2ETest
         // post-displacement.
         // A live STATE read, not a wait on the mode edge — see the sibling scenario above for why
         // that edge no longer fires: the episode is never broken, so the mode never transitions.
-        String modesAfter = deckCaptureOfThisShip(scenarioShipId,
+        DeckCapture modesAfter = deckCaptureOfThisShip(scenarioShipId,
                 "the displaced cavity body must still be held by THIS craft");
         assertTrue("the displaced body must be held under DECK semantics, not demoted to the"
-                + " outer-hull mode that pins it to the cavity's world floor: " + modesAfter,
-                modesAfter.contains("\"hullStand\":false"));
+                + " outer-hull mode that pins it to the cavity's world floor: " + modesAfter.raw(),
+                !modesAfter.hullStand);
         boolean shipCam = Boolean.parseBoolean(deckCameraText("active"));
         double settledY = bot().reportState().get("playerY").getAsDouble();
         double[] subEnd = parseSub(censusField("subPos"));
-        String capEnd = exec("artest vs deck-capture");
+        DeckCapture capEnd = DeckCapture.read(this::exec);
         // Every release in the displacement window, each with the gate that performed it: a
         // `noDeckBelow` or `noHullContact` here would say the enclosure term did NOT hold the body,
         // which is the failure this scenario is about and is not visible in a height alone.
         String releasesAfter = clientEvents.since(releaseMark, "deck_released");
         System.out.println("[cavity] shipCamActive=" + shipCam + " preY=" + preY + " settledY="
                 + settledY + " subEnd=" + subEnd[1] + " release=" + releases
-                + " reclaim=" + reclaimed + " modes=" + modesAfter
+                + " reclaim=" + reclaimed + " modes=" + modesAfter.raw()
                 + " releasesInWindow=" + releasesAfter + " :: " + trace);
 
         // The interior-boarding contract, positive half: the ENCLOSED unsupported body is the
@@ -490,17 +491,17 @@ public class VSCrewInteriorBoardingE2ETest extends AbstractSharedVsClientE2ETest
         // The live state at the end of the settle, for the reason given at the sibling scenario:
         // the episode never breaks here, so the mode edge never fires and a history of changes is
         // the wrong instrument for a claim about where the body ENDED.
-        String modesSettled = deckCaptureOfThisShip(scenarioShipId,
+        DeckCapture modesSettled = deckCaptureOfThisShip(scenarioShipId,
                 "the settled cavity body must still be held by THIS craft");
         assertTrue("an unsupported body in an enclosed cavity must be held with DECK semantics, not"
-                + " pinned by the outer-hull fallback (" + modesSettled + ") | the releases in this"
+                + " pinned by the outer-hull fallback (" + modesSettled.raw() + ") | the releases in this"
                 + " window, each with the gate that performed it: " + releasesAfter
-                + " | server verdict " + capEnd + " :: " + trace,
-                modesSettled.contains("\"hullStand\":false"));
+                + " | server verdict " + capEnd.raw() + " :: " + trace,
+                !modesSettled.hullStand);
         assertTrue("deck gravity must carry the body BACK to the deck, not let it settle on the "
                 + "roof ~3 world blocks below (preY=" + preY + " settledY=" + settledY + "): " + trace,
-                Math.abs(settledY - preY) < 1.5 && capEnd.contains("\"alreadyTracked\":true"));
-        ShipIdentity.assertCaptureAnchoredOn(capEnd, scenarioShipId,
+                Math.abs(settledY - preY) < 1.5 && capEnd.alreadyTracked);
+        capEnd.requireAnchoredOn( scenarioShipId,
                 "deck gravity must carry the body back to THIS ship's deck");
         assertTrue("the body must re-seat at its deck stand in subspace (subY " + subEnd[1]
                 + " vs stand " + sub0[1] + "; seat-top landing allowed): " + trace,
@@ -587,13 +588,13 @@ public class VSCrewInteriorBoardingE2ETest extends AbstractSharedVsClientE2ETest
             for (int i = 0; i < climbIters && subEnd[1] - subFly[1] < 2.0; i++) {
                 bot().waitTicks(2);
                 samples++;
-                String cap = exec("artest vs deck-capture");
+                DeckCapture cap = DeckCapture.read(this::exec);
                 // Anchored on THIS scenario's craft, per sample: the count below is a claim about
                 // one body keeping one ship's interior frame through the climb, and a sample taken
                 // against another hull in the same airspace is not evidence for it.
-                boolean tracked = cap.contains("\"alreadyTracked\":true")
-                        && !cap.contains("\"hullStand\":true")
-                        && scenarioShipId.equals(ShipIdentity.anchorOf(cap));
+                boolean tracked = cap.alreadyTracked
+                        && !cap.hullStand
+                        && cap.anchoredOn(scenarioShipId);
                 if (tracked) trackedSeen++;
                 if (Boolean.parseBoolean(deckCameraText("active"))) {
                     camSeen++;
@@ -661,7 +662,7 @@ public class VSCrewInteriorBoardingE2ETest extends AbstractSharedVsClientE2ETest
         // hovers forever and the seat wait below measures nothing) - so re-tap while the
         // capture probe still reports the body flying.
         boolean seated = false;
-        String capEnd = "";
+        DeckCapture capEnd = null;
         double[] subSeated = subEnd;
         long flightOffMark = clientEvents.mark();
         for (int round = 0; round < 4; round++) {
@@ -673,7 +674,7 @@ public class VSCrewInteriorBoardingE2ETest extends AbstractSharedVsClientE2ETest
             bot().waitTicks(2);
             bot().releaseKey(org.lwjgl.input.Keyboard.KEY_SPACE);
             bot().waitTicks(6);
-            if (!exec("artest vs deck-capture").contains("\"isFlying\":true")) {
+            if (!DeckCapture.read(this::exec).flying) {
                 break; // the toggle registered; NEVER tap again or flight flips back on
             }
         }
@@ -695,7 +696,7 @@ public class VSCrewInteriorBoardingE2ETest extends AbstractSharedVsClientE2ETest
         // A short settle after the contact: the claim below is about where the body CAME TO REST,
         // and the contact is the moment it first touched. Not a wait — a window.
         bot().waitTicks(10);
-        capEnd = exec("artest vs deck-capture");
+        capEnd = DeckCapture.read(this::exec);
         subSeated = parseSub(censusField("subPos"));
         // The descend leg parks the body over the SEAT column, so deck gravity may seat it on
         // the seat block's top - one block above the deck stand. Either landing is "seated on
@@ -705,9 +706,9 @@ public class VSCrewInteriorBoardingE2ETest extends AbstractSharedVsClientE2ETest
         // scenario's own — so without the anchor the height comparison below is between two
         // frames rather than two moments, and it is that comparison, not the flag, that decides
         // "he came back down onto the deck".
-        seated = capEnd.contains("\"alreadyTracked\":true")
-                && !capEnd.contains("\"hullStand\":true")
-                && scenarioShipId.equals(ShipIdentity.anchorOf(capEnd))
+        seated = capEnd.alreadyTracked
+                && !capEnd.hullStand
+                && capEnd.anchoredOn(scenarioShipId)
                 && subSeated[1] <= sub0[1] + 1.4;
         exec("gamemode survival @a"); // leave the shared world as the other tests expect it
         // WHERE it came to rest. The CONTACT is the link above; this is the geometry, and the two
@@ -716,7 +717,7 @@ public class VSCrewInteriorBoardingE2ETest extends AbstractSharedVsClientE2ETest
         // down a metre high on the seat block. None of that is visible in the contact record.
         assertTrue("turning flight off must seat the body back on THIS ship's deck geometry "
                 + "(sub=" + subSeated[1] + " vs start " + sub0[1] + ", landing=" + landing + "): "
-                + capEnd, seated);
+                + (capEnd == null ? "the capture was never read" : capEnd.raw()), seated);
     }
 
     /** "x,y,z" census position as doubles (block coords are integral; that is fine here). */

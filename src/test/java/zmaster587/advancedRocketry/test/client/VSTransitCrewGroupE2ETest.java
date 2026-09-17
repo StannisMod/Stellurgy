@@ -8,6 +8,7 @@ import org.junit.runners.MethodSorters;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import zmaster587.advancedRocketry.test.DeckCapture;
 import zmaster587.advancedRocketry.test.Reply;
 import zmaster587.advancedRocketry.test.PlayerState;
 import zmaster587.advancedRocketry.test.PilotSeat;
@@ -847,7 +848,7 @@ private long readCounter(String className, String field) throws Exception {
      * arrangement re-drops him over the deck until it takes, geometry-robustly rather than
      * assuming one landing spot.</p>
      */
-    private String standTheBotOnTheDeck(double shipX, double shipY, double shipZ) throws Exception {
+    private DeckCapture standTheBotOnTheDeck(double shipX, double shipY, double shipZ) throws Exception {
         // One CLIENT mark for both routes: whichever gets him off, his own `dismountRidingEntity`
         // is the record. The sneak route gets a WINDOW rather than a wait-until — the javadoc above
         // says the trigger is not the subject, so its expiry must not fail — and the probe route
@@ -887,7 +888,7 @@ private long readCounter(String className, String field) throws Exception {
         // Nothing is asserted here and nothing is returned as a verdict: the caller reads the
         // capture for its own claims. That is the difference from the loop this replaces, which
         // handed back the reading it had just exited on for a caller to re-assert.
-        return exec("artest vs deck-capture");
+        return DeckCapture.read(this::exec);
     }
 
     /**
@@ -1063,10 +1064,10 @@ private long readCounter(String className, String field) throws Exception {
         double deckZ = mount.get("posZ").getAsDouble();
 
         // ── JUMP-2: the interval is livable ─────────────────────────────────────────────────────
-        String capture = standTheBotOnTheDeck(deckX, deckY, deckZ);
+        DeckCapture capture = standTheBotOnTheDeck(deckX, deckY, deckZ);
         assertTrue("a crew member must be able to leave his seat IN HYPERSPACE and be resolved on his"
                 + " deck there — that is what makes the flight an interval rather than a cutscene: "
-                + capture, readBool(capture, "alreadyTracked"));
+                + capture.raw(), capture.alreadyTracked);
 
         // ── The visible half: the backdrop belongs to the FLIGHT, not to the seat ────────────────
         // The arrangement first, because both facts are the axis of the claim: he must be off his
@@ -1151,17 +1152,17 @@ private long readCounter(String className, String field) throws Exception {
                 + " deck he was standing on. transit-status=" + stillFlying.raw(),
                 stillFlying.inTransit >= 1);
         JsonObject aboardState = bot().reportState();
-        String aboardCapture = exec("artest vs deck-capture");
+        DeckCapture aboardCapture = DeckCapture.read(this::exec);
         assertTrue("a crew member standing on his own deck in hyperspace must not be taken by the"
                 + " void — he is aboard, and the danger is for bodies that are not: client="
-                + aboardState + " capture=" + aboardCapture,
+                + aboardState + " capture=" + aboardCapture.raw(),
                 aboardState.get("health").getAsFloat() > 0f);
         assertTrue("...and he must still be resolved on that deck after the whole budget: "
-                + aboardCapture, readBool(aboardCapture, "alreadyTracked"));
+                + aboardCapture.raw(), aboardCapture.alreadyTracked);
         // On HIS parked hull. Every scenario in this class parks a craft in this same hyperspace
         // world, and the negative leg below turns on him LEAVING the deck — so a capture held by a
         // neighbouring hull would make both legs read the wrong body's relationship to the void.
-        ShipIdentity.assertCaptureAnchoredOn(aboardCapture, hyperShipId,
+        aboardCapture.requireAnchoredOn( hyperShipId,
                 "the deck that keeps him out of the void must be his own ship's");
 
         // ── JUMP-8: the void is lethal ──────────────────────────────────────────────────────────
@@ -1189,9 +1190,9 @@ private long readCounter(String className, String field) throws Exception {
                     "the body must be off the hull ON THE CLIENT, which is the side whose resolver"
                             + " decides whether the deck still holds him");
         }
-        String offHull = exec("artest vs deck-capture");
+        DeckCapture offHull = DeckCapture.read(this::exec);
         scenario().requireArranged("he must actually be off the hull, or the void has nothing to take: "
-                + offHull, !readBool(offHull, "alreadyTracked"));
+                + offHull.raw(), !offHull.alreadyTracked);
 
         // Arm the channel the verdict is read out of, immediately before the wait and with no server
         // command after it: the harness echoes a marker line into this same chat for every command
@@ -1291,7 +1292,7 @@ private long readCounter(String className, String field) throws Exception {
         // The ship's world position is read for the stand-up arrangement's re-drop, not asserted on.
         PilotSeat seat = findSeat(originDim, setup.requireShipId());
         seatTheBot(originDim, setup.requireShipId());
-        String capture = standTheBotOnTheDeck(seat.shipWorldX, seat.shipWorldY, seat.shipWorldZ);
+        DeckCapture capture = standTheBotOnTheDeck(seat.shipWorldX, seat.shipWorldY, seat.shipWorldZ);
 
         // ── CONTROLS, all three before the stimulus ─────────────────────────────────────────────
         // Each one can fail, and each failure would make the in-flight reading vacuous in its own
@@ -1303,8 +1304,8 @@ private long readCounter(String className, String field) throws Exception {
                 !bot().reportRidingEntity().get("riding").getAsBoolean());
         assertTrue("CONTROL: the server must hold a deck capture for him — that is what 'aboard on"
                 + " his feet' MEANS to the crossing, and without it this test would be about a"
-                + " player standing in a void cell: " + capture,
-                readBool(capture, "alreadyTracked") && !readBool(capture, "hullStand"));
+                + " player standing in a void cell: " + capture.raw(),
+                capture.alreadyTracked && !capture.hullStand);
         // ...on the ship that is about to JUMP. The crossing enumerates the bodies aboard ONE hull,
         // so a capture held by any other craft in the cell means the crew member is not in the set
         // under test at all, and every reading downstream would be about somebody it never carried.
@@ -1312,7 +1313,7 @@ private long readCounter(String className, String field) throws Exception {
         // `TransitSetup.shipId` is ALREADY the physics id — the setup returns the assembler's own answer —
         // and the capture's anchor is a physics id too, so the two compare directly. The durable name
         // is a SEPARATE field of that reply and is what the far end needs; see the arrival below.
-        ShipIdentity.assertCaptureAnchoredOn(capture, setup.requireShipId(),
+        capture.requireAnchoredOn( setup.requireShipId(),
                 "CONTROL: the deck he stands on must be the ship this jump is performed with");
         assertEquals("CONTROL: he must be in the origin cell before the jump", originDim,
                 bot().reportWeather().get("dim").getAsInt());
@@ -1351,15 +1352,15 @@ private long readCounter(String className, String field) throws Exception {
         // sibling of this scenario reds on exactly that gap — so on its own this clause would be
         // satisfied by the one thing it must not be satisfied by. The server holding a deck capture
         // for him says he is aboard on his FEET, which is the state the crossing enumerates on.
-        String captureInFlight = exec("artest vs deck-capture");
+        DeckCapture captureInFlight = DeckCapture.read(this::exec);
         assertTrue("a crew member carried on his feet must be resolved on a deck in the corridor —"
                 + " without that, 'he is not riding' is his client not having a mount yet rather than"
-                + " a man standing on a hull: " + captureInFlight,
-                readBool(captureInFlight, "alreadyTracked"));
+                + " a man standing on a hull: " + captureInFlight.raw(),
+                captureInFlight.alreadyTracked);
         JsonObject ridingInFlight = bot().reportRidingEntity();
         assertTrue("a crew member who was standing must still be standing in flight, not folded into"
                 + " a seat by the carry: " + ridingInFlight + "; deck capture in flight="
-                + captureInFlight, !ridingInFlight.get("riding").getAsBoolean());
+                + captureInFlight.raw(), !ridingInFlight.get("riding").getAsBoolean());
 
         // ── THE SECOND CROSSING ─────────────────────────────────────────────────────────────────
         // The clause is about BOTH crossings, and the two are not the same code path reached twice:
@@ -1388,12 +1389,12 @@ private long readCounter(String className, String field) throws Exception {
         // ONE reply, for both the verdict and the diagnosis. The chain above ended at the settle,
         // which the server commits only once everyone is back aboard, so this is a read of a state
         // production has already announced rather than a sample of one still converging.
-        String captureOnArrival = exec("artest vs deck-capture");
+        DeckCapture captureOnArrival = DeckCapture.read(this::exec);
         // The arrival cell may hold other craft — that is exactly why the second crossing is not the
         // first one reached twice — so "back on the deck there" is only the clause's claim if it is
         // HIS deck. The physics id is re-derived from the ship's durable name because a crossing
         // mints a new one; the name is the handle that survives both crossings.
-        ShipIdentity.assertCaptureAnchoredOn(captureOnArrival,
+        captureOnArrival.requireAnchoredOn(
                 ShipIdentity.awaitPhysicsIdOf(this::exec, targetDim, setup.requireDurableId(),
                         40, () -> bot().waitTicks(5)),
                 "the deck he is put back on at the far end must be his own ship's."
@@ -1410,12 +1411,12 @@ private long readCounter(String className, String field) throws Exception {
                         + " right when the hold let go and wrong when this was read went through one"
                         + " of these: " + events.since(mark, "deck_released"));
         assertEquals("the arrival crossing must carry the crew member on his feet too — his own"
-                + " client must be in the TARGET cell: " + captureOnArrival
+                + " client must be in the TARGET cell: " + captureOnArrival.raw()
                 + "; the server's chain: " + events.since(mark),
                 targetDim, bot().reportWeather().get("dim").getAsInt());
         assertTrue("...and he must be back ON THE DECK there, not merely in the right world: "
-                + captureOnArrival + "; the server's chain: " + events.since(mark),
-                readBool(captureOnArrival, "alreadyTracked"));
+                + captureOnArrival.raw() + "; the server's chain: " + events.since(mark),
+                captureOnArrival.alreadyTracked);
         assertTrue("...and still on his feet, never seated late by the arrival: "
                 + bot().reportRidingEntity(),
                 !bot().reportRidingEntity().get("riding").getAsBoolean());
@@ -1492,10 +1493,10 @@ private long readCounter(String className, String field) throws Exception {
         double deckX = mount.get("posX").getAsDouble();
         double deckY = mount.get("posY").getAsDouble();
         double deckZ = mount.get("posZ").getAsDouble();
-        String capture = standTheBotOnTheDeck(deckX, deckY, deckZ);
+        DeckCapture capture = standTheBotOnTheDeck(deckX, deckY, deckZ);
         scenario().requireArranged("he must be resolved on his deck in hyperspace, i.e. aboard on his"
-                + " feet rather than adrift in a void world: " + capture,
-                readBool(capture, "alreadyTracked"));
+                + " feet rather than adrift in a void world: " + capture.raw(),
+                capture.alreadyTracked);
         scenario().requireArranged("and off his seat — riding anything at all would make the reading below"
                         + " the seated case again: " + bot().reportRidingEntity(),
                 !bot().reportRidingEntity().get("riding").getAsBoolean());
@@ -1562,11 +1563,11 @@ private long readCounter(String className, String field) throws Exception {
         JsonObject mount = ridingOnceTheClientHasRemounted(clientMark, CLIENT_REMOUNT_BUDGET_TICKS);
 
         // ── THE STIMULUS: off the seat, mid-flight ───────────────────────────────────────────────
-        String capture = standTheBotOnTheDeck(mount.get("posX").getAsDouble(),
+        DeckCapture capture = standTheBotOnTheDeck(mount.get("posX").getAsDouble(),
                 mount.get("posY").getAsDouble(), mount.get("posZ").getAsDouble());
         scenario().requireArranged("he must be resolved on his deck in hyperspace — aboard on his feet is"
-                + " what the arrival is supposed to give back: " + capture,
-                readBool(capture, "alreadyTracked"));
+                + " what the arrival is supposed to give back: " + capture.raw(),
+                capture.alreadyTracked);
         scenario().requireArranged("and genuinely out of the chair before the arrival: "
                         + bot().reportRidingEntity(),
                 !bot().reportRidingEntity().get("riding").getAsBoolean());
@@ -1597,13 +1598,13 @@ private long readCounter(String className, String field) throws Exception {
         for (int i = 0; i < 60 && !carriedOn; i++) {
             bot().waitTicks(2);
             carriedOn = clientDim("the arrival poll") == targetDim
-                    && readBool(exec("artest vs deck-capture"), "alreadyTracked");
+                    && DeckCapture.read(this::exec).alreadyTracked;
         }
-        String captureOnArrival = exec("artest vs deck-capture");
+        DeckCapture captureOnArrival = DeckCapture.read(this::exec);
         int arrivedDim = clientDim("the arrival verdict");
         scenario().requireArranged("the arrival must have carried him at all — his own client must be in"
                 + " the TARGET cell (" + targetDim + ") before his posture there means anything; it is"
-                + " in " + arrivedDim + ": " + captureOnArrival,
+                + " in " + arrivedDim + ": " + captureOnArrival.raw(),
                 arrivedDim == targetDim);
         // ── THE CONTRACT, before the arrangement-shaped reading below ───────────────────────────
         // Posture first, deliberately: being off the deck is a CONSEQUENCE of having been seated, so a
@@ -1612,14 +1613,14 @@ private long readCounter(String className, String field) throws Exception {
         assertTrue("a crew member who was on his FEET when the ship arrived must arrive on his feet:"
                         + " the arrival may not replay where he was sitting when the jump fired, an"
                         + " entire flight earlier. Riding state on arrival="
-                        + bot().reportRidingEntity() + " capture=" + captureOnArrival,
+                        + bot().reportRidingEntity() + " capture=" + captureOnArrival.raw(),
                 !bot().reportRidingEntity().get("riding").getAsBoolean());
         assertTrue("...and he must be back ON THE DECK, not merely in the right world: "
-                + captureOnArrival, readBool(captureOnArrival, "alreadyTracked"));
+                + captureOnArrival.raw(), captureOnArrival.alreadyTracked);
         // ...HIS deck. This class runs in a shared hyperspace world and arrives into a cell that may
         // hold other craft, so "on a deck" and "on the deck he stood up from" are different claims
         // and only the second is what a crossing is supposed to guarantee.
-        ShipIdentity.assertCaptureAnchoredOn(captureOnArrival,
+        captureOnArrival.requireAnchoredOn(
                 ShipIdentity.awaitPhysicsIdOf(this::exec, targetDim, setup.requireDurableId(),
                         40, () -> bot().waitTicks(5)),
                 "the deck he stands on after the arrival must be his own ship's."
