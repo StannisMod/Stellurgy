@@ -8,6 +8,7 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 import static org.junit.Assert.assertTrue;
+import zmaster587.advancedRocketry.test.PlayerShipData;
 import zmaster587.advancedRocketry.test.Events;
 import zmaster587.advancedRocketry.test.Reply;
 import zmaster587.advancedRocketry.test.FixtureSite;
@@ -142,26 +143,26 @@ public class VSCrewRidesRollingDeckE2ETest extends AbstractSharedVsClientE2ETest
                         + " deck — the ticks below are for the fall, not for the teleport");
         bot().waitTicks(80); // the fall itself: four blocks of it, and it is a value converging
 
-        String level = exec("artest vs player-ship-data");
+        PlayerShipData level = PlayerShipData.read(this::exec);
         // "Aboard" is tested by CONTAINMENT (shipLoaded: the player's world position lies inside a
         // loaded ship's box), NOT by VS's own lastTouchedShip. AR now resolves an aboard entity's
         // movement itself and cancels the vanilla move VS associates inside, so lastTouchedShip stays
         // null even though the player is standing on the deck - the containment answer is the true one.
-        assertTrue("a player standing on the ship must be recognised as aboard it: " + level,
-                level.contains("\"shipLoaded\":true"));
+        assertTrue("a player standing on the ship must be recognised as aboard it: " + level.raw(),
+                level.shipLoaded);
         // ...and aboard THIS scenario's ship. Containment cannot be satisfied by a distant hull, but
         // it can by an adjacent one, and every deck-frame number read below (localX/Y/Z) is expressed
         // in the subspace of whichever hull answered — so a neighbour here does not mislabel the
         // claim, it changes what the ride comparison at the foot of this method is measuring.
-        ShipIdentity.assertAboardShip(level, shipId,
+        level.requireAboard( shipId,
                 "the crew member must be aboard the ship this scenario built");
-        assertTrue("walking crew must NOT be reported as mounted (that is the seated pilot): " + level,
-                level.contains("\"mounted\":false"));
-        assertTrue("a player standing on the deck must be on the ground: " + level,
-                level.contains("\"playerOnGround\":true"));
+        assertTrue("walking crew must NOT be reported as mounted (that is the seated pilot): " + level.raw(),
+                !level.mounted);
+        assertTrue("a player standing on the deck must be on the ground: " + level.raw(),
+                level.onGround);
 
-        double[] localBefore = {readDouble(level, LOCAL_X), readDouble(level, LOCAL_Y), readDouble(level, LOCAL_Z)};
-        double[] worldBefore = {readDouble(level, PLAYER_X), readDouble(level, PLAYER_Y), readDouble(level, PLAYER_Z)};
+        double[] localBefore = {level.localX(), level.localY(), level.localZ()};
+        double[] worldBefore = {level.playerX, level.playerY, level.playerZ};
 
         // Roll the ship about its nose. Quaternion (w,x,y,z) for ROLL_DEG about +Z.
         double half = Math.toRadians(ROLL_DEG) / 2.0;
@@ -170,7 +171,7 @@ public class VSCrewRidesRollingDeckE2ETest extends AbstractSharedVsClientE2ETest
         assertTrue("attitude hold must accept the roll command: " + point, point.contains("\"commanded\":true"));
         bot().waitTicks(120); // let the controller actually roll the ship
 
-        String rolled = exec("artest vs player-ship-data");
+        PlayerShipData rolled = PlayerShipData.read(this::exec);
         // Client-observed resolution state (the CLIENT owns a player's movement, so ITS ShipFrameTravel
         // statics are the honest half; the server's are the competing resolution). Diagnostic printout
         // for any failure below - which side captured, which side thrashed.
@@ -188,23 +189,23 @@ public class VSCrewRidesRollingDeckE2ETest extends AbstractSharedVsClientE2ETest
                 + " || server ticks=" + Events.fieldLines(
                         events().since(0, "ship_frame_tick"), "line")
                 + " || server releases=" + events().since(0, "deck_released"));
-        assertTrue("the crew member must still be aboard after the roll: " + rolled,
-                rolled.contains("\"shipLoaded\":true"));
+        assertTrue("the crew member must still be aboard after the roll: " + rolled.raw(),
+                rolled.shipLoaded);
         // The roll is the moment a capture can be handed to the wrong hull, so "still aboard" is only
         // the claim this test means if it is still aboard the SAME ship it started on.
-        ShipIdentity.assertAboardShip(rolled, shipId,
+        rolled.requireAboard( shipId,
                 "the crew member must still be aboard the ship he started the roll on");
-        assertTrue("the crew member must not fall off a rolled deck: " + rolled,
-                rolled.contains("\"playerOnGround\":true"));
+        assertTrue("the crew member must not fall off a rolled deck: " + rolled.raw(),
+                rolled.onGround);
 
-        double[] localAfter = {readDouble(rolled, LOCAL_X), readDouble(rolled, LOCAL_Y), readDouble(rolled, LOCAL_Z)};
-        double[] worldAfter = {readDouble(rolled, PLAYER_X), readDouble(rolled, PLAYER_Y), readDouble(rolled, PLAYER_Z)};
+        double[] localAfter = {rolled.localX(), rolled.localY(), rolled.localZ()};
+        double[] worldAfter = {rolled.playerX, rolled.playerY, rolled.playerZ};
 
         double movedOnDeck = distance(localBefore, localAfter);
         double movedInWorld = distance(worldBefore, worldAfter);
         assertTrue("the crew member must ride the deck, not the world: he moved " + movedOnDeck
                         + " relative to the ship but only " + movedInWorld + " in the world"
-                        + "\n  level  = " + level + "\n  rolled = " + rolled,
+                        + "\n  level  = " + level.raw() + "\n  rolled = " + rolled.raw(),
                 movedOnDeck < movedInWorld);
     }
 }

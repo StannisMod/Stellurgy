@@ -172,40 +172,6 @@ public final class ShipIdentity {
                 + " addressed to this scenario's own craft; last reply: " + reply);
     }
 
-    /** The ship an {@code artest vs player-ship-data} reply says the body is inside, or {@code null}
-     *  when it is inside none. Production emits the key with a null value beside {@code shipLoaded},
-     *  so a missing key means the reply is not a player-ship-data answer at all. */
-    public static String aboardShipOf(String playerShipDataReply) {
-        return Reply.of("artest vs player-ship-data", String.valueOf(playerShipDataReply))
-                .text("shipId");
-    }
-
-    /**
-     * Fail unless the body described by {@code playerShipDataReply} is aboard {@code expectedShipId}.
-     *
-     * <p>{@code shipLoaded} is genuine CONTAINMENT — the body's world position lies inside a loaded
-     * hull's box, not merely near one — so it cannot be satisfied by a distant craft. It can be
-     * satisfied by an ADJACENT one: two hulls may occupy the same space, and on a world a class
-     * shares with its siblings the flag reads {@code true} either way. The reply's {@code localX/Y/Z}
-     * are that hull's subspace coordinates, so a wrong hull does not merely mislabel the claim, it
-     * silently changes what every deck-frame number below the assertion means.</p>
-     *
-     * @param what the scenario's own sentence for what being aboard means, used in the failure
-     */
-    public static void assertAboardShip(String playerShipDataReply, String expectedShipId,
-                                        String what) {
-        assertTrue("this assertion cannot mean anything without the scenario's own ship id — it was"
-                + " null, so nothing distinguishes this craft from a neighbour's: "
-                + playerShipDataReply, expectedShipId != null);
-        String aboard = aboardShipOf(playerShipDataReply);
-        assertTrue(what + " — the reply names NO ship containing this body, so \"" + what + "\""
-                + " cannot be read out of it: " + playerShipDataReply,
-                aboard != null && !aboard.isEmpty());
-        assertEquals(what + " — the body IS inside a hull, but a DIFFERENT one than this scenario's."
-                + " Every flag in the reply reads the same either way, and the subspace coordinates"
-                + " beside them belong to that other hull: " + playerShipDataReply,
-                expectedShipId, aboard);
-    }
 
     /**
      * Wait until a deck episode OPENED on {@code shipId} since {@code mark} and is still unbroken: a

@@ -10,6 +10,7 @@ import org.valkyrienskies.mod.common.ships.chunk_claims.ShipChunkAllocator;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import zmaster587.advancedRocketry.test.PlayerShipData;
 import zmaster587.advancedRocketry.test.DeckCapture;
 import zmaster587.advancedRocketry.test.Events;
 import zmaster587.advancedRocketry.test.Reply;
@@ -1369,7 +1370,7 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
             // by the first recorded sample after t0 — a gap that hides the entire event, and one in
             // which "it slid off" and "something threw it" look identical.
             if (i < 10) {
-                String psd = exec("artest vs player-ship-data");
+                PlayerShipData psd = PlayerShipData.read(this::exec);
                 // The two terms the hull-stand arm adds together — `worldMotion[1] + carryY`. The
                 // carry is the ship's own velocity at the body's point; the rest is the body's. One
                 // of them is the +30, and this is what says which without a new instrument.
@@ -1392,10 +1393,10 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
                                 + " since=%.0f touched=%s carryY=%.2f shipMotY=%.2f] ",
                         i * 3, settledY, bot().reportState().get("playerZ").getAsDouble(),
                         tracked, hull,
-                        readDouble(psd, MOTION_X), readDouble(psd, MOTION_Y), readDouble(psd, MOTION_Z),
-                        readDouble(psd, ADDED_X), readDouble(psd, ADDED_Y), readDouble(psd, ADDED_Z),
-                        readDouble(psd, TICKS_SINCE_TOUCHED),
-                        psd.contains("\"lastTouchedShip\":null") ? "null" : "a-ship",
+                        psd.motionX, psd.motionY, psd.motionZ,
+                        psd.addedVelX, psd.addedVelY, psd.addedVelZ,
+                        psd.ticksSinceTouchedShip,
+                        psd.lastTouchedShip() == null ? "null" : "a-ship",
                         srvTick == null ? Double.NaN : Events.number(srvTick, "carryY"),
                         srvTick == null ? Double.NaN : Events.number(srvTick, "motionShipY")));
             }

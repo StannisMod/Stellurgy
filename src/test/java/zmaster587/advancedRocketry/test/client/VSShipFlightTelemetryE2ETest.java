@@ -14,6 +14,7 @@ import java.util.regex.Pattern;
 
 import javax.imageio.ImageIO;
 
+import zmaster587.advancedRocketry.test.PlayerShipData;
 import zmaster587.advancedRocketry.test.Events;
 import zmaster587.advancedRocketry.test.Reply;
 import zmaster587.advancedRocketry.test.PilotSeat;
@@ -493,9 +494,9 @@ public class VSShipFlightTelemetryE2ETest extends AbstractSharedVsClientE2ETest 
                 + drift + " blocks across it", drift < 2.0);
 
         // And he must still be standing on it, not falling.
-        String data = exec("artest vs player-ship-data 0 " + crewId);
-        assertTrue("the crew member must still be resting on the deck: " + data,
-                data.contains("\"playerOnGround\":true"));
+        PlayerShipData data = PlayerShipData.byId(this::exec, 0, crewId);
+        assertTrue("the crew member must still be resting on the deck: " + data.raw(),
+                data.onGround);
         reportClientHealth("crewStaysOnASteeplyRolledDeckInsteadOfBeingFlungIntoACorner");
     }
 
@@ -578,15 +579,15 @@ public class VSShipFlightTelemetryE2ETest extends AbstractSharedVsClientE2ETest 
         // A body settled on the actual deck - the exact thing the pilot stands on.
         int standId = dropStandAndAwaitItsCapture(ship);
 
-        String onDeck = exec("artest vs player-ship-data 0 " + standId);
-        assertTrue("the body must have settled on the deck: " + onDeck,
-                onDeck.contains("\"playerOnGround\":true") && onDeck.contains("\"shipLoaded\":true"));
+        PlayerShipData onDeck = PlayerShipData.byId(this::exec, 0, standId);
+        assertTrue("the body must have settled on the deck: " + onDeck.raw(),
+                onDeck.onGround && onDeck.shipLoaded);
         // On THIS scenario's deck. `deckY` below is taken out of this same reply and every later
         // assertion is a comparison against it, so a neighbour's hull answering here does not merely
         // mislabel the settle — it moves the baseline the grounded-deck claim is measured from.
-        zmaster587.advancedRocketry.test.ShipIdentity.assertAboardShip(onDeck, scenarioShipId,
+        onDeck.requireAboard(scenarioShipId,
                 "the body must have settled on the deck of the ship this scenario built");
-        double deckY = readDouble(onDeck, "playerY");
+        double deckY = onDeck.playerY;
         assertTrue("a body on the deck must be resolved in the ship frame: "
                 + exec("artest vs would-take-over 0 " + standId),
                 exec("artest vs would-take-over 0 " + standId).contains("\"handles\":true"));
@@ -619,8 +620,8 @@ public class VSShipFlightTelemetryE2ETest extends AbstractSharedVsClientE2ETest 
                         + " stands over. Every release recorded since the floor went in: " + releases,
                 matchingRecords(releases, "\"e\":" + standId + ",", "steppedOntoTerrain") == 0);
 
-        String afterFloor = exec("artest vs player-ship-data 0 " + standId);
-        double yAfter = readDouble(afterFloor, "playerY");
+        PlayerShipData afterFloor = PlayerShipData.byId(this::exec, 0, standId);
+        double yAfter = afterFloor.playerY;
         String handles = exec("artest vs would-take-over 0 " + standId);
         System.out.println("[tier2] grounded-deck: deckY=" + deckY + " afterFloor y=" + yAfter
                 + " floorTop=" + (fy + 1) + " would-take-over=" + handles);
@@ -629,8 +630,8 @@ public class VSShipFlightTelemetryE2ETest extends AbstractSharedVsClientE2ETest 
                 handles.contains("\"handles\":true"));
         assertTrue("it must stay ON the deck (y=" + deckY + "), not drop toward the world floor (top "
                 + (fy + 1) + "): it is at y=" + yAfter, Math.abs(yAfter - deckY) < 1.0);
-        assertTrue("and still on the ground (the deck), not falling: " + afterFloor,
-                afterFloor.contains("\"playerOnGround\":true"));
+        assertTrue("and still on the ground (the deck), not falling: " + afterFloor.raw(),
+                afterFloor.onGround);
         reportClientHealth("aBodyOnADeckWithWorldGroundBelowStaysOnTheDeck");
     }
 
@@ -949,18 +950,12 @@ public class VSShipFlightTelemetryE2ETest extends AbstractSharedVsClientE2ETest 
     }
 
     private double[] localOf(int entityId) throws Exception {
-        String json = exec("artest vs player-ship-data 0 " + entityId);
-        // TWO different failures wear the same message unless they are split here. "no subject
-        // entity" means the body this scenario meant to watch is NOT THERE — an arrangement that
-        // never got built, and nothing about the product. Anything else means the body exists and
-        // the ship frame did not resolve for it, which IS the subject. Reported as an arrangement
-        // failure so the two are distinguishable by TYPE, not only by reading the text.
-        scenario().requireArranged("the body this scenario watches (entity " + entityId + ") does not"
-                + " exist on the server, so nothing below is about ship-frame resolution: " + json,
-                !json.contains("\"error\":\"no subject entity\""));
-        assertTrue("entity " + entityId + " must report a ship-frame position: " + json,
-                json.contains("\"localX\""));
-        return new double[]{readDouble(json, LOCAL_X), readDouble(json, LOCAL_Y), readDouble(json, LOCAL_Z)};
+        PlayerShipData json = PlayerShipData.byId(this::exec, 0, entityId);
+        // TWO different failures wear the same message unless they are split, and the reader now
+        // splits them: a subject that is NOT THERE is an arrangement failure it raises by type, and
+        // a body whose ship frame did not resolve is the AssertionError `localX()` throws. What was
+        // two hand-written guards here is the same distinction, made once for every caller.
+        return new double[]{json.localX(), json.localY(), json.localZ()};
     }
 
     private static double distance(double[] a, double[] b) {
@@ -1082,10 +1077,10 @@ public class VSShipFlightTelemetryE2ETest extends AbstractSharedVsClientE2ETest 
         // The capture is the link; coming to REST on the deck is the body's own fall settling, which
         // is a value and stays a wait.
         bot().waitTicks(40);
-        String resting = exec("artest vs player-ship-data 0 " + crewId);
+        PlayerShipData resting = PlayerShipData.byId(this::exec, 0, crewId);
         scenario().requireArranged("the dropped body must come to REST on the deck before its drift"
-                + " across that deck can mean anything: " + resting,
-                resting.contains("\"playerOnGround\":true"));
+                + " across that deck can mean anything: " + resting.raw(),
+                resting.onGround);
         return crewId;
     }
 

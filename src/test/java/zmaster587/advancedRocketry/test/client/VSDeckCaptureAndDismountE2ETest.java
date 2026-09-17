@@ -8,6 +8,7 @@ import org.lwjgl.input.Keyboard;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import zmaster587.advancedRocketry.test.PlayerShipData;
 import zmaster587.advancedRocketry.test.DeckCapture;
 import zmaster587.advancedRocketry.test.Events;
 import zmaster587.advancedRocketry.test.Reply;
@@ -166,22 +167,22 @@ public class VSDeckCaptureAndDismountE2ETest extends AbstractSharedVsClientE2ETe
 
         // Server oracle: does the server capture the standing player on the deck at all, and is the deck
         // solid under his feet in the ship frame? deck-capture prints the whole handles() decision.
-        String server = exec("artest vs player-ship-data");
+        PlayerShipData server = PlayerShipData.read(this::exec);
         DeckCapture capture = deckCaptureOfThisShip(scenarioShipId,
                 "the server must resolve him on THIS scenario's grounded ship");
-        double serverY = readDouble(server, PLAYER_Y);
-        System.out.println("[deckcap] grounded server=" + server);
+        double serverY = server.playerY;
+        System.out.println("[deckcap] grounded server=" + server.raw());
         System.out.println("[deckcap] grounded capture=" + capture.raw());
-        assertTrue("server must recognise the client player as aboard the grounded ship: " + server,
-                server.contains("\"shipLoaded\":true"));
-        ShipIdentity.assertAboardShip(server, scenarioShipId,
+        assertTrue("server must recognise the client player as aboard the grounded ship: " + server.raw(),
+                server.shipLoaded);
+        server.requireAboard( scenarioShipId,
                 "the server must place him inside THIS scenario's grounded ship");
         assertTrue("server must resolve the player in the ship frame, not hand him to vanilla: " + capture.raw(),
                 capture.verdict);
         assertTrue("the deck must be solid under his feet in the ship frame (>0), else he falls "
                 + "through: " + capture.raw(), capture.shipSupportObstacles > 0);
-        assertTrue("a client player standing on the deck must be on the ground: " + server,
-                server.contains("\"playerOnGround\":true"));
+        assertTrue("a client player standing on the deck must be on the ground: " + server.raw(),
+                server.onGround);
 
         // Client observation: where does the player's OWN client render him? A client fall-through
         // leaves his client Y well below where the server is holding him on the deck.
@@ -287,10 +288,10 @@ public class VSDeckCaptureAndDismountE2ETest extends AbstractSharedVsClientE2ETe
         ShipInfo info = shipInfo();
         double shipYPost = info.y;
         double velYPost = info.velY;
-        String server = exec("artest vs player-ship-data");
+        PlayerShipData server = PlayerShipData.read(this::exec);
         DeckCapture capture = deckCaptureOfThisShip(scenarioShipId,
                 "the dismounted pilot must be resolved on the deck of the ship he was flying");
-        double serverY = readDouble(server, PLAYER_Y);
+        double serverY = server.playerY;
         double clientY = bot().reportState().get("playerY").getAsDouble();
         System.out.println("[deckcap] dismount shipY " + shipYPre + "->" + shipYPost + " velYPost="
                 + velYPost + " serverY=" + serverY + " clientY=" + clientY);
@@ -405,22 +406,22 @@ public class VSDeckCaptureAndDismountE2ETest extends AbstractSharedVsClientE2ETe
                 DECK_LINK_BUDGET_TICKS);
         System.out.println("[deckcap] reloaded ship=" + reloaded + " clientCapture=" + landing);
 
-        String server = exec("artest vs player-ship-data");
+        PlayerShipData server = PlayerShipData.read(this::exec);
         DeckCapture capture = deckCaptureOfThisShip(scenarioShipId,
                 "the returning player must be resolved on the ship this scenario built, which is the"
                         + " one that was saved and reloaded");
-        double serverY = readDouble(server, PLAYER_Y);
+        double serverY = server.playerY;
         double clientY = bot().reportState().get("playerY").getAsDouble();
-        System.out.println("[deckcap] reloaded server=" + server);
+        System.out.println("[deckcap] reloaded server=" + server.raw());
         System.out.println("[deckcap] reloaded capture=" + capture.raw());
         System.out.println("[deckcap] reloaded serverY=" + serverY + " clientY=" + clientY
                 + " loadedNow=" + shipIsLoaded());
 
-        assertTrue("a reloaded ship must come back when the player returns to its deck: " + server,
-                server.contains("\"shipLoaded\":true"));
+        assertTrue("a reloaded ship must come back when the player returns to its deck: " + server.raw(),
+                server.shipLoaded);
         // "A ship came back" is not the claim — THIS ship coming back is. A sibling scenario's hull
         // standing in the same airspace satisfies `shipLoaded` byte-identically.
-        ShipIdentity.assertAboardShip(server, scenarioShipId,
+        server.requireAboard( scenarioShipId,
                 "the ship that came back under him must be the one this scenario saved");
         assertTrue("the player must be resolved on the reloaded deck, not fall through it: " + capture.raw(),
                 capture.verdict && capture.shipSupportObstacles > 0);
@@ -715,7 +716,7 @@ public class VSDeckCaptureAndDismountE2ETest extends AbstractSharedVsClientE2ETe
         String releases = clientEvents.since(dismountMark, "deck_released");
         DeckCapture capture = DeckCapture.read(this::exec);
         double clientY = bot().reportState().get("playerY").getAsDouble();
-        double serverY = readDouble(exec("artest vs player-ship-data"), PLAYER_Y);
+        double serverY = PlayerShipData.read(this::exec).playerY;
         System.out.println("[deckcap] tilted-dismount upY=" + tilted + " shipPosY=" + seat[1]
                 + " settledMinY=" + settledMin + " Ytraj=" + traj);
         System.out.println("[deckcap] tilted-dismount seed=" + seeded + " releases=" + releases);
@@ -825,7 +826,7 @@ public class VSDeckCaptureAndDismountE2ETest extends AbstractSharedVsClientE2ETe
         DeckCapture capture = deckCaptureOfThisShip(scenarioShipId,
                 "the ex-pilot must stay resolved on the ship he was rolled with");
         double clientY = bot().reportState().get("playerY").getAsDouble();
-        double serverY = readDouble(exec("artest vs player-ship-data"), PLAYER_Y);
+        double serverY = PlayerShipData.read(this::exec).playerY;
         System.out.println("[deckcap] dismount-then-roll " + label + " upY=" + tilted + " shipPosY="
                 + shipPosY + " settledMin=" + settledMin + " osc=" + osc + " seed=" + seeded
                 + " capturesOnRoll=" + Events.countRecordsWithField(rollCaptures, "ship")
@@ -944,7 +945,7 @@ public class VSDeckCaptureAndDismountE2ETest extends AbstractSharedVsClientE2ETe
                 "after leaving the seat on an INVERTED ship the ex-pilot must stay resolved on THAT"
                         + " ship, not on whatever else is in the airspace");
         double clientY = bot().reportState().get("playerY").getAsDouble();
-        double serverY = readDouble(exec("artest vs player-ship-data"), PLAYER_Y);
+        double serverY = PlayerShipData.read(this::exec).playerY;
         System.out.println("[deckcap] force-invert dismount seed=" + seeded + " capture=" + capture.raw()
                 + " clientY=" + clientY + " serverY=" + serverY);
 
