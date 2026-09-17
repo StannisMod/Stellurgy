@@ -287,8 +287,9 @@ public class SpaceSubsystemClientSyncGroupE2ETest extends AbstractSharedClientE2
         assertEquals("the client must still be in the slot dim two seconds later",
                 slotDim, bot().reportWeather().get("dim").getAsInt());
 
-        String post = exec("artest player health");
-        assertTrue("server must still see the player: " + post, post.contains("\"player\":\""));
+        // The reader refuses a reply with no player in it, which IS this assertion; what is left
+        // is naming it, so a red says which claim failed rather than printing a reply.
+        PlayerState.read(this::exec).requireName();
     }
 
     // ── system bodies broadcast ───────────────────────────────────────────────

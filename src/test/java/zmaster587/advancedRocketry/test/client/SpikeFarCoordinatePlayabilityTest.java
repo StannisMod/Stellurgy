@@ -7,6 +7,7 @@ import org.junit.Test;
 import org.lwjgl.input.Keyboard;
 import org.valkyrienskies.mod.common.ships.chunk_claims.ShipChunkAllocator;
 import zmaster587.advancedRocketry.test.GameTicks;
+import zmaster587.advancedRocketry.test.PlayerState;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -376,11 +377,11 @@ public class SpikeFarCoordinatePlayabilityTest extends AbstractClientE2ETest {
     // ─── instruments ────────────────────────────────────────────────────────────
 
     private double serverX() throws Exception {
-        return field(exec("artest player health"), "posX");
+        return PlayerState.read(this::exec).x;
     }
 
     private double serverY() throws Exception {
-        return field(exec("artest player health"), "posY");
+        return PlayerState.read(this::exec).y;
     }
 
     private double clientX() throws Exception {

@@ -3,6 +3,7 @@ package zmaster587.advancedRocketry.test.client;
 import com.google.gson.JsonObject;
 import zmaster587.advancedRocketry.client.render.planet.ApparentSize;
 import zmaster587.advancedRocketry.test.Reply;
+import zmaster587.advancedRocketry.test.PlayerState;
 import zmaster587.advancedRocketry.test.CellInfo;
 import zmaster587.advancedRocketry.test.Events;
 import org.junit.After;
@@ -143,7 +144,6 @@ public class BoundarySkyRendersInSlotCellE2ETest extends AbstractSharedClientE2E
         exec("artest space entry-clear");
     }
 
-    private static final String PLAYER_NAME = "player";
     /** The slot the settle actually bound the cell to — the one place that decides it. */
     private static final String BOUND_DIM = "slotDim";
     /** The feed, as the probe reports it straight off the production packet: one entry per cell. */
@@ -267,10 +267,7 @@ public class BoundarySkyRendersInSlotCellE2ETest extends AbstractSharedClientE2E
         exec("weather clear");
         exec("time set 6000");
 
-        String health = exec("artest player health");
-        Reply nameMReply = Reply.of(health);
-        assertTrue("player health must echo the player name: " + health, nameMReply.has(PLAYER_NAME));
-        botName = nameMReply.text(PLAYER_NAME);
+        botName = PlayerState.botName(this::exec);
 
         JsonObject rd = bot().setRenderDistance(SKY_RENDER_DISTANCE);
         int previousRenderDistance = rd.get("previous").getAsInt();
@@ -610,10 +607,7 @@ public class BoundarySkyRendersInSlotCellE2ETest extends AbstractSharedClientE2E
         int previousRenderDistance = rd.get("previous").getAsInt();
         assertTrue("the sky pass gate must be open, read back off the client's own field: " + rd,
                 rd.get("skyPassEnabled").getAsBoolean());
-        String health = exec("artest player health");
-        Reply nameMReply = Reply.of(health);
-        assertTrue("player health must echo the player name: " + health, nameMReply.has(PLAYER_NAME));
-        botName = nameMReply.text(PLAYER_NAME);
+        botName = PlayerState.botName(this::exec);
         try {
             String setup = exec("artest space entry-setup 1");
             assertTrue("entry-setup must install the stack: " + setup, setup.contains("\"ok\":true"));

@@ -6,6 +6,7 @@ import org.junit.runners.MethodSorters;
 
 import zmaster587.advancedRocketry.test.Events;
 import zmaster587.advancedRocketry.test.Reply;
+import zmaster587.advancedRocketry.test.PlayerState;
 
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -45,7 +46,6 @@ import static org.junit.Assert.assertTrue;
 @FixMethodOrder(MethodSorters.NAME_ASCENDING)
 public class SpaceDimGuardE2ETest extends AbstractSharedClientE2ETest {
 
-    private static final String DIM = "dim";
     private static final String POS_X = "posX";
     private static final String POS_Y = "posY";
     private static final String POS_Z = "posZ";
@@ -107,9 +107,8 @@ public class SpaceDimGuardE2ETest extends AbstractSharedClientE2ETest {
                 + " must still be empty when it runs; it holds: " + list,
                 list.contains("\"stations\":[]"));
 
-        String pre = exec("artest player health");
-        scenario().requireArranged("baseline must be overworld dim 0; " + pre,
-                0 == intField(DIM, pre, "dim"));
+        PlayerState pre = PlayerState.read(this::exec);
+        scenario().requireArranged("baseline must be overworld dim 0; " + pre.raw(), 0 == pre.dim);
 
         scenario().asserting("the guard transfers a station-less player back to the overworld");
         // BOTH marks before the stimulus, so nothing that happens in between can be missed: the
@@ -139,10 +138,9 @@ public class SpaceDimGuardE2ETest extends AbstractSharedClientE2ETest {
                 "the player whose body the guard moved must SEE the overworld, not merely be"
                         + " reported there", GUARD_LINK_BUDGET_TICKS);
 
-        String after = exec("artest player health");
-        int dim = intField(DIM, after, "dim");
+        PlayerState after = PlayerState.read(this::exec);
         assertEquals("no-station fallback must transfer player back to overworld; player is in dim "
-                + dim + " — " + after, 0, dim);
+                + after.dim + " — " + after.raw(), 0, after.dim);
     }
 
     /**
@@ -202,23 +200,22 @@ public class SpaceDimGuardE2ETest extends AbstractSharedClientE2ETest {
         // still standing at 50000 when the five ticks were up, and the leg indicted production for
         // it). Polling exits at the EARLIEST tick the teleport is visible, which is also the least
         // free-fall the posY check below can be handed.
-        String after = exec("artest player health");
+        PlayerState after = PlayerState.read(this::exec);
         int waitedTicks = 0;
-        while (waitedTicks < 120
-                && Math.abs(doubleField(POS_X, after, "posX") - 50000.5) < 1.0) {
+        while (waitedTicks < 120 && Math.abs(after.x - 50000.5) < 1.0) {
             bot().waitTicks(2);
             waitedTicks += 2;
-            after = exec("artest player health");
+            after = PlayerState.read(this::exec);
         }
         scenario().record("ticksUntilGuardMovedHim", waitedTicks);
-        int dim = intField(DIM, after, "dim");
+        int dim = after.dim;
         assertEquals("player must remain in the space dim — he should be teleported to the "
                 + "station's spawn, not back to overworld; dim=" + dim + " " + after,
                 SPACE_DIM, dim);
 
-        double posX = doubleField(POS_X, after, "posX");
-        double posY = doubleField(POS_Y, after, "posY");
-        double posZ = doubleField(POS_Z, after, "posZ");
+        double posX = after.x;
+        double posY = after.y;
+        double posZ = after.z;
         // The handler uses setPositionAndUpdate(spawn.x, spawn.y, spawn.z) exactly. X/Z motion in
         // vacuum is zero (no input), so a tight 2.0 epsilon holds. Y drifts down: gravity pulls the
         // player ~1 block/tick after a few ticks of accumulation, so 6.0 covers the 5-tick
