@@ -1,5 +1,6 @@
 package zmaster587.advancedRocketry.test.server;
 
+import zmaster587.advancedRocketry.test.RealizedBody;
 import zmaster587.advancedRocketry.test.Reply;
 import zmaster587.advancedRocketry.test.CellInfo;
 import com.github.stannismod.forge.testing.junit.AbstractHeadlessServerTest;
@@ -12,6 +13,7 @@ import java.util.regex.Pattern;
 
 import zmaster587.advancedRocketry.dimension.DimensionProperties;
 
+import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotEquals;
@@ -92,56 +94,54 @@ public class ProceduralPlanetRealizationE2ETest extends AbstractHeadlessServerTe
         assertTrue("the derivation must answer for an unrealized body: " + scan,
                 scan.contains("\"ok\":true"));
 
-        String realized = exec("artest space realize " + cell);
-        assertTrue("realization must mint a world: " + realized, realized.contains("\"ok\":true"));
-        int dim = jsonInt(realized, "dim");
-        assertTrue("a realized dimension id must be real: " + realized, dim > 1);
+        RealizedBody realized = RealizedBody.at(this::exec, cell);
+        int dim = realized.dim;
+        assertTrue("a realized dimension id must be real: " + realized.raw(), dim > 1);
 
         // The whole contract, field by field. Terrain is deliberately absent from this list: its tier
         // is APPROACH, not TELESCOPE, so the design lets it settle later — but it is compared anyway
         // because the derivation is the single origin of every one of these.
         assertEquals("orbital distance must be materialized, not re-rolled: scan " + scan
-                + " vs world " + realized, jsonInt(scan, "orbitalDist"), jsonInt(realized, "orbitalDist"));
-        assertEquals("gravity must match the scan: " + scan + " vs " + realized,
-                jsonInt(scan, "gravity"), jsonInt(realized, "gravity"));
-        assertEquals("atmospheric pressure must match the scan: " + scan + " vs " + realized,
-                jsonInt(scan, "pressure"), jsonInt(realized, "pressure"));
-        assertEquals("temperature must match the scan: " + scan + " vs " + realized,
-                jsonInt(scan, "temperature"), jsonInt(realized, "temperature"));
-        assertEquals("a breathable atmosphere must match the scan: " + scan + " vs " + realized,
-                jsonBool(scan, "oxygen"), jsonBool(realized, "oxygen"));
-        assertEquals("tidal locking must match the scan: " + scan + " vs " + realized,
-                jsonBool(scan, "locked"), jsonBool(realized, "locked"));
-        assertEquals("mass must match the scan: " + scan + " vs " + realized,
-                jsonDouble(scan, "mass"), jsonDouble(realized, "mass"), 1e-6d);
-        assertEquals("radius must match the scan: " + scan + " vs " + realized,
-                jsonDouble(scan, "radius"), jsonDouble(realized, "radius"), 1e-6d);
-        assertEquals("the star's metallicity must reach the world: " + scan + " vs " + realized,
-                jsonDouble(scan, "metallicity"), jsonDouble(realized, "metallicity"), 1e-6d);
+                + " vs world " + realized.raw(), jsonInt(scan, "orbitalDist"), realized.orbitalDist);
+        assertEquals("gravity must match the scan: " + scan + " vs " + realized.raw(),
+                jsonInt(scan, "gravity"), realized.gravityPercent);
+        assertEquals("atmospheric pressure must match the scan: " + scan + " vs " + realized.raw(),
+                jsonInt(scan, "pressure"), realized.pressure);
+        assertEquals("temperature must match the scan: " + scan + " vs " + realized.raw(),
+                jsonInt(scan, "temperature"), realized.temperature);
+        assertEquals("a breathable atmosphere must match the scan: " + scan + " vs " + realized.raw(),
+                jsonBool(scan, "oxygen"), realized.oxygen);
+        assertEquals("tidal locking must match the scan: " + scan + " vs " + realized.raw(),
+                jsonBool(scan, "locked"), realized.tidallyLocked);
+        assertEquals("mass must match the scan: " + scan + " vs " + realized.raw(),
+                jsonDouble(scan, "mass"), (double) realized.mass, 1e-6d);
+        assertEquals("radius must match the scan: " + scan + " vs " + realized.raw(),
+                jsonDouble(scan, "radius"), (double) realized.radius, 1e-6d);
+        assertEquals("the star's metallicity must reach the world: " + scan + " vs " + realized.raw(),
+                jsonDouble(scan, "metallicity"), (double) realized.metallicity, 1e-6d);
         assertEquals("the terrain source drawn for the type must be the one fixed on the world: "
-                + scan + " vs " + realized, jsonString(scan, "terrainSource"),
-                jsonString(realized, "terrainSource"));
+                + scan + " vs " + realized.raw(), jsonString(scan, "terrainSource"),
+                realized.terrainSource);
 
         // Gravity is DERIVED from the bulk properties, so the world must not merely carry a number that
         // happens to match — the relation has to hold on the world itself.
-        double mass = jsonDouble(realized, "mass");
-        double radius = jsonDouble(realized, "radius");
-        assertTrue("a realized world must carry real bulk properties: " + realized,
+        double mass = (double) realized.mass;
+        double radius = (double) realized.radius;
+        assertTrue("a realized world must carry real bulk properties: " + realized.raw(),
                 mass > 0d && radius > 0d);
         double expected = Math.max(0.05d, Math.min(4d, mass / (radius * radius)));
-        assertEquals("surface gravity must be M/R^2: " + realized,
-                expected * 100d, jsonInt(realized, "gravity"), 1.5d);
+        assertEquals("surface gravity must be M/R^2: " + realized.raw(),
+                expected * 100d, realized.gravityPercent, 1.5d);
 
-        assertTrue("the body must now advertise itself as a descent target: " + realized,
-                realized.contains("\"descendTarget\":true"));
-        assertTrue("a procedural system keeps its synthetic negative star id: " + realized,
-                jsonInt(realized, "starId") < 0);
+        assertTrue("the body must now advertise itself as a descent target: " + realized.raw(),
+                realized.descendTarget);
+        assertTrue("a procedural system keeps its synthetic negative star id: " + realized.raw(),
+                realized.starId < 0);
 
         // Idempotency: the trigger is a per-tick proximity check, so asking again is the normal case.
-        String again = exec("artest space realize " + cell);
-        assertTrue("a second descent must succeed: " + again, again.contains("\"ok\":true"));
-        assertEquals("a second descent must REUSE the world, not mint another: " + again,
-                dim, jsonInt(again, "dim"));
+        RealizedBody again = RealizedBody.at(this::exec, cell);
+        assertEquals("a second descent must REUSE the world, not mint another: " + again.raw(),
+                dim, again.dim);
 
         // And the world is a world: it loads, and it has ground rather than a column of air.
         String loaded = exec("artest dim time " + dim);
@@ -194,33 +194,29 @@ public class ProceduralPlanetRealizationE2ETest extends AbstractHeadlessServerTe
         assertFalse("...the parent's cell included: " + beforeParent.raw(),
                 anyDescendTarget(beforeParent));
 
-        String moon = exec("artest space realize " + cell + " " + moonVariant);
-        assertTrue("the moon must be realizable on its own account: " + moon,
-                moon.contains("\"ok\":true"));
-        assertTrue("a moon realized before its parent must still BE a moon: " + moon,
-                jsonBool(moon, "moon"));
-        int parentDim = jsonInt(moon, "parent");
-        assertTrue("and it must name a real parent dimension: " + moon, parentDim > 1);
-        assertNotEquals("which is not the moon itself", jsonInt(moon, "dim"), parentDim);
+        RealizedBody moon = RealizedBody.at(this::exec, cell, moonVariant);
+        assertTrue("a moon realized before its parent must still BE a moon: " + moon.raw(),
+                moon.moon);
+        int parentDim = moon.parent;
+        assertTrue("and it must name a real parent dimension: " + moon.raw(), parentDim > 1);
+        assertNotEquals("which is not the moon itself", moon.dim, parentDim);
 
         // The second half of the same corruption: a parentless moon kept its PARENT's distance from
         // the star as its own orbital distance, because that is the number its climate is derived
         // from. A moon's own orbit is around the parent, and the two are different numbers.
-        String parent = exec("artest space realize " + parentCell + " " + parentVariant);
-        assertTrue("the parent must answer with the world it was just given: " + parent,
-                parent.contains("\"ok\":true"));
+        RealizedBody parent = RealizedBody.at(this::exec, parentCell, parentVariant);
         assertEquals("realizing the parent afterwards must reuse the world the moon gave it",
-                parentDim, jsonInt(parent, "dim"));
-        assertFalse("the parent is not a moon: " + parent, jsonBool(parent, "moon"));
-        assertNotEquals("a moon's orbital distance is its own, not its parent's: moon " + moon
-                + " vs parent " + parent, jsonInt(parent, "orbitalDist"), jsonInt(moon, "orbitalDist"));
+                parentDim, parent.dim);
+        assertFalse("the parent is not a moon: " + parent.raw(), parent.moon);
+        assertNotEquals("a moon's orbital distance is its own, not its parent's: moon " + moon.raw()
+                + " vs parent " + parent.raw(), parent.orbitalDist, moon.orbitalDist);
         // ...and it is its own on the only scale that says so: a moon's own orbit is small, a
         // planet's distance from its star is hundreds of units. A moon that lost its own law is
         // realized at MIN_DISTANCE, i.e. INSIDE its parent, and the assertion above cannot see that
         // — MIN_DISTANCE differs from the parent's number too. This one names the floor.
         assertTrue("a moon realized at the minimum distance has lost its own orbit and sits inside "
-                        + "its parent: " + moon,
-                jsonInt(moon, "orbitalDist") > DimensionProperties.MIN_DISTANCE);
+                        + "its parent: " + moon.raw(),
+                moon.orbitalDist > DimensionProperties.MIN_DISTANCE);
     }
 
     /**
@@ -246,12 +242,11 @@ public class ProceduralPlanetRealizationE2ETest extends AbstractHeadlessServerTe
         String cell = jsonString(found, "cellKey");
         String parentCell = jsonString(found, "parentCellKey");
 
-        String moon = exec("artest space realize " + cell + " " + jsonInt(found, "moonVariant"));
-        assertTrue("a gas giant's moon must be realizable: " + moon, moon.contains("\"ok\":true"));
+        RealizedBody moon = RealizedBody.at(this::exec, cell, jsonInt(found, "moonVariant"));
         assertTrue("and it must be a moon, which it can only be if the giant got a record of its own: "
-                + moon, jsonBool(moon, "moon"));
-        assertTrue("naming a real parent dimension: " + moon, jsonInt(moon, "parent") > 1);
-        assertFalse("the moon itself is not the gas giant: " + moon, jsonBool(moon, "gasGiant"));
+                + moon.raw(), moon.moon);
+        assertTrue("naming a real parent dimension: " + moon.raw(), moon.parent > 1);
+        assertFalse("the moon itself is not the gas giant: " + moon.raw(), moon.gasGiant);
 
         // The giant now EXISTS as a place - the family's record carries its dimension - and is still
         // not somewhere to land: it has no surface, so the descent flag every downstream consumer
@@ -260,7 +255,7 @@ public class ProceduralPlanetRealizationE2ETest extends AbstractHeadlessServerTe
         CellInfo after = CellInfo.atKey(this::exec, parentCell);
         CellInfo.Body giantEntry = bodyOfKind(after, "GAS_GIANT");
         assertEquals("the giant must now hold the very dimension the moon calls its parent: "
-                + after.raw(), jsonInt(moon, "parent"), giantEntry.dim);
+                + after.raw(), moon.parent, giantEntry.dim);
         assertFalse("and it must still not be a descent target: " + giantEntry,
                 giantEntry.descendTarget);
 
@@ -268,8 +263,8 @@ public class ProceduralPlanetRealizationE2ETest extends AbstractHeadlessServerTe
         // the flag above is a report, this is the behaviour.
         String refused = exec("artest space realize " + parentCell + " "
                 + jsonInt(found, "parentVariant"));
-        assertTrue("realizing a gas giant as a DESCENT must stay refused: " + refused,
-                refused.contains("\"ok\":false"));
+        assertNotNull("realizing a gas giant as a DESCENT must stay refused: " + refused,
+                RealizedBody.refusedBecause(refused));
     }
 
     /**

@@ -5,6 +5,7 @@ import org.junit.Test;
 import org.junit.runners.MethodSorters;
 
 import zmaster587.advancedRocketry.test.FixtureSite;
+import zmaster587.advancedRocketry.test.RealizedBody;
 
 import static org.junit.Assert.assertTrue;
 import static zmaster587.advancedRocketry.test.client.ClientGuiTestSupport.openGuiByRightClick;
@@ -55,10 +56,8 @@ public class ObservatoryDepositButtonE2ETest extends AbstractSharedClientE2ETest
             String found = exec("artest space find-procedural 4");
             assertTrue("a dense procedural galaxy must offer a landable body: " + found,
                     found.contains("\"ok\":true"));
-            String realized = exec("artest space realize " + intOf(found, "sx") + " "
-                    + intOf(found, "sy") + " " + intOf(found, "sz"));
-            assertTrue("realization must mint a world: " + realized, realized.contains("\"ok\":true"));
-            fresh = intOf(realized, "dim");
+            fresh = RealizedBody.atSectorLocal(this::exec,
+                    intOf(found, "sx"), intOf(found, "sy"), intOf(found, "sz")).dim;
         } finally {
             exec("artest space gen-reset");
         }

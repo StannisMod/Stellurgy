@@ -5,6 +5,7 @@ import java.util.List;
 
 import org.junit.Test;
 
+import zmaster587.advancedRocketry.test.RealizedBody;
 import zmaster587.advancedRocketry.test.FixtureSite;
 import zmaster587.advancedRocketry.test.Reply;
 
@@ -95,10 +96,7 @@ public class Tier1AimsAtWhatThisWorldKnowsE2ETest extends AbstractSharedServerTe
                     found.contains("\"ok\":true"));
             String cell = intField(found, "sx") + " " + intField(found, "sy") + " "
                     + intField(found, "sz");
-            String realized = exec("artest space realize " + cell);
-            assertTrue("realization must mint a world to ask about: " + realized,
-                    realized.contains("\"ok\":true"));
-            int fresh = intField(realized, "dim");
+            int fresh = RealizedBody.at(this::exec, cell).dim;
 
             String reply = halves(0, fresh);
             assertTrue("a freshly minted world must be in nobody's global set: " + reply,
@@ -126,11 +124,8 @@ public class Tier1AimsAtWhatThisWorldKnowsE2ETest extends AbstractSharedServerTe
             String found = exec("artest space find-procedural 4");
             assertTrue("a dense procedural galaxy must offer a landable body: " + found,
                     found.contains("\"ok\":true"));
-            String realized = exec("artest space realize " + intField(found, "sx") + " "
-                    + intField(found, "sy") + " " + intField(found, "sz"));
-            assertTrue("realization must mint a world to ask about: " + realized,
-                    realized.contains("\"ok\":true"));
-            int fresh = intField(realized, "dim");
+            int fresh = RealizedBody.atSectorLocal(this::exec, intField(found, "sx"),
+                    intField(found, "sy"), intField(found, "sz")).dim;
 
             String reply = halves(0, fresh);
             assertTrue("arrangement: nobody may have taught this world globally: " + reply,
