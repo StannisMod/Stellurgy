@@ -1,5 +1,6 @@
 package zmaster587.advancedRocketry.test.server;
 
+import zmaster587.advancedRocketry.test.SubsystemStatus;
 import zmaster587.advancedRocketry.test.Reply;
 import zmaster587.advancedRocketry.test.ShipReadiness;
 
@@ -199,11 +200,11 @@ public class InterstellarJumpLegE2ETest extends AbstractSharedServerTest {
         if (!targetCell.equals(arrived.cellKey)) {
             System.out.println("[interstellar-leg] " + label + " NEVER ARRIVED after " + elapsed
                     + " ticks; last=" + arrived.raw()
-                    + " subsystem=" + exec("artest space subsystem-status"));
+                    + " subsystem=" + SubsystemStatus.read(this::exec).raw());
             return -1L;
         }
         assertEquals("[" + label + "] nothing may still be in transit once the ledger reports arrival",
-                0, extractInt(exec("artest space subsystem-status"), "transits"));
+                0, SubsystemStatus.read(this::exec).transits);
         return elapsed;
     }
 

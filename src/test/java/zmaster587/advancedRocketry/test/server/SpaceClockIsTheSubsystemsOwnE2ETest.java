@@ -11,6 +11,7 @@ import com.github.stannismod.forge.testing.server.RealDedicatedServerHarness;
 import org.junit.After;
 import org.junit.Assume;
 import org.junit.Before;
+import zmaster587.advancedRocketry.test.SubsystemStatus;
 import zmaster587.advancedRocketry.test.Reply;
 import zmaster587.advancedRocketry.test.GameTicks;
 
@@ -234,10 +235,10 @@ public class SpaceClockIsTheSubsystemsOwnE2ETest {
         harness = RealDedicatedServerHarness.startWith(root, false);
         String vs = exec("artest vs available");
 
-        String status = exec("artest space subsystem-status");
+        SubsystemStatus status = SubsystemStatus.read(this::exec);
         assertTrue("the production space subsystem must be live on boot 1 — its world-save hook is "
                         + "what persists the clock, so without it this test would assert nothing: "
-                        + status, status.contains("\"registered\":true"));
+                        + status.raw(), status.registered);
 
         long fresh = spaceClock(exec("artest space clock"));
         requireArranged("a fresh boot's clock must be far below the value set below, or "
@@ -255,9 +256,9 @@ public class SpaceClockIsTheSubsystemsOwnE2ETest {
 
         // --- boot 2: a brand new JVM, same world directory -----------------------------------------
         harness = RealDedicatedServerHarness.startWith(root, false);
-        String statusAfter = exec("artest space subsystem-status");
-        assertTrue("the production subsystem must come up again on boot 2: " + statusAfter,
-                statusAfter.contains("\"registered\":true"));
+        SubsystemStatus statusAfter = SubsystemStatus.read(this::exec);
+        assertTrue("the production subsystem must come up again on boot 2: " + statusAfter.raw(),
+                statusAfter.registered);
 
         long restored = spaceClock(exec("artest space clock"));
         assertTrue("the subsystem's clock must resume where the last save left it, not restart at"
@@ -297,10 +298,10 @@ public class SpaceClockIsTheSubsystemsOwnE2ETest {
 
         // --- boot 1 --------------------------------------------------------------------------------
         harness = RealDedicatedServerHarness.startWith(root, false);
-        String status = exec("artest space subsystem-status");
+        SubsystemStatus status = SubsystemStatus.read(this::exec);
         requireArranged("the space subsystem must be DOWN on this server, or this leg is a "
-                + "duplicate of the one above and covers nothing: " + status,
-                status.contains("\"registered\":false"));
+                + "duplicate of the one above and covers nothing: " + status.raw(),
+                !status.registered);
 
         // THE ADVANCE SITE, pinned where it can only be pinned. The increment sits ahead of the
         // controller-null return precisely so a stood-down session still gets a moving number; move
@@ -327,9 +328,9 @@ public class SpaceClockIsTheSubsystemsOwnE2ETest {
         harness = null;
         harness = RealDedicatedServerHarness.startWith(root, false);
 
-        String statusAfter = exec("artest space subsystem-status");
-        assertTrue("the subsystem must still be down on boot 2: " + statusAfter,
-                statusAfter.contains("\"registered\":false"));
+        SubsystemStatus statusAfter = SubsystemStatus.read(this::exec);
+        assertTrue("the subsystem must still be down on boot 2: " + statusAfter.raw(),
+                !statusAfter.registered);
 
         long restored = spaceClock(exec("artest space clock"));
         assertTrue("the clock must survive a reboot on a server with no space subsystem at all. Its"

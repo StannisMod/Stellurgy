@@ -9,6 +9,7 @@ import org.junit.Test;
 import org.junit.runners.MethodSorters;
 import org.lwjgl.input.Keyboard;
 
+import zmaster587.advancedRocketry.test.SubsystemStatus;
 import zmaster587.advancedRocketry.test.SeatMount;
 import zmaster587.advancedRocketry.test.Reply;
 import zmaster587.advancedRocketry.test.Events;
@@ -268,10 +269,10 @@ public class VSPreAssemblyBoardingPilotControlE2ETest extends AbstractSharedVsCl
 
         // The subsystem must actually be up, or the run silently degrades into a different
         // configuration than the one a player is in and its result would mean nothing.
-        String status = exec("artest space subsystem-status");
+        SubsystemStatus status = SubsystemStatus.read(this::exec);
         scenario().requireArranged("the production space subsystem must be REGISTERED - the seeded "
-                        + "config is what opts it in: " + status,
-                status.contains("\"registered\":true"));
+                        + "config is what opts it in: " + status.raw(),
+                status.registered);
 
         long awayMark = clientEvents().mark();
         exec("tp @a " + (bx + 600) + " 120 " + (bz + 600) + " 0 0");
@@ -667,7 +668,7 @@ public class VSPreAssemblyBoardingPilotControlE2ETest extends AbstractSharedVsCl
                         + " | EXPERIMENT (key held): yBefore=" + yBefore + " yAfter=" + yAfter
                         + " climb=" + (yAfter - yBefore) + " (need >= " + MIN_CLIMB + ")"
                         + " | DELIVERY: " + delivery
-                        + " | riding=" + ridingAfter + " subsystem=" + status,
+                        + " | riding=" + ridingAfter + " subsystem=" + status.raw(),
                 (yAfter - yBefore) >= MIN_CLIMB);
     }
 

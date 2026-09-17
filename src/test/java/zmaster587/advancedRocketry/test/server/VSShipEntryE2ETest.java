@@ -1,5 +1,6 @@
 package zmaster587.advancedRocketry.test.server;
 
+import zmaster587.advancedRocketry.test.SubsystemStatus;
 import zmaster587.advancedRocketry.test.Reply;
 import zmaster587.advancedRocketry.test.ShipReadiness;
 import zmaster587.advancedRocketry.space.CellSeam;
@@ -258,7 +259,7 @@ public class VSShipEntryE2ETest extends AbstractSharedServerTest {
         String arrived = exec("artest space entry-status id " + durableId);
         assertTrue("the ship never arrived at the cell the jump was aimed at; origin=" + originCell
                 + " requested=" + targetCell + " last status=" + arrived
-                + " subsystem=" + exec("artest space subsystem-status"), done);
+                + " subsystem=" + SubsystemStatus.read(this::exec).raw(), done);
 
         // A ledger row written by the arrival itself proves only what the arrival BELIEVES. The
         // player's reading comes later, when he walks up to his ship: his presence loads it, its
@@ -346,7 +347,7 @@ public class VSShipEntryE2ETest extends AbstractSharedServerTest {
                     Math.abs(actual[axis] - expected[axis]) <= CellSeam.CARRY_MARGIN);
         }
         assertEquals("nothing may still be in transit once the ledger reports arrival", 0,
-                extractInt(exec("artest space subsystem-status"), "transits"));
+                SubsystemStatus.read(this::exec).transits);
     }
 
     @After

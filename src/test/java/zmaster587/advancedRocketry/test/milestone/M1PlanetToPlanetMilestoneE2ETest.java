@@ -19,6 +19,7 @@ import org.junit.Test;
 import org.lwjgl.input.Keyboard;
 
 import zmaster587.advancedRocketry.space.TerrainHeightFinder;
+import zmaster587.advancedRocketry.test.SubsystemStatus;
 import zmaster587.advancedRocketry.test.Chains;
 import zmaster587.advancedRocketry.test.Events;
 import zmaster587.advancedRocketry.test.PilotSeat;
@@ -316,26 +317,23 @@ public class M1PlanetToPlanetMilestoneE2ETest {
                         + "skipped and every later leg would be running against defaults: " + fuelCfg,
                 fuelCfg.contains("\"value\":false"));
 
-        String status = exec("artest space subsystem-status");
+        SubsystemStatus status = SubsystemStatus.read(this::exec);
         requireArranged("the production space subsystem must be REGISTERED — it owns the "
                         + "cells a ship arrives in, and without it the climb leg has nowhere to go: "
-                        + status,
-                status.contains("\"registered\":true"));
+                        + status.raw(),
+                status.registered);
         // No dimension id may be owned twice. A space slot is a void world the subsystem rebinds at
         // will; a body is a place the universe registry describes, a crystal can name and a ship can
         // be flown to. One id doing both makes the registry's description a lie — it advertises a
         // planet whose world is empty space — and the descent that follows lands the ship nowhere.
-        Reply subsystem = Reply.of("artest space subsystem-status", status);
-        requireArranged("subsystem-status must report the slot/body id overlap: " + status,
-                subsystem.has(SLOT_DIMS_ALSO_BODIES));
-        int[] collided = subsystem.intArray(SLOT_DIMS_ALSO_BODIES);
+        int[] collided = status.slotDimsAlsoBodies();
         assertTrue("no space-slot dimension may also be an Advanced Rocketry body. Forge's free-id "
                         + "scan cannot see AR's own body ids (a surface-less body is never registered "
                         + "with Forge), so the pool can take one unless it asks AR too. "
                         + "slotDimsAlsoBodies=" + java.util.Arrays.toString(collided)
-                        + " status=" + status,
+                        + " status=" + status.raw(),
                 collided.length == 0);
-        System.out.println("[M1] leg 0 (config + subsystem) " + elapsed(tLeg) + " status=" + status);
+        System.out.println("[M1] leg 0 (config + subsystem) " + elapsed(tLeg) + " status=" + status.raw());
 
         // ---- LEG 1: stand the craft up on a pad. Blocks only — no interaction happens here. -----
         tLeg = System.currentTimeMillis();
@@ -461,20 +459,17 @@ public class M1PlanetToPlanetMilestoneE2ETest {
         } finally {
             bot().releaseKey(Keyboard.KEY_R);
         }
-        String statusAfter = exec("artest space subsystem-status");
+        SubsystemStatus statusAfter = SubsystemStatus.read(this::exec);
         String entryDecisions = events.since(entryMark, "entry_decided");
         assertTrue("the entry gate must have GRANTED this entry (STARTED): " + entryDecisions
-                        + " status=" + statusAfter,
+                        + " status=" + statusAfter.raw(),
                 entryDecisions.contains("\"decision\":\"STARTED\""));
         System.out.println("[M1] leg 4 (powered climb to the cell) " + elapsed(tLeg)
-                + " status=" + statusAfter);
+                + " status=" + statusAfter.raw());
 
         // ---- LEG 5: the arrival, measured from the CLIENT. --------------------------------------
         tLeg = System.currentTimeMillis();
-        Reply after = Reply.of("artest space subsystem-status", statusAfter);
-        requireArranged("subsystem-status must list its slot dims: " + statusAfter,
-                after.has(SLOT_DIMS));
-        String slotDims = "," + joinInts(after.intArray(SLOT_DIMS)) + ",";
+                String slotDims = "," + joinInts(statusAfter.slotDims()) + ",";
 
         // (1) The client's OWN world is a space cell — the pilot followed his ship through the seam
         // or he did not, and nothing server-side can answer that for him. Read off the client's own
@@ -483,7 +478,7 @@ public class M1PlanetToPlanetMilestoneE2ETest {
         int clientDim = awaitClientWorld(entryClientMark, slotDims,
                 "after the crossing the CLIENT itself must be in a space-cell dimension — a pilot "
                         + "whose ship left without him is the exact failure this leg exists to catch."
-                        + " slotDims=[" + slotDims + "] status=" + statusAfter,
+                        + " slotDims=[" + slotDims + "] status=" + statusAfter.raw(),
                 budget * 5);
 
         // (2) Still seated — and the crossing's own seat chain says how.
@@ -798,16 +793,13 @@ public class M1PlanetToPlanetMilestoneE2ETest {
 
         // The pilot, observed from the CLIENT: same two questions leg 5 asks, because a jump is the
         // second world transition of the loop and a seat lost in it is lost just as silently.
-        String statusAfterJump = exec("artest space subsystem-status");
-        Reply afterJump = Reply.of("artest space subsystem-status", statusAfterJump);
-        requireArranged("subsystem-status must list its slot dims: " + statusAfterJump,
-                afterJump.has(SLOT_DIMS));
-        String jumpSlotDims = "," + joinInts(afterJump.intArray(SLOT_DIMS)) + ",";
+        SubsystemStatus statusAfterJump = SubsystemStatus.read(this::exec);
+                String jumpSlotDims = "," + joinInts(statusAfterJump.slotDims()) + ",";
         int jumpDim = awaitClientWorld(jumpClientMark, jumpSlotDims,
                 "the pilot who fired the jump must come out of it in a space cell too — a drive "
                         + "that carries the hull and leaves the crew behind has not moved the SHIP. "
                         + "slotDims=[" + jumpSlotDims + "] ledger=" + ledgerAfterJump
-                        + " status=" + statusAfterJump,
+                        + " status=" + statusAfterJump.raw(),
                 budget * 5);
 
         JsonObject jumpRiding = assertStillSeated(events, jumpMark, jumpClientMark,

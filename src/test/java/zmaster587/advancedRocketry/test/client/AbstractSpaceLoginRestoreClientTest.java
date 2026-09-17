@@ -19,6 +19,7 @@ import java.util.regex.Pattern;
 
 import zmaster587.advancedRocketry.space.CellWorldMapper;
 import zmaster587.advancedRocketry.space.GalacticCoord;
+import zmaster587.advancedRocketry.test.SubsystemStatus;
 import zmaster587.advancedRocketry.test.SeatMount;
 import zmaster587.advancedRocketry.test.Reply;
 import zmaster587.advancedRocketry.test.PilotSeat;
@@ -367,7 +368,7 @@ public abstract class AbstractSpaceLoginRestoreClientTest {
 
         // The pool's composition on this side of the restart, kept so the boot-2 assertions can say
         // whether the slot the pilot was banked in still means the same thing afterwards.
-        String statusBefore = exec("artest space subsystem-status");
+        SubsystemStatus statusBefore = SubsystemStatus.read(this::exec);
 
         // Deliberately NO explicit save before the stop: what survives has to survive the shutdown
         // save alone, which is the only save a real operator's stop ever runs.
@@ -376,9 +377,9 @@ public abstract class AbstractSpaceLoginRestoreClientTest {
 
         // --- boot 2: a brand new server JVM and a brand new client JVM, same world root ----------
         serverHarness = RealDedicatedServerHarness.startWith(root, false);
-        String statusAfter = exec("artest space subsystem-status");
+        SubsystemStatus statusAfter = SubsystemStatus.read(this::exec);
         assertTrue("the production subsystem must come up again on boot 2, or nothing below is "
-                + "exercising it: " + statusAfter, statusAfter.contains("\"registered\":true"));
+                + "exercising it: " + statusAfter.raw(), statusAfter.registered);
 
         // The pool re-mints its slot dimension ids on every boot, so the id the pilot was banked under
         // (slotDim) routinely means nothing on this side of the restart - the two sets can be entirely
@@ -386,8 +387,8 @@ public abstract class AbstractSpaceLoginRestoreClientTest {
         // it would freeze an implementation detail. What matters is that the restore survives it, which
         // is what the assertions below measure. The two pool snapshots ride along in their failure text
         // so that a red is attributable to the id churn rather than merely correlated with it.
-        String pools = "\n  pool on boot 1: " + slotDimsOf(statusBefore)
-                + "\n  pool on boot 2: " + slotDimsOf(statusAfter)
+        String pools = "\n  pool on boot 1: " + statusBefore.slotDims()
+                + "\n  pool on boot 2: " + statusAfter.slotDims()
                 + "\n  pilot was banked in slot dim " + slotDim;
 
         // The ledger is what carries the ship across the restart, so read it back BEFORE the client
@@ -1244,14 +1245,14 @@ public abstract class AbstractSpaceLoginRestoreClientTest {
         serverHarness = RealDedicatedServerHarness.startWith(root, false);
         assumeProductionSubsystemAvailable();
 
-        String status = exec("artest space subsystem-status");
+        SubsystemStatus status = SubsystemStatus.read(this::exec);
         assertTrue("the production space subsystem must be live on boot 1 (that is what the seeded "
                 + "config opt-in is for) - without it this test would silently assert nothing: "
-                + status, status.contains("\"registered\":true"));
+                + status.raw(), status.registered);
         // CONTROL (witness sensitivity): no ship is ledgered before the climb, so a ledgered ship
         // afterwards is an observation about the entry and not about a pre-existing record.
-        assertEquals("no ship may be ledgered before the flight: " + status,
-                0, readInt(status, "ledger"));
+        assertEquals("no ship may be ledgered before the flight: " + status.raw(),
+                0, status.ledger);
 
         // Headless: nothing holds a freshly assembled or freshly crossed ship loaded between calls.
 
@@ -1315,10 +1316,10 @@ public abstract class AbstractSpaceLoginRestoreClientTest {
                         + " the production ledger - the restore reads that very ledger, so an"
                         + " arrangement that never wrote it tests nothing",
                 RESTORE_LINK_BUDGET_TICKS);
-        String ledgerStatus = exec("artest space subsystem-status");
+        SubsystemStatus ledgerStatus = SubsystemStatus.read(this::exec);
         assertTrue("the settled ship must be countable in the subsystem's own ledger, not only in"
-                + " the record of the write: " + ledgerStatus + " | " + settledRecord,
-                readIntOr(ledgerStatus, "ledger", 0) >= 1);
+                + " the record of the write: " + ledgerStatus.raw() + " | " + settledRecord,
+                ledgerStatus.ledger >= 1);
 
         // Find the slot the entry bound the cell to. Slot ids are minted per boot, so they are read
         // rather than known: the one slot dimension whose settled ship's flight computer resolves is
@@ -1376,11 +1377,11 @@ public abstract class AbstractSpaceLoginRestoreClientTest {
         serverHarness = RealDedicatedServerHarness.startWith(root, false);
         assumeProductionSubsystemAvailable();
 
-        String status = exec("artest space subsystem-status");
-        assertTrue("the production space subsystem must be live on boot 1: " + status,
-                status.contains("\"registered\":true"));
-        assertEquals("no ship may be ledgered before the flight: " + status,
-                0, readInt(status, "ledger"));
+        SubsystemStatus status = SubsystemStatus.read(this::exec);
+        assertTrue("the production space subsystem must be live on boot 1: " + status.raw(),
+                status.registered);
+        assertEquals("no ship may be ledgered before the flight: " + status.raw(),
+                0, status.ledger);
 
         startClient();
         bot().waitForWorld();
@@ -1478,9 +1479,9 @@ public abstract class AbstractSpaceLoginRestoreClientTest {
                         + "cross into its launch body's cell and settle there, carrying its pilot",
                 RESTORE_LINK_BUDGET_TICKS, Chains.GRANTED_ENTRY);
         String entryChain = events.since(entryMark);
-        String ledgerStatus = exec("artest space subsystem-status");
+        SubsystemStatus ledgerStatus = SubsystemStatus.read(this::exec);
         assertTrue("the entered ship must be countable in the subsystem's own ledger, not only in "
-                + "the record of the write: " + ledgerStatus, readIntOr(ledgerStatus, "ledger", 0) >= 1);
+                + "the record of the write: " + ledgerStatus.raw(), ledgerStatus.ledger >= 1);
         // Hands off. Aimed at the ship he actually flew - the pre-crossing one - because that is the
         // computer his throttle went to; the craft on the far side is a different VS object with a
         // fresh tile.
@@ -1959,17 +1960,6 @@ public abstract class AbstractSpaceLoginRestoreClientTest {
 
     protected static String readString(String json, String key) {
         return Reply.of(json).text(key);
-    }
-
-    /** The pool's slot dimension ids as reported by {@code space subsystem-status}. */
-    protected static java.util.List<Integer> slotDimsOf(String json) {
-        Reply status = Reply.of("artest space subsystem-status", json);
-        assertTrue("expected \"slotDims\" in: " + json, status.has("slotDims"));
-        java.util.List<Integer> dims = new java.util.ArrayList<Integer>();
-        for (int dim : status.intArray("slotDims")) {
-            dims.add(dim);
-        }
-        return dims;
     }
 
     protected static boolean readBool(String json, String key) {

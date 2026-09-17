@@ -16,6 +16,7 @@ import org.junit.Before;
 import org.junit.Test;
 import org.lwjgl.input.Keyboard;
 
+import zmaster587.advancedRocketry.test.SubsystemStatus;
 import zmaster587.advancedRocketry.test.SeatMount;
 import zmaster587.advancedRocketry.test.Reply;
 import zmaster587.advancedRocketry.test.ShipInfo;
@@ -144,10 +145,10 @@ public class VSPilotKeysWithSpaceSubsystemE2ETest {
 
         // The subsystem must actually be up, or this test silently degrades into the plain
         // pilot-keys case and its green would mean nothing.
-        String status = exec("artest space subsystem-status");
+        SubsystemStatus status = SubsystemStatus.read(this::exec);
         assertTrue("the production space subsystem must be REGISTERED for this test to be about "
-                + "anything - the seeded config is what opts it in: " + status,
-                status.contains("\"registered\":true"));
+                + "anything - the seeded config is what opts it in: " + status.raw(),
+                status.registered);
 
         // The CLIENT's own log, for the two placements this scenario depends on. This class boots
         // its own harness pair rather than extending the tier's base, so the shared wait is reached
@@ -250,7 +251,7 @@ public class VSPilotKeysWithSpaceSubsystemE2ETest {
                         + " demonstrably reached the computer (see the link above), so this red is"
                         + " about the flight itself. "
                         + "yBefore=" + yBefore + " yAfter=" + yAfter + " ship=" + shipUuid
-                        + " subsystem=" + status,
+                        + " subsystem=" + status.raw(),
                 (yAfter - yBefore) >= MIN_CLIMB);
     }
 

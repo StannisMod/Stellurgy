@@ -7,6 +7,7 @@ import org.junit.Test;
 
 import zmaster587.advancedRocketry.space.CellWorldMapper;
 import zmaster587.advancedRocketry.space.GalacticCoord;
+import zmaster587.advancedRocketry.test.SubsystemStatus;
 import zmaster587.advancedRocketry.test.DeckCapture;
 import zmaster587.advancedRocketry.test.Events;
 import zmaster587.advancedRocketry.test.ShipIdentity;
@@ -134,9 +135,9 @@ public class SpaceLoginRestoreSeatedPilotE2ETest extends AbstractSpaceLoginResto
         // Both discriminators, BEFORE the client connects. Without them a client reading says
         // nothing about the record: a second boot whose subsystem stood down, or whose ledger did
         // not survive the shutdown save, would leave him at an ordinary spawn for its own reasons.
-        String statusAfter = exec("artest space subsystem-status");
+        SubsystemStatus statusAfter = SubsystemStatus.read(this::exec);
         assertTrue("the production subsystem must come up again on boot 2, or nothing below is "
-                + "exercising it: " + statusAfter, statusAfter.contains("\"registered\":true"));
+                + "exercising it: " + statusAfter.raw(), statusAfter.registered);
         String ledger = exec("artest space ledger-get " + arrangedShipId);
         assertTrue("his ship must still be ledgered - there has to be a ship to restore him ONTO: "
                 + ledger, ledger.contains("\"found\":true"));

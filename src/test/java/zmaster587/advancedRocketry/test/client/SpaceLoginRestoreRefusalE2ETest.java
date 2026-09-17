@@ -7,6 +7,7 @@ import org.junit.Test;
 
 import zmaster587.advancedRocketry.space.CellWorldMapper;
 import zmaster587.advancedRocketry.space.GalacticCoord;
+import zmaster587.advancedRocketry.test.SubsystemStatus;
 import zmaster587.advancedRocketry.test.Events;
 
 import static org.junit.Assert.assertEquals;
@@ -157,9 +158,9 @@ public class SpaceLoginRestoreRefusalE2ETest extends AbstractSpaceLoginRestoreCl
 
         // The same two discriminators the other legs establish, so this leg differs from them in
         // exactly one thing: whether the player was ever aboard.
-        String statusAfter = exec("artest space subsystem-status");
-        assertTrue("the production subsystem must come up again on boot 2: " + statusAfter,
-                statusAfter.contains("\"registered\":true"));
+        SubsystemStatus statusAfter = SubsystemStatus.read(this::exec);
+        assertTrue("the production subsystem must come up again on boot 2: " + statusAfter.raw(),
+                statusAfter.registered);
         String ledger = exec("artest space ledger-get " + arrangedShipId);
         assertTrue("the ship must still be ledgered - a restore with nothing to restore ONTO would "
                 + "leave him in the overworld for the wrong reason: " + ledger,

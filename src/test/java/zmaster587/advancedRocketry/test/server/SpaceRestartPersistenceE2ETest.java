@@ -1,5 +1,6 @@
 package zmaster587.advancedRocketry.test.server;
 
+import zmaster587.advancedRocketry.test.SubsystemStatus;
 import zmaster587.advancedRocketry.test.Reply;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -112,12 +113,12 @@ public class SpaceRestartPersistenceE2ETest {
         harness = RealDedicatedServerHarness.startWith(root, false);
         assumeProductionSubsystemAvailable();
 
-        String status = exec("artest space subsystem-status");
+        SubsystemStatus status = SubsystemStatus.read(this::exec);
         // If this fails the rest of the test is meaningless rather than wrong: the production wiring
         // never registered, so nothing below would be exercising it. Say so explicitly.
         assertTrue("the production space subsystem must be live on boot 1 (config opt-in) — "
-                + "without it this test would silently assert nothing: " + status,
-                status.contains("\"registered\":true"));
+                + "without it this test would silently assert nothing: " + status.raw(),
+                status.registered);
 
         String settled = exec("artest space ledger-settle " + SHIP_ID + " "
                 + SECTOR_X + " " + SECTOR_Y + " " + SECTOR_Z + " 0 0 0");
@@ -142,9 +143,9 @@ public class SpaceRestartPersistenceE2ETest {
         // --- boot 2: a brand new JVM, same world directory ---------------------------------------
         harness = RealDedicatedServerHarness.startWith(root, false);
 
-        String statusAfter = exec("artest space subsystem-status");
-        assertTrue("the production subsystem must come up again on boot 2: " + statusAfter,
-                statusAfter.contains("\"registered\":true"));
+        SubsystemStatus statusAfter = SubsystemStatus.read(this::exec);
+        assertTrue("the production subsystem must come up again on boot 2: " + statusAfter.raw(),
+                statusAfter.registered);
 
         String restored = exec("artest space ledger-get " + SHIP_ID);
         assertTrue("a ship settled before the reboot must still be known after it — this is the "
@@ -182,9 +183,9 @@ public class SpaceRestartPersistenceE2ETest {
         harness = RealDedicatedServerHarness.startWith(root, false);
         assumeProductionSubsystemAvailable();
 
-        String status = exec("artest space subsystem-status");
+        SubsystemStatus status = SubsystemStatus.read(this::exec);
         assertTrue("the production space subsystem must be live on boot 1 — without it nothing below "
-                + "is exercising the shipped wiring: " + status, status.contains("\"registered\":true"));
+                + "is exercising the shipped wiring: " + status.raw(), status.registered);
 
         String settled = exec("artest space ledger-settle " + SHIP_ID + " "
                 + SECTOR_X + " " + SECTOR_Y + " " + SECTOR_Z + " 0 0 0");
@@ -199,9 +200,9 @@ public class SpaceRestartPersistenceE2ETest {
         // --- boot 2: a brand new JVM, same world directory ---------------------------------------
         harness = RealDedicatedServerHarness.startWith(root, false);
 
-        String statusAfter = exec("artest space subsystem-status");
-        assertTrue("the production subsystem must come up again on boot 2: " + statusAfter,
-                statusAfter.contains("\"registered\":true"));
+        SubsystemStatus statusAfter = SubsystemStatus.read(this::exec);
+        assertTrue("the production subsystem must come up again on boot 2: " + statusAfter.raw(),
+                statusAfter.registered);
 
         // Take the ship's old slot with an unrelated cell BEFORE its own cell is made live, so the
         // ship's cell is forced onto a different slot than it held last session.
@@ -259,9 +260,9 @@ public class SpaceRestartPersistenceE2ETest {
         harness = RealDedicatedServerHarness.startWith(root, false);
         assumeProductionSubsystemAvailable();
 
-        String status = exec("artest space subsystem-status");
-        assertTrue("the production space subsystem must be live on boot 1: " + status,
-                status.contains("\"registered\":true"));
+        SubsystemStatus status = SubsystemStatus.read(this::exec);
+        assertTrue("the production space subsystem must be live on boot 1: " + status.raw(),
+                status.registered);
 
         String settled = exec("artest space ledger-settle " + SHIP_ID + " "
                 + SECTOR_X + " " + SECTOR_Y + " " + SECTOR_Z + " 0 0 0");
@@ -279,12 +280,12 @@ public class SpaceRestartPersistenceE2ETest {
                 + " " + SHIP_ID);
         assertTrue("arrangement: the ledger must now call the ship in-flight: " + flying,
                 flying.contains("\"state\":\"IN_TRANSIT\""));
-        String midStatus = exec("artest space subsystem-status");
+        SubsystemStatus midStatus = SubsystemStatus.read(this::exec);
         assertEquals("arrangement: and NO jump may be carrying it — that is the whole condition under "
-                        + "test, and with a jump in flight this test would prove nothing: " + midStatus,
-                0, jsonInt(midStatus, "transits"));
+                        + "test, and with a jump in flight this test would prove nothing: " + midStatus.raw(),
+                0, midStatus.transits);
         assertEquals("arrangement: the subsystem must still hold the ship, or the save has nothing to "
-                + "lose: " + midStatus, 1, jsonInt(midStatus, "ledger"));
+                + "lose: " + midStatus.raw(), 1, midStatus.ledger);
 
         String savedAgain = exec("artest space save-now");
         assertTrue("the second save must also have run: " + savedAgain, savedAgain.contains("\"ok\":true"));
@@ -294,9 +295,9 @@ public class SpaceRestartPersistenceE2ETest {
         harness = null;
         harness = RealDedicatedServerHarness.startWith(root, false);
 
-        String statusAfter = exec("artest space subsystem-status");
-        assertTrue("the production subsystem must come up again on boot 2: " + statusAfter,
-                statusAfter.contains("\"registered\":true"));
+        SubsystemStatus statusAfter = SubsystemStatus.read(this::exec);
+        assertTrue("the production subsystem must come up again on boot 2: " + statusAfter.raw(),
+                statusAfter.registered);
 
         String restored = exec("artest space ledger-get " + SHIP_ID);
         assertTrue("the ship must survive a save point that could not record it — a save is allowed to "
@@ -337,9 +338,9 @@ public class SpaceRestartPersistenceE2ETest {
         harness = RealDedicatedServerHarness.startWith(root, false);
         assumeProductionSubsystemAvailable();
 
-        String status = exec("artest space subsystem-status");
-        assertTrue("the production space subsystem must be live on boot 1: " + status,
-                status.contains("\"registered\":true"));
+        SubsystemStatus status = SubsystemStatus.read(this::exec);
+        assertTrue("the production space subsystem must be live on boot 1: " + status.raw(),
+                status.registered);
 
         String settled = exec("artest space ledger-settle " + SHIP_ID + " "
                 + SECTOR_X + " " + SECTOR_Y + " " + SECTOR_Z + " 0 0 0");
@@ -349,29 +350,30 @@ public class SpaceRestartPersistenceE2ETest {
         String armed = exec("artest space save-fault-once");
         assertTrue("the fault must actually be armed, or nothing below is exercising a failed save: "
                 + armed, armed.contains("\"armed\":true"));
-        assertTrue("and the subsystem must agree it is armed: " + exec("artest space subsystem-status"),
-                exec("artest space subsystem-status").contains("\"saveFaultArmed\":true"));
+        assertTrue("and the subsystem must agree it is armed: " + SubsystemStatus.read(this::exec).raw(),
+                SubsystemStatus.read(this::exec).saveFaultArmed);
 
         // Wait for the world autosave to walk into the fault. Every poll is itself a liveness check:
         // on an unguarded handler the server is gone by now and exec() reports the dead process.
-        String live = "";
+        SubsystemStatus live;
         // An autosave is scheduled on the SERVER's tick counter (every 900 ticks), so waiting for
         // one is waiting for ticks - and the fork multiplier this budget carried was compensating for
         // a busy box delivering fewer of them per second, which is exactly what a tick budget removes.
-        final String[] seen = {""};
+        final SubsystemStatus[] seen = {null};
         boolean fired = GameTicks.until(harness.client(), GameTicks.server(), AUTOSAVE_WAIT_TICKS,
                 () -> {
-                    seen[0] = exec("artest space subsystem-status");
-                    return seen[0].contains("\"saveFaultArmed\":false");
+                    seen[0] = SubsystemStatus.read(this::exec);
+                    return !seen[0].saveFaultArmed;
                 });
         live = seen[0];
         assertTrue("no autosave reached the armed fault within "
                 + AUTOSAVE_WAIT_TICKS + " ticks, so this run never exercised a failing save at all "
-                + "and its green would be worth nothing: " + live, fired);
+                + "and its green would be worth nothing: "
+                + (live == null ? "the status was never read" : live.raw()), fired);
 
         // It fired, from the server tick, and the server is still answering.
         assertTrue("the server must still be running after a save point failed — a failed save costs a "
-                + "stale cycle, not the process: " + live, live.contains("\"registered\":true"));
+                + "stale cycle, not the process: " + live.raw(), live.registered);
 
         // And it is not wedged: an ordinary save still works afterwards.
         String recovered = exec("artest space save-now");
@@ -408,8 +410,8 @@ public class SpaceRestartPersistenceE2ETest {
         harness = RealDedicatedServerHarness.startWith(root, false);
         assumeProductionSubsystemAvailable();
 
-        String status = exec("artest space subsystem-status");
-        assertTrue("production subsystem must be live: " + status, status.contains("\"registered\":true"));
+        SubsystemStatus status = SubsystemStatus.read(this::exec);
+        assertTrue("production subsystem must be live: " + status.raw(), status.registered);
 
         String again = exec("artest space pool-idempotence");
         assertTrue("re-registering must not grow the pool: " + again, again.contains("\"grew\":false"));
@@ -425,8 +427,8 @@ public class SpaceRestartPersistenceE2ETest {
         harness = RealDedicatedServerHarness.startWith(root, false);
         assumeProductionSubsystemAvailable();
 
-        String status = exec("artest space subsystem-status");
-        assertTrue("production subsystem must be live: " + status, status.contains("\"registered\":true"));
+        SubsystemStatus status = SubsystemStatus.read(this::exec);
+        assertTrue("production subsystem must be live: " + status.raw(), status.registered);
 
         String missing = exec("artest space ledger-get " + UUID.randomUUID());
         assertTrue("a ship that was never settled must read back as absent: " + missing,

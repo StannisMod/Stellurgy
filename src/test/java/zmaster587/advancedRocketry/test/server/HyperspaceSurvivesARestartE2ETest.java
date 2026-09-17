@@ -12,6 +12,7 @@ import com.github.stannismod.forge.testing.server.RealDedicatedServerHarness;
 import org.junit.After;
 import org.junit.Assume;
 import org.junit.Before;
+import zmaster587.advancedRocketry.test.SubsystemStatus;
 import zmaster587.advancedRocketry.test.Reply;
 import zmaster587.advancedRocketry.test.TransitStatus;
 import zmaster587.advancedRocketry.test.TransitSetup;
@@ -195,9 +196,9 @@ public class HyperspaceSurvivesARestartE2ETest {
 
         // ── boot 2: a brand new server JVM, same world root ──────────────────────────────────────
         harness = RealDedicatedServerHarness.startWith(root, false);
-        String status = exec("artest space subsystem-status");
+        SubsystemStatus status = SubsystemStatus.read(this::exec);
         assertTrue("the production subsystem must come up again on boot 2, or nothing below is"
-                + " exercising it: " + status, status.contains("\"registered\":true"));
+                + " exercising it: " + status.raw(), status.registered);
 
         // The jump resumed as the SHIP, not as a copy of it. A restored transit that found its lane
         // empty is still "in transit" and still arrives — by pasting the block snapshot it carries —
@@ -205,9 +206,9 @@ public class HyperspaceSurvivesARestartE2ETest {
         // path is exactly what a jump degrades to when hyperspace does not come back. Asserted BEFORE
         // the ship count below, because this is the reading that says which product came back.
         assertTrue("a jump restored across the restart must still be carrying its parked hull, not"
-                        + " falling back to the block snapshot: " + status
+                        + " falling back to the block snapshot: " + status.raw()
                         + "\n  registries on disk after boot 1: " + savedRegistries,
-                readIntOr(status, "transitsParked", 0) >= 1);
+                status.transitsParked >= 1);
 
         // Re-derive hyperspace's id on THIS boot rather than reusing boot 1's: the id is minted per
         // boot by a free-id scan, and the whole point of naming the folder after the world is that

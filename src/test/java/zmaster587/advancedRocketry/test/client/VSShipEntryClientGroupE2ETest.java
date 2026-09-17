@@ -11,6 +11,7 @@ import org.junit.Test;
 import org.junit.runners.MethodSorters;
 import org.lwjgl.input.Keyboard;
 
+import zmaster587.advancedRocketry.test.SubsystemStatus;
 import zmaster587.advancedRocketry.test.SeatMount;
 import zmaster587.advancedRocketry.test.Events;
 import zmaster587.advancedRocketry.test.Reply;
@@ -178,8 +179,8 @@ public class VSShipEntryClientGroupE2ETest extends AbstractSharedVsClientE2ETest
     protected void resetFamilyStateBeforeTeleport() throws Exception {
         super.resetFamilyStateBeforeTeleport();
 
-        String status = exec("artest space subsystem-status");
-        if (!status.contains("\"registered\":true")) {
+        SubsystemStatus status = SubsystemStatus.read(this::exec);
+        if (!status.registered) {
             // Nothing to hand back — the subsystem is not up, and the scenario's own arrangement says
             // so far more usefully than a reset would.
             return;
@@ -199,9 +200,9 @@ public class VSShipEntryClientGroupE2ETest extends AbstractSharedVsClientE2ETest
     @Test
     public void aPilotWhoClimbsThroughTheCeilingArrivesSeatedAndInControl() throws Exception {
 
-        String status = exec("artest space subsystem-status");
+        SubsystemStatus status = SubsystemStatus.read(this::exec);
         scenario().requireArranged("the production space subsystem must be REGISTERED - the seeded "
-                + "config opts it in: " + status, status.contains("\"registered\":true"));
+                + "config opts it in: " + status.raw(), status.registered);
 
         int budget = 40;
         // Allocated, not chosen: the granted leg's ground is this scenario's own plot.
@@ -257,10 +258,9 @@ public class VSShipEntryClientGroupE2ETest extends AbstractSharedVsClientE2ETest
         }
 
         // ---- ARRIVAL: the three play-reported symptoms, measured from the client. -------------
-        String statusAfter = exec("artest space subsystem-status");
-        int[] pooledDims = Reply.of("artest space subsystem-status", statusAfter)
-                .intArray(SLOT_DIMS);
-        scenario().requireArranged("subsystem-status must list slot dims: " + statusAfter,
+        SubsystemStatus statusAfter = SubsystemStatus.read(this::exec);
+        int[] pooledDims = statusAfter.slotDims();
+        scenario().requireArranged("subsystem-status must list slot dims: " + statusAfter.raw(),
                 pooledDims.length > 0);
         StringBuilder joinedDims = new StringBuilder();
         for (int dim : pooledDims) {
@@ -283,7 +283,7 @@ public class VSShipEntryClientGroupE2ETest extends AbstractSharedVsClientE2ETest
                             + " the pilot follows his ship through the seam",
                     arrivalBudget * ARRIVAL_STEP_TICKS);
         } catch (AssertionError never) {
-            throw new AssertionError(never.getMessage() + " | subsystem status: " + statusAfter);
+            throw new AssertionError(never.getMessage() + " | subsystem status: " + statusAfter.raw());
         }
         int clientDim = lastDimOf(dimChanges);
 
@@ -396,9 +396,9 @@ public class VSShipEntryClientGroupE2ETest extends AbstractSharedVsClientE2ETest
     @Test
     public void aFullPoolRefusesTheEntryAndLeavesThePilotSeated() throws Exception {
 
-        String status = exec("artest space subsystem-status");
+        SubsystemStatus status = SubsystemStatus.read(this::exec);
         scenario().requireArranged("the production space subsystem must be REGISTERED - the seeded "
-                + "config opts it in: " + status, status.contains("\"registered\":true"));
+                + "config opts it in: " + status.raw(), status.registered);
 
         // Fill the pool with foreign cells and PROVE it is full: a further occupy must come back
         // exhausted, or a later "refused" observation is unattributable.
@@ -537,11 +537,11 @@ public class VSShipEntryClientGroupE2ETest extends AbstractSharedVsClientE2ETest
                         // anything — the entry is granted for a perfectly good reason and the missing
                         // refusal says nothing about the refusal path. Sampled at the same cadence as
                         // the altitude so the two timelines line up.
-                        String spaceSample = exec("artest space subsystem-status");
+                        SubsystemStatus spaceSample = SubsystemStatus.read(this::exec);
                         diag.append(' ').append(attempt).append(":recv=")
                                 .append(firstGroupOr(RECEIVED, d, "?"))
                                 .append("/deliv=").append(firstGroupOr(DELIVERED, d, "?"))
-                                .append("/ledger=").append(firstGroupOr(LEDGER, spaceSample, "?"));
+                                .append("/ledger=").append(spaceSample.ledger);
                     }
                     ShipInfo sample = ShipInfo.isLoaded(s) ? ShipInfo.of(s) : null;
                     if (sample != null) {
@@ -604,7 +604,7 @@ public class VSShipEntryClientGroupE2ETest extends AbstractSharedVsClientE2ETest
             // was TAKEN by the crossing (ledger grew, and the pilot is in a cell), it was UNLOADED
             // (still counted in the world, not loaded), it is GONE from the world entirely, or it
             // simply stopped climbing. One reading each, and only on the way to a failure.
-            String spaceNow = exec("artest space subsystem-status");
+            SubsystemStatus spaceNow = SubsystemStatus.read(this::exec);
             String loaded = exec("artest vs ship-count 0");
             String all = exec("artest vs ship-count-all 0");
             JsonObject where = bot().reportWeather();
@@ -615,7 +615,7 @@ public class VSShipEntryClientGroupE2ETest extends AbstractSharedVsClientE2ETest
                     + " The hull was level throughout, so the tilt this class usually dies of is NOT"
                     + " the reason. Server events since the climb began: " + events.since(refusalMark)
                     + " WHICH of the four it is:"
-                    + " subsystem=" + spaceNow + " shipsLoadedInDim0=" + loaded
+                    + " subsystem=" + spaceNow.raw() + " shipsLoadedInDim0=" + loaded
                     + " shipsAtAllInDim0=" + all + " clientDim=" + clientDim
                     + " byId=" + shipInfoById(shipUuid)
                     // The pool's OWN timeline, sampled across the climb: the premise "the pool is
@@ -771,9 +771,9 @@ public class VSShipEntryClientGroupE2ETest extends AbstractSharedVsClientE2ETest
 
     /** The pool's own slot dimension ids, from the subsystem's report. */
     private java.util.Set<Integer> slotDimsOfPool() throws Exception {
-        String status = exec("artest space subsystem-status");
+        SubsystemStatus status = SubsystemStatus.read(this::exec);
         java.util.Set<Integer> dims = new java.util.LinkedHashSet<Integer>();
-        for (int dim : Reply.of("artest space subsystem-status", status).intArray(SLOT_DIMS)) {
+        for (int dim : status.slotDims()) {
             dims.add(dim);
         }
         return dims;
@@ -803,11 +803,11 @@ public class VSShipEntryClientGroupE2ETest extends AbstractSharedVsClientE2ETest
 
     /** How many craft the space ledger holds right now. */
     private int ledgerSize() throws Exception {
-        String status = exec("artest space subsystem-status");
-        Reply subsystem = Reply.of("artest space subsystem-status", status);
-        scenario().requireArranged("subsystem-status must report the ledger: " + status,
-                subsystem.has(LEDGER));
-        return subsystem.integer(LEDGER);
+        SubsystemStatus status = SubsystemStatus.read(this::exec);
+        
+        scenario().requireArranged("subsystem-status must report the ledger: " + status.raw(),
+                true /* the reader refuses a status with no ledger count */);
+        return status.ledger;
     }
 
     /** The NAMED ship's altitude, or {@code NaN} while it is reporting none (the cut, for instance). */
