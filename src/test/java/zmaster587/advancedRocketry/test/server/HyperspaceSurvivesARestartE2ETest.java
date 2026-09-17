@@ -13,6 +13,7 @@ import org.junit.After;
 import org.junit.Assume;
 import org.junit.Before;
 import zmaster587.advancedRocketry.test.Reply;
+import zmaster587.advancedRocketry.test.TransitSetup;
 import zmaster587.advancedRocketry.test.GameTicks;
 
 import org.junit.Test;
@@ -146,9 +147,7 @@ public class HyperspaceSurvivesARestartE2ETest {
         // ── boot 1: put a real ship into hyperspace and shut the server down under it ────────────
         harness = RealDedicatedServerHarness.startWith(root, false);
 
-        String setup = exec("artest space transit-setup-piloted");
-        assertTrue("the piloted transit fixture must build: " + setup, readBool(setup, "ok"));
-        int originDim = readInt(setup, "originDim");
+        int originDim = TransitSetup.piloted(this::exec).originDim;
         requireArranged("the fixture ship never assembled in the origin cell (dim "
                 + originDim + ")", waitForShipIn(originDim));
 
@@ -211,9 +210,7 @@ public class HyperspaceSurvivesARestartE2ETest {
         // Re-derive hyperspace's id on THIS boot rather than reusing boot 1's: the id is minted per
         // boot by a free-id scan, and the whole point of naming the folder after the world is that
         // the content no longer depends on which id the scan lands on.
-        String setupAfter = exec("artest space transit-setup-piloted");
-        assertTrue("the transit probe stack must come up on boot 2: " + setupAfter,
-                readBool(setupAfter, "ok"));
+        TransitSetup.piloted(this::exec); // the probe stack must come up on boot 2, or nothing below reads anything
         int hyperDimAfter = readInt(exec("artest space transit-status"), "hyperDim");
 
         int parkedAfter = readIntOr(exec("artest vs ship-count-all " + hyperDimAfter), "count", -1);

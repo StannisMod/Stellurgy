@@ -9,6 +9,7 @@ import org.lwjgl.input.Keyboard;
 
 import zmaster587.advancedRocketry.test.Events;
 import zmaster587.advancedRocketry.test.Reply;
+import zmaster587.advancedRocketry.test.PilotSeat;
 import zmaster587.advancedRocketry.test.FixtureSite;
 
 import static org.junit.Assert.assertTrue;
@@ -52,12 +53,6 @@ public class VSPilotStationDestructionE2ETest extends AbstractSharedVsClientE2ET
     private static final String BUILDER_POS = "builderPos";
     private static final String POS_Y = "posY";
     private static final String DUMMY_ID = "dummyId";
-    private static final String SEAT_X = "seatX";
-    private static final String SEAT_Y = "seatY";
-    private static final String SEAT_Z = "seatZ";
-    private static final String AFC_X = "afcX";
-    private static final String AFC_Y = "afcY";
-    private static final String AFC_Z = "afcZ";
 
     private static final String VARIANT = "with-pilot-seat";
 
@@ -242,16 +237,15 @@ public class VSPilotStationDestructionE2ETest extends AbstractSharedVsClientE2ET
 
         // Resolve the seat + computer SUBSPACE blocks now, while the ship still sits at its build
         // site (subspace addresses are stationary; the ship's world pose is about to change).
-        String found = exec("artest vs find-seat 0 id " + ship.id);
-        Reply seat = Reply.of("artest vs find-seat", found);
-        assertTrue("find-seat must resolve the ship's subspace seat: " + found, seat.has(SEAT_X));
-        ship.seatX = seat.integer(SEAT_X);
-        ship.seatY = seat.integer(SEAT_Y);
-        ship.seatZ = seat.integer(SEAT_Z);
-        assertTrue("find-seat must resolve the seat's linked computer: " + found, seat.has(AFC_X));
-        ship.afcX = seat.integer(AFC_X);
-        ship.afcY = seat.integer(AFC_Y);
-        ship.afcZ = seat.integer(AFC_Z);
+        PilotSeat seat = PilotSeat.byId(this::exec, 0, ship.id)
+                .requireFound("find-seat must resolve the ship's subspace seat");
+        ship.seatX = seat.seatX;
+        ship.seatY = seat.seatY;
+        ship.seatZ = seat.seatZ;
+        assertTrue("find-seat must resolve the seat's linked computer: " + seat.raw(), seat.hasAfc);
+        ship.afcX = seat.afcX;
+        ship.afcY = seat.afcY;
+        ship.afcZ = seat.afcZ;
 
         // Seat the bot and fly up on the REAL key path until the climb is unambiguous. The seat is
         // addressed by the subspace block find-seat just resolved FOR THIS SHIP: `vs seat-mount`

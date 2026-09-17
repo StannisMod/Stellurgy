@@ -17,6 +17,8 @@ import zmaster587.advancedRocketry.space.CellWorldMapper;
 import zmaster587.advancedRocketry.space.GalacticCoord;
 import zmaster587.advancedRocketry.test.Reply;
 import zmaster587.advancedRocketry.test.Events;
+import zmaster587.advancedRocketry.test.PilotSeat;
+import zmaster587.advancedRocketry.test.TransitSetup;
 import zmaster587.advancedRocketry.test.ShipIdentity;
 import zmaster587.advancedRocketry.test.ShipInfo;
 
@@ -88,9 +90,7 @@ public class VSMidTransitRelogControlE2ETest extends AbstractSharedVsClientE2ETe
 
         // ---- ARRANGE: the transit stack over an EMPTY origin cell, then a real FLYABLE piloted
         // ship built there with the real assembler. --------------------------------------------
-        String setup = exec("artest space transit-setup-empty");
-        assertTrue("empty transit setup must succeed: " + setup, readBool(setup, "ok"));
-        int originDim = readInt(setup, "originDim");
+        int originDim = TransitSetup.empty(this::exec).originDim;
 
         // The origin CELL is a void world, so this lift is not about escaping terrain — it is about
         // there being ONE definition of where a fixture stands, shared with every other class,
@@ -138,13 +138,12 @@ public class VSMidTransitRelogControlE2ETest extends AbstractSharedVsClientE2ETe
                 + " durable id, or the jump departs nameless: " + named,
                 named.contains("\"afcFound\":true") && !named.contains("\"durableId\":\"\""));
 
-        String seat = exec("artest vs find-seat " + originDim + " id " + shipId);
-        assertTrue("the pilot seat must be found in the assembled ship (else the test is vacuous): "
-                + seat, readBool(seat, "seatFound"));
-        int seatX = readInt(seat, "seatX"), seatY = readInt(seat, "seatY"), seatZ = readInt(seat, "seatZ");
-        int sx = (int) Math.round(readDouble(seat, "shipWorldX"));
-        int sy = (int) Math.round(readDouble(seat, "shipWorldY"));
-        int sz = (int) Math.round(readDouble(seat, "shipWorldZ"));
+        PilotSeat seat = PilotSeat.byId(this::exec, originDim, shipId)
+                .requireFound("the pilot seat must be found in the assembled ship, or the test is vacuous");
+        int seatX = seat.seatX, seatY = seat.seatY, seatZ = seat.seatZ;
+        int sx = (int) Math.round(seat.shipWorldX);
+        int sy = (int) Math.round(seat.shipWorldY);
+        int sz = (int) Math.round(seat.shipWorldZ);
 
         // A landing platform under the berth: the departure cuts the ship out from under its
         // standing-by crew, and a pilot who relogs mid-transit resumes FALLING at login — over a

@@ -9,6 +9,8 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 import zmaster587.advancedRocketry.test.Events;
+import zmaster587.advancedRocketry.test.PilotSeat;
+import zmaster587.advancedRocketry.test.TransitSetup;
 import zmaster587.advancedRocketry.test.Reply;
 import zmaster587.advancedRocketry.test.ShipIdentity;
 import zmaster587.advancedRocketry.test.ShipInfo;
@@ -138,9 +140,7 @@ public class VSRiderKeepsHisMountAtCruiseE2ETest extends AbstractSharedVsClientE
         // arrangement only - what is under test is what the client is TOLD about an entity it
         // already has, not whether the ship loads.
 
-        String setup = exec("artest space transit-setup-empty");
-        scenario().requireArranged("empty cell setup must succeed: " + setup, readBool(setup, "ok"));
-        int dim = readInt(setup, "originDim");
+        int dim = TransitSetup.empty(this::exec).originDim;
 
         // The cell is a void world, so this is not about escaping terrain — it is about ONE
         // definition of where a fixture stands instead of a 64 nobody chose. The first link still
@@ -175,13 +175,12 @@ public class VSRiderKeepsHisMountAtCruiseE2ETest extends AbstractSharedVsClientE
         String durableShipId = ShipIdentity.nameFromAssembly(assembled);
         String scenarioShipId = ShipIdentity.awaitPhysicsIdOf(this::exec, dim, durableShipId, 40,
                 () -> bot().waitTicks(5));
-        String seat = exec("artest vs find-seat " + dim + " id " + scenarioShipId);
-        scenario().requireArranged("the pilot seat must be found (else the test is vacuous): " + seat,
-                readBool(seat, "seatFound"));
-        int seatX = readInt(seat, "seatX"), seatY = readInt(seat, "seatY"), seatZ = readInt(seat, "seatZ");
-        int sx = (int) Math.round(readDouble(seat, "shipWorldX"));
-        int sy = (int) Math.round(readDouble(seat, "shipWorldY"));
-        int sz = (int) Math.round(readDouble(seat, "shipWorldZ"));
+        PilotSeat seat = PilotSeat.byId(this::exec, dim, scenarioShipId)
+                .requireFound("the pilot seat must be found, or the test is vacuous");
+        int seatX = seat.seatX, seatY = seat.seatY, seatZ = seat.seatZ;
+        int sx = (int) Math.round(seat.shipWorldX);
+        int sy = (int) Math.round(seat.shipWorldY);
+        int sz = (int) Math.round(seat.shipWorldZ);
 
         String health = exec("artest player health");
         Reply nameMReply = Reply.of(health);

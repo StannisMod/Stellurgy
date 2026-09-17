@@ -12,6 +12,8 @@ import org.lwjgl.input.Keyboard;
 
 import zmaster587.advancedRocketry.test.Reply;
 import zmaster587.advancedRocketry.test.Events;
+import zmaster587.advancedRocketry.test.PilotSeat;
+import zmaster587.advancedRocketry.test.TransitSetup;
 import zmaster587.advancedRocketry.test.ShipIdentity;
 import zmaster587.advancedRocketry.test.ShipInfo;
 
@@ -187,9 +189,7 @@ public class VSFlightSmoothnessAcrossJumpE2ETest extends AbstractSharedVsClientE
         // ---- ARRANGE: the transit stack over an empty origin cell, and a real flyable ship built
         // in it by the real assembler. The piloted setup fixture's bare deck has no propulsion, so
         // a held key could move nothing and every number below would describe a parked craft. ----
-        String setup = exec("artest space transit-setup-empty");
-        scenario().requireArranged("the empty transit setup must succeed: " + setup, readBool(setup, "ok"));
-        int originDim = readInt(setup, "originDim");
+        int originDim = TransitSetup.empty(this::exec).originDim;
 
         // The cell is a void world, so this is not about escaping terrain — it is about ONE
         // definition of where a fixture stands instead of a 64 nobody chose. The first link still
@@ -236,14 +236,13 @@ public class VSFlightSmoothnessAcrossJumpE2ETest extends AbstractSharedVsClientE
         scenario().requireArranged("the transit stack must resolve this ship's flight computer and its"
                 + " durable id, or the jump departs nameless: " + named,
                 named.contains("\"afcFound\":true") && !named.contains("\"durableId\":\"\""));
-        String seat = exec("artest vs find-seat " + originDim + " id " + shipId);
-        scenario().requireArranged("the pilot seat must be found in the assembled ship: " + seat,
-                readBool(seat, "seatFound"));
-        int seatX = readInt(seat, "seatX"), seatY = readInt(seat, "seatY"), seatZ = readInt(seat, "seatZ");
-        int[] afcOrigin = {readInt(seat, "afcX"), readInt(seat, "afcY"), readInt(seat, "afcZ")};
-        int sx = (int) Math.round(readDouble(seat, "shipWorldX"));
-        int sy = (int) Math.round(readDouble(seat, "shipWorldY"));
-        int sz = (int) Math.round(readDouble(seat, "shipWorldZ"));
+        PilotSeat seat = PilotSeat.byId(this::exec, originDim, shipId)
+                .requireFound("the pilot seat must be found in the assembled ship");
+        int seatX = seat.seatX, seatY = seat.seatY, seatZ = seat.seatZ;
+        int[] afcOrigin = {seat.afcX, seat.afcY, seat.afcZ};
+        int sx = (int) Math.round(seat.shipWorldX);
+        int sy = (int) Math.round(seat.shipWorldY);
+        int sz = (int) Math.round(seat.shipWorldZ);
 
         String enter = exec("artest space enter " + botName() + " " + originDim
                 + " " + sx + " " + sy + " " + sz);
@@ -300,13 +299,12 @@ public class VSFlightSmoothnessAcrossJumpE2ETest extends AbstractSharedVsClientE
         // — but the durable name crosses with it, and `(0,200,0)` in the target cell was never an
         // address of this craft at all: it named whatever the yard lookup reached from there.
         String arrivedShipId = awaitPhysicsId(targetDim, durableShipId);
-        String arrivedSeat = "";
+        PilotSeat arrivedSeat = null;
         int[] afcArrived = null;
         for (int i = 0; i < 20 && afcArrived == null; i++) {
-            arrivedSeat = exec("artest vs find-seat " + targetDim + " id " + arrivedShipId);
-            if (readBool(arrivedSeat, "seatFound") && arrivedSeat.contains("\"afcX\"")) {
-                afcArrived = new int[]{readInt(arrivedSeat, "afcX"), readInt(arrivedSeat, "afcY"),
-                        readInt(arrivedSeat, "afcZ")};
+            arrivedSeat = PilotSeat.byId(this::exec, targetDim, arrivedShipId);
+            if (arrivedSeat.found && arrivedSeat.hasAfc) {
+                afcArrived = new int[]{arrivedSeat.afcX, arrivedSeat.afcY, arrivedSeat.afcZ};
             } else {
                 bot().waitTicks(10);
             }

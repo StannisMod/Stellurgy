@@ -3,6 +3,8 @@ package zmaster587.advancedRocketry.test.server;
 import zmaster587.advancedRocketry.test.Reply;
 import zmaster587.advancedRocketry.test.ShipInfo;
 import zmaster587.advancedRocketry.test.Events;
+import zmaster587.advancedRocketry.test.PilotSeat;
+import zmaster587.advancedRocketry.test.TransitSetup;
 import zmaster587.advancedRocketry.test.ShipReadiness;
 import zmaster587.advancedRocketry.test.GameTicks;
 
@@ -53,9 +55,8 @@ public class VSJumpCarriesLooseBodiesE2ETest extends AbstractSharedServerTest {
     public void aJumpCarriesTheBodiesLyingOnItsDeck() throws Exception {
 
 
-        String setup = exec("artest space transit-setup-piloted");
-        assertTrue("piloted transit setup failed: " + setup, setup.contains("\"ok\":true"));
-        int originDim = extractInt(setup, "originDim");
+        TransitSetup setup = TransitSetup.piloted(this::exec);
+        int originDim = setup.originDim;
         requireArranged("the origin ship never assembled/loaded (dim " + originDim + ")",
                 loadedShips(originDim) >= 1);
 
@@ -63,17 +64,14 @@ public class VSJumpCarriesLooseBodiesE2ETest extends AbstractSharedServerTest {
         // tier builds at the SAME anchor in the SAME pooled slot, so "the ship at (1,64,1)" is a
         // question with several right answers and the yard lookup takes the first — measured
         // elsewhere as seatFound:false on a craft that had just been built.
-        String shipId = extractString(setup, "shipId");
-        requireArranged("the piloted transit setup must name the ship it assembled: " + setup,
-                shipId != null && !shipId.isEmpty());
+        String shipId = setup.requireShipId();
 
         // Where the ship actually is in its cell — the deck the body is dropped onto.
-        String seat = exec("artest vs find-seat " + originDim + " id " + shipId);
-        requireArranged("the ship must resolve a world position: " + seat,
-                seat.contains("\"shipWorldX\""));
-        double shipX = extractDouble(seat, "shipWorldX");
-        double shipY = extractDouble(seat, "shipWorldY");
-        double shipZ = extractDouble(seat, "shipWorldZ");
+        PilotSeat seat = PilotSeat.byId(this::exec, originDim, shipId)
+                .requireFound("the ship must resolve a world position for the body to be dropped at");
+        double shipX = seat.shipWorldX;
+        double shipY = seat.shipWorldY;
+        double shipZ = seat.shipWorldZ;
 
         // Dropped AT the hull, not above it. A body spawned over a deck is a body falling, and this
         // fixture sits in a void cell: by the time the cut runs it can be well past the ship, which

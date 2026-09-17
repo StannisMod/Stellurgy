@@ -2,6 +2,7 @@ package zmaster587.advancedRocketry.test.server;
 
 import zmaster587.advancedRocketry.test.Reply;
 import zmaster587.advancedRocketry.test.Events;
+import zmaster587.advancedRocketry.test.TransitSetup;
 import zmaster587.advancedRocketry.test.GameTicks;
 import zmaster587.advancedRocketry.test.ShipIdentity;
 import zmaster587.advancedRocketry.test.ShipReadiness;
@@ -113,9 +114,8 @@ public class VSJumpDumpsTheCruiseE2ETest extends AbstractSharedServerTest {
      */
     private Arrived jumpUnderCruise(long speed, String route) throws Exception {
 
-        String setup = exec("artest space transit-setup-piloted");
-        assertTrue("piloted transit setup failed: " + setup, setup.contains("\"ok\":true"));
-        int originDim = extractInt(setup, "originDim");
+        TransitSetup setup = TransitSetup.piloted(this::exec);
+        int originDim = setup.originDim;
         assertTrue("origin ship never assembled/loaded in the pool-slot cell (dim " + originDim + ")",
                 loadedShips(originDim) >= 1);
 

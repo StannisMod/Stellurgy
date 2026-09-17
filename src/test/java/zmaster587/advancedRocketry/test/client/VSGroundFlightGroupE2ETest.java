@@ -13,6 +13,7 @@ import java.util.regex.Pattern;
 import zmaster587.advancedRocketry.api.FreeFlightPhysics;
 import zmaster587.advancedRocketry.test.Events;
 import zmaster587.advancedRocketry.test.Reply;
+import zmaster587.advancedRocketry.test.PilotSeat;
 import zmaster587.advancedRocketry.test.ShipInfo;
 import zmaster587.advancedRocketry.test.FixtureSite;
 import zmaster587.advancedRocketry.test.Plot;
@@ -660,12 +661,10 @@ public class VSGroundFlightGroupE2ETest extends AbstractSharedVsClientE2ETest {
         // Sit the bot on THIS ship's pilot seat: resolve the seat inside the ship this scenario
         // NAMES — the anchored form resolved the yard nearest a point, which is a different ship
         // whenever a neighbour's is nearer — then mount that subspace block.
-        String found = exec("artest vs find-seat 0 id " + shipId);
-        Reply seat = Reply.of("artest vs find-seat", found);
-        assertTrue("find-seat must resolve THIS ship's subspace seat: " + found,
-                seat.has("seatX") && seat.has("seatY") && seat.has("seatZ"));
-        String mountInfo = exec("artest vs seat-mount-at 0 " + seat.integer("seatX") + " "
-                + seat.integer("seatY") + " " + seat.integer("seatZ"));
+        PilotSeat seat = PilotSeat.byId(this::exec, 0, shipId)
+                .requireFound("find-seat must resolve THIS ship's subspace seat");
+        String mountInfo = exec("artest vs seat-mount-at 0 " + seat.seatX + " "
+                + seat.seatY + " " + seat.seatZ);
         int dummyId = Reply.of("artest vs seat-mount-at", mountInfo).integer(DUMMY_ID);
         long seatMark = clientEvents().mark();
         String mount = exec("artest player mount-entity " + dummyId);

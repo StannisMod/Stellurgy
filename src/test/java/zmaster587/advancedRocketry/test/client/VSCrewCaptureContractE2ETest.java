@@ -12,6 +12,7 @@ import java.util.regex.Pattern;
 
 import zmaster587.advancedRocketry.test.Events;
 import zmaster587.advancedRocketry.test.Reply;
+import zmaster587.advancedRocketry.test.PilotSeat;
 import zmaster587.advancedRocketry.test.FixtureSite;
 import zmaster587.advancedRocketry.test.ShipIdentity;
 import zmaster587.advancedRocketry.test.ShipInfo;
@@ -425,9 +426,6 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
     private static final String SHIP_FRAME_TRAVEL =
             "zmaster587.advancedRocketry.integration.vs.ShipFrameTravel";
     private static final String DUMMY_ID = "dummyId";
-    private static final String SEAT_X = "seatX";
-    private static final String SEAT_Y = "seatY";
-    private static final String SEAT_Z = "seatZ";
 
     @Test
     public void aStillCrewMemberOnASteeplyRolledDeckIsNotDraggedSideways() throws Exception {
@@ -2371,12 +2369,11 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
         // seat in the world's loaded-tile list with no filter at all; the positional form of
         // find-seat narrows that to "the yard nearest a point", which on a world holding two craft
         // is still a stranger's yard as readily as this one's. The id is in hand from the assembly.
-        String seat = exec("artest vs find-seat 0 id " + scenarioShipId);
-        assertTrue("find-seat must locate the pilot seat inside THIS scenario's ship ("
-                + scenarioShipId + ", built at " + bx + "," + by + "," + bz + "): " + seat,
-                seat.contains("\"seatFound\":true"));
-        String mountInfo = exec("artest vs seat-mount-at 0 " + readInt(seat, SEAT_X) + " "
-                + readInt(seat, SEAT_Y) + " " + readInt(seat, SEAT_Z));
+        PilotSeat seat = PilotSeat.byId(this::exec, 0, scenarioShipId)
+                .requireFound("find-seat must locate the pilot seat inside THIS scenario's ship ("
+                        + scenarioShipId + ", built at " + bx + "," + by + "," + bz + ")");
+        String mountInfo = exec("artest vs seat-mount-at 0 " + seat.seatX + " "
+                + seat.seatY + " " + seat.seatZ);
         int dummyId = Reply.of("artest vs seat-mount-at", mountInfo).integer(DUMMY_ID);
         assertTrue("bot must mount the seat dummy: " + mountInfo,
                 exec("artest player mount-entity " + dummyId).contains("\"mounted\":true"));

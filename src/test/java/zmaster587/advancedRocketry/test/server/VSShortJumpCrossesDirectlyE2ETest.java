@@ -2,6 +2,7 @@ package zmaster587.advancedRocketry.test.server;
 
 import zmaster587.advancedRocketry.test.Reply;
 import zmaster587.advancedRocketry.test.Events;
+import zmaster587.advancedRocketry.test.TransitSetup;
 import zmaster587.advancedRocketry.test.ShipReadiness;
 import zmaster587.advancedRocketry.test.GameTicks;
 import zmaster587.advancedRocketry.test.ShipIdentity;
@@ -44,8 +45,8 @@ public class VSShortJumpCrossesDirectlyE2ETest extends AbstractSharedServerTest 
     @Test
     public void aShortJumpArrivesWithoutEverBeingInFlight() throws Exception {
 
-        String setup = setUpPilotedShip();
-        int originDim = extractInt(setup, "originDim");
+        TransitSetup setup = setUpPilotedShip();
+        int originDim = setup.originDim;
 
         // Marked BEFORE the command whose effect is awaited.
         long jumpMark = events.mark();
@@ -72,8 +73,8 @@ public class VSShortJumpCrossesDirectlyE2ETest extends AbstractSharedServerTest 
     @Test
     public void theSameJumpFlownSlowlyStillGoesThroughHyperspace() throws Exception {
 
-        String setup = setUpPilotedShip();
-        int originDim = extractInt(setup, "originDim");
+        TransitSetup setup = setUpPilotedShip();
+        int originDim = setup.originDim;
 
         // Marked BEFORE the command whose effect is awaited.
         long jumpMark = events.mark();
@@ -122,13 +123,12 @@ public class VSShortJumpCrossesDirectlyE2ETest extends AbstractSharedServerTest 
         return arrived;
     }
 
-    private String setUpPilotedShip() throws Exception {
-        String setup = exec("artest space transit-setup-piloted");
-        assertTrue("piloted transit setup failed: " + setup, setup.contains("\"ok\":true"));
-        int originDim = extractInt(setup, "originDim");
-        assertTrue("the fixture must mint a durable id — a crossing resolves its ship by identity, "
-                + "never by the anchor every transit fixture shares: " + setup,
-                setup.contains("\"durableId\":\"") && !setup.contains("\"durableId\":\"\""));
+    private TransitSetup setUpPilotedShip() throws Exception {
+        TransitSetup setup = TransitSetup.piloted(this::exec);
+        int originDim = setup.originDim;
+        // A crossing resolves its ship by IDENTITY, never by the anchor every transit fixture
+        // shares, so a setup that minted no durable name cannot be crossed at all.
+        setup.requireDurableId();
         // ONE SHIP, ONE IDENTITY — production's rule, now pinned on the fixture that used to break
         // it. This build was once assembled off a STONE block of its own deck, so the computer's
         // durable name was never found and the substrate minted a second id; the reply then carried
@@ -138,8 +138,9 @@ public class VSShortJumpCrossesDirectlyE2ETest extends AbstractSharedServerTest 
         // assertion is what keeps that true rather than leaving it to a comment.
         assertEquals("the fixture's two ids must be ONE value: a craft assembled off its own flight "
                         + "computer is named by it, and two different ids here mean the assembly "
-                        + "found no computer and took a substrate-minted name instead: " + setup,
-                extractString(setup, "durableId"), extractString(setup, "shipId"));
+                        + "found no computer and took a substrate-minted name instead: "
+                        + setup.raw(),
+                setup.durableId, setup.shipId);
         assertTrue("origin ship never assembled/loaded in the pool-slot cell (dim " + originDim + ")",
                 loadedShips(originDim) >= 1);
         return setup;

@@ -1,6 +1,7 @@
 package zmaster587.advancedRocketry.test.server;
 
 import zmaster587.advancedRocketry.test.Reply;
+import zmaster587.advancedRocketry.test.PilotSeat;
 import zmaster587.advancedRocketry.test.ShipReadiness;
 import zmaster587.advancedRocketry.test.GameTicks;
 import zmaster587.advancedRocketry.test.ShipIdentity;
@@ -70,10 +71,9 @@ public class VSSeatDummyFacesTheShipE2ETest extends AbstractSharedServerTest {
         String durableId = ShipIdentity.nameFromAssembly(asm);
         String shipId = ShipIdentity.physicsIdOf(this::exec, 0, durableId);
 
-        String seat = exec("artest vs find-seat 0 id " + shipId);
-        assertTrue("the pilot seat must be found in the assembled ship (else nothing below is measured): "
-                + seat, seat.contains("\"seatFound\":true"));
-        int seatX = extractInt(seat, "seatX"), seatY = extractInt(seat, "seatY"), seatZ = extractInt(seat, "seatZ");
+        PilotSeat seat = PilotSeat.byId(this::exec, 0, shipId)
+                .requireFound("the pilot seat must be found in the assembled ship, or nothing below is measured");
+        int seatX = seat.seatX, seatY = seat.seatY, seatZ = seat.seatZ;
 
         String mountAt = exec("artest vs seat-mount-at 0 " + seatX + " " + seatY + " " + seatZ);
         assertTrue("the seat's mount dummy must spawn: " + mountAt, mountAt.contains("\"ok\":true"));

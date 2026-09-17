@@ -9,6 +9,7 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 import zmaster587.advancedRocketry.test.Events;
+import zmaster587.advancedRocketry.test.TransitSetup;
 import zmaster587.advancedRocketry.test.Reply;
 import zmaster587.advancedRocketry.test.ShipInfo;
 import zmaster587.advancedRocketry.test.FixtureSite;
@@ -161,10 +162,7 @@ public class VSShipExtremeCoordinatesE2ETest extends AbstractSharedVsClientE2ETe
         // where the pose band is realized, and it carries no orbit line to take the craft off the
         // altitude this whole scenario is about — see the class javadoc for what staging it in the
         // overworld cost. ──
-        String setup = exec("artest space transit-setup-empty");
-        scenario().requireArranged("the empty transit setup must succeed, or there is no cell to fly"
-                + " in: " + setup, setup.contains("\"ok\":true"));
-        cellDim = (int) readDouble(setup, ORIGIN_DIM);
+        cellDim = TransitSetup.empty(this::exec).originDim;
 
         // Held loaded BEFORE the craft exists, and the reason is worth keeping even though the lever
         // is no longer pulled here. A craft assembled in a cell has no player anywhere near it — the

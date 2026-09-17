@@ -6,6 +6,7 @@ import org.junit.runners.MethodSorters;
 
 
 import zmaster587.advancedRocketry.test.Reply;
+import zmaster587.advancedRocketry.test.PilotSeat;
 import zmaster587.advancedRocketry.test.Events;
 import zmaster587.advancedRocketry.test.FixtureSite;
 import zmaster587.advancedRocketry.test.Plot;
@@ -61,9 +62,6 @@ public class VSShipAtmosphereFrameSpikeTest extends AbstractSharedVsClientE2ETes
     private static final String ATM_TYPE = "type";
     private static final String CACHED_ATM = "cachedAtmosphere";
     private static final String BLOB_SIZE = "blobSize";
-    private static final String SEAT_X = "seatX";
-    private static final String SEAT_Y = "seatY";
-    private static final String SEAT_Z = "seatZ";
     private static final String WORLD_X = "worldX";
     private static final String WORLD_Y = "worldY";
     private static final String WORLD_Z = "worldZ";
@@ -180,13 +178,11 @@ public class VSShipAtmosphereFrameSpikeTest extends AbstractSharedVsClientE2ETes
         scenarioShipId = ShipIdentity.awaitPhysicsIdOf(this::exec, 0,
                 ShipIdentity.nameFromAssembly(assemble), 40, () -> bot().waitTicks(5));
 
-        String found = exec("artest vs find-seat 0 id " + scenarioShipId);
-        Reply seat = Reply.of("artest vs find-seat", found);
-        scenario().requireArranged("find-seat must resolve the ship's subspace seat: " + found,
-                seat.has(SEAT_X));
-        int sx = seat.integer(SEAT_X);
-        int sy = seat.integer(SEAT_Y);
-        int sz = seat.integer(SEAT_Z);
+        PilotSeat seat = PilotSeat.byId(this::exec, 0, scenarioShipId)
+                .requireFound("find-seat must resolve the ship's subspace seat");
+        int sx = seat.seatX;
+        int sy = seat.seatY;
+        int sz = seat.seatZ;
         System.out.println("[S1/ship] seatSubspace=" + sx + "," + sy + "," + sz);
 
         // The cabin goes beside the seat, in the ship's own (subspace) addresses.

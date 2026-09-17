@@ -11,6 +11,7 @@ import java.util.regex.Pattern;
 
 import zmaster587.advancedRocketry.test.Events;
 import zmaster587.advancedRocketry.test.Reply;
+import zmaster587.advancedRocketry.test.PilotSeat;
 import zmaster587.advancedRocketry.test.ShipInfo;
 import zmaster587.advancedRocketry.test.FixtureSite;
 import zmaster587.advancedRocketry.test.ShipIdentity;
@@ -41,9 +42,6 @@ public class VSCrewInteriorBoardingE2ETest extends AbstractSharedVsClientE2ETest
 
     private static final String BUILDER_POS = "builderPos";
     private static final String DUMMY_ID = "dummyId";
-    private static final String SEAT_X = "seatX";
-    private static final String SEAT_Y = "seatY";
-    private static final String SEAT_Z = "seatZ";
 
     private static final String VARIANT = "with-pilot-deck";
 
@@ -751,12 +749,11 @@ public class VSCrewInteriorBoardingE2ETest extends AbstractSharedVsClientE2ETest
         // By identity. The positional form resolves the yard through the ship NEAREST the base — no
         // containment test and no distance bound — so on this shared world it can seat the bot on a
         // neighbour's craft and say seatFound:true doing it.
-        String seat = exec("artest vs find-seat 0 id " + scenarioShipId);
-        assertTrue("find-seat must locate the pilot seat inside THIS scenario's ship ("
-                + scenarioShipId + ", built at " + bx + "," + by + "," + bz + "): " + seat,
-                seat.contains("\"seatFound\":true"));
-        String mountInfo = exec("artest vs seat-mount-at 0 " + readIntFrom(seat, SEAT_X) + " "
-                + readIntFrom(seat, SEAT_Y) + " " + readIntFrom(seat, SEAT_Z));
+        PilotSeat seat = PilotSeat.byId(this::exec, 0, scenarioShipId)
+                .requireFound("find-seat must locate the pilot seat inside THIS scenario's ship ("
+                        + scenarioShipId + ", built at " + bx + "," + by + "," + bz + ")");
+        String mountInfo = exec("artest vs seat-mount-at 0 " + seat.seatX + " "
+                + seat.seatY + " " + seat.seatZ);
         int dummyId = Reply.of("artest vs seat-mount-at", mountInfo).integer(DUMMY_ID);
         // The CLIENT's mark before the mount, because the reply above is the SERVER's receipt and
         // every caller of this helper goes on to drive the bot as a seated pilot.

@@ -11,6 +11,7 @@ import java.util.regex.Pattern;
 import zmaster587.advancedRocketry.test.Reply;
 import zmaster587.advancedRocketry.test.ArrangementFailure;
 import zmaster587.advancedRocketry.test.Events;
+import zmaster587.advancedRocketry.test.TransitSetup;
 import zmaster587.advancedRocketry.test.ShipIdentity;
 
 import static zmaster587.advancedRocketry.test.AdvancedRocketryTestConstants.FIXTURE_CELL_SPACING_BLOCKS;
@@ -106,53 +107,6 @@ public class VSTransitCrewGroupE2ETest extends AbstractSharedVsClientE2ETest {
 
     private static final String PLAYER_NAME = "player";
 
-    private static final String SETUP_SHIP_ID = "shipId";
-
-    /**
-     * The identity of the ship this scenario's setup just assembled.
-     *
-     * <p>Every scenario in this class runs its jump out of the SAME pool slot dimension and builds at
-     * the SAME anchor — the setup allocates a fresh cell controller each time, and a fresh controller's
-     * binding map is empty, so it always takes the first slot in the pool. Asking "the ship at
-     * (1,64,1)" in that dimension is therefore a question with several right answers, and the one the
-     * nearest-ship lookup returns is the FIRST ship ever assembled there: departed, and holding an
-     * empty shipyard. Measured twice in independent boots as {@code seatFound:false} on a ship that
-     * had just been built, with the same yard box printed under two different slot dims.</p>
-     */
-    private static String setupShipId(String setup) {
-        Reply mReply = Reply.of(setup);
-        assertTrue("the piloted transit setup must name the ship it assembled — without it every"
-                + " later question about that ship is a nearest-ship guess in a dimension this class"
-                + " deliberately reuses: " + setup, mReply.has(SETUP_SHIP_ID));
-        return mReply.text(SETUP_SHIP_ID);
-    }
-
-    private static final String SETUP_DURABLE_ID = "durableId";
-
-    /**
-     * The craft's DURABLE NAME out of the same setup reply — the only identity that survives a
-     * crossing.
-     *
-     * <p><b>At the setup reply the two fields now hold ONE value</b>, and this javadoc said the
-     * opposite until 2026-09-12. The fixture used to assemble off a stone block of its own deck, so
-     * the computer's name was never found and the substrate minted a second id; the assembly takes
-     * the pasted FOOTPRINT now and finds the computer inside it, which makes that mistake
-     * inexpressible. Pinned by {@code VSShortJumpCrossesDirectlyE2ETest}, which asserts the two are
-     * equal rather than leaving it to a paragraph.</p>
-     *
-     * <p><b>The distinction is real AFTER a crossing, and that is where it still earns its keep</b>:
-     * a crossing re-assembles the hull and mints a NEW physics id, while this name rides through. So
-     * the origin cell can be asked by either, and the far end only by this one, through
-     * {@code vs ship-uuid}. Asking the far end by a physics id from before the crossing answers
-     * {@code found:false} — that is not a missing ship, it is the wrong question.</p>
-     */
-    private static String setupDurableId(String setup) {
-        Reply mReply = Reply.of(setup);
-        assertTrue("the piloted transit setup must name the craft it minted, or nothing can address"
-                + " it after a crossing re-mints its physics id: " + setup, mReply.has(SETUP_DURABLE_ID));
-        return mReply.text(SETUP_DURABLE_ID);
-    }
-
     /**
      * The bot's own username, off the server's own answer.
      *
@@ -167,7 +121,8 @@ public class VSTransitCrewGroupE2ETest extends AbstractSharedVsClientE2ETest {
         return nameMReply.text(PLAYER_NAME);
     }
 
-    /** {@code find-seat} keyed by identity — see {@link #setupShipId} for why never by the anchor. */
+    /** {@code find-seat} keyed by identity: every scenario here builds at the SAME anchor in the
+ *  SAME pooled slot, so the anchor is a question with several right answers. */
     private String findSeat(int originDim, String shipId) throws Exception {
         return exec("artest vs find-seat " + originDim + " id " + shipId);
     }
@@ -315,9 +270,8 @@ private int waitForLoadedShip(int dim) throws Exception {
         // Build a PILOTED tier-2 ship in a fresh transit ORIGIN pool cell. The assembly is DEFERRED
         // rather than threaded — the spawn is queued and the ship manager drains that queue in its
         // own tick — so the ship + its seat are not queryable synchronously; poll for them below.
-        String setup = exec("artest space transit-setup-piloted");
-        assertTrue("piloted transit setup must succeed: " + setup, readBool(setup, "ok"));
-        int originDim = readInt(setup, "originDim");
+        TransitSetup setup = TransitSetup.piloted(this::exec);
+        int originDim = setup.originDim;
 
         // Wait for the async assembly to load the ship in the origin cell (count-all -> load-ships -> count).
         assertTrue("the piloted origin ship never assembled/loaded in the pool cell (dim " + originDim + ")",
@@ -327,7 +281,7 @@ private int waitForLoadedShip(int dim) throws Exception {
         // the identity the setup handed back rather than by the anchor every scenario here shares.
         // The helper locates the seat, carries the client in, mounts the dummy and asserts the
         // control that makes "still riding after the jump" mean anything.
-        seatTheBot(originDim, setupShipId(setup));
+        seatTheBot(originDim, setup.requireShipId());
 
         // The mark is taken BEFORE the departure, so nothing the jump does can fall between two reads.
         Events events = transitEvents(this::exec);
@@ -415,14 +369,13 @@ private int waitForLoadedShip(int dim) throws Exception {
     public void aSeatedCrewMemberIsAboardHisShipInHyperspaceWhileItIsStillFlying() throws Exception {
 
 
-        String setup = exec("artest space transit-setup-piloted");
-        assertTrue("piloted transit setup must succeed: " + setup, readBool(setup, "ok"));
-        int originDim = readInt(setup, "originDim");
+        TransitSetup setup = TransitSetup.piloted(this::exec);
+        int originDim = setup.originDim;
 
         assertTrue("the piloted origin ship never assembled/loaded in the pool cell (dim " + originDim + ")",
                 waitForLoadedShip(originDim) >= 1);
 
-        seatTheBot(originDim, setupShipId(setup));
+        seatTheBot(originDim, setup.requireShipId());
 
         // CONTROL: he is in the ORIGIN cell before the jump — so the mid-flight reading below can
         // move. (That he is RIDING is the last thing seatTheBot asserts.)
@@ -529,9 +482,8 @@ private boolean waitForRegisteredShip(int dim) throws Exception {
     @Test
     public void aCrewMemberIsReseatedOnArrivalWithNothingForcingTheShipLoaded() throws Exception {
 
-        String setup = execEnvelope("artest space transit-setup-piloted");
-        assertTrue("piloted transit setup must succeed: " + setup, readBool(setup, "ok"));
-        int originDim = readInt(setup, "originDim");
+        TransitSetup setup = TransitSetup.of(execEnvelope("artest space transit-setup-piloted"));
+        int originDim = setup.originDim;
 
         // ARRANGEMENT. The fixture's assembly is async, so wait for the ship to EXIST — asked through the
         // queryable registry, which answers for an unloaded ship and therefore forces nothing.
@@ -580,7 +532,7 @@ private boolean waitForRegisteredShip(int dim) throws Exception {
         // false positive, and this paragraph is the reason not to open the site again over it.
         String seat = "";
         for (int i = 0; i < 40 && !hasKey(seat, "shipWorldX"); i++) {
-            seat = execEnvelope("artest vs find-seat " + originDim + " id " + setupShipId(setup));
+            seat = execEnvelope("artest vs find-seat " + originDim + " id " + setup.requireShipId());
             if (!hasKey(seat, "shipWorldX")) {
                 bot().waitTicks(5);
             }
@@ -787,13 +739,12 @@ private long readCounter(String className, String field) throws Exception {
                 rd.get("skyPassEnabled").getAsBoolean());
 
 
-        String setup = exec("artest space transit-setup-piloted");
-        assertTrue("piloted transit setup must succeed: " + setup, readBool(setup, "ok"));
-        int originDim = readInt(setup, "originDim");
+        TransitSetup setup = TransitSetup.piloted(this::exec);
+        int originDim = setup.originDim;
         assertTrue("the piloted origin ship never assembled/loaded in the pool cell (dim " + originDim + ")",
                 waitForLoadedShip(originDim) >= 1);
 
-        seatTheBot(originDim, setupShipId(setup));
+        seatTheBot(originDim, setup.requireShipId());
 
         // ── CONTROL, in an ordinary cell ────────────────────────────────────────────────────────
         long skyBefore = skyFrames();
@@ -1056,12 +1007,11 @@ private long readCounter(String className, String field) throws Exception {
         assertTrue("the sky pass gate must be open, read back off the client's own field: " + rd,
                 rd.get("skyPassEnabled").getAsBoolean());
 
-        String setup = exec("artest space transit-setup-piloted");
-        assertTrue("piloted transit setup must succeed: " + setup, readBool(setup, "ok"));
-        int originDim = readInt(setup, "originDim");
+        TransitSetup setup = TransitSetup.piloted(this::exec);
+        int originDim = setup.originDim;
         assertTrue("the piloted origin ship never assembled/loaded in the pool cell (dim " + originDim + ")",
                 waitForLoadedShip(originDim) >= 1);
-        seatTheBot(originDim, setupShipId(setup));
+        seatTheBot(originDim, setup.requireShipId());
 
         // ── CONTROL, in the origin cell ─────────────────────────────────────────────────────────
         // Two readings the hyperspace ones are read against. Without the first, "the corridor did not
@@ -1081,7 +1031,7 @@ private long readCounter(String className, String field) throws Exception {
         // same channel and the same way of deriving the key, asked of a ship that is plainly alive
         // in an ordinary cell. Without it, silence in hyperspace cannot be told from a key nobody
         // ever writes under - and the two ask for opposite investigations.
-        String cellSeat = findSeat(originDim, setupShipId(setup));
+        String cellSeat = findSeat(originDim, setup.requireShipId());
         String cellAfcKey = originDim + " " + readInt(cellSeat, "afcX")
                 + " " + readInt(cellSeat, "afcY") + " " + readInt(cellSeat, "afcZ");
         long cellTileTicks = gameSeen(exec("artest vs motion-trace " + cellAfcKey));
@@ -1296,9 +1246,9 @@ private long readCounter(String className, String field) throws Exception {
         // running, so the test has to keep driving it WHILE it waits for the record.
         //
         // KEYED ON THE DURABLE NAME, and that is the whole lesson of getting it wrong once. The
-        // first cut asked for `setupShipId(setup)` — the SUBSTRATE's id — and the wait expired with
+        // first cut asked for `setup.requireShipId()` — the SUBSTRATE's id — and the wait expired with
         // the log full of transit records. `ledgerSettle` is keyed by the identity the ledger keeps,
-        // which `setupDurableId`'s own javadoc states two methods up: "the setup mints this on the
+        // which `TransitSetup.durableId` is documented to be: "the setup mints this on the
         // pad, onto the flight computer, and SETTLES THE LEDGER UNDER IT … Reading either one as the
         // other answers found:false — that is not a missing ship, it is the wrong question."
         //
@@ -1306,7 +1256,7 @@ private long readCounter(String className, String field) throws Exception {
         // five ticks of budget and each stimulus accelerates ten, so half of LIVABLE_FLIGHT_TICKS of
         // budget delivers the whole flight the scenario asked for.
         try {
-            events.awaitField(mark, "transit_settled", "ship", setupDurableId(setup),
+            events.awaitField(mark, "transit_settled", "ship", setup.requireDurableId(),
                     "the jump must be flown out before this scenario returns: it shares its"
                             + " hyperspace with every other scenario in this class, and a transit"
                             + " left running parks a hull there with a crew record for a player who"
@@ -1336,16 +1286,15 @@ private long readCounter(String className, String field) throws Exception {
     public void aWalkingCrewMemberTravelsWithHisShipThroughHyperspace() throws Exception {
 
 
-        String setup = exec("artest space transit-setup-piloted");
-        assertTrue("piloted transit setup must succeed: " + setup, readBool(setup, "ok"));
-        int originDim = readInt(setup, "originDim");
+        TransitSetup setup = TransitSetup.piloted(this::exec);
+        int originDim = setup.originDim;
         assertTrue("the piloted origin ship never assembled/loaded in the pool cell (dim " + originDim + ")",
                 waitForLoadedShip(originDim) >= 1);
 
         // Board the way every other scenario here boards (seat + its own control), then stand up.
         // The ship's world position is read for the stand-up arrangement's re-drop, not asserted on.
-        String seat = findSeat(originDim, setupShipId(setup));
-        seatTheBot(originDim, setupShipId(setup));
+        String seat = findSeat(originDim, setup.requireShipId());
+        seatTheBot(originDim, setup.requireShipId());
         String capture = standTheBotOnTheDeck(readDouble(seat, "shipWorldX"),
                 readDouble(seat, "shipWorldY"), readDouble(seat, "shipWorldZ"));
 
@@ -1365,10 +1314,10 @@ private long readCounter(String className, String field) throws Exception {
         // so a capture held by any other craft in the cell means the crew member is not in the set
         // under test at all, and every reading downstream would be about somebody it never carried.
         //
-        // `setupShipId` is ALREADY the physics id — the setup returns the assembler's own answer —
+        // `TransitSetup.shipId` is ALREADY the physics id — the setup returns the assembler's own answer —
         // and the capture's anchor is a physics id too, so the two compare directly. The durable name
         // is a SEPARATE field of that reply and is what the far end needs; see the arrival below.
-        ShipIdentity.assertCaptureAnchoredOn(capture, setupShipId(setup),
+        ShipIdentity.assertCaptureAnchoredOn(capture, setup.requireShipId(),
                 "CONTROL: the deck he stands on must be the ship this jump is performed with");
         assertEquals("CONTROL: he must be in the origin cell before the jump", originDim,
                 bot().reportWeather().get("dim").getAsInt());
@@ -1450,7 +1399,7 @@ private long readCounter(String className, String field) throws Exception {
         // HIS deck. The physics id is re-derived from the ship's durable name because a crossing
         // mints a new one; the name is the handle that survives both crossings.
         ShipIdentity.assertCaptureAnchoredOn(captureOnArrival,
-                ShipIdentity.awaitPhysicsIdOf(this::exec, targetDim, setupDurableId(setup),
+                ShipIdentity.awaitPhysicsIdOf(this::exec, targetDim, setup.requireDurableId(),
                         40, () -> bot().waitTicks(5)),
                 "the deck he is put back on at the far end must be his own ship's."
                         + " What production SAID it did, so a red here separates a re-seat that named"
@@ -1506,12 +1455,11 @@ private long readCounter(String className, String field) throws Exception {
 
         exec("gamemode survival @a");
 
-        String setup = exec("artest space transit-setup-piloted");
-        assertTrue("piloted transit setup must succeed: " + setup, readBool(setup, "ok"));
-        int originDim = readInt(setup, "originDim");
+        TransitSetup setup = TransitSetup.piloted(this::exec);
+        int originDim = setup.originDim;
         assertTrue("the piloted origin ship never assembled/loaded in the pool cell (dim " + originDim + ")",
                 waitForLoadedShip(originDim) >= 1);
-        seatTheBot(originDim, setupShipId(setup));
+        seatTheBot(originDim, setup.requireShipId());
 
         // ── READING 1, in an ordinary cell: no corridor ──────────────────────────────────────────
         long skyInCell = skyFrames();
@@ -1596,15 +1544,14 @@ private long readCounter(String className, String field) throws Exception {
 
         exec("gamemode survival @a");
 
-        String setup = exec("artest space transit-setup-piloted");
-        assertTrue("piloted transit setup must succeed: " + setup, readBool(setup, "ok"));
-        int originDim = readInt(setup, "originDim");
+        TransitSetup setup = TransitSetup.piloted(this::exec);
+        int originDim = setup.originDim;
         assertTrue("the piloted origin ship never assembled/loaded in the pool cell (dim " + originDim + ")",
                 waitForLoadedShip(originDim) >= 1);
 
         // Boards SEATED and jumps from the chair: that is what writes a SEATED departure record, and
         // the record is the subject here.
-        seatTheBot(originDim, setupShipId(setup));
+        seatTheBot(originDim, setup.requireShipId());
         Events events = transitEvents(this::exec);
         long mark = events.markInstrumented();
         long clientMark = clientEvents().mark();
@@ -1678,7 +1625,7 @@ private long readCounter(String className, String field) throws Exception {
         // hold other craft, so "on a deck" and "on the deck he stood up from" are different claims
         // and only the second is what a crossing is supposed to guarantee.
         ShipIdentity.assertCaptureAnchoredOn(captureOnArrival,
-                ShipIdentity.awaitPhysicsIdOf(this::exec, targetDim, setupDurableId(setup),
+                ShipIdentity.awaitPhysicsIdOf(this::exec, targetDim, setup.requireDurableId(),
                         40, () -> bot().waitTicks(5)),
                 "the deck he stands on after the arrival must be his own ship's."
                         + " What production SAID it did, so a red here separates a re-seat that named"
