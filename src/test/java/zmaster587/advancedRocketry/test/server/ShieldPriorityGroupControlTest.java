@@ -81,7 +81,10 @@ public class ShieldPriorityGroupControlTest extends AbstractSharedServerTest {
 
         // ...visible at console B, because both are views of ONE domain-level config.
         String listedAtB = exec(group(consoleB, z, "list"));
-        Reply.of(listedAtB).element("groups", "name", "bow");
+        // `name` IS a group's identity — this scenario named it "bow" itself — so this addresses
+        // the object it created, and two groups answering to one name would be the defect the
+        // refusal reports rather than an ambiguous read.
+        Reply.of("artest shield group list", listedAtB).element("groups", "name", "bow");
 
         // ...and editable at console B, with the effect landing on the emitter.
         assertTrue(Reply.of(exec(group(consoleB, z, "priority bow 9"))).ok());

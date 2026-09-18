@@ -137,7 +137,13 @@ public class SystemBodiesFeedFollowsTheCellE2ETest extends AbstractSharedServerT
                 "IN_TRANSIT".equals(Reply.of(transit).text("state")));
 
         String bodies = exec("artest space bodies");
-        Reply.of(bodies).element("ships", "state", "IN_TRANSIT");
+        // THIS scenario's ship, by the uuid it was ledgered under, and its state read off that row.
+        // Addressing the row by the STATE asks the feed "is anything in transit", which every other
+        // scenario's leftover jump answers — and would answer with this ship missing entirely.
+        assertEquals("the feed must carry this ship as the one in transit: " + bodies,
+                "IN_TRANSIT",
+                Reply.of("artest space bodies", bodies)
+                        .element("ships", "ship", shipId).text("state"));
         assertEquals("the cell is still bound to the same slot world; " + bodies,
                 slotDim, LedgerEntry.forShip(this::exec, shipId).slotDim());
         assertEquals("a cell's bodies must not vanish from its sky because a ship in it is mid-jump; "

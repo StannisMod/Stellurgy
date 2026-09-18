@@ -120,13 +120,14 @@ public class FluidLoaderActiveTransferTest extends AbstractSharedServerTest {
         // contract pin is "rocket gained the loader's fluid", not a
         // specific mB count.
         String postStorage = exec("artest rocket storage-fluid " + rocketId);
-        int storageAfter = extract(postStorage, TOTAL_AMOUNT);
-        assertTrue("rocket storage liquidTanks must contain oxygen "
-                        + "after loader ticks (the player-visible "
-                        + "'re-fuel automation' contract); storageAfter="
-                        + storageAfter + " storageJson=" + postStorage,
-                storageAfter > 0);
-        Reply.of(postStorage).element("tanks", "fluid", "oxygen");
+        // THE oxygen tank, and its amount read off that same tank. `totalAmount` sums every tank,
+        // so "the storage grew" and "oxygen is in there" were two questions about one subject —
+        // and a rocket holding oxygen beside anything else answers them from two different tanks.
+        Reply oxygen = Reply.of("artest rocket storage-fluid", postStorage)
+                .element("tanks", "fluid", "oxygen");
+        assertTrue("rocket storage liquidTanks must contain oxygen after loader ticks (the"
+                        + " player-visible 're-fuel automation' contract): " + postStorage,
+                oxygen.integer("amount") > 0);
     }
 
     /**

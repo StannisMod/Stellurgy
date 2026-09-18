@@ -95,7 +95,12 @@ public class PlatePressRecipeEndToEndTest extends AbstractSharedServerTest {
         String scan = String.join("\n", c.execute(
                 "artest entity scan-items 0 " + (x + 0.5) + " " + (y - 0.5) + " " + (z + 0.5) + " 2"));
         assertTrue("entity scan-items failed: " + scan, Reply.of(scan).ok());
-        Reply.of(scan).element("items", "item", String.valueOf(expectedOutputId));
+        // The scan is addressed by its own box — this press, radius 2 — so what it holds is an
+        // existence question; the press drops the output where it likes, and a second stack of it
+        // would be a press that ran twice, not an ambiguous reading.
+        assertTrue("the press must have dropped " + expectedOutputId + ": " + scan,
+                Reply.of("artest entity scan-items", scan)
+                        .holdsElement("items", "item", String.valueOf(expectedOutputId)));
 
         // Ingredient block must be gone (consumed by the press). After
         // activation the cell ends up either as AIR (setBlockToAir from

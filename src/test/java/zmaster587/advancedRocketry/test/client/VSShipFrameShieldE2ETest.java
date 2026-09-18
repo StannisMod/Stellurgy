@@ -142,15 +142,15 @@ public class VSShipFrameShieldE2ETest extends AbstractSharedVsClientE2ETest {
         // the link — it is what the geometry below is measured from, and this asserts the list it
         // leads with is the ship-framed emitter the event named.
         String emitters = exec("artest shield emitters 0");
-        assertTrue("the frame log says a ship-framed emitter is ready, but the shield registry does"
-                + " not list one:\n" + emitters,
-                // `shipFramed` belongs to an EMITTER, not to the registry's reply: asked of the
-                // reply it is a member's field, and the registry could list a ship-framed emitter
-                // beside the one this leg is about.
-                emitterCount(emitters) >= 1
-                        && Reply.of("artest shield emitters", emitters)
-                                .holdsElement("emitters", "shipFramed", "true"));
-        double wx1 = e(emitters, "worldX"), wy1 = e(emitters, "worldY"), wz1 = e(emitters, "worldZ");
+        // THE ship-framed emitter, fetched ONCE, and every number below read off that object. The
+        // pair this replaces asked "is some emitter ship-framed" and then took the geometry from
+        // "the first emitter in the list" — two questions a registry holding two emitters answers
+        // about two different ones. `element` also refuses if two are ship-framed, which is the
+        // ambiguity the old comment could only worry about.
+        Reply emitter = Reply.of("artest shield emitters", emitters)
+                .element("emitters", "shipFramed", "true");
+        double wx1 = emitter.number("worldX"), wy1 = emitter.number("worldY"),
+                wz1 = emitter.number("worldZ");
 
         // Check 1: the shell's world centre is at the loaded ship, FAR from the emitter's subspace pos
         // (VS relocates a ship's blocks thousands of blocks away into its shipyard).

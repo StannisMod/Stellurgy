@@ -313,7 +313,12 @@ final class MachineRecipeEndToEndKit {
             String read = String.join("\n", c.execute("artest hatch read 0 " + p.firstOutput()));
             assertTrue("hatch read errored for " + fixtureKey + ": " + read,
                     !Reply.of(read).has("error"));
-            Reply.of(read).element("slots", "item", String.valueOf(expectedItem));
+            // Addressed by the FETCH — the machine's own output hatch at `firstOutput()` — so the
+            // slot the recipe filled is the machine's choice and not the test's to name.
+            assertTrue("expected output " + expectedItem + " not in the output hatch for "
+                            + fixtureKey + ": " + read,
+                    Reply.of("artest hatch read", read)
+                            .holdsElement("slots", "item", String.valueOf(expectedItem)));
         }
         if (!r.fluidOutputs.isEmpty()) {
             String expectedFluid = r.fluidOutputs.get(0)[0];

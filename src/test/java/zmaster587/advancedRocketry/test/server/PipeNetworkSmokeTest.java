@@ -2,6 +2,7 @@ package zmaster587.advancedRocketry.test.server;
 
 // migrated to AbstractSharedServerTest
 import zmaster587.advancedRocketry.test.EnergyStore;
+import zmaster587.advancedRocketry.test.FluidStored;
 import zmaster587.advancedRocketry.test.Reply;
 import org.junit.Test;
 
@@ -173,8 +174,14 @@ public class PipeNetworkSmokeTest extends AbstractSharedServerTest {
 
         String stored = String.join("\n", client().execute(
                 "artest fluid stored 0 " + fx + " " + fy + " " + fz));
-        Reply.of(stored).element("tanks", "fluid", "water");
-        Reply.of(stored).element("tanks", "amount", String.valueOf(amount));
+        // THE hatch's own tank, by index, read ONCE. Addressing it by its contents would ask the
+        // list "is some tank holding water" and then, separately, "is some tank holding N" — two
+        // questions a two-tank hatch answers from two different tanks.
+        FluidStored tanks = FluidStored.of(stored);
+        assertEquals("the hatch's tank must hold the injected water: " + stored,
+                "water", tanks.fluid(0));
+        assertEquals("and all of what the inject reported filled: " + stored,
+                amount, tanks.amount(0));
     }
 
     private static long parseLong(String field, String s) {

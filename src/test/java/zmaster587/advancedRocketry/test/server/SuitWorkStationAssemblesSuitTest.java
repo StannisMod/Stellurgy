@@ -82,7 +82,11 @@ public class SuitWorkStationAssemblesSuitTest extends AbstractHeadlessServerTest
         // jetpack component in its NBT.
         String pre = join(client().execute(
                 "artest hatch read 0 " + X + " " + Y + " " + Z + " nbt"));
-        Reply.of(pre).element("slots", "item", "advancedrocketry:spacechestplate");
+        // SLOT 0 — where this test put the chestplate. Addressing the slot by its contents asks
+        // the hatch "is a chestplate anywhere in you", which a leaked stack in slot 3 answers.
+        assertEquals("slot 0 must hold the chestplate this test placed: " + pre,
+                "advancedrocketry:spacechestplate",
+                Reply.of("artest hatch read", pre).element("slots", "slot", "0").text("item"));
         assertTrue("fresh chestplate must not contain jetPack token yet — "
                         + "either the component slot pre-populated unexpectedly "
                         + "or a previous test leaked. Response: " + pre,
@@ -107,7 +111,9 @@ public class SuitWorkStationAssemblesSuitTest extends AbstractHeadlessServerTest
         //        contract: "armor component at index 0 is jetpack".
         String post = join(client().execute(
                 "artest hatch read 0 " + X + " " + Y + " " + Z + " nbt"));
-        Reply.of(post).element("slots", "item", "advancedrocketry:spacechestplate");
+        assertEquals("slot 0 must still hold the same chestplate after the dispatch: " + post,
+                "advancedrocketry:spacechestplate",
+                Reply.of("artest hatch read", post).element("slots", "slot", "0").text("item"));
         // (a) Chestplate's NBT must now contain the jetpack registry id.
         // Coupling to lower-cased token (Forge normalises resource paths).
         assertTrue("chestplate NBT must contain jetpack reference after addArmorComponent: " + post,

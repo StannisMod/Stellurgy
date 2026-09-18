@@ -303,7 +303,11 @@ public class RocketInfrastructureSmokeTest extends AbstractSharedServerTest {
 
         String postTransfer = String.join("\n", client().execute(
                 "artest rocket storage-inventory " + rocketId));
-        Reply.of(postTransfer).element("items", "item", "minecraft:cobblestone");
+        // Addressed by the FETCH — this rocket's storage — so its contents are an existence
+        // question: the loader chose the slot, and two stacks of one item is a stocked rocket.
+        assertTrue("the loader must have moved the cobblestone into the rocket: " + postTransfer,
+                Reply.of("artest rocket storage-inventory", postTransfer)
+                        .holdsElement("items", "item", "minecraft:cobblestone"));
     }
 
     /**

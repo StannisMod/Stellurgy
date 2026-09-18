@@ -83,7 +83,12 @@ public class RocketItemUnloaderActiveTransferTest extends AbstractSharedServerTe
 
         // Sanity: storage-inventory probe agrees with fill result.
         String preStorage = exec("artest rocket storage-inventory " + rocketId);
-        Reply.of(preStorage).element("items", "item", "minecraft:cobblestone");
+        // The CONTAINER is what this claim is about, and it is already addressed: the reply was
+        // fetched for THIS rocket. Its contents are then an existence question — the fixture chose
+        // no slot, and two stacks of one item is a stocked rocket, not an ambiguity.
+        assertTrue("the rocket's storage must hold the cobblestone the fixture put in: " + preStorage,
+                Reply.of("artest rocket storage-inventory", preStorage)
+                        .holdsElement("items", "item", "minecraft:cobblestone"));
 
         // Link rocket to unloader.
         String link = exec("artest infra link 0 " + ux + " " + uy + " " + uz
@@ -101,7 +106,9 @@ public class RocketItemUnloaderActiveTransferTest extends AbstractSharedServerTe
         // — that's the player-visible "drain returning rocket" contract.
         String postUnloader = exec("artest hatch read 0 " + ux + " " + uy + " " + uz);
         String postStorage = exec("artest rocket storage-inventory " + rocketId);
-        Reply.of(postUnloader).element("slots", "item", "minecraft:cobblestone");
+        assertTrue("the unloader's own inventory must hold what it drained: " + postUnloader,
+                Reply.of("artest hatch read", postUnloader)
+                        .holdsElement("slots", "item", "minecraft:cobblestone"));
     }
 
     // -- helpers ----------------------------------------------------------
