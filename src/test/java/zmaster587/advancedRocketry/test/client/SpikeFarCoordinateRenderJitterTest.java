@@ -5,6 +5,7 @@ import com.google.gson.JsonObject;
 
 import org.junit.Test;
 import zmaster587.advancedRocketry.test.GameTicks;
+import zmaster587.advancedRocketry.test.Reply;
 
 import javax.imageio.ImageIO;
 import java.awt.image.BufferedImage;
@@ -154,10 +155,9 @@ public class SpikeFarCoordinateRenderJitterTest extends AbstractClientE2ETest {
         exec("time set 6000");
 
         String health = exec("artest player health");
-        java.util.regex.Matcher m = java.util.regex.Pattern
-                .compile("\"player\"\\s*:\\s*\"([^\"]+)\"").matcher(health);
-        assertTrue("player health must echo the player name: " + health, m.find());
-        botName = m.group(1);
+        Reply healthReply = Reply.of("artest player health", health);
+        assertTrue("player health must echo the player name: " + health, healthReply.has("player"));
+        botName = healthReply.text("player");
 
         JsonObject fb = bot().setFramebuffer(true);
         assertTrue("this client's GL must support the framebuffer capture path: " + fb,
@@ -388,9 +388,10 @@ public class SpikeFarCoordinateRenderJitterTest extends AbstractClientE2ETest {
 
     /** The server's own reading of where the player is, so the stimulus can be shown to have landed. */
     private static double posXOf(String healthJson) {
-        java.util.regex.Matcher m = java.util.regex.Pattern
-                .compile("\"posX\"\\s*:\\s*([-0-9.eE]+)").matcher(healthJson);
-        return m.find() ? Double.parseDouble(m.group(1)) : Double.NaN;
+        // NaN on absence is deliberate and is CHECKED by every caller: this reading is used to show
+        // that a stimulus landed, and "the probe did not report posX" is not a position. It is not a
+        // plausible substitute for one either, which is the property a zero would not have had.
+        return Reply.of("artest player health", healthJson).numberOr("posX", Double.NaN);
     }
 
     /** The report is the deliverable, so it also lands on disk and survives a truncated console. */

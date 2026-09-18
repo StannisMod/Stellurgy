@@ -4,6 +4,7 @@ import zmaster587.advancedRocketry.test.Reply;
 import org.junit.Test;
 
 import zmaster587.advancedRocketry.test.NavStatus;
+import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
 /**
@@ -168,9 +169,16 @@ public class NavigationComputerE2ETest extends AbstractSharedServerTest {
 
         assertTrue("the sync must report moving addresses: " + synced,
                 Reply.of(synced).has("changed"));
-        assertTrue("both computers must end up holding all five addresses; A=" + self.raw()
-                        + " B=" + peer.raw() + " (B before its own sync: " + peerBefore.raw() + ")",
-                self.shipCrystals == 5 && peer.shipCrystals == 5);
+        // One assert per computer, because `self` and `peer` are two separate status fetches taken
+        // at two different moments (peer first). Conjoined, "both hold five" was never a statement
+        // about any one instant, and a red named neither computer.
+        assertEquals("the computer that offered the channel must hold the UNION — its own three"
+                        + " addresses plus the two the peer brought; A=" + self.raw(),
+                5, self.shipCrystals);
+        assertEquals("...and so must the computer that synced onto the same channel — a sync that"
+                        + " only moves addresses one way is a copy, not a sync; B=" + peer.raw()
+                        + " (B before its own sync: " + peerBefore.raw() + ")",
+                5, peer.shipCrystals);
     }
 
     @Test

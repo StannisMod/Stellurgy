@@ -178,6 +178,11 @@ public class VSRiderKeepsHisMountAtCruiseE2ETest extends AbstractSharedVsClientE
         PilotSeat seat = PilotSeat.byId(this::exec, dim, scenarioShipId)
                 .requireFound("the pilot seat must be found, or the test is vacuous");
         int seatX = seat.seatX, seatY = seat.seatY, seatZ = seat.seatZ;
+        // A WORLD-frame pose, carried through a name lookup into the `space enter` below. Sound
+        // here for one reason worth stating in a class whose whole subject is a MOVING hull: the
+        // craft has just been assembled at its berth and nothing has commanded it — the cruise is
+        // this test's STIMULUS and is not ordered for another eighty lines. The seatX/Y/Z beside it
+        // are SUBSPACE and carry no such condition.
         int sx = (int) Math.round(seat.shipWorldX);
         int sy = (int) Math.round(seat.shipWorldY);
         int sz = (int) Math.round(seat.shipWorldZ);

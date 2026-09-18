@@ -90,10 +90,29 @@ public final class Events {
         return env.get("events").isJsonArray() ? env.getAsJsonArray("events") : new JsonArray();
     }
 
-    /** One record as the object it is. Records are handed to callers as their own JSON TEXT — so that
-     *  a failure message can print one — and a reader holding one re-enters here to read a field. */
+    /**
+     * One record as the object it is. Records are handed to callers as their own JSON TEXT — so that
+     * a failure message can print one — and a reader holding one re-enters here to read a field.
+     *
+     * <p>And it refuses a REPLY, which is the mirror of {@link #eventsOf}'s refusal above and was
+     * missing until 2026-09-18. A reply's fields live one level down inside {@code events}, so a
+     * record-level read of one resolves nothing and answers {@code null} — indistinguishable from
+     * "this record does not carry the field". *Measured: two asserts in the M1 milestone read
+     * {@code managed} off an `await` REPLY through {@code Boolean.parseBoolean}, so both had been
+     * unable to pass since the reply became parsed rather than scraped — the regex that preceded it
+     * searched the whole string and found the field nested. Neither was in the two-leg pre-diff
+     * gate, so neither red was ever seen.* A record and a reply are both {@code String}, so this is
+     * the only place that can tell them apart.</p>
+     */
     private static JsonObject recordOf(String record) {
-        return envelope(record);
+        JsonObject obj = envelope(record);
+        if (obj.has("events")) {
+            throw new AssertionError("this is an `events since` REPLY, not one record, and a"
+                    + " record-level accessor reads its fields at the top level — where a record's"
+                    + " fields are not. Take the record first (Events.lastRecord / records /"
+                    + " recordsWhere), or ask the reply itself (Events.anyRecordHas): " + record);
+        }
+        return obj;
     }
 
     /** A primitive field as text, whatever type it was written as: a caller asking for a field cannot

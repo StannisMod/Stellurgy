@@ -431,9 +431,8 @@ public class PlanetBedSleepClientGroupE2ETest extends AbstractSharedClientE2ETes
 
     /** A numeric field of a probe reply, failing loudly rather than substituting a plausible zero. */
     private static double readDouble(String json, String key) {
-        java.util.regex.Matcher m = java.util.regex.Pattern
-                .compile("\"" + key + "\":(-?[0-9.eE+\\-]+)").matcher(json);
-        assertTrue("expected a number \"" + key + "\" in: " + json, m.find());
-        return Double.parseDouble(m.group(1));
+        Reply reply = Reply.of(json);
+        assertTrue("expected a number \"" + key + "\" in: " + json, reply.has(key));
+        return reply.number(key);
     }
 }

@@ -407,10 +407,14 @@ public class M1PlanetToPlanetMilestoneE2ETest {
                         + "crosshair was proven to be on that very block above, so a silence here is "
                         + "the interaction never arriving rather than a missed aim" + seatAim.diagnosis,
                 budget * 5);
-        assertTrue("…and the seat must know it belongs to a SHIP. An unmanaged seat is a chair: it "
+        // The RECORD, not the reply: `await` answers with the whole `events since` envelope, whose
+        // top level carries no `managed` at all. Read as a reply this field resolved to null, and
+        // `parseBoolean(null)` is false — so the assertion could not pass, whatever the seat decided.
+        assertEquals("…and the seat must know it belongs to a SHIP. An unmanaged seat is a chair: it "
                         + "seats him and carries no flight input at all, which is a green boarding "
                         + "followed by a craft that will not answer its controls. decision="
-                        + sitDecision, Boolean.parseBoolean(Events.text(sitDecision, "managed")));
+                        + sitDecision,
+                "true", Events.text(Events.lastRecord(sitDecision), "managed"));
 
         JsonObject riding = awaitClientMount(seatClientMark,
                 "a real use-key press aimed at the ship's PILOT SEAT must seat the pilot, as the "
@@ -461,9 +465,13 @@ public class M1PlanetToPlanetMilestoneE2ETest {
         }
         SubsystemStatus statusAfter = SubsystemStatus.read(this::exec);
         String entryDecisions = events.since(entryMark, "entry_decided");
-        assertTrue("the entry gate must have GRANTED this entry (STARTED): " + entryDecisions
+        // The RECORD again: `decision` is a field of an entry_decided record, and asking the reply
+        // for it reads the envelope's top level, where it is not. The subject here is the window —
+        // marked immediately before the climb, and this scenario flies one ship — so the last
+        // record in it is this climb's decision and no other's.
+        assertEquals("the entry gate must have GRANTED this entry (STARTED): " + entryDecisions
                         + " status=" + statusAfter.raw(),
-                "STARTED".equals(Reply.of(entryDecisions).text("decision")));
+                "STARTED", Events.text(Events.lastRecord(entryDecisions), "decision"));
         System.out.println("[M1] leg 4 (powered climb to the cell) " + elapsed(tLeg)
                 + " status=" + statusAfter.raw());
 
@@ -657,12 +665,19 @@ public class M1PlanetToPlanetMilestoneE2ETest {
                         + "a player commits to a destination, and an unarmed ship refuses the jump "
                         + "key outright", budget * 5);
         String armedStatus = exec("artest nav status " + slotDim + " " + describeArgs(navSub));
-        assertTrue("picking a listed address and pressing ARM must leave the ship ARMED at that "
-                        + "address — those two clicks are the whole of how a player commits to a "
-                        + "destination. The console's own verdict on the press: " + armDecision
-                        + " nav=" + armedStatus,
-                "ARMED".equals(Reply.of(armDecision).text("outcome"))
-                        && "true".equals(readString(armedStatus, NAV_ARMED)));
+        // Two claims, so two asserts. `armDecision` is the console's answer to the press, read off
+        // the event window; `armedStatus` is a live status fetched afterwards. Conjoined, a red said
+        // only that one of the two was false and handed the reader two rendered replies to diff —
+        // and the two are not even the same kind of fault: a press that was REFUSED and a press that
+        // was accepted onto a computer that then forgot it are different bugs.
+        assertEquals("pressing ARM must be ANSWERED with ARMED — that press is the whole of how a "
+                        + "player commits to a destination, and a refusal here is the console "
+                        + "declining the commit. The console's own verdict: " + armDecision,
+                "ARMED", Events.text(Events.lastRecord(armDecision), "outcome"));
+        assertEquals("...and the arming the console reported must be the state the ship is actually "
+                        + "in — a computer that answers ARMED and does not hold it refuses the jump "
+                        + "key with nothing to show the pilot why. nav=" + armedStatus,
+                "true", readString(armedStatus, NAV_ARMED));
         // A second clause stood here: that the pilot is TOLD, in his own chat, that the ship is
         // armed. It is gone — the chat line is a rendering of the arming, and the arming itself is
         // what the line above reads, off the navigation computer's own state.
@@ -1212,9 +1227,11 @@ public class M1PlanetToPlanetMilestoneE2ETest {
                 "the use press must REACH the seat when the pilot takes it again — the crosshair was "
                         + "confirmed on the block, so a silence is the interaction and not the aim",
                 budget * 5);
-        assertTrue("…and the seat must still know it belongs to a ship: an unmanaged seat carries no "
+        // The RECORD, not the reply — same reading as the first boarding above.
+        assertEquals("…and the seat must still know it belongs to a ship: an unmanaged seat carries no "
                         + "flight input, so the jump he is about to fire would go nowhere. decision="
-                        + decision, Boolean.parseBoolean(Events.text(decision, "managed")));
+                        + decision,
+                "true", Events.text(Events.lastRecord(decision), "managed"));
         return awaitClientMount(sitClientMark,
                 "the pilot must be back in his seat on the CLIENT before he fires the drive — the "
                         + "jump key is routed through the seat he occupies, and a seating that only "

@@ -143,6 +143,11 @@ public class VSMidTransitRelogControlE2ETest extends AbstractSharedVsClientE2ETe
         PilotSeat seat = PilotSeat.byId(this::exec, originDim, shipId)
                 .requireFound("the pilot seat must be found in the assembled ship, or the test is vacuous");
         int seatX = seat.seatX, seatY = seat.seatY, seatZ = seat.seatZ;
+        // A WORLD-frame pose, and everything below is built on it — the platform, and the cell the
+        // bot is placed into. It is carried across several commands, which is only sound because
+        // nothing has been ordered that can move this hull: it was assembled at its berth and the
+        // departure is not commanded until leg 3. The seat's own seatX/Y/Z above need no such note;
+        // they are SUBSPACE and would survive the hull flying.
         int sx = (int) Math.round(seat.shipWorldX);
         int sy = (int) Math.round(seat.shipWorldY);
         int sz = (int) Math.round(seat.shipWorldZ);

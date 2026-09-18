@@ -7,6 +7,7 @@ import org.junit.Test;
 import org.lwjgl.input.Keyboard;
 import org.valkyrienskies.mod.common.ships.chunk_claims.ShipChunkAllocator;
 import zmaster587.advancedRocketry.test.GameTicks;
+import zmaster587.advancedRocketry.test.Reply;
 import zmaster587.advancedRocketry.test.PlayerState;
 
 import java.nio.file.Files;
@@ -390,9 +391,10 @@ public class SpikeFarCoordinatePlayabilityTest extends AbstractClientE2ETest {
     }
 
     private static double field(String json, String key) {
-        java.util.regex.Matcher m = java.util.regex.Pattern
-                .compile("\"" + key + "\"\\s*:\\s*([-0-9.eE]+)").matcher(json);
-        return m.find() ? Double.parseDouble(m.group(1)) : Double.NaN;
+        // NaN on absence is deliberate and CHECKED by the callers, which grade a rung and must be
+        // able to say "not measured" apart from "measured zero" — at a far coordinate those are the
+        // two outcomes the whole spike exists to tell apart.
+        return Reply.of(json).numberOr(key, Double.NaN);
     }
 
     /** One rung's four numbers plus the verdict they earn against the origin control. */

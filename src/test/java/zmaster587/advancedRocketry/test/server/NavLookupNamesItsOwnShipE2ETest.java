@@ -114,12 +114,12 @@ public class NavLookupNamesItsOwnShipE2ETest extends AbstractSharedServerTest {
      * where it landed even when that ship carries no pilot seat — which these two do not.
      */
     private int[] flightComputerOf(String shipId) throws Exception {
-        String reply = exec("artest vs seat-input-by-id 0 " + shipId + " 0 0 0 0 0 0");
-        if (!reply.contains("\"afcX\"")) {
+        Reply reply = Reply.of("artest vs seat-input-by-id",
+                exec("artest vs seat-input-by-id 0 " + shipId + " 0 0 0 0 0 0"));
+        if (!reply.has("afcX")) {
             return null;
         }
-        return new int[]{extractInt(reply, "afcX"), extractInt(reply, "afcY"),
-                extractInt(reply, "afcZ")};
+        return new int[]{reply.integer("afcX"), reply.integer("afcY"), reply.integer("afcZ")};
     }
 
     @After
@@ -152,21 +152,11 @@ public class NavLookupNamesItsOwnShipE2ETest extends AbstractSharedServerTest {
         String fixture = exec("artest fixture rocket 0 " + baseX + " " + baseY + " " + baseZ
                 + " " + variant);
         assertTrue("fixture (" + variant + ") failed: " + fixture, Reply.of(fixture).ok());
-        java.util.regex.Matcher bp = java.util.regex.Pattern
-                .compile("\"builderPos\":\\[(-?\\d+),(-?\\d+),(-?\\d+)]").matcher(fixture);
-        assertTrue("fixture (" + variant + ") missing builderPos: " + fixture, bp.find());
-        return bp.group(1) + " " + bp.group(2) + " " + bp.group(3);
+        int[] bp = Reply.of("artest fixture rocket", fixture).requireBlockPos("builderPos");
+        return bp[0] + " " + bp[1] + " " + bp[2];
     }
 
     private static int extractInt(String json, String key) {
-        java.util.regex.Matcher m = java.util.regex.Pattern
-                .compile("\"" + key + "\":(-?\\d+)").matcher(json);
-        return m.find() ? Integer.parseInt(m.group(1)) : Integer.MIN_VALUE;
-    }
-
-    private static String extractString(String json, String key) {
-        java.util.regex.Matcher m = java.util.regex.Pattern
-                .compile("\"" + key + "\":\"([^\"]*)\"").matcher(json);
-        return m.find() ? m.group(1) : null;
+        return Reply.of(json).integer(key);
     }
 }
