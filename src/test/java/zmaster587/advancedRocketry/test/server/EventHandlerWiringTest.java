@@ -44,7 +44,7 @@ public class EventHandlerWiringTest extends AbstractSharedServerTest {
         String joined = String.join("\n", client().execute("artest dim list"));
         Assume.assumeFalse(
                 "No AR dimensions registered — skipping (empty galaxy?)",
-                joined.contains("\"arDimensions\":[]"));
+                (Reply.of(joined).arrayLength("arDimensions") == 0));
         Reply dims = Reply.of("artest dim list", joined);
         assertTrue("could not parse arDimensions array: " + joined, dims.has(AR_DIMS_ARRAY_PATTERN));
         for (int dim : dims.intArray(AR_DIMS_ARRAY_PATTERN)) {
@@ -65,7 +65,7 @@ public class EventHandlerWiringTest extends AbstractSharedServerTest {
         // setRain path that follows it.
         String loaded = String.join("\n", client().execute("artest dim load " + dim));
         assertTrue("dim load probe did not report loaded=true: " + loaded,
-                loaded.contains("\"loaded\":true"));
+                Reply.of(loaded).bool("loaded", false));
 
         DimWeather weather = weather(dim);
         assertTrue("WeatherEventHandler did not install the B1 wrapper on AR dim load: "

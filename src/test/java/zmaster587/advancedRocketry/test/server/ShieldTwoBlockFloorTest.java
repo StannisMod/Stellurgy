@@ -1,5 +1,6 @@
 package zmaster587.advancedRocketry.test.server;
 
+import zmaster587.advancedRocketry.test.Reply;
 import org.junit.Test;
 
 import java.util.List;
@@ -77,7 +78,7 @@ public class ShieldTwoBlockFloorTest extends AbstractSharedServerTest {
     private void place(String block, int x, int z) throws Exception {
         String resp = exec("artest place " + DIM + " " + x + " " + Y + " " + z + " " + block);
         assertTrue("failed to place " + block + " at " + x + "," + Y + "," + z + ": " + resp,
-                resp.contains("\"placed\":true"));
+                Reply.of(resp).bool("placed", false));
     }
 
     private static String exec(String command) throws Exception {

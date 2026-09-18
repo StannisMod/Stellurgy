@@ -153,7 +153,7 @@ public class MachineGuiClientGroupE2ETest extends AbstractSharedClientE2ETest {
         warmupPlotChunks();
         String place = exec("artest place " + dim + " " + x + " " + Y + " " + z + " " + blockId);
         scenario().requireArranged("could not place " + blockId + ": " + place,
-                place.contains("\"placed\":true") || place.contains("\"ok\":true"));
+                Reply.of(place).bool("placed", false) || Reply.of(place).ok());
 
         // Stand ON the machine's own column, one block up, looking down at its top face. The
         // source classes all used exactly this pose; in open air it needs no terrain at all.
@@ -318,10 +318,10 @@ public class MachineGuiClientGroupE2ETest extends AbstractSharedClientE2ETest {
         String footing = exec("artest fill " + dim + " " + baseX + " " + (Y - 1) + " " + baseZ
                 + " " + (baseX + 12) + " " + (Y - 1) + " " + (baseZ + 12) + " minecraft:stone");
         scenario().requireArranged("pad footing fill must succeed: " + footing,
-                footing.contains("\"ok\":true"));
+                Reply.of(footing).ok());
 
         String fixture = exec("artest fixture rocket " + dim + " " + baseX + " " + Y + " " + baseZ);
-        scenario().requireArranged("fixture rocket failed: " + fixture, fixture.contains("\"ok\":true"));
+        scenario().requireArranged("fixture rocket failed: " + fixture, Reply.of(fixture).ok());
         int[] bp = Reply.of(fixture).blockPos(BUILDER_POS);
         scenario().requireArranged("fixture response missing builderPos: " + fixture, bp != null);
         int bx = bp[0];
@@ -409,7 +409,7 @@ public class MachineGuiClientGroupE2ETest extends AbstractSharedClientE2ETest {
         assertTrue("the assembled rocket must arrive in the CLIENT's world - a rocket only the"
                         + " server knows about is not one the player can board. Entities the client"
                         + " saw join since the first click: " + joined,
-                joined.contains("\"cls\":\"EntityRocket\""));
+                Events.anyRecordHas(joined, "cls", "EntityRocket"));
 
         bot().closeScreen();
     }
@@ -466,7 +466,7 @@ public class MachineGuiClientGroupE2ETest extends AbstractSharedClientE2ETest {
         String fire = exec("artest infra railgun-fire " + dim + " " + sx + " " + Y + " " + sz
                 + " " + dim + " " + dx + " " + Y + " " + dz + " minecraft:cobblestone 16");
         scenario().requireArranged("railgun-fire probe must succeed: " + fire,
-                fire.contains("\"ok\":true"));
+                Reply.of(fire).ok());
 
         assertTrue("railgun MUST fire to a linked railgun in the same dimension with a client "
                 + "connected (issue #61 baseline); fire=" + fire,
@@ -499,7 +499,7 @@ public class MachineGuiClientGroupE2ETest extends AbstractSharedClientE2ETest {
         String fire = exec("artest infra railgun-fire " + dim + " " + sx + " " + Y + " " + sz
                 + " " + unregisteredDim + " 0 64 0 minecraft:cobblestone 16");
         scenario().requireArranged("railgun-fire probe must succeed: " + fire,
-                fire.contains("\"ok\":true"));
+                Reply.of(fire).ok());
 
         assertTrue("railgun must NOT fire at an unloadable (unregistered) destination; fire=" + fire,
                 "false".equals(readGroup(fire, FIRED)));
@@ -515,10 +515,10 @@ public class MachineGuiClientGroupE2ETest extends AbstractSharedClientE2ETest {
         int dim = plot().dim;
         String fixture = exec("artest fixture multiblock railgun " + dim + " " + x + " " + Y + " " + z);
         scenario().requireArranged("fixture multiblock railgun failed at " + x + "," + Y + "," + z
-                + ": " + fixture, fixture.contains("\"ok\":true"));
+                + ": " + fixture, Reply.of(fixture).ok());
         String tryComplete = exec("artest machine try-complete " + dim + " " + x + " " + Y + " " + z);
         scenario().requireArranged("railgun must validate at " + x + "," + Y + "," + z + ": "
-                + tryComplete, tryComplete.contains("\"isComplete\":true"));
+                + tryComplete, Reply.of(tryComplete).bool("isComplete", false));
     }
 
     // ── guidance computer ─────────────────────────────────────────────────────
@@ -587,18 +587,18 @@ public class MachineGuiClientGroupE2ETest extends AbstractSharedClientE2ETest {
         String fixture = exec("artest fixture multiblock observatory " + dim + " " + x + " " + Y
                 + " " + z);
         scenario().requireArranged("fixture multiblock observatory failed: " + fixture,
-                fixture.contains("\"ok\":true"));
+                Reply.of(fixture).ok());
 
         String completed = "";
         for (int attempt = 0; attempt < 8; attempt++) {
             completed = exec("artest machine try-complete " + dim + " " + x + " " + Y + " " + z);
-            if (completed.contains("\"isComplete\":true")) {
+            if (Reply.of(completed).bool("isComplete", false)) {
                 break;
             }
             bot().waitTicks(10);
         }
         scenario().requireArranged("the observatory structure never validated: " + completed,
-                completed.contains("\"isComplete\":true"));
+                Reply.of(completed).bool("isComplete", false));
 
         // Stand on the structure's open face, one block from the controller, looking at it. The
         // footing is not decoration: the fixture clears its own footprint to air, and a player
@@ -664,7 +664,7 @@ public class MachineGuiClientGroupE2ETest extends AbstractSharedClientE2ETest {
         exec("artest config set telescopeConeHalfAngleDegrees 20");
         String crystal = exec("artest telescope crystal " + where);
         scenario().requireArranged("could not put a crystal in the observatory: " + crystal,
-                crystal.contains("\"ok\":true"));
+                Reply.of(crystal).ok());
 
         // The reader REFUSES a world with no galactic address, so the arrangement check that used to
         // stand here — a `contains` on the rendered `"origin":"` — is the read itself.
@@ -702,7 +702,7 @@ public class MachineGuiClientGroupE2ETest extends AbstractSharedClientE2ETest {
                 + (home[0] + aimDistance * stepCells + 13L)
                 + " " + home[1] + " " + home[2]);
         scenario().requireArranged("could not place a system to be found: " + system,
-                system.contains("\"ok\":true"));
+                Reply.of(system).ok());
 
         // Observe. The survey is a chain and is asserted as one: the aim ACCEPTED the region (it can
         // refuse — no origin, or a region it will not look at, and production only logs that), and
@@ -718,7 +718,7 @@ public class MachineGuiClientGroupE2ETest extends AbstractSharedClientE2ETest {
         String begun = events.since(scanMark, "region_scan_begun");
         assertTrue("the instrument must ACCEPT the region the operator aimed it at - a refusal here"
                 + " is production's own verdict and the crystal below could never fill: " + begun,
-                begun.contains("\"accepted\":true"));
+                Events.anyRecordHas(begun, "accepted", "true"));
 
         scenario().measuring("the crystal in the machine, after a survey driven only by clicks");
         // The addresses ARE an accumulation and stay a single read — but what the test was waiting
@@ -779,9 +779,9 @@ public class MachineGuiClientGroupE2ETest extends AbstractSharedClientE2ETest {
                 + " " + at[2]);
         assertTrue("clicking planet button " + planetId
                 + " did not register a selection server-side: " + selectorInfo,
-                selectorInfo.contains("\"hasSelection\":true"));
+                Reply.of(selectorInfo).bool("hasSelection", false));
         assertTrue("selection did not resolve to a planet: " + selectorInfo,
-                selectorInfo.contains("\"selectedDim\":"));
+                Reply.of(selectorInfo).has("selectedDim"));
 
         bot().closeScreen();
     }
@@ -822,12 +822,12 @@ public class MachineGuiClientGroupE2ETest extends AbstractSharedClientE2ETest {
         scenario().arranging("seed the brought crystal and give the ship a blank one to copy into");
         String seed = exec("artest nav crystal " + where + " 0 " + SEEDED + " " + FIRST_SECTOR);
         scenario().requireArranged("the source slot must hold a crystal carrying " + SEEDED
-                + " addresses: " + seed, seed.contains("\"addresses\":" + SEEDED));
+                + " addresses: " + seed, String.valueOf(SEEDED).equals(Reply.of(seed).text("addresses")));
         // The ship's own crystal is the DESTINATION, and the copy is add-only into it: with that
         // slot empty there is nowhere to copy to and the button is a silent no-op.
         String shipCrystal = exec("artest nav crystal " + where + " 1 0");
         scenario().requireArranged("the ship slot must hold a (blank) crystal to copy INTO: "
-                + shipCrystal, shipCrystal.contains("\"addresses\":0"));
+                + shipCrystal, (Reply.of(shipCrystal).integerOr("addresses", Integer.MIN_VALUE) == 0));
         NavStatus before = NavStatus.of(exec("artest nav status " + where));
         scenario().requireArranged("ARRANGEMENT CONTROL: the ship's own crystal must start EMPTY, "
                 + "or the copy leg below cannot tell a successful copy from a pre-loaded console: "
@@ -883,7 +883,7 @@ public class MachineGuiClientGroupE2ETest extends AbstractSharedClientE2ETest {
                 "nav_command_received", "crystal_copied");
         String copies = events.since(copyMark, "crystal_copied");
         assertTrue("the console must have had a ship crystal to copy INTO, or the counts below are"
-                + " measuring the arrangement: " + copies, copies.contains("\"shipCrystal\":true"));
+                + " measuring the arrangement: " + copies, Events.anyRecordHas(copies, "shipCrystal", "true"));
         NavStatus copied = NavStatus.of(exec("artest nav status " + where));
         assertEquals("clicking COPY must write the brought crystal's addresses into the ship's own "
                 + "crystal: " + copied.raw() + " copies=" + copies, SEEDED, copied.shipCrystals);
@@ -1030,7 +1030,7 @@ public class MachineGuiClientGroupE2ETest extends AbstractSharedClientE2ETest {
         exec("artest player inv-bypass remove");
         String place = exec("artest place " + dim + " " + x + " " + Y + " " + z + " minecraft:chest");
         scenario().requireArranged("chest place must succeed: " + place,
-                place.contains("\"placed\":true"));
+                Reply.of(place).bool("placed", false));
         long standMark = clientEvents().mark();
         exec("tp @a " + (x + 0.5) + " " + (Y + 2) + " " + (z + 0.5) + " 0 90");
         awaitClientPlacedNear(standMark, x + 0.5, z + 0.5,
@@ -1046,7 +1046,7 @@ public class MachineGuiClientGroupE2ETest extends AbstractSharedClientE2ETest {
         long openOnClient = clientEvents().mark();
         String open = exec("artest player open-chest " + dim + " " + x + " " + Y + " " + z);
         scenario().requireArranged("server-side open-chest must succeed: " + open,
-                open.contains("\"ok\":true"));
+                Reply.of(open).ok());
         events.await(openMark, "container_opened", "the server must actually OPEN a container: with"
                 + " none open there is nothing for vanilla's distance check to close and both legs"
                 + " below would be measuring an empty screen", 100);
@@ -1055,12 +1055,12 @@ public class MachineGuiClientGroupE2ETest extends AbstractSharedClientE2ETest {
         scenario().requireArranged("the real client must DISPLAY the chest GUI — this scenario is"
                 + " about a screen surviving a distance, so a screen that never arrived is an"
                 + " arrangement failure, not a verdict on the redirect. openResp=" + open
-                + " screensDisplayed=" + displayed, displayed.contains("\"gui\":\"GuiChest\""));
+                + " screensDisplayed=" + displayed, Events.anyRecordHas(displayed, "gui", "GuiChest"));
 
         scenario().asserting("with the bypass on, the GUI survives a 200-block teleport");
         String addResp = exec("artest player inv-bypass add");
         scenario().requireArranged("inv-bypass add must report inBypass:true: " + addResp,
-                addResp.contains("\"inBypass\":true"));
+                Reply.of(addResp).bool("inBypass", false));
 
         long farMark = events.markInstrumented();
         long farClientMark = clientEvents().mark();
@@ -1101,7 +1101,7 @@ public class MachineGuiClientGroupE2ETest extends AbstractSharedClientE2ETest {
         long closeOnClient = clientEvents().mark();
         String removeResp = exec("artest player inv-bypass remove");
         scenario().requireArranged("inv-bypass remove must report inBypass:false: " + removeResp,
-                removeResp.contains("\"inBypass\":false"));
+                (!Reply.of(removeResp).bool("inBypass", true)));
 
         // The close is a chain, and its ORDER is one server call stack: the redirect answers, and
         // vanilla's own `if` closes the screen on that answer. Asserting it as a chain is what
@@ -1112,7 +1112,8 @@ public class MachineGuiClientGroupE2ETest extends AbstractSharedClientE2ETest {
                 "container_interact_checked", "container_closed");
         String checks = events.since(closeMark, "container_interact_checked");
         assertTrue("the reach check must have come back FALSE — a close for any other reason pins"
-                + " nothing about the redirect: " + checks, checks.contains("\"allowed\":false"));
+                + " nothing about the redirect: " + checks,
+                Events.anyRecordHas(checks, "allowed", "false"));
         // The wait IS the assertion now: it fails carrying every screen the client recorded, which
         // is what the `assertTrue` below it used to print after re-checking the wait's own exit
         // condition.

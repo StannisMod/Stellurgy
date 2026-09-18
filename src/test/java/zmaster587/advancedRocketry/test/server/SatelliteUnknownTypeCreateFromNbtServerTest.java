@@ -1,5 +1,6 @@
 package zmaster587.advancedRocketry.test.server;
 
+import zmaster587.advancedRocketry.test.Reply;
 import org.junit.Test;
 
 import static org.junit.Assert.assertTrue;
@@ -31,6 +32,6 @@ public class SatelliteUnknownTypeCreateFromNbtServerTest extends AbstractSharedS
         assertTrue("SatelliteRegistry.createFromNBT with an unregistered dataType "
                 + "must return null server-side (no NullPointerException, no "
                 + "placeholder) so the caller drops the satellite. Got: " + resp,
-                resp.contains("\"satClass\":\"null\""));
+                "null".equals(Reply.of(resp).text("satClass")));
     }
 }

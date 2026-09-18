@@ -1,5 +1,6 @@
 package zmaster587.advancedRocketry.test.server;
 
+import zmaster587.advancedRocketry.test.Reply;
 import org.junit.Test;
 
 import zmaster587.advancedRocketry.test.FixtureSite;
@@ -35,9 +36,9 @@ public class TerraformerMultiblockTest extends AbstractSharedServerTest {
         String fixture = join(client().execute(
                 "artest fixture multiblock terraformer 0 " + CX + " " + CY + " " + CZ));
         assertTrue("fixture multiblock terraformer failed: " + fixture,
-                fixture.contains("\"ok\":true"));
+                Reply.of(fixture).ok());
         assertTrue("fixture didn't place any blocks: " + fixture,
-                fixture.contains("\"placed\":") && !fixture.contains("\"placed\":0"));
+                Reply.of(fixture).has("placed") && !(Reply.of(fixture).integerOr("placed", Integer.MIN_VALUE) == 0));
 
         String info = join(client().execute(
                 "artest machine info 0 " + CX + " " + CY + " " + CZ));
@@ -47,9 +48,9 @@ public class TerraformerMultiblockTest extends AbstractSharedServerTest {
         String tryComplete = join(client().execute(
                 "artest machine try-complete 0 " + CX + " " + CY + " " + CZ));
         assertTrue("try-complete probe errored: " + tryComplete,
-                tryComplete.contains("\"ok\":true"));
+                Reply.of(tryComplete).ok());
         assertTrue("terraformer multiblock didn't validate (isComplete=false): " + tryComplete,
-                tryComplete.contains("\"isComplete\":true"));
+                Reply.of(tryComplete).bool("isComplete", false));
     }
 
     @Test
@@ -57,7 +58,7 @@ public class TerraformerMultiblockTest extends AbstractSharedServerTest {
         int cx = CX + 60, cy = CY, cz = CZ;
         String fixture = join(client().execute(
                 "artest fixture multiblock terraformer 0 " + cx + " " + cy + " " + cz));
-        assertTrue("fixture failed: " + fixture, fixture.contains("\"ok\":true"));
+        assertTrue("fixture failed: " + fixture, Reply.of(fixture).ok());
 
         // The controller sits in the equator ring. An advStructureBlock cell
         // directly adjacent at globalX = cx + 1 (one block east of the
@@ -67,12 +68,12 @@ public class TerraformerMultiblockTest extends AbstractSharedServerTest {
         String breakAdj = join(client().execute(
                 "artest place 0 " + (cx + 1) + " " + cy + " " + cz + " minecraft:stone"));
         assertTrue("could not replace neighbour: " + breakAdj,
-                breakAdj.contains("\"ok\":true"));
+                Reply.of(breakAdj).ok());
 
         String broken = join(client().execute(
                 "artest machine try-complete 0 " + cx + " " + cy + " " + cz));
         assertTrue("terraformer validated despite missing neighbour: " + broken,
-                broken.contains("\"isComplete\":false"));
+                (!Reply.of(broken).bool("isComplete", true)));
     }
 
     private static String join(java.util.List<String> resp) {

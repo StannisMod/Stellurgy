@@ -1,6 +1,7 @@
 package zmaster587.advancedRocketry.test.server;
 
 // migrated to AbstractSharedServerTest
+import zmaster587.advancedRocketry.test.Reply;
 import org.junit.Test;
 
 import static org.junit.Assert.assertTrue;
@@ -18,7 +19,7 @@ public class CommandsSmokeTest extends AbstractSharedServerTest {
     public void primaryCommandsAreRegistered() throws Exception {
         String joined = String.join("\n", client().execute("artest commands list"));
         assertTrue("/artest commands list schema invalid: " + joined,
-                joined.contains("\"commands\":["));
+                (Reply.of(joined).arrayLength("commands") >= 0));
         assertTrue("/artest itself missing from command list (test mode broken?): " + joined,
                 joined.contains("\"artest\""));
         boolean hasAR = joined.contains("\"advancedrocketry\"") || joined.contains("\"advrocketry\"")
@@ -39,7 +40,7 @@ public class CommandsSmokeTest extends AbstractSharedServerTest {
         // Sanity: server is still responsive after running help.
         String alive = String.join("\n", client().execute("artest commands list"));
         assertTrue("server unresponsive after /advancedrocketry help: " + alive,
-                alive.contains("\"commands\":["));
+                (Reply.of(alive).arrayLength("commands") >= 0));
     }
 
     @Test
@@ -53,7 +54,7 @@ public class CommandsSmokeTest extends AbstractSharedServerTest {
 
         String alive = String.join("\n", client().execute("artest commands list"));
         assertTrue("server unresponsive after malformed /advancedrocketry: " + alive,
-                alive.contains("\"commands\":["));
+                (Reply.of(alive).arrayLength("commands") >= 0));
     }
 
     @Test
@@ -64,6 +65,6 @@ public class CommandsSmokeTest extends AbstractSharedServerTest {
         // fallback branch.
         String reply = String.join("\n", client().execute("artest registry bogus"));
         assertTrue("expected JSON error for unknown registry subcommand, got: " + reply,
-                reply.contains("\"error\"") && reply.contains("unknown registry subcommand"));
+                Reply.of(reply).has("error") && reply.contains("unknown registry subcommand"));
     }
 }

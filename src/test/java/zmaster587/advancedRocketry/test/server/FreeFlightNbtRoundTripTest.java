@@ -65,7 +65,7 @@ public class FreeFlightNbtRoundTripTest extends AbstractSharedServerTest {
 
         String fixture = ok(client().execute(
                 "artest fixture rocket 0 " + baseX + " " + baseY + " " + baseZ + " simple"));
-        assertTrue("fixture failed: " + fixture, fixture.contains("\"ok\":true"));
+        assertTrue("fixture failed: " + fixture, Reply.of(fixture).ok());
         int[] bp = Reply.of(fixture).blockPos(BUILDER_POS);
         assertTrue("fixture missing builderPos: " + fixture, bp != null);
         int bx = bp[0];
@@ -74,7 +74,7 @@ public class FreeFlightNbtRoundTripTest extends AbstractSharedServerTest {
 
         String assemble = ok(client().execute(
                 "artest rocket assemble 0 " + bx + " " + by + " " + bz));
-        assertTrue("assemble failed: " + assemble, assemble.contains("\"ok\":true"));
+        assertTrue("assemble failed: " + assemble, Reply.of(assemble).ok());
 
         String list = ok(client().execute("artest rocket list 0"));
         java.util.List<RocketList.Entry> built = RocketList.of(list);
@@ -87,7 +87,7 @@ public class FreeFlightNbtRoundTripTest extends AbstractSharedServerTest {
         int id = buildAndAssemble(FixtureSite.openAir(0, 3300, 700));
 
         String r = ok(client().execute("artest entity rocket-nbt-roundtrip 0 " + id));
-        assertTrue("round-trip probe failed: " + r, r.contains("\"ok\":true"));
+        assertTrue("round-trip probe failed: " + r, Reply.of(r).ok());
 
         // Flight mode survives.
         assertEquals("flight mode must survive save/load: " + r,
@@ -118,7 +118,7 @@ public class FreeFlightNbtRoundTripTest extends AbstractSharedServerTest {
         int id = buildAndAssemble(FixtureSite.openAir(0, 3340, 700));
 
         String r = ok(client().execute("artest entity rocket-nbt-roundtrip 0 " + id));
-        assertTrue("round-trip probe failed: " + r, r.contains("\"ok\":true"));
+        assertTrue("round-trip probe failed: " + r, Reply.of(r).ok());
 
         // A save with no ffQuat* keys must load as the upright identity attitude.
         double tol = 1e-3;

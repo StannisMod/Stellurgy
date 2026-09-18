@@ -488,12 +488,12 @@ public abstract class AbstractSpaceLoginRestoreClientTest {
         // which is exactly that statement, and it also proves the record was rebuilt rather than
         // merely surviving.
         String tag = exec("artest space aboard-tag " + BOT);
-        assertTrue("being re-seated must leave him aboard again: " + tag, tag.contains("\"tagged\":true"));
+        assertTrue("being re-seated must leave him aboard again: " + tag, Reply.of(tag).bool("tagged", false));
         assertTrue("he must be back aboard the SAME ship, not some other one: " + tag
                 + " (entered ship " + arrangedShipId + ")", tag.contains(arrangedShipId));
         assertTrue("and the slot dimension he woke up in must be the one bound to his ship's cell "
                 + arrangedCellKey + " - a different cell would mean the restore materialized the "
-                + "wrong address: " + tag, tag.contains("\"cell\":\"" + arrangedCellKey + "\""));
+                + "wrong address: " + tag, String.valueOf(arrangedCellKey).equals(Reply.of(tag).text("cell")));
 
         // Where the ship actually is, right now, in the dimension the client reports. Read from the
         // server rather than remembered from boot 1, so the comparison is against the ship's live
@@ -977,7 +977,7 @@ public abstract class AbstractSpaceLoginRestoreClientTest {
                 + " 0 " + WINDOW_SPEED_BLOCKS_PER_SECOND + " 0");
         requireArranged("the drive must reach THIS ship's own flight computer, or the window "
                 + "below observes a motionless deck and cannot fail: " + driven,
-                driven.contains("\"afcResolved\":true"));
+                Reply.of(driven).bool("afcResolved", false));
         bot().waitTicks(THROTTLE_PULSE_TICKS);
     }
 
@@ -1061,7 +1061,7 @@ public abstract class AbstractSpaceLoginRestoreClientTest {
             }
             bot().waitTicks(20);
             String dismount = exec("artest player dismount");
-            if (!dismount.contains("\"ok\":true")) {
+            if (!Reply.of(dismount).ok()) {
                 return "<could not stand up again: " + dismount + ">";
             }
             bot().waitTicks(40);
@@ -1228,7 +1228,7 @@ public abstract class AbstractSpaceLoginRestoreClientTest {
         String tag = exec("artest space aboard-tag " + BOT);
         assertTrue("sitting down must leave a durable aboard record - it is the only thing that "
                 + "carries the pilot's ship across the restart: " + tag + " | stamps: " + stamped,
-                tag.contains("\"tagged\":true"));
+                Reply.of(tag).bool("tagged", false));
         assertTrue("and that record must name the ship the entry minted, not some other one: " + tag
                 + " (entered ship " + arrangedShipId + ")", tag.contains(arrangedShipId));
         return slotDim;
@@ -1267,7 +1267,7 @@ public abstract class AbstractSpaceLoginRestoreClientTest {
         // is a different arrangement than the one this test believes it is running.
         String launch = exec("artest space launch-cell " + LAUNCH_DIM);
         assertTrue("the launch dimension must resolve to a galactic address: " + launch,
-                launch.contains("\"ok\":true") && !launch.contains("\"cellKey\":null"));
+                Reply.of(launch).ok() && !launch.contains("\"cellKey\":null"));
 
         // Build a PILOTED tier-2 ship on the ground and assemble it with the real assembler - which
         // is what mints the durable ship id the aboard record and the ledger are both keyed by.
@@ -1279,7 +1279,7 @@ public abstract class AbstractSpaceLoginRestoreClientTest {
         long assemblyMark = events.mark();
         String assembled = exec("artest rocket assemble " + LAUNCH_DIM + " " + coords);
         assertTrue("a build carrying a flight computer must become a ship, not a rocket: " + assembled,
-                assembled.contains("\"rocketCount\":0"));
+                (Reply.of(assembled).integerOr("rocketCount", Integer.MIN_VALUE) == 0));
         assertTrue("the ship never assembled in the launch dimension",
                 waitForLoadedShip(events, assemblyMark, LAUNCH_DIM) >= 1);
 
@@ -1302,7 +1302,7 @@ public abstract class AbstractSpaceLoginRestoreClientTest {
         long entryMark = events.mark();
         String climb = exec("artest vs teleport-ship-by-id " + LAUNCH_DIM + " " + srcVsId
                 + " " + sx + " " + ABOVE_CEILING_Y + " " + sz);
-        assertTrue("the climb past the orbit ceiling failed: " + climb, climb.contains("\"ok\":true"));
+        assertTrue("the climb past the orbit ceiling failed: " + climb, Reply.of(climb).ok());
         exec("artest vs unpark-by-id " + LAUNCH_DIM + " " + srcVsId);
 
         // The flight computer's own tick now runs the entry: it crosses the ship into the launch
@@ -1359,7 +1359,7 @@ public abstract class AbstractSpaceLoginRestoreClientTest {
                 + " 0 0 0");
         requireArranged("the settled ship must be left holding station like a flown ship, or "
                 + "its physics never comes on and nothing can be aboard its deck: " + holdsStation,
-                holdsStation.contains("\"afcResolved\":true"));
+                Reply.of(holdsStation).bool("afcResolved", false));
 
         return slotDim;
     }
@@ -1390,7 +1390,7 @@ public abstract class AbstractSpaceLoginRestoreClientTest {
 
         String launch = exec("artest space launch-cell " + LAUNCH_DIM);
         assertTrue("the launch dimension must resolve to a galactic address: " + launch,
-                launch.contains("\"ok\":true") && !launch.contains("\"cellKey\":null"));
+                Reply.of(launch).ok() && !launch.contains("\"cellKey\":null"));
 
         Events events = events();
         clearArea(SRC_X, SRC_Z);
@@ -1398,7 +1398,7 @@ public abstract class AbstractSpaceLoginRestoreClientTest {
         long assemblyMark = events.mark();
         String assembled = exec("artest rocket assemble " + LAUNCH_DIM + " " + coords);
         assertTrue("a build carrying a flight computer must become a ship, not a rocket: " + assembled,
-                assembled.contains("\"rocketCount\":0"));
+                (Reply.of(assembled).integerOr("rocketCount", Integer.MIN_VALUE) == 0));
         assertTrue("the ship never assembled in the launch dimension",
                 waitForLoadedShip(events, assemblyMark, LAUNCH_DIM) >= 1);
 
@@ -1449,7 +1449,7 @@ public abstract class AbstractSpaceLoginRestoreClientTest {
         assertTrue("a pilot sitting on a planet must NOT yet carry an aboard record - the record "
                         + "means 'aboard a ship in a cell', and reading it as set here would make the "
                         + "post-arrival reading vacuous: " + groundTag,
-                groundTag.contains("\"tagged\":false"));
+                (!Reply.of(groundTag).bool("tagged", true)));
 
         // Fly, with him in the chair the whole way. Addressed to HIS ship's flight computer: a
         // seated rider is what keeps the input alive there (a riderless dummy clears it every tick),
@@ -1457,14 +1457,14 @@ public abstract class AbstractSpaceLoginRestoreClientTest {
         String heldClimb = exec("artest vs ff-input-by-id " + LAUNCH_DIM + " " + groundShipId
                 + " " + HELD_CLIMB);
         requireArranged("the throttle must reach the seated pilot's own flight computer: "
-                + heldClimb, heldClimb.contains("\"afcResolved\":true"));
+                + heldClimb, Reply.of(heldClimb).bool("afcResolved", false));
         // Both marks BEFORE the lift: the entry is committed on the flight computer's own tick, so
         // there is no later moment at which a reader could still be sure it had not already run.
         long entryMark = events.mark();
         long clientEntryMark = clientEvents().mark();
         String climb = exec("artest vs teleport-ship-by-id " + LAUNCH_DIM + " " + groundShipId
                 + " " + sx + " " + ABOVE_CEILING_Y + " " + sz);
-        assertTrue("the climb past the orbit ceiling failed: " + climb, climb.contains("\"ok\":true"));
+        assertTrue("the climb past the orbit ceiling failed: " + climb, Reply.of(climb).ok());
         exec("artest vs unpark-by-id " + LAUNCH_DIM + " " + groundShipId);
         bot().waitTicks(20);
         requireArranged("the pilot must still be in his seat as the ship reaches the ceiling "
@@ -1509,7 +1509,7 @@ public abstract class AbstractSpaceLoginRestoreClientTest {
         // require - so a ship left holding it would make every one of them unreadable.
         String parked = exec("artest vs ff-cruise-at " + slotDim + " " + arrangedAfcPos + " 0 0 0");
         requireArranged("the arrived ship must be left holding station: " + parked,
-                parked.contains("\"afcResolved\":true"));
+                Reply.of(parked).bool("afcResolved", false));
 
         // He rode his own ship across the seam: no probe transferred him, so a wrong dimension here
         // is the crossing failing to carry its crew, not an arrangement that walked him somewhere.
@@ -1559,7 +1559,7 @@ public abstract class AbstractSpaceLoginRestoreClientTest {
         assertTrue("a pilot who boarded on the ground and rode his ship into a cell must carry the "
                         + "durable aboard record - it is the only evidence the restore has that he "
                         + "was ever aboard: " + tag + " | stamps: " + stamped,
-                tag.contains("\"tagged\":true"));
+                Reply.of(tag).bool("tagged", false));
         assertTrue("and that record must name the ship the entry minted: " + tag
                 + " (entered ship " + arrangedShipId + ")", tag.contains(arrangedShipId));
         return slotDim;
@@ -1610,7 +1610,7 @@ public abstract class AbstractSpaceLoginRestoreClientTest {
         // in a javadoc, that a whole class of environment is handled.
         org.junit.Assume.assumeTrue("Valkyrien Skies is absent, so the production subsystem under"
                 + " test never registered and there is nothing here to exercise: " + vs,
-                vs.contains("\"available\":true"));
+                Reply.of(vs).bool("available", false));
     }
 
     // --- lifecycle ---------------------------------------------------------------------------------
@@ -1763,7 +1763,7 @@ public abstract class AbstractSpaceLoginRestoreClientTest {
     protected String standUpAndAwaitTheStandingRecord(Events events) throws Exception {
         long mark = events.mark();
         String dismount = exec("artest player dismount");
-        assertTrue("the pilot must leave his seat: " + dismount, dismount.contains("\"ok\":true"));
+        assertTrue("the pilot must leave his seat: " + dismount, Reply.of(dismount).ok());
         events.assertChain(mark, "standing up on his own deck must keep him aboard: he leaves the "
                         + "mount, and the reconciler's next pass re-stamps his durable record. A "
                         + "record DROPPED here (an aboard_record_cleared in the chain below instead "
@@ -1822,7 +1822,7 @@ public abstract class AbstractSpaceLoginRestoreClientTest {
                 String found = arrangedShipId == null
                         ? exec("artest space find-afc " + trimmed)
                         : exec("artest space find-afc " + trimmed + " " + arrangedShipId);
-                if (found.contains("\"found\":true")) {
+                if (Reply.of(found).bool("found", false)) {
                     // Its flight computer's own block position rides along. The ledger's id and the
                     // VS ship uuid are DIFFERENT identities, and the by-id command verbs resolve the
                     // second; this is how a caller holding the first reaches that ship's computer.
@@ -1835,7 +1835,7 @@ public abstract class AbstractSpaceLoginRestoreClientTest {
                             "" + readInt(found, "afcX"), "" + readInt(found, "afcY"),
                             "" + readInt(found, "afcZ")};
                 }
-                if (found.contains("\"found\":false")) {
+                if ((!Reply.of(found).bool("found", true))) {
                     // That dimension is loaded and the ledger is readable there; if the ship is
                     // simply not up yet, queueing its ships is what makes it resolvable.
                     exec("artest vs load-ships " + trimmed);
@@ -1865,7 +1865,7 @@ public abstract class AbstractSpaceLoginRestoreClientTest {
             // has failed to load and a neighbour's has. A name has no such gap.
             String hull = exec("artest vs ship-uuid " + dim + " " + arrangedShipId);
             Reply namedReply = Reply.of(hull);
-            if (hull.contains("\"found\":true") && namedReply.has(SHIP_UUID)) {
+            if (Reply.of(hull).bool("found", false) && namedReply.has(SHIP_UUID)) {
                 String info = exec("artest vs ship-info " + dim + " id " + namedReply.text(SHIP_UUID));
                 if (ShipInfo.isLoaded(info)) {
                     ShipInfo pose = ShipInfo.of(info);
@@ -1906,19 +1906,19 @@ public abstract class AbstractSpaceLoginRestoreClientTest {
     protected void clearArea(int baseX, int baseZ) throws Exception {
         int cx1 = (baseX - 4) >> 4, cz1 = (baseZ - 4) >> 4;
         int cx2 = (baseX + 20) >> 4, cz2 = (baseZ + 20) >> 4;
-        assertTrue("chunk warmup failed", exec("artest chunk warmup " + LAUNCH_DIM
-                + " " + cx1 + " " + cz1 + " " + cx2 + " " + cz2).contains("\"ok\":true"));
-        assertTrue("pre-clear failed", exec("artest fill " + LAUNCH_DIM
+        assertTrue("chunk warmup failed", Reply.of(exec("artest chunk warmup " + LAUNCH_DIM
+                + " " + cx1 + " " + cz1 + " " + cx2 + " " + cz2)).ok());
+        assertTrue("pre-clear failed", Reply.of(exec("artest fill " + LAUNCH_DIM
                 + " " + (baseX - 4) + " " + (SRC_Y - 2) + " " + (baseZ - 4)
                 + " " + (baseX + 20) + " " + (SRC_Y + 12) + " " + (baseZ + 20)
-                + " minecraft:air").contains("\"ok\":true"));
+                + " minecraft:air")).ok());
     }
 
     /** Place a fixture build and return its build-controller position, as the assembler wants it. */
     protected String placeFixture(int baseX, int baseY, int baseZ, String variant) throws Exception {
         String fixture = exec("artest fixture rocket " + LAUNCH_DIM
                 + " " + baseX + " " + baseY + " " + baseZ + " " + variant);
-        assertTrue("fixture (" + variant + ") failed: " + fixture, fixture.contains("\"ok\":true"));
+        assertTrue("fixture (" + variant + ") failed: " + fixture, Reply.of(fixture).ok());
         int[] builder = Reply.of(fixture).blockPos(BUILDER_POS);
         assertTrue("fixture (" + variant + ") missing builderPos: " + fixture, builder != null);
         return builder[0] + " " + builder[1] + " " + builder[2];

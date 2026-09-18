@@ -43,7 +43,7 @@ public class ModEntitySpawnResolutionTest extends AbstractHeadlessServerTest {
     @Test
     public void everyModdedEntityResolvesBackToItself() throws Exception {
         String report = String.join("\n", client().execute("artest entity registry"));
-        assertTrue("the registry probe must answer: " + report, report.contains("\"ok\":true"));
+        assertTrue("the registry probe must answer: " + report, Reply.of(report).ok());
 
         Reply scannedReply = Reply.of(report);
         assertTrue("the probe must report how many entities it examined: " + report, scannedReply.has(CHECKED));

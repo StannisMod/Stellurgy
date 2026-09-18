@@ -260,7 +260,7 @@ public class VSShipFlightTelemetryE2ETest extends AbstractSharedVsClientE2ETest 
                         + " measures a craft that is still commanded to fly and merely not steered."
                         + " The cut key is what a pilot uses and it zeroes the setpoint; if this"
                         + " reply carries a non-zero cruise the cut did not take: " + cruiseAfterCut,
-                cruiseAfterCut.contains("\"afcResolved\":true")
+                Reply.of(cruiseAfterCut).bool("afcResolved", false)
                         && Math.abs(readDouble(cruiseAfterCut, CRUISE_FWD)) < 1e-6
                         && Math.abs(readDouble(cruiseAfterCut, CRUISE_RIGHT)) < 1e-6
                         && Math.abs(readDouble(cruiseAfterCut, CRUISE_UP)) < 1e-6);
@@ -452,7 +452,7 @@ public class VSShipFlightTelemetryE2ETest extends AbstractSharedVsClientE2ETest 
         double half = Math.toRadians(75.0) / 2.0;
         String point = exec("artest vs point-by-id 0 " + scenarioShipId
                 + " " + Math.cos(half) + " 0.0 0.0 " + Math.sin(half));
-        assertTrue("attitude hold must accept the roll: " + point, point.contains("\"commanded\":true"));
+        assertTrue("attitude hold must accept the roll: " + point, Reply.of(point).bool("commanded", false));
         bot().waitTicks(200);
 
         // An attitude SLEW is a value converging, so it stays a wait — but the value it converges to
@@ -591,7 +591,7 @@ public class VSShipFlightTelemetryE2ETest extends AbstractSharedVsClientE2ETest 
         double deckY = onDeck.playerY;
         assertTrue("a body on the deck must be resolved in the ship frame: "
                 + exec("artest vs would-take-over 0 " + standId),
-                exec("artest vs would-take-over 0 " + standId).contains("\"handles\":true"));
+                Reply.of(exec("artest vs would-take-over 0 " + standId)).bool("handles", false));
 
         // Now make the ship "grounded": lay a world stone floor right under the deck, so the deck has
         // real terrain close beneath it - the overlap that broke the playtest. A body on the deck must
@@ -606,8 +606,8 @@ public class VSShipFlightTelemetryE2ETest extends AbstractSharedVsClientE2ETest 
         Events events = events();
         long floorMark = events.markInstrumented();
         assertTrue("must lay the world floor under the deck",
-                exec("artest fill 0 " + (sx - 3) + " " + fy + " " + (sz - 3) + " "
-                        + (sx + 3) + " " + fy + " " + (sz + 3) + " minecraft:stone").contains("\"ok\":true"));
+                Reply.of(exec("artest fill 0 " + (sx - 3) + " " + fy + " " + (sz - 3) + " "
+                        + (sx + 3) + " " + fy + " " + (sz + 3) + " minecraft:stone")).ok());
         bot().waitTicks(60);
 
         String releases = events.since(floorMark, "deck_released");
@@ -628,7 +628,7 @@ public class VSShipFlightTelemetryE2ETest extends AbstractSharedVsClientE2ETest 
                 + " floorTop=" + (fy + 1) + " would-take-over=" + handles);
         assertTrue("a body on the deck of a grounded ship must stay resolved in the ship frame, not be "
                 + "handed to vanilla because there is now ground below: " + handles,
-                handles.contains("\"handles\":true"));
+                Reply.of(handles).bool("handles", false));
         assertTrue("it must stay ON the deck (y=" + deckY + "), not drop toward the world floor (top "
                 + (fy + 1) + "): it is at y=" + yAfter, Math.abs(yAfter - deckY) < 1.0);
         assertTrue("and still on the ground (the deck), not falling: " + afterFloor.raw(),
@@ -763,7 +763,7 @@ public class VSShipFlightTelemetryE2ETest extends AbstractSharedVsClientE2ETest 
         long spawnMark = events.markInstrumented();
         String assemble = assembleFixture(site);
         assertTrue("a with-pilot-seat build must route to a ship: " + assemble,
-                assemble.contains("\"rocketCount\":0"));
+                (Reply.of(assemble).integerOr("rocketCount", Integer.MIN_VALUE) == 0));
         scenarioShipId = awaitShipSpawned(events, spawnMark,
                 "a with-pilot-seat assembly must create a VS ship in the queryable registry");
         bot().waitTicks(40);
@@ -811,7 +811,7 @@ public class VSShipFlightTelemetryE2ETest extends AbstractSharedVsClientE2ETest 
                 + seat.seatY + " " + seat.seatZ);
         int dummyId = Reply.of("artest vs seat-mount-at", mountInfo).integer(DUMMY_ID);
         assertTrue("bot must mount the seat dummy: " + mountInfo,
-                exec("artest player mount-entity " + dummyId).contains("\"mounted\":true"));
+                Reply.of(exec("artest player mount-entity " + dummyId)).bool("mounted", false));
         bot().waitTicks(10); // let the mount replicate and the client recognise the pilot seat
         return ship;
     }
@@ -1112,7 +1112,7 @@ public class VSShipFlightTelemetryE2ETest extends AbstractSharedVsClientE2ETest 
         site.requireClear(this::exec, 2, 24,
                 "the hull, the deck a body rides, and the air the craft rolls and climbs through");
         String fixture = exec("artest fixture rocket 0 " + baseX + " " + baseY + " " + baseZ + " " + VARIANT);
-        assertTrue("fixture (" + VARIANT + ") failed: " + fixture, fixture.contains("\"ok\":true"));
+        assertTrue("fixture (" + VARIANT + ") failed: " + fixture, Reply.of(fixture).ok());
         int[] bp = Reply.of(fixture).blockPos(BUILDER_POS);
         assertTrue("fixture missing builderPos: " + fixture, bp != null);
         return exec("artest rocket assemble 0 " + bp[0] + " " + bp[1] + " " + bp[2]);

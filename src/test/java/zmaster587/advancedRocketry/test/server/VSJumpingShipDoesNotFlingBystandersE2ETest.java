@@ -83,7 +83,7 @@ public class VSJumpingShipDoesNotFlingBystandersE2ETest extends AbstractSharedSe
         String coords = placeFixture(SRC_X, SRC_Y, SRC_Z, "with-pilot-deck");
         String asm = exec("artest rocket assemble 0 " + coords);
         assertTrue("with VS an AFC-bearing build must route to a ship (no rocket): " + asm,
-                asm.contains("\"rocketCount\":0"));
+                (Reply.of(asm).integerOr("rocketCount", Integer.MIN_VALUE) == 0));
         assertTrue("the ship never loaded", loadedShips(0) >= 1);
 
         // THIS ship, by the name the assembler minted for it — then the physics id it maps to. The
@@ -139,12 +139,12 @@ public class VSJumpingShipDoesNotFlingBystandersE2ETest extends AbstractSharedSe
                 + ((int) beforeZ - 4) + " " + ((int) beforeX + 4) + " " + (SRC_Y + 12) + " "
                 + ((int) beforeZ + 4) + " minecraft:air");
         assertTrue("the subject's fall shaft was not cleared, so it would land and release the ship"
-                + " before being measured: " + column, column.contains("\"ok\":true"));
+                + " before being measured: " + column, Reply.of(column).ok());
 
         // The jump: the production rigid relocation, aimed sideways so the lever arm is horizontal.
         String tp = exec("artest vs teleport-ship-by-id 0 " + shipId + " "
                 + ((int) sx + JUMP_DX) + " " + (int) sy + " " + (int) sz);
-        assertTrue("the jump failed: " + tp, tp.contains("\"ok\":true"));
+        assertTrue("the jump failed: " + tp, Reply.of(tp).ok());
         // CONTROL 4, taken BEFORE the hazard rather than after it: the subject must still be
         // associated with the ship at the moment the rotation starts. Every probe call costs the
         // server several ticks, and the association only lives 20 of them — a run that spent them on
@@ -163,7 +163,7 @@ public class VSJumpingShipDoesNotFlingBystandersE2ETest extends AbstractSharedSe
         // rotation is held by the same controller instead of fought by it.
         String rot = exec("artest vs force-rot-by-id 0 " + shipId + " 0 " + YAW_RAD_PER_S + " 0");
         assertTrue("the departed hull could not be commanded to rotate: " + rot,
-                rot.contains("\"afcResolved\":true"));
+                Reply.of(rot).bool("afcResolved", false));
 
         GameTicks.advance(client(), GameTicks.server(), WINDOW_TICKS);
 
@@ -215,14 +215,14 @@ public class VSJumpingShipDoesNotFlingBystandersE2ETest extends AbstractSharedSe
         int cx1 = (baseX - 8) >> 4, cz1 = (baseZ - 8) >> 4;
         int cx2 = (baseX + 24) >> 4, cz2 = (baseZ + 24) >> 4;
         assertTrue("chunk warmup failed",
-                exec("artest chunk warmup 0 " + cx1 + " " + cz1 + " " + cx2 + " " + cz2).contains("\"ok\":true"));
-        assertTrue("pre-clear failed", exec("artest fill 0 " + (baseX - 4) + " " + (SRC_Y - 2) + " " + (baseZ - 4)
-                + " " + (baseX + 20) + " " + (SRC_Y + 12) + " " + (baseZ + 20) + " minecraft:air").contains("\"ok\":true"));
+                Reply.of(exec("artest chunk warmup 0 " + cx1 + " " + cz1 + " " + cx2 + " " + cz2)).ok());
+        assertTrue("pre-clear failed", Reply.of(exec("artest fill 0 " + (baseX - 4) + " " + (SRC_Y - 2) + " " + (baseZ - 4)
+                + " " + (baseX + 20) + " " + (SRC_Y + 12) + " " + (baseZ + 20) + " minecraft:air")).ok());
     }
 
     private String placeFixture(int baseX, int baseY, int baseZ, String variant) throws Exception {
         String fixture = exec("artest fixture rocket 0 " + baseX + " " + baseY + " " + baseZ + " " + variant);
-        assertTrue("fixture (" + variant + ") failed: " + fixture, fixture.contains("\"ok\":true"));
+        assertTrue("fixture (" + variant + ") failed: " + fixture, Reply.of(fixture).ok());
         int[] bp = Reply.of(fixture).blockPos(BUILDER_POS);
         assertTrue("fixture (" + variant + ") missing builderPos: " + fixture, bp != null);
         return bp[0] + " " + bp[1] + " " + bp[2];

@@ -160,7 +160,7 @@ public class RocketAssemblySmokeTest extends AbstractSharedServerTest {
                 "the engineless build the scan must reject stands in this volume");
         String fixture = String.join("\n", client().execute(
                 "artest fixture rocket 0 " + baseX + " " + baseY + " " + baseZ + " invalid-no-engine"));
-        assertTrue("invalid-no-engine fixture failed: " + fixture, fixture.contains("\"ok\":true"));
+        assertTrue("invalid-no-engine fixture failed: " + fixture, Reply.of(fixture).ok());
         int[] bp = Reply.of(fixture).blockPos(BUILDER_POS);
         assertTrue("invalid fixture missing builderPos: " + fixture, bp != null);
         int bx = bp[0],
@@ -170,7 +170,7 @@ public class RocketAssemblySmokeTest extends AbstractSharedServerTest {
         String assemble = String.join("\n", client().execute(
                 "artest rocket assemble 0 " + bx + " " + by + " " + bz));
         assertTrue("assemble of engineless rocket must fail: " + assemble,
-                assemble.contains("\"error\""));
+                Reply.of(assemble).has("error"));
         Reply smReply = Reply.of(assemble);
         assertTrue("error response must surface scan status name: " + assemble, smReply.has(STATUS));
         String status = smReply.text(STATUS);
@@ -228,7 +228,7 @@ public class RocketAssemblySmokeTest extends AbstractSharedServerTest {
 
         String fixture = String.join("\n", client().execute(
                 "artest fixture rocket 0 " + baseX + " " + baseY + " " + baseZ + " " + variant));
-        assertTrue("fixture (" + variant + ") failed: " + fixture, fixture.contains("\"ok\":true"));
+        assertTrue("fixture (" + variant + ") failed: " + fixture, Reply.of(fixture).ok());
         int[] bp = Reply.of(fixture).blockPos(BUILDER_POS);
         assertTrue("fixture (" + variant + ") missing builderPos: " + fixture, bp != null);
         int bx = bp[0],
@@ -238,7 +238,7 @@ public class RocketAssemblySmokeTest extends AbstractSharedServerTest {
         String assemble = String.join("\n", client().execute(
                 "artest rocket assemble 0 " + bx + " " + by + " " + bz));
         assertTrue("assemble (" + variant + ") failed: " + assemble,
-                assemble.contains("\"ok\":true"));
+                Reply.of(assemble).ok());
 
         String rocketList = String.join("\n", client().execute("artest rocket list 0"));
         // Pick the last id reported — rocket list grows as fixtures stack up

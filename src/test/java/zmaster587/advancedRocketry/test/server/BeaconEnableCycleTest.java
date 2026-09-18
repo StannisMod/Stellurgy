@@ -82,7 +82,7 @@ public class BeaconEnableCycleTest extends AbstractSharedServerTest {
 
         String load = exec("artest dim load " + planetDim);
         assertTrue("planet dim load failed: " + load,
-                load.contains("\"loaded\":true") || load.contains("\"ok\":true"));
+                Reply.of(load).bool("loaded", false) || Reply.of(load).ok());
     }
 
     @AfterClass
@@ -151,7 +151,7 @@ public class BeaconEnableCycleTest extends AbstractSharedServerTest {
         String breakResp = exec("artest place " + planetDim + " "
                 + CX_BREAK + " " + CY + " " + CZ + " minecraft:air");
         assertTrue("could not air-replace controller block: " + breakResp,
-                breakResp.contains("\"ok\":true"));
+                Reply.of(breakResp).ok());
 
         boolean stillThere = beaconListContains(CX_BREAK, CY, CZ);
         assertFalse("broken-controller beacon still in registry"
@@ -167,18 +167,18 @@ public class BeaconEnableCycleTest extends AbstractSharedServerTest {
         String fixture = exec("artest fixture multiblock beacon "
                 + planetDim + " " + cx + " " + CY + " " + CZ);
         assertTrue("beacon fixture build failed: " + fixture,
-                fixture.contains("\"ok\":true"));
+                Reply.of(fixture).ok());
         String tryComplete = exec("artest machine try-complete "
                 + planetDim + " " + cx + " " + CY + " " + CZ);
         assertTrue("beacon structure failed to complete: " + tryComplete,
-                tryComplete.contains("\"isComplete\":true"));
+                Reply.of(tryComplete).bool("isComplete", false));
     }
 
     private static void enableMachine(int cx, boolean enabled) throws Exception {
         String resp = exec("artest machine set-enabled " + planetDim + " "
                 + cx + " " + CY + " " + CZ + " " + enabled);
         assertTrue("machine set-enabled failed: " + resp,
-                resp.contains("\"enabled\":" + enabled));
+                String.valueOf(enabled).equals(Reply.of(resp).text("enabled")));
     }
 
     private static String readBeaconList() throws Exception {

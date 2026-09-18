@@ -79,19 +79,19 @@ public class VSJumpCarriesLooseBodiesE2ETest extends AbstractSharedServerTest {
         // identity is handed in so the probe can answer production's question rather than a proxy.
         String dropped = exec("artest space loose-body " + originDim + " " + shipX + " " + shipY + " "
                 + shipZ + " " + shipId);
-        requireArranged("the body must be dropped: " + dropped, dropped.contains("\"ok\":true"));
+        requireArranged("the body must be dropped: " + dropped, Reply.of(dropped).ok());
 
         // CONTROL, and it is production's OWN aboard test rather than a proximity proxy: the body has
         // to be inside the ship's stay region — the same volume the crossing enumerates by, and the
         // same one the hyperspace void judges a crew member by. A green here means a later red is
         // about the carry.
         requireArranged("the dropped body must be ABOARD by the definition the crossing uses,"
-                + " not merely near the ship: " + dropped, dropped.contains("\"aboard\":true"));
+                + " not merely near the ship: " + dropped, Reply.of(dropped).bool("aboard", false));
 
         // Marked BEFORE the command whose effect is awaited.
         long transitMark = events.mark();
         String begin = exec("artest space transit-begin " + originDim + " 1 64 1 " + HYPERSPACE_JUMP_SPEED);
-        assertTrue("the transit must begin: " + begin, begin.contains("\"began\":true"));
+        assertTrue("the transit must begin: " + begin, Reply.of(begin).bool("began", false));
 
         // No pump: the server advances the jump. Waited for as the arrival production announces.
         String arrivedRecord = events.awaitRecordWithField(transitMark, "ship_transit_ended","route", "HYPERSPACE",

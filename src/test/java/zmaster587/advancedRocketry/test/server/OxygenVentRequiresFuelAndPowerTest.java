@@ -85,11 +85,11 @@ public class OxygenVentRequiresFuelAndPowerTest extends AbstractSharedServerTest
         String info = ventInfo(CX_NO_FLUID);
         assertTrue("vent without oxygen must report hasFluid:false after the "
                         + "drain-fail branch fires: " + info,
-                info.contains("\"hasFluid\":false"));
+                (!Reply.of(info).bool("hasFluid", true)));
         assertFalse("vent without oxygen must NOT report PRESSURIZEDAIR — the "
                         + "atmosphere should have reverted to the dim baseline: "
                         + info,
-                info.contains("\"blobAtmosphere\":\"PRESSURIZEDAIR\""));
+                "PRESSURIZEDAIR".equals(Reply.of(info).text("blobAtmosphere")));
     }
 
     /** Vent + oxygen, NO energy &rarr; {@code hasEnoughEnergy} guard fails at
@@ -166,19 +166,19 @@ public class OxygenVentRequiresFuelAndPowerTest extends AbstractSharedServerTest
     private void placeVent(int cx) throws Exception {
         String resp = exec("artest place 0 " + cx + " " + CY_BASE + " " + CZ_BASE
                 + " advancedrocketry:oxygenVent");
-        assertTrue("vent place failed: " + resp, resp.contains("\"placed\":true"));
+        assertTrue("vent place failed: " + resp, Reply.of(resp).bool("placed", false));
     }
 
     private void injectEnergy(int cx, int amount) throws Exception {
         String resp = exec("artest energy inject 0 " + cx + " " + CY_BASE + " " + CZ_BASE
                 + " " + amount);
-        assertTrue("energy inject failed: " + resp, resp.contains("\"ok\":true"));
+        assertTrue("energy inject failed: " + resp, Reply.of(resp).ok());
     }
 
     private void injectOxygen(int cx, int amount) throws Exception {
         String resp = exec("artest fluid inject 0 " + cx + " " + CY_BASE + " " + CZ_BASE
                 + " oxygen " + amount);
-        assertTrue("oxygen inject failed: " + resp, resp.contains("\"ok\":true"));
+        assertTrue("oxygen inject failed: " + resp, Reply.of(resp).ok());
     }
 
     /** Wakes the vent from "first run" state into its operating loop and

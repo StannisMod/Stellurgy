@@ -136,7 +136,7 @@ public class VSAssembledShipRealRightClickBoardingE2ETest extends AbstractShared
         long spawnMark = events.markInstrumented();
         String assemble = assembleFixture(site, VARIANT);
         scenario().requireArranged("a " + VARIANT + " build must route to a ship: " + assemble,
-                assemble.contains("\"ok\":true"));
+                Reply.of(assemble).ok());
         shipUuid = awaitShipSpawned(events, spawnMark, "the assembly must create a VS ship in the"
                 + " queryable registry before anything can be aimed at it (the spawn is asynchronous)");
 
@@ -374,7 +374,7 @@ public class VSAssembledShipRealRightClickBoardingE2ETest extends AbstractShared
                 "the hull, and the air the player stands and right-clicks in beside its seat");
         String fixture = exec("artest fixture rocket 0 " + baseX + " " + baseY + " " + baseZ + " " + variant);
         scenario().requireArranged("fixture (" + variant + ") failed: " + fixture,
-                fixture.contains("\"ok\":true"));
+                Reply.of(fixture).ok());
         int[] bp = Reply.of(fixture).blockPos(BUILDER_POS);
         scenario().requireArranged("fixture missing builderPos: " + fixture, bp != null);
         return exec("artest rocket assemble 0 " + bp[0] + " " + bp[1] + " " + bp[2]);

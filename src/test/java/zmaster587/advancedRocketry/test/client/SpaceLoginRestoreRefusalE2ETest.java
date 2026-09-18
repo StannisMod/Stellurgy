@@ -1,5 +1,6 @@
 package zmaster587.advancedRocketry.test.client;
 
+import zmaster587.advancedRocketry.test.Reply;
 import com.github.stannismod.forge.testing.server.RealDedicatedServerHarness;
 import com.google.gson.JsonObject;
 
@@ -105,7 +106,7 @@ public class SpaceLoginRestoreRefusalE2ETest extends AbstractSpaceLoginRestoreCl
                         + " ground and not on some other, rather than silently appearing at his spawn"
                         + " point", RESTORE_VERDICT_BUDGET_TICKS);
         assertFalse("...and the restore must not count him as aboard anything: " + restored,
-                restored.contains("\"aboard\":true"));
+                Events.anyRecordHas(restored, "aboard", "true"));
 
         // And he really is the orphan the message describes: out of the cell, off his ship.
         //
@@ -151,7 +152,7 @@ public class SpaceLoginRestoreRefusalE2ETest extends AbstractSpaceLoginRestoreCl
         // record that was never written in the first place.
         String tagBefore = exec("artest space aboard-tag " + BOT);
         assertTrue("a player who never boarded must carry no aboard record: " + tagBefore,
-                tagBefore.contains("\"tagged\":false"));
+                (!Reply.of(tagBefore).bool("tagged", true)));
 
         closeBoth();
         keepBootLog("boot1-never-aboard");
@@ -185,7 +186,7 @@ public class SpaceLoginRestoreRefusalE2ETest extends AbstractSpaceLoginRestoreCl
                 riding.get("riding").getAsBoolean());
         assertTrue("and the record oracle must still answer NO for him - if it cannot, every "
                 + "\"tagged\":true in this class is worthless: " + observed,
-                tag.contains("\"tagged\":false"));
+                (!Reply.of(tag).bool("tagged", true)));
     }
 
 }

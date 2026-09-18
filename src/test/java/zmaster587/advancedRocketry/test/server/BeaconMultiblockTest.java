@@ -1,5 +1,6 @@
 package zmaster587.advancedRocketry.test.server;
 
+import zmaster587.advancedRocketry.test.Reply;
 import org.junit.Test;
 
 import zmaster587.advancedRocketry.test.FixtureSite;
@@ -42,7 +43,7 @@ public class BeaconMultiblockTest extends AbstractSharedServerTest {
         String fixture = join(client().execute(
                 "artest fixture multiblock beacon 0 " + CX + " " + CY + " " + CZ));
         assertTrue("fixture multiblock beacon failed: " + fixture,
-                fixture.contains("\"ok\":true"));
+                Reply.of(fixture).ok());
 
         String info = join(client().execute(
                 "artest machine info 0 " + CX + " " + CY + " " + CZ));
@@ -52,9 +53,9 @@ public class BeaconMultiblockTest extends AbstractSharedServerTest {
         String tryComplete = MachineRecipeEndToEndKit.tryCompleteWithRetry(
                 client(), 0, CX, CY, CZ);
         assertTrue("try-complete probe errored: " + tryComplete,
-                tryComplete.contains("\"ok\":true"));
+                Reply.of(tryComplete).ok());
         assertTrue("beacon multiblock didn't validate (isComplete=false): " + tryComplete,
-                tryComplete.contains("\"isComplete\":true"));
+                Reply.of(tryComplete).bool("isComplete", false));
     }
 
     @Test
@@ -62,23 +63,23 @@ public class BeaconMultiblockTest extends AbstractSharedServerTest {
         int cx = CX + 30, cy = CY, cz = CZ;
         String fixture = join(client().execute(
                 "artest fixture multiblock beacon 0 " + cx + " " + cy + " " + cz));
-        assertTrue("fixture failed: " + fixture, fixture.contains("\"ok\":true"));
+        assertTrue("fixture failed: " + fixture, Reply.of(fixture).ok());
 
         String first = MachineRecipeEndToEndKit.tryCompleteWithRetry(client(), 0, cx, cy, cz);
         assertTrue("baseline must validate: " + first,
-                first.contains("\"isComplete\":true"));
+                Reply.of(first).bool("isComplete", false));
 
         // Replace the redstone tip with a stone block (any non-air, non-
         // redstone block fails the structure check).
         String breakTip = join(client().execute(
                 "artest place 0 " + cx + " " + (cy + 4) + " " + (cz + 1) + " minecraft:stone"));
         assertTrue("could not replace redstone tip: " + breakTip,
-                breakTip.contains("\"ok\":true"));
+                Reply.of(breakTip).ok());
 
         String broken = MachineRecipeEndToEndKit.tryCompleteWithRetry(client(), 0, cx, cy, cz);
         assertTrue("structure stayed complete after redstone tip removal — "
                         + "validator broken: " + broken,
-                broken.contains("\"isComplete\":false"));
+                (!Reply.of(broken).bool("isComplete", true)));
     }
 
     @Test
@@ -86,11 +87,11 @@ public class BeaconMultiblockTest extends AbstractSharedServerTest {
         int cx = CX + 60, cy = CY, cz = CZ;
         String fixture = join(client().execute(
                 "artest fixture multiblock beacon 0 " + cx + " " + cy + " " + cz));
-        assertTrue("fixture failed: " + fixture, fixture.contains("\"ok\":true"));
+        assertTrue("fixture failed: " + fixture, Reply.of(fixture).ok());
 
         String first = MachineRecipeEndToEndKit.tryCompleteWithRetry(client(), 0, cx, cy, cz);
         assertTrue("baseline must validate: " + first,
-                first.contains("\"isComplete\":true"));
+                Reply.of(first).bool("isComplete", false));
 
         // Replace a middle shaft block (y=cy+2 layer) with air. The
         // structure has blockStructureBlock at this position — replacing
@@ -98,12 +99,12 @@ public class BeaconMultiblockTest extends AbstractSharedServerTest {
         String breakShaft = join(client().execute(
                 "artest place 0 " + cx + " " + (cy + 2) + " " + (cz + 1) + " minecraft:air"));
         assertTrue("could not break shaft block: " + breakShaft,
-                breakShaft.contains("\"ok\":true"));
+                Reply.of(breakShaft).ok());
 
         String broken = MachineRecipeEndToEndKit.tryCompleteWithRetry(client(), 0, cx, cy, cz);
         assertTrue("structure stayed complete after shaft removal — "
                         + "validator broken: " + broken,
-                broken.contains("\"isComplete\":false"));
+                (!Reply.of(broken).bool("isComplete", true)));
     }
 
     private static String join(java.util.List<String> resp) {

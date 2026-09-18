@@ -53,7 +53,7 @@ public class SpaceStationDockUndockTest extends AbstractSharedServerTest {
 
     private int createStation() throws Exception {
         String resp = String.join("\n", client().execute("artest station create 0"));
-        assertTrue("station create failed: " + resp, resp.contains("\"ok\":true"));
+        assertTrue("station create failed: " + resp, Reply.of(resp).ok());
         Reply mReply = Reply.of(resp);
         assertTrue("could not parse station id: " + resp, mReply.has(ID_PATTERN));
         return Integer.parseInt(mReply.text(ID_PATTERN));
@@ -67,7 +67,7 @@ public class SpaceStationDockUndockTest extends AbstractSharedServerTest {
     public void addPadGrowsListWithExpectedDefaults() throws Exception {
         int id = createStation();
         String add = ok(client().execute("artest station add-pad " + id + " 10 20 alpha"));
-        assertTrue("add-pad must succeed: " + add, add.contains("\"ok\":true"));
+        assertTrue("add-pad must succeed: " + add, Reply.of(add).ok());
         // `add-pad` writes its own `padCount`, so it is read as ITS reply and not as a station
         // reading — and as a NUMBER: the substring form was a prefix, satisfied by 10 pads.
         assertEquals("padCount should be 1 after first add: " + add,
@@ -92,9 +92,12 @@ public class SpaceStationDockUndockTest extends AbstractSharedServerTest {
         int id = createStation();
         ok(client().execute("artest station add-pad " + id + " 10 20 alpha"));
         String dock = ok(client().execute("artest station dock " + id));
+        // `has("ok") && !ok()` and not a bare `!ok()`: the claim is that the verb REPORTED a
+        // refusal, and a reply that says nothing at all also fails `ok()`.
+        Reply dockRefusal = Reply.of("artest station dock", dock);
         assertTrue("dock must refuse a pad that hasn't opted into auto-land: " + dock,
-                dock.contains("\"ok\":false")
-                        && dock.contains("\"reason\":\"no free landing pad\""));
+                dockRefusal.has("ok") && !dockRefusal.ok()
+                        && "no free landing pad".equals(dockRefusal.text("reason")));
     }
 
     @Test
@@ -105,9 +108,12 @@ public class SpaceStationDockUndockTest extends AbstractSharedServerTest {
 
         String dock = ok(client().execute("artest station dock " + id));
         assertTrue("dock must succeed once pad is auto-land enabled: " + dock,
-                dock.contains("\"ok\":true"));
+                Reply.of(dock).ok());
+        // Read as NUMBERS: `contains("\"x\":30")` is satisfied by a pad at x=300, and the same
+        // prefix trap has already been measured on this producer's pad list.
+        Reply docked = Reply.of("artest station dock", dock);
         assertTrue("dock response must echo the chosen pad coords: " + dock,
-                dock.contains("\"x\":30") && dock.contains("\"z\":40"));
+                docked.integer("x") == 30 && docked.integer("z") == 40);
 
         // After dock with commit=true, THE pad's occupied flag must flip — asked of the pad at
         // (30, 40) rather than of the list, which would answer for any occupied pad.
@@ -115,8 +121,9 @@ public class SpaceStationDockUndockTest extends AbstractSharedServerTest {
 
         // A second dock against the only pad MUST return no-free-pad.
         String dock2 = ok(client().execute("artest station dock " + id));
+        Reply secondDock = Reply.of("artest station dock", dock2);
         assertTrue("second dock with no other free pad must fail: " + dock2,
-                dock2.contains("\"ok\":false"));
+                secondDock.has("ok") && !secondDock.ok());
     }
 
     @Test
@@ -131,7 +138,7 @@ public class SpaceStationDockUndockTest extends AbstractSharedServerTest {
         assertTrue("pre-undock pad must read occupied=true: " + pre.raw(), pre.occupied);
 
         String undock = ok(client().execute("artest station undock " + id + " 50 60"));
-        assertTrue("undock must succeed: " + undock, undock.contains("\"ok\":true"));
+        assertTrue("undock must succeed: " + undock, Reply.of(undock).ok());
 
         // Post-undock: pad is free again.
         StationPads.Pad post = pads(id).at(50, 60);
@@ -140,7 +147,7 @@ public class SpaceStationDockUndockTest extends AbstractSharedServerTest {
         // And the next dock call must successfully reclaim it.
         String reclaim = ok(client().execute("artest station dock " + id));
         assertTrue("post-undock dock must reclaim the just-freed pad: " + reclaim,
-                reclaim.contains("\"ok\":true") && reclaim.contains("\"x\":50"));
+                Reply.of(reclaim).ok() && (Reply.of(reclaim).integerOr("x", Integer.MIN_VALUE) == 50));
     }
 
     @Test
@@ -154,7 +161,7 @@ public class SpaceStationDockUndockTest extends AbstractSharedServerTest {
 
         String preview = ok(client().execute("artest station dock " + id + " false"));
         assertTrue("preview dock must report ok and the pad coords: " + preview,
-                preview.contains("\"ok\":true") && preview.contains("\"x\":70"));
+                Reply.of(preview).ok() && (Reply.of(preview).integerOr("x", Integer.MIN_VALUE) == 70));
 
         StationPads.Pad previewed = pads(id).at(70, 80);
         assertFalse("preview dock must NOT mark the pad occupied: " + previewed.raw(),
@@ -183,7 +190,7 @@ public class SpaceStationDockUndockTest extends AbstractSharedServerTest {
 
         String remove = ok(client().execute("artest station remove-pad " + id + " 100 100"));
         assertTrue("remove-pad must succeed and report removed=1: " + remove,
-                remove.contains("\"ok\":true") && remove.contains("\"removed\":1"));
+                Reply.of(remove).ok() && (Reply.of(remove).integerOr("removed", Integer.MIN_VALUE) == 1));
         assertEquals("padCount must drop to 1 after remove: " + remove,
                 1, Reply.of("artest station remove-pad", remove).integer("padCount"));
 

@@ -1,5 +1,6 @@
 package zmaster587.advancedRocketry.test.server;
 
+import zmaster587.advancedRocketry.test.Reply;
 import com.github.stannismod.forge.testing.junit.AbstractHeadlessServerTest;
 import org.junit.Test;
 
@@ -44,7 +45,7 @@ public class TerraformerMultiBlockCycleTest extends AbstractHeadlessServerTest {
         String place = String.join("\n", client().execute(
                 "artest place 0 " + x + " " + y + " " + z + " advancedrocketry:terraformer"));
         assertTrue("terraformer place failed: " + place,
-                place.contains("\"placed\":true"));
+                Reply.of(place).bool("placed", false));
 
         String info = String.join("\n", client().execute(
                 "artest machine info 0 " + x + " " + y + " " + z));
@@ -55,12 +56,12 @@ public class TerraformerMultiBlockCycleTest extends AbstractHeadlessServerTest {
         String tryComplete = String.join("\n", client().execute(
                 "artest machine try-complete 0 " + x + " " + y + " " + z));
         assertTrue("incomplete terraformer should report isComplete=false: " + tryComplete,
-                tryComplete.contains("\"isComplete\":false"));
+                (!Reply.of(tryComplete).bool("isComplete", true)));
 
         // Force-tick — must not crash even with incomplete structure.
         String tick = String.join("\n", client().execute(
                 "artest tile force-tick 0 " + x + " " + y + " " + z + " 60"));
-        assertTrue("force-tick errored: " + tick, tick.contains("\"ok\":true"));
+        assertTrue("force-tick errored: " + tick, Reply.of(tick).ok());
         assertEquals("must tick all 60 iterations",
                 60, extractInt(tick, "ticked"));
 

@@ -1,5 +1,6 @@
 package zmaster587.advancedRocketry.test.server;
 
+import zmaster587.advancedRocketry.test.Reply;
 import com.github.stannismod.forge.testing.junit.AbstractHeadlessServerTest;
 import com.github.stannismod.forge.testing.server.RealDedicatedServerHarness;
 import org.junit.After;
@@ -90,14 +91,14 @@ public class PlanetXmlConfigIntegrationTest {
 
         String dimList = String.join("\n", harness.client().execute("artest dim list"));
         assertTrue("dim list malformed: " + dimList,
-                dimList.contains("\"arDimensions\":["));
+                (Reply.of(dimList).arrayLength("arDimensions") >= 0));
         assertTrue("fixture dim " + FIXTURE_DIM + " not in arDimensions: " + dimList,
                 dimList.contains(String.valueOf(FIXTURE_DIM)));
 
         String planetInfo = String.join("\n",
                 harness.client().execute("artest planet info " + FIXTURE_DIM));
         assertTrue("planet info errored: " + planetInfo,
-                !planetInfo.contains("\"error\""));
+                !Reply.of(planetInfo).has("error"));
 
         for (String expected : new String[] {
                 "\"name\":\"" + FIXTURE_PLANET_NAME + "\"",

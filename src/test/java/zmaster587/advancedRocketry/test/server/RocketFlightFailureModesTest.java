@@ -54,7 +54,7 @@ public class RocketFlightFailureModesTest extends AbstractSharedServerTest {
     private int firstNonOverworldArDimOrSkip() throws Exception {
         String joined = ok(client().execute("artest dim list"));
         Assume.assumeFalse("No AR dimensions registered",
-                joined.contains("\"arDimensions\":[]"));
+                (Reply.of(joined).arrayLength("arDimensions") == 0));
         Reply dims = Reply.of("artest dim list", joined);
         assertTrue("could not parse arDimensions array: " + joined, dims.has(AR_DIMS_ARRAY));
         for (int dim : dims.intArray(AR_DIMS_ARRAY)) {
@@ -100,7 +100,7 @@ public class RocketFlightFailureModesTest extends AbstractSharedServerTest {
 
         String explodeResp = ok(client().execute("artest rocket explode " + id));
         assertTrue("explode probe must succeed: " + explodeResp,
-                explodeResp.contains("\"ok\":true"));
+                Reply.of(explodeResp).ok());
         // The atomic probe-response contract is the reliable assertion:
         // production EntityRocket.explode() calls setDead, which flips
         // the rocket's isDead flag synchronously inside the probe call.
@@ -109,7 +109,7 @@ public class RocketFlightFailureModesTest extends AbstractSharedServerTest {
         // list until the next worldTick's collect-dead pass, so that
         // observation is racy in a shared headless harness.
         assertTrue("explode probe response must report isDead=true: " + explodeResp,
-                explodeResp.contains("\"isDead\":true"));
+                Reply.of(explodeResp).bool("isDead", false));
     }
 
     @Test
@@ -181,13 +181,13 @@ public class RocketFlightFailureModesTest extends AbstractSharedServerTest {
     public void explodeOnUnknownRocketReturnsError() throws Exception {
         String resp = ok(client().execute("artest rocket explode 9999999"));
         assertTrue("unknown rocket must error: " + resp,
-                resp.contains("\"error\":\"rocket not found\""));
+                "rocket not found".equals(Reply.of(resp).text("error")));
     }
 
     @Test
     public void drainFuelOnUnknownRocketReturnsError() throws Exception {
         String resp = ok(client().execute("artest rocket drain-fuel 9999999"));
         assertTrue("unknown rocket must error: " + resp,
-                resp.contains("\"error\":\"rocket not found\""));
+                "rocket not found".equals(Reply.of(resp).text("error")));
     }
 }

@@ -1,5 +1,6 @@
 package zmaster587.advancedRocketry.test.server;
 
+import zmaster587.advancedRocketry.test.Reply;
 import org.junit.Test;
 
 import zmaster587.advancedRocketry.test.FixtureSite;
@@ -26,7 +27,7 @@ public class AreaGravityControllerMultiblockTest extends AbstractSharedServerTes
         String fixture = join(client().execute(
                 "artest fixture multiblock gravity-controller 0 " + CX + " " + CY + " " + CZ));
         assertTrue("fixture multiblock gravity-controller failed: " + fixture,
-                fixture.contains("\"ok\":true"));
+                Reply.of(fixture).ok());
 
         String info = join(client().execute(
                 "artest machine info 0 " + CX + " " + CY + " " + CZ));
@@ -36,9 +37,9 @@ public class AreaGravityControllerMultiblockTest extends AbstractSharedServerTes
         String tryComplete = join(client().execute(
                 "artest machine try-complete 0 " + CX + " " + CY + " " + CZ));
         assertTrue("try-complete probe errored: " + tryComplete,
-                tryComplete.contains("\"ok\":true"));
+                Reply.of(tryComplete).ok());
         assertTrue("gravity-controller multiblock didn't validate (isComplete=false): " + tryComplete,
-                tryComplete.contains("\"isComplete\":true"));
+                Reply.of(tryComplete).bool("isComplete", false));
     }
 
     @Test
@@ -46,24 +47,24 @@ public class AreaGravityControllerMultiblockTest extends AbstractSharedServerTes
         int cx = CX + 30, cy = CY, cz = CZ;
         String fixture = join(client().execute(
                 "artest fixture multiblock gravity-controller 0 " + cx + " " + cy + " " + cz));
-        assertTrue("fixture failed: " + fixture, fixture.contains("\"ok\":true"));
+        assertTrue("fixture failed: " + fixture, Reply.of(fixture).ok());
 
         String first = join(client().execute(
                 "artest machine try-complete 0 " + cx + " " + cy + " " + cz));
         assertTrue("baseline must validate: " + first,
-                first.contains("\"isComplete\":true"));
+                Reply.of(first).bool("isComplete", false));
 
         // Power-input plug directly under controller -> globalY = cy - 1, globalX = cx, globalZ = cz.
         String breakPlug = join(client().execute(
                 "artest place 0 " + cx + " " + (cy - 1) + " " + cz + " minecraft:stone"));
         assertTrue("could not replace plug: " + breakPlug,
-                breakPlug.contains("\"ok\":true"));
+                Reply.of(breakPlug).ok());
 
         String broken = join(client().execute(
                 "artest machine try-complete 0 " + cx + " " + cy + " " + cz));
         assertTrue("structure stayed complete after plug removal — "
                         + "validator broken: " + broken,
-                broken.contains("\"isComplete\":false"));
+                (!Reply.of(broken).bool("isComplete", true)));
     }
 
     @Test
@@ -71,24 +72,24 @@ public class AreaGravityControllerMultiblockTest extends AbstractSharedServerTes
         int cx = CX + 60, cy = CY, cz = CZ;
         String fixture = join(client().execute(
                 "artest fixture multiblock gravity-controller 0 " + cx + " " + cy + " " + cz));
-        assertTrue("fixture failed: " + fixture, fixture.contains("\"ok\":true"));
+        assertTrue("fixture failed: " + fixture, Reply.of(fixture).ok());
 
         String first = join(client().execute(
                 "artest machine try-complete 0 " + cx + " " + cy + " " + cz));
         assertTrue("baseline must validate: " + first,
-                first.contains("\"isComplete\":true"));
+                Reply.of(first).bool("isComplete", false));
 
         // advStructure at (cx+1, cy-1, cz) — east arm of the cross.
         String breakArm = join(client().execute(
                 "artest place 0 " + (cx + 1) + " " + (cy - 1) + " " + cz + " minecraft:stone"));
         assertTrue("could not break arm: " + breakArm,
-                breakArm.contains("\"ok\":true"));
+                Reply.of(breakArm).ok());
 
         String broken = join(client().execute(
                 "artest machine try-complete 0 " + cx + " " + cy + " " + cz));
         assertTrue("structure stayed complete after arm removal — "
                         + "validator broken: " + broken,
-                broken.contains("\"isComplete\":false"));
+                (!Reply.of(broken).bool("isComplete", true)));
     }
 
     private static String join(java.util.List<String> resp) {

@@ -64,7 +64,7 @@ public class SpikeFarCoordinateIntegrityTest extends AbstractHeadlessServerTest 
                     + "minecraft:diamond_block");
             String readBack = exec("artest block at " + OVERWORLD + " " + x + " " + PLACE_Y + " 0");
 
-            boolean terrainOk = !sample.contains("\"error\"") && !sample.contains("minecraft:air");
+            boolean terrainOk = !Reply.of(sample).has("error") && !sample.contains("minecraft:air");
             boolean storageOk = readBack.contains("diamond_block");
             report.add("x=" + x + " terrain=" + (terrainOk ? "ok" : "FAIL") + " storage="
                     + (storageOk ? "ok" : "FAIL") + " sample=" + oneLine(sample)

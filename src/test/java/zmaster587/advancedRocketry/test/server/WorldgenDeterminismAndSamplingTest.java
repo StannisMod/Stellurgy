@@ -45,7 +45,7 @@ public class WorldgenDeterminismAndSamplingTest extends AbstractSharedServerTest
         String joined = String.join("\n", client().execute("artest dim list"));
         Assume.assumeFalse(
                 "No AR dimensions registered — skipping (empty galaxy?)",
-                joined.contains("\"arDimensions\":[]"));
+                (Reply.of(joined).arrayLength("arDimensions") == 0));
         Reply dims = Reply.of("artest dim list", joined);
         assertTrue("could not parse arDimensions array: " + joined, dims.has(AR_DIMS_ARRAY_PATTERN));
         for (int dim : dims.intArray(AR_DIMS_ARRAY_PATTERN)) {
@@ -167,12 +167,12 @@ public class WorldgenDeterminismAndSamplingTest extends AbstractSharedServerTest
         // count parsed as zero, that's still acceptable (vacuum moon),
         // but the field MUST be present and parse as a non-negative integer.
         assertTrue("ore-stats reply missing 'count' field: " + stats,
-                stats.contains("\"count\":"));
+                Reply.of(stats).has("count"));
         assertTrue("ore-stats reply missing 'chunksScanned' field: " + stats,
-                stats.contains("\"chunksScanned\":"));
+                Reply.of(stats).has("chunksScanned"));
         // radius=1 -> 3×3 = 9 chunks
         assertTrue("ore-stats with radius=1 must have scanned >=1 chunk: " + stats,
-                !stats.contains("\"chunksScanned\":0"));
+                !(Reply.of(stats).integerOr("chunksScanned", Integer.MIN_VALUE) == 0));
     }
 
     @Test
@@ -184,7 +184,7 @@ public class WorldgenDeterminismAndSamplingTest extends AbstractSharedServerTest
                 client().execute("artest worldgen ore-stats " + dim + " 0 0 5 minecraft:stone"));
         // Cap is 4; 5 should error out fast rather than start scanning ~6.5M blocks.
         assertTrue("ore-stats with radius=5 should error (cap=4): " + stats,
-                stats.contains("\"error\":\"radius too large\""));
+                "radius too large".equals(Reply.of(stats).text("error")));
     }
 
     @Test
@@ -195,6 +195,6 @@ public class WorldgenDeterminismAndSamplingTest extends AbstractSharedServerTest
         String stats = String.join("\n",
                 client().execute("artest worldgen ore-stats " + dim + " 0 0 1 advancedrocketry:nonsense_block"));
         assertTrue("ore-stats with unknown block must error: " + stats,
-                stats.contains("\"error\":\"unknown block id\""));
+                "unknown block id".equals(Reply.of(stats).text("error")));
     }
 }

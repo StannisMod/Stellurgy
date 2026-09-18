@@ -75,7 +75,7 @@ public class RailgunFiringContractTest extends AbstractSharedServerTest {
         String fire = exec("artest infra railgun-fire 0 " + SX + " " + SY + " " + SZ
                 + " 0 " + DX + " " + DY + " " + DZ + " minecraft:cobblestone " + CARGO);
         assertTrue("railgun-fire probe must succeed: " + fire,
-                fire.contains("\"ok\":true"));
+                Reply.of(fire).ok());
 
         assertTrue("railgun MUST fire to a linked railgun in the same dimension; "
                         + "fire=" + fire, "true".equals(extractStr(fire, FIRED)));
@@ -108,14 +108,14 @@ public class RailgunFiringContractTest extends AbstractSharedServerTest {
         String create = exec("artest worldgen create-asteroid-dim "
                 + FRESH_DIM + " " + template);
         assertTrue("create-asteroid-dim must succeed: " + create,
-                create.contains("\"ok\":true"));
+                Reply.of(create).ok());
 
         buildAndComplete(LX, SY, XZ);
 
         String fire = exec("artest infra railgun-fire 0 " + LX + " " + SY + " " + XZ
                 + " " + FRESH_DIM + " 0 64 0 minecraft:cobblestone " + CARGO);
         assertTrue("railgun-fire probe must succeed: " + fire,
-                fire.contains("\"ok\":true"));
+                Reply.of(fire).ok());
 
         Assume.assumeTrue("destination dim was already loaded — can't prove the "
                         + "load branch; fire=" + fire,
@@ -147,7 +147,7 @@ public class RailgunFiringContractTest extends AbstractSharedServerTest {
         String fire = exec("artest infra railgun-fire 0 " + UX + " " + SY + " " + XZ
                 + " " + UNREGISTERED_DIM + " 0 64 0 minecraft:cobblestone " + CARGO);
         assertTrue("railgun-fire probe must succeed: " + fire,
-                fire.contains("\"ok\":true"));
+                Reply.of(fire).ok());
 
         assertTrue("must NOT fire at an unloadable (unregistered) destination; "
                         + "fire=" + fire, "false".equals(extractStr(fire, FIRED)));
@@ -170,7 +170,7 @@ public class RailgunFiringContractTest extends AbstractSharedServerTest {
     private int firstNonOverworldArDimOrSkip() throws Exception {
         String joined = exec("artest dim list");
         Assume.assumeFalse("No AR dimensions registered — skipping",
-                joined.contains("\"arDimensions\":[]"));
+                (Reply.of(joined).arrayLength("arDimensions") == 0));
         Reply dims = Reply.of("artest dim list", joined);
         assertTrue("could not parse arDimensions: " + joined, dims.has(AR_DIMS_ARRAY));
         for (int dim : dims.intArray(AR_DIMS_ARRAY)) {
@@ -184,12 +184,12 @@ public class RailgunFiringContractTest extends AbstractSharedServerTest {
         String fixture = exec("artest fixture multiblock railgun 0 "
                 + x + " " + y + " " + z);
         assertTrue("fixture multiblock railgun failed at " + x + "," + y + "," + z
-                + ": " + fixture, fixture.contains("\"ok\":true"));
+                + ": " + fixture, Reply.of(fixture).ok());
 
         String tryComplete = exec("artest machine try-complete 0 "
                 + x + " " + y + " " + z);
         assertTrue("railgun must validate at " + x + "," + y + "," + z
-                + ": " + tryComplete, tryComplete.contains("\"isComplete\":true"));
+                + ": " + tryComplete, Reply.of(tryComplete).bool("isComplete", false));
     }
 
     private static String exec(String cmd) throws Exception {

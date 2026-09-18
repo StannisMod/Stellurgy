@@ -1,5 +1,6 @@
 package zmaster587.advancedRocketry.test.client;
 
+import zmaster587.advancedRocketry.test.Reply;
 import com.github.stannismod.forge.testing.junit.AbstractClientE2ETest;
 import com.google.gson.JsonObject;
 import org.junit.Test;
@@ -53,7 +54,7 @@ public class BiomeScannerGetModulesOffStationE2ETest extends AbstractClientE2ETe
         // Overworld (dim 0) has no space stations, so getSpaceStationFromBlockCoords
         // is null there — the off-station case.
         String place = exec("artest place 0 " + X + " " + Y + " " + Z + " advancedrocketry:biomeScanner");
-        assertTrue("scanner must place: " + place, place.contains("\"placed\":true"));
+        assertTrue("scanner must place: " + place, Reply.of(place).bool("placed", false));
 
         // Clear the column below the scanner so getModules' `suitable` gate is true;
         // that is the branch that reaches the null deref.

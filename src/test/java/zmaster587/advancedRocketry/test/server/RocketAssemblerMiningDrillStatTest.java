@@ -81,7 +81,7 @@ public class RocketAssemblerMiningDrillStatTest extends AbstractSharedServerTest
         int cx2 = (baseX + 7) >> 4, cz2 = (baseZ + 7) >> 4;
         String warmup = String.join("\n", client().execute(
                 "artest chunk warmup 0 " + cx1 + " " + cz1 + " " + cx2 + " " + cz2));
-        assertTrue("chunk warmup failed: " + warmup, warmup.contains("\"ok\":true"));
+        assertTrue("chunk warmup failed: " + warmup, Reply.of(warmup).ok());
 
         // FIRST link: the volume this craft is built and flown in is EMPTY. The site
         // stands in open air, so this ASSERTS rather than digs - anything standing here
@@ -92,7 +92,7 @@ public class RocketAssemblerMiningDrillStatTest extends AbstractSharedServerTest
 
         String fixture = String.join("\n", client().execute(
                 "artest fixture rocket 0 " + baseX + " " + baseY + " " + baseZ + " " + variant));
-        assertTrue("fixture (" + variant + ") failed: " + fixture, fixture.contains("\"ok\":true"));
+        assertTrue("fixture (" + variant + ") failed: " + fixture, Reply.of(fixture).ok());
         int[] bp = Reply.of(fixture).blockPos(BUILDER_POS);
         assertTrue("fixture (" + variant + ") missing builderPos: " + fixture, bp != null);
         int bx = bp[0],
@@ -102,7 +102,7 @@ public class RocketAssemblerMiningDrillStatTest extends AbstractSharedServerTest
         String assemble = String.join("\n", client().execute(
                 "artest rocket assemble 0 " + bx + " " + by + " " + bz));
         assertTrue("assemble (" + variant + ") failed: " + assemble,
-                assemble.contains("\"ok\":true"));
+                Reply.of(assemble).ok());
 
         String rocketList = String.join("\n", client().execute("artest rocket list 0"));
         java.util.List<RocketList.Entry> built = RocketList.of(rocketList);

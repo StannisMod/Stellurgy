@@ -149,8 +149,8 @@ public class VSCrewRelogPersistenceE2ETest extends AbstractSharedVsClientE2ETest
         // the attitude change, not after it.
         double h = Math.toRadians(170.0) / 2.0;
         scenario().requireArranged("the attitude hold must accept the roll command",
-                exec("artest vs point-by-id 0 " + scenarioShipId + " "
-                        + Math.cos(h) + " " + Math.sin(h) + " 0.0 0.0").contains("\"commanded\":true"));
+                Reply.of(exec("artest vs point-by-id 0 " + scenarioShipId + " "
+                        + Math.cos(h) + " " + Math.sin(h) + " 0.0 0.0")).bool("commanded", false));
         long rollMark = lastClientTick();
         long rollReleaseMark = clientEvents().mark();
         // The per-tick pose trace, armed on the axis this scenario turns on: a body sliding across a
@@ -562,8 +562,8 @@ public class VSCrewRelogPersistenceE2ETest extends AbstractSharedVsClientE2ETest
 
         scenario().requireArranged("both freezes must really have SKIPPED ticks, or nothing was driven - "
                         + "a stall that advanced the world clock normally is not a stall" + observed,
-                stall.contains("\"ok\":true") && stalledTicks(stall) <= WALK_STALL_MS / 200
-                        && idleStall.contains("\"ok\":true")
+                Reply.of(stall).ok() && stalledTicks(stall) <= WALK_STALL_MS / 200
+                        && Reply.of(idleStall).ok()
                         && stalledTicks(idleStall) <= STALL_MS / 200);
         scenario().requireArranged("the client must have resolved the body through every window"
                         + observed,
@@ -662,8 +662,8 @@ public class VSCrewRelogPersistenceE2ETest extends AbstractSharedVsClientE2ETest
 
         double h = Math.toRadians(170.0) / 2.0;
         assertTrue("attitude hold must accept the inversion",
-                exec("artest vs point-by-id 0 " + scenarioShipId + " "
-                        + Math.cos(h) + " " + Math.sin(h) + " 0.0 0.0").contains("\"commanded\":true"));
+                Reply.of(exec("artest vs point-by-id 0 " + scenarioShipId + " "
+                        + Math.cos(h) + " " + Math.sin(h) + " 0.0 0.0")).bool("commanded", false));
         // An attitude CONVERGING under the hold is a physical value and not a link — production
         // never decides it has arrived — so this is a WINDOW and one read. It was a poll whose exit
         // condition is the gate below, which is the one shape question 2 does not license however
@@ -1298,7 +1298,7 @@ public class VSCrewRelogPersistenceE2ETest extends AbstractSharedVsClientE2ETest
         long spawnMark = events.markInstrumented();
         String assemble = assembleFixture(site);
         assertTrue("a with-pilot-seat build must route to a ship: " + assemble,
-                assemble.contains("\"rocketCount\":0"));
+                (Reply.of(assemble).integerOr("rocketCount", Integer.MIN_VALUE) == 0));
         // The IDENTITY, off that same record: this scenario built the ship, so it is TOLD which
         // ship that is, and nothing below re-derives it from a position.
         scenarioShipId = awaitShipSpawned(events, spawnMark, "a with-pilot-seat build must become a"
@@ -1345,7 +1345,7 @@ public class VSCrewRelogPersistenceE2ETest extends AbstractSharedVsClientE2ETest
         site.requireClear(this::exec, 2, 24,
                 "the hull, the deck the crew member is held on, and the air he walks and rolls through");
         String fixture = exec("artest fixture rocket 0 " + baseX + " " + baseY + " " + baseZ + " " + VARIANT);
-        assertTrue("fixture (" + VARIANT + ") failed: " + fixture, fixture.contains("\"ok\":true"));
+        assertTrue("fixture (" + VARIANT + ") failed: " + fixture, Reply.of(fixture).ok());
         int[] bp = Reply.of(fixture).blockPos(BUILDER_POS);
         assertTrue("fixture missing builderPos: " + fixture, bp != null);
         return exec("artest rocket assemble 0 " + bp[0] + " " + bp[1] + " " + bp[2]);

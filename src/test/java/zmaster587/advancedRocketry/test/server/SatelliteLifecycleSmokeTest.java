@@ -38,7 +38,7 @@ public class SatelliteLifecycleSmokeTest extends AbstractSharedServerTest {
         // Registry sanity.
         String types = String.join("\n", client().execute("artest satellite types"));
         assertTrue("satellite types schema invalid: " + types,
-                types.contains("\"satelliteTypes\":["));
+                (Reply.of(types).arrayLength("satelliteTypes") >= 0));
         int totalQuotes = countOccurrences(types, "\"");
         int actualCount = (totalQuotes - 2) / 2; // -2 for "satelliteTypes" key quotes
         assertTrue("expected ≥5 satellite types, got " + actualCount + ": " + types,
@@ -48,12 +48,11 @@ public class SatelliteLifecycleSmokeTest extends AbstractSharedServerTest {
         // smoke. The 10 per-type assertions below cover the remaining types.
         long satId = createAndGetId("solarEnergy", 250, 5000, 1024);
         String list = String.join("\n", client().execute("artest satellite list 0"));
-        assertTrue("created satellite " + satId + " not in list: " + list,
-                list.contains("\"id\":" + satId));
+        Reply.of(list).element("satellites", "id", String.valueOf(satId));
         String info = String.join("\n", client().execute("artest satellite info 0 " + satId));
-        assertTrue("info missing/wrong type: " + info, info.contains("\"type\":\"solarEnergy\""));
-        assertTrue("info missing/wrong powerGen: " + info, info.contains("\"powerGen\":250"));
-        assertTrue("info missing/wrong powerStorage: " + info, info.contains("\"powerStorage\":5000"));
+        assertTrue("info missing/wrong type: " + info, "solarEnergy".equals(Reply.of(info).text("type")));
+        assertTrue("info missing/wrong powerGen: " + info, (Reply.of(info).integerOr("powerGen", Integer.MIN_VALUE) == 250));
+        assertTrue("info missing/wrong powerStorage: " + info, (Reply.of(info).integerOr("powerStorage", Integer.MIN_VALUE) == 5000));
     }
 
     @Test
@@ -109,16 +108,16 @@ public class SatelliteLifecycleSmokeTest extends AbstractSharedServerTest {
         // optical = SatellitePrimaryFunction meta=0 (see AdvancedRocketry.java:535).
         String resp = String.join("\n", client().execute(
                 "artest satellite-builder build 0 optical"));
-        assertTrue("builder build failed: " + resp, resp.contains("\"ok\":true"));
+        assertTrue("builder build failed: " + resp, Reply.of(resp).ok());
         Reply mReply = Reply.of(resp);
         assertTrue("builder response missing id: " + resp, mReply.has(ID_PATTERN));
         long satId = Long.parseLong(mReply.text(ID_PATTERN));
 
         String info = String.join("\n", client().execute("artest satellite info 0 " + satId));
         assertTrue("builder-created satellite not registered: " + info,
-                !info.contains("\"error\""));
+                !Reply.of(info).has("error"));
         assertTrue("builder-created satellite must report type=optical: " + info,
-                info.contains("\"type\":\"optical\""));
+                "optical".equals(Reply.of(info).text("type")));
     }
 
     /**
@@ -141,7 +140,7 @@ public class SatelliteLifecycleSmokeTest extends AbstractSharedServerTest {
         String place = String.join("\n", client().execute(
                 "artest place 0 " + bx + " " + by + " " + bz + " advancedrocketry:satelliteControlCenter"));
         assertTrue("satellite terminal did not place: " + place,
-                place.contains("\"placed\":true"));
+                Reply.of(place).bool("placed", false));
 
         long satId = createAndGetId("density", 50, 500, 256);
 
@@ -149,14 +148,14 @@ public class SatelliteLifecycleSmokeTest extends AbstractSharedServerTest {
         // path the player would normally use.
         String imprint = String.join("\n", client().execute(
                 "artest satellite imprint-terminal 0 " + bx + " " + by + " " + bz + " " + satId));
-        assertTrue("terminal imprint failed: " + imprint, imprint.contains("\"ok\":true"));
+        assertTrue("terminal imprint failed: " + imprint, Reply.of(imprint).ok());
 
         String linked = String.join("\n", client().execute(
                 "artest satellite terminal-info 0 " + bx + " " + by + " " + bz));
         assertTrue("terminal must surface the linked satellite ID: " + linked,
-                linked.contains("\"linkedSatelliteId\":" + satId));
+                String.valueOf(satId).equals(Reply.of(linked).text("linkedSatelliteId")));
         assertTrue("terminal must surface the linked satellite type: " + linked,
-                linked.contains("\"linkedType\":\"density\""));
+                "density".equals(Reply.of(linked).text("linkedType")));
     }
 
     /**
@@ -168,20 +167,24 @@ public class SatelliteLifecycleSmokeTest extends AbstractSharedServerTest {
         long satId = createAndGetId(type, powerGen, powerStorage, maxData);
 
         String list = String.join("\n", client().execute("artest satellite list 0"));
-        assertTrue("freshly-created " + type + " satellite " + satId + " missing from list: " + list,
-                list.contains("\"id\":" + satId));
-        assertTrue("list must surface the correct type for " + type + ": " + list,
-                list.contains("\"type\":\"" + type + "\""));
+        // Addressed by the id this scenario just minted, and its TYPE read off that row. The list
+        // is shared with every other satellite the suite made, so `type` identifies nothing: the
+        // second line used to be a separate lookup and the world it passed on was one where some
+        // OTHER satellite had this type.
+        assertEquals("the satellite this scenario created must be listed with its own type: " + list,
+                String.valueOf(type),
+                Reply.of("artest satellite list", list)
+                        .element("satellites", "id", String.valueOf(satId)).text("type"));
 
         String info = String.join("\n", client().execute("artest satellite info 0 " + satId));
         assertTrue("info must echo type=" + type + ": " + info,
-                info.contains("\"type\":\"" + type + "\""));
+                String.valueOf(type).equals(Reply.of(info).text("type")));
         assertTrue("info must echo powerGen=" + powerGen + ": " + info,
-                info.contains("\"powerGen\":" + powerGen));
+                String.valueOf(powerGen).equals(Reply.of(info).text("powerGen")));
         assertTrue("info must echo powerStorage=" + powerStorage + ": " + info,
-                info.contains("\"powerStorage\":" + powerStorage));
+                String.valueOf(powerStorage).equals(Reply.of(info).text("powerStorage")));
         assertTrue("info must echo maxData=" + maxData + ": " + info,
-                info.contains("\"maxData\":" + maxData));
+                String.valueOf(maxData).equals(Reply.of(info).text("maxData")));
     }
 
     /**
@@ -191,7 +194,7 @@ public class SatelliteLifecycleSmokeTest extends AbstractSharedServerTest {
         String create = String.join("\n", client().execute(
                 "artest satellite create 0 " + type + " " + powerGen + " " + powerStorage + " " + maxData));
         assertTrue("satellite create (" + type + ") failed: " + create,
-                create.contains("\"ok\":true"));
+                Reply.of(create).ok());
         Reply mReply = Reply.of(create);
         assertTrue("could not extract satellite id from: " + create, mReply.has(ID_PATTERN));
         return Long.parseLong(mReply.text(ID_PATTERN));
@@ -199,7 +202,7 @@ public class SatelliteLifecycleSmokeTest extends AbstractSharedServerTest {
 
     private void ok(java.util.List<String> response) {
         String joined = String.join("\n", response);
-        assertTrue("probe call failed: " + joined, joined.contains("\"ok\":true"));
+        assertTrue("probe call failed: " + joined, Reply.of(joined).ok());
     }
 
     private static int countOccurrences(String s, String needle) {

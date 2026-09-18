@@ -140,7 +140,7 @@ public class SpikeFarCoordinateShipTest extends AbstractClientE2ETest {
                             + " (arrangement, not the coordinate)");
                     continue;
                 }
-                if (!assemble.contains("\"rocketCount\":0")) {
+                if (!(Reply.of(assemble).integerOr("rocketCount", Integer.MIN_VALUE) == 0)) {
                     verdicts.put(x, "the build did not route to a SHIP: " + oneLine(assemble));
                     continue;
                 }
@@ -214,7 +214,7 @@ public class SpikeFarCoordinateShipTest extends AbstractClientE2ETest {
                 }
                 String mounted = exec("artest player mount-entity "
                         + mountInfo.requireDummyId());
-                if (!mounted.contains("\"mounted\":true")) {
+                if (!Reply.of(mounted).bool("mounted", false)) {
                     verdicts.put(x, "the bot could not mount the seat dummy: " + oneLine(mounted));
                     continue;
                 }
@@ -345,7 +345,7 @@ public class SpikeFarCoordinateShipTest extends AbstractClientE2ETest {
             String assemble = assembleFixture(0);
             assertTrue("the fixture did not assemble", assemble != null);
             assertTrue("the build must route to a ship: " + oneLine(assemble),
-                    assemble.contains("\"rocketCount\":0"));
+                    (Reply.of(assemble).integerOr("rocketCount", Integer.MIN_VALUE) == 0));
             for (int i = 0; i < 40 && count("ship-count-all") < 1; i++) {
                 bot().waitTicks(5);
             }
@@ -363,7 +363,7 @@ public class SpikeFarCoordinateShipTest extends AbstractClientE2ETest {
             assertTrue("no seat: " + oneLine(mountInfo.raw()), mountInfo.seatFound);
             int dummyId = mountInfo.requireDummyId();
             assertTrue("could not mount",
-                    exec("artest player mount-entity " + dummyId).contains("\"mounted\":true"));
+                    Reply.of(exec("artest player mount-entity " + dummyId)).bool("mounted", false));
             String riding = awaitRiding(dummyId);
             assertTrue("the client never began riding: " + riding, riding == null);
 
@@ -521,7 +521,7 @@ public class SpikeFarCoordinateShipTest extends AbstractClientE2ETest {
         int cx1 = (x - 32) >> 4, cz1 = (ARENA_Z - 32) >> 4;
         int cx2 = (x + 32) >> 4, cz2 = (ARENA_Z + 32) >> 4;
         String warm = exec("artest chunk warmup 0 " + cx1 + " " + cz1 + " " + cx2 + " " + cz2);
-        if (!warm.contains("\"ok\":true")) {
+        if (!Reply.of(warm).ok()) {
             return "chunk warmup failed: " + oneLine(warm);
         }
         // A stone pad at BASE_Y-1 and air above it: 16M is ocean, and the fixture must not be built
@@ -530,7 +530,7 @@ public class SpikeFarCoordinateShipTest extends AbstractClientE2ETest {
                 + (x + 12) + " " + (BASE_Y - 1) + " " + (ARENA_Z + 12) + " minecraft:stone");
         String clear = exec("artest fill 0 " + (x - 8) + " " + BASE_Y + " " + (ARENA_Z - 8) + " "
                 + (x + 12) + " " + (BASE_Y + 14) + " " + (ARENA_Z + 12) + " minecraft:air");
-        if (!clear.contains("\"ok\":true")) {
+        if (!Reply.of(clear).ok()) {
             return "pre-clear failed: " + oneLine(clear);
         }
         String pad = exec("artest block at 0 " + x + " " + (BASE_Y - 1) + " " + ARENA_Z);
@@ -544,7 +544,7 @@ public class SpikeFarCoordinateShipTest extends AbstractClientE2ETest {
     private String assembleFixture(int x) throws Exception {
         String fixture = exec("artest fixture rocket 0 " + x + " " + BASE_Y + " " + ARENA_Z
                 + " " + VARIANT);
-        if (!fixture.contains("\"ok\":true")) {
+        if (!Reply.of(fixture).ok()) {
             System.out.println("[SPIKE ship] fixture at x=" + x + " failed: " + oneLine(fixture));
             return null;
         }

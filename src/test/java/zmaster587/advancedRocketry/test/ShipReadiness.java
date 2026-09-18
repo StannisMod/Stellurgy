@@ -96,7 +96,7 @@ public final class ShipReadiness {
         String reply = probe.exec("artest vs permaload false");
         assertTrue("this scenario asked for ships to be able to unload (" + why + ") and the probe"
                 + " did not accept it, so it is still running under the server's default and would"
-                + " measure that instead: " + reply, reply.contains("\"ok\":true"));
+                + " measure that instead: " + reply, Reply.of(reply).ok());
         System.out.println("[permaload] OFF for this scenario — " + why);
     }
 
@@ -113,7 +113,7 @@ public final class ShipReadiness {
     public static void holdShipsLoaded(Events.Probe probe, String why) throws Exception {
         String reply = probe.exec("artest vs permaload true");
         assertTrue("this scenario asked for ships to be held loaded again (" + why + ") and the"
-                + " probe did not accept it: " + reply, reply.contains("\"ok\":true"));
+                + " probe did not accept it: " + reply, Reply.of(reply).ok());
         System.out.println("[permaload] back ON for this scenario — " + why);
     }
 

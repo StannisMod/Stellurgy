@@ -98,7 +98,7 @@ public class VSRelocatedBodyIsNotFlungByItsLastShipE2ETest extends AbstractShare
         String coords = placeFixture(SRC_X, SRC_Y, SRC_Z, "with-pilot-deck");
         String asm = exec("artest rocket assemble 0 " + coords);
         assertTrue("with VS an AFC-bearing build must route to a ship (no rocket): " + asm,
-                asm.contains("\"rocketCount\":0"));
+                (Reply.of(asm).integerOr("rocketCount", Integer.MIN_VALUE) == 0));
         assertTrue("the ship never loaded", loadedShips(0) >= 1);
 
         // WHICH ship, from the assembler that named it. What remains a POLL is the world transform
@@ -130,8 +130,8 @@ public class VSRelocatedBodyIsNotFlungByItsLastShipE2ETest extends AbstractShare
         int dstX = SRC_X + CARRY_DX, dstZ = SRC_Z;
         assertTrue("the destination chunks never loaded, so the relocated subject would not be"
                         + " ticked there",
-                exec("artest chunk warmup 0 " + ((dstX - 16) >> 4) + " " + ((dstZ - 16) >> 4) + " "
-                        + ((dstX + 16) >> 4) + " " + ((dstZ + 16) >> 4)).contains("\"ok\":true"));
+                Reply.of(exec("artest chunk warmup 0 " + ((dstX - 16) >> 4) + " " + ((dstZ - 16) >> 4) + " "
+                        + ((dstX + 16) >> 4) + " " + ((dstZ + 16) >> 4))).ok());
 
         // The subject: a plain item, dropped over the hull so it falls onto the deck. Only the server
         // tick moves it, so any displacement below has exactly one possible author.
@@ -155,7 +155,7 @@ public class VSRelocatedBodyIsNotFlungByItsLastShipE2ETest extends AbstractShare
         // does for a player the game teleports.
         String moved = exec("artest entity set-pos 0 " + subjectId + " " + dstX + " " + DST_Y
                 + " " + dstZ);
-        assertTrue("the subject could not be relocated: " + moved, moved.contains("\"ok\":true"));
+        assertTrue("the subject could not be relocated: " + moved, Reply.of(moved).ok());
 
         // CONTROL 4, taken BEFORE the hazard rather than after it: the subject must still be
         // associated with the ship at the moment the rotation starts. Every probe call costs the
@@ -176,7 +176,7 @@ public class VSRelocatedBodyIsNotFlungByItsLastShipE2ETest extends AbstractShare
         // measured. A commanded rotation is held by the same controller instead of fought by it.
         String rot = exec("artest vs force-rot-by-id 0 " + shipId + " 0 " + YAW_RAD_PER_S + " 0");
         assertTrue("the hull left behind could not be commanded to rotate: " + rot,
-                rot.contains("\"afcResolved\":true"));
+                Reply.of(rot).bool("afcResolved", false));
 
         GameTicks.advance(client(), GameTicks.server(), WINDOW_TICKS);
 
@@ -229,14 +229,14 @@ public class VSRelocatedBodyIsNotFlungByItsLastShipE2ETest extends AbstractShare
         int cx1 = (baseX - 8) >> 4, cz1 = (baseZ - 8) >> 4;
         int cx2 = (baseX + 24) >> 4, cz2 = (baseZ + 24) >> 4;
         assertTrue("chunk warmup failed",
-                exec("artest chunk warmup 0 " + cx1 + " " + cz1 + " " + cx2 + " " + cz2).contains("\"ok\":true"));
-        assertTrue("pre-clear failed", exec("artest fill 0 " + (baseX - 4) + " " + (SRC_Y - 2) + " " + (baseZ - 4)
-                + " " + (baseX + 20) + " " + (SRC_Y + 12) + " " + (baseZ + 20) + " minecraft:air").contains("\"ok\":true"));
+                Reply.of(exec("artest chunk warmup 0 " + cx1 + " " + cz1 + " " + cx2 + " " + cz2)).ok());
+        assertTrue("pre-clear failed", Reply.of(exec("artest fill 0 " + (baseX - 4) + " " + (SRC_Y - 2) + " " + (baseZ - 4)
+                + " " + (baseX + 20) + " " + (SRC_Y + 12) + " " + (baseZ + 20) + " minecraft:air")).ok());
     }
 
     private String placeFixture(int baseX, int baseY, int baseZ, String variant) throws Exception {
         String fixture = exec("artest fixture rocket 0 " + baseX + " " + baseY + " " + baseZ + " " + variant);
-        assertTrue("fixture (" + variant + ") failed: " + fixture, fixture.contains("\"ok\":true"));
+        assertTrue("fixture (" + variant + ") failed: " + fixture, Reply.of(fixture).ok());
         int[] bp = Reply.of(fixture).blockPos(BUILDER_POS);
         assertTrue("fixture (" + variant + ") missing builderPos: " + fixture, bp != null);
         return bp[0] + " " + bp[1] + " " + bp[2];

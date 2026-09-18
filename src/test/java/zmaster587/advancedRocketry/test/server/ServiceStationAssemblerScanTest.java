@@ -73,7 +73,7 @@ public class ServiceStationAssemblerScanTest extends AbstractSharedServerTest {
         String placeAsm = exec("artest place 0 " + ax + " " + ay + " " + az
                 + " advancedrocketry:precisionassemblingmachine");
         assertTrue("precision assembler place failed: " + placeAsm,
-                placeAsm.contains("\"placed\":true"));
+                Reply.of(placeAsm).bool("placed", false));
 
         // Pre-state: scan hasn't run yet.
         String preState = exec("artest infra service-state 0 "
@@ -90,7 +90,7 @@ public class ServiceStationAssemblerScanTest extends AbstractSharedServerTest {
         String scan = exec("artest infra service-scan-assemblers 0 "
                 + s.sx + " " + s.sy + " " + s.sz);
         assertTrue("service-scan-assemblers must succeed: " + scan,
-                scan.contains("\"ok\":true"));
+                Reply.of(scan).ok());
 
         String postState = exec("artest infra service-state 0 "
                 + s.sx + " " + s.sy + " " + s.sz);
@@ -119,7 +119,7 @@ public class ServiceStationAssemblerScanTest extends AbstractSharedServerTest {
         String scan = exec("artest infra service-scan-assemblers 0 "
                 + s.sx + " " + s.sy + " " + s.sz);
         assertTrue("scan probe must succeed even with no assembler: " + scan,
-                scan.contains("\"ok\":true"));
+                Reply.of(scan).ok());
 
         String post = exec("artest infra service-state 0 "
                 + s.sx + " " + s.sy + " " + s.sz);
@@ -155,28 +155,28 @@ public class ServiceStationAssemblerScanTest extends AbstractSharedServerTest {
         String fixture = exec("artest fixture rocket 0 " + baseX + " " + CY_PAD
                 + " " + CZ_PAD + " simple");
         assertTrue("rocket fixture must build: " + fixture,
-                fixture.contains("\"ok\":true"));
+                Reply.of(fixture).ok());
         int[] bp = Reply.of(fixture).blockPos(BUILDER_POS);
         assertTrue("fixture missing builderPos: " + fixture, bp != null);
         String assemble = exec("artest rocket assemble 0 " + bp[0] + " "
                 + bp[1] + " " + bp[2]);
         assertTrue("assemble must succeed: " + assemble,
-                assemble.contains("\"ok\":true"));
+                Reply.of(assemble).ok());
         Reply eimReply = Reply.of(assemble);
         assertTrue("no entityId: " + assemble, eimReply.has(ENTITY_ID));
         int rocketId = Integer.parseInt(eimReply.text(ENTITY_ID));
 
         String inject = exec("artest infra inject-broken-part " + rocketId + " 5");
-        assertTrue("inject must succeed: " + inject, inject.contains("\"ok\":true"));
+        assertTrue("inject must succeed: " + inject, Reply.of(inject).ok());
 
         int sx = baseX + 10, sy = CY_PAD, sz = CZ_PAD;
         String place = exec("artest place 0 " + sx + " " + sy + " " + sz
                 + " advancedrocketry:serviceStation");
         assertTrue("service station place failed: " + place,
-                place.contains("\"placed\":true"));
+                Reply.of(place).bool("placed", false));
         String link = exec("artest infra link 0 " + sx + " " + sy + " " + sz
                 + " " + rocketId);
-        assertTrue("infra link must succeed: " + link, link.contains("\"ok\":true"));
+        assertTrue("infra link must succeed: " + link, Reply.of(link).ok());
         return new SetupResult(sx, sy, sz);
     }
 

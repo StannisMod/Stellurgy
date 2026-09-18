@@ -77,7 +77,7 @@ public class DockingPortNbtAndPacketTest extends AbstractSharedServerTest {
                 "artest chunk warmup 0 " + (cx - 1) + " " + (cz - 1)
                         + " " + (cx + 1) + " " + (cz + 1)));
         assertTrue("chunk warmup failed: " + resp,
-                resp.contains("\"ok\":true"));
+                Reply.of(resp).ok());
     }
 
     /** Place a TileDockingPort at the given coords. The block is
@@ -90,7 +90,7 @@ public class DockingPortNbtAndPacketTest extends AbstractSharedServerTest {
                         + " advancedrocketry:stationMarker"));
         assertTrue("stationMarker place failed at (" + x + "," + y + "," + z
                         + "): " + resp,
-                resp.contains("\"placed\":true"));
+                Reply.of(resp).bool("placed", false));
     }
 
     private static String extract(String src, String field) {
@@ -115,12 +115,12 @@ public class DockingPortNbtAndPacketTest extends AbstractSharedServerTest {
                 "artest docking-port set-ids 0 " + x + " " + y + " " + z
                         + " portA stationB"));
         assertTrue("set-ids must succeed: " + setIds,
-                setIds.contains("\"ok\":true"));
+                Reply.of(setIds).ok());
 
         String rt = join(client().execute(
                 "artest docking-port nbt-roundtrip 0 " + x + " " + y + " " + z));
         assertTrue("nbt-roundtrip must succeed: " + rt,
-                rt.contains("\"ok\":true"));
+                Reply.of(rt).ok());
 
         assertTrue("non-empty myIdStr must serialize a 'myId' NBT key: "
                 + rt, extractBool(rt, HAS_MY_ID_KEY));
@@ -147,7 +147,7 @@ public class DockingPortNbtAndPacketTest extends AbstractSharedServerTest {
         String rt = join(client().execute(
                 "artest docking-port nbt-roundtrip 0 " + x + " " + y + " " + z));
         assertTrue("nbt-roundtrip must succeed: " + rt,
-                rt.contains("\"ok\":true"));
+                Reply.of(rt).ok());
 
         assertEquals("empty myIdStr must NOT be written to NBT",
                 false, extractBool(rt, HAS_MY_ID_KEY));
@@ -168,15 +168,15 @@ public class DockingPortNbtAndPacketTest extends AbstractSharedServerTest {
         placeDockingPort(x, y, z);
 
         // Set myId so the packet has something to encode.
-        assertTrue(join(client().execute(
+        assertTrue(Reply.of(join(client().execute(
                 "artest docking-port set-ids 0 " + x + " " + y + " " + z
-                        + " gamma omega")).contains("\"ok\":true"));
+                        + " gamma omega"))).ok());
 
         String rt = join(client().execute(
                 "artest docking-port packet-roundtrip 0 " + x + " " + y + " "
                         + z + " 0"));
         assertTrue("packet-roundtrip id=0 must succeed: " + rt,
-                rt.contains("\"ok\":true"));
+                Reply.of(rt).ok());
         assertEquals("packet id=0 must carry myIdStr",
                 "gamma", extract(rt, DECODED_ID));
         // The wire is length-prefixed: int (4 bytes) + utf8 bytes for "gamma" (5).
@@ -194,15 +194,15 @@ public class DockingPortNbtAndPacketTest extends AbstractSharedServerTest {
         warmup(x, z);
         placeDockingPort(x, y, z);
 
-        assertTrue(join(client().execute(
+        assertTrue(Reply.of(join(client().execute(
                 "artest docking-port set-ids 0 " + x + " " + y + " " + z
-                        + " alpha beta")).contains("\"ok\":true"));
+                        + " alpha beta"))).ok());
 
         String rt = join(client().execute(
                 "artest docking-port packet-roundtrip 0 " + x + " " + y + " "
                         + z + " 1"));
         assertTrue("packet-roundtrip id=1 must succeed: " + rt,
-                rt.contains("\"ok\":true"));
+                Reply.of(rt).ok());
         assertEquals("packet id=1 must carry targetIdStr (not myIdStr)",
                 "beta", extract(rt, DECODED_ID));
     }

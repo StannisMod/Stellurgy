@@ -1,5 +1,6 @@
 package zmaster587.advancedRocketry.test.client;
 
+import zmaster587.advancedRocketry.test.Reply;
 import com.github.stannismod.forge.testing.junit.AbstractClientE2ETest;
 import com.google.gson.JsonObject;
 import org.junit.Test;
@@ -71,9 +72,9 @@ public class AudioRegistrySoundReachesClientE2ETest extends AbstractClientE2ETes
 
         String played = String.join("\n", serverClient().execute(
                 "artest sound play 0 8 79 8 combustionRocket"));
-        assertTrue("sound play probe failed: " + played, played.contains("\"ok\":true"));
+        assertTrue("sound play probe failed: " + played, Reply.of(played).ok());
         assertTrue("combustionRocket must be present in ForgeRegistries at send time: "
-                + played, played.contains("\"registered\":true"));
+                + played, Reply.of(played).bool("registered", false));
 
         // Contract: the sound reaches the real client's SoundManager — the client records the play
         // request it was handed, and a failure prints everything the client DID play since the mark

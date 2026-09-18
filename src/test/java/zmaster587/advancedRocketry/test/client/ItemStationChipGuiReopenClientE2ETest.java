@@ -1,5 +1,6 @@
 package zmaster587.advancedRocketry.test.client;
 
+import zmaster587.advancedRocketry.test.Reply;
 import com.github.stannismod.forge.testing.junit.AbstractClientE2ETest;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
@@ -143,7 +144,7 @@ public class ItemStationChipGuiReopenClientE2ETest extends AbstractClientE2ETest
 
         long equipMark = clientEvents().mark();
         String equip = exec("artest player equip-stationchip");
-        assertTrue("equip-stationchip must succeed: " + equip, equip.contains("\"ok\":true"));
+        assertTrue("equip-stationchip must succeed: " + equip, Reply.of(equip).ok());
         awaitHeld(equipMark, CHIP);
 
         // Sneak + right-click opens the chip's libVulpes modular GUI (this open
@@ -202,7 +203,7 @@ public class ItemStationChipGuiReopenClientE2ETest extends AbstractClientE2ETest
         String served = events.since(pressMark, "gui_container_served");
         assertTrue("AR's gui handler must be ASKED for the libVulpes MODULARFULLSCREEN id the chip"
                         + " re-opens on (id " + MODULARFULLSCREEN_ID + "): " + served,
-                served.contains("\"id\":" + MODULARFULLSCREEN_ID));
+                Events.anyRecordHas(served, "id", String.valueOf(MODULARFULLSCREEN_ID)));
         assertEquals("...and it must not answer NULL for it. That null was the whole of C010: Forge"
                         + " sends no gui packet for a null container, so the screen stayed shut with"
                         + " nothing logged anywhere. handlerAnswers=" + served,

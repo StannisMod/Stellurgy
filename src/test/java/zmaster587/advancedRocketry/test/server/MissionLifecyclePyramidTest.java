@@ -76,7 +76,7 @@ public class MissionLifecyclePyramidTest extends AbstractSharedServerTest {
 
         String start = ok(client().execute(
                 "artest mission start-gas 0 " + lastId + " " + duration + " water"));
-        assertFalse("start-gas must not error: " + start, start.contains("\"error\""));
+        assertFalse("start-gas must not error: " + start, Reply.of(start).has("error"));
         Reply mmReply = Reply.of(start);
         assertTrue("missing missionId in start response: " + start, mmReply.has(MISSION_ID));
         return Long.parseLong(mmReply.text(MISSION_ID));
@@ -84,7 +84,7 @@ public class MissionLifecyclePyramidTest extends AbstractSharedServerTest {
 
     private double progressFromAdvance(long missionId, long ticks) throws Exception {
         String r = ok(client().execute("artest mission advance " + missionId + " " + ticks));
-        assertFalse("advance must not error: " + r, r.contains("\"error\""));
+        assertFalse("advance must not error: " + r, Reply.of(r).has("error"));
         Reply pmReply = Reply.of(r);
         assertTrue("missing progress in advance response: " + r, pmReply.has(PROGRESS));
         return Double.parseDouble(pmReply.text(PROGRESS));
@@ -165,7 +165,7 @@ public class MissionLifecyclePyramidTest extends AbstractSharedServerTest {
         for (int attempt = 0; attempt < 30; attempt++) {
             ok(client().execute("artest satellite force-tick-dim 0"));
             state = ok(client().execute("artest mission state " + mid));
-            if (state.contains("\"error\":\"mission not found\"")) {
+            if ("mission not found".equals(Reply.of(state).text("error"))) {
                 pruned = true;
                 break;
             }

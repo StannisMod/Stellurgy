@@ -47,12 +47,12 @@ public class SolarTileStationPerimeterSliverZeroPowerTest extends AbstractHeadle
         ok(exec("artest dim load " + SPACE_DIM));
 
         String create = exec("artest station create 0");
-        assertTrue("station must create: " + create, create.contains("\"ok\":true"));
+        assertTrue("station must create: " + create, Reply.of(create).ok());
         int stationId = extract(ID, create);
 
         // Wire the station to orbit the overworld so the control panel is legitimately powered.
         String setParent = exec("artest station set-parent " + stationId + " 0");
-        assertTrue("station set-parent must succeed: " + setParent, setParent.contains("\"ok\":true"));
+        assertTrue("station set-parent must succeed: " + setParent, Reply.of(setParent).ok());
 
         StationInfo info = StationInfo.byId(this::exec, stationId);
         int spawnX = info.spawnX();
@@ -85,7 +85,7 @@ public class SolarTileStationPerimeterSliverZeroPowerTest extends AbstractHeadle
         String place = exec("artest place " + SPACE_DIM + " " + x + " " + y + " " + z
                 + " advancedrocketry:solarGenerator");
         assertTrue("solar generator must place at " + x + "," + y + "," + z + ": " + place,
-                place.contains("\"ok\":true") || place.contains("\"placed\":true"));
+                Reply.of(place).ok() || Reply.of(place).bool("placed", false));
         // Through the reader: a panel that is not there answered a well-formed absence, and a delta
         // between two absences is zero — which is exactly the claim this method's callers make.
         long before = energy(x, y, z)
@@ -93,7 +93,7 @@ public class SolarTileStationPerimeterSliverZeroPowerTest extends AbstractHeadle
                 .stored();
         String tick = exec("artest tile force-tick " + SPACE_DIM + " " + x + " " + y + " " + z + " 100");
         assertTrue("force-tick must not throw (C076 crash-guard still holds): " + tick,
-                tick.contains("\"ok\":true"));
+                Reply.of(tick).ok());
         long after = energy(x, y, z).stored();
         return after - before;
     }

@@ -1,5 +1,6 @@
 package zmaster587.advancedRocketry.test.server;
 
+import zmaster587.advancedRocketry.test.Reply;
 import com.github.stannismod.forge.testing.junit.AbstractHeadlessServerTest;
 import com.github.stannismod.forge.testing.server.RealDedicatedServerHarness;
 import org.junit.After;
@@ -107,6 +108,6 @@ public class PlanetDefsFaultToleranceTest {
         String info = String.join("\n",
                 harness.client().execute("artest planet info " + GOOD_DIM));
         assertTrue("good planet must round-trip its config: " + info,
-                info.contains("\"name\":\"GoodPlanet\""));
+                "GoodPlanet".equals(Reply.of(info).text("name")));
     }
 }

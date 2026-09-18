@@ -50,7 +50,7 @@ public class AdvancedFlightComputerTierGateTest extends AbstractSharedServerTest
         String assemble = assembleFixture(FixtureSite.openAir(0, 1200, 1200), VARIANT);
         // A rocket WAS built (fallback taken) ...
         assertTrue("expected exactly one rocket from the fallback path: " + assemble,
-                assemble.contains("\"rocketCount\":1"));
+                (Reply.of(assemble).integerOr("rocketCount", Integer.MIN_VALUE) == 1));
         int entityId = extractInt(assemble, "entityId");
         assertTrue("assemble did not report a rocket entity id: " + assemble, entityId >= 0);
 
@@ -74,7 +74,7 @@ public class AdvancedFlightComputerTierGateTest extends AbstractSharedServerTest
         // The defining contract of the fork WITH VS: the AFC diverts the build to a
         // ship, so no EntityRocket is spawned on the pad.
         assertTrue("with VS, an AFC-bearing build must not spawn a rocket: " + assemble,
-                assemble.contains("\"rocketCount\":0"));
+                (Reply.of(assemble).integerOr("rocketCount", Integer.MIN_VALUE) == 0));
     }
 
     @Test
@@ -87,7 +87,7 @@ public class AdvancedFlightComputerTierGateTest extends AbstractSharedServerTest
         String assemble = assembleFixture(FixtureSite.openAir(0, 2000, 2000), "advanced-flight-computer-only");
         assertTrue("an AFC alone must satisfy the guidance requirement and route to a ship "
                         + "(no rocket): " + assemble,
-                assemble.contains("\"rocketCount\":0"));
+                (Reply.of(assemble).integerOr("rocketCount", Integer.MIN_VALUE) == 0));
     }
 
     @Test
@@ -100,7 +100,7 @@ public class AdvancedFlightComputerTierGateTest extends AbstractSharedServerTest
         String assemble = String.join("\n", client().execute("artest rocket assemble 0 " + coords));
         assertTrue("without VS, an AFC alone must not satisfy guidance — scan must be NOGUIDANCE: "
                         + assemble,
-                assemble.contains("\"status\":\"NOGUIDANCE\""));
+                "NOGUIDANCE".equals(Reply.of(assemble).text("status")));
     }
 
     /**
@@ -112,7 +112,7 @@ public class AdvancedFlightComputerTierGateTest extends AbstractSharedServerTest
     private String assembleFixture(FixtureSite site, String variant) throws Exception {
         String coords = placeFixture(site, variant);
         String assemble = String.join("\n", client().execute("artest rocket assemble 0 " + coords));
-        assertTrue("assemble (" + variant + ") failed: " + assemble, assemble.contains("\"ok\":true"));
+        assertTrue("assemble (" + variant + ") failed: " + assemble, Reply.of(assemble).ok());
         return assemble;
     }
 
@@ -129,7 +129,7 @@ public class AdvancedFlightComputerTierGateTest extends AbstractSharedServerTest
         int cx2 = (baseX + 7) >> 4, cz2 = (baseZ + 7) >> 4;
         String warmup = String.join("\n", client().execute(
                 "artest chunk warmup 0 " + cx1 + " " + cz1 + " " + cx2 + " " + cz2));
-        assertTrue("chunk warmup failed: " + warmup, warmup.contains("\"ok\":true"));
+        assertTrue("chunk warmup failed: " + warmup, Reply.of(warmup).ok());
 
         // FIRST link: the volume this craft is built in is EMPTY. The site stands in open air, so
         // this ASSERTS rather than digs - anything standing here means the arrangement is wrong,
@@ -139,7 +139,7 @@ public class AdvancedFlightComputerTierGateTest extends AbstractSharedServerTest
 
         String fixture = String.join("\n", client().execute(
                 "artest fixture rocket 0 " + baseX + " " + baseY + " " + baseZ + " " + variant));
-        assertTrue("fixture (" + variant + ") failed: " + fixture, fixture.contains("\"ok\":true"));
+        assertTrue("fixture (" + variant + ") failed: " + fixture, Reply.of(fixture).ok());
         int[] bp = Reply.of(fixture).blockPos(BUILDER_POS);
         assertTrue("fixture (" + variant + ") missing builderPos: " + fixture, bp != null);
         return bp[0] + " " + bp[1] + " " + bp[2];

@@ -192,7 +192,7 @@ public class VSShipEntryClientGroupE2ETest extends AbstractSharedVsClientE2ETest
             assertTrue("a probe-held cell must be handed back between scenarios, or the next"
                     + " scenario's pool is full for a reason that has nothing to do with its own"
                     + " premise. cell=" + cell + " reply=" + released,
-                    released.contains("\"ok\":true"));
+                    Reply.of(released).ok());
         }
         scenario().record("spaceAtStart", exec("artest space subsystem-status").replace('\n', ' '));
     }
@@ -254,7 +254,7 @@ public class VSShipEntryClientGroupE2ETest extends AbstractSharedVsClientE2ETest
             String decisions = events.since(entryMark, "entry_decided");
             System.out.println("[GATE-STATS after entry leg] " + clientGateStats());
             assertTrue("the entry gate must have GRANTED this entry (STARTED), whatever else it decided"
-                    + " along the way: " + decisions, decisions.contains("\"decision\":\"STARTED\""));
+                    + " along the way: " + decisions, Events.anyRecordHas(decisions, "decision", "STARTED"));
         } finally {
             bot().releaseKey(Keyboard.KEY_R);
         }
@@ -371,7 +371,7 @@ public class VSShipEntryClientGroupE2ETest extends AbstractSharedVsClientE2ETest
         String tag = exec("artest space aboard-tag " + BOT);
         assertTrue("...and the record must READ as aboard once stamped: tag=" + tag + " riding="
                         + bot().reportRidingEntity() + " status=" + exec("artest space subsystem-status"),
-                tag.contains("\"tagged\":true"));
+                Reply.of(tag).bool("tagged", false));
     }
 
     // ── refused: the gate says REFUSED_POOL_FULL, and he stays in his seat in the launch world ───
@@ -704,7 +704,7 @@ public class VSShipEntryClientGroupE2ETest extends AbstractSharedVsClientE2ETest
         long spawnMark = events.markInstrumented();
         String assemble = assembleFixture(site, VARIANT);
         scenario().requireArranged("a with-pilot-seat build must route to a ship: " + assemble,
-                assemble.contains("\"ok\":true"));
+                Reply.of(assemble).ok());
         String shipUuid = awaitShipSpawned(events, spawnMark, "a with-pilot-seat assembly must create"
                 + " a VS ship in the physics registry — its record is where this scenario's ship"
                 + " identity comes from, and every later question about the craft is keyed on it");
@@ -747,7 +747,7 @@ public class VSShipEntryClientGroupE2ETest extends AbstractSharedVsClientE2ETest
         SeatMount mountInfo = SeatMount.onShip(this::exec, 0, shipUuid);
         String mount = exec("artest player mount-entity " + mountInfo.requireDummyId());
         scenario().requireArranged("bot must mount the seat dummy: " + mount,
-                mount.contains("\"mounted\":true"));
+                Reply.of(mount).bool("mounted", false));
         bot().waitTicks(10);
 
         return shipUuid;
@@ -764,7 +764,7 @@ public class VSShipEntryClientGroupE2ETest extends AbstractSharedVsClientE2ETest
                 "the craft that climbs to the orbit line, and the first blocks of that climb");
         String fixture = exec("artest fixture rocket 0 " + baseX + " " + baseY + " " + baseZ + " " + variant);
         scenario().requireArranged("fixture (" + variant + ") failed: " + fixture,
-                fixture.contains("\"ok\":true"));
+                Reply.of(fixture).ok());
         int[] bp = Reply.of(fixture).blockPos(BUILDER_POS);
         scenario().requireArranged("fixture missing builderPos: " + fixture, bp != null);
         return exec("artest rocket assemble 0 " + bp[0] + " " + bp[1] + " " + bp[2]);
@@ -793,7 +793,7 @@ public class VSShipEntryClientGroupE2ETest extends AbstractSharedVsClientE2ETest
         java.util.Set<Integer> held = new java.util.LinkedHashSet<Integer>();
         for (int cell : PRESSURE_CELLS) {
             String reply = exec("artest space cell-slot " + cell + " 0 0");
-            if (!reply.contains("\"managerLoaded\":true")) {
+            if (!Reply.of(reply).bool("managerLoaded", false)) {
                 continue;
             }
             Reply slot = Reply.of("artest space slot-status", reply);

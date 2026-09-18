@@ -41,11 +41,11 @@ public class PlanetDimensionLoadTest extends AbstractSharedServerTest {
         String joined = String.join("\n", client().execute("artest dim list"));
 
         assertTrue("dim list missing arDimensions key — probe wiring broken: " + joined,
-                joined.contains("\"arDimensions\":["));
+                (Reply.of(joined).arrayLength("arDimensions") >= 0));
 
         Assume.assumeFalse(
                 "No AR dimensions registered — skipping (empty galaxy?)",
-                joined.contains("\"arDimensions\":[]"));
+                (Reply.of(joined).arrayLength("arDimensions") == 0));
     }
 
     @Test
@@ -58,9 +58,9 @@ public class PlanetDimensionLoadTest extends AbstractSharedServerTest {
         String joined = String.join("\n", client().execute("artest dim load 0"));
 
         assertTrue("dim load 0 did not echo dim:0 in response: " + joined,
-                joined.contains("\"dim\":0"));
+                (Reply.of(joined).integerOr("dim", Integer.MIN_VALUE) == 0));
         assertTrue("dim load 0 did not report loaded:true: " + joined,
-                joined.contains("\"loaded\":true"));
+                Reply.of(joined).bool("loaded", false));
     }
 
     @Test
@@ -147,7 +147,7 @@ public class PlanetDimensionLoadTest extends AbstractSharedServerTest {
         String joined = String.join("\n", client().execute("artest dim list"));
         Assume.assumeFalse(
                 "No AR dimensions registered — skipping (empty galaxy?)",
-                joined.contains("\"arDimensions\":[]"));
+                (Reply.of(joined).arrayLength("arDimensions") == 0));
         int[] dims = Reply.of("artest dim list", joined).intArray(AR_DIM_PATTERN);
         assertTrue("could not parse first AR dim id from probe response: " + joined, dims.length > 0);
         return dims[0];
@@ -157,7 +157,7 @@ public class PlanetDimensionLoadTest extends AbstractSharedServerTest {
         String joined = String.join("\n", client().execute("artest dim list"));
         Assume.assumeFalse(
                 "No AR dimensions registered — skipping (empty galaxy?)",
-                joined.contains("\"arDimensions\":[]"));
+                (Reply.of(joined).arrayLength("arDimensions") == 0));
         Reply listed = Reply.of("artest dim list", joined);
         assertTrue("could not parse arDimensions array from probe response: " + joined,
                 listed.has(AR_DIMS_ARRAY_PATTERN));

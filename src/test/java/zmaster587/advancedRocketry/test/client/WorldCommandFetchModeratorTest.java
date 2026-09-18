@@ -194,7 +194,7 @@ public class WorldCommandFetchModeratorTest {
         // Op bot1 so /ar fetch (player-equipped verb) is authorised.
         String op = exec("artest player op-named " + BOT1_NAME);
         assertTrue("op-named must succeed for bot1: " + op,
-                op.contains("\"opped\":true"));
+                Reply.of(op).bool("opped", false));
 
         // BOTH marks before the stimulus: the fetch is one command and its two halves (the server
         // placing the body, the target's client applying the move) are milliseconds apart, so a

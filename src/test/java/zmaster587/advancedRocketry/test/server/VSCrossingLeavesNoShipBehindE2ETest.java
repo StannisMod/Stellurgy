@@ -141,7 +141,7 @@ public class VSCrossingLeavesNoShipBehindE2ETest extends AbstractSharedServerTes
         String looked = exec("artest vs empty-nearest-and-look 0 "
                 + LEG3_X + " " + BUILD_Y + " " + BASE_Z);
         assertTrue("the fault injection itself failed, so this leg measures nothing: " + looked,
-                looked.contains("\"ok\":true"));
+                Reply.of(looked).ok());
 
         String emptied = field(looked, "emptied");
         String answered = field(looked, "lookupAnswered");
@@ -175,7 +175,7 @@ public class VSCrossingLeavesNoShipBehindE2ETest extends AbstractSharedServerTes
 
         String cross = repack(sx, sy, dx, dy);
         assertTrue(what + " itself failed, so this leg measures nothing: " + cross,
-                cross.contains("\"ok\":true"));
+                Reply.of(cross).ok());
         assertTrue("the crossed ship never arrived at " + dx + "," + dy + "; " + what + "=" + cross
                 + " " + counters(), waitUntilShipIsAt(dx, dy));
 
@@ -205,7 +205,7 @@ public class VSCrossingLeavesNoShipBehindE2ETest extends AbstractSharedServerTes
         String coords = placeFixture(baseX, BUILD_Y, BASE_Z, "with-pilot-seat");
         String asm = exec("artest rocket assemble 0 " + coords);
         assertTrue("with VS an AFC-bearing build must route to a ship (no rocket): " + asm,
-                asm.contains("\"rocketCount\":0"));
+                (Reply.of(asm).integerOr("rocketCount", Integer.MIN_VALUE) == 0));
         assertTrue("the ship never entered VS's registry at " + baseX + "," + BUILD_Y + "," + BASE_Z
                         + ": " + counters(), registryExceeds(registryBefore));
         durableShipId = ShipIdentity.nameFromAssembly(asm);
@@ -282,15 +282,15 @@ public class VSCrossingLeavesNoShipBehindE2ETest extends AbstractSharedServerTes
         int cx1 = (baseX - 4) >> 4, cz1 = (BASE_Z - 4) >> 4;
         int cx2 = (baseX + 20) >> 4, cz2 = (BASE_Z + 20) >> 4;
         assertTrue("chunk warmup failed",
-                exec("artest chunk warmup 0 " + cx1 + " " + cz1 + " " + cx2 + " " + cz2).contains("\"ok\":true"));
-        assertTrue("pre-clear failed", exec("artest fill 0 " + (baseX - 4) + " " + (baseY - 2) + " " + (BASE_Z - 4)
+                Reply.of(exec("artest chunk warmup 0 " + cx1 + " " + cz1 + " " + cx2 + " " + cz2)).ok());
+        assertTrue("pre-clear failed", Reply.of(exec("artest fill 0 " + (baseX - 4) + " " + (baseY - 2) + " " + (BASE_Z - 4)
                 + " " + (baseX + 20) + " " + (baseY + 12) + " " + (BASE_Z + 20)
-                + " minecraft:air").contains("\"ok\":true"));
+                + " minecraft:air")).ok());
     }
 
     private String placeFixture(int baseX, int baseY, int baseZ, String variant) throws Exception {
         String fixture = exec("artest fixture rocket 0 " + baseX + " " + baseY + " " + baseZ + " " + variant);
-        assertTrue("fixture (" + variant + ") failed: " + fixture, fixture.contains("\"ok\":true"));
+        assertTrue("fixture (" + variant + ") failed: " + fixture, Reply.of(fixture).ok());
         int[] bp = Reply.of(fixture).blockPos(BUILDER_POS);
         assertTrue("fixture (" + variant + ") missing builderPos: " + fixture, bp != null);
         return bp[0] + " " + bp[1] + " " + bp[2];

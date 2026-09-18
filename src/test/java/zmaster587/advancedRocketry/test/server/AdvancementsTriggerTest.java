@@ -100,10 +100,10 @@ public class AdvancementsTriggerTest {
      *  world and its clock never crosses the %20 trigger window. */
     private void stationAndTick(int dim, double x, double y, double z, int ticks) throws Exception {
         String fake = exec("artest player ensure-fake " + dim + " " + x + " " + y + " " + z);
-        assertTrue("ensure-fake must succeed: " + fake, fake.contains("\"ok\":true"));
+        assertTrue("ensure-fake must succeed: " + fake, Reply.of(fake).ok());
         exec("artest chunk forceload " + dim + " " + (((int) x) >> 4) + " " + (((int) z) >> 4));
         assertTrue("tick-living must succeed",
-                exec("artest player tick-living " + ticks).contains("\"ok\":true"));
+                Reply.of(exec("artest player tick-living " + ticks)).ok());
         // Wait OFF the server thread: a console command runs ON the server thread, so a probe that
         // sleeps there blocks ticking entirely. The wait belongs in the test jvm — and it OBSERVES
         // the world's clock rather than hoping for it, so a world that is not ticking says so.
@@ -125,7 +125,7 @@ public class AdvancementsTriggerTest {
                 false, isDone(exec("artest player advancement " + ADV_WENT)));
 
         // Δy=15 from (2347,80,67) -> distSq=225 < 512 ✓. 60 ticks ≥ 3 windows.
-        assertTrue(exec("artest player tick-living 60").contains("\"ok\":true"));
+        assertTrue(Reply.of(exec("artest player tick-living 60")).ok());
         // Poll off-thread — the server free-runs while the test JVM sleeps.
         // The trigger fires from a per-tick check, so the budget is that check's world.
         boolean done = GameTicks.until(harness.client(), GameTicks.server(), GRANT_TICKS,

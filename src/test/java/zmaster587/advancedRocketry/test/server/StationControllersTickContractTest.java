@@ -70,7 +70,7 @@ public class StationControllersTickContractTest extends AbstractSharedServerTest
         String place = exec("artest place " + SPACE_DIM + " " + cx + " " + cy + " " + cz
                 + " advancedrocketry:altitudeController");
         assertTrue("altitude controller must place: " + place,
-                place.contains("\"placed\":true"));
+                Reply.of(place).bool("placed", false));
 
         // Snapshot pre-tick orbital distance.
         double preDist = station(stationId).orbitalDistance;
@@ -81,7 +81,7 @@ public class StationControllersTickContractTest extends AbstractSharedServerTest
         String setTarget = exec("artest station controller-set-target "
                 + SPACE_DIM + " " + cx + " " + cy + " " + cz + " 0 " + target);
         assertTrue("controller-set-target must succeed: " + setTarget,
-                setTarget.contains("\"ok\":true"));
+                Reply.of(setTarget).ok());
 
         // Sanity: station info now reports the target.
         int actualTarget = station(stationId).targetOrbitalDistance();
@@ -157,7 +157,7 @@ public class StationControllersTickContractTest extends AbstractSharedServerTest
         String place = exec("artest place " + SPACE_DIM + " " + cx + " " + cy + " " + cz
                 + " advancedrocketry:gravityController");
         assertTrue("gravity controller must place: " + place,
-                place.contains("\"placed\":true"));
+                Reply.of(place).bool("placed", false));
 
         // Try setting an explicit target via the controller. This may
         // get reverted by the redstone-default bug, but it's still a
@@ -210,7 +210,7 @@ public class StationControllersTickContractTest extends AbstractSharedServerTest
         String place = exec("artest place " + SPACE_DIM + " " + cx + " " + cy + " " + cz
                 + " advancedrocketry:orientationController");
         assertTrue("orientation controller must place: " + place,
-                place.contains("\"placed\":true"));
+                Reply.of(place).bool("placed", false));
 
         double preRotEast = station(stationId).rotationEast();
 
@@ -221,7 +221,7 @@ public class StationControllersTickContractTest extends AbstractSharedServerTest
         String setTarget = exec("artest station controller-set-target "
                 + SPACE_DIM + " " + cx + " " + cy + " " + cz + " 0 " + progress);
         assertTrue("controller-set-target must succeed: " + setTarget,
-                setTarget.contains("\"ok\":true"));
+                Reply.of(setTarget).ok());
 
         int actualTargetRph0 = station(stationId).targetRotationsPerHour(0);
         // targetRotationsPerHour[0] = progress - 60 = 40.
@@ -248,7 +248,7 @@ public class StationControllersTickContractTest extends AbstractSharedServerTest
     private int createStation() throws Exception {
         String create = exec("artest station create 0");
         assertTrue("station create failed: " + create,
-                create.contains("\"ok\":true"));
+                Reply.of(create).ok());
         Reply mReply = Reply.of(create);
         assertTrue("no station id in create response: " + create, mReply.has(STATION_ID));
         return Integer.parseInt(mReply.text(STATION_ID));

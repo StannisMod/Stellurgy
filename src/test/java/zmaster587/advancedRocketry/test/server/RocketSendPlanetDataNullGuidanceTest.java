@@ -73,12 +73,12 @@ public class RocketSendPlanetDataNullGuidanceTest extends AbstractSharedServerTe
         int rid = buildAndAssembleRocket(9500);
 
         String strip = ok(client().execute("artest rocket strip-guidance " + rid));
-        assertTrue("strip-guidance failed: " + strip, strip.contains("\"ok\":true"));
+        assertTrue("strip-guidance failed: " + strip, Reply.of(strip).ok());
         assertTrue("guidance computer must be gone: " + strip,
-                strip.contains("\"hasGuidanceComputer\":false"));
+                (!Reply.of(strip).bool("hasGuidanceComputer", true)));
 
         String resp = ok(client().execute("artest rocket send-planet-data " + rid + " 0"));
-        assertTrue("send-planet-data failed: " + resp, resp.contains("\"ok\":true"));
+        assertTrue("send-planet-data failed: " + resp, Reply.of(resp).ok());
 
         Reply mReply = Reply.of(resp);
         assertTrue("thrown field missing: " + resp, mReply.has(THROWN));
@@ -94,7 +94,7 @@ public class RocketSendPlanetDataNullGuidanceTest extends AbstractSharedServerTe
         int rid = buildAndAssembleRocket(9550);
 
         String resp = ok(client().execute("artest rocket planet-data-read-empty " + rid));
-        assertTrue("planet-data-read-empty failed: " + resp, resp.contains("\"ok\":true"));
+        assertTrue("planet-data-read-empty failed: " + resp, Reply.of(resp).ok());
 
         Reply mReply = Reply.of(resp);
         assertTrue("thrown field missing: " + resp, mReply.has(THROWN));

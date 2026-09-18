@@ -399,7 +399,7 @@ public class VSPreAssemblyBoardingPilotControlE2ETest extends AbstractSharedVsCl
         long assemblyOnClient = clientEvents().mark();
         String assemble = assembleFixture();
         scenario().requireArranged("a with-pilot-seat build must route to a ship: " + assemble,
-                assemble.contains("\"ok\":true"));
+                Reply.of(assemble).ok());
         bot().waitTicks(20);
 
         // CONTRACT, first half: sitting still means sitting. Assembling the ship under a seated
@@ -807,7 +807,7 @@ public class VSPreAssemblyBoardingPilotControlE2ETest extends AbstractSharedVsCl
 
         String mount = exec("artest player mount-entity " + mountInfo.requireDummyId());
         scenario().requireArranged("the bot must mount the seat's dummy: " + mount,
-                mount.contains("\"mounted\":true"));
+                Reply.of(mount).bool("mounted", false));
         bot().waitTicks(10);
         return "seatMount=" + mountInfo.raw() + " mount=" + mount;
     }
@@ -1056,7 +1056,7 @@ public class VSPreAssemblyBoardingPilotControlE2ETest extends AbstractSharedVsCl
         site.requireClear(this::exec, 2, 16,
                 "the loose craft, and the air the player stands and clicks in beside it");
         String fixture = exec("artest fixture rocket 0 " + baseX + " " + baseY + " " + baseZ + " " + variant);
-        scenario().requireArranged("fixture (" + variant + ") failed: " + fixture, fixture.contains("\"ok\":true"));
+        scenario().requireArranged("fixture (" + variant + ") failed: " + fixture, Reply.of(fixture).ok());
         int[] bp = Reply.of(fixture).blockPos(BUILDER_POS);
         scenario().requireArranged("fixture missing builderPos: " + fixture, bp != null);
         builderX = bp[0];

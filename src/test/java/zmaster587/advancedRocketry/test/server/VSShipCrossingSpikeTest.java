@@ -60,7 +60,7 @@ public class VSShipCrossingSpikeTest extends AbstractSharedServerTest {
         // by identity.
         String control = exec("artest vs seat-input 0 0 0 0 0 0 0");
         assertTrue("witness sensitivity control — seat probe must report seatFound:false before any ship: "
-                + control, !control.contains("\"seatFound\":true"));
+                + control, !Reply.of(control).bool("seatFound", false));
 
         // Build a piloted ship (pilot seat linked to an AFC) at the source and assemble it into a VS ship.
         clearArea(SRC_X, SRC_Z);
@@ -68,7 +68,7 @@ public class VSShipCrossingSpikeTest extends AbstractSharedServerTest {
         String coords = placeFixture(SRC_X, SRC_Y, SRC_Z, "with-pilot-seat");
         String asm = exec("artest rocket assemble 0 " + coords);
         assertTrue("with VS an AFC-bearing build must route to a ship (no rocket): " + asm,
-                asm.contains("\"rocketCount\":0"));
+                (Reply.of(asm).integerOr("rocketCount", Integer.MIN_VALUE) == 0));
         assertTrue("the source VS ship never loaded", loadedShips(0) >= 1);
 
         // The SOURCE ship, by the durable name its assembler minted. The crossing below re-assembles
@@ -83,9 +83,9 @@ public class VSShipCrossingSpikeTest extends AbstractSharedServerTest {
         // BASELINE: the seat resolves its flight computer, and we record the RELATIVE offset between them
         // (invariant under any rigid relocation — the number the crossing must preserve).
         String pre = exec("artest vs seat-input-by-id 0 " + srcShipId + " 0 0 0 0 0 0");
-        assertTrue("pre-crossing: seat must be found: " + pre, pre.contains("\"seatFound\":true"));
-        assertTrue("pre-crossing: seat must be linked to its AFC: " + pre, pre.contains("\"seatLinked\":true"));
-        assertTrue("pre-crossing: seat must resolve its AFC: " + pre, pre.contains("\"afcResolved\":true"));
+        assertTrue("pre-crossing: seat must be found: " + pre, Reply.of(pre).bool("seatFound", false));
+        assertTrue("pre-crossing: seat must be linked to its AFC: " + pre, Reply.of(pre).bool("seatLinked", false));
+        assertTrue("pre-crossing: seat must resolve its AFC: " + pre, Reply.of(pre).bool("afcResolved", false));
         int[] preOffset = seatToAfcOffset(pre);
 
         // Put a rider aboard (an EntityDummy bound to the pilot seat).
@@ -102,7 +102,7 @@ public class VSShipCrossingSpikeTest extends AbstractSharedServerTest {
         String cross = exec("artest vs ship-repack 0 id " + srcShipId + " "
                 + (int) sx + " " + (int) sy + " " + (int) sz
                 + " " + DST_X + " " + DST_Y + " " + DST_Z);
-        assertTrue("crossing failed (NO-GO signal): " + cross, cross.contains("\"ok\":true"));
+        assertTrue("crossing failed (NO-GO signal): " + cross, Reply.of(cross).ok());
         // No assertion on HOW the source stops being a ship. This used to require the crossing to have
         // deregistered it itself, which pinned the mechanism rather than the promise - and the mechanism
         // it pinned was the one that leaked a ship per crossing. What the crossing owes is that the world
@@ -126,10 +126,10 @@ public class VSShipCrossingSpikeTest extends AbstractSharedServerTest {
         // ship's internal geometry survived the pack/paste round-trip. Asked of the ARRIVED ship by its
         // own id: the crossing mints a new one, so this is deliberately not srcShipId.
         String post = exec("artest vs seat-input-by-id 0 " + dstShipId + " 0 0 0 0 0 0");
-        assertTrue("post-crossing: seat must be found: " + post, post.contains("\"seatFound\":true"));
+        assertTrue("post-crossing: seat must be found: " + post, Reply.of(post).bool("seatFound", false));
         assertTrue("post-crossing: seat must still be linked to its AFC: " + post,
-                post.contains("\"seatLinked\":true"));
-        assertTrue("post-crossing: seat must still resolve its AFC: " + post, post.contains("\"afcResolved\":true"));
+                Reply.of(post).bool("seatLinked", false));
+        assertTrue("post-crossing: seat must still resolve its AFC: " + post, Reply.of(post).bool("afcResolved", false));
         int[] postOffset = seatToAfcOffset(post);
         assertEquals("seat->AFC relative offset X changed across the crossing (geometry scrambled); pre="
                 + java.util.Arrays.toString(preOffset) + " post=" + java.util.Arrays.toString(postOffset),
@@ -162,14 +162,14 @@ public class VSShipCrossingSpikeTest extends AbstractSharedServerTest {
         int cx1 = (baseX - 4) >> 4, cz1 = (baseZ - 4) >> 4;
         int cx2 = (baseX + 20) >> 4, cz2 = (baseZ + 20) >> 4;
         assertTrue("chunk warmup failed",
-                exec("artest chunk warmup 0 " + cx1 + " " + cz1 + " " + cx2 + " " + cz2).contains("\"ok\":true"));
-        assertTrue("pre-clear failed", exec("artest fill 0 " + (baseX - 4) + " " + (SRC_Y - 2) + " " + (baseZ - 4)
-                + " " + (baseX + 20) + " " + (SRC_Y + 12) + " " + (baseZ + 20) + " minecraft:air").contains("\"ok\":true"));
+                Reply.of(exec("artest chunk warmup 0 " + cx1 + " " + cz1 + " " + cx2 + " " + cz2)).ok());
+        assertTrue("pre-clear failed", Reply.of(exec("artest fill 0 " + (baseX - 4) + " " + (SRC_Y - 2) + " " + (baseZ - 4)
+                + " " + (baseX + 20) + " " + (SRC_Y + 12) + " " + (baseZ + 20) + " minecraft:air")).ok());
     }
 
     private String placeFixture(int baseX, int baseY, int baseZ, String variant) throws Exception {
         String fixture = exec("artest fixture rocket 0 " + baseX + " " + baseY + " " + baseZ + " " + variant);
-        assertTrue("fixture (" + variant + ") failed: " + fixture, fixture.contains("\"ok\":true"));
+        assertTrue("fixture (" + variant + ") failed: " + fixture, Reply.of(fixture).ok());
         int[] bp = Reply.of(fixture).blockPos(BUILDER_POS);
         assertTrue("fixture (" + variant + ") missing builderPos: " + fixture, bp != null);
         return bp[0] + " " + bp[1] + " " + bp[2];

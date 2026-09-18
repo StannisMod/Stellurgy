@@ -103,7 +103,7 @@ public class VehicleRideClientGroupE2ETest extends AbstractSharedClientE2ETest {
         String fill = exec("artest fill " + dim + " " + plot().x(PAD_DX) + " " + PAD_Y + " "
                 + plot().z(PAD_DZ) + " " + plot().x(PAD_DX + PAD_EDGE - 1) + " " + PAD_Y + " "
                 + plot().z(PAD_DZ + PAD_EDGE - 1) + " minecraft:stone");
-        scenario().requireArranged("platform fill must succeed: " + fill, fill.contains("\"ok\":true"));
+        scenario().requireArranged("platform fill must succeed: " + fill, Reply.of(fill).ok());
         long standMark = clientEvents().mark();
         exec("tp @a " + (standX() + 0.5) + " " + (PAD_Y + 1) + " " + (standZ() + 0.5));
         awaitClientPlacedNear(standMark, standX() + 0.5, standZ() + 0.5,
@@ -126,7 +126,7 @@ public class VehicleRideClientGroupE2ETest extends AbstractSharedClientE2ETest {
         String resp = exec("artest entity spawn " + plot().dim + " " + vx + " " + (PAD_Y + 1)
                 + " " + vz + " " + entityId);
         scenario().requireArranged(entityId + " spawn must succeed: " + resp,
-                resp.contains("\"ok\":true") && resp.contains("\"spawned\":true"));
+                Reply.of(resp).ok() && Reply.of(resp).bool("spawned", false));
         Reply spawn = Reply.of("artest entity spawn", resp);
         scenario().requireArranged("spawn response must include entityId: " + resp,
                 spawn.has(ENTITY_ID));
@@ -140,9 +140,9 @@ public class VehicleRideClientGroupE2ETest extends AbstractSharedClientE2ETest {
     private void mount(int vehicleId) throws Exception {
         String mount = exec("artest player mount-entity " + vehicleId);
         scenario().requireArranged("mount-entity probe must succeed: " + mount,
-                mount.contains("\"ok\":true"));
+                Reply.of(mount).ok());
         scenario().requireArranged("mount-entity must report mounted:true: " + mount,
-                mount.contains("\"mounted\":true"));
+                Reply.of(mount).bool("mounted", false));
     }
 
     /** Polls until the CLIENT reports riding == expected (~10 s cap). */

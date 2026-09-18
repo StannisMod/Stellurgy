@@ -61,7 +61,7 @@ public class ScanningSatelliteTickContractTest extends AbstractSharedServerTest 
 
         String tickResp = String.join("\n", client().execute(
                 "artest satellite tick 0 " + satId + " 100"));
-        assertTrue("tick probe failed: " + tickResp, tickResp.contains("\"ok\":true"));
+        assertTrue("tick probe failed: " + tickResp, Reply.of(tickResp).ok());
         long preData = longField(PRE_DATA, tickResp, "preData");
         long postData = longField(POST_DATA, tickResp, "postData");
         assertTrue("optical with powerGen=1000 must accumulate ≥1 data point "
@@ -91,7 +91,7 @@ public class ScanningSatelliteTickContractTest extends AbstractSharedServerTest 
 
         String tickResp = String.join("\n", client().execute(
                 "artest satellite tick 0 " + satId + " 100"));
-        assertTrue("tick probe failed: " + tickResp, tickResp.contains("\"ok\":true"));
+        assertTrue("tick probe failed: " + tickResp, Reply.of(tickResp).ok());
         long preData = longField(PRE_DATA, tickResp, "preData");
         long postData = longField(POST_DATA, tickResp, "postData");
         assertTrue("density with powerGen=1000 must accumulate ≥1 data point "
@@ -120,7 +120,7 @@ public class ScanningSatelliteTickContractTest extends AbstractSharedServerTest 
 
         String tickResp = String.join("\n", client().execute(
                 "artest satellite tick 0 " + satId + " 100"));
-        assertTrue("tick probe failed: " + tickResp, tickResp.contains("\"ok\":true"));
+        assertTrue("tick probe failed: " + tickResp, Reply.of(tickResp).ok());
         long preData = longField(PRE_DATA, tickResp, "preData");
         long postData = longField(POST_DATA, tickResp, "postData");
         assertTrue("mass with powerGen=1000 must accumulate ≥1 data point "
@@ -152,7 +152,7 @@ public class ScanningSatelliteTickContractTest extends AbstractSharedServerTest 
 
         String tickResp = String.join("\n", client().execute(
                 "artest satellite tick 0 " + satId + " 100"));
-        assertTrue("tick probe failed: " + tickResp, tickResp.contains("\"ok\":true"));
+        assertTrue("tick probe failed: " + tickResp, Reply.of(tickResp).ok());
         long preData = longField(PRE_DATA, tickResp, "preData");
         long postData = longField(POST_DATA, tickResp, "postData");
         assertTrue("composition with powerGen=1000 must accumulate ≥1 data point "
@@ -208,11 +208,11 @@ public class ScanningSatelliteTickContractTest extends AbstractSharedServerTest 
         assertTrue("oreScanner has no DataStorage surface — `satellite data` "
                         + "probe must report it is not a SatelliteData subclass; "
                         + dataResp,
-                dataResp.contains("\"error\":\"not a SatelliteData subclass\""));
+                "not a SatelliteData subclass".equals(Reply.of(dataResp).text("error")));
 
         String tickResp = String.join("\n", client().execute(
                 "artest satellite tick 0 " + satId + " 10"));
-        assertTrue("tick probe failed: " + tickResp, tickResp.contains("\"ok\":true"));
+        assertTrue("tick probe failed: " + tickResp, Reply.of(tickResp).ok());
         long preStored = longField(PRE_STORED, tickResp, "preStored");
         long postStored = longField(POST_STORED, tickResp, "postStored");
         assertTrue("oreScanner tick must still accrue battery (inherited "
@@ -241,7 +241,7 @@ public class ScanningSatelliteTickContractTest extends AbstractSharedServerTest 
         String createResp = String.join("\n", client().execute(
                 "artest satellite create-spy-telescope 0"));
         assertTrue("create-spy-telescope failed: " + createResp,
-                createResp.contains("\"ok\":true"));
+                Reply.of(createResp).ok());
         Reply mReply = Reply.of(createResp);
         assertTrue("could not extract id from create response: " + createResp,
                 mReply.has(ID));
@@ -257,7 +257,7 @@ public class ScanningSatelliteTickContractTest extends AbstractSharedServerTest 
         String tickResp = String.join("\n", client().execute(
                 "artest satellite tick 0 " + spyId + " 10"));
         assertTrue("tick probe failed: " + tickResp,
-                tickResp.contains("\"ok\":true"));
+                Reply.of(tickResp).ok());
         long preStored = longField(PRE_STORED, tickResp, "preStored");
         long postStored = longField(POST_STORED, tickResp, "postStored");
         assertEquals("spyTelescope tickEntity is an empty body — even when "
@@ -275,7 +275,7 @@ public class ScanningSatelliteTickContractTest extends AbstractSharedServerTest 
                 "artest satellite create 0 " + type + " " + powerGen + " "
                         + powerStorage + " " + maxData));
         assertTrue("satellite create (" + type + ") failed: " + resp,
-                resp.contains("\"ok\":true"));
+                Reply.of(resp).ok());
         Reply mReply = Reply.of(resp);
         assertTrue("could not extract id from create response: " + resp, mReply.has(ID));
         return Long.parseLong(mReply.text(ID));

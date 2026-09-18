@@ -213,17 +213,17 @@ public class ItemSealDetectorPlayerMessagesE2ETest extends AbstractSharedClientE
         // Air placement is a no-op for /artest place but force-loads the chunk — accept either
         // "placed":true or a "placed":false echoing that the block was already there.
         scenario().requireArranged("place must not error at " + x + "," + Y + "," + z
-                + " with " + fixtureBlock + "; resp=" + placed, !placed.contains("\"error\""));
+                + " with " + fixtureBlock + "; resp=" + placed, !Reply.of(placed).has("error"));
 
         scenario().arranging("perch the player two blocks south of the fixture");
         String perch = exec("artest place " + dim + " " + x + " " + Y + " " + perchZ + " minecraft:stone");
-        scenario().requireArranged("perch place must not error: " + perch, !perch.contains("\"error\""));
+        scenario().requireArranged("perch place must not error: " + perch, !Reply.of(perch).has("error"));
 
         scenario().arranging("give the seal detector and wait for the CLIENT to render it in hand");
         long equipMark = clientEvents().mark();
         String give = exec("artest player give-held advancedrocketry:sealdetector");
         scenario().requireArranged("give-held sealdetector must succeed: " + give,
-                give.contains("\"ok\":true"));
+                Reply.of(give).ok());
         exec("tp @a " + (x + 0.5) + " " + (Y + 1) + " " + (z - 1.5));
         awaitClientPlacedNear(equipMark, x + 0.5, z - 1.5,
                 "the detector is used from where the player stands, so the client must have been"
@@ -256,7 +256,7 @@ public class ItemSealDetectorPlayerMessagesE2ETest extends AbstractSharedClientE
         String sent = events.since(mark, "chat_message_sent");
         assertTrue("the seal detector must answer the " + fixtureBlock + " fixture at " + x + ","
                 + Y + "," + z + " with " + key + "; what it actually sent since the click: " + sent,
-                sent.contains("\"key\":\"" + key + "\""));
+                Events.anyRecordHas(sent, "key", String.valueOf(key)));
 
         String seen = awaitClientRecord(clientMark, "client_chat_received", expectedChatText,
                 LINK_BUDGET_TICKS);

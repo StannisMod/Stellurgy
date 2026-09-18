@@ -32,13 +32,13 @@ public class WorldgenSmokeTest extends AbstractHeadlessServerTest {
     @Test
     public void earthChunkAndOreCountsLookSane() throws Exception {
         String sample = String.join("\n", client().execute("artest worldgen sample 0 0 0"));
-        assertTrue("worldgen sample failed: " + sample, !sample.contains("\"error\""));
+        assertTrue("worldgen sample failed: " + sample, !Reply.of(sample).has("error"));
         assertTrue("worldgen reports air on top — generator likely crashed: " + sample,
-                !sample.contains("\"topBlock\":\"minecraft:air\""));
+                !"minecraft:air".equals(Reply.of(sample).text("topBlock")));
 
         String bedrock = String.join("\n", client().execute(
                 "artest worldgen ore-stats 0 0 0 1 minecraft:bedrock"));
-        assertTrue("ore-stats bedrock failed: " + bedrock, !bedrock.contains("\"error\""));
+        assertTrue("ore-stats bedrock failed: " + bedrock, !Reply.of(bedrock).has("error"));
         assertEquals("expected 9 chunks scanned", 9L, parseLong(CHUNKS, bedrock));
         long bedrockCount = parseLong(COUNT, bedrock);
         assertTrue("vanilla bedrock count too low: " + bedrockCount + " in " + bedrock,

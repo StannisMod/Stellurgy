@@ -262,7 +262,7 @@ public class ItemRightClickClientGroupE2ETest extends AbstractSharedClientE2ETes
         long equipMark = clientEvents().mark();
         String give = exec("artest player give-held advancedrocketry:atmanalyser");
         scenario().requireArranged("give-held atmanalyser must succeed: " + give,
-                give.contains("\"ok\":true"));
+                Reply.of(give).ok());
         awaitHeld(equipMark, "advancedrocketry:atmanalyser");
 
         // Both marks BEFORE the click, so nothing that happens afterwards can be missed between two
@@ -316,7 +316,7 @@ public class ItemRightClickClientGroupE2ETest extends AbstractSharedClientE2ETes
         long equipMark = clientEvents().mark();
         String equip = exec("artest player equip-biomechanger " + plot().dim);
         scenario().requireArranged("equip-biomechanger must succeed: " + equip,
-                equip.contains("\"ok\":true"));
+                Reply.of(equip).ok());
         Reply satMReply = Reply.of(equip);
         scenario().requireArranged("equip response must carry satId: " + equip, satMReply.has(SAT_ID));
         long satId = Long.parseLong(satMReply.text(SAT_ID));
@@ -343,7 +343,7 @@ public class ItemRightClickClientGroupE2ETest extends AbstractSharedClientE2ETes
         // the recorder writes remote:true for the early exit that guard takes. A remote:true here
         // would mean the queue below was filled by nobody.
         assertTrue("the satellite must have been asked on the SERVER, not on the client's copy: "
-                + queued, queued.contains("\"remote\":false"));
+                + queued, Events.anyRecordHas(queued, "remote", "false"));
 
         int posAfter = extractInt(
                 exec("artest satellite poslist-size " + plot().dim + " " + satId), POSLIST_SIZE);
@@ -379,9 +379,9 @@ public class ItemRightClickClientGroupE2ETest extends AbstractSharedClientE2ETes
         long equipMark = clientEvents().mark();
         String equip = exec("artest player equip-orescanner none");
         scenario().requireArranged("equip-orescanner must succeed: " + equip,
-                equip.contains("\"ok\":true"));
+                Reply.of(equip).ok());
         scenario().requireArranged("empty branch must report hadSatelliteId:false: " + equip,
-                equip.contains("\"hadSatelliteId\":false"));
+                (!Reply.of(equip).bool("hadSatelliteId", true)));
         awaitHeld(equipMark, "advancedrocketry:orescanner");
 
         scenario().asserting("no screen opens on the client");
@@ -397,7 +397,7 @@ public class ItemRightClickClientGroupE2ETest extends AbstractSharedClientE2ETes
                 LINK_BUDGET_TICKS);
         assertTrue("the click that reached the server must be the ORE SCANNER's — an empty hand"
                 + " would produce the same silence below: " + clicks,
-                clicks.contains("\"item\":\"advancedrocketry:orescanner\""));
+                Events.anyRecordHas(clicks, "item", "advancedrocketry:orescanner"));
 
         String served = events.since(mark, "gui_container_served");
         assertEquals("an unbound ore scanner must never ask the server for a GUI; containers served"
@@ -422,9 +422,9 @@ public class ItemRightClickClientGroupE2ETest extends AbstractSharedClientE2ETes
         long equipMark = clientEvents().mark();
         String equip = exec("artest player equip-orescanner " + plot().dim);
         scenario().requireArranged("equip-orescanner must succeed: " + equip,
-                equip.contains("\"ok\":true"));
+                Reply.of(equip).ok());
         scenario().requireArranged("resolved branch must report hadSatelliteId:true: " + equip,
-                equip.contains("\"hadSatelliteId\":true"));
+                Reply.of(equip).bool("hadSatelliteId", false));
         awaitHeld(equipMark, "advancedrocketry:orescanner");
 
         scenario().asserting("the OreMapping GUI opens on the client");
@@ -486,13 +486,13 @@ public class ItemRightClickClientGroupE2ETest extends AbstractSharedClientE2ETes
         forceLoadAround(x, z);
         String placeResp = exec("artest place " + dim + " " + x + " " + Y + " " + z + " minecraft:stone");
         scenario().requireArranged("place must not error; resp=" + placeResp,
-                !placeResp.contains("\"error\""));
+                !Reply.of(placeResp).has("error"));
 
         scenario().arranging("stand the survival player two blocks above it, holding the item");
         exec("gamemode survival @a");
         long equipMark = clientEvents().mark();
         String give = exec("artest player give-held advancedrocketry:hovercraft");
-        scenario().requireArranged("give-held must succeed: " + give, give.contains("\"ok\":true"));
+        scenario().requireArranged("give-held must succeed: " + give, Reply.of(give).ok());
         exec("tp @a " + (x + 0.5) + " " + (Y + 2) + " " + (z + 0.5));
         // The click below is ray-traced from where the player stands and is dispatched by the
         // CLIENT, so the placement has to have reached the client — which is a link, where the ten
@@ -577,7 +577,7 @@ public class ItemRightClickClientGroupE2ETest extends AbstractSharedClientE2ETes
         exec("gamemode survival @a");
         long equipMark = clientEvents().mark();
         String give = exec("artest player give-held advancedrocketry:hovercraft");
-        scenario().requireArranged("give-held must succeed: " + give, give.contains("\"ok\":true"));
+        scenario().requireArranged("give-held must succeed: " + give, Reply.of(give).ok());
         // 200 is 50 blocks above the plot's own fixture level, and nothing is ever placed there —
         // so the upward ray has nothing to hit that belongs to this scenario or any other.
         exec("tp @a " + (x + 0.5) + " 200 " + (z + 0.5));
@@ -607,7 +607,7 @@ public class ItemRightClickClientGroupE2ETest extends AbstractSharedClientE2ETes
                 + " before its silence can be read as an empty ray trace", LINK_BUDGET_TICKS);
         assertTrue("the click that reached the server must be the HOVERCRAFT's — an empty hand"
                 + " would produce the same absence below: " + clicks,
-                clicks.contains("\"item\":\"advancedrocketry:hovercraft\""));
+                Events.anyRecordHas(clicks, "item", "advancedrocketry:hovercraft"));
 
         String joined = events.since(mark, "entity_joined_world");
         assertEquals("no hovercraft must be spawned on an empty ray-trace; entities that joined the"

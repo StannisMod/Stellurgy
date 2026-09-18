@@ -57,7 +57,7 @@ public class RocketRequireFuelDisableAssemblesTest extends AbstractSharedServerT
         site.requireClear(cmd -> String.join("\n", client().execute(cmd)), 2, 10,
                 "the craft is built and flown in this volume");
         String fixture = cmd("artest fixture rocket 0 " + baseX + " " + baseY + " " + baseZ + " simple");
-        assertTrue("fixture build failed: " + fixture, fixture.contains("\"ok\":true"));
+        assertTrue("fixture build failed: " + fixture, Reply.of(fixture).ok());
         int[] bp = Reply.of(fixture).blockPos(BUILDER_POS);
         assertTrue("no builderPos: " + fixture, bp != null);
         return cmd("artest rocket assemble 0 "
@@ -76,18 +76,18 @@ public class RocketRequireFuelDisableAssemblesTest extends AbstractSharedServerT
             // The assemble probe reports "ok":true only when the SCAN status was
             // SUCCESS; the "status" field it echoes is the POST-assemble status
             // (ALREADY_ASSEMBLED), so we gate on "ok":true, not status==SUCCESS.
-            assertTrue(cmd("artest config set rocketRequireFuel true").contains("\"ok\":true"));
+            assertTrue(Reply.of(cmd("artest config set rocketRequireFuel true")).ok());
             String on = buildAndAssemble(FixtureSite.openAir(0, 3400, 3400));
             assertTrue("simple fixture must assemble on rocketRequireFuel=true (scan SUCCESS): " + on,
-                    on.contains("\"ok\":true"));
+                    Reply.of(on).ok());
 
             // Contract: flipping fuel off must NOT block assembly. Pre-fix the
             // scan returned NOFUEL (the regression) and "ok":true was absent.
-            assertTrue(cmd("artest config set rocketRequireFuel false").contains("\"ok\":true"));
+            assertTrue(Reply.of(cmd("artest config set rocketRequireFuel false")).ok());
             String off = buildAndAssemble(FixtureSite.openAir(0, 3460, 3400));
             assertTrue("with rocketRequireFuel=false a valid rocket must still assemble "
                     + "(no fuel-adequacy gate); scan status was " + status(off) + ": " + off,
-                    off.contains("\"ok\":true"));
+                    Reply.of(off).ok());
         } finally {
             // Restore the shared-harness default for any later test in this JVM.
             client().execute("artest config set rocketRequireFuel true");

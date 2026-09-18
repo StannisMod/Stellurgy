@@ -1,5 +1,6 @@
 package zmaster587.advancedRocketry.test.server;
 
+import zmaster587.advancedRocketry.test.Reply;
 import zmaster587.advancedRocketry.test.ShipReadiness;
 import org.junit.After;
 
@@ -53,11 +54,11 @@ public class ArrivalSeatLookupNamesItsOwnShipE2ETest extends AbstractSharedServe
         String seatedAsm = exec("artest rocket assemble 0 "
                 + placeFixture(SEATED_X, SEATED_Y, SEATED_Z, "with-pilot-seat"));
         assertTrue("with VS an AFC-bearing build must route to a ship (no rocket): " + seatedAsm,
-                seatedAsm.contains("\"rocketCount\":0"));
+                (Reply.of(seatedAsm).integerOr("rocketCount", Integer.MIN_VALUE) == 0));
         String seatlessAsm = exec("artest rocket assemble 0 "
                 + placeFixture(SEATLESS_X, SEATLESS_Y, SEATLESS_Z, "with-nav-computer"));
         assertTrue("the seatless craft did not become a ship either: " + seatlessAsm,
-                seatlessAsm.contains("\"rocketCount\":0"));
+                (Reply.of(seatlessAsm).integerOr("rocketCount", Integer.MIN_VALUE) == 0));
         assertTrue("the ships never loaded", loadedShips(0) >= 2);
 
         // ARRANGEMENT CHECK, before either leg: the two crafts must be two REGISTERED ships, or the
@@ -113,17 +114,17 @@ public class ArrivalSeatLookupNamesItsOwnShipE2ETest extends AbstractSharedServe
     private void clearArea(int baseX, int baseZ) throws Exception {
         int cx1 = (baseX - 4) >> 4, cz1 = (baseZ - 4) >> 4;
         int cx2 = (baseX + 20) >> 4, cz2 = (baseZ + 20) >> 4;
-        assertTrue("chunk warmup failed", exec("artest chunk warmup 0 " + cx1 + " " + cz1 + " "
-                + cx2 + " " + cz2).contains("\"ok\":true"));
-        assertTrue("pre-clear failed", exec("artest fill 0 " + (baseX - 4) + " " + (SEATED_Y - 2)
+        assertTrue("chunk warmup failed", Reply.of(exec("artest chunk warmup 0 " + cx1 + " " + cz1 + " "
+                + cx2 + " " + cz2)).ok());
+        assertTrue("pre-clear failed", Reply.of(exec("artest fill 0 " + (baseX - 4) + " " + (SEATED_Y - 2)
                 + " " + (baseZ - 4) + " " + (baseX + 20) + " " + (SEATED_Y + 12) + " " + (baseZ + 20)
-                + " minecraft:air").contains("\"ok\":true"));
+                + " minecraft:air")).ok());
     }
 
     private String placeFixture(int baseX, int baseY, int baseZ, String variant) throws Exception {
         String fixture = exec("artest fixture rocket 0 " + baseX + " " + baseY + " " + baseZ
                 + " " + variant);
-        assertTrue("fixture (" + variant + ") failed: " + fixture, fixture.contains("\"ok\":true"));
+        assertTrue("fixture (" + variant + ") failed: " + fixture, Reply.of(fixture).ok());
         java.util.regex.Matcher bp = java.util.regex.Pattern
                 .compile("\"builderPos\":\\[(-?\\d+),(-?\\d+),(-?\\d+)]").matcher(fixture);
         assertTrue("fixture (" + variant + ") missing builderPos: " + fixture, bp.find());

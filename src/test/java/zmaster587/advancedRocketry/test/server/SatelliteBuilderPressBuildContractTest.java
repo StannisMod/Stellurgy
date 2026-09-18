@@ -83,11 +83,11 @@ public class SatelliteBuilderPressBuildContractTest extends AbstractSharedServer
         String place = exec("artest place 0 " + x + " " + y + " " + z
                 + " advancedrocketry:satelliteBuilder");
         assertTrue("satellite builder place failed: " + place,
-                place.contains("\"placed\":true"));
+                Reply.of(place).bool("placed", false));
 
         String resp = exec("artest satellite-builder press-build 0 "
                 + x + " " + y + " " + z + " optical");
-        assertTrue("press-build must succeed: " + resp, resp.contains("\"ok\":true"));
+        assertTrue("press-build must succeed: " + resp, Reply.of(resp).ok());
 
         // Per-type resolution: optical must map to a primary-function meta.
         assertNotEquals("optical must resolve to a valid primary-function meta",
@@ -141,7 +141,7 @@ public class SatelliteBuilderPressBuildContractTest extends AbstractSharedServer
         String place = exec("artest place 0 " + x + " " + y + " " + z
                 + " advancedrocketry:satelliteBuilder");
         assertTrue("satellite builder place failed: " + place,
-                place.contains("\"placed\":true"));
+                Reply.of(place).bool("placed", false));
 
         String resp = exec("artest satellite-builder press-build 0 "
                 + x + " " + y + " " + z + " weatherController");

@@ -93,7 +93,7 @@ public class ServiceStationFullRepairCycleTest extends AbstractSharedServerTest 
         String asmResp = exec("artest fixture machine precision-assembler 0 "
                 + FIXTURE_CX + " " + FIXTURE_CY + " " + FIXTURE_CZ);
         assertTrue("precision-assembler fixture must build: " + asmResp,
-                asmResp.contains("\"ok\":true"));
+                Reply.of(asmResp).ok());
         int[][] outputs = Reply.of("artest fixture multiblock", asmResp)
                 .blockPosArray(OUTPUT_POS_LIST);
         assertTrue("fixture response must include outputPositions: " + asmResp,
@@ -110,13 +110,13 @@ public class ServiceStationFullRepairCycleTest extends AbstractSharedServerTest 
         String fix = exec("artest fixture rocket 0 " + ROCKET_CX + " "
                 + FIXTURE_CY + " " + ROCKET_CZ + " simple");
         assertTrue("rocket fixture must build: " + fix,
-                fix.contains("\"ok\":true"));
+                Reply.of(fix).ok());
         int[] bp = Reply.of(fix).blockPos(BUILDER_POS);
         assertTrue("fixture missing builderPos: " + fix, bp != null);
         String assemble = exec("artest rocket assemble 0 " + bp[0] + " "
                 + bp[1] + " " + bp[2]);
         assertTrue("assemble must succeed: " + assemble,
-                assemble.contains("\"ok\":true"));
+                Reply.of(assemble).ok());
         Reply eimReply = Reply.of(assemble);
         assertTrue("no entityId: " + assemble, eimReply.has(ENTITY_ID));
         int rocketId = Integer.parseInt(eimReply.text(ENTITY_ID));
@@ -124,7 +124,7 @@ public class ServiceStationFullRepairCycleTest extends AbstractSharedServerTest 
         // Mark one of the rocket's advRocketmotor TileBrokenParts as
         // stage 5.
         String inject = exec("artest infra inject-broken-part " + rocketId + " 5");
-        assertTrue("inject must succeed: " + inject, inject.contains("\"ok\":true"));
+        assertTrue("inject must succeed: " + inject, Reply.of(inject).ok());
 
         // Place service station within 5 blocks of the assembler
         // controller (scanForAssemblers' radius). Controller is at
@@ -138,11 +138,11 @@ public class ServiceStationFullRepairCycleTest extends AbstractSharedServerTest 
         String place = exec("artest place 0 " + sx + " " + sy + " " + sz
                 + " advancedrocketry:serviceStation");
         assertTrue("service station place failed: " + place,
-                place.contains("\"placed\":true"));
+                Reply.of(place).bool("placed", false));
         String link = exec("artest infra link 0 " + sx + " " + sy + " " + sz
                 + " " + rocketId);
         assertTrue("infra link must succeed: " + link,
-                link.contains("\"ok\":true"));
+                Reply.of(link).ok());
 
         // Apply redstone power (performFunction requires
         // getEquivalentPower=true).
@@ -166,7 +166,7 @@ public class ServiceStationFullRepairCycleTest extends AbstractSharedServerTest 
         String pf1 = exec("artest infra service-perform-function 0 "
                 + sx + " " + sy + " " + sz);
         assertTrue("performFunction call #1 must succeed: " + pf1,
-                pf1.contains("\"ok\":true"));
+                Reply.of(pf1).ok());
 
         String mid = exec("artest infra service-state 0 " + sx + " " + sy + " " + sz);
         assertEquals("phase 1: assembler must be discovered: " + mid,
@@ -188,12 +188,12 @@ public class ServiceStationFullRepairCycleTest extends AbstractSharedServerTest 
         String fillOut = exec("artest hatch fill 0 " + outX + " " + outY + " " + outZ
                 + " 0 advancedrocketry:advrocketmotor 1");
         assertTrue("hatch fill on assembler output must succeed: " + fillOut,
-                fillOut.contains("\"ok\":true"));
+                Reply.of(fillOut).ok());
 
         String pf2 = exec("artest infra service-perform-function 0 "
                 + sx + " " + sy + " " + sz);
         assertTrue("performFunction call #2 must succeed: " + pf2,
-                pf2.contains("\"ok\":true"));
+                Reply.of(pf2).ok());
 
         String end = exec("artest infra service-state 0 " + sx + " " + sy + " " + sz);
         assertEquals("phase 2: partsProcessing must be cleared by "
@@ -214,7 +214,7 @@ public class ServiceStationFullRepairCycleTest extends AbstractSharedServerTest 
         assertTrue("post-cycle inject must succeed — rocket storage must still "
                         + "contain at least one stage-0 TileBrokenPart, proving "
                         + "the repaired part was restored (not lost): " + reInject,
-                reInject.contains("\"ok\":true"));
+                Reply.of(reInject).ok());
     }
 
     private static int extract(String src, String field) {

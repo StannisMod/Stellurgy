@@ -1,5 +1,6 @@
 package zmaster587.advancedRocketry.test.server;
 
+import zmaster587.advancedRocketry.test.Reply;
 import com.github.stannismod.forge.testing.junit.AbstractHeadlessServerTest;
 import org.junit.Test;
 
@@ -40,46 +41,46 @@ public class SelectorServerSmokeTest extends AbstractHeadlessServerTest {
         String place = String.join("\n", client().execute(
                 "artest place 0 " + x + " " + y + " " + z + " advancedrocketry:planetSelector"));
         assertTrue("could not place planetSelector: " + place,
-                place.contains("\"placed\":true"));
+                Reply.of(place).bool("placed", false));
 
         // Initial state — no selection yet.
         String empty = String.join("\n", client().execute(
                 "artest selector info 0 " + x + " " + y + " " + z));
         assertTrue("selector info errored on fresh tile: " + empty,
-                !empty.contains("\"error\""));
+                !Reply.of(empty).has("error"));
         assertTrue("freshly placed selector tile should report hasSelection=false: " + empty,
-                empty.contains("\"hasSelection\":false"));
+                (!Reply.of(empty).bool("hasSelection", true)));
 
         // Simulate a click selecting Earth (dim 0).
         String clickEarth = String.join("\n", client().execute(
                 "artest selector simulate-click 0 " + x + " " + y + " " + z + " 0"));
         assertTrue("simulate-click failed: " + clickEarth,
-                clickEarth.contains("\"ok\":true"));
+                Reply.of(clickEarth).ok());
 
         // dimCache must now reflect Earth.
         String earthInfo = String.join("\n", client().execute(
                 "artest selector info 0 " + x + " " + y + " " + z));
         assertTrue("selection didn't stick: " + earthInfo,
-                earthInfo.contains("\"hasSelection\":true"));
+                Reply.of(earthInfo).bool("hasSelection", false));
         assertTrue("selectedDim mismatch: " + earthInfo,
-                earthInfo.contains("\"selectedDim\":0"));
+                (Reply.of(earthInfo).integerOr("selectedDim", Integer.MIN_VALUE) == 0));
 
         // Probe non-existent planet dim — must reject without mutating state.
         String reject = String.join("\n", client().execute(
                 "artest selector simulate-click 0 " + x + " " + y + " " + z + " 99999"));
         assertTrue("expected rejection for non-registered planet dim 99999: " + reject,
-                reject.contains("\"error\":\"planet dim not registered\""));
+                "planet dim not registered".equals(Reply.of(reject).text("error")));
 
         String unchanged = String.join("\n", client().execute(
                 "artest selector info 0 " + x + " " + y + " " + z));
         assertTrue("selection unexpectedly mutated after rejected simulate-click: " + unchanged,
-                unchanged.contains("\"selectedDim\":0"));
+                (Reply.of(unchanged).integerOr("selectedDim", Integer.MIN_VALUE) == 0));
     }
 
     @Test
     public void selectorInfoOnEmptyPositionErrorsCleanly() throws Exception {
         String resp = String.join("\n", client().execute("artest selector info 0 100 80 100"));
         assertTrue("expected 'tile not TilePlanetSelector' on empty pos: " + resp,
-                resp.contains("\"error\":\"tile not TilePlanetSelector\""));
+                "tile not TilePlanetSelector".equals(Reply.of(resp).text("error")));
     }
 }

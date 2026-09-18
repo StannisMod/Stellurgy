@@ -74,7 +74,7 @@ public class TerraformerPoweredCycleOnOverworldTest extends AbstractSharedServer
     public void overworldTerraformerWithNonArConfigFlipStepsDensity() throws Exception {
         String flip = exec("artest config set allowTerraformNonAR true");
         assertTrue("config flip failed: " + flip,
-                flip.contains("\"ok\":true") && flip.contains("\"newValue\":true"));
+                Reply.of(flip).ok() && Reply.of(flip).bool("newValue", false));
 
         String fixture = buildAndCompleteFixture(CX_POSITIVE);
         injectPower(fixture, 30_000_000);
@@ -100,7 +100,7 @@ public class TerraformerPoweredCycleOnOverworldTest extends AbstractSharedServer
         // a passing default-branch test.
         String set = exec("artest config set allowTerraformNonAR false");
         assertTrue("config set-false failed: " + set,
-                set.contains("\"ok\":true"));
+                Reply.of(set).ok());
 
         String fixture = buildAndCompleteFixture(CX_NEGATIVE);
         injectPower(fixture, 30_000_000);
@@ -123,11 +123,11 @@ public class TerraformerPoweredCycleOnOverworldTest extends AbstractSharedServer
         String fixture = exec("artest fixture multiblock terraformer "
                 + DIM + " " + cx + " " + CY + " " + CZ);
         assertTrue("terraformer fixture build failed: " + fixture,
-                fixture.contains("\"ok\":true") && fixture.contains("\"unresolved\":0"));
+                Reply.of(fixture).ok() && (Reply.of(fixture).integerOr("unresolved", Integer.MIN_VALUE) == 0));
         String tryComplete = exec("artest machine try-complete "
                 + DIM + " " + cx + " " + CY + " " + CZ);
         assertTrue("terraformer structure failed to complete: " + tryComplete,
-                tryComplete.contains("\"isComplete\":true"));
+                Reply.of(tryComplete).bool("isComplete", false));
         return fixture;
     }
 
@@ -139,13 +139,13 @@ public class TerraformerPoweredCycleOnOverworldTest extends AbstractSharedServer
         int pz = m[2];
         String resp = exec("artest energy inject "
                 + DIM + " " + px + " " + py + " " + pz + " " + amount);
-        assertTrue("energy inject failed: " + resp, resp.contains("\"ok\":true"));
+        assertTrue("energy inject failed: " + resp, Reply.of(resp).ok());
     }
 
     private void enableMachine(int cx) throws Exception {
         String resp = exec("artest machine set-enabled "
                 + DIM + " " + cx + " " + CY + " " + CZ + " true");
-        assertTrue("machine set-enabled failed: " + resp, resp.contains("\"enabled\":true"));
+        assertTrue("machine set-enabled failed: " + resp, Reply.of(resp).bool("enabled", false));
     }
 
     private void runRefillCycle(String fixture, int cx, int iterations, int ticksPerIter)
@@ -158,7 +158,7 @@ public class TerraformerPoweredCycleOnOverworldTest extends AbstractSharedServer
             String tick = exec("artest tile force-tick "
                     + DIM + " " + cx + " " + CY + " " + CZ + " " + ticksPerIter);
             assertTrue("force-tick errored on iter " + i + ": " + tick,
-                    tick.contains("\"ok\":true"));
+                    Reply.of(tick).ok());
         }
     }
 
@@ -174,7 +174,7 @@ public class TerraformerPoweredCycleOnOverworldTest extends AbstractSharedServer
         String resp = exec("artest fluid inject "
                 + DIM + " " + lx + " " + ly + " " + lz + " " + fluidName + " " + amount);
         assertTrue(fluidName + " inject failed at hatch " + hatchIndex + ": " + resp,
-                resp.contains("\"ok\":true"));
+                Reply.of(resp).ok());
     }
 
     private int readDensity() throws Exception {

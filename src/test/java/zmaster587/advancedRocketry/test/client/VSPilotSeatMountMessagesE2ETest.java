@@ -95,7 +95,7 @@ public class VSPilotSeatMountMessagesE2ETest extends AbstractSharedVsClientE2ETe
         String place = exec("artest fill 0 " + SEAT_X + " " + SEAT_Y + " " + SEAT_Z
                 + " " + SEAT_X + " " + SEAT_Y + " " + SEAT_Z + " advancedrocketry:pilotSeat");
         scenario().requireArranged("placing the pilot seat failed: " + place,
-                place.contains("\"ok\":true"));
+                Reply.of(place).ok());
 
         standBesideTheSeat();
         emptyTheHand();
@@ -119,7 +119,7 @@ public class VSPilotSeatMountMessagesE2ETest extends AbstractSharedVsClientE2ETe
         String queued = events.since(noticeMark, "action_bar_queued");
         assertTrue("the notice the seat queues must be the \"not assembled\" one — the key IS the"
                         + " message's identity, and the lang file is keyed on it: " + queued,
-                queued.contains("\"key\":\"" + KEY_NOT_ASSEMBLED + "\""));
+                Events.anyRecordHas(queued, "key", String.valueOf(KEY_NOT_ASSEMBLED)));
 
         // The server said it; now the CLIENT must have been handed the resolved line. This is the
         // half that separates "never sent" from "sent and never arrived" — and it is read off the
@@ -167,7 +167,7 @@ public class VSPilotSeatMountMessagesE2ETest extends AbstractSharedVsClientE2ETe
         dismountAndConfirm(events);
         String occupy = exec("artest vs seat-occupy 0 " + SEAT_X + " " + SEAT_Y + " " + SEAT_Z);
         scenario().requireArranged("the seat-occupy probe must seat an NPC occupant: " + occupy,
-                occupy.contains("\"ok\":true") && occupy.contains("\"mounted\":true"));
+                Reply.of(occupy).ok() && Reply.of(occupy).bool("mounted", false));
         String occupantName = Reply.of("artest vs seat-occupy", occupy).text(OCCUPANT_NAME);
         scenario().requireArranged("seat-occupy must report the occupant's name: " + occupy,
                 occupantName != null);
@@ -191,7 +191,7 @@ public class VSPilotSeatMountMessagesE2ETest extends AbstractSharedVsClientE2ETe
         String refusal = events.since(refusalMark, "status_message_sent");
         assertTrue("clicking an OCCUPIED pilot seat must answer with the occupied refusal, keyed on "
                         + KEY_OCCUPIED + ": " + refusal,
-                refusal.contains("\"key\":\"" + KEY_OCCUPIED + "\""));
+                Events.anyRecordHas(refusal, "key", KEY_OCCUPIED));
         // NAMING the occupant is the contract, and the translation's own arguments are where the
         // name lives — a `contains` on the rendered line cannot tell a formatted name from a name
         // that happens to appear in the sentence.
@@ -233,15 +233,15 @@ public class VSPilotSeatMountMessagesE2ETest extends AbstractSharedVsClientE2ETe
         String place2 = exec("artest fill 0 " + LINKED_X + " " + SEAT_Y + " " + LINKED_Z
                 + " " + LINKED_X + " " + SEAT_Y + " " + LINKED_Z + " advancedrocketry:pilotSeat");
         scenario().requireArranged("placing the second pilot seat failed: " + place2,
-                place2.contains("\"ok\":true"));
+                Reply.of(place2).ok());
         String linked = exec("artest vs seat-link 0 " + LINKED_X + " " + SEAT_Y + " " + LINKED_Z
                 + " " + LINKED_X + " " + (SEAT_Y + 1) + " " + LINKED_Z);
         scenario().requireArranged("the seat must end up LINKED — without that this leg tests the same "
                         + "unlinked case as leg 1 and proves nothing: " + linked,
-                linked.contains("\"linked\":true"));
+                Reply.of(linked).bool("linked", false));
         scenario().requireArranged("CONTROL: and it must NOT be managed by a ship, or the notice is "
                         + "correctly absent for a reason that has nothing to do with the bug: " + linked,
-                linked.contains("\"managedByShip\":false"));
+                (!Reply.of(linked).bool("managedByShip", true)));
 
         standBeside(LINKED_X, LINKED_Z);
         long linkedMark = events.markInstrumented();
@@ -255,7 +255,7 @@ public class VSPilotSeatMountMessagesE2ETest extends AbstractSharedVsClientE2ETe
         String linkedQueued = events.since(linkedMark, "action_bar_queued");
         assertTrue("the notice queued for the linked-but-shipless craft must be " + KEY_NOT_ASSEMBLED
                         + ": " + linkedQueued,
-                linkedQueued.contains("\"key\":\"" + KEY_NOT_ASSEMBLED + "\""));
+                Events.anyRecordHas(linkedQueued, "key", KEY_NOT_ASSEMBLED));
         String linkedShown = awaitClientChat(linkedClientMark, "not assembled", NOTICE_BUDGET_TICKS,
                 "the notice for a linked-but-shipless craft must reach the pilot's own HUD");
         assertTrue("the line the client was handed must say the ship is not assembled: " + linkedShown,

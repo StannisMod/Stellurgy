@@ -77,7 +77,7 @@ public class RocketLaunchDepthTest extends AbstractSharedServerTest {
 
         String fixture = ok(client().execute(
                 "artest fixture rocket 0 " + site.x + " " + site.y + " " + site.z + " simple"));
-        assertTrue("fixture failed: " + fixture, fixture.contains("\"ok\":true"));
+        assertTrue("fixture failed: " + fixture, Reply.of(fixture).ok());
         int[] bp = Reply.of(fixture).blockPos(BUILDER_POS);
         assertTrue("fixture missing builderPos: " + fixture, bp != null);
         int bx = bp[0];
@@ -86,7 +86,7 @@ public class RocketLaunchDepthTest extends AbstractSharedServerTest {
 
         String assemble = ok(client().execute(
                 "artest rocket assemble 0 " + bx + " " + by + " " + bz));
-        assertTrue("assemble failed: " + assemble, assemble.contains("\"ok\":true"));
+        assertTrue("assemble failed: " + assemble, Reply.of(assemble).ok());
 
         String list = ok(client().execute("artest rocket list 0"));
         java.util.List<RocketList.Entry> built = RocketList.of(list);
@@ -97,7 +97,7 @@ public class RocketLaunchDepthTest extends AbstractSharedServerTest {
     private int firstNonOverworldArDimOrSkip() throws Exception {
         String joined = ok(client().execute("artest dim list"));
         Assume.assumeFalse("No AR dimensions registered",
-                joined.contains("\"arDimensions\":[]"));
+                (Reply.of(joined).arrayLength("arDimensions") == 0));
         Reply dims = Reply.of("artest dim list", joined);
         assertTrue("could not parse arDimensions array: " + joined, dims.has(AR_DIMS_ARRAY));
         for (int dim : dims.intArray(AR_DIMS_ARRAY)) {
@@ -122,18 +122,18 @@ public class RocketLaunchDepthTest extends AbstractSharedServerTest {
         String prog = ok(client().execute(
                 "artest rocket set-destination " + id + " " + destDim));
         assertTrue("set-destination must succeed: " + prog,
-                prog.contains("\"ok\":true"));
+                Reply.of(prog).ok());
         assertTrue("set-destination must echo back the dim it programmed: " + prog,
-                prog.contains("\"dim\":" + destDim));
+                String.valueOf(destDim).equals(Reply.of(prog).text("dim")));
         assertTrue("set-destination must round-trip the chip's stored dim: " + prog,
-                prog.contains("\"chipDim\":" + destDim));
+                String.valueOf(destDim).equals(Reply.of(prog).text("chipDim")));
 
         // Launch with fuelFill=true + mode=instant -> real rocket.launch().
         // This MUST flip isInFlight to true and NOT report an error.
         String launch = ok(client().execute(
                 "artest rocket launch " + id + " true instant"));
         assertTrue("launch response must be ok=true: " + launch,
-                launch.contains("\"ok\":true"));
+                Reply.of(launch).ok());
 
         RocketInfo info = rocketInfo(id);
         // The whole point: production launch path took the rocket from
@@ -158,7 +158,7 @@ public class RocketLaunchDepthTest extends AbstractSharedServerTest {
         String launch = ok(client().execute(
                 "artest rocket launch " + id + " true instant"));
         assertTrue("launch probe must succeed (wiring is fine): " + launch,
-                launch.contains("\"ok\":true"));
+                Reply.of(launch).ok());
 
         RocketInfo info = rocketInfo(id);
         // Production: the cannotGetThere branch calls setError(...) AND
@@ -197,7 +197,7 @@ public class RocketLaunchDepthTest extends AbstractSharedServerTest {
         String secondLaunch = ok(client().execute(
                 "artest rocket launch " + id + " true instant"));
         assertTrue("second launch on in-flight rocket must still be probe-ok: "
-                        + secondLaunch, secondLaunch.contains("\"ok\":true"));
+                        + secondLaunch, Reply.of(secondLaunch).ok());
 
         RocketInfo postInfo = rocketInfo(id);
         assertTrue("isInFlight must STAY true after no-op re-launch: " + postInfo.raw(),
@@ -233,7 +233,7 @@ public class RocketLaunchDepthTest extends AbstractSharedServerTest {
 
         String launch = ok(client().execute(
                 "artest rocket launch " + id + " true instant"));
-        assertTrue("launch wiring ok: " + launch, launch.contains("\"ok\":true"));
+        assertTrue("launch wiring ok: " + launch, Reply.of(launch).ok());
 
         RocketInfo info = rocketInfo(id);
         // Whichever branch production picks, the test pins observable
@@ -274,6 +274,6 @@ public class RocketLaunchDepthTest extends AbstractSharedServerTest {
     public void setDestinationOnUnknownRocketReturnsError() throws Exception {
         String resp = ok(client().execute("artest rocket set-destination 9999999 0"));
         assertTrue("set-destination on unknown id must return error: " + resp,
-                resp.contains("\"error\":\"rocket not found\""));
+                "rocket not found".equals(Reply.of(resp).text("error")));
     }
 }

@@ -17,6 +17,7 @@ import zmaster587.advancedRocketry.test.ShipInfo;
 
 import zmaster587.advancedRocketry.test.Plot;
 
+import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
@@ -331,11 +332,14 @@ public class VSRemoteBodyModelGateE2ETest extends AbstractSharedVsClientE2ETest 
         // the hulls containing the body with nothing saying which. The containment LIST is what says
         // so, and its size is the half that matters — one entry means the count above is
         // unambiguous, two mean it is a coin toss reading as a clean number either way.
-        assertEquals("the hull carrying the subject must be the ship this leg rolled, and it must be"
-                        + " the ONLY hull containing it — the support count beside this names no ship"
-                        + " at all: " + contact.raw(),
-                "[\"" + scenarioShipId + "\"]",
-                java.util.Arrays.toString(contact.containingShipIds()));
+        // Asserted on the ARRAY, not on a rendering of it. The expected side used to be a hand-built
+        // `["<id>"]` against `Arrays.toString`, which quotes nothing — so the two sides could not
+        // match for any world at all, and the leg reported a containment defect while the reply it
+        // printed named exactly the one hull it wanted.
+        assertArrayEquals("the hull carrying the subject must be the ship this leg rolled, and it"
+                        + " must be the ONLY hull containing it — the support count beside this names"
+                        + " no ship at all: " + contact.raw(),
+                new String[]{scenarioShipId}, contact.containingShipIds());
 
         lookAt(ship[0], ship[1], ship[2]);
         Sampling s = awaitRemoteSampling(subject);
@@ -567,8 +571,8 @@ public class VSRemoteBodyModelGateE2ETest extends AbstractSharedVsClientE2ETest 
      *  tick count (under suite load the slew takes longer than any fixed wait). */
     private void rollShip(int bx, int by, int bz) throws Exception {
         assertTrue("attitude hold must accept the steep roll",
-                exec("artest vs point-by-id 0 " + scenarioShipId + " " + STEEP_ROLL)
-                        .contains("\"commanded\":true"));
+                Reply.of(exec("artest vs point-by-id 0 " + scenarioShipId + " " + STEEP_ROLL)
+                        ).bool("commanded", false));
         // A WINDOW, not a poll — and the comment above was right that a tick count cannot be the
         // GATE, which is a different claim from "so it must re-read until it likes the answer". An
         // attitude converging under a hold is a physical value nobody publishes, and the hold never
@@ -624,10 +628,10 @@ public class VSRemoteBodyModelGateE2ETest extends AbstractSharedVsClientE2ETest 
         int sx = (int) Math.floor(spot[0]), sy = (int) Math.floor(spot[1]), sz = (int) Math.floor(spot[2]);
         String box = exec("artest fill 0 " + (sx - 2) + " " + sy + " " + (sz - 2)
                 + " " + (sx + 10) + " " + (sy + 6) + " " + (sz + 10) + " minecraft:air");
-        assertTrue("the camera-to-subject volume must clear: " + box, box.contains("\"ok\":true"));
+        assertTrue("the camera-to-subject volume must clear: " + box, Reply.of(box).ok());
         String pad = exec("artest fill 0 " + (sx + 8) + " " + (sy + 2) + " " + (sz + 8)
                 + " " + (sx + 8) + " " + (sy + 2) + " " + (sz + 8) + " minecraft:stone");
-        assertTrue("the camera needs a floor to stand on: " + pad, pad.contains("\"ok\":true"));
+        assertTrue("the camera needs a floor to stand on: " + pad, Reply.of(pad).ok());
     }
 
     /** Make {@code spot} somewhere a body can actually STAND: a world block under it (so the support
@@ -646,10 +650,10 @@ public class VSRemoteBodyModelGateE2ETest extends AbstractSharedVsClientE2ETest 
      *  <p>Returns false when either fill did not take.</p> */
     private boolean standingSpot(double[] spot) throws Exception {
         int fx = (int) Math.floor(spot[0]), fy = (int) Math.floor(spot[1]), fz = (int) Math.floor(spot[2]);
-        boolean floor = exec("artest fill 0 " + fx + " " + (fy - 1) + " " + fz
-                + " " + fx + " " + (fy - 1) + " " + fz + " minecraft:stone").contains("\"ok\":true");
-        boolean clear = exec("artest fill 0 " + fx + " " + fy + " " + fz
-                + " " + fx + " " + (fy + 1) + " " + fz + " minecraft:air").contains("\"ok\":true");
+        boolean floor = Reply.of(exec("artest fill 0 " + fx + " " + (fy - 1) + " " + fz
+                + " " + fx + " " + (fy - 1) + " " + fz + " minecraft:stone")).ok();
+        boolean clear = Reply.of(exec("artest fill 0 " + fx + " " + fy + " " + fz
+                + " " + fx + " " + (fy + 1) + " " + fz + " minecraft:air")).ok();
         return floor && clear;
     }
 
@@ -695,7 +699,7 @@ public class VSRemoteBodyModelGateE2ETest extends AbstractSharedVsClientE2ETest 
         subjectSpawnMark = clientMark();
         String spawned = exec("artest vs drop-living 0 minecraft:cow " + x + " " + y + " " + z);
         System.out.println("[modelgate] spawn raw: " + spawned.replace('\n', ' '));
-        assertTrue("the subject mob must spawn: " + spawned, spawned.contains("\"ok\":true"));
+        assertTrue("the subject mob must spawn: " + spawned, Reply.of(spawned).ok());
         bot().waitTicks(20);
         return Reply.of("artest entity spawn", spawned).integer(ENTITY_ID);
     }
@@ -775,7 +779,7 @@ public class VSRemoteBodyModelGateE2ETest extends AbstractSharedVsClientE2ETest 
         long spawnMark = events.markInstrumented();
         String assemble = assembleFixture(bx, by, bz);
         assertTrue("a " + VARIANT + " build must route to a ship: " + assemble,
-                assemble.contains("\"rocketCount\":0"));
+                (Reply.of(assemble).integerOr("rocketCount", Integer.MIN_VALUE) == 0));
         scenarioShipId = awaitShipSpawned(events, spawnMark, "assembly must create a VS ship in the"
                 + " physics registry (the spawn is queued, so this is a deadline for a discrete event"
                 + " and not a guess at how long a value takes to settle)");
@@ -814,14 +818,14 @@ public class VSRemoteBodyModelGateE2ETest extends AbstractSharedVsClientE2ETest 
         int cx1 = (baseX - 2) >> 4, cz1 = (baseZ - 2) >> 4;
         int cx2 = (baseX + 7) >> 4, cz2 = (baseZ + 7) >> 4;
         assertTrue("chunk warmup failed",
-                exec("artest chunk warmup 0 " + cx1 + " " + cz1 + " " + cx2 + " " + cz2)
-                        .contains("\"ok\":true"));
+                Reply.of(exec("artest chunk warmup 0 " + cx1 + " " + cz1 + " " + cx2 + " " + cz2)
+                        ).ok());
         assertTrue("pre-clear failed",
-                exec("artest fill 0 " + (baseX - 2) + " " + (baseY + 1) + " " + (baseZ - 2)
+                Reply.of(exec("artest fill 0 " + (baseX - 2) + " " + (baseY + 1) + " " + (baseZ - 2)
                         + " " + (baseX + 7) + " " + (baseY + 10) + " " + (baseZ + 7) + " minecraft:air")
-                        .contains("\"ok\":true"));
+                        ).ok());
         String fixture = exec("artest fixture rocket 0 " + baseX + " " + baseY + " " + baseZ + " " + VARIANT);
-        assertTrue("fixture (" + VARIANT + ") failed: " + fixture, fixture.contains("\"ok\":true"));
+        assertTrue("fixture (" + VARIANT + ") failed: " + fixture, Reply.of(fixture).ok());
         int[] bp = Reply.of(fixture).blockPos(BUILDER_POS);
         assertTrue("fixture missing builderPos: " + fixture, bp != null);
         return exec("artest rocket assemble 0 " + bp[0] + " " + bp[1] + " " + bp[2]);

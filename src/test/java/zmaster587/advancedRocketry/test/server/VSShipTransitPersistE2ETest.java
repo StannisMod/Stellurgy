@@ -62,7 +62,7 @@ public class VSShipTransitPersistE2ETest extends AbstractSharedServerTest {
         long transitMark = events.mark();
         String begin = exec("artest space transit-begin " + originDim + " " + ax + " " + ay + " " + az
                 + " " + HYPERSPACE_JUMP_SPEED);
-        assertTrue("transit did not begin (departure crossing failed): " + begin, begin.contains("\"began\":true"));
+        assertTrue("transit did not begin (departure crossing failed): " + begin, Reply.of(begin).bool("began", false));
 
         // Re-cut the parked ship's block snapshot, ONCE.
         //
@@ -85,14 +85,14 @@ public class VSShipTransitPersistE2ETest extends AbstractSharedServerTest {
 
         String lastExport = exec("artest space transit-export");
         assertTrue("the durable record must carry a block snapshot, or the restore below has no ship to "
-                + "paste: " + lastExport, lastExport.contains("\"hasSnapshot\":true"));
+                + "paste: " + lastExport, Reply.of(lastExport).bool("hasSnapshot", false));
 
         // Simulate a restart in-process: rebuild the transit from the exported record alone (the live
         // manager, and its parked hyperspace ship, are thrown away). Note: this reuses the in-memory record;
         // the on-disk NBT round-trip is unit-pinned separately (ShipLedgerDataTest + TransitRecordTest).
         String restore = exec("artest space transit-restore");
         assertTrue("restore did not recreate the in-flight transit: " + restore,
-                restore.contains("\"inTransit\":1"));
+                (Reply.of(restore).integerOr("inTransit", Integer.MIN_VALUE) == 1));
 
         // The RESTORED transit arrives on the server's own tick, like any other -- no pump. With no
         // live hyperspace ship it can only get there by pasting its snapshot into the target cell,

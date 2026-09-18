@@ -1,5 +1,6 @@
 package zmaster587.advancedRocketry.test.client;
 
+import zmaster587.advancedRocketry.test.Reply;
 import com.github.stannismod.forge.testing.client.RealClientHarness;
 import com.github.stannismod.forge.testing.junit.AbstractClientE2ETest;
 import com.github.stannismod.forge.testing.junit.AbstractHeadlessServerTest;
@@ -150,10 +151,10 @@ public class WeatherClientSyncE2ETest {
         // on AR planets is our ARDimensionWorldInfo wrapper.
         String setA = String.join("\n", serverHarness.client().execute(
                 "artest weather set " + DIM_A + " rain 12000"));
-        assertTrue("set rain on dim A failed: " + setA, setA.contains("\"ok\":true"));
+        assertTrue("set rain on dim A failed: " + setA, Reply.of(setA).ok());
         String setB = String.join("\n", serverHarness.client().execute(
                 "artest weather set " + DIM_B + " clear 12000"));
-        assertTrue("set clear on dim B failed: " + setB, setB.contains("\"ok\":true"));
+        assertTrue("set clear on dim B failed: " + setB, Reply.of(setB).ok());
 
         // Confirm the wrapper is in place on BOTH AR dims — without this the
         // isolation assertion below could pass for the wrong reason (e.g.
@@ -228,7 +229,7 @@ public class WeatherClientSyncE2ETest {
         // post-wrap reseed the client renders a ~5 s rain fade on arrival.
         String setOver = String.join("\n", serverHarness.client().execute(
                 "artest weather set 0 rain 12000"));
-        assertTrue("set rain on overworld failed: " + setOver, setOver.contains("\"ok\":true"));
+        assertTrue("set rain on overworld failed: " + setOver, Reply.of(setOver).ok());
 
         long toC = clientLog.mark();
         serverHarness.client().execute("artest tp " + DIM_C);

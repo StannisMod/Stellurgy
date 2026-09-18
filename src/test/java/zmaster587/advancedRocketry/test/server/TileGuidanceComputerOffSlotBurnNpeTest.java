@@ -49,7 +49,7 @@ public class TileGuidanceComputerOffSlotBurnNpeTest extends AbstractHeadlessServ
         // A station exists somewhere (models 'the player has a station'); it does
         // NOT occupy the off-slot cell we launch from.
         String create = exec("artest station create 0");
-        assertTrue("station must create: " + create, create.contains("\"ok\":true"));
+        assertTrue("station must create: " + create, Reply.of(create).ok());
 
         // Off-station: an empty grid cell far from the created station. After the C076
         // grid-mapping fix, getSpaceStationFromBlockCoords(4608,·,4608) reverse-maps to grid
@@ -64,18 +64,18 @@ public class TileGuidanceComputerOffSlotBurnNpeTest extends AbstractHeadlessServ
         String place = exec("artest place " + SPACE_DIM + " " + x + " " + y + " " + z
                 + " advancedrocketry:guidanceComputer");
         assertTrue("guidance computer must place: " + place,
-                place.contains("\"ok\":true") || place.contains("\"placed\":true"));
+                Reply.of(place).ok() || Reply.of(place).bool("placed", false));
 
         String r = exec("artest guidance launch-seq " + SPACE_DIM + " " + x + " " + y + " " + z + " " + destDim);
-        assertTrue("probe must run: " + r, r.contains("\"ok\":true"));
+        assertTrue("probe must run: " + r, Reply.of(r).ok());
         assertTrue("launch position must be off any station (proves the null path): " + r,
                 r.contains("\"stationAtPos\":null"));
         assertTrue("chip must be programmed to the real planet dim so the INVALID_PLANET short-circuit "
                         + "is bypassed and the guarded null-station path is reached: " + r,
-                r.contains("\"chipDim\":" + destDim));
+                String.valueOf(destDim).equals(Reply.of(r).text("chipDim")));
         assertTrue("L2 null-station guard: off-slot in-space launch-burn must NOT throw — "
                         + "TileGuidanceComputer folds a null currentSpaceStation into the early return. Got: " + r,
-                r.contains("\"threw\":false"));
+                (!Reply.of(r).bool("threw", true)));
         int burn = extractInt(BURN, r);
         assertTrue("a real burn must be returned (not the probe's Integer.MIN_VALUE 'did not run' sentinel), "
                         + "and it must be non-negative — the base launch-clearance burn with no trans-body "

@@ -62,7 +62,7 @@ public class SpaceSlotVsShipPersistTest extends AbstractSharedServerTest {
         // the same probe call (before any auto-unload), so it is not masked by the keepLoaded=false
         // world unloading between calls.
         String reload = exec("artest space reload " + slot + " deep");
-        assertTrue("slot must reload after a VS-ship unload: " + reload, reload.contains("\"present\":true"));
+        assertTrue("slot must reload after a VS-ship unload: " + reload, Reply.of(reload).bool("present", false));
         Reply rmReply = Reply.of(reload);
         int after = rmReply.has(COUNT_AFTER) ? Integer.parseInt(rmReply.text(COUNT_AFTER)) : -99;
         assertTrue("the VS ship's data must survive the slot unload/reload: " + reload, after >= 1);

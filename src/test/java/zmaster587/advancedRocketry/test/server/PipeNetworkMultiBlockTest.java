@@ -1,5 +1,6 @@
 package zmaster587.advancedRocketry.test.server;
 
+import zmaster587.advancedRocketry.test.Reply;
 import zmaster587.advancedRocketry.test.EnergyStore;
 import com.github.stannismod.forge.testing.junit.AbstractHeadlessServerTest;
 import org.junit.Test;
@@ -44,13 +45,13 @@ public class PipeNetworkMultiBlockTest extends AbstractHeadlessServerTest {
         String placeGen = String.join("\n", client().execute(
                 "artest place 0 " + gx + " " + gy + " " + gz
                         + " advancedrocketry:solarGenerator"));
-        assertTrue("solar place failed: " + placeGen, placeGen.contains("\"placed\":true"));
+        assertTrue("solar place failed: " + placeGen, Reply.of(placeGen).bool("placed", false));
 
         // Place forge-power-input directly east of the generator.
         String placeHatch = String.join("\n", client().execute(
                 "artest place 0 " + hx + " " + gy + " " + gz
                         + " libvulpes:forgepowerinput"));
-        assertTrue("hatch place failed: " + placeHatch, placeHatch.contains("\"placed\":true"));
+        assertTrue("hatch place failed: " + placeHatch, Reply.of(placeHatch).bool("placed", false));
 
         // Sanity — both tiles expose IEnergyStorage.
         EnergyStore genInfo = energy(gx, gy, gz)
@@ -71,7 +72,7 @@ public class PipeNetworkMultiBlockTest extends AbstractHeadlessServerTest {
         // see EnergySystemsSmokeTest for the sky-access guaranteed case).
         String tick = String.join("\n", client().execute(
                 "artest tile force-tick 0 " + gx + " " + gy + " " + gz + " 100"));
-        assertTrue("solar tick errored: " + tick, tick.contains("\"ok\":true"));
+        assertTrue("solar tick errored: " + tick, Reply.of(tick).ok());
 
         // Generator must still resolve.
         EnergyStore genAfter = energy(gx, gy, gz);
@@ -90,7 +91,7 @@ public class PipeNetworkMultiBlockTest extends AbstractHeadlessServerTest {
         // External inject MUST still work — independent of the generator.
         String inject = String.join("\n", client().execute(
                 "artest energy inject 0 " + hx + " " + gy + " " + gz + " 5000"));
-        assertTrue("inject must succeed: " + inject, inject.contains("\"ok\":true"));
+        assertTrue("inject must succeed: " + inject, Reply.of(inject).ok());
 
         long hatchPostInjectStored = energy(hx, gy, gz).stored();
         assertTrue("hatch must accept injected energy: pre=" + hatchFinal

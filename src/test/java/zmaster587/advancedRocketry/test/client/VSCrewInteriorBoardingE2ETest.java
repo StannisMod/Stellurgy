@@ -145,8 +145,8 @@ public class VSCrewInteriorBoardingE2ETest extends AbstractSharedVsClientE2ETest
         bot().waitTicks(20);
         double h = Math.toRadians(170.0) / 2.0;
         assertTrue("attitude hold must accept the inversion",
-                exec("artest vs point-by-id 0 " + scenarioShipId + " "
-                        + Math.cos(h) + " " + Math.sin(h) + " 0.0 0.0").contains("\"commanded\":true"));
+                Reply.of(exec("artest vs point-by-id 0 " + scenarioShipId + " "
+                        + Math.cos(h) + " " + Math.sin(h) + " 0.0 0.0")).bool("commanded", false));
         bot().waitTicks(200);
 
         // The arrangement as a CHAIN, not a budget: the probe un-seats him and the deck takes him.
@@ -351,8 +351,8 @@ public class VSCrewInteriorBoardingE2ETest extends AbstractSharedVsClientE2ETest
         bot().waitTicks(20);
         double h = Math.toRadians(170.0) / 2.0;
         assertTrue("attitude hold must accept the inversion",
-                exec("artest vs point-by-id 0 " + scenarioShipId + " "
-                        + Math.cos(h) + " " + Math.sin(h) + " 0.0 0.0").contains("\"commanded\":true"));
+                Reply.of(exec("artest vs point-by-id 0 " + scenarioShipId + " "
+                        + Math.cos(h) + " " + Math.sin(h) + " 0.0 0.0")).bool("commanded", false));
         bot().waitTicks(200);
 
         // Same arrangement chain as the open-cockpit scenario: `dismount` then `deck_entered`, and
@@ -537,8 +537,8 @@ public class VSCrewInteriorBoardingE2ETest extends AbstractSharedVsClientE2ETest
         bot().waitTicks(20);
         double h = Math.toRadians(60.0) / 2.0;
         assertTrue("attitude hold must accept the roll",
-                exec("artest vs point-by-id 0 " + scenarioShipId + " "
-                        + Math.cos(h) + " " + Math.sin(h) + " 0.0 0.0").contains("\"commanded\":true"));
+                Reply.of(exec("artest vs point-by-id 0 " + scenarioShipId + " "
+                        + Math.cos(h) + " " + Math.sin(h) + " 0.0 0.0")).bool("commanded", false));
         bot().waitTicks(150);
 
         // Same arrangement chain as the two interior scenarios.
@@ -758,7 +758,7 @@ public class VSCrewInteriorBoardingE2ETest extends AbstractSharedVsClientE2ETest
         // every caller of this helper goes on to drive the bot as a seated pilot.
         long seatClientMark = clientEvents().mark();
         assertTrue("bot must mount the seat dummy: " + mountInfo,
-                exec("artest player mount-entity " + dummyId).contains("\"mounted\":true"));
+                Reply.of(exec("artest player mount-entity " + dummyId)).bool("mounted", false));
         awaitClientMount(seatClientMark, "the bot must be seated as HIS OWN CLIENT renders him"
                 + " before this helper hands the ship back — the server reporting a mount is the"
                 + " other process", DECK_LINK_BUDGET_TICKS, " mountInfo=" + mountInfo);
@@ -781,7 +781,7 @@ public class VSCrewInteriorBoardingE2ETest extends AbstractSharedVsClientE2ETest
         exec("artest vs spawn-diag reset");
         String assemble = assembleFixture(site, variant);
         assertTrue("a with-pilot-seat build must route to a ship: " + assemble,
-                assemble.contains("\"rocketCount\":0"));
+                (Reply.of(assemble).integerOr("rocketCount", Integer.MIN_VALUE) == 0));
 
         // The registry's own addShip, awaited as a LINK. The count poll this replaces could not see
         // one: raising its budget from 200 to 600 ticks was measured and changed nothing (2/4 red
@@ -877,7 +877,7 @@ public class VSCrewInteriorBoardingE2ETest extends AbstractSharedVsClientE2ETest
                 "the hull, the cockpit cavity a body is released inside, and the whole volume the"
                         + " assembly flood can escape into");
         String fixture = exec("artest fixture rocket 0 " + baseX + " " + baseY + " " + baseZ + " " + variant);
-        assertTrue("fixture (" + variant + ") failed: " + fixture, fixture.contains("\"ok\":true"));
+        assertTrue("fixture (" + variant + ") failed: " + fixture, Reply.of(fixture).ok());
         int[] bp = Reply.of(fixture).blockPos(BUILDER_POS);
         assertTrue("fixture missing builderPos: " + fixture, bp != null);
         return exec("artest rocket assemble 0 " + bp[0] + " " + bp[1] + " " + bp[2]);

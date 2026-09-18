@@ -157,7 +157,7 @@ public class SealDetectorDispatchTest extends AbstractSharedServerTest {
             String ban = String.join("\n", client().execute(
                     "artest seal-detector add-block-ban minecraft:gold_block"));
             assertTrue("add-block-ban probe failed: " + ban,
-                    ban.contains("\"ok\":true"));
+                    Reply.of(ban).ok());
 
             assertEquals("gold_block on blockBanList must produce branch "
                             + "'notsealblock'",
@@ -250,6 +250,6 @@ public class SealDetectorDispatchTest extends AbstractSharedServerTest {
         String resp = String.join("\n", client().execute(
                 "artest seal-detector wibble 0 0 0 0"));
         assertTrue("unknown subcommand must surface an error; got: " + resp,
-                resp.contains("\"error\""));
+                Reply.of(resp).has("error"));
     }
 }

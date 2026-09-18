@@ -1,5 +1,6 @@
 package zmaster587.advancedRocketry.test.client;
 
+import zmaster587.advancedRocketry.test.Reply;
 import com.github.stannismod.forge.testing.junit.AbstractClientE2ETest;
 import com.google.gson.JsonObject;
 import org.junit.Test;
@@ -84,7 +85,7 @@ public class SatelliteUnknownTypeClientE2ETest extends AbstractClientE2ETest {
         // Server announces a satellite whose type is not in the registry.
         String announce = exec("artest satellite announce-unknown 0");
         assertTrue("announce-unknown probe must succeed: " + announce,
-                announce.contains("\"ok\":true"));
+                Reply.of(announce).ok());
 
         // PRESENCE: the packet reached this client and its registry lookup came back empty — the
         // exact branch the contract is about. Without this the absence below is also satisfied by a

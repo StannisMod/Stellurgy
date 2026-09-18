@@ -211,13 +211,13 @@ public class VSFlightSmoothnessAcrossJumpE2ETest extends AbstractSharedVsClientE
         String fixture = exec("artest fixture rocket " + originDim + " " + bx + " " + by + " " + bz
                 + " with-pilot-seat");
         scenario().requireArranged("fixture (with-pilot-seat) failed: " + fixture,
-                fixture.contains("\"ok\":true"));
+                Reply.of(fixture).ok());
         int[] bp = Reply.of("artest fixture rocket", fixture).blockPos("builderPos");
         scenario().requireArranged("fixture missing builderPos: " + fixture, bp != null);
         String assembled = exec("artest rocket assemble " + originDim + " " + bp[0] + " "
                 + bp[1] + " " + bp[2]);
         scenario().requireArranged("a with-pilot-seat build must route to a ship: " + assembled,
-                assembled.contains("\"rocketCount\":0"));
+                (Reply.of(assembled).integerOr("rocketCount", Integer.MIN_VALUE) == 0));
         scenario().requireArranged("the origin ship never assembled/loaded in dim " + originDim,
                 waitForLoadedShip(originDim) >= 1);
 
@@ -232,7 +232,7 @@ public class VSFlightSmoothnessAcrossJumpE2ETest extends AbstractSharedVsClientE
         String named = exec("artest space transit-name " + originDim + " " + shipId);
         scenario().requireArranged("the transit stack must resolve this ship's flight computer and its"
                 + " durable id, or the jump departs nameless: " + named,
-                named.contains("\"afcFound\":true") && !named.contains("\"durableId\":\"\""));
+                Reply.of(named).bool("afcFound", false) && !"".equals(Reply.of(named).text("durableId")));
         PilotSeat seat = PilotSeat.byId(this::exec, originDim, shipId)
                 .requireFound("the pilot seat must be found in the assembled ship");
         int seatX = seat.seatX, seatY = seat.seatY, seatZ = seat.seatZ;
@@ -274,7 +274,7 @@ public class VSFlightSmoothnessAcrossJumpE2ETest extends AbstractSharedVsClientE
         scenario().requireArranged("the transit must begin (departure crossing): " + begin,
                 readBool(begin, "began"));
         scenario().requireArranged("the jump must depart under the craft's own name, never the synthetic"
-                + " id a nameless fixture gets: " + begin, !begin.contains("\"shipId\":\"t\""));
+                + " id a nameless fixture gets: " + begin, !"t".equals(Reply.of(begin).text("shipId")));
 
         // The jump is this scenario's ARRANGEMENT — the subject is how the ship flies afterwards —
         // so the chain is required, not asserted: a jump that settles with its pilot left behind is
@@ -743,7 +743,7 @@ public class VSFlightSmoothnessAcrossJumpE2ETest extends AbstractSharedVsClientE
             scenario().requireArranged("seat-mount-at must spawn the seat dummy: " + mountAt,
                     readBool(mountAt, "ok"));
             mount = exec("artest player mount-entity " + readInt(mountAt, "dummyId"));
-            mounted = mount.contains("\"mounted\":true");
+            mounted = Reply.of(mount).bool("mounted", false);
             if (!mounted) {
                 bot().waitTicks(10);
             }

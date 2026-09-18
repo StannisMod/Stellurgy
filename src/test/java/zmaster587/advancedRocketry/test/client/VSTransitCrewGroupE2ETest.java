@@ -14,6 +14,7 @@ import zmaster587.advancedRocketry.test.PlayerState;
 import zmaster587.advancedRocketry.test.PilotSeat;
 import zmaster587.advancedRocketry.test.ArrangementFailure;
 import zmaster587.advancedRocketry.test.Events;
+import zmaster587.advancedRocketry.test.SubsystemStatus;
 import zmaster587.advancedRocketry.test.TransitStatus;
 import zmaster587.advancedRocketry.test.TransitSetup;
 import zmaster587.advancedRocketry.test.ShipIdentity;
@@ -89,9 +90,21 @@ public class VSTransitCrewGroupE2ETest extends AbstractSharedVsClientE2ETest {
      * COMPLETED, not evicted, which is the only way to remove it that leaves the subsystem in a
      * state a player could also reach. And it is asserted — a reset nobody checks cannot be told
      * from no reset — with the bound taken from the longest flight this class ever starts.</p>
+     *
+     * <p><b>The QUESTION is put to the world, not to the probe's memory.</b> "Is any jump in the
+     * air" is a fact about the live stack, and {@code space subsystem-status} answers it off
+     * {@code liveStack().transit} with no scaffold standing. {@code transit-status} cannot: it is
+     * gated on a handle only {@code transit-setup-*} fills, so before the FIRST scenario of a boot
+     * has set anything up it answers {@code error} — which is not "no jump", and the reader is
+     * right to refuse it. Measured 2026-09-18: that refusal killed all eight scenarios of this
+     * class in setup. The fly-out below is a different matter and keeps the scaffold verb: a jump
+     * can only be in the air here because a scenario in this JVM began one, and beginning one is
+     * what fills the handle.</p>
      */
     private void flyOutAnyJumpLeftInTheAir() throws Exception {
-        if (TransitStatus.read(this::exec).inTransit == 0) {
+        SubsystemStatus stack = SubsystemStatus.read(this::exec)
+                .requireRegistered("a scenario in this family cannot start without the space stack");
+        if (stack.transits == 0) {
             return;
         }
         boolean flownOut = false;
@@ -634,7 +647,7 @@ private static final int SKY_RENDER_DISTANCE = 8;
             scenario().requireArranged("seat-mount-at must spawn the seat dummy: " + mountAt,
                     readBool(mountAt, "ok"));
             mount = probe.exec("artest player mount-entity " + readInt(mountAt, "dummyId"));
-            mounted = mount.contains("\"mounted\":true");
+            mounted = Reply.of(mount).bool("mounted", false);
             if (!mounted) {
                 bot().waitTicks(10);
             }

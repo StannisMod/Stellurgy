@@ -113,7 +113,7 @@ public class MissionPersistenceRestartTest {
         int rid = buildAndAssembleRocket(firstBoot, 9500);
         String start = ok(firstBoot.client().execute(
                 "artest mission start-gas 0 " + rid + " " + expectedDuration + " oxygen 10"));
-        assertFalse("start-gas failed in boot1: " + start, start.contains("\"error\""));
+        assertFalse("start-gas failed in boot1: " + start, Reply.of(start).has("error"));
         Reply mmReply = Reply.of(start);
         assertTrue("missing missionId in start response: " + start, mmReply.has(MISSION_ID));
         missionId = Long.parseLong(mmReply.text(MISSION_ID));
@@ -125,9 +125,9 @@ public class MissionPersistenceRestartTest {
 
         String state = ok(secondBoot.client().execute("artest mission state " + missionId));
         assertFalse("state probe failed after reboot — mission lost: " + state,
-                state.contains("\"error\""));
+                Reply.of(state).has("error"));
         assertTrue("mission type must be gas after reboot: " + state,
-                state.contains("\"type\":\"gas\""));
+                "gas".equals(Reply.of(state).text("type")));
         Reply dmReply = Reply.of(state);
         assertTrue("missing duration in restored state: " + state, dmReply.has(DURATION));
         // MissionGasCollection ctor multiplies duration by gasCollectionMult
@@ -139,7 +139,7 @@ public class MissionPersistenceRestartTest {
         assertEquals("restored duration must equal configured (gasCollectionMult=1 in test env)",
                 expectedDuration, restoredDuration);
         assertTrue("mission must not be dead after reboot: " + state,
-                state.contains("\"isDead\":false"));
+                (!Reply.of(state).bool("isDead", true)));
     }
 
     @Test
@@ -151,7 +151,7 @@ public class MissionPersistenceRestartTest {
         int rid = buildAndAssembleRocket(firstBoot, 9600);
         String start = ok(firstBoot.client().execute(
                 "artest mission start-ore 0 " + rid + " " + expectedDuration + " 1.0"));
-        assertFalse("start-ore failed in boot1: " + start, start.contains("\"error\""));
+        assertFalse("start-ore failed in boot1: " + start, Reply.of(start).has("error"));
         Reply mmReply = Reply.of(start);
         assertTrue("missing missionId in start response: " + start, mmReply.has(MISSION_ID));
         missionId = Long.parseLong(mmReply.text(MISSION_ID));
@@ -163,14 +163,14 @@ public class MissionPersistenceRestartTest {
 
         String state = ok(secondBoot.client().execute("artest mission state " + missionId));
         assertFalse("state probe failed after reboot — mission lost: " + state,
-                state.contains("\"error\""));
+                Reply.of(state).has("error"));
         assertTrue("mission type must be ore after reboot: " + state,
-                state.contains("\"type\":\"ore\""));
+                "ore".equals(Reply.of(state).text("type")));
         Reply dmReply = Reply.of(state);
         assertTrue("missing duration in restored state: " + state, dmReply.has(DURATION));
         assertEquals("restored ore duration must equal configured",
                 expectedDuration, Long.parseLong(dmReply.text(DURATION)));
         assertTrue("mission must not be dead after reboot: " + state,
-                state.contains("\"isDead\":false"));
+                (!Reply.of(state).bool("isDead", true)));
     }
 }

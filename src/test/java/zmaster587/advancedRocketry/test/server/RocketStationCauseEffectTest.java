@@ -73,7 +73,7 @@ public class RocketStationCauseEffectTest extends AbstractSharedServerTest {
 
         String fixture = ok(client().execute(
                 "artest fixture rocket 0 " + baseX + " " + baseY + " " + baseZ + " simple"));
-        assertTrue("fixture failed: " + fixture, fixture.contains("\"ok\":true"));
+        assertTrue("fixture failed: " + fixture, Reply.of(fixture).ok());
         int[] bp = Reply.of(fixture).blockPos(BUILDER_POS);
         assertTrue("fixture missing builderPos: " + fixture, bp != null);
         int bx = bp[0];
@@ -82,7 +82,7 @@ public class RocketStationCauseEffectTest extends AbstractSharedServerTest {
 
         String assemble = ok(client().execute(
                 "artest rocket assemble 0 " + bx + " " + by + " " + bz));
-        assertTrue("assemble failed: " + assemble, assemble.contains("\"ok\":true"));
+        assertTrue("assemble failed: " + assemble, Reply.of(assemble).ok());
 
         String list = ok(client().execute("artest rocket list 0"));
         java.util.List<RocketList.Entry> built = RocketList.of(list);
@@ -92,7 +92,7 @@ public class RocketStationCauseEffectTest extends AbstractSharedServerTest {
 
     private int createStation() throws Exception {
         String resp = ok(client().execute("artest station create 0"));
-        assertTrue("station create failed: " + resp, resp.contains("\"ok\":true"));
+        assertTrue("station create failed: " + resp, Reply.of(resp).ok());
         Reply created = Reply.of("artest station create", resp);
         assertTrue("could not parse station id: " + resp, created.has(STATION_ID_FROM_CREATE));
         return created.integer(STATION_ID_FROM_CREATE);
@@ -122,7 +122,7 @@ public class RocketStationCauseEffectTest extends AbstractSharedServerTest {
         String override = ok(client().execute(
                 "artest rocket override-landing " + rocketId + " " + stationId));
         assertTrue("override-landing probe must succeed: " + override,
-                override.contains("\"ok\":true"));
+                Reply.of(override).ok());
 
         // STATION-side observable: alpha must now be occupied. If a
         // regression moved or removed the setOccupied call in
@@ -193,7 +193,7 @@ public class RocketStationCauseEffectTest extends AbstractSharedServerTest {
         String resp = ok(client().execute(
                 "artest rocket override-landing " + rocketId + " 9999999"));
         assertTrue("override-landing on unknown station must error: " + resp,
-                resp.contains("\"error\":\"station not found\""));
+                "station not found".equals(Reply.of(resp).text("error")));
     }
 
     @Test
@@ -212,7 +212,7 @@ public class RocketStationCauseEffectTest extends AbstractSharedServerTest {
         String resp = ok(client().execute(
                 "artest rocket override-landing 9999999 " + stationId));
         assertTrue("override-landing on unknown rocket must error: " + resp,
-                resp.contains("\"error\":\"rocket not found\""));
+                "rocket not found".equals(Reply.of(resp).text("error")));
     }
 
     /** Every landing pad the station holds, addressable by position. */

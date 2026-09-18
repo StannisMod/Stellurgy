@@ -2779,12 +2779,11 @@ public class TestProbeCommand extends CommandBase {
     /** The last exported transit records (the persist e2e simulates a restart by rebuilding from these). */
     private static java.util.List<zmaster587.advancedRocketry.space.TransitRecord> transitExport;
 
-    // --- Entry e2e state. These are the SERVER's own manager and ledger, remembered by `entry-setup`
-    //     so the fixture's verbs need not look them up again; the PRODUCTION trigger path runs
-    //     because it is the production subsystem, not because anything was installed over it.
-    //     `entry-clear` gives back what the scenario put in and drops these.
-    private static zmaster587.advancedRocketry.space.SpaceManager entryMgr;
-    private static zmaster587.advancedRocketry.space.ShipLedger entryLedger;
+    // --- Entry e2e state. The manager and the ledger used to be remembered here too, as the SERVER's
+    //     own pair, "so the fixture's verbs need not look them up again" — and what that bought was a
+    //     read-only verb answering about the probe's memory instead of about the world. Every verb
+    //     resolves them from `liveStack()` now; what remains below is the only entry state a fixture
+    //     genuinely OWNS, because the scenario created it and nothing else can give it back.
     /** The scratch slot worlds `entry-setup` appended to the pool; unloaded by `entry-clear`. */
     private static int[] entrySlotDims;
 
@@ -4732,6 +4731,14 @@ public class TestProbeCommand extends CommandBase {
         // test whose subject is a jump still being IN FLIGHT pushes its own subject towards the exit.
         // Since the fixture runs on the server's own subsystem the jump advances on the server tick
         // anyway, so reading and driving had no reason left to be the same call.
+        //
+        // WHY THIS ONE KEEPS THE SCAFFOLD GATE, where `entry-status` gave its up. Half of this report
+        // is not a world fact: `poseX/Y/Z`, `shipY`, `poseDist` and `targetDim` all describe the cell
+        // the SCENARIO aimed its jump at (`transitTarget`), and `crossing` is about the ship IT named.
+        // `liveStack()` cannot supply either — there is no such thing as "the server's target cell" —
+        // so a report built without the setup would answer about a coordinate nobody chose. The world
+        // question this verb is often ASKED instead — is any jump in the air — belongs to
+        // `subsystem-status`, which reads `transits` straight off the live stack and needs no fixture.
         if (args.length >= 1 && "transit-status".equalsIgnoreCase(args[0])) {
             if (transitTm == null) {
                 send(sender, "{\"error\":\"transit not set up\"}");
@@ -5058,12 +5065,10 @@ public class TestProbeCommand extends CommandBase {
                         + ",\"needSlots\":" + needSlots + "}");
                 return;
             }
-            entryMgr = live.manager;
-            entryLedger = live.ledger;
             // Registering hyperspace upfront mirrors the production start — idempotent, and no world
-            // loads until a first jump. (The `transit-setup-*` probes still build a SEPARATE stack with
-            // its own cells and manual ticking. That one is deliberately isolated and is ticked by
-            // hand; it is never the server's, and nothing can now make it look as though it were.)
+            // loads until a first jump. (The `transit-setup-*` probes arrange the SAME server stack;
+            // they hold their own handles to it only because their report describes a target cell the
+            // SCENARIO chose, which no world reader can supply.)
             zmaster587.advancedRocketry.space.HyperspaceWorld.register();
             StringBuilder sb = new StringBuilder("{\"ok\":true,\"dims\":[");
             for (int i = 0; i < entrySlotDims.length; i++) {
@@ -5147,9 +5152,20 @@ public class TestProbeCommand extends CommandBase {
         // found:false — a loud arrangement failure — rather than describing a neighbour. The key is the
         // ship's DURABLE id (the ledger is keyed on nothing else); `space find-afc <slotDim>` hands one
         // back beside the physics id, and `vs ship-uuid` crosses the other way.
+        //
+        // READ-ONLY, AND IT ASKS THE WORLD. Every field below comes from the server's own ledger and
+        // entry controller, so this verb resolves them from `liveStack()` and refuses only when there
+        // is no live stack to ask. It used to gate on `entryLedger` — a static that `entry-setup`
+        // fills with `live.ledger`, i.e. a CACHE of the very object resolved here — and a scenario
+        // that ledgers a craft without running `entry-setup` was then told "entry not set up" about a
+        // ledger that was up and holding its row. A reader cannot tell that from "no such craft", and
+        // the caller measuring an arrival reads three coordinates out of it.
         if (args.length >= 1 && "entry-status".equalsIgnoreCase(args[0])) {
-            if (entryLedger == null) {
-                send(sender, "{\"error\":\"entry not set up\"}");
+            zmaster587.advancedRocketry.space.SpaceSubsystem entryStatusStack = liveStack();
+            zmaster587.advancedRocketry.space.ShipLedger statusLedger =
+                    entryStatusStack == null ? null : entryStatusStack.ledger;
+            if (statusLedger == null) {
+                send(sender, "{\"error\":\"space subsystem not registered\"}");
                 return;
             }
             boolean statusById = args.length >= 3 && "id".equalsIgnoreCase(args[1]);
@@ -5162,14 +5178,12 @@ public class TestProbeCommand extends CommandBase {
                     return;
                 }
             }
-            zmaster587.advancedRocketry.space.SpaceSubsystem spaceStack = liveStack();
-            zmaster587.advancedRocketry.space.ShipEntryController ctl =
-                    spaceStack == null ? null : spaceStack.entry;
+            zmaster587.advancedRocketry.space.ShipEntryController ctl = entryStatusStack.entry;
             StringBuilder sb = new StringBuilder("{\"ok\":true");
             sb.append(",\"pending\":").append(ctl == null ? -1 : ctl.enteringCount());
-            sb.append(",\"ships\":").append(entryLedger.size());
+            sb.append(",\"ships\":").append(statusLedger.size());
             java.util.Map<java.util.UUID, zmaster587.advancedRocketry.space.ShipLedger.Entry> snap =
-                    entryLedger.snapshot();
+                    statusLedger.snapshot();
             java.util.UUID rowId = null;
             zmaster587.advancedRocketry.space.ShipLedger.Entry row = null;
             if (statusById) {
@@ -5191,9 +5205,7 @@ public class TestProbeCommand extends CommandBase {
                 sb.append(",\"lx\":").append(e.coord.localX());
                 sb.append(",\"ly\":").append(e.coord.localY());
                 sb.append(",\"lz\":").append(e.coord.localZ());
-                int entrySlot = spaceStack == null
-                        ? zmaster587.advancedRocketry.space.SpaceManager.UNBOUND_SLOT
-                        : spaceStack.manager.slotDimOf(e.coord);
+                int entrySlot = entryStatusStack.manager.slotDimOf(e.coord);
                 sb.append(",\"slotDim\":").append(slotDimJson(entrySlot));
                 sb.append(",\"slotBound\":").append(entrySlot
                         != zmaster587.advancedRocketry.space.SpaceManager.UNBOUND_SLOT);
@@ -5376,8 +5388,6 @@ public class TestProbeCommand extends CommandBase {
                     zmaster587.advancedRocketry.space.SpaceSlotPool.unload(dim);
                 }
             }
-            entryMgr = null;
-            entryLedger = null;
             entrySlotDims = null;
             send(sender, "{\"ok\":true}");
             return;

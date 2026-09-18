@@ -129,7 +129,7 @@ public class VacuumAndSuitClientGroupE2ETest extends AbstractSharedClientE2ETest
                 + plot().z(PAD_DZ) + " " + plot().x(PAD_DX + PAD_EDGE - 1) + " " + PAD_Y + " "
                 + plot().z(PAD_DZ + PAD_EDGE - 1) + " minecraft:stone");
         scenario().requireArranged("platform fill must succeed: " + fill,
-                fill.contains("\"ok\":true"));
+                Reply.of(fill).ok());
         long standMark = clientEvents().mark();
         exec("tp @a " + (plot().x(STAND_DX) + 0.5) + " " + (PAD_Y + 1) + " "
                 + (plot().z(STAND_DZ) + 0.5));
@@ -171,7 +171,7 @@ public class VacuumAndSuitClientGroupE2ETest extends AbstractSharedClientE2ETest
     private void setDensityAndConfirm(int density, boolean expectBreathable) throws Exception {
         String set = exec("artest atmosphere set-density " + plot().dim + " " + density);
         scenario().requireArranged("set-density " + density + " failed: " + set,
-                set.contains("\"ok\":true"));
+                Reply.of(set).ok());
         ClientPoll.Result<Integer> reads = ClientPoll.until(
                 bot()::waitTicks, this::snapshotDensity,
                 d -> expectBreathable ? d >= 1 : d == 0, 2, 20);
@@ -320,7 +320,7 @@ public class VacuumAndSuitClientGroupE2ETest extends AbstractSharedClientE2ETest
             scenario().arranging("equip the suit chest with a full pressure tank");
             String equip = exec("artest player equip-space-chest 1000");
             scenario().requireArranged("equip-space-chest must succeed: " + equip,
-                    equip.contains("\"ok\":true"));
+                    Reply.of(equip).ok());
             assertEquals("baseline chestAir", 1000, readChestAirComponentRoute());
 
             // The client armor[2] NBT syncs a tick or two AFTER the server-side equip; sampling it
@@ -374,7 +374,7 @@ public class VacuumAndSuitClientGroupE2ETest extends AbstractSharedClientE2ETest
             scenario().arranging("equip the suit chest with only three millibuckets of oxygen");
             String equip = exec("artest player equip-space-chest 3");
             scenario().requireArranged("equip-space-chest with low oxygen must succeed: " + equip,
-                    equip.contains("\"ok\":true"));
+                    Reply.of(equip).ok());
             assertEquals("baseline chestAir = 3", 3, readChestAirComponentRoute());
 
             double healthStart = health(bot().reportState());
@@ -395,14 +395,14 @@ public class VacuumAndSuitClientGroupE2ETest extends AbstractSharedClientE2ETest
             assertTrue("the vacuum must reach the chest's pressure tank before anything else can be"
                     + " concluded — without a drain the transition below never starts. Drains since"
                     + " the flip: " + drains,
-                    drains.contains("\"route\":\"component\""));
+                    Events.anyRecordHas(drains, "route", "component"));
 
             String hurts = awaitServerRecord(events, mark, "living_hurt", "\"source\":\"Vacuum\"",
                     LINK_BUDGET_TICKS);
             assertTrue("vacuum damage must apply once the tank is drained; damage the player took"
                     + " since the flip: " + hurts + " | drains: " + drains
                     + " | suit gate decisions: " + events.since(mark, "suit_immunity_decided"),
-                    hurts.contains("\"source\":\"Vacuum\""));
+                    Events.anyRecordHas(hurts, "source", "Vacuum"));
 
             String decisions = events.since(mark, "suit_immunity_decided");
             assertTrue("the suit gate must be recorded turning the player DOWN — that flip is the"
@@ -448,17 +448,17 @@ public class VacuumAndSuitClientGroupE2ETest extends AbstractSharedClientE2ETest
         String place = exec("artest place " + dim + " " + px + " " + py + " " + pz
                 + " advancedrocketry:oxygencharger");
         scenario().requireArranged("pad placement must succeed: " + place,
-                place.contains("\"ok\":true"));
+                Reply.of(place).ok());
         String inj = exec("artest fluid inject " + dim + " " + px + " " + py + " " + pz
                 + " oxygen 8000");
-        scenario().requireArranged("fluid inject must succeed: " + inj, inj.contains("\"ok\":true"));
+        scenario().requireArranged("fluid inject must succeed: " + inj, Reply.of(inj).ok());
 
         // initialOxygen=500: half of the pressure tank's 1000 mB capacity, which leaves headroom for
         // the pad to actually add fluid. Equipping a full tank short-circuits the pad's
         // canPerformFunction body (amtFluid = 0) and the test would measure nothing.
         String equip = exec("artest player equip-space-chest 500");
         scenario().requireArranged("equip-space-chest must succeed: " + equip,
-                equip.contains("\"ok\":true"));
+                Reply.of(equip).ok());
 
         scenario().measuring("the suit's air before standing on the pad");
         int airBefore = readChestAirComponentRoute();
@@ -515,7 +515,7 @@ public class VacuumAndSuitClientGroupE2ETest extends AbstractSharedClientE2ETest
             scenario().arranging("equip the enchanted air suit with a full buffer");
             String equip = exec("artest player equip-airsuit 1000");
             scenario().requireArranged("equip-airsuit must succeed: " + equip,
-                    equip.contains("\"ok\":true"));
+                    Reply.of(equip).ok());
             assertEquals("baseline chest air", 1000, readChestAir());
 
             scenario().asserting("80 ticks of breathable atmosphere drain nothing");
@@ -561,7 +561,7 @@ public class VacuumAndSuitClientGroupE2ETest extends AbstractSharedClientE2ETest
             scenario().arranging("equip the enchanted air suit with a full buffer");
             String equip = exec("artest player equip-airsuit 1000");
             scenario().requireArranged("equip-airsuit must succeed: " + equip,
-                    equip.contains("\"ok\":true"));
+                    Reply.of(equip).ok());
             assertEquals("baseline chest air before vacuum exposure", 1000, readChestAir());
 
             double healthStart = health(bot().reportState());
@@ -576,7 +576,7 @@ public class VacuumAndSuitClientGroupE2ETest extends AbstractSharedClientE2ETest
             assertTrue("the vacuum must reach the enchanted suit's buffer — the chest is the LAST"
                     + " piece production consults, so a drain is the proof the whole suit was asked."
                     + " Drains since the flip: " + drains,
-                    drains.contains("\"route\":\"enchanted\""));
+                    Events.anyRecordHas(drains, "route", "enchanted"));
 
             // The suit HELD: the gate never recorded a refusal and no vacuum damage was applied.
             // The decision recorder is edge-only, so a run of unchanged `true`s leaves no record at
@@ -651,7 +651,7 @@ public class VacuumAndSuitClientGroupE2ETest extends AbstractSharedClientE2ETest
             assertTrue("vacuum damage must apply to a bare-skinned player; what hurt him since the"
                     + " flip: " + hurts + " | suit gate decisions: "
                     + events.since(mark, "suit_immunity_decided"),
-                    hurts.contains("\"source\":\"Vacuum\""));
+                    Events.anyRecordHas(hurts, "source", "Vacuum"));
 
             String drains = events.since(mark, "suit_air_drained");
             assertEquals("a player with no chest must enter no decrement path at all — the damage"
@@ -709,7 +709,7 @@ public class VacuumAndSuitClientGroupE2ETest extends AbstractSharedClientE2ETest
                     LINK_BUDGET_TICKS);
             assertTrue("the vacuum must damage the player at all before the client can be shown it;"
                     + " what hurt him since the flip: " + hurts,
-                    hurts.contains("\"source\":\"Vacuum\""));
+                    Events.anyRecordHas(hurts, "source", "Vacuum"));
 
             double current = awaitClientHealthBelow(clientMark, healthStart,
                     "vacuum damage never reached the client (he started at " + healthStart
@@ -742,9 +742,9 @@ public class VacuumAndSuitClientGroupE2ETest extends AbstractSharedClientE2ETest
             scenario().arranging("equip the suit chest with a full pressure tank");
             String equip = exec("artest player equip-space-chest 1000");
             scenario().requireArranged("equip-space-chest must succeed: " + equip,
-                    equip.contains("\"ok\":true"));
+                    Reply.of(equip).ok());
             scenario().requireArranged("equip-space-chest must report oxygen filled in tank: "
-                    + equip, equip.contains("\"tankFilled\":1000"));
+                    + equip, (Reply.of(equip).integerOr("tankFilled", Integer.MIN_VALUE) == 1000));
             assertEquals("baseline chestAir read via ItemAirUtils -> ItemSpaceChest.getAirRemaining"
                     + " -> sum of FluidStack amounts must equal 1000",
                     1000, readChestAirComponentRoute());
@@ -761,7 +761,7 @@ public class VacuumAndSuitClientGroupE2ETest extends AbstractSharedClientE2ETest
             assertTrue("the vacuum must drain the chest's pressure tank through the COMPONENT route —"
                     + " the chest is the last piece production consults, so this is also the proof"
                     + " the whole suit was asked. Drains since the flip: " + drains,
-                    drains.contains("\"route\":\"component\""));
+                    Events.anyRecordHas(drains, "route", "component"));
 
             String decisions = events.since(mark, "suit_immunity_decided");
             assertEquals("a full suit must never be judged unprotected while its tank has oxygen;"

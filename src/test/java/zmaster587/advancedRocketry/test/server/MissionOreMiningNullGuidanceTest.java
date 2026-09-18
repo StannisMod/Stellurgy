@@ -66,7 +66,7 @@ public class MissionOreMiningNullGuidanceTest extends AbstractSharedServerTest {
     private long startOreMission(int rocketId, float drillingPower) throws Exception {
         String start = ok(client().execute(
                 "artest mission start-ore 0 " + rocketId + " 1000 " + drillingPower));
-        assertFalse("start-ore must not error: " + start, start.contains("\"error\""));
+        assertFalse("start-ore must not error: " + start, Reply.of(start).has("error"));
         Reply mmReply = Reply.of(start);
         assertTrue("missing missionId: " + start, mmReply.has(MISSION_ID));
         return Long.parseLong(mmReply.text(MISSION_ID));
@@ -81,9 +81,9 @@ public class MissionOreMiningNullGuidanceTest extends AbstractSharedServerTest {
         long mid = startOreMission(rid, 0.0f);
 
         String strip = ok(client().execute("artest mission strip-guidance " + mid));
-        assertTrue("strip-guidance failed: " + strip, strip.contains("\"ok\":true"));
+        assertTrue("strip-guidance failed: " + strip, Reply.of(strip).ok());
         assertTrue("guidance computer must be gone: " + strip,
-                strip.contains("\"hasGuidanceComputer\":false"));
+                (!Reply.of(strip).bool("hasGuidanceComputer", true)));
 
         MissionCompletion complete = MissionCompletion.now(
                 cmd -> ok(client().execute(cmd)), mid);
@@ -103,7 +103,7 @@ public class MissionOreMiningNullGuidanceTest extends AbstractSharedServerTest {
         long mid = startOreMission(rid, 1.0f);
 
         String strip = ok(client().execute("artest mission strip-guidance " + mid));
-        assertTrue("strip-guidance failed: " + strip, strip.contains("\"ok\":true"));
+        assertTrue("strip-guidance failed: " + strip, Reply.of(strip).ok());
 
         MissionCompletion complete = MissionCompletion.now(
                 cmd -> ok(client().execute(cmd)), mid);

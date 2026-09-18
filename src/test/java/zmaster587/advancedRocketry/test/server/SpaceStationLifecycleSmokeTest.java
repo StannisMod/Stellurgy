@@ -22,18 +22,17 @@ public class SpaceStationLifecycleSmokeTest extends AbstractHeadlessServerTest {
     public void stationCreateRegistersAndPersistsForList() throws Exception {
         String emptyList = String.join("\n", client().execute("artest station list"));
         assertTrue("expected empty stations on fresh server, got: " + emptyList,
-                emptyList.contains("\"stations\":[]"));
+                (Reply.of(emptyList).arrayLength("stations") == 0));
 
         String createResp = String.join("\n", client().execute("artest station create 0"));
-        assertTrue("station create failed: " + createResp, createResp.contains("\"ok\":true"));
+        assertTrue("station create failed: " + createResp, Reply.of(createResp).ok());
 
         Reply mReply = Reply.of(createResp);
         assertTrue("could not extract station id: " + createResp, mReply.has(ID_PATTERN));
         int stationId = Integer.parseInt(mReply.text(ID_PATTERN));
 
         String listAfter = String.join("\n", client().execute("artest station list"));
-        assertTrue("created station " + stationId + " missing from list: " + listAfter,
-                listAfter.contains("\"id\":" + stationId));
+        Reply.of(listAfter).element("stations", "id", String.valueOf(stationId));
 
         // Read as NUMBERS: the substring form was a prefix, so `"orbitingPlanetId":0` was also
         // satisfied by a station orbiting dim 9701 and `"fuelAmount":0` by one holding 1000.

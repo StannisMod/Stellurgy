@@ -1,5 +1,6 @@
 package zmaster587.advancedRocketry.test.server;
 
+import zmaster587.advancedRocketry.test.Reply;
 import org.junit.Test;
 
 import zmaster587.advancedRocketry.test.EnergyStore;
@@ -59,7 +60,7 @@ public class TileMachineDepthTest extends AbstractSharedServerTest {
         String r = ok(client().execute(
                 "artest place " + DIM + " " + x + " " + y + " " + z + " " + blockId));
         assertTrue("place(" + blockId + ") at " + x + "," + y + "," + z + " failed: " + r,
-                r.contains("\"placed\":true"));
+                Reply.of(r).bool("placed", false));
     }
 
     @Test
@@ -82,7 +83,7 @@ public class TileMachineDepthTest extends AbstractSharedServerTest {
         String tickResp = ok(client().execute(
                 "artest tile force-tick " + DIM + " " + x + " " + Y + " " + z + " 5"));
         assertTrue("solar generator force-tick must not error: " + tickResp,
-                tickResp.contains("\"ok\":true"));
+                Reply.of(tickResp).ok());
     }
 
     @Test
@@ -148,7 +149,7 @@ public class TileMachineDepthTest extends AbstractSharedServerTest {
         String tickResp = ok(client().execute(
                 "artest tile force-tick " + DIM + " " + x + " " + Y + " " + z + " 2"));
         assertTrue("oxygenVent force-tick must not error: " + tickResp,
-                !tickResp.contains("\"error\""));
+                !Reply.of(tickResp).has("error"));
     }
 
     @Test

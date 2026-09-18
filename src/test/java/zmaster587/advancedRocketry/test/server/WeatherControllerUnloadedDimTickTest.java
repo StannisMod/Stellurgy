@@ -42,7 +42,7 @@ public class WeatherControllerUnloadedDimTickTest extends AbstractSharedServerTe
 
     private long createWeatherSat() throws Exception {
         String resp = ok(client().execute("artest satellite create 0 weatherController 100 1000 1000"));
-        assertTrue("weather satellite create failed: " + resp, resp.contains("\"ok\":true"));
+        assertTrue("weather satellite create failed: " + resp, Reply.of(resp).ok());
         Reply mReply = Reply.of(resp);
         assertTrue("no id in create response: " + resp, mReply.has(ID));
         return Long.parseLong(mReply.text(ID));
@@ -66,7 +66,7 @@ public class WeatherControllerUnloadedDimTickTest extends AbstractSharedServerTe
                         + "NPE (C062): " + resp,
                 resp.contains("NullPointerException"));
         assertTrue("weather-tick-unloaded must succeed post-fix: " + resp,
-                resp.contains("\"ok\":true"));
+                Reply.of(resp).ok());
 
         Reply mReply = Reply.of(resp);
         assertTrue("listSizeAfter missing: " + resp, mReply.has(LIST_AFTER));

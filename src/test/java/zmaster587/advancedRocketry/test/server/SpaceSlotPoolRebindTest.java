@@ -1,5 +1,6 @@
 package zmaster587.advancedRocketry.test.server;
 
+import zmaster587.advancedRocketry.test.Reply;
 import org.junit.Test;
 
 import static org.junit.Assert.assertTrue;
@@ -26,8 +27,8 @@ public class SpaceSlotPoolRebindTest extends AbstractSharedServerTest {
         // The whole rebind round-trip runs synchronously inside the probe (see `space roundtrip`),
         // so there are no cross-tick timing hazards here -- we assert the single result envelope.
         String r = exec("artest space roundtrip");
-        assertTrue("space roundtrip must complete: " + r, r.contains("\"ok\":true"));
+        assertTrue("space roundtrip must complete: " + r, Reply.of(r).ok());
         assertTrue("a slot must rebind between on-disk cells with per-cell block isolation "
-                + "(A marker persists, B marker does not bleed into A): " + r, r.contains("\"pass\":true"));
+                + "(A marker persists, B marker does not bleed into A): " + r, Reply.of(r).bool("pass", false));
     }
 }

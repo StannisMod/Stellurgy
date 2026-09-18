@@ -36,7 +36,7 @@ public class SpaceStationCentreCellNoFalseStationTest extends AbstractHeadlessSe
     @Test
     public void centreGridCellResolvesToNoStationNotFalselyStationOne() throws Exception {
         String create = exec("artest station create 0");
-        assertTrue("station must create: " + create, create.contains("\"ok\":true"));
+        assertTrue("station must create: " + create, Reply.of(create).ok());
         int stationId = extract(ID, create);
 
         StationInfo info = StationInfo.byId(this::exec, stationId);
@@ -49,7 +49,7 @@ public class SpaceStationCentreCellNoFalseStationTest extends AbstractHeadlessSe
         String atSpawn = exec("artest station at " + spawnX + " " + spawnY + " " + spawnZ);
         assertTrue("control: the station spawn must resolve to its own station id " + stationId
                         + " (spawn=" + spawnX + "," + spawnZ + "): " + atSpawn,
-                atSpawn.contains("\"stationAtPos\":" + stationId));
+                String.valueOf(stationId).equals(Reply.of(atSpawn).text("stationAtPos")));
 
         // L5: a position in the central grid cell (0,0) — station id 0 is never
         // allocated, so it must resolve to NO station (was falsely station 1 before

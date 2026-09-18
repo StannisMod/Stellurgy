@@ -60,7 +60,7 @@ public class PlanetTerrainSourceE2ETest extends AbstractSharedServerTest {
         int template = firstTemplateArDimOrSkip();
         String create = exec("artest worldgen create-terrain-dim "
                 + MOD_WT_DIM + " " + template + " MOD_WORLDTYPE flat");
-        assertTrue("create-terrain-dim must succeed: " + create, create.contains("\"ok\":true"));
+        assertTrue("create-terrain-dim must succeed: " + create, Reply.of(create).ok());
 
         exec("artest dim load " + MOD_WT_DIM);
         DimInfo info = dimInfo(MOD_WT_DIM);
@@ -85,7 +85,7 @@ public class PlanetTerrainSourceE2ETest extends AbstractSharedServerTest {
         int template = firstTemplateArDimOrSkip();
         String create = exec("artest worldgen create-terrain-dim "
                 + TEMPLATE_DIM + " " + template + " TEMPLATE noSuchTemplate");
-        assertTrue("create-terrain-dim must succeed: " + create, create.contains("\"ok\":true"));
+        assertTrue("create-terrain-dim must succeed: " + create, Reply.of(create).ok());
 
         exec("artest dim load " + TEMPLATE_DIM);
         DimInfo info = dimInfo(TEMPLATE_DIM);
@@ -111,7 +111,7 @@ public class PlanetTerrainSourceE2ETest extends AbstractSharedServerTest {
         int template = firstTemplateArDimOrSkip();
         String create = exec("artest worldgen create-terrain-dim "
                 + FALLBACK_DIM + " " + template + " MOD_WORLDTYPE definitelyNotAWorldType");
-        assertTrue("create-terrain-dim must succeed: " + create, create.contains("\"ok\":true"));
+        assertTrue("create-terrain-dim must succeed: " + create, Reply.of(create).ok());
 
         exec("artest dim load " + FALLBACK_DIM);
         DimInfo info = dimInfo(FALLBACK_DIM);
@@ -177,7 +177,7 @@ public class PlanetTerrainSourceE2ETest extends AbstractSharedServerTest {
         int template = firstTemplateArDimOrSkip();
         String create = exec("artest worldgen create-terrain-dim "
                 + OPTIONS_DIM + " " + template + " MOD_WORLDTYPE flat " + FLAT_DIAMOND_PRESET);
-        assertTrue("create-terrain-dim must succeed: " + create, create.contains("\"ok\":true"));
+        assertTrue("create-terrain-dim must succeed: " + create, Reply.of(create).ok());
 
         exec("artest dim load " + OPTIONS_DIM);
         DimInfo info = dimInfo(OPTIONS_DIM);
@@ -213,7 +213,7 @@ public class PlanetTerrainSourceE2ETest extends AbstractSharedServerTest {
     private int firstTemplateArDimOrSkip() throws Exception {
         String joined = exec("artest dim list");
         Assume.assumeFalse("No AR dimensions registered — skipping",
-                joined.contains("\"arDimensions\":[]"));
+                (Reply.of(joined).arrayLength("arDimensions") == 0));
         Reply dims = Reply.of("artest dim list", joined);
         assertTrue("could not parse arDimensions: " + joined, dims.has(AR_DIMS_ARRAY));
         for (int dim : dims.intArray(AR_DIMS_ARRAY)) {

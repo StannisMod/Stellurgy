@@ -315,7 +315,7 @@ public class M1PlanetToPlanetMilestoneE2ETest {
                         + "field back through the same config object production uses, so a stale "
                         + "`true` here means the file was written in a syntax the config reader "
                         + "skipped and every later leg would be running against defaults: " + fuelCfg,
-                fuelCfg.contains("\"value\":false"));
+                (!Reply.of(fuelCfg).bool("value", true)));
 
         SubsystemStatus status = SubsystemStatus.read(this::exec);
         requireArranged("the production space subsystem must be REGISTERED — it owns the "
@@ -374,7 +374,7 @@ public class M1PlanetToPlanetMilestoneE2ETest {
         String nameReply = exec("artest vs ship-name 0 " + describeArgs(afcSub));
         requireArranged("the built ship's flight computer must carry a durable name, or nothing"
                 + " after the first crossing can be addressed to this craft: " + nameReply,
-                nameReply.contains("\"found\":true"));
+                Reply.of(nameReply).bool("found", false));
         builtShipName = readString(nameReply, SHIP_ID);
 
         // The subspace copy is a RIGID relocation of the pad build, so the seat must sit at exactly
@@ -463,7 +463,7 @@ public class M1PlanetToPlanetMilestoneE2ETest {
         String entryDecisions = events.since(entryMark, "entry_decided");
         assertTrue("the entry gate must have GRANTED this entry (STARTED): " + entryDecisions
                         + " status=" + statusAfter.raw(),
-                entryDecisions.contains("\"decision\":\"STARTED\""));
+                "STARTED".equals(Reply.of(entryDecisions).text("decision")));
         System.out.println("[M1] leg 4 (powered climb to the cell) " + elapsed(tLeg)
                 + " status=" + statusAfter.raw());
 
@@ -504,7 +504,7 @@ public class M1PlanetToPlanetMilestoneE2ETest {
         requireArranged("the ship the pilot flew up must be findable in the space cell he "
                         + "arrived in — the ledger says he is here, so a ship that cannot be located "
                         + "means the arrival left no body behind: " + afcProbe,
-                afcProbe.contains("\"found\":true"));
+                Reply.of(afcProbe).bool("found", false));
         String shipId = readString(afcProbe, SHIP_ID);
         // The reader refuses a ship the ledger has no entry for, and refuses to answer a cell for
         // one — which is what this arrangement check stood for, and it no longer has to ask the
@@ -661,7 +661,7 @@ public class M1PlanetToPlanetMilestoneE2ETest {
                         + "address — those two clicks are the whole of how a player commits to a "
                         + "destination. The console's own verdict on the press: " + armDecision
                         + " nav=" + armedStatus,
-                armDecision.contains("\"outcome\":\"ARMED\"")
+                "ARMED".equals(Reply.of(armDecision).text("outcome"))
                         && "true".equals(readString(armedStatus, NAV_ARMED)));
         // A second clause stood here: that the pilot is TOLD, in his own chat, that the ship is
         // armed. It is gone — the chat line is a rendering of the arming, and the arming itself is
@@ -677,7 +677,7 @@ public class M1PlanetToPlanetMilestoneE2ETest {
         assertTrue("…and the ship must still be able to say WHERE that body is: an armed jump whose "
                         + "target cannot be located is a burst about to be spent on nothing. nav="
                         + armedStatus,
-                armedStatus.contains("\"targetResolved\":true"));
+                Reply.of(armedStatus).bool("targetResolved", false));
         System.out.println("[M1] leg 6 (target picked + armed at the console) " + elapsed(tLeg)
                 + " launchCell=" + launchCell + " pick=" + pickIndex + " targetDim=" + targetDim
                 + " target=" + targetCell
@@ -858,7 +858,7 @@ public class M1PlanetToPlanetMilestoneE2ETest {
         String loaded = exec("artest dim load " + nearestDim);
         requireArranged("the destination world must be loaded before the descent is attempted, "
                         + "or the resolver refuses quietly and the leg measures nothing: " + loaded,
-                loaded.contains("\"loaded\":true"));
+                Reply.of(loaded).bool("loaded", false));
 
         // He CLOSES THE RANGE, then descends. A jump does not end on top of its destination: it ends
         // on a standoff ring around it, outside the descent trigger on purpose, because arriving in a
@@ -1307,7 +1307,7 @@ public class M1PlanetToPlanetMilestoneE2ETest {
         for (int attempt = 0; attempt < budget; attempt++) {
             String hull = exec("artest vs ship-uuid " + dim + " " + builtShipName);
             String hullId = Reply.of("artest vs ship-uuid", hull).text("id");
-            if (hull.contains("\"found\":true") && hullId != null) {
+            if (Reply.of(hull).bool("found", false) && hullId != null) {
                 lastSeatProbe = exec("artest vs find-seat " + dim + " id " + hullId);
                 if (rememberAnchor(lastSeatProbe)) {
                     return lastSeatProbe;
@@ -1765,7 +1765,7 @@ public class M1PlanetToPlanetMilestoneE2ETest {
                 "the jump-capable craft, and the deck the player boards and works it from");
         String fixture = exec("artest fixture rocket 0 " + bx + " " + by + " " + bz + " " + VARIANT);
         requireArranged("fixture (" + VARIANT + ") failed: " + fixture,
-                fixture.contains("\"ok\":true"));
+                Reply.of(fixture).ok());
         int[] bp = Reply.of(fixture).blockPos(BUILDER_POS);
         requireArranged("fixture missing builderPos: " + fixture, bp != null);
         return new int[]{bp[0], bp[1],
@@ -2074,7 +2074,7 @@ public class M1PlanetToPlanetMilestoneE2ETest {
         }
         String hull = exec("artest vs ship-uuid " + dim + " " + builtShipName);
         String namedHull = Reply.of("artest vs ship-uuid", hull).text("id");
-        if (!hull.contains("\"found\":true") || namedHull == null) {
+        if (!Reply.of(hull).bool("found", false) || namedHull == null) {
             lastToWorldProbe = hull;
             return null;
         }

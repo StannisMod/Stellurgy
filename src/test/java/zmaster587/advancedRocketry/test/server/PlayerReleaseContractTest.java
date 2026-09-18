@@ -1,5 +1,6 @@
 package zmaster587.advancedRocketry.test.server;
 
+import zmaster587.advancedRocketry.test.Reply;
 import com.github.stannismod.forge.testing.junit.AbstractHeadlessServerTest;
 import com.github.stannismod.forge.testing.server.RealDedicatedServerHarness;
 
@@ -82,7 +83,7 @@ public class PlayerReleaseContractTest {
     private void ensurePlayer() throws Exception {
         String fake = exec("artest player ensure-fake 0 8.5 80 8.5");
         assertTrue("the fake player must exist before anything can be bound to him: " + fake,
-                fake.contains("\"ok\":true"));
+                Reply.of(fake).ok());
     }
 
     @Test
@@ -93,13 +94,13 @@ public class PlayerReleaseContractTest {
         // never changes, and so would every green below.
         String bound = exec("artest player bindings");
         assertTrue("a player who has done nothing must be bound to nothing: " + bound,
-                bound.contains("\"bound\":[]"));
+                (Reply.of(bound).arrayLength("bound") == 0));
 
         // And releasing nothing releases NOTHING — a release that always claims something would
         // make clause 2 vacuous.
         String released = exec("artest player release");
         assertTrue("releasing an unbound player must report an empty list, not a courtesy one: "
-                + released, released.contains("\"releasedCount\":0"));
+                + released, (Reply.of(released).integerOr("releasedCount", Integer.MIN_VALUE) == 0));
     }
 
     @Test
@@ -107,7 +108,7 @@ public class PlayerReleaseContractTest {
         ensurePlayer();
         String bind = exec("artest player bind-aboard " + SHIP);
         assertTrue("the arrangement must actually stamp the record: " + bind,
-                bind.contains("\"tagged\":true"));
+                Reply.of(bind).bool("tagged", false));
 
         String bound = exec("artest player bindings");
         assertTrue("a stamped aboard record must be REPORTED as a binding — the question 'what is"
@@ -123,10 +124,10 @@ public class PlayerReleaseContractTest {
         // record's independent read-only witness. One of them agreeing with itself proves nothing.
         String after = exec("artest player bindings");
         assertTrue("after a release he must be bound to nothing: " + after,
-                after.contains("\"bound\":[]"));
+                (Reply.of(after).arrayLength("bound") == 0));
         String tag = exec("artest space aboard-tag " + fakeName());
         assertTrue("and the record's own witness must agree that it is gone: " + tag,
-                tag.contains("\"tagged\":false"));
+                (!Reply.of(tag).bool("tagged", true)));
     }
 
     @Test
@@ -134,7 +135,7 @@ public class PlayerReleaseContractTest {
         ensurePlayer();
         String bind = exec("artest player bind-grace");
         assertTrue("the arrangement must actually open the window: " + bind,
-                bind.contains("\"active\":true"));
+                Reply.of(bind).bool("active", false));
 
         String bound = exec("artest player bindings");
         assertTrue("the post-transfer grace is a binding like any other — it SUPPRESSES the suit"
@@ -148,7 +149,7 @@ public class PlayerReleaseContractTest {
 
         String after = exec("artest player bindings");
         assertTrue("after a release he must be bound to nothing: " + after,
-                after.contains("\"bound\":[]"));
+                (Reply.of(after).arrayLength("bound") == 0));
     }
 
     @Test
@@ -167,11 +168,11 @@ public class PlayerReleaseContractTest {
                         && released.contains("\"rocket transfer grace\""));
         assertFalse("and the report must not be a stale echo of the question — it is what each"
                         + " owner said it actually let go: " + released,
-                released.contains("\"releasedCount\":0"));
+                (Reply.of(released).integerOr("releasedCount", Integer.MIN_VALUE) == 0));
 
         String after = exec("artest player bindings");
         assertTrue("after a release he must be bound to nothing: " + after,
-                after.contains("\"bound\":[]"));
+                (Reply.of(after).arrayLength("bound") == 0));
     }
 
     /**

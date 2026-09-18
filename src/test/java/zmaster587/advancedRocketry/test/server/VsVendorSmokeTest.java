@@ -1,5 +1,6 @@
 package zmaster587.advancedRocketry.test.server;
 
+import zmaster587.advancedRocketry.test.Reply;
 import java.util.List;
 
 import org.junit.Test;
@@ -37,7 +38,7 @@ public class VsVendorSmokeTest extends AbstractSharedServerTest {
                 + "main source set and ships inside the mod, so an unavailable answer means the "
                 + "vendored tree stopped being compiled in or its integration stopped resolving — "
                 + "and every ship test in the suite is meaningless until that is fixed. Got: " + resp,
-                resp.contains("\"available\":true"));
+                Reply.of(resp).bool("available", false));
     }
 
     /** A ship registry that answers at all — the integration is wired, not merely on the classpath. */
@@ -46,6 +47,6 @@ public class VsVendorSmokeTest extends AbstractSharedServerTest {
         List<String> lines = client().execute("artest vs ship-count 0");
         String resp = String.join("\n", lines);
         assertTrue("with VS present the ship registry must answer for the overworld (a count of 0 is "
-                + "a fine answer; no answer is not): " + resp, resp.contains("\"count\":"));
+                + "a fine answer; no answer is not): " + resp, Reply.of(resp).has("count"));
     }
 }

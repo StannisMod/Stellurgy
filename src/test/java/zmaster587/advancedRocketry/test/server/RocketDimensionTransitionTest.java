@@ -80,7 +80,7 @@ public class RocketDimensionTransitionTest extends AbstractSharedServerTest {
     private int firstNonOverworldArDimOrSkip() throws Exception {
         String joined = ok(client().execute("artest dim list"));
         Assume.assumeFalse("No AR dimensions registered",
-                joined.contains("\"arDimensions\":[]"));
+                (Reply.of(joined).arrayLength("arDimensions") == 0));
         Reply dims = Reply.of("artest dim list", joined);
         assertTrue("could not parse arDimensions array: " + joined, dims.has(AR_DIMS_ARRAY));
         for (int dim : dims.intArray(AR_DIMS_ARRAY)) {
@@ -174,7 +174,7 @@ public class RocketDimensionTransitionTest extends AbstractSharedServerTest {
         // Find the rocket by UUID — must now be in destDim.
         String byUuid = ok(client().execute("artest rocket find-by-uuid " + uuid));
         assertTrue("rocket must be findable by UUID after transition: " + byUuid,
-                byUuid.contains("\"ok\":true"));
+                Reply.of(byUuid).ok());
         int dimAfter = Integer.parseInt(g(DIM_FIELD, byUuid, "dim"));
         assertEquals("rocket must have transitioned to destination dim", destDim, dimAfter);
     }
@@ -213,7 +213,7 @@ public class RocketDimensionTransitionTest extends AbstractSharedServerTest {
         // round-trip lands (no player anchor in the dest dim).
         String byUuid = ok(client().execute("artest rocket find-by-uuid " + uuid));
         assertTrue("rocket must be findable post-transition: " + byUuid,
-                byUuid.contains("\"ok\":true"));
+                Reply.of(byUuid).ok());
         int idAfter = Integer.parseInt(g(ENTITY_ID_FIELD, byUuid, "entityId after"));
         assertNotEquals("entityId must change across changeDimension", idBefore, idAfter);
         int sxAfter = Integer.parseInt(g(STORAGE_SIZE_X, byUuid, "sizeX after"));
@@ -253,16 +253,16 @@ public class RocketDimensionTransitionTest extends AbstractSharedServerTest {
         // -> changeDimension(-12345) -> canTravelTo guard returns null.
         String resp = ok(client().execute("artest rocket force-orbit-reached " + id));
         assertTrue("force-orbit-reached must not crash on invalid destDim: " + resp,
-                resp.contains("\"ok\":true"));
+                Reply.of(resp).ok());
 
         // Rocket must still be findable by UUID, dim unchanged.
         String byUuid = ok(client().execute("artest rocket find-by-uuid " + uuid));
         assertTrue("rocket must still exist after invalid-dim transition attempt: " + byUuid,
-                byUuid.contains("\"ok\":true"));
+                Reply.of(byUuid).ok());
         int dimAfter = Integer.parseInt(g(DIM_FIELD, byUuid, "dim after"));
         assertEquals("rocket must remain in original dim 0", 0, dimAfter);
         assertFalse("rocket must NOT be marked dead by the failed transition: " + byUuid,
-                byUuid.contains("\"isDead\":true"));
+                Reply.of(byUuid).bool("isDead", false));
     }
 
     @Test
@@ -273,13 +273,13 @@ public class RocketDimensionTransitionTest extends AbstractSharedServerTest {
         String resp = ok(client().execute(
                 "artest rocket find-by-uuid 00000000-0000-0000-0000-000000000000"));
         assertTrue("unknown uuid must error: " + resp,
-                resp.contains("\"error\":\"rocket not found by uuid\""));
+                "rocket not found by uuid".equals(Reply.of(resp).text("error")));
     }
 
     @Test
     public void findByUuidOnMalformedUuidReturnsError() throws Exception {
         String resp = ok(client().execute("artest rocket find-by-uuid not-a-uuid"));
         assertTrue("malformed uuid must error: " + resp,
-                resp.contains("\"error\":\"invalid uuid\""));
+                "invalid uuid".equals(Reply.of(resp).text("error")));
     }
 }

@@ -66,7 +66,7 @@ public class RocketInfrastructureLinkPersistenceTest {
         int sx = 1300, sy = FixtureSite.OPEN_AIR_Y, sz = 1300;
         String place = String.join("\n", firstBoot.client().execute(
                 "artest place 0 " + sx + " " + sy + " " + sz + " advancedrocketry:fuelingStation"));
-        assertTrue("place fueling station failed: " + place, place.contains("\"placed\":true"));
+        assertTrue("place fueling station failed: " + place, Reply.of(place).bool("placed", false));
 
         // Pre-clear + build + assemble rocket. Place rocket far enough away
         // (+20 X) so the pre-clear region doesn't wipe the fueling station.
@@ -74,7 +74,7 @@ public class RocketInfrastructureLinkPersistenceTest {
                 + " " + (sx + 27) + " " + (sy + 11) + " " + (sz + 7) + " minecraft:air");
         String fx = String.join("\n", firstBoot.client().execute(
                 "artest fixture rocket 0 " + (sx + 20) + " 64 " + sz + " simple"));
-        assertTrue("fixture rocket failed on first boot: " + fx, fx.contains("\"ok\":true"));
+        assertTrue("fixture rocket failed on first boot: " + fx, Reply.of(fx).ok());
         int[] bp = Reply.of(fx).blockPos(BUILDER_POS);
         assertTrue("could not parse builderPos: " + fx, bp != null);
         int bx = bp[0],
@@ -83,14 +83,14 @@ public class RocketInfrastructureLinkPersistenceTest {
 
         String assemble = String.join("\n", firstBoot.client().execute(
                 "artest rocket assemble 0 " + bx + " " + by + " " + bz));
-        assertTrue("rocket assemble failed on first boot: " + assemble, assemble.contains("\"ok\":true"));
+        assertTrue("rocket assemble failed on first boot: " + assemble, Reply.of(assemble).ok());
         Reply emReply = Reply.of(assemble);
         assertTrue("rocket entityId missing: " + assemble, emReply.has(ENT_ID));
         int rocketId = Integer.parseInt(emReply.text(ENT_ID));
 
         String link = String.join("\n", firstBoot.client().execute(
                 "artest infra link 0 " + sx + " " + sy + " " + sz + " " + rocketId));
-        assertTrue("link must succeed on first boot: " + link, link.contains("\"linked\":true"));
+        assertTrue("link must succeed on first boot: " + link, Reply.of(link).bool("linked", false));
 
         firstBoot.close();
         firstBoot = null;
@@ -100,7 +100,7 @@ public class RocketInfrastructureLinkPersistenceTest {
         String preserved = String.join("\n", secondBoot.client().execute(
                 "artest infra info 0 " + sx + " " + sy + " " + sz));
         assertTrue("infrastructure tile must persist across restart: " + preserved,
-                preserved.contains("\"isInfrastructure\":true"));
+                Reply.of(preserved).bool("isInfrastructure", false));
 
         // Force-load the chunk around the rocket spawn — Minecraft loads
         // entities lazily on chunk load, so {@code rocket list 0} reports
@@ -110,7 +110,9 @@ public class RocketInfrastructureLinkPersistenceTest {
         secondBoot.client().execute("artest block at 0 " + (sx + 20) + " 64 " + sz);
 
         String rockets = String.join("\n", secondBoot.client().execute("artest rocket list 0"));
+        // The claim is about the LIST: `rocket list` answers `{"rockets":[{"id":…}]}`, so an `id`
+        // asked of the reply itself is a member's field and the reply carries none of its own.
         assertTrue("rocket entity must persist across restart: " + rockets,
-                rockets.contains("\"id\":"));
+                Reply.of("artest rocket list", rockets).arrayLength("rockets") >= 1);
     }
 }

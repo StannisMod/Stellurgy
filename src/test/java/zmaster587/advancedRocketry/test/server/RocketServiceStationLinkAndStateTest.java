@@ -68,14 +68,14 @@ public class RocketServiceStationLinkAndStateTest extends AbstractSharedServerTe
         String place = exec("artest place 0 " + sx + " " + sy + " " + sz
                 + " advancedrocketry:serviceStation");
         assertTrue("service station place failed: " + place,
-                place.contains("\"placed\":true"));
+                Reply.of(place).bool("placed", false));
 
         // Tick. Production performFunction guards on `linkedRocket instanceof
         // EntityRocket` before doing any work — null branch must be a no-op.
         String tick = exec("artest tile force-tick 0 " + sx + " " + sy + " " + sz
                 + " 40");
         assertTrue("force-tick on unlinked service station must succeed: " + tick,
-                tick.contains("\"ok\":true"));
+                Reply.of(tick).ok());
 
         // State probe must succeed and report linkedRocketId = -1.
         String state = exec("artest infra service-state 0 " + sx + " " + sy + " " + sz);
@@ -107,14 +107,14 @@ public class RocketServiceStationLinkAndStateTest extends AbstractSharedServerTe
 
         String fixture = exec("artest fixture rocket 0 " + CX_WITH_LINK + " "
                 + CY_PAD + " " + CZ_PAD + " simple");
-        assertTrue("fixture must build: " + fixture, fixture.contains("\"ok\":true"));
+        assertTrue("fixture must build: " + fixture, Reply.of(fixture).ok());
         int[] bp = Reply.of(fixture).blockPos(BUILDER_POS);
         assertTrue("fixture missing builderPos: " + fixture, bp != null);
 
         String assemble = exec("artest rocket assemble 0 "
                 + bp[0] + " " + bp[1] + " " + bp[2]);
         assertTrue("assemble must succeed: " + assemble,
-                assemble.contains("\"ok\":true"));
+                Reply.of(assemble).ok());
         Reply eimReply = Reply.of(assemble);
         assertTrue("no entityId in assemble: " + assemble, eimReply.has(ENTITY_ID));
         int rocketId = Integer.parseInt(eimReply.text(ENTITY_ID));
@@ -125,13 +125,13 @@ public class RocketServiceStationLinkAndStateTest extends AbstractSharedServerTe
         String place = exec("artest place 0 " + sx + " " + sy + " " + sz
                 + " advancedrocketry:serviceStation");
         assertTrue("service station place failed: " + place,
-                place.contains("\"placed\":true"));
+                Reply.of(place).bool("placed", false));
 
         // Link.
         String link = exec("artest infra link 0 " + sx + " " + sy + " " + sz
                 + " " + rocketId);
         assertTrue("infra link must succeed: " + link,
-                link.contains("\"ok\":true"));
+                Reply.of(link).ok());
 
         // Verify the service station now reports the rocket's entityId.
         String state = exec("artest infra service-state 0 " + sx + " " + sy + " " + sz);

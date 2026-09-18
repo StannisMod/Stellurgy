@@ -266,25 +266,25 @@ public class WirelessTransceiverContractTest extends AbstractSharedServerTest {
     public void frozenSaveIdentifiersMustNotBeRespelled() throws Exception {
         String reg = String.join("\n", client().execute(
                 "artest registry lookup advancedrocketry:wirelessTransciever"));
-        assertTrue("registry lookup probe errored: " + reg, reg.contains("\"ok\":true"));
+        assertTrue("registry lookup probe errored: " + reg, Reply.of(reg).ok());
         assertTrue("FROZEN block registry name advancedrocketry:wirelesstransciever is gone — "
                         + "every existing world loses its placed transceivers: " + reg,
-                reg.contains("\"blockRegistered\":true"));
+                Reply.of(reg).bool("blockRegistered", false));
         assertTrue("FROZEN ItemBlock registry name is gone — stored transceivers are deleted "
                         + "from inventories and chests: " + reg,
-                reg.contains("\"itemRegistered\":true"));
+                Reply.of(reg).bool("itemRegistered", false));
         assertTrue("transceiver is no longer craftable — the recipe result no longer resolves "
                         + "against the frozen registry name: " + reg,
-                reg.contains("\"craftable\":true"));
+                Reply.of(reg).bool("craftable", false));
 
         int baseX = 3000;
         placeAt(baseX);
         String nbt = String.join("\n", client().execute(
                 "artest tile nbt-id " + DIM + " " + baseX + " " + Y + " " + Z));
-        assertTrue("tile nbt-id probe errored: " + nbt, nbt.contains("\"ok\":true"));
+        assertTrue("tile nbt-id probe errored: " + nbt, Reply.of(nbt).ok());
         assertTrue("FROZEN tile entity id changed — tiles in existing chunks and inside packed "
                         + "rockets/stations load as null, losing network id, mode and priority: " + nbt,
-                nbt.contains("\"id\":\"minecraft:artransciever\""));
+                "minecraft:artransciever".equals(Reply.of(nbt).text("id")));
 
         // The client resolves blockstate and models from the registry name
         // (lowercased). A server tier cannot render, but it can prove the files
@@ -310,7 +310,7 @@ public class WirelessTransceiverContractTest extends AbstractSharedServerTest {
                     "artest place " + DIM + " " + x + " " + Y + " " + Z
                             + " advancedrocketry:wirelessTransciever"));
             assertTrue("place failed at x=" + x + ": " + r,
-                    r.contains("\"placed\":true"));
+                    Reply.of(r).bool("placed", false));
             // ONE read, not a poll: the tile is there before `place` answers. 1.12.2's
             // Chunk.setBlockState creates the tile entity and hands it to World.setTileEntity
             // before it returns, and World.getTileEntity consults the pending list when the world
@@ -321,7 +321,7 @@ public class WirelessTransceiverContractTest extends AbstractSharedServerTest {
             // seconds of silence where this read names the tile that is actually at the position.
             String info = info(x);
             assertTrue("no transceiver tile at x=" + x + " right after place: " + info,
-                    info.contains("\"ok\":true"));
+                    Reply.of(info).ok());
         }
     }
 
@@ -345,7 +345,7 @@ public class WirelessTransceiverContractTest extends AbstractSharedServerTest {
                 "artest pipe wireless-pair " + DIM + " "
                         + x1 + " " + Y + " " + Z + " "
                         + x2 + " " + Y + " " + Z));
-        assertTrue("pair probe failed: " + r, r.contains("\"ok\":true"));
+        assertTrue("pair probe failed: " + r, Reply.of(r).ok());
         return extractInt(SHARED_ID, r);
     }
 
@@ -353,14 +353,14 @@ public class WirelessTransceiverContractTest extends AbstractSharedServerTest {
         String r = String.join("\n", client().execute(
                 "artest pipe wireless-set-mode " + DIM + " "
                         + x + " " + Y + " " + Z + " " + mode));
-        assertTrue("set-mode failed: " + r, r.contains("\"ok\":true"));
+        assertTrue("set-mode failed: " + r, Reply.of(r).ok());
     }
 
     private void setEnabled(int x, boolean enabled) throws Exception {
         String r = String.join("\n", client().execute(
                 "artest pipe wireless-set-enabled " + DIM + " "
                         + x + " " + Y + " " + Z + " " + enabled));
-        assertTrue("set-enabled failed: " + r, r.contains("\"ok\":true"));
+        assertTrue("set-enabled failed: " + r, Reply.of(r).ok());
     }
 
     private static String extractMode(String haystack) {

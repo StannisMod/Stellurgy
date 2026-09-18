@@ -44,7 +44,7 @@ public class StationDeployedRocketWireSymmetryTest extends AbstractSharedServerT
     @Test
     public void inheritedSubPacketRoundTripsSymmetrically() throws Exception {
         String resp = join(client().execute("artest rocket wire-symmetry TURNUPDATE"));
-        assertTrue("wire-symmetry probe errored: " + resp, resp.contains("\"ok\":true"));
+        assertTrue("wire-symmetry probe errored: " + resp, Reply.of(resp).ok());
 
         int written = intOf(WRITTEN, resp);
         int read = intOf(READ, resp);
@@ -65,7 +65,7 @@ public class StationDeployedRocketWireSymmetryTest extends AbstractSharedServerT
         // symmetric both pre- and post-fix — a regression guard that the fix
         // must not disturb the gas-selection path.
         String resp = join(client().execute("artest rocket wire-symmetry MENU_CHANGE"));
-        assertTrue("wire-symmetry probe errored: " + resp, resp.contains("\"ok\":true"));
+        assertTrue("wire-symmetry probe errored: " + resp, Reply.of(resp).ok());
         assertTrue("sanity: MENU_CHANGE must carry the gasId payload on the wire, got "
                 + resp, intOf(WRITTEN, resp) > 0);
         assertEquals("MENU_CHANGE must round-trip with zero trailing bytes: " + resp,

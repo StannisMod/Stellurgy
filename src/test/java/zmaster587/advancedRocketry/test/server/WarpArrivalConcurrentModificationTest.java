@@ -39,7 +39,7 @@ public class WarpArrivalConcurrentModificationTest extends AbstractHeadlessServe
         exec("artest dim load " + SPACE_DIM);
 
         String r = exec("artest station warp-collision 0 3");
-        assertTrue("probe must run: " + r, r.contains("\"ok\":true"));
+        assertTrue("probe must run: " + r, Reply.of(r).ok());
 
         Reply warped = Reply.of("artest warp tick-all", r);
         assertTrue("no threw field in: " + r, warped.has(THREW));

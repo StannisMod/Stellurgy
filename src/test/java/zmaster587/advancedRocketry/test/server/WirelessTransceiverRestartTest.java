@@ -124,7 +124,7 @@ public class WirelessTransceiverRestartTest {
         String r = String.join("\n", h.client().execute(
                 "artest place " + DIM + " " + x + " " + Y + " " + Z
                         + " advancedrocketry:wirelessTransciever"));
-        assertTrue("place failed at x=" + x + ": " + r, r.contains("\"placed\":true"));
+        assertTrue("place failed at x=" + x + ": " + r, Reply.of(r).bool("placed", false));
     }
 
     private static int pair(RealDedicatedServerHarness h, int xA, int xB) throws Exception {
@@ -132,7 +132,7 @@ public class WirelessTransceiverRestartTest {
                 "artest pipe wireless-pair " + DIM + " "
                         + xA + " " + Y + " " + Z + " "
                         + xB + " " + Y + " " + Z));
-        assertTrue("pair failed: " + r, r.contains("\"ok\":true"));
+        assertTrue("pair failed: " + r, Reply.of(r).ok());
         return extractInt(SHARED_ID, r);
     }
 
@@ -145,14 +145,14 @@ public class WirelessTransceiverRestartTest {
         String r = String.join("\n", h.client().execute(
                 "artest pipe wireless-set-mode " + DIM + " "
                         + x + " " + Y + " " + Z + " " + mode));
-        assertTrue("set-mode failed: " + r, r.contains("\"ok\":true"));
+        assertTrue("set-mode failed: " + r, Reply.of(r).ok());
     }
 
     private static void setEnabled(RealDedicatedServerHarness h, int x, boolean enabled) throws Exception {
         String r = String.join("\n", h.client().execute(
                 "artest pipe wireless-set-enabled " + DIM + " "
                         + x + " " + Y + " " + Z + " " + enabled));
-        assertTrue("set-enabled failed: " + r, r.contains("\"ok\":true"));
+        assertTrue("set-enabled failed: " + r, Reply.of(r).ok());
     }
 
     private static String extractMode(String haystack) {

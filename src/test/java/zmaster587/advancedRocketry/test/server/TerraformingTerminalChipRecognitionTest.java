@@ -85,7 +85,7 @@ public class TerraformingTerminalChipRecognitionTest extends AbstractSharedServe
         String redstone = exec("artest place 0 " + (x + 1) + " " + y + " " + z
                 + " minecraft:redstone_block");
         assertTrue("redstone_block place failed: " + redstone,
-                redstone.contains("\"placed\":true"));
+                Reply.of(redstone).bool("placed", false));
 
         // One force-tick is enough — update() reads redstone + slot 0
         // then mutates was_enabled_last_tick and the block state in the
@@ -135,7 +135,7 @@ public class TerraformingTerminalChipRecognitionTest extends AbstractSharedServe
         String place = exec("artest place 0 " + x + " " + y + " " + z
                 + " advancedrocketry:terraformingTerminal");
         assertTrue("terraformingTerminal place failed: " + place,
-                place.contains("\"placed\":true"));
+                Reply.of(place).bool("placed", false));
         // Apply redstone — proves the gate is on the chip side, not on
         // power side.
         exec("artest place 0 " + (x + 1) + " " + y + " " + z + " minecraft:redstone_block");
@@ -161,12 +161,12 @@ public class TerraformingTerminalChipRecognitionTest extends AbstractSharedServe
         String place = exec("artest place 0 " + x + " " + y + " " + z
                 + " advancedrocketry:terraformingTerminal");
         assertTrue("terraformingTerminal place failed: " + place,
-                place.contains("\"placed\":true"));
+                Reply.of(place).bool("placed", false));
 
         // Build + register a SatelliteBiomeChanger on dim 0.
         String build = exec("artest satellite-builder build 0 biomeChanger");
         assertTrue("biomeChanger satellite build failed: " + build,
-                build.contains("\"ok\":true"));
+                Reply.of(build).ok());
         Reply mReply = Reply.of(build);
         if (!mReply.has(SAT_ID)) {
             return -1L;
@@ -175,7 +175,7 @@ public class TerraformingTerminalChipRecognitionTest extends AbstractSharedServe
 
         String load = exec("artest terraforming terminal-load-chip 0 " + x + " " + y + " " + z
                 + " " + satId);
-        assertTrue("terminal-load-chip failed: " + load, load.contains("\"ok\":true"));
+        assertTrue("terminal-load-chip failed: " + load, Reply.of(load).ok());
         return satId;
     }
 

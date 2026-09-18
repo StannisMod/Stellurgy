@@ -84,7 +84,7 @@ public class LowGravFallDamageTest {
 
     private void stationFake(int dim) throws Exception {
         String fake = exec("artest player ensure-fake " + dim + " 8.5 120 8.5");
-        assertTrue("ensure-fake must succeed: " + fake, fake.contains("\"ok\":true"));
+        assertTrue("ensure-fake must succeed: " + fake, Reply.of(fake).ok());
         // Off-thread settle: the wait runs in the test jvm, because a command handler runs on the
         // server thread and would block the clock it is waiting for.
         GameTicks.advanceWorld(harness.client(), dim, 20);

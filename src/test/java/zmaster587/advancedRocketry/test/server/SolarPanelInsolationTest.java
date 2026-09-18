@@ -58,7 +58,7 @@ public class SolarPanelInsolationTest extends AbstractSharedServerTest {
     private int firstNonOverworldArDimOrSkip() throws Exception {
         String joined = ok(client().execute("artest dim list"));
         Assume.assumeFalse("No AR dimensions registered",
-                joined.contains("\"arDimensions\":[]"));
+                (Reply.of(joined).arrayLength("arDimensions") == 0));
         Reply dims = Reply.of("artest dim list", joined);
         assertTrue("could not parse arDimensions array: " + joined, dims.has(AR_DIMS_ARRAY));
         for (int dim : dims.intArray(AR_DIMS_ARRAY)) {
@@ -81,7 +81,7 @@ public class SolarPanelInsolationTest extends AbstractSharedServerTest {
                 "artest place " + dim + " " + x + " " + y + " " + z
                         + " advancedrocketry:solarGenerator"));
         assertTrue("could not place solar in dim " + dim + ": " + place,
-                place.contains("\"placed\":true"));
+                Reply.of(place).bool("placed", false));
         // Make sure it's daytime + clear for both dims.
         client().execute("time set day");
         client().execute("weather clear 100000");
@@ -97,7 +97,7 @@ public class SolarPanelInsolationTest extends AbstractSharedServerTest {
                 "artest tile force-tick " + dim + " " + x + " " + y + " " + z
                         + " " + ticks));
         assertTrue("force-tick failed in dim " + dim + ": " + tick,
-                tick.contains("\"ok\":true"));
+                Reply.of(tick).ok());
 
         long after = energy(dim, x, y, z).stored();
         return after - initial;

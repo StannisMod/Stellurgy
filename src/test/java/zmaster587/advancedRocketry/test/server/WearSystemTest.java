@@ -48,7 +48,7 @@ public class WearSystemTest extends AbstractSharedServerTest {
         requireClearSite(site);
         String fixture = String.join("\n", client().execute(
                 "artest fixture rocket 0 " + baseX + " " + baseY + " " + baseZ + " simple"));
-        assertTrue("fixture build failed: " + fixture, fixture.contains("\"ok\":true"));
+        assertTrue("fixture build failed: " + fixture, Reply.of(fixture).ok());
         int[] bp = Reply.of(fixture).blockPos(BUILDER_POS);
         assertTrue("no builderPos: " + fixture, bp != null);
         return new int[]{bp[0], bp[1], bp[2]};
@@ -57,7 +57,7 @@ public class WearSystemTest extends AbstractSharedServerTest {
     private int assembleAndGetId(int[] builderPos) throws Exception {
         String assemble = String.join("\n", client().execute(
                 "artest rocket assemble 0 " + builderPos[0] + " " + builderPos[1] + " " + builderPos[2]));
-        assertTrue("assemble failed: " + assemble, assemble.contains("\"ok\":true"));
+        assertTrue("assemble failed: " + assemble, Reply.of(assemble).ok());
         String list = String.join("\n", client().execute("artest rocket list 0"));
         java.util.List<RocketList.Entry> built = RocketList.of(list);
         assertTrue("no rocket id after assemble: " + list, !built.isEmpty());
@@ -83,15 +83,15 @@ public class WearSystemTest extends AbstractSharedServerTest {
         // Engine, fuel tank, seat positions (see fixture builder).
         String engine = String.join("\n", client().execute(
                 "artest wear get 0 " + (rocketX - 1) + " " + rocketY + " " + rocketZ));
-        assertTrue("motor must host wear cap: " + engine, engine.contains("\"registered\":true"));
+        assertTrue("motor must host wear cap: " + engine, Reply.of(engine).bool("registered", false));
 
         String tank = String.join("\n", client().execute(
                 "artest wear get 0 " + rocketX + " " + (rocketY + 1) + " " + rocketZ));
-        assertTrue("fuel tank must host wear cap: " + tank, tank.contains("\"registered\":true"));
+        assertTrue("fuel tank must host wear cap: " + tank, Reply.of(tank).bool("registered", false));
 
         String seat = String.join("\n", client().execute(
                 "artest wear get 0 " + rocketX + " " + (rocketY + 4) + " " + rocketZ));
-        assertTrue("seat must host wear cap: " + seat, seat.contains("\"registered\":true"));
+        assertTrue("seat must host wear cap: " + seat, Reply.of(seat).bool("registered", false));
     }
 
     @Test
@@ -102,7 +102,7 @@ public class WearSystemTest extends AbstractSharedServerTest {
         int ex = bx + 3 - 1, ey = by + 1, ez = bz + 3;
 
         String set = String.join("\n", client().execute("artest wear set 0 " + ex + " " + ey + " " + ez + " 7"));
-        assertTrue("wear set failed: " + set, set.contains("\"ok\":true"));
+        assertTrue("wear set failed: " + set, Reply.of(set).ok());
 
         String get = String.join("\n", client().execute("artest wear get 0 " + ex + " " + ey + " " + ez));
         Reply mReply = Reply.of(get);
@@ -142,7 +142,7 @@ public class WearSystemTest extends AbstractSharedServerTest {
         int rocketId = assembleAndGetId(builder);
         // Wear one motor to stage 5 (no PrecisionAssembler nearby -> standalone path).
         String inject = String.join("\n", client().execute("artest infra inject-broken-part " + rocketId + " 5"));
-        assertTrue("inject-broken-part failed: " + inject, inject.contains("\"ok\":true"));
+        assertTrue("inject-broken-part failed: " + inject, Reply.of(inject).ok());
         assertTrue("worn motor must give a non-zero breaking probability",
                 breakingProbOf(rocketId) > 0);
 
@@ -152,22 +152,22 @@ public class WearSystemTest extends AbstractSharedServerTest {
                 + " " + (sx + 1) + " " + (sy + 2) + " " + (sz + 1) + " minecraft:air");
         String place = String.join("\n", client().execute(
                 "artest place 0 " + sx + " " + sy + " " + sz + " advancedrocketry:serviceStation"));
-        assertTrue("service station place failed: " + place, place.contains("\"placed\":true"));
+        assertTrue("service station place failed: " + place, Reply.of(place).bool("placed", false));
         // Redstone power — performFunction requires getEquivalentPower=true.
         client().execute("artest place 0 " + sx + " " + (sy + 1) + " " + sz + " minecraft:redstone_block");
 
         String link = String.join("\n", client().execute(
                 "artest infra link 0 " + sx + " " + sy + " " + sz + " " + rocketId));
-        assertTrue("link failed: " + link, link.contains("\"ok\":true"));
+        assertTrue("link failed: " + link, Reply.of(link).ok());
 
         // Load the stage-5 repair recipe's non-part materials (ingot + plate),
         // each well above the x3 standalone multiplier.
         String load0 = String.join("\n", client().execute(
                 "artest wear station-load 0 " + sx + " " + sy + " " + sz + " 0 ore:ingotTitaniumIridium 16"));
-        assertTrue("station-load ingot failed: " + load0, load0.contains("\"ok\":true"));
+        assertTrue("station-load ingot failed: " + load0, Reply.of(load0).ok());
         String load1 = String.join("\n", client().execute(
                 "artest wear station-load 0 " + sx + " " + sy + " " + sz + " 1 ore:plateTitaniumAluminide 16"));
-        assertTrue("station-load plate failed: " + load1, load1.contains("\"ok\":true"));
+        assertTrue("station-load plate failed: " + load1, Reply.of(load1).ok());
 
         // Drive performFunction directly (no assembler -> standalone repair branch).
         client().execute("artest infra service-perform-function 0 " + sx + " " + sy + " " + sz);
@@ -188,14 +188,14 @@ public class WearSystemTest extends AbstractSharedServerTest {
         int rocketId = assembleAndGetId(builder);
 
         String status = String.join("\n", client().execute("artest wear rocket-status " + rocketId + " 0.7"));
-        assertTrue("rocket-status must find the rocket: " + status, status.contains("\"found\":true"));
+        assertTrue("rocket-status must find the rocket: " + status, Reply.of(status).bool("found", false));
 
         Reply tanksReply = Reply.of(status);
         assertTrue("no wornTankCount: " + status, tanksReply.has("wornTankCount"));
         assertTrue("a worn fuel tank must be surfaced for the launch gate: " + status,
                 tanksReply.integer("wornTankCount") >= 1);
         assertTrue("a critically-worn seat must be detected: " + status,
-                status.contains("\"hasCriticallyWornSeat\":true"));
+                Reply.of(status).bool("hasCriticallyWornSeat", false));
     }
 
     @Test

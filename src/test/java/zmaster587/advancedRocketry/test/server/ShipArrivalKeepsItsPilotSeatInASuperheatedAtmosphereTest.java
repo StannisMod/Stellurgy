@@ -72,7 +72,7 @@ public class ShipArrivalKeepsItsPilotSeatInASuperheatedAtmosphereTest extends Ab
         String coords = placeFixture(SRC_X, SRC_Y, SRC_Z);
         String asm = exec("artest rocket assemble 0 " + coords);
         assertTrue("with VS an AFC-bearing build must route to a ship (no rocket): " + asm,
-                asm.contains("\"rocketCount\":0"));
+                (Reply.of(asm).integerOr("rocketCount", Integer.MIN_VALUE) == 0));
         assertTrue("the source VS ship never loaded", loadedShips(0) >= 1);
 
         // The source ship, by the durable name its assembler minted — which is also what the ARRIVED
@@ -87,7 +87,7 @@ public class ShipArrivalKeepsItsPilotSeatInASuperheatedAtmosphereTest extends Ab
 
         String pre = exec("artest vs seat-input-by-id 0 " + srcShipId + " 0 0 0 0 0 0");
         assertTrue("before the crossing the ship must have a pilot seat to lose: " + pre,
-                pre.contains("\"seatFound\":true"));
+                Reply.of(pre).bool("seatFound", false));
 
         // INSTRUMENT CHECK, while the world is still temperate: placing a lone pilot seat this way
         // leaves a pilot seat. Without this leg, "the seat is gone" after the heat could just as
@@ -130,7 +130,7 @@ public class ShipArrivalKeepsItsPilotSeatInASuperheatedAtmosphereTest extends Ab
                 + (int) srcLive.x + " " + (int) srcLive.y + " " + (int) srcLive.z
                 + " " + DST_X + " " + DST_Y + " " + DST_Z);
         assertTrue("the crossing itself failed, so the seat question was never asked: " + cross,
-                cross.contains("\"ok\":true"));
+                Reply.of(cross).ok());
         assertTrue("the crossed ship never re-loaded at the destination: " + cross,
                 loadedShips(0) >= 1);
 
@@ -144,9 +144,9 @@ public class ShipArrivalKeepsItsPilotSeatInASuperheatedAtmosphereTest extends Ab
         String post = exec("artest vs seat-input-by-id 0 " + dstShipId + " 0 0 0 0 0 0");
         assertTrue("the arrived ship has NO pilot seat - it burned on the way in, and its crew has "
                         + "nowhere to sit. control=" + control + " post=" + post,
-                post.contains("\"seatFound\":true"));
+                Reply.of(post).bool("seatFound", false));
         assertTrue("the arrived ship's seat no longer resolves its flight computer: " + post,
-                post.contains("\"afcResolved\":true"));
+                Reply.of(post).bool("afcResolved", false));
 
         // And the block itself is a seat, not the fire that replaced it.
         String seatBlock = exec("artest space get-block 0 " + extractInt(post, "seatX")
@@ -181,9 +181,9 @@ public class ShipArrivalKeepsItsPilotSeatInASuperheatedAtmosphereTest extends Ab
         int cx1 = (baseX - 4) >> 4, cz1 = (baseZ - 4) >> 4;
         int cx2 = (baseX + 20) >> 4, cz2 = (baseZ + 20) >> 4;
         assertTrue("chunk warmup failed",
-                exec("artest chunk warmup 0 " + cx1 + " " + cz1 + " " + cx2 + " " + cz2).contains("\"ok\":true"));
-        assertTrue("pre-clear failed", exec("artest fill 0 " + (baseX - 4) + " " + (SRC_Y - 2) + " " + (baseZ - 4)
-                + " " + (baseX + 20) + " " + (SRC_Y + 12) + " " + (baseZ + 20) + " minecraft:air").contains("\"ok\":true"));
+                Reply.of(exec("artest chunk warmup 0 " + cx1 + " " + cz1 + " " + cx2 + " " + cz2)).ok());
+        assertTrue("pre-clear failed", Reply.of(exec("artest fill 0 " + (baseX - 4) + " " + (SRC_Y - 2) + " " + (baseZ - 4)
+                + " " + (baseX + 20) + " " + (SRC_Y + 12) + " " + (baseZ + 20) + " minecraft:air")).ok());
     }
 
     private void clearPos(int x, int y, int z) throws Exception {
@@ -194,15 +194,15 @@ public class ShipArrivalKeepsItsPilotSeatInASuperheatedAtmosphereTest extends Ab
     private String placeLoneSeat(int x, int y, int z) throws Exception {
         String box = x + " " + y + " " + z + " " + x + " " + y + " " + z;
         assertTrue("could not clear the position at " + box,
-                exec("artest fill 0 " + box + " minecraft:air").contains("\"ok\":true"));
+                Reply.of(exec("artest fill 0 " + box + " minecraft:air")).ok());
         assertTrue("could not place a pilot seat at " + box,
-                exec("artest fill 0 " + box + " " + PILOT_SEAT).contains("\"ok\":true"));
+                Reply.of(exec("artest fill 0 " + box + " " + PILOT_SEAT)).ok());
         return exec("artest space get-block 0 " + x + " " + y + " " + z);
     }
 
     private String placeFixture(int baseX, int baseY, int baseZ) throws Exception {
         String fixture = exec("artest fixture rocket 0 " + baseX + " " + baseY + " " + baseZ + " with-pilot-seat");
-        assertTrue("fixture failed: " + fixture, fixture.contains("\"ok\":true"));
+        assertTrue("fixture failed: " + fixture, Reply.of(fixture).ok());
         int[] bp = Reply.of(fixture).blockPos(BUILDER_POS);
         assertTrue("fixture missing builderPos: " + fixture, bp != null);
         return bp[0] + " " + bp[1] + " " + bp[2];

@@ -82,7 +82,7 @@ final class MachineRecipeEndToEndKit {
         String resp = String.join("\n", c.execute(
                 "artest fixture machine " + fixtureKey + " 0 " + cx + " " + cy + " " + cz));
         assertTrue("fixture machine " + fixtureKey + " failed: " + resp,
-                resp.contains("\"ok\":true"));
+                Reply.of(resp).ok());
         List<String> in   = matchAllPos(resp, "inputPositions");
         List<String> out  = matchAllPos(resp, "outputPositions");
         List<String> pwr  = matchAllPos(resp, "powerPositions");
@@ -126,7 +126,7 @@ final class MachineRecipeEndToEndKit {
         for (int attempt = 0; attempt < 8; attempt++) {
             resp = String.join("\n",
                     c.execute("artest machine try-complete " + dim + " " + cx + " " + cy + " " + cz));
-            if (resp.contains("\"attempted\":true")) return resp;
+            if (Reply.of(resp).bool("attempted", false)) return resp;
             GameTicks.advance(c, GameTicks.server(), TICKS_BETWEEN_ATTEMPTS);
         }
         return resp;
@@ -140,7 +140,7 @@ final class MachineRecipeEndToEndKit {
         for (int attempt = 0; attempt < 8; attempt++) {
             resp = String.join("\n",
                     c.execute("artest machine try-complete 0 " + cx + " " + cy + " " + cz));
-            if (resp.contains("\"isComplete\":true")) return;
+            if (Reply.of(resp).bool("isComplete", false)) return;
             attempts.append("\n  attempt ").append(attempt + 1).append(": ").append(resp);
             GameTicks.advance(c, GameTicks.server(), TICKS_BETWEEN_ATTEMPTS);
         }
@@ -172,7 +172,7 @@ final class MachineRecipeEndToEndKit {
         String resp = String.join("\n",
                 c.execute("artest machine recipe-info " + tileShortName + " 0"));
         assertTrue("recipe-info errored for " + tileShortName + ": " + resp,
-                !resp.contains("\"error\""));
+                !Reply.of(resp).has("error"));
         int time = 0;
         Reply tmReply = Reply.of(resp);
         if (tmReply.has(TIME_FIELD)) time = Integer.parseInt(tmReply.text(TIME_FIELD));
@@ -233,15 +233,15 @@ final class MachineRecipeEndToEndKit {
         fillFluidIngredients(c, fixtureKey, p, r.fluidIngredients);
         String inject = String.join("\n", c.execute(
                 "artest energy inject 0 " + p.firstPower() + " 10000000"));
-        assertTrue("power inject failed: " + inject, inject.contains("\"ok\":true"));
+        assertTrue("power inject failed: " + inject, Reply.of(inject).ok());
         String enable = String.join("\n", c.execute(
                 "artest machine set-enabled 0 " + cx + " " + cy + " " + cz + " true"));
         assertTrue("machine set-enabled failed: " + enable,
-                enable.contains("\"ok\":true") && enable.contains("\"enabled\":true"));
+                Reply.of(enable).ok() && Reply.of(enable).bool("enabled", false));
         int tickBudget = Math.max(2000, r.time + 1000);
         String tick = String.join("\n", c.execute(
                 "artest tile force-tick 0 " + cx + " " + cy + " " + cz + " " + tickBudget));
-        assertTrue("force-tick failed: " + tick, tick.contains("\"ok\":true"));
+        assertTrue("force-tick failed: " + tick, Reply.of(tick).ok());
         return String.join("\n", c.execute("artest hatch read 0 " + p.firstOutput()));
     }
 
@@ -261,12 +261,12 @@ final class MachineRecipeEndToEndKit {
         String inject = String.join("\n", c.execute(
                 "artest energy inject 0 " + p.firstPower() + " 10000000"));
         assertTrue("power inject failed for " + fixtureKey + ": " + inject,
-                inject.contains("\"ok\":true"));
+                Reply.of(inject).ok());
 
         String enable = String.join("\n", c.execute(
                 "artest machine set-enabled 0 " + cx + " " + cy + " " + cz + " true"));
         assertTrue("machine set-enabled failed for " + fixtureKey + ": " + enable,
-                enable.contains("\"ok\":true") && enable.contains("\"enabled\":true"));
+                Reply.of(enable).ok() && Reply.of(enable).bool("enabled", false));
 
         // Force-tick budget adapts to the recipe's declared completion time.
         // Most AR machine recipes are <500 ticks; the wildcard-structure
@@ -277,7 +277,7 @@ final class MachineRecipeEndToEndKit {
         String tick = String.join("\n", c.execute(
                 "artest tile force-tick 0 " + cx + " " + cy + " " + cz + " " + tickBudget));
         assertTrue("force-tick failed for " + fixtureKey + ": " + tick,
-                tick.contains("\"ok\":true"));
+                Reply.of(tick).ok());
 
         // Input-drain check — pins the "recipe consumed its ingredients"
         // contract. Without this, a regression where the machine generates
@@ -312,13 +312,8 @@ final class MachineRecipeEndToEndKit {
                     p.firstOutput() != null);
             String read = String.join("\n", c.execute("artest hatch read 0 " + p.firstOutput()));
             assertTrue("hatch read errored for " + fixtureKey + ": " + read,
-                    !read.contains("\"error\""));
-            assertTrue("expected output " + expectedItem
-                            + " not in output hatch — recipe did not complete for "
-                            + fixtureKey + " (item-inputs=" + r.itemIngredients.size()
-                            + ", fluid-inputs=" + r.fluidIngredients.size()
-                            + ", response=" + read + ")",
-                    read.contains("\"item\":\"" + expectedItem + "\""));
+                    !Reply.of(read).has("error"));
+            Reply.of(read).element("slots", "item", String.valueOf(expectedItem));
         }
         if (!r.fluidOutputs.isEmpty()) {
             String expectedFluid = r.fluidOutputs.get(0)[0];
@@ -332,7 +327,10 @@ final class MachineRecipeEndToEndKit {
             for (String pos : p.liquidOutputPositions) {
                 String read = String.join("\n", c.execute("artest fluid stored 0 " + pos));
                 seen.append(pos).append(" -> ").append(read).append('\n');
-                if (read.contains("\"fluid\":\"" + expectedFluid + "\"")) {
+                // A SEARCH over candidate positions: this position may legitimately hold nothing,
+                // so the question is existence and `element`'s refusal would end the loop.
+                if (Reply.of("artest fluid stored", read)
+                        .holdsElement("tanks", "fluid", String.valueOf(expectedFluid))) {
                     found = true; break;
                 }
             }
@@ -379,7 +377,7 @@ final class MachineRecipeEndToEndKit {
             assertTrue("hatch fill (hatch " + hatchIdx + " slot " + localSlot + " " + ing[1]
                             + ":" + ing[3] + " ×" + ing[2] + ") failed for "
                             + fixtureKey + ": " + fill,
-                    fill.contains("\"ok\":true"));
+                    Reply.of(fill).ok());
             globalSlot++;
         }
     }
@@ -412,7 +410,7 @@ final class MachineRecipeEndToEndKit {
                     "artest fluid inject 0 " + pos + " " + f[0] + " " + amount));
             assertTrue("fluid inject (" + f[0] + " ×" + amount + " into "
                             + pos + ") failed for " + fixtureKey + ": " + fluidResp,
-                    fluidResp.contains("\"ok\":true"));
+                    Reply.of(fluidResp).ok());
         }
     }
 }

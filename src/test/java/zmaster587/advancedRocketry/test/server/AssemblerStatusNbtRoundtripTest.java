@@ -77,7 +77,7 @@ public class AssemblerStatusNbtRoundtripTest extends AbstractSharedServerTest {
         int[] pos = placeAssembler(9600);
         String resp = ok(client().execute("artest assembler nbt-roundtrip 0 "
                 + pos[0] + " " + pos[1] + " " + pos[2] + " dropStatus"));
-        assertTrue("nbt-roundtrip failed: " + resp, resp.contains("\"ok\":true"));
+        assertTrue("nbt-roundtrip failed: " + resp, Reply.of(resp).ok());
 
         assertTrue("no throw expected for a missing status key: " + resp,
                 "null".equals(field(THREW, resp, "threw")));
@@ -94,7 +94,7 @@ public class AssemblerStatusNbtRoundtripTest extends AbstractSharedServerTest {
         int[] pos = placeAssembler(9700);
         String resp = ok(client().execute("artest assembler nbt-roundtrip 0 "
                 + pos[0] + " " + pos[1] + " " + pos[2] + " setStatus=999"));
-        assertTrue("nbt-roundtrip failed: " + resp, resp.contains("\"ok\":true"));
+        assertTrue("nbt-roundtrip failed: " + resp, Reply.of(resp).ok());
 
         assertTrue("an out-of-range status ordinal must not throw on load "
                         + "(no ArrayIndexOutOfBoundsException) (C033): " + resp,
@@ -112,7 +112,7 @@ public class AssemblerStatusNbtRoundtripTest extends AbstractSharedServerTest {
         int[] pos = placeAssembler(9800);
         String resp = ok(client().execute("artest assembler nbt-roundtrip 0 "
                 + pos[0] + " " + pos[1] + " " + pos[2]));
-        assertTrue("nbt-roundtrip failed: " + resp, resp.contains("\"ok\":true"));
+        assertTrue("nbt-roundtrip failed: " + resp, Reply.of(resp).ok());
 
         assertTrue("plain round-trip must not throw: " + resp,
                 "null".equals(field(THREW, resp, "threw")));

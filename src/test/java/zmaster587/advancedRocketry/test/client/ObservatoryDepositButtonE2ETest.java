@@ -56,10 +56,10 @@ public class ObservatoryDepositButtonE2ETest extends AbstractSharedClientE2ETest
         try {
             String installed = exec("artest space gen-install 0.9 2000000 987654321");
             assertTrue("the procedural generator must install: " + installed,
-                    installed.contains("\"ok\":true"));
+                    Reply.of(installed).ok());
             String found = exec("artest space find-procedural 4");
             assertTrue("a dense procedural galaxy must offer a landable body: " + found,
-                    found.contains("\"ok\":true"));
+                    Reply.of(found).ok());
             fresh = RealizedBody.atSectorLocal(this::exec,
                     intOf(found, "sx"), intOf(found, "sy"), intOf(found, "sz")).dim;
         } finally {
@@ -68,15 +68,15 @@ public class ObservatoryDepositButtonE2ETest extends AbstractSharedClientE2ETest
 
         String before = exec("artest planet knowledge 0 " + fresh);
         assertTrue("arrangement: a just-minted world must be unknown here: " + before,
-                before.contains("\"local\":false"));
+                (!Reply.of(before).bool("local", true)));
         assertTrue("arrangement: and unknown to the pack: " + before,
-                before.contains("\"global\":false"));
+                (!Reply.of(before).bool("global", true)));
         // The COMPLETE multiblock, not a lone block: the survey tab is a machine's GUI, and a test
         // that opened a half-built one would be measuring the incomplete panel.
         // The COMPLETE multiblock, not a lone block: the survey tab is a machine's GUI, and a test
         // that opened a half-built one would be measuring the incomplete panel.
         String built = exec("artest fixture multiblock observatory 0 " + X + " " + Y + " " + Z);
-        assertTrue("could not build an observatory: " + built, built.contains("\"ok\":true"));
+        assertTrue("could not build an observatory: " + built, Reply.of(built).ok());
         String crystal = exec("artest telescope crystal " + where + " " + fresh);
         assertEquals("the machine must hold a crystal naming exactly that world: " + crystal,
                 1, Reply.of("artest telescope crystal", crystal).integer("addresses"));
@@ -105,11 +105,11 @@ public class ObservatoryDepositButtonE2ETest extends AbstractSharedClientE2ETest
         // not touch the pack's global floor.
         String after = exec("artest planet knowledge 0 " + fresh);
         assertTrue("after the click a pad here must be offered that world: " + after,
-                after.contains("\"known\":true"));
+                Reply.of(after).bool("known", false));
         assertTrue("and it must be known LOCALLY, not announced to the whole game: " + after,
-                after.contains("\"local\":true"));
+                Reply.of(after).bool("local", false));
         assertTrue("the pack's own floor must be untouched: " + after,
-                after.contains("\"global\":false"));
+                (!Reply.of(after).bool("global", true)));
     }
 
     /** A numeric field of a probe reply, refusing when the reply does not carry it. */

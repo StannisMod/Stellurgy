@@ -47,7 +47,7 @@ public class CO2ScrubberComparatorOutputTest extends AbstractSharedServerTest {
         String resp = exec("artest infra comparator-override 0 "
                 + x + " " + y + " " + z);
         assertTrue("comparator-override must succeed: " + resp,
-                resp.contains("\"ok\":true"));
+                Reply.of(resp).ok());
         int value = extract(resp);
         assertTrue("empty CO2 scrubber must report comparator = 0; "
                         + "actual=" + value + " resp=" + resp,
@@ -66,7 +66,7 @@ public class CO2ScrubberComparatorOutputTest extends AbstractSharedServerTest {
         String resp = exec("artest infra comparator-override 0 "
                 + x + " " + y + " " + z);
         assertTrue("comparator-override must succeed: " + resp,
-                resp.contains("\"ok\":true"));
+                Reply.of(resp).ok());
         int value = extract(resp);
         assertTrue("CO2 scrubber with fresh cartridge must report "
                         + "comparator > 0 (the player-visible 'has "
@@ -82,7 +82,7 @@ public class CO2ScrubberComparatorOutputTest extends AbstractSharedServerTest {
     private void ok(String cmd) throws Exception {
         String resp = exec(cmd);
         assertTrue("probe must succeed: cmd='" + cmd + "' resp=" + resp,
-                resp.contains("\"ok\":true"));
+                Reply.of(resp).ok());
     }
 
     private static int extract(String src) {

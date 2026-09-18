@@ -81,7 +81,7 @@ public class RocketEventPayloadContractTest extends AbstractSharedServerTest {
         // Trigger dismantle — fires RocketDismantleEvent synchronously.
         String dismantle = exec("artest rocket dismantle " + rocketId);
         assertTrue("dismantle probe must succeed: " + dismantle,
-                dismantle.contains("\"ok\":true"));
+                Reply.of(dismantle).ok());
 
         String payloads = exec("artest rocket event-payloads");
         assertEquals("RocketDismantleEvent.getEntity().getEntityId() must equal "
@@ -100,7 +100,7 @@ public class RocketEventPayloadContractTest extends AbstractSharedServerTest {
         // Call prepareLaunch — fires RocketPreLaunchEvent.
         String launch = exec("artest rocket launch " + rocketId + " true prepare");
         assertTrue("rocket launch (prepare) must succeed: " + launch,
-                launch.contains("\"ok\":true") || launch.contains("\"entityId\":"));
+                Reply.of(launch).ok() || Reply.of(launch).has("entityId"));
 
         String payloads = exec("artest rocket event-payloads");
         assertEquals("RocketPreLaunchEvent.getEntity().getEntityId() must equal "
@@ -241,7 +241,7 @@ public class RocketEventPayloadContractTest extends AbstractSharedServerTest {
 
         String orbitResp = exec("artest rocket force-orbit-reached " + rocketId);
         assertTrue("force-orbit-reached probe must succeed: " + orbitResp,
-                orbitResp.contains("\"ok\":true"));
+                Reply.of(orbitResp).ok());
 
         String countsAfter = exec("artest rocket event-counts-full");
         int orbitAfter = extract(countsAfter, ORBIT_REACHED_COUNT);
@@ -288,13 +288,13 @@ public class RocketEventPayloadContractTest extends AbstractSharedServerTest {
                 + " minecraft:air");
         String fixture = exec("artest fixture rocket 0 " + baseX + " " + CY + " " + CZ
                 + " simple");
-        assertTrue("fixture build failed: " + fixture, fixture.contains("\"ok\":true"));
+        assertTrue("fixture build failed: " + fixture, Reply.of(fixture).ok());
         int[] bp = Reply.of(fixture).blockPos(BUILDER_POS);
         assertTrue("no builderPos: " + fixture, bp != null);
         String assemble = exec("artest rocket assemble 0 "
                 + bp[0] + " " + bp[1] + " " + bp[2]);
         assertTrue("assemble must succeed: " + assemble,
-                assemble.contains("\"ok\":true"));
+                Reply.of(assemble).ok());
         Reply eimReply = Reply.of(assemble);
         assertTrue("no entityId: " + assemble, eimReply.has(ENTITY_ID));
         return Integer.parseInt(eimReply.text(ENTITY_ID));

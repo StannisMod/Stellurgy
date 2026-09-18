@@ -84,7 +84,7 @@ public class FluidLoaderActiveTransferTest extends AbstractSharedServerTest {
         String inj = exec("artest fluid inject 0 " + lx + " " + ly + " " + lz
                 + " oxygen 32000");
         assertTrue("loader fluid inject must succeed: " + inj,
-                inj.contains("\"ok\":true"));
+                Reply.of(inj).ok());
         int loaderFilled = extract(inj, "filled");
         assertTrue("loader pre-fill must accept > 0 mB: " + inj,
                 loaderFilled > 0);
@@ -126,11 +126,7 @@ public class FluidLoaderActiveTransferTest extends AbstractSharedServerTest {
                         + "'re-fuel automation' contract); storageAfter="
                         + storageAfter + " storageJson=" + postStorage,
                 storageAfter > 0);
-        assertTrue("rocket storage post-state must contain the loader's "
-                        + "fluid type (oxygen) specifically — guards "
-                        + "against an off-target transfer; storageJson="
-                        + postStorage,
-                postStorage.contains("\"fluid\":\"oxygen\""));
+        Reply.of(postStorage).element("tanks", "fluid", "oxygen");
     }
 
     /**
@@ -159,7 +155,7 @@ public class FluidLoaderActiveTransferTest extends AbstractSharedServerTest {
         String fillResp = exec("artest rocket storage-fluid-fill " + rocketId
                 + " oxygen 16000");
         assertTrue("storage-fluid-fill must succeed: " + fillResp,
-                fillResp.contains("\"ok\":true"));
+                Reply.of(fillResp).ok());
         int tilesWithCap = extract(fillResp, TILES_WITH_CAP);
         int totalFilled = extract(fillResp, TOTAL_FILLED);
         assertTrue("with-fluid-cargo fixture must produce at least one "
@@ -185,7 +181,7 @@ public class FluidLoaderActiveTransferTest extends AbstractSharedServerTest {
         String link = exec("artest infra link 0 " + ux + " " + uy + " " + uz
                 + " " + rocketId);
         assertTrue("infra link must succeed: " + link,
-                link.contains("\"linked\":true"));
+                Reply.of(link).bool("linked", false));
 
         // Run the unloader's production update() for 60 ticks.
         ok("artest tile force-tick 0 " + ux + " " + uy + " " + uz + " 60");
@@ -218,7 +214,7 @@ public class FluidLoaderActiveTransferTest extends AbstractSharedServerTest {
     private void ok(String cmd) throws Exception {
         String resp = exec(cmd);
         assertTrue("probe must succeed: cmd='" + cmd + "' resp=" + resp,
-                resp.contains("\"ok\":true"));
+                Reply.of(resp).ok());
     }
 
     private int assembleFixture(FixtureSite site, String variant)
@@ -232,13 +228,13 @@ public class FluidLoaderActiveTransferTest extends AbstractSharedServerTest {
         String fx = exec("artest fixture rocket 0 " + baseX + " " + baseY + " " + baseZ
                 + " " + variant);
         assertTrue("fixture rocket (" + variant + ") failed: " + fx,
-                fx.contains("\"ok\":true"));
+                Reply.of(fx).ok());
         int[] bp = Reply.of(fx).blockPos(BUILDER_POS);
         assertTrue("could not parse builderPos: " + fx, bp != null);
         String assemble = exec("artest rocket assemble 0 "
                 + bp[0] + " " + bp[1] + " " + bp[2]);
         assertTrue("rocket assemble failed: " + assemble,
-                assemble.contains("\"ok\":true"));
+                Reply.of(assemble).ok());
         Reply emReply = Reply.of(assemble);
         assertTrue("rocket entityId missing: " + assemble, emReply.has(ENT_ID));
         return Integer.parseInt(emReply.text(ENT_ID));

@@ -81,7 +81,7 @@ public class BlackHoleGeneratorPoweredCycleTest extends AbstractSharedServerTest
         // world.provider.getDimension() == spaceDimId.
         String load = exec("artest dim load " + SPACE_DIM);
         assertTrue("space dim load failed: " + load,
-                load.contains("\"loaded\":true") || load.contains("\"ok\":true"));
+                Reply.of(load).bool("loaded", false) || Reply.of(load).ok());
     }
 
     @After
@@ -164,7 +164,7 @@ public class BlackHoleGeneratorPoweredCycleTest extends AbstractSharedServerTest
     private void flipSolBlackHole(boolean value) throws Exception {
         String resp = exec("artest star set-blackhole 0 " + value);
         assertTrue("Sol black-hole flip failed: " + resp,
-                resp.contains("\"ok\":true") && resp.contains("\"after\":" + value));
+                Reply.of(resp).ok() && String.valueOf(value).equals(Reply.of(resp).text("after")));
     }
 
     /** Creates a station orbiting Sol (dim {@link #SOL_DIM}), returns its
@@ -172,7 +172,7 @@ public class BlackHoleGeneratorPoweredCycleTest extends AbstractSharedServerTest
     private int[] createStationAndQuerySpawn() throws Exception {
         String create = exec("artest station create " + SOL_DIM);
         assertTrue("station create failed: " + create,
-                create.contains("\"ok\":true"));
+                Reply.of(create).ok());
         Reply created = Reply.of("artest station create", create);
         assertTrue("no station id in create response: " + create, created.has(STATION_ID));
         stationId = created.integer(STATION_ID);
@@ -187,7 +187,7 @@ public class BlackHoleGeneratorPoweredCycleTest extends AbstractSharedServerTest
         String fixture = exec("artest fixture multiblock blackhole-gen "
                 + dim + " " + cx + " " + cy + " " + cz);
         assertTrue("BHG fixture build failed: " + fixture,
-                fixture.contains("\"ok\":true"));
+                Reply.of(fixture).ok());
         assertTrue("no controllerPos in fixture response: " + fixture,
                 Reply.of("artest fixture multiblock", fixture).blockPos(CTRL_POS) != null);
         // Try-complete: BHG's onInventoryUpdated runs attemptFire which
@@ -199,7 +199,7 @@ public class BlackHoleGeneratorPoweredCycleTest extends AbstractSharedServerTest
         String tryComplete = exec("artest machine try-complete "
                 + dim + " " + cx + " " + cy + " " + cz);
         assertTrue("BHG structure failed to complete: " + tryComplete,
-                tryComplete.contains("\"isComplete\":true"));
+                Reply.of(tryComplete).bool("isComplete", false));
         return fixture;
     }
 
@@ -213,20 +213,20 @@ public class BlackHoleGeneratorPoweredCycleTest extends AbstractSharedServerTest
                 + inputPos[0] + " " + inputPos[1] + " " + inputPos[2]
                 + " 0 minecraft:dirt 64 0");
         assertTrue("hatch fill failed: " + resp,
-                resp.contains("\"ok\":true") || resp.contains("\"count\":64"));
+                Reply.of(resp).ok() || (Reply.of(resp).integerOr("count", Integer.MIN_VALUE) == 64));
     }
 
     private void enableMachine(int dim, int cx, int cy, int cz) throws Exception {
         String resp = exec("artest machine set-enabled " + dim + " "
                 + cx + " " + cy + " " + cz + " true");
         assertTrue("machine set-enabled failed: " + resp,
-                resp.contains("\"enabled\":true"));
+                Reply.of(resp).bool("enabled", false));
     }
 
     private void forceTick(int dim, int cx, int cy, int cz, int ticks) throws Exception {
         String resp = exec("artest tile force-tick " + dim + " "
                 + cx + " " + cy + " " + cz + " " + ticks);
-        assertTrue("force-tick errored: " + resp, resp.contains("\"ok\":true"));
+        assertTrue("force-tick errored: " + resp, Reply.of(resp).ok());
     }
 
     private int[] powerOutPosFrom(String fixture) {

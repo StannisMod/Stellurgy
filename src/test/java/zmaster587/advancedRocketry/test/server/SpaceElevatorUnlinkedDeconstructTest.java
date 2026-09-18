@@ -1,5 +1,6 @@
 package zmaster587.advancedRocketry.test.server;
 
+import zmaster587.advancedRocketry.test.Reply;
 import org.junit.Test;
 
 import zmaster587.advancedRocketry.test.FixtureSite;
@@ -51,7 +52,7 @@ public class SpaceElevatorUnlinkedDeconstructTest extends AbstractSharedServerTe
         String fixture = join(client().execute(
                 "artest fixture multiblock space-elevator 0 " + CX + " " + CY + " " + CZ));
         assertTrue("fixture multiblock space-elevator failed: " + fixture,
-                fixture.contains("\"ok\":true"));
+                Reply.of(fixture).ok());
 
         String info = join(client().execute(
                 "artest machine info 0 " + CX + " " + CY + " " + CZ));
@@ -64,9 +65,9 @@ public class SpaceElevatorUnlinkedDeconstructTest extends AbstractSharedServerTe
         // Contract: tearing down an elevator with no tether link must not
         // crash — the link teardown is a safe no-op when dimBlockPos is null.
         assertTrue("deconstruct probe errored: " + deconstruct,
-                deconstruct.contains("\"ok\":true"));
+                Reply.of(deconstruct).ok());
         assertTrue("deconstructing an unlinked elevator must not throw, got: "
-                + deconstruct, deconstruct.contains("\"threw\":false"));
+                + deconstruct, (!Reply.of(deconstruct).bool("threw", true)));
     }
 
     private static String join(java.util.List<String> resp) {
@@ -83,6 +84,6 @@ public class SpaceElevatorUnlinkedDeconstructTest extends AbstractSharedServerTe
         int cz2 = (blockZ + 16) >> 4;
         String resp = join(client().execute(
                 "artest chunk warmup 0 " + cx1 + " " + cz1 + " " + cx2 + " " + cz2));
-        assertTrue("chunk warmup failed: " + resp, resp.contains("\"ok\":true"));
+        assertTrue("chunk warmup failed: " + resp, Reply.of(resp).ok());
     }
 }

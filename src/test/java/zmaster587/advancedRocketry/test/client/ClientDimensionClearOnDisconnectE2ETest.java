@@ -1,5 +1,6 @@
 package zmaster587.advancedRocketry.test.client;
 
+import zmaster587.advancedRocketry.test.Reply;
 import com.github.stannismod.forge.testing.junit.AbstractClientE2ETest;
 import com.github.stannismod.forge.testing.junit.AbstractHeadlessServerTest;
 import com.github.stannismod.forge.testing.server.RealDedicatedServerHarness;
@@ -216,7 +217,7 @@ public class ClientDimensionClearOnDisconnectE2ETest {
         String disconnects = client.since(kickMark, "client_disconnected");
         assertTrue("the clearing branch is guarded on the server being REMOTE, so a run in which"
                         + " the client reports remote:false has not exercised this contract at all: "
-                        + disconnects, disconnects.contains("\"remote\":true"));
+                        + disconnects, Events.anyRecordHas(disconnects, "remote", "true"));
 
         // "Cleared nothing" and "never cleared" are different facts and the record keeps them apart:
         // the sizes are read at the clear's HEAD, so this is what the registry held going in.

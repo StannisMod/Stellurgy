@@ -53,7 +53,7 @@ public class MapGenCraterBiomeGateTest extends AbstractHeadlessServerTest {
         exec("artest dim load " + dim);
 
         String r = exec(("artest worldgen crater-gate " + dim + " " + generatorArg).trim());
-        assertTrue("probe must run: " + r, r.contains("\"ok\":true"));
+        assertTrue("probe must run: " + r, Reply.of(r).ok());
 
         int air = extract(AIR, r);
         assertTrue("C037: with the per-biome crater gate FALSE, the fixed (A||B)&&gate carves NO "

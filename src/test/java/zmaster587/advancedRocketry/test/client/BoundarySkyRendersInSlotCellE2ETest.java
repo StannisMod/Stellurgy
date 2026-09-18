@@ -328,10 +328,10 @@ public class BoundarySkyRendersInSlotCellE2ETest extends AbstractSharedClientE2E
             // and the slot it lands in is the answer this test uses everywhere below: the feed is keyed
             // with it and the pilot is put into it.
             String setup = exec("artest space entry-setup 1");
-            assertTrue("entry-setup must install the stack: " + setup, setup.contains("\"ok\":true"));
+            assertTrue("entry-setup must install the stack: " + setup, Reply.of(setup).ok());
             cell = findEmptyCell();
             String settle = exec("artest space ledger-settle " + cell + " 0");
-            assertTrue("ledger-settle must succeed: " + settle, settle.contains("\"ok\":true"));
+            assertTrue("ledger-settle must succeed: " + settle, Reply.of(settle).ok());
             Reply boundMReply = Reply.of(settle);
             assertTrue("the settle must report which slot the cell was bound to: " + settle, boundMReply.has(BOUND_DIM));
             slotDim = Integer.parseInt(boundMReply.text(BOUND_DIM));
@@ -404,7 +404,7 @@ public class BoundarySkyRendersInSlotCellE2ETest extends AbstractSharedClientE2E
                 // markers and the size legs below would be measuring nothing.
                 String poi = exec("artest space add-poi " + cell + " " + body[0] + " " + body[1] + " "
                         + body[2] + " " + body[3] + " " + body[4] + " 7 " + body[5]);
-                assertTrue("add-poi must register the body: " + poi, poi.contains("\"ok\":true"));
+                assertTrue("add-poi must register the body: " + poi, Reply.of(poi).ok());
             }
 
             // The whole set has to reach the client before any frame can be blamed on the renderer,
@@ -612,12 +612,12 @@ public class BoundarySkyRendersInSlotCellE2ETest extends AbstractSharedClientE2E
         botName = PlayerState.botName(this::exec);
         try {
             String setup = exec("artest space entry-setup 1");
-            assertTrue("entry-setup must install the stack: " + setup, setup.contains("\"ok\":true"));
+            assertTrue("entry-setup must install the stack: " + setup, Reply.of(setup).ok());
 
             // A universe with clusters in it. Without <galaxyGen> a world has no galaxies, hence no
             // clusters, hence no gas — and an empty sky would be honest for the wrong reason.
             String gen = exec("artest space gen-install 0.9 8");
-            assertTrue("the procedural generator must install: " + gen, gen.contains("\"ok\":true"));
+            assertTrue("the procedural generator must install: " + gen, Reply.of(gen).ok());
 
             // The reader refuses a walk that found nothing, and refuses to answer a sector for one
             // — which is what the two checks this replaces each stood for.
@@ -626,7 +626,7 @@ public class BoundarySkyRendersInSlotCellE2ETest extends AbstractSharedClientE2E
             String cloudCell = found.sectorX() + " 0 0";
 
             String settle = exec("artest space ledger-settle " + cloudCell + " 0");
-            assertTrue("ledger-settle must succeed: " + settle, settle.contains("\"ok\":true"));
+            assertTrue("ledger-settle must succeed: " + settle, Reply.of(settle).ok());
             Reply boundMReply = Reply.of(settle);
             assertTrue("the settle must report which slot the cell was bound to: " + settle,
                     boundMReply.has(BOUND_DIM));
@@ -930,7 +930,7 @@ public class BoundarySkyRendersInSlotCellE2ETest extends AbstractSharedClientE2E
     /** Put the player at a known altitude in {@code dim} through the production transfer path. */
     private void seat(int dim, int y) throws Exception {
         String enter = exec("artest space enter " + botName + " " + dim + " 0.5 " + y + " 0.5");
-        assertTrue("space enter must succeed: " + enter, enter.contains("\"ok\":true"));
+        assertTrue("space enter must succeed: " + enter, Reply.of(enter).ok());
     }
 
     /** The client's OWN copy of the render feed, read on the client thread. */

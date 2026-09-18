@@ -44,7 +44,7 @@ public class MachineRecipeIntegrationTest extends AbstractHeadlessServerTest {
         String empty = String.join("\n",
                 client().execute("artest machine tick-until 0 100 64 100 complete 5"));
         assertTrue("tick-until on empty pos didn't error: " + empty,
-                empty.contains("\"error\":\"no tile entity\""));
+                "no tile entity".equals(Reply.of(empty).text("error")));
 
         client().execute("artest place 0 100 64 100 minecraft:chest");
         String chest = String.join("\n",
@@ -56,7 +56,7 @@ public class MachineRecipeIntegrationTest extends AbstractHeadlessServerTest {
     @Test
     public void recipesSummaryReportsNonZeroCounts() throws Exception {
         String summary = String.join("\n", client().execute("artest machine recipes-summary"));
-        assertTrue("recipes-summary errored: " + summary, !summary.contains("\"error\""));
+        assertTrue("recipes-summary errored: " + summary, !Reply.of(summary).has("error"));
         String[] requiredMachines = {
                 "TileCuttingMachine", "TileElectricArcFurnace", "TileLathe",
                 "TileRollingMachine", "TileChemicalReactor",
@@ -78,7 +78,7 @@ public class MachineRecipeIntegrationTest extends AbstractHeadlessServerTest {
         String fixture = String.join("\n", client().execute(
                 "artest fixture machine cutting 0 " + cx + " " + cy + " " + cz));
         assertTrue("fixture machine cutting failed: " + fixture,
-                fixture.contains("\"ok\":true"));
+                Reply.of(fixture).ok());
 
         int[] ipm = Reply.of(fixture).blockPos(INPUT_POS);
         int[] opm = Reply.of(fixture).blockPos(OUTPUT_POS);
@@ -96,12 +96,12 @@ public class MachineRecipeIntegrationTest extends AbstractHeadlessServerTest {
         String complete = MachineRecipeEndToEndKit.tryCompleteWithRetry(
                 client(), 0, cx, cy, cz);
         assertTrue("multiblock not complete: " + complete,
-                complete.contains("\"isComplete\":true"));
+                Reply.of(complete).bool("isComplete", false));
 
         // 3. Resolve first recipe ingredient + expected output.
         String recipe = String.join("\n",
                 client().execute("artest machine recipe-info TileCuttingMachine 0"));
-        assertTrue("recipe-info errored: " + recipe, !recipe.contains("\"error\""));
+        assertTrue("recipe-info errored: " + recipe, !Reply.of(recipe).has("error"));
         // The FIRST entry of each list, read as an object. The regex this replaces pinned the whole
         // prefix — `"ingredients":[{"slot":0,"item":…` — so it matched only while slot 0 came first
         // AND the three fields stayed in that order, and answered "no ingredient" otherwise.
@@ -124,12 +124,12 @@ public class MachineRecipeIntegrationTest extends AbstractHeadlessServerTest {
         String hatchFill = String.join("\n", client().execute(
                 "artest hatch fill 0 " + inPos + " 0 " + ingredientItem + " "
                         + ingredientCount + " " + ingredientMeta));
-        assertTrue("hatch fill failed: " + hatchFill, hatchFill.contains("\"ok\":true"));
+        assertTrue("hatch fill failed: " + hatchFill, Reply.of(hatchFill).ok());
 
         // 5. Charge power hatch.
         String inject = String.join("\n", client().execute(
                 "artest energy inject 0 " + pwrPos + " 10000000"));
-        assertTrue("power inject failed: " + inject, inject.contains("\"ok\":true"));
+        assertTrue("power inject failed: " + inject, Reply.of(inject).ok());
 
         // 5b. Flip the machine's enable toggle. libVulpes machines default to
         // disabled until a player flips the GUI switch; tests have to toggle
@@ -137,7 +137,7 @@ public class MachineRecipeIntegrationTest extends AbstractHeadlessServerTest {
         String enable = String.join("\n", client().execute(
                 "artest machine set-enabled 0 " + cx + " " + cy + " " + cz + " true"));
         assertTrue("machine set-enabled failed: " + enable,
-                enable.contains("\"ok\":true") && enable.contains("\"enabled\":true"));
+                Reply.of(enable).ok() && Reply.of(enable).bool("enabled", false));
 
         // 6. Drive ticks in batches and poll the output hatch each batch.
         //    Default cutting recipes take ~100 ticks; serial budget 300 was
@@ -151,10 +151,13 @@ public class MachineRecipeIntegrationTest extends AbstractHeadlessServerTest {
         for (int batch = 0; batch < 12; batch++) {
             String tick = String.join("\n", client().execute(
                     "artest tile force-tick 0 " + cx + " " + cy + " " + cz + " 100"));
-            assertTrue("force-tick failed: " + tick, tick.contains("\"ok\":true"));
+            assertTrue("force-tick failed: " + tick, Reply.of(tick).ok());
             out = String.join("\n", client().execute("artest hatch read 0 " + outPos));
-            assertTrue("hatch read errored: " + out, !out.contains("\"error\""));
-            if (out.contains("\"item\":\"" + expectedOutput + "\"")) {
+            assertTrue("hatch read errored: " + out, !Reply.of(out).has("error"));
+            // A SEARCH across ticks: the recipe may not have completed yet, so the question is
+            // existence and `element`'s refusal would end the retry loop on the first pass.
+            if (Reply.of("artest hatch read", out)
+                    .holdsElement("slots", "item", String.valueOf(expectedOutput))) {
                 found = true;
                 break;
             }

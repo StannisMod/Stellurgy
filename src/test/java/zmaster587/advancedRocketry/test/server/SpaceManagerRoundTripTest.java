@@ -1,5 +1,6 @@
 package zmaster587.advancedRocketry.test.server;
 
+import zmaster587.advancedRocketry.test.Reply;
 import org.junit.Test;
 
 import static org.junit.Assert.assertTrue;
@@ -23,8 +24,8 @@ public class SpaceManagerRoundTripTest extends AbstractSharedServerTest {
     @Test
     public void controllerFlushesReloadsIsolatesAndGarbageCollects() throws Exception {
         String r = exec("artest space manager");
-        assertTrue("space manager probe must complete: " + r, r.contains("\"ok\":true"));
+        assertTrue("space manager probe must complete: " + r, Reply.of(r).ok());
         assertTrue("dirty cell must round-trip through the store, a clean cell must stay isolated, "
-                + "and GC must delete the stored folder: " + r, r.contains("\"pass\":true"));
+                + "and GC must delete the stored folder: " + r, Reply.of(r).bool("pass", false));
     }
 }

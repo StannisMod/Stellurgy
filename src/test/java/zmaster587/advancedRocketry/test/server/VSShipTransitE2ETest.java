@@ -59,7 +59,7 @@ public class VSShipTransitE2ETest extends AbstractSharedServerTest {
         long transitMark = events.mark();
         String begin = exec("artest space transit-begin " + originDim + " " + ax + " " + ay + " " + az
                 + " " + HYPERSPACE_JUMP_SPEED);
-        assertTrue("transit did not begin (departure crossing failed): " + begin, begin.contains("\"began\":true"));
+        assertTrue("transit did not begin (departure crossing failed): " + begin, Reply.of(begin).bool("began", false));
 
         // NO PUMP. The fixture now runs on the server's own subsystem, so the jump is advanced by
         // SpaceSubsystemEvents like any other -- and what this waits for is the arrival production

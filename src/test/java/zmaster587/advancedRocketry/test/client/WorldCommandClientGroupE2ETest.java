@@ -85,7 +85,7 @@ public class WorldCommandClientGroupE2ETest extends AbstractSharedClientE2ETest 
      *  that reads nothing like the contract under test. */
     private void opTheBot() throws Exception {
         String op = exec("artest player op-self");
-        scenario().requireArranged("op-self must succeed: " + op, op.contains("\"opped\":true"));
+        scenario().requireArranged("op-self must succeed: " + op, Reply.of(op).bool("opped", false));
     }
 
     private String botName() throws Exception {
@@ -171,7 +171,7 @@ public class WorldCommandClientGroupE2ETest extends AbstractSharedClientE2ETest 
         scenario().arranging("op the bot and put dirt in its hand");
         opTheBot();
         String give = exec("artest player give-held minecraft:dirt");
-        scenario().requireArranged("give-held must succeed: " + give, give.contains("\"ok\":true"));
+        scenario().requireArranged("give-held must succeed: " + give, Reply.of(give).ok());
 
         scenario().measuring("mark the client's chat log immediately before typing");
         Events clientLog = clientEvents();
@@ -195,7 +195,7 @@ public class WorldCommandClientGroupE2ETest extends AbstractSharedClientE2ETest 
         scenario().arranging("op the bot and put cobblestone in its hand");
         opTheBot();
         String give = exec("artest player give-held minecraft:cobblestone");
-        scenario().requireArranged("give-held must succeed: " + give, give.contains("\"ok\":true"));
+        scenario().requireArranged("give-held must succeed: " + give, Reply.of(give).ok());
 
         scenario().measuring("mark the client's chat log immediately before typing");
         Events clientLog = clientEvents();
@@ -250,7 +250,7 @@ public class WorldCommandClientGroupE2ETest extends AbstractSharedClientE2ETest 
 
         String post = exec("artest player inventory-contains advancedrocketry:spacestationchip");
         assertTrue("server inventory must also contain the chip: " + post,
-                !post.contains("\"count\":0"));
+                !(Reply.of(post).integerOr("count", Integer.MIN_VALUE) == 0));
     }
 
     // ── /ar goto dimension ────────────────────────────────────────────────────
@@ -281,7 +281,7 @@ public class WorldCommandClientGroupE2ETest extends AbstractSharedClientE2ETest 
 
             String health = exec("artest player health");
             assertTrue("server must agree the player is in dim " + targetDim + ": " + health,
-                    health.contains("\"dim\":" + targetDim));
+                    String.valueOf(targetDim).equals(Reply.of(health).text("dim")));
         } finally {
             // The dimension itself must go: a generated planet outlives the scenario and the next
             // one's `ar planet list` diff would see it. The player's own return is the reset's.

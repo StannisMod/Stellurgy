@@ -171,7 +171,7 @@ public final class FixtureSite {
                 + " minecraft:air");
         ArrangementFailure.requireArranged(
                 what + " — the working area could not even be read: " + reply,
-                reply != null && reply.contains("\"ok\":true"));
+                reply != null && Reply.of(reply).ok());
         int placed = intOf(reply, PLACED);
         if (placed == 0) {
             return;

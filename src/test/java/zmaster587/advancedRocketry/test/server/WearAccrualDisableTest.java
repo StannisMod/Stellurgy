@@ -48,12 +48,12 @@ public class WearAccrualDisableTest extends AbstractSharedServerTest {
         final int baseX = site.x, baseY = site.y, baseZ = site.z;
         requireClearSite(site);
         String fixture = cmd("artest fixture rocket 0 " + baseX + " " + baseY + " " + baseZ + " simple");
-        assertTrue("fixture build failed: " + fixture, fixture.contains("\"ok\":true"));
+        assertTrue("fixture build failed: " + fixture, Reply.of(fixture).ok());
         int[] bp = Reply.of(fixture).blockPos(BUILDER_POS);
         assertTrue("no builderPos: " + fixture, bp != null);
         String assemble = cmd("artest rocket assemble 0 "
                 + bp[0] + " " + bp[1] + " " + bp[2]);
-        assertTrue("assemble failed: " + assemble, assemble.contains("\"ok\":true"));
+        assertTrue("assemble failed: " + assemble, Reply.of(assemble).ok());
         String list = cmd("artest rocket list 0");
         java.util.List<RocketList.Entry> built = RocketList.of(list);
         assertTrue("no rocket id after assemble: " + list, !built.isEmpty());
@@ -62,7 +62,7 @@ public class WearAccrualDisableTest extends AbstractSharedServerTest {
 
     private double damagePartsAndReadProb(int rocketId, int iterations) throws Exception {
         String r = cmd("artest wear damage-parts " + rocketId + " " + iterations);
-        assertTrue("damage-parts must find the rocket: " + r, r.contains("\"found\":true"));
+        assertTrue("damage-parts must find the rocket: " + r, Reply.of(r).bool("found", false));
         double prob = Reply.of("artest wear damage-parts", r).number(BREAKING_PROB);
         assertTrue("no breakingProb in damage-parts response: " + r, !Double.isNaN(prob));
         return prob;
@@ -72,17 +72,17 @@ public class WearAccrualDisableTest extends AbstractSharedServerTest {
     public void wearAccruesOnlyWhenSystemEnabled() throws Exception {
         try {
             // Make motors wear deterministically fast so the "on" case is not flaky.
-            assertTrue(cmd("artest config set increaseWearIntensityProb 1.0").contains("\"ok\":true"));
+            assertTrue(Reply.of(cmd("artest config set increaseWearIntensityProb 1.0")).ok());
 
             // --- system ON: a worn motor raises the breaking probability ---
-            assertTrue(cmd("artest config set partsWearSystem true").contains("\"ok\":true"));
+            assertTrue(Reply.of(cmd("artest config set partsWearSystem true")).ok());
             int onRocket = buildAndAssemble(FixtureSite.openAir(0, 3200, 3200));
             double probOn = damagePartsAndReadProb(onRocket, 200);
             assertTrue("with the wear system ON, driving damageParts must accrue wear "
                     + "(breaking probability > 0), got " + probOn, probOn > 0);
 
             // --- system OFF: identical driving accrues nothing ---
-            assertTrue(cmd("artest config set partsWearSystem false").contains("\"ok\":true"));
+            assertTrue(Reply.of(cmd("artest config set partsWearSystem false")).ok());
             int offRocket = buildAndAssemble(FixtureSite.openAir(0, 3260, 3200));
             double probOff = damagePartsAndReadProb(offRocket, 200);
             assertEquals("with the wear system OFF, damageParts must not advance any wear "

@@ -1,5 +1,6 @@
 package zmaster587.advancedRocketry.test.client;
 
+import zmaster587.advancedRocketry.test.Reply;
 import zmaster587.advancedRocketry.test.DeckCapture;
 import zmaster587.advancedRocketry.test.Events;
 import zmaster587.advancedRocketry.test.ShipIdentity;
@@ -64,7 +65,7 @@ public class SpaceLoginRestoreDeckCrewE2ETest extends AbstractSpaceLoginRestoreC
         // The posture the report is about: on his feet, on his own deck.
         String tag = standUpAndAwaitTheStandingRecord(events());
         requireArranged("standing up must keep him aboard as a STANDING record: " + tag,
-                tag.contains("\"tagged\":true") && tag.contains("\"posture\":\"STANDING\""));
+                Reply.of(tag).bool("tagged", false) && "STANDING".equals(Reply.of(tag).text("posture")));
         DeckCapture capBefore = DeckCapture.read(this::exec);
         requireArranged("he must be captured ABOARD the deck before the relog, or the leg is "
                         + "not about a restored deck capture at all: " + capBefore.raw(),
@@ -93,16 +94,17 @@ public class SpaceLoginRestoreDeckCrewE2ETest extends AbstractSpaceLoginRestoreC
                         + "reads the record that handler leaves behind", LOGOUT_TICKS);
         requireArranged("the record he logs out with is the one his next login resolves from, so it "
                         + "must still say he was aboard his ship, on his feet: " + loggedOut,
-                loggedOut.contains("\"tagged\":true")
-                        && loggedOut.contains("\"posture\":\"STANDING\""));
+                // ONE logout record saying both: two field tests are satisfied by a tagged logout
+                // beside a different record whose posture happens to be STANDING.
+                Events.anyRecordHasAll(loggedOut, "tagged", "true", "posture", "STANDING"));
         // LEFT RAW: the subject here IS the error shape. `PlayerPosition` refuses it — it must,
         // because read as a position that reply puts him at the origin of the overworld, and every
         // other site in this family is asserting which world he is in.
         String offline = exec("artest player position-of " + BOT);
         requireArranged("the server must see him GONE after the disconnect, or nothing below "
                         + "is a relog: " + offline,
-                offline.contains("\"error\":\"no such player\"")
-                        || offline.contains("\"error\":\"no players connected\""));
+                "no such player".equals(Reply.of(offline).text("error"))
+                        || "no players connected".equals(Reply.of(offline).text("error")));
 
         // Nobody is left near the ship to hold its chunks while he is away.
 
@@ -154,7 +156,7 @@ public class SpaceLoginRestoreDeckCrewE2ETest extends AbstractSpaceLoginRestoreC
 
         String tag = standUpAndAwaitTheStandingRecord(events());
         requireArranged("standing up must keep him aboard as a STANDING record: " + tag,
-                tag.contains("\"tagged\":true") && tag.contains("\"posture\":\"STANDING\""));
+                Reply.of(tag).bool("tagged", false) && "STANDING".equals(Reply.of(tag).text("posture")));
         // Read ONCE: the two-exec idiom this replaces diagnosed from a different sample than the one
         // that decided the line, and under load the two disagree.
         DeckCapture capUpright = DeckCapture.read(this::exec);
@@ -191,7 +193,7 @@ public class SpaceLoginRestoreDeckCrewE2ETest extends AbstractSpaceLoginRestoreC
         String rolled = exec("artest vs point-at " + slotDim + " " + arrangedAfcPos
                 + " " + Math.cos(half) + " " + Math.sin(half) + " 0.0 0.0");
         requireArranged("the roll must reach THIS ship's own flight computer: " + rolled,
-                rolled.contains("\"commanded\":true"));
+                Reply.of(rolled).bool("commanded", false));
         // Read BY NAME, both times. This used to be "the ship nearest (0,0,0) in the slot", with a
         // one-ship count asserted first as its premise — but a count of one is not evidence that the
         // one is THIS craft, and the case where it is not is exactly the case where this scenario's
@@ -227,12 +229,13 @@ public class SpaceLoginRestoreDeckCrewE2ETest extends AbstractSpaceLoginRestoreC
                         + "reads the record that handler leaves behind", LOGOUT_TICKS);
         requireArranged("the record he logs out with is the one his next login resolves from, and "
                         + "an inverted deck must not change that: " + loggedOut,
-                loggedOut.contains("\"tagged\":true")
-                        && loggedOut.contains("\"posture\":\"STANDING\""));
+                // ONE logout record saying both: two field tests are satisfied by a tagged logout
+                // beside a different record whose posture happens to be STANDING.
+                Events.anyRecordHasAll(loggedOut, "tagged", "true", "posture", "STANDING"));
         String offline = exec("artest player position-of " + BOT);
         requireArranged("the server must see him GONE after the disconnect: " + offline,
-                offline.contains("\"error\":\"no such player\"")
-                        || offline.contains("\"error\":\"no players connected\""));
+                "no such player".equals(Reply.of(offline).text("error"))
+                        || "no players connected".equals(Reply.of(offline).text("error")));
 
         Events restore = events();
         long restoreMark = restore.mark();

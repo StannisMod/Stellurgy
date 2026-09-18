@@ -485,12 +485,12 @@ public abstract class AbstractSharedVsClientE2ETest extends AbstractSharedClient
         String moved = exec("artest vs teleport-ship-by-id " + dim + " " + shipId
                 + " " + x + " " + toY + " " + z);
         scenario().requireArranged("the lift off the pad must take, or the craft flies its whole"
-                + " window in ground contact: " + moved, moved.contains("\"ok\":true"));
+                + " window in ground contact: " + moved, Reply.of(moved).ok());
         bot().waitTicks(30); // transform adoption + rider sync settle
         String unparked = exec("artest vs unpark-by-id " + dim + " " + shipId);
         scenario().requireArranged("the rigid teleport leaves the ship PARKED by the substrate's own"
                 + " recipe, and a parked ship cannot be flown: " + unparked,
-                unparked.contains("\"ok\":true"));
+                Reply.of(unparked).ok());
         bot().waitTicks(10);
 
         String after = shipInfoById(dim, shipId);
@@ -659,7 +659,7 @@ public abstract class AbstractSharedVsClientE2ETest extends AbstractSharedClient
         String afcCleared = exec("artest vs afc-clear");
         assertTrue("the flight computer's bring-up channels must be cleared between"
                 + " scenarios, or a later scenario's ship flies under an earlier one's throttle;"
-                + " probe replied " + afcCleared, afcCleared.contains("\"ok\":true"));
+                + " probe replied " + afcCleared, Reply.of(afcCleared).ok());
 
         // Asserted on the CLIENT's own view. Where a dismount was actually owed — he arrived seated
         // from the previous scenario — the client PERFORMING it is the link, and it is waited for

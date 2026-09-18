@@ -1,5 +1,6 @@
 package zmaster587.advancedRocketry.test.server;
 
+import zmaster587.advancedRocketry.test.Reply;
 import org.junit.Test;
 
 import zmaster587.advancedRocketry.test.EnergyStore;
@@ -32,9 +33,9 @@ public class OrbitalLaserDrillMultiblockTest extends AbstractSharedServerTest {
         String fixture = join(client().execute(
                 "artest fixture multiblock orbital-laser-drill 0 " + CX + " " + CY + " " + CZ));
         assertTrue("fixture multiblock orbital-laser-drill failed: " + fixture,
-                fixture.contains("\"ok\":true"));
+                Reply.of(fixture).ok());
         assertTrue("fixture didn't place any blocks: " + fixture,
-                fixture.contains("\"placed\":") && !fixture.contains("\"placed\":0"));
+                Reply.of(fixture).has("placed") && !(Reply.of(fixture).integerOr("placed", Integer.MIN_VALUE) == 0));
 
         String info = join(client().execute(
                 "artest machine info 0 " + CX + " " + CY + " " + CZ));
@@ -44,9 +45,9 @@ public class OrbitalLaserDrillMultiblockTest extends AbstractSharedServerTest {
         String tryComplete = join(client().execute(
                 "artest machine try-complete 0 " + CX + " " + CY + " " + CZ));
         assertTrue("try-complete probe errored: " + tryComplete,
-                tryComplete.contains("\"ok\":true"));
+                Reply.of(tryComplete).ok());
         assertTrue("orbital-laser-drill multiblock didn't validate (isComplete=false): " + tryComplete,
-                tryComplete.contains("\"isComplete\":true"));
+                Reply.of(tryComplete).bool("isComplete", false));
     }
 
     @Test
@@ -62,12 +63,12 @@ public class OrbitalLaserDrillMultiblockTest extends AbstractSharedServerTest {
         int cx = CX + 80, cy = CY, cz = CZ;
         String fixture = join(client().execute(
                 "artest fixture multiblock orbital-laser-drill 0 " + cx + " " + cy + " " + cz));
-        assertTrue("fixture failed: " + fixture, fixture.contains("\"ok\":true"));
+        assertTrue("fixture failed: " + fixture, Reply.of(fixture).ok());
 
         String tryComplete = join(client().execute(
                 "artest machine try-complete 0 " + cx + " " + cy + " " + cz));
         assertTrue("baseline must validate: " + tryComplete,
-                tryComplete.contains("\"isComplete\":true"));
+                Reply.of(tryComplete).bool("isComplete", false));
 
         // (a) Energy flows through a 'P' power-input plug. structure[1][2][10]
         // -> for NORTH-facing controller (offset x=1, y=2, z=2) global
@@ -87,9 +88,9 @@ public class OrbitalLaserDrillMultiblockTest extends AbstractSharedServerTest {
         String tick = join(client().execute(
                 "artest tile force-tick 0 " + cx + " " + cy + " " + cz + " 20"));
         assertTrue("force-tick must not error: " + tick,
-                tick.contains("\"ok\":true"));
+                Reply.of(tick).ok());
         assertTrue("force-tick must report 20 ticks completed: " + tick,
-                tick.contains("\"ticked\":20"));
+                (Reply.of(tick).integerOr("ticked", Integer.MIN_VALUE) == 20));
 
         // (c) Plug's energy capability still exposed after 20 ticks (no
         // capability loss from idle ticking).
@@ -103,7 +104,7 @@ public class OrbitalLaserDrillMultiblockTest extends AbstractSharedServerTest {
         int cx = CX + 40, cy = CY, cz = CZ;
         String fixture = join(client().execute(
                 "artest fixture multiblock orbital-laser-drill 0 " + cx + " " + cy + " " + cz));
-        assertTrue("fixture failed: " + fixture, fixture.contains("\"ok\":true"));
+        assertTrue("fixture failed: " + fixture, Reply.of(fixture).ok());
 
         // No baseline try-complete — break BEFORE validation. A lens cell on
         // the controller layer at structure[2][4][4] (NORTH-facing globalX =
@@ -114,12 +115,12 @@ public class OrbitalLaserDrillMultiblockTest extends AbstractSharedServerTest {
         String breakLens = join(client().execute(
                 "artest place 0 " + (cx - 3) + " " + cy + " " + (cz + 2) + " minecraft:stone"));
         assertTrue("could not replace lens cell: " + breakLens,
-                breakLens.contains("\"ok\":true"));
+                Reply.of(breakLens).ok());
 
         String broken = join(client().execute(
                 "artest machine try-complete 0 " + cx + " " + cy + " " + cz));
         assertTrue("orbital-laser-drill validated despite missing lens cell: " + broken,
-                broken.contains("\"isComplete\":false"));
+                (!Reply.of(broken).bool("isComplete", true)));
     }
 
     private static String join(java.util.List<String> resp) {

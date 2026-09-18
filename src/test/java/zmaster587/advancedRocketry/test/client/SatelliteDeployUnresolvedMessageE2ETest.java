@@ -1,5 +1,6 @@
 package zmaster587.advancedRocketry.test.client;
 
+import zmaster587.advancedRocketry.test.Reply;
 import com.github.stannismod.forge.testing.junit.AbstractClientE2ETest;
 import org.junit.Test;
 
@@ -67,8 +68,8 @@ public class SatelliteDeployUnresolvedMessageE2ETest extends AbstractClientE2ETe
         long clientMark = clientMark();
 
         String resp = exec("artest satellite deploy-unresolved");
-        assertTrue("deploy-unresolved probe must succeed: " + resp, resp.contains("\"ok\":true"));
-        assertTrue("the probe must have mounted the pilot: " + resp, resp.contains("\"mounted\":true"));
+        assertTrue("deploy-unresolved probe must succeed: " + resp, Reply.of(resp).ok());
+        assertTrue("the probe must have mounted the pilot: " + resp, Reply.of(resp).bool("mounted", false));
 
         // Link 1 (server): production chose to tell the pilot, and told him THIS message. Carrying,
         // not the type alone: a chat line was sent either way, and any other message in the window

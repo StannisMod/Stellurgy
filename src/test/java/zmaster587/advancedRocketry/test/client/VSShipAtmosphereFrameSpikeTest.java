@@ -153,7 +153,7 @@ public class VSShipAtmosphereFrameSpikeTest extends AbstractSharedVsClientE2ETes
         String assemble = assembleFixture(site);
         System.out.println("[S1/ship] assemble=" + assemble);
         assertTrue("a with-pilot-seat build must route to a VS ship (no rocket): " + assemble,
-                assemble.contains("\"rocketCount\":0"));
+                (Reply.of(assemble).integerOr("rocketCount", Integer.MIN_VALUE) == 0));
         int all = 0;
         for (int i = 0; i < 60 && all < 1; i++) {
             bot().waitTicks(5);
@@ -237,29 +237,29 @@ public class VSShipAtmosphereFrameSpikeTest extends AbstractSharedVsClientE2ETes
      */
     private void buildCabin(int x, int y, int z) throws Exception {
         assertTrue("chunk warmup failed",
-                exec("artest chunk warmup 0 " + ((x - 2) >> 4) + " " + ((z - 2) >> 4)
-                        + " " + ((x + 4) >> 4) + " " + ((z + 4) >> 4)).contains("\"ok\":true"));
+                Reply.of(exec("artest chunk warmup 0 " + ((x - 2) >> 4) + " " + ((z - 2) >> 4)
+                        + " " + ((x + 4) >> 4) + " " + ((z + 4) >> 4))).ok());
         assertTrue("cabin shell fill failed",
-                exec("artest fill 0 " + (x - 1) + " " + (y - 2) + " " + (z - 1)
+                Reply.of(exec("artest fill 0 " + (x - 1) + " " + (y - 2) + " " + (z - 1)
                         + " " + (x + 3) + " " + (y + 3) + " " + (z + 3) + " minecraft:stone")
-                        .contains("\"ok\":true"));
+                        ).ok());
         assertTrue("cabin cavity fill failed",
-                exec("artest fill 0 " + x + " " + y + " " + z
+                Reply.of(exec("artest fill 0 " + x + " " + y + " " + z
                         + " " + (x + 2) + " " + (y + 2) + " " + (z + 2) + " minecraft:air")
-                        .contains("\"ok\":true"));
+                        ).ok());
     }
 
     /** Place, fuel and force-seal the cabin's vent; returns the raw {@code vent reseal} payload. */
     private String sealCabin(int x, int y, int z) throws Exception {
         String place = exec("artest place 0 " + x + " " + (y - 1) + " " + z
                 + " advancedrocketry:oxygenVent");
-        assertTrue("vent place failed: " + place, place.contains("\"placed\":true"));
+        assertTrue("vent place failed: " + place, Reply.of(place).bool("placed", false));
         assertTrue("energy inject failed",
-                exec("artest energy inject 0 " + x + " " + (y - 1) + " " + z + " 1000000")
-                        .contains("\"ok\":true"));
+                Reply.of(exec("artest energy inject 0 " + x + " " + (y - 1) + " " + z + " 1000000")
+                        ).ok());
         assertTrue("oxygen inject failed",
-                exec("artest fluid inject 0 " + x + " " + (y - 1) + " " + z + " oxygen 16000")
-                        .contains("\"ok\":true"));
+                Reply.of(exec("artest fluid inject 0 " + x + " " + (y - 1) + " " + z + " oxygen 16000")
+                        ).ok());
         exec("artest tile force-tick 0 " + x + " " + (y - 1) + " " + z + " 1");
         String reseal = exec("artest vent reseal 0 " + x + " " + (y - 1) + " " + z);
         exec("artest tile force-tick 0 " + x + " " + (y - 1) + " " + z + " 5");
@@ -386,7 +386,7 @@ public class VSShipAtmosphereFrameSpikeTest extends AbstractSharedVsClientE2ETes
                 "the hull, and the sealed cabin raised on it");
         String fixture = exec("artest fixture rocket 0 " + baseX + " " + baseY + " " + baseZ
                 + " " + VARIANT);
-        assertTrue("fixture (" + VARIANT + ") failed: " + fixture, fixture.contains("\"ok\":true"));
+        assertTrue("fixture (" + VARIANT + ") failed: " + fixture, Reply.of(fixture).ok());
         int[] bp = Reply.of(fixture).blockPos(BUILDER_POS);
         assertTrue("fixture missing builderPos: " + fixture, bp != null);
         return exec("artest rocket assemble 0 " + bp[0] + " " + bp[1] + " " + bp[2]);

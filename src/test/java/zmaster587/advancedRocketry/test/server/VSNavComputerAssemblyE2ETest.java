@@ -52,7 +52,7 @@ public class VSNavComputerAssemblyE2ETest extends AbstractSharedServerTest {
 
         String fixture = exec("artest fixture rocket 0 " + BASE_X + " " + BASE_Y + " " + BASE_Z
                 + " with-nav-computer");
-        assertTrue("the with-nav-computer fixture must build: " + fixture, fixture.contains("\"ok\":true"));
+        assertTrue("the with-nav-computer fixture must build: " + fixture, Reply.of(fixture).ok());
         int[] bp = Reply.of(fixture).blockPos(BUILDER_POS);
         assertTrue("fixture missing builderPos: " + fixture, bp != null);
 
@@ -61,14 +61,14 @@ public class VSNavComputerAssemblyE2ETest extends AbstractSharedServerTest {
         int navX = BASE_X + 3 - 1, navY = BASE_Y + 1 + 3, navZ = BASE_Z + 3 + 1;
         String before = exec("artest nav status 0 " + navX + " " + navY + " " + navZ);
         requireArranged("the fixture must actually contain a navigation computer: " + before,
-                before.contains("\"ok\":true"));
+                Reply.of(before).ok());
         requireArranged("control: a freshly built computer is NOT yet linked - without this"
                         + " the test could not tell assembly apart from doing nothing: " + before,
-                before.contains("\"linked\":false"));
+                (!Reply.of(before).bool("linked", true)));
 
         String asm = exec("artest rocket assemble 0 " + bp[0] + " " + bp[1] + " " + bp[2]);
         assertTrue("with the physics mod an AFC-bearing build must become a ship, not a rocket: " + asm,
-                asm.contains("\"rocketCount\":0"));
+                (Reply.of(asm).integerOr("rocketCount", Integer.MIN_VALUE) == 0));
 
         // The assembly lifts the craft one block before handing it to the physics mod, so the
         // computer's world position moves up with it.

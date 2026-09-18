@@ -87,7 +87,7 @@ public class VSCrewRidesRollingDeckE2ETest extends AbstractSharedVsClientE2ETest
         site.requireClear(this::exec, 2, 24,
                 "the hull, the deck a crew member rides, and the air it rolls through");
         String fixture = exec("artest fixture rocket 0 " + baseX + " " + baseY + " " + baseZ + " " + variant);
-        assertTrue("fixture (" + variant + ") failed: " + fixture, fixture.contains("\"ok\":true"));
+        assertTrue("fixture (" + variant + ") failed: " + fixture, Reply.of(fixture).ok());
         int[] bp = Reply.of(fixture).blockPos(BUILDER_POS);
         assertTrue("fixture missing builderPos: " + fixture, bp != null);
         return exec("artest rocket assemble 0 " + bp[0] + " " + bp[1] + " " + bp[2]);
@@ -110,7 +110,7 @@ public class VSCrewRidesRollingDeckE2ETest extends AbstractSharedVsClientE2ETest
 
         String assemble = assembleFixture(site, VARIANT);
         assertTrue("a with-pilot-seat build must route to a ship: " + assemble,
-                assemble.contains("\"rocketCount\":0"));
+                (Reply.of(assemble).integerOr("rocketCount", Integer.MIN_VALUE) == 0));
 
         // Event-gated async-VS assembly barrier (bounded ceiling + early exit): AWAIT the SPAWNED
         // stage instead of a fixed tick budget that reds a healthy spawn under concurrent-fork load.
@@ -168,7 +168,7 @@ public class VSCrewRidesRollingDeckE2ETest extends AbstractSharedVsClientE2ETest
         double half = Math.toRadians(ROLL_DEG) / 2.0;
         String point = exec("artest vs point-by-id 0 " + shipId
                 + " " + Math.cos(half) + " 0.0 0.0 " + Math.sin(half));
-        assertTrue("attitude hold must accept the roll command: " + point, point.contains("\"commanded\":true"));
+        assertTrue("attitude hold must accept the roll command: " + point, Reply.of(point).bool("commanded", false));
         bot().waitTicks(120); // let the controller actually roll the ship
 
         PlayerShipData rolled = PlayerShipData.read(this::exec);

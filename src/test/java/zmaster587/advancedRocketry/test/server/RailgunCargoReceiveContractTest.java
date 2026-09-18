@@ -66,7 +66,7 @@ public class RailgunCargoReceiveContractTest extends AbstractSharedServerTest {
         String fixture = exec("artest fixture multiblock railgun 0 "
                 + CX + " " + CY + " " + CZ);
         assertTrue("fixture multiblock railgun failed: " + fixture,
-                fixture.contains("\"ok\":true"));
+                Reply.of(fixture).ok());
 
         // Validate structure so libVulpes' integrateTile populates
         // itemOutPorts (the field the probe reads via reflection).
@@ -74,16 +74,16 @@ public class RailgunCargoReceiveContractTest extends AbstractSharedServerTest {
                 + CX + " " + CY + " " + CZ);
         assertTrue("railgun must validate (precondition for itemOutPorts "
                         + "to be populated): " + tryComplete,
-                tryComplete.contains("\"isComplete\":true"));
+                Reply.of(tryComplete).bool("isComplete", false));
 
         // Probe call: receive 16 cobblestone on the controller-side tile.
         String receive = exec("artest infra railgun-receive-cargo 0 "
                 + CX + " " + CY + " " + CZ + " minecraft:cobblestone 16");
         assertTrue("railgun-receive-cargo probe must succeed: " + receive,
-                receive.contains("\"ok\":true"));
+                Reply.of(receive).ok());
         assertTrue("canReceiveCargo must be true on freshly-assembled "
                         + "railgun (output port has empty slots): " + receive,
-                receive.contains("\"canReceive\":true"));
+                Reply.of(receive).bool("canReceive", false));
 
         int outPortCount = extract(receive, OUT_PORT_COUNT);
         assertTrue("railgun must have >= 1 output port after assembly: "

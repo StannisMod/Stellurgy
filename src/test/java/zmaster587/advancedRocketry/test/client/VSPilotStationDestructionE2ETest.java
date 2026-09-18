@@ -78,7 +78,7 @@ public class VSPilotStationDestructionE2ETest extends AbstractSharedVsClientE2ET
         long breakClientMark = clientEvents().mark();
         String broke = exec("artest fill 0 " + ship.seatX + " " + ship.seatY + " " + ship.seatZ
                 + " " + ship.seatX + " " + ship.seatY + " " + ship.seatZ + " minecraft:air");
-        assertTrue("breaking the seat block failed: " + broke, broke.contains("\"ok\":true"));
+        assertTrue("breaking the seat block failed: " + broke, Reply.of(broke).ok());
         try {
             // The release, as the three links breakBlock commits in ITS OWN source order: it
             // resolves the seat's linked computer and tells it the station is gone (which drops the
@@ -137,7 +137,7 @@ public class VSPilotStationDestructionE2ETest extends AbstractSharedVsClientE2ET
         String broke = exec("artest fill 0 " + ship.afcX + " " + ship.afcY + " " + ship.afcZ
                 + " " + ship.afcX + " " + ship.afcY + " " + ship.afcZ + " minecraft:air");
         assertTrue("breaking the flight computer block failed: " + broke,
-                broke.contains("\"ok\":true"));
+                Reply.of(broke).ok());
 
         // What the computer's breakBlock commits per seated rider, in its own source order: it
         // throws him off, then kills the mount he was on. A `status_message_sent` link stood ahead
@@ -214,7 +214,7 @@ public class VSPilotStationDestructionE2ETest extends AbstractSharedVsClientE2ET
         long spawnMark = events.markInstrumented();
         String assemble = assembleFixture(site);
         assertTrue("a with-pilot-seat build must route to a ship: " + assemble,
-                assemble.contains("\"rocketCount\":0"));
+                (Reply.of(assemble).integerOr("rocketCount", Integer.MIN_VALUE) == 0));
         FlyingShip ship = new FlyingShip();
         ship.id = awaitShipSpawned(events, spawnMark,
                 "assembly must create a VS ship in the queryable registry (async spawn)");
@@ -256,7 +256,7 @@ public class VSPilotStationDestructionE2ETest extends AbstractSharedVsClientE2ET
         ship.dummyId = Reply.of("artest vs seat-mount-at", mountInfo).integer(DUMMY_ID);
         long seatMark = clientEvents().mark();
         String mount = exec("artest player mount-entity " + ship.dummyId);
-        assertTrue("bot must mount the seat dummy: " + mount, mount.contains("\"mounted\":true"));
+        assertTrue("bot must mount the seat dummy: " + mount, Reply.of(mount).bool("mounted", false));
         // The lift below is commanded by a real key held on a client that must already be riding;
         // ten ticks were a bet on that, and this whole class is about what happens to a pilot.
         awaitClientMount(seatMark, "the client must be riding the seat before its pilot flies it",
@@ -380,7 +380,7 @@ public class VSPilotStationDestructionE2ETest extends AbstractSharedVsClientE2ET
                 "the hull, and the first blocks of the lane it climbs before the seat is broken");
         String fixture = exec("artest fixture rocket 0 " + baseX + " " + baseY + " " + baseZ
                 + " " + VARIANT);
-        assertTrue("fixture (" + VARIANT + ") failed: " + fixture, fixture.contains("\"ok\":true"));
+        assertTrue("fixture (" + VARIANT + ") failed: " + fixture, Reply.of(fixture).ok());
         int[] bp = Reply.of(fixture).blockPos(BUILDER_POS);
         assertTrue("fixture missing builderPos: " + fixture, bp != null);
         return exec("artest rocket assemble 0 " + bp[0] + " " + bp[1] + " " + bp[2]);

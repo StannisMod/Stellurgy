@@ -57,7 +57,7 @@ public class RocketLaunchEventTest extends AbstractSharedServerTest {
 
         String fixture = String.join("\n", client().execute(
                 "artest fixture rocket 0 " + baseX + " " + baseY + " " + baseZ + " simple"));
-        assertTrue("fixture failed: " + fixture, fixture.contains("\"ok\":true"));
+        assertTrue("fixture failed: " + fixture, Reply.of(fixture).ok());
         int[] bp = Reply.of(fixture).blockPos(BUILDER_POS);
         assertTrue("fixture missing builderPos: " + fixture, bp != null);
         int bx = bp[0];
@@ -66,7 +66,7 @@ public class RocketLaunchEventTest extends AbstractSharedServerTest {
 
         String assemble = String.join("\n", client().execute(
                 "artest rocket assemble 0 " + bx + " " + by + " " + bz));
-        assertTrue("assemble failed: " + assemble, assemble.contains("\"ok\":true"));
+        assertTrue("assemble failed: " + assemble, Reply.of(assemble).ok());
 
         String list = String.join("\n", client().execute("artest rocket list 0"));
         java.util.List<RocketList.Entry> built = RocketList.of(list);
@@ -86,9 +86,9 @@ public class RocketLaunchEventTest extends AbstractSharedServerTest {
         // false=skip fuel fill, force = setInFlight(true) bypass.
         String launch = String.join("\n",
                 client().execute("artest rocket launch " + id + " false force"));
-        assertTrue("force launch must succeed: " + launch, launch.contains("\"ok\":true"));
+        assertTrue("force launch must succeed: " + launch, Reply.of(launch).ok());
         assertTrue("force launch response must report isInFlight=true: " + launch,
-                launch.contains("\"isInFlight\":true"));
+                Reply.of(launch).bool("isInFlight", false));
 
         // Verify via a separate info probe — confirms the flag persists
         // through the entity registry, not just the launch response.
@@ -110,11 +110,11 @@ public class RocketLaunchEventTest extends AbstractSharedServerTest {
         // the fuel-fill loop fired), and not crash.
         String launch = String.join("\n",
                 client().execute("artest rocket launch " + id + " true instant"));
-        assertTrue("instant launch must succeed: " + launch, launch.contains("\"ok\":true"));
+        assertTrue("instant launch must succeed: " + launch, Reply.of(launch).ok());
         assertTrue("launch response must echo back the chosen mode: " + launch,
-                launch.contains("\"mode\":\"instant\""));
+                "instant".equals(Reply.of(launch).text("mode")));
         assertTrue("launch with fuelFill=true must echo it: " + launch,
-                launch.contains("\"fuelFilled\":true"));
+                Reply.of(launch).bool("fuelFilled", false));
     }
 
     @Test
@@ -125,7 +125,7 @@ public class RocketLaunchEventTest extends AbstractSharedServerTest {
         String launch = String.join("\n",
                 client().execute("artest rocket launch 9999999 false force"));
         assertTrue("launch on unknown id must report rocket-not-found: " + launch,
-                launch.contains("\"error\":\"rocket not found\""));
+                "rocket not found".equals(Reply.of(launch).text("error")));
     }
 
     @Test
@@ -139,8 +139,8 @@ public class RocketLaunchEventTest extends AbstractSharedServerTest {
         client().execute("artest rocket launch " + id + " false force");
         String second = String.join("\n",
                 client().execute("artest rocket launch " + id + " false force"));
-        assertTrue("second-launch must still ok: " + second, second.contains("\"ok\":true"));
+        assertTrue("second-launch must still ok: " + second, Reply.of(second).ok());
         assertTrue("second-launch must still report isInFlight=true: " + second,
-                second.contains("\"isInFlight\":true"));
+                Reply.of(second).bool("isInFlight", false));
     }
 }

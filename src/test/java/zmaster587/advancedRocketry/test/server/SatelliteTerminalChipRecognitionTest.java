@@ -160,7 +160,7 @@ public class SatelliteTerminalChipRecognitionTest extends AbstractSharedServerTe
         String place = exec("artest place 0 " + x + " " + y + " " + z
                 + " advancedrocketry:satelliteControlCenter");
         assertTrue("satelliteControlCenter place failed: " + place,
-                place.contains("\"placed\":true"));
+                Reply.of(place).bool("placed", false));
     }
 
     /** Place terminal, build optical satellite, load chip; optionally
@@ -169,7 +169,7 @@ public class SatelliteTerminalChipRecognitionTest extends AbstractSharedServerTe
         placeTerminal(x, y, z);
         String build = exec("artest satellite-builder build 0 optical");
         assertTrue("optical satellite build failed: " + build,
-                build.contains("\"ok\":true"));
+                Reply.of(build).ok());
         Reply mReply = Reply.of(build);
         if (!mReply.has(SAT_ID)) {
             return -1L;
@@ -177,7 +177,7 @@ public class SatelliteTerminalChipRecognitionTest extends AbstractSharedServerTe
         long satId = Long.parseLong(mReply.text(SAT_ID));
         String load = exec("artest satellite-terminal load-chip 0 " + x + " " + y + " " + z
                 + " " + satId);
-        assertTrue("chip load failed: " + load, load.contains("\"ok\":true"));
+        assertTrue("chip load failed: " + load, Reply.of(load).ok());
         if (injectPower) {
             injectPower(x, y, z, 1000);
         }
@@ -187,7 +187,7 @@ public class SatelliteTerminalChipRecognitionTest extends AbstractSharedServerTe
     private void injectPower(int x, int y, int z, int amount) throws Exception {
         String result = exec("artest energy inject 0 " + x + " " + y + " " + z
                 + " " + amount);
-        assertTrue("energy inject must succeed: " + result, result.contains("\"ok\":true"));
+        assertTrue("energy inject must succeed: " + result, Reply.of(result).ok());
     }
 
     private static String extract(String src, String field) {

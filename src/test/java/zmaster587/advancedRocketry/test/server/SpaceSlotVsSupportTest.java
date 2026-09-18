@@ -1,5 +1,6 @@
 package zmaster587.advancedRocketry.test.server;
 
+import zmaster587.advancedRocketry.test.Reply;
 import org.junit.Test;
 
 import static org.junit.Assert.assertTrue;
@@ -21,8 +22,8 @@ public class SpaceSlotVsSupportTest extends AbstractSharedServerTest {
     @Test
     public void vsShipSupportAttachesToAPoolWorld() throws Exception {
         String r = exec("artest space vs-cap deep");
-        assertTrue("vs-cap must complete: " + r, r.contains("\"ok\":true"));
+        assertTrue("vs-cap must complete: " + r, Reply.of(r).ok());
         assertTrue("VS ship support (per-world ship manager) must attach to a pool world: " + r,
-                r.contains("\"vsShipSupport\":true"));
+                Reply.of(r).bool("vsShipSupport", false));
     }
 }

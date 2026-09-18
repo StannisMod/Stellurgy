@@ -37,7 +37,7 @@ public class RocketLaunchSmokeTest extends AbstractHeadlessServerTest {
                 "the craft is built here and launched straight up out of this volume");
         String fixture = String.join("\n", client().execute(
                 "artest fixture rocket 0 " + baseX + " " + baseY + " " + baseZ));
-        assertTrue("fixture rocket failed: " + fixture, fixture.contains("\"ok\":true"));
+        assertTrue("fixture rocket failed: " + fixture, Reply.of(fixture).ok());
 
         int[] bp = Reply.of(fixture).blockPos(BUILDER_POS);
         assertTrue("missing builderPos: " + fixture, bp != null);
@@ -48,7 +48,7 @@ public class RocketLaunchSmokeTest extends AbstractHeadlessServerTest {
         String assemble = String.join("\n", client().execute(
                 "artest rocket assemble 0 " + bx + " " + by + " " + bz));
         assertTrue("assemble didn't produce a rocket: " + assemble,
-                assemble.contains("\"ok\":true") && !assemble.contains("\"entityId\":-1"));
+                Reply.of(assemble).ok() && !(Reply.of(assemble).integerOr("entityId", Integer.MIN_VALUE) == -1));
 
         Reply emReply = Reply.of(assemble);
         assertTrue("assemble response missing entityId: " + assemble, emReply.has(ENT_ID));
@@ -59,9 +59,9 @@ public class RocketLaunchSmokeTest extends AbstractHeadlessServerTest {
         String launchInstant = String.join("\n", client().execute(
                 "artest rocket launch " + entityId + " true instant"));
         assertTrue("instant launch errored: " + launchInstant,
-                launchInstant.contains("\"ok\":true"));
+                Reply.of(launchInstant).ok());
 
-        if (launchInstant.contains("\"isInFlight\":true") || launchInstant.contains("\"isInOrbit\":true")) {
+        if (Reply.of(launchInstant).bool("isInFlight", false) || Reply.of(launchInstant).bool("isInOrbit", false)) {
             // Real path succeeded.
             return;
         }
@@ -70,8 +70,8 @@ public class RocketLaunchSmokeTest extends AbstractHeadlessServerTest {
         String launchForce = String.join("\n", client().execute(
                 "artest rocket launch " + entityId + " true force"));
         assertTrue("force launch errored: " + launchForce,
-                launchForce.contains("\"ok\":true"));
+                Reply.of(launchForce).ok());
         assertTrue("force launch didn't set isInFlight=true: " + launchForce,
-                launchForce.contains("\"isInFlight\":true"));
+                Reply.of(launchForce).bool("isInFlight", false));
     }
 }

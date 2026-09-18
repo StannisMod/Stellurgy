@@ -97,7 +97,7 @@ public class MachineDomainSmokeSuite extends AbstractSharedServerTest {
         // recipes-summary baseline.
         String summary = join(client().execute("artest machine recipes-summary"));
         assertTrue("recipes-summary errored: " + summary,
-                !summary.contains("\"error\""));
+                !Reply.of(summary).has("error"));
 
         // Layout: a row of machines in the open-air band, x=2100..2140 step 5. The Y was a
         // hard-coded 64 until 2026-09-14, described here as "flat stone" — which is a claim about
@@ -117,7 +117,7 @@ public class MachineDomainSmokeSuite extends AbstractSharedServerTest {
 
             String place = join(client().execute(
                     "artest place 0 " + x + " " + y + " " + z + " " + blockId));
-            if (!place.contains("\"placed\":true")) {
+            if (!Reply.of(place).bool("placed", false)) {
                 failures.append(blockId).append("=PLACE_FAILED(").append(place).append(");\n");
                 continue;
             }
@@ -132,7 +132,7 @@ public class MachineDomainSmokeSuite extends AbstractSharedServerTest {
 
             String tryComplete = join(client().execute(
                     "artest machine try-complete 0 " + x + " " + y + " " + z));
-            if (!tryComplete.contains("\"isComplete\":false")) {
+            if (!(!Reply.of(tryComplete).bool("isComplete", true))) {
                 failures.append(blockId).append("=BARE_TRY_COMPLETE_NOT_FALSE(")
                         .append(tryComplete).append(");\n");
                 continue;
@@ -140,7 +140,7 @@ public class MachineDomainSmokeSuite extends AbstractSharedServerTest {
 
             String tick = join(client().execute(
                     "artest tile force-tick 0 " + x + " " + y + " " + z + " 20"));
-            if (!tick.contains("\"ok\":true")) {
+            if (!Reply.of(tick).ok()) {
                 failures.append(blockId).append("=TICK_FAILED(").append(tick).append(");\n");
                 continue;
             }
@@ -179,11 +179,11 @@ public class MachineDomainSmokeSuite extends AbstractSharedServerTest {
         // Step 0 — fixture-builder primitives still healthy.
         String emptyInfo = join(client().execute("artest machine info 0 200 " + probeY + " 200"));
         assertTrue("empty position machine info wrong: " + emptyInfo,
-                emptyInfo.contains("\"error\":\"no tile entity\""));
+                "no tile entity".equals(Reply.of(emptyInfo).text("error")));
         String fill = join(client().execute(
                 "artest fill 0 210 " + probeY + " 210 212 " + (probeY + 2) + " 212 minecraft:stone"));
         assertTrue("fill 3x3x3 stone failed: " + fill,
-                fill.contains("\"ok\":true") && fill.contains("\"volume\":27"));
+                Reply.of(fill).ok() && (Reply.of(fill).integerOr("volume", Integer.MIN_VALUE) == 27));
 
         // Step 1 — build the multiblock fixture. Its Y is the band: a cutting multiblock is
         // validated by its own STRUCTURE, so it wants nothing under it.
@@ -192,7 +192,7 @@ public class MachineDomainSmokeSuite extends AbstractSharedServerTest {
         String fixture = join(client().execute(
                 "artest fixture machine cutting 0 " + cx + " " + cy + " " + cz));
         assertTrue("fixture machine cutting failed: " + fixture,
-                fixture.contains("\"ok\":true"));
+                Reply.of(fixture).ok());
 
         int[] sawBlade = Reply.of("artest fixture multiblock", fixture)
                 .blockPos(MULTIBLOCK_SAWBLADE_POS);
@@ -202,32 +202,32 @@ public class MachineDomainSmokeSuite extends AbstractSharedServerTest {
         // Step 2 — try-complete on the controller -> isComplete=true.
         String complete = join(client().execute(
                 "artest machine try-complete 0 " + cx + " " + cy + " " + cz));
-        assertTrue("try-complete errored: " + complete, complete.contains("\"ok\":true"));
+        assertTrue("try-complete errored: " + complete, Reply.of(complete).ok());
         assertTrue("structure didn't validate (isComplete=false): " + complete,
-                complete.contains("\"isComplete\":true"));
+                Reply.of(complete).bool("isComplete", false));
 
         // Step 3 — break the sawblade -> re-validate -> isComplete=false.
         String breakBlock = join(client().execute(
                 "artest place 0 " + sx + " " + sy + " " + sz + " minecraft:air"));
         assertTrue("could not replace sawBlade with air: " + breakBlock,
-                breakBlock.contains("\"ok\":true"));
+                Reply.of(breakBlock).ok());
 
         String broken = join(client().execute(
                 "artest machine try-complete 0 " + cx + " " + cy + " " + cz));
-        assertTrue("try-complete errored after break: " + broken, broken.contains("\"ok\":true"));
+        assertTrue("try-complete errored after break: " + broken, Reply.of(broken).ok());
         assertTrue("structure stayed complete after sawBlade removal — validator broken: " + broken,
-                broken.contains("\"isComplete\":false"));
+                (!Reply.of(broken).bool("isComplete", true)));
 
         // Step 4 — restore the sawblade -> re-validate -> isComplete=true again.
         String restore = join(client().execute(
                 "artest place 0 " + sx + " " + sy + " " + sz + " advancedrocketry:sawBlade"));
         assertTrue("could not restore sawBlade: " + restore,
-                restore.contains("\"placed\":true"));
+                Reply.of(restore).bool("placed", false));
 
         String recomplete = join(client().execute(
                 "artest machine try-complete 0 " + cx + " " + cy + " " + cz));
         assertTrue("validator failed to re-detect a restored structure: " + recomplete,
-                recomplete.contains("\"isComplete\":true"));
+                Reply.of(recomplete).bool("isComplete", false));
     }
 
     // ─────────────────────────────────────────────────────────────────────
@@ -254,7 +254,7 @@ public class MachineDomainSmokeSuite extends AbstractSharedServerTest {
         // 2. libVulpes creative battery — Forge-energy capability presence (optional).
         String placeBattery = join(client().execute(
                 "artest place 0 1000 " + siteY + " 1000 libvulpes:creativepowerbattery"));
-        if (placeBattery.contains("\"placed\":true")) {
+        if (Reply.of(placeBattery).bool("placed", false)) {
             EnergyStore bat = energy(1000, siteY, 1000)
                     .requireEnergy("creative battery missing IEnergyStorage");
             assertTrue("creative battery has zero capacity: " + bat.raw(), bat.capacity() > 0L);
@@ -266,7 +266,7 @@ public class MachineDomainSmokeSuite extends AbstractSharedServerTest {
         String placeSolar = join(client().execute(
                 "artest place 0 1100 " + siteY + " 1100 advancedrocketry:solarGenerator"));
         assertTrue("could not place solarGenerator: " + placeSolar,
-                placeSolar.contains("\"placed\":true"));
+                Reply.of(placeSolar).bool("placed", false));
 
         EnergyStore s0 = energy(1100, siteY, 1100)
                 .requireEnergy("solarGenerator missing IEnergyStorage");
@@ -274,7 +274,7 @@ public class MachineDomainSmokeSuite extends AbstractSharedServerTest {
 
         String tick = join(client().execute(
                 "artest tile force-tick 0 1100 " + siteY + " 1100 100"));
-        assertTrue("force-tick failed: " + tick, tick.contains("\"ok\":true"));
+        assertTrue("force-tick failed: " + tick, Reply.of(tick).ok());
 
         EnergyStore s1 = energy(1100, siteY, 1100);
         long after = s1.stored();
@@ -311,20 +311,20 @@ public class MachineDomainSmokeSuite extends AbstractSharedServerTest {
 
         String place = join(client().execute(
                 "artest place 0 " + bx + " " + by + " " + bz + " advancedrocketry:oxygenVent"));
-        assertTrue("vent did not place: " + place, place.contains("\"placed\":true"));
+        assertTrue("vent did not place: " + place, Reply.of(place).bool("placed", false));
 
         String preTick = join(client().execute(
                 "artest vent info 0 " + bx + " " + by + " " + bz));
         assertTrue("probe must recognise the vent tile: " + preTick,
-                preTick.contains("\"isVent\":true"));
+                Reply.of(preTick).bool("isVent", false));
 
         String fluidFill = join(client().execute(
                 "artest fluid inject 0 " + bx + " " + by + " " + bz + " oxygen 16000"));
-        assertTrue("oxygen fill failed: " + fluidFill, fluidFill.contains("\"ok\":true"));
+        assertTrue("oxygen fill failed: " + fluidFill, Reply.of(fluidFill).ok());
 
         String energyFill = join(client().execute(
                 "artest energy inject 0 " + bx + " " + by + " " + bz + " 1000000"));
-        assertTrue("energy fill failed: " + energyFill, energyFill.contains("\"ok\":true"));
+        assertTrue("energy fill failed: " + energyFill, Reply.of(energyFill).ok());
 
         String fueled = join(client().execute(
                 "artest vent info 0 " + bx + " " + by + " " + bz));
@@ -337,7 +337,7 @@ public class MachineDomainSmokeSuite extends AbstractSharedServerTest {
         String reseal = join(client().execute(
                 "artest vent reseal 0 " + bx + " " + by + " " + bz));
         assertTrue("vent reseal probe failed: " + reseal,
-                reseal.contains("\"ok\":true"));
+                Reply.of(reseal).ok());
 
         client().execute("artest tile force-tick 0 " + bx + " " + by + " " + bz + " 5");
 
@@ -361,7 +361,7 @@ public class MachineDomainSmokeSuite extends AbstractSharedServerTest {
         String reseal2 = join(client().execute(
                 "artest vent reseal 0 " + bx + " " + by + " " + bz));
         assertTrue("second reseal probe failed: " + reseal2,
-                reseal2.contains("\"ok\":true"));
+                Reply.of(reseal2).ok());
 
         String leaked = join(client().execute(
                 "artest vent info 0 " + bx + " " + by + " " + bz));
@@ -391,16 +391,16 @@ public class MachineDomainSmokeSuite extends AbstractSharedServerTest {
             String resp = join(client().execute(
                     "artest item check " + id + " protective-armor"));
             assertTrue(id + " not registered: " + resp,
-                    resp.contains("\"registered\":true"));
+                    Reply.of(resp).bool("registered", false));
             assertTrue(id + " missing IProtectiveArmor capability: " + resp,
-                    resp.contains("\"hasCapability\":true"));
+                    Reply.of(resp).bool("hasCapability", false));
         }
 
         // 2. SpaceBreathing enchantment registered.
         String ench = join(client().execute(
                 "artest enchant check advancedrocketry:spacebreathing"));
         assertTrue("spacebreathing enchant missing: " + ench,
-                ench.contains("\"registered\":true"));
+                Reply.of(ench).bool("registered", false));
 
         // 3. Vacuum precondition: Earth -> density 0 -> non-breathable.
         // Snapshot original so we restore it after.
@@ -412,12 +412,12 @@ public class MachineDomainSmokeSuite extends AbstractSharedServerTest {
             String setVac = join(client().execute(
                     "artest atmosphere set-density 0 0"));
             assertTrue("set-density 0 failed: " + setVac,
-                    setVac.contains("\"ok\":true"));
+                    Reply.of(setVac).ok());
 
             String atm = join(client().execute(
                     "artest atmosphere get 0 0 70 0"));
             assertTrue("density=0 must yield non-breathable atmosphere: " + atm,
-                    atm.contains("\"breathable\":false"));
+                    (!Reply.of(atm).bool("breathable", true)));
         } finally {
             client().execute("artest atmosphere set-density 0 " + originalDensity);
         }
@@ -448,7 +448,7 @@ public class MachineDomainSmokeSuite extends AbstractSharedServerTest {
             int x = baseX + e.getValue();
             String place = join(client().execute(
                     "artest place 0 " + x + " " + y + " " + baseZ + " " + blockId));
-            if (!place.contains("\"placed\":true")) {
+            if (!Reply.of(place).bool("placed", false)) {
                 failures.append(blockId).append("=PLACE_FAILED;");
                 errors++;
                 continue;
@@ -492,7 +492,7 @@ public class MachineDomainSmokeSuite extends AbstractSharedServerTest {
                 "artest fill 0 " + x0 + " " + y + " " + z0 + " "
                         + (x0 + 4) + " " + y + " " + (z0 + 4)
                         + " advancedrocketry:solarPanel"));
-        assertTrue("solar fill failed: " + fill, fill.contains("\"ok\":true"));
+        assertTrue("solar fill failed: " + fill, Reply.of(fill).ok());
 
         int[][] airPositions = new int[][]{
                 {x0, z0},     {x0 + 4, z0},     {x0, z0 + 4},     {x0 + 4, z0 + 4},
@@ -509,7 +509,7 @@ public class MachineDomainSmokeSuite extends AbstractSharedServerTest {
                 "artest place 0 " + xC + " " + y + " " + zC
                         + " advancedrocketry:microwaveReciever"));
         assertTrue("controller place failed: " + place,
-                place.contains("\"placed\":true"));
+                Reply.of(place).bool("placed", false));
 
         String info = join(client().execute(
                 "artest machine info 0 " + xC + " " + y + " " + zC));
@@ -518,7 +518,7 @@ public class MachineDomainSmokeSuite extends AbstractSharedServerTest {
 
         String tick = join(client().execute(
                 "artest tile force-tick 0 " + xC + " " + y + " " + zC + " 40"));
-        assertTrue("force-tick errored: " + tick, tick.contains("\"ok\":true"));
+        assertTrue("force-tick errored: " + tick, Reply.of(tick).ok());
         assertEquals("must tick all 40 iterations",
                 40, extractInt(tick, "ticked"));
 
@@ -543,7 +543,7 @@ public class MachineDomainSmokeSuite extends AbstractSharedServerTest {
                 "artest place 0 " + x + " " + y + " " + z
                         + " advancedrocketry:blackholegenerator"));
         assertTrue("controller place failed: " + place,
-                place.contains("\"placed\":true"));
+                Reply.of(place).bool("placed", false));
 
         String info = join(client().execute(
                 "artest machine info 0 " + x + " " + y + " " + z));
@@ -552,7 +552,7 @@ public class MachineDomainSmokeSuite extends AbstractSharedServerTest {
 
         String tick = join(client().execute(
                 "artest tile force-tick 0 " + x + " " + y + " " + z + " 50"));
-        assertTrue("force-tick errored: " + tick, tick.contains("\"ok\":true"));
+        assertTrue("force-tick errored: " + tick, Reply.of(tick).ok());
         assertEquals("must tick all 50 iterations",
                 50, extractInt(tick, "ticked"));
 
@@ -571,7 +571,7 @@ public class MachineDomainSmokeSuite extends AbstractSharedServerTest {
     /** Asserts the probe response contains {@code "ok":true} and returns nothing. */
     private static void ok(List<String> response) {
         String joined = join(response);
-        assertTrue("probe call failed: " + joined, joined.contains("\"ok\":true"));
+        assertTrue("probe call failed: " + joined, Reply.of(joined).ok());
     }
 
     /** What the Forge energy capability at one block reports — refusing a block that is not there. */

@@ -73,11 +73,11 @@ public class ProceduralPlanetRealizationE2ETest extends AbstractHeadlessServerTe
     public void aProceduralBodyBecomesTheWorldTheScanDescribed() throws Exception {
         String installed = exec(GEN_INSTALL);
         assertTrue("the procedural generator must install: " + installed,
-                installed.contains("\"ok\":true"));
+                Reply.of(installed).ok());
 
         String found = exec("artest space find-procedural " + SWEEP_RADIUS);
         assertTrue("a dense procedural galaxy must offer a landable body: " + found,
-                found.contains("\"ok\":true"));
+                Reply.of(found).ok());
         String cell = jsonInt(found, "sx") + " " + jsonInt(found, "sy") + " " + jsonInt(found, "sz");
         assertTrue("the body must carry the orbit its physics is derived from: " + found,
                 jsonInt(found, "orbitalDist") > 0);
@@ -92,7 +92,7 @@ public class ProceduralPlanetRealizationE2ETest extends AbstractHeadlessServerTe
         // What the telescope would say, taken BEFORE anything is minted.
         String scan = exec("artest space derived " + cell);
         assertTrue("the derivation must answer for an unrealized body: " + scan,
-                scan.contains("\"ok\":true"));
+                Reply.of(scan).ok());
 
         RealizedBody realized = RealizedBody.at(this::exec, cell);
         int dim = realized.dim;
@@ -145,9 +145,9 @@ public class ProceduralPlanetRealizationE2ETest extends AbstractHeadlessServerTe
 
         // And the world is a world: it loads, and it has ground rather than a column of air.
         String loaded = exec("artest dim time " + dim);
-        assertFalse("the realized dimension must load: " + loaded, loaded.contains("\"error\""));
+        assertFalse("the realized dimension must load: " + loaded, Reply.of(loaded).has("error"));
         String sample = exec("artest worldgen sample " + dim + " 0 0");
-        assertFalse("the realized world must generate terrain: " + sample, sample.contains("\"error\""));
+        assertFalse("the realized world must generate terrain: " + sample, Reply.of(sample).has("error"));
         assertNotEquals("a realized planet must have ground under its sky: " + sample,
                 "minecraft:air", jsonString(sample, "topBlock"));
     }
@@ -170,11 +170,11 @@ public class ProceduralPlanetRealizationE2ETest extends AbstractHeadlessServerTe
     public void aMoonRealizedBeforeItsParentIsStillAMoon() throws Exception {
         String installed = exec(GEN_INSTALL);
         assertTrue("the procedural generator must install: " + installed,
-                installed.contains("\"ok\":true"));
+                Reply.of(installed).ok());
 
         String found = exec("artest space find-moon " + SWEEP_RADIUS);
         assertTrue("a dense procedural galaxy must offer a planet with a moon: " + found,
-                found.contains("\"ok\":true"));
+                Reply.of(found).ok());
         // TWO cells, by KEY. A moon has a cell of its own inside its parent's zone, so the family is
         // spread across two addresses and neither is a galactic sector triple: the moon's sectors
         // count cells of ITS PARENT's lattice, and passing them as three numbers would ask about a
@@ -232,11 +232,11 @@ public class ProceduralPlanetRealizationE2ETest extends AbstractHeadlessServerTe
     public void aGasGiantsMoonIsAMoonAndTheGiantStaysUnlandable() throws Exception {
         String installed = exec(GEN_INSTALL);
         assertTrue("the procedural generator must install: " + installed,
-                installed.contains("\"ok\":true"));
+                Reply.of(installed).ok());
 
         String found = exec("artest space find-moon " + SWEEP_RADIUS + " giant");
         assertTrue("a dense procedural galaxy must offer a gas giant with a moon: " + found,
-                found.contains("\"ok\":true"));
+                Reply.of(found).ok());
         assertTrue("arrangement: the parent must be the kind nothing can descend into: " + found,
                 jsonBool(found, "parentGasGiant"));
         String cell = jsonString(found, "cellKey");

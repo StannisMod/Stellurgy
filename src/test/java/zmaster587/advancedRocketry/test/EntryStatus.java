@@ -77,8 +77,11 @@ public final class EntryStatus {
     /**
      * Read one {@code entry-status} reply, or refuse.
      *
-     * <p>Refuses the {@code error} replies — the ledger never set up, a malformed id — because
-     * either would otherwise read as {@code found:false}, which is a statement about the CRAFT.</p>
+     * <p>Refuses the {@code error} replies — no space subsystem on this server, a malformed id —
+     * because either would otherwise read as {@code found:false}, which is a statement about the
+     * CRAFT. (Until 2026-09-18 there was a third: the verb gated on a probe static that only
+     * {@code entry-setup} filled, so a live ledger holding the row still answered "entry not set
+     * up". The verb reads the live stack now, and this refusal is about the world again.)</p>
      */
     public static EntryStatus of(String statusReply) {
         Reply reply = Reply.of("artest space entry-status", String.valueOf(statusReply));

@@ -103,8 +103,8 @@ public class AtmospherePlayerEventTest {
     /** Stations the fake player in {@code dim} and ticks it {@code ticks} times. */
     private void enterDimAndTick(int dim, int ticks) throws Exception {
         String fake = exec("artest player ensure-fake " + dim + " 8.5 120 8.5");
-        assertTrue("ensure-fake must succeed: " + fake, fake.contains("\"ok\":true"));
-        assertTrue(exec("artest player tick-living " + ticks).contains("\"ok\":true"));
+        assertTrue("ensure-fake must succeed: " + fake, Reply.of(fake).ok());
+        assertTrue(Reply.of(exec("artest player tick-living " + ticks)).ok());
         // Let the server actually RUN those ticks. Budgeted in ticks, which is what the caller asked
         // for: the old wall-clock equivalent bought proportionally fewer of them on a busy box, so
         // the atmosphere had less time to settle exactly when the machine was least able to give it.

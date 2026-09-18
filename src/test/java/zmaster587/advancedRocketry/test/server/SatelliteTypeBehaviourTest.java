@@ -53,7 +53,7 @@ public class SatelliteTypeBehaviourTest extends AbstractSharedServerTest {
         long satId = createSat("solarEnergy", 200, 4000, 1000);
         String resp = String.join("\n", client().execute(
                 "artest satellite markers 0 " + satId));
-        assertTrue("markers probe failed: " + resp, resp.contains("\"ok\":true"));
+        assertTrue("markers probe failed: " + resp, Reply.of(resp).ok());
         String isTransmitter = stringField(IS_TRANSMITTER, resp, "isUniversalEnergyTransmitter");
         String canTick = stringField(CAN_TICK, resp, "canTick");
         assertEquals("solarEnergy (SatelliteMicrowaveEnergy) MUST implement "
@@ -101,7 +101,7 @@ public class SatelliteTypeBehaviourTest extends AbstractSharedServerTest {
 
         String setResp = String.join("\n", client().execute(
                 "artest satellite biome-set 0 " + satId + " " + targetBiomeId));
-        assertTrue("biome-set failed: " + setResp, setResp.contains("\"ok\":true"));
+        assertTrue("biome-set failed: " + setResp, Reply.of(setResp).ok());
 
         // Add one position to the change queue.
         client().execute("artest satellite biome-add-pos 0 " + satId + " " + x + " " + y + " " + z);
@@ -174,7 +174,7 @@ public class SatelliteTypeBehaviourTest extends AbstractSharedServerTest {
                 "artest satellite create 0 " + type + " " + powerGen + " "
                         + powerStorage + " " + maxData));
         assertTrue("satellite create (" + type + ") failed: " + resp,
-                resp.contains("\"ok\":true"));
+                Reply.of(resp).ok());
         Reply mReply = Reply.of(resp);
         assertTrue("could not extract id from create response: " + resp, mReply.has(ID));
         return Long.parseLong(mReply.text(ID));

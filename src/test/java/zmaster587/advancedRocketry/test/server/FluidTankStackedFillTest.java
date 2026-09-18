@@ -1,5 +1,6 @@
 package zmaster587.advancedRocketry.test.server;
 
+import zmaster587.advancedRocketry.test.Reply;
 import zmaster587.advancedRocketry.test.FluidStored;
 import org.junit.Test;
 
@@ -50,7 +51,7 @@ public class FluidTankStackedFillTest extends AbstractSharedServerTest {
                     "artest chunk warmup 0 " + (cx - 1) + " " + (cz - 1) + " "
                             + (cx + 1) + " " + (cz + 1)));
             assertTrue("chunk warmup failed: " + resp,
-                    resp.contains("\"ok\":true"));
+                    Reply.of(resp).ok());
         } catch (Exception e) {
             throw new RuntimeException(e);
         }
@@ -63,7 +64,7 @@ public class FluidTankStackedFillTest extends AbstractSharedServerTest {
                         + " advancedrocketry:liquidTank"));
         assertTrue("liquidTank place failed at (" + x + "," + y + "," + z
                         + "): " + resp,
-                resp.contains("\"placed\":true"));
+                Reply.of(resp).bool("placed", false));
     }
 
     /** Return the {@code capacity} reported by {@code fluid stored}.
@@ -82,7 +83,7 @@ public class FluidTankStackedFillTest extends AbstractSharedServerTest {
         String resp = join(client().execute(
                 "artest fluid stored 0 " + x + " " + y + " " + z));
         assertTrue("fluid stored must succeed: " + resp,
-                resp.contains("\"hasFluid\":true"));
+                Reply.of(resp).bool("hasFluid", false));
         // An empty tank reports `"fluid":null` and no amount, which is a reading and not a failure.
         return FluidStored.of(resp).amount(0);
     }
@@ -109,9 +110,9 @@ public class FluidTankStackedFillTest extends AbstractSharedServerTest {
                 "artest fluid inject 0 " + baseX + " " + topY + " " + baseZ
                         + " oxygen " + injectAmt));
         assertTrue("inject must succeed: " + inject,
-                inject.contains("\"ok\":true"));
+                Reply.of(inject).ok());
         assertTrue("inject must report filled=injectAmt: " + inject,
-                inject.contains("\"filled\":" + injectAmt));
+                String.valueOf(injectAmt).equals(Reply.of(inject).text("filled")));
 
         int topAmt = storedAmount(baseX, topY, baseZ);
         int bottomAmt = storedAmount(baseX, bottomY, baseZ);
@@ -148,9 +149,9 @@ public class FluidTankStackedFillTest extends AbstractSharedServerTest {
                 "artest fluid inject 0 " + baseX + " " + topY + " " + baseZ
                         + " oxygen " + injectAmt));
         assertTrue("inject must succeed: " + inject,
-                inject.contains("\"ok\":true"));
+                Reply.of(inject).ok());
         assertTrue("inject must report filled=injectAmt (no clamping): " + inject,
-                inject.contains("\"filled\":" + injectAmt));
+                String.valueOf(injectAmt).equals(Reply.of(inject).text("filled")));
 
         int topAmt = storedAmount(baseX, topY, baseZ);
         int bottomAmt = storedAmount(baseX, bottomY, baseZ);

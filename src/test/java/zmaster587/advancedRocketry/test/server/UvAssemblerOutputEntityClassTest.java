@@ -67,13 +67,13 @@ public class UvAssemblerOutputEntityClassTest extends AbstractSharedServerTest {
 
         String fixture = exec("artest fixture rocket 0 " + CX_ROCKET + " " + CY + " " + CZ
                 + " simple");
-        assertTrue("rocket fixture must build: " + fixture, fixture.contains("\"ok\":true"));
+        assertTrue("rocket fixture must build: " + fixture, Reply.of(fixture).ok());
         int[] builder = parseBuilder(fixture);
 
         String assemble = exec("artest rocket assemble 0 " + builder[0] + " "
                 + builder[1] + " " + builder[2]);
         assertTrue("rocket assemble must succeed: " + assemble,
-                assemble.contains("\"ok\":true"));
+                Reply.of(assemble).ok());
 
         int entityId = lastRocketId();
         // The reader REFUSES a report with no entityClass, which is what the null check asserted.
@@ -90,13 +90,13 @@ public class UvAssemblerOutputEntityClassTest extends AbstractSharedServerTest {
     public void uvAssemblerProducesEntityStationDeployedRocket() throws Exception {
         String fixture = exec("artest fixture uv-rocket 0 " + CX_UV + " " + CY + " " + CZ);
         assertTrue("uv-rocket fixture must build: " + fixture,
-                fixture.contains("\"ok\":true"));
+                Reply.of(fixture).ok());
         int[] builder = parseBuilder(fixture);
 
         String assemble = exec("artest rocket assemble 0 " + builder[0] + " "
                 + builder[1] + " " + builder[2]);
         assertTrue("UV assemble must succeed: " + assemble,
-                assemble.contains("\"ok\":true"));
+                Reply.of(assemble).ok());
 
         int entityId = lastRocketId();
         String entityClass = RocketInfo.byId(WorldCommandFixtures::exec, entityId).entityClass;

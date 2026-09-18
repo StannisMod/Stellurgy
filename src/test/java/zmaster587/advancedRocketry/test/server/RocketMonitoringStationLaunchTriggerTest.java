@@ -86,7 +86,7 @@ public class RocketMonitoringStationLaunchTriggerTest extends AbstractSharedServ
 
     private static void ok(java.util.List<String> resp) {
         String joined = join(resp);
-        assertTrue("probe call failed: " + joined, joined.contains("\"ok\":true"));
+        assertTrue("probe call failed: " + joined, Reply.of(joined).ok());
     }
 
     /** Number of RocketPreLaunchEvent fires observed since
@@ -146,7 +146,7 @@ public class RocketMonitoringStationLaunchTriggerTest extends AbstractSharedServ
                 "the craft whose launch the station triggers stands in this volume");
         String fx = join(client().execute("artest fixture rocket 0 " + baseX
                 + " " + baseY + " " + baseZ + " simple"));
-        assertTrue("fixture rocket failed: " + fx, fx.contains("\"ok\":true"));
+        assertTrue("fixture rocket failed: " + fx, Reply.of(fx).ok());
         int[] bp = Reply.of(fx).blockPos(BUILDER_POS);
         assertTrue("builderPos missing: " + fx, bp != null);
         int bx = bp[0];
@@ -154,7 +154,7 @@ public class RocketMonitoringStationLaunchTriggerTest extends AbstractSharedServ
         int bz = bp[2];
         String assemble = join(client().execute("artest rocket assemble 0 "
                 + bx + " " + by + " " + bz));
-        assertTrue("rocket assemble failed: " + assemble, assemble.contains("\"ok\":true"));
+        assertTrue("rocket assemble failed: " + assemble, Reply.of(assemble).ok());
         Reply emReply = Reply.of(assemble);
         assertTrue("entityId missing: " + assemble, emReply.has(ENT_ID));
         return Integer.parseInt(emReply.text(ENT_ID));

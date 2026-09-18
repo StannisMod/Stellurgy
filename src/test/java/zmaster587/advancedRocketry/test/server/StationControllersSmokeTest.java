@@ -1,5 +1,6 @@
 package zmaster587.advancedRocketry.test.server;
 
+import zmaster587.advancedRocketry.test.Reply;
 import org.junit.Test;
 
 import zmaster587.advancedRocketry.test.FixtureSite;
@@ -71,7 +72,7 @@ public class StationControllersSmokeTest extends AbstractSharedServerTest {
         String place = exec("artest place 0 " + cx + " " + CY + " " + CZ
                 + " " + registryName);
         assertTrue("block " + registryName + " must place: " + place,
-                place.contains("\"placed\":true"));
+                Reply.of(place).bool("placed", false));
 
         String info = exec("artest machine info 0 " + cx + " " + CY + " " + CZ);
         assertTrue("block " + registryName + " must produce tile "
@@ -83,7 +84,7 @@ public class StationControllersSmokeTest extends AbstractSharedServerTest {
         String tick = exec("artest tile force-tick 0 " + cx + " " + CY + " " + CZ
                 + " 40");
         assertTrue("force-tick on " + registryName + " must succeed: " + tick,
-                tick.contains("\"ok\":true"));
+                Reply.of(tick).ok());
 
         // Re-query — proves the tile survived the tick burst (no
         // unregister, no replace).

@@ -51,7 +51,7 @@ public class FreeFlightAssistsE2ETest extends AbstractSharedServerTest {
 
         String fixture = ok(client().execute(
                 "artest fixture rocket 0 " + baseX + " " + baseY + " " + baseZ + " simple"));
-        assertTrue("fixture failed: " + fixture, fixture.contains("\"ok\":true"));
+        assertTrue("fixture failed: " + fixture, Reply.of(fixture).ok());
         int[] bp = Reply.of(fixture).blockPos(BUILDER_POS);
         assertTrue("fixture missing builderPos: " + fixture, bp != null);
         int bx = bp[0];
@@ -60,7 +60,7 @@ public class FreeFlightAssistsE2ETest extends AbstractSharedServerTest {
 
         String assemble = ok(client().execute(
                 "artest rocket assemble 0 " + bx + " " + by + " " + bz));
-        assertTrue("assemble failed: " + assemble, assemble.contains("\"ok\":true"));
+        assertTrue("assemble failed: " + assemble, Reply.of(assemble).ok());
 
         String list = ok(client().execute("artest rocket list 0"));
         java.util.List<RocketList.Entry> built = RocketList.of(list);
@@ -78,7 +78,7 @@ public class FreeFlightAssistsE2ETest extends AbstractSharedServerTest {
 
         String off = ok(client().execute("artest rocket set-flight-assist " + id + " off"));
         assertTrue("set-flight-assist off must succeed: " + off,
-                off.contains("\"ok\":true") && off.contains("\"flightAssistOn\":false"));
+                Reply.of(off).ok() && (!Reply.of(off).bool("flightAssistOn", true)));
 
         RocketInfo info1 = rocketInfo(id);
         assertFalse("info must round-trip FA=false: " + info1.raw(), info1.flightAssistOn);
@@ -108,9 +108,9 @@ public class FreeFlightAssistsE2ETest extends AbstractSharedServerTest {
         String applied = ok(client().execute(
                 "artest rocket free-flight-input " + id + " 0 0 0 0 0 1"));
         assertTrue("input must apply on FF rocket: " + applied,
-                applied.contains("\"applied\":true"));
+                Reply.of(applied).bool("applied", false));
         assertTrue("probe echoes cut=true: " + applied,
-                applied.contains("\"cut\":true"));
+                Reply.of(applied).bool("cut", false));
 
         RocketInfo info = rocketInfo(id);
         assertTrue("info must store ffInputCut=true: " + info.raw(),

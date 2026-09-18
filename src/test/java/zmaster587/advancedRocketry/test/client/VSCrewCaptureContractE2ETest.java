@@ -318,8 +318,8 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
         // side of the axis; an upright ship rarely aliases.
         double h = Math.toRadians(45.0) / 2.0;
         assertTrue("attitude hold must accept the tilt",
-                exec("artest vs point-by-id 0 " + scenarioShipId + " "
-                        + Math.cos(h) + " 0.0 0.0 " + Math.sin(h)).contains("\"commanded\":true"));
+                Reply.of(exec("artest vs point-by-id 0 " + scenarioShipId + " "
+                        + Math.cos(h) + " 0.0 0.0 " + Math.sin(h))).bool("commanded", false));
         bot().waitTicks(120);
         ShipInfo info = shipInfo();
         // The TILT is the premise, and until now nothing checked that it took: a run in which
@@ -339,11 +339,11 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
         // failing the Y-stability check on scenery, not on the contract under test.
         int px = (int) Math.floor(sx), pz = (int) Math.floor(sz);
         assertTrue("walk platform fill failed",
-                exec("artest fill 0 " + (px - 2) + " " + by + " " + (pz - 2) + " " + (px + 12) + " "
-                        + by + " " + (pz + 12) + " minecraft:stone").contains("\"ok\":true"));
+                Reply.of(exec("artest fill 0 " + (px - 2) + " " + by + " " + (pz - 2) + " " + (px + 12) + " "
+                        + by + " " + (pz + 12) + " minecraft:stone")).ok());
         assertTrue("walk headroom clear failed",
-                exec("artest fill 0 " + (px - 2) + " " + (by + 1) + " " + (pz - 2) + " " + (px + 12)
-                        + " " + (by + 4) + " " + (pz + 12) + " minecraft:air").contains("\"ok\":true"));
+                Reply.of(exec("artest fill 0 " + (px - 2) + " " + (by + 1) + " " + (pz - 2) + " " + (px + 12)
+                        + " " + (by + 4) + " " + (pz + 12) + " minecraft:air")).ok());
         // Face NORTH (yaw 180 looks along -Z in MC): the walk starts at the platform's south edge
         // and crosses its full depth without stepping off.
         long standMark = clientEvents().mark();
@@ -452,8 +452,8 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
                 + " deck before the stillness window means anything", CAPTURE_LINK_BUDGET_TICKS);
 
         assertTrue("attitude hold must accept the past-vertical roll",
-                exec("artest vs point-by-id 0 " + scenarioShipId + " 0.17365 0.0 0.0 0.98481")
-                        .contains("\"commanded\":true"));
+                Reply.of(exec("artest vs point-by-id 0 " + scenarioShipId + " 0.17365 0.0 0.0 0.98481")
+                        ).bool("commanded", false));
         bot().waitTicks(200); // slew and settle - stationary, steeply rolled
 
         // The subject must be in the regime the symptom lives in, and the instrument must fire:
@@ -1177,8 +1177,8 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
         double[] ship = buildShip(site);
         double h = Math.toRadians(160.0) / 2.0;
         assertTrue("attitude hold must accept the past-vertical roll",
-                exec("artest vs point-by-id 0 " + scenarioShipId + " "
-                        + Math.cos(h) + " " + Math.sin(h) + " 0.0 0.0").contains("\"commanded\":true"));
+                Reply.of(exec("artest vs point-by-id 0 " + scenarioShipId + " "
+                        + Math.cos(h) + " " + Math.sin(h) + " 0.0 0.0")).bool("commanded", false));
         bot().waitTicks(200);
         ShipInfo info = shipInfo();
         double upY = info.upY();
@@ -1279,8 +1279,8 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
         double[] ship = buildShip(site);
         double h = Math.toRadians(160.0) / 2.0;
         assertTrue("attitude hold must accept the past-vertical roll",
-                exec("artest vs point-by-id 0 " + scenarioShipId + " "
-                        + Math.cos(h) + " " + Math.sin(h) + " 0.0 0.0").contains("\"commanded\":true"));
+                Reply.of(exec("artest vs point-by-id 0 " + scenarioShipId + " "
+                        + Math.cos(h) + " " + Math.sin(h) + " 0.0 0.0")).bool("commanded", false));
         bot().waitTicks(200);
         ShipInfo info = shipInfo();
         double upY = info.upY();
@@ -1327,7 +1327,7 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
                 + ((int) sy + SHAFT_ABOVE_HULL) + " "
                 + ((int) sz + 12) + " minecraft:air");
         assertTrue("the staging clearing was not cut, so this scenario would stage a drop inside the"
-                + " fixture's own pit: " + clearing, clearing.contains("\"ok\":true"));
+                + " fixture's own pit: " + clearing, Reply.of(clearing).ok());
 
         exec("tp @a " + sx + " " + (sy + 7) + " " + sz + " 0 0");
         // Same premise as the hull-top encounter above, and the same link: the client must be
@@ -1390,7 +1390,10 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
                         // exists. A non-null ship here at the moment of the launch says that branch
                         // ran; a null one says the launch came from somewhere else entirely.
                         "[t%d y=%.2f z=%.2f cap=%b hull=%b m=(%.2f,%.2f,%.2f) add=(%.2f,%.2f,%.2f)"
-                                + " since=%.0f touched=%s carryY=%.2f shipMotY=%.2f] ",
+                                // `since` is a TICK COUNT and the field is an int: `%f` on it throws
+                                // IllegalFormatConversionException from inside the trace itself, and
+                                // the throw replaces the failure the trace was assembled to report.
+                                + " since=%d touched=%s carryY=%.2f shipMotY=%.2f] ",
                         i * 3, settledY, bot().reportState().get("playerZ").getAsDouble(),
                         tracked, hull,
                         psd.motionX, psd.motionY, psd.motionZ,
@@ -1626,8 +1629,8 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
         // = 1.62*sin50 = 1.24 > 0.6).
         double h = Math.toRadians(50.0) / 2.0;
         assertTrue("attitude hold must accept the roll",
-                exec("artest vs point-by-id 0 " + scenarioShipId + " "
-                        + Math.cos(h) + " " + Math.sin(h) + " 0.0 0.0").contains("\"commanded\":true"));
+                Reply.of(exec("artest vs point-by-id 0 " + scenarioShipId + " "
+                        + Math.cos(h) + " " + Math.sin(h) + " 0.0 0.0")).bool("commanded", false));
         bot().waitTicks(150);
         ShipInfo info = shipInfo();
         double upY = info.upY();
@@ -1828,7 +1831,7 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
                 + Math.cos(half) + " " + Math.sin(half) + " 0.0 0.0");
         scenario().requireArranged("the attitude hold must accept the commanded roll, or the craft"
                 + " never manoeuvres and the interval under test spans nothing: " + commanded,
-                commanded.contains("\"commanded\":true"));
+                Reply.of(commanded).bool("commanded", false));
         bot().waitTicks(200); // fly to it AND settle: the manoeuvre must be OVER when the body lands
 
         // What the deck is ACTUALLY doing now, measured rather than assumed. A craft can be told to
@@ -1858,7 +1861,7 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
                 + ((int) sz + 12) + " minecraft:air");
         scenario().requireArranged("the staging clearing was not cut, so the body would meet the"
                 + " fixture's own structure instead of the deck: " + clearing,
-                clearing.contains("\"ok\":true"));
+                Reply.of(clearing).ok());
         // Marked one statement before the drop. The value under test is an ARGUMENT of the capture
         // commit — the deck velocity production binds into the body's motion — and the commit records
         // it: every capture in this window carries its own carry triple, exactly, where a per-tick
@@ -2006,8 +2009,8 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
         // Roll the ship to ~60 degrees about X and hold it there.
         double h = Math.toRadians(60.0) / 2.0;
         assertTrue("attitude hold must accept the roll",
-                exec("artest vs point-by-id 0 " + scenarioShipId + " "
-                        + Math.cos(h) + " " + Math.sin(h) + " 0.0 0.0").contains("\"commanded\":true"));
+                Reply.of(exec("artest vs point-by-id 0 " + scenarioShipId + " "
+                        + Math.cos(h) + " " + Math.sin(h) + " 0.0 0.0")).bool("commanded", false));
         bot().waitTicks(150);
         double[] up = shipUpFromInfo(shipInfo());
         assertTrue("the ship must be steeply rolled for the frames to diverge (upY=" + up[1] + ")",
@@ -2077,8 +2080,8 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
         double coneBefore = dot(up, lookBefore);
         double h2 = Math.toRadians(85.0) / 2.0;
         assertTrue("attitude hold must accept the second roll",
-                exec("artest vs point-by-id 0 " + scenarioShipId + " "
-                        + Math.cos(h2) + " " + Math.sin(h2) + " 0.0 0.0").contains("\"commanded\":true"));
+                Reply.of(exec("artest vs point-by-id 0 " + scenarioShipId + " "
+                        + Math.cos(h2) + " " + Math.sin(h2) + " 0.0 0.0")).bool("commanded", false));
         bot().waitTicks(150);
         double[] up2 = shipUpFromInfo(shipInfo());
         double rolledBy = Math.toDegrees(Math.acos(clampUnit(dot(up, up2))));
@@ -2376,7 +2379,7 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
                 + seat.seatY + " " + seat.seatZ);
         int dummyId = Reply.of("artest vs seat-mount-at", mountInfo).integer(DUMMY_ID);
         assertTrue("bot must mount the seat dummy: " + mountInfo,
-                exec("artest player mount-entity " + dummyId).contains("\"mounted\":true"));
+                Reply.of(exec("artest player mount-entity " + dummyId)).bool("mounted", false));
         // The server says it mounted him; these two say the CLIENT did, and this class's whole
         // subject is what the client's resolver does with a body. The mount is his own `startRiding`;
         // the gate is the client's keybind tick deciding that the body it is holding is a ship's
@@ -2476,7 +2479,7 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
         long spawnMark = events.markInstrumented();
         String assemble = assembleFixture(site);
         assertTrue("a with-pilot-seat build must route to a ship: " + assemble,
-                assemble.contains("\"rocketCount\":0"));
+                (Reply.of(assemble).integerOr("rocketCount", Integer.MIN_VALUE) == 0));
 
         // IDENTITY, and the async-VS assembly barrier in the same link: the physics mod assembles on
         // its own thread and its queue lags behind a loaded machine, so this AWAITS the registry's own
@@ -2538,7 +2541,7 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
         site.requireClear(this::exec, 2, 24,
                 "the hull, the deck a crew member walks and jumps on, and the air above it");
         String fixture = exec("artest fixture rocket 0 " + baseX + " " + baseY + " " + baseZ + " " + VARIANT);
-        assertTrue("fixture (" + VARIANT + ") failed: " + fixture, fixture.contains("\"ok\":true"));
+        assertTrue("fixture (" + VARIANT + ") failed: " + fixture, Reply.of(fixture).ok());
         int[] bp = Reply.of(fixture).blockPos(BUILDER_POS);
         assertTrue("fixture missing builderPos: " + fixture, bp != null);
         return exec("artest rocket assemble 0 " + bp[0] + " " + bp[1] + " " + bp[2]);

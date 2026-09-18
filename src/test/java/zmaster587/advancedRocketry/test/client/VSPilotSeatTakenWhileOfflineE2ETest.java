@@ -115,7 +115,7 @@ public class VSPilotSeatTakenWhileOfflineE2ETest extends AbstractSharedVsClientE
         long spawnMark = events.markInstrumented();
         String assemble = assembleFixture(site);
         scenario().requireArranged("a with-pilot-seat build must route to a ship: " + assemble,
-                assemble.contains("\"rocketCount\":0"));
+                (Reply.of(assemble).integerOr("rocketCount", Integer.MIN_VALUE) == 0));
         // The return value is KEPT: it is this scenario's ship by construction (the mark precedes the
         // assembly), and every question below has to name that craft rather than whichever one a
         // world-wide scan lists first.
@@ -136,7 +136,7 @@ public class VSPilotSeatTakenWhileOfflineE2ETest extends AbstractSharedVsClientE
         long seatMark = clientEvents().mark();
         String mount = exec("artest player mount-entity " + mountInfo.requireDummyId());
         scenario().requireArranged("bot must mount the seat dummy: " + mount,
-                mount.contains("\"mounted\":true"));
+                Reply.of(mount).bool("mounted", false));
         // A LINK, where ten ticks used to stand: the server mounts him and the client PERFORMS the
         // seating when it is told, which is a record. Measured 2026-09-15 — under four client forks
         // those ten ticks were not enough and the scenario reported `riding:false` as though the
@@ -164,7 +164,7 @@ public class VSPilotSeatTakenWhileOfflineE2ETest extends AbstractSharedVsClientE
                         + " included, written to disk) before the seat can be taken behind his back",
                 LOGOUT_TICKS);
         scenario().requireArranged("the logout record must be the PILOT's: " + loggedOut,
-                loggedOut.contains("\"who\":\"" + BOT + "\""));
+                Events.anyRecordHas(loggedOut, "who", String.valueOf(BOT)));
         // The record says what he was riding as he left, which is exactly the premise the seat check
         // below rests on: vanilla takes a SEATED player's mount with him into his own player data.
         // Asserted here rather than inferred there, so a pilot who somehow left the seat first fails
@@ -172,7 +172,7 @@ public class VSPilotSeatTakenWhileOfflineE2ETest extends AbstractSharedVsClientE
         scenario().requireArranged("the pilot must have gone OFFLINE STILL SEATED — his mount is what"
                 + " vanilla persists inside his player data and re-spawns at his return, and this"
                 + " whole scenario is about that duplicate: " + loggedOut,
-                loggedOut.contains("\"riding\":\"EntityDummy\""));
+                Events.anyRecordHas(loggedOut, "riding", "EntityDummy"));
 
         // With no player near them the ship's chunks can drop out from under the probes below —
         // force them back in before acting on the seat.
@@ -185,12 +185,12 @@ public class VSPilotSeatTakenWhileOfflineE2ETest extends AbstractSharedVsClientE
         String seatWhileGone = exec("artest vs seat-status 0 " + seatX + " " + seatY + " " + seatZ);
         scenario().requireArranged("with its pilot offline the seat must have NO bound dummy left "
                 + "(vanilla persists the mount inside the player's own data): " + seatWhileGone,
-                seatWhileGone.contains("\"dummyFound\":false"));
+                (!Reply.of(seatWhileGone).bool("dummyFound", true)));
 
         // ---- ACT 2: someone takes the seat while he is offline. ---------------------------------
         String occupy = exec("artest vs seat-occupy 0 " + seatX + " " + seatY + " " + seatZ);
         scenario().requireArranged("the seat-occupy probe must seat an NPC occupant: " + occupy,
-                occupy.contains("\"ok\":true") && occupy.contains("\"mounted\":true"));
+                Reply.of(occupy).ok() && Reply.of(occupy).bool("mounted", false));
         // The occupant's NAME was read here, for a message assertion that no longer exists. The uuid
         // below is the identity everything in this scenario is asked by, and it is the one that
         // survives the chunk reload the pilot's return performs.
@@ -203,8 +203,10 @@ public class VSPilotSeatTakenWhileOfflineE2ETest extends AbstractSharedVsClientE
         scenario().requireArranged("seat-occupy must report the occupant's uuid: " + occupy, omReply.has(OCCUPANT_UUID));
         final String occupantUuid = omReply.text(OCCUPANT_UUID);
         String occupancy = exec("artest vs seat-status 0 " + seatX + " " + seatY + " " + seatZ);
-        scenario().requireArranged("the occupancy must HOLD before the pilot returns: " + occupancy,
-                occupancy.contains("\"uuid\":\"" + occupantUuid + "\""));
+        // The PASSENGER whose uuid this is — the occupant the scenario just seated. `uuid` belongs
+        // to a passenger row, and a seat can report more than one.
+        Reply.of("artest vs seat-status", occupancy)
+                .element("passengers", "uuid", occupantUuid);
 
         // ---- ACT 3: the pilot comes back — a real fresh login over his saved data. --------------
         // The mark BEFORE the login, because everything this act asserts happens DURING it: the
@@ -241,9 +243,10 @@ public class VSPilotSeatTakenWhileOfflineE2ETest extends AbstractSharedVsClientE
         String observed = "seatStatus=" + seatAfter + " riding=" + riding;
 
         // ---- ASSERT 1: the occupant KEEPS the seat. ---------------------------------------------
-        assertTrue("the occupant who took the seat while its pilot was offline must still hold it "
-                + "after the pilot returns: " + observed,
-                seatAfter.contains("\"uuid\":\"" + occupantUuid + "\""));
+        // The occupant BY UUID, as a passenger row — the load-bearing half of the scenario, and
+        // the reason it is not `holdsElement`: this is the one body that must be there.
+        Reply.of("artest vs seat-status", seatAfter)
+                .element("passengers", "uuid", occupantUuid);
 
         // ---- ASSERT 2: one seat — ONE dummy, even across a relog. -------------------------------
         // Vanilla re-spawns the returning pilot's persisted mount; unreconciled, that is a second
@@ -318,7 +321,7 @@ public class VSPilotSeatTakenWhileOfflineE2ETest extends AbstractSharedVsClientE
                 "the hull whose seat is taken and re-taken across a relog");
         String fixture = exec("artest fixture rocket 0 " + baseX + " " + baseY + " " + baseZ + " " + VARIANT);
         scenario().requireArranged("fixture (" + VARIANT + ") failed: " + fixture,
-                fixture.contains("\"ok\":true"));
+                Reply.of(fixture).ok());
         int[] bp = Reply.of(fixture).blockPos(BUILDER_POS);
         scenario().requireArranged("fixture missing builderPos: " + fixture, bp != null);
         return exec("artest rocket assemble 0 " + bp[0] + " " + bp[1] + " " + bp[2]);

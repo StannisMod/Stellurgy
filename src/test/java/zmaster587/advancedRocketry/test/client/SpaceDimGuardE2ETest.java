@@ -103,7 +103,7 @@ public class SpaceDimGuardE2ETest extends AbstractSharedClientE2ETest {
         String list = exec("artest station list");
         scenario().requireArranged("this scenario exercises the NO-STATION branch, so the registry"
                 + " must still be empty when it runs; it holds: " + list,
-                list.contains("\"stations\":[]"));
+                (Reply.of(list).arrayLength("stations") == 0));
 
         PlayerState pre = PlayerState.read(this::exec);
         scenario().requireArranged("baseline must be overworld dim 0; " + pre.raw(), 0 == pre.dim);
@@ -151,7 +151,7 @@ public class SpaceDimGuardE2ETest extends AbstractSharedClientE2ETest {
                 .describeOnFailureWith("artest station list", "artest player health");
         String createResp = exec("artest station create " + plot().dim);
         scenario().requireArranged("station create must succeed: " + createResp,
-                !createResp.contains("\"error\""));
+                !Reply.of(createResp).has("error"));
         int stationId = intField(STATION_ID, createResp, "station id");
         scenario().record("stationId", stationId);
 

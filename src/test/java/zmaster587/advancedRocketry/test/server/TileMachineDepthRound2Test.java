@@ -1,6 +1,7 @@
 package zmaster587.advancedRocketry.test.server;
 
 // migrated to AbstractSharedServerTest
+import zmaster587.advancedRocketry.test.Reply;
 import org.junit.Test;
 
 import zmaster587.advancedRocketry.test.EnergyStore;
@@ -56,7 +57,7 @@ public class TileMachineDepthRound2Test extends AbstractSharedServerTest {
         String r = ok(client().execute(
                 "artest place " + DIM + " " + x + " " + y + " " + z + " " + blockId));
         assertTrue("place(" + blockId + ") at " + x + "," + y + "," + z + " failed: " + r,
-                r.contains("\"placed\":true"));
+                Reply.of(r).bool("placed", false));
     }
 
     @Test
@@ -90,7 +91,7 @@ public class TileMachineDepthRound2Test extends AbstractSharedServerTest {
         assertTrue("suit work station must be IInventory-accessible: " + hatch,
                 !hatch.contains("not an IInventory") && !hatch.contains("\"no tile entity\""));
         assertTrue("suit work station hatch-read should expose size>0: " + hatch,
-                hatch.contains("\"size\":") && !hatch.contains("\"size\":0,"));
+                Reply.of(hatch).has("size") && !hatch.contains("\"size\":0,"));
     }
 
     @Test
@@ -119,7 +120,7 @@ public class TileMachineDepthRound2Test extends AbstractSharedServerTest {
         // The assembler family is ITickable; force-tick must succeed and not
         // crash on a not-yet-scanned (empty) build area.
         assertTrue("UV assembler force-tick must not error: " + tickResp,
-                tickResp.contains("\"ok\":true"));
+                Reply.of(tickResp).ok());
     }
 
     @Test
@@ -217,7 +218,7 @@ public class TileMachineDepthRound2Test extends AbstractSharedServerTest {
         // delegate ticking to the host structure). Either contract is fine —
         // but a thrown exception is NOT.
         assertTrue("terraformer force-tick threw or hard-errored: " + tickResp,
-                tickResp.contains("\"ok\":true")
+                Reply.of(tickResp).ok()
                         || tickResp.contains("tile not ITickable"));
     }
 }

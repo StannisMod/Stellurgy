@@ -112,7 +112,7 @@ public class VSPilotSeatRelogControlE2ETest extends AbstractSharedVsClientE2ETes
         long spawnMark = events.markInstrumented();
         String assemble = assembleFixture(BX, BY, BZ);
         scenario().requireArranged("a with-pilot-seat build must route to a ship: " + assemble,
-                assemble.contains("\"rocketCount\":0"));
+                (Reply.of(assemble).integerOr("rocketCount", Integer.MIN_VALUE) == 0));
         shipId = awaitShipSpawned(events, spawnMark,
                 "assembly must create a NEW VS ship in the queryable registry (async spawn)");
         long approachMark = clientEvents().mark();
@@ -146,7 +146,7 @@ public class VSPilotSeatRelogControlE2ETest extends AbstractSharedVsClientE2ETes
         long seatMark = clientEvents().mark();
         String mount = exec("artest player mount-entity " + mountInfo.requireDummyId());
         scenario().requireArranged("bot must mount the seat dummy: " + mount,
-                mount.contains("\"mounted\":true"));
+                Reply.of(mount).bool("mounted", false));
         // The control leg below asks whether the chain works BEFORE the relog; a client that has not
         // seated him yet would answer for a pilot who is not in the seat.
         awaitClientMount(seatMark, "the client must be riding the seat before the control leg, or"
@@ -328,15 +328,15 @@ public class VSPilotSeatRelogControlE2ETest extends AbstractSharedVsClientE2ETes
         int cx1 = (baseX - 2) >> 4, cz1 = (baseZ - 2) >> 4;
         int cx2 = (baseX + 7) >> 4, cz2 = (baseZ + 7) >> 4;
         scenario().requireArranged("chunk warmup failed",
-                exec("artest chunk warmup 0 " + cx1 + " " + cz1 + " " + cx2 + " " + cz2)
-                        .contains("\"ok\":true"));
+                Reply.of(exec("artest chunk warmup 0 " + cx1 + " " + cz1 + " " + cx2 + " " + cz2)
+                        ).ok());
         scenario().requireArranged("pre-clear failed",
-                exec("artest fill 0 " + (baseX - 2) + " " + (baseY + 1) + " " + (baseZ - 2)
+                Reply.of(exec("artest fill 0 " + (baseX - 2) + " " + (baseY + 1) + " " + (baseZ - 2)
                         + " " + (baseX + 7) + " " + (baseY + 10) + " " + (baseZ + 7) + " minecraft:air")
-                        .contains("\"ok\":true"));
+                        ).ok());
         String fixture = exec("artest fixture rocket 0 " + baseX + " " + baseY + " " + baseZ + " " + VARIANT);
         scenario().requireArranged("fixture (" + VARIANT + ") failed: " + fixture,
-                fixture.contains("\"ok\":true"));
+                Reply.of(fixture).ok());
         int[] bp = Reply.of(fixture).blockPos(BUILDER_POS);
         scenario().requireArranged("fixture missing builderPos: " + fixture, bp != null);
         return exec("artest rocket assemble 0 " + bp[0] + " " + bp[1] + " " + bp[2]);

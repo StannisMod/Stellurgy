@@ -139,7 +139,7 @@ public class ShieldAccumulatorTest extends AbstractSharedServerTest {
     private void place(String block, int x, int z) throws Exception {
         String resp = exec("artest place " + DIM + " " + x + " " + Y + " " + z + " " + block);
         assertTrue("failed to place " + block + " at " + x + "," + Y + "," + z + ": " + resp,
-                resp.contains("\"placed\":true"));
+                Reply.of(resp).bool("placed", false));
     }
 
     private static long readStored(String json) {

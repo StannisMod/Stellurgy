@@ -101,9 +101,9 @@ public class NuclearEngineRocketAssemblyTest extends AbstractSharedServerTest {
         // TileRocketAssemblingMachine line 457 (getThrust() <=
         // getNeededThrust()) fires -> status NOENGINES.
         assertTrue("misplaced-core assemble must NOT succeed: " + assemble,
-                assemble.contains("\"error\""));
+                Reply.of(assemble).has("error"));
         assertTrue("misplaced-core scan must surface NOENGINES status: " + assemble,
-                assemble.contains("\"status\":\"NOENGINES\""));
+                "NOENGINES".equals(Reply.of(assemble).text("status")));
     }
 
     /** Run fixture + assemble but DON'T assert SUCCESS — returns the raw
@@ -119,7 +119,7 @@ public class NuclearEngineRocketAssemblyTest extends AbstractSharedServerTest {
                 "the build the assembly scan must reject stands in this volume");
         String fixture = String.join("\n", client().execute(
                 "artest fixture rocket 0 " + baseX + " " + baseY + " " + baseZ + " " + variant));
-        assertTrue("fixture (" + variant + ") failed: " + fixture, fixture.contains("\"ok\":true"));
+        assertTrue("fixture (" + variant + ") failed: " + fixture, Reply.of(fixture).ok());
         int[] bp = Reply.of(fixture).blockPos(BUILDER_POS);
         assertTrue("fixture (" + variant + ") missing builderPos: " + fixture, bp != null);
         int bx = bp[0],
@@ -141,7 +141,7 @@ public class NuclearEngineRocketAssemblyTest extends AbstractSharedServerTest {
 
         String fixture = String.join("\n", client().execute(
                 "artest fixture rocket 0 " + baseX + " " + baseY + " " + baseZ + " " + variant));
-        assertTrue("fixture (" + variant + ") failed: " + fixture, fixture.contains("\"ok\":true"));
+        assertTrue("fixture (" + variant + ") failed: " + fixture, Reply.of(fixture).ok());
         int[] bp = Reply.of(fixture).blockPos(BUILDER_POS);
         assertTrue("fixture (" + variant + ") missing builderPos: " + fixture, bp != null);
         int bx = bp[0],
@@ -151,7 +151,7 @@ public class NuclearEngineRocketAssemblyTest extends AbstractSharedServerTest {
         String assemble = String.join("\n", client().execute(
                 "artest rocket assemble 0 " + bx + " " + by + " " + bz));
         assertTrue("assemble (" + variant + ") failed: " + assemble,
-                assemble.contains("\"ok\":true"));
+                Reply.of(assemble).ok());
 
         String rocketList = String.join("\n", client().execute("artest rocket list 0"));
         java.util.List<RocketList.Entry> built = RocketList.of(rocketList);

@@ -69,8 +69,8 @@ public class TimeCommandRespectsTheSkipPolicyE2ETest extends AbstractSharedServe
         long overworldBefore = dimTime(0);
         try {
             // ---- LOCKED: the shipped default. The planet must not move; the overworld must. ----
-            assertTrue(exec("artest config set allowTimeSkipOnPlanets false").contains("\"ok\":true"));
-            assertTrue(exec("artest config set allowTimeSkipOnOverworld true").contains("\"ok\":true"));
+            assertTrue(Reply.of(exec("artest config set allowTimeSkipOnPlanets false")).ok());
+            assertTrue(Reply.of(exec("artest config set allowTimeSkipOnOverworld true")).ok());
 
             long planetBefore = dimTime(planet);
             exec("time set " + LOCKED_PROBE_TIME);
@@ -92,7 +92,7 @@ public class TimeCommandRespectsTheSkipPolicyE2ETest extends AbstractSharedServe
                     Math.abs(planetAfterLocked - planetBefore) <= DRIFT_ALLOWANCE);
 
             // ---- ALLOWED: opt the arcade mechanic back in. The same command must now reach it. ----
-            assertTrue(exec("artest config set allowTimeSkipOnPlanets true").contains("\"ok\":true"));
+            assertTrue(Reply.of(exec("artest config set allowTimeSkipOnPlanets true")).ok());
             exec("time set " + ALLOWED_PROBE_TIME);
 
             assertLandedOn("with the flag on, the same command must reach the planet — this is the"

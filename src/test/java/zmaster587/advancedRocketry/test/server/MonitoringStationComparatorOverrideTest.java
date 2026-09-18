@@ -72,7 +72,7 @@ public class MonitoringStationComparatorOverrideTest extends AbstractSharedServe
                 + " advancedrocketry:monitoringStation");
 
         String info = exec("artest infra monitor-info 0 " + mx + " " + my + " " + mz);
-        assertTrue("monitor-info must succeed: " + info, info.contains("\"ok\":true"));
+        assertTrue("monitor-info must succeed: " + info, Reply.of(info).ok());
         assertEquals("freshly-placed monitor with no linked rocket must "
                         + "report linkedEntityId=-1: " + info,
                 -1, extract(info, LINKED_ENTITY_ID));
@@ -110,7 +110,7 @@ public class MonitoringStationComparatorOverrideTest extends AbstractSharedServe
         String linkResp = exec("artest infra link 0 " + mx + " " + my + " " + mz
                 + " " + rocketId);
         assertTrue("infra link must succeed: " + linkResp,
-                linkResp.contains("\"linked\":true"));
+                Reply.of(linkResp).bool("linked", false));
 
         // Read comparator with the rocket at a LOW altitude.
         exec("artest rocket set-state " + rocketId + " posY=68");
@@ -144,13 +144,13 @@ public class MonitoringStationComparatorOverrideTest extends AbstractSharedServe
                         "the craft the monitoring station reports on stands in this volume");
         String fixture = exec("artest fixture rocket 0 " + baseX + " " + baseY + " " + baseZ
                 + " simple");
-        assertTrue("fixture build failed: " + fixture, fixture.contains("\"ok\":true"));
+        assertTrue("fixture build failed: " + fixture, Reply.of(fixture).ok());
         int[] bp = Reply.of(fixture).blockPos(BUILDER_POS);
         assertTrue("no builderPos: " + fixture, bp != null);
         String assemble = exec("artest rocket assemble 0 "
                 + bp[0] + " " + bp[1] + " " + bp[2]);
         assertTrue("assemble must succeed: " + assemble,
-                assemble.contains("\"ok\":true"));
+                Reply.of(assemble).ok());
         Reply eimReply = Reply.of(assemble);
         assertTrue("no entityId: " + assemble, eimReply.has(ENTITY_ID));
         return Integer.parseInt(eimReply.text(ENTITY_ID));

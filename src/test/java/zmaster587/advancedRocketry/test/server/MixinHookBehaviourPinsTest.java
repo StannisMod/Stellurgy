@@ -100,7 +100,7 @@ public class MixinHookBehaviourPinsTest extends AbstractSharedServerTest {
     private int firstNonOverworldArDimOrSkip() throws Exception {
         String joined = ok(client().execute("artest dim list"));
         Assume.assumeFalse("No AR dimensions registered",
-                joined.contains("\"arDimensions\":[]"));
+                (Reply.of(joined).arrayLength("arDimensions") == 0));
         Reply dims = Reply.of("artest dim list", joined);
         assertTrue("could not parse arDimensions array: " + joined, dims.has(AR_DIMS_ARRAY));
         for (int dim : dims.intArray(AR_DIMS_ARRAY)) {
@@ -141,7 +141,7 @@ public class MixinHookBehaviourPinsTest extends AbstractSharedServerTest {
         String cmd = "artest entity spawn " + dim + " " + x + " " + y + " " + z + " "
                 + entityName + (extraArg == null ? "" : " " + extraArg);
         String resp = ok(client().execute(cmd));
-        assertFalse("entity spawn must succeed: " + resp, resp.contains("\"error\""));
+        assertFalse("entity spawn must succeed: " + resp, Reply.of(resp).has("error"));
         Reply mReply = Reply.of(resp);
         assertTrue("spawn response missing entityId: " + resp, mReply.has(ENTITY_ID));
         return Integer.parseInt(mReply.text(ENTITY_ID));
@@ -169,7 +169,7 @@ public class MixinHookBehaviourPinsTest extends AbstractSharedServerTest {
     private double tickEntityAndReadMotionY(int dim, int id, int count) throws Exception {
         String resp = ok(client().execute(
                 "artest entity tick " + dim + " " + id + " " + count));
-        assertFalse("entity tick must succeed: " + resp, resp.contains("\"error\""));
+        assertFalse("entity tick must succeed: " + resp, Reply.of(resp).has("error"));
         return doubleField(MOTION_Y, resp, "motionY");
     }
 
@@ -182,21 +182,21 @@ public class MixinHookBehaviourPinsTest extends AbstractSharedServerTest {
         int dim = firstNonOverworldArDimOrSkip();
         String r1 = ok(client().execute(
                 "artest place " + dim + " 12000 100 0 minecraft:stone"));
-        assertFalse("place 1 must succeed: " + r1, r1.contains("\"error\""));
+        assertFalse("place 1 must succeed: " + r1, Reply.of(r1).has("error"));
         String r2 = ok(client().execute(
                 "artest place " + dim + " 12000 100 0 minecraft:air"));
-        assertFalse("place 2 must succeed: " + r2, r2.contains("\"error\""));
+        assertFalse("place 2 must succeed: " + r2, Reply.of(r2).has("error"));
         String r3 = ok(client().execute(
                 "artest place " + dim + " 12000 101 0 minecraft:glass"));
-        assertFalse("place 3 must succeed: " + r3, r3.contains("\"error\""));
+        assertFalse("place 3 must succeed: " + r3, Reply.of(r3).has("error"));
         String r4 = ok(client().execute(
                 "artest place " + dim + " 12000 101 0 minecraft:air"));
-        assertFalse("place 4 must succeed: " + r4, r4.contains("\"error\""));
+        assertFalse("place 4 must succeed: " + r4, Reply.of(r4).has("error"));
 
         String atmoInfo = ok(client().execute(
                 "artest atmosphere get " + dim + " 12000 100 0"));
         assertFalse("atmosphere get must succeed (mixin hook hot path): "
-                + atmoInfo, atmoInfo.contains("\"error\""));
+                + atmoInfo, Reply.of(atmoInfo).has("error"));
     }
 
     /**
@@ -330,7 +330,7 @@ public class MixinHookBehaviourPinsTest extends AbstractSharedServerTest {
                     + " " + (worldZ + 0.5) + " minecraft:falling_block "
                     + "minecraft:stone 3"));
             assertFalse("spawn+tick must succeed: " + resp,
-                    resp.contains("\"error\""));
+                    Reply.of(resp).has("error"));
             double motionY = doubleField(MOTION_Y, resp, "motionY");
             assertTrue("EntityFallingBlock motionY must be < 0 after 3 "
                     + "immediate onUpdate ticks (vanilla -0.04 + mixin "
@@ -369,7 +369,7 @@ public class MixinHookBehaviourPinsTest extends AbstractSharedServerTest {
                     + (worldX + 0.5) + " " + spawnY + " " + (worldZ + 0.5)
                     + " minecraft:falling_block minecraft:stone 3"));
             assertFalse("spawn+tick must succeed: " + resp,
-                    resp.contains("\"error\""));
+                    Reply.of(resp).has("error"));
             double motionY = doubleField(MOTION_Y, resp, "motionY");
             assertTrue("EntityFallingBlock motionY must be < 0 after 3 "
                     + "immediate onUpdate ticks in overworld; response="

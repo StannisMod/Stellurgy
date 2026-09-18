@@ -70,7 +70,7 @@ public class VSJumpDumpsTheCruiseE2ETest extends AbstractSharedServerTest {
 
         String cruise = exec("artest vs ff-cruise-read-by-id " + arrived.dim + " " + arrived.vsId);
         assertTrue("the arrived craft has no flight computer to answer about, so this leg pins "
-                + "nothing: " + cruise, cruise.contains("\"afcResolved\":true"));
+                + "nothing: " + cruise, Reply.of(cruise).bool("afcResolved", false));
         assertEquals("a craft keeps its cruise across a cell-to-cell crossing — if this is zero, the "
                         + "dump is not a hyperspace carve-out but a regression that empties every "
                         + "setpoint everywhere, and its sibling leg would pass on it: " + cruise,
@@ -83,7 +83,7 @@ public class VSJumpDumpsTheCruiseE2ETest extends AbstractSharedServerTest {
 
         String cruise = exec("artest vs ff-cruise-read-by-id " + arrived.dim + " " + arrived.vsId);
         assertTrue("the arrived craft has no flight computer to answer about: " + cruise,
-                cruise.contains("\"afcResolved\":true"));
+                Reply.of(cruise).bool("afcResolved", false));
         assertEquals("a craft leaves hyperspace at rest, and this one arrived still carrying the "
                         + "cruise it entered with — so it will accelerate back to it within seconds "
                         + "of dropping out: " + cruise,
@@ -128,7 +128,7 @@ public class VSJumpDumpsTheCruiseE2ETest extends AbstractSharedServerTest {
         String commanded = exec("artest vs ff-cruise-by-id " + originDim + " " + originVsId
                 + " 0 0 " + COMMANDED_CRUISE);
         assertTrue("the craft has no flight computer to command, so nothing below is about a cruise: "
-                + commanded, commanded.contains("\"afcResolved\":true"));
+                + commanded, Reply.of(commanded).bool("afcResolved", false));
         assertEquals("PREMISE: the craft must actually be under way before it jumps, or both legs "
                         + "would be asking about a setpoint that was never there: " + commanded,
                 COMMANDED_CRUISE, extractDouble(commanded, "cruiseUp"), CRUISE_EPSILON);
@@ -136,7 +136,7 @@ public class VSJumpDumpsTheCruiseE2ETest extends AbstractSharedServerTest {
         // Marked BEFORE the command whose effect is awaited.
         long jumpMark = events.mark();
         String begin = exec("artest space transit-begin " + originDim + " 1 64 1 " + speed);
-        assertTrue("the jump must begin: " + begin, begin.contains("\"began\":true"));
+        assertTrue("the jump must begin: " + begin, Reply.of(begin).bool("began", false));
 
         String arrived = events.awaitRecordWithField(jumpMark, "ship_transit_ended","route", route,
                 "the ship never reached the target cell by the " + route + " route, so this leg has "

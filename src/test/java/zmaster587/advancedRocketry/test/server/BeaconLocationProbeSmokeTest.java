@@ -41,7 +41,7 @@ public class BeaconLocationProbeSmokeTest extends AbstractHeadlessServerTest {
     public void beaconListReportsEmptySetOnOverworld() throws Exception {
         String resp = String.join("\n", client().execute("artest beacon list 0"));
         assertTrue("beacon list probe failed on overworld: " + resp,
-                !resp.contains("\"error\""));
+                !Reply.of(resp).has("error"));
 
         Reply mReply = Reply.of(resp);
         assertTrue("response must contain count: " + resp, mReply.has(COUNT));
@@ -55,7 +55,7 @@ public class BeaconLocationProbeSmokeTest extends AbstractHeadlessServerTest {
 
         // Probe must also include the locations array (even when empty).
         assertTrue("response must declare locations array: " + resp,
-                resp.contains("\"locations\":["));
+                (Reply.of(resp).arrayLength("locations") >= 0));
     }
 
     @Test
@@ -64,6 +64,6 @@ public class BeaconLocationProbeSmokeTest extends AbstractHeadlessServerTest {
         int phantomDim = 30000;
         String resp = String.join("\n", client().execute("artest beacon list " + phantomDim));
         assertTrue("unknown dim must return error: " + resp,
-                resp.contains("\"error\":\"dim not registered\""));
+                "dim not registered".equals(Reply.of(resp).text("error")));
     }
 }

@@ -1,5 +1,6 @@
 package zmaster587.advancedRocketry.test.server;
 
+import zmaster587.advancedRocketry.test.Reply;
 import org.junit.Test;
 
 import static org.junit.Assert.assertTrue;
@@ -45,7 +46,7 @@ public class ServiceStationUnlinkedPerformFunctionTest extends AbstractSharedSer
         String place = exec("artest place 0 " + X + " " + Y + " " + Z
                 + " advancedrocketry:serviceStation");
         assertTrue("service station place failed: " + place,
-                place.contains("\"placed\":true"));
+                Reply.of(place).bool("placed", false));
 
         // Power it (performFunction's getEquivalentPower gate) but DO NOT link a
         // rocket — linkedRocket stays null.
@@ -53,19 +54,19 @@ public class ServiceStationUnlinkedPerformFunctionTest extends AbstractSharedSer
 
         // Sanity: truly unlinked, empty repair queue.
         String pre = exec("artest infra service-state 0 " + X + " " + Y + " " + Z);
-        assertTrue("station must be unlinked: " + pre, pre.contains("\"linkedRocketId\":-1"));
-        assertTrue("repair queue must be empty: " + pre, pre.contains("\"partsToRepairCount\":0"));
+        assertTrue("station must be unlinked: " + pre, (Reply.of(pre).integerOr("linkedRocketId", Integer.MIN_VALUE) == -1));
+        assertTrue("repair queue must be empty: " + pre, (Reply.of(pre).integerOr("partsToRepairCount", Integer.MIN_VALUE) == 0));
 
         // The concern: performFunction must NOT reach tryStandaloneRepair's
         // ((EntityRocket) linkedRocket).storage with a null linkedRocket.
         String pf = exec("artest infra service-perform-function 0 " + X + " " + Y + " " + Z);
         assertTrue("performFunction on an unlinked powered station must be a safe "
                 + "no-op (no NPE/CCE reaching the standalone-repair path): " + pf,
-                pf.contains("\"ok\":true"));
+                Reply.of(pf).ok());
 
         // State still sane after the no-op.
         String post = exec("artest infra service-state 0 " + X + " " + Y + " " + Z);
         assertTrue("repair queue still empty after no-op performFunction: " + post,
-                post.contains("\"partsToRepairCount\":0"));
+                (Reply.of(post).integerOr("partsToRepairCount", Integer.MIN_VALUE) == 0));
     }
 }

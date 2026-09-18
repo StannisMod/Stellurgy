@@ -52,7 +52,7 @@ public class VSShortJumpCrossesDirectlyE2ETest extends AbstractSharedServerTest 
         long jumpMark = events.mark();
         String begin = exec("artest space transit-begin " + originDim + " 1 64 1 "
                 + DIRECT_JUMP_SPEED);
-        assertTrue("the short jump must begin: " + begin, begin.contains("\"began\":true"));
+        assertTrue("the short jump must begin: " + begin, Reply.of(begin).bool("began", false));
         assertEquals("a direct crossing is not a flight — nothing may be in transit the moment it "
                         + "starts, because there is no flight to be in the middle of: " + begin,
                 0, extractInt(begin, "inTransit"));
@@ -80,7 +80,7 @@ public class VSShortJumpCrossesDirectlyE2ETest extends AbstractSharedServerTest 
         long jumpMark = events.mark();
         String begin = exec("artest space transit-begin " + originDim + " 1 64 1 "
                 + HYPERSPACE_JUMP_SPEED);
-        assertTrue("the jump must begin: " + begin, begin.contains("\"began\":true"));
+        assertTrue("the jump must begin: " + begin, Reply.of(begin).bool("began", false));
         assertEquals("a slow jump IS a flight, and reports one: " + begin,
                 1, extractInt(begin, "inTransit"));
 

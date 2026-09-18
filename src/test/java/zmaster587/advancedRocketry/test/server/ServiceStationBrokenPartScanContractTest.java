@@ -86,7 +86,7 @@ public class ServiceStationBrokenPartScanContractTest extends AbstractSharedServ
 
         String inject = exec("artest infra inject-broken-part " + rf.rocketId + " 5");
         assertTrue("inject must succeed for advRocketmotor (simple variant has 2): "
-                        + inject, inject.contains("\"ok\":true"));
+                        + inject, Reply.of(inject).ok());
         assertEquals("inject must report stage=5", 5, extract(inject, STAGE));
         int[] pp = Reply.of(inject).blockPos(PART_POS);
         assertTrue("inject must report partPos: " + inject, pp != null);
@@ -112,10 +112,10 @@ public class ServiceStationBrokenPartScanContractTest extends AbstractSharedServ
 
         String inject1 = exec("artest infra inject-broken-part " + rf.rocketId + " 3");
         assertTrue("first inject must succeed: " + inject1,
-                inject1.contains("\"ok\":true"));
+                Reply.of(inject1).ok());
         String inject2 = exec("artest infra inject-broken-part " + rf.rocketId + " 7");
         assertTrue("second inject must succeed (simple has 2 engines): "
-                        + inject2, inject2.contains("\"ok\":true"));
+                        + inject2, Reply.of(inject2).ok());
 
         int sx = CX_MULTI + 10, sy = CY_PAD, sz = CZ_PAD;
         placeServiceStation(sx, sy, sz);
@@ -146,7 +146,7 @@ public class ServiceStationBrokenPartScanContractTest extends AbstractSharedServ
         // Now mark a part as worn AFTER linking.
         String inject = exec("artest infra inject-broken-part " + rf.rocketId + " 5");
         assertTrue("inject must succeed post-link: " + inject,
-                inject.contains("\"ok\":true"));
+                Reply.of(inject).ok());
 
         // Without re-scan the station still reports 0 — confirms scan is
         // edge-triggered (on linkRocket), not level-triggered.
@@ -158,7 +158,7 @@ public class ServiceStationBrokenPartScanContractTest extends AbstractSharedServ
         // After re-scan, the new worn part surfaces.
         String relink = exec("artest infra service-relink 0 " + sx + " " + sy + " " + sz);
         assertTrue("service-relink probe must succeed: " + relink,
-                relink.contains("\"ok\":true"));
+                Reply.of(relink).ok());
         assertEquals("after explicit re-scan the new worn part is visible",
                 1, extract(exec("artest infra service-state 0 " + sx + " " + sy + " " + sz),
                         PARTS_COUNT));
@@ -182,14 +182,14 @@ public class ServiceStationBrokenPartScanContractTest extends AbstractSharedServ
         String fixture = exec("artest fixture rocket 0 " + baseX + " " + CY_PAD
                 + " " + CZ_PAD + " simple");
         assertTrue("rocket fixture must build: " + fixture,
-                fixture.contains("\"ok\":true"));
+                Reply.of(fixture).ok());
         int[] bp = Reply.of(fixture).blockPos(BUILDER_POS);
         assertTrue("fixture missing builderPos: " + fixture, bp != null);
 
         String assemble = exec("artest rocket assemble 0 " + bp[0] + " "
                 + bp[1] + " " + bp[2]);
         assertTrue("assemble must succeed: " + assemble,
-                assemble.contains("\"ok\":true"));
+                Reply.of(assemble).ok());
         Reply eimReply = Reply.of(assemble);
         assertTrue("no entityId in assemble: " + assemble, eimReply.has(ENTITY_ID));
         return new RocketFixture(Integer.parseInt(eimReply.text(ENTITY_ID)));
@@ -199,14 +199,14 @@ public class ServiceStationBrokenPartScanContractTest extends AbstractSharedServ
         String place = exec("artest place 0 " + sx + " " + sy + " " + sz
                 + " advancedrocketry:serviceStation");
         assertTrue("service station place failed: " + place,
-                place.contains("\"placed\":true"));
+                Reply.of(place).bool("placed", false));
     }
 
     private void linkStation(int sx, int sy, int sz, int rocketId) throws Exception {
         String link = exec("artest infra link 0 " + sx + " " + sy + " " + sz
                 + " " + rocketId);
         assertTrue("infra link must succeed: " + link,
-                link.contains("\"ok\":true"));
+                Reply.of(link).ok());
     }
 
     private static int extract(String src, String field) {

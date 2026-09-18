@@ -1,5 +1,6 @@
 package zmaster587.advancedRocketry.test.server;
 
+import zmaster587.advancedRocketry.test.Reply;
 import zmaster587.advancedRocketry.test.GameTicks;
 import zmaster587.advancedRocketry.test.MaterializedCell;
 
@@ -54,12 +55,12 @@ public class SpaceCellBindingSurvivesWorldUnloadE2ETest extends AbstractSharedSe
                 occupied.worldLoaded());
 
         String dropped = exec("artest space release " + UNHELD_CELL + " drop-hold");
-        assertTrue("release must clear the hold: " + dropped, dropped.contains("\"holdDropped\":true"));
+        assertTrue("release must clear the hold: " + dropped, Reply.of(dropped).bool("holdDropped", false));
 
         String gone = awaitWorld(UNHELD_CELL, false);
         assertTrue("the manager must still count the released cell as loaded — a cell with no occupant "
                         + "stays bound so a revisit is cheap: " + gone,
-                gone.contains("\"managerLoaded\":true"));
+                Reply.of(gone).bool("managerLoaded", false));
 
         // ── Leg 2: the repair. A binding whose world went away is live again on the next visit. ──
         MaterializedCell revisit = MaterializedCell.at(this::exec, UNHELD_CELL)
@@ -78,7 +79,7 @@ public class SpaceCellBindingSurvivesWorldUnloadE2ETest extends AbstractSharedSe
         assertTrue("a cell still bound to its slot must keep that slot's world, even with no occupant, "
                         + "no player and no chunks — leg 1 proves the sweep would otherwise take it: "
                         + stillThere,
-                stillThere.contains("\"worldLoaded\":true"));
+                Reply.of(stillThere).bool("worldLoaded", false));
     }
 
     /**
@@ -93,7 +94,7 @@ public class SpaceCellBindingSurvivesWorldUnloadE2ETest extends AbstractSharedSe
         final String[] last = {""};
         boolean unloaded = GameTicks.until(client(), GameTicks.server(), SWEEP_BUDGET_TICKS, () -> {
             last[0] = exec("artest space cell-slot " + cell);
-            return !expectLoaded && last[0].contains("\"worldLoaded\":false");
+            return !expectLoaded && (!Reply.of(last[0]).bool("worldLoaded", true));
         });
         if (unloaded) {
             return last[0];

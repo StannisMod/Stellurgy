@@ -79,7 +79,7 @@ public class RocketFlightCycleDepthTest extends AbstractSharedServerTest {
 
         String fixture = ok(client().execute(
                 "artest fixture rocket 0 " + baseX + " " + baseY + " " + baseZ + " simple"));
-        assertTrue("fixture failed: " + fixture, fixture.contains("\"ok\":true"));
+        assertTrue("fixture failed: " + fixture, Reply.of(fixture).ok());
         int[] bp = Reply.of(fixture).blockPos(BUILDER_POS);
         assertTrue("fixture missing builderPos: " + fixture, bp != null);
         int bx = bp[0];
@@ -88,7 +88,7 @@ public class RocketFlightCycleDepthTest extends AbstractSharedServerTest {
 
         String assemble = ok(client().execute(
                 "artest rocket assemble 0 " + bx + " " + by + " " + bz));
-        assertTrue("assemble failed: " + assemble, assemble.contains("\"ok\":true"));
+        assertTrue("assemble failed: " + assemble, Reply.of(assemble).ok());
 
         String list = ok(client().execute("artest rocket list 0"));
         java.util.List<RocketList.Entry> built = RocketList.of(list);
@@ -103,13 +103,13 @@ public class RocketFlightCycleDepthTest extends AbstractSharedServerTest {
         // present (initial 0); the assertion below pins JSON structure.
         String counts = ok(client().execute("artest rocket event-counts"));
         assertTrue("event-counts response must expose launch field: " + counts,
-                counts.contains("\"launch\":"));
+                Reply.of(counts).has("launch"));
         assertTrue("event-counts response must expose orbitReached field: " + counts,
-                counts.contains("\"orbitReached\":"));
+                Reply.of(counts).has("orbitReached"));
         assertTrue("event-counts response must expose dismantle field: " + counts,
-                counts.contains("\"dismantle\":"));
+                Reply.of(counts).has("dismantle"));
         assertTrue("event-counts response must expose preLaunch field: " + counts,
-                counts.contains("\"preLaunch\":"));
+                Reply.of(counts).has("preLaunch"));
     }
 
     @Test
@@ -126,12 +126,12 @@ public class RocketFlightCycleDepthTest extends AbstractSharedServerTest {
 
         String resp = ok(client().execute("artest rocket force-orbit-reached " + id));
         assertTrue("force-orbit-reached must succeed: " + resp,
-                resp.contains("\"ok\":true"));
+                Reply.of(resp).ok());
         // Inline-delta check: the probe reports orbitReachedEventDelta in
         // its response; must be >= 1 (event fired during the call).
         assertTrue("force-orbit-reached must report a non-zero orbitReachedEventDelta: "
-                + resp, resp.contains("\"orbitReachedEventDelta\":1")
-                    || resp.contains("\"orbitReachedEventDelta\":2"));
+                + resp, (Reply.of(resp).integerOr("orbitReachedEventDelta", Integer.MIN_VALUE) == 1)
+                    || (Reply.of(resp).integerOr("orbitReachedEventDelta", Integer.MIN_VALUE) == 2));
 
         String after = ok(client().execute("artest rocket event-counts"));
         int orbitAfter = parseGroup(ORBIT_COUNT, after, "orbitReached after");
@@ -147,9 +147,9 @@ public class RocketFlightCycleDepthTest extends AbstractSharedServerTest {
         int dismantleBefore = parseGroup(DISMANTLE_COUNT, before, "dismantle before");
 
         String resp = ok(client().execute("artest rocket dismantle " + id));
-        assertTrue("dismantle must succeed: " + resp, resp.contains("\"ok\":true"));
+        assertTrue("dismantle must succeed: " + resp, Reply.of(resp).ok());
         assertTrue("dismantle inline delta must be 1: " + resp,
-                resp.contains("\"dismantleEventDelta\":1"));
+                (Reply.of(resp).integerOr("dismantleEventDelta", Integer.MIN_VALUE) == 1));
 
         String after = ok(client().execute("artest rocket event-counts"));
         int dismantleAfter = parseGroup(DISMANTLE_COUNT, after, "dismantle after");
@@ -229,14 +229,14 @@ public class RocketFlightCycleDepthTest extends AbstractSharedServerTest {
     public void forceOrbitReachedOnUnknownRocketReturnsError() throws Exception {
         String resp = ok(client().execute("artest rocket force-orbit-reached 9999999"));
         assertTrue("unknown rocket must error: " + resp,
-                resp.contains("\"error\":\"rocket not found\""));
+                "rocket not found".equals(Reply.of(resp).text("error")));
     }
 
     @Test
     public void dismantleOnUnknownRocketReturnsError() throws Exception {
         String resp = ok(client().execute("artest rocket dismantle 9999999"));
         assertTrue("unknown rocket must error: " + resp,
-                resp.contains("\"error\":\"rocket not found\""));
+                "rocket not found".equals(Reply.of(resp).text("error")));
     }
 
     @Test
@@ -249,6 +249,6 @@ public class RocketFlightCycleDepthTest extends AbstractSharedServerTest {
         int id = buildAndAssemble(FixtureSite.openAir(0, 3500, 500));
         String resp = ok(client().execute("artest rocket force-orbit-reached " + id));
         assertTrue("orbit-reached on un-programmed rocket must succeed (no crash): "
-                + resp, resp.contains("\"ok\":true"));
+                + resp, Reply.of(resp).ok());
     }
 }

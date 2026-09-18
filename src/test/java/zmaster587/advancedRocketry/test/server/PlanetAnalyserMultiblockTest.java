@@ -1,5 +1,6 @@
 package zmaster587.advancedRocketry.test.server;
 
+import zmaster587.advancedRocketry.test.Reply;
 import org.junit.Test;
 
 import zmaster587.advancedRocketry.test.FixtureSite;
@@ -30,7 +31,7 @@ public class PlanetAnalyserMultiblockTest extends AbstractSharedServerTest {
         String fixture = join(client().execute(
                 "artest fixture multiblock planet-analyser 0 " + CX + " " + CY + " " + CZ));
         assertTrue("fixture multiblock planet-analyser failed: " + fixture,
-                fixture.contains("\"ok\":true"));
+                Reply.of(fixture).ok());
 
         String info = join(client().execute(
                 "artest machine info 0 " + CX + " " + CY + " " + CZ));
@@ -40,9 +41,9 @@ public class PlanetAnalyserMultiblockTest extends AbstractSharedServerTest {
         String tryComplete = join(client().execute(
                 "artest machine try-complete 0 " + CX + " " + CY + " " + CZ));
         assertTrue("try-complete probe errored: " + tryComplete,
-                tryComplete.contains("\"ok\":true"));
+                Reply.of(tryComplete).ok());
         assertTrue("planet-analyser multiblock didn't validate (isComplete=false): " + tryComplete,
-                tryComplete.contains("\"isComplete\":true"));
+                Reply.of(tryComplete).bool("isComplete", false));
     }
 
     @Test
@@ -50,24 +51,24 @@ public class PlanetAnalyserMultiblockTest extends AbstractSharedServerTest {
         int cx = CX + 30, cy = CY, cz = CZ;
         String fixture = join(client().execute(
                 "artest fixture multiblock planet-analyser 0 " + cx + " " + cy + " " + cz));
-        assertTrue("fixture failed: " + fixture, fixture.contains("\"ok\":true"));
+        assertTrue("fixture failed: " + fixture, Reply.of(fixture).ok());
 
         String first = join(client().execute(
                 "artest machine try-complete 0 " + cx + " " + cy + " " + cz));
         assertTrue("baseline must validate: " + first,
-                first.contains("\"isComplete\":true"));
+                Reply.of(first).bool("isComplete", false));
 
         // Centre data hatch at globalY = cy - 1, globalX = cx, globalZ = cz + 1.
         String breakData = join(client().execute(
                 "artest place 0 " + cx + " " + (cy - 1) + " " + (cz + 1) + " minecraft:stone"));
         assertTrue("could not replace data hatch: " + breakData,
-                breakData.contains("\"ok\":true"));
+                Reply.of(breakData).ok());
 
         String broken = join(client().execute(
                 "artest machine try-complete 0 " + cx + " " + cy + " " + cz));
         assertTrue("structure stayed complete after data-hatch removal — "
                         + "'D' char mapping broken: " + broken,
-                broken.contains("\"isComplete\":false"));
+                (!Reply.of(broken).bool("isComplete", true)));
     }
 
     @Test
@@ -75,24 +76,24 @@ public class PlanetAnalyserMultiblockTest extends AbstractSharedServerTest {
         int cx = CX + 60, cy = CY, cz = CZ;
         String fixture = join(client().execute(
                 "artest fixture multiblock planet-analyser 0 " + cx + " " + cy + " " + cz));
-        assertTrue("fixture failed: " + fixture, fixture.contains("\"ok\":true"));
+        assertTrue("fixture failed: " + fixture, Reply.of(fixture).ok());
 
         String first = join(client().execute(
                 "artest machine try-complete 0 " + cx + " " + cy + " " + cz));
         assertTrue("baseline must validate: " + first,
-                first.contains("\"isComplete\":true"));
+                Reply.of(first).bool("isComplete", false));
 
         // Slab next to controller at globalY = cy, globalX = cx + 1, globalZ = cz.
         String breakSlab = join(client().execute(
                 "artest place 0 " + (cx + 1) + " " + cy + " " + cz + " minecraft:stone"));
         assertTrue("could not replace slab: " + breakSlab,
-                breakSlab.contains("\"ok\":true"));
+                Reply.of(breakSlab).ok());
 
         String broken = join(client().execute(
                 "artest machine try-complete 0 " + cx + " " + cy + " " + cz));
         assertTrue("structure stayed complete after slab removal — "
                         + "slab OreDict lookup broken: " + broken,
-                broken.contains("\"isComplete\":false"));
+                (!Reply.of(broken).bool("isComplete", true)));
     }
 
     private static String join(java.util.List<String> resp) {

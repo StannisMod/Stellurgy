@@ -55,7 +55,7 @@ public class SatelliteIdChipPersistenceTest {
         String create = String.join("\n", firstBoot.client().execute(
                 "artest satellite create 0 composition 200 4000 2048"));
         assertTrue("satellite create failed on first boot: " + create,
-                create.contains("\"ok\":true"));
+                Reply.of(create).ok());
         Reply mReply = Reply.of(create);
         assertTrue("create response missing satellite id: " + create, mReply.has(ID));
         long satId = Long.parseLong(mReply.text(ID));
@@ -63,7 +63,7 @@ public class SatelliteIdChipPersistenceTest {
         String preStop = String.join("\n", firstBoot.client().execute(
                 "artest satellite info 0 " + satId));
         assertTrue("pre-stop satellite info must report composition: " + preStop,
-                preStop.contains("\"type\":\"composition\""));
+                "composition".equals(Reply.of(preStop).text("type")));
 
         firstBoot.close();
         firstBoot = null;
@@ -72,8 +72,8 @@ public class SatelliteIdChipPersistenceTest {
         String postBoot = String.join("\n", secondBoot.client().execute(
                 "artest satellite info 0 " + satId));
         assertTrue("satellite must survive restart and resolve by id "
-                + satId + ": " + postBoot, postBoot.contains("\"type\":\"composition\""));
+                + satId + ": " + postBoot, "composition".equals(Reply.of(postBoot).text("type")));
         assertTrue("powerStorage must persist across restart: " + postBoot,
-                postBoot.contains("\"powerStorage\":4000"));
+                (Reply.of(postBoot).integerOr("powerStorage", Integer.MIN_VALUE) == 4000));
     }
 }

@@ -83,7 +83,7 @@ public class MissionInfrastructureLifecycleTest extends AbstractSharedServerTest
     private long startGasMission(int rocketId, long duration) throws Exception {
         String start = ok(client().execute(
                 "artest mission start-gas 0 " + rocketId + " " + duration + " oxygen 10"));
-        assertFalse("start-gas must not error: " + start, start.contains("\"error\""));
+        assertFalse("start-gas must not error: " + start, Reply.of(start).has("error"));
         Reply mmReply = Reply.of(start);
         assertTrue("missing missionId: " + start, mmReply.has(MISSION_ID));
         return Long.parseLong(mmReply.text(MISSION_ID));
@@ -116,17 +116,17 @@ public class MissionInfrastructureLifecycleTest extends AbstractSharedServerTest
         int[] ipos = placeMonitoringStation(baseX, 600);
         String link = ok(client().execute("artest mission link-infra " + mid
                 + " 0 " + ipos[0] + " " + ipos[1] + " " + ipos[2]));
-        assertFalse("link-infra must not error: " + link, link.contains("\"error\""));
+        assertFalse("link-infra must not error: " + link, Reply.of(link).has("error"));
         assertTrue("link-infra must report linked=true: " + link,
-                link.contains("\"linked\":true"));
+                Reply.of(link).bool("linked", false));
 
         String state = ok(client().execute("artest mission infra-state 0 "
                 + ipos[0] + " " + ipos[1] + " " + ipos[2]));
-        assertFalse("infra-state must not error: " + state, state.contains("\"error\""));
+        assertFalse("infra-state must not error: " + state, Reply.of(state).has("error"));
         assertTrue("infra must report hasMission=true after link: " + state,
-                state.contains("\"hasMission\":true"));
+                Reply.of(state).bool("hasMission", false));
         assertTrue("infra must report this mission's id: " + state,
-                state.contains("\"missionId\":" + mid));
+                String.valueOf(mid).equals(Reply.of(state).text("missionId")));
     }
 
     /** After complete-now the production loop in MissionGasCollection
@@ -148,13 +148,13 @@ public class MissionInfrastructureLifecycleTest extends AbstractSharedServerTest
         int[] ipos = placeMonitoringStation(baseX, 600);
         String link = ok(client().execute("artest mission link-infra " + mid
                 + " 0 " + ipos[0] + " " + ipos[1] + " " + ipos[2]));
-        assertTrue("setup link-infra must succeed: " + link, link.contains("\"linked\":true"));
+        assertTrue("setup link-infra must succeed: " + link, Reply.of(link).bool("linked", false));
 
         // Sanity: pre-completion tile reports the mission.
         String preState = ok(client().execute("artest mission infra-state 0 "
                 + ipos[0] + " " + ipos[1] + " " + ipos[2]));
         assertTrue("pre-completion infra must report hasMission=true: " + preState,
-                preState.contains("\"hasMission\":true"));
+                Reply.of(preState).bool("hasMission", false));
 
         MissionCompletion cargo = MissionCompletion.now(
                 cmd -> ok(client().execute(cmd)), mid);
@@ -164,9 +164,9 @@ public class MissionInfrastructureLifecycleTest extends AbstractSharedServerTest
         String postState = ok(client().execute("artest mission infra-state 0 "
                 + ipos[0] + " " + ipos[1] + " " + ipos[2]));
         assertFalse("infra-state must not error: " + postState,
-                postState.contains("\"error\""));
+                Reply.of(postState).has("error"));
         assertTrue("infra must report hasMission=false after completion: " + postState,
-                postState.contains("\"hasMission\":false"));
+                (!Reply.of(postState).bool("hasMission", true)));
     }
 
     /** Rocket-side half of the lifecycle (MissionGasCollection.java:80-86):
@@ -195,7 +195,7 @@ public class MissionInfrastructureLifecycleTest extends AbstractSharedServerTest
         int[] ipos = placeMonitoringStation(baseX, 600);
         String link = ok(client().execute("artest mission link-infra " + mid
                 + " 0 " + ipos[0] + " " + ipos[1] + " " + ipos[2]));
-        assertTrue("setup link-infra must succeed: " + link, link.contains("\"linked\":true"));
+        assertTrue("setup link-infra must succeed: " + link, Reply.of(link).bool("linked", false));
 
         MissionCompletion cargo = MissionCompletion.now(
                 cmd -> ok(client().execute(cmd)), mid);
@@ -203,11 +203,11 @@ public class MissionInfrastructureLifecycleTest extends AbstractSharedServerTest
 
         String relink = ok(client().execute("artest mission rocket-relink-state 0"));
         assertFalse("rocket-relink-state must not error: " + relink,
-                relink.contains("\"error\""));
+                Reply.of(relink).has("error"));
         // At least one EntityStationDeployedRocket exists in launch dim
         // post-completion — production's onMissionComplete spawned it.
         assertFalse("deployedCount must be > 0 after gas completion: " + relink,
-                relink.contains("\"deployedCount\":0"));
+                (Reply.of(relink).integerOr("deployedCount", Integer.MIN_VALUE) == 0));
         // Production looped infrastructureCoords and called
         // rocket.linkInfrastructure for each entry. The placed monitoring
         // station coord must appear in some StationDeployedRocket's

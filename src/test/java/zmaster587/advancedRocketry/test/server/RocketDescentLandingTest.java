@@ -117,9 +117,9 @@ public class RocketDescentLandingTest extends AbstractSharedServerTest {
         int id = buildAndAssemble(FixtureSite.openAir(0, 6000, 500));
         String tickResp = ok(client().execute("artest rocket tick " + id + " 5"));
         assertTrue("tick probe must succeed: " + tickResp,
-                tickResp.contains("\"ok\":true"));
+                Reply.of(tickResp).ok());
         assertTrue("tick probe response must expose ticksExisted: " + tickResp,
-                tickResp.contains("\"ticksExisted\":"));
+                Reply.of(tickResp).has("ticksExisted"));
         int t = gi(TICKS_EXISTED, tickResp, "ticksExisted from tick response");
         assertTrue("ticksExisted must be non-negative: " + t, t >= 0);
     }
@@ -260,7 +260,7 @@ public class RocketDescentLandingTest extends AbstractSharedServerTest {
 
         String dismantleResp = ok(client().execute("artest rocket dismantle " + id));
         assertTrue("dismantle must succeed: " + dismantleResp,
-                dismantleResp.contains("\"ok\":true"));
+                Reply.of(dismantleResp).ok());
 
         boolean foundNonAir = false;
         outer:
@@ -270,7 +270,7 @@ public class RocketDescentLandingTest extends AbstractSharedServerTest {
                     String blockResp = ok(client().execute(
                             "artest block at 0 " + (site.x + dx) + " " + (posY + dy)
                                     + " " + (site.z + dz)));
-                    if (!blockResp.contains("\"isAir\":true")) {
+                    if (!Reply.of(blockResp).bool("isAir", false)) {
                         foundNonAir = true;
                         break outer;
                     }
@@ -287,14 +287,14 @@ public class RocketDescentLandingTest extends AbstractSharedServerTest {
         // must succeed and return ok=true. The list endpoint reflects
         // the active ticket set. release-all clears them.
         String fl = ok(client().execute("artest chunk forceload 0 100 100"));
-        assertTrue("forceload must succeed: " + fl, fl.contains("\"ok\":true"));
+        assertTrue("forceload must succeed: " + fl, Reply.of(fl).ok());
 
         String list = ok(client().execute("artest chunk list"));
         assertTrue("list must include the ticket key: " + list,
                 list.contains("0:100:100"));
 
         String rel = ok(client().execute("artest chunk release 0 100 100"));
-        assertTrue("release must succeed: " + rel, rel.contains("\"ok\":true"));
+        assertTrue("release must succeed: " + rel, Reply.of(rel).ok());
 
         String listAfter = ok(client().execute("artest chunk list"));
         assertFalse("list must not include released ticket: " + listAfter,

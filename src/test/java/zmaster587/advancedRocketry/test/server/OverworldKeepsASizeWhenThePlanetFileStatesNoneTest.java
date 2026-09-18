@@ -1,5 +1,6 @@
 package zmaster587.advancedRocketry.test.server;
 
+import zmaster587.advancedRocketry.test.Reply;
 import com.github.stannismod.forge.testing.junit.AbstractHeadlessServerTest;
 import com.github.stannismod.forge.testing.server.RealDedicatedServerHarness;
 import org.junit.After;
@@ -92,21 +93,21 @@ public class OverworldKeepsASizeWhenThePlanetFileStatesNoneTest {
         harness = RealDedicatedServerHarness.startWith(workDir, /*cleanupOnClose=*/true);
 
         String earth = String.join("\n", harness.client().execute("artest planet info 0"));
-        assertTrue("planet info errored for the overworld: " + earth, !earth.contains("\"error\""));
+        assertTrue("planet info errored for the overworld: " + earth, !Reply.of(earth).has("error"));
         assertTrue("the overworld must run with the unit radius when its planet file states none —"
                         + " a body of radius 0 draws at the marker size at every range and carries the"
                         + " flat 512-block proximity shell instead of an atmosphere: " + earth,
-                earth.contains("\"radius\":1.0"));
+                (Reply.of(earth).numberOr("radius", Double.NaN) == 1.0));
         assertTrue("the overworld must run with the unit mass on the same terms — mass and radius are"
                         + " stated together and derived gravity reads both: " + earth,
-                earth.contains("\"mass\":1.0"));
+                (Reply.of(earth).numberOr("mass", Double.NaN) == 1.0));
 
         // CONTROL: the repair is aimed at the ONE body whose bulk is a definition. A body that stated
         // its own must come back with what it stated, or the assertion above is passing on a blanket
         // "everything is 1 Earth" rather than on the overworld's entry.
         String luna = String.join("\n", harness.client().execute("artest planet info " + MOON_DIM));
-        assertTrue("planet info errored for the moon: " + luna, !luna.contains("\"error\""));
+        assertTrue("planet info errored for the moon: " + luna, !Reply.of(luna).has("error"));
         assertTrue("a body that STATES its bulk must keep it, not be repaired to the unit one: " + luna,
-                luna.contains("\"radius\":" + MOON_RADIUS) && luna.contains("\"mass\":" + MOON_MASS));
+                String.valueOf(MOON_RADIUS).equals(Reply.of(luna).text("radius")) && String.valueOf(MOON_MASS).equals(Reply.of(luna).text("mass")));
     }
 }

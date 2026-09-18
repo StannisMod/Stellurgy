@@ -57,14 +57,14 @@ public class VSShipDescentE2ETest extends AbstractSharedServerTest {
     public void aSettledShipDescendsIntoAPlanetDimViaTheCrossing() throws Exception {
 
         String setup = exec("artest space entry-setup 2");
-        assertTrue("entry setup failed: " + setup, setup.contains("\"ok\":true"));
+        assertTrue("entry setup failed: " + setup, Reply.of(setup).ok());
 
         // --- Phase 1: ENTER a ship so it is settled in a slot cell (the proven entry path). ---
         clearArea(SRC_X, SRC_Z);
         String coords = placeFixture(SRC_X, SRC_Y, SRC_Z, "with-pilot-seat");
         String asm = exec("artest rocket assemble 0 " + coords);
         assertTrue("with VS an AFC-bearing build must route to a ship (no rocket): " + asm,
-                asm.contains("\"rocketCount\":0"));
+                (Reply.of(asm).integerOr("rocketCount", Integer.MIN_VALUE) == 0));
         assertTrue("the source VS ship never loaded", loadedShips(0) >= 1);
 
         // The ship's own name, from the assembler that minted it — and from there its physics id. The
@@ -79,10 +79,10 @@ public class VSShipDescentE2ETest extends AbstractSharedServerTest {
         // A held throttle on THIS ship's own flight computer => a pilot is flying.
         String held = exec("artest vs ff-input-by-id 0 " + vsId + " 0 1 0 0 0 0");
         assertTrue("the held input must reach this ship's flight computer: " + held,
-                held.contains("\"afcResolved\":true"));
+                Reply.of(held).bool("afcResolved", false));
         String tp = exec("artest vs teleport-ship-by-id 0 " + vsId + " "
                 + (int) sx + " " + ABOVE_CEILING_Y + " " + (int) sz);
-        assertTrue("climb teleport failed: " + tp, tp.contains("\"ok\":true"));
+        assertTrue("climb teleport failed: " + tp, Reply.of(tp).ok());
         exec("artest vs unpark-by-id 0 " + vsId);
 
         String status = "";
@@ -121,7 +121,7 @@ public class VSShipDescentE2ETest extends AbstractSharedServerTest {
             // By id: this scenario already knows which ship it flew up, and "the first settled ship
             // in the slot" is a different question that happens to have the same answer today.
             String r = exec("artest space find-afc " + slotDim + " " + shipId);
-            if (!r.contains("\"found\":true")) {
+            if (!Reply.of(r).bool("found", false)) {
                 return false;
             }
             found[0] = r;
@@ -135,7 +135,7 @@ public class VSShipDescentE2ETest extends AbstractSharedServerTest {
         long descentMark = events.mark();
         String begin = exec("artest space descent-begin " + slotDim + " " + ax + " " + ay + " " + az
                 + " " + shipId + " " + TARGET_DIM);
-        assertTrue("descent did not start: " + begin, begin.contains("\"started\":true"));
+        assertTrue("descent did not start: " + begin, Reply.of(begin).bool("started", false));
 
         // The cut dropped the ship from the ledger at once (it has left the subsystem).
         assertEquals("the descending ship leaves the ledger on the cut", 0,
@@ -183,14 +183,14 @@ public class VSShipDescentE2ETest extends AbstractSharedServerTest {
         int cx1 = (baseX - 4) >> 4, cz1 = (baseZ - 4) >> 4;
         int cx2 = (baseX + 20) >> 4, cz2 = (baseZ + 20) >> 4;
         assertTrue("chunk warmup failed",
-                exec("artest chunk warmup 0 " + cx1 + " " + cz1 + " " + cx2 + " " + cz2).contains("\"ok\":true"));
-        assertTrue("pre-clear failed", exec("artest fill 0 " + (baseX - 4) + " " + (SRC_Y - 2) + " " + (baseZ - 4)
-                + " " + (baseX + 20) + " " + (SRC_Y + 12) + " " + (baseZ + 20) + " minecraft:air").contains("\"ok\":true"));
+                Reply.of(exec("artest chunk warmup 0 " + cx1 + " " + cz1 + " " + cx2 + " " + cz2)).ok());
+        assertTrue("pre-clear failed", Reply.of(exec("artest fill 0 " + (baseX - 4) + " " + (SRC_Y - 2) + " " + (baseZ - 4)
+                + " " + (baseX + 20) + " " + (SRC_Y + 12) + " " + (baseZ + 20) + " minecraft:air")).ok());
     }
 
     private String placeFixture(int baseX, int baseY, int baseZ, String variant) throws Exception {
         String fixture = exec("artest fixture rocket 0 " + baseX + " " + baseY + " " + baseZ + " " + variant);
-        assertTrue("fixture (" + variant + ") failed: " + fixture, fixture.contains("\"ok\":true"));
+        assertTrue("fixture (" + variant + ") failed: " + fixture, Reply.of(fixture).ok());
         int[] bp = Reply.of(fixture).blockPos(BUILDER_POS);
         assertTrue("fixture (" + variant + ") missing builderPos: " + fixture, bp != null);
         return bp[0] + " " + bp[1] + " " + bp[2];

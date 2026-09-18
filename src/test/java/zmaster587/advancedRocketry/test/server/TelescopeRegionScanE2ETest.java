@@ -90,7 +90,7 @@ public class TelescopeRegionScanE2ETest extends AbstractSharedServerTest {
     /** An observatory with a blank crystal in it, and the cell it stands in. */
     private long[] observatoryWithCrystal(int x) throws Exception {
         String placed = exec("artest telescope place " + where(x));
-        assertTrue("could not place an observatory: " + placed, placed.contains("\"ok\":true"));
+        assertTrue("could not place an observatory: " + placed, Reply.of(placed).ok());
         String crystal = exec("artest telescope crystal " + where(x));
         assertEquals("the crystal must start blank, or every count afterwards means nothing",
                 0, Reply.of("artest telescope crystal", crystal).integer("addresses"));
@@ -100,7 +100,7 @@ public class TelescopeRegionScanE2ETest extends AbstractSharedServerTest {
     /** Put a system with a planet in it at a cell, so what the instrument finds is determinate. */
     private void systemAt(long sx, long sy, long sz) throws Exception {
         String system = exec("artest telescope system " + sx + " " + sy + " " + sz);
-        assertTrue("could not place a system to be found: " + system, system.contains("\"ok\":true"));
+        assertTrue("could not place a system to be found: " + system, Reply.of(system).ok());
     }
 
     /**
@@ -273,7 +273,7 @@ public class TelescopeRegionScanE2ETest extends AbstractSharedServerTest {
 
         String cycled = exec("artest chunk cycle 0 " + (x >> 4) + " " + (CZ >> 4));
         assertTrue("the chunk was never actually dropped, so nothing was proven: " + cycled,
-                cycled.contains("\"dropped\":true") && cycled.contains("\"reloaded\":true"));
+                Reply.of(cycled).bool("dropped", false) && Reply.of(cycled).bool("reloaded", false));
 
         TelescopeReading after = scope(x);
         assertTrue("the survey did not come back with the chunk: " + after.raw(), after.scanning);
@@ -320,9 +320,9 @@ public class TelescopeRegionScanE2ETest extends AbstractSharedServerTest {
         // Carry the crystal to a navigation computer, the way a player would.
         int navX = x + 4;
         String placed = exec("artest nav place 0 " + navX + " " + CY + " " + CZ);
-        assertTrue("could not place a navigation computer: " + placed, placed.contains("\"ok\":true"));
+        assertTrue("could not place a navigation computer: " + placed, Reply.of(placed).ok());
         String handed = exec("artest telescope handover " + where(x) + " " + navX + " " + CY + " " + CZ);
-        assertTrue("the crystal did not reach the console: " + handed, handed.contains("\"ok\":true"));
+        assertTrue("the crystal did not reach the console: " + handed, Reply.of(handed).ok());
         // `handover` answers the stack it MOVED, not the instrument's state, so it is read as its
         // own two-field reply rather than as a telescope reading.
         assertTrue("and it must arrive holding what the telescope wrote: " + handed,

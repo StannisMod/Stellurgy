@@ -45,7 +45,7 @@ public class PlatePressRecipeEndToEndTest extends AbstractSharedServerTest {
         String resp = String.join("\n",
                 c.execute("artest fixture machine " + FIXTURE_KEY + " 0 " + x + " " + y + " " + z));
         assertTrue("fixture machine " + FIXTURE_KEY + " failed: " + resp,
-                resp.contains("\"ok\":true"));
+                Reply.of(resp).ok());
         assertTrue("response missing pressPos: " + resp,
                 resp.contains("\"pressPos\":[" + x + "," + y + "," + z + "]"));
 
@@ -53,12 +53,12 @@ public class PlatePressRecipeEndToEndTest extends AbstractSharedServerTest {
         String obsRead = String.join("\n", c.execute(
                 "artest block at 0 " + x + " " + (y - 2) + " " + z));
         assertTrue("obsidian missing at " + x + "," + (y - 2) + "," + z + ": " + obsRead,
-                obsRead.contains("\"block\":\"minecraft:obsidian\""));
+                "minecraft:obsidian".equals(Reply.of(obsRead).text("block")));
 
         String pressRead = String.join("\n", c.execute(
                 "artest block at 0 " + x + " " + y + " " + z));
         assertTrue("press missing at " + x + "," + y + "," + z + ": " + pressRead,
-                pressRead.contains("\"block\":\"advancedrocketry:platepress\""));
+                "advancedrocketry:platepress".equals(Reply.of(pressRead).text("block")));
     }
 
     @Test
@@ -68,7 +68,7 @@ public class PlatePressRecipeEndToEndTest extends AbstractSharedServerTest {
         // Build fixture + capture the resolved output id.
         String fixture = String.join("\n",
                 c.execute("artest fixture machine " + FIXTURE_KEY + " 0 " + x + " " + y + " " + z));
-        assertTrue("fixture failed: " + fixture, fixture.contains("\"ok\":true"));
+        assertTrue("fixture failed: " + fixture, Reply.of(fixture).ok());
 
         // Extract the resolved output item + ingredient block ids.
         Reply built = Reply.of("artest fixture machine", fixture);
@@ -88,16 +88,14 @@ public class PlatePressRecipeEndToEndTest extends AbstractSharedServerTest {
         String activate = String.join("\n", c.execute(
                 "artest place 0 " + x + " " + (y + 1) + " " + z + " minecraft:redstone_block"));
         assertTrue("redstone block placement failed: " + activate,
-                activate.contains("\"placed\":true"));
+                Reply.of(activate).bool("placed", false));
 
         // Scan for EntityItem within 2 blocks of (x+0.5, y-0.5, z+0.5) —
         // the spawn position from BlockSmallPlatePress.checkForMove.
         String scan = String.join("\n", c.execute(
                 "artest entity scan-items 0 " + (x + 0.5) + " " + (y - 0.5) + " " + (z + 0.5) + " 2"));
-        assertTrue("entity scan-items failed: " + scan, scan.contains("\"ok\":true"));
-        assertTrue("expected output item " + expectedOutputId
-                        + " not in scan response — recipe did not produce its EntityItem: " + scan,
-                scan.contains("\"item\":\"" + expectedOutputId + "\""));
+        assertTrue("entity scan-items failed: " + scan, Reply.of(scan).ok());
+        Reply.of(scan).element("items", "item", String.valueOf(expectedOutputId));
 
         // Ingredient block must be gone (consumed by the press). After
         // activation the cell ends up either as AIR (setBlockToAir from
@@ -109,6 +107,6 @@ public class PlatePressRecipeEndToEndTest extends AbstractSharedServerTest {
         assertTrue("ingredient block " + ingredientBlockId + " still present at "
                         + x + "," + (y - 1) + "," + z + " — press did not consume it: "
                         + ingredientRead,
-                !ingredientRead.contains("\"block\":\"" + ingredientBlockId + "\""));
+                !String.valueOf(ingredientBlockId).equals(Reply.of(ingredientRead).text("block")));
     }
 }

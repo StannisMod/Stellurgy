@@ -85,7 +85,7 @@ public class ShieldPriorityRedistributionTest extends AbstractSharedServerTest {
     private void setPriority(int x, int z, int value) throws Exception {
         String resp = exec("artest shield priority " + DIM + " " + x + " " + Y + " " + z + " " + value);
         assertTrue("failed to set priority " + value + " at " + x + ": " + resp,
-                resp.contains("\"priority\":" + value));
+                String.valueOf(value).equals(Reply.of(resp).text("priority")));
     }
 
     private ShieldTile read(int x, int z) throws Exception {
@@ -95,7 +95,7 @@ public class ShieldPriorityRedistributionTest extends AbstractSharedServerTest {
     private void place(String block, int x, int z) throws Exception {
         String resp = exec("artest place " + DIM + " " + x + " " + Y + " " + z + " " + block);
         assertTrue("failed to place " + block + " at " + x + "," + Y + "," + z + ": " + resp,
-                resp.contains("\"placed\":true"));
+                Reply.of(resp).bool("placed", false));
     }
 
     private static long readStored(String json) {

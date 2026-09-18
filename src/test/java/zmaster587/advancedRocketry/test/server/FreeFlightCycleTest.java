@@ -66,7 +66,7 @@ public class FreeFlightCycleTest extends AbstractSharedServerTest {
 
         String fixture = ok(client().execute(
                 "artest fixture rocket 0 " + baseX + " " + baseY + " " + baseZ + " simple"));
-        assertTrue("fixture failed: " + fixture, fixture.contains("\"ok\":true"));
+        assertTrue("fixture failed: " + fixture, Reply.of(fixture).ok());
         int[] bp = Reply.of(fixture).blockPos(BUILDER_POS);
         assertTrue("fixture missing builderPos: " + fixture, bp != null);
         int bx = bp[0];
@@ -75,7 +75,7 @@ public class FreeFlightCycleTest extends AbstractSharedServerTest {
 
         String assemble = ok(client().execute(
                 "artest rocket assemble 0 " + bx + " " + by + " " + bz));
-        assertTrue("assemble failed: " + assemble, assemble.contains("\"ok\":true"));
+        assertTrue("assemble failed: " + assemble, Reply.of(assemble).ok());
 
         String list = ok(client().execute("artest rocket list 0"));
         java.util.List<RocketList.Entry> built = RocketList.of(list);
@@ -125,9 +125,9 @@ public class FreeFlightCycleTest extends AbstractSharedServerTest {
         String set = ok(client().execute(
                 "artest rocket set-flight-mode " + id + " FREE_FLIGHT"));
         assertTrue("set-flight-mode FREE_FLIGHT must succeed: " + set,
-                set.contains("\"ok\":true"));
+                Reply.of(set).ok());
         assertTrue("set-flight-mode must echo mode: " + set,
-                set.contains("\"flightMode\":\"FREE_FLIGHT\""));
+                "FREE_FLIGHT".equals(Reply.of(set).text("flightMode")));
 
         RocketInfo info1 = rocketInfo(id);
         assertEquals("info must report FREE_FLIGHT after set: " + info1.raw(),
@@ -146,7 +146,7 @@ public class FreeFlightCycleTest extends AbstractSharedServerTest {
         String resp = ok(client().execute(
                 "artest rocket set-flight-mode " + id + " WARPDRIVE"));
         assertTrue("unknown mode must be reported as error: " + resp,
-                resp.contains("\"error\":\"unknown mode\""));
+                "unknown mode".equals(Reply.of(resp).text("error")));
     }
 
     @Test
@@ -159,9 +159,9 @@ public class FreeFlightCycleTest extends AbstractSharedServerTest {
         String start = ok(client().execute(
                 "artest rocket start-free-flight " + id));
         assertTrue("start-free-flight must succeed: " + start,
-                start.contains("\"ok\":true"));
+                Reply.of(start).ok());
         assertTrue("start-free-flight must flip isInFlight=true: " + start,
-                start.contains("\"isInFlight\":true"));
+                Reply.of(start).bool("isInFlight", false));
 
         RocketInfo info = rocketInfo(id);
         assertTrue("info must reflect in-flight after start-free-flight: " + info.raw(),
@@ -178,7 +178,7 @@ public class FreeFlightCycleTest extends AbstractSharedServerTest {
         String resp = ok(client().execute(
                 "artest rocket start-free-flight " + id));
         assertTrue("classic rocket must reject start-free-flight: " + resp,
-                resp.contains("\"error\":\"rocket not in FREE_FLIGHT\""));
+                "rocket not in FREE_FLIGHT".equals(Reply.of(resp).text("error")));
 
         RocketInfo info = rocketInfo(id);
         assertFalse("rejected start must NOT flip isInFlight: " + info.raw(), info.inFlight);
@@ -198,13 +198,13 @@ public class FreeFlightCycleTest extends AbstractSharedServerTest {
         String applied = ok(client().execute(
                 "artest rocket free-flight-input " + id + " 1.0 -0.5 0.25 0 0.75"));
         assertTrue("input must apply on FF rocket: " + applied,
-                applied.contains("\"applied\":true"));
+                Reply.of(applied).bool("applied", false));
         // Probe echoes the clamped values back; full-range happy-path values
         // should pass through unchanged.
         assertTrue("applied response must echo fwd=1.0: " + applied,
-                applied.contains("\"fwd\":1.0"));
+                (Reply.of(applied).numberOr("fwd", Double.NaN) == 1.0));
         assertTrue("applied response must echo vert=-0.5: " + applied,
-                applied.contains("\"vert\":-0.5"));
+                (Reply.of(applied).numberOr("vert", Double.NaN) == -0.5));
 
         // Info must round-trip the input — proves server-side storage path
         // is wired into the probe surface that clients/UI will read.
@@ -305,7 +305,7 @@ public class FreeFlightCycleTest extends AbstractSharedServerTest {
         String applied = ok(client().execute(
                 "artest rocket free-flight-input " + id + " 1.0 1.0 1.0 1.0 0.0"));
         assertTrue("classic-mode input must report applied=false: " + applied,
-                applied.contains("\"applied\":false"));
+                (!Reply.of(applied).bool("applied", true)));
 
         // info still shows zero current input (defensive). A craft with NO input block at all
         // satisfies the same claim more strongly — nothing is holding its stick — so the two are
@@ -326,14 +326,14 @@ public class FreeFlightCycleTest extends AbstractSharedServerTest {
         String resp = ok(client().execute(
                 "artest rocket free-flight-input " + id + " 5.0 -5.0 99.0 -99.0 50.0"));
         assertTrue("clamp positive overshoot to 1.0: " + resp,
-                resp.contains("\"fwd\":1.0"));
+                (Reply.of(resp).numberOr("fwd", Double.NaN) == 1.0));
         assertTrue("clamp negative overshoot to -1.0: " + resp,
-                resp.contains("\"vert\":-1.0"));
+                (Reply.of(resp).numberOr("vert", Double.NaN) == -1.0));
         assertTrue("clamp yaw +∞ish to 1.0: " + resp,
-                resp.contains("\"yaw\":1.0"));
+                (Reply.of(resp).numberOr("yaw", Double.NaN) == 1.0));
         assertTrue("clamp pitch -∞ish to -1.0: " + resp,
-                resp.contains("\"pitch\":-1.0"));
+                (Reply.of(resp).numberOr("pitch", Double.NaN) == -1.0));
         assertTrue("clamp brake to 1.0: " + resp,
-                resp.contains("\"brake\":1.0"));
+                (Reply.of(resp).numberOr("brake", Double.NaN) == 1.0));
     }
 }

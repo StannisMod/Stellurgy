@@ -53,7 +53,7 @@ public class ShieldLimiterBalanceTest extends AbstractSharedServerTest {
 
     private void place(String block, int x, int z) throws Exception {
         String resp = exec("artest place " + DIM + " " + x + " " + Y + " " + z + " " + block);
-        assertTrue("failed to place " + block + ": " + resp, resp.contains("\"placed\":true"));
+        assertTrue("failed to place " + block + ": " + resp, Reply.of(resp).bool("placed", false));
     }
 
     private static long readLong(String json, String key) {

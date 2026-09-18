@@ -175,7 +175,7 @@ public class VSShipExtremeCoordinatesE2ETest extends AbstractSharedVsClientE2ETe
         long assemblyMark = events.markInstrumented();
         String assemble = assembleFixture(FixtureSite.openAir(cellDim, BX, BZ), VARIANT);
         assertTrue("a with-pilot-seat build must route to a ship: " + assemble,
-                assemble.contains("\"rocketCount\":0"));
+                (Reply.of(assemble).integerOr("rocketCount", Integer.MIN_VALUE) == 0));
         // The craft's CREATION, and its identity, from one record. A count that rises says a ship
         // appeared somewhere in the world; `ship_spawned` says which craft was made, so the identity
         // and the existence are the same fact and neither is polled for.
@@ -194,7 +194,7 @@ public class VSShipExtremeCoordinatesE2ETest extends AbstractSharedVsClientE2ETe
                 + " " + (int) Math.round(seat.shipWorldY)
                 + " " + (int) Math.round(seat.shipWorldZ));
         scenario().requireArranged("space enter into the origin cell must succeed: " + enter,
-                enter.contains("\"ok\":true"));
+                Reply.of(enter).ok());
         bot().waitTicks(20);
         scenario().requireArranged("the client must have followed into the origin cell (dim "
                         + cellDim + ")",
@@ -214,7 +214,7 @@ public class VSShipExtremeCoordinatesE2ETest extends AbstractSharedVsClientE2ETe
         // budget could only ever be too short, never wrong in a way that says so.
         long seatMountMark = clientEvents().mark();
         assertTrue("bot must mount the seat dummy",
-                exec("artest player mount-entity " + dummyId).contains("\"mounted\":true"));
+                Reply.of(exec("artest player mount-entity " + dummyId)).bool("mounted", false));
         awaitClientMount(seatMountMark, "the client must FOLLOW the seat boarding before anything"
                         + " below is asked of a pilot — every leg here is about what a SEATED body"
                         + " does when its craft moves", CLIENT_REMOUNT_BUDGET_TICKS,
@@ -243,7 +243,7 @@ public class VSShipExtremeCoordinatesE2ETest extends AbstractSharedVsClientE2ETe
         long riderServerMark = events().markInstrumented();
         String tpY = exec("artest vs teleport-ship-by-id " + cellDim + " " + shipId
                 + " " + BX + " " + EXTREME_Y + " " + BZ);
-        assertTrue("teleport-ship to extreme Y must succeed: " + tpY, tpY.contains("\"ok\":true"));
+        assertTrue("teleport-ship to extreme Y must succeed: " + tpY, Reply.of(tpY).ok());
         bot().waitTicks(30); // transform adoption + rider sync settle
         // THE PREMISE THIS SCENARIO DIED OF, now asserted. In an ordinary world the teleport above is
         // followed by the entry on-ramp taking the craft into a cell under a NEW identity, and every
@@ -258,7 +258,7 @@ public class VSShipExtremeCoordinatesE2ETest extends AbstractSharedVsClientE2ETe
                 ShipInfo.isLoaded(stayed));
         String unparked = exec("artest vs unpark-by-id " + cellDim + " " + shipId);
         assertTrue("the teleport leaves the ship PARKED by VS's own recipe, and a parked ship cannot"
-                + " be flown — the unpark must take: " + unparked, unparked.contains("\"ok\":true"));
+                + " be flown — the unpark must take: " + unparked, Reply.of(unparked).ok());
         bot().waitTicks(10);
         String serverInfoAfterTp = shipInfoById();
         scenario().requireArranged("the teleported ship must still be loaded, or there is no server "
@@ -313,12 +313,12 @@ public class VSShipExtremeCoordinatesE2ETest extends AbstractSharedVsClientE2ETe
         long secondServerMark = events().markInstrumented();
         String tp2 = exec("artest vs teleport-ship-by-id " + cellDim + " " + shipId
                 + " " + (BX + SECOND_RELOCATION_X) + " " + EXTREME_Y + " " + BZ);
-        assertTrue("the second teleport must succeed: " + tp2, tp2.contains("\"ok\":true"));
+        assertTrue("the second teleport must succeed: " + tp2, Reply.of(tp2).ok());
         bot().waitTicks(30);
         String unparked2 = exec("artest vs unpark-by-id " + cellDim + " " + shipId);
         assertTrue("the second teleport leaves the craft PARKED, and a parked craft cannot be flown"
                 + " — a red below would then be about the park, not about the physics: " + unparked2,
-                unparked2.contains("\"ok\":true"));
+                Reply.of(unparked2).ok());
         bot().waitTicks(10);
 
         String afterSecond = shipInfoById();
@@ -488,7 +488,7 @@ public class VSShipExtremeCoordinatesE2ETest extends AbstractSharedVsClientE2ETe
                 "the craft that is then flown to the far edge of the realized pose band");
         String fixture = exec("artest fixture rocket " + dim + " " + baseX + " " + baseY + " "
                 + baseZ + " " + variant);
-        assertTrue("fixture (" + variant + ") failed: " + fixture, fixture.contains("\"ok\":true"));
+        assertTrue("fixture (" + variant + ") failed: " + fixture, Reply.of(fixture).ok());
         int[] bp = Reply.of(fixture).blockPos(BUILDER_POS);
         assertTrue("fixture missing builderPos: " + fixture, bp != null);
         return exec("artest rocket assemble " + dim + " " + bp[0] + " " + bp[1]

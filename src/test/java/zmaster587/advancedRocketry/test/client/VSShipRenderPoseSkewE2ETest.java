@@ -170,8 +170,8 @@ public class VSShipRenderPoseSkewE2ETest extends AbstractClientE2ETest {
         // never elapsed ticks.
         double h = Math.toRadians(160.0) / 2.0;
         assertTrue("attitude hold must accept the past-vertical roll",
-                exec("artest vs point-by-id 0 " + shipId + " "
-                        + Math.cos(h) + " " + Math.sin(h) + " 0.0 0.0").contains("\"commanded\":true"));
+                Reply.of(exec("artest vs point-by-id 0 " + shipId + " "
+                        + Math.cos(h) + " " + Math.sin(h) + " 0.0 0.0")).bool("commanded", false));
         // A WINDOW, then one read. The line above used to say "gate on the MEASURED attitude, never
         // elapsed ticks", and the half of that which is right is that a TICK COUNT may not be the
         // gate — the attitude still is. What it licensed was a loop whose exit condition is the
@@ -205,7 +205,7 @@ public class VSShipRenderPoseSkewE2ETest extends AbstractClientE2ETest {
                 + (int) Math.floor(sy + 7) + " " + (int) Math.floor(sz));
         assertTrue("the drop point must be free air — otherwise this leg measures the ground rather"
                         + " than the hull: " + dropBlock + " ship=" + info.raw(),
-                dropBlock.contains("\"isAir\":true"));
+                Reply.of(dropBlock).bool("isAir", false));
 
         // Drop the bot onto the world-top of the inverted hull. Two marks, one per side: the SERVER's
         // for the mode commit the hull-stand hold IS, the CLIENT's for the teleport's arrival. Both
@@ -324,8 +324,8 @@ public class VSShipRenderPoseSkewE2ETest extends AbstractClientE2ETest {
         // as the driver; a speed-independent delta names a constant cross-side pose offset.
         for (double climb : new double[]{0.6, 1.2}) {
             assertTrue("velocity command must engage for the moving leg",
-                    exec("artest vs force-vel-by-id 0 " + shipId + " 0 " + climb + " 0")
-                            .contains("\"commanded\":true"));
+                    Reply.of(exec("artest vs force-vel-by-id 0 " + shipId + " 0 " + climb + " 0")
+                            ).bool("commanded", false));
             long moveMark = clientMark();
             double moveCrossMax = 0.0, moveCrossSum = 0.0;
             int moveCrossN = 0;
@@ -409,7 +409,7 @@ public class VSShipRenderPoseSkewE2ETest extends AbstractClientE2ETest {
         double subZ = Events.number(latest, "subZ");
         String tw = exec("artest vs to-world 0 id " + shipId + " "
                 + subX + " " + subY + " " + subZ);
-        if (!tw.contains("\"ok\":true")) {
+        if (!Reply.of(tw).ok()) {
             return Double.NaN;
         }
         return distance(
@@ -482,7 +482,7 @@ public class VSShipRenderPoseSkewE2ETest extends AbstractClientE2ETest {
         String cleared = exec("artest fill 0 " + (fx - 8) + " " + (fy + 1) + " " + (fz - 8)
                 + " " + (fx + 8) + " " + (fy + 14) + " " + (fz + 8) + " minecraft:air");
         assertTrue("the drop column must be cleared of world terrain: " + cleared,
-                cleared.contains("\"ok\":true"));
+                Reply.of(cleared).ok());
         System.out.println("[poseskew] drop column cleared around (" + fx + "," + fy + "," + fz
                 + "): " + cleared);
     }
@@ -501,7 +501,7 @@ public class VSShipRenderPoseSkewE2ETest extends AbstractClientE2ETest {
         long spawnMark = events.markInstrumented();
         String assemble = assembleFixture(bx, by, bz);
         assertTrue("a with-pilot-seat build must route to a ship: " + assemble,
-                assemble.contains("\"rocketCount\":0"));
+                (Reply.of(assemble).integerOr("rocketCount", Integer.MIN_VALUE) == 0));
         String spawned = events.await(spawnMark, "ship_spawned", "the assembly must become a ship in"
                 + " the physics registry (the spawn is queued, so this is a deadline for a discrete"
                 + " event and not a settling value)", SHIP_SPAWN_BUDGET_TICKS);
@@ -552,14 +552,14 @@ public class VSShipRenderPoseSkewE2ETest extends AbstractClientE2ETest {
         int cx1 = (baseX - 2) >> 4, cz1 = (baseZ - 2) >> 4;
         int cx2 = (baseX + 7) >> 4, cz2 = (baseZ + 7) >> 4;
         assertTrue("chunk warmup failed",
-                exec("artest chunk warmup 0 " + cx1 + " " + cz1 + " " + cx2 + " " + cz2)
-                        .contains("\"ok\":true"));
+                Reply.of(exec("artest chunk warmup 0 " + cx1 + " " + cz1 + " " + cx2 + " " + cz2)
+                        ).ok());
         assertTrue("pre-clear failed",
-                exec("artest fill 0 " + (baseX - 2) + " " + (baseY + 1) + " " + (baseZ - 2)
+                Reply.of(exec("artest fill 0 " + (baseX - 2) + " " + (baseY + 1) + " " + (baseZ - 2)
                         + " " + (baseX + 7) + " " + (baseY + 10) + " " + (baseZ + 7) + " minecraft:air")
-                        .contains("\"ok\":true"));
+                        ).ok());
         String fixture = exec("artest fixture rocket 0 " + baseX + " " + baseY + " " + baseZ + " " + VARIANT);
-        assertTrue("fixture (" + VARIANT + ") failed: " + fixture, fixture.contains("\"ok\":true"));
+        assertTrue("fixture (" + VARIANT + ") failed: " + fixture, Reply.of(fixture).ok());
         int[] bp = Reply.of(fixture).blockPos(BUILDER_POS);
         assertTrue("fixture missing builderPos: " + fixture, bp != null);
         return exec("artest rocket assemble 0 " + bp[0] + " " + bp[1] + " " + bp[2]);

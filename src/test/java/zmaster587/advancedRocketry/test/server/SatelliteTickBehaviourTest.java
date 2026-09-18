@@ -58,7 +58,7 @@ public class SatelliteTickBehaviourTest extends AbstractSharedServerTest {
 
         String resp = String.join("\n", client().execute(
                 "artest satellite tick 0 " + satId + " " + ticks));
-        assertTrue("tick probe failed: " + resp, resp.contains("\"ok\":true"));
+        assertTrue("tick probe failed: " + resp, Reply.of(resp).ok());
         long pre = longField(PRE_STORED, resp, "preStored");
         long post = longField(POST_STORED, resp, "postStored");
         long delta = post - pre;
@@ -83,7 +83,7 @@ public class SatelliteTickBehaviourTest extends AbstractSharedServerTest {
         // powerStorage=500.
         String resp = String.join("\n", client().execute(
                 "artest satellite tick 0 " + satId + " 10"));
-        assertTrue("tick probe failed: " + resp, resp.contains("\"ok\":true"));
+        assertTrue("tick probe failed: " + resp, Reply.of(resp).ok());
         long post = longField(POST_STORED, resp, "postStored");
 
         String battResp = String.join("\n", client().execute(
@@ -110,7 +110,7 @@ public class SatelliteTickBehaviourTest extends AbstractSharedServerTest {
 
         String resp = String.join("\n", client().execute(
                 "artest satellite tick 0 " + satId + " 100"));
-        assertTrue("tick probe failed: " + resp, resp.contains("\"ok\":true"));
+        assertTrue("tick probe failed: " + resp, Reply.of(resp).ok());
         long preData = longField(PRE_DATA, resp, "preData");
         long postData = longField(POST_DATA, resp, "postData");
         long delta = postData - preData;
@@ -156,7 +156,7 @@ public class SatelliteTickBehaviourTest extends AbstractSharedServerTest {
                 "artest satellite create 0 " + type + " " + powerGen + " "
                         + powerStorage + " " + maxData));
         assertTrue("satellite create (" + type + ") failed: " + resp,
-                resp.contains("\"ok\":true"));
+                Reply.of(resp).ok());
         Reply mReply = Reply.of(resp);
         assertTrue("could not extract id from create response: " + resp, mReply.has(ID));
         return Long.parseLong(mReply.text(ID));

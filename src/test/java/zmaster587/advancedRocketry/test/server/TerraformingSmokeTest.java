@@ -27,7 +27,7 @@ public class TerraformingSmokeTest extends AbstractHeadlessServerTest {
     public void mutationKeepsOriginalDensityIntact() throws Exception {
         String before = String.join("\n", client().execute("artest terraforming info 0"));
         assertTrue("baseline terraforming info errored: " + before,
-                !before.contains("\"error\""));
+                !Reply.of(before).has("error"));
 
         Reply baseline = Reply.of("artest terraforming info", before);
         assertTrue("could not extract original/current from: " + before,
@@ -40,7 +40,7 @@ public class TerraformingSmokeTest extends AbstractHeadlessServerTest {
             String set = String.join("\n",
                     client().execute("artest terraforming set-density 0 " + target));
             assertTrue("set-density did not stick: " + set,
-                    set.contains("\"ok\":true") && set.contains("\"newDensity\":" + target));
+                    Reply.of(set).ok() && String.valueOf(target).equals(Reply.of(set).text("newDensity")));
 
             String after = String.join("\n", client().execute("artest terraforming info 0"));
             Reply mutated = Reply.of("artest terraforming info", after);

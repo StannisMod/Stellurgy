@@ -43,9 +43,9 @@ public class AsteroidDimensionContainsAsteroidsTest extends AbstractSharedServer
         String create = exec("artest worldgen create-asteroid-dim "
                 + ASTEROID_DIM + " " + template);
         assertTrue("create-asteroid-dim must succeed: " + create,
-                create.contains("\"ok\":true"));
+                Reply.of(create).ok());
         assertTrue("created dim must report isAsteroid:true: " + create,
-                create.contains("\"isAsteroid\":true"));
+                Reply.of(create).bool("isAsteroid", false));
 
         // Force the dim loaded so its WorldProviderAsteroid + ChunkProviderAsteroids
         // come online.
@@ -68,7 +68,7 @@ public class AsteroidDimensionContainsAsteroidsTest extends AbstractSharedServer
     private int firstNonOverworldArDimOrSkip() throws Exception {
         String joined = exec("artest dim list");
         Assume.assumeFalse("No AR dimensions registered — skipping",
-                joined.contains("\"arDimensions\":[]"));
+                (Reply.of(joined).arrayLength("arDimensions") == 0));
         Reply dims = Reply.of("artest dim list", joined);
         assertTrue("could not parse arDimensions: " + joined, dims.has(AR_DIMS_ARRAY));
         for (int dim : dims.intArray(AR_DIMS_ARRAY)) {

@@ -247,7 +247,7 @@ public class SatelliteCoverageGapsTest extends AbstractSharedServerTest {
     public void satelliteWithCanTickFalseIsNotAddedToTickingList() throws Exception {
         String resp = String.join("\n", client().execute(
                 "artest satellite create-spy-telescope 0"));
-        assertTrue("create-spy-telescope failed: " + resp, resp.contains("\"ok\":true"));
+        assertTrue("create-spy-telescope failed: " + resp, Reply.of(resp).ok());
         Reply mReply = Reply.of(resp);
         assertTrue("could not extract id from create response: " + resp, mReply.has(ID));
         long spyId = Long.parseLong(mReply.text(ID));
@@ -259,8 +259,7 @@ public class SatelliteCoverageGapsTest extends AbstractSharedServerTest {
         // The SpyTelescope must be in the satellites lifecycle list...
         String lifecycle = String.join("\n", client().execute(
                 "artest satellite list 0"));
-        assertTrue("SpyTelescope must be in the lifecycle satellites map: " + lifecycle,
-                lifecycle.contains("\"id\":" + spyId));
+        Reply.of(lifecycle).element("satellites", "id", String.valueOf(spyId));
 
         // ...but NOT in the tickingSatellites map.
         String ticking = String.join("\n", client().execute(
@@ -291,7 +290,7 @@ public class SatelliteCoverageGapsTest extends AbstractSharedServerTest {
                 "artest satellite info 0 " + satId));
         assertTrue("freshly-created satellite must be queryable via "
                 + "satellite info; resp=" + pre,
-                pre.contains("\"id\":" + satId));
+                String.valueOf(satId).equals(Reply.of(pre).text("id")));
 
         // Mark dead + drive one DimensionProperties.tick() so the
         // production removal branch fires synchronously (instead of
@@ -303,7 +302,7 @@ public class SatelliteCoverageGapsTest extends AbstractSharedServerTest {
                 "artest satellite info 0 " + satId));
         assertTrue("dead satellite must no longer be queryable by id; "
                 + "info should report not-found, got=" + post,
-                post.contains("\"error\":\"satellite not found\""));
+                "satellite not found".equals(Reply.of(post).text("error")));
     }
 
     // -- helpers ----------------------------------------------------------
@@ -313,7 +312,7 @@ public class SatelliteCoverageGapsTest extends AbstractSharedServerTest {
                 "artest satellite create 0 " + type + " " + powerGen + " "
                         + powerStorage + " " + maxData));
         assertTrue("satellite create (" + type + ") failed: " + resp,
-                resp.contains("\"ok\":true"));
+                Reply.of(resp).ok());
         Reply mReply = Reply.of(resp);
         assertTrue("could not extract id from create response: " + resp, mReply.has(ID));
         return Long.parseLong(mReply.text(ID));

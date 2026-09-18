@@ -456,8 +456,8 @@ public class VSDeckCaptureAndDismountE2ETest extends AbstractSharedVsClientE2ETe
         // cross flying up to a ship. Attitude hold does it with no pilot aboard.
         double h = Math.toRadians(45.0) / 2.0;
         assertTrue("attitude hold must accept the roll",
-                exec("artest vs point-by-id 0 " + scenarioShipId + " "
-                        + Math.cos(h) + " 0.0 0.0 " + Math.sin(h)).contains("\"commanded\":true"));
+                Reply.of(exec("artest vs point-by-id 0 " + scenarioShipId + " "
+                        + Math.cos(h) + " 0.0 0.0 " + Math.sin(h))).bool("commanded", false));
         bot().waitTicks(120);
         ShipInfo info = shipInfo();
         double sx = info.x, sy = info.y, sz = info.z;
@@ -515,8 +515,8 @@ public class VSDeckCaptureAndDismountE2ETest extends AbstractSharedVsClientE2ETe
         // POSITIVE control: level the ship and land him ON the deck. Now the deck camera SHOULD engage -
         // so the negative above is a real on-deck/off-deck discrimination, not the camera never firing.
         assertTrue("attitude hold must accept levelling",
-                exec("artest vs point-by-id 0 " + scenarioShipId + " 1.0 0.0 0.0 0.0")
-                        .contains("\"commanded\":true"));
+                Reply.of(exec("artest vs point-by-id 0 " + scenarioShipId + " 1.0 0.0 0.0 0.0")
+                        ).bool("commanded", false));
         bot().waitTicks(120);
         ShipInfo lvl = shipInfo();
         // The control is the camera's STATE, and it may NOT be its engage edge — a fact about the
@@ -793,8 +793,8 @@ public class VSDeckCaptureAndDismountE2ETest extends AbstractSharedVsClientE2ETe
 
         // Roll the now-UNMANNED ship (a mounted pilot would overwrite the target) to the commanded attitude.
         assertTrue("attitude hold must accept the " + label + " roll command",
-                exec("artest vs point-by-id 0 " + scenarioShipId + " " + qw + " 0.0 0.0 " + qz)
-                        .contains("\"commanded\":true"));
+                Reply.of(exec("artest vs point-by-id 0 " + scenarioShipId + " " + qw + " 0.0 0.0 " + qz)
+                        ).bool("commanded", false));
         bot().waitTicks(200); // slew to the roll and settle - stationary, not a transient
         double tilted = shipUpYFromInfo(shipInfo());
         // Reliable command -> a HARD assert that the regime was reached (fail loudly, not a silent skip).
@@ -1082,8 +1082,8 @@ public class VSDeckCaptureAndDismountE2ETest extends AbstractSharedVsClientE2ETe
 
         double h = Math.toRadians(90.0) / 2.0; // 90deg roll about the nose (+Z): deck on its side
         assertTrue("attitude hold must accept the tilt",
-                exec("artest vs point-by-id 0 " + scenarioShipId + " "
-                        + Math.cos(h) + " 0.0 0.0 " + Math.sin(h)).contains("\"commanded\":true"));
+                Reply.of(exec("artest vs point-by-id 0 " + scenarioShipId + " "
+                        + Math.cos(h) + " 0.0 0.0 " + Math.sin(h))).bool("commanded", false));
         bot().waitTicks(160); // slew to the tilt and settle - the ship is now HELD stationary
 
         // Sample across frames while the ship is stationary. Any variation is instability, not motion.
@@ -1156,8 +1156,8 @@ public class VSDeckCaptureAndDismountE2ETest extends AbstractSharedVsClientE2ETe
         // whose first run was green. What keeps it loaded is no longer anything this leg says: a
         // test server holds every ship loaded from the moment the probes register.
         assertTrue("attitude hold must accept the flip",
-                exec("artest vs point-by-id 0 " + scenarioShipId + " 0.17365 0.0 0.0 0.98481")
-                        .contains("\"commanded\":true"));
+                Reply.of(exec("artest vs point-by-id 0 " + scenarioShipId + " 0.17365 0.0 0.0 0.98481")
+                        ).bool("commanded", false));
         bot().waitTicks(200); // slew all the way over and settle
 
         ShipInfo info = shipInfo();
@@ -1218,7 +1218,7 @@ public class VSDeckCaptureAndDismountE2ETest extends AbstractSharedVsClientE2ETe
         long spawnMark = events.markInstrumented();
         String assemble = assembleFixture(site);
         assertTrue("a with-pilot-seat build must route to a ship: " + assemble,
-                assemble.contains("\"rocketCount\":0"));
+                (Reply.of(assemble).integerOr("rocketCount", Integer.MIN_VALUE) == 0));
         scenarioShipId = awaitShipSpawned(events, spawnMark,
                 "assembly must create a NEW VS ship in the queryable registry (async spawn)");
         bot().waitTicks(40);
@@ -1281,7 +1281,7 @@ public class VSDeckCaptureAndDismountE2ETest extends AbstractSharedVsClientE2ETe
                 + seat.seatY + " " + seat.seatZ);
         int dummyId = Reply.of("artest vs seat-mount-at", mountInfo).integer(DUMMY_ID);
         assertTrue("bot must mount the seat dummy: " + mountInfo,
-                exec("artest player mount-entity " + dummyId).contains("\"mounted\":true"));
+                Reply.of(exec("artest player mount-entity " + dummyId)).bool("mounted", false));
     }
 
     private String assembleFixture(FixtureSite site) throws Exception {
@@ -1298,7 +1298,7 @@ public class VSDeckCaptureAndDismountE2ETest extends AbstractSharedVsClientE2ETe
         site.requireClear(this::exec, 2, 24,
                 "the hull, the deck a pilot dismounts onto, and the air he jumps into above it");
         String fixture = exec("artest fixture rocket 0 " + baseX + " " + baseY + " " + baseZ + " " + VARIANT);
-        assertTrue("fixture (" + VARIANT + ") failed: " + fixture, fixture.contains("\"ok\":true"));
+        assertTrue("fixture (" + VARIANT + ") failed: " + fixture, Reply.of(fixture).ok());
         int[] bp = Reply.of(fixture).blockPos(BUILDER_POS);
         assertTrue("fixture missing builderPos: " + fixture, bp != null);
         return exec("artest rocket assemble 0 " + bp[0] + " " + bp[1] + " " + bp[2]);

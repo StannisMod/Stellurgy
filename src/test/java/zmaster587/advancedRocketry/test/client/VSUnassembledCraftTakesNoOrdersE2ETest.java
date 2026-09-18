@@ -123,7 +123,7 @@ public class VSUnassembledCraftTakesNoOrdersE2ETest extends AbstractSharedVsClie
         long spawnMark = events.markInstrumented();
         String assemble = assembleShip();
         scenario().requireArranged("a with-pilot-seat build must route to a ship: " + assemble,
-                assemble.contains("\"rocketCount\":0"));
+                (Reply.of(assemble).integerOr("rocketCount", Integer.MIN_VALUE) == 0));
         // Kept, not discarded: the mark precedes the assembly, so this record is this scenario's
         // own ship, and the mount below has to name it rather than take the first loaded seat.
         String controlShipId = awaitShipSpawned(events, spawnMark,
@@ -156,7 +156,7 @@ public class VSUnassembledCraftTakesNoOrdersE2ETest extends AbstractSharedVsClie
         long seatMark = clientEvents().mark();
         String mount = exec("artest player mount-entity " + mountInfo.requireDummyId());
         scenario().requireArranged("the bot must mount the seat dummy: " + mount,
-                mount.contains("\"mounted\":true"));
+                Reply.of(mount).bool("mounted", false));
         // "Let the mount replicate" is a record on the client's own log. The control below presses a
         // command key from that seat, and a client not yet riding routes it elsewhere.
         awaitClientMount(seatMark, "the client must be riding the seat before a command key is"
@@ -173,7 +173,7 @@ public class VSUnassembledCraftTakesNoOrdersE2ETest extends AbstractSharedVsClie
                 LINK_BUDGET_TICKS);
         assertTrue("CONTROL: the command that arrived must be the JUMP the test pressed — a seat"
                         + " answering some other key is not the control this leg needs: " + commanded,
-                commanded.contains("\"kind\":\"jump\""));
+                Events.anyRecordHas(commanded, "kind", "jump"));
 
         // And the per-tick steering path, the other gate leg 2 measures. Both ends are asserted,
         // separately: the two logs are joined only by game tick, so their ORDER within one tick is
@@ -218,11 +218,11 @@ public class VSUnassembledCraftTakesNoOrdersE2ETest extends AbstractSharedVsClie
                 + " " + (CRAFT_X + 3) + " " + (CRAFT_Y + 4) + " " + (CRAFT_Z + 3) + " minecraft:air");
         String seat = exec("artest fill 0 " + CRAFT_X + " " + CRAFT_Y + " " + CRAFT_Z
                 + " " + CRAFT_X + " " + CRAFT_Y + " " + CRAFT_Z + " advancedrocketry:pilotSeat");
-        scenario().requireArranged("placing the pilot seat failed: " + seat, seat.contains("\"ok\":true"));
+        scenario().requireArranged("placing the pilot seat failed: " + seat, Reply.of(seat).ok());
         String afc = exec("artest fill 0 " + CRAFT_X + " " + (CRAFT_Y + 2) + " " + CRAFT_Z
                 + " " + CRAFT_X + " " + (CRAFT_Y + 2) + " " + CRAFT_Z
                 + " advancedrocketry:advancedFlightComputer");
-        scenario().requireArranged("placing the flight computer failed: " + afc, afc.contains("\"ok\":true"));
+        scenario().requireArranged("placing the flight computer failed: " + afc, Reply.of(afc).ok());
 
         // Link the two WITHOUT assembling: exactly what the assembler leaves behind when the
         // physics mod rejects the spawn. A real failed assembly cannot be arranged deterministically.
@@ -230,10 +230,10 @@ public class VSUnassembledCraftTakesNoOrdersE2ETest extends AbstractSharedVsClie
                 + " " + CRAFT_X + " " + (CRAFT_Y + 2) + " " + CRAFT_Z);
         scenario().requireArranged("the seat must end up LINKED — an unlinked seat is refused for a "
                         + "reason that has nothing to do with this bug: " + linked,
-                linked.contains("\"linked\":true"));
+                Reply.of(linked).bool("linked", false));
         scenario().requireArranged("CONTROL: and NO ship may manage it — otherwise the craft is simply "
                         + "a ship and the refusal under test would be wrong: " + linked,
-                linked.contains("\"managedByShip\":false"));
+                (!Reply.of(linked).bool("managedByShip", true)));
 
         standBesideTheSeat();
         emptyTheHand();
@@ -320,8 +320,9 @@ public class VSUnassembledCraftTakesNoOrdersE2ETest extends AbstractSharedVsClie
         assertTrue("the client's own pilot gate must have been consulted while he sat on this craft"
                         + " and answered CLOSED — a silence from the server below means nothing if"
                         + " the client never sampled its keys at all: " + gate,
-                Events.countRecords(gate, "open", "false") > 0
-                        && gate.contains("\"ridingDummy\":true"));
+                // ONE gate record saying both: a closed gate beside a different record that
+                // happens to carry ridingDummy is not this claim.
+                Events.anyRecordHasAll(gate, "open", "false", "ridingDummy", "true"));
 
         String clientSends = clientEvents().since(deafClientMark, "pilot_input_sent");
         Events.assertInstrumentRan(clientSends, "pilot_input_sent_events",
@@ -405,15 +406,15 @@ public class VSUnassembledCraftTakesNoOrdersE2ETest extends AbstractSharedVsClie
         int cx1 = (SHIP_X - 2) >> 4, cz1 = (SHIP_Z - 2) >> 4;
         int cx2 = (SHIP_X + 7) >> 4, cz2 = (SHIP_Z + 7) >> 4;
         assertTrue("chunk warmup failed",
-                exec("artest chunk warmup 0 " + cx1 + " " + cz1 + " " + cx2 + " " + cz2)
-                        .contains("\"ok\":true"));
+                Reply.of(exec("artest chunk warmup 0 " + cx1 + " " + cz1 + " " + cx2 + " " + cz2)
+                        ).ok());
         assertTrue("pre-clear failed",
-                exec("artest fill 0 " + (SHIP_X - 2) + " " + (SHIP_Y + 1) + " " + (SHIP_Z - 2)
+                Reply.of(exec("artest fill 0 " + (SHIP_X - 2) + " " + (SHIP_Y + 1) + " " + (SHIP_Z - 2)
                         + " " + (SHIP_X + 7) + " " + (SHIP_Y + 10) + " " + (SHIP_Z + 7) + " minecraft:air")
-                        .contains("\"ok\":true"));
+                        ).ok());
         String fixture = exec("artest fixture rocket 0 " + SHIP_X + " " + SHIP_Y + " " + SHIP_Z
                 + " with-pilot-seat");
-        assertTrue("fixture (with-pilot-seat) failed: " + fixture, fixture.contains("\"ok\":true"));
+        assertTrue("fixture (with-pilot-seat) failed: " + fixture, Reply.of(fixture).ok());
         int[] bp = Reply.of(fixture).blockPos(BUILDER_POS);
         assertTrue("fixture missing builderPos: " + fixture, bp != null);
         return exec("artest rocket assemble 0 " + bp[0] + " " + bp[1] + " " + bp[2]);

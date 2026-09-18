@@ -50,7 +50,7 @@ public class HarnessMobSurvivalTest extends AbstractSharedServerTest {
         String spawned = exec("artest vs drop-living 0 minecraft:cow "
                 + (x + 0.5) + " " + y + " " + (z + 0.5));
         System.out.println("[mobsurv] spawn: " + spawned.replace('\n', ' '));
-        assertTrue("subject must spawn: " + spawned, spawned.contains("\"ok\":true"));
+        assertTrue("subject must spawn: " + spawned, Reply.of(spawned).ok());
         Reply mReply = Reply.of(spawned);
         assertTrue("spawn must report an entity id: " + spawned, mReply.has(ENTITY_ID));
         int id = Integer.parseInt(mReply.text(ENTITY_ID));

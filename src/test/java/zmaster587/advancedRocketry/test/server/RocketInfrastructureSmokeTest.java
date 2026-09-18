@@ -39,24 +39,24 @@ public class RocketInfrastructureSmokeTest extends AbstractSharedServerTest {
         String place = String.join("\n", client().execute(
                 "artest place 0 " + sx + " " + sy + " " + sz + " advancedrocketry:fuelingStation"));
         assertTrue("place fueling station failed: " + place,
-                place.contains("\"placed\":true"));
+                Reply.of(place).bool("placed", false));
 
         String infraInfo = String.join("\n", client().execute(
                 "artest infra info 0 " + sx + " " + sy + " " + sz));
         assertTrue("fueling station not IInfrastructure: " + infraInfo,
-                infraInfo.contains("\"isInfrastructure\":true"));
+                Reply.of(infraInfo).bool("isInfrastructure", false));
         assertTrue("infra info missing maxLinkDistance: " + infraInfo,
                 infraInfo.contains("\"maxLinkDistance\""));
 
         String emptyInfra = String.join("\n", client().execute("artest infra info 0 100 64 100"));
         assertTrue("infra info on empty pos didn't error: " + emptyInfra,
-                emptyInfra.contains("\"error\":\"no tile entity\""));
+                "no tile entity".equals(Reply.of(emptyInfra).text("error")));
 
         int rocketId = assembleFixture(rocketSite, "simple");
         String link = String.join("\n", client().execute(
                 "artest infra link 0 " + sx + " " + sy + " " + sz + " " + rocketId));
-        assertTrue("infra link probe errored: " + link, link.contains("\"ok\":true"));
-        assertTrue("station didn't accept rocket link: " + link, link.contains("\"linked\":true"));
+        assertTrue("infra link probe errored: " + link, Reply.of(link).ok());
+        assertTrue("station didn't accept rocket link: " + link, Reply.of(link).bool("linked", false));
         Reply cmReply = Reply.of(link);
         assertTrue("connectedCount missing", cmReply.has(CONN));
         assertTrue("connectedCount<1 after link: " + link,
@@ -66,7 +66,7 @@ public class RocketInfrastructureSmokeTest extends AbstractSharedServerTest {
         String relink = String.join("\n", client().execute(
                 "artest infra link 0 " + sx + " " + sy + " " + sz + " " + rocketId));
         assertTrue("re-link unexpectedly succeeded a second time: " + relink,
-                relink.contains("\"linked\":false"));
+                (!Reply.of(relink).bool("linked", true)));
     }
 
     /**
@@ -87,7 +87,7 @@ public class RocketInfrastructureSmokeTest extends AbstractSharedServerTest {
         ok(client().execute("artest place 0 " + fx + " 65 900 advancedrocketry:fuelingStation"));
         String fueling = String.join("\n", client().execute("artest infra info 0 " + fx + " 65 900"));
         assertTrue("fueling station must surface maxLinkDistance: " + fueling,
-                fueling.contains("\"maxLinkDistance\":"));
+                Reply.of(fueling).has("maxLinkDistance"));
         int fuelingMax = extractInt(fueling, "maxLinkDistance");
         assertTrue("fueling station maxLinkDistance must be a positive finite value: " + fueling,
                 fuelingMax > 0 && fuelingMax < 10_000);
@@ -125,15 +125,15 @@ public class RocketInfrastructureSmokeTest extends AbstractSharedServerTest {
 
         String link = String.join("\n", client().execute(
                 "artest infra link 0 " + sx + " " + sy + " " + sz + " " + rocketId));
-        assertTrue("initial link must succeed: " + link, link.contains("\"linked\":true"));
+        assertTrue("initial link must succeed: " + link, Reply.of(link).bool("linked", false));
         int linkedCount = extractInt(link, "connectedCount");
         assertTrue("connectedCount must be >0 after link: " + link, linkedCount >= 1);
 
         String unlink = String.join("\n", client().execute(
                 "artest infra unlink 0 " + sx + " " + sy + " " + sz + " " + rocketId));
-        assertTrue("unlink probe errored: " + unlink, unlink.contains("\"ok\":true"));
+        assertTrue("unlink probe errored: " + unlink, Reply.of(unlink).ok());
         assertTrue("unlink must report unlinked=true: " + unlink,
-                unlink.contains("\"unlinked\":true"));
+                Reply.of(unlink).bool("unlinked", false));
         int afterUnlink = extractInt(unlink, "connectedCount");
         assertEquals("connectedCount must drop by 1 after unlink",
                 linkedCount - 1, afterUnlink);
@@ -142,7 +142,7 @@ public class RocketInfrastructureSmokeTest extends AbstractSharedServerTest {
         String relink = String.join("\n", client().execute(
                 "artest infra link 0 " + sx + " " + sy + " " + sz + " " + rocketId));
         assertTrue("re-link after unlink must succeed: " + relink,
-                relink.contains("\"linked\":true"));
+                Reply.of(relink).bool("linked", false));
     }
 
     /**
@@ -163,23 +163,23 @@ public class RocketInfrastructureSmokeTest extends AbstractSharedServerTest {
 
         String preLink = String.join("\n", client().execute(
                 "artest infra monitor-info 0 " + mx + " " + my + " " + mz));
-        assertTrue("pre-link monitor probe failed: " + preLink, preLink.contains("\"ok\":true"));
+        assertTrue("pre-link monitor probe failed: " + preLink, Reply.of(preLink).ok());
         assertTrue("monitor must report no linked rocket initially: " + preLink,
-                preLink.contains("\"linkedEntityId\":-1"));
+                (Reply.of(preLink).integerOr("linkedEntityId", Integer.MIN_VALUE) == -1));
 
         int rocketId = assembleFixture(rocketSite, "simple");
         String link = String.join("\n", client().execute(
                 "artest infra link 0 " + mx + " " + my + " " + mz + " " + rocketId));
         assertTrue("link to monitoring station must succeed: " + link,
-                link.contains("\"linked\":true"));
+                Reply.of(link).bool("linked", false));
 
         String postLink = String.join("\n", client().execute(
                 "artest infra monitor-info 0 " + mx + " " + my + " " + mz));
         assertTrue("post-link monitor must surface the linked rocket entity id "
                 + rocketId + ": " + postLink,
-                postLink.contains("\"linkedEntityId\":" + rocketId));
+                String.valueOf(rocketId).equals(Reply.of(postLink).text("linkedEntityId")));
         assertTrue("post-link monitor must identify the entity as a rocket: " + postLink,
-                postLink.contains("\"linkedClass\":\"zmaster587.advancedRocketry.entity.EntityRocket\""));
+                "zmaster587.advancedRocketry.entity.EntityRocket".equals(Reply.of(postLink).text("linkedClass")));
     }
 
     /**
@@ -219,7 +219,7 @@ public class RocketInfrastructureSmokeTest extends AbstractSharedServerTest {
         String alive = String.join("\n", client().execute(
                 "artest infra info 0 " + lx + " " + ly + " " + lz));
         assertTrue("fluid loader must remain IInfrastructure after 30 ticks: " + alive,
-                alive.contains("\"isInfrastructure\":true"));
+                Reply.of(alive).bool("isInfrastructure", false));
     }
 
     /**
@@ -258,14 +258,14 @@ public class RocketInfrastructureSmokeTest extends AbstractSharedServerTest {
         String preLink = String.join("\n", client().execute(
                 "artest infra info 0 " + ux + " " + uy + " " + uz));
         assertTrue("unloader must be IInfrastructure: " + preLink,
-                preLink.contains("\"isInfrastructure\":true"));
+                Reply.of(preLink).bool("isInfrastructure", false));
 
         // 30 ticks of unloader update — must complete without crashing.
         ok(client().execute("artest tile force-tick 0 " + ux + " " + uy + " " + uz + " 30"));
         String stillLinked = String.join("\n", client().execute(
                 "artest infra info 0 " + ux + " " + uy + " " + uz));
         assertTrue("unloader tile must still be present after 30 ticks: " + stillLinked,
-                stillLinked.contains("\"isInfrastructure\":true"));
+                Reply.of(stillLinked).bool("isInfrastructure", false));
     }
 
     /**
@@ -296,15 +296,14 @@ public class RocketInfrastructureSmokeTest extends AbstractSharedServerTest {
         // The fixture's chest starts empty — rocket inventory should have 0
         // items pre-transfer.
         assertTrue("rocket should start with empty cargo: " + preTransfer,
-                preTransfer.contains("\"items\":["));
+                (Reply.of(preTransfer).arrayLength("items") >= 0));
 
         // Force-tick the loader so update() ferries the stack across.
         ok(client().execute("artest tile force-tick 0 " + lx + " " + ly + " " + lz + " 5"));
 
         String postTransfer = String.join("\n", client().execute(
                 "artest rocket storage-inventory " + rocketId));
-        assertTrue("loader must move cobblestone into rocket cargo chest: "
-                + postTransfer, postTransfer.contains("\"item\":\"minecraft:cobblestone\""));
+        Reply.of(postTransfer).element("items", "item", "minecraft:cobblestone");
     }
 
     /**
@@ -337,7 +336,7 @@ public class RocketInfrastructureSmokeTest extends AbstractSharedServerTest {
         String infoAfter = String.join("\n", client().execute(
                 "artest infra info 0 " + ux + " " + uy + " " + uz));
         assertTrue("unloader must remain IInfrastructure after ticks: " + infoAfter,
-                infoAfter.contains("\"isInfrastructure\":true"));
+                Reply.of(infoAfter).bool("isInfrastructure", false));
         // Sanity — the rocket's inventory tile (the cargo chest) is enumerable.
         String inv = String.join("\n", client().execute(
                 "artest rocket storage-inventory " + rocketId));
@@ -361,7 +360,7 @@ public class RocketInfrastructureSmokeTest extends AbstractSharedServerTest {
 
         String fx = String.join("\n", client().execute(
                 "artest fixture rocket 0 " + baseX + " " + baseY + " " + baseZ + " " + variant));
-        assertTrue("fixture rocket (" + variant + ") failed: " + fx, fx.contains("\"ok\":true"));
+        assertTrue("fixture rocket (" + variant + ") failed: " + fx, Reply.of(fx).ok());
         int[] bp = Reply.of(fx).blockPos(BUILDER_POS);
         assertTrue("could not parse builderPos: " + fx, bp != null);
         int bx = bp[0],
@@ -370,7 +369,7 @@ public class RocketInfrastructureSmokeTest extends AbstractSharedServerTest {
 
         String assemble = String.join("\n", client().execute(
                 "artest rocket assemble 0 " + bx + " " + by + " " + bz));
-        assertTrue("rocket assemble failed: " + assemble, assemble.contains("\"ok\":true"));
+        assertTrue("rocket assemble failed: " + assemble, Reply.of(assemble).ok());
         Reply emReply = Reply.of(assemble);
         assertTrue("rocket entityId missing: " + assemble, emReply.has(ENT_ID));
         int rocketId = Integer.parseInt(emReply.text(ENT_ID));
@@ -380,7 +379,7 @@ public class RocketInfrastructureSmokeTest extends AbstractSharedServerTest {
 
     private void ok(java.util.List<String> response) {
         String joined = String.join("\n", response);
-        assertTrue("probe call failed: " + joined, joined.contains("\"ok\":true"));
+        assertTrue("probe call failed: " + joined, Reply.of(joined).ok());
     }
 
     private static int extractInt(String haystack, String field) {

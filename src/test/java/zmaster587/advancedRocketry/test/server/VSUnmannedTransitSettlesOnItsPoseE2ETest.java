@@ -74,7 +74,7 @@ public class VSUnmannedTransitSettlesOnItsPoseE2ETest extends AbstractSharedServ
         String begin = exec("artest space transit-begin " + originDim + " " + ax + " " + ay + " " + az
                 + " " + HYPERSPACE_JUMP_SPEED);
         assertTrue("transit did not begin (departure crossing failed): " + begin,
-                begin.contains("\"began\":true"));
+                Reply.of(begin).bool("began", false));
 
         // No pump: the server advances the jump. Waited for as the arrival production announces.
         String arrivedRecord = events.awaitField(transitMark, "ship_transit_ended","route", "HYPERSPACE",

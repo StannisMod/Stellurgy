@@ -141,7 +141,7 @@ public class SpaceClockIsTheSubsystemsOwnE2ETest {
         long spaceBefore = spaceClock(exec("artest space clock"));
         String worldMoved = exec("artest space set-world-clock " + (worldClock(exec("artest space clock"))
                 + JUMP_TICKS));
-        assertTrue("the world clock must move: " + worldMoved, worldMoved.contains("\"ok\":true"));
+        assertTrue("the world clock must move: " + worldMoved, Reply.of(worldMoved).ok());
         requireArranged("the overworld's counter must really have jumped, or nothing below is"
                         + " a measurement: " + worldMoved,
                 worldClock(worldMoved) - jsonLong(worldMoved, "before") >= JUMP_TICKS / 2L);
@@ -156,7 +156,7 @@ public class SpaceClockIsTheSubsystemsOwnE2ETest {
         // ---- DIRECTION 2: move the SPACE clock. No world may follow it. ----
         long worldBefore = worldClock(exec("artest space clock"));
         String spaceMoved = exec("artest space set-clock " + (spaceAfterWorldMove + JUMP_TICKS));
-        assertTrue("the space clock must move: " + spaceMoved, spaceMoved.contains("\"ok\":true"));
+        assertTrue("the space clock must move: " + spaceMoved, Reply.of(spaceMoved).ok());
         requireArranged("the space clock must really have jumped: " + spaceMoved,
                 spaceClock(spaceMoved) - spaceAfterWorldMove >= JUMP_TICKS / 2L);
 
@@ -246,7 +246,7 @@ public class SpaceClockIsTheSubsystemsOwnE2ETest {
                 fresh < JUMP_TICKS / 2L);
 
         String moved = exec("artest space set-clock " + JUMP_TICKS);
-        assertTrue("the clock must be set: " + moved, moved.contains("\"ok\":true"));
+        assertTrue("the clock must be set: " + moved, Reply.of(moved).ok());
         assertEquals("and it must hold the value it was set to: " + moved, JUMP_TICKS,
                 spaceClock(moved));
 

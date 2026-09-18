@@ -86,7 +86,7 @@ public class SystemBodiesFeedFollowsTheCellE2ETest extends AbstractSharedServerT
     @Test
     public void aLiveCellWithNoShipInItIsStillToldWhatIsAroundIt() throws Exception {
         String setup = exec("artest space entry-setup 2");
-        assertTrue("entry setup failed: " + setup, setup.contains("\"ok\":true"));
+        assertTrue("entry setup failed: " + setup, Reply.of(setup).ok());
 
         // Hold the cell live with an occupant refcount and NO ship anywhere in the ledger.
         int slotDim = MaterializedCell.at(this::exec, CELL_NO_SHIP)
@@ -101,7 +101,7 @@ public class SystemBodiesFeedFollowsTheCellE2ETest extends AbstractSharedServerT
 
         String poi = exec("artest space add-poi " + CELL_NO_SHIP + " " + BODY_LOCAL + " PLANET 0 7");
         assertTrue("add-poi must register a descend target: " + poi,
-                poi.contains("\"ok\":true") && poi.contains("\"descendTarget\":true"));
+                Reply.of(poi).ok() && Reply.of(poi).bool("descendTarget", false));
 
         String after = exec("artest space bodies");
         assertEquals("the cell's own body must reach the feed with no ship in the cell at all; "
@@ -114,16 +114,16 @@ public class SystemBodiesFeedFollowsTheCellE2ETest extends AbstractSharedServerT
     @Test
     public void aLiveCellWhoseOnlyShipIsMidJumpIsStillToldWhatIsAroundIt() throws Exception {
         String setup = exec("artest space entry-setup 2");
-        assertTrue("entry setup failed: " + setup, setup.contains("\"ok\":true"));
+        assertTrue("entry setup failed: " + setup, Reply.of(setup).ok());
 
         String poi = exec("artest space add-poi " + CELL_MID_JUMP + " " + BODY_LOCAL + " MOON 0 7");
         assertTrue("add-poi must register a descend target: " + poi,
-                poi.contains("\"ok\":true") && poi.contains("\"descendTarget\":true"));
+                Reply.of(poi).ok() && Reply.of(poi).bool("descendTarget", false));
 
         // A settled ship first: this is the state the feed already handled, and it is the control that
         // proves the arrangement can produce a body at all.
         String settle = exec("artest space ledger-settle " + CELL_MID_JUMP + " -1");
-        assertTrue("ledger-settle must succeed: " + settle, settle.contains("\"ok\":true"));
+        assertTrue("ledger-settle must succeed: " + settle, Reply.of(settle).ok());
         int slotDim = jsonInt(settle, "slotDim");
         String shipId = jsonString(settle, "shipId");
         String settled = exec("artest space bodies");
@@ -134,11 +134,10 @@ public class SystemBodiesFeedFollowsTheCellE2ETest extends AbstractSharedServerT
         // slot, still holds its body, and whoever is standing in it is still looking at it.
         String transit = exec("artest space ledger-transit " + CELL_MID_JUMP + " " + shipId);
         assertTrue("ledger-transit must record the ship as in transit: " + transit,
-                transit.contains("\"state\":\"IN_TRANSIT\""));
+                "IN_TRANSIT".equals(Reply.of(transit).text("state")));
 
         String bodies = exec("artest space bodies");
-        assertTrue("the arrangement must really have a non-settled ship in this cell; " + bodies,
-                bodies.contains("\"state\":\"IN_TRANSIT\""));
+        Reply.of(bodies).element("ships", "state", "IN_TRANSIT");
         assertEquals("the cell is still bound to the same slot world; " + bodies,
                 slotDim, LedgerEntry.forShip(this::exec, shipId).slotDim());
         assertEquals("a cell's bodies must not vanish from its sky because a ship in it is mid-jump; "

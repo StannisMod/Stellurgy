@@ -121,7 +121,7 @@ public class OxygenVentBoundedByBlobCapTest extends AbstractSharedServerTest {
 
     private void setConfig(String key, int value) throws Exception {
         String resp = exec("artest config set " + key + " " + value);
-        assertTrue("could not set config " + key + ": " + resp, resp.contains("\"ok\":true"));
+        assertTrue("could not set config " + key + ": " + resp, Reply.of(resp).ok());
     }
 
     /** A fully enclosed 1×1×len air tube running +X from the vent, wrapped
@@ -136,11 +136,11 @@ public class OxygenVentBoundedByBlobCapTest extends AbstractSharedServerTest {
     private void sealVent(int cx) throws Exception {
         String resp = exec("artest place " + DIM + " " + cx + " " + CY + " " + CZ
                 + " advancedrocketry:oxygenVent");
-        assertTrue("vent place failed: " + resp, resp.contains("\"placed\":true"));
+        assertTrue("vent place failed: " + resp, Reply.of(resp).bool("placed", false));
         String e = exec("artest energy inject " + DIM + " " + cx + " " + CY + " " + CZ + " 1000000");
-        assertTrue("energy inject failed: " + e, e.contains("\"ok\":true"));
+        assertTrue("energy inject failed: " + e, Reply.of(e).ok());
         String o = exec("artest fluid inject " + DIM + " " + cx + " " + CY + " " + CZ + " oxygen 16000");
-        assertTrue("oxygen inject failed: " + o, o.contains("\"ok\":true"));
+        assertTrue("oxygen inject failed: " + o, Reply.of(o).ok());
         exec("artest tile force-tick " + DIM + " " + cx + " " + CY + " " + CZ + " 1");
         exec("artest vent reseal " + DIM + " " + cx + " " + CY + " " + CZ);
         exec("artest tile force-tick " + DIM + " " + cx + " " + CY + " " + CZ + " 5");

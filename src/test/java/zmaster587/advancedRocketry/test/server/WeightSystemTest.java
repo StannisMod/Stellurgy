@@ -34,12 +34,12 @@ public class WeightSystemTest extends AbstractSharedServerTest {
 
     private void reset() throws Exception {
         String r = String.join("\n", client().execute("artest weight reset"));
-        assertTrue("weight reset failed: " + r, r.contains("\"ok\":true"));
+        assertTrue("weight reset failed: " + r, Reply.of(r).ok());
     }
 
     private double itemWeight(String id, int count) throws Exception {
         String r = String.join("\n", client().execute("artest weight item " + id + " " + count));
-        assertTrue("item " + id + " not registered: " + r, r.contains("\"registered\":true"));
+        assertTrue("item " + id + " not registered: " + r, Reply.of(r).bool("registered", false));
         Reply mReply = Reply.of(r);
         assertTrue("no weight field for " + id + ": " + r, mReply.has(WEIGHT));
         return Double.parseDouble(mReply.text(WEIGHT));
@@ -47,7 +47,7 @@ public class WeightSystemTest extends AbstractSharedServerTest {
 
     private double fluidWeight(String name, int amount) throws Exception {
         String r = String.join("\n", client().execute("artest weight fluid " + name + " " + amount));
-        assertTrue("fluid " + name + " not registered: " + r, r.contains("\"registered\":true"));
+        assertTrue("fluid " + name + " not registered: " + r, Reply.of(r).bool("registered", false));
         Reply mReply = Reply.of(r);
         assertTrue("no weight field for fluid " + name + ": " + r, mReply.has(WEIGHT));
         return Double.parseDouble(mReply.text(WEIGHT));
@@ -82,7 +82,7 @@ public class WeightSystemTest extends AbstractSharedServerTest {
         assertTrue("baseline material weight must differ from the override sentinel", material != 99.0);
 
         String set = String.join("\n", client().execute("artest weight set minecraft:stone 99.0"));
-        assertTrue("weight set failed: " + set, set.contains("\"ok\":true"));
+        assertTrue("weight set failed: " + set, Reply.of(set).ok());
 
         assertEquals("explicit individual override must win over the material table",
                 99.0, itemWeight("minecraft:stone", 1), 1e-4);
@@ -92,12 +92,12 @@ public class WeightSystemTest extends AbstractSharedServerTest {
     public void regexBeatsMaterialButIndividualBeatsRegex() throws Exception {
         reset();
         String reg = String.join("\n", client().execute("artest weight set-regex minecraft:gla.* 3.0"));
-        assertTrue("set-regex failed: " + reg, reg.contains("\"ok\":true"));
+        assertTrue("set-regex failed: " + reg, Reply.of(reg).ok());
         assertEquals("regex rule must win over the material table",
                 3.0, itemWeight("minecraft:glass", 1), 1e-4);
 
         String set = String.join("\n", client().execute("artest weight set minecraft:glass 50.0"));
-        assertTrue("weight set failed: " + set, set.contains("\"ok\":true"));
+        assertTrue("weight set failed: " + set, Reply.of(set).ok());
         assertEquals("individual override must win over a matching regex rule",
                 50.0, itemWeight("minecraft:glass", 1), 1e-4);
     }
@@ -108,7 +108,7 @@ public class WeightSystemTest extends AbstractSharedServerTest {
         double base = itemWeight("minecraft:stone", 1);
 
         String sc = String.join("\n", client().execute("artest weight material-scale 2.0"));
-        assertTrue("material-scale failed: " + sc, sc.contains("\"ok\":true"));
+        assertTrue("material-scale failed: " + sc, Reply.of(sc).ok());
 
         assertEquals("material weight must scale by weightMaterialScale",
                 2 * base, itemWeight("minecraft:stone", 1), 1e-4);
@@ -121,7 +121,7 @@ public class WeightSystemTest extends AbstractSharedServerTest {
         assertTrue("fluid weight must be positive: " + base, base > 0);
 
         String sc = String.join("\n", client().execute("artest weight fuel-scale 2.0"));
-        assertTrue("fuel-scale failed: " + sc, sc.contains("\"ok\":true"));
+        assertTrue("fuel-scale failed: " + sc, Reply.of(sc).ok());
 
         assertEquals("fluid weight must scale by fuelMassScale",
                 2 * base, fluidWeight("water", 1000), 1e-4);

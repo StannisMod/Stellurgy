@@ -1,5 +1,6 @@
 package zmaster587.advancedRocketry.test.server;
 
+import zmaster587.advancedRocketry.test.Reply;
 import org.junit.Test;
 
 import zmaster587.advancedRocketry.test.NavStatus;
@@ -35,11 +36,11 @@ public class NavigationComputerE2ETest extends AbstractSharedServerTest {
         String copied = exec("artest nav copy " + A);
 
         assertTrue("the copy must report the three new addresses: " + copied,
-                copied.contains("\"changed\":3"));
+                (Reply.of(copied).integerOr("changed", Integer.MIN_VALUE) == 3));
         assertTrue("the ship's crystal must hold everything it had plus everything copied: " + copied,
-                copied.contains("\"ship\":5"));
+                (Reply.of(copied).integerOr("ship", Integer.MIN_VALUE) == 5));
         assertTrue("a copy must never take an address off the source crystal: " + copied,
-                copied.contains("\"source\":3"));
+                (Reply.of(copied).integerOr("source", Integer.MIN_VALUE) == 3));
     }
 
     @Test
@@ -53,7 +54,7 @@ public class NavigationComputerE2ETest extends AbstractSharedServerTest {
         NavStatus status = NavStatus.of(exec("artest nav status " + A));
 
         assertTrue("the source must be blank after an erase: " + erased,
-                erased.contains("\"source\":0"));
+                (Reply.of(erased).integerOr("source", Integer.MIN_VALUE) == 0));
         assertTrue("erasing the source must not touch what the ship knows: " + status.raw(),
                 status.shipCrystals == 5);
     }
@@ -63,7 +64,7 @@ public class NavigationComputerE2ETest extends AbstractSharedServerTest {
         String verdict = exec("artest nav gate 0 500 82 500");
 
         assertTrue("a ship with no navigation computer cannot jump: " + verdict,
-                verdict.contains("\"allowed\":false"));
+                (!Reply.of(verdict).bool("allowed", true)));
         assertTrue("and must be told exactly that: " + verdict,
                 verdict.contains("msg.jumpgate.nonavcomputer"));
     }
@@ -77,10 +78,10 @@ public class NavigationComputerE2ETest extends AbstractSharedServerTest {
         String verdict = exec("artest nav gate 0 " + AFC);
 
         assertTrue("having a computer is not having a destination: " + verdict,
-                verdict.contains("\"allowed\":false"));
+                (!Reply.of(verdict).bool("allowed", true)));
         assertTrue(verdict.contains("msg.jumpgate.notarget"));
         assertTrue("the computer itself must have been found: " + verdict,
-                verdict.contains("\"navComputer\":true"));
+                Reply.of(verdict).bool("navComputer", false));
     }
 
     @Test
@@ -94,7 +95,7 @@ public class NavigationComputerE2ETest extends AbstractSharedServerTest {
         String verdict = exec("artest nav gate 0 " + AFC_NO_DRIVE);
 
         assertTrue("a ship with no field generator cannot jump, however well it is aimed: " + verdict,
-                verdict.contains("\"allowed\":false"));
+                (!Reply.of(verdict).bool("allowed", true)));
         assertTrue(verdict.contains("msg.jumpgate.nodrive"));
     }
 
@@ -109,9 +110,9 @@ public class NavigationComputerE2ETest extends AbstractSharedServerTest {
         String verdict = exec("artest nav gate 0 " + AFC);
 
         assertTrue("computer aboard, position known, target set, a drive and the burst to open the "
-                + "window - nothing refuses this: " + verdict, verdict.contains("\"allowed\":true"));
+                + "window - nothing refuses this: " + verdict, Reply.of(verdict).bool("allowed", false));
         assertTrue("and nothing merely advises either: " + verdict,
-                verdict.contains("\"confirm\":false"));
+                (!Reply.of(verdict).bool("confirm", true)));
     }
 
     @Test
@@ -126,12 +127,12 @@ public class NavigationComputerE2ETest extends AbstractSharedServerTest {
         exec("artest drive charge 0 " + AFC + " full");
         String allowed = exec("artest nav gate 0 " + AFC);
 
-        assertTrue("precondition: the bank really is empty: " + flat, flat.contains("\"charge\":0"));
+        assertTrue("precondition: the bank really is empty: " + flat, (Reply.of(flat).integerOr("charge", Integer.MIN_VALUE) == 0));
         assertTrue("without the burst the window does not open at all: " + refused,
-                refused.contains("\"allowed\":false"));
+                (!Reply.of(refused).bool("allowed", true)));
         assertTrue(refused.contains("msg.jumpgate.capacitorlow"));
         assertTrue("and the same ship, charged, may go: " + allowed,
-                allowed.contains("\"allowed\":true"));
+                Reply.of(allowed).bool("allowed", false));
     }
 
     @Test
@@ -147,9 +148,9 @@ public class NavigationComputerE2ETest extends AbstractSharedServerTest {
         String verdict = exec("artest nav gate 0 " + AFC);
 
         assertTrue("an unsurveyed coordinate is still a coordinate: " + aimed,
-                aimed.contains("\"target\":\"4242_0_0\""));
+                "4242_0_0".equals(Reply.of(aimed).text("target")));
         assertTrue("and the gate lets the pilot take the risk: " + verdict,
-                verdict.contains("\"allowed\":true"));
+                Reply.of(verdict).bool("allowed", false));
     }
 
     @Test
@@ -166,7 +167,7 @@ public class NavigationComputerE2ETest extends AbstractSharedServerTest {
         NavStatus self = NavStatus.of(exec("artest nav status " + A));
 
         assertTrue("the sync must report moving addresses: " + synced,
-                synced.contains("\"changed\":"));
+                Reply.of(synced).has("changed"));
         assertTrue("both computers must end up holding all five addresses; A=" + self.raw()
                         + " B=" + peer.raw() + " (B before its own sync: " + peerBefore.raw() + ")",
                 self.shipCrystals == 5 && peer.shipCrystals == 5);
@@ -182,14 +183,14 @@ public class NavigationComputerE2ETest extends AbstractSharedServerTest {
         String synced = exec("artest nav sync " + A + " 0");
         NavStatus self = NavStatus.of(exec("artest nav status " + A));
 
-        assertTrue("channel 0 must move nothing: " + synced, synced.contains("\"changed\":0"));
+        assertTrue("channel 0 must move nothing: " + synced, (Reply.of(synced).integerOr("changed", Integer.MIN_VALUE) == 0));
         assertTrue("a computer nobody put on a channel must not pool its knowledge: " + self.raw(),
                 self.shipCrystals == 3);
     }
 
     private void placeComputer(String at) throws Exception {
         String placed = exec("artest nav place " + at);
-        assertTrue("the navigation computer must be placeable: " + placed, placed.contains("\"ok\":true"));
+        assertTrue("the navigation computer must be placeable: " + placed, Reply.of(placed).ok());
         exec("artest nav sync " + at + " 0"); // a fresh block starts on no channel
         exec("artest nav cleartarget " + at);
     }
@@ -197,7 +198,7 @@ public class NavigationComputerE2ETest extends AbstractSharedServerTest {
     private void stock(String at, int slot, int addresses, int firstSector) throws Exception {
         String stocked = exec("artest nav crystal " + at + " " + slot + " " + addresses
                 + " " + firstSector + " 1");
-        assertTrue("the probe must stock the crystal: " + stocked, stocked.contains("\"ok\":true"));
+        assertTrue("the probe must stock the crystal: " + stocked, Reply.of(stocked).ok());
     }
 
     private String exec(String cmd) throws Exception {

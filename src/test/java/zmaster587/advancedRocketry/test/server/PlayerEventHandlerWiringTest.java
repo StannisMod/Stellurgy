@@ -71,7 +71,7 @@ public class PlayerEventHandlerWiringTest extends AbstractSharedServerTest {
         String joined = ok(client().execute("artest dim list"));
         Assume.assumeFalse(
                 "No AR dimensions registered — skipping",
-                joined.contains("\"arDimensions\":[]"));
+                (Reply.of(joined).arrayLength("arDimensions") == 0));
         Reply dims = Reply.of("artest dim list", joined);
         assertTrue("could not parse arDimensions array: " + joined, dims.has(AR_DIMS_ARRAY));
         for (int dim : dims.intArray(AR_DIMS_ARRAY)) {
@@ -122,14 +122,14 @@ public class PlayerEventHandlerWiringTest extends AbstractSharedServerTest {
         // strip), the field-/Class-lookup in the probe surfaces it.
         String resp = ok(client().execute("artest event handlers"));
         assertTrue("PlanetEventHandler must be class-loaded: " + resp,
-                resp.contains("\"planetEventHandler\":\"loaded\""));
+                "loaded".equals(Reply.of(resp).text("planetEventHandler")));
         // RocketEventHandler is reported as "shipped" via classfile-resource
         // lookup — a static class reference would NoClassDefFoundError on
         // dedicated server because the class imports LWJGL / FontRenderer
         // (client-only). Resource presence is the strongest server-safe
         // proof that the @Mod packaging didn't drop the class.
         assertTrue("RocketEventHandler .class resource must be shipped: " + resp,
-                resp.contains("\"rocketEventHandler\":\"shipped\""));
+                "shipped".equals(Reply.of(resp).text("rocketEventHandler")));
         // PlanetWeatherEventHandler IS server-safe (no client imports), so
         // a direct static reference verifies + reports its FQN.
         assertTrue("PlanetWeatherEventHandler must be class-loaded (probe "
@@ -153,19 +153,19 @@ public class PlayerEventHandlerWiringTest extends AbstractSharedServerTest {
         String resp = ok(client().execute("artest event dim-side-effects " + dim));
 
         assertTrue("AR dim must be loaded for side-effect probing: " + resp,
-                resp.contains("\"loaded\":true"));
+                Reply.of(resp).bool("loaded", false));
         assertTrue("AR dim WorldInfo must be wrapped by ARDimensionWorldInfo: " + resp,
                 resp.contains("ARDimensionWorldInfo"));
         assertTrue("AR dim must have an AtmosphereHandler registered: " + resp,
-                resp.contains("\"hasAtmosphereHandler\":true"));
+                Reply.of(resp).bool("hasAtmosphereHandler", false));
         assertTrue("dim must be classified as AR planet: " + resp,
-                resp.contains("\"isARPlanet\":true"));
+                Reply.of(resp).bool("isARPlanet", false));
         // hasSkyColor=true means props.skyColor is non-null/non-empty.
         // (A future fixture planet with the default vanilla colour would
         // still pass — float[] is allocated by DimensionProperties; this
         // assertion just guards against a regression that drops the field.)
         assertTrue("AR dim must have a sky-color array configured: " + resp,
-                resp.contains("\"hasSkyColor\":true"));
+                Reply.of(resp).bool("hasSkyColor", false));
     }
 
     @Test
@@ -192,9 +192,9 @@ public class PlayerEventHandlerWiringTest extends AbstractSharedServerTest {
 
         String resp = ok(client().execute("artest event dim-side-effects " + nonArDim));
         assertTrue("non-AR dim " + nonArDim + " must be loaded: " + resp,
-                resp.contains("\"loaded\":true"));
+                Reply.of(resp).bool("loaded", false));
         assertTrue("non-AR dim " + nonArDim + " must NOT be classified as AR planet: " + resp,
-                resp.contains("\"isARPlanet\":false"));
+                (!Reply.of(resp).bool("isARPlanet", true)));
         // ARDimensionWorldInfo wrapping is the per-AR-dim B1 isolation chain;
         // a non-AR dim must stay vanilla so weather doesn't bleed in/out.
         assertTrue("non-AR dim " + nonArDim + " WorldInfo must NOT be wrapped: " + resp,
@@ -213,8 +213,8 @@ public class PlayerEventHandlerWiringTest extends AbstractSharedServerTest {
         // launches' destination dim.
         String resp = ok(client().execute("artest event transitions"));
         assertTrue("transition map probe must succeed: " + resp,
-                resp.contains("\"ok\":true"));
+                Reply.of(resp).ok());
         assertTrue("transition map must be empty at rest in a no-rocket test: " + resp,
-                resp.contains("\"size\":0"));
+                (Reply.of(resp).integerOr("size", Integer.MIN_VALUE) == 0));
     }
 }

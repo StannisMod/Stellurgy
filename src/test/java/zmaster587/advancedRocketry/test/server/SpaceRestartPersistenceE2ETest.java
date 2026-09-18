@@ -105,7 +105,7 @@ public class SpaceRestartPersistenceE2ETest {
         // the copy it left behind.
         org.junit.Assume.assumeTrue("Valkyrien Skies is absent, so the production subsystem under"
                 + " test never registered and there is nothing here to exercise: " + vs,
-                vs.contains("\"available\":true"));
+                Reply.of(vs).bool("available", false));
     }
 
     @Test
@@ -124,7 +124,7 @@ public class SpaceRestartPersistenceE2ETest {
         String settled = exec("artest space ledger-settle " + SHIP_ID + " "
                 + SECTOR_X + " " + SECTOR_Y + " " + SECTOR_Z + " 0 0 0");
         assertTrue("the ship must be recorded in the production ledger: " + settled,
-                settled.contains("\"ok\":true"));
+                Reply.of(settled).ok());
 
         LedgerEntry beforeSave = ledger(SHIP_ID);
         assertTrue("sanity: the ledger must hold the ship BEFORE the reboot, or a green result "
@@ -193,7 +193,7 @@ public class SpaceRestartPersistenceE2ETest {
         String settled = exec("artest space ledger-settle " + SHIP_ID + " "
                 + SECTOR_X + " " + SECTOR_Y + " " + SECTOR_Z + " 0 0 0");
         assertTrue("the ship must be recorded in the production ledger: " + settled,
-                settled.contains("\"ok\":true"));
+                Reply.of(settled).ok());
         int slotBeforeReboot = jsonInt(settled, "slotDim");
 
         // --- the reboot: this process really exits -----------------------------------------------
@@ -273,11 +273,11 @@ public class SpaceRestartPersistenceE2ETest {
         String settled = exec("artest space ledger-settle " + SHIP_ID + " "
                 + SECTOR_X + " " + SECTOR_Y + " " + SECTOR_Z + " 0 0 0");
         assertTrue("the ship must be recorded in the production ledger: " + settled,
-                settled.contains("\"ok\":true"));
+                Reply.of(settled).ok());
 
         // Lay a good snapshot on disk. Everything below is about what the NEXT save does to it.
         String saved = exec("artest space save-now");
-        assertTrue("the forced save must have run: " + saved, saved.contains("\"ok\":true"));
+        assertTrue("the forced save must have run: " + saved, Reply.of(saved).ok());
 
         // Now the state the crash left behind: the ledger says this ship is flying, and no jump carries
         // it. Both halves are asserted, because "the ship is somewhere else" and "the ship is nowhere"
@@ -285,7 +285,7 @@ public class SpaceRestartPersistenceE2ETest {
         String flying = exec("artest space ledger-transit " + SECTOR_X + " " + SECTOR_Y + " " + SECTOR_Z
                 + " " + SHIP_ID);
         assertTrue("arrangement: the ledger must now call the ship in-flight: " + flying,
-                flying.contains("\"state\":\"IN_TRANSIT\""));
+                "IN_TRANSIT".equals(Reply.of(flying).text("state")));
         SubsystemStatus midStatus = SubsystemStatus.read(this::exec);
         assertEquals("arrangement: and NO jump may be carrying it — that is the whole condition under "
                         + "test, and with a jump in flight this test would prove nothing: " + midStatus.raw(),
@@ -294,7 +294,7 @@ public class SpaceRestartPersistenceE2ETest {
                 + "lose: " + midStatus.raw(), 1, midStatus.ledger);
 
         String savedAgain = exec("artest space save-now");
-        assertTrue("the second save must also have run: " + savedAgain, savedAgain.contains("\"ok\":true"));
+        assertTrue("the second save must also have run: " + savedAgain, Reply.of(savedAgain).ok());
 
         // --- the reboot ---------------------------------------------------------------------------
         harness.close();
@@ -352,11 +352,11 @@ public class SpaceRestartPersistenceE2ETest {
         String settled = exec("artest space ledger-settle " + SHIP_ID + " "
                 + SECTOR_X + " " + SECTOR_Y + " " + SECTOR_Z + " 0 0 0");
         assertTrue("the ship must be recorded in the production ledger: " + settled,
-                settled.contains("\"ok\":true"));
+                Reply.of(settled).ok());
 
         String armed = exec("artest space save-fault-once");
         assertTrue("the fault must actually be armed, or nothing below is exercising a failed save: "
-                + armed, armed.contains("\"armed\":true"));
+                + armed, Reply.of(armed).bool("armed", false));
         assertTrue("and the subsystem must agree it is armed: " + SubsystemStatus.read(this::exec).raw(),
                 SubsystemStatus.read(this::exec).saveFaultArmed);
 
@@ -384,7 +384,7 @@ public class SpaceRestartPersistenceE2ETest {
 
         // And it is not wedged: an ordinary save still works afterwards.
         String recovered = exec("artest space save-now");
-        assertTrue("the next save must work normally: " + recovered, recovered.contains("\"ok\":true"));
+        assertTrue("the next save must work normally: " + recovered, Reply.of(recovered).ok());
 
         harness.close();
         harness = null;
@@ -420,9 +420,9 @@ public class SpaceRestartPersistenceE2ETest {
         assertTrue("production subsystem must be live: " + status.raw(), status.registered);
 
         String again = exec("artest space pool-idempotence");
-        assertTrue("re-registering must not grow the pool: " + again, again.contains("\"grew\":false"));
+        assertTrue("re-registering must not grow the pool: " + again, (!Reply.of(again).bool("grew", true)));
         assertTrue("and it must hand back the dimensions that already exist: " + again,
-                again.contains("\"returnedExisting\":true"));
+                Reply.of(again).bool("returnedExisting", false));
     }
 
     @Test

@@ -112,13 +112,13 @@ public class VSMidTransitRelogControlE2ETest extends AbstractSharedVsClientE2ETe
         String fixture = exec("artest fixture rocket " + originDim + " " + bx + " " + by + " " + bz
                 + " with-pilot-seat");
         scenario().requireArranged("fixture (with-pilot-seat) failed: " + fixture,
-                fixture.contains("\"ok\":true"));
+                Reply.of(fixture).ok());
         int[] bp = Reply.of("artest fixture rocket", fixture).blockPos("builderPos");
         scenario().requireArranged("fixture missing builderPos: " + fixture, bp != null);
         String assembled = exec("artest rocket assemble " + originDim
                 + " " + bp[0] + " " + bp[1] + " " + bp[2]);
         scenario().requireArranged("a with-pilot-seat build must route to a ship: " + assembled,
-                assembled.contains("\"rocketCount\":0"));
+                (Reply.of(assembled).integerOr("rocketCount", Integer.MIN_VALUE) == 0));
         assertTrue("the piloted origin ship never assembled/loaded in the pool cell (dim "
                 + originDim + ")", waitForLoadedShip(originDim) >= 1);
 
@@ -138,7 +138,7 @@ public class VSMidTransitRelogControlE2ETest extends AbstractSharedVsClientE2ETe
         String named = exec("artest space transit-name " + originDim + " " + shipId);
         scenario().requireArranged("the transit stack must resolve this ship's flight computer and its"
                 + " durable id, or the jump departs nameless: " + named,
-                named.contains("\"afcFound\":true") && !named.contains("\"durableId\":\"\""));
+                Reply.of(named).bool("afcFound", false) && !"".equals(Reply.of(named).text("durableId")));
 
         PilotSeat seat = PilotSeat.byId(this::exec, originDim, shipId)
                 .requireFound("the pilot seat must be found in the assembled ship, or the test is vacuous");
@@ -152,9 +152,9 @@ public class VSMidTransitRelogControlE2ETest extends AbstractSharedVsClientE2ETe
         // void cell he would be dead before the arrival could re-seat him. Geometry measured off
         // the ship's own world pose, not assumed.
         scenario().requireArranged("the landing platform must build: ",
-                exec("artest fill " + originDim + " " + (sx - 12) + " " + (sy - 8) + " " + (sz - 12)
+                Reply.of(exec("artest fill " + originDim + " " + (sx - 12) + " " + (sy - 8) + " " + (sz - 12)
                         + " " + (sx + 12) + " " + (sy - 8) + " " + (sz + 12) + " minecraft:stone")
-                        .contains("\"ok\":true"));
+                        ).ok());
 
         String botName = PlayerState.botName(this::exec);
 
@@ -189,7 +189,7 @@ public class VSMidTransitRelogControlE2ETest extends AbstractSharedVsClientE2ETe
                     + " " + seatX + " " + seatY + " " + seatZ);
             assertTrue("seat-mount-at must spawn the seat dummy: " + mountAt, readBool(mountAt, "ok"));
             mount = exec("artest player mount-entity " + readInt(mountAt, "dummyId"));
-            mounted = mount.contains("\"mounted\":true");
+            mounted = Reply.of(mount).bool("mounted", false);
             if (!mounted) {
                 bot().waitTicks(10);
             }
@@ -269,8 +269,8 @@ public class VSMidTransitRelogControlE2ETest extends AbstractSharedVsClientE2ETe
         // not go through the `stationKeeping` gate, so it can steady a craft that has never flown —
         // which is exactly this craft's state.
         assertTrue("the craft must accept a level attitude command before it is flown",
-                exec("artest vs point-by-id " + originDim + " " + shipId + " 1.0 0.0 0.0 0.0")
-                        .contains("\"commanded\":true"));
+                Reply.of(exec("artest vs point-by-id " + originDim + " " + shipId + " 1.0 0.0 0.0 0.0")
+                        ).bool("commanded", false));
         // A WINDOW, sized from the computer's own limits rather than polled: the hold slews at a
         // 2.0 rad/s ceiling and ramps to it at 4.0 rad/s^2, so even a half-turn is about 45 ticks.
         // The achieved attitude is printed so the size can be re-argued from a measurement.
@@ -287,8 +287,8 @@ public class VSMidTransitRelogControlE2ETest extends AbstractSharedVsClientE2ETe
         // (up-Y 0.9999), stationary (velY ~1e-18) and all 96 inputs received and delivered.
         assertTrue("the probe's attitude hold must be released before the pilot is asked to fly:"
                         + " it commands a zero velocity, so a craft still under it cannot climb",
-                exec("artest vs force-clear-by-id " + originDim + " " + shipId)
-                        .contains("\"ok\":true"));
+                Reply.of(exec("artest vs force-clear-by-id " + originDim + " " + shipId)
+                        ).ok());
         bot().waitTicks(10);
         long clientPilotMark = clientEvents().mark();
         if (!climbedWithinAttempts(3)) {
@@ -317,7 +317,7 @@ public class VSMidTransitRelogControlE2ETest extends AbstractSharedVsClientE2ETe
                 + " " + ax + " " + ay + " " + az + " " + HYPERSPACE_JUMP_SPEED);
         assertTrue("the transit must begin (departure crossing): " + begin, readBool(begin, "began"));
         scenario().requireArranged("the jump must depart under the craft's own name, never the synthetic"
-                + " id a nameless fixture gets: " + begin, !begin.contains("\"shipId\":\"t\""));
+                + " id a nameless fixture gets: " + begin, !"t".equals(Reply.of(begin).text("shipId")));
         // READ, not driven. This scenario's whole subject is a relog that happens WHILE the ship is
         // in transit, so a pump here would be advancing the jump towards the exit for the sake of
         // one field — and the server is advancing it on its own tick anyway.
@@ -402,7 +402,12 @@ public class VSMidTransitRelogControlE2ETest extends AbstractSharedVsClientE2ETe
         scenario().record("arrivalAltitudes", altitudes);
         System.out.println("[relog] arrival altitudes :: " + altitudes
                 + " || ship=" + arrivedShip + " || server=" + serverPlayer);
-        EntryStatus ledgerRow = EntryStatus.forShip(this::exec, durableId);
+        // `requireFound` and not the bare read: the three offsets below are what the arrival is
+        // measured against, and an absent row answers them NaN — which casts to a long zero and
+        // names the cell CENTRE, a coordinate that looks exactly like a settled pose.
+        EntryStatus ledgerRow = EntryStatus.forShip(this::exec, durableId)
+                .requireFound("the ship this pilot relogged aboard must be in the entry ledger before"
+                        + " its settled pose can be read off the row");
         double[] settled = CellWorldMapper.poseWorldOf(GalacticCoord.ofSectorLocal(0L, 0L, 0L,
                 ledgerRow.lx, ledgerRow.ly, ledgerRow.lz));
         scenario().record("settledPose", java.util.Arrays.toString(settled));

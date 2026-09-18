@@ -1,5 +1,6 @@
 package zmaster587.advancedRocketry.test.server;
 
+import zmaster587.advancedRocketry.test.Reply;
 import com.github.stannismod.forge.testing.junit.AbstractHeadlessServerTest;
 import com.github.stannismod.forge.testing.server.RealDedicatedServerHarness;
 import org.junit.After;
@@ -96,7 +97,7 @@ public class PerDimensionWeatherIsolationTest {
         // Rain on A only.
         String setA = String.join("\n",
                 harness.client().execute("artest weather set " + FIXTURE_DIM_A + " rain 12000"));
-        assertTrue("set rain on A failed: " + setA, setA.contains("\"ok\":true"));
+        assertTrue("set rain on A failed: " + setA, Reply.of(setA).ok());
 
         DimWeather wA = weather(FIXTURE_DIM_A);
         DimWeather wB = weather(FIXTURE_DIM_B);

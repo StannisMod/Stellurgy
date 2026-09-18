@@ -150,6 +150,127 @@ public final class Reply {
         return value == null ? fallback : "true".equalsIgnoreCase(value);
     }
 
+    /**
+     * Whether the verb reported success — the {@code ok} FIELD, read by name.
+     *
+     * <p><b>This exists because its absence was the single largest hole in the class.</b> Measured
+     * 2026-09-18: {@code contains("\"ok\":true")} stood at <b>803 sites in 217 files</b>, forty-seven
+     * per cent of every remaining substring test over a rendered reply — and the reason was that the
+     * most frequent question a test asks a probe had no data form at all, while all 22 other verbs
+     * here read a field by name.</p>
+     *
+     * <p><b>What the substring could not do, and this can.</b> A reply that is not JSON, or is a
+     * truncated line, or is a different object entirely, answers {@code false} to the needle and the
+     * caller reads it as "the verb said no". Here it never gets that far: {@link #of(String, String)}
+     * refuses anything that is not one JSON object, naming it. What remains false is exactly one
+     * thing — a reply that carries no {@code ok:true} — which is what the question means.</p>
+     *
+     * <p>A BRANCH may ask this ("it did not take, retry"). A claim that the verb REFUSED is a
+     * different thing and belongs in {@link #requireOk(String)}: {@code !ok()} is also satisfied by
+     * a reply that says nothing at all.</p>
+     */
+    public boolean ok() {
+        return bool("ok", false);
+    }
+
+    /**
+     * This reply, refusing as an ARRANGEMENT failure when the verb did not report success.
+     *
+     * <p>The type is deliberate: a probe verb that would not do what it was asked has not disproved
+     * anything about the mechanic under test — it is the world not having been put in place, and the
+     * gate's XML should record it as that. Use it where the call is a step of the arrangement; leave
+     * an {@code assertTrue} where the verb's success IS the claim under test.</p>
+     */
+    public Reply requireOk(String what) {
+        if (!ok()) {
+            ArrangementFailure.arrangementFailed(what + " — the verb did not report ok: " + raw);
+        }
+        return this;
+    }
+
+    /**
+     * The ONE element of the ARRAY {@code field} whose {@code member} is {@code value} — the object
+     * the caller NAMED — refusing when the list holds no such element, or more than one.
+     *
+     * <p><b>A test checks the object its own fixture created, and this is what lets it say so.</b>
+     * Maintainer ruling 2026-09-18, on the shape this replaces: a verb answering whether ANY
+     * element carries a value is a weaker question than the test's own claim — it passes on a
+     * neighbour's slot, a neighbouring station's row, another satellite — and, because it answers
+     * a {@code boolean}, it THROWS AWAY WHICH ONE MATCHED. A caller that then wants another field
+     * of that object has to ask again, and the second question may land on a different element:
+     * "a slot holds sticks" and "a slot holds 16" are both true of a hatch holding one stick and
+     * sixteen cobblestones. Here the element is fetched once, by the member that IDENTIFIES it,
+     * and everything else is read off THAT object — so a failure names which field differed.</p>
+     *
+     * <p>{@code StationPads.at(x, z)} is the same verb for one producer, and it is where this
+     * vocabulary already lived; this is the general form of it.</p>
+     *
+     * <p><b>Why more than one is also a refusal.</b> You address an element by something that
+     * identifies it — a slot index, an id, a name. Two matches mean the member does not identify,
+     * and every read afterwards is a coin toss wearing the shape of a clean answer.</p>
+     *
+     * <p>Measured 2026-09-18: the substrings these call sites came from searched the WHOLE
+     * rendering, so they found the field wherever it lived. Converting them turned <b>33 server
+     * tests red in one run</b>, each one {@code refuseIfOnlyNested} naming the member that owns the
+     * field — {@code slots[].item}, {@code tanks[].fluid}, {@code items[].item},
+     * {@code stations[].id}, {@code satellites[].id}, {@code rockets[].id}, {@code groups[].name},
+     * {@code ships[].state}. The refusal was right in every case.</p>
+     */
+    public Reply element(String field, String member, String value) {
+        String[] elements = objectArray(field);
+        Reply found = null;
+        for (String element : elements) {
+            Reply one = Reply.of(command + " [" + field + "]", element);
+            if (String.valueOf(value).equals(one.text(member))) {
+                if (found != null) {
+                    throw new AssertionError(command + "'s `" + field + "` holds MORE THAN ONE"
+                            + " element whose `" + member + "` is " + value + ", so that member"
+                            + " does not identify one of them: " + raw);
+                }
+                found = one;
+            }
+        }
+        if (found == null) {
+            throw new AssertionError(command + "'s `" + field + "` holds no element whose `"
+                    + member + "` is " + value + " — it holds " + elements.length + ": " + raw);
+        }
+        return found;
+    }
+
+    /**
+     * Whether the ARRAY {@code field} holds an element whose {@code member} is {@code value}.
+     *
+     * <p><b>For a NEGATIVE claim, and only that</b> — "the hatch no longer holds sticks anywhere",
+     * where absence IS the subject and {@link #element}'s refusal would be the pass. A positive
+     * claim uses {@code element}: a test that built the thing can name it, and naming it is what
+     * makes the reading about that thing.</p>
+     */
+    public boolean holdsElement(String field, String member, String value) {
+        for (String element : objectArray(field)) {
+            if (String.valueOf(value).equals(
+                    Reply.of(command + " [" + field + "]", element).text(member))) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * How many elements the ARRAY field holds, or {@code -1} when the reply carries no such array.
+     *
+     * <p>The {@code -1} is the whole point and it is not a fallback: {@link #intArray} answers an
+     * EMPTY array for a field that is absent, which is the right shape for a caller iterating and
+     * the wrong one for a caller ASKING — "the galaxy registered no dimensions" and "the probe
+     * stopped reporting them" are opposite findings behind one zero. Measured 2026-09-18: seventeen
+     * sites spelled this as {@code contains("\"arDimensions\":[]")}, and the three beside them that
+     * meant "the key is there at all" spelled it {@code contains("\"arDimensions\":[")} — a needle
+     * that is a PREFIX of the first, so one of the two pairs could never have distinguished them.</p>
+     */
+    public int arrayLength(String field) {
+        return json.has(field) && json.get(field).isJsonArray()
+                ? json.getAsJsonArray(field).size() : -1;
+    }
+
     /** One element of a numeric ARRAY field ({@code "pos":[x,y,z]}), or {@code NaN} when the reply
      *  carries no such array or it is shorter than {@code index}. */
     public double arrayNumber(String field, int index) {

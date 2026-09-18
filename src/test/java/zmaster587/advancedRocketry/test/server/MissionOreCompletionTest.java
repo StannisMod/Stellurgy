@@ -70,7 +70,7 @@ public class MissionOreCompletionTest extends AbstractSharedServerTest {
     private long startOreMission(int rocketId, long duration, float drillingPower) throws Exception {
         String start = ok(client().execute(
                 "artest mission start-ore 0 " + rocketId + " " + duration + " " + drillingPower));
-        assertFalse("start-ore must not error: " + start, start.contains("\"error\""));
+        assertFalse("start-ore must not error: " + start, Reply.of(start).has("error"));
         Reply mmReply = Reply.of(start);
         assertTrue("missing missionId in start response: " + start, mmReply.has(MISSION_ID));
         return Long.parseLong(mmReply.text(MISSION_ID));

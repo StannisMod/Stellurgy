@@ -91,10 +91,10 @@ public class AimAndArrivalShareOneClockE2ETest extends AbstractSharedServerTest 
                 moonDim != Integer.MIN_VALUE);
 
         assertTrue("the navigation console must place: ",
-                exec("artest nav place 0 " + NAV_X + " " + NAV_Y + " " + NAV_Z).contains("\"ok\":true"));
+                Reply.of(exec("artest nav place 0 " + NAV_X + " " + NAV_Y + " " + NAV_Z)).ok());
         String aimed = exec("artest nav target-body 0 " + NAV_X + " " + NAV_Y + " " + NAV_Z + " " + moonDim);
         assertTrue("the console must accept the moon as its target body: " + aimed,
-                aimed.contains("\"ok\":true"));
+                Reply.of(aimed).ok());
 
         long clockBefore = jsonLong(exec("artest space frame 0 0 0"), "clock");
         try {
@@ -103,7 +103,7 @@ public class AimAndArrivalShareOneClockE2ETest extends AbstractSharedServerTest 
             long[] aimAtStart = targetAbs(exec("artest nav status 0 " + NAV_X + " " + NAV_Y + " " + NAV_Z));
 
             String moved = exec("artest space set-clock " + (clockBefore + SPLIT_TICKS));
-            assertTrue("the space clock must move: " + moved, moved.contains("\"ok\":true"));
+            assertTrue("the space clock must move: " + moved, Reply.of(moved).ok());
             exec("artest nav refresh 0 " + NAV_X + " " + NAV_Y + " " + NAV_Z);
             String afterSpaceMove = exec("artest nav status 0 " + NAV_X + " " + NAV_Y + " " + NAV_Z);
             long[] aimAfterSpaceMove = targetAbs(afterSpaceMove);
@@ -117,7 +117,7 @@ public class AimAndArrivalShareOneClockE2ETest extends AbstractSharedServerTest 
 
             // ---- LEG B: the contract. Move a clock that is NOT the space clock. Nothing may follow. ----
             String lagged = exec("artest space aim-clock lag " + SPLIT_TICKS);
-            assertTrue("the lagging proxy must install: " + lagged, lagged.contains("\"ok\":true"));
+            assertTrue("the lagging proxy must install: " + lagged, Reply.of(lagged).ok());
 
             // Measure the INPUT before asserting the outcome: a green bought by an arrangement that
             // silently failed to diverge is the failure mode this line exists to make impossible.

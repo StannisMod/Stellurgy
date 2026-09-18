@@ -1,5 +1,6 @@
 package zmaster587.advancedRocketry.test.server;
 
+import zmaster587.advancedRocketry.test.Reply;
 import org.junit.Test;
 
 import java.util.LinkedHashMap;
@@ -45,7 +46,7 @@ public class AffsVendorSmokeTest extends AbstractSharedServerTest {
             int x = baseX + e.getValue();
             String resp = join(client().execute(
                     "artest place 0 " + x + " " + y + " " + z + " " + e.getKey()));
-            if (!resp.contains("\"placed\":true")) {
+            if (!Reply.of(resp).bool("placed", false)) {
                 failures.append(e.getKey()).append(" -> ").append(resp).append('\n');
             }
         }

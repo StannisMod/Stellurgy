@@ -85,12 +85,12 @@ public class RocketPreLaunchEventCancellationTest extends AbstractSharedServerTe
             // the event; the test listener cancels it.
             String arm = exec("artest rocket arm-prelaunch-cancel");
             assertTrue("arm probe failed: " + arm,
-                    arm.contains("\"armed\":true"));
+                    Reply.of(arm).bool("armed", false));
 
             String launch = exec("artest rocket launch " + entityId + " true prepare");
             assertTrue("rocket launch (prepare mode) must not error even when "
                             + "cancelled: " + launch,
-                    launch.contains("\"ok\":true") || launch.contains("\"entityId\":"));
+                    Reply.of(launch).ok() || Reply.of(launch).has("entityId"));
 
             RocketInfo info = RocketInfo.byId(WorldCommandFixtures::exec, entityId);
             assertEquals("cancelled prepareLaunch must leave LAUNCH_COUNTER "
@@ -123,7 +123,7 @@ public class RocketPreLaunchEventCancellationTest extends AbstractSharedServerTe
         String launch = exec("artest rocket launch " + entityId + " true prepare");
         assertTrue("rocket launch (prepare mode) must succeed when not cancelled: "
                         + launch,
-                launch.contains("\"ok\":true") || launch.contains("\"entityId\":"));
+                Reply.of(launch).ok() || Reply.of(launch).has("entityId"));
 
         RocketInfo info = RocketInfo.byId(WorldCommandFixtures::exec, entityId);
         assertEquals("uncancelled prepareLaunch must seed LAUNCH_COUNTER to 200 "
@@ -146,14 +146,14 @@ public class RocketPreLaunchEventCancellationTest extends AbstractSharedServerTe
         String fixture = exec("artest fixture rocket 0 " + baseX + " " + CY + " " + CZ
                 + " simple");
         assertTrue("fixture build failed: " + fixture,
-                fixture.contains("\"ok\":true"));
+                Reply.of(fixture).ok());
         int[] bp = Reply.of(fixture).blockPos(BUILDER_POS);
         assertTrue("fixture missing builderPos: " + fixture, bp != null);
 
         String assemble = exec("artest rocket assemble 0 "
                 + bp[0] + " " + bp[1] + " " + bp[2]);
         assertTrue("assemble must succeed: " + assemble,
-                assemble.contains("\"ok\":true"));
+                Reply.of(assemble).ok());
 
         Reply eimReply = Reply.of(assemble);
         assertTrue("no entityId in assemble response: " + assemble, eimReply.has(ENTITY_ID));

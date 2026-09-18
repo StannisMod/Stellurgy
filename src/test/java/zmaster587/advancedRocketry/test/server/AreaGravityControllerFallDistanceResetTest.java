@@ -61,7 +61,7 @@ public class AreaGravityControllerFallDistanceResetTest extends AbstractSharedSe
         ok("artest fixture multiblock gravity-controller 0 " + CX + " " + CY + " " + CZ);
         String complete = exec("artest machine try-complete 0 " + CX + " " + CY + " " + CZ);
         assertTrue("controller must validate: " + complete,
-                complete.contains("\"isComplete\":true"));
+                Reply.of(complete).bool("isComplete", false));
 
         // 2) Power the plug below the controller + enable the machine.
         //    isRunning() = getMachineEnabled() && isStateActive(...); a freshly
@@ -105,7 +105,7 @@ public class AreaGravityControllerFallDistanceResetTest extends AbstractSharedSe
     private int spawnPinnedStand(double x, double y, double z) throws Exception {
         String resp = exec("artest entity spawn 0 " + x + " " + y + " " + z
                 + " minecraft:armor_stand");
-        assertTrue("entity spawn must succeed: " + resp, resp.contains("\"ok\":true"));
+        assertTrue("entity spawn must succeed: " + resp, Reply.of(resp).ok());
         Reply mReply = Reply.of(resp);
         assertTrue("spawn must report entityId: " + resp, mReply.has("entityId"));
         int id = mReply.integer("entityId");
@@ -135,6 +135,6 @@ public class AreaGravityControllerFallDistanceResetTest extends AbstractSharedSe
     private void ok(String cmd) throws Exception {
         String resp = exec(cmd);
         assertTrue("probe must succeed: cmd='" + cmd + "' resp=" + resp,
-                resp.contains("\"ok\":true"));
+                Reply.of(resp).ok());
     }
 }

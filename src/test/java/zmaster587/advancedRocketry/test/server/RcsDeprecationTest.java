@@ -63,7 +63,7 @@ public class RcsDeprecationTest extends AbstractSharedServerTest {
 
         String fixture = ok(client().execute(
                 "artest fixture rocket 0 " + baseX + " " + baseY + " " + baseZ + " simple"));
-        assertTrue("fixture failed: " + fixture, fixture.contains("\"ok\":true"));
+        assertTrue("fixture failed: " + fixture, Reply.of(fixture).ok());
         int[] bp = Reply.of(fixture).blockPos(BUILDER_POS);
         assertTrue("fixture missing builderPos: " + fixture, bp != null);
         int bx = bp[0];
@@ -72,7 +72,7 @@ public class RcsDeprecationTest extends AbstractSharedServerTest {
 
         String assemble = ok(client().execute(
                 "artest rocket assemble 0 " + bx + " " + by + " " + bz));
-        assertTrue("assemble failed: " + assemble, assemble.contains("\"ok\":true"));
+        assertTrue("assemble failed: " + assemble, Reply.of(assemble).ok());
 
         String list = ok(client().execute("artest rocket list 0"));
         java.util.List<RocketList.Entry> built = RocketList.of(list);
@@ -87,7 +87,7 @@ public class RcsDeprecationTest extends AbstractSharedServerTest {
         // Drive the deprecated TOGGLE_RCS server path directly — the probe
         // invokes EntityRocket.toggleRCS() and reports RCS_MODE before/after.
         String resp = ok(client().execute("artest rocket toggle-rcs " + id));
-        assertTrue("toggle-rcs probe failed: " + resp, resp.contains("\"ok\":true"));
+        assertTrue("toggle-rcs probe failed: " + resp, Reply.of(resp).ok());
 
         Reply toggled = Reply.of("artest rocket toggle-rcs", resp);
         assertTrue("response missing rcsBefore: " + resp, toggled.has(RCS_BEFORE));

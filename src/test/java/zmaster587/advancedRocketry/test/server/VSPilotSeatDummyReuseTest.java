@@ -31,11 +31,11 @@ public class VSPilotSeatDummyReuseTest extends AbstractSharedServerTest {
         int x = 3000, y = FixtureSite.OPEN_AIR_Y, z = 3000;
         String warmup = String.join("\n", client().execute(
                 "artest chunk warmup 0 " + (x >> 4) + " " + (z >> 4) + " " + (x >> 4) + " " + (z >> 4)));
-        assertTrue("chunk warmup failed: " + warmup, warmup.contains("\"ok\":true"));
+        assertTrue("chunk warmup failed: " + warmup, Reply.of(warmup).ok());
         String place = String.join("\n", client().execute("artest fill 0 "
                 + x + " " + y + " " + z + " " + x + " " + y + " " + z
                 + " advancedrocketry:pilotSeat"));
-        assertTrue("placing the pilot seat failed: " + place, place.contains("\"ok\":true"));
+        assertTrue("placing the pilot seat failed: " + place, Reply.of(place).ok());
 
         // The bare form is right here and nowhere else: this test PLACES the only pilot seat in the
         // world two statements above, and the reader's seat count is what says so in a failure.

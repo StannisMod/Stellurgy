@@ -165,7 +165,7 @@ public class VSRiderKeepsHisMountAtCruiseE2ETest extends AbstractSharedVsClientE
         String assembled = exec("artest rocket assemble " + dim
                 + " " + bp[0] + " " + bp[1] + " " + bp[2]);
         scenario().requireArranged("a with-pilot-seat build must route to a ship: " + assembled,
-                assembled.contains("\"rocketCount\":0"));
+                (Reply.of(assembled).integerOr("rocketCount", Integer.MIN_VALUE) == 0));
         scenario().requireArranged("the ship never assembled/loaded in the cell (dim " + dim + ")",
                 waitForLoadedShip(dim) >= 1);
 
@@ -216,7 +216,7 @@ public class VSRiderKeepsHisMountAtCruiseE2ETest extends AbstractSharedVsClientE
                     readBool(mountAt, "ok"));
             dummyId = readInt(mountAt, "dummyId");
             mount = exec("artest player mount-entity " + dummyId);
-            mounted = mount.contains("\"mounted\":true");
+            mounted = Reply.of(mount).bool("mounted", false);
             if (!mounted) {
                 bot().waitTicks(10);
             }
@@ -260,7 +260,7 @@ public class VSRiderKeepsHisMountAtCruiseE2ETest extends AbstractSharedVsClientE
             String mountAt = exec("artest vs seat-mount-at " + dim
                     + " " + mountX + " " + mountY + " " + mountZ);
             mount = exec("artest player mount-entity " + readInt(mountAt, "dummyId"));
-            mounted = mount.contains("\"mounted\":true");
+            mounted = Reply.of(mount).bool("mounted", false);
             if (!mounted) {
                 bot().waitTicks(10);
             }

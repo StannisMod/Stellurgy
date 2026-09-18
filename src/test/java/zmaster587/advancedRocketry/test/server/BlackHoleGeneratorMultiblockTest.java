@@ -1,5 +1,6 @@
 package zmaster587.advancedRocketry.test.server;
 
+import zmaster587.advancedRocketry.test.Reply;
 import org.junit.Test;
 
 import zmaster587.advancedRocketry.test.EnergyStore;
@@ -38,7 +39,7 @@ public class BlackHoleGeneratorMultiblockTest extends AbstractSharedServerTest {
         String fixture = join(client().execute(
                 "artest fixture multiblock blackhole-gen 0 " + CX + " " + CY + " " + CZ));
         assertTrue("fixture multiblock blackhole-gen failed: " + fixture,
-                fixture.contains("\"ok\":true"));
+                Reply.of(fixture).ok());
 
         // Sanity: controller is the right tile class.
         String info = join(client().execute(
@@ -72,9 +73,9 @@ public class BlackHoleGeneratorMultiblockTest extends AbstractSharedServerTest {
         String tryComplete = join(client().execute(
                 "artest machine try-complete 0 " + CX + " " + CY + " " + CZ));
         assertTrue("try-complete probe errored: " + tryComplete,
-                tryComplete.contains("\"ok\":true"));
+                Reply.of(tryComplete).ok());
         assertTrue("BHG multiblock didn't validate (isComplete=false): " + tryComplete + layout,
-                tryComplete.contains("\"isComplete\":true"));
+                Reply.of(tryComplete).bool("isComplete", false));
     }
 
     @Test
@@ -84,28 +85,28 @@ public class BlackHoleGeneratorMultiblockTest extends AbstractSharedServerTest {
         int cx = CX + 30, cy = CY, cz = CZ;
         String fixture = join(client().execute(
                 "artest fixture multiblock blackhole-gen 0 " + cx + " " + cy + " " + cz));
-        assertTrue("fixture build failed: " + fixture, fixture.contains("\"ok\":true"));
+        assertTrue("fixture build failed: " + fixture, Reply.of(fixture).ok());
 
         // First validate — should pass.
         String first = join(client().execute(
                 "artest machine try-complete 0 " + cx + " " + cy + " " + cz));
         assertTrue("baseline try-complete should pass: " + first,
-                first.contains("\"isComplete\":true"));
+                Reply.of(first).bool("isComplete", false));
 
         // Break the lower1Mid column block (directly under centre at y=cy-1).
         // Production validator must notice and flip isComplete back to false.
         String breakBlock = join(client().execute(
                 "artest place 0 " + cx + " " + (cy - 1) + " " + (cz + 1) + " minecraft:air"));
         assertTrue("could not replace lower1 with air: " + breakBlock,
-                breakBlock.contains("\"ok\":true"));
+                Reply.of(breakBlock).ok());
 
         String broken = join(client().execute(
                 "artest machine try-complete 0 " + cx + " " + cy + " " + cz));
         assertTrue("try-complete after break errored: " + broken,
-                broken.contains("\"ok\":true"));
+                Reply.of(broken).ok());
         assertTrue("structure stayed complete after column block removal — "
                         + "validator broken: " + broken,
-                broken.contains("\"isComplete\":false"));
+                (!Reply.of(broken).bool("isComplete", true)));
     }
 
     @Test
@@ -114,13 +115,13 @@ public class BlackHoleGeneratorMultiblockTest extends AbstractSharedServerTest {
         int cx = CX + 60, cy = CY, cz = CZ;
         String fixture = join(client().execute(
                 "artest fixture multiblock blackhole-gen 0 " + cx + " " + cy + " " + cz));
-        assertTrue("fixture build failed: " + fixture, fixture.contains("\"ok\":true"));
+        assertTrue("fixture build failed: " + fixture, Reply.of(fixture).ok());
 
         // Form it so the controller's MultiBattery wires up the output plug.
         String formed = join(client().execute(
                 "artest machine try-complete 0 " + cx + " " + cy + " " + cz));
         assertTrue("formation must succeed: " + formed,
-                formed.contains("\"isComplete\":true"));
+                Reply.of(formed).bool("isComplete", false));
 
         // The forgePowerOutput plug at (cx+1, cy, cz+1) must expose an
         // IEnergyStorage capability with non-zero max. After formation the
@@ -150,12 +151,12 @@ public class BlackHoleGeneratorMultiblockTest extends AbstractSharedServerTest {
         int cx = CX + 90, cy = CY, cz = CZ;
         String fixture = join(client().execute(
                 "artest fixture multiblock blackhole-gen 0 " + cx + " " + cy + " " + cz));
-        assertTrue("fixture build failed: " + fixture, fixture.contains("\"ok\":true"));
+        assertTrue("fixture build failed: " + fixture, Reply.of(fixture).ok());
 
         String formed = join(client().execute(
                 "artest machine try-complete 0 " + cx + " " + cy + " " + cz));
         assertTrue("formation must succeed: " + formed,
-                formed.contains("\"isComplete\":true"));
+                Reply.of(formed).bool("isComplete", false));
 
         // Drive many controller updates — production update() consults
         // isAroundBlackHole() each call. With no black-hole context, the
@@ -163,7 +164,7 @@ public class BlackHoleGeneratorMultiblockTest extends AbstractSharedServerTest {
         String tick = join(client().execute(
                 "artest tile force-tick 0 " + cx + " " + cy + " " + cz + " 100"));
         assertTrue("force-tick must complete without exception: " + tick,
-                tick.contains("\"ok\":true"));
+                Reply.of(tick).ok());
 
         // Energy stored at the output plug must remain 0 (no production).
         int px = cx + 1, py = cy, pz = cz + 1;

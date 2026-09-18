@@ -1,5 +1,6 @@
 package zmaster587.advancedRocketry.test.client;
 
+import zmaster587.advancedRocketry.test.Reply;
 import com.github.stannismod.forge.testing.client.RealClientHarness;
 import com.github.stannismod.forge.testing.junit.AbstractClientE2ETest;
 import com.github.stannismod.forge.testing.junit.AbstractHeadlessServerTest;
@@ -219,10 +220,10 @@ public class SpawnPointReachesClientE2ETest {
         String silent = exec("artest dim set-spawn 0 "
                 + SPAWN_B_X + " " + SPAWN_B_Y + " " + SPAWN_B_Z);
         assertTrue("silent set-spawn must have taken effect server-side: " + silent,
-                silent.contains("\"ok\":true")
-                        && silent.contains("\"spawnX\":" + SPAWN_B_X)
-                        && silent.contains("\"spawnY\":" + SPAWN_B_Y)
-                        && silent.contains("\"spawnZ\":" + SPAWN_B_Z));
+                Reply.of(silent).ok()
+                        && String.valueOf(SPAWN_B_X).equals(Reply.of(silent).text("spawnX"))
+                        && String.valueOf(SPAWN_B_Y).equals(Reply.of(silent).text("spawnY"))
+                        && String.valueOf(SPAWN_B_Z).equals(Reply.of(silent).text("spawnZ")));
         clientHarness.bot().waitTicks(20);
         assertSpawnEquals("silent set-spawn must NOT have pushed a packet — if the client"
                         + " already reads B here the arrange leaked and the assertion below"
@@ -235,7 +236,7 @@ public class SpawnPointReachesClientE2ETest {
         // read a spawn point from.
         String load = exec("artest dim load " + PLANET_DIM);
         assertTrue("destination dim must load before it can be inspected: " + load,
-                load.contains("\"ok\":true") || load.contains("\"loaded\":true"));
+                Reply.of(load).ok() || Reply.of(load).bool("loaded", false));
         DimInfo destOracle = DimInfo.forDim(this::exec, PLANET_DIM);
         assertTrue("destination server-side spawn must be B: " + destOracle.raw(),
                 destOracle.spawnX() == SPAWN_B_X

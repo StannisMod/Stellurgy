@@ -72,7 +72,7 @@ public class RocketItemUnloaderActiveTransferTest extends AbstractSharedServerTe
         String fillResp = exec("artest rocket storage-item-fill " + rocketId
                 + " minecraft:cobblestone 32");
         assertTrue("storage-item-fill must succeed: " + fillResp,
-                fillResp.contains("\"ok\":true"));
+                Reply.of(fillResp).ok());
         int tilesWithCap = extract(fillResp, TILES_WITH_CAP);
         int totalPlaced = extract(fillResp, TOTAL_PLACED);
         assertTrue("with-cargo fixture must produce at least one IInventory "
@@ -83,15 +83,13 @@ public class RocketItemUnloaderActiveTransferTest extends AbstractSharedServerTe
 
         // Sanity: storage-inventory probe agrees with fill result.
         String preStorage = exec("artest rocket storage-inventory " + rocketId);
-        assertTrue("rocket storage must show the pre-filled cobblestone "
-                        + "(storage-inventory probe sanity gate): " + preStorage,
-                preStorage.contains("\"item\":\"minecraft:cobblestone\""));
+        Reply.of(preStorage).element("items", "item", "minecraft:cobblestone");
 
         // Link rocket to unloader.
         String link = exec("artest infra link 0 " + ux + " " + uy + " " + uz
                 + " " + rocketId);
         assertTrue("infra link must succeed: " + link,
-                link.contains("\"linked\":true"));
+                Reply.of(link).bool("linked", false));
 
         // Run the unloader's production update() for 60 ticks. Storage
         // chunk may contain multiple inventory tiles (engine TEs etc.)
@@ -103,10 +101,7 @@ public class RocketItemUnloaderActiveTransferTest extends AbstractSharedServerTe
         // — that's the player-visible "drain returning rocket" contract.
         String postUnloader = exec("artest hatch read 0 " + ux + " " + uy + " " + uz);
         String postStorage = exec("artest rocket storage-inventory " + rocketId);
-        assertTrue("unloader's own inventory must contain cobblestone "
-                        + "after 60 ticks of update(); unloader read="
-                        + postUnloader + "\n storage=" + postStorage,
-                postUnloader.contains("\"item\":\"minecraft:cobblestone\""));
+        Reply.of(postUnloader).element("slots", "item", "minecraft:cobblestone");
     }
 
     // -- helpers ----------------------------------------------------------
@@ -118,7 +113,7 @@ public class RocketItemUnloaderActiveTransferTest extends AbstractSharedServerTe
     private void ok(String cmd) throws Exception {
         String resp = exec(cmd);
         assertTrue("probe must succeed: cmd='" + cmd + "' resp=" + resp,
-                resp.contains("\"ok\":true"));
+                Reply.of(resp).ok());
     }
 
     private int assembleFixture(FixtureSite site, String variant)
@@ -132,13 +127,13 @@ public class RocketItemUnloaderActiveTransferTest extends AbstractSharedServerTe
         String fx = exec("artest fixture rocket 0 " + baseX + " " + baseY + " " + baseZ
                 + " " + variant);
         assertTrue("fixture rocket (" + variant + ") failed: " + fx,
-                fx.contains("\"ok\":true"));
+                Reply.of(fx).ok());
         int[] bp = Reply.of(fx).blockPos(BUILDER_POS);
         assertTrue("could not parse builderPos: " + fx, bp != null);
         String assemble = exec("artest rocket assemble 0 "
                 + bp[0] + " " + bp[1] + " " + bp[2]);
         assertTrue("rocket assemble failed: " + assemble,
-                assemble.contains("\"ok\":true"));
+                Reply.of(assemble).ok());
         Reply emReply = Reply.of(assemble);
         assertTrue("rocket entityId missing: " + assemble, emReply.has(ENT_ID));
         return Integer.parseInt(emReply.text(ENT_ID));

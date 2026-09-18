@@ -50,7 +50,7 @@ public class NebulaSkyFeedE2ETest extends AbstractHeadlessServerTest {
     public void aGalaxyWithClustersInItHasCloudsToLookAt() throws Exception {
         String installed = exec(GEN_INSTALL);
         assertTrue("the procedural generator must install: " + installed,
-                installed.contains("\"ok\":true"));
+                Reply.of(installed).ok());
 
         SkyNebulae feed = SkyNebulae.at(this::exec, findACloud().sectorX(), 0, 0);
         assertTrue("and that sky must hold the cloud the finder found: " + feed.raw(),
@@ -70,7 +70,7 @@ public class NebulaSkyFeedE2ETest extends AbstractHeadlessServerTest {
         // it has no clusters and no gas. A feed that produced a cloud here would be producing it from
         // nothing — and a landmark nobody generated is worse than no landmark.
         String reset = exec("artest space gen-reset");
-        assertTrue("the default generator must be restorable: " + reset, reset.contains("\"ok\":true"));
+        assertTrue("the default generator must be restorable: " + reset, Reply.of(reset).ok());
 
         SkyNebulae feed = SkyNebulae.at(this::exec, 0, 0, 0);
         assertEquals("a universe with no clusters must seat no clouds: " + feed.raw(),
@@ -96,7 +96,7 @@ public class NebulaSkyFeedE2ETest extends AbstractHeadlessServerTest {
         // real cloud in a real world, and a clear line beside it as the control.
         String installed = exec(GEN_INSTALL);
         assertTrue("the procedural generator must install: " + installed,
-                installed.contains("\"ok\":true"));
+                Reply.of(installed).ok());
 
         NebulaSearch found = findACloud();
         // A sight line THROUGH the cloud's core: from two radii short of its centre to two radii
@@ -113,7 +113,7 @@ public class NebulaSkyFeedE2ETest extends AbstractHeadlessServerTest {
 
         String through = exec("artest space extinction " + near + " " + far);
         assertTrue("the probe must answer for a real sight line: " + through,
-                through.contains("\"ok\":true"));
+                Reply.of(through).ok());
         assertTrue("a line that reaches a cloud's neighbourhood must cross SOME matter: " + through,
                 decimal(through, "column") > 0d);
         assertTrue("and the magnitudes must follow the column, not be invented: " + through,
@@ -121,7 +121,7 @@ public class NebulaSkyFeedE2ETest extends AbstractHeadlessServerTest {
 
         // The control: no generator, hence no clusters, hence nothing to cross.
         String reset = exec("artest space gen-reset");
-        assertTrue("the default generator must be restorable: " + reset, reset.contains("\"ok\":true"));
+        assertTrue("the default generator must be restorable: " + reset, Reply.of(reset).ok());
         String clear = exec("artest space extinction " + near + " " + far);
         assertEquals("a universe with no clouds must dim nothing: " + clear, 0d,
                 decimal(clear, "magnitudes"), 1.0E-9d);
@@ -133,7 +133,7 @@ public class NebulaSkyFeedE2ETest extends AbstractHeadlessServerTest {
         // the reading it is judged against is unchanged either way.
         String installed = exec(GEN_INSTALL);
         assertTrue("the procedural generator must install: " + installed,
-                installed.contains("\"ok\":true"));
+                Reply.of(installed).ok());
         NebulaSearch found = findACloud();
         // A sight line THROUGH the cloud's core: from two radii short of its centre to two radii
         // past it, along X. Built from where the generator says the cloud IS — the first version of
@@ -151,12 +151,12 @@ public class NebulaSkyFeedE2ETest extends AbstractHeadlessServerTest {
             exec("artest config set telescopeObscuredAtMagnitudes 0.0001");
             String strict = exec("artest space extinction " + near + " " + far);
             assertTrue("at a threshold below the real reading the line must count as obscured: "
-                    + strict, strict.contains("\"obscured\":true"));
+                    + strict, Reply.of(strict).bool("obscured", false));
 
             exec("artest config set telescopeObscuredAtMagnitudes 0");
             String off = exec("artest space extinction " + near + " " + far);
             assertTrue("with the mechanic off nothing is obscured: " + off,
-                    off.contains("\"obscured\":false"));
+                    (!Reply.of(off).bool("obscured", true)));
             assertTrue("and the dust itself is still measured — the flag removes the RULE, not the"
                     + " physics: " + off, decimal(off, "magnitudes") > 0d);
         } finally {
@@ -171,7 +171,7 @@ public class NebulaSkyFeedE2ETest extends AbstractHeadlessServerTest {
         // and a filter doing its job would be indistinguishable from a generator that stopped seating.
         String installed = exec(GEN_INSTALL);
         assertTrue("the procedural generator must install: " + installed,
-                installed.contains("\"ok\":true"));
+                Reply.of(installed).ok());
 
         SkyNebulae feed = SkyNebulae.at(this::exec, findACloud().sectorX(), 0, 0);
 

@@ -132,7 +132,7 @@ public class PerDimWorldInfoMasterToggleTest {
 
         // Master OFF before the dim is EVER loaded -> shouldWrap runtime-gates it
         // out, so the first load keeps the vanilla DerivedWorldInfo.
-        assertTrue(cmd("artest config set perDimWorldInfo false").contains("\"ok\":true"));
+        assertTrue(Reply.of(cmd("artest config set perDimWorldInfo false")).ok());
 
         DimWeather info = weather(FIXTURE_DIM); // first load
         assertFalse("with perDimWorldInfo OFF a freshly-loaded planet must NOT be "
@@ -148,8 +148,8 @@ public class PerDimWorldInfoMasterToggleTest {
         // Master ON (boot default, set explicitly for clarity) but the weather
         // SUB-toggle OFF — the leak-fix contract: the wrapper that owns per-dim
         // TIME must still install even though custom weather is disabled.
-        assertTrue(cmd("artest config set perDimWorldInfo true").contains("\"ok\":true"));
-        assertTrue(cmd("artest config set enableCustomPlanetWeather false").contains("\"ok\":true"));
+        assertTrue(Reply.of(cmd("artest config set perDimWorldInfo true")).ok());
+        assertTrue(Reply.of(cmd("artest config set enableCustomPlanetWeather false")).ok());
 
         DimWeather info = weather(FIXTURE_DIM); // first load
         assertTrue("perDimWorldInfo ON + weather OFF must STILL wrap the planet "

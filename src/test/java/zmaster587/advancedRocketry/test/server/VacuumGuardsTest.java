@@ -102,7 +102,7 @@ public class VacuumGuardsTest {
      *  AtmosphereHandler settle so the guards query a live atmosphere. */
     private void enterDim(int dim) throws Exception {
         String fake = exec("artest player ensure-fake " + dim + " 8.5 120 8.5");
-        assertTrue("ensure-fake must succeed: " + fake, fake.contains("\"ok\":true"));
+        assertTrue("ensure-fake must succeed: " + fake, Reply.of(fake).ok());
         exec("artest player tick-living 40");
         // Let the server run those ticks plus room for the AtmosphereHandler to settle, so the guards
         // below query a live atmosphere. In ticks: the settle is per-tick work, and a busy box used to

@@ -67,7 +67,7 @@ public final class ShipIdentity {
                 + " one particular craft: " + assembleReply, durableId != null);
         assertTrue("the pad carried more than one flight computer, so the id names one of several"
                 + " craft and the scenario cannot say which: " + assembleReply,
-                assembleReply.contains("\"afcCount\":1"));
+                (Reply.of(assembleReply).integerOr("afcCount", Integer.MIN_VALUE) == 1));
         return durableId;
     }
 
@@ -85,7 +85,7 @@ public final class ShipIdentity {
         String reply = probe.exec("artest vs ship-uuid " + dim + " " + durableShipId);
         assertTrue("no loaded hull in dim " + dim + " carries the name " + durableShipId + ", so every"
                 + " later `vs` call would have to guess which craft is meant: " + reply,
-                reply.contains("\"found\":true"));
+                Reply.of(reply).bool("found", false));
         String id = Reply.of("artest vs ship-uuid", reply).text("id");
         assertTrue("the bridge reported found:true without an id: " + reply, id != null);
         return id;
@@ -162,7 +162,7 @@ public final class ShipIdentity {
         for (int attempt = 0; attempt < attempts; attempt++) {
             reply = probe.exec("artest vs ship-uuid " + dim + " " + durableShipId);
             String hullId = Reply.of("artest vs ship-uuid", reply).text("id");
-            if (reply.contains("\"found\":true") && hullId != null) {
+            if (Reply.of(reply).bool("found", false) && hullId != null) {
                 return hullId;
             }
             between.await();
@@ -261,7 +261,7 @@ public final class ShipIdentity {
             }
         }
         for (String entered : Events.records(log.since(mark, "deck_entered"))) {
-            if (!entered.contains("\"ship\":\"" + shipId + "\"") && endsIt(entered, held)) {
+            if (!String.valueOf(shipId).equals(Reply.of(entered).text("ship")) && endsIt(entered, held)) {
                 return false;
             }
         }

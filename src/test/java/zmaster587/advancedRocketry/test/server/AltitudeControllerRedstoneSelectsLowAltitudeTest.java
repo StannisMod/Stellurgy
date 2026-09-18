@@ -34,7 +34,7 @@ public class AltitudeControllerRedstoneSelectsLowAltitudeTest extends AbstractSh
         exec("artest dim load " + SPACE_DIM);
 
         String create = exec("artest station create 0");
-        assertTrue("station must create: " + create, create.contains("\"ok\":true"));
+        assertTrue("station must create: " + create, Reply.of(create).ok());
         int stationId = extract(STATION_ID, create);
 
         StationInfo info = station(stationId);
@@ -44,13 +44,13 @@ public class AltitudeControllerRedstoneSelectsLowAltitudeTest extends AbstractSh
                 + " " + (cx + 1) + " " + cy + " " + (cz + 1) + " minecraft:air");
         String place = exec("artest place " + SPACE_DIM + " " + cx + " " + cy + " " + cz
                 + " advancedrocketry:altitudeController");
-        assertTrue("altitude controller must place: " + place, place.contains("\"placed\":true"));
+        assertTrue("altitude controller must place: " + place, Reply.of(place).bool("placed", false));
 
         // Put the controller into redstone-ON mode (default is OFF). With no redstone
         // wiring around it, getStrongPower(pos) == 0.
         String setRs = exec("artest station controller-set-redstone " + SPACE_DIM + " "
                 + cx + " " + cy + " " + cz + " ON");
-        assertTrue("controller-set-redstone must succeed: " + setRs, setRs.contains("\"ok\":true"));
+        assertTrue("controller-set-redstone must succeed: " + setRs, Reply.of(setRs).ok());
 
         // A few ticks: the redstone branch writes targetOrbitalDistance = f(power=0) each tick.
         exec("artest tile force-tick " + SPACE_DIM + " " + cx + " " + cy + " " + cz + " 3");

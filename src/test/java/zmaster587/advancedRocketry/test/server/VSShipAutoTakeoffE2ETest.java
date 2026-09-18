@@ -56,13 +56,13 @@ public class VSShipAutoTakeoffE2ETest extends AbstractSharedServerTest {
     public void autoTakeoffDeclinesWhenBlockedAndClimbsIntoSpaceWhenClear() throws Exception {
 
         String setup = exec("artest space entry-setup 2");
-        assertTrue("entry setup failed: " + setup, setup.contains("\"ok\":true"));
+        assertTrue("entry setup failed: " + setup, Reply.of(setup).ok());
 
         // Build + assemble a piloted ship in the overworld.
         clearArea(SRC_X, SRC_Z);
         String coords = placeFixture(SRC_X, SRC_Y, SRC_Z, "with-pilot-seat");
         String asm = exec("artest rocket assemble 0 " + coords);
-        assertTrue("AFC build must route to a ship: " + asm, asm.contains("\"rocketCount\":0"));
+        assertTrue("AFC build must route to a ship: " + asm, (Reply.of(asm).integerOr("rocketCount", Integer.MIN_VALUE) == 0));
         assertTrue("source ship never loaded", loadedShips(0) >= 1);
 
         // WHICH ship this scenario is about, taken from the moment that CREATED it: the assembler
@@ -80,35 +80,35 @@ public class VSShipAutoTakeoffE2ETest extends AbstractSharedServerTest {
         // The corridor is a 45-degree diagonal, so it moves ~1 block sideways per block of climb; a
         // blocking slab must be CLOSE overhead and WIDE enough to intercept it before it exits the span.
         int slabY = (int) sy + 5;
-        assertTrue("slab fill failed", exec("artest fill 0 " + ((int) sx - 20) + " " + slabY + " " + ((int) sz - 20)
+        assertTrue("slab fill failed", Reply.of(exec("artest fill 0 " + ((int) sx - 20) + " " + slabY + " " + ((int) sz - 20)
                 + " " + ((int) sx + 20) + " " + (slabY + 2) + " " + ((int) sz + 20) + " minecraft:stone")
-                .contains("\"ok\":true"));
+                ).ok());
         // No manual FF input: the autopilot alone drives (its branch requires in == null). entry-setup
         // cleared any stale static input channel.
         String engaged = exec("artest space auto-takeoff 0 id " + shipId);
-        assertTrue("auto-takeoff did not engage: " + engaged, engaged.contains("\"engaged\":true"));
+        assertTrue("auto-takeoff did not engage: " + engaged, Reply.of(engaged).bool("engaged", false));
 
         // The raycast runs on the AFC's OWN tick, so this is a wait for that tick to happen a few
         // times - which is a number of ticks, not a number of seconds.
         final String[] status = {""};
         boolean declined = GameTicks.until(client(), GameTicks.server(), DECLINE_TICKS, () -> {
             status[0] = exec("artest space auto-takeoff 0 id " + shipId + " status");
-            return status[0].contains("\"engaged\":false");
+            return (!Reply.of(status[0]).bool("engaged", true));
         });
         assertTrue("auto-takeoff did not decline a blocked corridor (still engaged): " + status[0],
                 declined);
 
         // ---- CLIMB + ENTER leg: clear the slab, hop the ship just below the ceiling, engage, enter. ----
-        assertTrue("slab clear failed", exec("artest fill 0 " + ((int) sx - 20) + " " + slabY + " " + ((int) sz - 20)
+        assertTrue("slab clear failed", Reply.of(exec("artest fill 0 " + ((int) sx - 20) + " " + slabY + " " + ((int) sz - 20)
                 + " " + ((int) sx + 20) + " " + (slabY + 2) + " " + ((int) sz + 20) + " minecraft:air")
-                .contains("\"ok\":true"));
+                ).ok());
         String tp = exec("artest vs teleport-ship-by-id 0 " + shipId + " "
                 + (int) sx + " " + NEAR_CEILING_Y + " " + (int) sz);
-        assertTrue("hop teleport failed: " + tp, tp.contains("\"ok\":true"));
+        assertTrue("hop teleport failed: " + tp, Reply.of(tp).ok());
         exec("artest vs unpark-by-id 0 " + shipId);
         String reEngage = exec("artest space auto-takeoff 0 id " + shipId);
         assertTrue("auto-takeoff did not re-engage over a clear corridor: " + reEngage,
-                reEngage.contains("\"engaged\":true"));
+                Reply.of(reEngage).bool("engaged", false));
 
         boolean settled = false;
         final EntryStatus[] entry = new EntryStatus[1];
@@ -151,14 +151,14 @@ public class VSShipAutoTakeoffE2ETest extends AbstractSharedServerTest {
         int cx1 = (baseX - 4) >> 4, cz1 = (baseZ - 4) >> 4;
         int cx2 = (baseX + 20) >> 4, cz2 = (baseZ + 20) >> 4;
         assertTrue("chunk warmup failed",
-                exec("artest chunk warmup 0 " + cx1 + " " + cz1 + " " + cx2 + " " + cz2).contains("\"ok\":true"));
-        assertTrue("pre-clear failed", exec("artest fill 0 " + (baseX - 4) + " " + (SRC_Y - 2) + " " + (baseZ - 4)
-                + " " + (baseX + 20) + " " + (SRC_Y + 12) + " " + (baseZ + 20) + " minecraft:air").contains("\"ok\":true"));
+                Reply.of(exec("artest chunk warmup 0 " + cx1 + " " + cz1 + " " + cx2 + " " + cz2)).ok());
+        assertTrue("pre-clear failed", Reply.of(exec("artest fill 0 " + (baseX - 4) + " " + (SRC_Y - 2) + " " + (baseZ - 4)
+                + " " + (baseX + 20) + " " + (SRC_Y + 12) + " " + (baseZ + 20) + " minecraft:air")).ok());
     }
 
     private String placeFixture(int baseX, int baseY, int baseZ, String variant) throws Exception {
         String fixture = exec("artest fixture rocket 0 " + baseX + " " + baseY + " " + baseZ + " " + variant);
-        assertTrue("fixture (" + variant + ") failed: " + fixture, fixture.contains("\"ok\":true"));
+        assertTrue("fixture (" + variant + ") failed: " + fixture, Reply.of(fixture).ok());
         int[] bp = Reply.of(fixture).blockPos(BUILDER_POS);
         assertTrue("fixture (" + variant + ") missing builderPos: " + fixture, bp != null);
         return bp[0] + " " + bp[1] + " " + bp[2];

@@ -1,5 +1,6 @@
 package zmaster587.advancedRocketry.test.server;
 
+import zmaster587.advancedRocketry.test.Reply;
 import org.junit.Test;
 
 import zmaster587.advancedRocketry.test.FixtureSite;
@@ -56,7 +57,7 @@ public class TerraformingTerminalSmokeTest extends AbstractSharedServerTest {
         String place = exec("artest place 0 " + CX_BASIC + " " + CY + " " + CZ
                 + " advancedrocketry:terraformingTerminal");
         assertTrue("terminal must place: " + place,
-                place.contains("\"placed\":true"));
+                Reply.of(place).bool("placed", false));
 
         String info = exec("artest machine info 0 " + CX_BASIC + " " + CY + " " + CZ);
         assertTrue("block must produce TileTerraformingTerminal: " + info,
@@ -68,7 +69,7 @@ public class TerraformingTerminalSmokeTest extends AbstractSharedServerTest {
         String tick = exec("artest tile force-tick 0 " + CX_BASIC + " " + CY + " "
                 + CZ + " 40");
         assertTrue("force-tick on empty terminal must succeed: " + tick,
-                tick.contains("\"ok\":true"));
+                Reply.of(tick).ok());
 
         String postInfo = exec("artest machine info 0 " + CX_BASIC + " " + CY + " "
                 + CZ);
@@ -82,7 +83,7 @@ public class TerraformingTerminalSmokeTest extends AbstractSharedServerTest {
         String place = exec("artest place 0 " + CX_REDSTONE + " " + CY + " " + CZ
                 + " advancedrocketry:terraformingTerminal");
         assertTrue("terminal must place: " + place,
-                place.contains("\"placed\":true"));
+                Reply.of(place).bool("placed", false));
 
         // Place a redstone block adjacent so isBlockIndirectlyGettingPowered
         // returns true. This pushes the terminal into the
@@ -95,7 +96,7 @@ public class TerraformingTerminalSmokeTest extends AbstractSharedServerTest {
                 + CZ + " 40");
         assertTrue("force-tick on redstone-powered empty terminal must succeed: "
                         + tick,
-                tick.contains("\"ok\":true"));
+                Reply.of(tick).ok());
 
         String postInfo = exec("artest machine info 0 " + CX_REDSTONE + " " + CY + " "
                 + CZ);

@@ -83,7 +83,7 @@ public class VSShipFrameShieldE2ETest extends AbstractSharedVsClientE2ETest {
 
         String assemble = assembleFixture(site);
         assertTrue("a with-shield-emitter build must route to a ship: " + assemble,
-                assemble.contains("\"rocketCount\":0"));
+                (Reply.of(assemble).integerOr("rocketCount", Integer.MIN_VALUE) == 0));
         // The identity, from the registry's record of THIS assembly's own add.
         final String shipId = awaitShipSpawned(events, spawnMark,
                 "a with-shield-emitter assembly must create a VS ship in the queryable registry");
@@ -144,7 +144,12 @@ public class VSShipFrameShieldE2ETest extends AbstractSharedVsClientE2ETest {
         String emitters = exec("artest shield emitters 0");
         assertTrue("the frame log says a ship-framed emitter is ready, but the shield registry does"
                 + " not list one:\n" + emitters,
-                emitterCount(emitters) >= 1 && emitters.contains("\"shipFramed\":true"));
+                // `shipFramed` belongs to an EMITTER, not to the registry's reply: asked of the
+                // reply it is a member's field, and the registry could list a ship-framed emitter
+                // beside the one this leg is about.
+                emitterCount(emitters) >= 1
+                        && Reply.of("artest shield emitters", emitters)
+                                .holdsElement("emitters", "shipFramed", "true"));
         double wx1 = e(emitters, "worldX"), wy1 = e(emitters, "worldY"), wz1 = e(emitters, "worldZ");
 
         // Check 1: the shell's world centre is at the loaded ship, FAR from the emitter's subspace pos
@@ -203,7 +208,7 @@ public class VSShipFrameShieldE2ETest extends AbstractSharedVsClientE2ETest {
         for (int i = 0; i < 25; i++) {
             String push = exec("artest vs push-ship-by-id 0 " + shipId + " 0 14 0");
             scenario().requireArranged("the push must reach THIS ship: " + push,
-                    push.contains("\"pushed\":true"));
+                    Reply.of(push).bool("pushed", false));
             bot().waitTicks(2);
         }
         double[] ship2 = shipPos(shipId);
@@ -309,7 +314,7 @@ public class VSShipFrameShieldE2ETest extends AbstractSharedVsClientE2ETest {
         site.requireClear(this::exec, 2, 20,
                 "the hull, and the shell the emitter projects around it");
         String fixture = exec("artest fixture rocket 0 " + baseX + " " + baseY + " " + baseZ + " " + VARIANT);
-        assertTrue("fixture (" + VARIANT + ") failed: " + fixture, fixture.contains("\"ok\":true"));
+        assertTrue("fixture (" + VARIANT + ") failed: " + fixture, Reply.of(fixture).ok());
         int[] bp = Reply.of(fixture).blockPos(BUILDER_POS);
         assertTrue("fixture missing builderPos: " + fixture, bp != null);
         return exec("artest rocket assemble 0 " + bp[0] + " " + bp[1] + " " + bp[2]);

@@ -1,5 +1,6 @@
 package zmaster587.advancedRocketry.test.server;
 
+import zmaster587.advancedRocketry.test.Reply;
 import zmaster587.advancedRocketry.test.ShipReadiness;
 import org.junit.After;
 import org.junit.Test;
@@ -60,11 +61,11 @@ public class NavLookupNamesItsOwnShipE2ETest extends AbstractSharedServerTest {
         String asmA = exec("artest rocket assemble 0 "
                 + placeFixture(SHIP_A_X, SHIP_A_Y, SHIP_A_Z, "with-nav-computer"));
         requireArranged("with VS an AFC-bearing build must route to a ship (no rocket): "
-                + asmA, asmA.contains("\"rocketCount\":0"));
+                + asmA, (Reply.of(asmA).integerOr("rocketCount", Integer.MIN_VALUE) == 0));
         String asmB = exec("artest rocket assemble 0 "
                 + placeFixture(SHIP_B_X, SHIP_B_Y, SHIP_B_Z, "with-nav-computer"));
         requireArranged("the second craft did not become a ship either: " + asmB,
-                asmB.contains("\"rocketCount\":0"));
+                (Reply.of(asmB).integerOr("rocketCount", Integer.MIN_VALUE) == 0));
         requireArranged("the ships never loaded", loadedShips(0) >= 2);
 
         // ARRANGEMENT CHECK, before anything is asked: there must be TWO registered ships, or the
@@ -104,7 +105,7 @@ public class NavLookupNamesItsOwnShipE2ETest extends AbstractSharedServerTest {
                         + "jump gate reports it has none — the lookup answered about some other "
                         + "craft's shipyard. ship=" + shipId + " neighbour=" + otherShipId
                         + " afc=(" + afc[0] + "," + afc[1] + "," + afc[2] + ") gate=" + gate,
-                gate.contains("\"navComputer\":true"));
+                Reply.of(gate).bool("navComputer", false));
     }
 
     /**
@@ -140,17 +141,17 @@ public class NavLookupNamesItsOwnShipE2ETest extends AbstractSharedServerTest {
     private void clearArea(int baseX, int baseZ) throws Exception {
         int cx1 = (baseX - 4) >> 4, cz1 = (baseZ - 4) >> 4;
         int cx2 = (baseX + 20) >> 4, cz2 = (baseZ + 20) >> 4;
-        assertTrue("chunk warmup failed", exec("artest chunk warmup 0 " + cx1 + " " + cz1 + " "
-                + cx2 + " " + cz2).contains("\"ok\":true"));
-        assertTrue("pre-clear failed", exec("artest fill 0 " + (baseX - 4) + " " + (SHIP_A_Y - 2)
+        assertTrue("chunk warmup failed", Reply.of(exec("artest chunk warmup 0 " + cx1 + " " + cz1 + " "
+                + cx2 + " " + cz2)).ok());
+        assertTrue("pre-clear failed", Reply.of(exec("artest fill 0 " + (baseX - 4) + " " + (SHIP_A_Y - 2)
                 + " " + (baseZ - 4) + " " + (baseX + 20) + " " + (SHIP_A_Y + 12) + " " + (baseZ + 20)
-                + " minecraft:air").contains("\"ok\":true"));
+                + " minecraft:air")).ok());
     }
 
     private String placeFixture(int baseX, int baseY, int baseZ, String variant) throws Exception {
         String fixture = exec("artest fixture rocket 0 " + baseX + " " + baseY + " " + baseZ
                 + " " + variant);
-        assertTrue("fixture (" + variant + ") failed: " + fixture, fixture.contains("\"ok\":true"));
+        assertTrue("fixture (" + variant + ") failed: " + fixture, Reply.of(fixture).ok());
         java.util.regex.Matcher bp = java.util.regex.Pattern
                 .compile("\"builderPos\":\\[(-?\\d+),(-?\\d+),(-?\\d+)]").matcher(fixture);
         assertTrue("fixture (" + variant + ") missing builderPos: " + fixture, bp.find());

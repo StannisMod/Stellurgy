@@ -29,7 +29,7 @@ public class SpaceStationDepthTest extends AbstractSharedServerTest {
 
     private int createStation(int orbitingDim) throws Exception {
         String resp = String.join("\n", client().execute("artest station create " + orbitingDim));
-        assertTrue("station create failed: " + resp, resp.contains("\"ok\":true"));
+        assertTrue("station create failed: " + resp, Reply.of(resp).ok());
         Reply mReply = Reply.of(resp);
         assertTrue("could not parse station id from create response: " + resp, mReply.has(ID_PATTERN));
         return Integer.parseInt(mReply.text(ID_PATTERN));
@@ -51,12 +51,9 @@ public class SpaceStationDepthTest extends AbstractSharedServerTest {
         assertNotEquals(a, c);
 
         String list = String.join("\n", client().execute("artest station list"));
-        assertTrue("station " + a + " missing from list: " + list,
-                list.contains("\"id\":" + a));
-        assertTrue("station " + b + " missing from list: " + list,
-                list.contains("\"id\":" + b));
-        assertTrue("station " + c + " missing from list: " + list,
-                list.contains("\"id\":" + c));
+        Reply.of(list).element("stations", "id", String.valueOf(a));
+        Reply.of(list).element("stations", "id", String.valueOf(b));
+        Reply.of(list).element("stations", "id", String.valueOf(c));
     }
 
     @Test

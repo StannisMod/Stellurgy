@@ -79,17 +79,17 @@ public class FuelingStationFuelsAdjacentRocketTest extends AbstractHeadlessServe
         int cx2 = (RX + 7) >> 4, cz2 = (RZ + 7) >> 4;
         String warmup = join(client().execute(
                 "artest chunk warmup 0 " + cx1 + " " + cz1 + " " + cx2 + " " + cz2));
-        assertTrue("chunk warmup failed: " + warmup, warmup.contains("\"ok\":true"));
+        assertTrue("chunk warmup failed: " + warmup, Reply.of(warmup).ok());
         String fillAir = join(client().execute(
                 "artest fill 0 " + (RX - 2) + " " + (RY + 1) + " " + (RZ - 2)
                         + " " + (RX + 7) + " " + (RY + 10) + " " + (RZ + 7) + " minecraft:air"));
-        assertTrue("pre-clear failed: " + fillAir, fillAir.contains("\"ok\":true"));
+        assertTrue("pre-clear failed: " + fillAir, Reply.of(fillAir).ok());
 
         // ─── 1. Build + assemble rocket fixture ────────────────────────
         String fixture = join(client().execute(
                 "artest fixture rocket 0 " + RX + " " + RY + " " + RZ));
         assertTrue("rocket fixture failed: " + fixture,
-                fixture.contains("\"ok\":true"));
+                Reply.of(fixture).ok());
 
         // The fixture places the rocket builder at (RX+2, RY+1, RZ-1).
         int builderX = RX + 2;
@@ -102,9 +102,9 @@ public class FuelingStationFuelsAdjacentRocketTest extends AbstractHeadlessServe
         String assemble = join(client().execute(
                 "artest rocket assemble 0 " + builderX + " " + builderY + " " + builderZ));
         assertTrue("rocket assemble probe errored: " + assemble,
-                assemble.contains("\"ok\":true")
-                        && (assemble.contains("\"status\":\"SUCCESS\"")
-                                || assemble.contains("\"status\":\"ALREADY_ASSEMBLED\"")));
+                Reply.of(assemble).ok()
+                        && ("SUCCESS".equals(Reply.of(assemble).text("status"))
+                                || "ALREADY_ASSEMBLED".equals(Reply.of(assemble).text("status"))));
         Reply assembled = Reply.of("artest rocket assemble", assemble);
         assertTrue("could not parse entityId: " + assemble, assembled.has(ENTITY_ID));
         int rocketId = assembled.integer(ENTITY_ID);
@@ -113,7 +113,7 @@ public class FuelingStationFuelsAdjacentRocketTest extends AbstractHeadlessServe
         String placeFs = join(client().execute(
                 "artest place 0 " + FX + " " + FY + " " + FZ + " advancedrocketry:fuelingStation"));
         assertTrue("fuelingStation place failed: " + placeFs,
-                placeFs.contains("\"placed\":true"));
+                Reply.of(placeFs).bool("placed", false));
 
         String preFuel = join(client().execute("artest rocket fuel " + rocketId));
         Reply preMono = monoEntry(preFuel);
@@ -128,7 +128,7 @@ public class FuelingStationFuelsAdjacentRocketTest extends AbstractHeadlessServe
         // ─── 3. Link station -> rocket ──────────────────────────────────
         String link = join(client().execute(
                 "artest infra link 0 " + FX + " " + FY + " " + FZ + " " + rocketId));
-        assertTrue("infra link failed: " + link, link.contains("\"ok\":true"));
+        assertTrue("infra link failed: " + link, Reply.of(link).ok());
 
         // ─── 4. Fluid + power into station ─────────────────────────────
         // rocketFuel is the canonical LIQUID_MONOPROPELLANT in
@@ -144,19 +144,19 @@ public class FuelingStationFuelsAdjacentRocketTest extends AbstractHeadlessServe
             inject = join(client().execute(
                     "artest fluid inject 0 " + FX + " " + FY + " " + FZ + " rocketfuel 8000"));
         }
-        assertTrue("fluid inject failed: " + inject, inject.contains("\"ok\":true"));
+        assertTrue("fluid inject failed: " + inject, Reply.of(inject).ok());
 
         // Charge RF — fueling station consumes 30 RF per operation; 100 000
         // RF is enough for many ticks.
         String energy = join(client().execute(
                 "artest energy inject 0 " + FX + " " + FY + " " + FZ + " 100000"));
-        assertTrue("energy inject failed: " + energy, energy.contains("\"ok\":true"));
+        assertTrue("energy inject failed: " + energy, Reply.of(energy).ok());
 
         // Read tank before tick — pin the baseline.
         String preTank = join(client().execute(
                 "artest fluid stored 0 " + FX + " " + FY + " " + FZ));
         assertTrue("station must report fluid present: " + preTank,
-                preTank.contains("\"hasFluid\":true"));
+                Reply.of(preTank).bool("hasFluid", false));
         // Summed across the station's tanks: the amount is a TANK's field, not the reply's.
         int initialTank = FluidStored.of(preTank).amountOf(STATION_FUEL);
         assertTrue("station tank must be at least 1 000 mB before tick: " + initialTank
@@ -172,7 +172,7 @@ public class FuelingStationFuelsAdjacentRocketTest extends AbstractHeadlessServe
         String tick = join(client().execute(
                 "artest tile force-tick-clock 0 " + FX + " " + FY + " " + FZ + " 200"));
         assertTrue("station force-tick errored: " + tick,
-                tick.contains("\"ok\":true"));
+                Reply.of(tick).ok());
 
         // ─── 6. Verify both endpoints of the matched-accounting claim ───
         String postTank = join(client().execute(

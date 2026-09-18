@@ -75,7 +75,7 @@ public class MissionGasCompletionTest extends AbstractSharedServerTest {
         String start = ok(client().execute(
                 "artest mission start-gas 0 " + rocketId + " " + duration + " " + fluid
                         + " " + intakePower));
-        assertFalse("start-gas must not error: " + start, start.contains("\"error\""));
+        assertFalse("start-gas must not error: " + start, Reply.of(start).has("error"));
         Reply mmReply = Reply.of(start);
         assertTrue("missing missionId in start response: " + start, mmReply.has(MISSION_ID));
         return Long.parseLong(mmReply.text(MISSION_ID));

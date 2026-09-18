@@ -1,5 +1,6 @@
 package zmaster587.advancedRocketry.test.server;
 
+import zmaster587.advancedRocketry.test.Reply;
 import com.github.stannismod.forge.testing.junit.AbstractHeadlessServerTest;
 import org.junit.Test;
 
@@ -54,7 +55,7 @@ public class UvAssemblerDivergesFromRocketAssemblerTest extends AbstractHeadless
                 "artest place 0 " + X_ROCKET + " " + Y + " " + Z_ROCKET
                         + " advancedrocketry:rocketBuilder"));
         assertTrue("rocketBuilder place failed: " + placeRocket,
-                placeRocket.contains("\"placed\":true"));
+                Reply.of(placeRocket).bool("placed", false));
 
         String rocketInfo = join(client().execute(
                 "artest machine info 0 " + X_ROCKET + " " + Y + " " + Z_ROCKET));
@@ -70,7 +71,7 @@ public class UvAssemblerDivergesFromRocketAssemblerTest extends AbstractHeadless
                 "artest place 0 " + X_UV + " " + Y + " " + Z_UV
                         + " advancedrocketry:deployableRocketBuilder"));
         assertTrue("deployableRocketBuilder place failed: " + placeUv,
-                placeUv.contains("\"placed\":true"));
+                Reply.of(placeUv).bool("placed", false));
 
         String uvInfo = join(client().execute(
                 "artest machine info 0 " + X_UV + " " + Y + " " + Z_UV));

@@ -38,7 +38,7 @@ public class WeatherControllerPacketValidationTest extends AbstractSharedServerT
 
     private long createWeatherSat() throws Exception {
         String resp = ok(client().execute("artest satellite create 0 weatherController 100 1000 1000"));
-        assertTrue("weather satellite create failed: " + resp, resp.contains("\"ok\":true"));
+        assertTrue("weather satellite create failed: " + resp, Reply.of(resp).ok());
         Reply mReply = Reply.of(resp);
         assertTrue("no id in create response: " + resp, mReply.has(ID));
         return Long.parseLong(mReply.text(ID));
@@ -59,7 +59,7 @@ public class WeatherControllerPacketValidationTest extends AbstractSharedServerT
 
         String apply = ok(client().execute(
                 "artest satellite weather-apply 0 " + satId + " 5 100000"));
-        assertTrue("weather-apply failed: " + apply, apply.contains("\"ok\":true"));
+        assertTrue("weather-apply failed: " + apply, Reply.of(apply).ok());
 
         int mode = intField(MODE, apply, "mode_id");
         int flood = intField(FLOOD, apply, "floodlevel");
@@ -82,7 +82,7 @@ public class WeatherControllerPacketValidationTest extends AbstractSharedServerT
 
         String apply = ok(client().execute(
                 "artest satellite weather-apply 0 " + satId + " 1 -50"));
-        assertTrue("weather-apply failed: " + apply, apply.contains("\"ok\":true"));
+        assertTrue("weather-apply failed: " + apply, Reply.of(apply).ok());
 
         int flood = intField(FLOOD, apply, "floodlevel");
         assertTrue("a negative flood level must clamp to >= 1 (got " + flood + "): " + apply,
@@ -97,7 +97,7 @@ public class WeatherControllerPacketValidationTest extends AbstractSharedServerT
 
         String apply = ok(client().execute(
                 "artest satellite weather-apply 0 " + satId + " 2 90"));
-        assertTrue("weather-apply failed: " + apply, apply.contains("\"ok\":true"));
+        assertTrue("weather-apply failed: " + apply, Reply.of(apply).ok());
 
         int mode = intField(MODE, apply, "mode_id");
         int flood = intField(FLOOD, apply, "floodlevel");

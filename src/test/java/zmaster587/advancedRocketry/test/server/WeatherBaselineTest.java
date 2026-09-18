@@ -1,5 +1,6 @@
 package zmaster587.advancedRocketry.test.server;
 
+import zmaster587.advancedRocketry.test.Reply;
 import com.github.stannismod.forge.testing.junit.AbstractHeadlessServerTest;
 import com.github.stannismod.forge.testing.server.RealDedicatedServerHarness;
 import org.junit.After;
@@ -94,7 +95,7 @@ public class WeatherBaselineTest {
 
         harness.client().execute("artest weather set 0 clear 12000");
         String setOver = String.join("\n", harness.client().execute("artest weather set 0 rain 12000"));
-        assertTrue("weather set on overworld failed: " + setOver, setOver.contains("\"ok\":true"));
+        assertTrue("weather set on overworld failed: " + setOver, Reply.of(setOver).ok());
 
         DimWeather w0 = weather(0);
         DimWeather wA = weather(FIXTURE_DIM_A);

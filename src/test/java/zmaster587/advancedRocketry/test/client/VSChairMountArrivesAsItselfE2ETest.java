@@ -61,23 +61,23 @@ public class VSChairMountArrivesAsItselfE2ETest extends AbstractSharedVsClientE2
 
         // ---- ARRANGE: a floor, a chair on it, and the player standing next to the chair. --------
         scenario().requireArranged("chunk warmup failed",
-                exec("artest chunk warmup 0 " + (FX >> 4) + " " + (FZ >> 4) + " "
-                        + ((FX + 1) >> 4) + " " + ((FZ + 1) >> 4)).contains("\"ok\":true"));
+                Reply.of(exec("artest chunk warmup 0 " + (FX >> 4) + " " + (FZ >> 4) + " "
+                        + ((FX + 1) >> 4) + " " + ((FZ + 1) >> 4))).ok());
         scenario().requireArranged("floor fill failed",
-                exec("artest fill 0 " + (FX - 2) + " " + FY + " " + (FZ - 2) + " "
+                Reply.of(exec("artest fill 0 " + (FX - 2) + " " + FY + " " + (FZ - 2) + " "
                         + (FX + 2) + " " + FY + " " + (FZ + 2) + " minecraft:stone")
-                        .contains("\"ok\":true"));
+                        ).ok());
         scenario().requireArranged("clearing the space above the floor failed",
-                exec("artest fill 0 " + (FX - 2) + " " + (FY + 1) + " " + (FZ - 2) + " "
+                Reply.of(exec("artest fill 0 " + (FX - 2) + " " + (FY + 1) + " " + (FZ - 2) + " "
                         + (FX + 2) + " " + (FY + 3) + " " + (FZ + 2) + " minecraft:air")
-                        .contains("\"ok\":true"));
+                        ).ok());
         // The chair block carries the HOST mod's domain, not the physics engine's: vendored code
         // registers under the container it is loaded in. An unknown block id fills air here and
         // still reports success, which is why the placement is read back below.
         String chair = exec("artest fill 0 " + CX + " " + CY + " " + CZ + " "
                 + CX + " " + CY + " " + CZ + " advancedrocketry:passenger_chair");
         scenario().requireArranged("the chair block must be placeable: " + chair,
-                chair.contains("\"ok\":true"));
+                Reply.of(chair).ok());
         String rightAfter = exec("artest block at 0 " + CX + " " + CY + " " + CZ);
         scenario().requireArranged("the chair must actually be in the world once the fill reports"
                 + " success: " + rightAfter, rightAfter.contains("passenger_chair"));

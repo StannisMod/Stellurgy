@@ -44,12 +44,12 @@ public class VSShipMultiControlScanTest extends AbstractSharedServerTest {
                 + (baseX + 4) + " " + (baseY + 4) + " " + (baseZ + 3) + " "
                 + (baseX + 4) + " " + (baseY + 4) + " " + (baseZ + 3)
                 + " advancedrocketry:advancedFlightComputer"));
-        assertTrue("placing the second flight computer failed: " + fill, fill.contains("\"ok\":true"));
+        assertTrue("placing the second flight computer failed: " + fill, Reply.of(fill).ok());
 
         String assemble = String.join("\n", client().execute("artest rocket assemble 0 " + coords));
         assertTrue("a build with TWO flight computers must be rejected at scan with its own error "
                         + "code: " + assemble,
-                assemble.contains("\"status\":\"MULTIPLEFLIGHTCOMPUTERS\""));
+                "MULTIPLEFLIGHTCOMPUTERS".equals(Reply.of(assemble).text("status")));
     }
 
     @Test
@@ -64,12 +64,12 @@ public class VSShipMultiControlScanTest extends AbstractSharedServerTest {
                 + (baseX + 4) + " " + (baseY + 5) + " " + (baseZ + 3) + " "
                 + (baseX + 4) + " " + (baseY + 5) + " " + (baseZ + 3)
                 + " advancedrocketry:pilotSeat"));
-        assertTrue("placing the second pilot seat failed: " + fill, fill.contains("\"ok\":true"));
+        assertTrue("placing the second pilot seat failed: " + fill, Reply.of(fill).ok());
 
         String assemble = String.join("\n", client().execute("artest rocket assemble 0 " + coords));
         assertTrue("a build with TWO pilot seats must be rejected at scan with its own error code: "
                         + assemble,
-                assemble.contains("\"status\":\"MULTIPLEPILOTSEATS\""));
+                "MULTIPLEPILOTSEATS".equals(Reply.of(assemble).text("status")));
     }
 
     /** Place the fixture on a pad WITHOUT assembling; returns the builder pos as "bx by bz". */
@@ -84,7 +84,7 @@ public class VSShipMultiControlScanTest extends AbstractSharedServerTest {
                 "the build the assembly scan is about stands in this volume");
         String fixture = String.join("\n", client().execute(
                 "artest fixture rocket 0 " + baseX + " " + baseY + " " + baseZ + " " + variant));
-        assertTrue("fixture (" + variant + ") failed: " + fixture, fixture.contains("\"ok\":true"));
+        assertTrue("fixture (" + variant + ") failed: " + fixture, Reply.of(fixture).ok());
         int[] bp = Reply.of(fixture).blockPos(BUILDER_POS);
         assertTrue("fixture (" + variant + ") missing builderPos: " + fixture, bp != null);
         return bp[0] + " " + bp[1] + " " + bp[2];

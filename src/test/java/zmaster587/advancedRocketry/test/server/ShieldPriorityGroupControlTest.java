@@ -43,21 +43,21 @@ public class ShieldPriorityGroupControlTest extends AbstractSharedServerTest {
         int console = base + 4;
         place("affs:shield_console", console, z);
 
-        assertTrue(exec(group(console, z, "create aft 7")).contains("\"ok\":true"));
-        assertTrue(exec(group(console, z, "assign aft " + e1 + " " + Y + " " + z)).contains("\"ok\":true"));
-        assertTrue(exec(group(console, z, "assign aft " + e2 + " " + Y + " " + z)).contains("\"ok\":true"));
+        assertTrue(Reply.of(exec(group(console, z, "create aft 7"))).ok());
+        assertTrue(Reply.of(exec(group(console, z, "assign aft " + e1 + " " + Y + " " + z))).ok());
+        assertTrue(Reply.of(exec(group(console, z, "assign aft " + e2 + " " + Y + " " + z))).ok());
 
         assertEquals("group priority must be pushed into member emitter 1", 7, readPriority(e1, z));
         assertEquals("group priority must be pushed into member emitter 2", 7, readPriority(e2, z));
         assertEquals("the emitter must report the group that lists it", "aft", read(e1, z).group());
 
         // One edit retunes the whole group — the D134-5 point ("all power to the rear shields").
-        assertTrue(exec(group(console, z, "priority aft 3")).contains("\"ok\":true"));
+        assertTrue(Reply.of(exec(group(console, z, "priority aft 3"))).ok());
         assertEquals("raising the group must retune member 1", 3, readPriority(e1, z));
         assertEquals("raising the group must retune member 2", 3, readPriority(e2, z));
 
         // The SETTING is emitter-owned: deleting the naming layer must not retune anything.
-        assertTrue(exec(group(console, z, "delete aft")).contains("\"ok\":true"));
+        assertTrue(Reply.of(exec(group(console, z, "delete aft"))).ok());
         assertEquals("deleting the group silently retuned emitter 1 — the setting is emitter-owned",
                 3, readPriority(e1, z));
         assertEquals("deleting the group silently retuned emitter 2 — the setting is emitter-owned",
@@ -76,25 +76,23 @@ public class ShieldPriorityGroupControlTest extends AbstractSharedServerTest {
         place("affs:shield_console", consoleB, z);
 
         // Created at console A...
-        assertTrue(exec(group(consoleA, z, "create bow 5")).contains("\"ok\":true"));
-        assertTrue(exec(group(consoleA, z, "assign bow " + emitter + " " + Y + " " + z)).contains("\"ok\":true"));
+        assertTrue(Reply.of(exec(group(consoleA, z, "create bow 5"))).ok());
+        assertTrue(Reply.of(exec(group(consoleA, z, "assign bow " + emitter + " " + Y + " " + z))).ok());
 
         // ...visible at console B, because both are views of ONE domain-level config.
         String listedAtB = exec(group(consoleB, z, "list"));
-        assertTrue("a group created at one console is not visible at another — the config is not a "
-                + "domain-level SSOT:\n" + listedAtB, listedAtB.contains("\"name\":\"bow\""));
+        Reply.of(listedAtB).element("groups", "name", "bow");
 
         // ...and editable at console B, with the effect landing on the emitter.
-        assertTrue(exec(group(consoleB, z, "priority bow 9")).contains("\"ok\":true"));
+        assertTrue(Reply.of(exec(group(consoleB, z, "priority bow 9"))).ok());
         assertEquals("an edit made at the second console did not reach the emitter", 9, readPriority(emitter, z));
 
         // Destroying console A loses nothing: the group still exists and still edits.
-        assertTrue(exec("artest place " + DIM + " " + consoleA + " " + Y + " " + z + " minecraft:air")
-                .contains("\"placed\":true"));
+        assertTrue(Reply.of(exec("artest place " + DIM + " " + consoleA + " " + Y + " " + z + " minecraft:air")
+                ).bool("placed", false));
         String afterBreak = exec(group(consoleB, z, "list"));
-        assertTrue("destroying one console lost the domain config — consoles must be stateless:\n"
-                + afterBreak, afterBreak.contains("\"name\":\"bow\""));
-        assertTrue(exec(group(consoleB, z, "priority bow 2")).contains("\"ok\":true"));
+        Reply.of(afterBreak).element("groups", "name", "bow");
+        assertTrue(Reply.of(exec(group(consoleB, z, "priority bow 2"))).ok());
         assertEquals("the surviving console cannot retune after the other was destroyed",
                 2, readPriority(emitter, z));
     }
@@ -107,12 +105,12 @@ public class ShieldPriorityGroupControlTest extends AbstractSharedServerTest {
         int console = base + 3;
         place("affs:shield_console", console, z);
 
-        assertTrue(exec(group(console, z, "create hull 4")).contains("\"ok\":true"));
-        assertTrue(exec(group(console, z, "assign hull " + emitter + " " + Y + " " + z)).contains("\"ok\":true"));
+        assertTrue(Reply.of(exec(group(console, z, "create hull 4"))).ok());
+        assertTrue(Reply.of(exec(group(console, z, "assign hull " + emitter + " " + Y + " " + z))).ok());
         String codeBefore = read(emitter, z).accessCode();
 
         String rotated = exec("artest shield rotate-code " + DIM + " " + console + " " + Y + " " + z);
-        assertTrue("rotation failed:\n" + rotated, rotated.contains("\"ok\":true"));
+        assertTrue("rotation failed:\n" + rotated, Reply.of(rotated).ok());
         String newCode = readString(rotated, "code");
         assertFalse("the rotated code is empty — nothing was regenerated", newCode.isEmpty());
         assertFalse("rotation produced the same code as before (" + newCode + ") — a leaked code would "
@@ -148,7 +146,7 @@ public class ShieldPriorityGroupControlTest extends AbstractSharedServerTest {
     private void place(String block, int x, int z) throws Exception {
         String resp = exec("artest place " + DIM + " " + x + " " + Y + " " + z + " " + block);
         assertTrue("failed to place " + block + " at " + x + "," + Y + "," + z + ": " + resp,
-                resp.contains("\"placed\":true"));
+                Reply.of(resp).bool("placed", false));
     }
 
     private static String exec(String command) throws Exception {

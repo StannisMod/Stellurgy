@@ -1,5 +1,6 @@
 package zmaster587.advancedRocketry.test.server;
 
+import zmaster587.advancedRocketry.test.Reply;
 import zmaster587.advancedRocketry.test.FluidStored;
 import com.github.stannismod.forge.testing.junit.AbstractHeadlessServerTest;
 import com.github.stannismod.forge.testing.server.RealDedicatedServerHarness;
@@ -71,16 +72,16 @@ public class FluidTankNBTRoundTripsAcrossRestartTest {
         String place = String.join("\n", firstBoot.client().execute(
                 "artest place 0 " + TX + " " + TY + " " + TZ + " advancedrocketry:liquidTank"));
         assertTrue("liquidTank place failed: " + place,
-                place.contains("\"placed\":true"));
+                Reply.of(place).bool("placed", false));
 
         String preInject = String.join("\n", firstBoot.client().execute(
                 "artest fluid stored 0 " + TX + " " + TY + " " + TZ));
         assertTrue("liquidTank must expose IFluidHandler capability: " + preInject,
-                preInject.contains("\"hasFluid\":true"));
+                Reply.of(preInject).bool("hasFluid", false));
 
         String inject = String.join("\n", firstBoot.client().execute(
                 "artest fluid inject 0 " + TX + " " + TY + " " + TZ + " oxygen " + INJECT_AMOUNT));
-        assertTrue("fluid inject failed: " + inject, inject.contains("\"ok\":true"));
+        assertTrue("fluid inject failed: " + inject, Reply.of(inject).ok());
 
         // Verify the inject landed in-memory before we save the world.
         String storedBefore = String.join("\n", firstBoot.client().execute(
@@ -106,7 +107,7 @@ public class FluidTankNBTRoundTripsAcrossRestartTest {
         String storedAfter = String.join("\n", secondBoot.client().execute(
                 "artest fluid stored 0 " + TX + " " + TY + " " + TZ));
         assertTrue("liquidTank must still expose IFluidHandler after restart: " + storedAfter,
-                storedAfter.contains("\"hasFluid\":true"));
+                Reply.of(storedAfter).bool("hasFluid", false));
 
         String fluidAfter = fluidOrFail(storedAfter, "fluidName (boot 2)");
         int amountAfter = theTank(storedAfter, "amount (boot 2)").amount(0);

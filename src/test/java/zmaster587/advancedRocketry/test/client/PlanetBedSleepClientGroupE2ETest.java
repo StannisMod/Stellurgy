@@ -1,5 +1,6 @@
 package zmaster587.advancedRocketry.test.client;
 
+import zmaster587.advancedRocketry.test.Reply;
 import zmaster587.advancedRocketry.test.Events;
 
 import com.google.gson.JsonObject;
@@ -137,7 +138,7 @@ public class PlanetBedSleepClientGroupE2ETest extends AbstractSharedClientE2ETes
         String shipped = exec("artest config get " + FLAG);
         scenario().requireArranged("this scenario is about the SHIPPED default of " + FLAG
                 + ", so it reads it instead of writing it: " + shipped,
-                shipped.contains("\"value\":false"));
+                (!Reply.of(shipped).bool("value", true)));
 
         exec("gamerule doMobSpawning false");
         stageSleepingSite(DIM_LOCKED);
@@ -286,19 +287,19 @@ public class PlanetBedSleepClientGroupE2ETest extends AbstractSharedClientE2ETes
     private void stageSleepingSite(int dim) throws Exception {
         String weather = exec("artest weather set " + dim + " clear 12000");
         scenario().requireArranged("could not clear the planet's weather: " + weather,
-                weather.contains("\"ok\":true"));
+                Reply.of(weather).ok());
         String platform = exec("artest fill " + dim + " 4 " + PLAT_Y + " 4 12 " + PLAT_Y
                 + " 12 minecraft:stone");
         scenario().requireArranged("the sleeping platform was not built, so there is nothing to lie"
-                + " down on: " + platform, platform.contains("\"ok\":true"));
+                + " down on: " + platform, Reply.of(platform).ok());
         String foot = exec("artest place " + dim + " " + BED_X + " " + BED_Y + " " + BED_FOOT_Z
                 + " minecraft:bed 0");
         scenario().requireArranged("the bed's FOOT was not placed: " + foot,
-                foot.contains("\"ok\":true"));
+                Reply.of(foot).ok());
         String head = exec("artest place " + dim + " " + BED_X + " " + BED_Y + " " + BED_HEAD_Z
                 + " minecraft:bed 8");
         scenario().requireArranged("the bed's HEAD was not placed: " + head,
-                head.contains("\"ok\":true"));
+                Reply.of(head).ok());
 
         long transferMark = clientEvents().mark();
         exec("artest tp " + dim);
@@ -330,13 +331,15 @@ public class PlanetBedSleepClientGroupE2ETest extends AbstractSharedClientE2ETes
             exec("tp " + PLAYER + " 8.5 " + BED_Y + " 7.5");
             bot().waitTicks(5);
             chunkSeen = clientEvents().since(chunkMark, "chunk_data_applied");
-            if (chunkSeen.contains("\"cx\":0") && chunkSeen.contains("\"cz\":0")) {
+            // ONE record for the chunk at (0, 0): two separate field tests are satisfied by a
+            // record for (0, 9) beside one for (7, 0).
+            if (Events.anyRecordHasAll(chunkSeen, "cx", "0", "cz", "0")) {
                 break;
             }
         }
         scenario().requireArranged("the client never applied the platform's chunk data, so it keeps"
                         + " simulating a fall through blocks the server has: " + chunkSeen,
-                chunkSeen.contains("\"cx\":0") && chunkSeen.contains("\"cz\":0"));
+                Events.anyRecordHasAll(chunkSeen, "cx", "0", "cz", "0"));
 
         // Vanilla console /tp (same-dim) puts the player on the platform, a bed-reach-range step
         // north of the bed head (|Δz| = 2.5 ≤ 3).
@@ -368,7 +371,7 @@ public class PlanetBedSleepClientGroupE2ETest extends AbstractSharedClientE2ETes
         String set = exec("artest config set " + FLAG + " " + allowed);
         scenario().requireArranged("the time-skip flag must actually be " + allowed
                 + " — every claim in this class is about which side of it is in force: " + set,
-                set.contains("\"newValue\":" + allowed));
+                String.valueOf(allowed).equals(Reply.of(set).text("newValue")));
     }
 
     // `pollForLockedMessage` lived here: thirty rounds of twenty ticks, joining the client's last

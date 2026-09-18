@@ -1,5 +1,6 @@
 package zmaster587.advancedRocketry.test.server;
 
+import zmaster587.advancedRocketry.test.Reply;
 import org.junit.Test;
 
 import zmaster587.advancedRocketry.test.FixtureSite;
@@ -32,7 +33,7 @@ public class SolarArrayMultiblockTest extends AbstractSharedServerTest {
         String fixture = join(client().execute(
                 "artest fixture multiblock solar-array 0 " + CX + " " + CY + " " + CZ));
         assertTrue("fixture multiblock solar-array failed: " + fixture,
-                fixture.contains("\"ok\":true"));
+                Reply.of(fixture).ok());
 
         String info = join(client().execute(
                 "artest machine info 0 " + CX + " " + CY + " " + CZ));
@@ -42,9 +43,9 @@ public class SolarArrayMultiblockTest extends AbstractSharedServerTest {
         String tryComplete = join(client().execute(
                 "artest machine try-complete 0 " + CX + " " + CY + " " + CZ));
         assertTrue("try-complete probe errored: " + tryComplete,
-                tryComplete.contains("\"ok\":true"));
+                Reply.of(tryComplete).ok());
         assertTrue("solar-array multiblock didn't validate (isComplete=false): " + tryComplete,
-                tryComplete.contains("\"isComplete\":true"));
+                Reply.of(tryComplete).bool("isComplete", false));
     }
 
     @Test
@@ -52,7 +53,7 @@ public class SolarArrayMultiblockTest extends AbstractSharedServerTest {
         int cx = CX + 30, cy = CY, cz = CZ;
         String fixture = join(client().execute(
                 "artest fixture multiblock solar-array 0 " + cx + " " + cy + " " + cz));
-        assertTrue("fixture failed: " + fixture, fixture.contains("\"ok\":true"));
+        assertTrue("fixture failed: " + fixture, Reply.of(fixture).ok());
 
         // Right plug flanking controller — globalY = cy, globalX = cx + 1, globalZ = cz.
         // Replacing with stone (NOT removing the plug TE — stone doesn't match 'p',
@@ -61,12 +62,12 @@ public class SolarArrayMultiblockTest extends AbstractSharedServerTest {
         String breakPlug = join(client().execute(
                 "artest place 0 " + (cx + 1) + " " + cy + " " + cz + " minecraft:stone"));
         assertTrue("could not replace plug: " + breakPlug,
-                breakPlug.contains("\"ok\":true"));
+                Reply.of(breakPlug).ok());
 
         String broken = join(client().execute(
                 "artest machine try-complete 0 " + cx + " " + cy + " " + cz));
         assertTrue("structure validated despite missing 'p' plug: " + broken,
-                broken.contains("\"isComplete\":false"));
+                (!Reply.of(broken).bool("isComplete", true)));
     }
 
     @Test
@@ -74,7 +75,7 @@ public class SolarArrayMultiblockTest extends AbstractSharedServerTest {
         int cx = CX + 60, cy = CY, cz = CZ;
         String fixture = join(client().execute(
                 "artest fixture multiblock solar-array 0 " + cx + " " + cy + " " + cz));
-        assertTrue("fixture failed: " + fixture, fixture.contains("\"ok\":true"));
+        assertTrue("fixture failed: " + fixture, Reply.of(fixture).ok());
 
         // The '*' wildcard accepts solarArrayPanel OR Blocks.AIR — but NOT
         // stone. Replace a mid-array panel with stone and the validator
@@ -83,12 +84,12 @@ public class SolarArrayMultiblockTest extends AbstractSharedServerTest {
         String breakCell = join(client().execute(
                 "artest place 0 " + cx + " " + cy + " " + (cz + 10) + " minecraft:stone"));
         assertTrue("could not replace panel: " + breakCell,
-                breakCell.contains("\"ok\":true"));
+                Reply.of(breakCell).ok());
 
         String broken = join(client().execute(
                 "artest machine try-complete 0 " + cx + " " + cy + " " + cz));
         assertTrue("structure validated despite stone in '*' wildcard cell: " + broken,
-                broken.contains("\"isComplete\":false"));
+                (!Reply.of(broken).bool("isComplete", true)));
     }
 
     private static String join(java.util.List<String> resp) {

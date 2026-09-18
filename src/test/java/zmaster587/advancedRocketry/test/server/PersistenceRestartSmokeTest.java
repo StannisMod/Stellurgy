@@ -100,20 +100,18 @@ public class PersistenceRestartSmokeTest {
                 dimInfo.arPlanet);
 
         String stations = String.join("\n", secondBoot.client().execute("artest station list"));
-        assertTrue("station " + stationId + " did NOT survive restart: " + stations,
-                stations.contains("\"id\":" + stationId));
+        Reply.of(stations).element("stations", "id", String.valueOf(stationId));
         StationInfo stationInfo = StationInfo.byId(
                 cmd -> String.join("\n", secondBoot.client().execute(cmd)), (int) stationId);
         assertEquals("station's orbitingPlanetId did not survive: " + stationInfo.raw(),
                 0, stationInfo.orbitingPlanetId);
 
         String sats = String.join("\n", secondBoot.client().execute("artest satellite list 0"));
-        assertTrue("satellite " + satelliteId + " did NOT survive restart: " + sats,
-                sats.contains("\"id\":" + satelliteId));
+        Reply.of(sats).element("satellites", "id", String.valueOf(satelliteId));
         String satInfo = String.join("\n",
                 secondBoot.client().execute("artest satellite info 0 " + satelliteId));
         assertTrue("satellite type did not survive restart: " + satInfo,
-                satInfo.contains("\"type\":\"mass\""));
+                "mass".equals(Reply.of(satInfo).text("type")));
 
         String planet = String.join("\n", secondBoot.client().execute("artest planet info 0"));
         Reply amReply = Reply.of(planet);

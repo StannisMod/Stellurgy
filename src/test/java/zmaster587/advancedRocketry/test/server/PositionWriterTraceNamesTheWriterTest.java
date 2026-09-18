@@ -74,7 +74,7 @@ public class PositionWriterTraceNamesTheWriterTest {
     /** Put the fake player somewhere known, and let the placement that created him settle. */
     private void station(double y) throws Exception {
         String fake = exec("artest player ensure-fake 0 8.5 " + y + " 8.5");
-        assertTrue("ensure-fake must succeed: " + fake, fake.contains("\"ok\":true"));
+        assertTrue("ensure-fake must succeed: " + fake, Reply.of(fake).ok());
     }
 
     /**

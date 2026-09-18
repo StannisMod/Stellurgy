@@ -202,7 +202,7 @@ public class FreeFlightModeE2ETest extends AbstractSharedClientE2ETest {
 
         String fixture = exec("artest fixture rocket 0 " + baseX + " " + baseY + " "
                 + baseZ + " simple");
-        assertTrue("fixture failed: " + fixture, fixture.contains("\"ok\":true"));
+        assertTrue("fixture failed: " + fixture, Reply.of(fixture).ok());
         int[] bp = Reply.of(fixture).blockPos(BUILDER_POS);
         assertTrue("fixture response missing builderPos: " + fixture, bp != null);
         int bx = bp[0];
@@ -216,12 +216,12 @@ public class FreeFlightModeE2ETest extends AbstractSharedClientE2ETest {
         // merely stop being watched. The assertion below reads the last response, after the
         // driving has stopped.
         String assemble = exec("artest rocket assemble 0 " + bx + " " + by + " " + bz);
-        for (int attempt = 0; attempt < 3 && !assemble.contains("\"ok\":true"); attempt++) {
+        for (int attempt = 0; attempt < 3 && !Reply.of(assemble).ok(); attempt++) {
             bot().waitTicks(5);
             exec("artest fixture rocket 0 " + baseX + " " + baseY + " " + baseZ + " simple");
             assemble = exec("artest rocket assemble 0 " + bx + " " + by + " " + bz);
         }
-        assertTrue("assemble failed: " + assemble, assemble.contains("\"ok\":true"));
+        assertTrue("assemble failed: " + assemble, Reply.of(assemble).ok());
 
         return rocketIdInThisPlot();
     }
@@ -388,26 +388,26 @@ public class FreeFlightModeE2ETest extends AbstractSharedClientE2ETest {
 
         String mount = exec("artest player mount-entity " + rocketId);
         assertTrue("mount-entity must succeed: " + mount,
-                mount.contains("\"ok\":true") && mount.contains("\"mounted\":true"));
+                Reply.of(mount).ok() && Reply.of(mount).bool("mounted", false));
 
         // Pre-launch: flip mode to FREE_FLIGHT. This is the toggle contract
         // exercised by the M keybind path on a real client.
         String setMode = exec("artest rocket set-flight-mode " + rocketId + " FREE_FLIGHT");
         assertTrue("set-flight-mode must succeed: " + setMode,
-                setMode.contains("\"ok\":true"));
+                Reply.of(setMode).ok());
         assertTrue("mode echoed FREE_FLIGHT: " + setMode,
-                setMode.contains("\"flightMode\":\"FREE_FLIGHT\""));
+                "FREE_FLIGHT".equals(Reply.of(setMode).text("flightMode")));
 
         // start-free-flight: bypass classic countdown.
         Events events = events();
         long launchMark = events.markInstrumented();
         String start = exec("artest rocket start-free-flight " + rocketId);
         assertTrue("start-free-flight must succeed: " + start,
-                start.contains("\"ok\":true"));
+                Reply.of(start).ok());
         // The probe response itself reflects the immediate isInFlight=true
         // (read in the same call as the mutation).
         assertTrue("start-free-flight must report isInFlight=true in response: " + start,
-                start.contains("\"isInFlight\":true"));
+                Reply.of(start).bool("isInFlight", false));
         // And the flag was WRITTEN on the entity, which is what this scenario is named for. The
         // probe reply above is the same call as the mutation and would echo an assignment nobody
         // else can see; the record is taken at `EntityRocket.setInFlight`, the one mutator every
@@ -426,7 +426,7 @@ public class FreeFlightModeE2ETest extends AbstractSharedClientE2ETest {
         // Bot is still riding the rocket — FF tick must not dismount the pilot.
         String riding = exec("artest player riding-entity");
         assertTrue("bot must still be riding the FF rocket after takeoff: " + riding,
-                riding.contains("\"ridingEntityId\":" + rocketId)
+                String.valueOf(rocketId).equals(Reply.of(riding).text("ridingEntityId"))
                         || riding.contains("EntityRocket"));
 
         // Cleanup.
@@ -450,7 +450,7 @@ public class FreeFlightModeE2ETest extends AbstractSharedClientE2ETest {
         String inputResp = exec("artest rocket free-flight-input " + rocketId
                 + " 0.0 1.0 0.0 0.0 0.0");
         assertTrue("input must apply on FF rocket: " + inputResp,
-                inputResp.contains("\"applied\":true"));
+                Reply.of(inputResp).bool("applied", false));
 
         // Snapshot motion BEFORE ticks (right after start).
         double myBefore = rocketInfo(rocketId).motionY;
@@ -476,7 +476,7 @@ public class FreeFlightModeE2ETest extends AbstractSharedClientE2ETest {
         // Bot still riding — FF tick preserves passenger across server ticks.
         String riding = exec("artest player riding-entity");
         assertFalse("FF tick must NOT auto-dismount the pilot mid-flight: " + riding,
-                riding.contains("\"ridingEntityId\":-1"));
+                (Reply.of(riding).integerOr("ridingEntityId", Integer.MIN_VALUE) == -1));
 
         // Cleanup.
         exec("artest rocket free-flight-input " + rocketId + " 0 0 0 0 0");
@@ -563,7 +563,7 @@ public class FreeFlightModeE2ETest extends AbstractSharedClientE2ETest {
         int rocketId = mountFreshFreeFlightRocket();
 
         String inputResp = exec("artest rocket free-flight-input " + rocketId + " 0 1 0 0 0");
-        assertTrue("vertical input must apply: " + inputResp, inputResp.contains("\"applied\":true"));
+        assertTrue("vertical input must apply: " + inputResp, Reply.of(inputResp).bool("applied", false));
 
         double yBefore = rocketInfo(rocketId).posY;
         bot().waitTicks(30);
@@ -1063,7 +1063,7 @@ public class FreeFlightModeE2ETest extends AbstractSharedClientE2ETest {
         // validation honestly rejects a dry rocket, which is its own contract —
         // these tests exercise the start RITUAL, so they fly fuelled.
         String fuel = exec("artest rocket fill-fuel " + rocketId);
-        assertTrue("fill-fuel must succeed: " + fuel, fuel.contains("\"ok\":true"));
+        assertTrue("fill-fuel must succeed: " + fuel, Reply.of(fuel).ok());
         bot().waitTicks(5);
         return rocketId;
     }

@@ -40,7 +40,7 @@ public class HovercraftEntitySmokeTest extends AbstractHeadlessServerTest {
                 "artest entity spawn 0 " + px + ".5 " + py + " " + pz + ".5"
                         + " advancedrocketry:ARHoverCraft"));
         assertTrue("hovercraft spawn failed: " + spawn,
-                spawn.contains("\"ok\":true") && spawn.contains("\"spawned\":true"));
+                Reply.of(spawn).ok() && Reply.of(spawn).bool("spawned", false));
 
         // `entity spawn` is its own producer and refuses on its own: `integer` names the field and
         // throws when it is absent, which is what the has-check stood for.

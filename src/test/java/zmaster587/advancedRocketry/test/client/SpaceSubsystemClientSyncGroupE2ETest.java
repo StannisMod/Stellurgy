@@ -208,7 +208,7 @@ public class SpaceSubsystemClientSyncGroupE2ETest extends AbstractSharedClientE2
         Events clientLog = clientEvents();
         long entryMark = clientLog.mark();
         String enter = exec("artest space enter " + botName + " " + slotDim + " 0.5 200 0.5");
-        scenario().requireArranged("space enter must succeed: " + enter, enter.contains("\"ok\":true"));
+        scenario().requireArranged("space enter must succeed: " + enter, Reply.of(enter).ok());
         // The client's own world is now the slot dim — the far side of the transfer, and the proof
         // that the registration sync landed (a client that never registered the dim could not build
         // a WorldClient for it). Waited for as a LINK: the respawn is a discrete event, and a client
@@ -234,7 +234,7 @@ public class SpaceSubsystemClientSyncGroupE2ETest extends AbstractSharedClientE2
         long repositionMark = clientLog.mark();
         String reposition = exec("artest space enter " + botName + " " + slotDim + " 0.5 66 0.5");
         scenario().requireArranged("repositioning onto the platform must succeed: " + reposition,
-                reposition.contains("\"ok\":true"));
+                Reply.of(reposition).ok());
         // A same-dim reposition is a server-side position write, and its far side is the client
         // APPLYING the correction — the link the forty ticks were budgeting for.
         clientLog.await(repositionMark, "client_pos_look_applied",
@@ -319,14 +319,14 @@ public class SpaceSubsystemClientSyncGroupE2ETest extends AbstractSharedClientE2
             // fallback stars (all at sy=sz=0), so bodiesAt returns ONLY this POI.
             String poi = exec("artest space add-poi 0 5000 0 1000 500 -300 PLANET 0 7");
             scenario().requireArranged("add-poi must register a descend target: " + poi,
-                    poi.contains("\"ok\":true") && poi.contains("\"descendTarget\":true"));
+                    Reply.of(poi).ok() && Reply.of(poi).bool("descendTarget", false));
 
             // The dimension under test is the one the subsystem ACTUALLY bound the cell to, read
             // back from the settle. It is not the test's to choose: slot ids are minted per boot,
             // and a number picked here would only be a guess at the binding.
             String settle = exec("artest space ledger-settle 0 5000 0 " + pooled[0]);
             scenario().requireArranged("ledger-settle must succeed: " + settle,
-                    settle.contains("\"ok\":true"));
+                    Reply.of(settle).ok());
             Reply boundMReply = Reply.of(settle);
             scenario().requireArranged("the settle must report which slot the cell was bound to: "
                     + settle, boundMReply.has(BOUND_DIM));
@@ -359,7 +359,7 @@ public class SpaceSubsystemClientSyncGroupE2ETest extends AbstractSharedClientE2
             long insideMark = clientLog.mark();
             String enter = exec("artest space enter " + botName() + " " + slotDim + " 0.5 200 0.5");
             scenario().requireArranged("space enter must succeed: " + enter,
-                    enter.contains("\"ok\":true"));
+                    Reply.of(enter).ok());
 
             scenario().asserting("the client is sent the cell's sky, and its contents survive intact");
             // THE LINK: the per-player broadcast reached this client and its handler applied the
@@ -435,7 +435,7 @@ public class SpaceSubsystemClientSyncGroupE2ETest extends AbstractSharedClientE2
 
             String moved = exec("artest space set-clock " + (serverBefore + JUMP_TICKS));
             scenario().requireArranged("the server clock must move: " + moved,
-                    moved.contains("\"ok\":true"));
+                    Reply.of(moved).ok());
 
             // The link, not a budget: the client ACCEPTED a baseline carrying the jumped value.
             // The threshold is half the jump, the same discriminator the assertion below uses — a

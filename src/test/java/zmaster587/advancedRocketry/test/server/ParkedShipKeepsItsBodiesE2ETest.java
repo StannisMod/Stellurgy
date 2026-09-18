@@ -92,7 +92,7 @@ public class ParkedShipKeepsItsBodiesE2ETest extends AbstractSharedServerTest {
         CellInfo reDerived;
         try {
             String set = exec("artest space set-clock " + (clockBefore + AGE_TICKS));
-            assertTrue("the clock must move: " + set, set.contains("\"ok\":true"));
+            assertTrue("the clock must move: " + set, Reply.of(set).ok());
             assertEquals("the space subsystem must read the clock that was set: " + set,
                     clockBefore + AGE_TICKS, jsonLong(set, "spaceClock"));
 
@@ -108,7 +108,7 @@ public class ParkedShipKeepsItsBodiesE2ETest extends AbstractSharedServerTest {
             // authored orbital elements — and never from the clock.
             String forget = exec("artest space forget-name " + WATCHED_DIM);
             assertTrue("the registry must have been holding a recorded name to forget: " + forget,
-                    forget.contains("\"held\":true"));
+                    Reply.of(forget).bool("held", false));
             reDerived = CellInfo.atKey(this::exec, cellKey, WATCHED_DIM);
         } finally {
             // Hand the shared server back the clock it had. A test that ages the universe by eleven

@@ -157,7 +157,7 @@ public class VSJumpDriveFixtureBoardingE2ETest extends AbstractSharedVsClientE2E
         long spawnMark = events.markInstrumented();
         String assemble = assembleFixture();
         scenario().requireArranged("a " + VARIANT + " build must route to a ship: " + assemble,
-                assemble.contains("\"ok\":true"));
+                Reply.of(assemble).ok());
         // The id is KEPT. It was being discarded, and every lookup below then went back to the base
         // coordinates to find the craft again — a question a neighbour's ship answers in the same
         // shape on a world this class shares.
@@ -259,7 +259,7 @@ public class VSJumpDriveFixtureBoardingE2ETest extends AbstractSharedVsClientE2E
         assertTrue("the ship must find its own NAVIGATION COMPUTER from the flight computer. That "
                         + "search is by the console's stored link back to this computer and adopts "
                         + "nothing, so it is the assembler's welding that is under test here: " + gate,
-                gate.contains("\"navComputer\":true"));
+                Reply.of(gate).bool("navComputer", false));
 
         int[] navSub = add(afcSub, OFF_NAV);
         NavStatus navStatus = NavStatus.at(this::exec, 0, navSub[0], navSub[1], navSub[2]);
@@ -630,7 +630,7 @@ public class VSJumpDriveFixtureBoardingE2ETest extends AbstractSharedVsClientE2E
         String fixture = exec("artest fixture rocket 0 " + site.x + " " + site.y + " " + site.z
                 + " " + VARIANT);
         scenario().requireArranged("fixture (" + VARIANT + ") failed: " + fixture,
-                fixture.contains("\"ok\":true"));
+                Reply.of(fixture).ok());
         int[] bp = Reply.of(fixture).blockPos(BUILDER_POS);
         scenario().requireArranged("fixture missing builderPos: " + fixture, bp != null);
         return exec("artest rocket assemble 0 " + bp[0] + " " + bp[1] + " " + bp[2]);

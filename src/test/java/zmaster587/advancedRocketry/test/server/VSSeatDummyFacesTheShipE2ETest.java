@@ -64,7 +64,7 @@ public class VSSeatDummyFacesTheShipE2ETest extends AbstractSharedServerTest {
         String coords = placeFixture(SRC_X, SRC_Y, SRC_Z, "with-pilot-seat");
         String asm = exec("artest rocket assemble 0 " + coords);
         assertTrue("the pilot-seat build must route to a ship, not a rocket: " + asm,
-                asm.contains("\"rocketCount\":0"));
+                (Reply.of(asm).integerOr("rocketCount", Integer.MIN_VALUE) == 0));
         assertTrue("the source ship never assembled/loaded", loadedShips(0) >= 1);
 
         // The craft this scenario built, by the name its assembler minted, and the physics id that
@@ -77,7 +77,7 @@ public class VSSeatDummyFacesTheShipE2ETest extends AbstractSharedServerTest {
         int seatX = seat.seatX, seatY = seat.seatY, seatZ = seat.seatZ;
 
         String mountAt = exec("artest vs seat-mount-at 0 " + seatX + " " + seatY + " " + seatZ);
-        assertTrue("the seat's mount dummy must spawn: " + mountAt, mountAt.contains("\"ok\":true"));
+        assertTrue("the seat's mount dummy must spawn: " + mountAt, Reply.of(mountAt).ok());
 
         // Where the ship points BEFORE the turn, and where its mount thinks it points. Asked by the
         // id resolved above: a lookup at the build site was defended as "the one positional lookup
@@ -90,8 +90,8 @@ public class VSSeatDummyFacesTheShipE2ETest extends AbstractSharedServerTest {
         // Commanded on an UNMANNED ship: a seated pilot's own input would overwrite the attitude
         // target every tick. The ship hovers while the controller slews it round.
         assertTrue("the attitude hold must accept the yaw command",
-                exec("artest vs point-by-id 0 " + shipId
-                        + " " + TURN_QW + " 0.0 " + TURN_QY + " 0.0").contains("\"commanded\":true"));
+                Reply.of(exec("artest vs point-by-id 0 " + shipId
+                        + " " + TURN_QW + " 0.0 " + TURN_QY + " 0.0")).bool("commanded", false));
 
         // The slew runs on the attitude controller's tick, so the budget is that controller's world.
         final double[] yaw = {shipYawBefore};
@@ -131,7 +131,7 @@ public class VSSeatDummyFacesTheShipE2ETest extends AbstractSharedServerTest {
     private double mountYaw(int seatX, int seatY, int seatZ) throws Exception {
         String status = exec("artest vs seat-status 0 " + seatX + " " + seatY + " " + seatZ);
         assertTrue("the seat's bound mount must be found for its rotation to be read: " + status,
-                status.contains("\"dummyFound\":true"));
+                Reply.of(status).bool("dummyFound", false));
         return extractDouble(status, "dummyYaw");
     }
 
@@ -168,15 +168,15 @@ public class VSSeatDummyFacesTheShipE2ETest extends AbstractSharedServerTest {
         int cx1 = (baseX - 4) >> 4, cz1 = (baseZ - 4) >> 4;
         int cx2 = (baseX + 20) >> 4, cz2 = (baseZ + 20) >> 4;
         assertTrue("chunk warmup failed",
-                exec("artest chunk warmup 0 " + cx1 + " " + cz1 + " " + cx2 + " " + cz2).contains("\"ok\":true"));
-        assertTrue("pre-clear failed", exec("artest fill 0 " + (baseX - 4) + " " + (SRC_Y - 2) + " " + (baseZ - 4)
+                Reply.of(exec("artest chunk warmup 0 " + cx1 + " " + cz1 + " " + cx2 + " " + cz2)).ok());
+        assertTrue("pre-clear failed", Reply.of(exec("artest fill 0 " + (baseX - 4) + " " + (SRC_Y - 2) + " " + (baseZ - 4)
                 + " " + (baseX + 20) + " " + (SRC_Y + 12) + " " + (baseZ + 20) + " minecraft:air")
-                .contains("\"ok\":true"));
+                ).ok());
     }
 
     private String placeFixture(int baseX, int baseY, int baseZ, String variant) throws Exception {
         String fixture = exec("artest fixture rocket 0 " + baseX + " " + baseY + " " + baseZ + " " + variant);
-        assertTrue("fixture (" + variant + ") failed: " + fixture, fixture.contains("\"ok\":true"));
+        assertTrue("fixture (" + variant + ") failed: " + fixture, Reply.of(fixture).ok());
         int[] bp = Reply.of(fixture).blockPos(BUILDER_POS);
         assertTrue("fixture (" + variant + ") missing builderPos: " + fixture, bp != null);
         return bp[0] + " " + bp[1] + " " + bp[2];

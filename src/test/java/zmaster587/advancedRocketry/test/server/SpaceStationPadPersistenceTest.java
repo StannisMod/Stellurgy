@@ -91,7 +91,7 @@ public class SpaceStationPadPersistenceTest {
         String dock = String.join("\n",
                 firstBoot.client().execute("artest station dock " + stationId));
         assertTrue("boot1 dock must claim padB: " + dock,
-                dock.contains("\"ok\":true") && dock.contains("\"x\":200"));
+                Reply.of(dock).ok() && (Reply.of(dock).integerOr("x", Integer.MIN_VALUE) == 200));
 
         // Sanity dump before restart.
         StationPads padsBefore = pads(firstBoot, stationId);
@@ -110,8 +110,7 @@ public class SpaceStationPadPersistenceTest {
 
         String stations = String.join("\n",
                 secondBoot.client().execute("artest station list"));
-        assertTrue("station " + stationId + " did NOT survive restart: " + stations,
-                stations.contains("\"id\":" + stationId));
+        Reply.of(stations).element("stations", "id", String.valueOf(stationId));
 
         StationPads padsAfter = pads(secondBoot, stationId);
         assertTrue("padA must survive restart: " + padsAfter.raw(), padsAfter.has(100, 100));
@@ -172,11 +171,11 @@ public class SpaceStationPadPersistenceTest {
         String undock = String.join("\n", secondBoot.client().execute(
                 "artest station undock " + stationId + " 200 200"));
         assertTrue("post-restart undock must succeed: " + undock,
-                undock.contains("\"ok\":true"));
+                Reply.of(undock).ok());
         String dock2 = String.join("\n", secondBoot.client().execute(
                 "artest station dock " + stationId));
         assertTrue("post-restart dock must reclaim padB: " + dock2,
-                dock2.contains("\"ok\":true") && dock2.contains("\"x\":200"));
+                Reply.of(dock2).ok() && (Reply.of(dock2).integerOr("x", Integer.MIN_VALUE) == 200));
     }
 
     /**
@@ -240,6 +239,6 @@ public class SpaceStationPadPersistenceTest {
     private static void ok(RealDedicatedServerHarness harness, String cmd) throws Exception {
         String resp = String.join("\n", harness.client().execute(cmd));
         assertEquals("probe " + cmd + " did not return ok: " + resp,
-                true, resp.contains("\"ok\":true"));
+                true, Reply.of(resp).ok());
     }
 }

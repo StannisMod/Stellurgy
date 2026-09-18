@@ -79,7 +79,7 @@ public class VSUnpilotedEntryE2ETest extends AbstractSharedServerTest {
     public void anUnpilotedShipClimbingPastTheCeilingStillEntersSpace() throws Exception {
 
         String setup = exec("artest space entry-setup 2");
-        assertTrue("entry setup failed: " + setup, setup.contains("\"ok\":true"));
+        assertTrue("entry setup failed: " + setup, Reply.of(setup).ok());
 
         EntryStatus control = EntryStatus.wholeLedger(this::exec);
         assertEquals("witness sensitivity control — no ship must be ledgered before the climb: " + control,
@@ -89,11 +89,11 @@ public class VSUnpilotedEntryE2ETest extends AbstractSharedServerTest {
         String coords = placeFixture(SRC_X, SRC_Y, SRC_Z, "with-pilot-seat");
         String asm = exec("artest rocket assemble 0 " + coords);
         assertTrue("with VS an AFC-bearing build must route to a ship (no rocket): " + asm,
-                asm.contains("\"rocketCount\":0"));
+                (Reply.of(asm).integerOr("rocketCount", Integer.MIN_VALUE) == 0));
         assertTrue("the source VS ship never loaded", loadedShips(0) >= 1);
 
         String launch = exec("artest space launch-cell 0");
-        assertTrue("launch-cell resolve failed: " + launch, launch.contains("\"ok\":true"));
+        assertTrue("launch-cell resolve failed: " + launch, Reply.of(launch).ok());
         String expectedCell = extractString(launch, "cellKey");
         assertTrue("launch dim resolved to no cell: " + launch, expectedCell != null);
 
@@ -110,11 +110,11 @@ public class VSUnpilotedEntryE2ETest extends AbstractSharedServerTest {
         String hands = exec("artest vs ff-input-by-id 0 " + vsId);
         assertTrue("this ship's flight computer must resolve, and hold NO pilot input, or the climb"
                 + " below is the piloted leg again: " + hands,
-                hands.contains("\"afcResolved\":true") && hands.contains("\"input\":\"null\""));
+                Reply.of(hands).bool("afcResolved", false) && "null".equals(Reply.of(hands).text("input")));
 
         String tp = exec("artest vs teleport-ship-by-id 0 " + vsId + " "
                 + (int) sx + " " + ABOVE_CEILING_Y + " " + (int) sz);
-        assertTrue("climb teleport failed: " + tp, tp.contains("\"ok\":true"));
+        assertTrue("climb teleport failed: " + tp, Reply.of(tp).ok());
         exec("artest vs unpark-by-id 0 " + vsId);
 
         final EntryStatus[] status = new EntryStatus[1];
@@ -152,14 +152,14 @@ public class VSUnpilotedEntryE2ETest extends AbstractSharedServerTest {
         int cx1 = (baseX - 4) >> 4, cz1 = (baseZ - 4) >> 4;
         int cx2 = (baseX + 20) >> 4, cz2 = (baseZ + 20) >> 4;
         assertTrue("chunk warmup failed",
-                exec("artest chunk warmup 0 " + cx1 + " " + cz1 + " " + cx2 + " " + cz2).contains("\"ok\":true"));
-        assertTrue("pre-clear failed", exec("artest fill 0 " + (baseX - 4) + " " + (SRC_Y - 2) + " " + (baseZ - 4)
-                + " " + (baseX + 20) + " " + (SRC_Y + 12) + " " + (baseZ + 20) + " minecraft:air").contains("\"ok\":true"));
+                Reply.of(exec("artest chunk warmup 0 " + cx1 + " " + cz1 + " " + cx2 + " " + cz2)).ok());
+        assertTrue("pre-clear failed", Reply.of(exec("artest fill 0 " + (baseX - 4) + " " + (SRC_Y - 2) + " " + (baseZ - 4)
+                + " " + (baseX + 20) + " " + (SRC_Y + 12) + " " + (baseZ + 20) + " minecraft:air")).ok());
     }
 
     private String placeFixture(int baseX, int baseY, int baseZ, String variant) throws Exception {
         String fixture = exec("artest fixture rocket 0 " + baseX + " " + baseY + " " + baseZ + " " + variant);
-        assertTrue("fixture (" + variant + ") failed: " + fixture, fixture.contains("\"ok\":true"));
+        assertTrue("fixture (" + variant + ") failed: " + fixture, Reply.of(fixture).ok());
         int[] bp = Reply.of(fixture).blockPos(BUILDER_POS);
         assertTrue("fixture (" + variant + ") missing builderPos: " + fixture, bp != null);
         return bp[0] + " " + bp[1] + " " + bp[2];

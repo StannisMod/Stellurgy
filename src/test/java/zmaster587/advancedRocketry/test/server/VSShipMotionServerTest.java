@@ -79,7 +79,7 @@ public class VSShipMotionServerTest extends AbstractSharedServerTest {
         // queues an async VS relocation.
         String assemble = assembleFixture(SITE, VARIANT);
         assertTrue("with VS, the AFC build must route to a ship (no rocket): " + assemble,
-                assemble.contains("\"rocketCount\":0"));
+                (Reply.of(assemble).integerOr("rocketCount", Integer.MIN_VALUE) == 0));
 
         // 1) The ship must be in the queryable registry — READ, not waited for.
         //
@@ -108,7 +108,7 @@ public class VSShipMotionServerTest extends AbstractSharedServerTest {
         String load = exec("artest vs load-ships 0");
         assertTrue("load-ships must account for the ship, either as a queued load or as one already"
                 + " loaded: " + load,
-                load.contains("\"requested\":1") || load.contains("\"alreadyLoaded\":1"));
+                (Reply.of(load).integerOr("requested", Integer.MIN_VALUE) == 1) || (Reply.of(load).integerOr("alreadyLoaded", Integer.MIN_VALUE) == 1));
 
         // 3) The ship's NAME, from the assembler that minted it, and then its position asked BY that
         //    name. The identity used to be re-derived here from a bounded lookup at the build spot,
@@ -145,7 +145,7 @@ public class VSShipMotionServerTest extends AbstractSharedServerTest {
         // `force-vel-by-id` ("a velocity setpoint alone does nothing"). Asserting it here, rather
         // than deleting it, is what stops the class quietly going back to the setpoint.
         String setpoint = exec("artest vs push-ship-by-id 0 " + shipId[0] + " 0 0 " + COMMANDED_VZ);
-        assertTrue("push-ship-by-id must find the ship: " + setpoint, setpoint.contains("\"pushed\":true"));
+        assertTrue("push-ship-by-id must find the ship: " + setpoint, Reply.of(setpoint).bool("pushed", false));
         GameTicks.advance(client(), GameTicks.server(), DRIVE_TICKS);
         double zAfterSetpoint = ShipInfo.byId(this::exec, 0, shipId[0]).z;
         assertTrue("a raw velocity setpoint must NOT be mistaken for a working drive: the ship moved "
@@ -160,7 +160,7 @@ public class VSShipMotionServerTest extends AbstractSharedServerTest {
         // every tick against a substrate that keeps discarding it.
         String drive = exec("artest vs force-vel-by-id 0 " + shipId[0] + " 0 0 " + COMMANDED_VZ);
         assertTrue("the command must reach THIS ship's own flight computer: " + drive,
-                drive.contains("\"afcResolved\":true"));
+                Reply.of(drive).bool("afcResolved", false));
         GameTicks.advance(client(), GameTicks.server(), DRIVE_TICKS);
         double zAfter = ShipInfo.byId(this::exec, 0, shipId[0]).z;
 
@@ -189,14 +189,14 @@ public class VSShipMotionServerTest extends AbstractSharedServerTest {
         site.requireClear(this::exec, 2, 10,
                 "the craft is built here and then driven horizontally out of this volume");
         String fixture = exec("artest fixture rocket 0 " + baseX + " " + baseY + " " + baseZ + " " + variant);
-        assertTrue("fixture (" + variant + ") failed: " + fixture, fixture.contains("\"ok\":true"));
+        assertTrue("fixture (" + variant + ") failed: " + fixture, Reply.of(fixture).ok());
         int[] bp = Reply.of(fixture).blockPos(BUILDER_POS);
         assertTrue("fixture missing builderPos: " + fixture, bp != null);
         int bx = bp[0],
                 by = bp[1],
                 bz = bp[2];
         String assemble = exec("artest rocket assemble 0 " + bx + " " + by + " " + bz);
-        assertTrue("assemble failed: " + assemble, assemble.contains("\"ok\":true"));
+        assertTrue("assemble failed: " + assemble, Reply.of(assemble).ok());
         return assemble;
     }
 }
