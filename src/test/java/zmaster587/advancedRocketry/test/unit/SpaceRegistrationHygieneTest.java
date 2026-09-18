@@ -27,31 +27,32 @@ import static org.junit.Assert.assertTrue;
  */
 public class SpaceRegistrationHygieneTest {
 
-    // ---- enable-gate: shouldRegister(enabled, vsAvailable, alreadyBuilt) --------------------
+    // ---- the gate: shouldRegister(alreadyBuilt) ---------------------------------------------
+    //
+    // BOTH CONDITIONAL TESTS HERE WERE DELETED RATHER THAN RELAXED, on 2026-09-18, because each
+    // pinned a contract about something that no longer exists:
+    //
+    //   * `theDisabledFlagFullyStandsDown` pinned `enableSpaceSubsystem=false` vetoing
+    //     registration. The flag is gone (maintainer: "давай вообще уберём условие регистрации
+    //     космоса, он слишком централен") — space is the mod's subject, not one of its features.
+    //   * `noValkyrienSkiesMeansNothingToHost` pinned standing down when VS is absent. VS is
+    //     VENDORED into this jar (`build.gradle`: "VS is a mandatory part of the mod"), so the
+    //     condition could only fire for a stripped or repacked jar — a broken build, for which
+    //     silently registering no space at all was the worst available answer.
+    //
+    // What is left is idempotence, which is not a gate on the environment at all.
 
     @Test
-    public void registersOnlyWhenEveryConditionIsMet() {
-        assertTrue("flag on, VS present, not yet built -> register",
-                SpaceSubsystem.shouldRegister(true, true, false));
-    }
-
-    @Test
-    public void theDisabledFlagFullyStandsDown() {
-        // Regression guard: with the enable flag off, NOTHING registers, whatever else is true.
-        assertFalse("enableSpaceSubsystem=false must veto registration",
-                SpaceSubsystem.shouldRegister(false, true, false));
-    }
-
-    @Test
-    public void noValkyrienSkiesMeansNothingToHost() {
-        assertFalse("without VS the subsystem has no tier-2 ships to host -> do not register",
-                SpaceSubsystem.shouldRegister(true, false, false));
+    public void registersOnEveryWorkingInstall() {
+        assertTrue("not yet built -> register. Since the flag and the VS probe were both removed,"
+                        + " this is the only outcome an operator or an environment can reach",
+                SpaceSubsystem.shouldRegister(false));
     }
 
     @Test
     public void anAlreadyBuiltSessionDoesNotReRegister() {
         assertFalse("a single-player re-open reuses the JVM-global registration",
-                SpaceSubsystem.shouldRegister(true, true, true));
+                SpaceSubsystem.shouldRegister(true));
     }
 
     // ---- ephemeral hyperspace: the wipe targets exactly the unbound-slot folder ------------

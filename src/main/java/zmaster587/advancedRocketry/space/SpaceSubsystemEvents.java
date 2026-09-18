@@ -51,7 +51,7 @@ public final class SpaceSubsystemEvents {
         }
         // THE SUBSYSTEM'S ONLY ADVANCE SITE. One increment per server tick, before anything else
         // here can return: the clock is not the controller's, it is the subsystem's, and a
-        // session with the controller down (config off, no Valkyrien Skies, a harness that
+        // session with the controller down (no Valkyrien Skies on the classpath, or a harness that
         // installs its own stack) must still get a number that MOVES when it asks the time —
         // a clock frozen at zero is the defect this counter replaced, not an acceptable
         // stand-down. Nothing else in the mod may increment it; the other server-tick handler in

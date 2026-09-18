@@ -83,7 +83,8 @@ public class ARConfiguration {
     @ConfigProperty(needsSync = true)
     public int spaceDimId = -2;
     // Movable-ship space subsystem (server-authoritative; loaded in loadPreInit, never network-synced).
-    public boolean enableSpaceSubsystem = true;
+    // There is deliberately NO enable flag here: space is the mod's subject rather than one of its
+    // features, and it registers wherever the mod runs. See SpaceSubsystem.shouldRegister.
     public int spaceCellPoolSize = 10;
     public String spaceCellGcPolicy = "both";
     public int spaceCellMaxAgeTicks = 1728000;
@@ -631,7 +632,9 @@ public class ARConfiguration {
 
         //Movable-ship space subsystem (tier-2 ships). The pool size is the direct perf knob: only this
         //many space "bubble" worlds ever tick at once. GC trims the on-disk store of modified cells.
-        arConfig.enableSpaceSubsystem = config.getBoolean("enableSpaceSubsystem", PERFORMANCE, true, "Enable the movable-ship (Valkyrien Skies) space subsystem: the pool of 'bubble' dimensions, the shared hyperspace world, and tier-2 ship transit. When false, NO space dimensions are registered at server start - set this on servers that do not use tier-2 ships. Has no effect without Valkyrien Skies installed (the subsystem is skipped either way).");
+        //There is NO enableSpaceSubsystem flag: it was removed on 2026-09-18 because space is the
+        //mod's subject and not one of its features. An existing config file that still carries the
+        //key is harmless - Forge leaves unread keys alone, so nothing has to be migrated.
         arConfig.spaceCellPoolSize = config.getInt("spaceCellPoolSize", PERFORMANCE, 10, 1, 64, "Number of pre-registered space 'bubble' worlds that can be live (ticking) at once. The direct performance knob for the movable-ship space subsystem.");
         arConfig.spaceCellGcPolicy = config.getString("spaceCellGcPolicy", PERFORMANCE, "both", "Garbage-collection policy for the on-disk store of modified space cells: age | count | both | never.", new String[]{"age", "count", "both", "never"});
         arConfig.spaceCellMaxAgeTicks = config.getInt("spaceCellMaxAgeTicks", PERFORMANCE, 1728000, 0, Integer.MAX_VALUE, "Ticks since last visit before an age/both GC deletes a stored space cell (1728000 = 24h at 20 tps).");

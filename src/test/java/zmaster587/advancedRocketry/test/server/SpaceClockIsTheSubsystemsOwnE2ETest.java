@@ -270,77 +270,33 @@ public class SpaceClockIsTheSubsystemsOwnE2ETest {
                 restored - JUMP_TICKS <= ELAPSED_SLACK_TICKS);
     }
 
-    /**
-     * The counter is durable on a server where the space subsystem never came up at all.
-     *
-     * <p><b>This is not a corner: it is the configuration most servers run.</b> The clock is read by
-     * code that has no idea whether space registered — {@code CrystalSeeding} stamps the freshness of
-     * every address a memory crystal is seeded with, on any world, with or without Valkyrien Skies —
-     * and that stamp is written into the ITEM, where it outlives the session in storage the space
-     * subsystem does not own. A counter that restarted at zero on every boot would leave every such
-     * stamp permanently in the future, so the freshest observation could never win a merge again.</p>
-     *
-     * <p>The subsystem is turned off by config rather than by the absence of Valkyrien Skies, so this
-     * leg runs and means the same thing in EVERY configuration of the gate — including {@code
-     * }, where the neighbouring reboot test covers the subsystem-up path instead. That the
-     * subsystem really is down is asserted, not assumed: with it up, this would be a second copy of
-     * the test above rather than the one that covers the other path.</p>
-     */
-    @Test
-    public void theClockComesBackWithTheSubsystemTurnedOff() throws Exception {
-        java.nio.file.Path arConfigDir = root.resolve("config").resolve("advRocketry");
-        Files.createDirectories(arConfigDir);
-        Files.write(arConfigDir.resolve("advancedRocketry.cfg"),
-                ("# seeded by SpaceClockIsTheSubsystemsOwnE2ETest\n"
-                        + "performance {\n"
-                        + "    B:enableSpaceSubsystem=false\n"
-                        + "}\n").getBytes(java.nio.charset.StandardCharsets.UTF_8));
+    // ---- THE DOWN-SUBSYSTEM LEG IS GONE, AND ITS COVERAGE WITH IT -------------------------------
+    //
+    // `theClockComesBackWithTheSubsystemTurnedOff` stood here until 2026-09-18. It booted a server
+    // with `enableSpaceSubsystem=false` and pinned the one thing only a stood-down server can show:
+    // that the clock ADVANCES and SURVIVES A REBOOT on a session where the controller was never
+    // built -- the reason `SpaceSubsystem.advanceClock()` sits ABOVE the `live == null` return in
+    // `SpaceSubsystemEvents`, and the reason the clock restore in `onServerStarted` sits above the
+    // same check.
+    //
+    // The flag was removed that day (maintainer: "давай вообще уберём условие регистрации космоса,
+    // он слишком централен"), and with it the only way to ARRANGE a server whose space subsystem is
+    // down: the sole remaining condition is Valkyrien Skies missing from the classpath, and VS is
+    // vendored into this jar, so no test can produce it.
+    //
+    // WHAT STILL COVERS WHAT:
+    //   * clock persistence across a reboot -- the neighbouring test above, on a server with the
+    //     subsystem UP. That is now every server.
+    //   * the ORDER of the two statements (advance/restore before the null return) -- NOTHING.
+    //     It is unarranged, and moving the increment below the return would go green everywhere.
+    //     It is not a weakened assertion, it is an absent one, which is why it is written down here
+    //     instead of being quietly dropped.
+    //
+    // Recovering it needs a seam rather than a flag: `advanceClock()` and `onServerStarted(live)`
+    // both already take the subsystem as a PARAMETER (they are static-free by design), so a unit
+    // test calling them with `null` would pin the order without any server and without giving an
+    // operator a switch for the mod's own subject.
 
-        // --- boot 1 --------------------------------------------------------------------------------
-        harness = RealDedicatedServerHarness.startWith(root, false);
-        SubsystemStatus status = SubsystemStatus.read(this::exec);
-        requireArranged("the space subsystem must be DOWN on this server, or this leg is a "
-                + "duplicate of the one above and covers nothing: " + status.raw(),
-                !status.registered);
-
-        // THE ADVANCE SITE, pinned where it can only be pinned. The increment sits ahead of the
-        // controller-null return precisely so a stood-down session still gets a moving number; move
-        // it below that return and this is the one assertion in the suite that goes red.
-        long tickA = spaceClock(exec("artest space clock"));
-        GameTicks.advance(harness.client(), GameTicks.server(), OBSERVED_TICKS);
-        long tickB = spaceClock(exec("artest space clock"));
-        assertTrue("the clock must advance on a server where the space controller was never built —"
-                        + " that is what the advance site sitting ahead of the controller check buys,"
-                        + " and a clock frozen at zero for such a session is the defect the owned"
-                        + " counter replaced. " + tickA + " -> " + tickB, tickB > tickA);
-
-        long fresh = spaceClock(exec("artest space clock"));
-        requireArranged("a fresh boot's clock must be far below the value set below. fresh="
-                + fresh, fresh < JUMP_TICKS / 2L);
-
-        String moved = exec("artest space set-clock " + JUMP_TICKS);
-        assertTrue("the clock must be set even with the subsystem down — it advances on every server "
-                + "regardless: " + moved, moved.contains("\"ok\":true"));
-        assertEquals("and hold the value it was set to: " + moved, JUMP_TICKS, spaceClock(moved));
-
-        // --- the reboot ----------------------------------------------------------------------------
-        harness.close();
-        harness = null;
-        harness = RealDedicatedServerHarness.startWith(root, false);
-
-        SubsystemStatus statusAfter = SubsystemStatus.read(this::exec);
-        assertTrue("the subsystem must still be down on boot 2: " + statusAfter.raw(),
-                !statusAfter.registered);
-
-        long restored = spaceClock(exec("artest space clock"));
-        assertTrue("the clock must survive a reboot on a server with no space subsystem at all. Its"
-                        + " readers do not know the subsystem exists, and their stamps outlive the"
-                        + " session: a counter that restarts at zero puts every stored stamp in the"
-                        + " future for good. set=" + JUMP_TICKS + " restored=" + restored,
-                restored >= JUMP_TICKS);
-        assertTrue("...and it must be the SAVED value it resumed from: restored=" + restored,
-                restored - JUMP_TICKS <= ELAPSED_SLACK_TICKS);
-    }
 
     // --- helpers -----------------------------------------------------------------------------------
 

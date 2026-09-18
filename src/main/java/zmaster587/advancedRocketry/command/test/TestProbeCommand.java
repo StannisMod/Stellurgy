@@ -3943,7 +3943,8 @@ public class TestProbeCommand extends CommandBase {
         // --- PRODUCTION-wiring probes. Unlike every other verb here these deliberately touch the real
         //     SpaceSubsystem rather than a probe-local stack, so a restart test can prove the shipped
         //     server-start / world-save path actually persists and restores. They are only useful when
-        //     the subsystem registered (enableSpaceSubsystem, plus Valkyrien Skies present).
+        //     the subsystem registered, which since 2026-09-18 is every working install: the config
+        //     flag is gone and the one remaining reason to stand down is a stripped classpath.
 
         // bodies: what the sky in a slot world is BEING TOLD to draw, read from the server side.
         //
@@ -3955,7 +3956,7 @@ public class TestProbeCommand extends CommandBase {
         if (args.length >= 1 && "bodies".equalsIgnoreCase(args[0])) {
             zmaster587.advancedRocketry.space.SpaceSubsystem spaceStack = liveStack();
             if (spaceStack == null) {
-                send(sender, "{\"error\":\"space subsystem not registered - see enableSpaceSubsystem\"}");
+                send(sender, "{\"error\":\"space subsystem not registered\"}");
                 return;
             }
             zmaster587.advancedRocketry.space.ShipLedger led = spaceStack.ledger;
@@ -5018,7 +5019,7 @@ public class TestProbeCommand extends CommandBase {
                 // Not survivable-and-quiet: with no subsystem the production on-ramp this fixture
                 // exists to drive is not there at all, and every assertion downstream would be
                 // measuring its absence.
-                send(sender, "{\"error\":\"the server has no space subsystem - see enableSpaceSubsystem\"}");
+                send(sender, "{\"error\":\"the server has no space subsystem\"}");
                 return;
             }
             // THE SERVER'S OWN POOL, and nothing appended to it.
@@ -5573,7 +5574,7 @@ public class TestProbeCommand extends CommandBase {
         if (args.length >= 4 && "jump".equalsIgnoreCase(args[0])) {
             zmaster587.advancedRocketry.space.SpaceSubsystem spaceStack = liveStack();
             if (spaceStack == null) {
-                send(sender, "{\"error\":\"space subsystem not registered - see enableSpaceSubsystem\"}");
+                send(sender, "{\"error\":\"space subsystem not registered\"}");
                 return;
             }
             zmaster587.advancedRocketry.space.ShipTransitManager tm = spaceStack.transit;

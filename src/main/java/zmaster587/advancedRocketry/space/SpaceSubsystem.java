@@ -160,8 +160,8 @@ public final class SpaceSubsystem {
 
     /**
      * Whether the production subsystem should register the space dimensions on server start. Pure decision
-     * surface — factored out so the gate ({@code enableSpaceSubsystem} flag, Valkyrien Skies presence,
-     * once-per-session idempotence) is unit-testable without booting a server.
+     * surface — factored out so the one remaining condition (once-per-session idempotence) is
+     * unit-testable without booting a server.
      *
      * <p>The decision deliberately does NOT consider whether the JVM runs in test mode. Space is the
      * point of this mod, so it registers wherever the mod runs — an interactive session launched with
@@ -169,16 +169,31 @@ public final class SpaceSubsystem {
      * takes them from {@link SpaceSlotPool#registerAdditionalSlots(int)}, which APPENDS to the pool
      * and therefore cannot disturb what production already registered.</p>
      *
-     * <ul>
-     *   <li>{@code enabled} — the {@code enableSpaceSubsystem} config flag; when off the subsystem is fully
-     *       disabled, registering no dimensions at all (a config toggle must return the vanilla baseline).</li>
-     *   <li>{@code vsAvailable} — the subsystem only hosts tier-2 Valkyrien Skies ships; without VS there
-     *       is nothing to host, so registering ~10 dimensions is pure dead weight.</li>
-     *   <li>{@code alreadyBuilt} — a single-player re-open reuses the JVM-global registration.</li>
-     * </ul>
+     * <p><b>There is no config flag here, and that is the decision.</b> {@code enableSpaceSubsystem}
+     * was removed on 2026-09-18 (maintainer: <i>"давай вообще уберём условие регистрации космоса, он
+     * слишком централен"</i>). Space is not a feature of this mod, it is its subject: the dimension
+     * pool, hyperspace and tier-2 transit are what everything above them is built on, so a server
+     * that boots without them is not a lighter server but a different, broken game. A toggle on
+     * something that central buys a configuration nobody should run and costs every layer above it a
+     * branch for a state it cannot handle.</p>
+     *
+     * <p><b>The Valkyrien Skies condition is gone too, for the same reason and one more.</b> It asked
+     * {@code VSIntegration.isAvailable()}, which probes for a VS class on the classpath — and VS is
+     * VENDORED into this jar: {@code build.gradle} compiles {@code valkyrienskies/src/main/java}
+     * into the main source set and says in as many words that "VS is a mandatory part of the mod".
+     * So the answer was always yes, and the {@code false} branch was reachable only by a stripped or
+     * repacked jar, which is a broken build rather than a configuration. Standing the subsystem down
+     * for it was not a graceful degradation either — it produced a server with no cells, no
+     * hyperspace and no tier-2 transit, which is the very outcome this decision now refuses to keep
+     * a path to. A repacked jar fails at class load instead, where the cause is legible.</p>
+     *
+     * <p>What is left is ONE condition, and it gates on nothing the operator or the environment can
+     * say: {@code alreadyBuilt} — a single-player re-open reuses the JVM-global registration. It
+     * stays a named function rather than an inlined {@code != null} so that the once-per-session
+     * rule keeps a witness at the unit tier.</p>
      */
-    public static boolean shouldRegister(boolean enabled, boolean vsAvailable, boolean alreadyBuilt) {
-        return enabled && vsAvailable && !alreadyBuilt;
+    public static boolean shouldRegister(boolean alreadyBuilt) {
+        return !alreadyBuilt;
     }
 
     /** Extra headroom above the cells' topmost realizable pose, so a ship can maneuver at the very
@@ -211,8 +226,8 @@ public final class SpaceSubsystem {
 
     /**
      * Server-start step: register the pool (once per JVM) and build this server's subsystem, unless
-     * {@link #shouldRegister} says to stand down (the {@code enableSpaceSubsystem} flag off, Valkyrien
-     * Skies absent, or one already built).
+     * {@link #shouldRegister} says to stand down — which now happens for exactly one reason, a
+     * subsystem already built in this JVM.
      *
      * <p>Returns what the OWNER should hold from here on — {@code existing} untouched when standing
      * down, a freshly wired subsystem otherwise. It takes the owner's current value and gives one
@@ -229,21 +244,12 @@ public final class SpaceSubsystem {
      * {@link SpaceSlotPool#registerPool(int)} is idempotent — so the two cannot fight over slot ids.</p>
      */
     public static SpaceSubsystem buildForServer(SpaceSubsystem existing) {
+        // The config is still read — for the pool SIZE, the cell GC policy and the home-system
+        // anchor. What it no longer carries is an on/off switch for the subsystem itself.
         ARConfiguration cfg = ARConfiguration.getCurrentConfig();
-        boolean vsAvailable = VSIntegration.isAvailable();
-        boolean alreadyBuilt = existing != null;
-        if (!shouldRegister(cfg.enableSpaceSubsystem, vsAvailable, alreadyBuilt)) {
-            // Log the operator-facing reason (already-built is an internal, expected no-op that
-            // must stay quiet).
-            if (!alreadyBuilt) {
-                if (!cfg.enableSpaceSubsystem) {
-                    AdvancedRocketry.logger.info("[SPACE] subsystem disabled (enableSpaceSubsystem=false) - "
-                            + "no space dimensions registered");
-                } else if (!vsAvailable) {
-                    AdvancedRocketry.logger.info("[SPACE] Valkyrien Skies not installed - space subsystem "
-                            + "not registered (no tier-2 ships to host)");
-                }
-            }
+        if (!shouldRegister(existing != null)) {
+            // Nothing to log: the only way here is a single-player re-open reusing the JVM-global
+            // registration, which is an internal, expected no-op and was always kept quiet.
             return existing;
         }
         // The cells realize ship poses across the whole [-HALF_CELL, HALF_CELL) band on every axis
