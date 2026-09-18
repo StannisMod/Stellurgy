@@ -5,8 +5,6 @@ import org.junit.FixMethodOrder;
 import org.junit.Test;
 import org.junit.runners.MethodSorters;
 
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 import zmaster587.advancedRocketry.test.Events;
 import zmaster587.advancedRocketry.test.Reply;
@@ -221,14 +219,71 @@ public class VacuumAndSuitClientGroupE2ETest extends AbstractSharedClientE2ETest
      * HUD and the inventory screen draw from. Returns -1 if absent.
      */
     private int clientChestAir() throws Exception {
-        JsonObject items = bot().reportPlayerItems();
-        String nbt = items.getAsJsonArray("armor").get(2).getAsJsonObject().get("nbt").getAsString();
-        Matcher m = Pattern.compile("\\bair:(\\d+)").matcher(nbt);
-        if (m.find()) return Integer.parseInt(m.group(1));
-        m = Pattern.compile("\\bAmount:(\\d+)").matcher(nbt);
-        if (m.find()) return Integer.parseInt(m.group(1));
-        return -1;
+        JsonObject chest = bot().reportPlayerItems().getAsJsonArray("armor").get(2).getAsJsonObject();
+        // The tag as DATA, not its `toString()`. What stood here was `\bair:(\d+)` over Minecraft's
+        // own display rendering of the compound — a format nothing promises to keep, and one where
+        // `air` cannot be told from any other tag whose name ends in those three letters. The
+        // harness now reports the compound itself beside the rendering (`stackJson`, added the same
+        // day); `nbt` stays for a failure message to print.
+        JsonObject tag = chest.getAsJsonObject("tag");
+        Integer air = tagNamed(tag, SUIT_AIR_TAG);
+        if (air != null) {
+            return air;
+        }
+        Integer amount = tagNamed(tag, FLUID_AMOUNT_TAG);
+        return amount == null ? -1 : amount;
     }
+
+    /**
+     * The first tag called {@code name} anywhere in the compound, depth-first, or {@code null}.
+     *
+     * <p>The search is by NAME and it descends, because a fluid tank writes {@code Amount} inside
+     * its own sub-compound and the suit writes {@code air} at the top. That is the same reach the
+     * regex had over the rendering — and the difference is that a name here is a key, so a tag
+     * called {@code chair} can no longer answer for one called {@code air}.</p>
+     */
+    private static Integer tagNamed(JsonObject tag, String name) {
+        if (tag.has(name) && tag.get(name).isJsonPrimitive()) {
+            return (int) tag.get(name).getAsDouble();
+        }
+        for (java.util.Map.Entry<String, com.google.gson.JsonElement> entry : tag.entrySet()) {
+            Integer nested = inElement(entry.getValue(), name);
+            if (nested != null) {
+                return nested;
+            }
+        }
+        return null;
+    }
+
+    /**
+     * The same search through one value, LISTS included.
+     *
+     * <p>Descending only into compounds was not enough and the first version did exactly that: this
+     * chest piece keeps its tank in a sub-inventory, so the {@code Amount} sits inside a LIST of
+     * stacks, and three tests went red reading {@code -1}. The regex this replaced searched the
+     * whole flattened rendering, so depth and container kind never came up — which is the one thing
+     * a text search is better at, and the reason to say out loud what the structured reader must
+     * cover instead.</p>
+     */
+    private static Integer inElement(com.google.gson.JsonElement value, String name) {
+        if (value.isJsonObject()) {
+            return tagNamed(value.getAsJsonObject(), name);
+        }
+        if (value.isJsonArray()) {
+            for (com.google.gson.JsonElement element : value.getAsJsonArray()) {
+                Integer nested = inElement(element, name);
+                if (nested != null) {
+                    return nested;
+                }
+            }
+        }
+        return null;
+    }
+
+    /** The suit buffer's own tag, as the item writes it. */
+    private static final String SUIT_AIR_TAG = "air";
+    /** A fluid-tank stack's amount, for a chest piece whose buffer is a tank rather than a counter. */
+    private static final String FLUID_AMOUNT_TAG = "Amount";
 
     private static double health(JsonObject state) {
         return state.has("health") ? state.get("health").getAsDouble() : -1.0;

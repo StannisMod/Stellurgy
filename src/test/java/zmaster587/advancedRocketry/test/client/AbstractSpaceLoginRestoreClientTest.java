@@ -14,8 +14,6 @@ import org.lwjgl.input.Keyboard;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 import zmaster587.advancedRocketry.space.CellWorldMapper;
 import zmaster587.advancedRocketry.space.GalacticCoord;
@@ -268,12 +266,6 @@ public abstract class AbstractSpaceLoginRestoreClientTest {
      * ship-relative motion>|c=<carry>|in=<strafe>/<forward>|d=<on deck>}. Every field is in the SHIP's
      * frame, which is what makes a drift measurable at all.
      */
-    protected static final Pattern HISTORY_LINE = Pattern.compile(
-            "(\\d+)([afh])\\|B=(-?[0-9.E\\-]+),(-?[0-9.E\\-]+),(-?[0-9.E\\-]+)"
-                    + "\\|H=(-?[0-9.E\\-]+),(-?[0-9.E\\-]+),(-?[0-9.E\\-]+)"
-                    + "\\|m=(-?[0-9.E\\-]+),(-?[0-9.E\\-]+),(-?[0-9.E\\-]+)"
-                    + "\\|c=(-?[0-9.E\\-]+)\\|in=(-?[0-9.]+)/(-?[0-9.]+)\\|d=(\\d)"
-                    + "\\|s=(\\d)(\\d)/(-?\\d+)");
 
     protected static final String SHIP_ID = "shipId";
     /** The PHYSICS id in a {@code vs ship-uuid} reply — the other half of a tier-2 craft's identity. */
@@ -875,11 +867,11 @@ public abstract class AbstractSpaceLoginRestoreClientTest {
      * re-applies the committed point, not the collision box.
      */
     protected int sweepPinnedTicksIn(String history, long fromTick) {
-        Matcher m = HISTORY_LINE.matcher(history);
         int n = 0;
-        while (m.find()) {
-            if (Long.parseLong(m.group(1)) > fromTick
-                    && ("1".equals(m.group(16)) || "1".equals(m.group(17)))) {
+        for (String record : Events.records(history)) {
+            if (tickOf(record) > fromTick
+                    && ("true".equals(Events.text(record, "collidedX"))
+                            || "true".equals(Events.text(record, "collidedZ")))) {
                 n++;
             }
         }
@@ -899,11 +891,12 @@ public abstract class AbstractSpaceLoginRestoreClientTest {
      * body that resolved and did not move, and the two are otherwise both printed as zeros.</p>
      */
     protected String linesAfter(String history, long fromTick) {
-        Matcher m = HISTORY_LINE.matcher(history);
         StringBuilder out = new StringBuilder();
-        while (m.find()) {
-            if (Long.parseLong(m.group(1)) > fromTick) {
-                out.append("\n      ").append(m.group());
+        for (String record : Events.records(history)) {
+            if (tickOf(record) > fromTick) {
+                // The record, not the packed `line` it also carries: this is a failure message, and
+                // the record shows every field the readers above judged on.
+                out.append("\n      ").append(record);
             }
         }
         return out.length() == 0 ? " (no resolved tick at all in this window)" : out.toString();
@@ -911,11 +904,10 @@ public abstract class AbstractSpaceLoginRestoreClientTest {
 
     /** The most obstacles the sweep saw in the window - a body standing inside geometry sees more. */
     protected int maxObstaclesIn(String history, long fromTick) {
-        Matcher m = HISTORY_LINE.matcher(history);
         int worst = -1;
-        while (m.find()) {
-            if (Long.parseLong(m.group(1)) > fromTick) {
-                worst = Math.max(worst, Integer.parseInt(m.group(18)));
+        for (String record : Events.records(history)) {
+            if (tickOf(record) > fromTick) {
+                worst = Math.max(worst, (int) Events.number(record, "obstacles"));
             }
         }
         return worst;
@@ -923,10 +915,9 @@ public abstract class AbstractSpaceLoginRestoreClientTest {
 
     /** How many ticks of the window the resolver did NOT consider the body to be on the deck. */
     protected int offDeckTicksIn(String history, long fromTick) {
-        Matcher m = HISTORY_LINE.matcher(history);
         int n = 0;
-        while (m.find()) {
-            if (Long.parseLong(m.group(1)) > fromTick && "0".equals(m.group(15))) {
+        for (String record : Events.records(history)) {
+            if (tickOf(record) > fromTick && "false".equals(Events.text(record, "onDeck"))) {
                 n++;
             }
         }
@@ -935,12 +926,11 @@ public abstract class AbstractSpaceLoginRestoreClientTest {
 
     /** How many ticks of the window carried a nonzero walk input, as the resolver saw it. */
     protected int inputTicksIn(String history, long fromTick) {
-        Matcher m = HISTORY_LINE.matcher(history);
         int n = 0;
-        while (m.find()) {
-            if (Long.parseLong(m.group(1)) > fromTick
-                    && (Double.parseDouble(m.group(13)) != 0.0
-                            || Double.parseDouble(m.group(14)) != 0.0)) {
+        for (String record : Events.records(history)) {
+            if (tickOf(record) > fromTick
+                    && (Events.number(record, "inStrafe") != 0.0
+                            || Events.number(record, "inForward") != 0.0)) {
                 n++;
             }
         }
@@ -2077,19 +2067,43 @@ public abstract class AbstractSpaceLoginRestoreClientTest {
      * costs a round trip each, which stretches the very timeline being measured and hides everything
      * between the samples.
      */
+    /**
+     * This client's per-tick ship-frame record, as the REPLY it is.
+     *
+     * <p>It used to hand back {@code fieldLines(…, "line")} — the packed rendering each record also
+     * carries — and every reader below re-parsed that with a regex. The record has carried the same
+     * numbers as FIELDS since the trace moved into {@code MixinShipFrameTravelWrites}, which kept
+     * the line only so the readers would not have to change in the same step. They change here.</p>
+     */
     protected String clientTickHistory() throws Exception {
-        return Events.fieldLines(clientEvents().since(0, "ship_frame_tick"), "line");
+        return clientEvents().since(0, "ship_frame_tick");
     }
+
+    /** The resolved-tick counter of one {@code ship_frame_tick} record — the window's own clock. */
+    protected static long tickOf(String record) {
+        return (long) Events.number(record, "resolvedTick");
+    }
+
+    /** One ship-frame point of a record: {@code bodyLocal} (where the body IS) or {@code held}
+     *  (where the resolver committed it). */
+    protected static double[] pointOf(String record, String prefix) {
+        return new double[]{Events.number(record, prefix + "X"), Events.number(record, prefix + "Y"),
+                Events.number(record, prefix + "Z")};
+    }
+
+    /** Where the body IS, in the ship's frame. */
+    protected static final String BODY_LOCAL = "bodyLocal";
+    /** Where the resolver COMMITTED it, in the ship's frame. */
+    protected static final String HELD = "held";
 
 
 
     /** The newest resolved-tick number on record - the mark a window starts from. The record survives
      *  the reconnect, so without this mark the pins would read ticks from before the restart. */
     protected long lastClientTick() throws Exception {
-        Matcher m = HISTORY_LINE.matcher(clientTickHistory());
         long last = -1L;
-        while (m.find()) {
-            last = Long.parseLong(m.group(1));
+        for (String record : Events.records(clientTickHistory())) {
+            last = tickOf(record);
         }
         return last;
     }
@@ -2100,25 +2114,27 @@ public abstract class AbstractSpaceLoginRestoreClientTest {
      * and comes back cannot pass.
      */
     protected double bodyPointTravel(String history, long fromTick) {
-        return travel(history, fromTick, 3);
+        return travel(history, fromTick, BODY_LOCAL);
     }
 
     /** The same measure for the point the resolver COMMITS - still for a body someone else pulls. */
     protected double heldPointTravel(String history, long fromTick) {
-        return travel(history, fromTick, 6);
+        return travel(history, fromTick, HELD);
     }
 
-    protected double travel(String history, long fromTick, int firstGroup) {
-        Matcher m = HISTORY_LINE.matcher(history);
+    /**
+     * @param prefix which ship-frame point to follow — {@link #BODY_LOCAL} or {@link #HELD}.
+     *               It used to be a GROUP INDEX into the packed line (3 or 6), which is a number
+     *               whose meaning lived in a regex somewhere else.
+     */
+    protected double travel(String history, long fromTick, String prefix) {
         double[] first = null;
         double worst = 0.0;
-        while (m.find()) {
-            if (Long.parseLong(m.group(1)) <= fromTick) {
+        for (String record : Events.records(history)) {
+            if (tickOf(record) <= fromTick) {
                 continue;
             }
-            double[] point = {Double.parseDouble(m.group(firstGroup)),
-                    Double.parseDouble(m.group(firstGroup + 1)),
-                    Double.parseDouble(m.group(firstGroup + 2))};
+            double[] point = pointOf(record, prefix);
             if (first == null) {
                 first = point;
             } else {
@@ -2130,10 +2146,9 @@ public abstract class AbstractSpaceLoginRestoreClientTest {
 
     /** Ticks the window actually covers - the witness that the pins had something to look at. */
     protected int resolvedSince(String history, long fromTick) {
-        Matcher m = HISTORY_LINE.matcher(history);
         int n = 0;
-        while (m.find()) {
-            if (Long.parseLong(m.group(1)) > fromTick) {
+        for (String record : Events.records(history)) {
+            if (tickOf(record) > fromTick) {
                 n++;
             }
         }
@@ -2147,27 +2162,32 @@ public abstract class AbstractSpaceLoginRestoreClientTest {
      * the body was not actually idle and the whole window is void.
      */
     protected String writerSummary(String history, long fromTick) {
-        Matcher m = HISTORY_LINE.matcher(history);
         double worstMotion = 0.0;
         double worstCarry = 0.0;
         int hull = 0;
         int inputTicks = 0;
         int offDeck = 0;
-        while (m.find()) {
-            if (Long.parseLong(m.group(1)) <= fromTick) {
+        for (String record : Events.records(history)) {
+            if (tickOf(record) <= fromTick) {
                 continue;
             }
-            double mx = Double.parseDouble(m.group(9));
-            double mz = Double.parseDouble(m.group(11));
+            double mx = Events.number(record, "motionShipX");
+            double mz = Events.number(record, "motionShipZ");
             worstMotion = Math.max(worstMotion, Math.sqrt(mx * mx + mz * mz));
-            worstCarry = Math.max(worstCarry, Math.abs(Double.parseDouble(m.group(12))));
-            if ("h".equals(m.group(2))) {
+            // The line packed the carry's LENGTH; the record carries its three components, so the
+            // length is computed here. This is the only value of the trace that was not a field.
+            double cx = Events.number(record, "carryX");
+            double cy = Events.number(record, "carryY");
+            double cz = Events.number(record, "carryZ");
+            worstCarry = Math.max(worstCarry, Math.sqrt(cx * cx + cy * cy + cz * cz));
+            if ("h".equals(Events.text(record, "path"))) {
                 hull++;
             }
-            if (Double.parseDouble(m.group(13)) != 0.0 || Double.parseDouble(m.group(14)) != 0.0) {
+            if (Events.number(record, "inStrafe") != 0.0
+                    || Events.number(record, "inForward") != 0.0) {
                 inputTicks++;
             }
-            if ("0".equals(m.group(15))) {
+            if ("false".equals(Events.text(record, "onDeck"))) {
                 offDeck++;
             }
         }
@@ -2193,16 +2213,14 @@ public abstract class AbstractSpaceLoginRestoreClientTest {
     }
 
     protected double stepStat(String history, long fromTick, boolean bandSum) {
-        Matcher m = HISTORY_LINE.matcher(history);
         double[] previous = null;
         double worst = 0.0;
         double total = 0.0;
-        while (m.find()) {
-            if (Long.parseLong(m.group(1)) <= fromTick) {
+        for (String record : Events.records(history)) {
+            if (tickOf(record) <= fromTick) {
                 continue;
             }
-            double[] point = {Double.parseDouble(m.group(3)), Double.parseDouble(m.group(4)),
-                    Double.parseDouble(m.group(5))};
+            double[] point = pointOf(record, BODY_LOCAL);
             if (previous != null) {
                 double step = alongDeck(previous, point);
                 worst = Math.max(worst, step);

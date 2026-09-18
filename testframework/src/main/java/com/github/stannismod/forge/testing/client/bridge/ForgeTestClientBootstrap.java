@@ -1696,19 +1696,68 @@ public final class ForgeTestClientBootstrap {
         return mc.player;
     }
 
-    /** {id, count, nbt} of a client-side ItemStack; empty stacks → id="" count=0. */
+    /**
+     * {id, count, nbt, tag} of a client-side ItemStack; empty stacks → id="" count=0.
+     *
+     * <p>{@code nbt} is the tag's {@code toString()} — a RENDERING, kept for a failure message to
+     * print. {@code tag} is the same tag as DATA, and it is what a reader asking for one value
+     * should use: a caller that wants the suit's air out of {@code nbt} has to write
+     * {@code \bair:(\d+)} over Minecraft's own display format, which nothing anywhere promises to
+     * keep stable, and which cannot tell a tag named {@code air} from one whose name merely ends in
+     * it. Added 2026-09-18, with the one such caller converted in the same change.</p>
+     */
     private static JsonObject stackJson(ItemStack stack) {
         JsonObject json = new JsonObject();
         if (stack == null || stack.isEmpty()) {
             json.addProperty("id", "");
             json.addProperty("count", 0);
             json.addProperty("nbt", "");
+            json.add("tag", new JsonObject());
             return json;
         }
         json.addProperty("id", String.valueOf(stack.getItem().getRegistryName()));
         json.addProperty("count", stack.getCount());
-        json.addProperty("nbt", stack.getTagCompound() == null ? "" : stack.getTagCompound().toString());
+        net.minecraft.nbt.NBTTagCompound tag = stack.getTagCompound();
+        json.addProperty("nbt", tag == null ? "" : tag.toString());
+        json.add("tag", tag == null ? new JsonObject() : nbtJson(tag));
         return json;
+    }
+
+    /**
+     * An NBT compound as JSON: every tag by its own NAME, numbers as numbers, nested compounds
+     * nested, lists as arrays.
+     *
+     * <p>A tag whose type this does not model (a byte/int/long array) arrives as its
+     * {@code toString()} rather than being dropped — an absent key and a key this cannot render are
+     * different things, and a reader must be able to tell them apart.</p>
+     */
+    private static JsonObject nbtJson(net.minecraft.nbt.NBTTagCompound tag) {
+        JsonObject out = new JsonObject();
+        for (String key : tag.getKeySet()) {
+            out.add(key, nbtValue(tag.getTag(key)));
+        }
+        return out;
+    }
+
+    private static JsonElement nbtValue(net.minecraft.nbt.NBTBase value) {
+        if (value instanceof net.minecraft.nbt.NBTTagCompound) {
+            return nbtJson((net.minecraft.nbt.NBTTagCompound) value);
+        }
+        if (value instanceof net.minecraft.nbt.NBTTagList) {
+            net.minecraft.nbt.NBTTagList list = (net.minecraft.nbt.NBTTagList) value;
+            JsonArray array = new JsonArray();
+            for (int i = 0; i < list.tagCount(); i++) {
+                array.add(nbtValue(list.get(i)));
+            }
+            return array;
+        }
+        if (value instanceof net.minecraft.nbt.NBTTagString) {
+            return new com.google.gson.JsonPrimitive(((net.minecraft.nbt.NBTTagString) value).getString());
+        }
+        if (value instanceof net.minecraft.nbt.NBTPrimitive) {
+            return new com.google.gson.JsonPrimitive(((net.minecraft.nbt.NBTPrimitive) value).getDouble());
+        }
+        return new com.google.gson.JsonPrimitive(String.valueOf(value));
     }
 
     private static JsonObject ok() {

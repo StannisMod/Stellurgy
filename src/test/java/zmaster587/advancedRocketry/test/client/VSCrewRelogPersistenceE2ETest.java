@@ -5,8 +5,6 @@ import org.junit.Test;
 import org.junit.runners.MethodSorters;
 import org.lwjgl.input.Keyboard;
 
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 import com.google.gson.JsonObject;
 
@@ -1015,35 +1013,39 @@ public class VSCrewRelogPersistenceE2ETest extends AbstractSharedVsClientE2ETest
      * invisible. This is the client body's ship-frame point every tick it was resolved.
      */
     private String clientTickHistory() throws Exception {
-        return Events.fieldLines(clientEvents().since(0, "ship_frame_tick"), "line");
+        return clientEvents().since(0, "ship_frame_tick");
     }
 
-    /** One line of that record: the resolved-tick number, which capture path produced it, and the
-     *  ship-frame point the client COMMITTED for the body that tick. */
-    private static final Pattern HISTORY_LINE = Pattern.compile(
-            "(\\d+)([afh])\\|B=[^|]*\\|H=(-?[0-9.E\\-]+),(-?[0-9.E\\-]+),(-?[0-9.E\\-]+)\\|");
+    /** The resolved-tick counter of one record — the window's own clock. */
+    private static long tickOf(String record) {
+        return (long) Events.number(record, "resolvedTick");
+    }
+
+    /** One ship-frame point of a record: {@code bodyLocal} (found) or {@code held} (committed). */
+    private static double[] pointOf(String record, String prefix) {
+        return new double[]{Events.number(record, prefix + "X"), Events.number(record, prefix + "Y"),
+                Events.number(record, prefix + "Z")};
+    }
 
     /**
-     * The same line with the LIVE body point captured instead of the committed one. A separate pattern
-     * rather than extra groups on {@link #HISTORY_LINE}, so the existing helpers' group numbers stay
-     * where they are. The committed point reads perfectly still for a body something else is holding;
-     * this is the one that answers "did the body move along the deck".
+     * Four patterns stood here — one per QUESTION, because group numbers are positional and a reader
+     * wanting a different field of the same line needed its own expression. Their own comment said
+     * as much: *"a separate pattern rather than extra groups … so the existing helpers' group
+     * numbers stay where they are."* Read by field name, that reason is gone and so are they.
      */
-    private static final Pattern BODY_LINE = Pattern.compile(
-            "(\\d+)([afh])\\|B=(-?[0-9.E\\-]+),(-?[0-9.E\\-]+),(-?[0-9.E\\-]+)\\|");
+    private static final String BODY_LOCAL = "bodyLocal";
+    private static final String HELD = "held";
 
     /** How far the BODY travelled along the deck in the window: first tick after {@code fromTick} to
      *  the farthest one, so a body that wanders out and back cannot pass. */
     private double bodyPointTravel(String history, long fromTick) {
-        Matcher m = BODY_LINE.matcher(history);
         double[] first = null;
         double worst = 0.0;
-        while (m.find()) {
-            if (Long.parseLong(m.group(1)) <= fromTick) {
+        for (String record : Events.records(history)) {
+            if (tickOf(record) <= fromTick) {
                 continue;
             }
-            double[] point = {Double.parseDouble(m.group(3)), Double.parseDouble(m.group(4)),
-                    Double.parseDouble(m.group(5))};
+            double[] point = pointOf(record, BODY_LOCAL);
             if (first == null) {
                 first = point;
             } else {
@@ -1052,12 +1054,6 @@ public class VSCrewRelogPersistenceE2ETest extends AbstractSharedVsClientE2ETest
         }
         return worst;
     }
-
-    /** The same line read for BOTH of its points at once — where the body was found and where it
-     *  was put. Their difference is the whole subject of the seat leg. */
-    private static final Pattern SEAT_LINE = Pattern.compile(
-            "(\\d+)([afh])\\|B=(-?[0-9.E\\-]+),(-?[0-9.E\\-]+),(-?[0-9.E\\-]+)"
-                    + "\\|H=(-?[0-9.E\\-]+),(-?[0-9.E\\-]+),(-?[0-9.E\\-]+)\\|");
 
     /**
      * The worst distance, over the window, between where a body was FOUND at the top of its
@@ -1074,16 +1070,14 @@ public class VSCrewRelogPersistenceE2ETest extends AbstractSharedVsClientE2ETest
      * offset every tick, and the wander measure sees only the ramp into it.</p>
      */
     private double seatMiss(String history, long fromTick) {
-        Matcher m = SEAT_LINE.matcher(history);
         double worst = 0.0;
-        while (m.find()) {
-            if (Long.parseLong(m.group(1)) <= fromTick) {
+        for (String record : Events.records(history)) {
+            if (tickOf(record) <= fromTick) {
                 continue;
             }
-            double dx = Double.parseDouble(m.group(3)) - Double.parseDouble(m.group(6));
-            double dy = Double.parseDouble(m.group(4)) - Double.parseDouble(m.group(7));
-            double dz = Double.parseDouble(m.group(5)) - Double.parseDouble(m.group(8));
-            worst = Math.max(worst, Math.sqrt(dx * dx + dy * dy + dz * dz));
+            double[] found = pointOf(record, BODY_LOCAL);
+            double[] committed = pointOf(record, HELD);
+            worst = Math.max(worst, distance(found, committed));
         }
         return worst;
     }
@@ -1096,16 +1090,13 @@ public class VSCrewRelogPersistenceE2ETest extends AbstractSharedVsClientE2ETest
      * clean drop count means nothing if the key never reached the resolver, and a body that has
      * walked off a 5x5 deck is measuring the deck edge rather than the guard.</p>
      */
-    private static final Pattern INPUT_LINE = Pattern.compile(
-            "(\\d+)([afh])\\|B=[^|]*\\|H=[^|]*\\|m=[^|]*\\|c=[^|]*\\|in=(-?[0-9.]+)/(-?[0-9.]+)\\|d=(\\d)");
-
     /** Ticks after {@code fromTick} in which the resolver saw a nonzero walk input. */
     private int inputTicksSince(String history, long fromTick) {
-        Matcher m = INPUT_LINE.matcher(history);
         int n = 0;
-        while (m.find()) {
-            if (Long.parseLong(m.group(1)) > fromTick
-                    && (Double.parseDouble(m.group(3)) != 0.0 || Double.parseDouble(m.group(4)) != 0.0)) {
+        for (String record : Events.records(history)) {
+            if (tickOf(record) > fromTick
+                    && (Events.number(record, "inStrafe") != 0.0
+                            || Events.number(record, "inForward") != 0.0)) {
                 n++;
             }
         }
@@ -1114,10 +1105,9 @@ public class VSCrewRelogPersistenceE2ETest extends AbstractSharedVsClientE2ETest
 
     /** Ticks after {@code fromTick} the body spent without the deck under it. */
     private int offDeckTicksSince(String history, long fromTick) {
-        Matcher m = INPUT_LINE.matcher(history);
         int n = 0;
-        while (m.find()) {
-            if (Long.parseLong(m.group(1)) > fromTick && "0".equals(m.group(5))) {
+        for (String record : Events.records(history)) {
+            if (tickOf(record) > fromTick && "false".equals(Events.text(record, "onDeck"))) {
                 n++;
             }
         }
@@ -1128,10 +1118,9 @@ public class VSCrewRelogPersistenceE2ETest extends AbstractSharedVsClientE2ETest
      *  from, so the pins never read ticks from before the window (the record survives the relog:
      *  the harness reuses one client JVM). */
     private long lastClientTick() throws Exception {
-        Matcher m = HISTORY_LINE.matcher(clientTickHistory());
         long last = -1;
-        while (m.find()) {
-            last = Long.parseLong(m.group(1));
+        for (String record : Events.records(clientTickHistory())) {
+            last = tickOf(record);
         }
         return last;
     }
@@ -1140,15 +1129,13 @@ public class VSCrewRelogPersistenceE2ETest extends AbstractSharedVsClientE2ETest
      *  after {@code fromTick} to the farthest one, not merely the last, so a body that wanders out
      *  and back cannot pass. */
     private double heldPointTravel(String history, long fromTick) {
-        Matcher m = HISTORY_LINE.matcher(history);
         double[] first = null;
         double worst = 0.0;
-        while (m.find()) {
-            if (Long.parseLong(m.group(1)) <= fromTick) {
+        for (String record : Events.records(history)) {
+            if (tickOf(record) <= fromTick) {
                 continue;
             }
-            double[] held = {Double.parseDouble(m.group(3)), Double.parseDouble(m.group(4)),
-                    Double.parseDouble(m.group(5))};
+            double[] held = pointOf(record, HELD);
             if (first == null) {
                 first = held;
             } else {
@@ -1159,10 +1146,9 @@ public class VSCrewRelogPersistenceE2ETest extends AbstractSharedVsClientE2ETest
     }
 
     private int hullStandTicks(String history, long fromTick) {
-        Matcher m = HISTORY_LINE.matcher(history);
         int hull = 0;
-        while (m.find()) {
-            if (Long.parseLong(m.group(1)) > fromTick && "h".equals(m.group(2))) {
+        for (String record : Events.records(history)) {
+            if (tickOf(record) > fromTick && "h".equals(Events.text(record, "path"))) {
                 hull++;
             }
         }
@@ -1172,10 +1158,9 @@ public class VSCrewRelogPersistenceE2ETest extends AbstractSharedVsClientE2ETest
     /** How many ticks the window actually covers — a witness that the pins above had something to
      *  look at, since "no travel" and "no ticks recorded" read the same. */
     private int resolvedSince(String history, long fromTick) {
-        Matcher m = HISTORY_LINE.matcher(history);
         int n = 0;
-        while (m.find()) {
-            if (Long.parseLong(m.group(1)) > fromTick) {
+        for (String record : Events.records(history)) {
+            if (tickOf(record) > fromTick) {
                 n++;
             }
         }

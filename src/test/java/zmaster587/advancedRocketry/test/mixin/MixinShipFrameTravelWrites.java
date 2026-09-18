@@ -133,11 +133,18 @@ public abstract class MixinShipFrameTravelWrites {
         // the JVM's two sides had committed last. Asked of the resolving body's world instead: same
         // number, and it cannot be another body's or another side's.
         long commitWorldTime = entity.world == null ? -1L : entity.world.getTotalWorldTime();
-        // The SAME line production used to append to its ring, byte for byte: eighteen readers across
-        // two test classes parse this format, and changing it and them in one step would have been a
-        // rewrite of the parsing layer on top of a move. What changed is WHO builds it and where it
-        // goes — a record attributed to this body, in the ring the reader can take a mark in, instead
-        // of one JVM-global string that held every body at once.
+        // A compact one-line-per-tick RENDERING, for a failure message to print.
+        //
+        // It began as the string production appended to its ring, kept byte for byte because
+        // eighteen readers across two test classes parsed this format and converting them in the
+        // same step would have been a rewrite of the parsing layer on top of a move. **That
+        // conversion happened on 2026-09-18**: every reader takes the fields below by name, and the
+        // last value the line carried that no field did — the resolved-tick counter — became
+        // `resolvedTick`. Nothing parses this string any more; four sites append it to a diagnosis,
+        // where a line per tick is far easier to read than the records are.
+        //
+        // So it stays, and the hazard it used to carry does not: two accounts of one tick are only
+        // dangerous while a VERDICT can be drawn from the second one.
         String line = String.format(java.util.Locale.ROOT,
                 "%d%c|%s|H=%.3f,%.3f,%.3f|m=%.4f,%.4f,%.4f|c=%.4f|in=%.1f/%.1f|d=%d"
                         + "|s=%d%d/%d|w=%d",
@@ -154,6 +161,12 @@ public abstract class MixinShipFrameTravelWrites {
         // statics from whichever side happened to be asked.
         TestTrace.record(entity, "ship_frame_tick",
                 "\"e\":" + entity.getEntityId()
+                        // This side's resolved-tick counter — the LEADING number of the line, and
+                        // until 2026-09-18 the one value the line carried that no field did. Every
+                        // reader filters a window on it, so its absence was what kept all of them
+                        // parsing the rendering: the fields could answer the question but not say
+                        // which ticks the answer was about.
+                        + ",\"resolvedTick\":" + ticks
                         + ",\"who\":\"" + TestTrace.json(entity.getName()) + "\""
                         + ",\"path\":\"" + path + "\""
                         + ",\"onDeck\":" + onDeck

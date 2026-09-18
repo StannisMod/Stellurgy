@@ -7,8 +7,6 @@ import org.junit.runners.MethodSorters;
 import org.lwjgl.input.Keyboard;
 import org.valkyrienskies.mod.common.ships.chunk_claims.ShipChunkAllocator;
 
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 import zmaster587.advancedRocketry.test.PlayerShipData;
 import zmaster587.advancedRocketry.test.DeckCapture;
@@ -478,10 +476,10 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
         // fifth tick. The poll saw one tick in five and paid a round trip per field for it; the
         // record carries every resolved tick of the window, and each line is attributed to the body
         // it describes rather than holding whatever the last resolved body left in a static.
-        String tickLines = Events.fieldLines(client.since(churnMark, "ship_frame_tick"), "line");
+        String tickLines = client.since(churnMark, "ship_frame_tick");
         maxLateral = maxLateralShipMotion(tickLines);
-        strafeSeen = maxInput(tickLines, 0);
-        forwardSeen = maxInput(tickLines, 1);
+        strafeSeen = maxInput(tickLines, IN_STRAFE);
+        forwardSeen = maxInput(tickLines, IN_FORWARD);
         trace.append(tickLines);
         String releases = client.since(churnMark, "deck_released");
         String gate = client.since(churnMark, "deck_carry");
@@ -572,10 +570,10 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
         bot().waitTicks(100);
         // Read once from the per-tick record; see the sibling leg above for why a five-tick poll of
         // four statics was both blinder and dearer than this.
-        String tickLines = Events.fieldLines(client.since(churnMark, "ship_frame_tick"), "line");
+        String tickLines = client.since(churnMark, "ship_frame_tick");
         maxLateral = maxLateralShipMotion(tickLines);
-        strafeSeen = maxInput(tickLines, 0);
-        forwardSeen = maxInput(tickLines, 1);
+        strafeSeen = maxInput(tickLines, IN_STRAFE);
+        forwardSeen = maxInput(tickLines, IN_FORWARD);
         trace.append(tickLines);
         // The churn, as the client's own releases in THIS window with the gate that fired on each —
         // where a cumulative counter delta could only say that something, some time, had happened.
@@ -2575,31 +2573,34 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
      * <p>Parsed out of the line rather than sampled off a static: the line is written on every
      * resolved tick, so a transient that lived and died between two five-tick polls is here.</p>
      */
-    private static double maxLateralShipMotion(String tickLines) {
-        Matcher m = SHIP_MOTION_COLUMN.matcher(String.valueOf(tickLines));
+    private static double maxLateralShipMotion(String tickRecords) {
         double most = 0.0;
-        while (m.find()) {
-            most = Math.max(most, Math.max(Math.abs(Double.parseDouble(m.group(1))),
-                    Math.abs(Double.parseDouble(m.group(3)))));
+        for (String record : Events.records(tickRecords)) {
+            most = Math.max(most, Math.max(Math.abs(Events.number(record, "motionShipX")),
+                    Math.abs(Events.number(record, "motionShipZ"))));
         }
         return most;
     }
 
-    /** The largest |value| of one half of the {@code in=} column: 0 is strafe, 1 is forward. */
-    private static float maxInput(String tickLines, int half) {
-        Matcher m = INPUT_COLUMN.matcher(String.valueOf(tickLines));
+    /**
+     * The largest |value| of one walk input over the window.
+     *
+     * <p>The parameter used to be {@code int half} — 0 for strafe, 1 for forward — which is a
+     * position inside a {@code |in=a/b|} column and means nothing without the pattern that carved
+     * it. It is the field's NAME now.</p>
+     */
+    private static float maxInput(String tickRecords, String field) {
         float most = 0f;
-        while (m.find()) {
-            most = Math.max(most, Math.abs(Float.parseFloat(m.group(half + 1))));
+        for (String record : Events.records(tickRecords)) {
+            most = Math.max(most, (float) Math.abs(Events.number(record, field)));
         }
         return most;
     }
 
-    private static final Pattern SHIP_MOTION_COLUMN = Pattern.compile(
-            "\\|m=(-?[0-9.]+),(-?[0-9.]+),(-?[0-9.]+)\\|");
-
-    private static final Pattern INPUT_COLUMN =
-            Pattern.compile("\\|in=(-?[0-9.]+)/(-?[0-9.]+)\\|");
+    /** The walk input across the deck, as the resolver saw it. */
+    private static final String IN_STRAFE = "inStrafe";
+    /** The walk input along it. */
+    private static final String IN_FORWARD = "inForward";
 
     /** The subject's SUBSPACE feet position from a {@code subspace-census} reply, as "x,y,z". */
     private static String readSubPos(String census) {
