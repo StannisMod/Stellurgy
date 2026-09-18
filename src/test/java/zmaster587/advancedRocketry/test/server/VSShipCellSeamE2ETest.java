@@ -15,14 +15,13 @@ import org.junit.FixMethodOrder;
 import org.junit.Test;
 import org.junit.runners.MethodSorters;
 
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 import zmaster587.advancedRocketry.test.FixtureSite;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotEquals;
+import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
@@ -57,7 +56,6 @@ import static org.junit.Assert.fail;
 public class VSShipCellSeamE2ETest extends AbstractSharedServerTest {
 
     private static final String BUILDER_POS = "builderPos";
-    private static final Pattern CELL_KEY = Pattern.compile("^(-?\\d+)_(-?\\d+)_(-?\\d+)$");
 
     /** Where this test builds its ship — its own region, clear of the entry/descent legs. */
     private static final int SRC_X = 6800, SRC_Y = FixtureSite.OPEN_AIR_Y, SRC_Z = 6800;
@@ -893,12 +891,21 @@ public class VSShipCellSeamE2ETest extends AbstractSharedServerTest {
                         + "records were evicted rather than absent) " + records;
     }
 
-    /** The three sector indices of a {@code sx_sy_sz} cell key. */
+    /**
+     * The three sector indices of a cell key, decoded by the type that WRITES it.
+     *
+     * <p>{@code GalacticCoord.fromCellKey} is the exact inverse of {@code cellKey()} and lives
+     * beside it, so the format has one reader. The {@code ^(-?\d+)_(-?\d+)_(-?\d+)$} that stood
+     * here was a second one, and an incomplete second one: a ZONED key —
+     * {@code zone + '.' + sx_sy_sz}, e.g. {@code 19_0_0.213_0_0}, which is what a cell inside a
+     * body's lattice is called — matches it nowhere, so this refused with "unparsable cell key"
+     * for a key the game had just written correctly.</p>
+     */
     private static long[] cellSectors(String cellKey) {
-        Matcher m = CELL_KEY.matcher(cellKey);
-        assertTrue("unparsable cell key: " + cellKey, m.matches());
-        return new long[]{Long.parseLong(m.group(1)), Long.parseLong(m.group(2)),
-                Long.parseLong(m.group(3))};
+        zmaster587.advancedRocketry.space.GalacticCoord coord =
+                zmaster587.advancedRocketry.space.GalacticCoord.fromCellKey(cellKey);
+        assertNotNull("unparsable cell key: " + cellKey, coord);
+        return new long[]{coord.sectorX(), coord.sectorY(), coord.sectorZ()};
     }
 
     /** This tier's reader of the server's ordered event log. */

@@ -15,12 +15,11 @@ import zmaster587.advancedRocketry.test.ShipInfo;
 import org.junit.After;
 import org.junit.Test;
 
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 import zmaster587.advancedRocketry.test.FixtureSite;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 import static zmaster587.advancedRocketry.test.server.WorldCommandFixtures.awaitWithinTicks;
 
@@ -83,7 +82,6 @@ public class VSShipEntryE2ETest extends AbstractSharedServerTest {
      * leaves the ship legitimately IN_TRANSIT for thousands of ticks and the test reds on its own poll
      * window while production is working correctly.
      */
-    private static final Pattern CELL_KEY = Pattern.compile("^(-?\\d+)_(-?\\d+)_(-?\\d+)$");
 
     @Test
     public void aPilotedShipClimbingPastTheCeilingEntersSpaceViaTheFlightComputerTick() throws Exception {
@@ -222,11 +220,14 @@ public class VSShipEntryE2ETest extends AbstractSharedServerTest {
 
         // Jump it ONE sector over. The slot dim is passed explicitly: the console sender's own world is
         // the overworld, and the default would read that instead of the cell the ship is in.
-        Matcher origin = CELL_KEY.matcher(originCell == null ? "" : originCell);
-        assertTrue("entry-status reported no decodable origin cell key: " + status, origin.matches());
+        // Decoded by the type that WRITES the key, not by a regex beside it: a ZONED key
+        // (`zone + '.' + sx_sy_sz`) is a real cell name and matched no `^(-?\d+)_(-?\d+)_(-?\d+)$`.
+        zmaster587.advancedRocketry.space.GalacticCoord origin =
+                zmaster587.advancedRocketry.space.GalacticCoord.fromCellKey(originCell);
+        assertNotNull("entry-status reported no decodable origin cell key: " + status, origin);
         String jump = exec("artest space jump id " + durableId + " "
-                + (Integer.parseInt(origin.group(1)) + 1)
-                + " " + origin.group(2) + " " + origin.group(3) + " " + slotDim);
+                + (origin.sectorX() + 1)
+                + " " + origin.sectorY() + " " + origin.sectorZ() + " " + slotDim);
         assertTrue("the jump probe found no settled ship to move: " + jump, Reply.of(jump).bool("began", false));
         // THIS ship departed. Without the id the verb jumps the cell's first settled row, so a cell
         // holding a second craft would carry that one away and report a successful jump.

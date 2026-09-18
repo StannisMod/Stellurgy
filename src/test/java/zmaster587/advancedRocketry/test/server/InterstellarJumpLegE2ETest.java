@@ -13,12 +13,11 @@ import zmaster587.advancedRocketry.test.ShipInfo;
 
 import org.junit.Test;
 
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 import zmaster587.advancedRocketry.test.FixtureSite;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 import static zmaster587.advancedRocketry.test.ArrangementFailure.requireArranged;
 
@@ -92,7 +91,6 @@ public class InterstellarJumpLegE2ETest extends AbstractSharedServerTest {
     private static final long FLIGHT_SPEED = 40_000_000L;
 
     private static final String BUILDER_POS = "builderPos";
-    private static final Pattern CELL_KEY = Pattern.compile("^(-?\\d+)_(-?\\d+)_(-?\\d+)$");
 
     /** Server ticks the CLIMB into space is given. */
     private static final int SETTLE_TICKS = 600;
@@ -141,11 +139,15 @@ public class InterstellarJumpLegE2ETest extends AbstractSharedServerTest {
                 + status.raw(), status.settled());
         int slotDim = status.slotDim;
         String originCell = status.cellKey;
-        Matcher origin = CELL_KEY.matcher(originCell == null ? "" : originCell);
-        assertTrue("entry-status reported no decodable origin cell key: " + status.raw(),
-                origin.matches());
-        long osx = Long.parseLong(origin.group(1));
-        String osy = origin.group(2), osz = origin.group(3);
+        // Decoded by the type that WRITES the key. `GalacticCoord.fromCellKey` is the exact inverse
+        // of `cellKey()` and handles the ZONED form (`zone + '.' + sx_sy_sz`) that a cell inside a
+        // body's lattice carries; the `^(-?\d+)_(-?\d+)_(-?\d+)$` that stood here matched none of
+        // those, and would have blamed the producer for "no decodable origin cell key".
+        zmaster587.advancedRocketry.space.GalacticCoord origin =
+                zmaster587.advancedRocketry.space.GalacticCoord.fromCellKey(originCell);
+        assertNotNull("entry-status reported no decodable origin cell key: " + status.raw(), origin);
+        long osx = origin.sectorX();
+        String osy = String.valueOf(origin.sectorY()), osz = String.valueOf(origin.sectorZ());
 
         // ---- CONTROL LEG: one sector over. Four ticks of flight; it proves the arrangement. -------
         long hopTicks = flyTo(osx + 1, osy, osz, slotDim, originCell, setup, "hop", durableId);
@@ -155,13 +157,14 @@ public class InterstellarJumpLegE2ETest extends AbstractSharedServerTest {
         EntryStatus afterHop = EntryStatus.forShip(this::exec, durableId);
         String hopCell = afterHop.cellKey;
         int hopSlot = afterHop.slotDim;
-        Matcher hopOrigin = CELL_KEY.matcher(hopCell == null ? "" : hopCell);
-        assertTrue("no decodable cell key after the hop: " + afterHop.raw(), hopOrigin.matches());
+        zmaster587.advancedRocketry.space.GalacticCoord hopOrigin =
+                zmaster587.advancedRocketry.space.GalacticCoord.fromCellKey(hopCell);
+        assertNotNull("no decodable cell key after the hop: " + afterHop.raw(), hopOrigin);
 
         // ---- THE SUBJECT: the same ship, the same stack, 537 sectors instead of one. ---------------
-        long farTicks = flyTo(Long.parseLong(hopOrigin.group(1)) + INTERSTELLAR_SECTORS,
-                hopOrigin.group(2), hopOrigin.group(3), hopSlot, hopCell, setup, "interstellar",
-                durableId);
+        long farTicks = flyTo(hopOrigin.sectorX() + INTERSTELLAR_SECTORS,
+                String.valueOf(hopOrigin.sectorY()), String.valueOf(hopOrigin.sectorZ()),
+                hopSlot, hopCell, setup, "interstellar", durableId);
 
         System.out.println("[interstellar-leg] hop=" + hopTicks + " ticks, interstellar(" + INTERSTELLAR_SECTORS
                 + " sectors)=" + farTicks + " ticks = " + (farTicks / 20.0D) + " s"
