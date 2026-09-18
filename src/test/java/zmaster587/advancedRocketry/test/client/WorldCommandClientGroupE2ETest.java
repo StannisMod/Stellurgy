@@ -13,8 +13,6 @@ import zmaster587.advancedRocketry.test.PlayerState;
 import java.util.HashSet;
 import java.util.Locale;
 import java.util.Set;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotEquals;
@@ -64,7 +62,6 @@ import static org.junit.Assert.assertTrue;
 @FixMethodOrder(MethodSorters.NAME_ASCENDING)
 public class WorldCommandClientGroupE2ETest extends AbstractSharedClientE2ETest {
 
-    private static final Pattern DIM_LINE = Pattern.compile("DIM(\\d+):");
     private static final String STATION_ID = "id";
     private static final String POS_X = "posX";
 
@@ -92,14 +89,26 @@ public class WorldCommandClientGroupE2ETest extends AbstractSharedClientE2ETest 
         return PlayerState.botName(this::exec);
     }
 
+    /**
+     * The one dimension present in {@code after} and not in {@code before}, or {@code -1}.
+     *
+     * <p>Both are {@code artest dim list} replies now, not {@code ar planet list} renderings. The
+     * scenario's subject is the dimension a generate ADDED, never the caption a planet line carries,
+     * and the two lists come from the same place — {@code PlanetListCommand:28} iterates the very
+     * registry {@code arDimensions} reports.</p>
+     *
+     * <p>The {@code -1} stays and is checked by both callers: "no new dimension appeared" is a real
+     * outcome of the command under test, not a reader that failed.</p>
+     */
     private static int newDimFromDiff(String before, String after) {
         Set<Integer> beforeIds = new HashSet<>();
-        Matcher m = DIM_LINE.matcher(before);
-        while (m.find()) beforeIds.add(Integer.parseInt(m.group(1)));
-        Matcher m2 = DIM_LINE.matcher(after);
-        while (m2.find()) {
-            int id = Integer.parseInt(m2.group(1));
-            if (!beforeIds.contains(id)) return id;
+        for (int dim : Reply.of("artest dim list", before).intArray("arDimensions")) {
+            beforeIds.add(dim);
+        }
+        for (int dim : Reply.of("artest dim list", after).intArray("arDimensions")) {
+            if (!beforeIds.contains(dim)) {
+                return dim;
+            }
         }
         return -1;
     }
@@ -261,9 +270,9 @@ public class WorldCommandClientGroupE2ETest extends AbstractSharedClientE2ETest 
     public void arGotoTransfersPlayerToTargetDim() throws Exception {
         scenario().arranging("op the bot and generate a planet to travel to");
         opTheBot();
-        String before = exec("ar planet list");
+        String before = exec("artest dim list");
         exec("ar planet generate 0 GotoTarget");
-        String after = exec("ar planet list");
+        String after = exec("artest dim list");
         int targetDim = newDimFromDiff(before, after);
         scenario().record("targetDim", targetDim);
         scenario().requireArranged("planet generate must yield a new dim id; before=" + before
@@ -308,9 +317,9 @@ public class WorldCommandClientGroupE2ETest extends AbstractSharedClientE2ETest 
         scenario().requireArranged("the client must name the world type it starts in, else the"
                 + " comparison below has nothing to change FROM; got '" + home + "'", !home.isEmpty());
 
-        String before = exec("ar planet list");
+        String before = exec("artest dim list");
         exec("ar planet generate 0 WorldTypeTarget");
-        String after = exec("ar planet list");
+        String after = exec("artest dim list");
         int targetDim = newDimFromDiff(before, after);
         scenario().record("targetDim", targetDim);
         scenario().requireArranged("planet generate must yield a new dim id; before=" + before

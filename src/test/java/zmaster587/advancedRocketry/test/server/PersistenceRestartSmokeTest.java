@@ -62,8 +62,10 @@ public class PersistenceRestartSmokeTest {
         firstBoot = RealDedicatedServerHarness.startWith(workDir, /*cleanupOnClose=*/false);
 
         String regSummary = String.join("\n", firstBoot.client().execute("artest registry summary"));
+        // No "malformed?" assertion beside this any more: `extractCounts` refuses by field name and
+        // prints the reply, so a null it could once return is now unreachable — and a check that
+        // cannot fire reads as protection that is not there.
         firstCounts = extractCounts(regSummary, "blocks", "items", "entities", "biomes");
-        assertTrue("first boot registry summary malformed: " + regSummary, firstCounts != null);
 
         // Mutation A: station orbiting Earth.
         String createStation = String.join("\n", firstBoot.client().execute("artest station create 0"));
@@ -88,7 +90,6 @@ public class PersistenceRestartSmokeTest {
 
         String secondSummary = String.join("\n", secondBoot.client().execute("artest registry summary"));
         int[] secondCounts = extractCounts(secondSummary, "blocks", "items", "entities", "biomes");
-        assertTrue("second boot registry summary malformed: " + secondSummary, secondCounts != null);
         for (int i = 0; i < firstCounts.length; i++) {
             assertEquals("registry count mismatch at idx " + i,
                     firstCounts[i], secondCounts[i]);
@@ -120,21 +121,22 @@ public class PersistenceRestartSmokeTest {
                 targetDensity, Integer.parseInt(amReply.text(ATM_DENSITY)));
     }
 
+    /**
+     * The registry counts this reply reports, refusing by NAME when one is missing.
+     *
+     * <p>It used to find each key by {@code indexOf("\"" + key + "\":")} and walk the digits after
+     * it, answering {@code null} for the whole array when any one key was absent. The callers then
+     * asserted "summary malformed" — one sentence for four fields, naming none of them, and the
+     * same sentence for a reply that was not a reply at all. {@code Reply.integer} names the field
+     * it could not find and prints what it was given.</p>
+     */
     private static int[] extractCounts(String json, String... keys) {
+        Reply reply = Reply.of("artest registry summary", json);
         int[] result = new int[keys.length];
         for (int i = 0; i < keys.length; i++) {
-            String needle = "\"" + keys[i] + "\":";
-            int idx = json.indexOf(needle);
-            if (idx < 0) return null;
-            int start = idx + needle.length();
-            int end = start;
-            while (end < json.length() && (Character.isDigit(json.charAt(end)) || json.charAt(end) == '-')) end++;
-            try {
-                result[i] = Integer.parseInt(json.substring(start, end));
-            } catch (NumberFormatException e) {
-                return null;
-            }
+            result[i] = reply.integer(keys[i]);
         }
         return result;
     }
+
 }

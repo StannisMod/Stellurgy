@@ -7,8 +7,6 @@ import org.junit.Test;
 
 import java.util.HashSet;
 import java.util.Set;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 import zmaster587.advancedRocketry.test.FixtureSite;
 
@@ -64,7 +62,6 @@ public class BeaconEnableCycleTest extends AbstractSharedServerTest {
     private static final int CX_DISABLE = 200;
     private static final int CX_BREAK   = 300;
 
-    private static final Pattern DIM_LINE = Pattern.compile("DIM(\\d+):");
     /** The dim's beacon registry, as {@code "locations":[[x,y,z], …]}. */
     private static final String LOCATIONS = "locations";
 
@@ -222,11 +219,21 @@ public class BeaconEnableCycleTest extends AbstractSharedServerTest {
         return false;
     }
 
+    /**
+     * The AR dimensions registered right now.
+     *
+     * <p>Asked of the probe, not scraped out of {@code ar planet list}. Nothing here is a claim
+     * about that command's OUTPUT — it was only ever a convenient place to find the ids, and a
+     * {@code DIM(\d+):} over it breaks on any change to how a planet line is captioned. Both read
+     * the same source: {@code PlanetListCommand:28} iterates
+     * {@code DimensionManager.getInstance().getRegisteredDimensions()}, which is exactly what
+     * {@code artest dim list} reports as {@code arDimensions}.</p>
+     */
     private static Set<Integer> arDims() throws Exception {
-        String list = exec("ar planet list");
         Set<Integer> ids = new HashSet<>();
-        Matcher m = DIM_LINE.matcher(list);
-        while (m.find()) ids.add(Integer.parseInt(m.group(1)));
+        for (int dim : Reply.of("artest dim list", exec("artest dim list")).intArray("arDimensions")) {
+            ids.add(dim);
+        }
         return ids;
     }
 }

@@ -71,22 +71,10 @@ public class ServerBootSmokeSuite extends AbstractSharedServerTest {
         assertTrue("registry summary missing 'biomes' key: " + joined,
                 Reply.of(joined).has("biomes"));
 
-        int entitiesCount = parseIntKey(joined, "entities");
+        int entitiesCount = Reply.of("artest registry summary", joined).integer("entities");
         assertTrue("entity registry suspiciously small (" + entitiesCount
                         + ") — AR may not have loaded",
                 entitiesCount > 1);
     }
 
-    private static int parseIntKey(String json, String key) {
-        String needle = "\"" + key + "\":";
-        int idx = json.indexOf(needle);
-        if (idx < 0) return -1;
-        int start = idx + needle.length();
-        int end = start;
-        while (end < json.length() && (Character.isDigit(json.charAt(end)) || json.charAt(end) == '-')) {
-            end++;
-        }
-        try { return Integer.parseInt(json.substring(start, end)); }
-        catch (NumberFormatException e) { return -1; }
-    }
 }

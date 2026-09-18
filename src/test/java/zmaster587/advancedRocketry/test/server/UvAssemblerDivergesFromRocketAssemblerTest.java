@@ -102,14 +102,20 @@ public class UvAssemblerDivergesFromRocketAssemblerTest extends AbstractHeadless
         return String.join("\n", resp);
     }
 
-    /** Pull the tileClass JSON value out of an {@code /artest machine info}
-     *  response. Returns the raw class name (FQN) or empty string on miss. */
+    /**
+     * The {@code tileClass} an {@code artest machine info} reply reports, refusing when it carries
+     * none.
+     *
+     * <p>It used to slice the reply by index off the needle {@code "\"tileClass\":\""} and answer
+     * {@code ""} on a miss. Two classes being "different" is this test's whole claim, and two
+     * empty strings are EQUAL — so a reply that stopped carrying the field at all would have made
+     * the assertion fail for a reason that has nothing to do with the two blocks, while printing
+     * both replies and looking like a real verdict.</p>
+     */
     private static String extractTileClass(String response) {
-        String needle = "\"tileClass\":\"";
-        int start = response.indexOf(needle);
-        if (start < 0) return "";
-        start += needle.length();
-        int end = response.indexOf('"', start);
-        return end < 0 ? "" : response.substring(start, end);
+        // No `requireOk` here, and that is not an omission: `artest machine info` reports a flat
+        // object with no `ok` field at all, so demanding one refuses every healthy reply. Measured
+        // — the first version of this line did exactly that.
+        return Reply.of("artest machine info", response).text("tileClass");
     }
 }

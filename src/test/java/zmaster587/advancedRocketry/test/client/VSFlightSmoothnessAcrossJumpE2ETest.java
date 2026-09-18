@@ -17,6 +17,8 @@ import zmaster587.advancedRocketry.test.ShipIdentity;
 import zmaster587.advancedRocketry.test.ShipInfo;
 
 import static zmaster587.advancedRocketry.test.AdvancedRocketryTestConstants.HYPERSPACE_JUMP_SPEED;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 
 /**
@@ -485,7 +487,7 @@ public class VSFlightSmoothnessAcrossJumpE2ETest extends AbstractSharedVsClientE
                 exec("artest vs motion-trace reset");
                 bot().waitTicks(LIFT_POLL_TICKS);
                 moved = netMoveLength(section(exec("artest vs motion-trace " + dim + " " + afc[0]
-                        + " " + afc[1] + " " + afc[2] + " " + WINDOW_MS), "\"phys\":"));
+                        + " " + afc[1] + " " + afc[2] + " " + WINDOW_MS), "phys"));
             }
         } finally {
             bot().releaseKey(Keyboard.KEY_R);
@@ -514,11 +516,11 @@ public class VSFlightSmoothnessAcrossJumpE2ETest extends AbstractSharedVsClientE
         leg.clientJson = bot().readStaticField(MOTION_TRACE, "CLIENT_SUMMARY")
                 .get("value").getAsString();
 
-        String phys = section(leg.serverJson, "\"phys\":");
-        String game = section(leg.serverJson, "\"game\":");
-        String window = section(leg.clientJson, "\"w" + WINDOW_MS + "\":");
-        String clientTick = section(window, "\"tick\":");
-        String frame = section(window, "\"frame\":");
+        String phys = section(leg.serverJson, "phys");
+        String game = section(leg.serverJson, "game");
+        String window = section(leg.clientJson, "w" + WINDOW_MS);
+        String clientTick = section(window, "tick");
+        String frame = section(window, "frame");
 
         leg.physSamples = readIntOr(phys, "n", 0);
         leg.gameSamples = readIntOr(game, "n", 0);
@@ -537,7 +539,7 @@ public class VSFlightSmoothnessAcrossJumpE2ETest extends AbstractSharedVsClientE
         // Column 3 of the server-tick channel is the cumulative server chunk count; differencing it
         // across the window is what turns "chunks arrived between the legs" into "chunks arrived
         // while that tick was stalled".
-        leg.chunksInWindow = (long) (column(game, "\"last\":", 3) - column(game, "\"first\":", 3));
+        leg.chunksInWindow = (long) (column(game, "last", 3) - column(game, "first", 3));
         leg.serverChunkLoads = readIntOr(leg.serverJson, "serverChunkLoads", 0);
         leg.clientChunkLoads = readIntOr(leg.clientJson, "chunkLoads", 0);
         // How far the SHIP itself went over the window, from the physics channel's own net move —
@@ -554,7 +556,7 @@ public class VSFlightSmoothnessAcrossJumpE2ETest extends AbstractSharedVsClientE
      * question is evenness, not speed.
      */
     private static double evenness(String channelJson) {
-        String step = section(channelJson, "\"stepBlocks\":");
+        String step = section(channelJson, "stepBlocks");
         double p50 = readDoubleOr(step, "p50", 0);
         double p95 = readDoubleOr(step, "p95", 0);
         if (p50 <= 1.0e-6) {
@@ -665,26 +667,22 @@ public class VSFlightSmoothnessAcrossJumpE2ETest extends AbstractSharedVsClientE
                 subject <= allowed);
     }
 
-    /** One column of a channel's {@code "first"} or {@code "last"} sample row. */
+    /**
+     * One column of a channel's {@code first} or {@code last} sample row, refusing when the row is
+     * absent or too short.
+     *
+     * <p>It used to find the row by {@code indexOf}, slice to the next {@code ']'} and split the
+     * slice on commas — a positional read with FOUR paths that each answered {@code 0.0}. The
+     * caller differences two of these to count chunk arrivals inside the window, and two zeros
+     * difference to zero: "no chunks loaded while that tick was stalled" is the reading that
+     * exonerates the jump, and it is what a missing row produced.</p>
+     */
     private static double column(String channelJson, String rowKey, int index) {
-        int at = channelJson.indexOf(rowKey);
-        if (at < 0) {
-            return 0.0;
-        }
-        int open = channelJson.indexOf('[', at);
-        int close = channelJson.indexOf(']', open);
-        if (open < 0 || close < 0) {
-            return 0.0;
-        }
-        String[] parts = channelJson.substring(open + 1, close).split(",");
-        if (index >= parts.length) {
-            return 0.0;
-        }
-        try {
-            return Double.parseDouble(parts[index].trim());
-        } catch (NumberFormatException notANumber) {
-            return 0.0;
-        }
+        double value = Reply.of("a smoothness channel", channelJson).arrayNumber(rowKey, index);
+        assertFalse("the channel carries no `" + rowKey + "[" + index + "]`, so the chunk count "
+                + "below is not a count — and read as zero it says no chunks arrived, which is the "
+                + "answer that clears the jump: " + channelJson, Double.isNaN(value));
+        return value;
     }
 
     /** The length of a channel's {@code netMove} vector, or 0 when it reported none. */
@@ -700,32 +698,28 @@ public class VSFlightSmoothnessAcrossJumpE2ETest extends AbstractSharedVsClientE
     }
 
     /**
-     * The balanced JSON object that follows {@code key} in {@code json}. Written by hand rather
-     * than parsed because the probe envelope is a flat string and a regex for a nested object stops
-     * at the first closing brace, which here is always the wrong one.
+     * One named channel of a motion trace, as its own JSON — refusing when the trace carries none.
+     *
+     * <p>This used to walk the text by hand: find {@code "\"phys\":"} with {@code indexOf}, find the
+     * next {@code '{'}, then count braces to the matching one. Its own comment explained why a
+     * REGEX could not do it — a regex for a nested object stops at the first closing brace — and
+     * that was true, and it is an argument for PARSING, which the hand-walk is not. Reading a reply
+     * by index is worse than the regex it replaces: the slice depends on the field's punctuation and
+     * on what follows it, which is the whole of what a parser exists to not care about.</p>
+     *
+     * <p>And it answered {@code ""} on a miss, which is why this REFUSES now. Everything read out of
+     * a channel here is a MEASUREMENT — a sample count, a hitch in milliseconds, an evenness ratio —
+     * and an empty channel gave every one of them {@code 0} through the {@code …Or} readers below.
+     * Zero hitch and zero surge is the best possible result for the property under test, so a trace
+     * that lost a channel would have reported a perfectly smooth flight, on both legs, and the
+     * comparison between them would have held.</p>
      */
     private static String section(String json, String key) {
-        int at = json.indexOf(key);
-        if (at < 0) {
-            return "";
-        }
-        int start = json.indexOf('{', at + key.length() - 1);
-        if (start < 0) {
-            return "";
-        }
-        int depth = 0;
-        for (int i = start; i < json.length(); i++) {
-            char c = json.charAt(i);
-            if (c == '{') {
-                depth++;
-            } else if (c == '}') {
-                depth--;
-                if (depth == 0) {
-                    return json.substring(start, i + 1);
-                }
-            }
-        }
-        return "";
+        String nested = Reply.of("artest vs motion-trace", json).object(key);
+        assertNotNull("the motion trace carries no `" + key + "` channel, so nothing below is a "
+                + "reading of it — and read as zeros it would be a reading of a perfectly smooth "
+                + "flight: " + json, nested);
+        return nested;
     }
 
     // --- arrangement helpers (mirroring the tier-2 client e2e classes) ---------------------------

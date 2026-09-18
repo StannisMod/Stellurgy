@@ -8,8 +8,6 @@ import org.junit.Test;
 
 import java.util.HashSet;
 import java.util.Set;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 import zmaster587.advancedRocketry.test.FixtureSite;
 
@@ -45,7 +43,6 @@ import static zmaster587.advancedRocketry.test.server.WorldCommandFixtures.exec;
  */
 public class TerraformerPoweredCycleOnArPlanetTest extends AbstractSharedServerTest {
 
-    private static final Pattern DIM_LINE = Pattern.compile("DIM(\\d+):");
     private static final String CURRENT_ATMOS = "currentAtmosphere";
     private static final String POWER_POS = "powerPos";
     private static final String LIQUID_INPUT_POS = "liquidInputPos";
@@ -313,11 +310,16 @@ public class TerraformerPoweredCycleOnArPlanetTest extends AbstractSharedServerT
         return Integer.parseInt(mReply.text(CURRENT_ATMOS));
     }
 
+    /**
+     * The AR dimensions registered right now, asked of the probe rather than scraped out of
+     * {@code ar planet list}. Nothing here claims anything about that command's output; both read
+     * {@code DimensionManager.getInstance().getRegisteredDimensions()}.
+     */
     private static Set<Integer> arDims() throws Exception {
-        String list = exec("ar planet list");
         Set<Integer> ids = new HashSet<>();
-        Matcher m = DIM_LINE.matcher(list);
-        while (m.find()) ids.add(Integer.parseInt(m.group(1)));
+        for (int dim : Reply.of("artest dim list", exec("artest dim list")).intArray("arDimensions")) {
+            ids.add(dim);
+        }
         return ids;
     }
 }
