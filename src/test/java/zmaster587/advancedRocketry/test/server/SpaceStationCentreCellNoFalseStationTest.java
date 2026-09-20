@@ -5,8 +5,6 @@ import zmaster587.advancedRocketry.test.StationInfo;
 import com.github.stannismod.forge.testing.junit.AbstractHeadlessServerTest;
 import org.junit.Test;
 
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 import static org.junit.Assert.assertTrue;
 
@@ -58,7 +56,11 @@ public class SpaceStationCentreCellNoFalseStationTest extends AbstractHeadlessSe
         String atCentre = exec("artest station at 100 64 100");
         assertTrue("PIN L5: the central grid cell must resolve to no station (radius-0 index fix) — it "
                         + "collided with grid (-1,-1) on index 1 = station 1 via (2*0-1)^2. Got: " + atCentre,
-                atCentre.contains("\"stationAtPos\":null"));
+                // `has` answers false for an ABSENT field and for one whose value is JSON null,
+                // which is the whole claim. The needle it replaces was one rendering of that —
+                // it would have missed `"stationAtPos": null` with a space, and matched the
+                // string appearing inside any other field.
+                !Reply.of("artest station at", atCentre).has("stationAtPos"));
     }
 
     private String exec(String cmd) throws Exception {

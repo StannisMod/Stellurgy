@@ -3,8 +3,6 @@ package zmaster587.advancedRocketry.test.server;
 import zmaster587.advancedRocketry.test.Reply;
 import org.junit.Test;
 
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
@@ -62,9 +60,14 @@ public class WeatherControllerUnloadedDimTickTest extends AbstractSharedServerTe
 
         String resp = ok(client().execute("artest satellite weather-tick-unloaded 0 " + satId));
 
+        // An NPE reaches a caller as a REFUSAL: the command's top-level catch renders it as
+        // `{"error":"NullPointerException: …"}`. So the claim is made against that field. The
+        // substring over the whole rendering was also satisfied by the words appearing in any
+        // other field — a class name, a message echoed back — and said nothing about where.
+        Reply ticked = Reply.of("artest satellite weather-tick-unloaded", resp);
         assertFalse("ticking a weather controller with an unloaded world must not "
                         + "NPE (C062): " + resp,
-                resp.contains("NullPointerException"));
+                ticked.refused() && ticked.error().startsWith("NullPointerException"));
         assertTrue("weather-tick-unloaded must succeed post-fix: " + resp,
                 Reply.of(resp).ok());
 

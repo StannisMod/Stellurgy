@@ -1,10 +1,12 @@
 package zmaster587.advancedRocketry.test.server;
 
+import zmaster587.advancedRocketry.test.MachineInfo;
 import zmaster587.advancedRocketry.test.Reply;
 import org.junit.Test;
 
 import zmaster587.advancedRocketry.test.FixtureSite;
 
+import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
 /**
@@ -47,8 +49,8 @@ public class BeaconMultiblockTest extends AbstractSharedServerTest {
 
         String info = join(client().execute(
                 "artest machine info 0 " + CX + " " + CY + " " + CZ));
-        assertTrue("expected TileBeacon tile at controller pos: " + info,
-                info.contains("TileBeacon"));
+        assertEquals("expected TileBeacon tile at controller pos: " + info,
+                "TileBeacon", MachineInfo.of(info).tileSimpleName());
 
         String tryComplete = MachineRecipeEndToEndKit.tryCompleteWithRetry(
                 client(), 0, CX, CY, CZ);

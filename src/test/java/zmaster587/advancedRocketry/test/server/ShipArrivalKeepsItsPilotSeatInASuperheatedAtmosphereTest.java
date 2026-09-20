@@ -8,8 +8,6 @@ import zmaster587.advancedRocketry.test.ShipInfo;
 
 import org.junit.Test;
 
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 import zmaster587.advancedRocketry.test.FixtureSite;
 
@@ -106,8 +104,12 @@ public class ShipArrivalKeepsItsPilotSeatInASuperheatedAtmosphereTest extends Ab
         // measures nothing.
         originalTemperature = extractInt(exec("artest planet info 0"), "averageTemperature");
         String heated = exec("artest planet set-temp 0 " + SUPERHEATED_KELVIN);
+        // The atmosphere the planet ENDED UP with, read off the field that names it. Lower-casing
+        // the whole reply and searching it also matched the word in `atmosphere` belonging to a
+        // refusal, and would have matched a dimension or planet NAME carrying it.
         assertTrue("could not author a superheated atmosphere: " + heated,
-                heated.toLowerCase().contains("superheated"));
+                Reply.of("artest planet set-temp", heated).text("atmosphere")
+                        .toLowerCase(java.util.Locale.ROOT).contains("superheated"));
 
         // POSITIVE CONTROL: the same placement into that atmosphere does NOT leave a pilot seat.
         // (What it leaves is not pinned: the conversion writes fire, and fire with nothing to burn

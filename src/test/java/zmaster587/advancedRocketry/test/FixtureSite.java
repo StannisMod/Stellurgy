@@ -1,7 +1,5 @@
 package zmaster587.advancedRocketry.test;
 
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 /**
  * WHERE a fixture stands, and the first link that says the volume around it is empty.

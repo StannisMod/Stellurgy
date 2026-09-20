@@ -4,8 +4,6 @@ import zmaster587.advancedRocketry.test.Reply;
 import zmaster587.advancedRocketry.test.CellInfo;
 import org.junit.Test;
 
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 import static org.junit.Assert.assertTrue;
 import static zmaster587.advancedRocketry.test.ArrangementFailure.requireArranged;

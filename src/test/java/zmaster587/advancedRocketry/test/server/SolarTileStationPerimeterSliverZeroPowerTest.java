@@ -6,8 +6,6 @@ import zmaster587.advancedRocketry.test.StationInfo;
 import com.github.stannismod.forge.testing.junit.AbstractHeadlessServerTest;
 import org.junit.Test;
 
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 import static org.junit.Assert.assertTrue;
 

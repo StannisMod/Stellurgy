@@ -5,8 +5,6 @@ import org.junit.Test;
 
 import zmaster587.advancedRocketry.test.GameTicks;
 
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 import zmaster587.advancedRocketry.test.FixtureSite;
 

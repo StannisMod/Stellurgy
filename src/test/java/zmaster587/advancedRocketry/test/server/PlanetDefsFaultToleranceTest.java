@@ -1,5 +1,6 @@
 package zmaster587.advancedRocketry.test.server;
 
+import zmaster587.advancedRocketry.test.DimList;
 import zmaster587.advancedRocketry.test.Reply;
 import com.github.stannismod.forge.testing.junit.AbstractHeadlessServerTest;
 import com.github.stannismod.forge.testing.server.RealDedicatedServerHarness;
@@ -98,11 +99,15 @@ public class PlanetDefsFaultToleranceTest {
         // before becoming ready".
         harness = RealDedicatedServerHarness.startWith(workDir, /*cleanupOnClose=*/true);
 
-        String dimList = String.join("\n", harness.client().execute("artest dim list"));
+        // Membership of a SET of integers, asked of one. It used to be asked of the rendering —
+        // `dimList.contains("9402")` — and those digits match anywhere in the blob: the negative
+        // claim below would fail for a tick time carrying them, and the positive one above would
+        // pass with the dimension absent as long as something printed 94010 or 19401.
+        DimList dimList = DimList.of(String.join("\n", harness.client().execute("artest dim list")));
         assertTrue("well-formed planet must survive a dirty planetDefs.xml: " + dimList,
-                dimList.contains(String.valueOf(GOOD_DIM)));
+                dimList.holds(GOOD_DIM));
         assertFalse("malformed planet must be skipped, not registered: " + dimList,
-                dimList.contains(String.valueOf(BAD_DIM)));
+                dimList.holds(BAD_DIM));
 
         // The good planet is fully functional, not just listed.
         String info = String.join("\n",

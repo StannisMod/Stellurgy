@@ -4,8 +4,6 @@ import zmaster587.advancedRocketry.test.Reply;
 import com.github.stannismod.forge.testing.junit.AbstractHeadlessServerTest;
 import org.junit.Test;
 
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
@@ -52,7 +50,7 @@ public class TerraformingSmokeTest extends AbstractHeadlessServerTest {
             assertEquals("originalAtmosphere unexpectedly mutated: " + after,
                     original, mutated.integer(ORIG));
             assertTrue("proxylists not reported: " + after,
-                    after.contains("\"proxyInitialized\""));
+                    Reply.of(after).has("proxyInitialized"));
         } finally {
             client().execute("artest terraforming set-density 0 " + currentBefore);
         }

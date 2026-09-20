@@ -138,6 +138,9 @@ public final class MissionCompletion {
         int total = 0;
         for (String entry : reply.objectArray("fluids")) {
             Reply fluid = Reply.of("artest mission complete-now fluid", entry);
+            // the producer always writes `type` beside the amount: an entry is built as one pair
+            // and a tank with no fluid is skipped before it is appended at all. An entry without
+            // it would be a broken probe, not a fluid this craft failed to collect.
             if (type.equals(fluid.text("type"))) {
                 total += fluid.integer("amount");
             }
@@ -158,6 +161,18 @@ public final class MissionCompletion {
     /** The reply exactly as the probe sent it, for a message that has to show the whole answer. */
     public String raw() {
         return raw;
+    }
+
+    /**
+     * Whether the verb THREW, and with what — the shape an unhandled exception reaches a caller
+     * in: the command's top-level catch renders it as {@code {"error":"NullPointerException: …"}}.
+     *
+     * <p>Named here because the callers that ask it are guarding a specific crash and used to ask
+     * the whole rendering — {@code raw().contains("NullPointerException")} — which is satisfied by
+     * the words appearing in any field, and says nothing about whether the verb actually failed.</p>
+     */
+    public boolean threw(String exceptionSimpleName) {
+        return reply.refused() && reply.error().startsWith(exceptionSimpleName);
     }
 
     @Override

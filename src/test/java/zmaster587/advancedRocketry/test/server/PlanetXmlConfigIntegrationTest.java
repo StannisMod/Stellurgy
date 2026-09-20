@@ -1,5 +1,6 @@
 package zmaster587.advancedRocketry.test.server;
 
+import zmaster587.advancedRocketry.test.DimList;
 import zmaster587.advancedRocketry.test.Reply;
 import com.github.stannismod.forge.testing.junit.AbstractHeadlessServerTest;
 import com.github.stannismod.forge.testing.server.RealDedicatedServerHarness;
@@ -12,6 +13,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 
+import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
 /**
@@ -89,26 +91,30 @@ public class PlanetXmlConfigIntegrationTest {
     public void fixtureXmlRoundTripsThroughServerStart() throws Exception {
         harness = RealDedicatedServerHarness.startWith(workDir, /*cleanupOnClose=*/true);
 
-        String dimList = String.join("\n", harness.client().execute("artest dim list"));
-        assertTrue("dim list malformed: " + dimList,
-                (Reply.of(dimList).arrayLength("arDimensions") >= 0));
+        // `holds` refuses a reply carrying no `arDimensions` of its own, so the malformed-reply
+        // claim that used to stand here as a separate line is the same claim, made where it bites.
+        DimList dimList = DimList.of(String.join("\n", harness.client().execute("artest dim list")));
         assertTrue("fixture dim " + FIXTURE_DIM + " not in arDimensions: " + dimList,
-                dimList.contains(String.valueOf(FIXTURE_DIM)));
+                dimList.holds(FIXTURE_DIM));
 
         String planetInfo = String.join("\n",
                 harness.client().execute("artest planet info " + FIXTURE_DIM));
         assertTrue("planet info errored: " + planetInfo,
                 !Reply.of(planetInfo).has("error"));
 
-        for (String expected : new String[] {
-                "\"name\":\"" + FIXTURE_PLANET_NAME + "\"",
-                "\"orbitalDistance\":" + FIXTURE_ORBITAL_DISTANCE,
-                "\"atmosphereDensity\":" + FIXTURE_ATM_DENSITY,
-                "\"rotationalPeriod\":" + FIXTURE_ROTATIONAL_PERIOD,
-                "\"gravity\":0.75",
-        }) {
-            assertTrue("planet info missing " + expected + ": " + planetInfo,
-                    planetInfo.contains(expected));
-        }
+        // Five fields, read by name. As substring needles they were five renderings — the numeric
+        // ones matched a PREFIX, so `"orbitalDistance":250` was satisfied by 2500, and `0.75`
+        // depended on how gson chose to print the double that tick.
+        Reply info = Reply.of("artest planet info", planetInfo);
+        assertEquals("planet name did not round-trip: " + planetInfo,
+                FIXTURE_PLANET_NAME, info.text("name"));
+        assertEquals("orbitalDistance did not round-trip: " + planetInfo,
+                FIXTURE_ORBITAL_DISTANCE, info.integer("orbitalDistance"));
+        assertEquals("atmosphereDensity did not round-trip: " + planetInfo,
+                FIXTURE_ATM_DENSITY, info.integer("atmosphereDensity"));
+        assertEquals("rotationalPeriod did not round-trip: " + planetInfo,
+                FIXTURE_ROTATIONAL_PERIOD, info.integer("rotationalPeriod"));
+        assertEquals("gravity did not round-trip: " + planetInfo,
+                FIXTURE_GRAVITY_HUNDREDTHS / 100.0, info.number("gravity"), 1e-9);
     }
 }

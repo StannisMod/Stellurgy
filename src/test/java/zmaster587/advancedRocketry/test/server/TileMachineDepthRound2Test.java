@@ -78,7 +78,7 @@ public class TileMachineDepthRound2Test extends AbstractSharedServerTest {
         // would satisfy by the block not being there at all.
         EnergyStore stored = energy(x, z);
         assertTrue("tileClass should mention TileSuitWorkStation: " + stored.raw(),
-                stored.tileClass().contains("TileSuitWorkStation"));
+                "TileSuitWorkStation".equals(stored.tileSimpleName()));
         assertFalse("suit work station is a manual assembler — must NOT report energy cap: "
                         + stored.raw(),
                 stored.hasEnergy);
@@ -88,10 +88,16 @@ public class TileMachineDepthRound2Test extends AbstractSharedServerTest {
         // entire crafting matrix renders empty).
         String hatch = ok(client().execute(
                 "artest hatch read " + DIM + " " + x + " " + Y + " " + z));
-        assertTrue("suit work station must be IInventory-accessible: " + hatch,
-                !hatch.contains("not an IInventory") && !hatch.contains("\"no tile entity\""));
+        // Against the refusal rather than against two of its possible texts: the pair of
+        // substrings passed for every OTHER refusal the probe can write.
+        Reply hatchReply = Reply.of("artest hatch read", hatch);
+        assertFalse("suit work station must be IInventory-accessible: " + hatch,
+                hatchReply.refused());
+        // And the size is COMPARED, not searched. `!contains("\"size\":0,")` needed the comma:
+        // where `size` is the object's last field the needle cannot match, so a zero-slot
+        // inventory — the defect this line exists to catch — passed it.
         assertTrue("suit work station hatch-read should expose size>0: " + hatch,
-                Reply.of(hatch).has("size") && !hatch.contains("\"size\":0,"));
+                hatchReply.integer("size") > 0);
     }
 
     @Test
@@ -106,7 +112,7 @@ public class TileMachineDepthRound2Test extends AbstractSharedServerTest {
 
         EnergyStore stored = energy(x, z);
         assertTrue("tileClass should mention TileUnmannedVehicleAssembler: " + stored.raw(),
-                stored.tileClass().contains("TileUnmannedVehicleAssembler"));
+                "TileUnmannedVehicleAssembler".equals(stored.tileSimpleName()));
 
         // Round 1 pinned the rocket builder's energy contract; UV assembler
         // shares the same parent so it MUST also have an energy face. If the
@@ -135,16 +141,16 @@ public class TileMachineDepthRound2Test extends AbstractSharedServerTest {
 
         EnergyStore stored = energy(x, z);
         assertTrue("tileClass should mention TileLandingPad: " + stored.raw(),
-                stored.tileClass().contains("TileLandingPad"));
+                "TileLandingPad".equals(stored.tileSimpleName()));
 
         // TileInventoryHatch implements IInventory — the hatch-read probe
         // discriminates by IInventory, so its success here pins the
         // parent-class contract surface.
         String hatch = ok(client().execute(
                 "artest hatch read " + DIM + " " + x + " " + Y + " " + z));
-        assertTrue("landing pad must be IInventory-accessible (extends "
+        assertFalse("landing pad must be IInventory-accessible (extends "
                         + "TileInventoryHatch): " + hatch,
-                !hatch.contains("not an IInventory") && !hatch.contains("\"no tile entity\""));
+                Reply.of("artest hatch read", hatch).refused());
     }
 
     @Test
@@ -159,7 +165,7 @@ public class TileMachineDepthRound2Test extends AbstractSharedServerTest {
 
         EnergyStore stored = energy(x, z);
         assertTrue("tileClass should mention TileFuelingStation: " + stored.raw(),
-                stored.tileClass().contains("TileFuelingStation"));
+                "TileFuelingStation".equals(stored.tileSimpleName()));
         assertTrue("fueling station must expose CapabilityEnergy (RF consumer): "
                         + stored.raw(),
                 stored.hasEnergy);
@@ -169,9 +175,8 @@ public class TileMachineDepthRound2Test extends AbstractSharedServerTest {
         // (whether or not the tank is empty) confirms the cap survives.
         String fluid = ok(client().execute(
                 "artest fluid stored " + DIM + " " + x + " " + Y + " " + z));
-        assertTrue("fueling station tank cap silently dropped: " + fluid,
-                !fluid.contains("\"no tile entity\"")
-                        && !fluid.contains("\"tile has no IFluidHandler\""));
+        assertFalse("fueling station tank cap silently dropped: " + fluid,
+                Reply.of("artest fluid stored", fluid).refused());
     }
 
     @Test
@@ -190,7 +195,7 @@ public class TileMachineDepthRound2Test extends AbstractSharedServerTest {
 
         EnergyStore stored = energy(x, z);
         assertTrue("tileClass should mention TileAtmosphereTerraformer: " + stored.raw(),
-                stored.tileClass().contains("TileAtmosphereTerraformer"));
+                "TileAtmosphereTerraformer".equals(stored.tileSimpleName()));
         // Contract surprise pinned here: a pre-assembly multiblock controller
         // is "cap-dark" — it has no IEnergyStorage until the structure forms.
         // If a refactor changes the polarity of `isComplete` and the
@@ -217,8 +222,8 @@ public class TileMachineDepthRound2Test extends AbstractSharedServerTest {
         // reports "tile not ITickable" (some libVulpes multiblock controllers
         // delegate ticking to the host structure). Either contract is fine —
         // but a thrown exception is NOT.
+        Reply tick = Reply.of("artest tile force-tick", tickResp);
         assertTrue("terraformer force-tick threw or hard-errored: " + tickResp,
-                Reply.of(tickResp).ok()
-                        || tickResp.contains("tile not ITickable"));
+                tick.ok() || tick.refusedWith("tile not ITickable"));
     }
 }

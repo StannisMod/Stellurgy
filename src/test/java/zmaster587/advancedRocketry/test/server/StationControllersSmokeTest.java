@@ -1,5 +1,6 @@
 package zmaster587.advancedRocketry.test.server;
 
+import zmaster587.advancedRocketry.test.MachineInfo;
 import zmaster587.advancedRocketry.test.Reply;
 import org.junit.Test;
 
@@ -77,7 +78,7 @@ public class StationControllersSmokeTest extends AbstractSharedServerTest {
         String info = exec("artest machine info 0 " + cx + " " + CY + " " + CZ);
         assertTrue("block " + registryName + " must produce tile "
                         + tileSimpleName + ": " + info,
-                info.contains(tileSimpleName));
+                MachineInfo.of(info).isTile(tileSimpleName));
 
         // 40 force-ticks — enough for any % N == 0 gate to fire at least
         // once. Pure smoke: must not throw, tile must remain queryable.
@@ -91,6 +92,6 @@ public class StationControllersSmokeTest extends AbstractSharedServerTest {
         String postInfo = exec("artest machine info 0 " + cx + " " + CY + " " + CZ);
         assertTrue("tile must remain " + tileSimpleName + " after ticking: "
                         + postInfo,
-                postInfo.contains(tileSimpleName));
+                MachineInfo.of(postInfo).isTile(tileSimpleName));
     }
 }

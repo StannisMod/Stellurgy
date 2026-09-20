@@ -57,6 +57,14 @@ public class PlayerReleaseContractTest {
     /** Any well-formed id: the record names a ship, and nothing here asks the ledger about it. */
     private static final String SHIP = "11111111-2222-3333-4444-555555555555";
 
+    /** The two arrays this contract reads, and the two binding names production puts in them —
+     *  spelled once, because a binding named in four places by a literal is four places to
+     *  rename. */
+    private static final String BOUND = "bound";
+    private static final String RELEASED = "released";
+    private static final String ABOARD_RECORD = "aboard record";
+    private static final String TRANSFER_GRACE = "rocket transfer grace";
+
     private Path workDir;
     private RealDedicatedServerHarness harness;
 
@@ -110,15 +118,19 @@ public class PlayerReleaseContractTest {
         assertTrue("the arrangement must actually stamp the record: " + bind,
                 Reply.of(bind).bool("tagged"));
 
+        // Membership of a string ARRAY, asked of the array. As a substring over the whole
+        // rendering it was also satisfied by the name appearing in some other field — and
+        // `"aboard record incomplete"`, which this probe family writes as a REFUSAL, carries
+        // `"aboard record"` inside it.
         String bound = exec("artest player bindings");
         assertTrue("a stamped aboard record must be REPORTED as a binding — the question 'what is"
                 + " this player bound to' is half the contract: " + bound,
-                bound.contains("\"aboard record\""));
+                Reply.of(bound).holdsText(BOUND, ABOARD_RECORD));
 
         String released = exec("artest player release");
         assertTrue("the release must NAME the aboard record it let go; a release nobody can see is"
                 + " indistinguishable from no release: " + released,
-                released.contains("\"aboard record\""));
+                Reply.of(released).holdsText(RELEASED, ABOARD_RECORD));
 
         // Asked of production twice, two different ways: the release's own view and the aboard
         // record's independent read-only witness. One of them agreeing with itself proves nothing.
@@ -141,11 +153,11 @@ public class PlayerReleaseContractTest {
         assertTrue("the post-transfer grace is a binding like any other — it SUPPRESSES the suit"
                 + " check, so a player carrying one into his next situation is measured against a"
                 + " gate that was told to stand down: " + bound,
-                bound.contains("\"rocket transfer grace\""));
+                Reply.of(bound).holdsText(BOUND, TRANSFER_GRACE));
 
         String released = exec("artest player release");
         assertTrue("the release must name the grace: " + released,
-                released.contains("\"rocket transfer grace\""));
+                Reply.of(released).holdsText(RELEASED, TRANSFER_GRACE));
 
         String after = exec("artest player bindings");
         assertTrue("after a release he must be bound to nothing: " + after,
@@ -160,12 +172,13 @@ public class PlayerReleaseContractTest {
 
         String bound = exec("artest player bindings");
         assertTrue("both bindings must be reported, not the first one found: " + bound,
-                bound.contains("\"aboard record\"") && bound.contains("\"rocket transfer grace\""));
+                Reply.of(bound).holdsText(BOUND, ABOARD_RECORD)
+                        && Reply.of(bound).holdsText(BOUND, TRANSFER_GRACE));
 
         String released = exec("artest player release");
         assertTrue("a release stops at nothing: both must be named: " + released,
-                released.contains("\"aboard record\"")
-                        && released.contains("\"rocket transfer grace\""));
+                Reply.of(released).holdsText(RELEASED, ABOARD_RECORD)
+                        && Reply.of(released).holdsText(RELEASED, TRANSFER_GRACE));
         assertFalse("and the report must not be a stale echo of the question — it is what each"
                         + " owner said it actually let go: " + released,
                 (Reply.of(released).integer("releasedCount") == 0));

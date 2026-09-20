@@ -5,8 +5,6 @@ import org.junit.FixMethodOrder;
 import org.junit.Test;
 import org.junit.runners.MethodSorters;
 
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 import zmaster587.advancedRocketry.test.Events;
 import zmaster587.advancedRocketry.test.PilotSeat;
@@ -362,7 +360,15 @@ public class VSRiderKeepsHisMountAtCruiseE2ETest extends AbstractSharedVsClientE
             // held, never why - and a green would not distinguish "the guard worked" from "the
             // arrangement never put the mechanism under load".
             String track = exec("artest vs mount-tracking " + dim);
-            if (readBool(track, "seatedRider") && !readBool(track, "riderTracks")) {
+            // absence is the answer for `seatedRider`: the verb writes `{"error":"world not
+            // loaded"}` with no fields at all when the dimension is between worlds, which across a
+            // jump is exactly the moment this counter exists to describe — and a refusing read
+            // there would end the measurement window with a complaint about the instrument.
+            // `riderTracks` stays a refusing read on purpose: the producer always writes it on a
+            // reply that says `seatedRider` is true, so the `&&` reaches it only where it is
+            // there — and a default would quietly turn "not tracked" into "nothing to report".
+            if (Reply.of(track).boolOr("seatedRider", false)
+                    && !readBool(track, "riderTracks")) {
                 riderUntracked++;
             }
             double lagX = Events.number(track, "anchorLagX");

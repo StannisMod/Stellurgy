@@ -96,6 +96,9 @@ public class SpikeFarCoordinatePlayabilityTest extends AbstractClientE2ETest {
 
     /** The corridor runs +X from the player; the wall's near face is this many blocks ahead. */
     private static final int WALL_OFFSET = 16;
+
+    /** The block the arena is built out of, spelled once — the fill above lays exactly this. */
+    private static final String STONE = "minecraft:stone";
     private static final int WALK_TICKS = 40;
     private static final int RAM_TICKS = 160;
 
@@ -320,20 +323,31 @@ public class SpikeFarCoordinatePlayabilityTest extends AbstractClientE2ETest {
         for (int dx : new int[] {0, 1, 2, 5, 10, WALL_OFFSET - 2}) {
             String at = exec("artest block at " + OVERWORLD + " " + (x + dx) + " " + STAND_Y + " "
                     + ARENA_Z);
-            if (!at.contains("minecraft:air")) {
+            // The probe answers the question directly — `isAir` — instead of being searched for
+            // the id. The substring form was also satisfied by a `minecraft:air` value sitting
+            // in some other field of the reply.
+            // The refusing read is right here and the producer always writes both `block` and
+            // `isAir` for a loaded dimension: the one shape that omits them is `world not
+            // loaded`, and this asks about the overworld.
+            if (!Reply.of(at).bool("isAir")) {
                 return "the corridor is not air at x+" + dx + " (" + oneLine(at) + ")";
             }
         }
         for (int dx : new int[] {0, 8, WALL_OFFSET - 1}) {
             String at = exec("artest block at " + OVERWORLD + " " + (x + dx) + " " + FLOOR_Y + " "
                     + ARENA_Z);
-            if (!at.contains("stone")) {
+            // The id, compared. `contains("stone")` is satisfied by cobblestone, sandstone,
+            // stonebrick and redstone_block — so an arena the fill laid wrong read as sound,
+            // which is exactly what this control exists to catch. Refusing, because the producer
+            // always writes `block` for a loaded dimension and this asks about the overworld.
+            if (!STONE.equals(Reply.of(at).text("block"))) {
                 return "the floor is not stone at x+" + dx + " (" + oneLine(at) + ")";
             }
         }
         String wall = exec("artest block at " + OVERWORLD + " " + (x + WALL_OFFSET) + " " + STAND_Y
                 + " " + ARENA_Z);
-        if (!wall.contains("stone")) {
+        // the producer always writes `block` for a loaded dimension, as above.
+        if (!STONE.equals(Reply.of(wall).text("block"))) {
             return "the wall is not stone (" + oneLine(wall) + ")";
         }
         return null;

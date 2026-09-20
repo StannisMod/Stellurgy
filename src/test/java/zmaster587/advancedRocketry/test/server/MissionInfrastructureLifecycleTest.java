@@ -5,8 +5,6 @@ import zmaster587.advancedRocketry.test.RocketList;
 import zmaster587.advancedRocketry.test.Reply;
 import org.junit.Test;
 
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 import zmaster587.advancedRocketry.test.FixtureSite;
 
@@ -213,9 +211,19 @@ public class MissionInfrastructureLifecycleTest extends AbstractSharedServerTest
         // station coord must appear in some StationDeployedRocket's
         // infrastructureCoords list. Test for the exact triple as JSON
         // array to avoid matching a coincidental coord-with-shared-axis.
-        String expected = "[" + ipos[0] + "," + ipos[1] + "," + ipos[2] + "]";
-        assertTrue("rocket infrastructureCoords must contain "
-                        + expected + ": " + relink,
-                relink.contains(expected));
+        // Walked as the structure it is: the reply holds a rocket per element, each with its own
+        // `infrastructure` array of [x,y,z]. Built as a needle it depended on the producer's
+        // rendering of a coordinate — a space after a comma, or a double for a whole number, and
+        // the claim reads as the link never having been made.
+        boolean linked = false;
+        for (String rocket : Reply.of("artest mission rocket-relink-state", relink)
+                .objectArray("rockets")) {
+            for (int[] coord : Reply.of("one deployed rocket", rocket)
+                    .blockPosArray("infrastructure")) {
+                linked |= coord[0] == ipos[0] && coord[1] == ipos[1] && coord[2] == ipos[2];
+            }
+        }
+        assertTrue("rocket infrastructureCoords must contain ["
+                        + ipos[0] + "," + ipos[1] + "," + ipos[2] + "]: " + relink, linked);
     }
 }

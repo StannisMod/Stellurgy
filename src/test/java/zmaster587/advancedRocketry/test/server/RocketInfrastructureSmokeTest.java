@@ -4,8 +4,6 @@ package zmaster587.advancedRocketry.test.server;
 import zmaster587.advancedRocketry.test.Reply;
 import org.junit.Test;
 
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 import zmaster587.advancedRocketry.test.FixtureSite;
 
@@ -46,7 +44,7 @@ public class RocketInfrastructureSmokeTest extends AbstractSharedServerTest {
         assertTrue("fueling station not IInfrastructure: " + infraInfo,
                 Reply.of(infraInfo).bool("isInfrastructure"));
         assertTrue("infra info missing maxLinkDistance: " + infraInfo,
-                infraInfo.contains("\"maxLinkDistance\""));
+                Reply.of(infraInfo).has("maxLinkDistance"));
 
         String emptyInfra = String.join("\n", client().execute("artest infra info 0 100 64 100"));
         assertTrue("infra info on empty pos didn't error: " + emptyInfra,
@@ -345,7 +343,7 @@ public class RocketInfrastructureSmokeTest extends AbstractSharedServerTest {
         String inv = String.join("\n", client().execute(
                 "artest rocket storage-inventory " + rocketId));
         assertTrue("rocket must expose an inventoryTileCount: " + inv,
-                inv.contains("\"inventoryTileCount\""));
+                Reply.of(inv).has("inventoryTileCount"));
     }
 
     /**

@@ -912,8 +912,15 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
                 "the per-tick pose trace did or did not run");
         // The one thing asserted: the trace exists and covers ticks. Everything else here is a
         // reading, and a spike that asserted its own expectations would stop being able to say "no".
-        assertTrue("the trace must contain per-tick records to read: " + trace,
-                trace.contains("client_deck_pose_tick") && trace.contains("\"stepY\""));
+        // Asked PER RECORD. The pair of needles over the envelope could be answered by two
+        // DIFFERENT things — the type name is carried by the INSTRUMENTS list whether or not
+        // anything was recorded, so `stepY` sitting in some other instrument's record satisfied
+        // the second half while the trace itself was empty.
+        boolean anyStepY = false;
+        for (String record : Events.records(trace)) {
+            anyStepY |= Events.text(record, "stepY") != null;
+        }
+        assertTrue("the trace must contain per-tick records to read: " + trace, anyStepY);
     }
 
     // ---- The server does not simply ratify what a client declares ------------------------------
@@ -1516,7 +1523,10 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
                 + " shipInsideCleared=" + (sx >= bx - 2 && sx <= bx + 7
                         && sz >= bz - 2 && sz <= bz + 7)
                 + ": " + enc,
-                underBlock.isEmpty() || underBlock.contains("air"));
+                // The id, compared. `contains("air")` is satisfied by `advancedrocketry:airlock`
+                // and by anything else carrying those three letters, so a solid block under his
+                // feet could read as a cleared column — which is what this claim exists to deny.
+                underBlock.isEmpty() || "minecraft:air".equals(underBlock));
 
         // The outer-hull mode contract: the hull encounter may be HELD (hull-stand), but it must
         // NEVER read as ABOARD - no deck frame, no deck camera, no deck mouse for a hull stander.

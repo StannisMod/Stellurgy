@@ -1,5 +1,6 @@
 package zmaster587.advancedRocketry.test.server;
 
+import zmaster587.advancedRocketry.test.MachineInfo;
 import zmaster587.advancedRocketry.test.Reply;
 import com.github.stannismod.forge.testing.junit.AbstractHeadlessServerTest;
 import org.junit.Test;
@@ -49,8 +50,8 @@ public class TerraformerMultiBlockCycleTest extends AbstractHeadlessServerTest {
 
         String info = String.join("\n", client().execute(
                 "artest machine info 0 " + x + " " + y + " " + z));
-        assertTrue("expected terraformer tile: " + info,
-                info.contains("TileAtmosphereTerraformer"));
+        assertEquals("expected terraformer tile: " + info,
+                "TileAtmosphereTerraformer", MachineInfo.of(info).tileSimpleName());
 
         // Try-complete on incomplete structure must report isComplete=false.
         String tryComplete = String.join("\n", client().execute(
@@ -68,8 +69,8 @@ public class TerraformerMultiBlockCycleTest extends AbstractHeadlessServerTest {
         // Tile must still resolve.
         String postInfo = String.join("\n", client().execute(
                 "artest machine info 0 " + x + " " + y + " " + z));
-        assertTrue("tile must survive tick burst: " + postInfo,
-                postInfo.contains("TileAtmosphereTerraformer"));
+        assertEquals("tile must survive tick burst: " + postInfo,
+                "TileAtmosphereTerraformer", MachineInfo.of(postInfo).tileSimpleName());
 
         // Terraforming info must keep reporting proxyInitialized — the
         // cross-cutting field every gameplay path depends on. (Production:
@@ -78,7 +79,7 @@ public class TerraformerMultiBlockCycleTest extends AbstractHeadlessServerTest {
         String terraInfo = String.join("\n", client().execute(
                 "artest terraforming info 0"));
         assertTrue("terraforming info missing proxyInitialized: " + terraInfo,
-                terraInfo.contains("\"proxyInitialized\""));
+                Reply.of(terraInfo).has("proxyInitialized"));
     }
 
     private static int extractInt(String s, String field) {

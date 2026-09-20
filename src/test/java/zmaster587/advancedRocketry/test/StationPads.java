@@ -103,7 +103,11 @@ public final class StationPads {
                     + reply.text("error") + "), so this is not a list of its pads — and read as one"
                     + " it is a station holding none: " + text);
         }
-        if (!reply.has("pads") && !text.contains("\"pads\"")) {
+        // `has` asks for a PRIMITIVE and answers false for an array, so it can never answer this
+        // question — which is why a substring stood beside it. `arrayLength` is the verb that
+        // can: -1 exactly when the reply carries no such array, and 0 for a station with no pads,
+        // which is a reading and must not be refused here.
+        if (reply.arrayLength("pads") < 0) {
             throw new AssertionError("this is not an `artest station pads` answer: it carries no"
                     + " `pads`: " + text);
         }

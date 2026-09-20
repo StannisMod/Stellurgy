@@ -1,10 +1,12 @@
 package zmaster587.advancedRocketry.test.server;
 
+import zmaster587.advancedRocketry.test.MachineInfo;
 import zmaster587.advancedRocketry.test.Reply;
 import org.junit.Test;
 
 import zmaster587.advancedRocketry.test.FixtureSite;
 
+import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
 /**
@@ -35,8 +37,8 @@ public class PlanetAnalyserMultiblockTest extends AbstractSharedServerTest {
 
         String info = join(client().execute(
                 "artest machine info 0 " + CX + " " + CY + " " + CZ));
-        assertTrue("expected TileAstrobodyDataProcessor tile at controller pos: " + info,
-                info.contains("TileAstrobodyDataProcessor"));
+        assertEquals("expected TileAstrobodyDataProcessor tile at controller pos: " + info,
+                "TileAstrobodyDataProcessor", MachineInfo.of(info).tileSimpleName());
 
         String tryComplete = join(client().execute(
                 "artest machine try-complete 0 " + CX + " " + CY + " " + CZ));

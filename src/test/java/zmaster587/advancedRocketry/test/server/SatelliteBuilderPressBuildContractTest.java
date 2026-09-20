@@ -3,8 +3,6 @@ package zmaster587.advancedRocketry.test.server;
 import zmaster587.advancedRocketry.test.Reply;
 import org.junit.Test;
 
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 import zmaster587.advancedRocketry.test.FixtureSite;
 
@@ -147,9 +145,13 @@ public class SatelliteBuilderPressBuildContractTest extends AbstractSharedServer
                 + x + " " + y + " " + z + " weatherController");
         // Probe must surface the canAssemble-false branch as an error
         // (not crash, not silently succeed).
+        // Read OF THE FIELD: the producer writes a tail onto this one ("… after slot load"), so
+        // a prefix is the reading and the rendering around it is not searched.
+        Reply refusal = Reply.of("artest satellite-builder press-build", resp);
         assertTrue("expected canAssembleSatellite=false error for default chip + "
                         + "weatherController: " + resp,
-                resp.contains("canAssembleSatellite returned false"));
+                refusal.refused()
+                        && refusal.error().startsWith("canAssembleSatellite returned false"));
         // Primary-meta resolution must still succeed — the rejection is
         // about the chip slot, not the registry scan.
         assertNotEquals("weatherController must still resolve a primary meta even "

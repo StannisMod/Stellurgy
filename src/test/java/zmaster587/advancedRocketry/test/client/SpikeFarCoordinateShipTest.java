@@ -15,8 +15,6 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 import zmaster587.advancedRocketry.test.FixtureSite;
 
@@ -538,7 +536,10 @@ public class SpikeFarCoordinateShipTest extends AbstractClientE2ETest {
             return "pre-clear failed: " + oneLine(clear);
         }
         String pad = exec("artest block at 0 " + x + " " + (BASE_Y - 1) + " " + ARENA_Z);
-        if (!pad.contains("stone")) {
+        // The id, compared: `contains("stone")` also accepts cobblestone and sandstone, so a pad
+        // laid out of the wrong block passed the control that exists to check it. Refusing,
+        // because the producer always writes `block` for a loaded dimension and this asks dim 0.
+        if (!"minecraft:stone".equals(Reply.of(pad).text("block"))) {
             return "the pad is not stone (" + oneLine(pad) + ")";
         }
         return null;

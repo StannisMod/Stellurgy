@@ -5,8 +5,6 @@ import zmaster587.advancedRocketry.test.RocketInfo;
 import zmaster587.advancedRocketry.test.Reply;
 import org.junit.Test;
 
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 import zmaster587.advancedRocketry.test.FixtureSite;
 
@@ -94,8 +92,12 @@ public class FreeFlightAssistsE2ETest extends AbstractSharedServerTest {
         int id = buildAndAssemble(FixtureSite.openAir(0, 4050, 500));
         String resp = ok(client().execute(
                 "artest rocket set-flight-assist " + id + " wat"));
+        // Read OF THE FIELD. The producer builds this message around the value it rejected, so
+        // a prefix is the reading; the needle it replaces was matched anywhere in the rendering,
+        // including inside a field echoing the phrase back.
+        Reply refusal = Reply.of("artest rocket set-flight-assist", resp);
         assertTrue("bad value must report error: " + resp,
-                resp.contains("\"error\":\"bad value"));
+                refusal.refused() && refusal.error().startsWith("bad value"));
     }
 
     @Test

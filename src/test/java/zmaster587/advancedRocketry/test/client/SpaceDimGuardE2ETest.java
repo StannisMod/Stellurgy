@@ -9,8 +9,6 @@ import zmaster587.advancedRocketry.test.Reply;
 import zmaster587.advancedRocketry.test.PlayerState;
 import zmaster587.advancedRocketry.test.StationInfo;
 
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;

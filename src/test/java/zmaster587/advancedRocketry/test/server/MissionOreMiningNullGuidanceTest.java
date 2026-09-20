@@ -5,8 +5,6 @@ import zmaster587.advancedRocketry.test.RocketList;
 import zmaster587.advancedRocketry.test.Reply;
 import org.junit.Test;
 
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 import zmaster587.advancedRocketry.test.FixtureSite;
 
@@ -89,7 +87,7 @@ public class MissionOreMiningNullGuidanceTest extends AbstractSharedServerTest {
                 cmd -> ok(client().execute(cmd)), mid);
         assertFalse("completing an ore mission with a missing guidance computer "
                         + "must not NPE the server tick (C049): " + complete.raw(),
-                complete.raw().contains("NullPointerException"));
+                complete.threw("NullPointerException"));
         assertTrue("complete-now must report success: " + complete.raw(),
                 complete.isDeadAfter);
     }
@@ -108,7 +106,7 @@ public class MissionOreMiningNullGuidanceTest extends AbstractSharedServerTest {
         MissionCompletion complete = MissionCompletion.now(
                 cmd -> ok(client().execute(cmd)), mid);
         assertFalse("completing with a missing guidance computer must not NPE: " + complete.raw(),
-                complete.raw().contains("NullPointerException"));
+                complete.threw("NullPointerException"));
         assertTrue("complete-now must report success: " + complete.raw(),
                 complete.isDeadAfter);
     }

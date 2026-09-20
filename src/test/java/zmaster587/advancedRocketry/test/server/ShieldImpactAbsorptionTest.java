@@ -9,6 +9,7 @@ import java.util.List;
 
 import zmaster587.advancedRocketry.test.FixtureSite;
 
+import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
 /**
@@ -107,8 +108,14 @@ public class ShieldImpactAbsorptionTest extends AbstractSharedServerTest {
         exec("artest shield explode " + DIM + " " + (px + 0.5D) + " " + (Y + 1.5D) + " " + (pz + 0.5D) + " 4");
 
         String shieldedBlock = exec("artest block at " + DIM + " " + px + " " + Y + " " + pz);
-        assertTrue("a glass block inside a powered shield was destroyed by an explosion — the field did "
-                        + "not protect it:\n" + shieldedBlock, shieldedBlock.contains("minecraft:glass"));
+        // The id, compared. `contains("minecraft:glass")` is also satisfied by
+        // `minecraft:glass_pane` and by `stained_glass`, so a block the explosion REPLACED with a
+        // glass variant would have read as the shield protecting the original.
+        // the producer always writes `block` for a loaded dimension, and this asks about one
+        // the fixture has just built in.
+        assertEquals("a glass block inside a powered shield was destroyed by an explosion — the field did "
+                        + "not protect it:\n" + shieldedBlock,
+                "minecraft:glass", Reply.of("artest block at", shieldedBlock).text("block"));
         long storedAfter = read(ex, gz).shieldStored();
         assertTrue("shield energy did not drop while absorbing the explosion (before=" + storedBefore
                         + " after=" + storedAfter + "): the block may have survived for another reason.",

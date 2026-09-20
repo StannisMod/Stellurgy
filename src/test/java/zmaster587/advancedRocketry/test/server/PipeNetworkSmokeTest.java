@@ -27,7 +27,10 @@ public class PipeNetworkSmokeTest extends AbstractSharedServerTest {
     public void forgeEnergyStorageContractMatches() throws Exception {
         // LEFT RAW: the subject of this line IS the error shape, which `EnergyStore` refuses.
         String empty = String.join("\n", client().execute("artest energy stored 0 1200 64 1200"));
-        assertTrue("expected 'no tile entity': " + empty, empty.contains("\"no tile entity\""));
+        // THAT refusal, not merely some refusal: as a substring, any other error the probe can
+        // write satisfied this just as well.
+        assertTrue("expected 'no tile entity': " + empty,
+                Reply.of(empty).refusedWith("no tile entity"));
 
         String place = String.join("\n", client().execute(
                 "artest place 0 1200 64 1200 libvulpes:forgepowerinput"));

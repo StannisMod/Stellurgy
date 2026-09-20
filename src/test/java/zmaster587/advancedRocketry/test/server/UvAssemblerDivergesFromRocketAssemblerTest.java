@@ -1,5 +1,6 @@
 package zmaster587.advancedRocketry.test.server;
 
+import zmaster587.advancedRocketry.test.MachineInfo;
 import zmaster587.advancedRocketry.test.Reply;
 import com.github.stannismod.forge.testing.junit.AbstractHeadlessServerTest;
 import org.junit.Test;
@@ -7,6 +8,7 @@ import org.junit.Test;
 import zmaster587.advancedRocketry.test.FixtureSite;
 
 import static org.junit.Assert.assertNotEquals;
+import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
 /**
@@ -60,11 +62,11 @@ public class UvAssemblerDivergesFromRocketAssemblerTest extends AbstractHeadless
         String rocketInfo = join(client().execute(
                 "artest machine info 0 " + X_ROCKET + " " + Y + " " + Z_ROCKET));
         // TileRocketAssemblingMachine is the production target — pin it.
-        assertTrue("rocketBuilder must report TileRocketAssemblingMachine: " + rocketInfo,
-                rocketInfo.contains("TileRocketAssemblingMachine"));
+        assertEquals("rocketBuilder must report TileRocketAssemblingMachine: " + rocketInfo,
+                "TileRocketAssemblingMachine", MachineInfo.of(rocketInfo).tileSimpleName());
         // It must NOT report the UV class.
-        assertTrue("rocketBuilder unexpectedly reported the UV class: " + rocketInfo,
-                !rocketInfo.contains("TileUnmannedVehicleAssembler"));
+        assertNotEquals("rocketBuilder unexpectedly reported the UV class: " + rocketInfo,
+                "TileUnmannedVehicleAssembler", MachineInfo.of(rocketInfo).tileSimpleName());
 
         // ─── Place the UV / deployable rocket assembler ──────────────────
         String placeUv = join(client().execute(
@@ -75,8 +77,8 @@ public class UvAssemblerDivergesFromRocketAssemblerTest extends AbstractHeadless
 
         String uvInfo = join(client().execute(
                 "artest machine info 0 " + X_UV + " " + Y + " " + Z_UV));
-        assertTrue("deployableRocketBuilder must report TileUnmannedVehicleAssembler: " + uvInfo,
-                uvInfo.contains("TileUnmannedVehicleAssembler"));
+        assertEquals("deployableRocketBuilder must report TileUnmannedVehicleAssembler: " + uvInfo,
+                "TileUnmannedVehicleAssembler", MachineInfo.of(uvInfo).tileSimpleName());
 
         // ─── Class-identity pin ──────────────────────────────────────────
         // Extract the tileClass JSON values and assert they differ. A
@@ -92,10 +94,10 @@ public class UvAssemblerDivergesFromRocketAssemblerTest extends AbstractHeadless
         // is a real, independent tile-entity — not a shared-state pun).
         String rocketRefetch = join(client().execute(
                 "artest machine info 0 " + X_ROCKET + " " + Y + " " + Z_ROCKET));
-        assertTrue("rocketBuilder must remain queryable after UV placement: " + rocketRefetch,
-                rocketRefetch.contains("TileRocketAssemblingMachine"));
-        assertTrue("rocketBuilder must NOT be mutated by UV placement: " + rocketRefetch,
-                !rocketRefetch.contains("TileUnmannedVehicleAssembler"));
+        assertEquals("rocketBuilder must remain queryable after UV placement: " + rocketRefetch,
+                "TileRocketAssemblingMachine", MachineInfo.of(rocketRefetch).tileSimpleName());
+        assertNotEquals("rocketBuilder must NOT be mutated by UV placement: " + rocketRefetch,
+                "TileUnmannedVehicleAssembler", MachineInfo.of(rocketRefetch).tileSimpleName());
     }
 
     private static String join(java.util.List<String> resp) {

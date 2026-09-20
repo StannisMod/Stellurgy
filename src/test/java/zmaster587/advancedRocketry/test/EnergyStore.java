@@ -95,9 +95,21 @@ public final class EnergyStore {
         return this;
     }
 
-    /** The tile's class, as the server names it. Always present. */
+    /** The tile's class, as the server names it — fully qualified. Always present. */
     public String tileClass() {
         return reply.text("tileClass");
+    }
+
+    /**
+     * The tile's SIMPLE class name — what a test means when it names a tile.
+     *
+     * <p>Taken off the qualified name rather than matched inside it. Callers used to write
+     * {@code tileClass().contains("TileSolarPanel")}, which is also satisfied by
+     * {@code TileSolarPanelAdvanced} and by any package or outer class carrying those letters —
+     * so the claim "this is the solar panel" could not fail for the panel's own descendants.</p>
+     */
+    public String tileSimpleName() {
+        return reply.simpleClassName("tileClass");
     }
 
     /** How much energy the store holds. Refuses a tile with no store. */

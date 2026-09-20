@@ -375,7 +375,7 @@ public class VSPreAssemblyBoardingPilotControlE2ETest extends AbstractSharedVsCl
         scenario().requireArranged("the bot is riding SOMETHING, but not "
                         + "the pilot seat's mount, so it is not piloting anything. boarding=" + how
                         + " riding=" + riding,
-                entityClassOf(riding).contains("EntityDummy"));
+                "EntityDummy".equals(simpleNameOf(entityClassOf(riding))));
         double mountDistSq = distanceSqFromMountToSeatCentre(riding);
         scenario().requireArranged("the mount the bot is riding is not "
                         + "at the seat it was supposed to board, at (" + seatX + "," + seatY + ","
@@ -477,7 +477,7 @@ public class VSPreAssemblyBoardingPilotControlE2ETest extends AbstractSharedVsCl
                 isRiding(ridingAfter));
         assertTrue("the mount a player is left riding after assembly must still be the pilot seat's, "
                         + "not some leftover entity. boarding=" + how + " riding=" + ridingAfter,
-                entityClassOf(ridingAfter).contains("EntityDummy"));
+                "EntityDummy".equals(simpleNameOf(entityClassOf(ridingAfter))));
 
         // ARRANGEMENT window, load-aware: the boarding is re-expressed onto the relocated seat by
         // an asynchronous rebind that can only run once the physics mod has finished relocating the
@@ -1016,6 +1016,16 @@ public class VSPreAssemblyBoardingPilotControlE2ETest extends AbstractSharedVsCl
     private static String entityClassOf(JsonObject riding) {
         return riding != null && riding.has("entityClass")
                 ? riding.get("entityClass").getAsString() : "";
+    }
+
+    /**
+     * The SIMPLE name of a qualified class, so "he is riding the dummy" is a comparison and not a
+     * search. `contains("EntityDummy")` was satisfied by any class merely ENDING in it and by any
+     * package component carrying those letters.
+     */
+    private static String simpleNameOf(String qualified) {
+        int lastDot = qualified.lastIndexOf('.');
+        return lastDot < 0 ? qualified : qualified.substring(lastDot + 1);
     }
 
     private static boolean isWorldReady(JsonObject report) {

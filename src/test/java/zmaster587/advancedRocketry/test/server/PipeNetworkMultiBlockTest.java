@@ -120,7 +120,7 @@ public class PipeNetworkMultiBlockTest extends AbstractHeadlessServerTest {
         for (int[] p : positions) {
             String info = String.join("\n", client().execute(
                     "artest machine info " + dim + " " + p[0] + " " + p[1] + " " + p[2]));
-            if (info.contains("\"tileClass\"")) count++;
+            if (Reply.of(info).has("tileClass")) count++;
         }
         return count;
     }

@@ -1,8 +1,6 @@
 package zmaster587.advancedRocketry.test.client;
 
 import java.util.Locale;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 import com.google.gson.JsonObject;
 

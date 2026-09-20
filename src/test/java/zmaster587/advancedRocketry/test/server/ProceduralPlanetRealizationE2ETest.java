@@ -8,8 +8,6 @@ import com.github.stannismod.forge.testing.junit.AbstractHeadlessServerTest;
 import org.junit.After;
 import org.junit.Test;
 
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 import zmaster587.advancedRocketry.dimension.DimensionProperties;
 

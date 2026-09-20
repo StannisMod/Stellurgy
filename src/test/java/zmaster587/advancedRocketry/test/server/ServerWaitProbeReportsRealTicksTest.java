@@ -4,8 +4,6 @@ import org.junit.Test;
 import zmaster587.advancedRocketry.test.Reply;
 import zmaster587.advancedRocketry.test.GameTicks;
 
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
@@ -47,7 +45,7 @@ public class ServerWaitProbeReportsRealTicksTest extends AbstractSharedServerTes
     @Test
     public void theWaitProbeNeverClaimsTicksItDidNotObserve() throws Exception {
         String reply = exec("artest server wait 0 " + TICKS);
-        assertTrue("the wait probe failed on the overworld: " + reply, reply.contains("\"requested\""));
+        assertTrue("the wait probe failed on the overworld: " + reply, Reply.of(reply).has("requested"));
 
         int elapsed = extractInt(reply, "elapsedTicks");
         boolean claimsAdvanced = Reply.of(reply).bool("advanced");
@@ -59,7 +57,7 @@ public class ServerWaitProbeReportsRealTicksTest extends AbstractSharedServerTes
         assertTrue("the probe returned fewer ticks than asked and must not report that as a wait: "
                 + reply, (!Reply.of(reply).bool("advanced")));
         assertTrue("and it must name what to do instead, or the next caller repeats the mistake: "
-                + reply, reply.contains("\"hint\""));
+                + reply, Reply.of(reply).has("hint"));
     }
 
     /**

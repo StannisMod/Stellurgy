@@ -9,8 +9,6 @@ import zmaster587.advancedRocketry.test.ShipReadiness;
 
 import org.junit.Test;
 
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 import static zmaster587.advancedRocketry.test.AdvancedRocketryTestConstants.HYPERSPACE_JUMP_SPEED;
 import static org.junit.Assert.assertTrue;
@@ -100,9 +98,17 @@ public class VSUnmannedTransitSettlesOnItsPoseE2ETest extends AbstractSharedServ
         // would quietly accept the paste band on some future cell whose pose happens to be low.
         TransitStatus settled = TransitStatus.of(lastTick);
         String expected = settled.poseX + "," + settled.poseY + "," + settled.poseZ;
+        // MEMBERSHIP of the list, compared per entry. The field is `x,y,z;x,y,z;…`, so a
+        // substring over the whole string is satisfied by a NEIGHBOURING ship's coordinate that
+        // merely contains these digits — `1100,64,1000` contains `100,64,100` — which is exactly
+        // the "a bit off" reading the comment above says must not pass.
+        boolean settledOnThePose = false;
+        for (String one : positions.split(";")) {
+            settledOnThePose |= expected.equals(one);
+        }
         assertTrue("an unmanned arrival must settle ON the pose realizing its target coordinate; expected "
                 + "a ship at " + expected + " but the world holds " + positions + ": " + lastTick,
-                positions.contains(expected));
+                settledOnThePose);
     }
 
     /**

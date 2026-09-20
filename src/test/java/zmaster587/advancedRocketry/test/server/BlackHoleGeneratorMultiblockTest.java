@@ -1,5 +1,6 @@
 package zmaster587.advancedRocketry.test.server;
 
+import zmaster587.advancedRocketry.test.MachineInfo;
 import zmaster587.advancedRocketry.test.Reply;
 import org.junit.Test;
 
@@ -44,8 +45,8 @@ public class BlackHoleGeneratorMultiblockTest extends AbstractSharedServerTest {
         // Sanity: controller is the right tile class.
         String info = join(client().execute(
                 "artest machine info 0 " + CX + " " + CY + " " + CZ));
-        assertTrue("expected TileBlackHoleGenerator tile at controller pos: " + info,
-                info.contains("TileBlackHoleGenerator"));
+        assertEquals("expected TileBlackHoleGenerator tile at controller pos: " + info,
+                "TileBlackHoleGenerator", MachineInfo.of(info).tileSimpleName());
 
         // Diagnostic: dump every fixture position so we can see exactly what's
         // there if validation fails (e.g. wrong block resolved, wrong meta).

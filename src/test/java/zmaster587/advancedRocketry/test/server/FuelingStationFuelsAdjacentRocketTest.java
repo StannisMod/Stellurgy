@@ -6,8 +6,6 @@ import com.github.stannismod.forge.testing.junit.AbstractHeadlessServerTest;
 import org.junit.Test;
 
 import java.util.List;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 import zmaster587.advancedRocketry.test.FixtureSite;
 
@@ -140,7 +138,9 @@ public class FuelingStationFuelsAdjacentRocketTest extends AbstractHeadlessServe
         // cased form before declaring the inject broken.
         String inject = join(client().execute(
                 "artest fluid inject 0 " + FX + " " + FY + " " + FZ + " rocketFuel 8000"));
-        if (inject.contains("\"fluid not registered\"")) {
+        // The refusal itself, compared. As a substring it was also satisfied by the `name` echo
+        // this verb writes beside it, and by any other reply quoting the phrase.
+        if (Reply.of("artest fluid inject", inject).refusedWith("fluid not registered")) {
             inject = join(client().execute(
                     "artest fluid inject 0 " + FX + " " + FY + " " + FZ + " rocketfuel 8000"));
         }

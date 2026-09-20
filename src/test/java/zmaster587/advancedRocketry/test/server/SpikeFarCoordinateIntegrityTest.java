@@ -43,6 +43,11 @@ public class SpikeFarCoordinateIntegrityTest extends AbstractHeadlessServerTest 
     private static final int OVERWORLD = 0;
     private static final int PLACE_Y = FixtureSite.OPEN_AIR_Y;
 
+    /** The two ids this control is about, and the field the sampler reports the column's top in. */
+    private static final String TOP_BLOCK = "topBlock";
+    private static final String AIR = "minecraft:air";
+    private static final String DIAMOND = "minecraft:diamond_block";
+
     private String exec(String cmd) throws Exception {
         return String.join("\n", client().execute(cmd));
     }
@@ -64,8 +69,15 @@ public class SpikeFarCoordinateIntegrityTest extends AbstractHeadlessServerTest 
                     + "minecraft:diamond_block");
             String readBack = exec("artest block at " + OVERWORLD + " " + x + " " + PLACE_Y + " 0");
 
-            boolean terrainOk = !Reply.of(sample).has("error") && !sample.contains("minecraft:air");
-            boolean storageOk = readBack.contains("diamond_block");
+            // The sample's own fields, not its rendering: `contains("minecraft:air")` was
+            // satisfied by the id appearing anywhere in the sample — including in a neighbouring
+            // column it also reports — so a chunk that generated as pure air could read as sound.
+            Reply sampled = Reply.of("artest worldgen sample", sample);
+            boolean terrainOk = !sampled.refused() && !AIR.equals(sampled.text(TOP_BLOCK));
+            // And the id, compared: `contains("diamond_block")` also accepts a block whose own
+            // name merely ends in it, which is the reading this control exists to make exact.
+            // the producer always writes `block` for a loaded dimension, and this is dim 0.
+            boolean storageOk = DIAMOND.equals(Reply.of("artest block at", readBack).text("block"));
             report.add("x=" + x + " terrain=" + (terrainOk ? "ok" : "FAIL") + " storage="
                     + (storageOk ? "ok" : "FAIL") + " sample=" + oneLine(sample)
                     + " placed=" + oneLine(placed) + " readBack=" + oneLine(readBack));

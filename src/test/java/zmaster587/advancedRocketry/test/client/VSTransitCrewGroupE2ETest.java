@@ -493,8 +493,17 @@ private boolean waitForRegisteredShip(int dim) throws Exception {
         return false;
     }
 
+    /**
+     * Whether the reply carries {@code key} as a field of its OWN — which is what every caller
+     * here means.
+     *
+     * <p>It used to search the rendering for {@code "key":}, which also answers true for a field
+     * belonging to a MEMBER of the reply (the reader refuses that by name, saying where it found
+     * it) and for the text appearing inside some other field's value. It also answered true for
+     * a field whose value is JSON null, which is not a reading.</p>
+     */
     private static boolean hasKey(String json, String key) {
-        return json != null && json.contains("\"" + key + "\":");
+        return json != null && Reply.of(json).has(key);
     }
 
     @Test

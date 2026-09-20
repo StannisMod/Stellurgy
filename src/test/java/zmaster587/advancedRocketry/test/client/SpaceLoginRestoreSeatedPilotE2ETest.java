@@ -109,8 +109,12 @@ public class SpaceLoginRestoreSeatedPilotE2ETest extends AbstractSpaceLoginResto
         assertTrue("standing up on his own deck must keep him aboard, as a STANDING record - a "
                 + "record dropped here is exactly what used to send him to an ordinary spawn: " + tag,
                 Reply.of(tag).bool("tagged") && "STANDING".equals(Reply.of(tag).text("posture")));
-        assertTrue("and it must still name the ship he is standing on: " + tag
-                + " (entered ship " + arrangedShipId + ")", tag.contains(arrangedShipId));
+        // The field that HOLDS the ship, not the id appearing somewhere in the rendering: the
+        // same claim elsewhere in this family reads `shipId`, and a uuid is long enough that a
+        // substring test looks exact while asking a much weaker question.
+        assertEquals("and it must still name the ship he is standing on: " + tag
+                + " (entered ship " + arrangedShipId + ")",
+                arrangedShipId, Reply.of(tag).text("shipId"));
         // He must really be resolved on the DECK, in the ship's own frame, before the restart: that
         // is what produces the record asserted above, and a hull-stand catch is not it.
         DeckCapture capBefore = DeckCapture.read(this::exec);

@@ -1,5 +1,6 @@
 package zmaster587.advancedRocketry.test.server;
 
+import zmaster587.advancedRocketry.test.MachineInfo;
 import zmaster587.advancedRocketry.test.Reply;
 import zmaster587.advancedRocketry.test.StationInfo;
 import org.junit.Test;
@@ -93,8 +94,8 @@ public class WarpControllerDepthTest extends AbstractSharedServerTest {
         // for non-spaceDim positions would silently let players warp
         // anywhere by placing a monitor in their base.
         String state = placeAndReadWarpState(0, 5000, 80, 5000);
-        assertTrue("tileClass must be TileWarpController: " + state,
-                state.contains("TileWarpController"));
+        assertEquals("tileClass must be TileWarpController: " + state,
+                "TileWarpController", MachineInfo.of(state).tileSimpleName());
         assertTrue("overworld controller must NOT see a space object: " + state,
                 (!Reply.of(state).bool("hasSpaceObject")));
     }

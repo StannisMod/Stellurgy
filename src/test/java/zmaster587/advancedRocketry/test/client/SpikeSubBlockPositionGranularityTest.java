@@ -11,8 +11,6 @@ import zmaster587.advancedRocketry.test.GameTicks;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 import zmaster587.advancedRocketry.test.FixtureSite;
 
@@ -214,12 +212,19 @@ public class SpikeSubBlockPositionGranularityTest extends AbstractClientE2ETest 
         for (int dx : new int[] {0, 1, 2}) {
             String at = exec("artest block at " + OVERWORLD + " " + (x + dx) + " " + FLOOR_Y + " "
                     + ARENA_Z);
-            if (!at.contains("stone")) {
+            // The id, compared, and the air question asked of the field that answers it.
+            // `contains("stone")` is satisfied by cobblestone, sandstone and redstone_block, so
+            // a floor the fill laid wrong read as sound — which is what this control is for.
+            // Both reads refuse, and the producer always writes `block` and `isAir` for a loaded
+            // dimension: the one shape that omits them is `world not loaded`, and this asks
+            // about the overworld.
+            if (!"minecraft:stone".equals(Reply.of(at).text("block"))) {
                 return "the floor is not stone at x+" + dx + " (" + oneLine(at) + ")";
             }
             String above = exec("artest block at " + OVERWORLD + " " + (x + dx) + " " + STAND_Y + " "
                     + ARENA_Z);
-            if (!above.contains("minecraft:air")) {
+            // the producer always writes `isAir`, as above.
+            if (!Reply.of(above).bool("isAir")) {
                 return "the standing space is not air at x+" + dx + " (" + oneLine(above) + ")";
             }
         }

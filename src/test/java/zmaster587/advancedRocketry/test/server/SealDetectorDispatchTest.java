@@ -4,12 +4,11 @@ import zmaster587.advancedRocketry.test.Reply;
 import org.junit.After;
 import org.junit.Test;
 
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 import zmaster587.advancedRocketry.test.FixtureSite;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertTrue;
 
 /**
@@ -241,8 +240,10 @@ public class SealDetectorDispatchTest extends AbstractSharedServerTest {
         place(x, y, z, "minecraft:stone");
         String resp = String.join("\n", client().execute(
                 "artest seal-detector check " + DIM + " " + x + " " + y + " " + z));
-        assertTrue("response must echo the position; got: " + resp,
-                resp.contains("\"pos\":[" + x + "," + y + "," + z + "]"));
+        // Three numbers, compared. As a needle this depended on the producer's rendering of a
+        // coordinate rather than on the coordinate.
+        assertArrayEquals("response must echo the position; got: " + resp,
+                new int[]{x, y, z}, Reply.of("artest seal-detector check", resp).blockPos("pos"));
     }
 
     @Test

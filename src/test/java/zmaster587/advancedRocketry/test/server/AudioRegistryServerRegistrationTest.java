@@ -56,10 +56,14 @@ public class AudioRegistryServerRegistrationTest extends AbstractSharedServerTes
 
         String resp = join(client().execute("artest registry sounds advancedrocketry"));
         assertTrue("registry sounds probe errored: " + resp, Reply.of(resp).ok());
+        // MEMBERSHIP of the sound list, asked of the list. As a quoted substring over the whole
+        // rendering it was also answered by the `namespace` field, and by any path that merely
+        // ENDS in the declared one.
+        Reply sounds = Reply.of("artest registry sounds", resp);
         for (String path : declaredPaths) {
             assertTrue("declared sound missing from the live Forge registry after a "
                     + "real mod boot (FML wiring broken?): " + path + " — " + resp,
-                    resp.contains("\"" + path + "\""));
+                    sounds.holdsText("sounds", path));
         }
     }
 

@@ -3,8 +3,6 @@ package zmaster587.advancedRocketry.test.server;
 import org.junit.Test;
 
 import java.util.List;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 import zmaster587.advancedRocketry.test.ShieldTile;
 import zmaster587.advancedRocketry.test.Reply;

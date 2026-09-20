@@ -7,9 +7,9 @@ import zmaster587.advancedRocketry.test.GameTicks;
 
 import org.junit.Test;
 
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertTrue;
 
 /**
@@ -82,6 +82,9 @@ public class PlayerEventHandlerWiringTest extends AbstractSharedServerTest {
         return -1;
     }
 
+    /** The class the dimension's WorldInfo actually is, as the probe reports it. */
+    private static final String WORLD_INFO_CLASS = "worldInfoClass";
+
     @Test
     public void planetEventHandlerTickCounterAdvancesUnderServerTicks() throws Exception {
         // Tick counter advance is the strongest "PlanetEventHandler is
@@ -134,8 +137,8 @@ public class PlayerEventHandlerWiringTest extends AbstractSharedServerTest {
         // a direct static reference verifies + reports its FQN.
         assertTrue("PlanetWeatherEventHandler must be class-loaded (probe "
                         + "should report its FQN): " + resp,
-                resp.contains(
-                        "zmaster587.advancedRocketry.world.weather.PlanetWeatherEventHandler"));
+                "zmaster587.advancedRocketry.world.weather.PlanetWeatherEventHandler".equals(
+                        Reply.of(resp).text("planetWeatherEventHandler")));
     }
 
     @Test
@@ -154,8 +157,11 @@ public class PlayerEventHandlerWiringTest extends AbstractSharedServerTest {
 
         assertTrue("AR dim must be loaded for side-effect probing: " + resp,
                 Reply.of(resp).bool("loaded"));
-        assertTrue("AR dim WorldInfo must be wrapped by ARDimensionWorldInfo: " + resp,
-                resp.contains("ARDimensionWorldInfo"));
+        // The CLASS the world info actually is, read off the field that names it and compared
+        // as a name. The substring was satisfied by the word appearing anywhere in the reply —
+        // including in a neighbouring field naming the wrapper it did NOT install.
+        assertEquals("AR dim WorldInfo must be wrapped by ARDimensionWorldInfo: " + resp,
+                "ARDimensionWorldInfo", Reply.of(resp).simpleClassName(WORLD_INFO_CLASS));
         assertTrue("AR dim must have an AtmosphereHandler registered: " + resp,
                 Reply.of(resp).bool("hasAtmosphereHandler"));
         assertTrue("dim must be classified as AR planet: " + resp,
@@ -197,8 +203,8 @@ public class PlayerEventHandlerWiringTest extends AbstractSharedServerTest {
                 (!Reply.of(resp).bool("isARPlanet")));
         // ARDimensionWorldInfo wrapping is the per-AR-dim B1 isolation chain;
         // a non-AR dim must stay vanilla so weather doesn't bleed in/out.
-        assertTrue("non-AR dim " + nonArDim + " WorldInfo must NOT be wrapped: " + resp,
-                !resp.contains("ARDimensionWorldInfo"));
+        assertNotEquals("non-AR dim " + nonArDim + " WorldInfo must NOT be wrapped: " + resp,
+                "ARDimensionWorldInfo", Reply.of(resp).simpleClassName(WORLD_INFO_CLASS));
     }
 
     @Test

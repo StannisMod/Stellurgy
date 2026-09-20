@@ -5,8 +5,6 @@ import org.junit.Test;
 import org.junit.runners.MethodSorters;
 import org.lwjgl.input.Keyboard;
 
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 import com.google.gson.JsonObject;
 
@@ -16,6 +14,7 @@ import zmaster587.advancedRocketry.test.Reply;
 
 import zmaster587.advancedRocketry.test.FixtureSite;
 
+import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 
 /**
@@ -189,8 +188,17 @@ public class VSUnassembledCraftTakesNoOrdersE2ETest extends AbstractSharedVsClie
                     "CONTROL: and the CLIENT must be the thing that sent it —"
                             + " this is the send seam whose silence leg 2 reads as a refusal",
                     LINK_BUDGET_TICKS);
-            assertTrue("CONTROL: the client's send must name the seat it resolved: " + sentByClient,
-                    sentByClient.contains("\"seat\":\""));
+            // Asked of the RECORD by name — and the record is TAKEN first, because `await`
+            // answers the `events since` ENVELOPE and a record-level accessor reads an
+            // envelope's top level, where a record's fields are not. (The reader says exactly
+            // that and refuses; the first version of this line learned it from a red.)
+            //
+            // The needle it replaces was `"seat":"` — a rendering of the first character of a
+            // non-empty string value — so it failed for a seat written with a space after the
+            // colon and passed for the text appearing in any other field of the envelope,
+            // `instruments` included.
+            assertNotNull("CONTROL: the client's send must name the seat it resolved: "
+                    + sentByClient, Events.text(Events.lastRecord(sentByClient), "seat"));
         } finally {
             bot().releaseKey(Keyboard.KEY_R);
         }

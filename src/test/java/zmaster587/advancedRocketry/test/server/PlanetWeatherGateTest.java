@@ -5,6 +5,7 @@ import com.github.stannismod.forge.testing.server.RealDedicatedServerHarness;
 import org.junit.After;
 import org.junit.Assume;
 import org.junit.Before;
+import zmaster587.advancedRocketry.test.DimList;
 import zmaster587.advancedRocketry.test.DimWeather;
 import zmaster587.advancedRocketry.test.GameTicks;
 
@@ -109,10 +110,10 @@ public class PlanetWeatherGateTest {
     public void atmosphereGatesRainAndThunderRequiresRain() throws Exception {
         harness = RealDedicatedServerHarness.startWith(workDir, /*cleanupOnClose=*/true);
 
-        String dimList = String.join("\n", harness.client().execute("artest dim list"));
+        DimList dimList = DimList.of(String.join("\n", harness.client().execute("artest dim list")));
         for (int dim : new int[]{DIM_THIN_RAIN, DIM_THICK_RAIN, DIM_DRY_THUNDER}) {
             assertTrue("fixture dim " + dim + " not registered: " + dimList,
-                    dimList.contains(String.valueOf(dim)));
+                    dimList.holds(dim));
         }
 
         // Read the live state of each planet. The three claims are not the same SHAPE, so they are

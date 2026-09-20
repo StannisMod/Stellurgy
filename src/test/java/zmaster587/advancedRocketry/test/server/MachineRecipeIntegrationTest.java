@@ -3,8 +3,6 @@ package zmaster587.advancedRocketry.test.server;
 import com.github.stannismod.forge.testing.junit.AbstractHeadlessServerTest;
 import org.junit.Test;
 
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 import zmaster587.advancedRocketry.test.Reply;
 import zmaster587.advancedRocketry.test.FixtureSite;
@@ -49,8 +47,15 @@ public class MachineRecipeIntegrationTest extends AbstractHeadlessServerTest {
         client().execute("artest place 0 100 64 100 minecraft:chest");
         String chest = String.join("\n",
                 client().execute("artest machine tick-until 0 100 64 100 complete 5"));
+        // Read OF THE FIELD, both halves. This verb builds its message out of the reflection
+        // failure's own text — `"tile lacks " + e.getMessage()` — so the method name is inside
+        // the error and a substring of THAT is the reading. What it replaces was a pair of
+        // needles over the whole rendering, which two DIFFERENT parts of the reply could satisfy
+        // between them: the phrase in `error` and `isComplete` in some other field entirely.
+        Reply rejection = Reply.of("artest machine tick-until", chest);
         assertTrue("tick-until didn't gracefully reject TileEntityChest: " + chest,
-                chest.contains("\"error\":\"tile lacks ") && chest.contains("isComplete"));
+                rejection.refused() && rejection.error().startsWith("tile lacks ")
+                        && rejection.error().contains("isComplete"));
     }
 
     @Test

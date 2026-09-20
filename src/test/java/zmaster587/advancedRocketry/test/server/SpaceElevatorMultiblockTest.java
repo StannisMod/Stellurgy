@@ -1,10 +1,12 @@
 package zmaster587.advancedRocketry.test.server;
 
+import zmaster587.advancedRocketry.test.MachineInfo;
 import zmaster587.advancedRocketry.test.Reply;
 import org.junit.Test;
 
 import zmaster587.advancedRocketry.test.FixtureSite;
 
+import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
 /**
@@ -41,8 +43,8 @@ public class SpaceElevatorMultiblockTest extends AbstractSharedServerTest {
 
         String info = join(client().execute(
                 "artest machine info 0 " + CX + " " + CY + " " + CZ));
-        assertTrue("expected TileSpaceElevator tile at controller pos: " + info,
-                info.contains("TileSpaceElevator"));
+        assertEquals("expected TileSpaceElevator tile at controller pos: " + info,
+                "TileSpaceElevator", MachineInfo.of(info).tileSimpleName());
 
         String tryComplete = join(client().execute(
                 "artest machine try-complete 0 " + CX + " " + CY + " " + CZ));

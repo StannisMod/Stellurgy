@@ -6,8 +6,6 @@ import org.junit.Test;
 import org.junit.runners.MethodSorters;
 import org.lwjgl.input.Keyboard;
 
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 import zmaster587.advancedRocketry.api.FreeFlightPhysics;
 import zmaster587.advancedRocketry.test.Events;

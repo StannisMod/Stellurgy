@@ -1,5 +1,6 @@
 package zmaster587.advancedRocketry.test.server;
 
+import zmaster587.advancedRocketry.test.DimList;
 import zmaster587.advancedRocketry.test.Reply;
 import zmaster587.advancedRocketry.test.DimWeather;
 import com.github.stannismod.forge.testing.junit.AbstractHeadlessServerTest;
@@ -93,9 +94,8 @@ public class WeatherCycleDisableTest {
     public void customWeatherCycleRunsOnlyWhenConfigEnabled() throws Exception {
         harness = RealDedicatedServerHarness.startWith(workDir, /*cleanupOnClose=*/true);
 
-        String dimList = cmd("artest dim list");
-        assertTrue("fixture dim not registered: " + dimList,
-                dimList.contains(String.valueOf(FIXTURE_DIM)));
+        DimList dimList = DimList.of(cmd("artest dim list"));
+        assertTrue("fixture dim not registered: " + dimList, dimList.holds(FIXTURE_DIM));
 
         // Load the planet while custom weather is still ENABLED (boot default) so it
         // wraps with its own ARDimensionWorldInfo. Wrapping is sticky for the dim's

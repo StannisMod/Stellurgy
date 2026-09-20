@@ -13,6 +13,7 @@ import zmaster587.advancedRocketry.test.ShipInfo;
 import zmaster587.advancedRocketry.test.Events;
 import zmaster587.advancedRocketry.test.FixtureSite;
 
+import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
 /**
@@ -326,9 +327,15 @@ public class VSAssembledShipRealRightClickBoardingE2ETest extends AbstractShared
                         && riding.get("entityClass").getAsString().endsWith("EntityDummy"));
 
         // The server's own view, so a client-only ghost mount cannot pass for a boarding.
-        assertTrue("the SERVER must agree the player is riding the seat's mount - a client-side-only "
+        // The class, read off the field that carries it and compared as a name — the same shape
+        // the client's own reading uses two lines above. As a substring it was satisfied by the
+        // name appearing anywhere in the reply, and by a class merely ENDING in it.
+        // the producer always writes `ridingEntityClass`; it is empty for a player riding
+        // nothing, which is a reading and not an absence.
+        assertEquals("the SERVER must agree the player is riding the seat's mount - a client-side-only "
                 + "mount would render a pilot who is not aboard anything." + boardDiag,
-                serverRiding.contains("EntityDummy"));
+                "EntityDummy", Reply.of("artest player riding-entity", serverRiding)
+                        .simpleClassName("ridingEntityClass"));
     }
 
     // ---- helpers -------------------------------------------------------------------------------

@@ -1,10 +1,12 @@
 package zmaster587.advancedRocketry.test.server;
 
+import zmaster587.advancedRocketry.test.MachineInfo;
 import zmaster587.advancedRocketry.test.Reply;
 import org.junit.Test;
 
 import zmaster587.advancedRocketry.test.FixtureSite;
 
+import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 import static zmaster587.advancedRocketry.test.server.WorldCommandFixtures.exec;
 
@@ -60,8 +62,8 @@ public class TerraformingTerminalSmokeTest extends AbstractSharedServerTest {
                 Reply.of(place).bool("placed"));
 
         String info = exec("artest machine info 0 " + CX_BASIC + " " + CY + " " + CZ);
-        assertTrue("block must produce TileTerraformingTerminal: " + info,
-                info.contains("TileTerraformingTerminal"));
+        assertEquals("block must produce TileTerraformingTerminal: " + info,
+                "TileTerraformingTerminal", MachineInfo.of(info).tileSimpleName());
 
         // 40 force-ticks — drives the natural update() loop through
         // hasValidBiomeChanger=false branch repeatedly. No NPE if the
@@ -73,9 +75,9 @@ public class TerraformingTerminalSmokeTest extends AbstractSharedServerTest {
 
         String postInfo = exec("artest machine info 0 " + CX_BASIC + " " + CY + " "
                 + CZ);
-        assertTrue("tile must remain TileTerraformingTerminal after ticking: "
+        assertEquals("tile must remain TileTerraformingTerminal after ticking: "
                         + postInfo,
-                postInfo.contains("TileTerraformingTerminal"));
+                "TileTerraformingTerminal", MachineInfo.of(postInfo).tileSimpleName());
     }
 
     @Test
@@ -100,7 +102,7 @@ public class TerraformingTerminalSmokeTest extends AbstractSharedServerTest {
 
         String postInfo = exec("artest machine info 0 " + CX_REDSTONE + " " + CY + " "
                 + CZ);
-        assertTrue("tile must survive redstone-powered tick burst: " + postInfo,
-                postInfo.contains("TileTerraformingTerminal"));
+        assertEquals("tile must survive redstone-powered tick burst: " + postInfo,
+                "TileTerraformingTerminal", MachineInfo.of(postInfo).tileSimpleName());
     }
 }

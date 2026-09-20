@@ -6,8 +6,6 @@ import org.junit.Test;
 import org.junit.runners.MethodSorters;
 
 import java.util.Locale;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 import zmaster587.advancedRocketry.test.Reply;
 import zmaster587.advancedRocketry.test.Events;

@@ -13,8 +13,6 @@ import zmaster587.advancedRocketry.test.Events;
 import zmaster587.advancedRocketry.test.PlayerPosition;
 import zmaster587.advancedRocketry.test.Reply;
 
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 import zmaster587.advancedRocketry.test.FixtureSite;
 

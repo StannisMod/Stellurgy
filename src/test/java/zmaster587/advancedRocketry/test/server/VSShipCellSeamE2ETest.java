@@ -893,7 +893,15 @@ public class VSShipCellSeamE2ETest extends AbstractSharedServerTest {
         // contained "cell_claim_" — which it always does, because the INSTRUMENTS array lists
         // "cell_claim_events" whether anything was recorded or not. The guard written to stop an
         // empty answer reading as a finding was itself answering from the wrong field.
-        boolean any = records.contains("\"type\":\"cell_claim_");
+        // And now asked OF the record's own `type`, rather than of a rendering of it. The needle
+        // above was already the SECOND attempt at this line, and it was still a prefix over the
+        // whole envelope: a record of any other type carrying that text in a field of its own
+        // answered it just as well.
+        boolean any = false;
+        for (String record : Events.records(records)) {
+            String type = Events.text(record, "type");
+            any |= type != null && type.startsWith("cell_claim_");
+        }
         return any ? records
                 : "(NO cell-claim record — this scenario never bound a cell at all, so the pool was "
                         + "never asked; note the reply's own dropped/droppedByType, which say whether "

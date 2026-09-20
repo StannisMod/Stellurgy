@@ -5,9 +5,8 @@ import com.github.stannismod.forge.testing.junit.AbstractHeadlessServerTest;
 import org.junit.Assume;
 import org.junit.Test;
 
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
 /**
@@ -68,8 +67,10 @@ public class TileGuidanceComputerOffSlotBurnNpeTest extends AbstractHeadlessServ
 
         String r = exec("artest guidance launch-seq " + SPACE_DIM + " " + x + " " + y + " " + z + " " + destDim);
         assertTrue("probe must run: " + r, Reply.of(r).ok());
-        assertTrue("launch position must be off any station (proves the null path): " + r,
-                r.contains("\"stationAtPos\":null"));
+        // `has` is false for an absent field AND for a JSON null, which is the claim; the needle
+        // was one rendering of it and also matched the string inside any other field.
+        assertFalse("launch position must be off any station (proves the null path): " + r,
+                Reply.of("artest guidance launch-seq", r).has("stationAtPos"));
         assertTrue("chip must be programmed to the real planet dim so the INVALID_PLANET short-circuit "
                         + "is bypassed and the guarded null-station path is reached: " + r,
                 String.valueOf(destDim).equals(Reply.of(r).text("chipDim")));

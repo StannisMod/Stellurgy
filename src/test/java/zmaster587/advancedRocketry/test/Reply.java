@@ -40,6 +40,10 @@ import com.google.gson.JsonParser;
  */
 public final class Reply {
 
+    /** The field every probe verb writes when it refuses. Named here so `error()` and
+     *  `refused()` cannot drift apart, and so the spelling is stated once. */
+    private static final String ERROR = "error";
+
     private final String command;
     private final String raw;
     private final JsonObject json;
@@ -259,6 +263,57 @@ public final class Reply {
     }
 
     /**
+     * Whether the verb REFUSED — the {@code error} FIELD, read by name.
+     *
+     * <p>The twin of {@link #ok()}, and the field this class had no reader for until 2026-09-20.
+     * Its absence is why {@code contains("\"error\":\"no tile entity\"")} was the idiom: a refusal
+     * is the one thing a probe verb says most often and the only shape a caller could not ask
+     * for. {@code ok()} is not its negation — a reply can carry neither, and a verb that answers
+     * a reading rather than a status carries no {@code ok} at all.</p>
+     */
+    public boolean refused() {
+        return has(ERROR);
+    }
+
+    /**
+     * The refusal in the producer's OWN WORDS, refusing when the verb did not refuse.
+     *
+     * <p>It refuses rather than answering {@code null} for the reason {@link #text} does: a
+     * {@code null} is compared, and {@code "no tile entity".equals(reply.error())} would then be
+     * false both for a different refusal and for a reply that succeeded — only the first is a
+     * reading. Ask {@link #refused()} first where the question is whether it refused at all.</p>
+     *
+     * <p><b>Compare it, do not search it.</b> These strings are short and exact —
+     * {@code "no tile entity"}, {@code "not an emitter"}, {@code "world not loaded"} — so
+     * {@code assertEquals} says which refusal was expected and prints the one that came. A
+     * {@code startsWith} is right only where the producer builds the message around a number, as
+     * {@code "tile.update() threw after N ticks: …"} does, and then it is a reading OF THE FIELD
+     * rather than of the rendering around it.</p>
+     */
+    public String error() {
+        String value = primitiveOf(ERROR);
+        if (value == null) {
+            throw new AssertionError(command + " did not refuse — it carries no `" + ERROR
+                    + "`: " + raw);
+        }
+        return value;
+    }
+
+    /**
+     * Whether the verb refused with EXACTLY this message — a branch, where {@link #error()} is
+     * the reading.
+     *
+     * <p>For the caller that asks "did it say THIS" and must act on the answer rather than fail
+     * on it: a retry under a different spelling, a smoke test recording a verdict per block.
+     * Answers false for a reply that succeeded and for one that refused differently, and those
+     * are the two things the substring it replaces could not tell apart from each other.</p>
+     */
+    public boolean refusedWith(String message) {
+        String value = primitiveOf(ERROR);
+        return value != null && value.equals(message);
+    }
+
+    /**
      * The ONE element of the ARRAY {@code field} whose {@code member} is {@code value} — the object
      * the caller NAMED — refusing when the list holds no such element, or more than one.
      *
@@ -369,6 +424,84 @@ public final class Reply {
         for (String element : objectArray(field)) {
             if (String.valueOf(value).equals(
                     Reply.of(command + " [" + field + "]", element).textOr(member, null))) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * A fully-qualified class name this reply carries, as its SIMPLE name — refusing when the
+     * reply does not carry the field.
+     *
+     * <p><b>What a test means when it names a tile or an entity is the simple name</b>, and the
+     * probes report the qualified one. Every caller that bridged that gap did it with
+     * {@code contains("TileBeacon")}, which is satisfied by {@code TileBeaconAdvanced}, by a
+     * package component carrying those letters, and by the name appearing in a refusal about a
+     * different block entirely. Taking the name apart and comparing it makes those different
+     * answers.</p>
+     *
+     * <p>It lives here rather than in each reply's own reader because three of them needed it
+     * within one sweep, and the fourth copy is the one that would have differed.</p>
+     */
+    public String simpleClassName(String field) {
+        String qualified = text(field);
+        int lastDot = qualified.lastIndexOf('.');
+        return lastDot < 0 ? qualified : qualified.substring(lastDot + 1);
+    }
+
+    /**
+     * Whether the TEXT array {@code field} holds exactly this value.
+     *
+     * <p>The twin of {@link #holdsElement} for an array of plain strings —
+     * {@code "bound":["aboard record","rocket transfer grace"]} — and the data form of the idiom
+     * it replaces. Callers asked {@code reply.contains("\"aboard record\"")}, which searches the
+     * WHOLE rendering: it is satisfied by the value appearing in a different array, in a field
+     * name, or inside a longer member ({@code "aboard record incomplete"} contains
+     * {@code "aboard record"}), and it cannot tell an empty list from a missing one.</p>
+     *
+     * <p>Element equality is exact. Where the caller means "one of these", it says so with two
+     * calls, because that is a different claim and deserves to read like one.</p>
+     */
+    public boolean holdsText(String field, String value) {
+        for (String element : textArray(field)) {
+            if (String.valueOf(value).equals(element)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Whether the ARRAY {@code field} holds an element carrying EVERY one of
+     * {@code memberValues}, given as {@code member, value, member, value, …}.
+     *
+     * <p>The fourth cell of a two-by-two this class carried three of: {@link #element} addresses
+     * by one member and refuses, {@link #elementWhereAll} addresses by several and refuses,
+     * {@link #holdsElement} asks by one and answers {@code false}. This asks by several.</p>
+     *
+     * <p><b>It exists because its absence turned a reading into a refusal.</b> A recipe test asks
+     * "is this input slot still holding its initial stack" — and a slot the recipe CONSUMED is
+     * absent from the list entirely, which is the answer. Written with {@code elementWhereAll}
+     * the drained case threw instead of answering, so the one state the check exists to detect
+     * was the one it could not report. Measured 2026-09-20: six recipe e2es, red on the first
+     * run of the conversion that introduced it.</p>
+     */
+    public boolean holdsElementWithAll(String field, String... memberValues) {
+        if (memberValues.length == 0 || memberValues.length % 2 != 0) {
+            throw new AssertionError("holdsElementWithAll takes member, value pairs and was given "
+                    + memberValues.length + " argument(s): "
+                    + java.util.Arrays.toString(memberValues));
+        }
+        for (String element : objectArray(field)) {
+            Reply one = Reply.of(command + " [" + field + "]", element);
+            boolean all = true;
+            for (int i = 0; i < memberValues.length && all; i += 2) {
+                // absence is the answer inside the scan, as in `element` above: an element that
+                // does not carry the member is not the one being addressed.
+                all = String.valueOf(memberValues[i + 1]).equals(one.textOr(memberValues[i], null));
+            }
+            if (all) {
                 return true;
             }
         }

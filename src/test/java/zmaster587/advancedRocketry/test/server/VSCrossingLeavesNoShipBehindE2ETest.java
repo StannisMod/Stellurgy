@@ -6,8 +6,6 @@ import zmaster587.advancedRocketry.test.ShipIdentity;
 
 import org.junit.Test;
 
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 import zmaster587.advancedRocketry.test.FixtureSite;
 

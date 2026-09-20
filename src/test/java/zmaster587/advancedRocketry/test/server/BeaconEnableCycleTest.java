@@ -1,5 +1,6 @@
 package zmaster587.advancedRocketry.test.server;
 
+import zmaster587.advancedRocketry.test.Events;
 import zmaster587.advancedRocketry.test.Reply;
 import org.junit.AfterClass;
 import org.junit.BeforeClass;
@@ -199,7 +200,16 @@ public class BeaconEnableCycleTest extends AbstractSharedServerTest {
             return "(no mark was taken, so nothing can be said about the sequence: " + markReply + ")";
         }
         String records = exec("artest events since " + mark.integer("seq"));
-        return records.contains("beacon_") ? records
+        // Asked of each record's own `type`. `contains("beacon_")` over the envelope is answered
+        // by the INSTRUMENTS list, which names every registered recorder whether or not it wrote
+        // anything — so the "no beacon record at all" branch below could never be reached, and
+        // the three answers this method exists to tell apart collapsed into one.
+        boolean anyBeacon = false;
+        for (String record : Events.records(records)) {
+            String type = Events.text(record, "type");
+            anyBeacon |= type != null && type.startsWith("beacon_");
+        }
+        return anyBeacon ? records
                 : "(no beacon record at all in " + records.length() + " bytes of events — either the "
                         + "break never reached production, or the recording mixins are not applied)";
     }

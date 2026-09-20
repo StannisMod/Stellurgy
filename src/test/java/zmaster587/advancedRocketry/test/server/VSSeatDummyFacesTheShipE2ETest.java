@@ -11,8 +11,6 @@ import zmaster587.advancedRocketry.test.ShipInfo;
 import org.junit.After;
 import org.junit.Test;
 
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 import zmaster587.advancedRocketry.api.FreeFlightPhysics;
 

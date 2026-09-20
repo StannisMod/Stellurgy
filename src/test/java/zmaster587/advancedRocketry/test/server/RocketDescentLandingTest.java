@@ -7,8 +7,6 @@ import zmaster587.advancedRocketry.test.RocketList;
 import zmaster587.advancedRocketry.test.FixtureSite;
 import zmaster587.advancedRocketry.test.GameTicks;
 
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
@@ -48,6 +46,9 @@ public class RocketDescentLandingTest extends AbstractSharedServerTest {
     /** The field the TICK reply answers with — that verb's own, not {@code rocket info}'s. */
     private static final String TICKS_EXISTED = "ticksExisted";
     private static final String LANDED_COUNT = "landed";
+    /** The forceload ticket the chunk-ticket claims are about, and the array it lives in. */
+    private static final String TICKETS = "tickets";
+    private static final String TICKET_KEY = "0:100:100";
 
     private static String ok(java.util.List<String> resp) {
         return String.join("\n", resp);
@@ -270,6 +271,11 @@ public class RocketDescentLandingTest extends AbstractSharedServerTest {
                     String blockResp = ok(client().execute(
                             "artest block at 0 " + (site.x + dx) + " " + (posY + dy)
                                     + " " + (site.z + dz)));
+                    // the producer always writes `isAir` for a loaded dimension, and this asks
+                    // about dim 0 — so the one shape that omits it (`world not loaded`) is not
+                    // reachable from here. A default would let a probe that stopped answering
+                    // read as five cubic metres of air and fail the claim below for the wrong
+                    // reason.
                     if (!Reply.of(blockResp).bool("isAir")) {
                         foundNonAir = true;
                         break outer;
@@ -290,14 +296,17 @@ public class RocketDescentLandingTest extends AbstractSharedServerTest {
         assertTrue("forceload must succeed: " + fl, Reply.of(fl).ok());
 
         String list = ok(client().execute("artest chunk list"));
+        // MEMBERSHIP of the ticket array, asked of the array. As a substring the key was also
+        // matched inside a LONGER key — `0:100:1000` contains `0:100:100` — so the negative
+        // claim below could fail for a neighbour's ticket and the positive one pass on it.
         assertTrue("list must include the ticket key: " + list,
-                list.contains("0:100:100"));
+                Reply.of("artest chunk list", list).holdsText(TICKETS, TICKET_KEY));
 
         String rel = ok(client().execute("artest chunk release 0 100 100"));
         assertTrue("release must succeed: " + rel, Reply.of(rel).ok());
 
         String listAfter = ok(client().execute("artest chunk list"));
         assertFalse("list must not include released ticket: " + listAfter,
-                listAfter.contains("0:100:100"));
+                Reply.of("artest chunk list", listAfter).holdsText(TICKETS, TICKET_KEY));
     }
 }

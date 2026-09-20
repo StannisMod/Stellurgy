@@ -299,10 +299,21 @@ final class MachineRecipeEndToEndKit {
         if (!r.itemIngredients.isEmpty()) {
             String inputRead = String.join("\n", c.execute("artest hatch read 0 " + p.firstInput()));
             boolean anyDrained = false;
+            // ASKED of the list, not addressed in it: an element carrying all three of slot,
+            // item and count is the slot still holding its initial stack, and NO such element is
+            // exactly what "it drained" looks like — a consumed slot leaves the array entirely
+            // (`{"size":4,"slots":[]}`). Addressing it would refuse on the one state this check
+            // exists to detect.
+            //
+            // As one needle the three fields had to be adjacent and in the producer's order — a
+            // field inserted between them makes every slot look drained and the whole claim
+            // vacuous — and the count was matched as a PREFIX, so a slot still holding 16
+            // answered for one holding 1 whenever the expected count was 1.
+            Reply slots = Reply.of("artest hatch read", inputRead);
             for (String[] ing : r.itemIngredients) {
-                String stillUntouched = "\"slot\":" + ing[0] + ",\"item\":\""
-                        + ing[1] + "\",\"count\":" + ing[2];
-                if (!inputRead.contains(stillUntouched)) { anyDrained = true; break; }
+                boolean untouched = slots.holdsElementWithAll("slots",
+                        "slot", ing[0], "item", ing[1], "count", ing[2]);
+                if (!untouched) { anyDrained = true; break; }
             }
             assertTrue("no input items consumed for " + fixtureKey
                             + " — recipe appears to run but every ingredient slot still "

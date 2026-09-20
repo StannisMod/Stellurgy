@@ -264,6 +264,11 @@ public final class ShipIdentity {
             }
         }
         for (String entered : Events.records(log.since(mark, "deck_entered"))) {
+            // the producer always writes `ship` on this record — it is the argument the capture
+            // was installed with, rendered unconditionally — so absence here is a broken
+            // instrument and not an entry onto nothing. Which matters because this read runs
+            // inside a wait predicate: a defaulting read would silently call every record an
+            // entry onto another hull and end the episode that is still open.
             if (!String.valueOf(shipId).equals(Reply.of(entered).text("ship")) && endsIt(entered, held)) {
                 return false;
             }

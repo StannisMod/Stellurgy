@@ -1409,6 +1409,10 @@ public class M1PlanetToPlanetMilestoneE2ETest {
         java.util.List<String> out = new java.util.ArrayList<>();
         for (String ship : Reply.of("artest space bodies", bodies).objectArray(SHIPS)) {
             for (String body : Reply.of("one ship's cell", ship).objectArray(CELL_BODIES)) {
+                // the producer always writes this flag on every body element — it is appended
+                // beside the name in the same builder — so an element without it is a broken
+                // probe, not a body that is no descend target. A default here would answer "this
+                // cell offers nothing to descend to" for a reply that never said so.
                 if (Reply.of("one cell body", body).bool(BODY_DESCEND_TARGET)) {
                     out.add(body);
                 }
@@ -2104,7 +2108,12 @@ public class M1PlanetToPlanetMilestoneE2ETest {
         // absence is the answer, as in the seat probe above: the loop waits for a hull to
         // carry the name.
         String namedHull = Reply.of("artest vs ship-uuid", hull).textOr("id", null);
-        if (!Reply.of(hull).bool("found") || namedHull == null) {
+        // absence is the answer for `found` too, and for a shape the line above does not reach:
+        // the verb answers `{"error":"world not loaded"}` — with no `found` at all — for a cell
+        // whose world is not up, which is one of the states this mapping is asked in. Both arms
+        // here are non-failing (the caller reads a null as "could not map"), so a refusal would
+        // be the only thing able to end the run, and it would end it about the instrument.
+        if (!Reply.of(hull).boolOr("found", false) || namedHull == null) {
             lastToWorldProbe = hull;
             return null;
         }

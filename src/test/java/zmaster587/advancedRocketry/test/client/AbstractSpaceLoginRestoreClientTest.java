@@ -482,7 +482,7 @@ public abstract class AbstractSpaceLoginRestoreClientTest {
         String tag = exec("artest space aboard-tag " + BOT);
         assertTrue("being re-seated must leave him aboard again: " + tag, Reply.of(tag).bool("tagged"));
         assertTrue("he must be back aboard the SAME ship, not some other one: " + tag
-                + " (entered ship " + arrangedShipId + ")", tag.contains(arrangedShipId));
+                + " (entered ship " + arrangedShipId + ")", arrangedShipId.equals(Reply.of(tag).text("shipId")));
         assertTrue("and the slot dimension he woke up in must be the one bound to his ship's cell "
                 + arrangedCellKey + " - a different cell would mean the restore materialized the "
                 + "wrong address: " + tag, String.valueOf(arrangedCellKey).equals(Reply.of(tag).text("cell")));
@@ -1046,7 +1046,11 @@ public abstract class AbstractSpaceLoginRestoreClientTest {
                 return "<no seat to re-capture through: " + seat.raw() + ">";
             }
             String mount = exec("artest player mount-entity " + seat.requireDummyId());
-            if (!readBool(mount, "mounted")) {
+            // absence is the answer, and here it is the WHOLE point of the method: the verb writes
+            // `{"error":"entity not found"}` with no `mounted` when the seat dummy has gone, and a
+            // refusing read of it throws an AssertionError — which is an Error, so the catch below
+            // does not see it and this diagnostic becomes the reason the subject's pin goes red.
+            if (!Reply.of(mount).boolOr("mounted", false)) {
                 return "<could not re-seat: " + mount + ">";
             }
             bot().waitTicks(20);
@@ -1223,7 +1227,7 @@ public abstract class AbstractSpaceLoginRestoreClientTest {
                 + "carries the pilot's ship across the restart: " + tag + " | stamps: " + stamped,
                 Reply.of(tag).bool("tagged"));
         assertTrue("and that record must name the ship the entry minted, not some other one: " + tag
-                + " (entered ship " + arrangedShipId + ")", tag.contains(arrangedShipId));
+                + " (entered ship " + arrangedShipId + ")", arrangedShipId.equals(Reply.of(tag).text("shipId")));
         return slotDim;
     }
 
@@ -1260,7 +1264,10 @@ public abstract class AbstractSpaceLoginRestoreClientTest {
         // is a different arrangement than the one this test believes it is running.
         String launch = exec("artest space launch-cell " + LAUNCH_DIM);
         assertTrue("the launch dimension must resolve to a galactic address: " + launch,
-                Reply.of(launch).ok() && !launch.contains("\"cellKey\":null"));
+                // `has` is the whole claim: it answers false for a field that is absent
+                // AND for one whose value is JSON null, which is the shape the needle
+                // `"cellKey":null` was hunting for one rendering of.
+                Reply.of(launch).ok() && Reply.of(launch).has("cellKey"));
 
         // Build a PILOTED tier-2 ship on the ground and assemble it with the real assembler - which
         // is what mints the durable ship id the aboard record and the ledger are both keyed by.
@@ -1383,7 +1390,10 @@ public abstract class AbstractSpaceLoginRestoreClientTest {
 
         String launch = exec("artest space launch-cell " + LAUNCH_DIM);
         assertTrue("the launch dimension must resolve to a galactic address: " + launch,
-                Reply.of(launch).ok() && !launch.contains("\"cellKey\":null"));
+                // `has` is the whole claim: it answers false for a field that is absent
+                // AND for one whose value is JSON null, which is the shape the needle
+                // `"cellKey":null` was hunting for one rendering of.
+                Reply.of(launch).ok() && Reply.of(launch).has("cellKey"));
 
         Events events = events();
         clearArea(SRC_X, SRC_Z);
@@ -1573,7 +1583,7 @@ public abstract class AbstractSpaceLoginRestoreClientTest {
                         + "was ever aboard: " + tag + " | stamps: " + stamped,
                 Reply.of(tag).bool("tagged"));
         assertTrue("and that record must name the ship the entry minted: " + tag
-                + " (entered ship " + arrangedShipId + ")", tag.contains(arrangedShipId));
+                + " (entered ship " + arrangedShipId + ")", arrangedShipId.equals(Reply.of(tag).text("shipId")));
         return slotDim;
     }
 

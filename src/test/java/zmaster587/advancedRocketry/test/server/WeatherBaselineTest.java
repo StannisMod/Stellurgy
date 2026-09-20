@@ -1,5 +1,6 @@
 package zmaster587.advancedRocketry.test.server;
 
+import zmaster587.advancedRocketry.test.DimList;
 import zmaster587.advancedRocketry.test.Reply;
 import com.github.stannismod.forge.testing.junit.AbstractHeadlessServerTest;
 import com.github.stannismod.forge.testing.server.RealDedicatedServerHarness;
@@ -87,11 +88,9 @@ public class WeatherBaselineTest {
     public void weatherPropagationMatchesExpectedMode() throws Exception {
         harness = RealDedicatedServerHarness.startWith(workDir, /*cleanupOnClose=*/true);
 
-        String dimList = String.join("\n", harness.client().execute("artest dim list"));
-        assertTrue("fixture dim A not registered: " + dimList,
-                dimList.contains(String.valueOf(FIXTURE_DIM_A)));
-        assertTrue("fixture dim B not registered: " + dimList,
-                dimList.contains(String.valueOf(FIXTURE_DIM_B)));
+        DimList dimList = DimList.of(String.join("\n", harness.client().execute("artest dim list")));
+        assertTrue("fixture dim A not registered: " + dimList, dimList.holds(FIXTURE_DIM_A));
+        assertTrue("fixture dim B not registered: " + dimList, dimList.holds(FIXTURE_DIM_B));
 
         harness.client().execute("artest weather set 0 clear 12000");
         String setOver = String.join("\n", harness.client().execute("artest weather set 0 rain 12000"));

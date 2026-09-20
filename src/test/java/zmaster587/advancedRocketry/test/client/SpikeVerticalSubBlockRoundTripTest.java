@@ -11,8 +11,6 @@ import zmaster587.advancedRocketry.test.GameTicks;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 import static org.junit.Assert.assertTrue;
 

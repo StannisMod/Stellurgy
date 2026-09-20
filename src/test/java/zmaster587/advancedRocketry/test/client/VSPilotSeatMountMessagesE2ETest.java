@@ -6,8 +6,6 @@ import org.junit.Test;
 import org.junit.runners.MethodSorters;
 
 import java.util.Locale;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 import zmaster587.advancedRocketry.test.SeatMount;
 import zmaster587.advancedRocketry.test.Reply;
@@ -176,7 +174,11 @@ public class VSPilotSeatMountMessagesE2ETest extends AbstractSharedVsClientE2ETe
         String occupancy = exec("artest vs seat-status 0 " + SEAT_X + " " + SEAT_Y + " " + SEAT_Z);
         scenario().requireArranged("the NPC occupant must still be seated when the bot clicks (it was "
                         + "mounted a moment ago): " + occupancy,
-                occupancy.contains("\"passengers\":[{"));
+                // "the passenger list holds someone", asked of the list. The needle it replaces
+                // was a rendering of the first two characters of a non-empty array — it would
+                // have missed `"passengers": [{` with a space, and matched the same text inside
+                // any other field.
+                Reply.of("artest vs seat-status", occupancy).arrayLength("passengers") >= 1);
 
         long refusalMark = events.markInstrumented();
         long refusalClientMark = clientEvents().mark();

@@ -28,6 +28,9 @@ public class NavigationComputerE2ETest extends AbstractSharedServerTest {
      */
     private static final String AFC_NO_DRIVE = "2440 82 2440";
 
+    /** The gate's own refusal, as the lang key production hands the player. */
+    private static final String MESSAGE = "message";
+
     @Test
     public void copyingACrystalAddsToTheShipWithoutTakingFromTheSource() throws Exception {
         placeComputer(A);
@@ -67,7 +70,7 @@ public class NavigationComputerE2ETest extends AbstractSharedServerTest {
         assertTrue("a ship with no navigation computer cannot jump: " + verdict,
                 (!Reply.of(verdict).bool("allowed")));
         assertTrue("and must be told exactly that: " + verdict,
-                verdict.contains("msg.jumpgate.nonavcomputer"));
+                "msg.jumpgate.nonavcomputer".equals(Reply.of(verdict).text(MESSAGE)));
     }
 
     @Test
@@ -80,7 +83,7 @@ public class NavigationComputerE2ETest extends AbstractSharedServerTest {
 
         assertTrue("having a computer is not having a destination: " + verdict,
                 (!Reply.of(verdict).bool("allowed")));
-        assertTrue(verdict.contains("msg.jumpgate.notarget"));
+        assertEquals("msg.jumpgate.notarget", Reply.of(verdict).text(MESSAGE));
         assertTrue("the computer itself must have been found: " + verdict,
                 Reply.of(verdict).bool("navComputer"));
     }
@@ -97,7 +100,7 @@ public class NavigationComputerE2ETest extends AbstractSharedServerTest {
 
         assertTrue("a ship with no field generator cannot jump, however well it is aimed: " + verdict,
                 (!Reply.of(verdict).bool("allowed")));
-        assertTrue(verdict.contains("msg.jumpgate.nodrive"));
+        assertEquals("msg.jumpgate.nodrive", Reply.of(verdict).text(MESSAGE));
     }
 
     @Test
@@ -131,7 +134,7 @@ public class NavigationComputerE2ETest extends AbstractSharedServerTest {
         assertTrue("precondition: the bank really is empty: " + flat, (Reply.of(flat).integer("charge") == 0));
         assertTrue("without the burst the window does not open at all: " + refused,
                 (!Reply.of(refused).bool("allowed")));
-        assertTrue(refused.contains("msg.jumpgate.capacitorlow"));
+        assertEquals("msg.jumpgate.capacitorlow", Reply.of(refused).text(MESSAGE));
         assertTrue("and the same ship, charged, may go: " + allowed,
                 Reply.of(allowed).bool("allowed"));
     }

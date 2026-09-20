@@ -6,8 +6,6 @@ import com.github.stannismod.forge.testing.junit.AbstractClientE2ETest;
 import org.junit.Test;
 
 import java.util.Locale;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 import zmaster587.advancedRocketry.test.DeckCapture;
 import zmaster587.advancedRocketry.test.ArrangementFailure;

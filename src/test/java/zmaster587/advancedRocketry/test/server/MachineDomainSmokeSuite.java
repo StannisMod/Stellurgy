@@ -1,14 +1,13 @@
 package zmaster587.advancedRocketry.test.server;
 
 import zmaster587.advancedRocketry.test.EnergyStore;
+import zmaster587.advancedRocketry.test.MachineInfo;
 import zmaster587.advancedRocketry.test.Reply;
 import org.junit.Test;
 
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 import zmaster587.advancedRocketry.test.FixtureSite;
 
@@ -125,9 +124,12 @@ public class MachineDomainSmokeSuite extends AbstractSharedServerTest {
                 continue;
             }
 
-            String info = join(client().execute(
-                    "artest machine info 0 " + x + " " + y + " " + z));
-            if (!info.contains(tileClass)) {
+            // The table above holds SIMPLE names and the probe reports QUALIFIED ones, so this
+            // used to be a substring test — satisfied by `TileBeaconAdvanced` where `TileBeacon`
+            // was meant, and by the name appearing in an error message about something else.
+            MachineInfo info = MachineInfo.of(join(client().execute(
+                    "artest machine info 0 " + x + " " + y + " " + z)));
+            if (!info.isTile(tileClass)) {
                 failures.append(blockId).append("=WRONG_TILE_CLASS(expected ")
                         .append(tileClass).append("; got: ").append(info).append(");\n");
                 continue;
@@ -156,9 +158,9 @@ public class MachineDomainSmokeSuite extends AbstractSharedServerTest {
                 continue;
             }
 
-            String postInfo = join(client().execute(
-                    "artest machine info 0 " + x + " " + y + " " + z));
-            if (!postInfo.contains(tileClass)) {
+            MachineInfo postInfo = MachineInfo.of(join(client().execute(
+                    "artest machine info 0 " + x + " " + y + " " + z)));
+            if (!postInfo.isTile(tileClass)) {
                 failures.append(blockId).append("=POST_TICK_TILE_LOST(")
                         .append(postInfo).append(");\n");
                 continue;
@@ -254,8 +256,8 @@ public class MachineDomainSmokeSuite extends AbstractSharedServerTest {
         // `EnergyStore` refuses — and refuses precisely so the readings below cannot be satisfied
         // by a block that is not there.
         String empty = join(client().execute("artest energy stored 0 1000 " + siteY + " 1000"));
-        assertTrue("expected 'no tile entity' on empty pos: " + empty,
-                empty.contains("\"no tile entity\""));
+        assertEquals("expected 'no tile entity' on empty pos: " + empty,
+                "no tile entity", Reply.of(empty).error());
 
         // 2. libVulpes creative battery — Forge-energy capability presence (optional).
         String placeBattery = join(client().execute(
@@ -465,18 +467,23 @@ public class MachineDomainSmokeSuite extends AbstractSharedServerTest {
                 errors++;
                 continue;
             }
-            String info = join(client().execute(
-                    "artest machine info 0 " + x + " " + y + " " + baseZ));
-            if (info.contains("Exception")
-                    || (!info.contains("\"tileClass\"") && !info.contains("\"no tile entity\""))) {
+            // "the probe answered SOMETHING I understand" — either a tile stands there, or it
+            // told me none does. Any third shape is the probe failing, and that used to be
+            // detected by looking for the word "Exception" anywhere in the rendering, which is
+            // also satisfied by a tile whose own class name carries it.
+            MachineInfo info = MachineInfo.of(join(client().execute(
+                    "artest machine info 0 " + x + " " + y + " " + baseZ)));
+            if (!info.hasTile() && !info.reportsNoTile()) {
                 failures.append(blockId).append("=INFO_BAD;");
                 errors++;
                 continue;
             }
-            if (info.contains("\"tileClass\"")) {
-                String tick = join(client().execute(
-                        "artest tile force-tick 0 " + x + " " + y + " " + baseZ + " 5"));
-                if (tick.contains("Exception") || tick.contains("\"error\":\"tile.update")) {
+            if (info.hasTile()) {
+                Reply tick = Reply.of(join(client().execute(
+                        "artest tile force-tick 0 " + x + " " + y + " " + baseZ + " 5")));
+                // The producer builds this one around a count — "tile.update() threw after N
+                // ticks: …" — so a prefix is the reading, and it is a reading OF THE FIELD.
+                if (tick.refused() && tick.error().startsWith("tile.update")) {
                     failures.append(blockId).append("=TICK_THREW(").append(tick).append(");");
                     errors++;
                 }
@@ -523,10 +530,10 @@ public class MachineDomainSmokeSuite extends AbstractSharedServerTest {
         assertTrue("controller place failed: " + place,
                 Reply.of(place).bool("placed"));
 
-        String info = join(client().execute(
-                "artest machine info 0 " + xC + " " + y + " " + zC));
-        assertTrue("expected microwave-receiver tile: " + info,
-                info.contains("TileMicrowaveReciever"));
+        MachineInfo info = MachineInfo.of(join(client().execute(
+                "artest machine info 0 " + xC + " " + y + " " + zC)));
+        assertEquals("expected microwave-receiver tile: " + info,
+                "TileMicrowaveReciever", info.tileSimpleName());
 
         String tick = join(client().execute(
                 "artest tile force-tick 0 " + xC + " " + y + " " + zC + " 40"));
@@ -534,10 +541,10 @@ public class MachineDomainSmokeSuite extends AbstractSharedServerTest {
         assertEquals("must tick all 40 iterations",
                 40, extractInt(tick, "ticked"));
 
-        String postInfo = join(client().execute(
-                "artest machine info 0 " + xC + " " + y + " " + zC));
-        assertTrue("tile must survive tick burst: " + postInfo,
-                postInfo.contains("TileMicrowaveReciever"));
+        MachineInfo postInfo = MachineInfo.of(join(client().execute(
+                "artest machine info 0 " + xC + " " + y + " " + zC)));
+        assertEquals("tile must survive tick burst: " + postInfo,
+                "TileMicrowaveReciever", postInfo.tileSimpleName());
     }
 
     // ─────────────────────────────────────────────────────────────────────
@@ -557,10 +564,10 @@ public class MachineDomainSmokeSuite extends AbstractSharedServerTest {
         assertTrue("controller place failed: " + place,
                 Reply.of(place).bool("placed"));
 
-        String info = join(client().execute(
-                "artest machine info 0 " + x + " " + y + " " + z));
-        assertTrue("expected black-hole-generator tile: " + info,
-                info.contains("TileBlackHoleGenerator"));
+        MachineInfo info = MachineInfo.of(join(client().execute(
+                "artest machine info 0 " + x + " " + y + " " + z)));
+        assertEquals("expected black-hole-generator tile: " + info,
+                "TileBlackHoleGenerator", info.tileSimpleName());
 
         String tick = join(client().execute(
                 "artest tile force-tick 0 " + x + " " + y + " " + z + " 50"));
@@ -568,10 +575,10 @@ public class MachineDomainSmokeSuite extends AbstractSharedServerTest {
         assertEquals("must tick all 50 iterations",
                 50, extractInt(tick, "ticked"));
 
-        String postInfo = join(client().execute(
-                "artest machine info 0 " + x + " " + y + " " + z));
-        assertTrue("tile must survive tick burst: " + postInfo,
-                postInfo.contains("TileBlackHoleGenerator"));
+        MachineInfo postInfo = MachineInfo.of(join(client().execute(
+                "artest machine info 0 " + x + " " + y + " " + z)));
+        assertEquals("tile must survive tick burst: " + postInfo,
+                "TileBlackHoleGenerator", postInfo.tileSimpleName());
     }
 
     // ── Helpers ──────────────────────────────────────────────────────────

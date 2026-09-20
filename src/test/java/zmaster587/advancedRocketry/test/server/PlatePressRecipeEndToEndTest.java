@@ -6,6 +6,7 @@ import org.junit.Test;
 import zmaster587.advancedRocketry.test.FixtureSite;
 import zmaster587.advancedRocketry.test.Reply;
 
+import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertTrue;
 
 /**
@@ -46,8 +47,11 @@ public class PlatePressRecipeEndToEndTest extends AbstractSharedServerTest {
                 c.execute("artest fixture machine " + FIXTURE_KEY + " 0 " + x + " " + y + " " + z));
         assertTrue("fixture machine " + FIXTURE_KEY + " failed: " + resp,
                 Reply.of(resp).ok());
-        assertTrue("response missing pressPos: " + resp,
-                resp.contains("\"pressPos\":[" + x + "," + y + "," + z + "]"));
+        // The position, read as three numbers and compared. Built as a needle it depended on how
+        // the producer renders a coordinate — a space after a comma, or a double instead of an
+        // int, and the fixture reads as having reported no position at all.
+        assertArrayEquals("response missing pressPos: " + resp,
+                new int[]{x, y, z}, Reply.of("artest fixture machine", resp).blockPos("pressPos"));
 
         // Read each cell of the 3-stack and verify the correct block sits there.
         String obsRead = String.join("\n", c.execute(

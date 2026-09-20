@@ -202,8 +202,11 @@ public final class DeckCapture {
      * unambiguous, two mean it is a coin toss that reads as a clean number either way.</p>
      */
     public String[] containingShipIds() {
-        String[] ids = reply.textArray("containingShipIds");
-        return ids == null ? new String[0] : ids;
+        // `textArray` answers an EMPTY array for a field the reply does not carry and never
+        // answers null, so the null branch that used to stand here could not be reached from any
+        // caller. An absent field and "no hull contains him" are told apart by `has`, not by a
+        // second empty array manufactured one line later.
+        return reply.textArray("containingShipIds");
     }
 
     /**

@@ -1,11 +1,10 @@
 package zmaster587.advancedRocketry.test.server;
 
+import zmaster587.advancedRocketry.test.DimList;
 import zmaster587.advancedRocketry.test.Reply;
 import zmaster587.advancedRocketry.test.GameTicks;
 
 import java.util.List;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 /**
  * shared command-invocation + result-readback helpers for the
@@ -122,8 +121,13 @@ final class WorldCommandFixtures {
      *  info probe is incapable of distinguishing "registered" from
      *  "absent" by itself. */
     static boolean planetExists(int dim) throws Exception {
-        String list = exec("ar planet list");
-        return list.contains("DIM" + dim + ":");
+        // Asked of the DATA that answers the same question. The comment above rules out
+        // `planet info`, and rightly — but `artest dim list` reports
+        // `DimensionManager.getRegisteredDimensions()`, which is the very collection
+        // `/ar planet list` iterates, and it reports it as a list of integers. The chat form
+        // needed the trailing colon to stop `DIM9` matching `DIM90`, which is a bound a reader
+        // does not have to remember.
+        return DimList.from(WorldCommandFixtures::exec).holds(dim);
     }
 
     private static String planetInfo(int dim) throws Exception {

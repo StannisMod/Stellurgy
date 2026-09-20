@@ -43,6 +43,10 @@ public class VSChairMountArrivesAsItselfE2ETest extends AbstractSharedVsClientE2
         return "vs-chair-mount-identity";
     }
 
+    /** The block this scenario is about, spelled as the registry spells it: the
+     *  substring `passenger_chair` also matches any id merely ending in it. */
+    private static final String CHAIR_BLOCK = "advancedrocketry:passenger_chair";
+
     /** The server's own entity report: {@code "entities":[{"id":…,"class":…,"x":…}, …]}. */
     private static final String ENTITIES = "entities";
     private static final String ENTITY_ID = "id";
@@ -80,7 +84,8 @@ public class VSChairMountArrivesAsItselfE2ETest extends AbstractSharedVsClientE2
                 Reply.of(chair).ok());
         String rightAfter = exec("artest block at 0 " + CX + " " + CY + " " + CZ);
         scenario().requireArranged("the chair must actually be in the world once the fill reports"
-                + " success: " + rightAfter, rightAfter.contains("passenger_chair"));
+                + " success: " + rightAfter, CHAIR_BLOCK.equals(
+                        Reply.of("artest block at", rightAfter).text("block")));
         // The platform is built into a chunk the client may not hold yet, so the first teleport can
         // land the player on nothing and he falls out of reach of the chair. Re-place him until his
         // own client agrees he is standing on it.
@@ -98,7 +103,8 @@ public class VSChairMountArrivesAsItselfE2ETest extends AbstractSharedVsClientE2
                 Math.abs(standY - (FY + 1)) <= 0.6);
         String placed = exec("artest block at 0 " + CX + " " + CY + " " + CZ);
         scenario().requireArranged("the chair block must still be there when the player reaches for"
-                + " it: " + placed, placed.contains("passenger_chair"));
+                + " it: " + placed, CHAIR_BLOCK.equals(
+                        Reply.of("artest block at", placed).text("block")));
 
         // ---- ACT: the player sits down, through a real right-click on his own client. -----------
         JsonObject click = bot().interactBlock(CX, CY, CZ);
@@ -113,6 +119,9 @@ public class VSChairMountArrivesAsItselfE2ETest extends AbstractSharedVsClientE2
         String chairEntityClass = null;
         for (String near : Reply.of("artest entity near", serverSide).objectArray(ENTITIES)) {
             Reply entity = Reply.of("one nearby entity", near);
+            // the producer always writes `class` on every element of this list — id, class and
+            // the three coordinates are appended together — so an element without it is a broken
+            // probe rather than an entity that is not the chair.
             if (CHAIR_ENTITY.equals(entity.text(ENTITY_CLASS))) {
                 chairEntityId = entity.integer(ENTITY_ID);
                 chairEntityClass = entity.text(ENTITY_CLASS);
