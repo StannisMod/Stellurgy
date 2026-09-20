@@ -80,11 +80,11 @@ public class FreeFlightLaunchGateTest extends AbstractSharedServerTest {
         String resp = ok(client().execute("artest rocket ff-prepare-launch " + id));
         assertTrue("ff-prepare-launch probe failed: " + resp, Reply.of(resp).ok());
         assertTrue("rocket must be in FREE_FLIGHT mode for this pin: " + resp,
-                Reply.of(resp).bool("isFreeFlight", false));
+                Reply.of(resp).bool("isFreeFlight"));
 
         // The gate: no fuel => must NOT enter flight (no on-pad dead-state).
         assertTrue("fuel-less FF rocket must stay grounded after prepareLaunch "
                         + "(gate regression — it entered flight): " + resp,
-                (!Reply.of(resp).bool("isInFlight", true)));
+                (!Reply.of(resp).bool("isInFlight")));
     }
 }

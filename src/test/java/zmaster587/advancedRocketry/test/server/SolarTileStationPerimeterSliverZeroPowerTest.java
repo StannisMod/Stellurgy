@@ -85,7 +85,7 @@ public class SolarTileStationPerimeterSliverZeroPowerTest extends AbstractHeadle
         String place = exec("artest place " + SPACE_DIM + " " + x + " " + y + " " + z
                 + " advancedrocketry:solarGenerator");
         assertTrue("solar generator must place at " + x + "," + y + "," + z + ": " + place,
-                Reply.of(place).ok() || Reply.of(place).bool("placed", false));
+                Reply.of(place).ok() || Reply.of(place).bool("placed"));
         // Through the reader: a panel that is not there answered a well-formed absence, and a delta
         // between two absences is zero — which is exactly the claim this method's callers make.
         long before = energy(x, y, z)

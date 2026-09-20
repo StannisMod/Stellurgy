@@ -125,8 +125,8 @@ public class M1PlanetToPlanetMilestoneE2ETest {
     /** Whether {@code nav status} is aimed at a body a ship can actually put down on. */
     private static boolean isLandable(String navStatus) {
         Reply aim = Reply.of("artest nav status", navStatus);
-        return aim.bool(NAV_TARGET_DESCEND_TARGET, false)
-                && !aim.bool(NAV_TARGET_SLOT_WORLD, true);
+        return aim.bool(NAV_TARGET_DESCEND_TARGET)
+                && !aim.bool(NAV_TARGET_SLOT_WORLD);
     }
 
     /** The body the console is aimed at, from {@code nav status}. */
@@ -315,7 +315,7 @@ public class M1PlanetToPlanetMilestoneE2ETest {
                         + "field back through the same config object production uses, so a stale "
                         + "`true` here means the file was written in a syntax the config reader "
                         + "skipped and every later leg would be running against defaults: " + fuelCfg,
-                (!Reply.of(fuelCfg).bool("value", true)));
+                (!Reply.of(fuelCfg).bool("value")));
 
         SubsystemStatus status = SubsystemStatus.read(this::exec);
         requireArranged("the production space subsystem must be REGISTERED — it owns the "
@@ -374,7 +374,7 @@ public class M1PlanetToPlanetMilestoneE2ETest {
         String nameReply = exec("artest vs ship-name 0 " + describeArgs(afcSub));
         requireArranged("the built ship's flight computer must carry a durable name, or nothing"
                 + " after the first crossing can be addressed to this craft: " + nameReply,
-                Reply.of(nameReply).bool("found", false));
+                Reply.of(nameReply).bool("found"));
         builtShipName = readString(nameReply, SHIP_ID);
 
         // The subspace copy is a RIGID relocation of the pad build, so the seat must sit at exactly
@@ -512,7 +512,7 @@ public class M1PlanetToPlanetMilestoneE2ETest {
         requireArranged("the ship the pilot flew up must be findable in the space cell he "
                         + "arrived in — the ledger says he is here, so a ship that cannot be located "
                         + "means the arrival left no body behind: " + afcProbe,
-                Reply.of(afcProbe).bool("found", false));
+                Reply.of(afcProbe).bool("found"));
         String shipId = readString(afcProbe, SHIP_ID);
         // The reader refuses a ship the ledger has no entry for, and refuses to answer a cell for
         // one — which is what this arrangement check stood for, and it no longer has to ask the
@@ -588,7 +588,7 @@ public class M1PlanetToPlanetMilestoneE2ETest {
         // apply — and the read after it is the measurement.
         bot().waitTicks(SLOT_APPLIED_TICKS);
         String navStatus = exec("artest nav status " + slotDim + " " + describeArgs(navSub));
-        int listed = readInt(navStatus, NAV_SHIP_ADDRESSES, 0);
+        int listed = readIntOr(navStatus, NAV_SHIP_ADDRESSES, 0);
         assertTrue("putting a memory crystal into the console's SHIP slot must give the pilot a list "
                         + "of places he can fly to — the ship's addresses ARE that crystal's, so an "
                         + "empty list here means the insertion never landed, and a list of ONE leaves "
@@ -637,7 +637,7 @@ public class M1PlanetToPlanetMilestoneE2ETest {
             if (isLandable(picked)) {
                 pickIndex = candidate;
                 targetCell = cell;
-                targetDim = readInt(picked, NAV_TARGET_DIM, Integer.MIN_VALUE);
+                targetDim = readIntOr(picked, NAV_TARGET_DIM, Integer.MIN_VALUE);
                 targetInfo = picked;
             }
         }
@@ -688,11 +688,11 @@ public class M1PlanetToPlanetMilestoneE2ETest {
         assertTrue("…and the destination it is armed at must still be the BODY he picked — an ARM that "
                         + "quietly re-aimed the ship would send him somewhere he never chose. "
                         + "pickedDim=" + targetDim + " nav=" + armedStatus,
-                targetDim == readInt(armedStatus, NAV_TARGET_DIM, Integer.MIN_VALUE));
+                targetDim == readIntOr(armedStatus, NAV_TARGET_DIM, Integer.MIN_VALUE));
         assertTrue("…and the ship must still be able to say WHERE that body is: an armed jump whose "
                         + "target cannot be located is a burst about to be spent on nothing. nav="
                         + armedStatus,
-                Reply.of(armedStatus).bool("targetResolved", false));
+                Reply.of(armedStatus).bool("targetResolved"));
         System.out.println("[M1] leg 6 (target picked + armed at the console) " + elapsed(tLeg)
                 + " launchCell=" + launchCell + " pick=" + pickIndex + " targetDim=" + targetDim
                 + " target=" + targetCell
@@ -873,7 +873,7 @@ public class M1PlanetToPlanetMilestoneE2ETest {
         String loaded = exec("artest dim load " + nearestDim);
         requireArranged("the destination world must be loaded before the descent is attempted, "
                         + "or the resolver refuses quietly and the leg measures nothing: " + loaded,
-                Reply.of(loaded).bool("loaded", false));
+                Reply.of(loaded).bool("loaded"));
 
         // He CLOSES THE RANGE, then descends. A jump does not end on top of its destination: it ends
         // on a standoff ring around it, outside the descent trigger on purpose, because arriving in a
@@ -1192,6 +1192,9 @@ public class M1PlanetToPlanetMilestoneE2ETest {
         // reached the server and he got up" and for "something else threw him off" — and on this deck
         // the second is a real failure mode, since a standing pilot is held aboard by the server.
         long standMark = log.mark();
+        // The CLIENT's own mark too: the claim below is about where he is RENDERED, and the
+        // client records its dismounts as the server records its own.
+        long standClientMark = clientEvents().mark();
         bot().holdKey(Keyboard.KEY_LSHIFT);
         try {
             log.await(standMark, "dismount",
@@ -1201,7 +1204,12 @@ public class M1PlanetToPlanetMilestoneE2ETest {
         } finally {
             bot().releaseKey(Keyboard.KEY_LSHIFT);
         }
-        bot().waitTicks(10);
+        // WAS `waitTicks(10)`. A budget between the server's dismount and the client's
+        // render asserts how fast this box replicates; the client's own dismount record
+        // says the thing itself, and cannot be sampled past.
+        clientEvents().await(standClientMark, "dismount",
+                "the client must APPLY the dismount the server recorded, or the read below is"
+                        + " about a client that never got the message", budget * 5);
         assertTrue("…and the CLIENT must render him on his feet: the deck hold that keeps a standing "
                         + "pilot aboard runs on the server, so a dismount the client never applied "
                         + "leaves him riding a seat the server says he left. riding="
@@ -1323,8 +1331,11 @@ public class M1PlanetToPlanetMilestoneE2ETest {
                 builtShipName);
         for (int attempt = 0; attempt < budget; attempt++) {
             String hull = exec("artest vs ship-uuid " + dim + " " + builtShipName);
-            String hullId = Reply.of("artest vs ship-uuid", hull).text("id");
-            if (Reply.of(hull).bool("found", false) && hullId != null) {
+            // absence is the answer: this is the retry loop, and "no hull carries that name yet"
+        // is what it is waiting out.
+        String hullId = Reply.of("artest vs ship-uuid", hull).textOr("id", null);
+            // absence is the answer: this is a retry loop, and "not yet" is what it is reading for.
+            if (Reply.of(hull).boolOr("found", false) && hullId != null) {
                 lastSeatProbe = exec("artest vs find-seat " + dim + " id " + hullId);
                 if (rememberAnchor(lastSeatProbe)) {
                     return lastSeatProbe;
@@ -1398,7 +1409,7 @@ public class M1PlanetToPlanetMilestoneE2ETest {
         java.util.List<String> out = new java.util.ArrayList<>();
         for (String ship : Reply.of("artest space bodies", bodies).objectArray(SHIPS)) {
             for (String body : Reply.of("one ship's cell", ship).objectArray(CELL_BODIES)) {
-                if (Reply.of("one cell body", body).bool(BODY_DESCEND_TARGET, false)) {
+                if (Reply.of("one cell body", body).bool(BODY_DESCEND_TARGET)) {
                     out.add(body);
                 }
             }
@@ -2090,8 +2101,10 @@ public class M1PlanetToPlanetMilestoneE2ETest {
             return null;
         }
         String hull = exec("artest vs ship-uuid " + dim + " " + builtShipName);
-        String namedHull = Reply.of("artest vs ship-uuid", hull).text("id");
-        if (!Reply.of(hull).bool("found", false) || namedHull == null) {
+        // absence is the answer, as in the seat probe above: the loop waits for a hull to
+        // carry the name.
+        String namedHull = Reply.of("artest vs ship-uuid", hull).textOr("id", null);
+        if (!Reply.of(hull).bool("found") || namedHull == null) {
             lastToWorldProbe = hull;
             return null;
         }
@@ -2145,7 +2158,10 @@ public class M1PlanetToPlanetMilestoneE2ETest {
     }
 
     private static String readString(String json, String field) {
-        return Reply.of(json).text(field);
+        // absence is the answer, and WHICH answer is the CALLER's: this verb is handed a
+        // FIELD name, so it cannot know what a missing one means — and the callers here
+        // include waits, which read the shape that does not carry the field yet.
+        return Reply.of(json).textOr(field, null);
     }
 
     /** A probe field that may come back quoted or as a bare {@code null}, as a plain string. */
@@ -2153,7 +2169,9 @@ public class M1PlanetToPlanetMilestoneE2ETest {
         return raw == null ? "" : raw.replace("\"", "");
     }
 
-    private static int readInt(String json, String field, int fallback) {
+    private static int readIntOr(String json, String field, int fallback) {
+        // absence is the answer, and WHICH answer is the CALLER's: this verb takes the
+        // default as an argument, so every call site names what a missing field means there.
         return Reply.of(json).integerOr(field, fallback);
     }
 
@@ -2187,9 +2205,18 @@ public class M1PlanetToPlanetMilestoneE2ETest {
     /** @see #readTriple */
     private static double[] readTripleD(String json, String xField, String yField, String zField) {
         Reply reply = Reply.of(json);
-        double x = reply.number(xField);
-        double y = reply.number(yField);
-        double z = reply.number(zField);
+        // absence is the answer, and WHICH answer is the CALLER's: this verb is handed a
+        // FIELD name, so it cannot know what a missing one means — and the callers here
+        // include waits, which read the shape that does not carry the field yet.
+        double x = reply.numberOr(xField, Double.NaN);
+        // absence is the answer, and WHICH answer is the CALLER's: this verb is handed a
+        // FIELD name, so it cannot know what a missing one means — and the callers here
+        // include waits, which read the shape that does not carry the field yet.
+        double y = reply.numberOr(yField, Double.NaN);
+        // absence is the answer, and WHICH answer is the CALLER's: this verb is handed a
+        // FIELD name, so it cannot know what a missing one means — and the callers here
+        // include waits, which read the shape that does not carry the field yet.
+        double z = reply.numberOr(zField, Double.NaN);
         if (Double.isNaN(x) || Double.isNaN(y) || Double.isNaN(z)) {
             return null;
         }

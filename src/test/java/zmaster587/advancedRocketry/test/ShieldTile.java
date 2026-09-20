@@ -69,8 +69,11 @@ public final class ShieldTile {
         String text = String.valueOf(readReply);
         Reply reply = Reply.of("artest shield read", text);
         if (!reply.has("kind")) {
+            // absence is the answer: this branch is reached precisely when the reply is not a
+            // shield report, and it may carry no `error` either — the failure must still name
+            // what it got, so a refusal here would replace the diagnosis with the reader's own.
             ArrangementFailure.arrangementFailed("`artest shield read` found no shield block at that"
-                    + " position (" + reply.textOr("error", "no kind reported") + "), so every field"
+                    + " position (" + reply.reported("error") + "), so every field"
                     + " below would be absent rather than zero: " + text);
         }
         return new ShieldTile(reply, text);
@@ -100,7 +103,7 @@ public final class ShieldTile {
 
     /** Whether the emitter's field is up. */
     public boolean powered() {
-        return emitterField("powered").bool("powered", false);
+        return emitterField("powered").bool("powered");
     }
 
     /** The emitter's shell radius in blocks. */
@@ -146,11 +149,11 @@ public final class ShieldTile {
 
     /** Whether the shell is resolved in a ship's frame, and whether that frame answers right now. */
     public boolean shipFramed() {
-        return emitterField("shipFramed").bool("shipFramed", false);
+        return emitterField("shipFramed").bool("shipFramed");
     }
 
     public boolean frameReady() {
-        return emitterField("frameReady").bool("frameReady", false);
+        return emitterField("frameReady").bool("frameReady");
     }
 
     /** Where this emitter stands in the supply order when the network cannot feed everything. */
@@ -160,15 +163,15 @@ public final class ShieldTile {
 
     /** The domain that owns it, the group that lists it, and the credential it carries. */
     public String domainId() {
-        return emitterField("domainId").textOr("domainId", "");
+        return emitterField("domainId").text("domainId");
     }
 
     public String group() {
-        return emitterField("group").textOr("group", "");
+        return emitterField("group").text("group");
     }
 
     public String accessCode() {
-        return emitterField("accessCode").textOr("accessCode", "");
+        return emitterField("accessCode").text("accessCode");
     }
 
     private Reply emitterField(String field) {

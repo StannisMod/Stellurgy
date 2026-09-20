@@ -807,7 +807,7 @@ public class VSPreAssemblyBoardingPilotControlE2ETest extends AbstractSharedVsCl
 
         String mount = exec("artest player mount-entity " + mountInfo.requireDummyId());
         scenario().requireArranged("the bot must mount the seat's dummy: " + mount,
-                Reply.of(mount).bool("mounted", false));
+                Reply.of(mount).bool("mounted"));
         bot().waitTicks(10);
         return "seatMount=" + mountInfo.raw() + " mount=" + mount;
     }

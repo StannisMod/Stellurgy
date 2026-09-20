@@ -50,22 +50,19 @@ public final class StationPads {
             this.raw = raw;
             this.x = reply.integer("x");
             this.z = reply.integer("z");
-            this.occupied = reply.bool("occupied", false);
-            this.allowAutoLand = reply.bool("allowAutoLand", false);
+            this.occupied = reply.bool("occupied");
+            this.allowAutoLand = reply.bool("allowAutoLand");
         }
 
         /** The pad's name. Refuses an unnamed pad — see the class note. */
         public String name() {
-            String value = reply.text("name");
-            if (value == null) {
-                throw new AssertionError("the pad at " + x + "," + z + " carries no name: " + raw);
-            }
-            return value;
+            return reply.text("name");
         }
 
         /** Whether the pad carries a name at all. */
         public boolean hasName() {
-            return reply.text("name") != null;
+            // absence is the answer: this verb's whole subject is whether a name is there.
+            return reply.textOr("name", null) != null;
         }
 
         /** This pad exactly as the producer wrote it. */

@@ -55,12 +55,12 @@ public class SpaceCellBindingSurvivesWorldUnloadE2ETest extends AbstractSharedSe
                 occupied.worldLoaded());
 
         String dropped = exec("artest space release " + UNHELD_CELL + " drop-hold");
-        assertTrue("release must clear the hold: " + dropped, Reply.of(dropped).bool("holdDropped", false));
+        assertTrue("release must clear the hold: " + dropped, Reply.of(dropped).bool("holdDropped"));
 
         String gone = awaitWorld(UNHELD_CELL, false);
         assertTrue("the manager must still count the released cell as loaded — a cell with no occupant "
                         + "stays bound so a revisit is cheap: " + gone,
-                Reply.of(gone).bool("managerLoaded", false));
+                Reply.of(gone).bool("managerLoaded"));
 
         // ── Leg 2: the repair. A binding whose world went away is live again on the next visit. ──
         MaterializedCell revisit = MaterializedCell.at(this::exec, UNHELD_CELL)
@@ -79,7 +79,7 @@ public class SpaceCellBindingSurvivesWorldUnloadE2ETest extends AbstractSharedSe
         assertTrue("a cell still bound to its slot must keep that slot's world, even with no occupant, "
                         + "no player and no chunks — leg 1 proves the sweep would otherwise take it: "
                         + stillThere,
-                Reply.of(stillThere).bool("worldLoaded", false));
+                Reply.of(stillThere).bool("worldLoaded"));
     }
 
     /**
@@ -94,7 +94,9 @@ public class SpaceCellBindingSurvivesWorldUnloadE2ETest extends AbstractSharedSe
         final String[] last = {""};
         boolean unloaded = GameTicks.until(client(), GameTicks.server(), SWEEP_BUDGET_TICKS, () -> {
             last[0] = exec("artest space cell-slot " + cell);
-            return !expectLoaded && (!Reply.of(last[0]).bool("worldLoaded", true));
+            // absence is the answer: this is a WAIT for the sweep to drop the world, and a
+            // cell whose slot is gone answers no `worldLoaded` at all.
+            return !expectLoaded && (!Reply.of(last[0]).boolOr("worldLoaded", false));
         });
         if (unloaded) {
             return last[0];

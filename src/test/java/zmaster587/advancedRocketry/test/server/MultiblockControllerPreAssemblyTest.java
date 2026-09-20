@@ -66,7 +66,7 @@ public class MultiblockControllerPreAssemblyTest extends AbstractSharedServerTes
         String place = ok(client().execute("artest place " + DIM + " " + x + " " + Y
                 + " " + z + " " + blockId));
         assertTrue("place(" + blockId + ") failed: " + place,
-                Reply.of(place).bool("placed", false));
+                Reply.of(place).bool("placed"));
         return ok(client().execute(
                 "artest tile multiblock-state " + DIM + " " + x + " " + Y + " " + z));
     }
@@ -97,7 +97,7 @@ public class MultiblockControllerPreAssemblyTest extends AbstractSharedServerTes
         assertTrue("orbitalLaserDrill must be at this position: " + state,
                 state.contains("TileOrbitalLaserDrill"));
         assertTrue("isolated orbitalLaserDrill must NOT be complete: " + state,
-                (!Reply.of(state).bool("isComplete", true)));
+                (!Reply.of(state).bool("isComplete")));
         forceTickSafely(0, 0, 5);
     }
 
@@ -108,7 +108,7 @@ public class MultiblockControllerPreAssemblyTest extends AbstractSharedServerTes
         assertTrue("tileClass must be TileSpaceElevator: " + state,
                 state.contains("TileSpaceElevator"));
         assertTrue("isolated space elevator must NOT be complete: " + state,
-                (!Reply.of(state).bool("isComplete", true)));
+                (!Reply.of(state).bool("isComplete")));
         forceTickSafely(8, 0, 5);
     }
 
@@ -119,7 +119,7 @@ public class MultiblockControllerPreAssemblyTest extends AbstractSharedServerTes
         assertTrue("tileClass must be TileBlackHoleGenerator: " + state,
                 state.contains("TileBlackHoleGenerator"));
         assertTrue("isolated blackHoleGenerator must NOT be complete: " + state,
-                (!Reply.of(state).bool("isComplete", true)));
+                (!Reply.of(state).bool("isComplete")));
         forceTickSafely(16, 0, 5);
     }
 
@@ -130,7 +130,7 @@ public class MultiblockControllerPreAssemblyTest extends AbstractSharedServerTes
         assertTrue("tileClass must be TileObservatory: " + state,
                 state.contains("TileObservatory"));
         assertTrue("isolated observatory must NOT be complete: " + state,
-                (!Reply.of(state).bool("isComplete", true)));
+                (!Reply.of(state).bool("isComplete")));
         forceTickSafely(32, 0, 5);
     }
 
@@ -141,7 +141,7 @@ public class MultiblockControllerPreAssemblyTest extends AbstractSharedServerTes
         assertTrue("tileClass must be TileRailgun: " + state,
                 state.contains("TileRailgun"));
         assertTrue("isolated railgun must NOT be complete: " + state,
-                (!Reply.of(state).bool("isComplete", true)));
+                (!Reply.of(state).bool("isComplete")));
         forceTickSafely(40, 0, 5);
     }
 
@@ -159,7 +159,7 @@ public class MultiblockControllerPreAssemblyTest extends AbstractSharedServerTes
                         + "not a TilePlanetAnalyser as the block name suggests): " + state,
                 state.contains("TileAstrobodyDataProcessor"));
         assertTrue("isolated planetAnalyser must NOT be complete: " + state,
-                (!Reply.of(state).bool("isComplete", true)));
+                (!Reply.of(state).bool("isComplete")));
         forceTickSafely(48, 0, 5);
     }
 
@@ -176,6 +176,6 @@ public class MultiblockControllerPreAssemblyTest extends AbstractSharedServerTes
         // controller — that would mean the multiblock is rendering as
         // formed when it isn't.
         assertTrue("observatory canRender must NOT be true on isolated placement: "
-                + state, !Reply.of(state).bool("canRender", false));
+                + state, !Reply.of(state).bool("canRender"));
     }
 }

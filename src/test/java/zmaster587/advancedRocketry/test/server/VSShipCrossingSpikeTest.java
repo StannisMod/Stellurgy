@@ -60,7 +60,7 @@ public class VSShipCrossingSpikeTest extends AbstractSharedServerTest {
         // by identity.
         String control = exec("artest vs seat-input 0 0 0 0 0 0 0");
         assertTrue("witness sensitivity control — seat probe must report seatFound:false before any ship: "
-                + control, !Reply.of(control).bool("seatFound", false));
+                + control, !Reply.of(control).bool("seatFound"));
 
         // Build a piloted ship (pilot seat linked to an AFC) at the source and assemble it into a VS ship.
         clearArea(SRC_X, SRC_Z);
@@ -68,7 +68,7 @@ public class VSShipCrossingSpikeTest extends AbstractSharedServerTest {
         String coords = placeFixture(SRC_X, SRC_Y, SRC_Z, "with-pilot-seat");
         String asm = exec("artest rocket assemble 0 " + coords);
         assertTrue("with VS an AFC-bearing build must route to a ship (no rocket): " + asm,
-                (Reply.of(asm).integerOr("rocketCount", Integer.MIN_VALUE) == 0));
+                (Reply.of(asm).integer("rocketCount") == 0));
         assertTrue("the source VS ship never loaded", loadedShips(0) >= 1);
 
         // The SOURCE ship, by the durable name its assembler minted. The crossing below re-assembles
@@ -83,9 +83,9 @@ public class VSShipCrossingSpikeTest extends AbstractSharedServerTest {
         // BASELINE: the seat resolves its flight computer, and we record the RELATIVE offset between them
         // (invariant under any rigid relocation — the number the crossing must preserve).
         String pre = exec("artest vs seat-input-by-id 0 " + srcShipId + " 0 0 0 0 0 0");
-        assertTrue("pre-crossing: seat must be found: " + pre, Reply.of(pre).bool("seatFound", false));
-        assertTrue("pre-crossing: seat must be linked to its AFC: " + pre, Reply.of(pre).bool("seatLinked", false));
-        assertTrue("pre-crossing: seat must resolve its AFC: " + pre, Reply.of(pre).bool("afcResolved", false));
+        assertTrue("pre-crossing: seat must be found: " + pre, Reply.of(pre).bool("seatFound"));
+        assertTrue("pre-crossing: seat must be linked to its AFC: " + pre, Reply.of(pre).bool("seatLinked"));
+        assertTrue("pre-crossing: seat must resolve its AFC: " + pre, Reply.of(pre).bool("afcResolved"));
         int[] preOffset = seatToAfcOffset(pre);
 
         // Put a rider aboard (an EntityDummy bound to the pilot seat).
@@ -126,10 +126,10 @@ public class VSShipCrossingSpikeTest extends AbstractSharedServerTest {
         // ship's internal geometry survived the pack/paste round-trip. Asked of the ARRIVED ship by its
         // own id: the crossing mints a new one, so this is deliberately not srcShipId.
         String post = exec("artest vs seat-input-by-id 0 " + dstShipId + " 0 0 0 0 0 0");
-        assertTrue("post-crossing: seat must be found: " + post, Reply.of(post).bool("seatFound", false));
+        assertTrue("post-crossing: seat must be found: " + post, Reply.of(post).bool("seatFound"));
         assertTrue("post-crossing: seat must still be linked to its AFC: " + post,
-                Reply.of(post).bool("seatLinked", false));
-        assertTrue("post-crossing: seat must still resolve its AFC: " + post, Reply.of(post).bool("afcResolved", false));
+                Reply.of(post).bool("seatLinked"));
+        assertTrue("post-crossing: seat must still resolve its AFC: " + post, Reply.of(post).bool("afcResolved"));
         int[] postOffset = seatToAfcOffset(post);
         assertEquals("seat->AFC relative offset X changed across the crossing (geometry scrambled); pre="
                 + java.util.Arrays.toString(preOffset) + " post=" + java.util.Arrays.toString(postOffset),
@@ -190,16 +190,15 @@ public class VSShipCrossingSpikeTest extends AbstractSharedServerTest {
      */
     private static String extractString(String json, String key) {
         String value = Reply.of(json).text(key);
-        assertTrue("expected string \"" + key + "\" in: " + json, value != null);
         assertTrue("\"" + key + "\" came back empty in: " + json, !value.isEmpty());
         return value;
     }
 
     private static int extractInt(String json, String key) {
-        return Reply.of(json).integerOr(key, Integer.MIN_VALUE);
+        return Reply.of(json).integer(key);
     }
 
     private static double extractDouble(String json, String key) {
-        return Reply.of(json).numberOr(key, 0.0);
+        return Reply.of(json).number(key);
     }
 }

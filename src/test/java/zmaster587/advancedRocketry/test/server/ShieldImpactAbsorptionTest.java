@@ -89,7 +89,7 @@ public class ShieldImpactAbsorptionTest extends AbstractSharedServerTest {
         String controlBlock = exec("artest block at " + DIM + " " + cx + " " + Y + " " + cz);
         assertTrue("control: the explosion did not destroy an unshielded glass block — the blast is "
                         + "not lethal here, so the shielded case would prove nothing:\n" + controlBlock,
-                Reply.of(controlBlock).bool("isAir", false));
+                Reply.of(controlBlock).bool("isAir"));
 
         // Shielded: the same block, same blast, but inside a powered field — it must survive.
         int gx = 986, gz = 780;
@@ -156,7 +156,7 @@ public class ShieldImpactAbsorptionTest extends AbstractSharedServerTest {
     private void place(String block, int x, int z) throws Exception {
         String resp = exec("artest place " + DIM + " " + x + " " + Y + " " + z + " " + block);
         assertTrue("failed to place " + block + " at " + x + "," + Y + "," + z + ": " + resp,
-                Reply.of(resp).bool("placed", false));
+                Reply.of(resp).bool("placed"));
     }
 
     private void chargeIteration(int gx, int gz) throws Exception {

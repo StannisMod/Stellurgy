@@ -91,7 +91,7 @@ public final class ShipInfo {
         this.omegaY = reply.number("omegaY");
         this.omegaZ = reply.number("omegaZ");
         this.omega = reply.number("omega");
-        this.ready = reply.bool("ready", false);
+        this.ready = reply.bool("ready");
         this.blocks = reply.has("blocks") ? Integer.valueOf(reply.integer("blocks")) : null;
     }
 
@@ -114,11 +114,13 @@ public final class ShipInfo {
                     + " whether this world holds the ship at all, so that a missing pose cannot read"
                     + " as a position: " + shipInfoReply);
         }
-        if (!reply.bool("managed", false)) {
+        // absence is the answer: a reply that is not a managed-ship report carries no
+        // `managed` at all, and "this is not a ship the substrate holds" is what it means.
+        if (!reply.boolOr("managed", false)) {
             // An ARRANGEMENT failure by TYPE and not by prefix: the id names nothing in that world,
             // so the state this reading is about was never built. A reader — human or the gate's own
             // XML — must be able to tell that from "the product put the ship in the wrong place".
-            ArrangementFailure.arrangementFailed("no ship with id " + reply.text("id")
+            ArrangementFailure.arrangementFailed("no ship with id " + reply.reported("id")
                     + " is loaded in " + askedOf + ", so it has no pose to report: " + shipInfoReply);
         }
         return new ShipInfo(reply, String.valueOf(shipInfoReply));
@@ -143,7 +145,8 @@ public final class ShipInfo {
                     + " 'the ship is not here' cannot be told from 'that was not the reply I think"
                     + " it was': " + shipInfoReply);
         }
-        return reply.bool("managed", false);
+        // absence is the answer: this verb's whole subject is whether the reply is one.
+        return reply.boolOr("managed", false);
     }
 
     /** The same question, asked of {@code dim} about {@code shipId}. */

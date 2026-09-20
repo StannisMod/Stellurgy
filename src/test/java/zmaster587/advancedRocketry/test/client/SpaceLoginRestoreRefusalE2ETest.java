@@ -105,6 +105,8 @@ public class SpaceLoginRestoreRefusalE2ETest extends AbstractSpaceLoginRestoreCl
                 "a pilot whose ship the server cannot find must be ORPHANED by the restore, on that"
                         + " ground and not on some other, rather than silently appearing at his spawn"
                         + " point", RESTORE_VERDICT_BUDGET_TICKS);
+        // absence is the answer: the claim is that NO record says he is aboard, so a window
+        // holding no such record is the pass this asserts.
         assertFalse("...and the restore must not count him as aboard anything: " + restored,
                 Events.anyRecordHas(restored, "aboard", "true"));
 
@@ -152,7 +154,7 @@ public class SpaceLoginRestoreRefusalE2ETest extends AbstractSpaceLoginRestoreCl
         // record that was never written in the first place.
         String tagBefore = exec("artest space aboard-tag " + BOT);
         assertTrue("a player who never boarded must carry no aboard record: " + tagBefore,
-                (!Reply.of(tagBefore).bool("tagged", true)));
+                (!Reply.of(tagBefore).bool("tagged")));
 
         closeBoth();
         keepBootLog("boot1-never-aboard");
@@ -186,7 +188,7 @@ public class SpaceLoginRestoreRefusalE2ETest extends AbstractSpaceLoginRestoreCl
                 riding.get("riding").getAsBoolean());
         assertTrue("and the record oracle must still answer NO for him - if it cannot, every "
                 + "\"tagged\":true in this class is worthless: " + observed,
-                (!Reply.of(tag).bool("tagged", true)));
+                (!Reply.of(tag).bool("tagged")));
     }
 
 }

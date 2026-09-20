@@ -69,7 +69,7 @@ public final class StationInfo {
         this.orbitingPlanetId = reply.integer("orbitingPlanetId");
         this.destOrbitingBody = reply.integer("destOrbitingBody");
         this.orbitalDistance = reply.number("orbitalDistance");
-        this.anchored = reply.bool("isAnchored", false);
+        this.anchored = reply.bool("isAnchored");
         this.transitionTime = reply.longInteger("transitionTime");
     }
 
@@ -154,7 +154,7 @@ public final class StationInfo {
     /** Whether any of them is free for a rocket to land on. */
     public boolean hasFreePad() {
         requireStation("hasFreePad");
-        return reply.bool("hasFreePad", false);
+        return reply.bool("hasFreePad");
     }
 
     /** The orbital distance its altitude controller is steering toward. */

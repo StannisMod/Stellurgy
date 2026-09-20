@@ -480,7 +480,7 @@ public abstract class AbstractSpaceLoginRestoreClientTest {
         // which is exactly that statement, and it also proves the record was rebuilt rather than
         // merely surviving.
         String tag = exec("artest space aboard-tag " + BOT);
-        assertTrue("being re-seated must leave him aboard again: " + tag, Reply.of(tag).bool("tagged", false));
+        assertTrue("being re-seated must leave him aboard again: " + tag, Reply.of(tag).bool("tagged"));
         assertTrue("he must be back aboard the SAME ship, not some other one: " + tag
                 + " (entered ship " + arrangedShipId + ")", tag.contains(arrangedShipId));
         assertTrue("and the slot dimension he woke up in must be the one bound to his ship's cell "
@@ -967,7 +967,7 @@ public abstract class AbstractSpaceLoginRestoreClientTest {
                 + " 0 " + WINDOW_SPEED_BLOCKS_PER_SECOND + " 0");
         requireArranged("the drive must reach THIS ship's own flight computer, or the window "
                 + "below observes a motionless deck and cannot fail: " + driven,
-                Reply.of(driven).bool("afcResolved", false));
+                Reply.of(driven).bool("afcResolved"));
         bot().waitTicks(THROTTLE_PULSE_TICKS);
     }
 
@@ -1160,16 +1160,19 @@ public abstract class AbstractSpaceLoginRestoreClientTest {
         int seatY = seat.seatY;
         int seatZ = seat.seatZ;
 
+        long enterMark = clientEvents().mark();
         String enter = exec("artest space enter " + BOT + " " + slotDim
                 + " " + seat.shipWorldX
                 + " " + seat.shipWorldY
                 + " " + seat.shipWorldZ);
         assertTrue("the client must be transferred into the ship's cell: " + enter,
                 readBool(enter, "ok"));
-        bot().waitTicks(20);
-        assertEquals("the client must have followed into the ship's slot dimension - otherwise "
-                + "everything below is arranging on the wrong side of a dimension boundary",
-                slotDim, clientDim());
+        // WAS `waitTicks(20)` and a read. The client PUBLISHES the dimension it changed to, and
+        // a budget between the order and the read is an assertion about how fast this box
+        // replicates rather than about the transfer.
+        ClientEvents.awaitDim(clientEvents(), enterMark, slotDim,
+                "everything below is arranged on the client's side of a dimension boundary",
+                CLIENT_DIM_LINK_BUDGET_TICKS);
 
         String mountAt = exec("artest vs seat-mount-at " + slotDim
                 + " " + seatX + " " + seatY + " " + seatZ);
@@ -1218,7 +1221,7 @@ public abstract class AbstractSpaceLoginRestoreClientTest {
         String tag = exec("artest space aboard-tag " + BOT);
         assertTrue("sitting down must leave a durable aboard record - it is the only thing that "
                 + "carries the pilot's ship across the restart: " + tag + " | stamps: " + stamped,
-                Reply.of(tag).bool("tagged", false));
+                Reply.of(tag).bool("tagged"));
         assertTrue("and that record must name the ship the entry minted, not some other one: " + tag
                 + " (entered ship " + arrangedShipId + ")", tag.contains(arrangedShipId));
         return slotDim;
@@ -1269,7 +1272,7 @@ public abstract class AbstractSpaceLoginRestoreClientTest {
         long assemblyMark = events.mark();
         String assembled = exec("artest rocket assemble " + LAUNCH_DIM + " " + coords);
         assertTrue("a build carrying a flight computer must become a ship, not a rocket: " + assembled,
-                (Reply.of(assembled).integerOr("rocketCount", Integer.MIN_VALUE) == 0));
+                (Reply.of(assembled).integer("rocketCount") == 0));
         assertTrue("the ship never assembled in the launch dimension",
                 waitForLoadedShip(events, assemblyMark, LAUNCH_DIM) >= 1);
 
@@ -1349,7 +1352,7 @@ public abstract class AbstractSpaceLoginRestoreClientTest {
                 + " 0 0 0");
         requireArranged("the settled ship must be left holding station like a flown ship, or "
                 + "its physics never comes on and nothing can be aboard its deck: " + holdsStation,
-                Reply.of(holdsStation).bool("afcResolved", false));
+                Reply.of(holdsStation).bool("afcResolved"));
 
         return slotDim;
     }
@@ -1388,7 +1391,7 @@ public abstract class AbstractSpaceLoginRestoreClientTest {
         long assemblyMark = events.mark();
         String assembled = exec("artest rocket assemble " + LAUNCH_DIM + " " + coords);
         assertTrue("a build carrying a flight computer must become a ship, not a rocket: " + assembled,
-                (Reply.of(assembled).integerOr("rocketCount", Integer.MIN_VALUE) == 0));
+                (Reply.of(assembled).integer("rocketCount") == 0));
         assertTrue("the ship never assembled in the launch dimension",
                 waitForLoadedShip(events, assemblyMark, LAUNCH_DIM) >= 1);
 
@@ -1439,7 +1442,7 @@ public abstract class AbstractSpaceLoginRestoreClientTest {
         assertTrue("a pilot sitting on a planet must NOT yet carry an aboard record - the record "
                         + "means 'aboard a ship in a cell', and reading it as set here would make the "
                         + "post-arrival reading vacuous: " + groundTag,
-                (!Reply.of(groundTag).bool("tagged", true)));
+                (!Reply.of(groundTag).bool("tagged")));
 
         // Fly, with him in the chair the whole way. Addressed to HIS ship's flight computer: a
         // seated rider is what keeps the input alive there (a riderless dummy clears it every tick),
@@ -1447,7 +1450,7 @@ public abstract class AbstractSpaceLoginRestoreClientTest {
         String heldClimb = exec("artest vs ff-input-by-id " + LAUNCH_DIM + " " + groundShipId
                 + " " + HELD_CLIMB);
         requireArranged("the throttle must reach the seated pilot's own flight computer: "
-                + heldClimb, Reply.of(heldClimb).bool("afcResolved", false));
+                + heldClimb, Reply.of(heldClimb).bool("afcResolved"));
         // Both marks BEFORE the lift: the entry is committed on the flight computer's own tick, so
         // there is no later moment at which a reader could still be sure it had not already run.
         long entryMark = events.mark();
@@ -1456,11 +1459,30 @@ public abstract class AbstractSpaceLoginRestoreClientTest {
                 + " " + sx + " " + ABOVE_CEILING_Y + " " + sz);
         assertTrue("the climb past the orbit ceiling failed: " + climb, Reply.of(climb).ok());
         exec("artest vs unpark-by-id " + LAUNCH_DIM + " " + groundShipId);
-        bot().waitTicks(20);
-        requireArranged("the pilot must still be in his seat as the ship reaches the ceiling "
-                        + "- if the lift alone unseats him this leg never tests the crossing: "
-                        + bot().reportRidingEntity(),
-                bot().reportRidingEntity().get("riding").getAsBoolean());
+        // WAS `waitTicks(20)` and a read of the client's riding flag. The budget decided the
+        // verdict, and a first attempt to name a WINDOW instead was wrong for a second
+        // reason worth recording: this is not a negative claim. A ship teleport legitimately
+        // takes the client's mount OFF and puts it back, so "no dismount since the lift" is
+        // false on a CORRECT run — the twenty ticks were covering the re-establishment. What
+        // is claimed is that the chain ENDS seated, which is a link and cannot be sampled
+        // past.
+        try {
+            clientEvents().awaitMatching(clientEntryMark, "mount",
+                    seen -> ClientEvents.endsMounted(clientEvents(), clientEntryMark),
+                    "a chain that ENDS in a mount (a mount exists, after every dismount)",
+                    "the pilot must be back in his seat once the ship has reached the ceiling"
+                            + " - if the lift alone unseats him this leg never tests the"
+                            + " crossing", CLIENT_REMOUNT_LINK_BUDGET_TICKS);
+        } catch (AssertionError never) {
+            Events.assertInstrumentRan(clientEvents().since(clientEntryMark, "mount"),
+                    "entity_mount_writes", "the client's own mounts must be observed at all"
+                            + " before an absent one can be read as a seat he never regained");
+            requireArranged(never.getMessage() + " | client says "
+                    + bot().reportRidingEntity() + "; its own mounts since the lift: "
+                    + clientEvents().since(clientEntryMark, "mount")
+                    + "; its dismounts: " + clientEvents().since(clientEntryMark, "dismount"),
+                    false);
+        }
 
         // The entry as the chain a GRANTED one IS - the ship is cut into the cell, the gate records
         // its decision, the arrived hull's pose is written, the crew is put back on it and the
@@ -1499,7 +1521,7 @@ public abstract class AbstractSpaceLoginRestoreClientTest {
         // require - so a ship left holding it would make every one of them unreadable.
         String parked = exec("artest vs ff-cruise-at " + slotDim + " " + arrangedAfcPos + " 0 0 0");
         requireArranged("the arrived ship must be left holding station: " + parked,
-                Reply.of(parked).bool("afcResolved", false));
+                Reply.of(parked).bool("afcResolved"));
 
         // He rode his own ship across the seam: no probe transferred him, so a wrong dimension here
         // is the crossing failing to carry its crew, not an arrangement that walked him somewhere.
@@ -1549,7 +1571,7 @@ public abstract class AbstractSpaceLoginRestoreClientTest {
         assertTrue("a pilot who boarded on the ground and rode his ship into a cell must carry the "
                         + "durable aboard record - it is the only evidence the restore has that he "
                         + "was ever aboard: " + tag + " | stamps: " + stamped,
-                Reply.of(tag).bool("tagged", false));
+                Reply.of(tag).bool("tagged"));
         assertTrue("and that record must name the ship the entry minted: " + tag
                 + " (entered ship " + arrangedShipId + ")", tag.contains(arrangedShipId));
         return slotDim;
@@ -1598,9 +1620,11 @@ public abstract class AbstractSpaceLoginRestoreClientTest {
         // from it, so the skip this javadoc promises had never once happened and all six scenarios of
         // this family ran on regardless. A skip that cannot skip is worse than none — it is a claim,
         // in a javadoc, that a whole class of environment is handled.
+        // absence is the answer: a build without the substrate answers no `available` at all,
+        // and that is precisely the world this gate skips in.
         org.junit.Assume.assumeTrue("Valkyrien Skies is absent, so the production subsystem under"
                 + " test never registered and there is nothing here to exercise: " + vs,
-                Reply.of(vs).bool("available", false));
+                Reply.of(vs).boolOr("available", false));
     }
 
     // --- lifecycle ---------------------------------------------------------------------------------
@@ -1812,7 +1836,10 @@ public abstract class AbstractSpaceLoginRestoreClientTest {
                 String found = arrangedShipId == null
                         ? exec("artest space find-afc " + trimmed)
                         : exec("artest space find-afc " + trimmed + " " + arrangedShipId);
-                if (Reply.of(found).bool("found", false)) {
+                // absence is the answer: the probe answers `{"error":"world or ledger not
+                // ready"}` while the slot is still coming up, and this loop exists to sit
+                // through exactly that.
+                if (Reply.of(found).boolOr("found", false)) {
                     // Its flight computer's own block position rides along. The ledger's id and the
                     // VS ship uuid are DIFFERENT identities, and the by-id command verbs resolve the
                     // second; this is how a caller holding the first reaches that ship's computer.
@@ -1825,7 +1852,8 @@ public abstract class AbstractSpaceLoginRestoreClientTest {
                             "" + readInt(found, "afcX"), "" + readInt(found, "afcY"),
                             "" + readInt(found, "afcZ")};
                 }
-                if ((!Reply.of(found).bool("found", true))) {
+                // absence is the answer, as above.
+                if ((!Reply.of(found).boolOr("found", false))) {
                     // That dimension is loaded and the ledger is readable there; if the ship is
                     // simply not up yet, queueing its ships is what makes it resolvable.
                     exec("artest vs load-ships " + trimmed);
@@ -1855,7 +1883,8 @@ public abstract class AbstractSpaceLoginRestoreClientTest {
             // has failed to load and a neighbour's has. A name has no such gap.
             String hull = exec("artest vs ship-uuid " + dim + " " + arrangedShipId);
             Reply namedReply = Reply.of(hull);
-            if (Reply.of(hull).bool("found", false) && namedReply.has(SHIP_UUID)) {
+            // absence is the answer: this is a retry loop, and "not yet" is what it is reading for.
+            if (Reply.of(hull).boolOr("found", false) && namedReply.has(SHIP_UUID)) {
                 String info = exec("artest vs ship-info " + dim + " id " + namedReply.text(SHIP_UUID));
                 if (ShipInfo.isLoaded(info)) {
                     ShipInfo pose = ShipInfo.of(info);
@@ -1915,17 +1944,16 @@ public abstract class AbstractSpaceLoginRestoreClientTest {
     }
 
     protected static String readShipId(String json) {
-        Reply mReply = Reply.of(json);
-        assertTrue("expected a minted ship id in: " + json, mReply.has(SHIP_ID));
-        return mReply.text(SHIP_ID);
+        return Reply.of(json).text(SHIP_ID);
     }
 
     protected static int readInt(String json, String key) {
-        assertTrue("expected int \"" + key + "\" in: " + json, Reply.of(json).has(key));
         return Reply.of(json).integer(key);
     }
 
     protected static int readIntOr(String json, String key, int def) {
+        // absence is the answer, and WHICH answer is the CALLER's: this verb takes the
+        // default as an argument, so every call site names what a missing field means there.
         return Reply.of(json).integerOr(key, def);
     }
 
@@ -1954,7 +1982,7 @@ public abstract class AbstractSpaceLoginRestoreClientTest {
     }
 
     protected static boolean readBool(String json, String key) {
-        return Reply.of(json).bool(key, false);
+        return Reply.of(json).bool(key);
     }
 
     // --- the ordered event log ---------------------------------------------------------------------
@@ -1998,6 +2026,22 @@ public abstract class AbstractSpaceLoginRestoreClientTest {
      * SILENTLY, so the budget has to outlive that silence rather than merely outlast a settle.
      */
     protected static final int RESTORE_LINK_BUDGET_TICKS = 450;
+
+    /**
+     * How long the CLIENT may take to publish the dimension it followed the bot into.
+     *
+     * <p>A link's budget, not a wait's: the record it waits on is published exactly once per
+     * transfer, so the number only has to be longer than a slow box and a verdict never turns
+     * on it. What stood here was {@code waitTicks(20)} followed by a read of the client's
+     * dimension, which is a different thing — that one asserted how fast this box
+     * replicates.</p>
+     */
+    protected static final int CLIENT_DIM_LINK_BUDGET_TICKS = 200;
+
+    /** How long the CLIENT may take to end its mount chain seated again after a ship the
+     *  pilot is riding is moved under him. A link's budget: the chain is published, and the
+     *  verdict is the chain rather than the number. */
+    protected static final int CLIENT_REMOUNT_LINK_BUDGET_TICKS = 200;
 
     /**
      * Wait for one record of {@code type} on the CLIENT's own log - optionally one carrying

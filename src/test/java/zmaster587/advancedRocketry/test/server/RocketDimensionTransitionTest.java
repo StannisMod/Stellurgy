@@ -262,7 +262,7 @@ public class RocketDimensionTransitionTest extends AbstractSharedServerTest {
         int dimAfter = Integer.parseInt(g(DIM_FIELD, byUuid, "dim after"));
         assertEquals("rocket must remain in original dim 0", 0, dimAfter);
         assertFalse("rocket must NOT be marked dead by the failed transition: " + byUuid,
-                Reply.of(byUuid).bool("isDead", false));
+                Reply.of(byUuid).bool("isDead"));
     }
 
     @Test

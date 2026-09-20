@@ -88,7 +88,7 @@ public class SpaceSlotVsShipReloadE2ETest extends AbstractClientE2ETest {
                         + " cannot unload, and the reload below is about an unloaded one",
                 DIM_LINK_BUDGET_TICKS);
         assertTrue("slot must reload after the ship's world is unloaded: ",
-                Reply.of(exec("artest space reload " + slot + " deep")).bool("present", false));
+                Reply.of(exec("artest space reload " + slot + " deep")).bool("present"));
         bot().waitTicks(20);
 
         // Bot returns onto the ship; it must RE-LOAD live after the rebind.

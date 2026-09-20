@@ -54,11 +54,11 @@ public class ArrivalSeatLookupNamesItsOwnShipE2ETest extends AbstractSharedServe
         String seatedAsm = exec("artest rocket assemble 0 "
                 + placeFixture(SEATED_X, SEATED_Y, SEATED_Z, "with-pilot-seat"));
         assertTrue("with VS an AFC-bearing build must route to a ship (no rocket): " + seatedAsm,
-                (Reply.of(seatedAsm).integerOr("rocketCount", Integer.MIN_VALUE) == 0));
+                (Reply.of(seatedAsm).integer("rocketCount") == 0));
         String seatlessAsm = exec("artest rocket assemble 0 "
                 + placeFixture(SEATLESS_X, SEATLESS_Y, SEATLESS_Z, "with-nav-computer"));
         assertTrue("the seatless craft did not become a ship either: " + seatlessAsm,
-                (Reply.of(seatlessAsm).integerOr("rocketCount", Integer.MIN_VALUE) == 0));
+                (Reply.of(seatlessAsm).integer("rocketCount") == 0));
         assertTrue("the ships never loaded", loadedShips(0) >= 2);
 
         // ARRANGEMENT CHECK, before either leg: the two crafts must be two REGISTERED ships, or the

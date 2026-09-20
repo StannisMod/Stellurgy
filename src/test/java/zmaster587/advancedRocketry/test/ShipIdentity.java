@@ -61,13 +61,13 @@ public final class ShipIdentity {
      * nothing saying which.</p>
      */
     public static String nameFromAssembly(String assembleReply) {
+        // The READ is the refusal: `text` names the verb and prints the reply, which is what
+        // the assertion that stood here used to carry by hand.
         String durableId = Reply.of("artest rocket assemble", String.valueOf(assembleReply))
                 .text("shipId");
-        assertTrue("the assembler did not name the ship it built, so nothing downstream can be about"
-                + " one particular craft: " + assembleReply, durableId != null);
         assertTrue("the pad carried more than one flight computer, so the id names one of several"
                 + " craft and the scenario cannot say which: " + assembleReply,
-                (Reply.of(assembleReply).integerOr("afcCount", Integer.MIN_VALUE) == 1));
+                (Reply.of(assembleReply).integer("afcCount") == 1));
         return durableId;
     }
 
@@ -85,9 +85,10 @@ public final class ShipIdentity {
         String reply = probe.exec("artest vs ship-uuid " + dim + " " + durableShipId);
         assertTrue("no loaded hull in dim " + dim + " carries the name " + durableShipId + ", so every"
                 + " later `vs` call would have to guess which craft is meant: " + reply,
-                Reply.of(reply).bool("found", false));
+                Reply.of(reply).bool("found"));
+        // The READ is the refusal, and it says the same thing the assertion that stood here
+        // said: a bridge that reported `found:true` and then named no id.
         String id = Reply.of("artest vs ship-uuid", reply).text("id");
-        assertTrue("the bridge reported found:true without an id: " + reply, id != null);
         return id;
     }
 
@@ -161,8 +162,10 @@ public final class ShipIdentity {
         String reply = "";
         for (int attempt = 0; attempt < attempts; attempt++) {
             reply = probe.exec("artest vs ship-uuid " + dim + " " + durableShipId);
-            String hullId = Reply.of("artest vs ship-uuid", reply).text("id");
-            if (Reply.of(reply).bool("found", false) && hullId != null) {
+            // absence is the answer: this is the retry loop, and "no hull carries that name
+            // yet" is precisely what it is waiting out.
+            String hullId = Reply.of("artest vs ship-uuid", reply).textOr("id", null);
+            if (Reply.of(reply).boolOr("found", false) && hullId != null) {
                 return hullId;
             }
             between.await();

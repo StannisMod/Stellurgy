@@ -38,7 +38,7 @@ public class TerraformerMultiblockTest extends AbstractSharedServerTest {
         assertTrue("fixture multiblock terraformer failed: " + fixture,
                 Reply.of(fixture).ok());
         assertTrue("fixture didn't place any blocks: " + fixture,
-                Reply.of(fixture).has("placed") && !(Reply.of(fixture).integerOr("placed", Integer.MIN_VALUE) == 0));
+                Reply.of(fixture).has("placed") && !(Reply.of(fixture).integer("placed") == 0));
 
         String info = join(client().execute(
                 "artest machine info 0 " + CX + " " + CY + " " + CZ));
@@ -50,7 +50,7 @@ public class TerraformerMultiblockTest extends AbstractSharedServerTest {
         assertTrue("try-complete probe errored: " + tryComplete,
                 Reply.of(tryComplete).ok());
         assertTrue("terraformer multiblock didn't validate (isComplete=false): " + tryComplete,
-                Reply.of(tryComplete).bool("isComplete", false));
+                Reply.of(tryComplete).bool("isComplete"));
     }
 
     @Test
@@ -73,7 +73,7 @@ public class TerraformerMultiblockTest extends AbstractSharedServerTest {
         String broken = join(client().execute(
                 "artest machine try-complete 0 " + cx + " " + cy + " " + cz));
         assertTrue("terraformer validated despite missing neighbour: " + broken,
-                (!Reply.of(broken).bool("isComplete", true)));
+                (!Reply.of(broken).bool("isComplete")));
     }
 
     private static String join(java.util.List<String> resp) {

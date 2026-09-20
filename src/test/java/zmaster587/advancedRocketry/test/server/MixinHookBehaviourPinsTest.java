@@ -149,7 +149,6 @@ public class MixinHookBehaviourPinsTest extends AbstractSharedServerTest {
 
     private double doubleField(String field, String src, String fieldName) {
         double value = Reply.of(src).number(field);
-        assertTrue("field " + fieldName + " missing in: " + src, !Double.isNaN(value));
         return value;
     }
 

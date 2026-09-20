@@ -112,7 +112,7 @@ public class WeatherCycleDisableTest {
         // Forced-clear marker (rain=-1, thunder=-1): the custom cycle, when it runs,
         // drives this planet to clear regardless of what we set.
         String marker = cmd("artest weather set-marker " + FIXTURE_DIM + " -1 -1");
-        assertTrue("set-marker failed: " + marker, Reply.of(marker).bool("usesCustomWorldInfo", false));
+        assertTrue("set-marker failed: " + marker, Reply.of(marker).bool("usesCustomWorldInfo"));
 
         // --- config ON: the forced-clear cycle runs and suppresses the rain ---
         // (No intermediate "is raining" assert — with the cycle active the natural

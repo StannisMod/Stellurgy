@@ -115,7 +115,7 @@ public class VSPilotSeatTakenWhileOfflineE2ETest extends AbstractSharedVsClientE
         long spawnMark = events.markInstrumented();
         String assemble = assembleFixture(site);
         scenario().requireArranged("a with-pilot-seat build must route to a ship: " + assemble,
-                (Reply.of(assemble).integerOr("rocketCount", Integer.MIN_VALUE) == 0));
+                (Reply.of(assemble).integer("rocketCount") == 0));
         // The return value is KEPT: it is this scenario's ship by construction (the mark precedes the
         // assembly), and every question below has to name that craft rather than whichever one a
         // world-wide scan lists first.
@@ -136,7 +136,7 @@ public class VSPilotSeatTakenWhileOfflineE2ETest extends AbstractSharedVsClientE
         long seatMark = clientEvents().mark();
         String mount = exec("artest player mount-entity " + mountInfo.requireDummyId());
         scenario().requireArranged("bot must mount the seat dummy: " + mount,
-                Reply.of(mount).bool("mounted", false));
+                Reply.of(mount).bool("mounted"));
         // A LINK, where ten ticks used to stand: the server mounts him and the client PERFORMS the
         // seating when it is told, which is a record. Measured 2026-09-15 — under four client forks
         // those ten ticks were not enough and the scenario reported `riding:false` as though the
@@ -185,12 +185,12 @@ public class VSPilotSeatTakenWhileOfflineE2ETest extends AbstractSharedVsClientE
         String seatWhileGone = exec("artest vs seat-status 0 " + seatX + " " + seatY + " " + seatZ);
         scenario().requireArranged("with its pilot offline the seat must have NO bound dummy left "
                 + "(vanilla persists the mount inside the player's own data): " + seatWhileGone,
-                (!Reply.of(seatWhileGone).bool("dummyFound", true)));
+                (!Reply.of(seatWhileGone).bool("dummyFound")));
 
         // ---- ACT 2: someone takes the seat while he is offline. ---------------------------------
         String occupy = exec("artest vs seat-occupy 0 " + seatX + " " + seatY + " " + seatZ);
         scenario().requireArranged("the seat-occupy probe must seat an NPC occupant: " + occupy,
-                Reply.of(occupy).ok() && Reply.of(occupy).bool("mounted", false));
+                Reply.of(occupy).ok() && Reply.of(occupy).bool("mounted"));
         // The occupant's NAME was read here, for a message assertion that no longer exists. The uuid
         // below is the identity everything in this scenario is asked by, and it is the one that
         // survives the chunk reload the pilot's return performs.

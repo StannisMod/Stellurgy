@@ -131,11 +131,16 @@ public class HyperspaceSurvivesARestartE2ETest {
     }
 
     private static int readIntOr(String json, String key, int def) {
+        // absence is the answer, and WHICH answer is the CALLER's: this verb takes the
+        // default as an argument, so every call site names what a missing field means there.
         return Reply.of(json).integerOr(key, def);
     }
 
     private static boolean readBool(String json, String key) {
-        return Reply.of(json).bool(key, false);
+        // absence is the answer, and WHICH answer is the CALLER's: this verb is handed a
+        // FIELD name, so it cannot know what a missing one means — and the callers here
+        // include waits, which read the shape that does not carry the field yet.
+        return Reply.of(json).boolOr(key, false);
     }
 
     /** Poll for the ship the fixture assembles in its origin cell (VS assembly is asynchronous). */

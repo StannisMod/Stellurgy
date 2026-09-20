@@ -108,7 +108,7 @@ public class SpaceLoginRestoreSeatedPilotE2ETest extends AbstractSpaceLoginResto
         String tag = standUpAndAwaitTheStandingRecord(events());
         assertTrue("standing up on his own deck must keep him aboard, as a STANDING record - a "
                 + "record dropped here is exactly what used to send him to an ordinary spawn: " + tag,
-                Reply.of(tag).bool("tagged", false) && "STANDING".equals(Reply.of(tag).text("posture")));
+                Reply.of(tag).bool("tagged") && "STANDING".equals(Reply.of(tag).text("posture")));
         assertTrue("and it must still name the ship he is standing on: " + tag
                 + " (entered ship " + arrangedShipId + ")", tag.contains(arrangedShipId));
         // He must really be resolved on the DECK, in the ship's own frame, before the restart: that

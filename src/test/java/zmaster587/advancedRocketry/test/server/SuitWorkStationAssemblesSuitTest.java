@@ -52,7 +52,7 @@ public class SuitWorkStationAssemblesSuitTest extends AbstractHeadlessServerTest
         String place = join(client().execute(
                 "artest place 0 " + X + " " + Y + " " + Z + " advancedrocketry:suitWorkStation"));
         assertTrue("suitWorkStation place failed: " + place,
-                Reply.of(place).bool("placed", false));
+                Reply.of(place).bool("placed"));
 
         // Sanity: tile is the expected class + IInventory.
         String info0 = join(client().execute("artest machine info 0 " + X + " " + Y + " " + Z));

@@ -64,11 +64,11 @@ public class VSNavComputerAssemblyE2ETest extends AbstractSharedServerTest {
                 Reply.of(before).ok());
         requireArranged("control: a freshly built computer is NOT yet linked - without this"
                         + " the test could not tell assembly apart from doing nothing: " + before,
-                (!Reply.of(before).bool("linked", true)));
+                (!Reply.of(before).bool("linked")));
 
         String asm = exec("artest rocket assemble 0 " + bp[0] + " " + bp[1] + " " + bp[2]);
         assertTrue("with the physics mod an AFC-bearing build must become a ship, not a rocket: " + asm,
-                (Reply.of(asm).integerOr("rocketCount", Integer.MIN_VALUE) == 0));
+                (Reply.of(asm).integer("rocketCount") == 0));
 
         // The assembly lifts the craft one block before handing it to the physics mod, so the
         // computer's world position moves up with it.

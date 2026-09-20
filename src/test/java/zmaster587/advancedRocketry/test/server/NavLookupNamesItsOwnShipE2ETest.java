@@ -61,11 +61,11 @@ public class NavLookupNamesItsOwnShipE2ETest extends AbstractSharedServerTest {
         String asmA = exec("artest rocket assemble 0 "
                 + placeFixture(SHIP_A_X, SHIP_A_Y, SHIP_A_Z, "with-nav-computer"));
         requireArranged("with VS an AFC-bearing build must route to a ship (no rocket): "
-                + asmA, (Reply.of(asmA).integerOr("rocketCount", Integer.MIN_VALUE) == 0));
+                + asmA, (Reply.of(asmA).integer("rocketCount") == 0));
         String asmB = exec("artest rocket assemble 0 "
                 + placeFixture(SHIP_B_X, SHIP_B_Y, SHIP_B_Z, "with-nav-computer"));
         requireArranged("the second craft did not become a ship either: " + asmB,
-                (Reply.of(asmB).integerOr("rocketCount", Integer.MIN_VALUE) == 0));
+                (Reply.of(asmB).integer("rocketCount") == 0));
         requireArranged("the ships never loaded", loadedShips(0) >= 2);
 
         // ARRANGEMENT CHECK, before anything is asked: there must be TWO registered ships, or the
@@ -105,7 +105,7 @@ public class NavLookupNamesItsOwnShipE2ETest extends AbstractSharedServerTest {
                         + "jump gate reports it has none — the lookup answered about some other "
                         + "craft's shipyard. ship=" + shipId + " neighbour=" + otherShipId
                         + " afc=(" + afc[0] + "," + afc[1] + "," + afc[2] + ") gate=" + gate,
-                Reply.of(gate).bool("navComputer", false));
+                Reply.of(gate).bool("navComputer"));
     }
 
     /**

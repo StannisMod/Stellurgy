@@ -39,7 +39,7 @@ public class AreaGravityControllerMultiblockTest extends AbstractSharedServerTes
         assertTrue("try-complete probe errored: " + tryComplete,
                 Reply.of(tryComplete).ok());
         assertTrue("gravity-controller multiblock didn't validate (isComplete=false): " + tryComplete,
-                Reply.of(tryComplete).bool("isComplete", false));
+                Reply.of(tryComplete).bool("isComplete"));
     }
 
     @Test
@@ -52,7 +52,7 @@ public class AreaGravityControllerMultiblockTest extends AbstractSharedServerTes
         String first = join(client().execute(
                 "artest machine try-complete 0 " + cx + " " + cy + " " + cz));
         assertTrue("baseline must validate: " + first,
-                Reply.of(first).bool("isComplete", false));
+                Reply.of(first).bool("isComplete"));
 
         // Power-input plug directly under controller -> globalY = cy - 1, globalX = cx, globalZ = cz.
         String breakPlug = join(client().execute(
@@ -64,7 +64,7 @@ public class AreaGravityControllerMultiblockTest extends AbstractSharedServerTes
                 "artest machine try-complete 0 " + cx + " " + cy + " " + cz));
         assertTrue("structure stayed complete after plug removal — "
                         + "validator broken: " + broken,
-                (!Reply.of(broken).bool("isComplete", true)));
+                (!Reply.of(broken).bool("isComplete")));
     }
 
     @Test
@@ -77,7 +77,7 @@ public class AreaGravityControllerMultiblockTest extends AbstractSharedServerTes
         String first = join(client().execute(
                 "artest machine try-complete 0 " + cx + " " + cy + " " + cz));
         assertTrue("baseline must validate: " + first,
-                Reply.of(first).bool("isComplete", false));
+                Reply.of(first).bool("isComplete"));
 
         // advStructure at (cx+1, cy-1, cz) — east arm of the cross.
         String breakArm = join(client().execute(
@@ -89,7 +89,7 @@ public class AreaGravityControllerMultiblockTest extends AbstractSharedServerTes
                 "artest machine try-complete 0 " + cx + " " + cy + " " + cz));
         assertTrue("structure stayed complete after arm removal — "
                         + "validator broken: " + broken,
-                (!Reply.of(broken).bool("isComplete", true)));
+                (!Reply.of(broken).bool("isComplete")));
     }
 
     private static String join(java.util.List<String> resp) {

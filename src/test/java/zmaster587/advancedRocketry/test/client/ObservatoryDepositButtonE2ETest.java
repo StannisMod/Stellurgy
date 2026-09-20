@@ -68,9 +68,9 @@ public class ObservatoryDepositButtonE2ETest extends AbstractSharedClientE2ETest
 
         String before = exec("artest planet knowledge 0 " + fresh);
         assertTrue("arrangement: a just-minted world must be unknown here: " + before,
-                (!Reply.of(before).bool("local", true)));
+                (!Reply.of(before).bool("local")));
         assertTrue("arrangement: and unknown to the pack: " + before,
-                (!Reply.of(before).bool("global", true)));
+                (!Reply.of(before).bool("global")));
         // The COMPLETE multiblock, not a lone block: the survey tab is a machine's GUI, and a test
         // that opened a half-built one would be measuring the incomplete panel.
         // The COMPLETE multiblock, not a lone block: the survey tab is a machine's GUI, and a test
@@ -105,11 +105,11 @@ public class ObservatoryDepositButtonE2ETest extends AbstractSharedClientE2ETest
         // not touch the pack's global floor.
         String after = exec("artest planet knowledge 0 " + fresh);
         assertTrue("after the click a pad here must be offered that world: " + after,
-                Reply.of(after).bool("known", false));
+                Reply.of(after).bool("known"));
         assertTrue("and it must be known LOCALLY, not announced to the whole game: " + after,
-                Reply.of(after).bool("local", false));
+                Reply.of(after).bool("local"));
         assertTrue("the pack's own floor must be untouched: " + after,
-                (!Reply.of(after).bool("global", true)));
+                (!Reply.of(after).bool("global")));
     }
 
     /** A numeric field of a probe reply, refusing when the reply does not carry it. */

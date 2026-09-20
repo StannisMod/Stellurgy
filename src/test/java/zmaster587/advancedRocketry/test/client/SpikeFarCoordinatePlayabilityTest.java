@@ -394,7 +394,7 @@ public class SpikeFarCoordinatePlayabilityTest extends AbstractClientE2ETest {
         // NaN on absence is deliberate and CHECKED by the callers, which grade a rung and must be
         // able to say "not measured" apart from "measured zero" — at a far coordinate those are the
         // two outcomes the whole spike exists to tell apart.
-        return Reply.of(json).numberOr(key, Double.NaN);
+        return Reply.of(json).number(key);
     }
 
     /** One rung's four numbers plus the verdict they earn against the origin control. */

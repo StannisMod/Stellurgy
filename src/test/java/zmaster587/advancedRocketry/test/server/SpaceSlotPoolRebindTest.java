@@ -29,6 +29,6 @@ public class SpaceSlotPoolRebindTest extends AbstractSharedServerTest {
         String r = exec("artest space roundtrip");
         assertTrue("space roundtrip must complete: " + r, Reply.of(r).ok());
         assertTrue("a slot must rebind between on-disk cells with per-cell block isolation "
-                + "(A marker persists, B marker does not bleed into A): " + r, Reply.of(r).bool("pass", false));
+                + "(A marker persists, B marker does not bleed into A): " + r, Reply.of(r).bool("pass"));
     }
 }

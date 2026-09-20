@@ -62,9 +62,8 @@ public class WearAccrualDisableTest extends AbstractSharedServerTest {
 
     private double damagePartsAndReadProb(int rocketId, int iterations) throws Exception {
         String r = cmd("artest wear damage-parts " + rocketId + " " + iterations);
-        assertTrue("damage-parts must find the rocket: " + r, Reply.of(r).bool("found", false));
+        assertTrue("damage-parts must find the rocket: " + r, Reply.of(r).bool("found"));
         double prob = Reply.of("artest wear damage-parts", r).number(BREAKING_PROB);
-        assertTrue("no breakingProb in damage-parts response: " + r, !Double.isNaN(prob));
         return prob;
     }
 

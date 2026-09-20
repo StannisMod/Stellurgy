@@ -68,18 +68,18 @@ public final class TransitStatus {
 
     private TransitStatus(Reply reply, String raw) {
         this.raw = raw;
-        this.inTransit = reply.integerOr("inTransit", -1);
-        this.crossing = reply.integerOr("crossing", -1);
-        this.targetDim = reply.integerOr("targetDim", Integer.MIN_VALUE);
-        this.poseX = (long) reply.numberOr("poseX", Double.NaN);
-        this.poseY = (long) reply.numberOr("poseY", Double.NaN);
-        this.poseZ = (long) reply.numberOr("poseZ", Double.NaN);
-        this.shipY = (long) reply.numberOr("shipY", Double.NaN);
-        this.poseDist = (long) reply.numberOr("poseDist", Double.NaN);
-        this.crewDim = reply.integerOr("crewDim", Integer.MIN_VALUE);
-        this.hyperDim = reply.integerOr("hyperDim", Integer.MIN_VALUE);
-        this.reseating = reply.integerOr("reseating", -1);
-        this.ships = reply.textOr("ships", "");
+        this.inTransit = reply.integer("inTransit");
+        this.crossing = reply.integer("crossing");
+        this.targetDim = reply.integer("targetDim");
+        this.poseX = (long) reply.number("poseX");
+        this.poseY = (long) reply.number("poseY");
+        this.poseZ = (long) reply.number("poseZ");
+        this.shipY = (long) reply.number("shipY");
+        this.poseDist = (long) reply.number("poseDist");
+        this.crewDim = reply.integer("crewDim");
+        this.hyperDim = reply.integer("hyperDim");
+        this.reseating = reply.integer("reseating");
+        this.ships = reply.text("ships");
     }
 
     /**
@@ -91,7 +91,7 @@ public final class TransitStatus {
      */
     public static TransitStatus of(String statusReply) {
         Reply reply = Reply.of("artest space transit-status", String.valueOf(statusReply));
-        if (!reply.bool("ok", false)) {
+        if (!reply.ok()) {
             ArrangementFailure.arrangementFailed("the transit stack does not answer about its own"
                     + " status, so a zero in-flight count here would be a claim about the jump"
                     + " rather than about the reply: " + statusReply);

@@ -70,7 +70,7 @@ public class VSJumpDumpsTheCruiseE2ETest extends AbstractSharedServerTest {
 
         String cruise = exec("artest vs ff-cruise-read-by-id " + arrived.dim + " " + arrived.vsId);
         assertTrue("the arrived craft has no flight computer to answer about, so this leg pins "
-                + "nothing: " + cruise, Reply.of(cruise).bool("afcResolved", false));
+                + "nothing: " + cruise, Reply.of(cruise).bool("afcResolved"));
         assertEquals("a craft keeps its cruise across a cell-to-cell crossing — if this is zero, the "
                         + "dump is not a hyperspace carve-out but a regression that empties every "
                         + "setpoint everywhere, and its sibling leg would pass on it: " + cruise,
@@ -83,7 +83,7 @@ public class VSJumpDumpsTheCruiseE2ETest extends AbstractSharedServerTest {
 
         String cruise = exec("artest vs ff-cruise-read-by-id " + arrived.dim + " " + arrived.vsId);
         assertTrue("the arrived craft has no flight computer to answer about: " + cruise,
-                Reply.of(cruise).bool("afcResolved", false));
+                Reply.of(cruise).bool("afcResolved"));
         assertEquals("a craft leaves hyperspace at rest, and this one arrived still carrying the "
                         + "cruise it entered with — so it will accelerate back to it within seconds "
                         + "of dropping out: " + cruise,
@@ -128,7 +128,7 @@ public class VSJumpDumpsTheCruiseE2ETest extends AbstractSharedServerTest {
         String commanded = exec("artest vs ff-cruise-by-id " + originDim + " " + originVsId
                 + " 0 0 " + COMMANDED_CRUISE);
         assertTrue("the craft has no flight computer to command, so nothing below is about a cruise: "
-                + commanded, Reply.of(commanded).bool("afcResolved", false));
+                + commanded, Reply.of(commanded).bool("afcResolved"));
         assertEquals("PREMISE: the craft must actually be under way before it jumps, or both legs "
                         + "would be asking about a setpoint that was never there: " + commanded,
                 COMMANDED_CRUISE, extractDouble(commanded, "cruiseUp"), CRUISE_EPSILON);
@@ -136,13 +136,15 @@ public class VSJumpDumpsTheCruiseE2ETest extends AbstractSharedServerTest {
         // Marked BEFORE the command whose effect is awaited.
         long jumpMark = events.mark();
         String begin = exec("artest space transit-begin " + originDim + " 1 64 1 " + speed);
-        assertTrue("the jump must begin: " + begin, Reply.of(begin).bool("began", false));
+        assertTrue("the jump must begin: " + begin, Reply.of(begin).bool("began"));
 
-        String arrived = events.awaitRecordWithField(jumpMark, "ship_transit_ended","route", route,
+        // Narrowed by the CRAFT as well as the route — see the identity note below: the
+        // arrival is read for WHICH ship arrived, so the wait must already be that ship's.
+        String arrived = events.awaitRecordWithFields(jumpMark, "ship_transit_ended",
                 "the ship never reached the target cell by the " + route + " route, so this leg has "
                         + "no arrival to read a cruise off; the durable record now reads "
                         + exec("artest space transit-export"),
-                ARRIVAL_TICKS);
+                ARRIVAL_TICKS, "ship", setup.requireDurableId(), "route", route);
         int targetDim = extractInt(arrived, "dim");
         assertTrue("the arrival was announced but names no dimension: " + arrived, targetDim >= 0);
         assertTrue("the ship never (re)loaded in the target cell (dim " + targetDim + "); countAll="
@@ -176,10 +178,10 @@ public class VSJumpDumpsTheCruiseE2ETest extends AbstractSharedServerTest {
     }
 
     private static int extractInt(String json, String key) {
-        return Reply.of(json).integerOr(key, Integer.MIN_VALUE);
+        return Reply.of(json).integer(key);
     }
 
     private static double extractDouble(String json, String key) {
-        return Reply.of(json).numberOr(key, Double.NaN);
+        return Reply.of(json).number(key);
     }
 }

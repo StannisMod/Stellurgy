@@ -48,7 +48,7 @@ public class Tier1AimsAtWhatThisWorldKnowsE2ETest extends AbstractSharedServerTe
     private boolean known(int standing, int target) throws Exception {
         String reply = exec("artest planet knowledge " + standing + " " + target);
         assertTrue("the knowledge probe failed: " + reply, Reply.of(reply).has("known"));
-        return Reply.of(reply).bool("known", false);
+        return Reply.of(reply).bool("known");
     }
 
     /** The same reply's two halves, so a red test says WHICH source moved. */
@@ -101,9 +101,9 @@ public class Tier1AimsAtWhatThisWorldKnowsE2ETest extends AbstractSharedServerTe
 
             String reply = halves(0, fresh);
             assertTrue("a freshly minted world must be in nobody's global set: " + reply,
-                    (!Reply.of(reply).bool("global", true)));
+                    (!Reply.of(reply).bool("global")));
             assertTrue("nor known on the world we are standing on: " + reply,
-                    (!Reply.of(reply).bool("local", true)));
+                    (!Reply.of(reply).bool("local")));
             assertFalse("and a pad here must therefore not be offered it: " + reply,
                     known(0, fresh));
         } finally {
@@ -130,8 +130,8 @@ public class Tier1AimsAtWhatThisWorldKnowsE2ETest extends AbstractSharedServerTe
 
             String reply = halves(0, fresh);
             assertTrue("arrangement: nobody may have taught this world globally: " + reply,
-                    (!Reply.of(reply).bool("global", true)));
-            assertTrue("arrangement: nor locally: " + reply, (!Reply.of(reply).bool("local", true)));
+                    (!Reply.of(reply).bool("global")));
+            assertTrue("arrangement: nor locally: " + reply, (!Reply.of(reply).bool("local")));
             assertTrue("with research off a pad must still be offered it - the place-bound set is"
                     + " additive over a gate that is not there: " + reply, known(0, fresh));
         } finally {
@@ -173,9 +173,9 @@ public class Tier1AimsAtWhatThisWorldKnowsE2ETest extends AbstractSharedServerTe
         for (int dim : landed) {
             String reply = halves(0, dim);
             assertTrue("a deposited address must be known to a pad standing here: " + reply,
-                    Reply.of(reply).bool("known", false));
+                    Reply.of(reply).bool("known"));
             assertTrue("and it must be known LOCALLY - the deposit may not touch the global floor: "
-                    + reply, Reply.of(reply).bool("local", false));
+                    + reply, Reply.of(reply).bool("local"));
         }
 
         String depositedAgain = exec("artest telescope deposit " + where());

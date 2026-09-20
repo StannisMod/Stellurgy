@@ -113,7 +113,7 @@ public class FuelingStationFuelsAdjacentRocketTest extends AbstractHeadlessServe
         String placeFs = join(client().execute(
                 "artest place 0 " + FX + " " + FY + " " + FZ + " advancedrocketry:fuelingStation"));
         assertTrue("fuelingStation place failed: " + placeFs,
-                Reply.of(placeFs).bool("placed", false));
+                Reply.of(placeFs).bool("placed"));
 
         String preFuel = join(client().execute("artest rocket fuel " + rocketId));
         Reply preMono = monoEntry(preFuel);
@@ -156,7 +156,7 @@ public class FuelingStationFuelsAdjacentRocketTest extends AbstractHeadlessServe
         String preTank = join(client().execute(
                 "artest fluid stored 0 " + FX + " " + FY + " " + FZ));
         assertTrue("station must report fluid present: " + preTank,
-                Reply.of(preTank).bool("hasFluid", false));
+                Reply.of(preTank).bool("hasFluid"));
         // Summed across the station's tanks: the amount is a TANK's field, not the reply's.
         int initialTank = FluidStored.of(preTank).amountOf(STATION_FUEL);
         assertTrue("station tank must be at least 1 000 mB before tick: " + initialTank

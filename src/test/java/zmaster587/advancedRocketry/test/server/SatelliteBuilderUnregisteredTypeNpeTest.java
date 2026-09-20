@@ -39,14 +39,14 @@ public class SatelliteBuilderUnregisteredTypeNpeTest extends AbstractSharedServe
 
         exec("artest chunk warmup 0 " + (x >> 4) + " " + (z >> 4) + " " + (x >> 4) + " " + (z >> 4));
         String place = exec("artest place 0 " + x + " " + y + " " + z + " advancedrocketry:satelliteBuilder");
-        assertTrue("satellite builder must place: " + place, Reply.of(place).bool("placed", false));
+        assertTrue("satellite builder must place: " + place, Reply.of(place).bool("placed"));
 
         String resp = exec("artest satellite-builder press-build-unregistered 0 " + x + " " + y + " " + z);
         assertTrue("probe setup must succeed: " + resp, Reply.of(resp).ok());
         assertTrue("the bogus type must be absent from the class registry (else not a valid L3 repro): " + resp,
-                Reply.of(resp).bool("getNewSatelliteNull", false));
+                Reply.of(resp).bool("getNewSatelliteNull"));
         assertTrue("the bogus part must actually load into core slot 0: " + resp,
-                Reply.of(resp).bool("slot0Loaded", false));
+                Reply.of(resp).bool("slot0Loaded"));
         assertTrue("L3 null-type guard: pressing Build with an unregistered core type must NOT throw — "
                         + "canAssembleSatellite returns false (build silently rejected) when getNewSatellite is "
                         + "null, so onInventoryButtonPressed(0) skips assembleSatellite. Got: " + resp,

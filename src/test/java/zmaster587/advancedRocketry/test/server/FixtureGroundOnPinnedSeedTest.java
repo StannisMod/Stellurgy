@@ -120,7 +120,6 @@ public class FixtureGroundOnPinnedSeedTest extends AbstractHeadlessServerTest {
 
     private static String stringField(String field, String text) {
         String value = Reply.of(text).text(field);
-        assertTrue("field `" + field + "` not found in: " + text, value != null);
         return value;
     }
 }

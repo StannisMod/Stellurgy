@@ -77,7 +77,7 @@ public class TerraformerPoweredCycleOnArPlanetTest extends AbstractSharedServerT
         // can find a live WorldServer for it.
         String load = exec("artest dim load " + newDim);
         assertTrue("dim load did not report loaded:true — " + load,
-                Reply.of(load).bool("loaded", false) || Reply.of(load).ok());
+                Reply.of(load).bool("loaded"));
     }
 
     @After
@@ -119,7 +119,7 @@ public class TerraformerPoweredCycleOnArPlanetTest extends AbstractSharedServerT
         String preState = exec("artest machine controller-state "
                 + newDim + " " + CX_POSITIVE + " " + CY + " " + CZ);
         assertTrue("controller-state probe missing batteries readout — " + preState,
-                Reply.of(preState).bool("batteriesPresent", false));
+                Reply.of(preState).bool("batteriesPresent"));
 
         // ARRANGE the starting density instead of taking whatever the world hands over. The
         // terraformer only steps UP while density is below its ceiling of 1600, and a planet's
@@ -201,7 +201,7 @@ public class TerraformerPoweredCycleOnArPlanetTest extends AbstractSharedServerT
         String drain = exec("artest machine clear-batteries " + newDim
                 + " " + CX_NO_POWER + " " + CY + " " + CZ);
         assertTrue("clear-batteries probe failed: " + drain,
-                Reply.of(drain).bool("cleared", false));
+                Reply.of(drain).bool("cleared"));
 
         // Top up fluid each iteration so OOF can't be the cause of any
         // non-progression observed below — power-absence must be the
@@ -227,11 +227,11 @@ public class TerraformerPoweredCycleOnArPlanetTest extends AbstractSharedServerT
         String fixture = exec("artest fixture multiblock terraformer "
                 + newDim + " " + cx + " " + CY + " " + CZ);
         assertTrue("terraformer fixture build failed: " + fixture,
-                Reply.of(fixture).ok() && (Reply.of(fixture).integerOr("unresolved", Integer.MIN_VALUE) == 0));
+                Reply.of(fixture).ok() && (Reply.of(fixture).integer("unresolved") == 0));
         String tryComplete = exec("artest machine try-complete "
                 + newDim + " " + cx + " " + CY + " " + CZ);
         assertTrue("terraformer structure failed to complete: " + tryComplete,
-                Reply.of(tryComplete).bool("isComplete", false));
+                Reply.of(tryComplete).bool("isComplete"));
         return fixture;
     }
 
@@ -294,7 +294,7 @@ public class TerraformerPoweredCycleOnArPlanetTest extends AbstractSharedServerT
     private void enableMachine(int cx) throws Exception {
         String resp = exec("artest machine set-enabled "
                 + newDim + " " + cx + " " + CY + " " + CZ + " true");
-        assertTrue("machine set-enabled failed: " + resp, Reply.of(resp).bool("enabled", false));
+        assertTrue("machine set-enabled failed: " + resp, Reply.of(resp).bool("enabled"));
     }
 
     private void forceTick(int cx, int ticks) throws Exception {

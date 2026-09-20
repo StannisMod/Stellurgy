@@ -97,7 +97,6 @@ public class VSRiderKeepsHisMountAtCruiseE2ETest extends AbstractSharedVsClientE
 
     private static double readDouble(String json, String field) {
         double value = Reply.of(json).number(field);
-        assertTrue("expected `" + field + "` in: " + json, !Double.isNaN(value));
         return value;
     }
 
@@ -107,7 +106,7 @@ public class VSRiderKeepsHisMountAtCruiseE2ETest extends AbstractSharedVsClientE
     }
 
     private static boolean readBool(String json, String key) {
-        return Reply.of(json).bool(key, false);
+        return Reply.of(json).bool(key);
     }
 
     private boolean riding() throws Exception {
@@ -115,6 +114,8 @@ public class VSRiderKeepsHisMountAtCruiseE2ETest extends AbstractSharedVsClientE
     }
 
     private static int readIntOr(String json, String key, int fallback) {
+        // absence is the answer, and WHICH answer is the CALLER's: this verb takes the
+        // default as an argument, so every call site names what a missing field means there.
         return Reply.of(json).integerOr(key, fallback);
     }
 
@@ -165,7 +166,7 @@ public class VSRiderKeepsHisMountAtCruiseE2ETest extends AbstractSharedVsClientE
         String assembled = exec("artest rocket assemble " + dim
                 + " " + bp[0] + " " + bp[1] + " " + bp[2]);
         scenario().requireArranged("a with-pilot-seat build must route to a ship: " + assembled,
-                (Reply.of(assembled).integerOr("rocketCount", Integer.MIN_VALUE) == 0));
+                (Reply.of(assembled).integer("rocketCount") == 0));
         scenario().requireArranged("the ship never assembled/loaded in the cell (dim " + dim + ")",
                 waitForLoadedShip(dim) >= 1);
 
@@ -189,7 +190,6 @@ public class VSRiderKeepsHisMountAtCruiseE2ETest extends AbstractSharedVsClientE
 
         String health = exec("artest player health");
         Reply nameMReply = Reply.of(health);
-        assertTrue("player health must echo the player name: " + health, nameMReply.has(PLAYER_NAME));
         String botName = nameMReply.text(PLAYER_NAME);
 
         scenario().requireArranged("the bot must enter the cell",
@@ -221,7 +221,8 @@ public class VSRiderKeepsHisMountAtCruiseE2ETest extends AbstractSharedVsClientE
                     readBool(mountAt, "ok"));
             dummyId = readInt(mountAt, "dummyId");
             mount = exec("artest player mount-entity " + dummyId);
-            mounted = Reply.of(mount).bool("mounted", false);
+            // absence is the answer: this is a retry loop, and "not yet" is what it is reading for.
+            mounted = Reply.of(mount).boolOr("mounted", false);
             if (!mounted) {
                 bot().waitTicks(10);
             }
@@ -261,17 +262,23 @@ public class VSRiderKeepsHisMountAtCruiseE2ETest extends AbstractSharedVsClientE
                         + " leg cannot fail", riding());
 
         mounted = false;
+        // The CLIENT's mark, before the re-seat is ordered: the control below reads the
+        // client, and the link is what says the mount reached it.
+        long reseatClientMark = clientEvents().mark();
         for (int attempt = 0; attempt < 5 && !mounted; attempt++) {
             String mountAt = exec("artest vs seat-mount-at " + dim
                     + " " + mountX + " " + mountY + " " + mountZ);
             mount = exec("artest player mount-entity " + readInt(mountAt, "dummyId"));
-            mounted = Reply.of(mount).bool("mounted", false);
+            // absence is the answer: this is a retry loop, and "not yet" is what it is reading for.
+            mounted = Reply.of(mount).boolOr("mounted", false);
             if (!mounted) {
                 bot().waitTicks(10);
             }
         }
         scenario().requireArranged("the bot must be re-seated after the control: " + mount, mounted);
-        bot().waitTicks(10);
+        // WAS `waitTicks(10)` and a read. The server says it seated him; this reads the
+        // CLIENT, and a budget between the two is an assertion about replication speed.
+        ridingOnceTheClientHasRemounted(reseatClientMark, CLIENT_REMOUNT_BUDGET_TICKS);
         scenario().requireArranged("seated again before the cruise", riding());
 
         // ---- STIMULUS: a COASTING horizontal cruise. Three properties, each load-bearing.

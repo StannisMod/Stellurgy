@@ -78,7 +78,7 @@ public class FreeFlightAssistsE2ETest extends AbstractSharedServerTest {
 
         String off = ok(client().execute("artest rocket set-flight-assist " + id + " off"));
         assertTrue("set-flight-assist off must succeed: " + off,
-                Reply.of(off).ok() && (!Reply.of(off).bool("flightAssistOn", true)));
+                Reply.of(off).ok() && (!Reply.of(off).bool("flightAssistOn")));
 
         RocketInfo info1 = rocketInfo(id);
         assertFalse("info must round-trip FA=false: " + info1.raw(), info1.flightAssistOn);
@@ -108,9 +108,9 @@ public class FreeFlightAssistsE2ETest extends AbstractSharedServerTest {
         String applied = ok(client().execute(
                 "artest rocket free-flight-input " + id + " 0 0 0 0 0 1"));
         assertTrue("input must apply on FF rocket: " + applied,
-                Reply.of(applied).bool("applied", false));
+                Reply.of(applied).bool("applied"));
         assertTrue("probe echoes cut=true: " + applied,
-                Reply.of(applied).bool("cut", false));
+                Reply.of(applied).bool("cut"));
 
         RocketInfo info = rocketInfo(id);
         assertTrue("info must store ffInputCut=true: " + info.raw(),

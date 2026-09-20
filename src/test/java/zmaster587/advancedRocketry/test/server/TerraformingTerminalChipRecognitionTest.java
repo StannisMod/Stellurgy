@@ -85,7 +85,7 @@ public class TerraformingTerminalChipRecognitionTest extends AbstractSharedServe
         String redstone = exec("artest place 0 " + (x + 1) + " " + y + " " + z
                 + " minecraft:redstone_block");
         assertTrue("redstone_block place failed: " + redstone,
-                Reply.of(redstone).bool("placed", false));
+                Reply.of(redstone).bool("placed"));
 
         // One force-tick is enough — update() reads redstone + slot 0
         // then mutates was_enabled_last_tick and the block state in the
@@ -135,7 +135,7 @@ public class TerraformingTerminalChipRecognitionTest extends AbstractSharedServe
         String place = exec("artest place 0 " + x + " " + y + " " + z
                 + " advancedrocketry:terraformingTerminal");
         assertTrue("terraformingTerminal place failed: " + place,
-                Reply.of(place).bool("placed", false));
+                Reply.of(place).bool("placed"));
         // Apply redstone — proves the gate is on the chip side, not on
         // power side.
         exec("artest place 0 " + (x + 1) + " " + y + " " + z + " minecraft:redstone_block");
@@ -161,7 +161,7 @@ public class TerraformingTerminalChipRecognitionTest extends AbstractSharedServe
         String place = exec("artest place 0 " + x + " " + y + " " + z
                 + " advancedrocketry:terraformingTerminal");
         assertTrue("terraformingTerminal place failed: " + place,
-                Reply.of(place).bool("placed", false));
+                Reply.of(place).bool("placed"));
 
         // Build + register a SatelliteBiomeChanger on dim 0.
         String build = exec("artest satellite-builder build 0 biomeChanger");
@@ -181,7 +181,6 @@ public class TerraformingTerminalChipRecognitionTest extends AbstractSharedServe
 
     private static String extract(String src, String field) {
         String value = Reply.of(src).text(field);
-        assertTrue("field `" + field + "` not found in: " + src, value != null);
         return value;
     }
 }

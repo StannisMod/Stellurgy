@@ -57,7 +57,7 @@ public class TerraformingTerminalSmokeTest extends AbstractSharedServerTest {
         String place = exec("artest place 0 " + CX_BASIC + " " + CY + " " + CZ
                 + " advancedrocketry:terraformingTerminal");
         assertTrue("terminal must place: " + place,
-                Reply.of(place).bool("placed", false));
+                Reply.of(place).bool("placed"));
 
         String info = exec("artest machine info 0 " + CX_BASIC + " " + CY + " " + CZ);
         assertTrue("block must produce TileTerraformingTerminal: " + info,
@@ -83,7 +83,7 @@ public class TerraformingTerminalSmokeTest extends AbstractSharedServerTest {
         String place = exec("artest place 0 " + CX_REDSTONE + " " + CY + " " + CZ
                 + " advancedrocketry:terraformingTerminal");
         assertTrue("terminal must place: " + place,
-                Reply.of(place).bool("placed", false));
+                Reply.of(place).bool("placed"));
 
         // Place a redstone block adjacent so isBlockIndirectlyGettingPowered
         // returns true. This pushes the terminal into the

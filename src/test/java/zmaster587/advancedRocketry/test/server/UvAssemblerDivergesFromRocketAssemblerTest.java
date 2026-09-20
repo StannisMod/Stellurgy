@@ -55,7 +55,7 @@ public class UvAssemblerDivergesFromRocketAssemblerTest extends AbstractHeadless
                 "artest place 0 " + X_ROCKET + " " + Y + " " + Z_ROCKET
                         + " advancedrocketry:rocketBuilder"));
         assertTrue("rocketBuilder place failed: " + placeRocket,
-                Reply.of(placeRocket).bool("placed", false));
+                Reply.of(placeRocket).bool("placed"));
 
         String rocketInfo = join(client().execute(
                 "artest machine info 0 " + X_ROCKET + " " + Y + " " + Z_ROCKET));
@@ -71,7 +71,7 @@ public class UvAssemblerDivergesFromRocketAssemblerTest extends AbstractHeadless
                 "artest place 0 " + X_UV + " " + Y + " " + Z_UV
                         + " advancedrocketry:deployableRocketBuilder"));
         assertTrue("deployableRocketBuilder place failed: " + placeUv,
-                Reply.of(placeUv).bool("placed", false));
+                Reply.of(placeUv).bool("placed"));
 
         String uvInfo = join(client().execute(
                 "artest machine info 0 " + X_UV + " " + Y + " " + Z_UV));

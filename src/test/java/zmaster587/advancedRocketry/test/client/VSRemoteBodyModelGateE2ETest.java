@@ -498,7 +498,7 @@ public class VSRemoteBodyModelGateE2ETest extends AbstractSharedVsClientE2ETest 
 
     private String blockAt(int x, int y, int z) throws Exception {
         return Reply.of("artest block at",
-                exec("artest block at 0 " + x + " " + y + " " + z)).textOr("block", "?");
+                exec("artest block at 0 " + x + " " + y + " " + z)).text("block");
     }
 
     /** Whether the CLIENT world holds THIS subject, and where it puts it. Best effort: a probe
@@ -572,7 +572,7 @@ public class VSRemoteBodyModelGateE2ETest extends AbstractSharedVsClientE2ETest 
     private void rollShip(int bx, int by, int bz) throws Exception {
         assertTrue("attitude hold must accept the steep roll",
                 Reply.of(exec("artest vs point-by-id 0 " + scenarioShipId + " " + STEEP_ROLL)
-                        ).bool("commanded", false));
+                        ).bool("commanded"));
         // A WINDOW, not a poll — and the comment above was right that a tick count cannot be the
         // GATE, which is a different claim from "so it must re-read until it likes the answer". An
         // attitude converging under a hold is a physical value nobody publishes, and the hold never
@@ -779,7 +779,7 @@ public class VSRemoteBodyModelGateE2ETest extends AbstractSharedVsClientE2ETest 
         long spawnMark = events.markInstrumented();
         String assemble = assembleFixture(bx, by, bz);
         assertTrue("a " + VARIANT + " build must route to a ship: " + assemble,
-                (Reply.of(assemble).integerOr("rocketCount", Integer.MIN_VALUE) == 0));
+                (Reply.of(assemble).integer("rocketCount") == 0));
         scenarioShipId = awaitShipSpawned(events, spawnMark, "assembly must create a VS ship in the"
                 + " physics registry (the spawn is queued, so this is a deadline for a discrete event"
                 + " and not a guess at how long a value takes to settle)");
@@ -851,7 +851,6 @@ public class VSRemoteBodyModelGateE2ETest extends AbstractSharedVsClientE2ETest 
 
     private double readDouble(String json, String field) {
         double value = Reply.of(json).number(field);
-        assertTrue("expected a number `" + field + "` in: " + json, !Double.isNaN(value));
         return value;
     }
 

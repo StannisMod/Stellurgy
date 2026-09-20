@@ -41,7 +41,7 @@ public class SelectorServerSmokeTest extends AbstractHeadlessServerTest {
         String place = String.join("\n", client().execute(
                 "artest place 0 " + x + " " + y + " " + z + " advancedrocketry:planetSelector"));
         assertTrue("could not place planetSelector: " + place,
-                Reply.of(place).bool("placed", false));
+                Reply.of(place).bool("placed"));
 
         // Initial state — no selection yet.
         String empty = String.join("\n", client().execute(
@@ -49,7 +49,7 @@ public class SelectorServerSmokeTest extends AbstractHeadlessServerTest {
         assertTrue("selector info errored on fresh tile: " + empty,
                 !Reply.of(empty).has("error"));
         assertTrue("freshly placed selector tile should report hasSelection=false: " + empty,
-                (!Reply.of(empty).bool("hasSelection", true)));
+                (!Reply.of(empty).bool("hasSelection")));
 
         // Simulate a click selecting Earth (dim 0).
         String clickEarth = String.join("\n", client().execute(
@@ -61,9 +61,9 @@ public class SelectorServerSmokeTest extends AbstractHeadlessServerTest {
         String earthInfo = String.join("\n", client().execute(
                 "artest selector info 0 " + x + " " + y + " " + z));
         assertTrue("selection didn't stick: " + earthInfo,
-                Reply.of(earthInfo).bool("hasSelection", false));
+                Reply.of(earthInfo).bool("hasSelection"));
         assertTrue("selectedDim mismatch: " + earthInfo,
-                (Reply.of(earthInfo).integerOr("selectedDim", Integer.MIN_VALUE) == 0));
+                (Reply.of(earthInfo).integer("selectedDim") == 0));
 
         // Probe non-existent planet dim — must reject without mutating state.
         String reject = String.join("\n", client().execute(
@@ -74,7 +74,7 @@ public class SelectorServerSmokeTest extends AbstractHeadlessServerTest {
         String unchanged = String.join("\n", client().execute(
                 "artest selector info 0 " + x + " " + y + " " + z));
         assertTrue("selection unexpectedly mutated after rejected simulate-click: " + unchanged,
-                (Reply.of(unchanged).integerOr("selectedDim", Integer.MIN_VALUE) == 0));
+                (Reply.of(unchanged).integer("selectedDim") == 0));
     }
 
     @Test

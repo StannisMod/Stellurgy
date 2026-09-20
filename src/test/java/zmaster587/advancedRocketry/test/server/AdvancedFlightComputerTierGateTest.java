@@ -50,7 +50,7 @@ public class AdvancedFlightComputerTierGateTest extends AbstractSharedServerTest
         String assemble = assembleFixture(FixtureSite.openAir(0, 1200, 1200), VARIANT);
         // A rocket WAS built (fallback taken) ...
         assertTrue("expected exactly one rocket from the fallback path: " + assemble,
-                (Reply.of(assemble).integerOr("rocketCount", Integer.MIN_VALUE) == 1));
+                (Reply.of(assemble).integer("rocketCount") == 1));
         int entityId = extractInt(assemble, "entityId");
         assertTrue("assemble did not report a rocket entity id: " + assemble, entityId >= 0);
 
@@ -74,7 +74,7 @@ public class AdvancedFlightComputerTierGateTest extends AbstractSharedServerTest
         // The defining contract of the fork WITH VS: the AFC diverts the build to a
         // ship, so no EntityRocket is spawned on the pad.
         assertTrue("with VS, an AFC-bearing build must not spawn a rocket: " + assemble,
-                (Reply.of(assemble).integerOr("rocketCount", Integer.MIN_VALUE) == 0));
+                (Reply.of(assemble).integer("rocketCount") == 0));
     }
 
     @Test
@@ -87,7 +87,7 @@ public class AdvancedFlightComputerTierGateTest extends AbstractSharedServerTest
         String assemble = assembleFixture(FixtureSite.openAir(0, 2000, 2000), "advanced-flight-computer-only");
         assertTrue("an AFC alone must satisfy the guidance requirement and route to a ship "
                         + "(no rocket): " + assemble,
-                (Reply.of(assemble).integerOr("rocketCount", Integer.MIN_VALUE) == 0));
+                (Reply.of(assemble).integer("rocketCount") == 0));
     }
 
     @Test
@@ -146,6 +146,6 @@ public class AdvancedFlightComputerTierGateTest extends AbstractSharedServerTest
     }
 
     private static int extractInt(String haystack, String field) {
-        return Reply.of(haystack).integerOr(field, -1);
+        return Reply.of(haystack).integer(field);
     }
 }

@@ -85,7 +85,7 @@ public class RocketPreLaunchEventCancellationTest extends AbstractSharedServerTe
             // the event; the test listener cancels it.
             String arm = exec("artest rocket arm-prelaunch-cancel");
             assertTrue("arm probe failed: " + arm,
-                    Reply.of(arm).bool("armed", false));
+                    Reply.of(arm).bool("armed"));
 
             String launch = exec("artest rocket launch " + entityId + " true prepare");
             assertTrue("rocket launch (prepare mode) must not error even when "

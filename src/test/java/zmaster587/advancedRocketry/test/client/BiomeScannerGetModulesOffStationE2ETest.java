@@ -54,7 +54,7 @@ public class BiomeScannerGetModulesOffStationE2ETest extends AbstractClientE2ETe
         // Overworld (dim 0) has no space stations, so getSpaceStationFromBlockCoords
         // is null there — the off-station case.
         String place = exec("artest place 0 " + X + " " + Y + " " + Z + " advancedrocketry:biomeScanner");
-        assertTrue("scanner must place: " + place, Reply.of(place).bool("placed", false));
+        assertTrue("scanner must place: " + place, Reply.of(place).bool("placed"));
 
         // Clear the column below the scanner so getModules' `suitable` gate is true;
         // that is the branch that reaches the null deref.

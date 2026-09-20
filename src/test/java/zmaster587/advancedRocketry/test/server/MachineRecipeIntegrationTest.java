@@ -96,7 +96,7 @@ public class MachineRecipeIntegrationTest extends AbstractHeadlessServerTest {
         String complete = MachineRecipeEndToEndKit.tryCompleteWithRetry(
                 client(), 0, cx, cy, cz);
         assertTrue("multiblock not complete: " + complete,
-                Reply.of(complete).bool("isComplete", false));
+                Reply.of(complete).bool("isComplete"));
 
         // 3. Resolve first recipe ingredient + expected output.
         String recipe = String.join("\n",
@@ -137,7 +137,7 @@ public class MachineRecipeIntegrationTest extends AbstractHeadlessServerTest {
         String enable = String.join("\n", client().execute(
                 "artest machine set-enabled 0 " + cx + " " + cy + " " + cz + " true"));
         assertTrue("machine set-enabled failed: " + enable,
-                Reply.of(enable).ok() && Reply.of(enable).bool("enabled", false));
+                Reply.of(enable).ok() && Reply.of(enable).bool("enabled"));
 
         // 6. Drive ticks in batches and poll the output hatch each batch.
         //    Default cutting recipes take ~100 ticks; serial budget 300 was
@@ -156,6 +156,8 @@ public class MachineRecipeIntegrationTest extends AbstractHeadlessServerTest {
             assertTrue("hatch read errored: " + out, !Reply.of(out).has("error"));
             // A SEARCH across ticks: the recipe may not have completed yet, so the question is
             // existence and `element`'s refusal would end the retry loop on the first pass.
+            // absence is the answer: the claim is whether the hatch holds that item AT ALL,
+            // and a list with no such element is the "not yet" this loop waits out.
             if (Reply.of("artest hatch read", out)
                     .holdsElement("slots", "item", String.valueOf(expectedOutput))) {
                 found = true;

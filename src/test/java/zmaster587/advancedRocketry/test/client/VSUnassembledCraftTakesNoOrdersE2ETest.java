@@ -123,7 +123,7 @@ public class VSUnassembledCraftTakesNoOrdersE2ETest extends AbstractSharedVsClie
         long spawnMark = events.markInstrumented();
         String assemble = assembleShip();
         scenario().requireArranged("a with-pilot-seat build must route to a ship: " + assemble,
-                (Reply.of(assemble).integerOr("rocketCount", Integer.MIN_VALUE) == 0));
+                (Reply.of(assemble).integer("rocketCount") == 0));
         // Kept, not discarded: the mark precedes the assembly, so this record is this scenario's
         // own ship, and the mount below has to name it rather than take the first loaded seat.
         String controlShipId = awaitShipSpawned(events, spawnMark,
@@ -156,7 +156,7 @@ public class VSUnassembledCraftTakesNoOrdersE2ETest extends AbstractSharedVsClie
         long seatMark = clientEvents().mark();
         String mount = exec("artest player mount-entity " + mountInfo.requireDummyId());
         scenario().requireArranged("the bot must mount the seat dummy: " + mount,
-                Reply.of(mount).bool("mounted", false));
+                Reply.of(mount).bool("mounted"));
         // "Let the mount replicate" is a record on the client's own log. The control below presses a
         // command key from that seat, and a client not yet riding routes it elsewhere.
         awaitClientMount(seatMark, "the client must be riding the seat before a command key is"
@@ -230,10 +230,10 @@ public class VSUnassembledCraftTakesNoOrdersE2ETest extends AbstractSharedVsClie
                 + " " + CRAFT_X + " " + (CRAFT_Y + 2) + " " + CRAFT_Z);
         scenario().requireArranged("the seat must end up LINKED — an unlinked seat is refused for a "
                         + "reason that has nothing to do with this bug: " + linked,
-                Reply.of(linked).bool("linked", false));
+                Reply.of(linked).bool("linked"));
         scenario().requireArranged("CONTROL: and NO ship may manage it — otherwise the craft is simply "
                         + "a ship and the refusal under test would be wrong: " + linked,
-                (!Reply.of(linked).bool("managedByShip", true)));
+                (!Reply.of(linked).bool("managedByShip")));
 
         standBesideTheSeat();
         emptyTheHand();
@@ -433,7 +433,7 @@ public class VSUnassembledCraftTakesNoOrdersE2ETest extends AbstractSharedVsClie
 
     private int count(String sub) throws Exception {
         String command = "artest vs " + sub + " 0";
-        return Reply.of(command, exec(command)).integerOr(COUNT, -1);
+        return Reply.of(command, exec(command)).integer(COUNT);
     }
 
 }

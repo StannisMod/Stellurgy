@@ -234,16 +234,22 @@ private int waitForLoadedShip(int dim) throws Exception {
     }
 
     private static int readIntOr(String json, String key, int def) {
+        // absence is the answer, and WHICH answer is the CALLER's: this verb takes the
+        // default as an argument, so every call site names what a missing field means there.
         return Reply.of(json).integerOr(key, def);
     }
 
     private static double readDouble(String json, String key) {
-        assertTrue("expected number \"" + key + "\" in: " + json, Reply.of(json).has(key));
-        return Reply.of(json).number(key);
+        Reply reply = Reply.of(json);
+        assertTrue("expected number \"" + key + "\" in: " + json, reply.has(key));
+        return reply.number(key);
     }
 
     private static boolean readBool(String json, String key) {
-        return Reply.of(json).bool(key, false);
+        // absence is the answer, and WHICH answer is the CALLER's: this verb is handed a
+        // FIELD name, so it cannot know what a missing one means — and the callers here
+        // include waits, which read the shape that does not carry the field yet.
+        return Reply.of(json).boolOr(key, false);
     }
 
     /**
@@ -641,13 +647,17 @@ private static final int SKY_RENDER_DISTANCE = 8;
             throws Exception {
         String mountAt = "", mount = "";
         boolean mounted = false;
+        // The CLIENT's mark, before anything is ordered: what the caller asserts next is the
+        // client's own riding state, and the link below is what says the mount reached it.
+        long clientMark = clientEvents().mark();
         for (int attempt = 0; attempt < SEAT_MOUNT_ATTEMPTS && !mounted; attempt++) {
             mountAt = probe.exec("artest vs seat-mount-at " + originDim + " " + seatX + " " + seatY
                     + " " + seatZ);
             scenario().requireArranged("seat-mount-at must spawn the seat dummy: " + mountAt,
                     readBool(mountAt, "ok"));
             mount = probe.exec("artest player mount-entity " + readInt(mountAt, "dummyId"));
-            mounted = Reply.of(mount).bool("mounted", false);
+            // absence is the answer: this is a retry loop, and "not yet" is what it is reading for.
+            mounted = Reply.of(mount).boolOr("mounted", false);
             if (!mounted) {
                 bot().waitTicks(10);
             }
@@ -660,7 +670,14 @@ private static final int SKY_RENDER_DISTANCE = 8;
         scenario().requireArranged("the bot must mount the pilot-seat dummy (" + SEAT_MOUNT_ATTEMPTS
                 + " spawn+mount attempts) at the seat " + seatX + "," + seatY + "," + seatZ
                 + " in dim " + originDim + " — spawn=" + mountAt + " mount=" + mount, mounted);
-        bot().waitTicks(10);
+        // WAS `bot().waitTicks(10)`. The server says it seated him; the caller then asserts
+        // the CLIENT is riding, and between the two stood a tick budget — which is an
+        // assertion about how fast this box replicates, not about the mount. The client
+        // publishes its own mount chain, and a chain that ENDS seated is the same claim
+        // without the budget. Measured 2026-09-20: the control read `riding:false` on a
+        // full-tier run and passed serially, which is what a budget does rather than what a
+        // mount does.
+        ridingOnceTheClientHasRemounted(clientMark, CLIENT_REMOUNT_BUDGET_TICKS);
     }
 
     /** Put the bot in the origin cell and on the ship's pilot seat. */

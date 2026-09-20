@@ -300,9 +300,11 @@ public class SatelliteCoverageGapsTest extends AbstractSharedServerTest {
 
         String post = String.join("\n", client().execute(
                 "artest satellite info 0 " + satId));
+        // absence is the answer: a reply with NO `error` is the success shape, and "the
+        // verb refused, with this reason" is exactly what this claim measures.
         assertTrue("dead satellite must no longer be queryable by id; "
                 + "info should report not-found, got=" + post,
-                "satellite not found".equals(Reply.of(post).text("error")));
+                "satellite not found".equals(Reply.of(post).textOr("error", null)));
     }
 
     // -- helpers ----------------------------------------------------------

@@ -677,6 +677,62 @@ public final class Events {
         return matching.get(matching.size() - 1);
     }
 
+    /**
+     * As {@link #awaitRecordWithField}, narrowed by EVERY pair rather than by one — the form to
+     * take when one of the pairs is the subject's IDENTITY.
+     *
+     * <p><b>This exists because a window query keyed on a description is not a question about the
+     * test's own subject.</b> {@code awaitRecordWithField(mark, "ship_transit_ended", "route",
+     * "HYPERSPACE", …)} waits for SOME ship to have finished SOME hyperspace jump, and on a server
+     * where a sibling scenario is flying its own craft that is a different ship's arrival read as
+     * this one's. Naming the ship beside the route makes the wait structurally about the craft the
+     * scenario built — and, because {@link #anyRecordHasAll} requires one record to carry all of
+     * them, the two halves cannot be satisfied by two different arrivals.</p>
+     *
+     * <p>Returns the LAST matching record, for the same reason {@link #awaitRecordWithField}
+     * does.</p>
+     */
+    public String awaitRecordWithFields(long mark, String type, String what, int tickBudget,
+                                        String... fieldsAndValues) throws Exception {
+        if (fieldsAndValues.length == 0 || fieldsAndValues.length % 2 != 0) {
+            throw new AssertionError("awaitRecordWithFields takes field, value pairs and was given "
+                    + fieldsAndValues.length + " argument(s): "
+                    + java.util.Arrays.toString(fieldsAndValues));
+        }
+        StringBuilder describing = new StringBuilder("carrying");
+        for (int i = 0; i < fieldsAndValues.length; i += 2) {
+            describing.append(i == 0 ? " " : " and ")
+                    .append(fieldsAndValues[i]).append(" = ").append(fieldsAndValues[i + 1]);
+        }
+        String reply = awaitMatching(mark, type, one -> anyRecordHasAll(one, fieldsAndValues),
+                describing.toString(), what, tickBudget, null);
+        List<String> matching = recordsWhereAll(reply, fieldsAndValues);
+        if (matching.isEmpty()) {
+            throw new AssertionError(what + " — the wait for a `" + type + "` " + describing
+                    + " returned, yet no record of the reply carries them. This is a reader fault,"
+                    + " not a statement about the world: " + reply);
+        }
+        return matching.get(matching.size() - 1);
+    }
+
+    /** Every record carrying all of {@code fieldsAndValues} — the list form of
+     *  {@link #anyRecordHasAll}, so a caller can take the one that matched. */
+    public static List<String> recordsWhereAll(String sinceReply, String... fieldsAndValues) {
+        List<String> found = new ArrayList<>();
+        for (JsonElement record : eventsOf(sinceReply)) {
+            JsonObject one = record.getAsJsonObject();
+            boolean all = true;
+            for (int i = 0; i < fieldsAndValues.length && all; i += 2) {
+                String seen = primitive(one, fieldsAndValues[i]);
+                all = seen != null && seen.equals(fieldsAndValues[i + 1]);
+            }
+            if (all) {
+                found.add(record.toString());
+            }
+        }
+        return found;
+    }
+
     /** Whether any record in a {@code since} reply carries {@code field} with this value, compared as
      *  text. The field read is structural; nothing here matches a rendering of the record. */
     public static boolean anyRecordHas(String sinceReply, String field, String value) {

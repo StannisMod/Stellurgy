@@ -74,7 +74,7 @@ public class RailgunCargoReceiveContractTest extends AbstractSharedServerTest {
                 + CX + " " + CY + " " + CZ);
         assertTrue("railgun must validate (precondition for itemOutPorts "
                         + "to be populated): " + tryComplete,
-                Reply.of(tryComplete).bool("isComplete", false));
+                Reply.of(tryComplete).bool("isComplete"));
 
         // Probe call: receive 16 cobblestone on the controller-side tile.
         String receive = exec("artest infra railgun-receive-cargo 0 "
@@ -83,7 +83,7 @@ public class RailgunCargoReceiveContractTest extends AbstractSharedServerTest {
                 Reply.of(receive).ok());
         assertTrue("canReceiveCargo must be true on freshly-assembled "
                         + "railgun (output port has empty slots): " + receive,
-                Reply.of(receive).bool("canReceive", false));
+                Reply.of(receive).bool("canReceive"));
 
         int outPortCount = extract(receive, OUT_PORT_COUNT);
         assertTrue("railgun must have >= 1 output port after assembly: "

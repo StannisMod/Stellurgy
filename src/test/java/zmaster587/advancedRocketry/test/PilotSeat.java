@@ -69,17 +69,24 @@ public final class PilotSeat {
 
     private PilotSeat(Reply reply, String raw) {
         this.raw = raw;
-        this.found = reply.bool("seatFound", false);
-        this.seatX = reply.integerOr("seatX", Integer.MIN_VALUE);
-        this.seatY = reply.integerOr("seatY", Integer.MIN_VALUE);
-        this.seatZ = reply.integerOr("seatZ", Integer.MIN_VALUE);
+        this.found = reply.bool("seatFound");
+        // The seat's own coordinates ride the `seatFound:true` branch, and the flight computer's
+        // ride a branch inside that one. Each is read under the flag it is emitted with, so a
+        // producer that announced a seat and then wrote no position REFUSES here instead of
+        // handing on a sentinel that reads as "no seat".
+        this.seatX = found ? reply.integer("seatX") : Integer.MIN_VALUE;
+        this.seatY = found ? reply.integer("seatY") : Integer.MIN_VALUE;
+        this.seatZ = found ? reply.integer("seatZ") : Integer.MIN_VALUE;
         this.hasAfc = reply.has("afcX") && reply.has("afcY") && reply.has("afcZ");
-        this.afcX = reply.integerOr("afcX", Integer.MIN_VALUE);
-        this.afcY = reply.integerOr("afcY", Integer.MIN_VALUE);
-        this.afcZ = reply.integerOr("afcZ", Integer.MIN_VALUE);
-        this.shipWorldX = reply.number("shipWorldX");
-        this.shipWorldY = reply.number("shipWorldY");
-        this.shipWorldZ = reply.number("shipWorldZ");
+        this.afcX = hasAfc ? reply.integer("afcX") : Integer.MIN_VALUE;
+        this.afcY = hasAfc ? reply.integer("afcY") : Integer.MIN_VALUE;
+        this.afcZ = hasAfc ? reply.integer("afcZ") : Integer.MIN_VALUE;
+        // absence is the answer: the producer writes these only when the seat resolved a world
+        // position, which a craft whose blocks are not in the subspace yet has not. NaN announces
+        // itself and cannot be read as a coordinate; a zero could.
+        this.shipWorldX = reply.numberOr("shipWorldX", Double.NaN);
+        this.shipWorldY = reply.numberOr("shipWorldY", Double.NaN);
+        this.shipWorldZ = reply.numberOr("shipWorldZ", Double.NaN);
         this.yard = reply.has("yard") ? reply.intArray("yard") : null;
     }
 

@@ -94,7 +94,7 @@ public class RocketItemUnloaderActiveTransferTest extends AbstractSharedServerTe
         String link = exec("artest infra link 0 " + ux + " " + uy + " " + uz
                 + " " + rocketId);
         assertTrue("infra link must succeed: " + link,
-                Reply.of(link).bool("linked", false));
+                Reply.of(link).bool("linked"));
 
         // Run the unloader's production update() for 60 ticks. Storage
         // chunk may contain multiple inventory tiles (engine TEs etc.)

@@ -391,7 +391,7 @@ public class SpikeFarCoordinateRenderJitterTest extends AbstractClientE2ETest {
         // NaN on absence is deliberate and is CHECKED by every caller: this reading is used to show
         // that a stimulus landed, and "the probe did not report posX" is not a position. It is not a
         // plausible substitute for one either, which is the property a zero would not have had.
-        return Reply.of("artest player health", healthJson).numberOr("posX", Double.NaN);
+        return Reply.of("artest player health", healthJson).number("posX");
     }
 
     /** The report is the deliverable, so it also lands on disk and survives a truncated console. */

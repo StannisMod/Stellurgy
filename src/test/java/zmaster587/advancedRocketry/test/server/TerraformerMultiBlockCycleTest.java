@@ -45,7 +45,7 @@ public class TerraformerMultiBlockCycleTest extends AbstractHeadlessServerTest {
         String place = String.join("\n", client().execute(
                 "artest place 0 " + x + " " + y + " " + z + " advancedrocketry:terraformer"));
         assertTrue("terraformer place failed: " + place,
-                Reply.of(place).bool("placed", false));
+                Reply.of(place).bool("placed"));
 
         String info = String.join("\n", client().execute(
                 "artest machine info 0 " + x + " " + y + " " + z));
@@ -56,7 +56,7 @@ public class TerraformerMultiBlockCycleTest extends AbstractHeadlessServerTest {
         String tryComplete = String.join("\n", client().execute(
                 "artest machine try-complete 0 " + x + " " + y + " " + z));
         assertTrue("incomplete terraformer should report isComplete=false: " + tryComplete,
-                (!Reply.of(tryComplete).bool("isComplete", true)));
+                (!Reply.of(tryComplete).bool("isComplete")));
 
         // Force-tick — must not crash even with incomplete structure.
         String tick = String.join("\n", client().execute(
@@ -82,6 +82,6 @@ public class TerraformerMultiBlockCycleTest extends AbstractHeadlessServerTest {
     }
 
     private static int extractInt(String s, String field) {
-        return zmaster587.advancedRocketry.test.Reply.of(s).integerOr(field, -1);
+        return zmaster587.advancedRocketry.test.Reply.of(s).integer(field);
     }
 }

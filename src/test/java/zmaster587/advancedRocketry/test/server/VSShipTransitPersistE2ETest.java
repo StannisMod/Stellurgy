@@ -62,7 +62,7 @@ public class VSShipTransitPersistE2ETest extends AbstractSharedServerTest {
         long transitMark = events.mark();
         String begin = exec("artest space transit-begin " + originDim + " " + ax + " " + ay + " " + az
                 + " " + HYPERSPACE_JUMP_SPEED);
-        assertTrue("transit did not begin (departure crossing failed): " + begin, Reply.of(begin).bool("began", false));
+        assertTrue("transit did not begin (departure crossing failed): " + begin, Reply.of(begin).bool("began"));
 
         // Re-cut the parked ship's block snapshot, ONCE.
         //
@@ -85,22 +85,22 @@ public class VSShipTransitPersistE2ETest extends AbstractSharedServerTest {
 
         String lastExport = exec("artest space transit-export");
         assertTrue("the durable record must carry a block snapshot, or the restore below has no ship to "
-                + "paste: " + lastExport, Reply.of(lastExport).bool("hasSnapshot", false));
+                + "paste: " + lastExport, Reply.of(lastExport).bool("hasSnapshot"));
 
         // Simulate a restart in-process: rebuild the transit from the exported record alone (the live
         // manager, and its parked hyperspace ship, are thrown away). Note: this reuses the in-memory record;
         // the on-disk NBT round-trip is unit-pinned separately (ShipLedgerDataTest + TransitRecordTest).
         String restore = exec("artest space transit-restore");
         assertTrue("restore did not recreate the in-flight transit: " + restore,
-                (Reply.of(restore).integerOr("inTransit", Integer.MIN_VALUE) == 1));
+                (Reply.of(restore).integer("inTransit") == 1));
 
         // The RESTORED transit arrives on the server's own tick, like any other -- no pump. With no
         // live hyperspace ship it can only get there by pasting its snapshot into the target cell,
         // so the arrival production announces IS the proof that path ran.
-        String arrived = events.awaitRecordWithField(transitMark, "ship_transit_ended","route", "HYPERSPACE",
+        String arrived = events.awaitRecordWithFields(transitMark, "ship_transit_ended",
                 "the restored jump never completed; the durable record now reads "
                         + exec("artest space transit-export"),
-                ARRIVAL_TICKS);
+                ARRIVAL_TICKS, "ship", setup.requireDurableId(), "route", "HYPERSPACE");
         int targetDim = extractInt(arrived, "dim");
         assertTrue("the arrival was announced but names no dimension: " + arrived, targetDim >= 0);
 
@@ -145,6 +145,6 @@ public class VSShipTransitPersistE2ETest extends AbstractSharedServerTest {
     }
 
     private static int extractInt(String json, String key) {
-        return Reply.of(json).integerOr(key, Integer.MIN_VALUE);
+        return Reply.of(json).integer(key);
     }
 }

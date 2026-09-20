@@ -46,7 +46,7 @@ public class ServiceStationUnlinkedPerformFunctionTest extends AbstractSharedSer
         String place = exec("artest place 0 " + X + " " + Y + " " + Z
                 + " advancedrocketry:serviceStation");
         assertTrue("service station place failed: " + place,
-                Reply.of(place).bool("placed", false));
+                Reply.of(place).bool("placed"));
 
         // Power it (performFunction's getEquivalentPower gate) but DO NOT link a
         // rocket — linkedRocket stays null.
@@ -54,8 +54,8 @@ public class ServiceStationUnlinkedPerformFunctionTest extends AbstractSharedSer
 
         // Sanity: truly unlinked, empty repair queue.
         String pre = exec("artest infra service-state 0 " + X + " " + Y + " " + Z);
-        assertTrue("station must be unlinked: " + pre, (Reply.of(pre).integerOr("linkedRocketId", Integer.MIN_VALUE) == -1));
-        assertTrue("repair queue must be empty: " + pre, (Reply.of(pre).integerOr("partsToRepairCount", Integer.MIN_VALUE) == 0));
+        assertTrue("station must be unlinked: " + pre, (Reply.of(pre).integer("linkedRocketId") == -1));
+        assertTrue("repair queue must be empty: " + pre, (Reply.of(pre).integer("partsToRepairCount") == 0));
 
         // The concern: performFunction must NOT reach tryStandaloneRepair's
         // ((EntityRocket) linkedRocket).storage with a null linkedRocket.
@@ -67,6 +67,6 @@ public class ServiceStationUnlinkedPerformFunctionTest extends AbstractSharedSer
         // State still sane after the no-op.
         String post = exec("artest infra service-state 0 " + X + " " + Y + " " + Z);
         assertTrue("repair queue still empty after no-op performFunction: " + post,
-                (Reply.of(post).integerOr("partsToRepairCount", Integer.MIN_VALUE) == 0));
+                (Reply.of(post).integer("partsToRepairCount") == 0));
     }
 }

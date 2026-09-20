@@ -920,8 +920,10 @@ public class BoundarySkyRendersInSlotCellE2ETest extends AbstractSharedClientE2E
     private static int feedBodyCount(String json, int slotDim) {
         for (String entry : Reply.of("the system-bodies feed", json).objectArray(FEED)) {
             Reply cell = Reply.of("one feed entry", entry);
+            // absence is the answer: this walks a LIST looking for one cell, and an entry
+            // that carries no slot dim is not the one being looked for.
             if (cell.integerOr(SLOT_DIM, Integer.MIN_VALUE) == slotDim) {
-                return cell.integerOr(BODY_COUNT, -1);
+                return cell.integer(BODY_COUNT);
             }
         }
         return -1;

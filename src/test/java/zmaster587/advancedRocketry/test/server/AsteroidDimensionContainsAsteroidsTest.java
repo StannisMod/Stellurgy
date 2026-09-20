@@ -45,7 +45,7 @@ public class AsteroidDimensionContainsAsteroidsTest extends AbstractSharedServer
         assertTrue("create-asteroid-dim must succeed: " + create,
                 Reply.of(create).ok());
         assertTrue("created dim must report isAsteroid:true: " + create,
-                Reply.of(create).bool("isAsteroid", false));
+                Reply.of(create).bool("isAsteroid"));
 
         // Force the dim loaded so its WorldProviderAsteroid + ChunkProviderAsteroids
         // come online.

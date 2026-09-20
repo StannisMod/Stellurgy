@@ -55,10 +55,10 @@ public class ShieldStrikeAbsorptionTest extends AbstractSharedServerTest {
         int impactEnergy = 2000;
         String result = strike(ex, gz, impactEnergy, "RADIANT");
         assertTrue("a charged shield did not intercept a cheap cooperative strike:\n" + result,
-                Reply.of(result).bool("intercepted", false));
+                Reply.of(result).bool("intercepted"));
         assertTrue("the strike was not fully absorbed (residual passed through a shield that could pay):\n"
-                + result, Reply.of(result).bool("fullyAbsorbed", false));
-        assertTrue("expected zero residual on a full absorb:\n" + result, (Reply.of(result).integerOr("residual", Integer.MIN_VALUE) == 0));
+                + result, Reply.of(result).bool("fullyAbsorbed"));
+        assertTrue("expected zero residual on a full absorb:\n" + result, (Reply.of(result).integer("residual") == 0));
 
         long storedAfter = read(ex, gz).shieldStored();
         long drop = storedBefore - storedAfter;
@@ -74,7 +74,7 @@ public class ShieldStrikeAbsorptionTest extends AbstractSharedServerTest {
         exec("artest shield charge " + DIM + " " + ex + " " + Y + " " + gz + " 0");
         String downResult = strike(ex, gz, impactEnergy, "RADIANT");
         assertTrue("a down shield still intercepted the strike — it must be a barrier only while charged:\n"
-                + downResult, (!Reply.of(downResult).bool("intercepted", true)));
+                + downResult, (!Reply.of(downResult).bool("intercepted")));
     }
 
     @Test
@@ -94,9 +94,9 @@ public class ShieldStrikeAbsorptionTest extends AbstractSharedServerTest {
         int impactEnergy = (int) (storedBefore * 3L);
         String result = strike(ex, gz, impactEnergy, "RADIANT");
         assertTrue("an overmatching strike was not intercepted at all:\n" + result,
-                Reply.of(result).bool("intercepted", false));
+                Reply.of(result).bool("intercepted"));
         assertTrue("an overmatching strike was reported fully absorbed — the shield cannot afford it:\n"
-                + result, (!Reply.of(result).bool("fullyAbsorbed", true)));
+                + result, (!Reply.of(result).bool("fullyAbsorbed")));
         long residual = readLong(result, "residual");
         long absorbed = readLong(result, "absorbed");
         assertTrue("no residual impact passed a shield that could not fully pay:\n" + result, residual > 0);
@@ -126,7 +126,7 @@ public class ShieldStrikeAbsorptionTest extends AbstractSharedServerTest {
     private void place(String block, int x, int z) throws Exception {
         String resp = exec("artest place " + DIM + " " + x + " " + Y + " " + z + " " + block);
         assertTrue("failed to place " + block + " at " + x + "," + Y + "," + z + ": " + resp,
-                Reply.of(resp).bool("placed", false));
+                Reply.of(resp).bool("placed"));
     }
 
     private void chargeIteration(int gx, int gz) throws Exception {

@@ -151,7 +151,7 @@ public class VacuumAndSuitClientGroupE2ETest extends AbstractSharedClientE2ETest
     /** Reads the dim's baseline density so {@link #restoreDim} can put it back. */
     private int snapshotDensity() throws Exception {
         String planet = exec("artest planet info " + plot().dim);
-        return Reply.of("artest planet info", planet).integerOr(DENSITY, 100);
+        return Reply.of("artest planet info", planet).integer(DENSITY);
     }
 
     /**
@@ -799,7 +799,7 @@ public class VacuumAndSuitClientGroupE2ETest extends AbstractSharedClientE2ETest
             scenario().requireArranged("equip-space-chest must succeed: " + equip,
                     Reply.of(equip).ok());
             scenario().requireArranged("equip-space-chest must report oxygen filled in tank: "
-                    + equip, (Reply.of(equip).integerOr("tankFilled", Integer.MIN_VALUE) == 1000));
+                    + equip, (Reply.of(equip).integer("tankFilled") == 1000));
             assertEquals("baseline chestAir read via ItemAirUtils -> ItemSpaceChest.getAirRemaining"
                     + " -> sum of FluidStack amounts must equal 1000",
                     1000, readChestAirComponentRoute());

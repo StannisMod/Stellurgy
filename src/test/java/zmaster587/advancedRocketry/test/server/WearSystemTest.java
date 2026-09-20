@@ -83,15 +83,15 @@ public class WearSystemTest extends AbstractSharedServerTest {
         // Engine, fuel tank, seat positions (see fixture builder).
         String engine = String.join("\n", client().execute(
                 "artest wear get 0 " + (rocketX - 1) + " " + rocketY + " " + rocketZ));
-        assertTrue("motor must host wear cap: " + engine, Reply.of(engine).bool("registered", false));
+        assertTrue("motor must host wear cap: " + engine, Reply.of(engine).bool("registered"));
 
         String tank = String.join("\n", client().execute(
                 "artest wear get 0 " + rocketX + " " + (rocketY + 1) + " " + rocketZ));
-        assertTrue("fuel tank must host wear cap: " + tank, Reply.of(tank).bool("registered", false));
+        assertTrue("fuel tank must host wear cap: " + tank, Reply.of(tank).bool("registered"));
 
         String seat = String.join("\n", client().execute(
                 "artest wear get 0 " + rocketX + " " + (rocketY + 4) + " " + rocketZ));
-        assertTrue("seat must host wear cap: " + seat, Reply.of(seat).bool("registered", false));
+        assertTrue("seat must host wear cap: " + seat, Reply.of(seat).bool("registered"));
     }
 
     @Test
@@ -152,7 +152,7 @@ public class WearSystemTest extends AbstractSharedServerTest {
                 + " " + (sx + 1) + " " + (sy + 2) + " " + (sz + 1) + " minecraft:air");
         String place = String.join("\n", client().execute(
                 "artest place 0 " + sx + " " + sy + " " + sz + " advancedrocketry:serviceStation"));
-        assertTrue("service station place failed: " + place, Reply.of(place).bool("placed", false));
+        assertTrue("service station place failed: " + place, Reply.of(place).bool("placed"));
         // Redstone power — performFunction requires getEquivalentPower=true.
         client().execute("artest place 0 " + sx + " " + (sy + 1) + " " + sz + " minecraft:redstone_block");
 
@@ -188,14 +188,14 @@ public class WearSystemTest extends AbstractSharedServerTest {
         int rocketId = assembleAndGetId(builder);
 
         String status = String.join("\n", client().execute("artest wear rocket-status " + rocketId + " 0.7"));
-        assertTrue("rocket-status must find the rocket: " + status, Reply.of(status).bool("found", false));
+        assertTrue("rocket-status must find the rocket: " + status, Reply.of(status).bool("found"));
 
         Reply tanksReply = Reply.of(status);
         assertTrue("no wornTankCount: " + status, tanksReply.has("wornTankCount"));
         assertTrue("a worn fuel tank must be surfaced for the launch gate: " + status,
                 tanksReply.integer("wornTankCount") >= 1);
         assertTrue("a critically-worn seat must be detected: " + status,
-                Reply.of(status).bool("hasCriticallyWornSeat", false));
+                Reply.of(status).bool("hasCriticallyWornSeat"));
     }
 
     @Test

@@ -303,19 +303,17 @@ public class ProceduralPlanetRealizationE2ETest extends AbstractHeadlessServerTe
 
     private static double jsonDouble(String json, String key) {
         double value = Reply.of(json).number(key);
-        assertTrue("missing number '" + key + "' in " + json, !Double.isNaN(value));
         return value;
     }
 
     private static boolean jsonBool(String json, String key) {
         Reply reply = Reply.of(json);
         assertTrue("missing boolean '" + key + "' in " + json, reply.has(key));
-        return reply.bool(key, false);
+        return reply.bool(key);
     }
 
     private static String jsonString(String json, String key) {
         String value = Reply.of(json).text(key);
-        assertTrue("missing string '" + key + "' in " + json, value != null);
         return value;
     }
 }

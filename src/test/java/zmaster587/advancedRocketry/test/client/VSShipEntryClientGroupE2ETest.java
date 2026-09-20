@@ -371,7 +371,7 @@ public class VSShipEntryClientGroupE2ETest extends AbstractSharedVsClientE2ETest
         String tag = exec("artest space aboard-tag " + BOT);
         assertTrue("...and the record must READ as aboard once stamped: tag=" + tag + " riding="
                         + bot().reportRidingEntity() + " status=" + exec("artest space subsystem-status"),
-                Reply.of(tag).bool("tagged", false));
+                Reply.of(tag).bool("tagged"));
     }
 
     // ── refused: the gate says REFUSED_POOL_FULL, and he stays in his seat in the launch world ───
@@ -747,7 +747,7 @@ public class VSShipEntryClientGroupE2ETest extends AbstractSharedVsClientE2ETest
         SeatMount mountInfo = SeatMount.onShip(this::exec, 0, shipUuid);
         String mount = exec("artest player mount-entity " + mountInfo.requireDummyId());
         scenario().requireArranged("bot must mount the seat dummy: " + mount,
-                Reply.of(mount).bool("mounted", false));
+                Reply.of(mount).bool("mounted"));
         bot().waitTicks(10);
 
         return shipUuid;
@@ -793,7 +793,9 @@ public class VSShipEntryClientGroupE2ETest extends AbstractSharedVsClientE2ETest
         java.util.Set<Integer> held = new java.util.LinkedHashSet<Integer>();
         for (int cell : PRESSURE_CELLS) {
             String reply = exec("artest space cell-slot " + cell + " 0 0");
-            if (!Reply.of(reply).bool("managerLoaded", false)) {
+            // absence is the answer: this is the wait, and "the flag is not there yet" is
+            // the state it exists to sit through.
+            if (!Reply.of(reply).boolOr("managerLoaded", false)) {
                 continue;
             }
             Reply slot = Reply.of("artest space slot-status", reply);
@@ -872,6 +874,8 @@ public class VSShipEntryClientGroupE2ETest extends AbstractSharedVsClientE2ETest
     /** {@code field} of a probe reply, or {@code fallback} — a missing field must read as "not
      *  answered" and never as a number, which is how a dead probe reads as a real zero. */
     private static String firstGroupOr(String field, String reply, String fallback) {
+        // absence is the answer, and WHICH answer is the CALLER's: this verb takes the
+        // default as an argument, so every call site names what a missing field means there.
         return Reply.of(reply).textOr(field, fallback);
     }
 

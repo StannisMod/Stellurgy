@@ -58,9 +58,9 @@ public class PlanetDimensionLoadTest extends AbstractSharedServerTest {
         String joined = String.join("\n", client().execute("artest dim load 0"));
 
         assertTrue("dim load 0 did not echo dim:0 in response: " + joined,
-                (Reply.of(joined).integerOr("dim", Integer.MIN_VALUE) == 0));
+                (Reply.of(joined).integer("dim") == 0));
         assertTrue("dim load 0 did not report loaded:true: " + joined,
-                Reply.of(joined).bool("loaded", false));
+                Reply.of(joined).bool("loaded"));
     }
 
     @Test

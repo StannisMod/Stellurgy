@@ -319,7 +319,7 @@ public class SpaceSubsystemClientSyncGroupE2ETest extends AbstractSharedClientE2
             // fallback stars (all at sy=sz=0), so bodiesAt returns ONLY this POI.
             String poi = exec("artest space add-poi 0 5000 0 1000 500 -300 PLANET 0 7");
             scenario().requireArranged("add-poi must register a descend target: " + poi,
-                    Reply.of(poi).ok() && Reply.of(poi).bool("descendTarget", false));
+                    Reply.of(poi).ok() && Reply.of(poi).bool("descendTarget"));
 
             // The dimension under test is the one the subsystem ACTUALLY bound the cell to, read
             // back from the settle. It is not the test's to choose: slot ids are minted per boot,

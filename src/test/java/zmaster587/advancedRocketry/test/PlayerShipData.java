@@ -61,12 +61,12 @@ public final class PlayerShipData {
     private PlayerShipData(Reply reply, String raw) {
         this.reply = reply;
         this.raw = raw;
-        this.shipLoaded = reply.bool("shipLoaded", false);
-        this.mounted = reply.bool("mounted", false);
+        this.shipLoaded = reply.bool("shipLoaded");
+        this.mounted = reply.bool("mounted");
         this.playerX = reply.number("playerX");
         this.playerY = reply.number("playerY");
         this.playerZ = reply.number("playerZ");
-        this.onGround = reply.bool("playerOnGround", false);
+        this.onGround = reply.bool("playerOnGround");
         this.addedVelX = reply.number("addedVelX");
         this.addedVelY = reply.number("addedVelY");
         this.addedVelZ = reply.number("addedVelZ");
@@ -74,8 +74,8 @@ public final class PlayerShipData {
         this.motionX = reply.number("motionX");
         this.motionY = reply.number("motionY");
         this.motionZ = reply.number("motionZ");
-        this.ticksSinceTouchedShip = reply.integerOr("ticksSinceTouchedShip", -1);
-        this.ticksPartOfGround = reply.integerOr("ticksPartOfGround", -1);
+        this.ticksSinceTouchedShip = reply.integer("ticksSinceTouchedShip");
+        this.ticksPartOfGround = reply.integer("ticksPartOfGround");
     }
 
     /**
@@ -92,7 +92,9 @@ public final class PlayerShipData {
             ArrangementFailure.arrangementFailed("`artest vs player-ship-data` had no subject to"
                     + " report on (" + reply.text("error") + "): " + text);
         }
-        if (!reply.bool("available", true)) {
+        // absence is the answer: the REPORT shape carries no `available` at all — the field
+        // exists only on the third shape, `{"available":false}`, so missing means a report.
+        if (!reply.boolOr("available", true)) {
             ArrangementFailure.arrangementFailed("the physics substrate holds no movement data for"
                     + " this body, so every field below would be absent rather than zero — that is"
                     + " a statement about the instrument, not about the body: " + text);
@@ -107,7 +109,8 @@ public final class PlayerShipData {
     /** Whether the substrate answered at all — for a caller whose subject IS the absence. */
     public static boolean dataAvailable(String dataReply) {
         Reply reply = Reply.of("artest vs player-ship-data", String.valueOf(dataReply));
-        return !reply.has("error") && reply.bool("available", true) && reply.has("shipLoaded");
+        // absence is the answer, for the same reason as in `of` above.
+        return !reply.has("error") && reply.boolOr("available", true) && reply.has("shipLoaded");
     }
 
     /** Ask about the FIRST player — the probe's own default subject. */
@@ -127,7 +130,9 @@ public final class PlayerShipData {
      * siblings left in the same world — the whole reason the field is read at all.</p>
      */
     public String requireShipId() {
-        String shipId = reply.text("shipId");
+        // absence is the answer: the producer writes `shipId` as JSON null when no loaded hull
+        // holds the body, and the refusal below is this verb's own diagnosis of that.
+        String shipId = reply.textOr("shipId", null);
         if (!shipLoaded || shipId == null || shipId.isEmpty()) {
             throw new AssertionError("no loaded hull holds this body, so there is no ship to name —"
                     + " an empty id would travel into the next command as the four characters"
@@ -188,7 +193,9 @@ public final class PlayerShipData {
      * names the hull it left, which is what {@link #ticksSinceTouchedShip} counts from.</p>
      */
     public String lastTouchedShip() {
-        return reply.text("lastTouchedShip");
+        // absence is the answer: a body that has touched no hull gets JSON null here, and
+        // "none" is exactly what this verb reports.
+        return reply.textOr("lastTouchedShip", null);
     }
 
     /** The reply exactly as the probe sent it, for a message that has to show the whole answer. */

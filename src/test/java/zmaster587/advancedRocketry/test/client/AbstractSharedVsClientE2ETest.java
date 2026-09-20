@@ -626,7 +626,11 @@ public abstract class AbstractSharedVsClientE2ETest extends AbstractSharedClient
 
     /** The {@code "id"} field of a {@code ship-info} reply, or null when it carries none. */
     protected static String readShipId(String shipInfoJson) {
-        String id = Reply.of("artest vs ship-info", shipInfoJson).text(SHIP_ID);
+        // absence is the answer: this verb's own contract is "the id, or null when the reply
+        // names no ship", and the line below turns an empty one into the same null.
+        // absence is the answer: this verb's own contract is "the id, or null when the reply
+        // names no ship", and the line below turns an empty one into the same null.
+        String id = Reply.of("artest vs ship-info", shipInfoJson).textOr(SHIP_ID, null);
         return id == null || id.isEmpty() ? null : id;
     }
 

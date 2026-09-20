@@ -64,7 +64,7 @@ public class VSSeatDummyFacesTheShipE2ETest extends AbstractSharedServerTest {
         String coords = placeFixture(SRC_X, SRC_Y, SRC_Z, "with-pilot-seat");
         String asm = exec("artest rocket assemble 0 " + coords);
         assertTrue("the pilot-seat build must route to a ship, not a rocket: " + asm,
-                (Reply.of(asm).integerOr("rocketCount", Integer.MIN_VALUE) == 0));
+                (Reply.of(asm).integer("rocketCount") == 0));
         assertTrue("the source ship never assembled/loaded", loadedShips(0) >= 1);
 
         // The craft this scenario built, by the name its assembler minted, and the physics id that
@@ -91,7 +91,7 @@ public class VSSeatDummyFacesTheShipE2ETest extends AbstractSharedServerTest {
         // target every tick. The ship hovers while the controller slews it round.
         assertTrue("the attitude hold must accept the yaw command",
                 Reply.of(exec("artest vs point-by-id 0 " + shipId
-                        + " " + TURN_QW + " 0.0 " + TURN_QY + " 0.0")).bool("commanded", false));
+                        + " " + TURN_QW + " 0.0 " + TURN_QY + " 0.0")).bool("commanded"));
 
         // The slew runs on the attitude controller's tick, so the budget is that controller's world.
         final double[] yaw = {shipYawBefore};
@@ -131,7 +131,7 @@ public class VSSeatDummyFacesTheShipE2ETest extends AbstractSharedServerTest {
     private double mountYaw(int seatX, int seatY, int seatZ) throws Exception {
         String status = exec("artest vs seat-status 0 " + seatX + " " + seatY + " " + seatZ);
         assertTrue("the seat's bound mount must be found for its rotation to be read: " + status,
-                Reply.of(status).bool("dummyFound", false));
+                Reply.of(status).bool("dummyFound"));
         return extractDouble(status, "dummyYaw");
     }
 
@@ -183,14 +183,23 @@ public class VSSeatDummyFacesTheShipE2ETest extends AbstractSharedServerTest {
     }
 
     private static String extractString(String json, String key) {
-        return Reply.of(json).text(key);
+        // absence is the answer, and WHICH answer is the CALLER's: this verb is handed a
+        // FIELD name, so it cannot know what a missing one means — and the callers here
+        // include waits, which read the shape that does not carry the field yet.
+        return Reply.of(json).textOr(key, null);
     }
 
     private static int extractInt(String json, String key) {
+        // absence is the answer, and WHICH answer is the CALLER's: this verb is handed a
+        // FIELD name, so it cannot know what a missing one means — and the callers here
+        // include waits, which read the shape that does not carry the field yet.
         return Reply.of(json).integerOr(key, Integer.MIN_VALUE);
     }
 
     private static double extractDouble(String json, String key) {
+        // absence is the answer, and WHICH answer is the CALLER's: this verb is handed a
+        // FIELD name, so it cannot know what a missing one means — and the callers here
+        // include waits, which read the shape that does not carry the field yet.
         return Reply.of(json).numberOr(key, 0.0);
     }
 }

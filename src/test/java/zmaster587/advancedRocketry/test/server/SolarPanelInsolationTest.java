@@ -81,7 +81,7 @@ public class SolarPanelInsolationTest extends AbstractSharedServerTest {
                 "artest place " + dim + " " + x + " " + y + " " + z
                         + " advancedrocketry:solarGenerator"));
         assertTrue("could not place solar in dim " + dim + ": " + place,
-                Reply.of(place).bool("placed", false));
+                Reply.of(place).bool("placed"));
         // Make sure it's daytime + clear for both dims.
         client().execute("time set day");
         client().execute("weather clear 100000");

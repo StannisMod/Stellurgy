@@ -153,7 +153,7 @@ public class VSShipAtmosphereFrameSpikeTest extends AbstractSharedVsClientE2ETes
         String assemble = assembleFixture(site);
         System.out.println("[S1/ship] assemble=" + assemble);
         assertTrue("a with-pilot-seat build must route to a VS ship (no rocket): " + assemble,
-                (Reply.of(assemble).integerOr("rocketCount", Integer.MIN_VALUE) == 0));
+                (Reply.of(assemble).integer("rocketCount") == 0));
         int all = 0;
         for (int i = 0; i < 60 && all < 1; i++) {
             bot().waitTicks(5);
@@ -253,7 +253,7 @@ public class VSShipAtmosphereFrameSpikeTest extends AbstractSharedVsClientE2ETes
     private String sealCabin(int x, int y, int z) throws Exception {
         String place = exec("artest place 0 " + x + " " + (y - 1) + " " + z
                 + " advancedrocketry:oxygenVent");
-        assertTrue("vent place failed: " + place, Reply.of(place).bool("placed", false));
+        assertTrue("vent place failed: " + place, Reply.of(place).bool("placed"));
         assertTrue("energy inject failed",
                 Reply.of(exec("artest energy inject 0 " + x + " " + (y - 1) + " " + z + " 1000000")
                         ).ok());

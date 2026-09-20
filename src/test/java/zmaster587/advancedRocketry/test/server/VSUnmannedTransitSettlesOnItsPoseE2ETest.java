@@ -74,13 +74,13 @@ public class VSUnmannedTransitSettlesOnItsPoseE2ETest extends AbstractSharedServ
         String begin = exec("artest space transit-begin " + originDim + " " + ax + " " + ay + " " + az
                 + " " + HYPERSPACE_JUMP_SPEED);
         assertTrue("transit did not begin (departure crossing failed): " + begin,
-                Reply.of(begin).bool("began", false));
+                Reply.of(begin).bool("began"));
 
         // No pump: the server advances the jump. Waited for as the arrival production announces.
-        String arrivedRecord = events.awaitField(transitMark, "ship_transit_ended","route", "HYPERSPACE",
+        String arrivedRecord = events.awaitRecordWithFields(transitMark, "ship_transit_ended",
                 "the ship never arrived at all; the transit now reads "
                         + exec("artest space transit-status"),
-                ARRIVAL_TICKS);
+                ARRIVAL_TICKS, "ship", setup.requireDurableId(), "route", "HYPERSPACE");
         String lastTick = exec("artest space transit-status");
 
         // Positive control for the instrument: the probe must have RESOLVED the arrived ship at all.
@@ -89,7 +89,6 @@ public class VSUnmannedTransitSettlesOnItsPoseE2ETest extends AbstractSharedServ
         // Control first: the target world must actually hold a ship, or "its position is not X" below
         // would pass on a run where the ship had vanished — the opposite of what this asserts.
         String positions = Reply.of("artest space transit-tick", lastTick).text("ships");
-        assertTrue("the probe reported no ships field at all: " + lastTick, positions != null);
         assertTrue("the target world holds no ship, so nothing below measures the arrival: " + lastTick,
                 !positions.isEmpty());
 
@@ -134,6 +133,9 @@ public class VSUnmannedTransitSettlesOnItsPoseE2ETest extends AbstractSharedServ
     }
 
     private static int extractInt(String json, String key) {
+        // absence is the answer, and WHICH answer is the CALLER's: this verb is handed a
+        // FIELD name, so it cannot know what a missing one means — and the callers here
+        // include waits, which read the shape that does not carry the field yet.
         return Reply.of(json).integerOr(key, Integer.MIN_VALUE);
     }
 }

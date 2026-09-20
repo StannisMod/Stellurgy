@@ -49,7 +49,7 @@ public class SpaceElevatorMultiblockTest extends AbstractSharedServerTest {
         assertTrue("try-complete probe errored: " + tryComplete,
                 Reply.of(tryComplete).ok());
         assertTrue("space-elevator multiblock didn't validate (isComplete=false): " + tryComplete,
-                Reply.of(tryComplete).bool("isComplete", false));
+                Reply.of(tryComplete).bool("isComplete"));
     }
 
     @Test
@@ -73,7 +73,7 @@ public class SpaceElevatorMultiblockTest extends AbstractSharedServerTest {
         String broken = join(client().execute(
                 "artest machine try-complete 0 " + cx + " " + cy + " " + cz));
         assertTrue("structure validated despite missing adv-structure east of motor: " + broken,
-                (!Reply.of(broken).bool("isComplete", true)));
+                (!Reply.of(broken).bool("isComplete")));
     }
 
     @Test
@@ -93,7 +93,7 @@ public class SpaceElevatorMultiblockTest extends AbstractSharedServerTest {
         String broken = join(client().execute(
                 "artest machine try-complete 0 " + cx + " " + cy + " " + cz));
         assertTrue("structure validated despite missing slab in outer ring: " + broken,
-                (!Reply.of(broken).bool("isComplete", true)));
+                (!Reply.of(broken).bool("isComplete")));
     }
 
     private static String join(java.util.List<String> resp) {

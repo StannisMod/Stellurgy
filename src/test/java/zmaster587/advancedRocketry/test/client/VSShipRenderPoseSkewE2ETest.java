@@ -171,7 +171,7 @@ public class VSShipRenderPoseSkewE2ETest extends AbstractClientE2ETest {
         double h = Math.toRadians(160.0) / 2.0;
         assertTrue("attitude hold must accept the past-vertical roll",
                 Reply.of(exec("artest vs point-by-id 0 " + shipId + " "
-                        + Math.cos(h) + " " + Math.sin(h) + " 0.0 0.0")).bool("commanded", false));
+                        + Math.cos(h) + " " + Math.sin(h) + " 0.0 0.0")).bool("commanded"));
         // A WINDOW, then one read. The line above used to say "gate on the MEASURED attitude, never
         // elapsed ticks", and the half of that which is right is that a TICK COUNT may not be the
         // gate — the attitude still is. What it licensed was a loop whose exit condition is the
@@ -205,7 +205,7 @@ public class VSShipRenderPoseSkewE2ETest extends AbstractClientE2ETest {
                 + (int) Math.floor(sy + 7) + " " + (int) Math.floor(sz));
         assertTrue("the drop point must be free air — otherwise this leg measures the ground rather"
                         + " than the hull: " + dropBlock + " ship=" + info.raw(),
-                Reply.of(dropBlock).bool("isAir", false));
+                Reply.of(dropBlock).bool("isAir"));
 
         // Drop the bot onto the world-top of the inverted hull. Two marks, one per side: the SERVER's
         // for the mode commit the hull-stand hold IS, the CLIENT's for the teleport's arrival. Both
@@ -325,7 +325,7 @@ public class VSShipRenderPoseSkewE2ETest extends AbstractClientE2ETest {
         for (double climb : new double[]{0.6, 1.2}) {
             assertTrue("velocity command must engage for the moving leg",
                     Reply.of(exec("artest vs force-vel-by-id 0 " + shipId + " 0 " + climb + " 0")
-                            ).bool("commanded", false));
+                            ).bool("commanded"));
             long moveMark = clientMark();
             double moveCrossMax = 0.0, moveCrossSum = 0.0;
             int moveCrossN = 0;
@@ -501,7 +501,7 @@ public class VSShipRenderPoseSkewE2ETest extends AbstractClientE2ETest {
         long spawnMark = events.markInstrumented();
         String assemble = assembleFixture(bx, by, bz);
         assertTrue("a with-pilot-seat build must route to a ship: " + assemble,
-                (Reply.of(assemble).integerOr("rocketCount", Integer.MIN_VALUE) == 0));
+                (Reply.of(assemble).integer("rocketCount") == 0));
         String spawned = events.await(spawnMark, "ship_spawned", "the assembly must become a ship in"
                 + " the physics registry (the spawn is queued, so this is a deadline for a discrete"
                 + " event and not a settling value)", SHIP_SPAWN_BUDGET_TICKS);
@@ -600,8 +600,10 @@ public class VSShipRenderPoseSkewE2ETest extends AbstractClientE2ETest {
     }
 
     private double readDouble(String json, String field) {
-        double value = Reply.of(json).number(field);
-        assertTrue("expected a number `" + field + "` in: " + json, !Double.isNaN(value));
+        // absence is the answer, and WHICH answer is the CALLER's: this verb is handed a
+        // FIELD name, so it cannot know what a missing one means — and the callers here
+        // include waits, which read the shape that does not carry the field yet.
+        double value = Reply.of(json).numberOr(field, Double.NaN);
         return value;
     }
 

@@ -97,10 +97,10 @@ public final class TelescopeReading {
     private TelescopeReading(Reply reply, String raw) {
         this.reply = reply;
         this.raw = raw;
-        this.ok = reply.bool("ok", false);
-        this.scanning = reply.bool("scanning", false);
-        this.passive = reply.bool("passive", false);
-        this.wholeSystem = reply.bool("wholeSystem", false);
+        this.ok = reply.ok();
+        this.scanning = reply.bool("scanning");
+        this.passive = reply.bool("passive");
+        this.wholeSystem = reply.bool("wholeSystem");
         this.now = reply.longInteger("now");
         this.addresses = reply.integer("addresses");
         this.lastDiscoveries = reply.integer("lastDiscoveries");
@@ -323,13 +323,13 @@ public final class TelescopeReading {
     /** Whether a step is due right now. */
     public boolean stepDue() {
         requireSurvey("stepDue");
-        return reply.bool("stepDue", false);
+        return reply.bool("stepDue");
     }
 
     /** Whether this survey is a POINTING (an apex and an opening) rather than a local radar. */
     public boolean pointing() {
         requireSurvey("pointing");
-        return reply.bool("pointing", false);
+        return reply.bool("pointing");
     }
 
     /** How many shells a pointing walks through; {@code 0} for a radar. */

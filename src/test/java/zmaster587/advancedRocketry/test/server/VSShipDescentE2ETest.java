@@ -64,7 +64,7 @@ public class VSShipDescentE2ETest extends AbstractSharedServerTest {
         String coords = placeFixture(SRC_X, SRC_Y, SRC_Z, "with-pilot-seat");
         String asm = exec("artest rocket assemble 0 " + coords);
         assertTrue("with VS an AFC-bearing build must route to a ship (no rocket): " + asm,
-                (Reply.of(asm).integerOr("rocketCount", Integer.MIN_VALUE) == 0));
+                (Reply.of(asm).integer("rocketCount") == 0));
         assertTrue("the source VS ship never loaded", loadedShips(0) >= 1);
 
         // The ship's own name, from the assembler that minted it — and from there its physics id. The
@@ -79,7 +79,7 @@ public class VSShipDescentE2ETest extends AbstractSharedServerTest {
         // A held throttle on THIS ship's own flight computer => a pilot is flying.
         String held = exec("artest vs ff-input-by-id 0 " + vsId + " 0 1 0 0 0 0");
         assertTrue("the held input must reach this ship's flight computer: " + held,
-                Reply.of(held).bool("afcResolved", false));
+                Reply.of(held).bool("afcResolved"));
         String tp = exec("artest vs teleport-ship-by-id 0 " + vsId + " "
                 + (int) sx + " " + ABOVE_CEILING_Y + " " + (int) sz);
         assertTrue("climb teleport failed: " + tp, Reply.of(tp).ok());
@@ -121,7 +121,8 @@ public class VSShipDescentE2ETest extends AbstractSharedServerTest {
             // By id: this scenario already knows which ship it flew up, and "the first settled ship
             // in the slot" is a different question that happens to have the same answer today.
             String r = exec("artest space find-afc " + slotDim + " " + shipId);
-            if (!Reply.of(r).bool("found", false)) {
+            // absence is the answer: this is a WAIT for the ship to settle in the slot.
+            if (!Reply.of(r).boolOr("found", false)) {
                 return false;
             }
             found[0] = r;
@@ -135,7 +136,7 @@ public class VSShipDescentE2ETest extends AbstractSharedServerTest {
         long descentMark = events.mark();
         String begin = exec("artest space descent-begin " + slotDim + " " + ax + " " + ay + " " + az
                 + " " + shipId + " " + TARGET_DIM);
-        assertTrue("descent did not start: " + begin, Reply.of(begin).bool("started", false));
+        assertTrue("descent did not start: " + begin, Reply.of(begin).bool("started"));
 
         // The cut dropped the ship from the ledger at once (it has left the subsystem).
         assertEquals("the descending ship leaves the ledger on the cut", 0,
@@ -197,14 +198,23 @@ public class VSShipDescentE2ETest extends AbstractSharedServerTest {
     }
 
     private static int extractInt(String json, String key) {
+        // absence is the answer, and WHICH answer is the CALLER's: this verb is handed a
+        // FIELD name, so it cannot know what a missing one means — and the callers here
+        // include waits, which read the shape that does not carry the field yet.
         return Reply.of(json).integerOr(key, Integer.MIN_VALUE);
     }
 
     private static double extractDouble(String json, String key) {
+        // absence is the answer, and WHICH answer is the CALLER's: this verb is handed a
+        // FIELD name, so it cannot know what a missing one means — and the callers here
+        // include waits, which read the shape that does not carry the field yet.
         return Reply.of(json).numberOr(key, 0.0);
     }
 
     private static String extractString(String json, String key) {
-        return Reply.of(json).text(key);
+        // absence is the answer, and WHICH answer is the CALLER's: this verb is handed a
+        // FIELD name, so it cannot know what a missing one means — and the callers here
+        // include waits, which read the shape that does not carry the field yet.
+        return Reply.of(json).textOr(key, null);
     }
 }

@@ -146,7 +146,7 @@ public class VSCrewInteriorBoardingE2ETest extends AbstractSharedVsClientE2ETest
         double h = Math.toRadians(170.0) / 2.0;
         assertTrue("attitude hold must accept the inversion",
                 Reply.of(exec("artest vs point-by-id 0 " + scenarioShipId + " "
-                        + Math.cos(h) + " " + Math.sin(h) + " 0.0 0.0")).bool("commanded", false));
+                        + Math.cos(h) + " " + Math.sin(h) + " 0.0 0.0")).bool("commanded"));
         bot().waitTicks(200);
 
         // The arrangement as a CHAIN, not a budget: the probe un-seats him and the deck takes him.
@@ -352,7 +352,7 @@ public class VSCrewInteriorBoardingE2ETest extends AbstractSharedVsClientE2ETest
         double h = Math.toRadians(170.0) / 2.0;
         assertTrue("attitude hold must accept the inversion",
                 Reply.of(exec("artest vs point-by-id 0 " + scenarioShipId + " "
-                        + Math.cos(h) + " " + Math.sin(h) + " 0.0 0.0")).bool("commanded", false));
+                        + Math.cos(h) + " " + Math.sin(h) + " 0.0 0.0")).bool("commanded"));
         bot().waitTicks(200);
 
         // Same arrangement chain as the open-cockpit scenario: `dismount` then `deck_entered`, and
@@ -538,7 +538,7 @@ public class VSCrewInteriorBoardingE2ETest extends AbstractSharedVsClientE2ETest
         double h = Math.toRadians(60.0) / 2.0;
         assertTrue("attitude hold must accept the roll",
                 Reply.of(exec("artest vs point-by-id 0 " + scenarioShipId + " "
-                        + Math.cos(h) + " " + Math.sin(h) + " 0.0 0.0")).bool("commanded", false));
+                        + Math.cos(h) + " " + Math.sin(h) + " 0.0 0.0")).bool("commanded"));
         bot().waitTicks(150);
 
         // Same arrangement chain as the two interior scenarios.
@@ -735,7 +735,9 @@ public class VSCrewInteriorBoardingE2ETest extends AbstractSharedVsClientE2ETest
     }
 
     private int readIntFrom(String json, String field) {
-        return Reply.of(json).integer(field);
+        Reply reply = Reply.of(json);
+        assertTrue("expected an int `" + field + "` in: " + json, reply.has(field));
+        return reply.integer(field);
     }
 
     private double[] buildAndBoardShip(FixtureSite site, String variant) throws Exception {
@@ -758,7 +760,7 @@ public class VSCrewInteriorBoardingE2ETest extends AbstractSharedVsClientE2ETest
         // every caller of this helper goes on to drive the bot as a seated pilot.
         long seatClientMark = clientEvents().mark();
         assertTrue("bot must mount the seat dummy: " + mountInfo,
-                Reply.of(exec("artest player mount-entity " + dummyId)).bool("mounted", false));
+                Reply.of(exec("artest player mount-entity " + dummyId)).bool("mounted"));
         awaitClientMount(seatClientMark, "the bot must be seated as HIS OWN CLIENT renders him"
                 + " before this helper hands the ship back — the server reporting a mount is the"
                 + " other process", DECK_LINK_BUDGET_TICKS, " mountInfo=" + mountInfo);
@@ -781,7 +783,7 @@ public class VSCrewInteriorBoardingE2ETest extends AbstractSharedVsClientE2ETest
         exec("artest vs spawn-diag reset");
         String assemble = assembleFixture(site, variant);
         assertTrue("a with-pilot-seat build must route to a ship: " + assemble,
-                (Reply.of(assemble).integerOr("rocketCount", Integer.MIN_VALUE) == 0));
+                (Reply.of(assemble).integer("rocketCount") == 0));
 
         // The registry's own addShip, awaited as a LINK. The count poll this replaces could not see
         // one: raising its budget from 200 to 600 ticks was measured and changed nothing (2/4 red
@@ -919,6 +921,9 @@ public class VSCrewInteriorBoardingE2ETest extends AbstractSharedVsClientE2ETest
         // bare boolean — because the caller asks for a column, not for a type. The regex this
         // replaces spelled that alternation out and then had to strip the quotes back off; a parsed
         // primitive knows its own type.
+        // absence is the answer, and WHICH answer is the CALLER's: this verb is handed a
+        // FIELD name, so it cannot know what a missing one means — and the callers here
+        // include waits, which read the shape that does not carry the field yet.
         return Reply.of("artest vs subspace-census", latestCensus).textOr(field, "");
     }
 
@@ -942,8 +947,10 @@ public class VSCrewInteriorBoardingE2ETest extends AbstractSharedVsClientE2ETest
     }
 
     private double readDouble(String json, String field) {
-        double value = Reply.of(json).number(field);
-        assertTrue("expected a number `" + field + "` in: " + json, !Double.isNaN(value));
+        // absence is the answer, and WHICH answer is the CALLER's: this verb is handed a
+        // FIELD name, so it cannot know what a missing one means — and the callers here
+        // include waits, which read the shape that does not carry the field yet.
+        double value = Reply.of(json).numberOr(field, Double.NaN);
         return value;
     }
 

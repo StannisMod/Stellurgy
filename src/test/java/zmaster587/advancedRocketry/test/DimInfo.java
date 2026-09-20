@@ -56,8 +56,8 @@ public final class DimInfo {
         this.reply = reply;
         this.raw = raw;
         this.dim = reply.integer("dim");
-        this.loaded = reply.bool("loaded", false);
-        this.arPlanet = reply.bool("isARPlanet", false);
+        this.loaded = reply.bool("loaded");
+        this.arPlanet = reply.bool("isARPlanet");
     }
 
     /**
@@ -213,7 +213,7 @@ public final class DimInfo {
      */
     private String present(String field) {
         String value = reply.text(field);
-        if (value == null || ABSENT.equals(value)) {
+        if (ABSENT.equals(value)) {
             throw new AssertionError("dim " + dim + " has no `" + field + "` — the probe answers the"
                     + " four characters \"null\" there, which is not a name: " + raw);
         }
@@ -228,6 +228,6 @@ public final class DimInfo {
     @Override
     public String toString() {
         return "dim " + dim + " loaded=" + loaded + " arPlanet=" + arPlanet
-                + (hasPlanetProperties() ? " terrainSource=" + reply.text("terrainSource") : "");
+                + (hasPlanetProperties() ? " terrainSource=" + reply.reported("terrainSource") : "");
     }
 }

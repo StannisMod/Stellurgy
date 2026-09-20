@@ -100,7 +100,7 @@ public class PlayerReleaseContractTest {
         // make clause 2 vacuous.
         String released = exec("artest player release");
         assertTrue("releasing an unbound player must report an empty list, not a courtesy one: "
-                + released, (Reply.of(released).integerOr("releasedCount", Integer.MIN_VALUE) == 0));
+                + released, (Reply.of(released).integer("releasedCount") == 0));
     }
 
     @Test
@@ -108,7 +108,7 @@ public class PlayerReleaseContractTest {
         ensurePlayer();
         String bind = exec("artest player bind-aboard " + SHIP);
         assertTrue("the arrangement must actually stamp the record: " + bind,
-                Reply.of(bind).bool("tagged", false));
+                Reply.of(bind).bool("tagged"));
 
         String bound = exec("artest player bindings");
         assertTrue("a stamped aboard record must be REPORTED as a binding — the question 'what is"
@@ -127,7 +127,7 @@ public class PlayerReleaseContractTest {
                 (Reply.of(after).arrayLength("bound") == 0));
         String tag = exec("artest space aboard-tag " + fakeName());
         assertTrue("and the record's own witness must agree that it is gone: " + tag,
-                (!Reply.of(tag).bool("tagged", true)));
+                (!Reply.of(tag).bool("tagged")));
     }
 
     @Test
@@ -135,7 +135,7 @@ public class PlayerReleaseContractTest {
         ensurePlayer();
         String bind = exec("artest player bind-grace");
         assertTrue("the arrangement must actually open the window: " + bind,
-                Reply.of(bind).bool("active", false));
+                Reply.of(bind).bool("active"));
 
         String bound = exec("artest player bindings");
         assertTrue("the post-transfer grace is a binding like any other — it SUPPRESSES the suit"
@@ -168,7 +168,7 @@ public class PlayerReleaseContractTest {
                         && released.contains("\"rocket transfer grace\""));
         assertFalse("and the report must not be a stale echo of the question — it is what each"
                         + " owner said it actually let go: " + released,
-                (Reply.of(released).integerOr("releasedCount", Integer.MIN_VALUE) == 0));
+                (Reply.of(released).integer("releasedCount") == 0));
 
         String after = exec("artest player bindings");
         assertTrue("after a release he must be bound to nothing: " + after,

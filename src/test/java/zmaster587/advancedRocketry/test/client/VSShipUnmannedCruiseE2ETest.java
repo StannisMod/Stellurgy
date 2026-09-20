@@ -71,7 +71,7 @@ public class VSShipUnmannedCruiseE2ETest extends AbstractSharedVsClientE2ETest {
                 "the assembly below must run with no observer near it, and the observer is a client");
         String assemble = assembleFixture(site);
         assertTrue("a with-pilot-seat build must route to a ship: " + assemble,
-                (Reply.of(assemble).integerOr("rocketCount", Integer.MIN_VALUE) == 0));
+                (Reply.of(assemble).integer("rocketCount") == 0));
         shipId = awaitShipSpawned(events,
                 spawnMark, "a with-pilot-seat assembly must create a VS ship in the registry");
         bot().waitTicks(40);
@@ -109,7 +109,7 @@ public class VSShipUnmannedCruiseE2ETest extends AbstractSharedVsClientE2ETest {
                 mountInfo.seatFound);
         long seatMark = clientEvents().mark();
         String mount = exec("artest player mount-entity " + mountInfo.requireDummyId());
-        assertTrue("bot must mount the seat dummy: " + mount, Reply.of(mount).bool("mounted", false));
+        assertTrue("bot must mount the seat dummy: " + mount, Reply.of(mount).bool("mounted"));
         // The deflection below is a real key on a client that must already be riding; the setpoint
         // ramp it drives is what the whole scenario measures.
         awaitClientMount(seatMark, "the client must be riding the seat before the cruise is flown"
@@ -184,7 +184,7 @@ public class VSShipUnmannedCruiseE2ETest extends AbstractSharedVsClientE2ETest {
                 remount.reused);
         String mounted = exec("artest player mount-entity " + remount.requireDummyId());
         assertTrue("bot must re-mount the seat dummy: " + mounted,
-                Reply.of(mounted).bool("mounted", false));
+                Reply.of(mounted).bool("mounted"));
         double yRemount = shipY();
         bot().waitTicks(40);
         double yAfter = shipY();
@@ -252,7 +252,6 @@ public class VSShipUnmannedCruiseE2ETest extends AbstractSharedVsClientE2ETest {
 
     private double readDouble(String json, String field) {
         double value = Reply.of(json).number(field);
-        assertTrue("field `" + field + "` not found in: " + json, !Double.isNaN(value));
         return value;
     }
 

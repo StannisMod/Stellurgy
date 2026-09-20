@@ -39,7 +39,7 @@ public class WeightSystemTest extends AbstractSharedServerTest {
 
     private double itemWeight(String id, int count) throws Exception {
         String r = String.join("\n", client().execute("artest weight item " + id + " " + count));
-        assertTrue("item " + id + " not registered: " + r, Reply.of(r).bool("registered", false));
+        assertTrue("item " + id + " not registered: " + r, Reply.of(r).bool("registered"));
         Reply mReply = Reply.of(r);
         assertTrue("no weight field for " + id + ": " + r, mReply.has(WEIGHT));
         return Double.parseDouble(mReply.text(WEIGHT));
@@ -47,7 +47,7 @@ public class WeightSystemTest extends AbstractSharedServerTest {
 
     private double fluidWeight(String name, int amount) throws Exception {
         String r = String.join("\n", client().execute("artest weight fluid " + name + " " + amount));
-        assertTrue("fluid " + name + " not registered: " + r, Reply.of(r).bool("registered", false));
+        assertTrue("fluid " + name + " not registered: " + r, Reply.of(r).bool("registered"));
         Reply mReply = Reply.of(r);
         assertTrue("no weight field for fluid " + name + ": " + r, mReply.has(WEIGHT));
         return Double.parseDouble(mReply.text(WEIGHT));

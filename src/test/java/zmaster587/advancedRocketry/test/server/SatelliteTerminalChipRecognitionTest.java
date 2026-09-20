@@ -160,7 +160,7 @@ public class SatelliteTerminalChipRecognitionTest extends AbstractSharedServerTe
         String place = exec("artest place 0 " + x + " " + y + " " + z
                 + " advancedrocketry:satelliteControlCenter");
         assertTrue("satelliteControlCenter place failed: " + place,
-                Reply.of(place).bool("placed", false));
+                Reply.of(place).bool("placed"));
     }
 
     /** Place terminal, build optical satellite, load chip; optionally
@@ -192,7 +192,6 @@ public class SatelliteTerminalChipRecognitionTest extends AbstractSharedServerTe
 
     private static String extract(String src, String field) {
         String value = Reply.of(src).text(field);
-        assertTrue("field `" + field + "` not found in: " + src, value != null);
         return value;
     }
 }

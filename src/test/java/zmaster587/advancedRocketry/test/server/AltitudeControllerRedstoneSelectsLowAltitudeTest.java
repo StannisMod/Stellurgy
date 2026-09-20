@@ -44,7 +44,7 @@ public class AltitudeControllerRedstoneSelectsLowAltitudeTest extends AbstractSh
                 + " " + (cx + 1) + " " + cy + " " + (cz + 1) + " minecraft:air");
         String place = exec("artest place " + SPACE_DIM + " " + cx + " " + cy + " " + cz
                 + " advancedrocketry:altitudeController");
-        assertTrue("altitude controller must place: " + place, Reply.of(place).bool("placed", false));
+        assertTrue("altitude controller must place: " + place, Reply.of(place).bool("placed"));
 
         // Put the controller into redstone-ON mode (default is OFF). With no redstone
         // wiring around it, getStrongPower(pos) == 0.

@@ -214,7 +214,7 @@ public class VSPilotStationDestructionE2ETest extends AbstractSharedVsClientE2ET
         long spawnMark = events.markInstrumented();
         String assemble = assembleFixture(site);
         assertTrue("a with-pilot-seat build must route to a ship: " + assemble,
-                (Reply.of(assemble).integerOr("rocketCount", Integer.MIN_VALUE) == 0));
+                (Reply.of(assemble).integer("rocketCount") == 0));
         FlyingShip ship = new FlyingShip();
         ship.id = awaitShipSpawned(events, spawnMark,
                 "assembly must create a VS ship in the queryable registry (async spawn)");
@@ -256,7 +256,7 @@ public class VSPilotStationDestructionE2ETest extends AbstractSharedVsClientE2ET
         ship.dummyId = Reply.of("artest vs seat-mount-at", mountInfo).integer(DUMMY_ID);
         long seatMark = clientEvents().mark();
         String mount = exec("artest player mount-entity " + ship.dummyId);
-        assertTrue("bot must mount the seat dummy: " + mount, Reply.of(mount).bool("mounted", false));
+        assertTrue("bot must mount the seat dummy: " + mount, Reply.of(mount).bool("mounted"));
         // The lift below is commanded by a real key held on a client that must already be riding;
         // ten ticks were a bet on that, and this whole class is about what happens to a pilot.
         awaitClientMount(seatMark, "the client must be riding the seat before its pilot flies it",
@@ -365,7 +365,6 @@ public class VSPilotStationDestructionE2ETest extends AbstractSharedVsClientE2ET
 
     private double readDouble(String json, String field) {
         double value = Reply.of(json).number(field);
-        assertTrue("expected a number `" + field + "` in: " + json, !Double.isNaN(value));
         return value;
     }
 

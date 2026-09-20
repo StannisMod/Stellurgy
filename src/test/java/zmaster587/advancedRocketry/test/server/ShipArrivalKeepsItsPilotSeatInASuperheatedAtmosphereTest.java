@@ -72,7 +72,7 @@ public class ShipArrivalKeepsItsPilotSeatInASuperheatedAtmosphereTest extends Ab
         String coords = placeFixture(SRC_X, SRC_Y, SRC_Z);
         String asm = exec("artest rocket assemble 0 " + coords);
         assertTrue("with VS an AFC-bearing build must route to a ship (no rocket): " + asm,
-                (Reply.of(asm).integerOr("rocketCount", Integer.MIN_VALUE) == 0));
+                (Reply.of(asm).integer("rocketCount") == 0));
         assertTrue("the source VS ship never loaded", loadedShips(0) >= 1);
 
         // The source ship, by the durable name its assembler minted — which is also what the ARRIVED
@@ -87,7 +87,7 @@ public class ShipArrivalKeepsItsPilotSeatInASuperheatedAtmosphereTest extends Ab
 
         String pre = exec("artest vs seat-input-by-id 0 " + srcShipId + " 0 0 0 0 0 0");
         assertTrue("before the crossing the ship must have a pilot seat to lose: " + pre,
-                Reply.of(pre).bool("seatFound", false));
+                Reply.of(pre).bool("seatFound"));
 
         // INSTRUMENT CHECK, while the world is still temperate: placing a lone pilot seat this way
         // leaves a pilot seat. Without this leg, "the seat is gone" after the heat could just as
@@ -144,9 +144,9 @@ public class ShipArrivalKeepsItsPilotSeatInASuperheatedAtmosphereTest extends Ab
         String post = exec("artest vs seat-input-by-id 0 " + dstShipId + " 0 0 0 0 0 0");
         assertTrue("the arrived ship has NO pilot seat - it burned on the way in, and its crew has "
                         + "nowhere to sit. control=" + control + " post=" + post,
-                Reply.of(post).bool("seatFound", false));
+                Reply.of(post).bool("seatFound"));
         assertTrue("the arrived ship's seat no longer resolves its flight computer: " + post,
-                Reply.of(post).bool("afcResolved", false));
+                Reply.of(post).bool("afcResolved"));
 
         // And the block itself is a seat, not the fire that replaced it.
         String seatBlock = exec("artest space get-block 0 " + extractInt(post, "seatX")
@@ -210,7 +210,7 @@ public class ShipArrivalKeepsItsPilotSeatInASuperheatedAtmosphereTest extends Ab
 
     private static String blockOf(String json) {
         return Reply.of("artest block at", json)
-                .textOr("block", "<no block field in " + json + ">");
+                .reported("block");
     }
 
     /**
@@ -220,16 +220,15 @@ public class ShipArrivalKeepsItsPilotSeatInASuperheatedAtmosphereTest extends Ab
      */
     private static String extractString(String json, String key) {
         String value = Reply.of(json).text(key);
-        assertTrue("expected string \"" + key + "\" in: " + json, value != null);
         assertTrue("\"" + key + "\" came back empty in: " + json, !value.isEmpty());
         return value;
     }
 
     private static int extractInt(String json, String key) {
-        return Reply.of(json).integerOr(key, Integer.MIN_VALUE);
+        return Reply.of(json).integer(key);
     }
 
     private static double extractDouble(String json, String key) {
-        return Reply.of(json).numberOr(key, 0.0);
+        return Reply.of(json).number(key);
     }
 }

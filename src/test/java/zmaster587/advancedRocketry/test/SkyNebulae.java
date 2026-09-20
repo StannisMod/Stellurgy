@@ -129,6 +129,6 @@ public final class SkyNebulae {
 
     @Override
     public String toString() {
-        return "cell " + reply.text("cell") + " draws " + drawn + " of " + seated + " seated";
+        return "cell " + reply.reported("cell") + " draws " + drawn + " of " + seated + " seated";
     }
 }

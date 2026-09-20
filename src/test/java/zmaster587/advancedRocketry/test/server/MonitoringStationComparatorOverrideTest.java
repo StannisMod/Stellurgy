@@ -110,7 +110,7 @@ public class MonitoringStationComparatorOverrideTest extends AbstractSharedServe
         String linkResp = exec("artest infra link 0 " + mx + " " + my + " " + mz
                 + " " + rocketId);
         assertTrue("infra link must succeed: " + linkResp,
-                Reply.of(linkResp).bool("linked", false));
+                Reply.of(linkResp).bool("linked"));
 
         // Read comparator with the rocket at a LOW altitude.
         exec("artest rocket set-state " + rocketId + " posY=68");

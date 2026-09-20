@@ -24,9 +24,19 @@ import com.google.gson.JsonParser;
  * a default instead cannot be told apart from one that read a real value, which is the defect above
  * wearing a tidier coat.</p>
  *
- * <p>A field that is ABSENT is reported as absent — {@code NaN}, {@code null}, or the explicit
- * fallback a caller passes — and never as zero. An absent measurement and a measured zero are
- * different readings, and a test that cannot tell them apart is not measuring.</p>
+ * <p>A field that is ABSENT is reported as absent, never as zero. An absent measurement and a
+ * measured zero are different readings, and a test that cannot tell them apart is not measuring.</p>
+ *
+ * <p><b>ONE RULE FOR EVERY READER HERE: the bare name REFUSES on absence, and the {@code …Or} name
+ * defaults.</b> {@link #bool(String)}, {@link #number(String)}, {@link #text(String)},
+ * {@link #integer(String)} and {@link #longInteger(String)} say that the producer always writes
+ * this field, so not finding it is the reader being wrong rather than the world being some way.
+ * {@link #boolOr}, {@link #numberOr}, {@link #textOr} and {@link #integerOr} say the opposite — the
+ * producer writes it only sometimes — and the caller owes one line saying why absence is the answer
+ * THERE. {@link #has(String)} asks the absence question outright, for a claim that is about it.</p>
+ *
+ * <p>The rule is greppable, which is the point: {@code Or(} is every place a default is still being
+ * taken, and a default nobody can find is one nobody reviews.</p>
  */
 public final class Reply {
 
@@ -65,34 +75,60 @@ public final class Reply {
         return primitiveOf(field) != null;
     }
 
-    /** {@code field} as a number, or {@code NaN} when the reply does not carry it. */
-    public double number(String field) {
+    /**
+     * The primitive at {@code field}, refusing when the reply does not carry one.
+     *
+     * <p>Every refusing reader goes through here, so they all name the same two things: the verb
+     * that answered and the reply it answered with. A caller reading the message sees what the
+     * producer actually wrote, which is the one fact that decides whether the field was renamed,
+     * whether the verb took a different branch, or whether the question was aimed at the wrong
+     * reply entirely.</p>
+     */
+    private String requirePrimitive(String field) {
         String value = primitiveOf(field);
         if (value == null) {
-            return Double.NaN;
+            throw new AssertionError(command + " did not report `" + field + "`: " + raw);
         }
+        return value;
+    }
+
+    /**
+     * {@code field} as a number, refusing when the reply does not carry it.
+     *
+     * <p>Absence is not a measurement. A verb that did not write the field did not measure zero and
+     * did not measure {@code NaN} — it took a branch the caller did not expect, or the producer
+     * renamed the field, and both are the reader being wrong about the world rather than the world
+     * being in some state. Where absence really is the answer — a negative claim, an optional
+     * member — {@link #numberOr(String, double)} says so at the call site.</p>
+     */
+    public double number(String field) {
+        String value = requirePrimitive(field);
         try {
             return Double.parseDouble(value);
         } catch (NumberFormatException notANumber) {
-            return Double.NaN;
+            throw new AssertionError(command + "'s `" + field + "` is `" + value + "`, which is not"
+                    + " a number: " + raw);
         }
     }
 
     /** {@code field} as a number, or {@code fallback} when absent — say out loud why a default is
      *  legitimate here, because it cannot be told from a measurement afterwards. */
     public double numberOr(String field, double fallback) {
-        double value = number(field);
-        return Double.isNaN(value) ? fallback : value;
+        String value = primitiveOf(field);
+        if (value == null) {
+            return fallback;
+        }
+        try {
+            return Double.parseDouble(value);
+        } catch (NumberFormatException notANumber) {
+            return fallback;
+        }
     }
 
     /** {@code field} as an int, refusing when the reply does not carry one — for a field the verb
      *  always writes, where absence is a broken probe rather than a reading. */
     public int integer(String field) {
-        double value = number(field);
-        if (Double.isNaN(value)) {
-            throw new AssertionError(command + " did not report `" + field + "`: " + raw);
-        }
-        return (int) value;
+        return (int) number(field);
     }
 
     /**
@@ -109,32 +145,51 @@ public final class Reply {
      * anyway.</p>
      */
     public long longInteger(String field) {
-        String value = primitiveOf(field);
-        if (value == null) {
-            throw new AssertionError(command + " did not report `" + field + "`: " + raw);
-        }
+        String value = requirePrimitive(field);
         try {
             return Long.parseLong(value.trim());
         } catch (NumberFormatException notAWholeNumber) {
-            double asDouble = number(field);
-            if (Double.isNaN(asDouble)) {
-                throw new AssertionError(command + "'s `" + field + "` is `" + value + "`, which is"
-                        + " not a number: " + raw);
-            }
-            return (long) asDouble;
+            return (long) number(field);
         }
     }
 
     /** {@code field} as an int, or {@code fallback} when absent. */
     public int integerOr(String field, int fallback) {
-        double value = number(field);
+        double value = numberOr(field, Double.NaN);
         return Double.isNaN(value) ? fallback : (int) value;
     }
 
-    /** {@code field} as text, or {@code null} when the reply does not carry it. Any primitive, as
-     *  text: a caller asking for a field cannot be wrong about its SHAPE, which is the verb's. */
+    /**
+     * {@code field} as text, refusing when the reply does not carry it. Any primitive, as text: a
+     * caller asking for a field cannot be wrong about its SHAPE, which is the verb's.
+     *
+     * <p>It refuses rather than answering {@code null} because a {@code null} is compared, not
+     * checked: {@code "docked".equals(reply.text("state"))} is FALSE both when the state is
+     * something else and when there is no state field at all, and only the first is a reading.
+     * Where the absence itself is the claim, {@link #textOr(String, String)} or {@link #has(String)}
+     * says which was meant.</p>
+     */
     public String text(String field) {
-        return primitiveOf(field);
+        return requirePrimitive(field);
+    }
+
+    /**
+     * {@code field} rendered FOR A MESSAGE, never as a reading.
+     *
+     * <p>The one place a default is not a decision: a failure message has to print whatever the
+     * reply carried, and a reader that refused inside one would replace the failure under
+     * investigation with a complaint about the message. So this never refuses — and it never
+     * answers {@code "null"} either, which is the shape that made the old {@code textOr(f, null)}
+     * in a message worth removing: {@code "null"} is also a value a producer writes, so a reader of
+     * the failure could not tell "the field said null" from "there was no field".</p>
+     *
+     * <p>It is not a reading and must not be used as one: nothing compares its result, branches on
+     * it, or passes it to another command. Those are {@link #text(String)} and
+     * {@link #textOr(String, String)}.</p>
+     */
+    public String reported(String field) {
+        String value = primitiveOf(field);
+        return value == null ? "<no " + field + ">" : value;
     }
 
     /** {@code field} as text, or {@code fallback} when absent. */
@@ -143,9 +198,24 @@ public final class Reply {
         return value == null ? fallback : value;
     }
 
-    /** {@code field} as a boolean; {@code fallback} when absent. Anything that is not the literal
-     *  {@code true} reads false, the way a JSON boolean does. */
-    public boolean bool(String field, boolean fallback) {
+    /**
+     * {@code field} as a boolean, refusing when the reply does not carry it. Anything that is not
+     * the literal {@code true} reads false, the way a JSON boolean does.
+     *
+     * <p>This is the verb that wave 3 exists for. {@code boolOr(f, false)} answers "no" to two
+     * different worlds — the verb reported {@code false}, and the verb reported nothing — and a
+     * test cannot act on the difference it cannot see. Most probe verbs write their flags on the
+     * success path only, so the second world is an ARRANGEMENT that did not happen: a tile that
+     * was not there, a lookup that missed, a verb that refused. Refusing says that, where a
+     * {@code false} says the mechanic answered.</p>
+     */
+    public boolean bool(String field) {
+        return "true".equalsIgnoreCase(requirePrimitive(field));
+    }
+
+    /** {@code field} as a boolean; {@code fallback} when absent — for a field the producer writes
+     *  only sometimes, where the caller says in one line why absence is the answer. */
+    public boolean boolOr(String field, boolean fallback) {
         String value = primitiveOf(field);
         return value == null ? fallback : "true".equalsIgnoreCase(value);
     }
@@ -170,7 +240,7 @@ public final class Reply {
      * a reply that says nothing at all.</p>
      */
     public boolean ok() {
-        return bool("ok", false);
+        return boolOr("ok", false);
     }
 
     /**
@@ -217,11 +287,14 @@ public final class Reply {
      * {@code ships[].state}. The refusal was right in every case.</p>
      */
     public Reply element(String field, String member, String value) {
+        // absence is the answer inside the scan below: an ARRAY is heterogeneous by nature, so
+        // an element that does not carry `member` is one that does not match — refusing there
+        // would turn a neighbour's shape into a failure of the caller's own question.
         String[] elements = objectArray(field);
         Reply found = null;
         for (String element : elements) {
             Reply one = Reply.of(command + " [" + field + "]", element);
-            if (String.valueOf(value).equals(one.text(member))) {
+            if (String.valueOf(value).equals(one.textOr(member, null))) {
                 if (found != null) {
                     throw new AssertionError(command + "'s `" + field + "` holds MORE THAN ONE"
                             + " element whose `" + member + "` is " + value + ", so that member"
@@ -238,6 +311,52 @@ public final class Reply {
     }
 
     /**
+     * The ONE element of the ARRAY {@code field} carrying EVERY one of {@code memberValues},
+     * given as {@code member, value, member, value, …} — for a subject whose ADDRESS takes more
+     * than one field.
+     *
+     * <p>{@link #element(String, String, String)} names an object by a single member, which is the
+     * right shape when one exists: an id, a uuid, a slot index. Where it does not — a block is
+     * {@code posX} AND {@code posY} AND {@code posZ} — a single member is a DESCRIPTION, and the
+     * same syntax carries both. Asking by every field of the address makes the answer structurally
+     * about the object the caller built.</p>
+     *
+     * <p>Refuses on none and on more than one, for the same reason {@code element} does.</p>
+     */
+    public Reply elementWhereAll(String field, String... memberValues) {
+        if (memberValues.length == 0 || memberValues.length % 2 != 0) {
+            throw new AssertionError("elementWhereAll takes member, value pairs and was given "
+                    + memberValues.length + " argument(s): "
+                    + java.util.Arrays.toString(memberValues));
+        }
+        String[] elements = objectArray(field);
+        Reply found = null;
+        for (String element : elements) {
+            Reply one = Reply.of(command + " [" + field + "]", element);
+            boolean all = true;
+            for (int i = 0; i < memberValues.length && all; i += 2) {
+                // absence is the answer inside the scan, as in `element` above: an element that
+                // does not carry the member is not the one being addressed.
+                all = String.valueOf(memberValues[i + 1]).equals(one.textOr(memberValues[i], null));
+            }
+            if (all) {
+                if (found != null) {
+                    throw new AssertionError(command + "'s `" + field + "` holds MORE THAN ONE"
+                            + " element carrying " + java.util.Arrays.toString(memberValues)
+                            + ", so those members do not address one of them: " + raw);
+                }
+                found = one;
+            }
+        }
+        if (found == null) {
+            throw new AssertionError(command + "'s `" + field + "` holds no element carrying "
+                    + java.util.Arrays.toString(memberValues) + " — it holds " + elements.length
+                    + ": " + raw);
+        }
+        return found;
+    }
+
+    /**
      * Whether the ARRAY {@code field} holds an element whose {@code member} is {@code value}.
      *
      * <p><b>For a NEGATIVE claim, and only that</b> — "the hatch no longer holds sticks anywhere",
@@ -246,9 +365,10 @@ public final class Reply {
      * makes the reading about that thing.</p>
      */
     public boolean holdsElement(String field, String member, String value) {
+        // absence is the answer, as in element above: an element without `member` does not match.
         for (String element : objectArray(field)) {
             if (String.valueOf(value).equals(
-                    Reply.of(command + " [" + field + "]", element).text(member))) {
+                    Reply.of(command + " [" + field + "]", element).textOr(member, null))) {
                 return true;
             }
         }

@@ -381,7 +381,7 @@ public class ItemRightClickClientGroupE2ETest extends AbstractSharedClientE2ETes
         scenario().requireArranged("equip-orescanner must succeed: " + equip,
                 Reply.of(equip).ok());
         scenario().requireArranged("empty branch must report hadSatelliteId:false: " + equip,
-                (!Reply.of(equip).bool("hadSatelliteId", true)));
+                (!Reply.of(equip).bool("hadSatelliteId")));
         awaitHeld(equipMark, "advancedrocketry:orescanner");
 
         scenario().asserting("no screen opens on the client");
@@ -424,7 +424,7 @@ public class ItemRightClickClientGroupE2ETest extends AbstractSharedClientE2ETes
         scenario().requireArranged("equip-orescanner must succeed: " + equip,
                 Reply.of(equip).ok());
         scenario().requireArranged("resolved branch must report hadSatelliteId:true: " + equip,
-                Reply.of(equip).bool("hadSatelliteId", false));
+                Reply.of(equip).bool("hadSatelliteId"));
         awaitHeld(equipMark, "advancedrocketry:orescanner");
 
         scenario().asserting("the OreMapping GUI opens on the client");

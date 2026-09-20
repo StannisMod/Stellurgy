@@ -136,7 +136,7 @@ public class OxygenVentBoundedByBlobCapTest extends AbstractSharedServerTest {
     private void sealVent(int cx) throws Exception {
         String resp = exec("artest place " + DIM + " " + cx + " " + CY + " " + CZ
                 + " advancedrocketry:oxygenVent");
-        assertTrue("vent place failed: " + resp, Reply.of(resp).bool("placed", false));
+        assertTrue("vent place failed: " + resp, Reply.of(resp).bool("placed"));
         String e = exec("artest energy inject " + DIM + " " + cx + " " + CY + " " + CZ + " 1000000");
         assertTrue("energy inject failed: " + e, Reply.of(e).ok());
         String o = exec("artest fluid inject " + DIM + " " + cx + " " + CY + " " + CZ + " oxygen 16000");

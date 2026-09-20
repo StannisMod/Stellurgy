@@ -83,7 +83,7 @@ public class VSJumpingShipDoesNotFlingBystandersE2ETest extends AbstractSharedSe
         String coords = placeFixture(SRC_X, SRC_Y, SRC_Z, "with-pilot-deck");
         String asm = exec("artest rocket assemble 0 " + coords);
         assertTrue("with VS an AFC-bearing build must route to a ship (no rocket): " + asm,
-                (Reply.of(asm).integerOr("rocketCount", Integer.MIN_VALUE) == 0));
+                (Reply.of(asm).integer("rocketCount") == 0));
         assertTrue("the ship never loaded", loadedShips(0) >= 1);
 
         // THIS ship, by the name the assembler minted for it — then the physics id it maps to. The
@@ -163,7 +163,7 @@ public class VSJumpingShipDoesNotFlingBystandersE2ETest extends AbstractSharedSe
         // rotation is held by the same controller instead of fought by it.
         String rot = exec("artest vs force-rot-by-id 0 " + shipId + " 0 " + YAW_RAD_PER_S + " 0");
         assertTrue("the departed hull could not be commanded to rotate: " + rot,
-                Reply.of(rot).bool("afcResolved", false));
+                Reply.of(rot).bool("afcResolved"));
 
         GameTicks.advance(client(), GameTicks.server(), WINDOW_TICKS);
 
@@ -229,14 +229,22 @@ public class VSJumpingShipDoesNotFlingBystandersE2ETest extends AbstractSharedSe
     }
 
     private static int extractInt(String json, String key) {
+        // absence is the answer, and WHICH answer is the CALLER's: this verb is handed a
+        // FIELD name, so it cannot know what a missing one means — and the callers here
+        // include waits, which read the shape that does not carry the field yet.
         return Reply.of(json).integerOr(key, Integer.MIN_VALUE);
     }
 
     private static double extractDouble(String json, String key) {
+        // absence is the answer, and WHICH answer is the CALLER's: this verb is handed a
+        // FIELD name, so it cannot know what a missing one means — and the callers here
+        // include waits, which read the shape that does not carry the field yet.
         return Reply.of(json).numberOr(key, 0.0);
     }
 
     private static String extractString(String json, String key) {
-        return Reply.of(json).text(key);
+        // absence is the answer: the callers WAIT on this, and the fields they wait for —
+        // `lastTouchedShip` above all — are written as JSON null until the thing happens.
+        return Reply.of(json).textOr(key, null);
     }
 }

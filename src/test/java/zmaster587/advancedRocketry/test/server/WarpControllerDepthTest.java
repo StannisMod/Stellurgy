@@ -82,7 +82,7 @@ public class WarpControllerDepthTest extends AbstractSharedServerTest {
         String place = ok(client().execute("artest place " + dim + " " + x + " " + y
                 + " " + z + " advancedrocketry:warpMonitor"));
         assertTrue("warp monitor place failed: " + place,
-                Reply.of(place).bool("placed", false));
+                Reply.of(place).bool("placed"));
         return ok(client().execute("artest tile warp-state " + dim + " " + x + " " + y + " " + z));
     }
 
@@ -96,7 +96,7 @@ public class WarpControllerDepthTest extends AbstractSharedServerTest {
         assertTrue("tileClass must be TileWarpController: " + state,
                 state.contains("TileWarpController"));
         assertTrue("overworld controller must NOT see a space object: " + state,
-                (!Reply.of(state).bool("hasSpaceObject", true)));
+                (!Reply.of(state).bool("hasSpaceObject")));
     }
 
     @Test
@@ -124,7 +124,7 @@ public class WarpControllerDepthTest extends AbstractSharedServerTest {
 
         String state = placeAndReadWarpState(SPACE_DIM, xz[0], 128, xz[1]);
         assertTrue("controller at station spawn must see a space object: " + state,
-                Reply.of(state).bool("hasSpaceObject", false));
+                Reply.of(state).bool("hasSpaceObject"));
         assertTrue("hosted station id must match the one we created (" + stationId
                         + "): " + state,
                 String.valueOf(stationId).equals(Reply.of(state).text("stationId")));
@@ -174,7 +174,7 @@ public class WarpControllerDepthTest extends AbstractSharedServerTest {
         String state = ok(client().execute(
                 "artest tile warp-state " + SPACE_DIM + " " + xz[0] + " 128 " + xz[1]));
         assertTrue("station starts non-anchored (default): " + state,
-                (!Reply.of(state).bool("stationAnchored", true)));
+                (!Reply.of(state).bool("stationAnchored")));
 
         // Warp trigger: with no destination set (destOrbitingDim is the
         // current orbit by default), the destination-equals-current gate
@@ -226,9 +226,9 @@ public class WarpControllerDepthTest extends AbstractSharedServerTest {
         String debug = ok(client().execute(
                 "artest tile warp-trigger-debug " + SPACE_DIM + " " + xz[0] + " 128 " + xz[1]));
         assertTrue("the station reports that it cannot travel: " + debug,
-                (!Reply.of(debug).bool("canTravel", true)));
+                (!Reply.of(debug).bool("canTravel")));
         assertTrue("and that is the ONLY gate standing in the way - fuel, destination and anchor "
-                + "are all satisfied: " + debug, (!Reply.of(debug).bool("allGatesGreen", true)));
+                + "are all satisfied: " + debug, (!Reply.of(debug).bool("allGatesGreen")));
 
         ok(client().execute(
                 "artest tile warp-trigger " + SPACE_DIM + " " + xz[0] + " 128 " + xz[1]));
@@ -252,7 +252,7 @@ public class WarpControllerDepthTest extends AbstractSharedServerTest {
         String anchorResp = ok(client().execute(
                 "artest station set-anchor " + stationId + " true"));
         assertTrue("anchor probe must succeed: " + anchorResp,
-                Reply.of(anchorResp).bool("after", false));
+                Reply.of(anchorResp).bool("after"));
 
         placeAndReadWarpState(SPACE_DIM, xz[0], 128, xz[1]);
 

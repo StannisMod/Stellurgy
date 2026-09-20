@@ -175,7 +175,7 @@ public class VSShipExtremeCoordinatesE2ETest extends AbstractSharedVsClientE2ETe
         long assemblyMark = events.markInstrumented();
         String assemble = assembleFixture(FixtureSite.openAir(cellDim, BX, BZ), VARIANT);
         assertTrue("a with-pilot-seat build must route to a ship: " + assemble,
-                (Reply.of(assemble).integerOr("rocketCount", Integer.MIN_VALUE) == 0));
+                (Reply.of(assemble).integer("rocketCount") == 0));
         // The craft's CREATION, and its identity, from one record. A count that rises says a ship
         // appeared somewhere in the world; `ship_spawned` says which craft was made, so the identity
         // and the existence are the same fact and neither is polled for.
@@ -189,16 +189,17 @@ public class VSShipExtremeCoordinatesE2ETest extends AbstractSharedVsClientE2ETe
         // renders, and a client in another world renders none of it.
         PilotSeat seat = PilotSeat.byId(this::exec, cellDim, shipId)
                 .requireFound("the pilot seat must be found in the assembled craft");
+        long enterMark = clientEvents().mark();
         String enter = exec("artest space enter " + botName() + " " + cellDim
                 + " " + (int) Math.round(seat.shipWorldX)
                 + " " + (int) Math.round(seat.shipWorldY)
                 + " " + (int) Math.round(seat.shipWorldZ));
         scenario().requireArranged("space enter into the origin cell must succeed: " + enter,
                 Reply.of(enter).ok());
-        bot().waitTicks(20);
-        scenario().requireArranged("the client must have followed into the origin cell (dim "
-                        + cellDim + ")",
-                bot().reportWeather().get("dim").getAsInt() == cellDim);
+        // WAS `waitTicks(20)` and a read of the weather report's dim — a budget between the
+        // order and the read is an assertion about this box, not about the transfer.
+        awaitClientDim(enterMark, cellDim,
+                "everything below is arranged on the client's side of the boundary");
 
         SeatMount mountInfo = SeatMount.onShip(this::exec, cellDim, shipId);
         assertTrue("seat-mount must find the pilot seat: " + mountInfo.raw(),
@@ -214,7 +215,7 @@ public class VSShipExtremeCoordinatesE2ETest extends AbstractSharedVsClientE2ETe
         // budget could only ever be too short, never wrong in a way that says so.
         long seatMountMark = clientEvents().mark();
         assertTrue("bot must mount the seat dummy",
-                Reply.of(exec("artest player mount-entity " + dummyId)).bool("mounted", false));
+                Reply.of(exec("artest player mount-entity " + dummyId)).bool("mounted"));
         awaitClientMount(seatMountMark, "the client must FOLLOW the seat boarding before anything"
                         + " below is asked of a pilot — every leg here is about what a SEATED body"
                         + " does when its craft moves", CLIENT_REMOUNT_BUDGET_TICKS,
@@ -472,7 +473,6 @@ public class VSShipExtremeCoordinatesE2ETest extends AbstractSharedVsClientE2ETe
 
     private double readDouble(String json, String field) {
         double value = Reply.of(json).number(field);
-        assertTrue("expected a number `" + field + "` in: " + json, !Double.isNaN(value));
         return value;
     }
 

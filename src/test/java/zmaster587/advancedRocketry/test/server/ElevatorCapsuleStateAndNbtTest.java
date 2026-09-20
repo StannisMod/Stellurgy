@@ -93,7 +93,7 @@ public class ElevatorCapsuleStateAndNbtTest extends AbstractSharedServerTest {
                 "artest entity spawn 0 " + x + ".5 " + BASE_Y + " " + BASE_Z + ".5"
                         + " advancedrocketry:ARSpaceElevatorCapsule"));
         assertTrue("capsule spawn failed: " + spawn,
-                Reply.of(spawn).ok() && Reply.of(spawn).bool("spawned", false));
+                Reply.of(spawn).ok() && Reply.of(spawn).bool("spawned"));
         Reply mReply = Reply.of(spawn);
         assertTrue("spawn response must carry entityId: " + spawn, mReply.has(ENTITY_ID));
         return Integer.parseInt(mReply.text(ENTITY_ID));
@@ -102,7 +102,7 @@ public class ElevatorCapsuleStateAndNbtTest extends AbstractSharedServerTest {
     private static boolean extractBool(String src, String field) {
         Reply reply = Reply.of(src);
         assertTrue("field `" + field + "` not found in: " + src, reply.has(field));
-        return reply.bool(field, false);
+        return reply.bool(field);
     }
 
     private static int extractInt(String src, String field) {

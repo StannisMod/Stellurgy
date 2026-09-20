@@ -61,17 +61,26 @@ public final class EntryStatus {
 
     private EntryStatus(Reply reply, String raw) {
         this.raw = raw;
-        this.ships = reply.integerOr("ships", -1);
-        this.pending = reply.integerOr("pending", -1);
-        this.found = reply.bool("found", false);
-        this.shipId = reply.text("shipId");
-        this.state = reply.text("state");
-        this.cellKey = reply.text("cellKey");
-        this.lx = (long) reply.numberOr("lx", Double.NaN);
-        this.ly = (long) reply.numberOr("ly", Double.NaN);
-        this.lz = (long) reply.numberOr("lz", Double.NaN);
-        this.slotDim = reply.integerOr("slotDim", Integer.MIN_VALUE);
-        this.slotBound = reply.bool("slotBound", false);
+        this.ships = reply.integer("ships");
+        this.pending = reply.integer("pending");
+        // WHETHER A ROW IS HERE, asked of the row and not of a flag only one form writes.
+        // The producer emits `found` on the id form alone; the whole-ledger form simply carries
+        // a row or does not. Read off `found`, the whole-ledger form answered false while
+        // holding a row — and the class note above promises the opposite.
+        this.found = reply.has("shipId");
+        this.shipId = found ? reply.text("shipId") : null;
+        this.state = found ? reply.text("state") : null;
+        this.cellKey = found ? reply.text("cellKey") : null;
+        // Read under `found`, and as Long.MIN_VALUE without one. The previous form defaulted to
+        // Double.NaN and then cast it to long, which is ZERO: a reply with no row answered that
+        // the craft sits at its cell's origin.
+        this.lx = found ? (long) reply.number("lx") : Long.MIN_VALUE;
+        this.ly = found ? (long) reply.number("ly") : Long.MIN_VALUE;
+        this.lz = found ? (long) reply.number("lz") : Long.MIN_VALUE;
+        // absence is the answer for the slot alone: the producer writes JSON null there for a
+        // cell no slot world is bound to, which is what `slotBound` beside it reports.
+        this.slotDim = found ? reply.integerOr("slotDim", Integer.MIN_VALUE) : Integer.MIN_VALUE;
+        this.slotBound = found && reply.bool("slotBound");
     }
 
     /**
@@ -85,7 +94,7 @@ public final class EntryStatus {
      */
     public static EntryStatus of(String statusReply) {
         Reply reply = Reply.of("artest space entry-status", String.valueOf(statusReply));
-        if (!reply.bool("ok", false)) {
+        if (!reply.ok()) {
             ArrangementFailure.arrangementFailed("the entry ledger does not answer about its own"
                     + " status, so a `found:false` here would be a claim about the craft rather than"
                     + " about the reply: " + statusReply);

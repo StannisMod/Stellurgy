@@ -54,9 +54,9 @@ public final class MissionCompletion {
         this.reply = reply;
         this.raw = raw;
         this.missionId = (long) reply.number("missionId");
-        this.wasDeadBefore = reply.bool("wasDeadBefore", false);
-        this.isDeadAfter = reply.bool("isDeadAfter", false);
-        this.completed = reply.bool("completed", false);
+        this.wasDeadBefore = reply.bool("wasDeadBefore");
+        this.isDeadAfter = reply.bool("isDeadAfter");
+        this.completed = reply.bool("completed");
         this.launchDim = reply.integer("launchDim");
         this.rocketCount = reply.integer("rocketCount");
         this.fluidEntries = reply.integer("fluidEntries");
@@ -98,7 +98,9 @@ public final class MissionCompletion {
      * every count as zero, which is what an empty rocket looks like.</p>
      */
     public MissionCompletion requireCargoScanned(String what) {
-        String cargoError = reply.text("cargoError");
+        // absence is the answer: the field exists only when the scan FAILED, so no field means
+        // the scan ran — which is exactly what this verb is asking.
+        String cargoError = reply.textOr("cargoError", null);
         if (cargoError != null) {
             ArrangementFailure.arrangementFailed(what + " — the launch-pad cargo scan did not run ("
                     + cargoError + "), so its zeros are about the scan and not about the craft: "
@@ -118,7 +120,7 @@ public final class MissionCompletion {
         String[] items = reply.objectArray("items");
         String[] ids = new String[items.length];
         for (int i = 0; i < items.length; i++) {
-            ids[i] = Reply.of("artest mission complete-now item", items[i]).textOr("id", "");
+            ids[i] = Reply.of("artest mission complete-now item", items[i]).text("id");
         }
         return ids;
     }
@@ -137,7 +139,7 @@ public final class MissionCompletion {
         for (String entry : reply.objectArray("fluids")) {
             Reply fluid = Reply.of("artest mission complete-now fluid", entry);
             if (type.equals(fluid.text("type"))) {
-                total += fluid.integerOr("amount", 0);
+                total += fluid.integer("amount");
             }
         }
         return total;

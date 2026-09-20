@@ -62,8 +62,8 @@ public final class DimWeather {
         this.reply = reply;
         this.raw = raw;
         this.dim = reply.integer("dim");
-        this.raining = reply.bool("isRaining", false);
-        this.thundering = reply.bool("isThundering", false);
+        this.raining = reply.bool("isRaining");
+        this.thundering = reply.bool("isThundering");
         this.rainTime = reply.integer("rainTime");
         this.thunderTime = reply.integer("thunderTime");
         this.cleanWeatherTime = reply.integer("cleanWeatherTime");
@@ -101,11 +101,7 @@ public final class DimWeather {
 
     /** The FQN of the {@code WorldInfo} that answered — what says whose weather state this is. */
     public String worldInfoClass() {
-        String value = reply.text("worldInfoClass");
-        if (value == null) {
-            throw new AssertionError("`artest weather get` named no world info class: " + raw);
-        }
-        return value;
+        return reply.text("worldInfoClass");
     }
 
     /**

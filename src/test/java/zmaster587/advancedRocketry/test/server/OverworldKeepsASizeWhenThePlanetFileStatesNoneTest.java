@@ -97,10 +97,10 @@ public class OverworldKeepsASizeWhenThePlanetFileStatesNoneTest {
         assertTrue("the overworld must run with the unit radius when its planet file states none —"
                         + " a body of radius 0 draws at the marker size at every range and carries the"
                         + " flat 512-block proximity shell instead of an atmosphere: " + earth,
-                (Reply.of(earth).numberOr("radius", Double.NaN) == 1.0));
+                (Reply.of(earth).number("radius") == 1.0));
         assertTrue("the overworld must run with the unit mass on the same terms — mass and radius are"
                         + " stated together and derived gravity reads both: " + earth,
-                (Reply.of(earth).numberOr("mass", Double.NaN) == 1.0));
+                (Reply.of(earth).number("mass") == 1.0));
 
         // CONTROL: the repair is aimed at the ONE body whose bulk is a definition. A body that stated
         // its own must come back with what it stated, or the assertion above is passing on a blanket
@@ -108,6 +108,7 @@ public class OverworldKeepsASizeWhenThePlanetFileStatesNoneTest {
         String luna = String.join("\n", harness.client().execute("artest planet info " + MOON_DIM));
         assertTrue("planet info errored for the moon: " + luna, !Reply.of(luna).has("error"));
         assertTrue("a body that STATES its bulk must keep it, not be repaired to the unit one: " + luna,
-                String.valueOf(MOON_RADIUS).equals(Reply.of(luna).text("radius")) && String.valueOf(MOON_MASS).equals(Reply.of(luna).text("mass")));
+                String.valueOf(MOON_RADIUS).equals(Reply.of(luna).text("radius"))
+                        && String.valueOf(MOON_MASS).equals(Reply.of(luna).text("mass")));
     }
 }

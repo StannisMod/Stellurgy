@@ -60,12 +60,11 @@ public class VSCrewRidesRollingDeckE2ETest extends AbstractSharedVsClientE2ETest
 
     private int count(String sub) throws Exception {
         String command = "artest vs " + sub + " 0";
-        return Reply.of(command, exec(command)).integerOr(COUNT, -1);
+        return Reply.of(command, exec(command)).integer(COUNT);
     }
 
     private double readDouble(String json, String field) {
         double value = Reply.of(json).number(field);
-        assertTrue("expected a number `" + field + "` in: " + json, !Double.isNaN(value));
         return value;
     }
 
@@ -110,7 +109,7 @@ public class VSCrewRidesRollingDeckE2ETest extends AbstractSharedVsClientE2ETest
 
         String assemble = assembleFixture(site, VARIANT);
         assertTrue("a with-pilot-seat build must route to a ship: " + assemble,
-                (Reply.of(assemble).integerOr("rocketCount", Integer.MIN_VALUE) == 0));
+                (Reply.of(assemble).integer("rocketCount") == 0));
 
         // Event-gated async-VS assembly barrier (bounded ceiling + early exit): AWAIT the SPAWNED
         // stage instead of a fixed tick budget that reds a healthy spawn under concurrent-fork load.
@@ -168,7 +167,7 @@ public class VSCrewRidesRollingDeckE2ETest extends AbstractSharedVsClientE2ETest
         double half = Math.toRadians(ROLL_DEG) / 2.0;
         String point = exec("artest vs point-by-id 0 " + shipId
                 + " " + Math.cos(half) + " 0.0 0.0 " + Math.sin(half));
-        assertTrue("attitude hold must accept the roll command: " + point, Reply.of(point).bool("commanded", false));
+        assertTrue("attitude hold must accept the roll command: " + point, Reply.of(point).bool("commanded"));
         bot().waitTicks(120); // let the controller actually roll the ship
 
         PlayerShipData rolled = PlayerShipData.read(this::exec);

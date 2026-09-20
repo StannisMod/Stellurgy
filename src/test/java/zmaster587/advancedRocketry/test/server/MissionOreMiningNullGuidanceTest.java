@@ -83,7 +83,7 @@ public class MissionOreMiningNullGuidanceTest extends AbstractSharedServerTest {
         String strip = ok(client().execute("artest mission strip-guidance " + mid));
         assertTrue("strip-guidance failed: " + strip, Reply.of(strip).ok());
         assertTrue("guidance computer must be gone: " + strip,
-                (!Reply.of(strip).bool("hasGuidanceComputer", true)));
+                (!Reply.of(strip).bool("hasGuidanceComputer")));
 
         MissionCompletion complete = MissionCompletion.now(
                 cmd -> ok(client().execute(cmd)), mid);

@@ -113,7 +113,6 @@ public class AtmospherePlayerEventTest {
 
     private String field(String field, String src) {
         String value = Reply.of(src).text(field);
-        assertTrue("field `" + field + "` not found in: " + src, value != null);
         return value;
     }
 

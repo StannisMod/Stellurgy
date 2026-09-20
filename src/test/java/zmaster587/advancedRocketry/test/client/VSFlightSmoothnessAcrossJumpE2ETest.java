@@ -219,7 +219,7 @@ public class VSFlightSmoothnessAcrossJumpE2ETest extends AbstractSharedVsClientE
         String assembled = exec("artest rocket assemble " + originDim + " " + bp[0] + " "
                 + bp[1] + " " + bp[2]);
         scenario().requireArranged("a with-pilot-seat build must route to a ship: " + assembled,
-                (Reply.of(assembled).integerOr("rocketCount", Integer.MIN_VALUE) == 0));
+                (Reply.of(assembled).integer("rocketCount") == 0));
         scenario().requireArranged("the origin ship never assembled/loaded in dim " + originDim,
                 waitForLoadedShip(originDim) >= 1);
 
@@ -234,7 +234,7 @@ public class VSFlightSmoothnessAcrossJumpE2ETest extends AbstractSharedVsClientE
         String named = exec("artest space transit-name " + originDim + " " + shipId);
         scenario().requireArranged("the transit stack must resolve this ship's flight computer and its"
                 + " durable id, or the jump departs nameless: " + named,
-                Reply.of(named).bool("afcFound", false) && !"".equals(Reply.of(named).text("durableId")));
+                Reply.of(named).bool("afcFound") && !"".equals(Reply.of(named).text("durableId")));
         PilotSeat seat = PilotSeat.byId(this::exec, originDim, shipId)
                 .requireFound("the pilot seat must be found in the assembled ship");
         int seatX = seat.seatX, seatY = seat.seatY, seatZ = seat.seatZ;
@@ -243,13 +243,16 @@ public class VSFlightSmoothnessAcrossJumpE2ETest extends AbstractSharedVsClientE
         int sy = (int) Math.round(seat.shipWorldY);
         int sz = (int) Math.round(seat.shipWorldZ);
 
+        long enterMark = clientEvents().mark();
         String enter = exec("artest space enter " + botName() + " " + originDim
                 + " " + sx + " " + sy + " " + sz);
         scenario().requireArranged("space enter into the origin cell must succeed: " + enter,
                 readBool(enter, "ok"));
-        bot().waitTicks(20);
-        scenario().requireArranged("the client must have followed into the origin cell",
-                bot().reportWeather().get("dim").getAsInt() == originDim);
+        // WAS `waitTicks(20)` and a read of the weather report's dim. The client publishes
+        // the dimension it changed to; a budget in between asserts how fast this box
+        // replicates, not that the transfer happened.
+        awaitClientDim(enterMark, originDim,
+                "the mount below seats him on a ship in that cell, and the client renders it");
         mountTheSeat(originDim, seatX, seatY, seatZ);
 
         // ---- LEG A (the control): fly in the origin cell, before anything has jumped. -----------
@@ -737,7 +740,8 @@ public class VSFlightSmoothnessAcrossJumpE2ETest extends AbstractSharedVsClientE
             scenario().requireArranged("seat-mount-at must spawn the seat dummy: " + mountAt,
                     readBool(mountAt, "ok"));
             mount = exec("artest player mount-entity " + readInt(mountAt, "dummyId"));
-            mounted = Reply.of(mount).bool("mounted", false);
+            // absence is the answer: this is a retry loop, and "not yet" is what it is reading for.
+            mounted = Reply.of(mount).boolOr("mounted", false);
             if (!mounted) {
                 bot().waitTicks(10);
             }
@@ -768,7 +772,7 @@ public class VSFlightSmoothnessAcrossJumpE2ETest extends AbstractSharedVsClientE
     }
 
     private static boolean readBool(String json, String key) {
-        return Reply.of(json).bool(key, false);
+        return Reply.of(json).bool(key);
     }
 
     private static int readInt(String json, String key) {
@@ -777,6 +781,8 @@ public class VSFlightSmoothnessAcrossJumpE2ETest extends AbstractSharedVsClientE
     }
 
     private static int readIntOr(String json, String key, int def) {
+        // absence is the answer, and WHICH answer is the CALLER's: this verb takes the
+        // default as an argument, so every call site names what a missing field means there.
         return Reply.of(json).integerOr(key, def);
     }
 
@@ -786,6 +792,8 @@ public class VSFlightSmoothnessAcrossJumpE2ETest extends AbstractSharedVsClientE
     }
 
     private static double readDoubleOr(String json, String key, double def) {
+        // absence is the answer, and WHICH answer is the CALLER's: this verb takes the
+        // default as an argument, so every call site names what a missing field means there.
         return Reply.of(json).numberOr(key, def);
     }
 }

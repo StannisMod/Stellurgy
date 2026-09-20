@@ -172,7 +172,7 @@ public class WorldgenDeterminismAndSamplingTest extends AbstractSharedServerTest
                 Reply.of(stats).has("chunksScanned"));
         // radius=1 -> 3×3 = 9 chunks
         assertTrue("ore-stats with radius=1 must have scanned >=1 chunk: " + stats,
-                !(Reply.of(stats).integerOr("chunksScanned", Integer.MIN_VALUE) == 0));
+                !(Reply.of(stats).integer("chunksScanned") == 0));
     }
 
     @Test

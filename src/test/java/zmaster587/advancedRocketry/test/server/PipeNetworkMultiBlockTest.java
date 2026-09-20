@@ -45,13 +45,13 @@ public class PipeNetworkMultiBlockTest extends AbstractHeadlessServerTest {
         String placeGen = String.join("\n", client().execute(
                 "artest place 0 " + gx + " " + gy + " " + gz
                         + " advancedrocketry:solarGenerator"));
-        assertTrue("solar place failed: " + placeGen, Reply.of(placeGen).bool("placed", false));
+        assertTrue("solar place failed: " + placeGen, Reply.of(placeGen).bool("placed"));
 
         // Place forge-power-input directly east of the generator.
         String placeHatch = String.join("\n", client().execute(
                 "artest place 0 " + hx + " " + gy + " " + gz
                         + " libvulpes:forgepowerinput"));
-        assertTrue("hatch place failed: " + placeHatch, Reply.of(placeHatch).bool("placed", false));
+        assertTrue("hatch place failed: " + placeHatch, Reply.of(placeHatch).bool("placed"));
 
         // Sanity — both tiles expose IEnergyStorage.
         EnergyStore genInfo = energy(gx, gy, gz)

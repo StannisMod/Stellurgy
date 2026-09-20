@@ -171,6 +171,8 @@ public final class ShipReadiness {
     /** The {@code count} of a probe reply, or {@link Integer#MIN_VALUE} when it carries none. */
     private static int countOf(String reply) {
         Reply mReply = Reply.of(String.valueOf(reply));
-        return mReply.has(COUNT) ? Integer.parseInt(mReply.text(COUNT)) : Integer.MIN_VALUE;
+        // absence is the answer: this reader's own contract is "or MIN_VALUE when the reply
+        // carries none", and its callers branch on that.
+        return mReply.has(COUNT) ? mReply.integer(COUNT) : Integer.MIN_VALUE;
     }
 }

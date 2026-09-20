@@ -101,7 +101,7 @@ public class SystemBodiesFeedFollowsTheCellE2ETest extends AbstractSharedServerT
 
         String poi = exec("artest space add-poi " + CELL_NO_SHIP + " " + BODY_LOCAL + " PLANET 0 7");
         assertTrue("add-poi must register a descend target: " + poi,
-                Reply.of(poi).ok() && Reply.of(poi).bool("descendTarget", false));
+                Reply.of(poi).ok() && Reply.of(poi).bool("descendTarget"));
 
         String after = exec("artest space bodies");
         assertEquals("the cell's own body must reach the feed with no ship in the cell at all; "
@@ -118,7 +118,7 @@ public class SystemBodiesFeedFollowsTheCellE2ETest extends AbstractSharedServerT
 
         String poi = exec("artest space add-poi " + CELL_MID_JUMP + " " + BODY_LOCAL + " MOON 0 7");
         assertTrue("add-poi must register a descend target: " + poi,
-                Reply.of(poi).ok() && Reply.of(poi).bool("descendTarget", false));
+                Reply.of(poi).ok() && Reply.of(poi).bool("descendTarget"));
 
         // A settled ship first: this is the state the feed already handled, and it is the control that
         // proves the arrangement can produce a body at all.
@@ -160,8 +160,10 @@ public class SystemBodiesFeedFollowsTheCellE2ETest extends AbstractSharedServerT
     private static int feedBodyCount(String json, int slotDim) {
         for (String entry : Reply.of("the system-bodies feed", json).objectArray(FEED)) {
             Reply cell = Reply.of("one feed entry", entry);
+            // absence is the answer: this walks a LIST looking for one cell, and an entry
+            // that carries no slot dim is not the one being looked for.
             if (cell.integerOr(SLOT_DIM, Integer.MIN_VALUE) == slotDim) {
-                return cell.integerOr(BODY_COUNT, -1);
+                return cell.integer(BODY_COUNT);
             }
         }
         return -1;

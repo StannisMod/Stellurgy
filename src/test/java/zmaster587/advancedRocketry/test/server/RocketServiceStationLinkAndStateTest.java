@@ -68,7 +68,7 @@ public class RocketServiceStationLinkAndStateTest extends AbstractSharedServerTe
         String place = exec("artest place 0 " + sx + " " + sy + " " + sz
                 + " advancedrocketry:serviceStation");
         assertTrue("service station place failed: " + place,
-                Reply.of(place).bool("placed", false));
+                Reply.of(place).bool("placed"));
 
         // Tick. Production performFunction guards on `linkedRocket instanceof
         // EntityRocket` before doing any work — null branch must be a no-op.
@@ -125,7 +125,7 @@ public class RocketServiceStationLinkAndStateTest extends AbstractSharedServerTe
         String place = exec("artest place 0 " + sx + " " + sy + " " + sz
                 + " advancedrocketry:serviceStation");
         assertTrue("service station place failed: " + place,
-                Reply.of(place).bool("placed", false));
+                Reply.of(place).bool("placed"));
 
         // Link.
         String link = exec("artest infra link 0 " + sx + " " + sy + " " + sz

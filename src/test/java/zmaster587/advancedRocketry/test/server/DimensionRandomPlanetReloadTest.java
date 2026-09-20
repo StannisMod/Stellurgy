@@ -74,9 +74,8 @@ public class DimensionRandomPlanetReloadTest {
 
     private static Path planetDefsPath(RealDedicatedServerHarness h) throws Exception {
         String save = ok(h.client().execute("artest server save-dimensions"));
-        assertTrue("save-dimensions failed: " + save, Reply.of(save).bool("xmlExists", false));
+        assertTrue("save-dimensions failed: " + save, Reply.of(save).bool("xmlExists"));
         String xmlPath = Reply.of("artest server save-dimensions", save).text("xmlPath");
-        assertTrue("save-dimensions missing xmlPath: " + save, xmlPath != null);
         return Paths.get(xmlPath.replace("\\\\", "\\"));
     }
 

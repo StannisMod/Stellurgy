@@ -152,8 +152,10 @@ public class MachineGuiClientGroupE2ETest extends AbstractSharedClientE2ETest {
         scenario().arranging("place " + blockId + " at " + x + "," + Y + "," + z);
         warmupPlotChunks();
         String place = exec("artest place " + dim + " " + x + " " + Y + " " + z + " " + blockId);
+        // absence is the answer on the first half: the place verb writes `placed` only on
+        // its success path, and the `ok()` beside it accepts the other shape it answers.
         scenario().requireArranged("could not place " + blockId + ": " + place,
-                Reply.of(place).bool("placed", false) || Reply.of(place).ok());
+                Reply.of(place).boolOr("placed", false) || Reply.of(place).ok());
 
         // Stand ON the machine's own column, one block up, looking down at its top face. The
         // source classes all used exactly this pose; in open air it needs no terrain at all.
@@ -260,7 +262,9 @@ public class MachineGuiClientGroupE2ETest extends AbstractSharedClientE2ETest {
     }
 
     private static int readInt(String json, String field) {
-        return Reply.of(json).integer(field);
+        Reply reply = Reply.of(json);
+        assertTrue("expected an int `" + field + "` in: " + json, reply.has(field));
+        return reply.integer(field);
     }
 
     /**
@@ -280,13 +284,17 @@ public class MachineGuiClientGroupE2ETest extends AbstractSharedClientE2ETest {
     }
 
     private static boolean readBoolean(String json, String field) {
-        return Reply.of(json).bool(field, false);
+        Reply reply = Reply.of(json);
+        assertTrue("expected a flag `" + field + "` in: " + json, reply.has(field));
+        return reply.bool(field);
     }
 
     /** {@code field} as the text the verb wrote, refusing when the reply carries none. */
     private static String readGroup(String json, String field) {
-        String value = Reply.of(json).text(field);
-        assertTrue("expected `" + field + "` in: " + json, value != null);
+        // absence is the answer, and WHICH answer is the CALLER's: this verb is handed a
+        // FIELD name, so it cannot know what a missing one means — and the callers here
+        // include waits, which read the shape that does not carry the field yet.
+        String value = Reply.of(json).textOr(field, null);
         return value;
     }
 
@@ -518,7 +526,7 @@ public class MachineGuiClientGroupE2ETest extends AbstractSharedClientE2ETest {
                 + ": " + fixture, Reply.of(fixture).ok());
         String tryComplete = exec("artest machine try-complete " + dim + " " + x + " " + Y + " " + z);
         scenario().requireArranged("railgun must validate at " + x + "," + Y + "," + z + ": "
-                + tryComplete, Reply.of(tryComplete).bool("isComplete", false));
+                + tryComplete, Reply.of(tryComplete).bool("isComplete"));
     }
 
     // ── guidance computer ─────────────────────────────────────────────────────
@@ -592,13 +600,15 @@ public class MachineGuiClientGroupE2ETest extends AbstractSharedClientE2ETest {
         String completed = "";
         for (int attempt = 0; attempt < 8; attempt++) {
             completed = exec("artest machine try-complete " + dim + " " + x + " " + Y + " " + z);
-            if (Reply.of(completed).bool("isComplete", false)) {
+            // absence is the answer: this is the wait, and "the flag is not there yet" is
+            // the state it exists to sit through.
+            if (Reply.of(completed).boolOr("isComplete", false)) {
                 break;
             }
             bot().waitTicks(10);
         }
         scenario().requireArranged("the observatory structure never validated: " + completed,
-                Reply.of(completed).bool("isComplete", false));
+                Reply.of(completed).bool("isComplete"));
 
         // Stand on the structure's open face, one block from the controller, looking at it. The
         // footing is not decoration: the fixture clears its own footprint to air, and a player
@@ -779,7 +789,7 @@ public class MachineGuiClientGroupE2ETest extends AbstractSharedClientE2ETest {
                 + " " + at[2]);
         assertTrue("clicking planet button " + planetId
                 + " did not register a selection server-side: " + selectorInfo,
-                Reply.of(selectorInfo).bool("hasSelection", false));
+                Reply.of(selectorInfo).bool("hasSelection"));
         assertTrue("selection did not resolve to a planet: " + selectorInfo,
                 Reply.of(selectorInfo).has("selectedDim"));
 
@@ -827,7 +837,7 @@ public class MachineGuiClientGroupE2ETest extends AbstractSharedClientE2ETest {
         // slot empty there is nowhere to copy to and the button is a silent no-op.
         String shipCrystal = exec("artest nav crystal " + where + " 1 0");
         scenario().requireArranged("the ship slot must hold a (blank) crystal to copy INTO: "
-                + shipCrystal, (Reply.of(shipCrystal).integerOr("addresses", Integer.MIN_VALUE) == 0));
+                + shipCrystal, (Reply.of(shipCrystal).integer("addresses") == 0));
         NavStatus before = NavStatus.of(exec("artest nav status " + where));
         scenario().requireArranged("ARRANGEMENT CONTROL: the ship's own crystal must start EMPTY, "
                 + "or the copy leg below cannot tell a successful copy from a pre-loaded console: "
@@ -1030,7 +1040,7 @@ public class MachineGuiClientGroupE2ETest extends AbstractSharedClientE2ETest {
         exec("artest player inv-bypass remove");
         String place = exec("artest place " + dim + " " + x + " " + Y + " " + z + " minecraft:chest");
         scenario().requireArranged("chest place must succeed: " + place,
-                Reply.of(place).bool("placed", false));
+                Reply.of(place).bool("placed"));
         long standMark = clientEvents().mark();
         exec("tp @a " + (x + 0.5) + " " + (Y + 2) + " " + (z + 0.5) + " 0 90");
         awaitClientPlacedNear(standMark, x + 0.5, z + 0.5,
@@ -1060,7 +1070,7 @@ public class MachineGuiClientGroupE2ETest extends AbstractSharedClientE2ETest {
         scenario().asserting("with the bypass on, the GUI survives a 200-block teleport");
         String addResp = exec("artest player inv-bypass add");
         scenario().requireArranged("inv-bypass add must report inBypass:true: " + addResp,
-                Reply.of(addResp).bool("inBypass", false));
+                Reply.of(addResp).bool("inBypass"));
 
         long farMark = events.markInstrumented();
         long farClientMark = clientEvents().mark();
@@ -1101,7 +1111,7 @@ public class MachineGuiClientGroupE2ETest extends AbstractSharedClientE2ETest {
         long closeOnClient = clientEvents().mark();
         String removeResp = exec("artest player inv-bypass remove");
         scenario().requireArranged("inv-bypass remove must report inBypass:false: " + removeResp,
-                (!Reply.of(removeResp).bool("inBypass", true)));
+                (!Reply.of(removeResp).bool("inBypass")));
 
         // The close is a chain, and its ORDER is one server call stack: the redirect answers, and
         // vanilla's own `if` closes the screen on that answer. Asserting it as a chain is what

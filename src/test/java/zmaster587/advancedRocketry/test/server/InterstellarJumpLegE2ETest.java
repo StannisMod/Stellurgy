@@ -114,7 +114,7 @@ public class InterstellarJumpLegE2ETest extends AbstractSharedServerTest {
         String coords = placeFixture(SRC_X, SRC_Y, SRC_Z, "with-pilot-seat");
         String asm = exec("artest rocket assemble 0 " + coords);
         assertTrue("an AFC-bearing build must route to a ship (no rocket): " + asm,
-                (Reply.of(asm).integerOr("rocketCount", Integer.MIN_VALUE) == 0));
+                (Reply.of(asm).integer("rocketCount") == 0));
         assertTrue("the source VS ship never loaded", loadedShips(0) >= 1);
 
         // The ship's own name, from the assembler that minted it, and the physics id it maps to. Every
@@ -129,7 +129,7 @@ public class InterstellarJumpLegE2ETest extends AbstractSharedServerTest {
         int sz = (int) src.z;
         String held = exec("artest vs ff-input-by-id 0 " + shipId + " 0 1 0 0 0 0");
         assertTrue("the held input must reach this ship's flight computer: " + held,
-                Reply.of(held).bool("afcResolved", false));
+                Reply.of(held).bool("afcResolved"));
         assertTrue("climb teleport failed", Reply.of(exec("artest vs teleport-ship-by-id 0 " + shipId + " "
                 + sx + " " + ABOVE_CEILING_Y + " " + sz)).ok());
         exec("artest vs unpark-by-id 0 " + shipId);
@@ -189,7 +189,7 @@ public class InterstellarJumpLegE2ETest extends AbstractSharedServerTest {
         String jump = exec("artest space jump id " + durableId + " "
                 + tsx + " " + tsy + " " + tsz + " " + slotDim + " " + FLIGHT_SPEED);
         assertTrue("[" + label + "] the jump probe found no settled ship to move: " + jump,
-                Reply.of(jump).bool("began", false));
+                Reply.of(jump).bool("began"));
         assertEquals("[" + label + "] the jump named a different ship than this scenario's: " + jump,
                 durableId, extractString(jump, "shipId"));
         String targetCell = extractString(jump, "toCell");
@@ -277,14 +277,23 @@ public class InterstellarJumpLegE2ETest extends AbstractSharedServerTest {
     }
 
     private static int extractInt(String json, String key) {
+        // absence is the answer, and WHICH answer is the CALLER's: this verb is handed a
+        // FIELD name, so it cannot know what a missing one means — and the callers here
+        // include waits, which read the shape that does not carry the field yet.
         return Reply.of(json).integerOr(key, Integer.MIN_VALUE);
     }
 
     private static double extractDouble(String json, String key) {
+        // absence is the answer, and WHICH answer is the CALLER's: this verb is handed a
+        // FIELD name, so it cannot know what a missing one means — and the callers here
+        // include waits, which read the shape that does not carry the field yet.
         return Reply.of(json).numberOr(key, 0.0);
     }
 
     private static String extractString(String json, String key) {
-        return Reply.of(json).text(key);
+        // absence is the answer, and WHICH answer is the CALLER's: this verb is handed a
+        // FIELD name, so it cannot know what a missing one means — and the callers here
+        // include waits, which read the shape that does not carry the field yet.
+        return Reply.of(json).textOr(key, null);
     }
 }

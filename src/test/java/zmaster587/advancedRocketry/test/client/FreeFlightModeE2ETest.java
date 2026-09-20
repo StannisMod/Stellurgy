@@ -97,13 +97,17 @@ public class FreeFlightModeE2ETest extends AbstractSharedClientE2ETest {
      */
     private static int primaryFuelAmount(String fuelReply) {
         Reply reply = Reply.of("artest rocket fuel", fuelReply);
-        String primary = reply.text("primaryFuelType");
+        // absence is the answer: a craft with no fuel type names none, and the branch below
+        // reports exactly that rather than a tank reading.
+        // absence is the answer: a craft with no fuel type names none, and the branch below
+        // reports exactly that rather than a tank reading.
+        String primary = reply.textOr("primaryFuelType", null);
         String fuels = reply.object("fuels");
         if (primary == null || fuels == null) {
             return -1;
         }
         String entry = Reply.of(fuels).object(primary);
-        return entry == null ? -1 : Reply.of(entry).integerOr("amount", -1);
+        return entry == null ? -1 : Reply.of(entry).integer("amount");
     }
 
     /**
@@ -388,7 +392,7 @@ public class FreeFlightModeE2ETest extends AbstractSharedClientE2ETest {
 
         String mount = exec("artest player mount-entity " + rocketId);
         assertTrue("mount-entity must succeed: " + mount,
-                Reply.of(mount).ok() && Reply.of(mount).bool("mounted", false));
+                Reply.of(mount).ok() && Reply.of(mount).bool("mounted"));
 
         // Pre-launch: flip mode to FREE_FLIGHT. This is the toggle contract
         // exercised by the M keybind path on a real client.
@@ -407,7 +411,7 @@ public class FreeFlightModeE2ETest extends AbstractSharedClientE2ETest {
         // The probe response itself reflects the immediate isInFlight=true
         // (read in the same call as the mutation).
         assertTrue("start-free-flight must report isInFlight=true in response: " + start,
-                Reply.of(start).bool("isInFlight", false));
+                Reply.of(start).bool("isInFlight"));
         // And the flag was WRITTEN on the entity, which is what this scenario is named for. The
         // probe reply above is the same call as the mutation and would echo an assignment nobody
         // else can see; the record is taken at `EntityRocket.setInFlight`, the one mutator every
@@ -426,8 +430,7 @@ public class FreeFlightModeE2ETest extends AbstractSharedClientE2ETest {
         // Bot is still riding the rocket — FF tick must not dismount the pilot.
         String riding = exec("artest player riding-entity");
         assertTrue("bot must still be riding the FF rocket after takeoff: " + riding,
-                String.valueOf(rocketId).equals(Reply.of(riding).text("ridingEntityId"))
-                        || riding.contains("EntityRocket"));
+                String.valueOf(rocketId).equals(Reply.of(riding).text("ridingEntityId")));
 
         // Cleanup.
         exec("artest player dismount");
@@ -450,7 +453,7 @@ public class FreeFlightModeE2ETest extends AbstractSharedClientE2ETest {
         String inputResp = exec("artest rocket free-flight-input " + rocketId
                 + " 0.0 1.0 0.0 0.0 0.0");
         assertTrue("input must apply on FF rocket: " + inputResp,
-                Reply.of(inputResp).bool("applied", false));
+                Reply.of(inputResp).bool("applied"));
 
         // Snapshot motion BEFORE ticks (right after start).
         double myBefore = rocketInfo(rocketId).motionY;
@@ -476,7 +479,7 @@ public class FreeFlightModeE2ETest extends AbstractSharedClientE2ETest {
         // Bot still riding — FF tick preserves passenger across server ticks.
         String riding = exec("artest player riding-entity");
         assertFalse("FF tick must NOT auto-dismount the pilot mid-flight: " + riding,
-                (Reply.of(riding).integerOr("ridingEntityId", Integer.MIN_VALUE) == -1));
+                (Reply.of(riding).integer("ridingEntityId") == -1));
 
         // Cleanup.
         exec("artest rocket free-flight-input " + rocketId + " 0 0 0 0 0");
@@ -563,7 +566,7 @@ public class FreeFlightModeE2ETest extends AbstractSharedClientE2ETest {
         int rocketId = mountFreshFreeFlightRocket();
 
         String inputResp = exec("artest rocket free-flight-input " + rocketId + " 0 1 0 0 0");
-        assertTrue("vertical input must apply: " + inputResp, Reply.of(inputResp).bool("applied", false));
+        assertTrue("vertical input must apply: " + inputResp, Reply.of(inputResp).bool("applied"));
 
         double yBefore = rocketInfo(rocketId).posY;
         bot().waitTicks(30);

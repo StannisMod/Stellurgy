@@ -82,7 +82,7 @@ public class WorldCommandClientGroupE2ETest extends AbstractSharedClientE2ETest 
      *  that reads nothing like the contract under test. */
     private void opTheBot() throws Exception {
         String op = exec("artest player op-self");
-        scenario().requireArranged("op-self must succeed: " + op, Reply.of(op).bool("opped", false));
+        scenario().requireArranged("op-self must succeed: " + op, Reply.of(op).bool("opped"));
     }
 
     private String botName() throws Exception {
@@ -167,7 +167,6 @@ public class WorldCommandClientGroupE2ETest extends AbstractSharedClientE2ETest 
 
     private static double extractDouble(String src, String field) {
         double value = Reply.of(src).number(field);
-        assertTrue("field `" + field + "` not found in: " + src, !Double.isNaN(value));
         return value;
     }
 
@@ -259,7 +258,7 @@ public class WorldCommandClientGroupE2ETest extends AbstractSharedClientE2ETest 
 
         String post = exec("artest player inventory-contains advancedrocketry:spacestationchip");
         assertTrue("server inventory must also contain the chip: " + post,
-                !(Reply.of(post).integerOr("count", Integer.MIN_VALUE) == 0));
+                !(Reply.of(post).integer("count") == 0));
     }
 
     // ── /ar goto dimension ────────────────────────────────────────────────────

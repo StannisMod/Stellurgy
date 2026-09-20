@@ -53,11 +53,11 @@ public class OrbitalLaserDrillModeDispatchTest extends AbstractSharedServerTest 
         // Contract: the target block was removed from the world.
         assertTrue("mining drill must remove the target block (set to air); "
                         + "resp=" + resp,
-                Reply.of(resp).bool("centerRemoved", false));
+                Reply.of(resp).bool("centerRemoved"));
 
         // Band-pin: strictly more than zero items produced.
         assertTrue("drop count must be > 0; resp=" + resp,
-                !(Reply.of(resp).integerOr("dropCount", Integer.MIN_VALUE) == 0));
+                !(Reply.of(resp).integer("dropCount") == 0));
     }
 
     private String exec(String cmd) throws Exception {

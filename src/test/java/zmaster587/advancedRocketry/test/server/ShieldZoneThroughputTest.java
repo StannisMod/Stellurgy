@@ -171,9 +171,9 @@ public class ShieldZoneThroughputTest extends AbstractSharedServerTest {
         String nearA = zone(aEx + 2, z);
         String nearB = zone(bEx - 2, z);
         assertTrue("a point nearest emitter A must be owned by A (ownerX=" + aEx + "):\n" + nearA,
-                Reply.of(nearA).bool("owned", false) && String.valueOf(aEx).equals(Reply.of(nearA).text("ownerX")));
+                Reply.of(nearA).bool("owned") && String.valueOf(aEx).equals(Reply.of(nearA).text("ownerX")));
         assertTrue("a point nearest emitter B must be owned by B (ownerX=" + bEx + "):\n" + nearB,
-                Reply.of(nearB).bool("owned", false) && String.valueOf(bEx).equals(Reply.of(nearB).text("ownerX")));
+                Reply.of(nearB).bool("owned") && String.valueOf(bEx).equals(Reply.of(nearB).text("ownerX")));
     }
 
     // helpers -----------------------------------------------------------------
@@ -195,13 +195,13 @@ public class ShieldZoneThroughputTest extends AbstractSharedServerTest {
     private void place(String block, int x, int z) throws Exception {
         String resp = exec("artest place " + DIM + " " + x + " " + Y + " " + z + " " + block);
         assertTrue("failed to place " + block + " at " + x + "," + Y + "," + z + ": " + resp,
-                Reply.of(resp).bool("placed", false));
+                Reply.of(resp).bool("placed"));
     }
 
     private void placeMeta(String block, int x, int z, int meta) throws Exception {
         String resp = exec("artest place " + DIM + " " + x + " " + Y + " " + z + " " + block + " " + meta);
         assertTrue("failed to place " + block + " (meta " + meta + ") at " + x + "," + Y + "," + z + ": " + resp,
-                Reply.of(resp).bool("placed", false));
+                Reply.of(resp).bool("placed"));
     }
 
     private static long readInt(String field, String json) {

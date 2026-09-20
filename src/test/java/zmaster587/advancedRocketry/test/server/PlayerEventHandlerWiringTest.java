@@ -153,19 +153,19 @@ public class PlayerEventHandlerWiringTest extends AbstractSharedServerTest {
         String resp = ok(client().execute("artest event dim-side-effects " + dim));
 
         assertTrue("AR dim must be loaded for side-effect probing: " + resp,
-                Reply.of(resp).bool("loaded", false));
+                Reply.of(resp).bool("loaded"));
         assertTrue("AR dim WorldInfo must be wrapped by ARDimensionWorldInfo: " + resp,
                 resp.contains("ARDimensionWorldInfo"));
         assertTrue("AR dim must have an AtmosphereHandler registered: " + resp,
-                Reply.of(resp).bool("hasAtmosphereHandler", false));
+                Reply.of(resp).bool("hasAtmosphereHandler"));
         assertTrue("dim must be classified as AR planet: " + resp,
-                Reply.of(resp).bool("isARPlanet", false));
+                Reply.of(resp).bool("isARPlanet"));
         // hasSkyColor=true means props.skyColor is non-null/non-empty.
         // (A future fixture planet with the default vanilla colour would
         // still pass — float[] is allocated by DimensionProperties; this
         // assertion just guards against a regression that drops the field.)
         assertTrue("AR dim must have a sky-color array configured: " + resp,
-                Reply.of(resp).bool("hasSkyColor", false));
+                Reply.of(resp).bool("hasSkyColor"));
     }
 
     @Test
@@ -192,9 +192,9 @@ public class PlayerEventHandlerWiringTest extends AbstractSharedServerTest {
 
         String resp = ok(client().execute("artest event dim-side-effects " + nonArDim));
         assertTrue("non-AR dim " + nonArDim + " must be loaded: " + resp,
-                Reply.of(resp).bool("loaded", false));
+                Reply.of(resp).bool("loaded"));
         assertTrue("non-AR dim " + nonArDim + " must NOT be classified as AR planet: " + resp,
-                (!Reply.of(resp).bool("isARPlanet", true)));
+                (!Reply.of(resp).bool("isARPlanet")));
         // ARDimensionWorldInfo wrapping is the per-AR-dim B1 isolation chain;
         // a non-AR dim must stay vanilla so weather doesn't bleed in/out.
         assertTrue("non-AR dim " + nonArDim + " WorldInfo must NOT be wrapped: " + resp,
@@ -215,6 +215,6 @@ public class PlayerEventHandlerWiringTest extends AbstractSharedServerTest {
         assertTrue("transition map probe must succeed: " + resp,
                 Reply.of(resp).ok());
         assertTrue("transition map must be empty at rest in a no-rocket test: " + resp,
-                (Reply.of(resp).integerOr("size", Integer.MIN_VALUE) == 0));
+                (Reply.of(resp).integer("size") == 0));
     }
 }

@@ -112,7 +112,7 @@ public class VSPilotSeatRelogControlE2ETest extends AbstractSharedVsClientE2ETes
         long spawnMark = events.markInstrumented();
         String assemble = assembleFixture(BX, BY, BZ);
         scenario().requireArranged("a with-pilot-seat build must route to a ship: " + assemble,
-                (Reply.of(assemble).integerOr("rocketCount", Integer.MIN_VALUE) == 0));
+                (Reply.of(assemble).integer("rocketCount") == 0));
         shipId = awaitShipSpawned(events, spawnMark,
                 "assembly must create a NEW VS ship in the queryable registry (async spawn)");
         long approachMark = clientEvents().mark();
@@ -146,7 +146,7 @@ public class VSPilotSeatRelogControlE2ETest extends AbstractSharedVsClientE2ETes
         long seatMark = clientEvents().mark();
         String mount = exec("artest player mount-entity " + mountInfo.requireDummyId());
         scenario().requireArranged("bot must mount the seat dummy: " + mount,
-                Reply.of(mount).bool("mounted", false));
+                Reply.of(mount).bool("mounted"));
         // The control leg below asks whether the chain works BEFORE the relog; a client that has not
         // seated him yet would answer for a pilot who is not in the seat.
         awaitClientMount(seatMark, "the client must be riding the seat before the control leg, or"

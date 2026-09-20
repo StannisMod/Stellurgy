@@ -72,12 +72,12 @@ public class FluidTankNBTRoundTripsAcrossRestartTest {
         String place = String.join("\n", firstBoot.client().execute(
                 "artest place 0 " + TX + " " + TY + " " + TZ + " advancedrocketry:liquidTank"));
         assertTrue("liquidTank place failed: " + place,
-                Reply.of(place).bool("placed", false));
+                Reply.of(place).bool("placed"));
 
         String preInject = String.join("\n", firstBoot.client().execute(
                 "artest fluid stored 0 " + TX + " " + TY + " " + TZ));
         assertTrue("liquidTank must expose IFluidHandler capability: " + preInject,
-                Reply.of(preInject).bool("hasFluid", false));
+                Reply.of(preInject).bool("hasFluid"));
 
         String inject = String.join("\n", firstBoot.client().execute(
                 "artest fluid inject 0 " + TX + " " + TY + " " + TZ + " oxygen " + INJECT_AMOUNT));
@@ -107,7 +107,7 @@ public class FluidTankNBTRoundTripsAcrossRestartTest {
         String storedAfter = String.join("\n", secondBoot.client().execute(
                 "artest fluid stored 0 " + TX + " " + TY + " " + TZ));
         assertTrue("liquidTank must still expose IFluidHandler after restart: " + storedAfter,
-                Reply.of(storedAfter).bool("hasFluid", false));
+                Reply.of(storedAfter).bool("hasFluid"));
 
         String fluidAfter = fluidOrFail(storedAfter, "fluidName (boot 2)");
         int amountAfter = theTank(storedAfter, "amount (boot 2)").amount(0);

@@ -57,9 +57,12 @@ public final class LedgerEntry {
     private LedgerEntry(Reply reply, String raw) {
         this.reply = reply;
         this.raw = raw;
-        this.found = reply.bool("found", false);
-        this.slotBound = reply.bool("slotBound", false);
-        this.slotWorldLoaded = reply.bool("slotWorldLoaded", false);
+        this.found = reply.bool("found");
+        // Read only under `found`. The producer's not-found shape is `{"found":false}` and
+        // carries neither field, so a default here would answer "no slot is bound" about a
+        // ship the ledger has never heard of — two different findings under one false.
+        this.slotBound = found && reply.bool("slotBound");
+        this.slotWorldLoaded = found && reply.bool("slotWorldLoaded");
     }
 
     /**
@@ -128,7 +131,9 @@ public final class LedgerEntry {
     /** The dimension id of the slot world bound to the entry's cell. Refuses an unbound slot. */
     public int slotDim() {
         requireEntry("slotDim");
-        String value = reply.text("slotDim");
+        // absence is the answer: an unbound slot is reported as the producer's own sentinel,
+        // and the refusal below names it rather than reading it as a dimension.
+        String value = reply.textOr("slotDim", null);
         if (value == null || UNBOUND.equals(value)) {
             ArrangementFailure.arrangementFailed("no slot world is bound to this ship's cell, so"
                     + " there is no slot dimension — the probe answers the four characters \"null\""
@@ -143,7 +148,8 @@ public final class LedgerEntry {
      */
     public String slotCell() {
         requireEntry("slotCell");
-        String value = reply.text("slotCell");
+        // absence is the answer, as in slotDim above: nothing bound, nothing to name.
+        String value = reply.textOr("slotCell", null);
         if (value == null || value.isEmpty()) {
             ArrangementFailure.arrangementFailed("no slot world is bound to this ship's cell, so"
                     + " there is no slot cell key — the probe answers the empty string there: "
@@ -173,8 +179,8 @@ public final class LedgerEntry {
     @Override
     public String toString() {
         return found
-                ? "ledger " + reply.text("state") + " at " + reply.text("cell")
-                        + " slot=" + reply.text("slotDim") + " (" + reply.text("slotCell") + ")"
+                ? "ledger " + reply.reported("state") + " at " + reply.reported("cell")
+                        + " slot=" + reply.reported("slotDim") + " (" + reply.reported("slotCell") + ")"
                 : "ledger holds no entry for this ship";
     }
 }

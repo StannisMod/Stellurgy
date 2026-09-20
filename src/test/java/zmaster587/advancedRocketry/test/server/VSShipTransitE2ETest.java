@@ -59,7 +59,7 @@ public class VSShipTransitE2ETest extends AbstractSharedServerTest {
         long transitMark = events.mark();
         String begin = exec("artest space transit-begin " + originDim + " " + ax + " " + ay + " " + az
                 + " " + HYPERSPACE_JUMP_SPEED);
-        assertTrue("transit did not begin (departure crossing failed): " + begin, Reply.of(begin).bool("began", false));
+        assertTrue("transit did not begin (departure crossing failed): " + begin, Reply.of(begin).bool("began"));
 
         // NO PUMP. The fixture now runs on the server's own subsystem, so the jump is advanced by
         // SpaceSubsystemEvents like any other -- and what this waits for is the arrival production
@@ -67,10 +67,10 @@ public class VSShipTransitE2ETest extends AbstractSharedServerTest {
         // the server drives a transit (the old loop drove it by hand and could not have noticed if
         // production stopped), and the record proves the arrival happened rather than that a sample
         // caught a moment.
-        String arrived = events.awaitRecordWithField(transitMark, "ship_transit_ended","route", "HYPERSPACE",
+        String arrived = events.awaitRecordWithFields(transitMark, "ship_transit_ended",
                 "the jump never completed; the durable record now reads "
                         + exec("artest space transit-export"),
-                ARRIVAL_TICKS);
+                ARRIVAL_TICKS, "ship", setup.requireDurableId(), "route", "HYPERSPACE");
         // The dimension the arrival event was posted IN, which is the slot holding the target cell.
         int targetDim = extractInt(arrived, "dim");
         assertTrue("the arrival was announced but names no dimension: " + arrived, targetDim >= 0);
@@ -116,6 +116,6 @@ public class VSShipTransitE2ETest extends AbstractSharedServerTest {
     }
 
     private static int extractInt(String json, String key) {
-        return Reply.of(json).integerOr(key, Integer.MIN_VALUE);
+        return Reply.of(json).integer(key);
     }
 }

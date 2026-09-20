@@ -195,6 +195,6 @@ public final class FixtureSite {
     }
 
     private static int intOf(String reply, String field) {
-        return Reply.of(String.valueOf(reply)).integerOr(field, Integer.MIN_VALUE);
+        return Reply.of(String.valueOf(reply)).integer(field);
     }
 }

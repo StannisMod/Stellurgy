@@ -139,7 +139,7 @@ public class MissionPersistenceRestartTest {
         assertEquals("restored duration must equal configured (gasCollectionMult=1 in test env)",
                 expectedDuration, restoredDuration);
         assertTrue("mission must not be dead after reboot: " + state,
-                (!Reply.of(state).bool("isDead", true)));
+                (!Reply.of(state).bool("isDead")));
     }
 
     @Test
@@ -171,6 +171,6 @@ public class MissionPersistenceRestartTest {
         assertEquals("restored ore duration must equal configured",
                 expectedDuration, Long.parseLong(dmReply.text(DURATION)));
         assertTrue("mission must not be dead after reboot: " + state,
-                (!Reply.of(state).bool("isDead", true)));
+                (!Reply.of(state).bool("isDead")));
     }
 }

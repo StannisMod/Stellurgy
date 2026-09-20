@@ -44,7 +44,7 @@ public class FreeFlightNbtRoundTripTest extends AbstractSharedServerTest {
     private static boolean bool(String json, String key) {
         Reply reply = Reply.of(json);
         assertTrue("response missing boolean key " + key + ": " + json, reply.has(key));
-        return reply.bool(key, false);
+        return reply.bool(key);
     }
 
     private static String str(String json, String key) {

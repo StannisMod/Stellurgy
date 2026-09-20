@@ -50,14 +50,14 @@ public class ServerWaitProbeReportsRealTicksTest extends AbstractSharedServerTes
         assertTrue("the wait probe failed on the overworld: " + reply, reply.contains("\"requested\""));
 
         int elapsed = extractInt(reply, "elapsedTicks");
-        boolean claimsAdvanced = Reply.of(reply).bool("advanced", false);
+        boolean claimsAdvanced = Reply.of(reply).bool("advanced");
         if (elapsed >= TICKS) {
             assertTrue("the clock DID advance, so the probe must say so — a real wait that reports "
                     + "itself as a non-wait is the same defect mirrored: " + reply, claimsAdvanced);
             return;
         }
         assertTrue("the probe returned fewer ticks than asked and must not report that as a wait: "
-                + reply, (!Reply.of(reply).bool("advanced", true)));
+                + reply, (!Reply.of(reply).bool("advanced")));
         assertTrue("and it must name what to do instead, or the next caller repeats the mistake: "
                 + reply, reply.contains("\"hint\""));
     }
@@ -80,7 +80,7 @@ public class ServerWaitProbeReportsRealTicksTest extends AbstractSharedServerTes
         String clock = exec("artest server tick-count 0");
         assertTrue("a probe handler must report that it runs on the server thread — if this ever "
                 + "flips, a probe-side wait becomes possible and GameTicks can be retired: " + clock,
-                Reply.of(clock).bool("onServerThread", false));
+                Reply.of(clock).bool("onServerThread"));
 
         long before = GameTicks.count(client(), 0);
         long observed = GameTicks.advanceWorld(client(), 0, TICKS);
@@ -203,6 +203,9 @@ public class ServerWaitProbeReportsRealTicksTest extends AbstractSharedServerTes
     }
 
     private static int extractInt(String json, String key) {
+        // absence is the answer, and WHICH answer is the CALLER's: this verb is handed a
+        // FIELD name, so it cannot know what a missing one means — and the callers here
+        // include waits, which read the shape that does not carry the field yet.
         return Reply.of(json).integerOr(key, Integer.MIN_VALUE);
     }
 }

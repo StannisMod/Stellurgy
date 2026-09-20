@@ -48,8 +48,10 @@ public final class MaterializedCell {
     private MaterializedCell(Reply reply, String raw) {
         this.reply = reply;
         this.raw = raw;
-        this.ok = reply.bool("ok", false);
-        this.exhausted = reply.bool("exhausted", false);
+        this.ok = reply.ok();
+        // absence is the answer: the producer writes `exhausted` ONLY beside `ok:false`, so a
+        // reply that does not carry it is a pool that had a slot to give.
+        this.exhausted = reply.boolOr("exhausted", false);
     }
 
     /**
@@ -108,7 +110,7 @@ public final class MaterializedCell {
                     + " ask about — and `false` here would read as a binding whose world went away: "
                     + raw);
         }
-        return reply.bool("worldLoaded", false);
+        return reply.bool("worldLoaded");
     }
 
     /** The cell key the manager materialized, as the producer's own address. */
@@ -125,8 +127,8 @@ public final class MaterializedCell {
     @Override
     public String toString() {
         return ok
-                ? "cell " + reply.text("cellKey") + " live in slot " + reply.text("slotDim")
-                        + " world=" + reply.text("worldLoaded")
+                ? "cell " + reply.reported("cellKey") + " live in slot " + reply.reported("slotDim")
+                        + " world=" + reply.reported("worldLoaded")
                 : exhausted ? "the slot pool is exhausted" : "the cell was not materialized";
     }
 }

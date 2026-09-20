@@ -113,7 +113,7 @@ public class VSChairMountArrivesAsItselfE2ETest extends AbstractSharedVsClientE2
         String chairEntityClass = null;
         for (String near : Reply.of("artest entity near", serverSide).objectArray(ENTITIES)) {
             Reply entity = Reply.of("one nearby entity", near);
-            if (CHAIR_ENTITY.equals(entity.textOr(ENTITY_CLASS, null))) {
+            if (CHAIR_ENTITY.equals(entity.text(ENTITY_CLASS))) {
                 chairEntityId = entity.integer(ENTITY_ID);
                 chairEntityClass = entity.text(ENTITY_CLASS);
             }

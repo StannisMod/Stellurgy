@@ -126,7 +126,9 @@ final class MachineRecipeEndToEndKit {
         for (int attempt = 0; attempt < 8; attempt++) {
             resp = String.join("\n",
                     c.execute("artest machine try-complete " + dim + " " + cx + " " + cy + " " + cz));
-            if (Reply.of(resp).bool("attempted", false)) return resp;
+            // absence is the answer: this is the wait, and "the flag is not there yet" is
+            // the state it exists to sit through.
+            if (Reply.of(resp).boolOr("attempted", false)) return resp;
             GameTicks.advance(c, GameTicks.server(), TICKS_BETWEEN_ATTEMPTS);
         }
         return resp;
@@ -140,7 +142,9 @@ final class MachineRecipeEndToEndKit {
         for (int attempt = 0; attempt < 8; attempt++) {
             resp = String.join("\n",
                     c.execute("artest machine try-complete 0 " + cx + " " + cy + " " + cz));
-            if (Reply.of(resp).bool("isComplete", false)) return;
+            // absence is the answer: this is the wait, and "the flag is not there yet" is
+            // the state it exists to sit through.
+            if (Reply.of(resp).boolOr("isComplete", false)) return;
             attempts.append("\n  attempt ").append(attempt + 1).append(": ").append(resp);
             GameTicks.advance(c, GameTicks.server(), TICKS_BETWEEN_ATTEMPTS);
         }
@@ -198,7 +202,10 @@ final class MachineRecipeEndToEndKit {
             Reply one = Reply.of(element);
             String[] values = new String[fields.length];
             for (int i = 0; i < fields.length; i++) {
-                values[i] = one.text(fields[i]);
+                // absence is the answer: the caller asks for a SET of fields over a
+                // heterogeneous list, and an element that carries none of one of them is a
+                // fact about that element rather than about the reply.
+                values[i] = one.textOr(fields[i], null);
             }
             out.add(values);
         }
@@ -237,7 +244,7 @@ final class MachineRecipeEndToEndKit {
         String enable = String.join("\n", c.execute(
                 "artest machine set-enabled 0 " + cx + " " + cy + " " + cz + " true"));
         assertTrue("machine set-enabled failed: " + enable,
-                Reply.of(enable).ok() && Reply.of(enable).bool("enabled", false));
+                Reply.of(enable).ok() && Reply.of(enable).bool("enabled"));
         int tickBudget = Math.max(2000, r.time + 1000);
         String tick = String.join("\n", c.execute(
                 "artest tile force-tick 0 " + cx + " " + cy + " " + cz + " " + tickBudget));
@@ -266,7 +273,7 @@ final class MachineRecipeEndToEndKit {
         String enable = String.join("\n", c.execute(
                 "artest machine set-enabled 0 " + cx + " " + cy + " " + cz + " true"));
         assertTrue("machine set-enabled failed for " + fixtureKey + ": " + enable,
-                Reply.of(enable).ok() && Reply.of(enable).bool("enabled", false));
+                Reply.of(enable).ok() && Reply.of(enable).bool("enabled"));
 
         // Force-tick budget adapts to the recipe's declared completion time.
         // Most AR machine recipes are <500 ticks; the wildcard-structure
@@ -334,7 +341,9 @@ final class MachineRecipeEndToEndKit {
                 seen.append(pos).append(" -> ").append(read).append('\n');
                 // A SEARCH over candidate positions: this position may legitimately hold nothing,
                 // so the question is existence and `element`'s refusal would end the loop.
-                if (Reply.of("artest fluid stored", read)
+                // absence is the answer: the claim is whether the tank holds that fluid AT ALL,
+            // and a list with no such element is the "not yet" this loop waits out.
+            if (Reply.of("artest fluid stored", read)
                         .holdsElement("tanks", "fluid", String.valueOf(expectedFluid))) {
                     found = true; break;
                 }

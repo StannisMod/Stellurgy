@@ -101,7 +101,7 @@ public class VSShipEntryE2ETest extends AbstractSharedServerTest {
         String coords = placeFixture(SRC_X, SRC_Y, SRC_Z, "with-pilot-seat");
         String asm = exec("artest rocket assemble 0 " + coords);
         assertTrue("with VS an AFC-bearing build must route to a ship (no rocket): " + asm,
-                (Reply.of(asm).integerOr("rocketCount", Integer.MIN_VALUE) == 0));
+                (Reply.of(asm).integer("rocketCount") == 0));
         assertTrue("the source VS ship never loaded", loadedShips(0) >= 1);
 
         // The cell the production resolver answers for the launch dimension — the entry MUST land here.
@@ -125,7 +125,7 @@ public class VSShipEntryE2ETest extends AbstractSharedServerTest {
         // reading as unpiloted while claiming to be the piloted leg.
         String heldInput = exec("artest vs ff-input-by-id 0 " + shipId + " 0 1 0 0 0 0");
         assertTrue("the held input must reach this ship's flight computer: " + heldInput,
-                Reply.of(heldInput).bool("afcResolved", false));
+                Reply.of(heldInput).bool("afcResolved"));
         String tp = exec("artest vs teleport-ship-by-id 0 " + shipId + " "
                 + (int) sx + " " + ABOVE_CEILING_Y + " " + (int) sz);
         assertTrue("climb teleport failed: " + tp, Reply.of(tp).ok());
@@ -189,7 +189,7 @@ public class VSShipEntryE2ETest extends AbstractSharedServerTest {
         String coords = placeFixture(JUMP_SRC_X, SRC_Y, JUMP_SRC_Z, "with-pilot-seat");
         String asm = exec("artest rocket assemble 0 " + coords);
         assertTrue("with VS an AFC-bearing build must route to a ship (no rocket): " + asm,
-                (Reply.of(asm).integerOr("rocketCount", Integer.MIN_VALUE) == 0));
+                (Reply.of(asm).integer("rocketCount") == 0));
         assertTrue("the source VS ship never loaded", loadedShips(0) >= 1);
 
         String durableId = ShipIdentity.nameFromAssembly(asm);
@@ -199,7 +199,7 @@ public class VSShipEntryE2ETest extends AbstractSharedServerTest {
         double sx = src.x, sy = src.y, sz = src.z;
         String heldInput = exec("artest vs ff-input-by-id 0 " + shipId + " 0 1 0 0 0 0");
         assertTrue("the held input must reach this ship's flight computer: " + heldInput,
-                Reply.of(heldInput).bool("afcResolved", false));
+                Reply.of(heldInput).bool("afcResolved"));
         assertTrue("climb teleport failed", Reply.of(exec("artest vs teleport-ship-by-id 0 " + shipId + " "
                 + (int) sx + " " + ABOVE_CEILING_Y + " " + (int) sz)).ok());
         exec("artest vs unpark-by-id 0 " + shipId);
@@ -228,7 +228,7 @@ public class VSShipEntryE2ETest extends AbstractSharedServerTest {
         String jump = exec("artest space jump id " + durableId + " "
                 + (origin.sectorX() + 1)
                 + " " + origin.sectorY() + " " + origin.sectorZ() + " " + slotDim);
-        assertTrue("the jump probe found no settled ship to move: " + jump, Reply.of(jump).bool("began", false));
+        assertTrue("the jump probe found no settled ship to move: " + jump, Reply.of(jump).bool("began"));
         // THIS ship departed. Without the id the verb jumps the cell's first settled row, so a cell
         // holding a second craft would carry that one away and report a successful jump.
         assertEquals("the jump named a different ship: " + jump,
@@ -396,11 +396,11 @@ public class VSShipEntryE2ETest extends AbstractSharedServerTest {
     }
 
     private static int extractInt(String json, String key) {
-        return Reply.of(json).integerOr(key, Integer.MIN_VALUE);
+        return Reply.of(json).integer(key);
     }
 
     private static double extractDouble(String json, String key) {
-        return Reply.of(json).numberOr(key, 0.0);
+        return Reply.of(json).number(key);
     }
 
     private static String extractString(String json, String key) {

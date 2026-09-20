@@ -108,7 +108,7 @@ public class ParkedShipKeepsItsBodiesE2ETest extends AbstractSharedServerTest {
             // authored orbital elements — and never from the clock.
             String forget = exec("artest space forget-name " + WATCHED_DIM);
             assertTrue("the registry must have been holding a recorded name to forget: " + forget,
-                    Reply.of(forget).bool("held", false));
+                    Reply.of(forget).bool("held"));
             reDerived = CellInfo.atKey(this::exec, cellKey, WATCHED_DIM);
         } finally {
             // Hand the shared server back the clock it had. A test that ages the universe by eleven

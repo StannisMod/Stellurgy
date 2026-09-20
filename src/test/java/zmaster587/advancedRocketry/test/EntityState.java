@@ -46,7 +46,7 @@ public final class EntityState {
         this.reply = reply;
         this.raw = raw;
         this.entityId = reply.integer("entityId");
-        this.alive = reply.bool("isAlive", false);
+        this.alive = reply.bool("isAlive");
     }
 
     /**
@@ -87,7 +87,7 @@ public final class EntityState {
 
     /** The entity's own dead FLAG, which is not the same as being gone. See the class note. */
     public boolean dead() {
-        return live("isDead") && reply.bool("isDead", false);
+        return live("isDead") && reply.bool("isDead");
     }
 
     /**
@@ -98,7 +98,7 @@ public final class EntityState {
      * question for which mixing the two is right.</p>
      */
     public boolean goneOrDying() {
-        return !alive || reply.bool("isDead", false);
+        return !alive || reply.bool("isDead");
     }
 
     /** The entity's class, as the server names it. Refuses when the entity is gone. */
@@ -136,7 +136,7 @@ public final class EntityState {
     /** Whether vanilla gravity is switched off on it — what a pinned fixture entity carries. */
     public boolean hasNoGravity() {
         requireLive("hasNoGravity");
-        return reply.bool("hasNoGravity", false);
+        return reply.bool("hasNoGravity");
     }
 
     /**
@@ -174,9 +174,9 @@ public final class EntityState {
     @Override
     public String toString() {
         return alive
-                ? "entity " + entityId + " " + reply.text("entityClass") + " at "
-                        + reply.number("posX") + "," + reply.number("posY") + ","
-                        + reply.number("posZ")
+                ? "entity " + entityId + " " + reply.reported("entityClass") + " at "
+                        + reply.reported("posX") + "," + reply.reported("posY") + ","
+                        + reply.reported("posZ")
                 : "entity " + entityId + " is gone";
     }
 }

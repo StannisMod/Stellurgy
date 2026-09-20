@@ -90,17 +90,16 @@ public class DockingPortNbtAndPacketTest extends AbstractSharedServerTest {
                         + " advancedrocketry:stationMarker"));
         assertTrue("stationMarker place failed at (" + x + "," + y + "," + z
                         + "): " + resp,
-                Reply.of(resp).bool("placed", false));
+                Reply.of(resp).bool("placed"));
     }
 
     private static String extract(String src, String field) {
         String value = Reply.of(src).text(field);
-        assertTrue("field `" + field + "` not found in: " + src, value != null);
         return value;
     }
 
     private static boolean extractBool(String src, String field) {
-        return Reply.of(src).bool(field, false);
+        return Reply.of(src).bool(field);
     }
 
     @Test

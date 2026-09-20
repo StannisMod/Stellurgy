@@ -192,7 +192,7 @@ public class HyperdriveE2ETest extends AbstractSharedServerTest {
         String pressed = exec("artest drive press 0 " + SHIP_D);
 
         assertTrue("choosing a destination and choosing to go are two separate acts: " + pressed,
-                (!Reply.of(pressed).bool("spooling", true)));
+                (!Reply.of(pressed).bool("spooling")));
     }
 
     @Test
@@ -207,9 +207,9 @@ public class HyperdriveE2ETest extends AbstractSharedServerTest {
         String pressed = exec("artest drive press 0 " + SHIP_D);
 
         assertTrue("the console is where the pilot commits to a destination: " + armed,
-                Reply.of(armed).bool("armed", false));
+                Reply.of(armed).bool("armed"));
         assertTrue("and the helm is where he commits to going: " + pressed,
-                Reply.of(pressed).bool("spooling", false));
+                Reply.of(pressed).bool("spooling"));
     }
 
     @Test
@@ -227,7 +227,7 @@ public class HyperdriveE2ETest extends AbstractSharedServerTest {
         long chargeAfter = drive(SHIP_D).charge;
 
         assertTrue("a second press during the wind-up stops it: " + aborted,
-                (!Reply.of(aborted).bool("spooling", true)));
+                (!Reply.of(aborted).bool("spooling")));
         assertEquals("and it costs the pilot nothing - the burst is the only thing ever spent, "
                 + "and it has not fired", chargeBefore, chargeAfter);
     }
@@ -249,7 +249,7 @@ public class HyperdriveE2ETest extends AbstractSharedServerTest {
         long after = drive(SHIP_D).charge;
 
         assertTrue("a ship with no destination does not wind up: " + pressed,
-                (!Reply.of(pressed).bool("spooling", true)));
+                (!Reply.of(pressed).bool("spooling")));
         assertEquals("and a refusal is never a loss", before, after);
     }
 
@@ -266,9 +266,9 @@ public class HyperdriveE2ETest extends AbstractSharedServerTest {
         exec("artest nav target " + NAV_D + " 9 0 0");
         String pressed = exec("artest drive press 0 " + SHIP_D);
 
-        assertTrue("precondition: it really was armed: " + armed, Reply.of(armed).bool("armed", false));
+        assertTrue("precondition: it really was armed: " + armed, Reply.of(armed).bool("armed"));
         assertTrue("a new destination is a new decision: " + pressed,
-                (!Reply.of(pressed).bool("spooling", true)));
+                (!Reply.of(pressed).bool("spooling")));
     }
 
     // ─── Dampeners ─────────────────────────────────────────────────────────────
@@ -352,7 +352,7 @@ public class HyperdriveE2ETest extends AbstractSharedServerTest {
         int cz = 2840 >> 4;
         String cycled = exec("artest chunk cycle 0 " + cx + " " + cz);
         assertTrue("the chunk must really have left memory, or nothing was read back from disk: "
-                + cycled, Reply.of(cycled).bool("dropped", false));
+                + cycled, Reply.of(cycled).bool("dropped"));
 
         DriveInfo after = drive(SHIP_E);
         assertEquals("a bank that came back from disk holds what it held: " + after.raw(), before,

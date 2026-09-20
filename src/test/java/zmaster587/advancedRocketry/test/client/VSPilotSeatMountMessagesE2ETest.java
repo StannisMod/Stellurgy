@@ -167,10 +167,8 @@ public class VSPilotSeatMountMessagesE2ETest extends AbstractSharedVsClientE2ETe
         dismountAndConfirm(events);
         String occupy = exec("artest vs seat-occupy 0 " + SEAT_X + " " + SEAT_Y + " " + SEAT_Z);
         scenario().requireArranged("the seat-occupy probe must seat an NPC occupant: " + occupy,
-                Reply.of(occupy).ok() && Reply.of(occupy).bool("mounted", false));
+                Reply.of(occupy).ok() && Reply.of(occupy).bool("mounted"));
         String occupantName = Reply.of("artest vs seat-occupy", occupy).text(OCCUPANT_NAME);
-        scenario().requireArranged("seat-occupy must report the occupant's name: " + occupy,
-                occupantName != null);
 
         standBesideTheSeat();
         // The occupancy must still HOLD at the moment of the click — measured server-side, not
@@ -238,10 +236,10 @@ public class VSPilotSeatMountMessagesE2ETest extends AbstractSharedVsClientE2ETe
                 + " " + LINKED_X + " " + (SEAT_Y + 1) + " " + LINKED_Z);
         scenario().requireArranged("the seat must end up LINKED — without that this leg tests the same "
                         + "unlinked case as leg 1 and proves nothing: " + linked,
-                Reply.of(linked).bool("linked", false));
+                Reply.of(linked).bool("linked"));
         scenario().requireArranged("CONTROL: and it must NOT be managed by a ship, or the notice is "
                         + "correctly absent for a reason that has nothing to do with the bug: " + linked,
-                (!Reply.of(linked).bool("managedByShip", true)));
+                (!Reply.of(linked).bool("managedByShip")));
 
         standBeside(LINKED_X, LINKED_Z);
         long linkedMark = events.markInstrumented();

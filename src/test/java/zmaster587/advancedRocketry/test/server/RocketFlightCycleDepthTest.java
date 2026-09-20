@@ -130,8 +130,8 @@ public class RocketFlightCycleDepthTest extends AbstractSharedServerTest {
         // Inline-delta check: the probe reports orbitReachedEventDelta in
         // its response; must be >= 1 (event fired during the call).
         assertTrue("force-orbit-reached must report a non-zero orbitReachedEventDelta: "
-                + resp, (Reply.of(resp).integerOr("orbitReachedEventDelta", Integer.MIN_VALUE) == 1)
-                    || (Reply.of(resp).integerOr("orbitReachedEventDelta", Integer.MIN_VALUE) == 2));
+                + resp, (Reply.of(resp).integer("orbitReachedEventDelta") == 1)
+                    || (Reply.of(resp).integer("orbitReachedEventDelta") == 2));
 
         String after = ok(client().execute("artest rocket event-counts"));
         int orbitAfter = parseGroup(ORBIT_COUNT, after, "orbitReached after");
@@ -149,7 +149,7 @@ public class RocketFlightCycleDepthTest extends AbstractSharedServerTest {
         String resp = ok(client().execute("artest rocket dismantle " + id));
         assertTrue("dismantle must succeed: " + resp, Reply.of(resp).ok());
         assertTrue("dismantle inline delta must be 1: " + resp,
-                (Reply.of(resp).integerOr("dismantleEventDelta", Integer.MIN_VALUE) == 1));
+                (Reply.of(resp).integer("dismantleEventDelta") == 1));
 
         String after = ok(client().execute("artest rocket event-counts"));
         int dismantleAfter = parseGroup(DISMANTLE_COUNT, after, "dismantle after");

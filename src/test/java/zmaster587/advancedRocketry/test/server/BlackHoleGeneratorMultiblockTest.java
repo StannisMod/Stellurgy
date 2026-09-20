@@ -75,7 +75,7 @@ public class BlackHoleGeneratorMultiblockTest extends AbstractSharedServerTest {
         assertTrue("try-complete probe errored: " + tryComplete,
                 Reply.of(tryComplete).ok());
         assertTrue("BHG multiblock didn't validate (isComplete=false): " + tryComplete + layout,
-                Reply.of(tryComplete).bool("isComplete", false));
+                Reply.of(tryComplete).bool("isComplete"));
     }
 
     @Test
@@ -91,7 +91,7 @@ public class BlackHoleGeneratorMultiblockTest extends AbstractSharedServerTest {
         String first = join(client().execute(
                 "artest machine try-complete 0 " + cx + " " + cy + " " + cz));
         assertTrue("baseline try-complete should pass: " + first,
-                Reply.of(first).bool("isComplete", false));
+                Reply.of(first).bool("isComplete"));
 
         // Break the lower1Mid column block (directly under centre at y=cy-1).
         // Production validator must notice and flip isComplete back to false.
@@ -106,7 +106,7 @@ public class BlackHoleGeneratorMultiblockTest extends AbstractSharedServerTest {
                 Reply.of(broken).ok());
         assertTrue("structure stayed complete after column block removal — "
                         + "validator broken: " + broken,
-                (!Reply.of(broken).bool("isComplete", true)));
+                (!Reply.of(broken).bool("isComplete")));
     }
 
     @Test
@@ -121,7 +121,7 @@ public class BlackHoleGeneratorMultiblockTest extends AbstractSharedServerTest {
         String formed = join(client().execute(
                 "artest machine try-complete 0 " + cx + " " + cy + " " + cz));
         assertTrue("formation must succeed: " + formed,
-                Reply.of(formed).bool("isComplete", false));
+                Reply.of(formed).bool("isComplete"));
 
         // The forgePowerOutput plug at (cx+1, cy, cz+1) must expose an
         // IEnergyStorage capability with non-zero max. After formation the
@@ -156,7 +156,7 @@ public class BlackHoleGeneratorMultiblockTest extends AbstractSharedServerTest {
         String formed = join(client().execute(
                 "artest machine try-complete 0 " + cx + " " + cy + " " + cz));
         assertTrue("formation must succeed: " + formed,
-                Reply.of(formed).bool("isComplete", false));
+                Reply.of(formed).bool("isComplete"));
 
         // Drive many controller updates — production update() consults
         // isAroundBlackHole() each call. With no black-hole context, the

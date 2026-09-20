@@ -148,7 +148,7 @@ public class VSCrewRelogPersistenceE2ETest extends AbstractSharedVsClientE2ETest
         double h = Math.toRadians(170.0) / 2.0;
         scenario().requireArranged("the attitude hold must accept the roll command",
                 Reply.of(exec("artest vs point-by-id 0 " + scenarioShipId + " "
-                        + Math.cos(h) + " " + Math.sin(h) + " 0.0 0.0")).bool("commanded", false));
+                        + Math.cos(h) + " " + Math.sin(h) + " 0.0 0.0")).bool("commanded"));
         long rollMark = lastClientTick();
         long rollReleaseMark = clientEvents().mark();
         // The per-tick pose trace, armed on the axis this scenario turns on: a body sliding across a
@@ -661,7 +661,7 @@ public class VSCrewRelogPersistenceE2ETest extends AbstractSharedVsClientE2ETest
         double h = Math.toRadians(170.0) / 2.0;
         assertTrue("attitude hold must accept the inversion",
                 Reply.of(exec("artest vs point-by-id 0 " + scenarioShipId + " "
-                        + Math.cos(h) + " " + Math.sin(h) + " 0.0 0.0")).bool("commanded", false));
+                        + Math.cos(h) + " " + Math.sin(h) + " 0.0 0.0")).bool("commanded"));
         // An attitude CONVERGING under the hold is a physical value and not a link — production
         // never decides it has arrived — so this is a WINDOW and one read. It was a poll whose exit
         // condition is the gate below, which is the one shape question 2 does not license however
@@ -1167,8 +1167,9 @@ public class VSCrewRelogPersistenceE2ETest extends AbstractSharedVsClientE2ETest
         return n;
     }
 
+    /** A field of a probe reply FOR A MESSAGE — never a reading; see {@code Reply.reported}. */
     private static String readString(String json, String key) {
-        return Reply.of(json).textOr(key, "?");
+        return Reply.of(json).reported(key);
     }
 
     /** The client's own rendered position. */
@@ -1283,7 +1284,7 @@ public class VSCrewRelogPersistenceE2ETest extends AbstractSharedVsClientE2ETest
         long spawnMark = events.markInstrumented();
         String assemble = assembleFixture(site);
         assertTrue("a with-pilot-seat build must route to a ship: " + assemble,
-                (Reply.of(assemble).integerOr("rocketCount", Integer.MIN_VALUE) == 0));
+                (Reply.of(assemble).integer("rocketCount") == 0));
         // The IDENTITY, off that same record: this scenario built the ship, so it is TOLD which
         // ship that is, and nothing below re-derives it from a position.
         scenarioShipId = awaitShipSpawned(events, spawnMark, "a with-pilot-seat build must become a"
@@ -1343,8 +1344,10 @@ public class VSCrewRelogPersistenceE2ETest extends AbstractSharedVsClientE2ETest
     }
 
     private double readDouble(String json, String field) {
-        double value = Reply.of(json).number(field);
-        assertTrue("expected a number `" + field + "` in: " + json, !Double.isNaN(value));
+        // absence is the answer, and WHICH answer is the CALLER's: this verb is handed a
+        // FIELD name, so it cannot know what a missing one means — and the callers here
+        // include waits, which read the shape that does not carry the field yet.
+        double value = Reply.of(json).numberOr(field, Double.NaN);
         return value;
     }
 

@@ -58,11 +58,15 @@ public final class TransitSetup {
     private TransitSetup(Reply reply, String raw) {
         this.raw = raw;
         this.originDim = reply.integer("originDim");
+        // absence is the answer for everything below the dimension: the EMPTY setup answers
+        // `{"ok":true,"originDim":N}` and nothing else — no anchor, no ids — because there
+        // is no craft to name. `of` refuses a reply with no `originDim`, which is the one
+        // field every shape of this verb carries.
         this.anchorX = reply.integerOr("anchorX", Integer.MIN_VALUE);
         this.anchorY = reply.integerOr("anchorY", Integer.MIN_VALUE);
         this.anchorZ = reply.integerOr("anchorZ", Integer.MIN_VALUE);
-        this.shipId = emptyToNull(reply.text("shipId"));
-        this.durableId = emptyToNull(reply.text("durableId"));
+        this.shipId = emptyToNull(reply.textOr("shipId", null));
+        this.durableId = emptyToNull(reply.textOr("durableId", null));
     }
 
     private static String emptyToNull(String value) {
@@ -79,7 +83,7 @@ public final class TransitSetup {
      */
     public static TransitSetup of(String setupReply) {
         Reply reply = Reply.of("artest space transit-setup", String.valueOf(setupReply));
-        if (!reply.bool("ok", false)) {
+        if (!reply.ok()) {
             ArrangementFailure.arrangementFailed("the transit setup did not build its origin cell,"
                     + " so nothing below departs from anywhere: " + setupReply);
         }

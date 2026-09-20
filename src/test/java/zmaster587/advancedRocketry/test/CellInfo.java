@@ -56,8 +56,8 @@ public final class CellInfo {
             this.dim = body.integer("dim");
             this.kind = body.text("kind");
             this.cell = body.text("cell");
-            this.descendTarget = body.bool("descendTarget", false);
-            this.slotWorld = body.bool("slotWorld", false);
+            this.descendTarget = body.bool("descendTarget");
+            this.slotWorld = body.bool("slotWorld");
         }
 
         @Override
@@ -92,13 +92,17 @@ public final class CellInfo {
     private CellInfo(Reply reply, String raw) {
         this.raw = raw;
         this.cellKey = reply.text("cellKey");
-        this.anchor = reply.text("anchor");
-        this.bodiesAtCount = reply.integerOr("bodiesAt", -1);
-        this.systemBodyCount = reply.integerOr("systemBodies", -1);
-        this.hasOverride = reply.bool("hasOverride", false);
+        // absence is the answer: the producer writes JSON null when the cell belongs to no
+        // system, and "this cell has no anchor" is a reading about the universe.
+        this.anchor = reply.textOr("anchor", null);
+        this.bodiesAtCount = reply.integer("bodiesAt");
+        this.systemBodyCount = reply.integer("systemBodies");
+        this.hasOverride = reply.bool("hasOverride");
         this.systemBodies = bodiesOf(reply, "bodies");
         this.cellBodies = bodiesOf(reply, "cellBodies");
-        this.dimCell = reply.text("dimCell");
+        // absence is the answer twice: the field is emitted only when a dim was ASKED about,
+        // and it is JSON null when the registry places that dim nowhere.
+        this.dimCell = reply.textOr("dimCell", null);
     }
 
     private static List<Body> bodiesOf(Reply reply, String field) {
@@ -118,7 +122,7 @@ public final class CellInfo {
      */
     public static CellInfo of(String cellInfoReply) {
         Reply reply = Reply.of("artest space cell-info", String.valueOf(cellInfoReply));
-        if (!reply.bool("ok", false)) {
+        if (!reply.ok()) {
             throw new AssertionError("`artest space cell-info` did not answer about a cell at all,"
                     + " so an empty body list here would be a claim about the universe rather than"
                     + " about the reply: " + cellInfoReply);

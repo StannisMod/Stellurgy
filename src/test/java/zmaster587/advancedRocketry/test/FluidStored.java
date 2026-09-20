@@ -43,12 +43,21 @@ public final class FluidStored {
 
     /** The fluid in tank {@code index}, or {@code null} when that tank is empty. */
     public String fluid(int index) {
-        return tank(index).textOr(FLUID, null);
+        Reply one = tank(index);
+        // absence is the answer: an EMPTY tank is reported as a capacity with
+        // {@code "fluid":null} and no {@code amount} at all, so a refusal here would say the
+        // PROBE was broken about a tank that is simply empty — which is the one thing these
+        // two accessors exist to report. `count()` above is the reading for "no handler".
+        return one.has(FLUID) ? one.text(FLUID) : null;
     }
 
     /** How much is in tank {@code index}; 0 when it is empty. */
     public int amount(int index) {
-        return tank(index).integerOr(AMOUNT, 0);
+        Reply one = tank(index);
+        // absence is the answer, as in fluid() above: an empty tank carries no amount, and a
+        // tank holding nothing holds zero. A tank that NAMES a fluid and reports no amount
+        // still refuses, because that one is a broken reply.
+        return one.has(AMOUNT) ? one.integer(AMOUNT) : 0;
     }
 
     /** Tank {@code index}'s capacity. */

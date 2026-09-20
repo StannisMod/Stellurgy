@@ -46,7 +46,10 @@ public class AffsVendorSmokeTest extends AbstractSharedServerTest {
             int x = baseX + e.getValue();
             String resp = join(client().execute(
                     "artest place 0 " + x + " " + y + " " + z + " " + e.getKey()));
-            if (!Reply.of(resp).bool("placed", false)) {
+            // absence is the answer: the place verb writes `placed` only on its success
+            // path, and this suite RECORDS a failure per block rather than ending on the
+            // first one — a refusal here would take the other blocks' verdicts with it.
+            if (!Reply.of(resp).boolOr("placed", false)) {
                 failures.append(e.getKey()).append(" -> ").append(resp).append('\n');
             }
         }

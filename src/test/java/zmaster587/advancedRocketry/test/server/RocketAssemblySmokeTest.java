@@ -172,7 +172,6 @@ public class RocketAssemblySmokeTest extends AbstractSharedServerTest {
         assertTrue("assemble of engineless rocket must fail: " + assemble,
                 Reply.of(assemble).has("error"));
         Reply smReply = Reply.of(assemble);
-        assertTrue("error response must surface scan status name: " + assemble, smReply.has(STATUS));
         String status = smReply.text(STATUS);
         assertTrue("status for engineless rocket must indicate missing thrust "
                         + "(NOENGINES expected, got " + status + "): " + assemble,

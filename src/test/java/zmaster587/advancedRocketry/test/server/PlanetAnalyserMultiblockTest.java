@@ -43,7 +43,7 @@ public class PlanetAnalyserMultiblockTest extends AbstractSharedServerTest {
         assertTrue("try-complete probe errored: " + tryComplete,
                 Reply.of(tryComplete).ok());
         assertTrue("planet-analyser multiblock didn't validate (isComplete=false): " + tryComplete,
-                Reply.of(tryComplete).bool("isComplete", false));
+                Reply.of(tryComplete).bool("isComplete"));
     }
 
     @Test
@@ -56,7 +56,7 @@ public class PlanetAnalyserMultiblockTest extends AbstractSharedServerTest {
         String first = join(client().execute(
                 "artest machine try-complete 0 " + cx + " " + cy + " " + cz));
         assertTrue("baseline must validate: " + first,
-                Reply.of(first).bool("isComplete", false));
+                Reply.of(first).bool("isComplete"));
 
         // Centre data hatch at globalY = cy - 1, globalX = cx, globalZ = cz + 1.
         String breakData = join(client().execute(
@@ -68,7 +68,7 @@ public class PlanetAnalyserMultiblockTest extends AbstractSharedServerTest {
                 "artest machine try-complete 0 " + cx + " " + cy + " " + cz));
         assertTrue("structure stayed complete after data-hatch removal — "
                         + "'D' char mapping broken: " + broken,
-                (!Reply.of(broken).bool("isComplete", true)));
+                (!Reply.of(broken).bool("isComplete")));
     }
 
     @Test
@@ -81,7 +81,7 @@ public class PlanetAnalyserMultiblockTest extends AbstractSharedServerTest {
         String first = join(client().execute(
                 "artest machine try-complete 0 " + cx + " " + cy + " " + cz));
         assertTrue("baseline must validate: " + first,
-                Reply.of(first).bool("isComplete", false));
+                Reply.of(first).bool("isComplete"));
 
         // Slab next to controller at globalY = cy, globalX = cx + 1, globalZ = cz.
         String breakSlab = join(client().execute(
@@ -93,7 +93,7 @@ public class PlanetAnalyserMultiblockTest extends AbstractSharedServerTest {
                 "artest machine try-complete 0 " + cx + " " + cy + " " + cz));
         assertTrue("structure stayed complete after slab removal — "
                         + "slab OreDict lookup broken: " + broken,
-                (!Reply.of(broken).bool("isComplete", true)));
+                (!Reply.of(broken).bool("isComplete")));
     }
 
     private static String join(java.util.List<String> resp) {

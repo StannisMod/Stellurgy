@@ -54,12 +54,12 @@ public final class NavStatus {
     private NavStatus(Reply reply, String raw) {
         this.reply = reply;
         this.raw = raw;
-        this.linked = reply.bool("linked", false);
+        this.linked = reply.bool("linked");
         this.targetDim = reply.integer("targetDim");
-        this.targetResolved = reply.bool("targetResolved", false);
-        this.targetDescendTarget = reply.bool("targetDescendTarget", false);
-        this.targetSlotWorld = reply.bool("targetSlotWorld", false);
-        this.armed = reply.bool("armed", false);
+        this.targetResolved = reply.bool("targetResolved");
+        this.targetDescendTarget = reply.bool("targetDescendTarget");
+        this.targetSlotWorld = reply.bool("targetSlotWorld");
+        this.armed = reply.bool("armed");
         this.shipCrystals = reply.integer("ship");
         this.sourceCrystals = reply.integer("source");
         this.spaceClock = (long) reply.number("spaceClock");
@@ -98,7 +98,9 @@ public final class NavStatus {
      * aimed at nothing. See the class note: this is not the body's address now.
      */
     public String targetCell() {
-        return reply.text("target");
+        // absence is the answer: a computer aimed at nothing carries no target, and "aimed at
+        // nothing" is what every caller of this asks about.
+        return reply.textOr("target", null);
     }
 
     /** Whether the computer is aimed at anything at all. */
@@ -108,12 +110,15 @@ public final class NavStatus {
 
     /** What kind of body it is aimed at, as the universe registry names the kind. */
     public String targetKind() {
-        return reply.text("targetKind");
+        // absence is the answer, as in targetCell above: no aim, no kind.
+        return reply.textOr("targetKind", null);
     }
 
     /** How far the aim currently misses the body it names, or {@code NaN} when there is no aim. */
     public double aimMissNow() {
-        return reply.number("aimMissNow");
+        // absence is the answer: no aim, no miss — and NaN cannot be read as a distance of
+        // zero, which is what "the aim is perfect" would look like.
+        return reply.numberOr("aimMissNow", Double.NaN);
     }
 
     /** The reply exactly as the probe sent it, for a message that has to show the whole answer. */

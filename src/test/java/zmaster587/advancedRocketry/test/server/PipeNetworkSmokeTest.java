@@ -32,7 +32,7 @@ public class PipeNetworkSmokeTest extends AbstractSharedServerTest {
         String place = String.join("\n", client().execute(
                 "artest place 0 1200 64 1200 libvulpes:forgepowerinput"));
         assertTrue("could not place libvulpes:forgepowerinput: " + place,
-                Reply.of(place).bool("placed", false));
+                Reply.of(place).bool("placed"));
 
         EnergyStore initial = EnergyStore.at(
                         cmd -> String.join("\n", client().execute(cmd)), 0, 1200, 64, 1200)
@@ -149,6 +149,8 @@ public class PipeNetworkSmokeTest extends AbstractSharedServerTest {
         assertEquals("slot 0 must hold the replacement stack: " + read2,
                 "minecraft:cobblestone", replaced.text("item"));
         assertEquals("slot 0 must hold all sixty-four: " + read2, 64, replaced.integer("count"));
+        // absence is the answer: `holdsElement` exists for exactly this negative claim — the
+        // hatch no longer holds sticks ANYWHERE, so no matching element is the subject.
         assertTrue("old stick stack must be gone after replacement: " + read2,
                 !Reply.of("artest hatch read", read2)
                         .holdsElement("slots", "item", "minecraft:stick"));
@@ -189,7 +191,7 @@ public class PipeNetworkSmokeTest extends AbstractSharedServerTest {
     }
 
     private static int extractInt(String haystack, String field) {
-        return Reply.of(haystack).integerOr(field, -1);
+        return Reply.of(haystack).integer(field);
     }
 
     private void ok(java.util.List<String> response) {

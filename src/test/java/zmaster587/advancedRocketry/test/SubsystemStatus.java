@@ -51,12 +51,12 @@ public final class SubsystemStatus {
     private SubsystemStatus(Reply reply, String raw) {
         this.reply = reply;
         this.raw = raw;
-        this.registered = reply.bool("registered", false);
+        this.registered = reply.bool("registered");
         this.pool = reply.integer("pool");
         this.ledger = reply.integer("ledger");
         this.transits = reply.integer("transits");
         this.transitsParked = reply.integer("transitsParked");
-        this.saveFaultArmed = reply.bool("saveFaultArmed", false);
+        this.saveFaultArmed = reply.bool("saveFaultArmed");
     }
 
     /**

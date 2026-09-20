@@ -205,10 +205,12 @@ public class ScanningSatelliteTickContractTest extends AbstractSharedServerTest 
 
         String dataResp = String.join("\n", client().execute(
                 "artest satellite data 0 " + satId));
+        // absence is the answer: a reply with NO `error` is the success shape, and "the
+        // verb refused, with this reason" is exactly what this claim measures.
         assertTrue("oreScanner has no DataStorage surface — `satellite data` "
                         + "probe must report it is not a SatelliteData subclass; "
                         + dataResp,
-                "not a SatelliteData subclass".equals(Reply.of(dataResp).text("error")));
+                "not a SatelliteData subclass".equals(Reply.of(dataResp).textOr("error", null)));
 
         String tickResp = String.join("\n", client().execute(
                 "artest satellite tick 0 " + satId + " 10"));

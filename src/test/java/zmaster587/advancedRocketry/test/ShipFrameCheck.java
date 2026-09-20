@@ -44,8 +44,9 @@ public final class ShipFrameCheck {
     private ShipFrameCheck(Reply reply, String raw) {
         this.reply = reply;
         this.raw = raw;
-        // The measured reply carries no `available` field; the refusal carries nothing else.
-        this.available = !reply.has("available") || reply.bool("available", false);
+        // absence is the answer: the MEASURED reply carries no `available` field at all — only
+        // the refusal shape writes one — so "no such field" means the check ran.
+        this.available = !reply.has("available") || reply.boolOr("available", false);
     }
 
     /** Read one {@code vs ship-frame-check} reply, or refuse what is not one. */
@@ -150,15 +151,16 @@ public final class ShipFrameCheck {
         return measurement("qz");
     }
 
+    /**
+     * One number off a check that ran, refusing when the reply does not carry it.
+     *
+     * <p>The refusal is the reader's own: every number here is compared against a tolerance, so an
+     * absence read as a value is read as PERFECT AGREEMENT — the one answer a frame check can give
+     * that nobody questions.</p>
+     */
     private double measurement(String field) {
         requireMeasured(field + " is asked of a check that ran");
-        double value = reply.number(field);
-        if (Double.isNaN(value)) {
-            throw new AssertionError("`artest vs ship-frame-check` carries no `" + field + "` —"
-                    + " and every number in this reply is compared against a tolerance, so an"
-                    + " absence reads as perfect agreement: " + raw);
-        }
-        return value;
+        return reply.number(field);
     }
 
     /** The reply exactly as the probe sent it, for a message that has to show the whole answer. */
@@ -169,10 +171,10 @@ public final class ShipFrameCheck {
     @Override
     public String toString() {
         return available
-                ? "frame check up=" + reply.text("upDisagreement")
-                        + " fwd=" + reply.text("fwdDisagreement")
-                        + " posRt=" + reply.text("posRoundTripErr")
-                        + " rotRt=" + reply.text("rotRoundTripErr")
+                ? "frame check up=" + reply.reported("upDisagreement")
+                        + " fwd=" + reply.reported("fwdDisagreement")
+                        + " posRt=" + reply.reported("posRoundTripErr")
+                        + " rotRt=" + reply.reported("rotRoundTripErr")
                 : "the ship-frame check did not run";
     }
 }

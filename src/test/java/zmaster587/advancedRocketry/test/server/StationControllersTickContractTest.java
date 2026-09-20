@@ -70,7 +70,7 @@ public class StationControllersTickContractTest extends AbstractSharedServerTest
         String place = exec("artest place " + SPACE_DIM + " " + cx + " " + cy + " " + cz
                 + " advancedrocketry:altitudeController");
         assertTrue("altitude controller must place: " + place,
-                Reply.of(place).bool("placed", false));
+                Reply.of(place).bool("placed"));
 
         // Snapshot pre-tick orbital distance.
         double preDist = station(stationId).orbitalDistance;
@@ -157,7 +157,7 @@ public class StationControllersTickContractTest extends AbstractSharedServerTest
         String place = exec("artest place " + SPACE_DIM + " " + cx + " " + cy + " " + cz
                 + " advancedrocketry:gravityController");
         assertTrue("gravity controller must place: " + place,
-                Reply.of(place).bool("placed", false));
+                Reply.of(place).bool("placed"));
 
         // Try setting an explicit target via the controller. This may
         // get reverted by the redstone-default bug, but it's still a
@@ -210,7 +210,7 @@ public class StationControllersTickContractTest extends AbstractSharedServerTest
         String place = exec("artest place " + SPACE_DIM + " " + cx + " " + cy + " " + cz
                 + " advancedrocketry:orientationController");
         assertTrue("orientation controller must place: " + place,
-                Reply.of(place).bool("placed", false));
+                Reply.of(place).bool("placed"));
 
         double preRotEast = station(stationId).rotationEast();
 

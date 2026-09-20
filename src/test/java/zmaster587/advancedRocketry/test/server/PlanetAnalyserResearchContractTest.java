@@ -65,7 +65,7 @@ public class PlanetAnalyserResearchContractTest extends AbstractSharedServerTest
                 + CX + " " + CY + " " + CZ);
         assertTrue("analyser must validate (precondition for dataCables[] "
                         + "to be populated): " + tryComplete,
-                Reply.of(tryComplete).bool("isComplete", false));
+                Reply.of(tryComplete).bool("isComplete"));
 
         // 2) Pre-fill all 3 data hatches with COMPOSITION data via the
         // databus-set-data probe. Which physical hatch maps to

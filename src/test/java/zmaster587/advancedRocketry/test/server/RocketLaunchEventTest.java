@@ -88,7 +88,7 @@ public class RocketLaunchEventTest extends AbstractSharedServerTest {
                 client().execute("artest rocket launch " + id + " false force"));
         assertTrue("force launch must succeed: " + launch, Reply.of(launch).ok());
         assertTrue("force launch response must report isInFlight=true: " + launch,
-                Reply.of(launch).bool("isInFlight", false));
+                Reply.of(launch).bool("isInFlight"));
 
         // Verify via a separate info probe — confirms the flag persists
         // through the entity registry, not just the launch response.
@@ -114,7 +114,7 @@ public class RocketLaunchEventTest extends AbstractSharedServerTest {
         assertTrue("launch response must echo back the chosen mode: " + launch,
                 "instant".equals(Reply.of(launch).text("mode")));
         assertTrue("launch with fuelFill=true must echo it: " + launch,
-                Reply.of(launch).bool("fuelFilled", false));
+                Reply.of(launch).bool("fuelFilled"));
     }
 
     @Test
@@ -141,6 +141,6 @@ public class RocketLaunchEventTest extends AbstractSharedServerTest {
                 client().execute("artest rocket launch " + id + " false force"));
         assertTrue("second-launch must still ok: " + second, Reply.of(second).ok());
         assertTrue("second-launch must still report isInFlight=true: " + second,
-                Reply.of(second).bool("isInFlight", false));
+                Reply.of(second).bool("isInFlight"));
     }
 }

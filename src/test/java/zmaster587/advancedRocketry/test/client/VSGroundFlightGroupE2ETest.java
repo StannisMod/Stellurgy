@@ -227,14 +227,14 @@ public class VSGroundFlightGroupE2ETest extends AbstractSharedVsClientE2ETest {
         long spawnMarkA = events.markInstrumented();
         String assembleA = assembleFixture(siteA, AFC_VARIANT);
         scenario().requireArranged("ship A must assemble: " + assembleA,
-                (Reply.of(assembleA).integerOr("rocketCount", Integer.MIN_VALUE) == 0));
+                (Reply.of(assembleA).integer("rocketCount") == 0));
         String idA = awaitShipSpawned(events, spawnMarkA,
                 "ship A's assembly must create a VS ship in the queryable registry (async spawn)");
 
         long spawnMarkB = events.markInstrumented();
         String assembleB = assembleFixture(siteB, AFC_VARIANT);
         scenario().requireArranged("ship B must assemble: " + assembleB,
-                (Reply.of(assembleB).integerOr("rocketCount", Integer.MIN_VALUE) == 0));
+                (Reply.of(assembleB).integer("rocketCount") == 0));
         String idB = awaitShipSpawned(events, spawnMarkB,
                 "ship B's assembly must create a VS ship in the queryable registry (async spawn)");
 
@@ -339,7 +339,7 @@ public class VSGroundFlightGroupE2ETest extends AbstractSharedVsClientE2ETest {
         long spawnMark = events.markInstrumented();
         String assemble = assembleFixture(site, AFC_VARIANT);
         assertTrue("with VS, the AFC build must route to a ship (no rocket): " + assemble,
-                (Reply.of(assemble).integerOr("rocketCount", Integer.MIN_VALUE) == 0));
+                (Reply.of(assemble).integer("rocketCount") == 0));
         final String shipId = awaitShipSpawned(events, spawnMark,
                 "assembly must create a VS ship in the queryable registry (async spawn)");
         bot().waitTicks(40); // settle before any observer approaches
@@ -380,7 +380,7 @@ public class VSGroundFlightGroupE2ETest extends AbstractSharedVsClientE2ETest {
         for (int i = 0; i < FLIGHT_WINDOW_TICKS; i++) {
             String cmd = exec("artest vs force-vel-by-id 0 " + shipId + " 0 8 0");
             assertTrue("force-vel must reach THIS ship's own flight computer: " + cmd,
-                    Reply.of(cmd).bool("commanded", false));
+                    Reply.of(cmd).bool("commanded"));
             bot().waitTicks(1);
             ShipInfo info = ShipInfo.of(shipInfoById(shipId));
             yAfter = info.y;
@@ -410,7 +410,7 @@ public class VSGroundFlightGroupE2ETest extends AbstractSharedVsClientE2ETest {
         for (int i = 0; i < FLIGHT_WINDOW_TICKS; i++) {
             String cmd = exec("artest vs force-rot-by-id 0 " + shipId + " 0 1.0 0");
             assertTrue("force-rot must reach THIS ship's own flight computer: " + cmd,
-                    Reply.of(cmd).bool("commanded", false));
+                    Reply.of(cmd).bool("commanded"));
             bot().waitTicks(1);
             double[] qNow = readQuat(shipInfoById(shipId));
             // |dot| of two unit quaternions is cos(halfAngle); < 0.98 => rotated by more than ~23°.
@@ -436,7 +436,7 @@ public class VSGroundFlightGroupE2ETest extends AbstractSharedVsClientE2ETest {
             String cmd = exec("artest vs point-by-id 0 " + shipId
                     + " " + target[0] + " " + target[1] + " " + target[2] + " " + target[3]);
             assertTrue("point must reach THIS ship's own flight computer: " + cmd,
-                    Reply.of(cmd).bool("commanded", false));
+                    Reply.of(cmd).bool("commanded"));
             bot().waitTicks(1);
             double[] q = readQuat(shipInfoById(shipId));
             convDot = Math.abs(q[0] * target[0] + q[1] * target[1] + q[2] * target[2] + q[3] * target[3]);
@@ -458,7 +458,7 @@ public class VSGroundFlightGroupE2ETest extends AbstractSharedVsClientE2ETest {
         // throttle. Asserted: a release nobody checks is indistinguishable from no release.
         String released = exec("artest vs force-clear-by-id 0 " + shipId);
         scenario().requireArranged("the probe command must be released before the FF path is measured: "
-                + released, Reply.of(released).bool("cleared", false));
+                + released, Reply.of(released).bool("cleared"));
 
         double[] pBefore = readVec(shipInfoById(shipId));
         double[] at = pBefore;
@@ -473,7 +473,7 @@ public class VSGroundFlightGroupE2ETest extends AbstractSharedVsClientE2ETest {
             String cmd = exec("artest vs ff-input-by-id 0 " + shipId
                     + " 0 1 0 0 0 0"); // throttleVertical = full up
             assertTrue("the throttle must reach this ship's own flight computer: " + cmd,
-                    Reply.of(cmd).bool("afcResolved", false));
+                    Reply.of(cmd).bool("afcResolved"));
             bot().waitTicks(1);
             double[] p = readVec(shipInfoById(shipId));
             at = p;
@@ -512,7 +512,7 @@ public class VSGroundFlightGroupE2ETest extends AbstractSharedVsClientE2ETest {
         long spawnMark = events.markInstrumented();
         String assemble = assembleFixture(site, AFC_VARIANT);
         assertTrue("with VS, the AFC build must route to a ship (no rocket): " + assemble,
-                (Reply.of(assemble).integerOr("rocketCount", Integer.MIN_VALUE) == 0));
+                (Reply.of(assemble).integer("rocketCount") == 0));
 
         // The ship must appear in the queryable registry (async spawn did not fault) — its own
         // record, which also NAMES it: the identity every question below is keyed on.
@@ -555,7 +555,7 @@ public class VSGroundFlightGroupE2ETest extends AbstractSharedVsClientE2ETest {
         long spawnMark = events.markInstrumented();
         String assemble = assembleFixture(site, SEAT_VARIANT);
         assertTrue("a with-pilot-seat build must route to a ship (no rocket): " + assemble,
-                (Reply.of(assemble).integerOr("rocketCount", Integer.MIN_VALUE) == 0));
+                (Reply.of(assemble).integer("rocketCount") == 0));
         // The identity, off this scenario's own creation record — not re-derived from the base below.
         final String shipId = awaitShipSpawned(events, spawnMark, "assembly must create a VS ship");
         bot().waitTicks(40);
@@ -586,10 +586,10 @@ public class VSGroundFlightGroupE2ETest extends AbstractSharedVsClientE2ETest {
             // answers afcResolved:true from somebody else's ship while this one sits still.
             lastSeat = exec("artest vs seat-input-by-id 0 " + shipId + " 0 1 0 0 0 0"); // full up
             assertTrue("seat-input must find THIS ship's pilot seat: " + lastSeat,
-                    Reply.of(lastSeat).bool("seatFound", false));
+                    Reply.of(lastSeat).bool("seatFound"));
             assertTrue("the pilot seat must resolve its linked flight computer (offset intact "
                             + "after VS relocation): " + lastSeat,
-                    Reply.of(lastSeat).bool("afcResolved", false));
+                    Reply.of(lastSeat).bool("afcResolved"));
             bot().waitTicks(1);
             yAfter = ShipInfo.of(shipInfoById(shipId)).y;
             maxSeatClimb = Math.max(maxSeatClimb, yAfter - yBefore);
@@ -632,7 +632,7 @@ public class VSGroundFlightGroupE2ETest extends AbstractSharedVsClientE2ETest {
         long spawnMark = events.markInstrumented();
         String assemble = assembleFixture(site, SEAT_VARIANT);
         assertTrue("a with-pilot-seat build must route to a ship: " + assemble,
-                (Reply.of(assemble).integerOr("rocketCount", Integer.MIN_VALUE) == 0));
+                (Reply.of(assemble).integer("rocketCount") == 0));
         // The identity, off this scenario's own creation record. It is fixed HERE, before the ship has
         // moved a block, and it stays valid through the sixty-tick climb below — the flight that no
         // positional bound survives.
@@ -666,7 +666,7 @@ public class VSGroundFlightGroupE2ETest extends AbstractSharedVsClientE2ETest {
         long seatMark = clientEvents().mark();
         String mount = exec("artest player mount-entity " + dummyId);
         assertTrue("bot must mount the seat dummy: " + mount,
-                Reply.of(mount).bool("mounted", false));
+                Reply.of(mount).bool("mounted"));
         // "Let the mount replicate" is the right sentence and ten ticks were the wrong way to say
         // it: replication is a record on the client's own log, and the baseline read below is of the
         // mount the client is rendering.
@@ -868,7 +868,7 @@ public class VSGroundFlightGroupE2ETest extends AbstractSharedVsClientE2ETest {
 
     private int count(String sub) throws Exception {
         String command = "artest vs " + sub + " 0";
-        return Reply.of(command, exec(command)).integerOr(COUNT, -1);
+        return Reply.of(command, exec(command)).integer(COUNT);
     }
 
     private double[] readVec(String shipInfoJson) {
@@ -883,7 +883,6 @@ public class VSGroundFlightGroupE2ETest extends AbstractSharedVsClientE2ETest {
 
     private double readDouble(String json, String field) {
         double value = Reply.of(json).number(field);
-        assertTrue("expected a number `" + field + "` in: " + json, !Double.isNaN(value));
         return value;
     }
 

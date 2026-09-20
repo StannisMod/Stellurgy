@@ -43,7 +43,7 @@ public final class NebulaSearch {
     private NebulaSearch(Reply reply, String raw) {
         this.reply = reply;
         this.raw = raw;
-        this.found = reply.bool("found", false);
+        this.found = reply.bool("found");
     }
 
     /** Read one {@code nebula-find} reply, or refuse. */
@@ -70,9 +70,11 @@ public final class NebulaSearch {
     /** This reading, refusing when the walk found nothing. */
     public NebulaSearch requireFound(String what) {
         if (!found) {
+            // absence is the answer: this names what the walk did INSIDE the failure that says
+            // it found nothing, and a refusal here would hide that diagnosis.
             ArrangementFailure.arrangementFailed(what + " — the walk searched "
-                    + reply.textOr("searched", "?") + " steps of "
-                    + reply.textOr("stride", "?") + " cells and found no cloud: " + raw);
+                    + reply.reported("searched") + " steps of "
+                    + reply.reported("stride") + " cells and found no cloud: " + raw);
         }
         return this;
     }
@@ -183,7 +185,7 @@ public final class NebulaSearch {
     @Override
     public String toString() {
         return found
-                ? "a cloud at cell " + reply.text("cell") + " (" + reply.text("drawn") + " drawn)"
-                : "no cloud in " + reply.textOr("searched", "?") + " steps";
+                ? "a cloud at cell " + reply.reported("cell") + " (" + reply.reported("drawn") + " drawn)"
+                : "no cloud in " + reply.reported("searched") + " steps";
     }
 }

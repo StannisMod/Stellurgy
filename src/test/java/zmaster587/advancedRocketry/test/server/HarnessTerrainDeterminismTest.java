@@ -109,6 +109,6 @@ public class HarnessTerrainDeterminismTest {
         Reply biomeReply = Reply.of(resp);
         assertTrue("sample of chunk [" + chunk[0] + "," + chunk[1] + "] malformed: " + resp,
                 yReply.has(TOP_Y) && blockReply.has(TOP_BLOCK) && biomeReply.has(BIOME));
-        return yReply.text(TOP_Y) + "|" + blockReply.text(TOP_BLOCK) + "|" + biomeReply.text(BIOME);
+        return yReply.text(TOP_Y) + "|" + blockReply.reported(TOP_BLOCK) + "|" + biomeReply.reported(BIOME);
     }
 }

@@ -52,7 +52,7 @@ public class VSShortJumpCrossesDirectlyE2ETest extends AbstractSharedServerTest 
         long jumpMark = events.mark();
         String begin = exec("artest space transit-begin " + originDim + " 1 64 1 "
                 + DIRECT_JUMP_SPEED);
-        assertTrue("the short jump must begin: " + begin, Reply.of(begin).bool("began", false));
+        assertTrue("the short jump must begin: " + begin, Reply.of(begin).bool("began"));
         assertEquals("a direct crossing is not a flight — nothing may be in transit the moment it "
                         + "starts, because there is no flight to be in the middle of: " + begin,
                 0, extractInt(begin, "inTransit"));
@@ -60,7 +60,7 @@ public class VSShortJumpCrossesDirectlyE2ETest extends AbstractSharedServerTest 
         // The arrival names the route it was flown by, so this leg asserts the MECHANISM rather
         // than inferring it from an in-transit count that happens to read zero. A jump that went
         // through hyperspace no longer satisfies it.
-        String arrived = arrivesInTheTargetCell(jumpMark, "DIRECT");
+        String arrived = arrivesInTheTargetCell(jumpMark, setup.requireDurableId(), "DIRECT");
         assertEquals("and nothing was ever in transit while it settled: " + arrived,
                 0, extractInt(begin, "inTransit"));
     }
@@ -80,11 +80,11 @@ public class VSShortJumpCrossesDirectlyE2ETest extends AbstractSharedServerTest 
         long jumpMark = events.mark();
         String begin = exec("artest space transit-begin " + originDim + " 1 64 1 "
                 + HYPERSPACE_JUMP_SPEED);
-        assertTrue("the jump must begin: " + begin, Reply.of(begin).bool("began", false));
+        assertTrue("the jump must begin: " + begin, Reply.of(begin).bool("began"));
         assertEquals("a slow jump IS a flight, and reports one: " + begin,
                 1, extractInt(begin, "inTransit"));
 
-        arrivesInTheTargetCell(jumpMark, "HYPERSPACE");
+        arrivesInTheTargetCell(jumpMark, setup.requireDurableId(), "HYPERSPACE");
     }
 
     /**
@@ -100,23 +100,24 @@ public class VSShortJumpCrossesDirectlyE2ETest extends AbstractSharedServerTest 
      * <p>No pump. The fixture runs on the server's own subsystem, so the jump is advanced by the
      * server tick like any other — and if it stops being, this fails.</p>
      */
-    private String arrivesInTheTargetCell(long mark, String route) throws Exception {
-        String arrived = events.awaitRecordWithField(mark, "ship_transit_ended","route", route,
+    private String arrivesInTheTargetCell(long mark, String durableId, String route)
+            throws Exception {
+        // Narrowed by the CRAFT as well as the route: a route alone is a description, and a
+        // sibling scenario arriving by the same route in the same window satisfies it.
+        String arrived = events.awaitRecordWithFields(mark, "ship_transit_ended",
                 "the ship never reached the target cell by the " + route + " route; the durable"
                         + " record now reads " + exec("artest space transit-export"),
-                ARRIVAL_TICKS);
+                ARRIVAL_TICKS, "ship", durableId, "route", route);
         int targetDim = extractInt(arrived, "dim");
         assertTrue("the arrival was announced but names no dimension: " + arrived, targetDim >= 0);
         assertTrue("the ship never (re)loaded in the target cell (dim " + targetDim + "); countAll="
                 + exec("artest vs ship-count-all " + targetDim), loadedShips(targetDim) >= 1);
-        // Identified off the ARRIVAL'S OWN RECORD, which names the craft that arrived. "The only
-        // loaded ship in this cell" stood here and was an accident: it worked while an earlier
-        // scenario's hull unloaded once nobody was near it, and stopped the day a test server began
-        // holding ships loaded — the cell then held two and the read could not say which was this
-        // jump's. A count is a premise about the cell; the record is an identity.
-        String durableId = Events.text(arrived, "ship");
-        assertTrue("the arrival must name the craft that made it, or nothing below is addressed to"
-                + " this jump's ship: " + arrived, durableId != null && !durableId.trim().isEmpty());
+        // Identified by the craft this scenario BUILT, which is now what the wait above is keyed
+        // on. "The only loaded ship in this cell" stood here and was an accident: it worked while
+        // an earlier scenario's hull unloaded once nobody was near it, and stopped the day a test
+        // server began holding ships loaded — the cell then held two and the read could not say
+        // which was this jump's. Re-reading the id off the record stood here next, and it answered
+        // whichever ship the route-only wait had matched.
         String arrivedId = ShipIdentity.physicsIdOf(this::exec, targetDim, durableId.trim());
         assertTrue("the arrived ship is not VS-managed in the target cell; id=" + arrivedId,
                 ShipInfo.loadedIn(this::exec, targetDim, arrivedId));
@@ -170,6 +171,6 @@ public class VSShortJumpCrossesDirectlyE2ETest extends AbstractSharedServerTest 
     }
 
     private static int extractInt(String json, String key) {
-        return Reply.of(json).integerOr(key, Integer.MIN_VALUE);
+        return Reply.of(json).integer(key);
     }
 }

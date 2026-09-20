@@ -57,12 +57,8 @@ public class PerDimWorldInfoMasterToggleTest {
      * its own and does not have one yet, so this stays and names the one verb it serves.</p>
      */
     private static boolean dimTimeIsWrapped(String reply) {
-        String worldInfoClass = Reply.of("artest dim time", reply).text(WORLD_INFO_CLASS);
-        if (worldInfoClass == null) {
-            throw new AssertionError("`artest dim time` must report `" + WORLD_INFO_CLASS + "`, or"
-                    + " nothing here says which WorldInfo the world carries: " + reply);
-        }
-        return worldInfoClass.endsWith("ARDimensionWorldInfo");
+        return Reply.of("artest dim time", reply).text(WORLD_INFO_CLASS)
+                .endsWith("ARDimensionWorldInfo");
     }
 
     /** One world's sky, refusing a world the probe could not bring up. */

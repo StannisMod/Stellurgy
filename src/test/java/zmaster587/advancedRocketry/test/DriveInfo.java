@@ -92,14 +92,14 @@ public final class DriveInfo {
         this.emitters = reply.integer("emitters");
         this.dampeners = reply.integer("dampeners");
         this.poweredDampeners = reply.integer("poweredDampeners");
-        this.hullMeasured = reply.bool("hullMeasured", false);
+        this.hullMeasured = reply.bool("hullMeasured");
         this.storedEnergy = reply.longInteger("storedEnergy");
         this.speedBlocksPerTick = reply.longInteger("speedBlocksPerTick");
         this.transitTicks = reply.longInteger("transitTicks");
         this.flightEnergyCost = reply.longInteger("flightEnergyCost");
-        this.allowed = reply.bool("allowed", false);
-        this.confirm = reply.bool("confirm", false);
-        this.spooling = reply.bool("spooling", false);
+        this.allowed = reply.bool("allowed");
+        this.confirm = reply.bool("confirm");
+        this.spooling = reply.bool("spooling");
     }
 
     /**
@@ -122,7 +122,7 @@ public final class DriveInfo {
                     + " carries `drivePower` beside the gate's `allowed`, and a `build`, `charge` or"
                     + " `push` reply carries neither: " + text);
         }
-        if (reply.has("afc") && !reply.bool("afc", true)) {
+        if (reply.has("afc") && !reply.bool("afc")) {
             ArrangementFailure.arrangementFailed("there is no flight computer at that position, so"
                     + " there is no ship whose drive this could be — every zero below is an empty"
                     + " block and not a badly built craft: " + text);

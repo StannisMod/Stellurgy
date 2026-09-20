@@ -65,7 +65,7 @@ public class EventHandlerWiringTest extends AbstractSharedServerTest {
         // setRain path that follows it.
         String loaded = String.join("\n", client().execute("artest dim load " + dim));
         assertTrue("dim load probe did not report loaded=true: " + loaded,
-                Reply.of(loaded).bool("loaded", false));
+                Reply.of(loaded).bool("loaded"));
 
         DimWeather weather = weather(dim);
         assertTrue("WeatherEventHandler did not install the B1 wrapper on AR dim load: "

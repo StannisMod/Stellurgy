@@ -457,7 +457,7 @@ public class VSDeckCaptureAndDismountE2ETest extends AbstractSharedVsClientE2ETe
         double h = Math.toRadians(45.0) / 2.0;
         assertTrue("attitude hold must accept the roll",
                 Reply.of(exec("artest vs point-by-id 0 " + scenarioShipId + " "
-                        + Math.cos(h) + " 0.0 0.0 " + Math.sin(h))).bool("commanded", false));
+                        + Math.cos(h) + " 0.0 0.0 " + Math.sin(h))).bool("commanded"));
         bot().waitTicks(120);
         ShipInfo info = shipInfo();
         double sx = info.x, sy = info.y, sz = info.z;
@@ -516,7 +516,7 @@ public class VSDeckCaptureAndDismountE2ETest extends AbstractSharedVsClientE2ETe
         // so the negative above is a real on-deck/off-deck discrimination, not the camera never firing.
         assertTrue("attitude hold must accept levelling",
                 Reply.of(exec("artest vs point-by-id 0 " + scenarioShipId + " 1.0 0.0 0.0 0.0")
-                        ).bool("commanded", false));
+                        ).bool("commanded"));
         bot().waitTicks(120);
         ShipInfo lvl = shipInfo();
         // The control is the camera's STATE, and it may NOT be its engage edge — a fact about the
@@ -794,7 +794,7 @@ public class VSDeckCaptureAndDismountE2ETest extends AbstractSharedVsClientE2ETe
         // Roll the now-UNMANNED ship (a mounted pilot would overwrite the target) to the commanded attitude.
         assertTrue("attitude hold must accept the " + label + " roll command",
                 Reply.of(exec("artest vs point-by-id 0 " + scenarioShipId + " " + qw + " 0.0 0.0 " + qz)
-                        ).bool("commanded", false));
+                        ).bool("commanded"));
         bot().waitTicks(200); // slew to the roll and settle - stationary, not a transient
         double tilted = shipUpYFromInfo(shipInfo());
         // Reliable command -> a HARD assert that the regime was reached (fail loudly, not a silent skip).
@@ -1083,7 +1083,7 @@ public class VSDeckCaptureAndDismountE2ETest extends AbstractSharedVsClientE2ETe
         double h = Math.toRadians(90.0) / 2.0; // 90deg roll about the nose (+Z): deck on its side
         assertTrue("attitude hold must accept the tilt",
                 Reply.of(exec("artest vs point-by-id 0 " + scenarioShipId + " "
-                        + Math.cos(h) + " 0.0 0.0 " + Math.sin(h))).bool("commanded", false));
+                        + Math.cos(h) + " 0.0 0.0 " + Math.sin(h))).bool("commanded"));
         bot().waitTicks(160); // slew to the tilt and settle - the ship is now HELD stationary
 
         // Sample across frames while the ship is stationary. Any variation is instability, not motion.
@@ -1157,7 +1157,7 @@ public class VSDeckCaptureAndDismountE2ETest extends AbstractSharedVsClientE2ETe
         // test server holds every ship loaded from the moment the probes register.
         assertTrue("attitude hold must accept the flip",
                 Reply.of(exec("artest vs point-by-id 0 " + scenarioShipId + " 0.17365 0.0 0.0 0.98481")
-                        ).bool("commanded", false));
+                        ).bool("commanded"));
         bot().waitTicks(200); // slew all the way over and settle
 
         ShipInfo info = shipInfo();
@@ -1218,7 +1218,7 @@ public class VSDeckCaptureAndDismountE2ETest extends AbstractSharedVsClientE2ETe
         long spawnMark = events.markInstrumented();
         String assemble = assembleFixture(site);
         assertTrue("a with-pilot-seat build must route to a ship: " + assemble,
-                (Reply.of(assemble).integerOr("rocketCount", Integer.MIN_VALUE) == 0));
+                (Reply.of(assemble).integer("rocketCount") == 0));
         scenarioShipId = awaitShipSpawned(events, spawnMark,
                 "assembly must create a NEW VS ship in the queryable registry (async spawn)");
         bot().waitTicks(40);
@@ -1281,7 +1281,7 @@ public class VSDeckCaptureAndDismountE2ETest extends AbstractSharedVsClientE2ETe
                 + seat.seatY + " " + seat.seatZ);
         int dummyId = Reply.of("artest vs seat-mount-at", mountInfo).integer(DUMMY_ID);
         assertTrue("bot must mount the seat dummy: " + mountInfo,
-                Reply.of(exec("artest player mount-entity " + dummyId)).bool("mounted", false));
+                Reply.of(exec("artest player mount-entity " + dummyId)).bool("mounted"));
     }
 
     private String assembleFixture(FixtureSite site) throws Exception {

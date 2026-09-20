@@ -109,7 +109,7 @@ public class RocketFlightFailureModesTest extends AbstractSharedServerTest {
         // list until the next worldTick's collect-dead pass, so that
         // observation is racy in a shared headless harness.
         assertTrue("explode probe response must report isDead=true: " + explodeResp,
-                Reply.of(explodeResp).bool("isDead", false));
+                Reply.of(explodeResp).bool("isDead"));
     }
 
     @Test
@@ -140,7 +140,7 @@ public class RocketFlightFailureModesTest extends AbstractSharedServerTest {
                 fuels.has(FUELS));
         for (String perType : fuels.objectValues(FUELS)) {
             assertEquals("all fuel types must be drained: " + fuelResp, 0.0,
-                    Reply.of("one fuel entry", perType).numberOr(FUEL_AMOUNT, Double.NaN), 0.0);
+                    Reply.of("one fuel entry", perType).number(FUEL_AMOUNT), 0.0);
         }
 
         // Tick a few times — production must NOT explode.

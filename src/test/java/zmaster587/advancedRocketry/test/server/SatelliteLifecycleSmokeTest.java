@@ -51,8 +51,8 @@ public class SatelliteLifecycleSmokeTest extends AbstractSharedServerTest {
         Reply.of(list).element("satellites", "id", String.valueOf(satId));
         String info = String.join("\n", client().execute("artest satellite info 0 " + satId));
         assertTrue("info missing/wrong type: " + info, "solarEnergy".equals(Reply.of(info).text("type")));
-        assertTrue("info missing/wrong powerGen: " + info, (Reply.of(info).integerOr("powerGen", Integer.MIN_VALUE) == 250));
-        assertTrue("info missing/wrong powerStorage: " + info, (Reply.of(info).integerOr("powerStorage", Integer.MIN_VALUE) == 5000));
+        assertTrue("info missing/wrong powerGen: " + info, (Reply.of(info).integer("powerGen") == 250));
+        assertTrue("info missing/wrong powerStorage: " + info, (Reply.of(info).integer("powerStorage") == 5000));
     }
 
     @Test
@@ -140,7 +140,7 @@ public class SatelliteLifecycleSmokeTest extends AbstractSharedServerTest {
         String place = String.join("\n", client().execute(
                 "artest place 0 " + bx + " " + by + " " + bz + " advancedrocketry:satelliteControlCenter"));
         assertTrue("satellite terminal did not place: " + place,
-                Reply.of(place).bool("placed", false));
+                Reply.of(place).bool("placed"));
 
         long satId = createAndGetId("density", 50, 500, 256);
 

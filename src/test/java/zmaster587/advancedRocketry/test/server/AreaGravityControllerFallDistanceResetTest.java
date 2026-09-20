@@ -61,7 +61,7 @@ public class AreaGravityControllerFallDistanceResetTest extends AbstractSharedSe
         ok("artest fixture multiblock gravity-controller 0 " + CX + " " + CY + " " + CZ);
         String complete = exec("artest machine try-complete 0 " + CX + " " + CY + " " + CZ);
         assertTrue("controller must validate: " + complete,
-                Reply.of(complete).bool("isComplete", false));
+                Reply.of(complete).bool("isComplete"));
 
         // 2) Power the plug below the controller + enable the machine.
         //    isRunning() = getMachineEnabled() && isStateActive(...); a freshly

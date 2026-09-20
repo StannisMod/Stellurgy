@@ -259,7 +259,7 @@ public class VSJumpDriveFixtureBoardingE2ETest extends AbstractSharedVsClientE2E
         assertTrue("the ship must find its own NAVIGATION COMPUTER from the flight computer. That "
                         + "search is by the console's stored link back to this computer and adopts "
                         + "nothing, so it is the assembler's welding that is under test here: " + gate,
-                Reply.of(gate).bool("navComputer", false));
+                Reply.of(gate).bool("navComputer"));
 
         int[] navSub = add(afcSub, OFF_NAV);
         NavStatus navStatus = NavStatus.at(this::exec, 0, navSub[0], navSub[1], navSub[2]);
@@ -687,6 +687,6 @@ public class VSJumpDriveFixtureBoardingE2ETest extends AbstractSharedVsClientE2E
     }
 
     private static String readGroup(String json, String field) {
-        return Reply.of(json).textOr(field, "");
+        return Reply.of(json).text(field);
     }
 }

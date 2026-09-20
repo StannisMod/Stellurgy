@@ -149,9 +149,9 @@ public class VSShipCellSeamE2ETest extends AbstractSharedServerTest {
         long carryMark = events.mark();
         String carry = exec("artest space seam-carry " + sourceSlot + " id " + arShipId);
         assertTrue("production does not agree the ship has left its cell (its own predicate on the "
-                + "live pose): " + carry, Reply.of(carry).bool("wouldCarry", false));
+                + "live pose): " + carry, Reply.of(carry).bool("wouldCarry"));
         assertTrue("the carry did not start — the reason is in the reply: " + carry,
-                Reply.of(carry).bool("started", false));
+                Reply.of(carry).bool("started"));
         // The carry moved THIS ship. Without the id the verb takes the slot's first SETTLED row, and
         // a slot that has held two craft answers `started:true` for the wrong one — after which every
         // assertion below reads a ledger row nobody moved.
@@ -258,7 +258,7 @@ public class VSShipCellSeamE2ETest extends AbstractSharedServerTest {
         assertTrue("the body could not be dropped: " + drop, Reply.of(drop).ok());
         assertTrue("PRODUCTION's own aboard predicate says this body is not on the ship, so the carry "
                 + "is under no obligation to take it and this scenario would pin nothing: " + drop,
-                Reply.of(drop).bool("aboard", false));
+                Reply.of(drop).bool("aboard"));
         String bodyId = extractString(drop, "uuid");
         assertTrue("the drop reported no uuid to follow the body by: " + drop, bodyId != null);
 
@@ -267,18 +267,18 @@ public class VSShipCellSeamE2ETest extends AbstractSharedServerTest {
         String beforeCarry = exec("artest space loose-body-find " + bodyId + " "
                 + arranged.sourceSlot + " " + settledVsId);
         assertTrue("the body cannot be found in the world it was just dropped into: " + beforeCarry,
-                Reply.of(beforeCarry).bool("found", false));
+                Reply.of(beforeCarry).bool("found"));
         assertTrue("before the carry the body must be ABOARD the source ship, or what follows is not "
-                + "about a carry at all: " + beforeCarry, Reply.of(beforeCarry).bool("aboard", false));
+                + "about a carry at all: " + beforeCarry, Reply.of(beforeCarry).bool("aboard"));
 
         // Marked BEFORE the carry: a mark taken afterwards can miss the record it is about.
         long carryMark = events.mark();
         String carry = exec("artest space seam-carry " + arranged.sourceSlot + " id "
                 + arranged.arShipId);
         assertTrue("production does not agree the ship has left its cell: " + carry,
-                Reply.of(carry).bool("wouldCarry", false));
+                Reply.of(carry).bool("wouldCarry"));
         assertTrue("the carry did not start — the reason is in the reply: " + carry,
-                Reply.of(carry).bool("started", false));
+                Reply.of(carry).bool("started"));
         // The carry moved the ship this body was dropped on, and not the slot's first settled row.
         assertEquals("the carry named a different ship: " + carry,
                 arranged.arShipId, extractString(carry, "shipId"));
@@ -339,8 +339,10 @@ public class VSShipCellSeamE2ETest extends AbstractSharedServerTest {
                 () -> {
                     found[0] = exec("artest space loose-body-find " + bodyId + " "
                             + carriedSlot + " " + dstVsId);
-                    return Reply.of(found[0]).bool("found", false)
-                            && Reply.of(found[0]).bool("aboard", false);
+                    // absence is the answer: this is a WAIT, and the reply it reads before the
+                    // thing happens does not carry the field at all.
+                    return Reply.of(found[0]).boolOr("found", false)
+                            && Reply.of(found[0]).boolOr("aboard", false);
                 });
         // The two failure modes are separated on the way out, because they mean different things: a
         // body that never arrived is a crossing that dropped its cargo; a body that arrived and is not
@@ -361,7 +363,7 @@ public class VSShipCellSeamE2ETest extends AbstractSharedServerTest {
                         + " | the carry is still holding: " + stash
                         + " (found in the source = never stowed; held in the stash = stowed and"
                         + " never released; neither = lost outright)",
-                carried || Reply.of(found[0]).bool("found", false));
+                carried || Reply.of(found[0]).bool("found"));
         // The SHIP's pose is read again HERE, beside the body's, because "not aboard" has two very
         // different causes and one number cannot separate them: the body was put down away from the
         // deck, or the deck moved after it was put down. The two positions side by side say which.
@@ -445,7 +447,7 @@ public class VSShipCellSeamE2ETest extends AbstractSharedServerTest {
                 + " " + settledVsId);
         assertTrue("the body could not be dropped: " + drop, Reply.of(drop).ok());
         assertTrue("PRODUCTION's own aboard predicate says this body is not on the ship, so the carry "
-                + "is under no obligation to take it: " + drop, Reply.of(drop).bool("aboard", false));
+                + "is under no obligation to take it: " + drop, Reply.of(drop).bool("aboard"));
         String bodyId = extractString(drop, "uuid");
         assertTrue("the drop reported no uuid to follow the body by: " + drop, bodyId != null);
 
@@ -453,9 +455,9 @@ public class VSShipCellSeamE2ETest extends AbstractSharedServerTest {
         String carry = exec("artest space seam-carry " + arranged.sourceSlot + " id "
                 + arranged.arShipId);
         assertTrue("production does not agree the ship has left its cell: " + carry,
-                Reply.of(carry).bool("wouldCarry", false));
+                Reply.of(carry).bool("wouldCarry"));
         assertTrue("the carry did not start — the reason is in the reply: " + carry,
-                Reply.of(carry).bool("started", false));
+                Reply.of(carry).bool("started"));
 
         long[] src = cellSectors(arranged.sourceCell);
         String destSlotReply = exec("artest space cell-slot " + (src[0] + 1) + " " + src[1] + " "
@@ -484,8 +486,10 @@ public class VSShipCellSeamE2ETest extends AbstractSharedServerTest {
                 () -> {
                     found[0] = exec("artest space loose-body-find " + bodyId + " "
                             + carriedSlot + " " + dstVsId);
-                    return Reply.of(found[0]).bool("found", false)
-                            && Reply.of(found[0]).bool("aboard", false);
+                    // absence is the answer: this is a WAIT, and the reply it reads before the
+                    // thing happens does not carry the field at all.
+                    return Reply.of(found[0]).boolOr("found", false)
+                            && Reply.of(found[0]).boolOr("aboard", false);
                 });
         assertTrue("the cargo never came to rest on the arrived ship: " + found[0]
                 + " ship=" + arrivedShip(carriedSlot, arranged.arShipId), landedAboard);
@@ -539,7 +543,7 @@ public class VSShipCellSeamE2ETest extends AbstractSharedServerTest {
         assertTrue("the cargo was put down on the deck and then left behind by its own ship: the "
                         + "craft travelled " + Math.abs(afterY - beforeY) + " blocks and the body is "
                         + still + "; ship=" + shipAfter.raw(),
-                Reply.of(still).bool("found", false) && Reply.of(still).bool("aboard", false));
+                Reply.of(still).bool("found") && Reply.of(still).bool("aboard"));
     }
 
     private ShipPastItsFace arrangeAShipPastItsFace() throws Exception {
@@ -555,7 +559,7 @@ public class VSShipCellSeamE2ETest extends AbstractSharedServerTest {
         String coords = placeFixture(SRC_X, SRC_Y, SRC_Z, "with-pilot-seat");
         String asm = exec("artest rocket assemble 0 " + coords);
         assertTrue("with VS an AFC-bearing build must route to a ship (no rocket): " + asm,
-                (Reply.of(asm).integerOr("rocketCount", Integer.MIN_VALUE) == 0));
+                (Reply.of(asm).integer("rocketCount") == 0));
 
         // THIS TEST'S OWN SHIP, named by the assembler that built it. Everything downstream is asked
         // about THIS id and no other. The identity is not looked up — a lookup ("the first ledgered
@@ -586,7 +590,7 @@ public class VSShipCellSeamE2ETest extends AbstractSharedServerTest {
 
         String heldInput = exec("artest vs ff-input-by-id 0 " + srcVsId + " 0 1 0 0 0 0");
         assertTrue("the held input must reach this ship's flight computer: " + heldInput,
-                Reply.of(heldInput).bool("afcResolved", false));
+                Reply.of(heldInput).bool("afcResolved"));
         assertTrue("climb teleport failed",
                 Reply.of(exec("artest vs teleport-ship-by-id 0 " + srcVsId + " "
                         + (int) sx + " " + ABOVE_CEILING_Y + " " + (int) sz)
@@ -610,8 +614,11 @@ public class VSShipCellSeamE2ETest extends AbstractSharedServerTest {
                 () -> {
                     String gate = entryGate(srcVsId);
                     gateTrace.append(gateDigest(gate)).append(' ');
-                    return Reply.of(gate).bool("wouldTrigger", false)
-                            || (!Reply.of(gate).bool("afcResolved", true));
+                    // absence is the answer: this WAITS for the craft to climb over the entry
+                    // line, and the gate answers `afcResolved:false` with no decision in it
+                    // until the flight computer resolves.
+                    return Reply.of(gate).boolOr("wouldTrigger", false)
+                            || (!Reply.of(gate).boolOr("afcResolved", false));
                 });
         assertTrue("the climb teleport reported ok and the craft is STILL not above the entry line, "
                         + "so nothing below is about the on-ramp — it is about a craft that never "
@@ -751,14 +758,14 @@ public class VSShipCellSeamE2ETest extends AbstractSharedServerTest {
         String released = exec("artest vs ff-input-by-id " + sourceSlot + " " + settledVsId
                 + " 0 0 0 0 0 0");
         assertTrue("the throttle could not be released, so the ship stays under power: " + released,
-                Reply.of(released).bool("afcResolved", false));
+                Reply.of(released).bool("afcResolved"));
         // ASSERTED ON THE READ-BACK, never on "the command resolved". The reply carries the cruise
         // the computer now holds, and that — not whether a message arrived — is the quantity this
         // step exists to establish.
         String stopped = exec("artest vs ff-cruise-by-id " + sourceSlot + " " + settledVsId
                 + " 0 0 0");
         assertTrue("the cruise could not be commanded, so the craft keeps flying its last setpoint: "
-                + stopped, Reply.of(stopped).bool("afcResolved", false));
+                + stopped, Reply.of(stopped).bool("afcResolved"));
         double cruiseF = extractDouble(stopped, "cruiseForward");
         double cruiseR = extractDouble(stopped, "cruiseRight");
         double cruiseU = extractDouble(stopped, "cruiseUp");
@@ -857,13 +864,15 @@ public class VSShipCellSeamE2ETest extends AbstractSharedServerTest {
      * the line it is being compared with, and the two numbers have different owners.</p>
      */
     private static String gateDigest(String gate) {
-        if (!Reply.of(gate).bool("afcResolved", false)) {
+        // absence is the answer: this builds a DIAGNOSTIC line for a failure message, and a
+        // gate reply that carries nothing is exactly the "[afc-gone]" it reports.
+        if (!Reply.of(gate).boolOr("afcResolved", false)) {
             return "[afc-gone]";
         }
         return "[y=" + extractDouble(gate, "shipY") + "/" + extractInt(gate, "ceiling")
-                + " trig=" + (Reply.of(gate).bool("wouldTrigger", false))
-                + " latched=" + (Reply.of(gate).bool("latched", false))
-                + " posed=" + (Reply.of(gate).bool("posed", false))
+                + " trig=" + (Reply.of(gate).reported("wouldTrigger"))
+                + " latched=" + (Reply.of(gate).reported("latched"))
+                + " posed=" + (Reply.of(gate).reported("posed"))
                 // The computer's own tick census, because every other field here is an INPUT to a
                 // check that only runs if the computer runs: a reading with all four inputs right
                 // and `trig=true` still says nothing until this number is seen to MOVE.
@@ -947,7 +956,7 @@ public class VSShipCellSeamE2ETest extends AbstractSharedServerTest {
         String reply = exec("artest vs ship-uuid " + slotDim + " " + durableShipId);
         assertTrue("no physics ship in dim " + slotDim + " carries this test's durable id "
                 + durableShipId + " — the craft is not there, or not assembled yet: " + reply,
-                Reply.of(reply).bool("found", false));
+                Reply.of(reply).bool("found"));
         String vsId = extractString(reply, "id");
         assertTrue("the translation returned no id: " + reply, vsId != null);
         return vsId;
@@ -984,10 +993,16 @@ public class VSShipCellSeamE2ETest extends AbstractSharedServerTest {
 
     /** A whole number too wide for an int — an identity hash is one. {@code Long.MIN_VALUE} absent. */
     private static long extractLong(String json, String key) {
+        // absence is the answer, and WHICH answer is the CALLER's: this verb is handed a
+        // FIELD name, so it cannot know what a missing one means — and the callers here
+        // include waits, which read the shape that does not carry the field yet.
         return (long) Reply.of(json).numberOr(key, Long.MIN_VALUE);
     }
 
     private static int extractInt(String json, String key) {
+        // absence is the answer, and WHICH answer is the CALLER's: this verb is handed a
+        // FIELD name, so it cannot know what a missing one means — and the callers here
+        // include waits, which read the shape that does not carry the field yet.
         return Reply.of(json).integerOr(key, Integer.MIN_VALUE);
     }
 
@@ -998,10 +1013,16 @@ public class VSShipCellSeamE2ETest extends AbstractSharedServerTest {
      * would make a missing field read as "the ship is at the origin".
      */
     private static double extractDouble(String json, String key) {
+        // absence is the answer, and WHICH answer is the CALLER's: this verb is handed a
+        // FIELD name, so it cannot know what a missing one means — and the callers here
+        // include waits, which read the shape that does not carry the field yet.
         return Reply.of(json).numberOr(key, Double.NaN);
     }
 
     private static String extractString(String json, String key) {
-        return Reply.of(json).text(key);
+        // absence is the answer, and WHICH answer is the CALLER's: this verb is handed a
+        // FIELD name, so it cannot know what a missing one means — and the callers here
+        // include waits, which read the shape that does not carry the field yet.
+        return Reply.of(json).textOr(key, null);
     }
 }

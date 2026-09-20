@@ -72,7 +72,7 @@ public class StationControllersSmokeTest extends AbstractSharedServerTest {
         String place = exec("artest place 0 " + cx + " " + CY + " " + CZ
                 + " " + registryName);
         assertTrue("block " + registryName + " must place: " + place,
-                Reply.of(place).bool("placed", false));
+                Reply.of(place).bool("placed"));
 
         String info = exec("artest machine info 0 " + cx + " " + CY + " " + CZ);
         assertTrue("block " + registryName + " must produce tile "

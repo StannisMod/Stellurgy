@@ -165,7 +165,9 @@ public class MissionLifecyclePyramidTest extends AbstractSharedServerTest {
         for (int attempt = 0; attempt < 30; attempt++) {
             ok(client().execute("artest satellite force-tick-dim 0"));
             state = ok(client().execute("artest mission state " + mid));
-            if ("mission not found".equals(Reply.of(state).text("error"))) {
+            // absence is the answer: a mission that still EXISTS answers no `error` at all,
+            // so "no error" is the not-yet-pruned state this loop is waiting out.
+            if ("mission not found".equals(Reply.of(state).textOr("error", null))) {
                 pruned = true;
                 break;
             }

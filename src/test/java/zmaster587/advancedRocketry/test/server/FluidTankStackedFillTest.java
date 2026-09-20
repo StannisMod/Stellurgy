@@ -64,7 +64,7 @@ public class FluidTankStackedFillTest extends AbstractSharedServerTest {
                         + " advancedrocketry:liquidTank"));
         assertTrue("liquidTank place failed at (" + x + "," + y + "," + z
                         + "): " + resp,
-                Reply.of(resp).bool("placed", false));
+                Reply.of(resp).bool("placed"));
     }
 
     /** Return the {@code capacity} reported by {@code fluid stored}.
@@ -83,7 +83,7 @@ public class FluidTankStackedFillTest extends AbstractSharedServerTest {
         String resp = join(client().execute(
                 "artest fluid stored 0 " + x + " " + y + " " + z));
         assertTrue("fluid stored must succeed: " + resp,
-                Reply.of(resp).bool("hasFluid", false));
+                Reply.of(resp).bool("hasFluid"));
         // An empty tank reports `"fluid":null` and no amount, which is a reading and not a failure.
         return FluidStored.of(resp).amount(0);
     }

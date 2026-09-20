@@ -139,7 +139,10 @@ final class WorldCommandFixtures {
      * neither.</p>
      */
     private static String matchOrThrow(String src, String field) {
-        String value = Reply.of("artest planet info", src).text(field);
+        // absence is the answer, and WHICH answer is the CALLER's: this verb is handed a
+        // FIELD name, so it cannot know what a missing one means — and the callers here
+        // include waits, which read the shape that does not carry the field yet.
+        String value = Reply.of("artest planet info", src).textOr(field, null);
         if (value == null) {
             throw new AssertionError("field \"" + field + "\" not found in: " + src);
         }

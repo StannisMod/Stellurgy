@@ -57,7 +57,7 @@ public class TileMachineDepthRound2Test extends AbstractSharedServerTest {
         String r = ok(client().execute(
                 "artest place " + DIM + " " + x + " " + y + " " + z + " " + blockId));
         assertTrue("place(" + blockId + ") at " + x + "," + y + "," + z + " failed: " + r,
-                Reply.of(r).bool("placed", false));
+                Reply.of(r).bool("placed"));
     }
 
     @Test

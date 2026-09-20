@@ -86,18 +86,18 @@ public class VSJumpCarriesLooseBodiesE2ETest extends AbstractSharedServerTest {
         // same one the hyperspace void judges a crew member by. A green here means a later red is
         // about the carry.
         requireArranged("the dropped body must be ABOARD by the definition the crossing uses,"
-                + " not merely near the ship: " + dropped, Reply.of(dropped).bool("aboard", false));
+                + " not merely near the ship: " + dropped, Reply.of(dropped).bool("aboard"));
 
         // Marked BEFORE the command whose effect is awaited.
         long transitMark = events.mark();
         String begin = exec("artest space transit-begin " + originDim + " 1 64 1 " + HYPERSPACE_JUMP_SPEED);
-        assertTrue("the transit must begin: " + begin, Reply.of(begin).bool("began", false));
+        assertTrue("the transit must begin: " + begin, Reply.of(begin).bool("began"));
 
         // No pump: the server advances the jump. Waited for as the arrival production announces.
-        String arrivedRecord = events.awaitRecordWithField(transitMark, "ship_transit_ended","route", "HYPERSPACE",
+        String arrivedRecord = events.awaitRecordWithFields(transitMark, "ship_transit_ended",
                 "the jump never completed; the transit now reads "
                         + exec("artest space transit-status"),
-                ARRIVAL_TICKS);
+                ARRIVAL_TICKS, "ship", setup.requireDurableId(), "route", "HYPERSPACE");
         int targetDim = extractInt(arrivedRecord, "dim");
         assertTrue("the arrival was announced but names no dimension: " + arrivedRecord,
                 targetDim >= 0);
@@ -159,16 +159,25 @@ public class VSJumpCarriesLooseBodiesE2ETest extends AbstractSharedServerTest {
     }
 
     private static int extractInt(String json, String key) {
+        // absence is the answer, and WHICH answer is the CALLER's: this verb is handed a
+        // FIELD name, so it cannot know what a missing one means — and the callers here
+        // include waits, which read the shape that does not carry the field yet.
         return Reply.of(json).integerOr(key, -1);
     }
 
     private static String extractString(String json, String key) {
         assertTrue("expected string \"" + key + "\" in: " + json, Reply.of(json).has(key));
-        return Reply.of(json).text(key);
+        // absence is the answer, and WHICH answer is the CALLER's: this verb is handed a
+        // FIELD name, so it cannot know what a missing one means — and the callers here
+        // include waits, which read the shape that does not carry the field yet.
+        return Reply.of(json).textOr(key, null);
     }
 
     private static double extractDouble(String json, String key) {
         assertTrue("expected number \"" + key + "\" in: " + json, Reply.of(json).has(key));
-        return Reply.of(json).number(key);
+        // absence is the answer, and WHICH answer is the CALLER's: this verb is handed a
+        // FIELD name, so it cannot know what a missing one means — and the callers here
+        // include waits, which read the shape that does not carry the field yet.
+        return Reply.of(json).numberOr(key, Double.NaN);
     }
 }

@@ -48,7 +48,7 @@ public class RocketLaunchSmokeTest extends AbstractHeadlessServerTest {
         String assemble = String.join("\n", client().execute(
                 "artest rocket assemble 0 " + bx + " " + by + " " + bz));
         assertTrue("assemble didn't produce a rocket: " + assemble,
-                Reply.of(assemble).ok() && !(Reply.of(assemble).integerOr("entityId", Integer.MIN_VALUE) == -1));
+                Reply.of(assemble).ok() && !(Reply.of(assemble).integer("entityId") == -1));
 
         Reply emReply = Reply.of(assemble);
         assertTrue("assemble response missing entityId: " + assemble, emReply.has(ENT_ID));
@@ -61,7 +61,9 @@ public class RocketLaunchSmokeTest extends AbstractHeadlessServerTest {
         assertTrue("instant launch errored: " + launchInstant,
                 Reply.of(launchInstant).ok());
 
-        if (Reply.of(launchInstant).bool("isInFlight", false) || Reply.of(launchInstant).bool("isInOrbit", false)) {
+        // absence is the answer: this is the fast path — a launch that already took answers
+        // both flags, and a reply carrying neither falls through to the slow path below.
+        if (Reply.of(launchInstant).boolOr("isInFlight", false) || Reply.of(launchInstant).boolOr("isInOrbit", false)) {
             // Real path succeeded.
             return;
         }
@@ -72,6 +74,6 @@ public class RocketLaunchSmokeTest extends AbstractHeadlessServerTest {
         assertTrue("force launch errored: " + launchForce,
                 Reply.of(launchForce).ok());
         assertTrue("force launch didn't set isInFlight=true: " + launchForce,
-                Reply.of(launchForce).bool("isInFlight", false));
+                Reply.of(launchForce).bool("isInFlight"));
     }
 }

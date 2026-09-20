@@ -77,7 +77,7 @@ public final class RocketInfo {
             this.pitch = reply.number("ffInputPitch");
             this.roll = reply.number("ffInputRoll");
             this.brake = reply.number("ffInputBrake");
-            this.cut = reply.bool("ffInputCut", false);
+            this.cut = reply.bool("ffInputCut");
         }
 
         @Override
@@ -154,24 +154,24 @@ public final class RocketInfo {
         this.reply = reply;
         this.raw = raw;
         this.entityId = reply.integer("entityId");
-        this.uuid = reply.textOr("uuid", null);
-        this.entityClass = requireText(reply, "entityClass", raw);
+        this.uuid = reply.text("uuid");
+        this.entityClass = reply.text("entityClass");
         this.dim = reply.integer("dim");
         this.posX = reply.number("posX");
         this.posY = reply.number("posY");
         this.posZ = reply.number("posZ");
-        this.inFlight = reply.bool("isInFlight", false);
-        this.inOrbit = reply.bool("isInOrbit", false);
-        this.flightMode = requireText(reply, "flightMode", raw);
+        this.inFlight = reply.bool("isInFlight");
+        this.inOrbit = reply.bool("isInOrbit");
+        this.flightMode = reply.text("flightMode");
         this.ticksExisted = reply.integer("ticksExisted");
         this.launchCounter = reply.integer("launchCounter");
         this.destinationDim = reply.integer("destinationDim");
-        this.errorMessage = requireText(reply, "errorMessage", raw);
-        this.flightAssistOn = reply.bool("flightAssistOn", false);
-        this.hasStorage = reply.bool("hasStorage", false);
-        this.advancedFlightComputerPresent = reply.bool("advancedFlightComputerPresent", false);
-        this.guidanceComputerPresent = reply.bool("guidanceComputerPresent", false);
-        this.guidanceComputerSlotOccupied = reply.bool("guidanceComputerSlotOccupied", false);
+        this.errorMessage = reply.text("errorMessage");
+        this.flightAssistOn = reply.bool("flightAssistOn");
+        this.hasStorage = reply.bool("hasStorage");
+        this.advancedFlightComputerPresent = reply.bool("advancedFlightComputerPresent");
+        this.guidanceComputerPresent = reply.bool("guidanceComputerPresent");
+        this.guidanceComputerSlotOccupied = reply.bool("guidanceComputerSlotOccupied");
         this.thrust = reply.integer("thrust");
         this.weightNoFuel = reply.number("weight_no_fuel");
         this.breakingProb = reply.number("breakingProb");
@@ -201,8 +201,12 @@ public final class RocketInfo {
         String text = String.valueOf(infoReply);
         Reply reply = Reply.of("artest rocket info", text);
         if (isNotFound(reply)) {
+            // absence is the answer here: this is the not-found shape, and the id is being
+            // named in a message that must reach the reader whatever the reply carried. A
+            // refusal in a failure message replaces the arrangement's own diagnosis with the
+            // reader's.
             ArrangementFailure.arrangementFailed("`artest rocket info` does not know entity "
-                    + reply.integerOr("entityId", Integer.MIN_VALUE) + ", so nothing here is a"
+                    + reply.reported("entityId") + ", so nothing here is a"
                     + " reading of a craft — the craft was never built, or something else removed"
                     + " it: " + text);
         }
@@ -245,27 +249,15 @@ public final class RocketInfo {
     }
 
     /**
-     * A field the verb always writes on a craft report — absence is a broken probe, never a
-     * reading, so it refuses rather than answering {@code null} into whatever asked for it.
-     */
-    private static String requireText(Reply reply, String field, String raw) {
-        String value = reply.text(field);
-        if (value == null) {
-            throw new AssertionError("`artest rocket info` reports every craft's `" + field
-                    + "`, so a report without one is not this verb's answer: " + raw);
-        }
-        return value;
-    }
-
-    /**
-     * The craft's persistent UUID, refusing when the reply did not carry one.
+     * The craft's persistent UUID, refusing when the reply carried an empty one.
      *
      * <p>A {@code require} and not a field because this value TRAVELS: it is pasted into
-     * {@code artest rocket find-by-uuid <uuid>}, and an absent one would go out as the four
-     * characters {@code null} and come back as "no craft has that id".</p>
+     * {@code artest rocket find-by-uuid <uuid>}, and an empty one would go out as nothing at all
+     * and come back as "no craft has that id". An ABSENT uuid is refused a level lower, by the
+     * reader that built this object.</p>
      */
     public String requireUuid() {
-        if (uuid == null || uuid.isEmpty()) {
+        if (uuid.isEmpty()) {
             throw new AssertionError("`artest rocket info` answered no uuid for entity " + entityId
                     + ", and this id is about to be asked of another verb: " + raw);
         }
@@ -355,7 +347,7 @@ public final class RocketInfo {
         long total = 0;
         for (String perType : reply.objectValues("fuel")) {
             total += (long) Reply.of("artest rocket info fuel entry", perType)
-                    .numberOr("capacity", 0);
+                    .number("capacity");
         }
         return total;
     }
@@ -365,7 +357,7 @@ public final class RocketInfo {
         long total = 0;
         for (String perType : reply.objectValues("fuel")) {
             total += (long) Reply.of("artest rocket info fuel entry", perType)
-                    .numberOr("amount", 0);
+                    .number("amount");
         }
         return total;
     }

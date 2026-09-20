@@ -46,7 +46,7 @@ public class AtmosphereOxygenSmokeTest extends AbstractHeadlessServerTest {
         assertTrue("baseline atmosphere probe errored: " + baseline,
                 !Reply.of(baseline).has("error"));
         assertTrue("baseline Earth not breathable — env contamination? " + baseline,
-                Reply.of(baseline).bool("breathable", false));
+                Reply.of(baseline).bool("breathable"));
 
         String planet = String.join("\n", client().execute("artest planet info 0"));
         int originalDensity = extractInt(planet, "atmosphereDensity");
@@ -56,11 +56,11 @@ public class AtmosphereOxygenSmokeTest extends AbstractHeadlessServerTest {
             String setResp = String.join("\n", client().execute("artest atmosphere set-density 0 0"));
             assertTrue("set-density failed: " + setResp, Reply.of(setResp).ok());
             assertTrue("set-density did not stick: " + setResp,
-                    (Reply.of(setResp).integerOr("newDensity", Integer.MIN_VALUE) == 0));
+                    (Reply.of(setResp).integer("newDensity") == 0));
 
             String vacResp = String.join("\n", client().execute("artest atmosphere get 0 0 70 0"));
             assertTrue("density=0 should yield non-breathable, got: " + vacResp,
-                    (!Reply.of(vacResp).bool("breathable", true)));
+                    (!Reply.of(vacResp).bool("breathable")));
         } finally {
             client().execute("artest atmosphere set-density 0 " + originalDensity);
         }
@@ -87,12 +87,12 @@ public class AtmosphereOxygenSmokeTest extends AbstractHeadlessServerTest {
 
         String place = String.join("\n", client().execute(
                 "artest place 0 " + bx + " " + by + " " + bz + " advancedrocketry:oxygenDetection"));
-        assertTrue("detector did not place: " + place, Reply.of(place).bool("placed", false));
+        assertTrue("detector did not place: " + place, Reply.of(place).bool("placed"));
 
         // Snapshot pre-tick — defaults to unpowered.
         String pre = String.join("\n", client().execute(
                 "artest atmosphere detector-output 0 " + bx + " " + by + " " + bz));
-        assertTrue("pre-tick probe failed: " + pre, Reply.of(pre).bool("isDetector", false));
+        assertTrue("pre-tick probe failed: " + pre, Reply.of(pre).bool("isDetector"));
         assertEquals("detector should default to AIR mode: " + pre,
                 "air", matchOrFail("detectorMode", pre));
 
@@ -104,12 +104,12 @@ public class AtmosphereOxygenSmokeTest extends AbstractHeadlessServerTest {
                 "artest atmosphere detector-force-sample 0 " + bx + " " + by + " " + bz));
         assertTrue("force-sample failed: " + sample1, Reply.of(sample1).ok());
         assertTrue("AIR target on overworld must report detected=true: " + sample1,
-                Reply.of(sample1).bool("detected", false));
+                Reply.of(sample1).bool("detected"));
 
         String postAir = String.join("\n", client().execute(
                 "artest atmosphere detector-output 0 " + bx + " " + by + " " + bz));
         assertTrue("detector should be POWERED after detecting AIR: " + postAir,
-                Reply.of(postAir).bool("powered", false));
+                Reply.of(postAir).bool("powered"));
         assertEquals("strongPower should be 15 when POWERED: " + postAir,
                 "15", matchOrFail("strongPower", postAir));
 
@@ -124,12 +124,12 @@ public class AtmosphereOxygenSmokeTest extends AbstractHeadlessServerTest {
         assertTrue("force-sample (vacuum target) failed: " + sample2,
                 Reply.of(sample2).ok());
         assertTrue("vacuum target on overworld must report detected=false: " + sample2,
-                (!Reply.of(sample2).bool("detected", true)));
+                (!Reply.of(sample2).bool("detected")));
 
         String postVacuum = String.join("\n", client().execute(
                 "artest atmosphere detector-output 0 " + bx + " " + by + " " + bz));
         assertTrue("detector should be UNPOWERED when looking for vacuum on Earth: "
-                + postVacuum, (!Reply.of(postVacuum).bool("powered", true)));
+                + postVacuum, (!Reply.of(postVacuum).bool("powered")));
         assertEquals("strongPower should be 0 when UNPOWERED: " + postVacuum,
                 "0", matchOrFail("strongPower", postVacuum));
     }
@@ -152,13 +152,13 @@ public class AtmosphereOxygenSmokeTest extends AbstractHeadlessServerTest {
 
         String place = String.join("\n", client().execute(
                 "artest place 0 " + bx + " " + by + " " + bz + " advancedrocketry:oxygenScrubber"));
-        assertTrue("scrubber did not place: " + place, Reply.of(place).bool("placed", false));
+        assertTrue("scrubber did not place: " + place, Reply.of(place).bool("placed"));
 
         // Empty scrubber — useCharge must report consumed=false.
         String emptyConsume = String.join("\n", client().execute(
                 "artest scrubber consume 0 " + bx + " " + by + " " + bz));
         assertTrue("empty scrubber must reject useCharge: " + emptyConsume,
-                (!Reply.of(emptyConsume).bool("consumed", true)));
+                (!Reply.of(emptyConsume).bool("consumed")));
 
         // Load a fresh cartridge into slot 0.
         String fill = String.join("\n", client().execute(
@@ -170,7 +170,7 @@ public class AtmosphereOxygenSmokeTest extends AbstractHeadlessServerTest {
         String firstConsume = String.join("\n", client().execute(
                 "artest scrubber consume 0 " + bx + " " + by + " " + bz));
         assertTrue("first consume should succeed: " + firstConsume,
-                Reply.of(firstConsume).bool("consumed", false));
+                Reply.of(firstConsume).bool("consumed"));
         int damageBefore = extractInt(firstConsume, "damageBefore");
         int damageAfter = extractInt(firstConsume, "damageAfter");
         assertEquals("damage must increment by exactly 1 per consume — got "
@@ -209,7 +209,7 @@ public class AtmosphereOxygenSmokeTest extends AbstractHeadlessServerTest {
 
         String place = String.join("\n", client().execute(
                 "artest place 0 " + bx + " " + by + " " + bz + " advancedrocketry:oxygenCharger"));
-        assertTrue("charge pad did not place: " + place, Reply.of(place).bool("placed", false));
+        assertTrue("charge pad did not place: " + place, Reply.of(place).bool("placed"));
 
         // Pad's tank caps at 16 000 mB; 4 000 leaves headroom for the test
         // either way. We deliberately use less than the chestplate's max-air
@@ -254,17 +254,17 @@ public class AtmosphereOxygenSmokeTest extends AbstractHeadlessServerTest {
         // Baseline: vanilla armor must NOT register as an air container.
         String bare = String.join("\n", client().execute(
                 "artest enchant validates-as-airsuit minecraft:diamond_chestplate false"));
-        assertTrue("baseline probe failed: " + bare, Reply.of(bare).bool("registered", false));
+        assertTrue("baseline probe failed: " + bare, Reply.of(bare).bool("registered"));
         assertTrue("vanilla diamond chestplate must NOT be an air container: " + bare,
-                (!Reply.of(bare).bool("isAirContainer", true)));
+                (!Reply.of(bare).bool("isAirContainer")));
 
         // With the spacebreathing enchant: same stack now passes the gate.
         String enchanted = String.join("\n", client().execute(
                 "artest enchant validates-as-airsuit minecraft:diamond_chestplate true"));
         assertTrue("enchanted probe failed: " + enchanted,
-                Reply.of(enchanted).bool("registered", false));
+                Reply.of(enchanted).bool("registered"));
         assertTrue("spacebreathing-enchanted armor must register as air container: "
-                + enchanted, Reply.of(enchanted).bool("isAirContainer", false));
+                + enchanted, Reply.of(enchanted).bool("isAirContainer"));
 
         // Sanity: the enchant itself is registered (defence in depth — if the
         // registration broke, the probe would still synthesise an enchant
@@ -272,7 +272,7 @@ public class AtmosphereOxygenSmokeTest extends AbstractHeadlessServerTest {
         String reg = String.join("\n", client().execute(
                 "artest enchant check advancedrocketry:spacebreathing"));
         assertTrue("spacebreathing enchant missing: " + reg,
-                Reply.of(reg).bool("registered", false));
+                Reply.of(reg).bool("registered"));
     }
 
     /**
@@ -303,7 +303,7 @@ public class AtmosphereOxygenSmokeTest extends AbstractHeadlessServerTest {
         String placeTorch = String.join("\n", client().execute(
                 "artest place 0 " + bx + " " + by + " " + bz + " minecraft:torch"));
         assertTrue("torch did not place: " + placeTorch,
-                Reply.of(placeTorch).bool("placed", false));
+                Reply.of(placeTorch).bool("placed"));
         String preTorch = String.join("\n", client().execute(
                 "artest block at 0 " + bx + " " + by + " " + bz));
         assertTrue("pre-extinguish must be minecraft:torch: " + preTorch,
@@ -344,7 +344,7 @@ public class AtmosphereOxygenSmokeTest extends AbstractHeadlessServerTest {
         String postStone = String.join("\n", client().execute(
                 "artest block at 0 " + sx + " " + by + " " + bz));
         assertTrue("post-drop position must be air: " + postStone,
-                Reply.of(postStone).bool("isAir", false));
+                Reply.of(postStone).bool("isAir"));
 
         // Clean up the torchBlocks list so other tests don't see polluted
         // config state.
@@ -363,6 +363,6 @@ public class AtmosphereOxygenSmokeTest extends AbstractHeadlessServerTest {
     }
 
     private static int extractInt(String haystack, String field) {
-        return Reply.of(haystack).integerOr(field, -1);
+        return Reply.of(haystack).integer(field);
     }
 }

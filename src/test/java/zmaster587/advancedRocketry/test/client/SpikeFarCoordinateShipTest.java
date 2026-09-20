@@ -140,6 +140,9 @@ public class SpikeFarCoordinateShipTest extends AbstractClientE2ETest {
                             + " (arrangement, not the coordinate)");
                     continue;
                 }
+                // absence is the answer: this SWEEPS coordinates and records a verdict per
+                // one, so a probe that answered nothing is this row's failure and not the
+                // end of the sweep.
                 if (!(Reply.of(assemble).integerOr("rocketCount", Integer.MIN_VALUE) == 0)) {
                     verdicts.put(x, "the build did not route to a SHIP: " + oneLine(assemble));
                     continue;
@@ -214,7 +217,8 @@ public class SpikeFarCoordinateShipTest extends AbstractClientE2ETest {
                 }
                 String mounted = exec("artest player mount-entity "
                         + mountInfo.requireDummyId());
-                if (!Reply.of(mounted).bool("mounted", false)) {
+                // absence is the answer, as above: one row's verdict, not the sweep's end.
+                if (!Reply.of(mounted).boolOr("mounted", false)) {
                     verdicts.put(x, "the bot could not mount the seat dummy: " + oneLine(mounted));
                     continue;
                 }
@@ -345,7 +349,7 @@ public class SpikeFarCoordinateShipTest extends AbstractClientE2ETest {
             String assemble = assembleFixture(0);
             assertTrue("the fixture did not assemble", assemble != null);
             assertTrue("the build must route to a ship: " + oneLine(assemble),
-                    (Reply.of(assemble).integerOr("rocketCount", Integer.MIN_VALUE) == 0));
+                    (Reply.of(assemble).integer("rocketCount") == 0));
             for (int i = 0; i < 40 && count("ship-count-all") < 1; i++) {
                 bot().waitTicks(5);
             }
@@ -363,7 +367,7 @@ public class SpikeFarCoordinateShipTest extends AbstractClientE2ETest {
             assertTrue("no seat: " + oneLine(mountInfo.raw()), mountInfo.seatFound);
             int dummyId = mountInfo.requireDummyId();
             assertTrue("could not mount",
-                    Reply.of(exec("artest player mount-entity " + dummyId)).bool("mounted", false));
+                    Reply.of(exec("artest player mount-entity " + dummyId)).bool("mounted"));
             String riding = awaitRiding(dummyId);
             assertTrue("the client never began riding: " + riding, riding == null);
 
@@ -613,10 +617,13 @@ public class SpikeFarCoordinateShipTest extends AbstractClientE2ETest {
 
     private int count(String sub) throws Exception {
         String command = "artest vs " + sub + " 0";
-        return Reply.of(command, exec(command)).integerOr(COUNT, -1);
+        return Reply.of(command, exec(command)).integer(COUNT);
     }
 
     private static double field(String json, String key) {
+        // absence is the answer: this spike SWEEPS coordinates and records a verdict per one,
+        // so a probe that answered nothing for a given x must leave that row unmeasured
+        // rather than end the sweep. The caller tests for NaN.
         return Reply.of(json).numberOr(key, Double.NaN);
     }
 

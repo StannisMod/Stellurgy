@@ -138,7 +138,7 @@ public class PlanetBedSleepClientGroupE2ETest extends AbstractSharedClientE2ETes
         String shipped = exec("artest config get " + FLAG);
         scenario().requireArranged("this scenario is about the SHIPPED default of " + FLAG
                 + ", so it reads it instead of writing it: " + shipped,
-                (!Reply.of(shipped).bool("value", true)));
+                (!Reply.of(shipped).bool("value")));
 
         exec("gamerule doMobSpawning false");
         stageSleepingSite(DIM_LOCKED);
@@ -433,6 +433,9 @@ public class PlanetBedSleepClientGroupE2ETest extends AbstractSharedClientE2ETes
     private static double readDouble(String json, String key) {
         Reply reply = Reply.of(json);
         assertTrue("expected a number \"" + key + "\" in: " + json, reply.has(key));
-        return reply.number(key);
+        // absence is the answer, and WHICH answer is the CALLER's: this verb is handed a
+        // FIELD name, so it cannot know what a missing one means — and the callers here
+        // include waits, which read the shape that does not carry the field yet.
+        return reply.numberOr(key, Double.NaN);
     }
 }

@@ -64,7 +64,7 @@ public class RailgunMultiblockTest extends AbstractSharedServerTest {
         assertTrue("try-complete probe errored: " + tryComplete,
                 Reply.of(tryComplete).ok());
         assertTrue("railgun multiblock didn't validate (isComplete=false): " + tryComplete,
-                Reply.of(tryComplete).bool("isComplete", false));
+                Reply.of(tryComplete).bool("isComplete"));
     }
 
     @Test
@@ -77,7 +77,7 @@ public class RailgunMultiblockTest extends AbstractSharedServerTest {
         String first = join(client().execute(
                 "artest machine try-complete 0 " + cx + " " + cy + " " + cz));
         assertTrue("baseline must validate: " + first,
-                Reply.of(first).bool("isComplete", false));
+                Reply.of(first).bool("isComplete"));
 
         // Top of the core column (y=0 layer struct cell at globalY = cy + 10,
         // globalX = cx, globalZ = cz + 3). Replace with stone.
@@ -90,7 +90,7 @@ public class RailgunMultiblockTest extends AbstractSharedServerTest {
                 "artest machine try-complete 0 " + cx + " " + cy + " " + cz));
         assertTrue("structure stayed complete after core column removal — "
                         + "validator broken: " + broken,
-                (!Reply.of(broken).bool("isComplete", true)));
+                (!Reply.of(broken).bool("isComplete")));
     }
 
     @Test
@@ -103,7 +103,7 @@ public class RailgunMultiblockTest extends AbstractSharedServerTest {
         String first = join(client().execute(
                 "artest machine try-complete 0 " + cx + " " + cy + " " + cz));
         assertTrue("baseline must validate: " + first,
-                Reply.of(first).bool("isComplete", false));
+                Reply.of(first).bool("isComplete"));
 
         // Centre of the y=9 transition layer (titanium centre at globalY = cy+1,
         // globalX = cx, globalZ = cz + 3). Replace with stone.
@@ -116,7 +116,7 @@ public class RailgunMultiblockTest extends AbstractSharedServerTest {
                 "artest machine try-complete 0 " + cx + " " + cy + " " + cz));
         assertTrue("structure stayed complete after transition-layer titanium removal — "
                         + "validator broken: " + broken,
-                (!Reply.of(broken).bool("isComplete", true)));
+                (!Reply.of(broken).bool("isComplete")));
     }
 
     private static String join(java.util.List<String> resp) {

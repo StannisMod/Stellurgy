@@ -56,7 +56,7 @@ public final class EnergyStore {
         this.posX = reply.integer("posX");
         this.posY = reply.integer("posY");
         this.posZ = reply.integer("posZ");
-        this.hasEnergy = reply.bool("hasEnergy", false);
+        this.hasEnergy = reply.bool("hasEnergy");
     }
 
     /**
@@ -119,12 +119,12 @@ public final class EnergyStore {
     /** Whether the store lets energy be taken out of it, and whether it takes any in. */
     public boolean canExtract() {
         requireStore("canExtract");
-        return reply.bool("canExtract", false);
+        return reply.bool("canExtract");
     }
 
     public boolean canReceive() {
         requireStore("canReceive");
-        return reply.bool("canReceive", false);
+        return reply.bool("canReceive");
     }
 
     private long quantity(String field) {
@@ -149,8 +149,8 @@ public final class EnergyStore {
     public String toString() {
         return hasEnergy
                 ? tileClass() + " at " + posX + "," + posY + "," + posZ + " holds "
-                        + reply.text("energyStored") + "/" + reply.text("energyMax")
-                        + " on face " + reply.text("energyFace")
+                        + reply.reported("energyStored") + "/" + reply.reported("energyMax")
+                        + " on face " + reply.reported("energyFace")
                 : tileClass() + " at " + posX + "," + posY + "," + posZ + " has no energy store";
     }
 }

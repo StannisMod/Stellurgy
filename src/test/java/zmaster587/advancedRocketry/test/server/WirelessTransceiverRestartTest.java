@@ -124,7 +124,7 @@ public class WirelessTransceiverRestartTest {
         String r = String.join("\n", h.client().execute(
                 "artest place " + DIM + " " + x + " " + Y + " " + Z
                         + " advancedrocketry:wirelessTransciever"));
-        assertTrue("place failed at x=" + x + ": " + r, Reply.of(r).bool("placed", false));
+        assertTrue("place failed at x=" + x + ": " + r, Reply.of(r).bool("placed"));
     }
 
     private static int pair(RealDedicatedServerHarness h, int xA, int xB) throws Exception {
@@ -170,6 +170,6 @@ public class WirelessTransceiverRestartTest {
     private static boolean extractBool(String field, String haystack) {
         Reply reply = Reply.of(haystack);
         assertTrue("probe response missing `" + field + "`: " + haystack, reply.has(field));
-        return reply.bool(field, false);
+        return reply.bool(field);
     }
 }

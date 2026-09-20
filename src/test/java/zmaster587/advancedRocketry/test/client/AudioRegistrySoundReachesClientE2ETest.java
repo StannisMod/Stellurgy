@@ -74,7 +74,7 @@ public class AudioRegistrySoundReachesClientE2ETest extends AbstractClientE2ETes
                 "artest sound play 0 8 79 8 combustionRocket"));
         assertTrue("sound play probe failed: " + played, Reply.of(played).ok());
         assertTrue("combustionRocket must be present in ForgeRegistries at send time: "
-                + played, Reply.of(played).bool("registered", false));
+                + played, Reply.of(played).bool("registered"));
 
         // Contract: the sound reaches the real client's SoundManager — the client records the play
         // request it was handed, and a failure prints everything the client DID play since the mark

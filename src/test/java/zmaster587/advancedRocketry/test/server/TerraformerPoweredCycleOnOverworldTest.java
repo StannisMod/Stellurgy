@@ -74,7 +74,7 @@ public class TerraformerPoweredCycleOnOverworldTest extends AbstractSharedServer
     public void overworldTerraformerWithNonArConfigFlipStepsDensity() throws Exception {
         String flip = exec("artest config set allowTerraformNonAR true");
         assertTrue("config flip failed: " + flip,
-                Reply.of(flip).ok() && Reply.of(flip).bool("newValue", false));
+                Reply.of(flip).ok() && Reply.of(flip).bool("newValue"));
 
         String fixture = buildAndCompleteFixture(CX_POSITIVE);
         injectPower(fixture, 30_000_000);
@@ -123,11 +123,11 @@ public class TerraformerPoweredCycleOnOverworldTest extends AbstractSharedServer
         String fixture = exec("artest fixture multiblock terraformer "
                 + DIM + " " + cx + " " + CY + " " + CZ);
         assertTrue("terraformer fixture build failed: " + fixture,
-                Reply.of(fixture).ok() && (Reply.of(fixture).integerOr("unresolved", Integer.MIN_VALUE) == 0));
+                Reply.of(fixture).ok() && (Reply.of(fixture).integer("unresolved") == 0));
         String tryComplete = exec("artest machine try-complete "
                 + DIM + " " + cx + " " + CY + " " + CZ);
         assertTrue("terraformer structure failed to complete: " + tryComplete,
-                Reply.of(tryComplete).bool("isComplete", false));
+                Reply.of(tryComplete).bool("isComplete"));
         return fixture;
     }
 
@@ -145,7 +145,7 @@ public class TerraformerPoweredCycleOnOverworldTest extends AbstractSharedServer
     private void enableMachine(int cx) throws Exception {
         String resp = exec("artest machine set-enabled "
                 + DIM + " " + cx + " " + CY + " " + CZ + " true");
-        assertTrue("machine set-enabled failed: " + resp, Reply.of(resp).bool("enabled", false));
+        assertTrue("machine set-enabled failed: " + resp, Reply.of(resp).bool("enabled"));
     }
 
     private void runRefillCycle(String fixture, int cx, int iterations, int ticksPerIter)

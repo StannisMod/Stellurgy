@@ -44,9 +44,9 @@ public final class SeatMount {
     private SeatMount(Reply reply, String raw) {
         this.reply = reply;
         this.raw = raw;
-        this.seatFound = reply.bool("seatFound", false);
-        this.seatsLoaded = reply.integerOr("seatsLoaded", -1);
-        this.reused = reply.bool("reused", false);
+        this.seatFound = reply.bool("seatFound");
+        this.seatsLoaded = reply.integer("seatsLoaded");
+        this.reused = reply.bool("reused");
     }
 
     /**

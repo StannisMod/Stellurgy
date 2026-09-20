@@ -83,7 +83,7 @@ public class SatelliteBuilderPressBuildContractTest extends AbstractSharedServer
         String place = exec("artest place 0 " + x + " " + y + " " + z
                 + " advancedrocketry:satelliteBuilder");
         assertTrue("satellite builder place failed: " + place,
-                Reply.of(place).bool("placed", false));
+                Reply.of(place).bool("placed"));
 
         String resp = exec("artest satellite-builder press-build 0 "
                 + x + " " + y + " " + z + " optical");
@@ -141,7 +141,7 @@ public class SatelliteBuilderPressBuildContractTest extends AbstractSharedServer
         String place = exec("artest place 0 " + x + " " + y + " " + z
                 + " advancedrocketry:satelliteBuilder");
         assertTrue("satellite builder place failed: " + place,
-                Reply.of(place).bool("placed", false));
+                Reply.of(place).bool("placed"));
 
         String resp = exec("artest satellite-builder press-build 0 "
                 + x + " " + y + " " + z + " weatherController");
@@ -159,7 +159,6 @@ public class SatelliteBuilderPressBuildContractTest extends AbstractSharedServer
 
     private static String extract(String src, String field) {
         String value = Reply.of(src).text(field);
-        assertTrue("field `" + field + "` not found in: " + src, value != null);
         return value;
     }
 

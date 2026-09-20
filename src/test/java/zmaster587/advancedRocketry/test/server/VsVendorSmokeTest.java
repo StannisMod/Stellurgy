@@ -38,7 +38,7 @@ public class VsVendorSmokeTest extends AbstractSharedServerTest {
                 + "main source set and ships inside the mod, so an unavailable answer means the "
                 + "vendored tree stopped being compiled in or its integration stopped resolving — "
                 + "and every ship test in the suite is meaningless until that is fixed. Got: " + resp,
-                Reply.of(resp).bool("available", false));
+                Reply.of(resp).bool("available"));
     }
 
     /** A ship registry that answers at all — the integration is wired, not merely on the classpath. */

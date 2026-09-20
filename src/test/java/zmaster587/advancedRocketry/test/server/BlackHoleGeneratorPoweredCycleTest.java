@@ -75,13 +75,13 @@ public class BlackHoleGeneratorPoweredCycleTest extends AbstractSharedServerTest
         String solInfo = exec("artest star get 0");
         Reply sol = Reply.of("artest star get", solInfo);
         assertTrue("could not read Sol's black-hole flag: " + solInfo, sol.has(STAR_BLACKHOLE));
-        originalSolBlackHole = sol.bool(STAR_BLACKHOLE, false);
+        originalSolBlackHole = sol.bool(STAR_BLACKHOLE);
 
         // Load the space dim — BHG production checks
         // world.provider.getDimension() == spaceDimId.
         String load = exec("artest dim load " + SPACE_DIM);
         assertTrue("space dim load failed: " + load,
-                Reply.of(load).bool("loaded", false) || Reply.of(load).ok());
+                Reply.of(load).bool("loaded"));
     }
 
     @After
@@ -199,7 +199,7 @@ public class BlackHoleGeneratorPoweredCycleTest extends AbstractSharedServerTest
         String tryComplete = exec("artest machine try-complete "
                 + dim + " " + cx + " " + cy + " " + cz);
         assertTrue("BHG structure failed to complete: " + tryComplete,
-                Reply.of(tryComplete).bool("isComplete", false));
+                Reply.of(tryComplete).bool("isComplete"));
         return fixture;
     }
 
@@ -213,14 +213,14 @@ public class BlackHoleGeneratorPoweredCycleTest extends AbstractSharedServerTest
                 + inputPos[0] + " " + inputPos[1] + " " + inputPos[2]
                 + " 0 minecraft:dirt 64 0");
         assertTrue("hatch fill failed: " + resp,
-                Reply.of(resp).ok() || (Reply.of(resp).integerOr("count", Integer.MIN_VALUE) == 64));
+                Reply.of(resp).ok() || (Reply.of(resp).integer("count") == 64));
     }
 
     private void enableMachine(int dim, int cx, int cy, int cz) throws Exception {
         String resp = exec("artest machine set-enabled " + dim + " "
                 + cx + " " + cy + " " + cz + " true");
         assertTrue("machine set-enabled failed: " + resp,
-                Reply.of(resp).bool("enabled", false));
+                Reply.of(resp).bool("enabled"));
     }
 
     private void forceTick(int dim, int cx, int cy, int cz, int ticks) throws Exception {

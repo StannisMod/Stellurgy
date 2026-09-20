@@ -88,7 +88,7 @@ public class PlatePressRecipeEndToEndTest extends AbstractSharedServerTest {
         String activate = String.join("\n", c.execute(
                 "artest place 0 " + x + " " + (y + 1) + " " + z + " minecraft:redstone_block"));
         assertTrue("redstone block placement failed: " + activate,
-                Reply.of(activate).bool("placed", false));
+                Reply.of(activate).bool("placed"));
 
         // Scan for EntityItem within 2 blocks of (x+0.5, y-0.5, z+0.5) —
         // the spawn position from BlockSmallPlatePress.checkForMove.

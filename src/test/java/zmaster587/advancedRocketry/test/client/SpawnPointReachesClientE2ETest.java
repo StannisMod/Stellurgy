@@ -236,7 +236,7 @@ public class SpawnPointReachesClientE2ETest {
         // read a spawn point from.
         String load = exec("artest dim load " + PLANET_DIM);
         assertTrue("destination dim must load before it can be inspected: " + load,
-                Reply.of(load).ok() || Reply.of(load).bool("loaded", false));
+                Reply.of(load).bool("loaded"));
         DimInfo destOracle = DimInfo.forDim(this::exec, PLANET_DIM);
         assertTrue("destination server-side spawn must be B: " + destOracle.raw(),
                 destOracle.spawnX() == SPAWN_B_X

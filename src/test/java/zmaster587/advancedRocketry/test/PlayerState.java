@@ -51,7 +51,7 @@ public final class PlayerState {
         this.name = reply.text("player");
         this.health = reply.number("health");
         this.maxHealth = reply.number("maxHealth");
-        this.dim = reply.integerOr("dim", Integer.MIN_VALUE);
+        this.dim = reply.integer("dim");
         this.x = reply.number("posX");
         this.y = reply.number("posY");
         this.z = reply.number("posZ");
@@ -66,7 +66,7 @@ public final class PlayerState {
      */
     public static PlayerState of(String healthReply) {
         Reply reply = Reply.of("artest player health", String.valueOf(healthReply));
-        if (!reply.bool("ok", false)) {
+        if (!reply.ok()) {
             ArrangementFailure.arrangementFailed("the server has no player to report on, so nothing"
                     + " read below would be about anybody: " + healthReply);
         }

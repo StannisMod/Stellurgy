@@ -64,7 +64,7 @@ public class TileGuidanceComputerOffSlotBurnNpeTest extends AbstractHeadlessServ
         String place = exec("artest place " + SPACE_DIM + " " + x + " " + y + " " + z
                 + " advancedrocketry:guidanceComputer");
         assertTrue("guidance computer must place: " + place,
-                Reply.of(place).ok() || Reply.of(place).bool("placed", false));
+                Reply.of(place).ok() || Reply.of(place).bool("placed"));
 
         String r = exec("artest guidance launch-seq " + SPACE_DIM + " " + x + " " + y + " " + z + " " + destDim);
         assertTrue("probe must run: " + r, Reply.of(r).ok());
@@ -75,7 +75,7 @@ public class TileGuidanceComputerOffSlotBurnNpeTest extends AbstractHeadlessServ
                 String.valueOf(destDim).equals(Reply.of(r).text("chipDim")));
         assertTrue("L2 null-station guard: off-slot in-space launch-burn must NOT throw — "
                         + "TileGuidanceComputer folds a null currentSpaceStation into the early return. Got: " + r,
-                (!Reply.of(r).bool("threw", true)));
+                (!Reply.of(r).bool("threw")));
         int burn = extractInt(BURN, r);
         assertTrue("a real burn must be returned (not the probe's Integer.MIN_VALUE 'did not run' sentinel), "
                         + "and it must be non-negative — the base launch-clearance burn with no trans-body "

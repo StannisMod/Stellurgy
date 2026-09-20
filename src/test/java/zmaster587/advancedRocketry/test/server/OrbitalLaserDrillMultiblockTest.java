@@ -35,7 +35,7 @@ public class OrbitalLaserDrillMultiblockTest extends AbstractSharedServerTest {
         assertTrue("fixture multiblock orbital-laser-drill failed: " + fixture,
                 Reply.of(fixture).ok());
         assertTrue("fixture didn't place any blocks: " + fixture,
-                Reply.of(fixture).has("placed") && !(Reply.of(fixture).integerOr("placed", Integer.MIN_VALUE) == 0));
+                Reply.of(fixture).has("placed") && !(Reply.of(fixture).integer("placed") == 0));
 
         String info = join(client().execute(
                 "artest machine info 0 " + CX + " " + CY + " " + CZ));
@@ -47,7 +47,7 @@ public class OrbitalLaserDrillMultiblockTest extends AbstractSharedServerTest {
         assertTrue("try-complete probe errored: " + tryComplete,
                 Reply.of(tryComplete).ok());
         assertTrue("orbital-laser-drill multiblock didn't validate (isComplete=false): " + tryComplete,
-                Reply.of(tryComplete).bool("isComplete", false));
+                Reply.of(tryComplete).bool("isComplete"));
     }
 
     @Test
@@ -68,7 +68,7 @@ public class OrbitalLaserDrillMultiblockTest extends AbstractSharedServerTest {
         String tryComplete = join(client().execute(
                 "artest machine try-complete 0 " + cx + " " + cy + " " + cz));
         assertTrue("baseline must validate: " + tryComplete,
-                Reply.of(tryComplete).bool("isComplete", false));
+                Reply.of(tryComplete).bool("isComplete"));
 
         // (a) Energy flows through a 'P' power-input plug. structure[1][2][10]
         // -> for NORTH-facing controller (offset x=1, y=2, z=2) global
@@ -90,7 +90,7 @@ public class OrbitalLaserDrillMultiblockTest extends AbstractSharedServerTest {
         assertTrue("force-tick must not error: " + tick,
                 Reply.of(tick).ok());
         assertTrue("force-tick must report 20 ticks completed: " + tick,
-                (Reply.of(tick).integerOr("ticked", Integer.MIN_VALUE) == 20));
+                (Reply.of(tick).integer("ticked") == 20));
 
         // (c) Plug's energy capability still exposed after 20 ticks (no
         // capability loss from idle ticking).
@@ -120,7 +120,7 @@ public class OrbitalLaserDrillMultiblockTest extends AbstractSharedServerTest {
         String broken = join(client().execute(
                 "artest machine try-complete 0 " + cx + " " + cy + " " + cz));
         assertTrue("orbital-laser-drill validated despite missing lens cell: " + broken,
-                (!Reply.of(broken).bool("isComplete", true)));
+                (!Reply.of(broken).bool("isComplete")));
     }
 
     private static String join(java.util.List<String> resp) {

@@ -182,7 +182,7 @@ public class FluidLoaderActiveTransferTest extends AbstractSharedServerTest {
         String link = exec("artest infra link 0 " + ux + " " + uy + " " + uz
                 + " " + rocketId);
         assertTrue("infra link must succeed: " + link,
-                Reply.of(link).bool("linked", false));
+                Reply.of(link).bool("linked"));
 
         // Run the unloader's production update() for 60 ticks.
         ok("artest tile force-tick 0 " + ux + " " + uy + " " + uz + " 60");

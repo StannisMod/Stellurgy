@@ -189,7 +189,7 @@ public class RailgunFiringContractTest extends AbstractSharedServerTest {
         String tryComplete = exec("artest machine try-complete 0 "
                 + x + " " + y + " " + z);
         assertTrue("railgun must validate at " + x + "," + y + "," + z
-                + ": " + tryComplete, Reply.of(tryComplete).bool("isComplete", false));
+                + ": " + tryComplete, Reply.of(tryComplete).bool("isComplete"));
     }
 
     private static String exec(String cmd) throws Exception {
@@ -198,7 +198,6 @@ public class RailgunFiringContractTest extends AbstractSharedServerTest {
 
     private static String extractStr(String src, String field) {
         String value = Reply.of(src).text(field);
-        assertTrue("field `" + field + "` not found in: " + src, value != null);
         return value;
     }
 

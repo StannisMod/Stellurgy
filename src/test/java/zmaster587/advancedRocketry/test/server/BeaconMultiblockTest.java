@@ -55,7 +55,7 @@ public class BeaconMultiblockTest extends AbstractSharedServerTest {
         assertTrue("try-complete probe errored: " + tryComplete,
                 Reply.of(tryComplete).ok());
         assertTrue("beacon multiblock didn't validate (isComplete=false): " + tryComplete,
-                Reply.of(tryComplete).bool("isComplete", false));
+                Reply.of(tryComplete).bool("isComplete"));
     }
 
     @Test
@@ -67,7 +67,7 @@ public class BeaconMultiblockTest extends AbstractSharedServerTest {
 
         String first = MachineRecipeEndToEndKit.tryCompleteWithRetry(client(), 0, cx, cy, cz);
         assertTrue("baseline must validate: " + first,
-                Reply.of(first).bool("isComplete", false));
+                Reply.of(first).bool("isComplete"));
 
         // Replace the redstone tip with a stone block (any non-air, non-
         // redstone block fails the structure check).
@@ -79,7 +79,7 @@ public class BeaconMultiblockTest extends AbstractSharedServerTest {
         String broken = MachineRecipeEndToEndKit.tryCompleteWithRetry(client(), 0, cx, cy, cz);
         assertTrue("structure stayed complete after redstone tip removal — "
                         + "validator broken: " + broken,
-                (!Reply.of(broken).bool("isComplete", true)));
+                (!Reply.of(broken).bool("isComplete")));
     }
 
     @Test
@@ -91,7 +91,7 @@ public class BeaconMultiblockTest extends AbstractSharedServerTest {
 
         String first = MachineRecipeEndToEndKit.tryCompleteWithRetry(client(), 0, cx, cy, cz);
         assertTrue("baseline must validate: " + first,
-                Reply.of(first).bool("isComplete", false));
+                Reply.of(first).bool("isComplete"));
 
         // Replace a middle shaft block (y=cy+2 layer) with air. The
         // structure has blockStructureBlock at this position — replacing
@@ -104,7 +104,7 @@ public class BeaconMultiblockTest extends AbstractSharedServerTest {
         String broken = MachineRecipeEndToEndKit.tryCompleteWithRetry(client(), 0, cx, cy, cz);
         assertTrue("structure stayed complete after shaft removal — "
                         + "validator broken: " + broken,
-                (!Reply.of(broken).bool("isComplete", true)));
+                (!Reply.of(broken).bool("isComplete")));
     }
 
     private static String join(java.util.List<String> resp) {

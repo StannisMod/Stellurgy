@@ -75,7 +75,7 @@ public class RocketSendPlanetDataNullGuidanceTest extends AbstractSharedServerTe
         String strip = ok(client().execute("artest rocket strip-guidance " + rid));
         assertTrue("strip-guidance failed: " + strip, Reply.of(strip).ok());
         assertTrue("guidance computer must be gone: " + strip,
-                (!Reply.of(strip).bool("hasGuidanceComputer", true)));
+                (!Reply.of(strip).bool("hasGuidanceComputer")));
 
         String resp = ok(client().execute("artest rocket send-planet-data " + rid + " 0"));
         assertTrue("send-planet-data failed: " + resp, Reply.of(resp).ok());
@@ -83,7 +83,7 @@ public class RocketSendPlanetDataNullGuidanceTest extends AbstractSharedServerTe
         Reply mReply = Reply.of(resp);
         assertTrue("thrown field missing: " + resp, mReply.has(THROWN));
         assertTrue("a SENDPLANETDATA packet for a guidance-computer-less rocket "
-                        + "must not throw (Bug A); got " + mReply.text(THROWN) + ": " + resp,
+                        + "must not throw (Bug A); got " + mReply.reported(THROWN) + ": " + resp,
                 "null".equals(mReply.text(THROWN)));
     }
 
@@ -99,7 +99,7 @@ public class RocketSendPlanetDataNullGuidanceTest extends AbstractSharedServerTe
         Reply mReply = Reply.of(resp);
         assertTrue("thrown field missing: " + resp, mReply.has(THROWN));
         assertTrue("reading a SENDPLANETDATA packet with an empty payload must not "
-                        + "underflow the buffer (Bug B); got " + mReply.text(THROWN) + ": " + resp,
+                        + "underflow the buffer (Bug B); got " + mReply.reported(THROWN) + ": " + resp,
                 "null".equals(mReply.text(THROWN)));
     }
 }

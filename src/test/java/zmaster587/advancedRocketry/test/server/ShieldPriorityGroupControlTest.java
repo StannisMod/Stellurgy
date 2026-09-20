@@ -92,7 +92,7 @@ public class ShieldPriorityGroupControlTest extends AbstractSharedServerTest {
 
         // Destroying console A loses nothing: the group still exists and still edits.
         assertTrue(Reply.of(exec("artest place " + DIM + " " + consoleA + " " + Y + " " + z + " minecraft:air")
-                ).bool("placed", false));
+                ).bool("placed"));
         String afterBreak = exec(group(consoleB, z, "list"));
         Reply.of(afterBreak).element("groups", "name", "bow");
         assertTrue(Reply.of(exec(group(consoleB, z, "priority bow 2"))).ok());
@@ -149,7 +149,7 @@ public class ShieldPriorityGroupControlTest extends AbstractSharedServerTest {
     private void place(String block, int x, int z) throws Exception {
         String resp = exec("artest place " + DIM + " " + x + " " + Y + " " + z + " " + block);
         assertTrue("failed to place " + block + " at " + x + "," + Y + "," + z + ": " + resp,
-                Reply.of(resp).bool("placed", false));
+                Reply.of(resp).bool("placed"));
     }
 
     private static String exec(String command) throws Exception {

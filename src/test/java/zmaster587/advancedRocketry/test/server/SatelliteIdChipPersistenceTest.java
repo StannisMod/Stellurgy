@@ -74,6 +74,6 @@ public class SatelliteIdChipPersistenceTest {
         assertTrue("satellite must survive restart and resolve by id "
                 + satId + ": " + postBoot, "composition".equals(Reply.of(postBoot).text("type")));
         assertTrue("powerStorage must persist across restart: " + postBoot,
-                (Reply.of(postBoot).integerOr("powerStorage", Integer.MIN_VALUE) == 4000));
+                (Reply.of(postBoot).integer("powerStorage") == 4000));
     }
 }

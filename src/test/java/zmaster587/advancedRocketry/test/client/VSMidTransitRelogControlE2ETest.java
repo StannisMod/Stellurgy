@@ -118,7 +118,7 @@ public class VSMidTransitRelogControlE2ETest extends AbstractSharedVsClientE2ETe
         String assembled = exec("artest rocket assemble " + originDim
                 + " " + bp[0] + " " + bp[1] + " " + bp[2]);
         scenario().requireArranged("a with-pilot-seat build must route to a ship: " + assembled,
-                (Reply.of(assembled).integerOr("rocketCount", Integer.MIN_VALUE) == 0));
+                (Reply.of(assembled).integer("rocketCount") == 0));
         assertTrue("the piloted origin ship never assembled/loaded in the pool cell (dim "
                 + originDim + ")", waitForLoadedShip(originDim) >= 1);
 
@@ -138,7 +138,7 @@ public class VSMidTransitRelogControlE2ETest extends AbstractSharedVsClientE2ETe
         String named = exec("artest space transit-name " + originDim + " " + shipId);
         scenario().requireArranged("the transit stack must resolve this ship's flight computer and its"
                 + " durable id, or the jump departs nameless: " + named,
-                Reply.of(named).bool("afcFound", false) && !"".equals(Reply.of(named).text("durableId")));
+                Reply.of(named).bool("afcFound") && !"".equals(Reply.of(named).text("durableId")));
 
         PilotSeat seat = PilotSeat.byId(this::exec, originDim, shipId)
                 .requireFound("the pilot seat must be found in the assembled ship, or the test is vacuous");
@@ -194,7 +194,8 @@ public class VSMidTransitRelogControlE2ETest extends AbstractSharedVsClientE2ETe
                     + " " + seatX + " " + seatY + " " + seatZ);
             assertTrue("seat-mount-at must spawn the seat dummy: " + mountAt, readBool(mountAt, "ok"));
             mount = exec("artest player mount-entity " + readInt(mountAt, "dummyId"));
-            mounted = Reply.of(mount).bool("mounted", false);
+            // absence is the answer: this is a retry loop, and "not yet" is what it is reading for.
+            mounted = Reply.of(mount).boolOr("mounted", false);
             if (!mounted) {
                 bot().waitTicks(10);
             }
@@ -275,7 +276,7 @@ public class VSMidTransitRelogControlE2ETest extends AbstractSharedVsClientE2ETe
         // which is exactly this craft's state.
         assertTrue("the craft must accept a level attitude command before it is flown",
                 Reply.of(exec("artest vs point-by-id " + originDim + " " + shipId + " 1.0 0.0 0.0 0.0")
-                        ).bool("commanded", false));
+                        ).bool("commanded"));
         // A WINDOW, sized from the computer's own limits rather than polled: the hold slews at a
         // 2.0 rad/s ceiling and ramps to it at 4.0 rad/s^2, so even a half-turn is about 45 ticks.
         // The achieved attitude is printed so the size can be re-argued from a measurement.
@@ -551,6 +552,8 @@ public class VSMidTransitRelogControlE2ETest extends AbstractSharedVsClientE2ETe
     }
 
     private static int readIntOr(String json, String key, int def) {
+        // absence is the answer, and WHICH answer is the CALLER's: this verb takes the
+        // default as an argument, so every call site names what a missing field means there.
         return Reply.of(json).integerOr(key, def);
     }
 
@@ -562,10 +565,10 @@ public class VSMidTransitRelogControlE2ETest extends AbstractSharedVsClientE2ETe
     /** As above, but ABSENCE is an answer: a diagnostic that refuses is worse than one that says
      *  the field was not there. Only for building a failure message — never for a verdict. */
     private static double readDoubleOr(String json, String key) {
-        return Reply.of(json).numberOr(key, Double.NaN);
+        return Reply.of(json).number(key);
     }
 
     private static boolean readBool(String json, String key) {
-        return Reply.of(json).bool(key, false);
+        return Reply.of(json).bool(key);
     }
 }

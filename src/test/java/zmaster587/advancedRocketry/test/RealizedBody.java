@@ -86,14 +86,14 @@ public final class RealizedBody {
         this.gravityPercent = reply.integer("gravity");
         this.pressure = reply.integer("pressure");
         this.temperature = reply.integer("temperature");
-        this.oxygen = reply.bool("oxygen", false);
-        this.tidallyLocked = reply.bool("locked", false);
+        this.oxygen = reply.bool("oxygen");
+        this.tidallyLocked = reply.bool("locked");
         this.metallicity = reply.number("metallicity");
-        this.gasGiant = reply.bool("gasGiant", false);
+        this.gasGiant = reply.bool("gasGiant");
         this.terrainSource = reply.text("terrainSource");
-        this.moon = reply.bool("moon", false);
+        this.moon = reply.bool("moon");
         this.parent = reply.integer("parent");
-        this.descendTarget = reply.bool("descendTarget", false);
+        this.descendTarget = reply.bool("descendTarget");
         this.starId = reply.integer("starId");
     }
 
@@ -111,9 +111,12 @@ public final class RealizedBody {
             throw new AssertionError("this is not an `artest space realize` answer: it carries no"
                     + " `ok`, so nothing in it says whether a world was realized: " + text);
         }
-        if (!reply.bool("ok", false)) {
+        // absence is the answer twice over: the refusal shape carries no `ok`, and "the body was
+        // not realized" is exactly what this branch reports; and the `reason` below is rendered
+        // INTO that failure, where a refusal would replace the diagnosis with the reader's own.
+        if (!reply.boolOr("ok", false)) {
             ArrangementFailure.arrangementFailed("`artest space realize` realized nothing ("
-                    + reply.textOr("reason", "no reason given") + "), so the properties this"
+                    + reply.reported("reason") + "), so the properties this"
                     + " reading is about belong to no world: " + text);
         }
         return new RealizedBody(reply, text);
@@ -150,7 +153,9 @@ public final class RealizedBody {
             throw new AssertionError("this is not an `artest space realize` answer, so it is neither"
                     + " a refusal nor a world: " + text);
         }
-        return reply.bool("ok", false) ? null : reply.textOr("reason", "");
+        // absence is the answer, both halves: no `ok` means the refusal shape, and a refusal
+        // without a stated reason is still a refusal.
+        return reply.ok() ? null : reply.textOr("reason", "");
     }
 
     /** The reply exactly as the probe sent it, for a message that has to show the whole answer. */

@@ -66,7 +66,7 @@ public class RocketInfrastructureLinkPersistenceTest {
         int sx = 1300, sy = FixtureSite.OPEN_AIR_Y, sz = 1300;
         String place = String.join("\n", firstBoot.client().execute(
                 "artest place 0 " + sx + " " + sy + " " + sz + " advancedrocketry:fuelingStation"));
-        assertTrue("place fueling station failed: " + place, Reply.of(place).bool("placed", false));
+        assertTrue("place fueling station failed: " + place, Reply.of(place).bool("placed"));
 
         // Pre-clear + build + assemble rocket. Place rocket far enough away
         // (+20 X) so the pre-clear region doesn't wipe the fueling station.
@@ -90,7 +90,7 @@ public class RocketInfrastructureLinkPersistenceTest {
 
         String link = String.join("\n", firstBoot.client().execute(
                 "artest infra link 0 " + sx + " " + sy + " " + sz + " " + rocketId));
-        assertTrue("link must succeed on first boot: " + link, Reply.of(link).bool("linked", false));
+        assertTrue("link must succeed on first boot: " + link, Reply.of(link).bool("linked"));
 
         firstBoot.close();
         firstBoot = null;
@@ -100,7 +100,7 @@ public class RocketInfrastructureLinkPersistenceTest {
         String preserved = String.join("\n", secondBoot.client().execute(
                 "artest infra info 0 " + sx + " " + sy + " " + sz));
         assertTrue("infrastructure tile must persist across restart: " + preserved,
-                Reply.of(preserved).bool("isInfrastructure", false));
+                Reply.of(preserved).bool("isInfrastructure"));
 
         // Force-load the chunk around the rocket spawn — Minecraft loads
         // entities lazily on chunk load, so {@code rocket list 0} reports

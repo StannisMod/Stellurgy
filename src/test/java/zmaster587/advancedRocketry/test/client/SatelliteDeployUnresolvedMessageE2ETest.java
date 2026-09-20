@@ -69,7 +69,7 @@ public class SatelliteDeployUnresolvedMessageE2ETest extends AbstractClientE2ETe
 
         String resp = exec("artest satellite deploy-unresolved");
         assertTrue("deploy-unresolved probe must succeed: " + resp, Reply.of(resp).ok());
-        assertTrue("the probe must have mounted the pilot: " + resp, Reply.of(resp).bool("mounted", false));
+        assertTrue("the probe must have mounted the pilot: " + resp, Reply.of(resp).bool("mounted"));
 
         // Link 1 (server): production chose to tell the pilot, and told him THIS message. Carrying,
         // not the type alone: a chat line was sent either way, and any other message in the window

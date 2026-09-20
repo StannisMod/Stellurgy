@@ -73,7 +73,7 @@ public class ServiceStationAssemblerScanTest extends AbstractSharedServerTest {
         String placeAsm = exec("artest place 0 " + ax + " " + ay + " " + az
                 + " advancedrocketry:precisionassemblingmachine");
         assertTrue("precision assembler place failed: " + placeAsm,
-                Reply.of(placeAsm).bool("placed", false));
+                Reply.of(placeAsm).bool("placed"));
 
         // Pre-state: scan hasn't run yet.
         String preState = exec("artest infra service-state 0 "
@@ -173,7 +173,7 @@ public class ServiceStationAssemblerScanTest extends AbstractSharedServerTest {
         String place = exec("artest place 0 " + sx + " " + sy + " " + sz
                 + " advancedrocketry:serviceStation");
         assertTrue("service station place failed: " + place,
-                Reply.of(place).bool("placed", false));
+                Reply.of(place).bool("placed"));
         String link = exec("artest infra link 0 " + sx + " " + sy + " " + sz
                 + " " + rocketId);
         assertTrue("infra link must succeed: " + link, Reply.of(link).ok());

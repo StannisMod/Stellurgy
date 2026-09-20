@@ -91,7 +91,7 @@ public class SpaceStationPadPersistenceTest {
         String dock = String.join("\n",
                 firstBoot.client().execute("artest station dock " + stationId));
         assertTrue("boot1 dock must claim padB: " + dock,
-                Reply.of(dock).ok() && (Reply.of(dock).integerOr("x", Integer.MIN_VALUE) == 200));
+                Reply.of(dock).ok() && (Reply.of(dock).integer("x") == 200));
 
         // Sanity dump before restart.
         StationPads padsBefore = pads(firstBoot, stationId);
@@ -175,7 +175,7 @@ public class SpaceStationPadPersistenceTest {
         String dock2 = String.join("\n", secondBoot.client().execute(
                 "artest station dock " + stationId));
         assertTrue("post-restart dock must reclaim padB: " + dock2,
-                Reply.of(dock2).ok() && (Reply.of(dock2).integerOr("x", Integer.MIN_VALUE) == 200));
+                Reply.of(dock2).ok() && (Reply.of(dock2).integer("x") == 200));
     }
 
     /**

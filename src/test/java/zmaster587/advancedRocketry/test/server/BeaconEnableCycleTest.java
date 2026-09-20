@@ -79,7 +79,7 @@ public class BeaconEnableCycleTest extends AbstractSharedServerTest {
 
         String load = exec("artest dim load " + planetDim);
         assertTrue("planet dim load failed: " + load,
-                Reply.of(load).bool("loaded", false) || Reply.of(load).ok());
+                Reply.of(load).bool("loaded"));
     }
 
     @AfterClass
@@ -168,7 +168,7 @@ public class BeaconEnableCycleTest extends AbstractSharedServerTest {
         String tryComplete = exec("artest machine try-complete "
                 + planetDim + " " + cx + " " + CY + " " + CZ);
         assertTrue("beacon structure failed to complete: " + tryComplete,
-                Reply.of(tryComplete).bool("isComplete", false));
+                Reply.of(tryComplete).bool("isComplete"));
     }
 
     private static void enableMachine(int cx, boolean enabled) throws Exception {

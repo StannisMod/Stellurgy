@@ -121,12 +121,11 @@ public class LowGravFallDamageTest {
     private static boolean boolField(String field, String src) {
         Reply reply = Reply.of(src);
         assertTrue("field `" + field + "` not found in: " + src, reply.has(field));
-        return reply.bool(field, false);
+        return reply.bool(field);
     }
 
     private static double doubleField(String field, String src) {
         double value = Reply.of(src).number(field);
-        assertTrue("field `" + field + "` not found in: " + src, !Double.isNaN(value));
         return value;
     }
 }

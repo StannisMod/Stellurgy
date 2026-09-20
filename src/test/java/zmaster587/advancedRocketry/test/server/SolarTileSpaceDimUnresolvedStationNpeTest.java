@@ -50,7 +50,7 @@ public class SolarTileSpaceDimUnresolvedStationNpeTest extends AbstractSharedSer
                 + SPACE_DIM + " " + cx + " " + cy + " " + cz));
         assertTrue("solar array must validate (isComplete=true) so update() reaches "
                 + "the insolation branch: " + tryComplete,
-                Reply.of(tryComplete).bool("isComplete", false));
+                Reply.of(tryComplete).bool("isComplete"));
 
         // Fixed: the off-station tick returns 0 insolation instead of NPEing.
         String tick = join(client().execute("artest tile force-tick "
@@ -77,7 +77,7 @@ public class SolarTileSpaceDimUnresolvedStationNpeTest extends AbstractSharedSer
         String place = join(client().execute("artest place " + SPACE_DIM
                 + " " + x + " " + y + " " + z + " advancedrocketry:solarGenerator"));
         assertTrue("solar generator must place: " + place,
-                Reply.of(place).ok() || Reply.of(place).bool("placed", false));
+                Reply.of(place).ok() || Reply.of(place).bool("placed"));
 
         client().execute("time set day");
         client().execute("weather clear 100000");

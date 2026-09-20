@@ -273,7 +273,7 @@ public class TelescopeRegionScanE2ETest extends AbstractSharedServerTest {
 
         String cycled = exec("artest chunk cycle 0 " + (x >> 4) + " " + (CZ >> 4));
         assertTrue("the chunk was never actually dropped, so nothing was proven: " + cycled,
-                Reply.of(cycled).bool("dropped", false) && Reply.of(cycled).bool("reloaded", false));
+                Reply.of(cycled).bool("dropped") && Reply.of(cycled).bool("reloaded"));
 
         TelescopeReading after = scope(x);
         assertTrue("the survey did not come back with the chunk: " + after.raw(), after.scanning);

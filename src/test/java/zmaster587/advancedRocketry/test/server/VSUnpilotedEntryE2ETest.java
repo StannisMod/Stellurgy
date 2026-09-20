@@ -89,7 +89,7 @@ public class VSUnpilotedEntryE2ETest extends AbstractSharedServerTest {
         String coords = placeFixture(SRC_X, SRC_Y, SRC_Z, "with-pilot-seat");
         String asm = exec("artest rocket assemble 0 " + coords);
         assertTrue("with VS an AFC-bearing build must route to a ship (no rocket): " + asm,
-                (Reply.of(asm).integerOr("rocketCount", Integer.MIN_VALUE) == 0));
+                (Reply.of(asm).integer("rocketCount") == 0));
         assertTrue("the source VS ship never loaded", loadedShips(0) >= 1);
 
         String launch = exec("artest space launch-cell 0");
@@ -110,7 +110,7 @@ public class VSUnpilotedEntryE2ETest extends AbstractSharedServerTest {
         String hands = exec("artest vs ff-input-by-id 0 " + vsId);
         assertTrue("this ship's flight computer must resolve, and hold NO pilot input, or the climb"
                 + " below is the piloted leg again: " + hands,
-                Reply.of(hands).bool("afcResolved", false) && "null".equals(Reply.of(hands).text("input")));
+                Reply.of(hands).bool("afcResolved") && "null".equals(Reply.of(hands).text("input")));
 
         String tp = exec("artest vs teleport-ship-by-id 0 " + vsId + " "
                 + (int) sx + " " + ABOVE_CEILING_Y + " " + (int) sz);
@@ -166,14 +166,23 @@ public class VSUnpilotedEntryE2ETest extends AbstractSharedServerTest {
     }
 
     private static int extractInt(String json, String key) {
+        // absence is the answer, and WHICH answer is the CALLER's: this verb is handed a
+        // FIELD name, so it cannot know what a missing one means — and the callers here
+        // include waits, which read the shape that does not carry the field yet.
         return Reply.of(json).integerOr(key, Integer.MIN_VALUE);
     }
 
     private static double extractDouble(String json, String key) {
+        // absence is the answer, and WHICH answer is the CALLER's: this verb is handed a
+        // FIELD name, so it cannot know what a missing one means — and the callers here
+        // include waits, which read the shape that does not carry the field yet.
         return Reply.of(json).numberOr(key, 0.0);
     }
 
     private static String extractString(String json, String key) {
-        return Reply.of(json).text(key);
+        // absence is the answer, and WHICH answer is the CALLER's: this verb is handed a
+        // FIELD name, so it cannot know what a missing one means — and the callers here
+        // include waits, which read the shape that does not carry the field yet.
+        return Reply.of(json).textOr(key, null);
     }
 }

@@ -83,7 +83,7 @@ public class VSShipFrameShieldE2ETest extends AbstractSharedVsClientE2ETest {
 
         String assemble = assembleFixture(site);
         assertTrue("a with-shield-emitter build must route to a ship: " + assemble,
-                (Reply.of(assemble).integerOr("rocketCount", Integer.MIN_VALUE) == 0));
+                (Reply.of(assemble).integer("rocketCount") == 0));
         // The identity, from the registry's record of THIS assembly's own add.
         final String shipId = awaitShipSpawned(events, spawnMark,
                 "a with-shield-emitter assembly must create a VS ship in the queryable registry");
@@ -142,13 +142,17 @@ public class VSShipFrameShieldE2ETest extends AbstractSharedVsClientE2ETest {
         // the link — it is what the geometry below is measured from, and this asserts the list it
         // leads with is the ship-framed emitter the event named.
         String emitters = exec("artest shield emitters 0");
-        // THE ship-framed emitter, fetched ONCE, and every number below read off that object. The
-        // pair this replaces asked "is some emitter ship-framed" and then took the geometry from
-        // "the first emitter in the list" — two questions a registry holding two emitters answers
-        // about two different ones. `element` also refuses if two are ship-framed, which is the
-        // ambiguity the old comment could only worry about.
+        // THE emitter THIS TEST PLACED, addressed by its own block position, and every number
+        // below read off that object. Two earlier forms stood here: a pair that asked "is some
+        // emitter ship-framed" and then took the geometry from "the first emitter in the list",
+        // and then `element("emitters", "shipFramed", "true")` — which is a DESCRIPTION, and a
+        // second ship-framed emitter anywhere in the dimension answers it just as well.
         Reply emitter = Reply.of("artest shield emitters", emitters)
-                .element("emitters", "shipFramed", "true");
+                .elementWhereAll("emitters", "posX", String.valueOf(spX),
+                        "posY", String.valueOf(spY), "posZ", String.valueOf(spZ));
+        assertTrue("the emitter this test placed must be the ship-framed one, or the geometry"
+                + " below is measured off a shell that is not on the hull: " + emitters,
+                emitter.bool("shipFramed"));
         double wx1 = emitter.number("worldX"), wy1 = emitter.number("worldY"),
                 wz1 = emitter.number("worldZ");
 
@@ -208,7 +212,7 @@ public class VSShipFrameShieldE2ETest extends AbstractSharedVsClientE2ETest {
         for (int i = 0; i < 25; i++) {
             String push = exec("artest vs push-ship-by-id 0 " + shipId + " 0 14 0");
             scenario().requireArranged("the push must reach THIS ship: " + push,
-                    Reply.of(push).bool("pushed", false));
+                    Reply.of(push).bool("pushed"));
             bot().waitTicks(2);
         }
         double[] ship2 = shipPos(shipId);
@@ -251,7 +255,7 @@ public class VSShipFrameShieldE2ETest extends AbstractSharedVsClientE2ETest {
     }
 
     private int emitterCount(String json) {
-        return Reply.of(json).integerOr(EMITTER_COUNT, 0);
+        return Reply.of(json).integer(EMITTER_COUNT);
     }
 
     private int entityId(String json) {
@@ -292,7 +296,10 @@ public class VSShipFrameShieldE2ETest extends AbstractSharedVsClientE2ETest {
         assertTrue("expected at least one emitter in: " + json, listed.length >= 1);
         Reply first = Reply.of("one shield emitter", listed[0]);
         assertTrue("expected key " + key + " on the emitter in: " + json, first.has(key));
-        return first.number(key);
+        // absence is the answer, and WHICH answer is the CALLER's: this verb is handed a
+        // FIELD name, so it cannot know what a missing one means — and the callers here
+        // include waits, which read the shape that does not carry the field yet.
+        return first.numberOr(key, Double.NaN);
     }
 
     private static double dist(double x1, double y1, double z1, double x2, double y2, double z2) {

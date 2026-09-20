@@ -68,18 +68,18 @@ public final class DeckCapture {
         this.reply = reply;
         this.raw = raw;
         this.entityId = reply.integer("entityId");
-        this.verdict = reply.bool("verdict", false);
-        this.alreadyTracked = reply.bool("alreadyTracked", false);
-        this.hullStand = reply.bool("hullStand", false);
-        this.aboardByContainment = reply.bool("aboardByContainment", false);
-        this.supportedByWorldTerrain = reply.bool("supportedByWorldTerrain", false);
-        this.shipFrameResolved = reply.bool("shipFrameResolved", false);
-        this.shipSupportObstacles = reply.integerOr("shipSupportObstacles", Integer.MIN_VALUE);
-        this.supportedByShip = reply.bool("supportedByShip", false);
-        this.vsAvailable = reply.bool("vsAvailable", false);
-        this.riding = reply.bool("isRiding", false);
-        this.flying = reply.bool("isFlying", false);
-        this.elytraFlying = reply.bool("isElytraFlying", false);
+        this.verdict = reply.bool("verdict");
+        this.alreadyTracked = reply.bool("alreadyTracked");
+        this.hullStand = reply.bool("hullStand");
+        this.aboardByContainment = reply.bool("aboardByContainment");
+        this.supportedByWorldTerrain = reply.bool("supportedByWorldTerrain");
+        this.shipFrameResolved = reply.bool("shipFrameResolved");
+        this.shipSupportObstacles = reply.integer("shipSupportObstacles");
+        this.supportedByShip = reply.bool("supportedByShip");
+        this.vsAvailable = reply.bool("vsAvailable");
+        this.riding = reply.bool("isRiding");
+        this.flying = reply.bool("isFlying");
+        this.elytraFlying = reply.bool("isElytraFlying");
     }
 
     /**
@@ -149,7 +149,9 @@ public final class DeckCapture {
 
     /** The ship holding the capture, refusing when nothing holds this body. */
     public String requireAnchorShipId() {
-        String anchor = reply.text("anchorShipId");
+        // absence is the answer: production writes `anchorShipId` as JSON null on the
+        // untracked branch, so "no anchor" arrives as a missing value and is refused below.
+        String anchor = reply.textOr("anchorShipId", null);
         if (!alreadyTracked || anchor == null || anchor.isEmpty()) {
             throw new AssertionError("nothing holds entity " + entityId + ", so there is no anchor"
                     + " ship to name — an empty id here would travel into the next command as the"
@@ -160,7 +162,8 @@ public final class DeckCapture {
 
     /** Whether the resolver names an anchor at all, for a caller whose subject is its absence. */
     public boolean hasAnchor() {
-        return alreadyTracked && reply.text("anchorShipId") != null;
+        // absence is the answer: this verb's whole subject is whether an anchor is named.
+        return alreadyTracked && reply.textOr("anchorShipId", null) != null;
     }
 
     /** Whether THIS capture is held by {@code shipId} — the question a shared world makes necessary. */
@@ -215,7 +218,9 @@ public final class DeckCapture {
                     + " no first-contact candidate — that field belongs to the untracked branch: "
                     + raw);
         }
-        return reply.text("firstContactCandidate");
+        // absence is the answer: the untracked branch writes the candidate as JSON null when
+        // nothing would take the body, and "nobody would" is what this verb reports.
+        return reply.textOr("firstContactCandidate", null);
     }
 
     /**
@@ -226,7 +231,7 @@ public final class DeckCapture {
      */
     public boolean inStayRegion() {
         requireTracked("inStayRegion");
-        return reply.bool("inStayRegion", false);
+        return reply.bool("inStayRegion");
     }
 
     /**
@@ -254,6 +259,8 @@ public final class DeckCapture {
      * zero would not be. An assertion about where the body IS uses {@link #bodyShipFrameY()}.</p>
      */
     public double bodyShipFrameYOrNaN() {
+        // absence is the answer: see the javadoc — an unresolved sample inside an arc must not
+        // end the scenario, and NaN cannot be misread as a height.
         return alreadyTracked ? reply.number("bodyShipFrameY") : Double.NaN;
     }
 

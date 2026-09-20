@@ -674,6 +674,8 @@ public abstract class AbstractSharedClientE2ETest {
      */
     private int playerDimOnTheServer(int fallback) throws Exception {
         String reply = exec("artest oxygen player " + HARNESS_ACCOUNT);
+        // absence is the answer, and WHICH answer is the CALLER's: this verb takes the
+        // default as an argument, so every call site names what a missing field means there.
         return Reply.of("artest oxygen player", reply).integerOr("dim", fallback);
     }
 

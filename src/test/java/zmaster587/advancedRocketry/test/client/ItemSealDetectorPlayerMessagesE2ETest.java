@@ -109,7 +109,6 @@ public class ItemSealDetectorPlayerMessagesE2ETest extends AbstractSharedClientE
 
     private String fieldOf(String field, String src, String label) {
         String value = Reply.of(src).text(field);
-        assertTrue("expected " + label + " field in: " + src, value != null);
         return value;
     }
 

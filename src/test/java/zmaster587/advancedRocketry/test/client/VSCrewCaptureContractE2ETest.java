@@ -317,7 +317,7 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
         double h = Math.toRadians(45.0) / 2.0;
         assertTrue("attitude hold must accept the tilt",
                 Reply.of(exec("artest vs point-by-id 0 " + scenarioShipId + " "
-                        + Math.cos(h) + " 0.0 0.0 " + Math.sin(h))).bool("commanded", false));
+                        + Math.cos(h) + " 0.0 0.0 " + Math.sin(h))).bool("commanded"));
         bot().waitTicks(120);
         ShipInfo info = shipInfo();
         // The TILT is the premise, and until now nothing checked that it took: a run in which
@@ -451,7 +451,7 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
 
         assertTrue("attitude hold must accept the past-vertical roll",
                 Reply.of(exec("artest vs point-by-id 0 " + scenarioShipId + " 0.17365 0.0 0.0 0.98481")
-                        ).bool("commanded", false));
+                        ).bool("commanded"));
         bot().waitTicks(200); // slew and settle - stationary, steeply rolled
 
         // The subject must be in the regime the symptom lives in, and the instrument must fire:
@@ -1176,7 +1176,7 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
         double h = Math.toRadians(160.0) / 2.0;
         assertTrue("attitude hold must accept the past-vertical roll",
                 Reply.of(exec("artest vs point-by-id 0 " + scenarioShipId + " "
-                        + Math.cos(h) + " " + Math.sin(h) + " 0.0 0.0")).bool("commanded", false));
+                        + Math.cos(h) + " " + Math.sin(h) + " 0.0 0.0")).bool("commanded"));
         bot().waitTicks(200);
         ShipInfo info = shipInfo();
         double upY = info.upY();
@@ -1278,7 +1278,7 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
         double h = Math.toRadians(160.0) / 2.0;
         assertTrue("attitude hold must accept the past-vertical roll",
                 Reply.of(exec("artest vs point-by-id 0 " + scenarioShipId + " "
-                        + Math.cos(h) + " " + Math.sin(h) + " 0.0 0.0")).bool("commanded", false));
+                        + Math.cos(h) + " " + Math.sin(h) + " 0.0 0.0")).bool("commanded"));
         bot().waitTicks(200);
         ShipInfo info = shipInfo();
         double upY = info.upY();
@@ -1628,7 +1628,7 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
         double h = Math.toRadians(50.0) / 2.0;
         assertTrue("attitude hold must accept the roll",
                 Reply.of(exec("artest vs point-by-id 0 " + scenarioShipId + " "
-                        + Math.cos(h) + " " + Math.sin(h) + " 0.0 0.0")).bool("commanded", false));
+                        + Math.cos(h) + " " + Math.sin(h) + " 0.0 0.0")).bool("commanded"));
         bot().waitTicks(150);
         ShipInfo info = shipInfo();
         double upY = info.upY();
@@ -1829,7 +1829,7 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
                 + Math.cos(half) + " " + Math.sin(half) + " 0.0 0.0");
         scenario().requireArranged("the attitude hold must accept the commanded roll, or the craft"
                 + " never manoeuvres and the interval under test spans nothing: " + commanded,
-                Reply.of(commanded).bool("commanded", false));
+                Reply.of(commanded).bool("commanded"));
         bot().waitTicks(200); // fly to it AND settle: the manoeuvre must be OVER when the body lands
 
         // What the deck is ACTUALLY doing now, measured rather than assumed. A craft can be told to
@@ -2008,7 +2008,7 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
         double h = Math.toRadians(60.0) / 2.0;
         assertTrue("attitude hold must accept the roll",
                 Reply.of(exec("artest vs point-by-id 0 " + scenarioShipId + " "
-                        + Math.cos(h) + " " + Math.sin(h) + " 0.0 0.0")).bool("commanded", false));
+                        + Math.cos(h) + " " + Math.sin(h) + " 0.0 0.0")).bool("commanded"));
         bot().waitTicks(150);
         double[] up = shipUpFromInfo(shipInfo());
         assertTrue("the ship must be steeply rolled for the frames to diverge (upY=" + up[1] + ")",
@@ -2079,7 +2079,7 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
         double h2 = Math.toRadians(85.0) / 2.0;
         assertTrue("attitude hold must accept the second roll",
                 Reply.of(exec("artest vs point-by-id 0 " + scenarioShipId + " "
-                        + Math.cos(h2) + " " + Math.sin(h2) + " 0.0 0.0")).bool("commanded", false));
+                        + Math.cos(h2) + " " + Math.sin(h2) + " 0.0 0.0")).bool("commanded"));
         bot().waitTicks(150);
         double[] up2 = shipUpFromInfo(shipInfo());
         double rolledBy = Math.toDegrees(Math.acos(clampUnit(dot(up, up2))));
@@ -2377,7 +2377,7 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
                 + seat.seatY + " " + seat.seatZ);
         int dummyId = Reply.of("artest vs seat-mount-at", mountInfo).integer(DUMMY_ID);
         assertTrue("bot must mount the seat dummy: " + mountInfo,
-                Reply.of(exec("artest player mount-entity " + dummyId)).bool("mounted", false));
+                Reply.of(exec("artest player mount-entity " + dummyId)).bool("mounted"));
         // The server says it mounted him; these two say the CLIENT did, and this class's whole
         // subject is what the client's resolver does with a body. The mount is his own `startRiding`;
         // the gate is the client's keybind tick deciding that the body it is holding is a ship's
@@ -2477,7 +2477,7 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
         long spawnMark = events.markInstrumented();
         String assemble = assembleFixture(site);
         assertTrue("a with-pilot-seat build must route to a ship: " + assemble,
-                (Reply.of(assemble).integerOr("rocketCount", Integer.MIN_VALUE) == 0));
+                (Reply.of(assemble).integer("rocketCount") == 0));
 
         // IDENTITY, and the async-VS assembly barrier in the same link: the physics mod assembles on
         // its own thread and its queue lags behind a loaded machine, so this AWAITS the registry's own
@@ -2553,7 +2553,6 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
 
     private double readDouble(String json, String field) {
         double value = Reply.of(json).number(field);
-        assertTrue("expected a number `" + field + "` in: " + json, !Double.isNaN(value));
         return value;
     }
 
@@ -2604,7 +2603,7 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
 
     /** The subject's SUBSPACE feet position from a {@code subspace-census} reply, as "x,y,z". */
     private static String readSubPos(String census) {
-        return Reply.of("artest vs subspace-census", census).textOr("subPos", "");
+        return Reply.of("artest vs subspace-census", census).text("subPos");
     }
 
     /** {@code block - feet}, componentwise, for two "x,y,z" triples; "?" if either is unreadable. */

@@ -103,9 +103,11 @@ public class SpaceRestartPersistenceE2ETest {
         // is worse than none — it is a claim, in a javadoc, that a whole class of environment is
         // handled. The twin of this body in the login-restore client base was fixed first; this is
         // the copy it left behind.
+        // absence is the answer: a build without the substrate answers no `available` at all,
+        // and that is precisely the world this gate skips in.
         org.junit.Assume.assumeTrue("Valkyrien Skies is absent, so the production subsystem under"
                 + " test never registered and there is nothing here to exercise: " + vs,
-                Reply.of(vs).bool("available", false));
+                Reply.of(vs).boolOr("available", false));
     }
 
     @Test
@@ -356,7 +358,7 @@ public class SpaceRestartPersistenceE2ETest {
 
         String armed = exec("artest space save-fault-once");
         assertTrue("the fault must actually be armed, or nothing below is exercising a failed save: "
-                + armed, Reply.of(armed).bool("armed", false));
+                + armed, Reply.of(armed).bool("armed"));
         assertTrue("and the subsystem must agree it is armed: " + SubsystemStatus.read(this::exec).raw(),
                 SubsystemStatus.read(this::exec).saveFaultArmed);
 
@@ -420,9 +422,9 @@ public class SpaceRestartPersistenceE2ETest {
         assertTrue("production subsystem must be live: " + status.raw(), status.registered);
 
         String again = exec("artest space pool-idempotence");
-        assertTrue("re-registering must not grow the pool: " + again, (!Reply.of(again).bool("grew", true)));
+        assertTrue("re-registering must not grow the pool: " + again, (!Reply.of(again).bool("grew")));
         assertTrue("and it must hand back the dimensions that already exist: " + again,
-                Reply.of(again).bool("returnedExisting", false));
+                Reply.of(again).bool("returnedExisting"));
     }
 
     @Test

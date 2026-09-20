@@ -85,7 +85,7 @@ public class OxygenVentRequiresFuelAndPowerTest extends AbstractSharedServerTest
         String info = ventInfo(CX_NO_FLUID);
         assertTrue("vent without oxygen must report hasFluid:false after the "
                         + "drain-fail branch fires: " + info,
-                (!Reply.of(info).bool("hasFluid", true)));
+                (!Reply.of(info).bool("hasFluid")));
         assertFalse("vent without oxygen must NOT report PRESSURIZEDAIR — the "
                         + "atmosphere should have reverted to the dim baseline: "
                         + info,
@@ -166,7 +166,7 @@ public class OxygenVentRequiresFuelAndPowerTest extends AbstractSharedServerTest
     private void placeVent(int cx) throws Exception {
         String resp = exec("artest place 0 " + cx + " " + CY_BASE + " " + CZ_BASE
                 + " advancedrocketry:oxygenVent");
-        assertTrue("vent place failed: " + resp, Reply.of(resp).bool("placed", false));
+        assertTrue("vent place failed: " + resp, Reply.of(resp).bool("placed"));
     }
 
     private void injectEnergy(int cx, int amount) throws Exception {

@@ -85,7 +85,6 @@ public class FreeFlightCycleTest extends AbstractSharedServerTest {
 
     private static double parseDouble(String body, String field, String label) {
         double value = Reply.of(body).number(field);
-        assertTrue("missing " + label + " in: " + body, !Double.isNaN(value));
         return value;
     }
 
@@ -98,14 +97,18 @@ public class FreeFlightCycleTest extends AbstractSharedServerTest {
      */
     private static int parsePrimaryFuel(String fuelBody) {
         Reply reply = Reply.of("artest rocket fuel", fuelBody);
-        String primary = reply.text("primaryFuelType");
+        // absence is the answer: a craft with no fuel type names none, and the branch below
+        // reports exactly that rather than a tank reading.
+        // absence is the answer: a craft with no fuel type names none, and the branch below
+        // reports exactly that rather than a tank reading.
+        String primary = reply.textOr("primaryFuelType", null);
         String fuels = reply.object("fuels");
         if (primary == null || fuels == null) {
             // Rocket may have no primary fuel type; treat as 0 for our purposes.
             return 0;
         }
         String entry = Reply.of(fuels).object(primary);
-        return entry == null ? 0 : Reply.of(entry).integerOr("amount", 0);
+        return entry == null ? 0 : Reply.of(entry).integer("amount");
     }
 
     // ---------------------------------------------------------------------
@@ -161,7 +164,7 @@ public class FreeFlightCycleTest extends AbstractSharedServerTest {
         assertTrue("start-free-flight must succeed: " + start,
                 Reply.of(start).ok());
         assertTrue("start-free-flight must flip isInFlight=true: " + start,
-                Reply.of(start).bool("isInFlight", false));
+                Reply.of(start).bool("isInFlight"));
 
         RocketInfo info = rocketInfo(id);
         assertTrue("info must reflect in-flight after start-free-flight: " + info.raw(),
@@ -198,13 +201,13 @@ public class FreeFlightCycleTest extends AbstractSharedServerTest {
         String applied = ok(client().execute(
                 "artest rocket free-flight-input " + id + " 1.0 -0.5 0.25 0 0.75"));
         assertTrue("input must apply on FF rocket: " + applied,
-                Reply.of(applied).bool("applied", false));
+                Reply.of(applied).bool("applied"));
         // Probe echoes the clamped values back; full-range happy-path values
         // should pass through unchanged.
         assertTrue("applied response must echo fwd=1.0: " + applied,
-                (Reply.of(applied).numberOr("fwd", Double.NaN) == 1.0));
+                (Reply.of(applied).number("fwd") == 1.0));
         assertTrue("applied response must echo vert=-0.5: " + applied,
-                (Reply.of(applied).numberOr("vert", Double.NaN) == -0.5));
+                (Reply.of(applied).number("vert") == -0.5));
 
         // Info must round-trip the input — proves server-side storage path
         // is wired into the probe surface that clients/UI will read.
@@ -305,7 +308,7 @@ public class FreeFlightCycleTest extends AbstractSharedServerTest {
         String applied = ok(client().execute(
                 "artest rocket free-flight-input " + id + " 1.0 1.0 1.0 1.0 0.0"));
         assertTrue("classic-mode input must report applied=false: " + applied,
-                (!Reply.of(applied).bool("applied", true)));
+                (!Reply.of(applied).bool("applied")));
 
         // info still shows zero current input (defensive). A craft with NO input block at all
         // satisfies the same claim more strongly — nothing is holding its stick — so the two are
@@ -326,14 +329,14 @@ public class FreeFlightCycleTest extends AbstractSharedServerTest {
         String resp = ok(client().execute(
                 "artest rocket free-flight-input " + id + " 5.0 -5.0 99.0 -99.0 50.0"));
         assertTrue("clamp positive overshoot to 1.0: " + resp,
-                (Reply.of(resp).numberOr("fwd", Double.NaN) == 1.0));
+                (Reply.of(resp).number("fwd") == 1.0));
         assertTrue("clamp negative overshoot to -1.0: " + resp,
-                (Reply.of(resp).numberOr("vert", Double.NaN) == -1.0));
+                (Reply.of(resp).number("vert") == -1.0));
         assertTrue("clamp yaw +∞ish to 1.0: " + resp,
-                (Reply.of(resp).numberOr("yaw", Double.NaN) == 1.0));
+                (Reply.of(resp).number("yaw") == 1.0));
         assertTrue("clamp pitch -∞ish to -1.0: " + resp,
-                (Reply.of(resp).numberOr("pitch", Double.NaN) == -1.0));
+                (Reply.of(resp).number("pitch") == -1.0));
         assertTrue("clamp brake to 1.0: " + resp,
-                (Reply.of(resp).numberOr("brake", Double.NaN) == 1.0));
+                (Reply.of(resp).number("brake") == 1.0));
     }
 }

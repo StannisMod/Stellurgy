@@ -62,7 +62,7 @@ public class VSShipAutoTakeoffE2ETest extends AbstractSharedServerTest {
         clearArea(SRC_X, SRC_Z);
         String coords = placeFixture(SRC_X, SRC_Y, SRC_Z, "with-pilot-seat");
         String asm = exec("artest rocket assemble 0 " + coords);
-        assertTrue("AFC build must route to a ship: " + asm, (Reply.of(asm).integerOr("rocketCount", Integer.MIN_VALUE) == 0));
+        assertTrue("AFC build must route to a ship: " + asm, (Reply.of(asm).integer("rocketCount") == 0));
         assertTrue("source ship never loaded", loadedShips(0) >= 1);
 
         // WHICH ship this scenario is about, taken from the moment that CREATED it: the assembler
@@ -86,14 +86,16 @@ public class VSShipAutoTakeoffE2ETest extends AbstractSharedServerTest {
         // No manual FF input: the autopilot alone drives (its branch requires in == null). entry-setup
         // cleared any stale static input channel.
         String engaged = exec("artest space auto-takeoff 0 id " + shipId);
-        assertTrue("auto-takeoff did not engage: " + engaged, Reply.of(engaged).bool("engaged", false));
+        assertTrue("auto-takeoff did not engage: " + engaged, Reply.of(engaged).bool("engaged"));
 
         // The raycast runs on the AFC's OWN tick, so this is a wait for that tick to happen a few
         // times - which is a number of ticks, not a number of seconds.
         final String[] status = {""};
         boolean declined = GameTicks.until(client(), GameTicks.server(), DECLINE_TICKS, () -> {
             status[0] = exec("artest space auto-takeoff 0 id " + shipId + " status");
-            return (!Reply.of(status[0]).bool("engaged", true));
+            // absence is the answer: this WAITS for the corridor to be declined, and a status
+            // taken before auto-takeoff has anything to say carries no `engaged`.
+            return (!Reply.of(status[0]).boolOr("engaged", false));
         });
         assertTrue("auto-takeoff did not decline a blocked corridor (still engaged): " + status[0],
                 declined);
@@ -108,7 +110,7 @@ public class VSShipAutoTakeoffE2ETest extends AbstractSharedServerTest {
         exec("artest vs unpark-by-id 0 " + shipId);
         String reEngage = exec("artest space auto-takeoff 0 id " + shipId);
         assertTrue("auto-takeoff did not re-engage over a clear corridor: " + reEngage,
-                Reply.of(reEngage).bool("engaged", false));
+                Reply.of(reEngage).bool("engaged"));
 
         boolean settled = false;
         final EntryStatus[] entry = new EntryStatus[1];
@@ -165,14 +167,23 @@ public class VSShipAutoTakeoffE2ETest extends AbstractSharedServerTest {
     }
 
     private static int extractInt(String json, String key) {
+        // absence is the answer, and WHICH answer is the CALLER's: this verb is handed a
+        // FIELD name, so it cannot know what a missing one means — and the callers here
+        // include waits, which read the shape that does not carry the field yet.
         return Reply.of(json).integerOr(key, Integer.MIN_VALUE);
     }
 
     private static double extractDouble(String json, String key) {
+        // absence is the answer, and WHICH answer is the CALLER's: this verb is handed a
+        // FIELD name, so it cannot know what a missing one means — and the callers here
+        // include waits, which read the shape that does not carry the field yet.
         return Reply.of(json).numberOr(key, 0.0);
     }
 
     private static String extractString(String json, String key) {
-        return Reply.of(json).text(key);
+        // absence is the answer, and WHICH answer is the CALLER's: this verb is handed a
+        // FIELD name, so it cannot know what a missing one means — and the callers here
+        // include waits, which read the shape that does not carry the field yet.
+        return Reply.of(json).textOr(key, null);
     }
 }

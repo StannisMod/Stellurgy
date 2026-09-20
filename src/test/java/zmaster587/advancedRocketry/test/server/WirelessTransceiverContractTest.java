@@ -269,13 +269,13 @@ public class WirelessTransceiverContractTest extends AbstractSharedServerTest {
         assertTrue("registry lookup probe errored: " + reg, Reply.of(reg).ok());
         assertTrue("FROZEN block registry name advancedrocketry:wirelesstransciever is gone — "
                         + "every existing world loses its placed transceivers: " + reg,
-                Reply.of(reg).bool("blockRegistered", false));
+                Reply.of(reg).bool("blockRegistered"));
         assertTrue("FROZEN ItemBlock registry name is gone — stored transceivers are deleted "
                         + "from inventories and chests: " + reg,
-                Reply.of(reg).bool("itemRegistered", false));
+                Reply.of(reg).bool("itemRegistered"));
         assertTrue("transceiver is no longer craftable — the recipe result no longer resolves "
                         + "against the frozen registry name: " + reg,
-                Reply.of(reg).bool("craftable", false));
+                Reply.of(reg).bool("craftable"));
 
         int baseX = 3000;
         placeAt(baseX);
@@ -310,7 +310,7 @@ public class WirelessTransceiverContractTest extends AbstractSharedServerTest {
                     "artest place " + DIM + " " + x + " " + Y + " " + Z
                             + " advancedrocketry:wirelessTransciever"));
             assertTrue("place failed at x=" + x + ": " + r,
-                    Reply.of(r).bool("placed", false));
+                    Reply.of(r).bool("placed"));
             // ONE read, not a poll: the tile is there before `place` answers. 1.12.2's
             // Chunk.setBlockState creates the tile entity and hands it to World.setTileEntity
             // before it returns, and World.getTileEntity consults the pending list when the world
@@ -378,6 +378,6 @@ public class WirelessTransceiverContractTest extends AbstractSharedServerTest {
     private static boolean extractBool(String field, String haystack) {
         Reply reply = Reply.of(haystack);
         assertTrue("probe response missing `" + field + "`: " + haystack, reply.has(field));
-        return reply.bool(field, false);
+        return reply.bool(field);
     }
 }

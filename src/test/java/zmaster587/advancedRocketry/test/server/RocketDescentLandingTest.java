@@ -270,7 +270,7 @@ public class RocketDescentLandingTest extends AbstractSharedServerTest {
                     String blockResp = ok(client().execute(
                             "artest block at 0 " + (site.x + dx) + " " + (posY + dy)
                                     + " " + (site.z + dz)));
-                    if (!Reply.of(blockResp).bool("isAir", false)) {
+                    if (!Reply.of(blockResp).bool("isAir")) {
                         foundNonAir = true;
                         break outer;
                     }

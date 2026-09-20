@@ -67,7 +67,7 @@ public class SpaceElevatorUnlinkedDeconstructTest extends AbstractSharedServerTe
         assertTrue("deconstruct probe errored: " + deconstruct,
                 Reply.of(deconstruct).ok());
         assertTrue("deconstructing an unlinked elevator must not throw, got: "
-                + deconstruct, (!Reply.of(deconstruct).bool("threw", true)));
+                + deconstruct, (!Reply.of(deconstruct).bool("threw")));
     }
 
     private static String join(java.util.List<String> resp) {

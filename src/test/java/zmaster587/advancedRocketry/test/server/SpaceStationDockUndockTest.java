@@ -147,7 +147,7 @@ public class SpaceStationDockUndockTest extends AbstractSharedServerTest {
         // And the next dock call must successfully reclaim it.
         String reclaim = ok(client().execute("artest station dock " + id));
         assertTrue("post-undock dock must reclaim the just-freed pad: " + reclaim,
-                Reply.of(reclaim).ok() && (Reply.of(reclaim).integerOr("x", Integer.MIN_VALUE) == 50));
+                Reply.of(reclaim).ok() && (Reply.of(reclaim).integer("x") == 50));
     }
 
     @Test
@@ -161,7 +161,7 @@ public class SpaceStationDockUndockTest extends AbstractSharedServerTest {
 
         String preview = ok(client().execute("artest station dock " + id + " false"));
         assertTrue("preview dock must report ok and the pad coords: " + preview,
-                Reply.of(preview).ok() && (Reply.of(preview).integerOr("x", Integer.MIN_VALUE) == 70));
+                Reply.of(preview).ok() && (Reply.of(preview).integer("x") == 70));
 
         StationPads.Pad previewed = pads(id).at(70, 80);
         assertFalse("preview dock must NOT mark the pad occupied: " + previewed.raw(),
@@ -190,7 +190,7 @@ public class SpaceStationDockUndockTest extends AbstractSharedServerTest {
 
         String remove = ok(client().execute("artest station remove-pad " + id + " 100 100"));
         assertTrue("remove-pad must succeed and report removed=1: " + remove,
-                Reply.of(remove).ok() && (Reply.of(remove).integerOr("removed", Integer.MIN_VALUE) == 1));
+                Reply.of(remove).ok() && (Reply.of(remove).integer("removed") == 1));
         assertEquals("padCount must drop to 1 after remove: " + remove,
                 1, Reply.of("artest station remove-pad", remove).integer("padCount"));
 
