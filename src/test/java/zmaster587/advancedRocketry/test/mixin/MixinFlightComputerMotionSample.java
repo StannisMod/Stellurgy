@@ -40,6 +40,10 @@ public abstract class MixinFlightComputerMotionSample {
         MotionTrace.game(
                 MotionTrace.keyOf(self.getWorld().provider.getDimension(),
                         self.getPos().getX(), self.getPos().getY(), self.getPos().getZ()),
+                // The tick this sample belongs to, from the WORLD's own counter rather than from a
+                // count of samples: a tick the server never got round to must leave a hole here,
+                // and a counter incremented beside the sample could not leave one.
+                self.getWorld().getTotalWorldTime(),
                 self.pilotInput != null,
                 arTest$magnitude(self.commandedVelocity),
                 arTest$magnitude(velocitySetpoint));

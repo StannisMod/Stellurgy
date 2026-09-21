@@ -30,7 +30,14 @@ public abstract class MixinRocketEventHandlerMotionSample {
         if (view != null) {
             float p = (float) event.getRenderPartialTicks();
             Vec3d eye = view.getPositionEyes(p);
-            MotionTrace.clientFrame(eye.x, eye.y, eye.z, p);
+            // The tick this frame was rendered INSIDE, not a tick of its own: several frames share
+            // one, and how many is the frame rate. So this channel's per-tick block is a FRAME
+            // COUNT per tick, never a gap count — a tick with no frame is the render loop's
+            // business and the only channel that can see it is this one, which is also the one
+            // whose rate the box sets. Nothing asserts on it; it is here so the number is beside
+            // the others when a reader is chasing something real.
+            MotionTrace.clientFrame(view.world == null ? -1L : view.world.getTotalWorldTime(),
+                    eye.x, eye.y, eye.z, p);
         }
     }
 }

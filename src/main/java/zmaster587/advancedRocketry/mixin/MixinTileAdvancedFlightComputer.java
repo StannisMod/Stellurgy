@@ -175,6 +175,12 @@ public abstract class MixinTileAdvancedFlightComputer implements IPhysicsBlockCo
                 zmaster587.advancedRocketry.command.test.MotionTrace.keyOf(
                         physo.getWorld().provider.getDimension(),
                         self2.getX(), self2.getY(), self2.getZ()),
+                // The WORLD tick this physics step ran against, read across the thread boundary as
+                // a plain long. This loop runs on the physics thread at its own rate, so several
+                // steps share one world tick and the healthy reading is that every tick got at
+                // least one — never that each carried exactly one. A counter incremented here
+                // would count steps and call them ticks, and could not show a missed tick at all.
+                physo.getWorld().getTotalWorldTime(),
                 // WHO drove this step, and on WHICH ship. A block's flight computer is one object on
                 // one ship, so a window carrying two of either is a state to go and look at rather
                 // than a number to average — and the two cases have different causes: two

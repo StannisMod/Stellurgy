@@ -26,11 +26,33 @@ public abstract class MixinKeyBindingsMotionSample {
 
     @Inject(method = "onClientTick", at = @At("HEAD"))
     private void arTest$clientTickSample(TickEvent.ClientTickEvent event, CallbackInfo ci) {
+        // ONE PHASE. `ClientTickEvent` is posted twice per client tick — START and END — and this
+        // sampler took both from the day it was written, so the channel ran at 40 Hz against a
+        // 20 Hz clock and every per-sample displacement on it was half a tick's worth of ground.
+        // Nothing said so: a wall-clock summary reports a doubled rate as a rate, and the two
+        // readings built on this channel (a hitch total and an evenness ratio) were computed over
+        // the doubled series. Measured 2026-09-21 by the per-TICK index, which named it at once:
+        // 120 samples across 61 ticks, maxPerTick 2.
+        if (event.phase != TickEvent.Phase.END) {
+            return;
+        }
         Minecraft mc = Minecraft.getMinecraft();
         EntityPlayerSP player = mc == null ? null : mc.player;
         if (player != null) {
-            MotionTrace.clientTick(player.posX, player.posY, player.posZ,
-                    player.getRidingEntity() != null);
+            // The PLAYER's own tick count, not the world's time. Both advance once per client tick
+            // and neither is driven by this sampler — but the world's is also OVERWRITTEN by the
+            // server's periodic time packet, so it repeats a value or skips one whenever the two
+            // sides differ by a tick. Measured 2026-09-21: 60 samples across a 60-tick span landed
+            // in 59 distinct world-time values, one of them carrying two, which reads as a missed
+            // tick and a lurch that never happened. `ticksExisted` is incremented by
+            // `Entity.onUpdate` on the client and nothing else writes it.
+            net.minecraft.entity.Entity mount = player.getRidingEntity();
+            MotionTrace.clientTick(player.ticksExisted,
+                    player.posX, player.posY, player.posZ,
+                    mount != null,
+                    mount == null ? 0.0 : mount.posX,
+                    mount == null ? 0.0 : mount.posY,
+                    mount == null ? 0.0 : mount.posZ);
         }
     }
 }

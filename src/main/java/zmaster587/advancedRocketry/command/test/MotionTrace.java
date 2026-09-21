@@ -4,9 +4,15 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 
 /**
- * A flight recorder for MOTION SMOOTHNESS: bounded, wall-clock-stamped rings of where a tier-2
- * ship, its pilot and the pilot's own camera actually were, sampled on each of the four clocks the
- * craft's motion passes through.
+ * A flight recorder for MOTION SMOOTHNESS: bounded rings of where a tier-2 ship, its pilot and the
+ * pilot's own camera actually were, sampled on each of the four clocks the craft's motion passes
+ * through, each sample carrying both the TICK it was taken in and its wall-clock nanoTime.
+ *
+ * <p><b>The tick is what a verdict may rest on; the nanoTime is for the failure message.</b> A
+ * wall-clock interval belongs to the HOST, so a summary built from it measures the box with the
+ * code as one contributor among several — see {@code perTick} in the summary, and the {@code tick}
+ * array's own note. The two are kept side by side on purpose: a reader chasing a real hitch wants
+ * the milliseconds, and no test may assert on them.</p>
  *
  * <p><b>Why four clocks.</b> A ship the pilot describes as "flying in jerks" can be jerking on any
  * one of them, and they are fixed by different things:</p>
@@ -67,15 +73,43 @@ public final class MotionTrace {
      * reports a healthy client as stuttering, in every run, forever.</p>
      */
     private static final double[] NOMINAL_MS = {1000.0 / 60.0, 50.0, 50.0, 0.0};
-    /** Columns carried per sample. Their meaning is per-channel; see the recording methods. */
-    private static final int COLUMNS = 10;
+    /**
+     * Where a channel keeps a SECOND pose, or -1 where it keeps only its own.
+     *
+     * <p>Only the client tick has one: the pilot's position in columns 1..3 and the MOUNT he rides
+     * in 6..8. Two poses in one sample is how a freeze is localised without a second run — the
+     * pilot's view is the mount's position plus an offset, so a tick where the pilot did not move
+     * either had a mount that did not move or did not apply one that did, and those are different
+     * defects.</p>
+     */
+    private static final int[] SECOND_POSE_COL = {-1, -1, 6, -1};
+    /**
+     * Where a channel keeps the COMMANDED speed, or -1 where it keeps none.
+     *
+     * <p>Reported as a maximum over the window so a caller can bound the craft's motion by what was
+     * actually ASKED of it rather than by the ceiling anyone could have asked for. The difference
+     * decides whether a bound can see anything: a craft cruising at 2 blocks/tick whose client pose
+     * jumps 4 in one tick is inside the 3-block setpoint ceiling once the two clocks' phase beat is
+     * allowed for, and outside its own command by a factor of two.</p>
+     */
+    private static final int[] CMD_SPEED_COL = {5, 1, -1, -1};
+    /**
+     * Columns carried per sample. Their meaning is per-channel; see the recording methods.
+     *
+     * <p>Widened from 10 to 12 on 2026-09-21, when the client tick gained the MOUNT's pose: its
+     * three columns landed on 6..8 and 8 was {@link #COL_WRITER}, so that channel began reporting
+     * sixty distinct writers — a reading that on the physics channel means two craft claiming one
+     * flight computer. The identity columns now sit at the END, past every channel's payload,
+     * where a new payload column cannot reach them.</p>
+     */
+    private static final int COLUMNS = 12;
     /**
      * The column every channel reserves for the IDENTITY of whatever produced the sample, or 0 where
      * a channel has only one possible producer. Counting the distinct values of this inside a window
      * turns "this ring is being written twice as fast as its clock runs" — which reads like an
      * instrument fault — into "two named things are writing here", which is a finding.
      */
-    private static final int COL_WRITER = 8;
+    private static final int COL_WRITER = 10;
     /**
      * A SECOND identity, so the two ways of having two writers can be told apart without another
      * run. On the physics channel the writer is the controller OBJECT and this is its SHIP: two
@@ -83,7 +117,7 @@ public final class MotionTrace {
      * replacement — while two writers carrying two ships are two craft claiming one flight computer.
      * The fixes for those are not remotely the same.
      */
-    private static final int COL_WRITER2 = 9;
+    private static final int COL_WRITER2 = 11;
     /**
      * How many distinct flight computers each per-ship channel keeps at once.
      *
@@ -179,11 +213,11 @@ public final class MotionTrace {
      * step by one controller on one ship; anything else shows up otherwise only as a sample rate
      * that has quietly doubled, which reads like an instrument fault rather than a defect.</p>
      */
-    public static void phys(long key, double controllerTag, double shipTag, double dt,
+    public static void phys(long key, long worldTick, double controllerTag, double shipTag, double dt,
                             double x, double y, double z,
                             double speed, double cmdSpeed, double mass, boolean clamped) {
-        ring(PHYS, key).add(System.nanoTime(), dt, x, y, z, speed, cmdSpeed, mass,
-                clamped ? 1.0 : 0.0, controllerTag, shipTag);
+        ring(PHYS, key).add(System.nanoTime(), worldTick, dt, x, y, z, speed, cmdSpeed, mass,
+                clamped ? 1.0 : 0.0, 0.0, 0.0, controllerTag, shipTag);
     }
 
     /**
@@ -193,22 +227,33 @@ public final class MotionTrace {
      * setpoint|, cumulative server chunk loads, then four zeroes. The INTERVAL between samples is
      * the server tick period as this tile experiences it, which is the point of the channel.</p>
      */
-    public static void game(long key, boolean pilotInput, double cmdSpeed, double setpointSpeed) {
-        ring(GAME, key).add(System.nanoTime(), pilotInput ? 1.0 : 0.0, cmdSpeed, setpointSpeed,
-                serverChunkLoads, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0);
+    public static void game(long key, long worldTick, boolean pilotInput, double cmdSpeed,
+                            double setpointSpeed) {
+        ring(GAME, key).add(System.nanoTime(), worldTick, pilotInput ? 1.0 : 0.0, cmdSpeed,
+                setpointSpeed, serverChunkLoads, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0);
     }
 
     /**
      * One client tick, carrying where the CLIENT believes the local player is.
      *
      * <p>Columns: 1 if riding something else 0, then x, y, z, then cumulative client chunk loads,
-     * then three zeroes. Every POSITIONAL channel keeps its pose in columns 1..3 so one displacement
-     * routine reads them all — a channel that put its pose elsewhere would be measured silently
-     * wrong rather than loudly.</p>
+     * then arriving ship poses, then the MOUNT's own x, y, z. Every POSITIONAL channel keeps its
+     * pose in columns 1..3 so one displacement routine reads them all — a channel that put its pose
+     * elsewhere would be measured silently wrong rather than loudly.</p>
+     *
+     * <p><b>The mount's position is here to localise a freeze, and it is a different question from
+     * every other column.</b> A pilot's client position is the mount's plus an offset, and the
+     * mount's is the ship's pose plus another — so when the pilot's view stands still for a tick
+     * and then covers two ticks of ground, which it does intermittently while the server flies the
+     * craft perfectly evenly, the freeze entered at one of three places and only a reading of the
+     * MIDDLE one says which. Taken in the same sample as the pilot's, so the two are the same tick
+     * by construction rather than by argument.</p>
      */
-    public static void clientTick(double x, double y, double z, boolean riding) {
-        ring(CLIENT_TICK, 0L).add(System.nanoTime(), riding ? 1.0 : 0.0, x, y, z, clientChunkLoads,
-                clientShipTransformUpdates, 0.0, 0.0, 0.0, 0.0);
+    public static void clientTick(long clientTick, double x, double y, double z, boolean riding,
+                                  double mountX, double mountY, double mountZ) {
+        ring(CLIENT_TICK, 0L).add(System.nanoTime(), clientTick, riding ? 1.0 : 0.0, x, y, z,
+                clientChunkLoads, clientShipTransformUpdates, mountX, mountY, mountZ, 0.0,
+                0.0, 0.0);
     }
 
     /**
@@ -218,9 +263,10 @@ public final class MotionTrace {
      * <p>Columns: partial ticks, then eye x, y, z (the shared positional layout), then four
      * zeroes.</p>
      */
-    public static void clientFrame(double eyeX, double eyeY, double eyeZ, double partialTicks) {
-        ring(CLIENT_FRAME, 0L).add(System.nanoTime(), partialTicks, eyeX, eyeY, eyeZ, 0.0, 0.0,
-                0.0, 0.0, 0.0, 0.0);
+    public static void clientFrame(long clientTick, double eyeX, double eyeY, double eyeZ,
+                                   double partialTicks) {
+        ring(CLIENT_FRAME, 0L).add(System.nanoTime(), clientTick, partialTicks, eyeX, eyeY, eyeZ,
+                0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0);
     }
 
     /**
@@ -313,7 +359,8 @@ public final class MotionTrace {
         Map<Long, Ring> byKey = RINGS[channel];
         Ring r = byKey.get(key);
         if (r == null) {
-            r = new Ring(CAPACITY[channel], NOMINAL_MS[channel]);
+            r = new Ring(CAPACITY[channel], NOMINAL_MS[channel], SECOND_POSE_COL[channel],
+                    CMD_SPEED_COL[channel]);
             byKey.put(key, r); // over budget: the put evicts the least recently used ring, loudly
         }
         return r;
@@ -331,22 +378,48 @@ public final class MotionTrace {
         private final int cap;
         private final double nominalMs;
         private final long[] time;
+        /**
+         * The TICK each sample was taken in, beside its nanoTime.
+         *
+         * <p><b>This is the column the verdicts are built on, and the nanoTime is not.</b> A
+         * wall-clock interval is a property of the HOST — CPU contention, GC, chunk I/O, whatever
+         * else the box is running — so a summary derived from it measures the machine with the code
+         * as one contributor. What the CODE produces is a sequence of poses indexed by tick, and a
+         * gap, a double step or a step the drive could not have commanded are all properties of that
+         * sequence. On a box ten times slower the same code produces the same sequence.</p>
+         *
+         * <p>It is a separate array rather than a column because a tick is a long and the columns are
+         * doubles: at the far end of a long-running save a world time would start losing integers,
+         * and a tick index that silently rounds is worse than none.</p>
+         *
+         * <p>It must come from a clock the SAMPLER does not drive. A counter incremented here would
+         * make a gap undetectable by construction — it would count samples and call them ticks.</p>
+         */
+        private final long[] tick;
         private final double[] cols;
         private volatile int write;
         private volatile long seen;
 
-        Ring(int cap, double nominalMs) {
+        private final int secondPoseCol;
+        private final int cmdSpeedCol;
+
+        Ring(int cap, double nominalMs, int secondPoseCol, int cmdSpeedCol) {
             this.cap = cap;
             this.nominalMs = nominalMs;
+            this.secondPoseCol = secondPoseCol;
+            this.cmdSpeedCol = cmdSpeedCol;
             this.time = new long[cap];
+            this.tick = new long[cap];
             this.cols = new double[cap * COLUMNS];
         }
 
-        void add(long ns, double c0, double c1, double c2, double c3,
-                 double c4, double c5, double c6, double c7, double c8, double c9) {
+        void add(long ns, long tickIndex, double c0, double c1, double c2, double c3,
+                 double c4, double c5, double c6, double c7, double c8, double c9,
+                 double c10, double c11) {
             int i = write;
             int base = i * COLUMNS;
             time[i] = ns;
+            tick[i] = tickIndex;
             cols[base] = c0;
             cols[base + 1] = c1;
             cols[base + 2] = c2;
@@ -357,6 +430,8 @@ public final class MotionTrace {
             cols[base + 7] = c7;
             cols[base + 8] = c8;
             cols[base + 9] = c9;
+            cols[base + 10] = c10;
+            cols[base + 11] = c11;
             write = (i + 1) % cap;
             seen++;
         }
@@ -446,7 +521,16 @@ public final class MotionTrace {
                         stalls++;
                     }
                 }
-                sb.append(",\"stepBlocks\":{\"p50\":").append(round(medStep))
+                // The largest CHANGE between two consecutive steps — the surge, and the one number
+                // here that is bounded by something production declares: a craft tracking a
+                // setpoint cannot change speed faster than the setpoint itself can ramp. A maximum
+                // step says how fast it went; only this says how abruptly.
+                double maxStepChange = 0.0;
+                for (int i = 1; i < step.length; i++) {
+                    maxStepChange = Math.max(maxStepChange, Math.abs(step[i] - step[i - 1]));
+                }
+                sb.append(",\"stepChangeBlocks\":{\"max\":").append(round(maxStepChange)).append('}')
+                        .append(",\"stepBlocks\":{\"p50\":").append(round(medStep))
                         .append(",\"p95\":").append(round(pct(sortedStep, 0.95)))
                         .append(",\"max\":").append(round(sortedStep[sortedStep.length - 1]))
                         .append("},\"stalls\":").append(stalls)
@@ -460,6 +544,18 @@ public final class MotionTrace {
                         .append(",\"netMove\":[").append(round(sumDx)).append(',')
                         .append(round(sumDy)).append(',').append(round(sumDz)).append(']');
             }
+            if (cmdSpeedCol >= 0) {
+                double maxCmd = 0.0;
+                for (int i = 0; i < n; i++) {
+                    maxCmd = Math.max(maxCmd, cols[idx[i] * COLUMNS + cmdSpeedCol]);
+                }
+                sb.append(",\"cmdSpeedMax\":").append(round(maxCmd));
+            }
+            if (positional && secondPoseCol >= 0) {
+                appendSecondPose(sb, idx, n);
+            }
+            appendPerTick(sb, idx, n, positional);
+
             // How many DISTINCT producers wrote into this window. One is the only healthy answer on
             // a channel whose clock has a single owner; more says the ring is not measuring one
             // thing, and says it in a way a doubled rate alone never could.
@@ -473,6 +569,109 @@ public final class MotionTrace {
             appendRow(sb, ",\"last\":", idx[n - 1]);
             sb.append('}');
             return sb.toString();
+        }
+
+        /**
+         * The SECOND pose's step series, under {@code mount} — the same numbers as the channel's
+         * own, over the columns at {@link #secondPoseCol}.
+         *
+         * <p>Its whole value is that it is the SAME SAMPLE. A tick where the pilot's step is 0 and
+         * the mount's is 2 says the mount moved and the pilot was not carried; 0 and 0 says the
+         * freeze arrived already made, from the ship's pose or from the entity that tracks it. Two
+         * separate runs could not tell those apart at all, and a second channel could not tell them
+         * apart on the same TICK.</p>
+         */
+        private void appendSecondPose(StringBuilder sb, int[] idx, int n) {
+            double[] step = new double[n - 1];
+            for (int i = 1; i < n; i++) {
+                int a = idx[i - 1] * COLUMNS + secondPoseCol;
+                int b = idx[i] * COLUMNS + secondPoseCol;
+                double dx = cols[b] - cols[a];
+                double dy = cols[b + 1] - cols[a + 1];
+                double dz = cols[b + 2] - cols[a + 2];
+                step[i - 1] = Math.sqrt(dx * dx + dy * dy + dz * dz);
+            }
+            double[] sorted = step.clone();
+            java.util.Arrays.sort(sorted);
+            double maxChange = 0.0;
+            for (int i = 1; i < step.length; i++) {
+                maxChange = Math.max(maxChange, Math.abs(step[i] - step[i - 1]));
+            }
+            sb.append(",\"mount\":{\"stepBlocks\":{\"p50\":").append(round(median(sorted)))
+                    .append(",\"p95\":").append(round(pct(sorted, 0.95)))
+                    .append(",\"max\":").append(round(sorted[sorted.length - 1]))
+                    .append("},\"stepChangeBlocks\":{\"max\":").append(round(maxChange))
+                    .append("},\"lastSteps\":").append(tail(step, STEP_TAIL)).append('}');
+        }
+
+        /**
+         * The window's account of itself IN TICKS — the half of this summary a verdict may rest on.
+         *
+         * <p>Reports, under {@code perTick}:</p>
+         * <ul>
+         *   <li>{@code ticks} / {@code span} — distinct ticks seen, and how many the window covers.
+         *       </li>
+         *   <li>{@code gaps} = {@code span - ticks}: ticks inside the window for which this channel
+         *       produced NO sample. On a channel whose writer runs once per tick, that is the ship
+         *       standing still for a tick and then catching up — the jerk itself, named.</li>
+         *   <li>{@code maxPerTick} / {@code minPerTick}: how many samples one tick carried. A channel
+         *       sampled once per tick contracts to 1 and 1; two samples in one tick is a lurch — or,
+         *       measured 2026-09-21, a sampler taking both phases of a tick event and running at
+         *       twice its clock, which no wall-clock summary could name. On the physics channel,
+         *       which runs at its own rate against the world tick, the healthy answer is the RATIO
+         *       of the two clocks and the number worth reading is {@code gaps}.</li>
+         * </ul>
+         *
+         * <p><b>The step series is NOT here, deliberately.</b> It is reported per SAMPLE, above,
+         * because a sample is the natural beat of each channel — and a per-TICK displacement built
+         * out of a channel that samples faster than the tick is an artefact: with two to four
+         * physics steps landing in one world tick, last-sample-to-last-sample alternates between two
+         * and four steps' worth of ground and reports a metronomic craft as surging by a factor of
+         * two. Measured on the first calibration run, where the per-sample series read
+         * p50 = p95 = max = 0.667 blocks — perfectly even — while the per-tick one read a change of
+         * 1.33. A caller wanting a per-tick bound scales the per-sample one by the ratio of the
+         * declared rates, which it can do because both are declared.</p>
+         *
+         * <p>Emitted only where the samples carry ticks. A channel driven by something that is not a
+         * tick — the render loop — says so by their absence rather than by a zero.</p>
+         */
+        private void appendPerTick(StringBuilder sb, int[] idx, int n, boolean positional) {
+            long first = tick[idx[0]];
+            long last = tick[idx[n - 1]];
+            if (first < 0 || last < first) {
+                return;
+            }
+            // One pass, ticks arriving in order: the newest sample of each tick is the pose that
+            // tick ENDED at, which is what the next tick's displacement is measured from.
+            long[] tickAt = new long[n];
+            int[] lastSampleOf = new int[n];
+            int[] samplesIn = new int[n];
+            int ticks = 0;
+            for (int i = 0; i < n; i++) {
+                long t = tick[idx[i]];
+                if (ticks > 0 && tickAt[ticks - 1] == t) {
+                    lastSampleOf[ticks - 1] = idx[i];
+                    samplesIn[ticks - 1]++;
+                    continue;
+                }
+                tickAt[ticks] = t;
+                lastSampleOf[ticks] = idx[i];
+                samplesIn[ticks] = 1;
+                ticks++;
+            }
+            int maxPerTick = 0;
+            int minPerTick = Integer.MAX_VALUE;
+            for (int i = 0; i < ticks; i++) {
+                maxPerTick = Math.max(maxPerTick, samplesIn[i]);
+                minPerTick = Math.min(minPerTick, samplesIn[i]);
+            }
+            long span = last - first + 1;
+            sb.append(",\"perTick\":{\"ticks\":").append(ticks)
+                    .append(",\"span\":").append(span)
+                    .append(",\"gaps\":").append(Math.max(0L, span - ticks))
+                    .append(",\"maxPerTick\":").append(maxPerTick)
+                    .append(",\"minPerTick\":").append(ticks == 0 ? 0 : minPerTick)
+                    .append('}');
         }
 
         /** How many beats of {@link #summary}'s per-beat step series are reported verbatim. */
