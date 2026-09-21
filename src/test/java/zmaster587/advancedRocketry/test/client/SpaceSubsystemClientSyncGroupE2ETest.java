@@ -111,17 +111,9 @@ public class SpaceSubsystemClientSyncGroupE2ETest extends AbstractSharedClientE2
     /** Wait for a sky feed naming {@code slotDim} to be APPLIED on this client. */
     private String awaitBodiesFor(Events events, long mark, int slotDim, String what,
                                   int tickBudget) throws Exception {
-        String reply = "";
-        for (int waited = 0; waited <= tickBudget; waited += 5) {
-            reply = events.since(mark, "system_bodies_received");
-            if (carriesFeedFor(reply, slotDim)) {
-                return reply;
-            }
-            bot().waitTicks(5);
-        }
-        throw new AssertionError(what + " — no `system_bodies_received` naming slot dim " + slotDim
-                + " was applied within " + tickBudget + " ticks. What DID happen since the mark: "
-                + Events.typesOf(events.since(mark)) + " | raw: " + reply);
+        return events.awaitMatching(mark, "system_bodies_received",
+                reply -> carriesFeedFor(reply, slotDim),
+                "naming slot dim " + slotDim, what, tickBudget);
     }
 
     /**
@@ -131,20 +123,20 @@ public class SpaceSubsystemClientSyncGroupE2ETest extends AbstractSharedClientE2
      */
     private String awaitClockBaselineAtLeast(Events events, long mark, long min, String what,
                                              int tickBudget) throws Exception {
-        String reply = "";
-        for (int waited = 0; waited <= tickBudget; waited += 5) {
-            reply = events.since(mark, "space_clock_synced");
-            for (String record : Events.records(reply)) {
-                double tick = Events.number(record, "serverTick");
-                if (!Double.isNaN(tick) && (long) tick >= min) {
-                    return reply;
-                }
+        return events.awaitMatching(mark, "space_clock_synced",
+                reply -> carriesBaselineAtLeast(reply, min),
+                "carrying a serverTick of at least " + min, what, tickBudget);
+    }
+
+    /** True when any {@code space_clock_synced} record in {@code reply} carries a serverTick ≥ min. */
+    private static boolean carriesBaselineAtLeast(String reply, long min) {
+        for (String record : Events.records(reply)) {
+            double tick = Events.number(record, "serverTick");
+            if (!Double.isNaN(tick) && (long) tick >= min) {
+                return true;
             }
-            bot().waitTicks(5);
         }
-        throw new AssertionError(what + " — no `space_clock_synced` carrying a serverTick of at least"
-                + " " + min + " arrived within " + tickBudget + " ticks. Baselines since the mark: "
-                + reply);
+        return false;
     }
 
     /**

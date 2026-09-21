@@ -947,6 +947,48 @@ public abstract class AbstractSharedClientE2ETest {
         clientEvents().await(mark, "client_pos_look_applied", what, PLACEMENT_LINK_BUDGET_TICKS);
     }
 
+    /**
+     * Clear the bot's inventory and wait until the CLIENT has been TOLD its hand is empty.
+     *
+     * <p><b>Why this is a link and not a poll.</b> A held stack eats a right-click, so every
+     * boarding and every GUI scenario clears the hand first — and six classes each carried the same
+     * loop, asking {@code report_player_items} up to twenty times whether the hand looked empty
+     * yet. A poll of a field cannot tell "the clear has not arrived" from "the recorder was never
+     * woven", and it answers about a rendering rather than about the packet that set it. The packet
+     * is recorded: {@code handleSetSlot} writes {@code client_slot_set} with {@code item} =
+     * {@code "empty"} for an empty stack.</p>
+     *
+     * <p><b>Its blind spot, because it has one.</b> The record does not say WHICH slot became empty
+     * in a form this wait filters on — {@code clear} empties the whole inventory, so the first
+     * {@code "empty"} record may be for any slot in that burst. That is why the hand itself is read
+     * ONCE afterwards: the link establishes that the clear reached the client, the read establishes
+     * that the HAND is the slot in question, and neither is a poll.</p>
+     */
+    protected final void emptyTheHandOnClient(String what) throws Exception {
+        long clearMark = clientEvents().mark();
+        exec("clear @a");
+        bot().selectHotbar(0);
+        try {
+            clientEvents().awaitField(clearMark, "client_slot_set", "item", "empty",
+                    what, HAND_LINK_BUDGET_TICKS);
+        } catch (AssertionError never) {
+            // Which silence it was: an empty log from a recorder that never wove says nothing about
+            // the clear, and must not be read as a clear that failed.
+            Events.assertInstrumentRan(clientEvents().since(clearMark, "client_slot_set"),
+                    "client_slot_set", "the client's own slot writes must be observed at all before"
+                            + " an absent one can be read as a clear that never landed");
+            scenario().arrangementFailed(what + " — " + never.getMessage());
+        }
+        JsonObject items = bot().reportPlayerItems();
+        String held = items.has("held") && items.getAsJsonObject("held").has("id")
+                ? items.getAsJsonObject("held").get("id").getAsString() : "?";
+        scenario().requireArranged(what + " — the clear reached the client, but the HAND still"
+                + " reads " + held + ": " + items, held.isEmpty());
+    }
+
+    /** How long the client is given to be TOLD about a cleared hand, in ticks. */
+    private static final int HAND_LINK_BUDGET_TICKS = 200;
+
     // The POINT form of `appliedInsidePlot` lives in ClientEvents.appliedNear, because the tier has
     // two class hierarchies — these shared bases and the harness's own AbstractClientE2ETest — and a
     // wait that belongs to both must not be solved by copying it into each.

@@ -169,23 +169,8 @@ public class VSAssembledShipRealRightClickBoardingE2ETest extends AbstractShared
         // ---- ARRANGEMENT: an EMPTY hand, or a held stack consumes the press before the block. ----
         // A freshly joined player does not start empty-handed (mods hand out items on first join),
         // so the hand is cleared and then VERIFIED from the client, never assumed.
-        exec("clear @a");
-        bot().selectHotbar(0);
-        JsonObject items = bot().reportPlayerItems();
-        String heldId = null;
-        for (int attempt = 0; attempt < 20; attempt++) {
-            if (isWorldReady(items)) {
-                heldId = items.getAsJsonObject("held").get("id").getAsString();
-                if (heldId.isEmpty()) {
-                    break;
-                }
-            }
-            bot().waitTicks(5);
-            items = bot().reportPlayerItems();
-        }
-        scenario().requireArranged("the bot's main hand must be EMPTY so the use press reaches the seat "
-                + "block rather than being consumed by a held item. held=" + heldId + " items=" + items,
-                heldId != null && heldId.isEmpty());
+        emptyTheHandOnClient("the bot's main hand must be EMPTY so the use press reaches the seat"
+                + " block rather than being consumed by a held item");
 
         // ---- HOP 1-3: put the crosshair on the seat, and PROVE it landed there. ------------------
         // Re-derived every attempt from the seat's LIVE world position: a freshly assembled ship

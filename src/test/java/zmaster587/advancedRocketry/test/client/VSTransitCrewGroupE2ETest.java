@@ -913,16 +913,22 @@ private long readCounter(String className, String field) throws Exception {
         // The client's log, because the resolver that claims a body is the client's (the base's own
         // note on this family). Keyed on nothing but the type: this helper does not know the ship's
         // id, and the caller's assertions that follow name it.
+        // The 40-tick STIMULUS PERIOD is the fall: he has to be left alone long enough to land
+        // between re-drops, while the record is still read every five ticks. At the read cadence he
+        // would be teleported eight times per fall and never reach the deck. Where he LANDS is not
+        // the subject — this fixture's deck is 3x3 and the cell around it is void — so the stimulus
+        // puts him over it again rather than assuming one landing spot.
         long captureMark = clientEvents().mark();
-        for (int drop = 0; drop < 6; drop++) {
-            bot().waitTicks(40); // fall onto the deck and settle
-            if (!Events.records(clientEvents().since(captureMark, "deck_carry")).isEmpty()) {
-                break;
-            }
-            // Re-drop. Where he LANDS is not the subject — this fixture's deck is 3x3 and the cell
-            // around it is void — so the arrangement puts him over it again rather than assuming
-            // one landing spot.
-            exec("tp @a " + shipX + " " + (shipY + 4.0) + " " + shipZ + " 0 0");
+        try {
+            clientEvents().awaitMatching(captureMark, "deck_carry",
+                    reply -> !Events.records(reply).isEmpty(), "for any body",
+                    "the deck never took the dropped body", 240,
+                    () -> exec("tp @a " + shipX + " " + (shipY + 4.0) + " " + shipZ + " 0 0"), 40);
+        } catch (AssertionError neverCaught) {
+            // Not a verdict here either: the caller reads the capture and makes its own claims, and
+            // one of them is about a body the deck did NOT take. Swallowing keeps that case its to
+            // decide, and the reading below is what it decides from.
+            scenario().record("deckCarryLink", neverCaught.getMessage());
         }
         // Nothing is asserted here and nothing is returned as a verdict: the caller reads the
         // capture for its own claims. That is the difference from the loop this replaces, which

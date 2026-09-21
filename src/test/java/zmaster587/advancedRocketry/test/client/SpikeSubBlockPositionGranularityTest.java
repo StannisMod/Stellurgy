@@ -243,6 +243,12 @@ public class SpikeSubBlockPositionGranularityTest extends AbstractClientE2ETest 
         double lastX = Double.NaN;
         double lastY = Double.NaN;
         String lastReply = "";
+        // STAYS A LOOP, and the refusal names the link. The re-issued far-tp IS the stimulus — a
+        // delivery that did not take is not recoverable by reading longer — and the exit is a
+        // CONVERGENCE on where the server holds him. The link that looks right is `pos_jump`, and
+        // it does not answer: it fires only on a VERTICAL write past a threshold and carries
+        // `from`/`to` in Y alone, so it cannot say he arrived at this X. What this cannot see: a
+        // delivery that landed and was undone between two attempts.
         for (int attempt = 1; attempt <= DELIVERY_ATTEMPTS; attempt++) {
             lastReply = exec("artest player far-tp " + fmt(x + 0.5d) + " " + STAND_Y + " "
                     + fmt(ARENA_Z + 0.5d));

@@ -360,20 +360,21 @@ public class PlanetBedSleepClientGroupE2ETest extends AbstractSharedClientE2ETes
             scenario().arrangementFailed(notArranged.getMessage());
             return; // unreachable: arrangementFailed always throws
         }
-        String chunkSeen = "";
-        for (int attempt = 0; attempt < 60; attempt++) {
-            exec("tp " + PLAYER + " 8.5 " + BED_Y + " 7.5");
-            bot().waitTicks(5);
-            chunkSeen = clientEvents().since(chunkMark, "chunk_data_applied");
-            // ONE record for the chunk at (0, 0): two separate field tests are satisfied by a
-            // record for (0, 9) beside one for (7, 0).
-            if (Events.anyRecordHasAll(chunkSeen, "cx", "0", "cz", "0")) {
-                break;
-            }
+        // The re-sent teleport is the STIMULUS, not the wait: the chunk is sent because the player
+        // keeps arriving, so the loop's iterations are doing work rather than watching a clock.
+        // ONE record for the chunk at (0, 0) — two separate field tests are satisfied by a record
+        // for (0, 9) beside one for (7, 0).
+        try {
+            clientEvents().awaitMatching(chunkMark, "chunk_data_applied",
+                    reply -> Events.anyRecordHasAll(reply, "cx", "0", "cz", "0"),
+                    "for the chunk at (0, 0)",
+                    "the platform's chunk data never reached this client", 300,
+                    () -> exec("tp " + PLAYER + " 8.5 " + BED_Y + " 7.5"));
+        } catch (AssertionError never) {
+            scenario().arrangementFailed("the client never applied the platform's chunk data, so it"
+                    + " keeps simulating a fall through blocks the server has: "
+                    + never.getMessage());
         }
-        scenario().requireArranged("the client never applied the platform's chunk data, so it keeps"
-                        + " simulating a fall through blocks the server has: " + chunkSeen,
-                Events.anyRecordHasAll(chunkSeen, "cx", "0", "cz", "0"));
 
         // Vanilla console /tp (same-dim) puts the player on the platform, a bed-reach-range step
         // north of the bed head (|Δz| = 2.5 ≤ 3).

@@ -91,7 +91,7 @@ public class ObservatoryDepositButtonE2ETest extends AbstractSharedClientE2ETest
         exec("tp @a " + (X + 0.5) + " " + (Y + 2) + " " + (Z + 2.5) + " 0 30");
         awaitClientPlacedNear(standMark, X + 0.5, Z + 2.5,
                 "the player must be at the machine before he right-clicks it");
-        String screen = openGuiByRightClick(bot(), X, Y, Z);
+        String screen = openGuiByRightClick(bot(), clientEvents(), X, Y, Z);
         assertTrue("right-clicking the observatory must open a GUI, got: " + screen,
                 screen.contains("Gui"));
 

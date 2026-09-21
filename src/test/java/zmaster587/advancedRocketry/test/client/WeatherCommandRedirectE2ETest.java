@@ -169,13 +169,14 @@ public class WeatherCommandRedirectE2ETest {
         // begin-raining FLAG (code 1) is only broadcast when the server-side
         // strength crosses the isRaining() threshold (> 0.2), so wait past
         // that before asserting the flag.
-        JsonObject onPlanet = waitForClientRainStrengthAtLeast(0.25f);
+        ClientPoll.Result<JsonObject> rain = waitForClientRainStrengthAtLeast(0.25f);
+        JsonObject onPlanet = rain.value;
         assertTrue("client should still be in the planet dim: " + onPlanet,
                 onPlanet.has("dim") && onPlanet.get("dim").getAsInt() == DIM);
         assertTrue("client-visible isRaining must flip true on the planet: " + onPlanet,
                 onPlanet.get("isRaining").getAsBoolean());
-        assertTrue("client rainStrength must start climbing on the planet: " + onPlanet,
-                onPlanet.get("rainStrength").getAsFloat() > 0f);
+        assertTrue("client rainStrength must start climbing on the planet; the ramp was watched as "
+                + rain, onPlanet.get("rainStrength").getAsFloat() > 0f);
 
         // Reverse direction: /weather clear from the same spot clears the
         // planet (and the overworld stays untouched — still clear).
@@ -252,15 +253,14 @@ public class WeatherCommandRedirectE2ETest {
      * asserts on the returned report, so a wait that ends short is a value the caller can judge
      * rather than a verdict this method invents.</p>
      */
-    private JsonObject waitForClientRainStrengthAtLeast(float minStrength) throws Exception {
-        JsonObject latest = clientHarness.bot().reportWeather();
-        for (int waited = 0; waited < 200; waited += 10) {
-            if (latest.has("rainStrength") && latest.get("rainStrength").getAsFloat() >= minStrength) {
-                return latest;
-            }
-            clientHarness.bot().waitTicks(10);
-            latest = clientHarness.bot().reportWeather();
-        }
-        return latest; // soft wait — caller asserts and prints the report
+    private ClientPoll.Result<JsonObject> waitForClientRainStrengthAtLeast(float minStrength)
+            throws Exception {
+        // ClientPoll rather than a hand-rolled loop: the result says whether the predicate ever
+        // held and how much of its ceiling it spent, which a bare last-reading cannot.
+        return ClientPoll.until(clientHarness.bot()::waitTicks,
+                () -> clientHarness.bot().reportWeather(),
+                report -> report.has("rainStrength")
+                        && report.get("rainStrength").getAsFloat() >= minStrength,
+                10, 20);
     }
 }

@@ -282,9 +282,8 @@ public class VSShipFlightTelemetryE2ETest extends AbstractSharedVsClientE2ETest 
             // The key REACHING the computer is a link, and it is waited for before the climb is
             // measured: a red on the climb alone cannot tell a throttle that never arrived (a broken
             // key binding, seat packet or dummy) from a ship that got it and did not rise.
-            awaitRecord(events, throttleMark, "pilot_input_set",
-                    "the real held throttle must reach a ship's flight computer at all", 100,
-                    "\"input\":\"set\"");
+            events.awaitField(throttleMark, "pilot_input_set", "input", "set",
+                    "the real held throttle must reach a ship's flight computer at all", 100);
             // Event-gated hover-lift: hold vertical-up until the ship has climbed, with a bounded
             // ceiling + early exit.
             lift = ClientPoll.until(bot()::waitTicks,
@@ -793,9 +792,8 @@ public class VSShipFlightTelemetryE2ETest extends AbstractSharedVsClientE2ETest 
             // As in test 1: the throttle's arrival at the computer is a link and is awaited as one,
             // so a climb that never happens is not reported as a control failure when the control
             // never got there.
-            awaitRecord(events, throttleMark, "pilot_input_set",
-                    "the real held throttle must reach a ship's flight computer at all", 100,
-                    "\"input\":\"set\"");
+            events.awaitField(throttleMark, "pilot_input_set", "input", "set",
+                    "the real held throttle must reach a ship's flight computer at all", 100);
             // Event-gated hover-lift (bounded ceiling + early exit): the loop returns the moment the
             // ship has climbed, so the ceiling is patience and not how far it flies.
             lift = ClientPoll.until(bot()::waitTicks,
@@ -825,8 +823,8 @@ public class VSShipFlightTelemetryE2ETest extends AbstractSharedVsClientE2ETest 
         // the computer is told the pilot has gone, and it then DECIDES to hold station. "It did not
         // sink" says nothing about a station hold that was never armed — an inert computer does not
         // sink either, it is simply not flying.
-        awaitRecord(events, dismountMark, "pilot_input_set",
-                "the flight computer must be told the pilot stood up", 120, "\"input\":\"null\"");
+        events.awaitField(dismountMark, "pilot_input_set", "input", "null",
+                "the flight computer must be told the pilot stood up", 120);
         String hold;
         try {
             hold = events.await(dismountMark, "unmanned_hold_decided",
@@ -1095,34 +1093,14 @@ public class VSShipFlightTelemetryE2ETest extends AbstractSharedVsClientE2ETest 
         return Math.sqrt(dx * dx + dy * dy + dz * dz);
     }
 
-    /**
-     * Wait for a record of {@code type} whose payload carries every one of {@code needles} — an
-     * {@link Events#await} that can say WHICH body it means.
-     *
-     * <p>Local to this class because {@code Events.await} matches on the TYPE alone, and every deck
-     * link this class waits for is about ONE body: the harness world holds the bot, this scenario's
-     * armour stand and every earlier scenario's, and all of them are captured and released by the
-     * same resolver. A wait that could be answered by any of them would be measuring the crowd.</p>
-     */
-    private String awaitRecord(Events events, long mark, String type, String what, int tickBudget,
-                               String... needles) throws Exception {
-        String reply = "";
-        // This budget is a DEADLINE for a discrete commit with an early exit — how patient the test
-        // is, never how far the world moves: the loop returns the moment the record appears, and
-        // reaching the end of it is a failure either way.
-        for (int waited = 0; waited <= tickBudget; waited += 5) {
-            reply = events.since(mark, type);
-            if (matchingRecords(reply, needles) > 0) {
-                return reply;
-            }
-            bot().waitTicks(5);
-        }
-        throw new AssertionError(what + " — no `" + type + "` carrying "
-                + java.util.Arrays.toString(needles) + " was recorded within " + tickBudget
-                + " ticks. Records of that type since the mark: " + reply
-                + " | everything recorded since the mark, in order: "
-                + Events.typesOf(events.since(mark)));
-    }
+    // WHY EVERY WAIT HERE NAMES A FIELD. `Events.await` matches on the TYPE alone, and every deck
+    // link this class waits for is about ONE body: the harness world holds the bot, this scenario's
+    // armour stand and every earlier scenario's, and all of them are captured and released by the
+    // same resolver. A wait answerable by any of them would be measuring the crowd. The join is the
+    // `e` / `ship` FIELDS, through Events.awaitField and awaitRecordWithFields.
+    //
+    // `matchingRecords` below survives for the five READS that count records after the fact; it is
+    // a substring reader and each of those five is a candidate for the same field treatment.
 
     /**
      * The NUMERIC {@code field} of the last record in a {@code since} reply, or {@code "none"} when
@@ -1201,11 +1179,11 @@ public class VSShipFlightTelemetryE2ETest extends AbstractSharedVsClientE2ETest 
                 + " " + ship[2]), ENTITY_ID);
         // Keyed on the body AND on the ship: the entity needle alone says a deck took him, never
         // which deck, and every reading below is expressed in the taking ship's own frame.
-        awaitRecord(events, dropMark, "deck_entered",
+        events.awaitRecordWithFields(dropMark, "deck_entered",
                 "THIS ship's deck must TAKE the dropped body (entity " + crewId + "): the ship-frame"
                         + " resolver never captured it for this craft, so nothing below is about how"
                         + " a captured body rides THIS deck", 200,
-                "\"e\":" + crewId + ",", "\"ship\":\"" + scenarioShipId + "\"");
+                "e", String.valueOf(crewId), "ship", scenarioShipId);
         // The capture is the link; coming to REST on the deck is the body's own fall settling, which
         // is a value and stays a wait.
         bot().waitTicks(40);

@@ -637,15 +637,22 @@ public class MachineGuiClientGroupE2ETest extends AbstractSharedClientE2ETest {
         // player on a footing his own client has not received yet, and he falls through it — the
         // same fall, to the same fraction of a block, every time. Standing still is a convergence,
         // so it is polled.
-        double standingY = 0;
-        for (int attempt = 0; attempt < 6; attempt++) {
-            exec("tp @a " + (x + 0.5) + " " + (Y + 1) + " " + (z - 0.5) + " 0 0");
-            bot().waitTicks(20);
-            standingY = bot().reportState().get("playerY").getAsDouble();
-            if (Math.abs(standingY - (Y + 1)) <= 1.0) {
-                break;
-            }
+        // The teleport is the STIMULUS and `client_pos_look_applied` is the link: the wait ends
+        // when the CLIENT has applied a server position write, which is the thing the fixed wait
+        // was standing in for. The re-issue stays because a click that lands before the client has
+        // the footing drops him through it, and no amount of reading recovers that — so it is
+        // re-sent every 20 ticks while the log is read every 5.
+        long placedMark = clientEvents().mark();
+        try {
+            clientEvents().awaitMatching(placedMark, "client_pos_look_applied",
+                    reply -> !Events.records(reply).isEmpty(), "applying a server position write",
+                    "the player must be put on the footing beside the machine", 120,
+                    () -> exec("tp @a " + (x + 0.5) + " " + (Y + 1) + " " + (z - 0.5) + " 0 0"), 20);
+        } catch (AssertionError never) {
+            scenario().arrangementFailed("the client never applied the teleport onto the footing: "
+                    + never.getMessage());
         }
+        double standingY = bot().reportState().get("playerY").getAsDouble();
         scenario().requireArranged("the player fell off the footing (y=" + standingY + ", wanted "
                 + (Y + 1) + ") — every click from here would be out of reach."
                 + " footingPlacements=" + footing
@@ -1006,21 +1013,7 @@ public class MachineGuiClientGroupE2ETest extends AbstractSharedClientE2ETest {
 
     /** Server-side clear + client-observed empty hand (a held stack can eat the right-click). */
     private void emptyTheHand() throws Exception {
-        exec("clear @a");
-        bot().selectHotbar(0);
-        String heldId = null;
-        for (int attempt = 0; attempt < 20; attempt++) {
-            JsonObject items = bot().reportPlayerItems();
-            if (items.has("worldReady") && items.get("worldReady").getAsBoolean()
-                    && items.has("held")) {
-                heldId = items.getAsJsonObject("held").get("id").getAsString();
-                if (heldId.isEmpty()) {
-                    return;
-                }
-            }
-            bot().waitTicks(5);
-        }
-        scenario().arrangementFailed("the bot's hand must be observably empty; held=" + heldId);
+        emptyTheHandOnClient("the bot's hand must be observably empty");
     }
 
     // ── inventory-bypass mixin ────────────────────────────────────────────────

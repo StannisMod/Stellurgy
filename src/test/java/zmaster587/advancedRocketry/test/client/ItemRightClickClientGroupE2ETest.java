@@ -515,13 +515,17 @@ public class ItemRightClickClientGroupE2ETest extends AbstractSharedClientE2ETes
         // before the click rather than assumed from having asked for it.
         scenario().measuring("aim straight down and confirm the CLIENT is holding that look");
         bot().setLook(0f, 90f);
-        double pitch = Double.NaN;
-        for (int i = 0; i < 20; i++) {
-            bot().waitTicks(2);
-            pitch = bot().reportState().get("playerPitch").getAsDouble();
-            if (pitch > LOOKING_STRAIGHT_DOWN_DEG) break;
-        }
-        scenario().record("clientPitch", pitch);
+        // ClientPoll rather than a hand-rolled loop. There is no link to take: `setLook` is the
+        // CLIENT aiming itself, it sends no packet the client then applies, and
+        // `client_pos_look_applied` records the SERVER writing a look — a different event that does
+        // not happen here. So this stays a poll, and what it buys by being the harness's one is the
+        // self-report: satisfied, iterations spent against its ceiling, and the last pitch read.
+        // What it cannot see: an aim that reached the threshold and moved off it between reads.
+        ClientPoll.Result<Double> aim = ClientPoll.until(bot()::waitTicks,
+                () -> bot().reportState().get("playerPitch").getAsDouble(),
+                seen -> seen > LOOKING_STRAIGHT_DOWN_DEG, 2, 20);
+        double pitch = aim.value;
+        scenario().record("clientPitch", aim.toString());
         scenario().requireArranged("the client must be looking straight down before the click, or"
                 + " the item's 5-block ray traces into empty air; client pitch=" + pitch,
                 pitch > LOOKING_STRAIGHT_DOWN_DEG);

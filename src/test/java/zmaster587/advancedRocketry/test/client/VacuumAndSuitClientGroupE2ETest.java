@@ -311,28 +311,17 @@ public class VacuumAndSuitClientGroupE2ETest extends AbstractSharedClientE2ETest
 
     // ── waiting on a log, either side ─────────────────────────────────────────
 
-    /**
-     * Wait until the SERVER log carries a record of {@code type} matching {@code needle}, or the
-     * budget ends; the reply comes back either way so the CALLER asserts.
-     *
-     * <p>{@link Events#await} waits on a bare TYPE, which is not enough for any of the three types
-     * this class means: {@code living_hurt} is recorded for every damage source a player can meet
-     * (fall, suffocation, the vacuum), and {@code suit_air_drained} is written by BOTH suit routes
-     * under one name. A wait on the type alone would be satisfied by the wrong record and read as
-     * the contract holding.</p>
-     */
-    private String awaitServerRecord(Events events, long mark, String type, String needle,
-                                     int tickBudget) throws Exception {
-        String reply = "";
-        for (int waited = 0; waited <= tickBudget; waited += 5) {
-            reply = events.since(mark, type);
-            if (reply.contains(needle)) {
-                return reply;
-            }
-            bot().waitTicks(5);
-        }
-        return reply;
-    }
+    // WHY EVERY SERVER-SIDE WAIT HERE NAMES A FIELD. `Events.await` waits on a bare TYPE, which is
+    // not enough for any of the three types this class means: `living_hurt` is recorded for every
+    // damage source a player can meet (fall, suffocation, the vacuum), and `suit_air_drained` is
+    // written by BOTH suit routes under one name. A wait on the type alone would be satisfied by
+    // the wrong record and read as the contract holding. So each one goes through
+    // Events.awaitRecordWithField, naming `route` or `source`.
+    //
+    // The local wait this replaced returned its reply on EXPIRY, and each caller then asserted on
+    // it with a sentence explaining what the record meant. Those assertions could not fail once the
+    // wait had returned — they re-asked exactly what it had just established — so the sentences
+    // moved into the wait's own `what`, where they are printed by the failure that means them.
 
     /**
      * Wait until the CLIENT has been told a health BELOW {@code threshold} since {@code mark}, and
@@ -465,19 +454,15 @@ public class VacuumAndSuitClientGroupE2ETest extends AbstractSharedClientE2ETest
             setDensityAndConfirm(0, false);
 
             scenario().asserting("the tank drains to nothing and the damage then starts");
-            String drains = awaitServerRecord(events, mark, "suit_air_drained",
-                    "\"route\":\"component\"", LINK_BUDGET_TICKS);
-            assertTrue("the vacuum must reach the chest's pressure tank before anything else can be"
-                    + " concluded — without a drain the transition below never starts. Drains since"
-                    + " the flip: " + drains,
-                    Events.anyRecordHas(drains, "route", "component"));
-
-            String hurts = awaitServerRecord(events, mark, "living_hurt", "\"source\":\"Vacuum\"",
+            String drains = events.awaitRecordWithField(mark, "suit_air_drained", "route",
+                    "component",
+                    "the vacuum must reach the chest's pressure tank before anything else can be"
+                            + " concluded — without a drain the transition below never starts",
                     LINK_BUDGET_TICKS);
-            assertTrue("vacuum damage must apply once the tank is drained; damage the player took"
-                    + " since the flip: " + hurts + " | drains: " + drains
-                    + " | suit gate decisions: " + events.since(mark, "suit_immunity_decided"),
-                    Events.anyRecordHas(hurts, "source", "Vacuum"));
+
+            String hurts = events.awaitRecordWithField(mark, "living_hurt", "source", "Vacuum",
+                    "vacuum damage must apply once the tank is drained; the drain that started it: "
+                            + drains, LINK_BUDGET_TICKS);
 
             String decisions = events.since(mark, "suit_immunity_decided");
             assertTrue("the suit gate must be recorded turning the player DOWN — that flip is the"
@@ -646,12 +631,11 @@ public class VacuumAndSuitClientGroupE2ETest extends AbstractSharedClientE2ETest
             setDensityAndConfirm(0, false);
 
             scenario().asserting("the suit's air drains and the suit keeps the player unhurt");
-            String drains = awaitServerRecord(events, mark, "suit_air_drained",
-                    "\"route\":\"enchanted\"", LINK_BUDGET_TICKS);
-            assertTrue("the vacuum must reach the enchanted suit's buffer — the chest is the LAST"
-                    + " piece production consults, so a drain is the proof the whole suit was asked."
-                    + " Drains since the flip: " + drains,
-                    Events.anyRecordHas(drains, "route", "enchanted"));
+            String drains = events.awaitRecordWithField(mark, "suit_air_drained", "route",
+                    "enchanted",
+                    "the vacuum must reach the enchanted suit's buffer — the chest is the LAST"
+                            + " piece production consults, so a drain is the proof the whole suit"
+                            + " was asked", LINK_BUDGET_TICKS);
 
             // The suit HELD: the gate never recorded a refusal and no vacuum damage was applied.
             // The decision recorder is edge-only, so a run of unchanged `true`s leaves no record at
@@ -721,12 +705,8 @@ public class VacuumAndSuitClientGroupE2ETest extends AbstractSharedClientE2ETest
             setDensityAndConfirm(0, false);
 
             scenario().asserting("vacuum damages the unprotected player, and drains no air");
-            String hurts = awaitServerRecord(events, mark, "living_hurt", "\"source\":\"Vacuum\"",
-                    LINK_BUDGET_TICKS);
-            assertTrue("vacuum damage must apply to a bare-skinned player; what hurt him since the"
-                    + " flip: " + hurts + " | suit gate decisions: "
-                    + events.since(mark, "suit_immunity_decided"),
-                    Events.anyRecordHas(hurts, "source", "Vacuum"));
+            String hurts = events.awaitRecordWithField(mark, "living_hurt", "source", "Vacuum",
+                    "vacuum damage must apply to a bare-skinned player", LINK_BUDGET_TICKS);
 
             String drains = events.since(mark, "suit_air_drained");
             assertEquals("a player with no chest must enter no decrement path at all — the damage"
@@ -780,11 +760,9 @@ public class VacuumAndSuitClientGroupE2ETest extends AbstractSharedClientE2ETest
             // TOLD a lower health: read off the client's own record of the health packet rather than
             // sampled from what it renders now, so a drop cannot be missed between two samples and a
             // local prediction cannot stand in for a packet that never came.
-            String hurts = awaitServerRecord(events, mark, "living_hurt", "\"source\":\"Vacuum\"",
+            String hurts = events.awaitRecordWithField(mark, "living_hurt", "source", "Vacuum",
+                    "the vacuum must damage the player at all before the client can be shown it",
                     LINK_BUDGET_TICKS);
-            assertTrue("the vacuum must damage the player at all before the client can be shown it;"
-                    + " what hurt him since the flip: " + hurts,
-                    Events.anyRecordHas(hurts, "source", "Vacuum"));
 
             double current = awaitClientHealthBelow(clientMark, healthStart,
                     "vacuum damage never reached the client (he started at " + healthStart
@@ -831,12 +809,11 @@ public class VacuumAndSuitClientGroupE2ETest extends AbstractSharedClientE2ETest
             setDensityAndConfirm(0, false);
 
             scenario().asserting("the tank drains through the component route and the suit holds");
-            String drains = awaitServerRecord(events, mark, "suit_air_drained",
-                    "\"route\":\"component\"", LINK_BUDGET_TICKS);
-            assertTrue("the vacuum must drain the chest's pressure tank through the COMPONENT route —"
-                    + " the chest is the last piece production consults, so this is also the proof"
-                    + " the whole suit was asked. Drains since the flip: " + drains,
-                    Events.anyRecordHas(drains, "route", "component"));
+            String drains = events.awaitRecordWithField(mark, "suit_air_drained", "route",
+                    "component",
+                    "the vacuum must drain the chest's pressure tank through the COMPONENT route —"
+                            + " the chest is the last piece production consults, so this is also"
+                            + " the proof the whole suit was asked", LINK_BUDGET_TICKS);
 
             String decisions = events.since(mark, "suit_immunity_decided");
             assertEquals("a full suit must never be judged unprotected while its tank has oxygen;"

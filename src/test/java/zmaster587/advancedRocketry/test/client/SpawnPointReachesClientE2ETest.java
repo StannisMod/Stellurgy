@@ -180,7 +180,8 @@ public class SpawnPointReachesClientE2ETest {
         startClient();
         clientHarness.bot().waitForWorld();
 
-        JsonObject spawn = waitForClientSpawn(SPAWN_A_X, SPAWN_A_Y, SPAWN_A_Z);
+        // Mark 0: the spawn packet rides in with the join, before any mark this test could take.
+        JsonObject spawn = waitForClientSpawn(0L, SPAWN_A_X, SPAWN_A_Y, SPAWN_A_Z);
         assertEquals("client should be in the overworld: " + spawn, 0, spawn.get("dim").getAsInt());
         assertSpawnEquals("client world spawn after login", spawn,
                 SPAWN_A_X, SPAWN_A_Y, SPAWN_A_Z);
@@ -210,8 +211,9 @@ public class SpawnPointReachesClientE2ETest {
         // Positive control: force a known-good client state through vanilla's
         // own broadcast. If this fails, the probe or the client is broken and
         // nothing below would mean anything.
+        long broadcast = clientEvents().mark();
         exec("setworldspawn " + SPAWN_A_X + " " + SPAWN_A_Y + " " + SPAWN_A_Z);
-        JsonObject synced = waitForClientSpawn(SPAWN_A_X, SPAWN_A_Y, SPAWN_A_Z);
+        JsonObject synced = waitForClientSpawn(broadcast, SPAWN_A_X, SPAWN_A_Y, SPAWN_A_Z);
         assertSpawnEquals("POSITIVE CONTROL: a broadcast SPacketSpawnPosition must reach the"
                         + " client (a failure here is the probe or the client, not AR)",
                 synced, SPAWN_A_X, SPAWN_A_Y, SPAWN_A_Z);
@@ -248,7 +250,7 @@ public class SpawnPointReachesClientE2ETest {
         exec("artest tp " + PLANET_DIM);
         awaitClientDim(toPlanet, PLANET_DIM);
 
-        JsonObject onPlanet = waitForClientSpawn(SPAWN_B_X, SPAWN_B_Y, SPAWN_B_Z);
+        JsonObject onPlanet = waitForClientSpawn(toPlanet, SPAWN_B_X, SPAWN_B_Y, SPAWN_B_Z);
         assertEquals("client should be on the planet: " + onPlanet,
                 PLANET_DIM, onPlanet.get("dim").getAsInt());
         assertSpawnEquals("client world spawn after cross-dim transfer", onPlanet,
@@ -259,29 +261,40 @@ public class SpawnPointReachesClientE2ETest {
         exec("artest tp 0");
         awaitClientDim(toOverworld, 0);
         assertSpawnEquals("client world spawn after transferring back to the overworld",
-                waitForClientSpawn(SPAWN_B_X, SPAWN_B_Y, SPAWN_B_Z),
+                waitForClientSpawn(toOverworld, SPAWN_B_X, SPAWN_B_Y, SPAWN_B_Z),
                 SPAWN_B_X, SPAWN_B_Y, SPAWN_B_Z);
     }
 
     /**
-     * Polls ~10 s for the expected triple and returns the LAST sample either
-     * way — a soft wait, so the caller's assertion carries the full JSON into
-     * the failure message.
+     * Wait until the CLIENT has been TOLD this spawn triple, then read what it holds ONCE.
+     *
+     * <p>This replaced a poll of {@code report_spawn}, which sampled the value the packet sets and
+     * could not tell "not sent yet" from "sent and overwritten between two reads". The record is
+     * {@code client_spawn_set}, written at the tail of {@code handleSpawnPosition} — added to the
+     * harness on 2026-09-21 for exactly this wait, because until then there was nothing to link
+     * on and a longer budget was the only lever.</p>
+     *
+     * @param mark a mark on the CLIENT log taken BEFORE whatever changes the spawn; {@code 0} for
+     *             a login, where the packet arrives with the join and precedes any mark a test
+     *             could take
      */
-    private JsonObject waitForClientSpawn(int x, int y, int z) throws Exception {
-        JsonObject latest = clientHarness.bot().reportSpawn();
-        for (int waited = 0; waited < 200; waited += 10) {
-            if (latest != null && latest.has("spawnX")
-                    && latest.get("spawnX").getAsInt() == x
-                    && latest.get("spawnY").getAsInt() == y
-                    && latest.get("spawnZ").getAsInt() == z) {
-                return latest;
-            }
-            clientHarness.bot().waitTicks(10);
-            latest = clientHarness.bot().reportSpawn();
+    private JsonObject waitForClientSpawn(long mark, int x, int y, int z) throws Exception {
+        try {
+            clientEvents().awaitRecordWithFields(mark, "client_spawn_set",
+                    "the client must be TOLD the world spawn", SPAWN_LINK_BUDGET_TICKS,
+                    "x", String.valueOf(x), "y", String.valueOf(y), "z", String.valueOf(z));
+        } catch (AssertionError never) {
+            Events.assertInstrumentRan(clientEvents().since(mark, "client_spawn_set"),
+                    "client_spawn_set", "the client's own spawn writes must be observed at all"
+                            + " before an absent one can be read as a spawn that never reached it");
+            throw new AssertionError(never.getMessage() + " | the client currently holds "
+                    + clientHarness.bot().reportSpawn(), never);
         }
-        return latest;
+        return clientHarness.bot().reportSpawn();
     }
+
+    /** How long the client is given to be TOLD a world spawn, in ticks. */
+    private static final int SPAWN_LINK_BUDGET_TICKS = 200;
 
     /**
      * The client is IN {@code expectedDim}, waited for as the RESPAWN packet that puts it there —

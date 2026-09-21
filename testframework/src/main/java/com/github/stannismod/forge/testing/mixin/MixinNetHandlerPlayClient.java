@@ -9,6 +9,7 @@ import net.minecraft.network.play.server.SPacketJoinGame;
 import net.minecraft.network.play.server.SPacketPlayerPosLook;
 import net.minecraft.network.play.server.SPacketRespawn;
 import net.minecraft.network.play.server.SPacketSetSlot;
+import net.minecraft.network.play.server.SPacketSpawnPosition;
 import net.minecraft.network.play.server.SPacketUpdateHealth;
 
 import org.spongepowered.asm.mixin.Mixin;
@@ -90,6 +91,9 @@ import com.github.stannismod.forge.testing.client.bridge.ForgeTestClientBootstra
  *       a set-slot for a window that is not the open container, and this record cannot tell a
  *       stored stack from a dropped one; it says only that the packet was handled. Also SILENT
  *       about a REPEAT: see the change-gate on the seam below.</li>
+ *   <li>{@code client_spawn_set} — the client's copy of the world spawn is what the server sent
+ *       ({@code handleSpawnPosition}). Payload: {@code x}, {@code y}, {@code z}. SILENT about WHY
+ *       it changed and about a bed-spawn, which is per-player and travels by another route.</li>
  *   <li>{@code client_health_updated} — the client player's health and food are what the server
  *       says ({@code handleUpdateHealth}). Payload: {@code health}, {@code food}. SILENT about
  *       saturation (in the packet, not in the pin) and about damage the client PREDICTED locally.</li>
@@ -149,6 +153,27 @@ public class MixinNetHandlerPlayClient {
         ForgeTestClientBootstrap.noteInstrumentEntered("client_dimension_changed");
         ForgeTestClientBootstrap.recordEvent("client_dimension_changed",
                 "\"dim\":" + packet.getDimension() + ",\"via\":\"join\"");
+    }
+
+    /**
+     * The client's copy of the world spawn is now what the server sent.
+     *
+     * <p>Added 2026-09-21 because there was nothing to wait on: a test that changes the spawn
+     * point and then wants to know the client heard could only poll {@code report_spawn} and read
+     * its own timing. The packet carries one {@code BlockPos} and the handler writes it into the
+     * world info and returns, so the recorded values are the packet's — what the server SENT —
+     * rather than a later re-read.</p>
+     *
+     * <p>NOT gated: the server sends this on join and on every spawn change, and each is a distinct
+     * fact. A test that means "the change I just made" reads since its own mark.</p>
+     */
+    @Inject(method = "handleSpawnPosition", at = @At("TAIL"))
+    private void forgeTest$recordSpawnPosition(SPacketSpawnPosition packet, CallbackInfo ci) {
+        ForgeTestClientBootstrap.noteInstrumentEntered(INSTRUMENT);
+        ForgeTestClientBootstrap.noteInstrumentEntered("client_spawn_set");
+        net.minecraft.util.math.BlockPos pos = packet.getSpawnPos();
+        ForgeTestClientBootstrap.recordEvent("client_spawn_set",
+                "\"x\":" + pos.getX() + ",\"y\":" + pos.getY() + ",\"z\":" + pos.getZ());
     }
 
     /**

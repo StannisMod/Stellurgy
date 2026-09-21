@@ -890,13 +890,39 @@ public final class Events {
     public String awaitMatching(long mark, String type, Condition holds,
                                 String matching, String what, int tickBudget, Stimulus stimulus)
             throws Exception {
+        return awaitMatching(mark, type, holds, matching, what, tickBudget, stimulus, 5);
+    }
+
+    /**
+     * {@link #awaitMatching(long, String, Condition, String, String, int, Stimulus)} with a PERIOD
+     * for the stimulus, in ticks.
+     *
+     * <p><b>Reading and acting are two different rhythms, and folding them into one is a bug.</b>
+     * Five ticks is right for READING — a record that exists is found within a step of appearing —
+     * but a stimulus applied every five ticks can prevent the very thing it is asking for.
+     * Measured 2026-09-21 on a crew drop that must FALL about forty ticks onto a deck between
+     * teleports: at the read cadence it would have been re-teleported eight times per fall and
+     * never landed, and that site had kept a hand-rolled loop for want of this parameter. The same
+     * shape is a right-click re-issued until a GUI opens, where the click is cheap but must not be
+     * spammed.</p>
+     *
+     * <p>So the read stays at five and the stimulus fires every {@code stimulusEveryTicks}, the
+     * first time immediately. The budget is unchanged and still the deadline.</p>
+     */
+    public String awaitMatching(long mark, String type, Condition holds,
+                                String matching, String what, int tickBudget, Stimulus stimulus,
+                                int stimulusEveryTicks) throws Exception {
+        if (stimulusEveryTicks <= 0) {
+            throw new AssertionError("awaitMatching needs a positive stimulus period and was given "
+                    + stimulusEveryTicks);
+        }
         String reply = "";
         for (int waited = 0; waited <= tickBudget; waited += 5) {
             reply = since(mark, type);
             if (holds.holds(reply)) {
                 return reply;
             }
-            if (stimulus != null) {
+            if (stimulus != null && waited % stimulusEveryTicks == 0) {
                 stimulus.run();
             }
             step.ticks(5);

@@ -184,13 +184,14 @@ public class WeatherClientSyncE2ETest {
         // server-driven via SPacketChangeGameState (begin/end raining +
         // strength edges), so it ramps up over a handful of ticks before
         // settling near 1.0. Poll a short window.
-        JsonObject onA = waitForClientRainStrengthAtLeast(0.05f);
+        ClientPoll.Result<JsonObject> rainA = waitForClientRainStrengthAtLeast(0.05f);
+        JsonObject onA = rainA.value;
         assertTrue("client should be in dim A after goto: " + onA,
                 onA.has("dim") && onA.get("dim").getAsInt() == DIM_A);
         assertTrue("client-visible isRaining must be true on dim A: " + onA,
                 onA.get("isRaining").getAsBoolean());
-        assertTrue("client rainStrength must climb above 0 on dim A: " + onA,
-                onA.get("rainStrength").getAsFloat() > 0f);
+        assertTrue("client rainStrength must climb above 0 on dim A; the ramp was watched as "
+                        + rainA, onA.get("rainStrength").getAsFloat() > 0f);
 
         // Teleport to dim B. This is the path that fires
         // PlayerChangedDimensionEvent -> PlanetWeatherEventHandler.syncToPlayer,
@@ -314,15 +315,15 @@ public class WeatherClientSyncE2ETest {
      * vanilla game-state packet. What it no longer has to absorb is the crossing itself — that is
      * awaited as its own link above, so a red here can only be about the rain.</p>
      */
-    private JsonObject waitForClientRainStrengthAtLeast(float minStrength) throws Exception {
-        JsonObject latest = clientHarness.bot().reportWeather();
-        for (int waited = 0; waited < 200; waited += 10) {
-            if (latest.has("rainStrength") && latest.get("rainStrength").getAsFloat() >= minStrength) {
-                return latest;
-            }
-            clientHarness.bot().waitTicks(10);
-            latest = clientHarness.bot().reportWeather();
-        }
-        return latest; // let the caller decide; this is a soft wait
+    private ClientPoll.Result<JsonObject> waitForClientRainStrengthAtLeast(float minStrength)
+            throws Exception {
+        // ClientPoll rather than a hand-rolled loop, and the difference is the SELF-REPORT: the
+        // result carries whether the predicate ever held, how many of its iterations it spent and
+        // what it last read, so a caller printing it says which of those it is complaining about.
+        return ClientPoll.until(clientHarness.bot()::waitTicks,
+                () -> clientHarness.bot().reportWeather(),
+                report -> report.has("rainStrength")
+                        && report.get("rainStrength").getAsFloat() >= minStrength,
+                10, 20);
     }
 }

@@ -1277,27 +1277,48 @@ public class M1PlanetToPlanetMilestoneE2ETest {
      */
     private String openConsoleFromTheDeck(int dim, int[] afcSub, int[] navSub, int budget)
             throws Exception {
-        Aim aim = new Aim();
-        for (int attempt = 0; attempt < 6; attempt++) {
-            String already = screenOf(bot().reportState());
-            if (!already.isEmpty()) {
-                return already;
-            }
-            aim = aimAt(dim, afcSub, navSub, OFF_STAND, 0.5, 0.5, 0.5, budget);
-            assertAimed(aim, navSub, "navigation console", "navigationcomputer");
-            pressUse();
-            for (int waited = 0; waited < 6; waited++) {
-                bot().waitTicks(10);
-                String screen = screenOf(bot().reportState());
-                if (!screen.isEmpty()) {
-                    return screen;
-                }
-            }
+        String already = screenOf(bot().reportState());
+        if (!already.isEmpty()) {
+            return already;
         }
-        return "ARRANGEMENT: console never opened;" + aim.diagnosis;
+        // The aim-and-press is the STIMULUS and `client_gui_opened` is the link. The crosshair is
+        // re-derived before every press because a freshly settled craft moves under it, and the
+        // press is re-issued every 60 ticks while the log is read every 5 — a press that never
+        // registered is not recoverable by reading longer, which is what makes this a stimulus.
+        Aim[] aim = {new Aim()};
+        long mark = clientEvents().mark();
+        try {
+            clientEvents().awaitMatching(mark, "client_gui_opened",
+                    reply -> Events.records(reply).size()
+                            > Events.recordsWhere(reply, "gui", "none").size(),
+                    "opening any screen", "the navigation console must open", 360,
+                    () -> {
+                        aim[0] = aimAt(dim, afcSub, navSub, OFF_STAND, 0.5, 0.5, 0.5, budget);
+                        assertAimed(aim[0], navSub, "navigation console", "navigationcomputer");
+                        pressUse();
+                    }, 60);
+        } catch (AssertionError neverOpened) {
+            return "ARRANGEMENT: console never opened;" + aim[0].diagnosis + " | "
+                    + neverOpened.getMessage();
+        }
+        return screenOf(bot().reportState());
     }
 
-    /** An empty main hand, without wiping the inventory the pilot is carrying his crystal in. */
+    /**
+     * An empty main hand, without wiping the inventory the pilot is carrying his crystal in.
+     *
+     * <p><b>This one stays a poll, and the reason is that no record exists to wait on.</b> Every
+     * other hand wait in the tier links on {@code client_slot_set}, which the client writes when
+     * the SERVER sets a slot. Nothing is set here: selecting a hotbar index is a CLIENT action, it
+     * sends {@code CPacketHeldItemChange} and produces no record on either side. What the loop is
+     * really waiting for is the client being in a ready world at all — {@code isWorldReady} is the
+     * gate every iteration tests — and that has no link either.</p>
+     *
+     * <p>The work this needs is a test mixin on the client's own held-slot change, not a longer
+     * budget; until then the loop is honest about what it cannot see: it cannot tell a hand that is
+     * still catching up from a client that was never ready, and it reports the last held id it
+     * managed to read so a red says which.</p>
+     */
     private void holdNothing(int budget) throws Exception {
         bot().selectHotbar(1);
         String heldId = null;
@@ -1611,24 +1632,29 @@ public class M1PlanetToPlanetMilestoneE2ETest {
      * press, so a red names the hop that failed rather than merely the outcome.
      */
     private String openBuilderScreenByRealKeyPress(int[] builderPos, int budget) throws Exception {
-        Aim aim = new Aim();
-        for (int attempt = 0; attempt < 6; attempt++) {
-            String already = screenOf(bot().reportState());
-            if (!already.isEmpty()) {
-                return already;
-            }
-            aim = aimAtWorldBlock(builderPos, 0.5, 0.5, 0.5, budget);
-            assertAimed(aim, builderPos, "rocket assembler", "rocketbuilder");
-            pressUse();
-            for (int waited = 0; waited < 6; waited++) {
-                bot().waitTicks(10);
-                String screen = screenOf(bot().reportState());
-                if (!screen.isEmpty()) {
-                    return screen;
-                }
-            }
+        String already = screenOf(bot().reportState());
+        if (!already.isEmpty()) {
+            return already;
         }
-        return "";
+        // Same pair as openConsoleFromTheDeck: aim-and-press is the stimulus, `client_gui_opened`
+        // is the link, and the crosshair is re-derived every press because the machine's world
+        // position is read fresh.
+        Aim[] aim = {new Aim()};
+        long mark = clientEvents().mark();
+        try {
+            clientEvents().awaitMatching(mark, "client_gui_opened",
+                    reply -> Events.records(reply).size()
+                            > Events.recordsWhere(reply, "gui", "none").size(),
+                    "opening any screen", "the rocket assembler must open", 360,
+                    () -> {
+                        aim[0] = aimAtWorldBlock(builderPos, 0.5, 0.5, 0.5, budget);
+                        assertAimed(aim[0], builderPos, "rocket assembler", "rocketbuilder");
+                        pressUse();
+                    }, 60);
+        } catch (AssertionError neverOpened) {
+            return "";
+        }
+        return screenOf(bot().reportState());
     }
 
     // ---- aiming ---------------------------------------------------------------------------------
@@ -1901,19 +1927,26 @@ public class M1PlanetToPlanetMilestoneE2ETest {
 
     /** Server-side clear plus a client-observed empty hand (a held stack eats the use press). */
     private void emptyTheHand() throws Exception {
+        // The clear is recorded: handleSetSlot writes `client_slot_set` with item = "empty". The
+        // link says the clear REACHED the client; the read below says the HAND is the slot meant,
+        // which the record does not distinguish in the burst `clear` produces. Neither is a poll.
+        // (This class cannot use the shared base's emptyTheHandOnClient — it extends the harness's
+        // own AbstractClientE2ETest, not the tier's shared base.)
+        long clearMark = clientEvents().mark();
         exec("clear @a");
         bot().selectHotbar(0);
-        String heldId = null;
-        for (int attempt = 0; attempt < 20; attempt++) {
-            JsonObject items = bot().reportPlayerItems();
-            if (isWorldReady(items) && items.has("held")) {
-                heldId = items.getAsJsonObject("held").get("id").getAsString();
-                if (heldId.isEmpty()) {
-                    return;
-                }
-            }
-            bot().waitTicks(5);
+        try {
+            clientEvents().awaitField(clearMark, "client_slot_set", "item", "empty",
+                    "the clear must reach the client before the hand can be read as empty", 200);
+        } catch (AssertionError never) {
+            Events.assertInstrumentRan(clientEvents().since(clearMark, "client_slot_set"),
+                    "client_slot_set", "the client's own slot writes must be observed at all before"
+                            + " an absent one can be read as a clear that never landed");
+            requireArranged("the clear never reached the client: " + never.getMessage(), false);
         }
+        JsonObject items = bot().reportPlayerItems();
+        String heldId = isWorldReady(items) && items.has("held")
+                ? items.getAsJsonObject("held").get("id").getAsString() : null;
         requireArranged("the bot's main hand must be EMPTY so the use press reaches the "
                 + "block rather than being consumed by a held item; held=" + heldId,
                 heldId != null && heldId.isEmpty());

@@ -7,6 +7,7 @@ import org.junit.runners.MethodSorters;
 
 
 import zmaster587.advancedRocketry.test.EntityState;
+import zmaster587.advancedRocketry.test.Events;
 import zmaster587.advancedRocketry.test.Reply;
 import zmaster587.advancedRocketry.test.Plot;
 
@@ -156,27 +157,53 @@ public class VehicleRideClientGroupE2ETest extends AbstractSharedClientE2ETest {
         return id;
     }
 
-    private void mount(int vehicleId) throws Exception {
+    /** Mounts through the probe and answers a CLIENT mark taken BEFORE it, for the link below. */
+    private long mount(int vehicleId) throws Exception {
+        long clientMark = clientEvents().mark();
         String mount = exec("artest player mount-entity " + vehicleId);
         scenario().requireArranged("mount-entity probe must succeed: " + mount,
                 Reply.of(mount).ok());
         scenario().requireArranged("mount-entity must report mounted:true: " + mount,
                 Reply.of(mount).bool("mounted"));
+        return clientMark;
     }
 
-    /** Polls until the CLIENT reports riding == expected (~10 s cap). */
-    private JsonObject waitForClientRiding(boolean expected) throws Exception {
-        JsonObject last = null;
-        for (int waited = 0; waited < 200; waited += 5) {
-            bot().waitTicks(5);
-            last = bot().reportRidingEntity();
-            if (last.get("riding").getAsBoolean() == expected) {
-                return last;
+    /**
+     * The CLIENT's own mount chain reached {@code expected}, then the state read ONCE.
+     *
+     * <p>This replaced a poll of {@code report_riding_entity}, which could only ever sample the
+     * state these records announce — and whose {@code false} was equally produced by a client that
+     * had not been told anything yet. {@code MixinEntityPositionWriters} is in the COMMON mixin
+     * list, so the client's own {@code mount} / {@code dismount} have been recorded all along; this
+     * class sits on the shared client base rather than the VS one, which is the only reason it
+     * carried its own loop.</p>
+     *
+     * @param clientMark a mark on the CLIENT log, taken BEFORE whatever seats or unseats him
+     */
+    private JsonObject waitForClientRiding(boolean expected, long clientMark) throws Exception {
+        if (expected) {
+            // ENDS mounted, not "a mount happened": a window that can hold a later dismount would
+            // satisfy the weaker claim while the caller asserts the stronger one.
+            ClientEvents.awaitMounted(clientEvents(), clientMark,
+                    "the client must follow the server's seating", RIDING_LINK_BUDGET_TICKS);
+        } else {
+            try {
+                clientEvents().await(clientMark, "dismount",
+                        "the client must follow the server's dismount", RIDING_LINK_BUDGET_TICKS);
+            } catch (AssertionError never) {
+                Events.assertInstrumentRan(clientEvents().since(clientMark, "dismount"),
+                        "entity_mount_writes", "the client's own dismounts must be observed at all"
+                                + " before an absent one can be read as a client that kept him"
+                                + " seated");
+                throw new AssertionError(never.getMessage() + " clientRiding="
+                        + bot().reportRidingEntity(), never);
             }
         }
-        throw new AssertionError("client never reached riding=" + expected
-                + "; last report: " + last);
+        return bot().reportRidingEntity();
     }
+
+    /** How long the client is given to follow a seating or a dismount, in ticks. */
+    private static final int RIDING_LINK_BUDGET_TICKS = 200;
 
     private static int extract(String src, String field) {
         Reply reply = Reply.of(src);
@@ -206,9 +233,9 @@ public class VehicleRideClientGroupE2ETest extends AbstractSharedClientE2ETest {
         int craftId = spawnVehicle("advancedrocketry:ARHoverCraft");
 
         scenario().asserting("the client renders itself riding the craft it was mounted on");
-        mount(craftId);
+        long mountMark = mount(craftId);
 
-        JsonObject clientRiding = waitForClientRiding(true);
+        JsonObject clientRiding = waitForClientRiding(true, mountMark);
         assertTrue("client must report riding=true after mount: " + clientRiding,
                 clientRiding.get("riding").getAsBoolean());
         assertEquals("client-side ridden entity id must be the craft's id",
@@ -230,15 +257,16 @@ public class VehicleRideClientGroupE2ETest extends AbstractSharedClientE2ETest {
     public void playerDismountClearsRidingEntity() throws Exception {
         buildPadAndStand();
         int craftId = spawnVehicle("advancedrocketry:ARHoverCraft");
-        mount(craftId);
-        JsonObject mounted = waitForClientRiding(true);
+        long mountMark = mount(craftId);
+        JsonObject mounted = waitForClientRiding(true, mountMark);
         scenario().requireArranged("arrange: client must be riding the craft first; got " + mounted,
                 craftId == mounted.get("entityId").getAsInt());
 
         scenario().asserting("a held sneak key dismounts the rider, on both sides");
+        long sneakMark = clientEvents().mark();
         bot().setKey(KEY_LSHIFT, true);
         try {
-            JsonObject clientRiding = waitForClientRiding(false);
+            JsonObject clientRiding = waitForClientRiding(false, sneakMark);
             assertTrue("client must report riding=false after sneak-dismount: " + clientRiding,
                     !clientRiding.get("riding").getAsBoolean());
         } finally {
@@ -257,8 +285,7 @@ public class VehicleRideClientGroupE2ETest extends AbstractSharedClientE2ETest {
     public void forwardThrottleMovesHovercraftLaterally() throws Exception {
         buildPadAndStand();
         int craftId = spawnVehicle("advancedrocketry:ARHoverCraft");
-        mount(craftId);
-        waitForClientRiding(true);
+        waitForClientRiding(true, mount(craftId));
 
         scenario().measuring("the craft's lateral position as the CLIENT renders it, before input");
         JsonObject pre = bot().reportRidingEntity();
@@ -347,9 +374,9 @@ public class VehicleRideClientGroupE2ETest extends AbstractSharedClientE2ETest {
         int capsuleId = spawnVehicle("advancedrocketry:ARSpaceElevatorCapsule");
 
         scenario().asserting("the client renders itself riding the capsule");
-        mount(capsuleId);
+        long mountMark = mount(capsuleId);
 
-        JsonObject clientRiding = waitForClientRiding(true);
+        JsonObject clientRiding = waitForClientRiding(true, mountMark);
         assertEquals("client-side ridden entity id must be the capsule's id",
                 capsuleId, clientRiding.get("entityId").getAsInt());
         assertTrue("client-side ridden entity class must be EntityElevatorCapsule: " + clientRiding,
@@ -368,15 +395,16 @@ public class VehicleRideClientGroupE2ETest extends AbstractSharedClientE2ETest {
     public void playerDismountClearsRidingEntityOnTheCapsule() throws Exception {
         buildPadAndStand();
         int capsuleId = spawnVehicle("advancedrocketry:ARSpaceElevatorCapsule");
-        mount(capsuleId);
-        JsonObject mounted = waitForClientRiding(true);
+        long mountMark = mount(capsuleId);
+        JsonObject mounted = waitForClientRiding(true, mountMark);
         scenario().requireArranged("arrange: client must be riding the capsule first; got " + mounted,
                 capsuleId == mounted.get("entityId").getAsInt());
 
         scenario().asserting("a held sneak key dismounts the rider, on both sides");
+        long sneakMark = clientEvents().mark();
         bot().setKey(KEY_LSHIFT, true);
         try {
-            JsonObject clientRiding = waitForClientRiding(false);
+            JsonObject clientRiding = waitForClientRiding(false, sneakMark);
             assertTrue("client must report riding=false after sneak-dismount: " + clientRiding,
                     !clientRiding.get("riding").getAsBoolean());
         } finally {

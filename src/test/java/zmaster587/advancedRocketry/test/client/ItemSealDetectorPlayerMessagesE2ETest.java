@@ -152,29 +152,6 @@ public class ItemSealDetectorPlayerMessagesE2ETest extends AbstractSharedClientE
      *  now bounding a wait for a RECORD instead of 200 ticks of asking a field how it looks. */
     private static final int HELD_LINK_BUDGET_TICKS = 200;
 
-    /**
-     * Wait until the CLIENT's own event log carries a record matching {@code needle}, or the budget
-     * ends; the reply comes back either way so the CALLER asserts and owns the failure message.
-     *
-     * <p>The server log has {@link Events} for this, offered by the shared base. The client log is a
-     * different transport ({@code bot().eventsSince}, no probe command behind it) and the base does
-     * not wrap it, so this class carries its own reader. Matching is case-insensitive: a chat line is
-     * prose, and its capitalisation belongs to the translation rather than to the contract.</p>
-     */
-    private String awaitClientRecord(long mark, String type, String needle, int tickBudget)
-            throws Exception {
-        String reply = "";
-        String wanted = needle.toLowerCase(Locale.ROOT);
-        for (int waited = 0; waited <= tickBudget; waited += 5) {
-            reply = clientEvents().since(mark, type);
-            if (reply.toLowerCase(Locale.ROOT).contains(wanted)) {
-                return reply;
-            }
-            bot().waitTicks(5);
-        }
-        return reply;
-    }
-
     /** Stages the fixture in this scenario's plot, stands the player on a stone perch one
      *  block away holding the seal detector, RIGHT-CLICKS the fixture through
      *  the real client ({@code interactBlock} &rarr; CPacketPlayerTryUseItemOnBlock),
@@ -255,14 +232,17 @@ public class ItemSealDetectorPlayerMessagesE2ETest extends AbstractSharedClientE
                 + Y + "," + z + " with " + key + "; what it actually sent since the click: " + sent,
                 Events.anyRecordHas(sent, "key", String.valueOf(key)));
 
-        String seen = awaitClientRecord(clientMark, "client_chat_received", expectedChatText,
+        // The link IS the assertion. It replaced a soft wait followed by two checks that could no
+        // longer fail once the wait had returned: both asked exactly what the wait had just
+        // established. Matching stays case-insensitive — a chat line is prose, and its
+        // capitalisation belongs to the translation rather than to the contract.
+        clientEvents().awaitMatching(clientMark, "client_chat_received",
+                reply -> reply.toLowerCase(Locale.ROOT)
+                        .contains(expectedChatText.toLowerCase(Locale.ROOT)),
+                "showing '" + expectedChatText + "'",
+                "the player was never shown the seal detector's reply for " + fixtureBlock
+                        + " at " + x + "," + Y + "," + z + "; the server sent " + sent,
                 LINK_BUDGET_TICKS);
-        Events.assertInstrumentRan(seen, "client_chat_received",
-                "the player was shown the seal detector's reply");
-        assertTrue("client chat must show '" + expectedChatText + "' for " + fixtureBlock
-                + " at " + x + "," + Y + "," + z + "; the server sent " + sent
-                + " and the client's chat records since the click are: " + seen,
-                seen.toLowerCase(Locale.ROOT).contains(expectedChatText.toLowerCase(Locale.ROOT)));
 
         scenario().asserting("production dispatch and the server-tier mirror agree on the branch");
         String checkResp = exec("artest seal-detector check " + dim + " " + x + " " + Y + " " + z);

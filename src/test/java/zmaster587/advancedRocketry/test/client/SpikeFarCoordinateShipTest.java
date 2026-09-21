@@ -5,6 +5,7 @@ import com.github.stannismod.forge.testing.junit.AbstractClientE2ETest;
 import org.junit.Test;
 import org.lwjgl.input.Keyboard;
 import zmaster587.advancedRocketry.test.SeatMount;
+import zmaster587.advancedRocketry.test.Events;
 import zmaster587.advancedRocketry.test.Reply;
 import zmaster587.advancedRocketry.test.GameTicks;
 import zmaster587.advancedRocketry.test.ShipIdentity;
@@ -213,6 +214,7 @@ public class SpikeFarCoordinateShipTest extends AbstractClientE2ETest {
                     verdicts.put(x, "seat-mount reported no dummy id: " + oneLine(mountInfo.raw()));
                     continue;
                 }
+                long mountMark = clientEvents().mark();
                 String mounted = exec("artest player mount-entity "
                         + mountInfo.requireDummyId());
                 // absence is the answer, as above: one row's verdict, not the sweep's end.
@@ -224,7 +226,7 @@ public class SpikeFarCoordinateShipTest extends AbstractClientE2ETest {
                 // so wait until the CLIENT agrees it is riding — the first run of this leg read the
                 // rider's posY one tick too early and died on a missing field, which reads exactly
                 // like a coordinate failure and is not one.
-                String riding = awaitRiding(mountInfo.requireDummyId());
+                String riding = awaitRiding(mountInfo.requireDummyId(), mountMark);
                 if (riding != null) {
                     verdicts.put(x, riding + " (server said " + oneLine(mounted) + ")");
                     continue;
@@ -364,9 +366,10 @@ public class SpikeFarCoordinateShipTest extends AbstractClientE2ETest {
             SeatMount mountInfo = SeatMount.onShip(this::exec, 0, shipId);
             assertTrue("no seat: " + oneLine(mountInfo.raw()), mountInfo.seatFound);
             int dummyId = mountInfo.requireDummyId();
+            long mountMark = clientEvents().mark();
             assertTrue("could not mount",
                     Reply.of(exec("artest player mount-entity " + dummyId)).bool("mounted"));
-            String riding = awaitRiding(dummyId);
+            String riding = awaitRiding(dummyId, mountMark);
             assertTrue("the client never began riding: " + riding, riding == null);
 
             // ONE command. Forward throttle rather than vertical: horizontal travel has no ceiling to
@@ -460,14 +463,22 @@ public class SpikeFarCoordinateShipTest extends AbstractClientE2ETest {
      *
      * @return {@code null} once the client is riding, else the reason plus that diagnosis
      */
-    private String awaitRiding(int dummyId) throws Exception {
-        com.google.gson.JsonObject last = null;
-        for (int i = 0; i < RIDING_ATTEMPTS; i++) {
-            bot().waitTicks(5);
+    private String awaitRiding(int dummyId, long clientMark) throws Exception {
+        com.google.gson.JsonObject last;
+        try {
+            // The CLIENT's own mount chain, not a sample of reportRidingEntity: the poll this
+            // replaced could only ever read the state this record announces, and its "not riding"
+            // was equally produced by a client that had not been told anything yet.
+            // MixinEntityPositionWriters is in the COMMON mixin list, so the record is there for a
+            // spike as much as for the tier.
+            ClientEvents.awaitMounted(clientEvents(), clientMark,
+                    "the client must begin riding the seat dummy", RIDING_ATTEMPTS * 5);
             last = bot().reportRidingEntity();
             if (last.has("riding") && last.get("riding").getAsBoolean() && last.has("posY")) {
                 return null;
             }
+        } catch (AssertionError never) {
+            last = bot().reportRidingEntity();
         }
         String clientState;
         String clientEntities;
@@ -484,6 +495,13 @@ public class SpikeFarCoordinateShipTest extends AbstractClientE2ETest {
                 + " | client sees near him: " + oneLine(clientEntities)
                 + " | server holds the dummy at: "
                 + oneLine(exec("artest entity info 0 " + dummyId));
+    }
+
+    /** The CLIENT's own ordered event log, behind the same verbs the server's is read through.
+     *  {@link Events#mark} refuses a sequence unless a recorder is subscribed, which is what keeps
+     *  an empty log later from reading as "it never happened". */
+    private Events clientEvents() throws Exception {
+        return ClientEvents.of(bot());
     }
 
     private double riderY() throws Exception {
@@ -581,6 +599,12 @@ public class SpikeFarCoordinateShipTest extends AbstractClientE2ETest {
      */
     private String deliver(int x) throws Exception {
         double lastX = Double.NaN;
+        // STAYS A LOOP, and the refusal names the link. The re-issued far-tp IS the stimulus — a
+        // delivery that did not take is not recoverable by reading longer — and the exit is a
+        // CONVERGENCE on where the server holds him. The link that looks right is `pos_jump`, and
+        // it does not answer: it fires only on a VERTICAL write past a threshold and carries
+        // `from`/`to` in Y alone, so it cannot say he arrived at this X. What this cannot see: a
+        // delivery that landed and was undone between two attempts.
         for (int attempt = 1; attempt <= DELIVERY_ATTEMPTS; attempt++) {
             exec("artest player far-tp " + fmt(x + 0.5d) + " " + (BASE_Y + 6) + " "
                     + fmt(ARENA_Z + 0.5d));

@@ -566,22 +566,8 @@ public class VSJumpDriveFixtureBoardingE2ETest extends AbstractSharedVsClientE2E
 
     /** Server-side clear plus a client-observed empty hand (a held stack eats the use press). */
     private void emptyTheHand() throws Exception {
-        exec("clear @a");
-        bot().selectHotbar(0);
-        String heldId = null;
-        for (int attempt = 0; attempt < 20; attempt++) {
-            JsonObject items = bot().reportPlayerItems();
-            if (isWorldReady(items) && items.has("held")) {
-                heldId = items.getAsJsonObject("held").get("id").getAsString();
-                if (heldId.isEmpty()) {
-                    return;
-                }
-            }
-            bot().waitTicks(5);
-        }
-        scenario().requireArranged("the bot's main hand must be EMPTY so the use press reaches the "
-                + "block rather than being consumed by a held item; held=" + heldId,
-                heldId != null && heldId.isEmpty());
+        emptyTheHandOnClient("the bot's main hand must be EMPTY so the use press reaches the block"
+                + " rather than being consumed by a held item");
     }
 
     /**

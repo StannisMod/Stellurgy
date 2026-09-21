@@ -755,32 +755,8 @@ public class VSPreAssemblyBoardingPilotControlE2ETest extends AbstractSharedVsCl
         // A held stack can consume the right-click before the block ever sees it - and a freshly
         // joined player does NOT start empty-handed (mods hand out items on first join), so the
         // hand is emptied explicitly and then VERIFIED from the client, not assumed.
-        exec("clear @a");
-        bot().selectHotbar(0);
-        // The clear takes a few ticks to reach the client, so poll for the OBSERVED empty hand
-        // rather than sampling once.
-        JsonObject items = bot().reportPlayerItems();
-        String heldId = null;
-        for (int attempt = 0; attempt < 20; attempt++) {
-            if (isWorldReady(items)) {
-                heldId = items.getAsJsonObject("held").get("id").getAsString();
-                if (heldId.isEmpty()) {
-                    break;
-                }
-            }
-            bot().waitTicks(TICKS_PER_SAMPLE);
-            items = bot().reportPlayerItems();
-        }
-        scenario().requireArranged("the client must be in a ready world before its held item can be "
-                        + "read - a not-yet-ready client reports no hand at all: " + items,
-                isWorldReady(items));
-        if (heldId == null || !heldId.isEmpty()) {
-            heldId = items.getAsJsonObject("held").get("id").getAsString();
-        }
-        scenario().requireArranged("the bot's main hand must be EMPTY (it was cleared server-side) so "
-                        + "the right-click reaches the seat block rather than being consumed by a "
-                        + "held item. held=" + heldId,
-                heldId != null && heldId.isEmpty());
+        emptyTheHandOnClient("the bot's main hand must be EMPTY (it was cleared server-side) so the"
+                + " right-click reaches the seat block rather than being consumed by a held item");
 
         return "click=" + bot().interactBlock(seatX, seatY, seatZ);
     }

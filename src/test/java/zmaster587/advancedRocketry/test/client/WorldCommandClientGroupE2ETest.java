@@ -138,18 +138,13 @@ public class WorldCommandClientGroupE2ETest extends AbstractSharedClientE2ETest 
      */
     private void awaitChatContaining(Events events, long mark, String needle) throws Exception {
         String lowered = needle.toLowerCase(Locale.ROOT);
-        String reply = "";
-        for (int waited = 0; waited <= REPLY_BUDGET_TICKS; waited += 10) {
-            reply = events.since(mark, "client_chat_received");
-            if (reply.toLowerCase(Locale.ROOT).contains(lowered)) {
-                return;
-            }
-            bot().waitTicks(10);
-        }
-        throw new AssertionError("the command's reply must reach the player's chat: no"
-                + " `client_chat_received` carrying \"" + needle + "\" within "
-                + REPLY_BUDGET_TICKS + " ticks. Everything the client WAS told since the mark: "
-                + reply);
+        // A chat line is PROSE, so the match stays a substring — there is no field here whose value
+        // is the sentence. What the link buys over the loop it replaces is the failure: the four
+        // causes of an empty log are told apart, which a bare "nothing arrived" cannot do.
+        events.awaitMatching(mark, "client_chat_received",
+                reply -> reply.toLowerCase(Locale.ROOT).contains(lowered),
+                "carrying \"" + needle + "\"",
+                "the command's reply must reach the player's chat", REPLY_BUDGET_TICKS);
     }
 
     /** Counts stacks of {@code itemId} in the CLIENT-rendered main inventory. */

@@ -347,22 +347,7 @@ public class VSPilotSeatMountMessagesE2ETest extends AbstractSharedVsClientE2ETe
 
     /** Server-side clear + client-observed empty hand (a held stack can eat the right-click). */
     private void emptyTheHand() throws Exception {
-        exec("clear @a");
-        bot().selectHotbar(0);
-        String heldId = null;
-        for (int attempt = 0; attempt < 20; attempt++) {
-            JsonObject items = bot().reportPlayerItems();
-            if (items.has("worldReady") && items.get("worldReady").getAsBoolean()
-                    && items.has("held")) {
-                heldId = items.getAsJsonObject("held").get("id").getAsString();
-                if (heldId.isEmpty()) {
-                    return;
-                }
-            }
-            bot().waitTicks(5);
-        }
-        scenario().requireArranged("the bot's hand must be observably empty; held=" + heldId,
-                heldId != null && heldId.isEmpty());
+        emptyTheHandOnClient("the bot's hand must be observably empty");
     }
 
     // ---- Observation helpers -------------------------------------------------------------------

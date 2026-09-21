@@ -141,9 +141,8 @@ public class VSShipUnmannedCruiseE2ETest extends AbstractSharedVsClientE2ETest {
             // seat forwards the client's packet and the computer is HANDED an input. Awaited as a
             // link, so "the ship never rose" cannot be reported for a key that never got there.
             // (No ship filter: this class builds one ship and flies it, and the mark is fresh.)
-            awaitRecord(events, rampMark, "pilot_input_set",
-                    "the real held key must reach the ship's flight computer at all", 100,
-                    "\"input\":\"set\"");
+            events.awaitField(rampMark, "pilot_input_set", "input", "set",
+                    "the real held key must reach the ship's flight computer at all", 100);
             // The ramp needs the FULL hold: no early exit, because a position early-exit would
             // release the key before the setpoint has ramped (audit: not poll-able).
             int rampIters = 30;
@@ -163,7 +162,7 @@ public class VSShipUnmannedCruiseE2ETest extends AbstractSharedVsClientE2ETest {
         assertTrue("the held throttle must have moved the ship's CRUISE SETPOINT — that setting, not"
                         + " the key, is what an unmanned ship keeps executing. Recorded since the"
                         + " hold began: " + ramped,
-                matchingRecords(ramped, "\"via\":\"pilot\"") > 0);
+                !Events.recordsWhere(ramped, "via", "pilot").isEmpty());
         scenario().requireArranged("the held key must have ramped a real climb before the dismount "
                         + "can test anything (y0=" + y0 + " yRamped=" + yRamped + ")",
                 yRamped - y0 > RAMPED_A_CLIMB_BLOCKS);
@@ -179,10 +178,9 @@ public class VSShipUnmannedCruiseE2ETest extends AbstractSharedVsClientE2ETest {
         // riderless dummy clears the computer's pilot input, and until that lands the ship is simply
         // still being flown. This is the link the 40-tick window used to hide — a red then read as
         // two altitudes whether the dismount had reached the computer or not.
-        awaitRecord(events, dismountMark, "pilot_input_set",
+        events.awaitField(dismountMark, "pilot_input_set", "input", "null",
                 "the flight computer must be told the pilot has gone, or the climb below is just a"
-                        + " ship that is still being piloted", 100,
-                "\"input\":\"null\"");
+                        + " ship that is still being piloted", 100);
         bot().waitTicks(40);
         double yUnmanned = shipY();
         assertTrue("an unmanned ship with Flight Assist on and a non-zero cruise setpoint must "
@@ -215,55 +213,13 @@ public class VSShipUnmannedCruiseE2ETest extends AbstractSharedVsClientE2ETest {
         return readDouble(shipInfoById(shipId), POS_Y);
     }
 
-    /**
-     * Wait for a record of {@code type} whose payload carries every one of {@code needles} — an
-     * {@link Events#await} that can say WHICH record it means.
-     *
-     * <p>Local to this class because {@code Events.await} matches on the type alone, and the two
-     * links this scenario waits for are distinguished only by their payload: a
-     * {@code pilot_input_set} carrying {@code "set"} is the throttle arriving and one carrying
-     * {@code "null"} is the pilot leaving, and waiting for "either" would let the mount satisfy the
-     * dismount's wait.</p>
-     */
-    private String awaitRecord(Events events, long mark, String type, String what, int tickBudget,
-                               String... needles) throws Exception {
-        String reply = "";
-        // This budget is a DEADLINE for a discrete commit with an early exit — how patient the test
-        // is, never how far the world moves: the loop returns the moment the record appears, and
-        // reaching the end of it is a failure either way.
-        for (int waited = 0; waited <= tickBudget; waited += 5) {
-            reply = events.since(mark, type);
-            if (matchingRecords(reply, needles) > 0) {
-                return reply;
-            }
-            bot().waitTicks(5);
-        }
-        throw new AssertionError(what + " — no `" + type + "` carrying "
-                + java.util.Arrays.toString(needles) + " was recorded within " + tickBudget
-                + " ticks. Records of that type since the mark: " + reply
-                + " | everything recorded since the mark, in order: "
-                + Events.typesOf(events.since(mark)));
-    }
-
-    /** How many records of a {@code since} reply carry EVERY one of {@code needles}. */
-    private static int matchingRecords(String sinceReply, String... needles) {
-        int n = 0;
-        // Events.records is the one definition of "a record": it reads the parsed `events` array, so
-        // the envelope cannot be counted as one and no local guard is needed.
-        for (String record : Events.records(sinceReply)) {
-            boolean all = true;
-            for (String needle : needles) {
-                if (!record.contains(needle)) {
-                    all = false;
-                    break;
-                }
-            }
-            if (all) {
-                n++;
-            }
-        }
-        return n;
-    }
+    // WHY EVERY WAIT HERE NAMES A FIELD. `Events.await` matches on the type alone, and the two
+    // links this scenario waits for differ only in their payload: a `pilot_input_set` carrying
+    // "set" is the throttle arriving, one carrying "null" is the pilot leaving, and waiting for
+    // "either" would let the mount satisfy the dismount's wait. The join is the `input` FIELD,
+    // through Events.awaitField. The local wrapper this replaced matched a raw substring
+    // (`"input":"set"`), which rides on the writer's field ORDER and on the quoting it happened to
+    // use.
 
     private double readDouble(String json, String field) {
         double value = Reply.of(json).number(field);

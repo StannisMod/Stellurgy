@@ -244,22 +244,16 @@ public class VSDeckCaptureAndDismountE2ETest extends AbstractSharedVsClientE2ETe
      * scenario holds is the {@code vsShip} of its own {@code ship_spawned} record — the same field,
      * written from the same uuid at the registry's add.</p>
      *
-     * <p>A payload filter belongs on {@link Events} itself; it is written here because this wave does
-     * not extend the shared base.</p>
+     * <p>The filter itself now lives on {@link Events#awaitMatching}, which this delegates to: the
+     * only thing local is WHICH field joins, and the failure it raises carries the four-cause
+     * triage for an empty log that a hand-rolled loop here never printed.</p>
      */
     private String awaitThisShip(Events events, long mark, String type, String what)
             throws Exception {
-        String reply = "";
-        for (int waited = 0; waited <= DECK_LINK_BUDGET_TICKS; waited += 5) {
-            reply = events.since(mark, type);
-            if (Events.countRecords(reply, "vsShip", scenarioShipId) > 0) {
-                return reply;
-            }
-            bot().waitTicks(5);
-        }
-        throw new AssertionError(what + " — no `" + type + "` naming this scenario's ship ("
-                + scenarioShipId + ") was recorded within " + DECK_LINK_BUDGET_TICKS + " ticks."
-                + " Records of that type in the window (they belong to other ships): " + reply);
+        return events.awaitMatching(mark, type,
+                reply -> Events.countRecords(reply, "vsShip", scenarioShipId) > 0,
+                "naming this scenario's ship (" + scenarioShipId + ")", what,
+                DECK_LINK_BUDGET_TICKS);
     }
 
     /**

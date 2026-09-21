@@ -418,39 +418,18 @@ public class FreeFlightModeE2ETest extends AbstractSharedClientE2ETest {
     /** {@link #awaitFlightSet(Events, long, int, boolean, String)} with an explicit tick budget. */
     private void awaitFlightSet(Events events, long mark, int rocketId, boolean inFlight,
                                 String what, int tickBudget) throws Exception {
-        awaitRecord(events, mark, "rocket_flight_set", what, tickBudget,
-                "\"e\":" + rocketId + ",", "\"inFlight\":" + inFlight);
+        events.awaitRecordWithFields(mark, "rocket_flight_set", what, tickBudget,
+                "e", String.valueOf(rocketId), "inFlight", String.valueOf(inFlight));
     }
 
-    /**
-     * Wait for a record of {@code type} whose payload carries every one of {@code needles} — an
-     * {@link Events#await} that can say WHICH rocket it means.
-     *
-     * <p>Local to this class because {@code Events.await} matches on the TYPE alone, and this class
-     * is 27 scenarios on ONE shared world: every earlier scenario's rocket is still standing there,
-     * several of them left in flight, and each can write its own in-flight flag or land on its own
-     * while a later scenario is watching. A link that could not name the rocket would be answered by
-     * a neighbour — the same failure the plot-filtered {@link #rocketIdInThisPlot()} exists for.</p>
-     */
-    private String awaitRecord(Events events, long mark, String type, String what, int tickBudget,
-                               String... needles) throws Exception {
-        String reply = "";
-        // This budget is a DEADLINE for a discrete commit with an early exit — how patient the test
-        // is, never how far the world moves: the loop returns the moment the record appears, and
-        // reaching the end of it is a failure either way.
-        for (int waited = 0; waited <= tickBudget; waited += 5) {
-            reply = events.since(mark, type);
-            if (matchingRecords(reply, needles) > 0) {
-                return reply;
-            }
-            bot().waitTicks(5);
-        }
-        throw new AssertionError(what + " — no `" + type + "` carrying "
-                + java.util.Arrays.toString(needles) + " was recorded within " + tickBudget
-                + " ticks. Records of that type since the mark: " + reply
-                + " | everything recorded since the mark, in order: "
-                + Events.typesOf(events.since(mark)));
-    }
+    // WHY EVERY WAIT BELOW NAMES ITS ROCKET. `Events.await` matches on the TYPE alone, and this
+    // class is 27 scenarios on ONE shared world: every earlier scenario's rocket is still standing
+    // there, several left in flight, and each can write its own in-flight flag or land on its own
+    // while a later scenario is watching. A link that could not name the rocket would be answered
+    // by a neighbour — the same failure the plot-filtered rocketIdInThisPlot() exists for. The join
+    // is the `e` FIELD, through awaitField / awaitRecordWithFields; the local wrapper this replaced
+    // matched a raw substring (`"e":<id>,`), which rides on the writer's field ORDER and on the
+    // value being followed by a comma.
 
     /**
      * A measurement WINDOW, in client ticks, equal to the ceiling the poll it replaces was allowed.
@@ -475,26 +454,6 @@ public class FreeFlightModeE2ETest extends AbstractSharedClientE2ETest {
      */
     private int windowTicks(int stepTicks, int baseIterations) {
         return stepTicks * baseIterations;
-    }
-
-    /** How many records of a {@code since} reply carry EVERY one of {@code needles}. */
-    private static int matchingRecords(String sinceReply, String... needles) {
-        int n = 0;
-        // Events.records is the one definition of "a record": it reads the parsed `events` array, so
-        // the envelope cannot be counted as one and no local guard is needed.
-        for (String record : Events.records(sinceReply)) {
-            boolean all = true;
-            for (String needle : needles) {
-                if (!record.contains(needle)) {
-                    all = false;
-                    break;
-                }
-            }
-            if (all) {
-                n++;
-            }
-        }
-        return n;
     }
 
     // ---------------------------------------------------------------------
@@ -779,9 +738,8 @@ public class FreeFlightModeE2ETest extends AbstractSharedClientE2ETest {
         // The LINK: the held climb key must reach THIS rocket's free-flight input on the server.
         // This leg's point is that a REAL key does what the probe does, so "the key arrived" is
         // half of its subject and must be asserted as itself rather than inferred from altitude.
-        awaitRecord(climbEvents, climbMark, "rocket_ff_traced",
-                "holding the real climb key must deliver a free-flight input to this rocket", 100,
-                "\"e\":" + rocketId + ",");
+        climbEvents.awaitField(climbMark, "rocket_ff_traced", "e", rocketId,
+                "holding the real climb key must deliver a free-flight input to this rocket", 100);
         bot().waitTicks(windowTicks(4, 10));
         RocketInfo svrInfo = rocketInfo(rocketId);
         double svrYAfter = svrInfo.posY;
@@ -1013,9 +971,9 @@ public class FreeFlightModeE2ETest extends AbstractSharedClientE2ETest {
         // client ate into a GUI — and this leg's subject is which of those E does. The link does
         // not single out E (R is down too, and the record carries no input values); what pins E is
         // the screen check and the -X direction below.
-        awaitRecord(eEvents, eMark, "rocket_ff_traced",
+        eEvents.awaitField(eMark, "rocket_ff_traced", "e", rocketId,
                 "the held keys must deliver a free-flight input to this rocket while E is down",
-                100, "\"e\":" + rocketId + ",");
+                100);
         bot().waitTicks(windowTicks(5, 5));
 
         String screenDuring = currentScreen();
@@ -1056,9 +1014,8 @@ public class FreeFlightModeE2ETest extends AbstractSharedClientE2ETest {
         // does NOT single out Q: two keys are down and the record carries no input values worth
         // matching on (its message is production's own trace string, which is scheduled to go), so
         // the claim is "the key path is alive for this rocket", and the DIRECTION is the assertion.
-        awaitRecord(qEvents, qMark, "rocket_ff_traced",
-                "the held keys must deliver a free-flight input to this rocket", 100,
-                "\"e\":" + rocketId + ",");
+        qEvents.awaitField(qMark, "rocket_ff_traced", "e", rocketId,
+                "the held keys must deliver a free-flight input to this rocket", 100);
         bot().waitTicks(windowTicks(5, 5));
         double xAfter = rocketInfo(rocketId).posX;
         bot().releaseKey(Keyboard.KEY_Q);
@@ -1264,7 +1221,7 @@ public class FreeFlightModeE2ETest extends AbstractSharedClientE2ETest {
         assertTrue("releasing the key early must mean the engines were never lit — not lit and then"
                         + " shut off again. Writes to any rocket's in-flight flag since the hold"
                         + " began: " + flightWrites,
-                matchingRecords(flightWrites, "\"e\":" + rocketId + ",") == 0);
+                Events.recordsWhere(flightWrites, "e", String.valueOf(rocketId)).isEmpty());
         String hud = freeFlightHud();
         assertTrue("HUD must be back to ENGINES OFF after the cancel: " + hud,
                 hud.contains("ENGINES OFF"));
@@ -1290,10 +1247,9 @@ public class FreeFlightModeE2ETest extends AbstractSharedClientE2ETest {
             // that was never airborne satisfies just as well, and never saw the announcement at all.
             awaitFlightSet(events, descentMark, rocketId, false,
                     "descending into the ground must shut THIS rocket's engines off", 240);
-            awaitRecord(events, descentMark, "rocket_landed",
+            events.awaitField(descentMark, "rocket_landed", "e", rocketId,
                     "a touchdown must be announced on the bus, or nothing that reacts to a rocket"
-                            + " arriving ever hears about it", 120,
-                    "\"e\":" + rocketId + ",");
+                            + " arriving ever hears about it", 120);
         } finally {
             bot().releaseKey(Keyboard.KEY_F);
         }
@@ -1415,10 +1371,12 @@ public class FreeFlightModeE2ETest extends AbstractSharedClientE2ETest {
         }
         bot().releaseKey(Keyboard.KEY_D);
         bot().releaseKey(Keyboard.KEY_R);
-        // Wait for the craft rotation to actually settle (the client bleeds the
-        // server correction geometrically; under load the residual takes longer
-        // than a fixed tick count, and a non-atomic read pair straddling the
-        // bleed reads as a phantom lock error).
+        // THIS ONE STAYS A LOOP, because what it waits for is a VALUE that converges rather than
+        // an event anything DECIDES. The client bleeds the server's rotation correction
+        // geometrically, so there is no instant at which the craft "has settled" and no record
+        // production could commit for one — the exit is the DIFFERENCE between two readings, which
+        // no single record can carry. What it cannot see, written down: a yaw that stopped moving
+        // for one pair of samples and then resumed, and the shape of the bleed in between.
         double prevYaw = Double.NaN;
         for (int i = 0; i < 20; i++) {
             bot().waitTicks(2);
