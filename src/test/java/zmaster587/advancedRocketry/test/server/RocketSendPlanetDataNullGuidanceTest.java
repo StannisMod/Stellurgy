@@ -6,6 +6,7 @@ import org.junit.Test;
 
 import zmaster587.advancedRocketry.test.RocketList;
 import zmaster587.advancedRocketry.test.FixtureSite;
+import zmaster587.advancedRocketry.test.RocketFixture;
 
 import static org.junit.Assert.assertTrue;
 
@@ -32,7 +33,6 @@ import static org.junit.Assert.assertTrue;
  */
 public class RocketSendPlanetDataNullGuidanceTest extends AbstractSharedServerTest {
 
-    private static final String BUILDER_POS = "builderPos";
     private static final String ROCKET_LIST_ID = "id";
     private static final String THROWN = "thrown";
 
@@ -48,16 +48,8 @@ public class RocketSendPlanetDataNullGuidanceTest extends AbstractSharedServerTe
         // stands in open air, so this ASSERTS rather than digs - anything standing here
         // means the arrangement is wrong, and it is said now instead of arriving many
         // links later wearing some mechanic's name.
-        site.requireClear(cmd -> ok(client().execute(cmd)), 2, 10,
+        RocketFixture.assembleAt(site, cmd -> ok(client().execute(cmd)), "simple", 2, 10,
                 "the craft is built and flown in this volume");
-        String fixture = ok(client().execute(
-                "artest fixture rocket 0 " + baseX + " " + baseY + " " + baseZ + " simple"));
-        int[] bp = Reply.of(fixture).blockPos(BUILDER_POS);
-        assertTrue("fixture missing builderPos: " + fixture, bp != null);
-        int bx = bp[0];
-        int by = bp[1];
-        int bz = bp[2];
-        ok(client().execute("artest rocket assemble 0 " + bx + " " + by + " " + bz));
         String list = ok(client().execute("artest rocket list 0"));
         java.util.List<RocketList.Entry> built = RocketList.of(list);
         assertTrue("no rocket after assemble: " + list, !built.isEmpty());

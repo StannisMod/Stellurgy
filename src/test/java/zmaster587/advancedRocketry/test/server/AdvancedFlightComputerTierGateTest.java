@@ -8,6 +8,7 @@ import org.junit.Test;
 import zmaster587.advancedRocketry.test.Reply;
 import zmaster587.advancedRocketry.test.RocketInfo;
 import zmaster587.advancedRocketry.test.FixtureSite;
+import zmaster587.advancedRocketry.test.RocketFixture;
 
 import static org.junit.Assert.assertTrue;
 
@@ -32,7 +33,6 @@ import static org.junit.Assert.assertTrue;
  */
 public class AdvancedFlightComputerTierGateTest extends AbstractSharedServerTest {
 
-    private static final String BUILDER_POS = "builderPos";
 
     private static final String VARIANT = "with-advanced-flight-computer";
 
@@ -132,14 +132,9 @@ public class AdvancedFlightComputerTierGateTest extends AbstractSharedServerTest
         // FIRST link: the volume this craft is built in is EMPTY. The site stands in open air, so
         // this ASSERTS rather than digs - anything standing here means the arrangement is wrong,
         // and it is said now instead of arriving many links later as a scan that found nothing.
-        site.requireClear(cmd -> String.join("\n", client().execute(cmd)), 2, 10,
+        int[] bp = RocketFixture.placeAt(site, cmd -> String.join("\n", client().execute(cmd)),
+                variant, 2, 10,
                 "the craft is built and scanned in this volume");
-
-        String fixture = String.join("\n", client().execute(
-                "artest fixture rocket 0 " + baseX + " " + baseY + " " + baseZ + " " + variant));
-        assertTrue("fixture (" + variant + ") failed: " + fixture, Reply.of(fixture).ok());
-        int[] bp = Reply.of(fixture).blockPos(BUILDER_POS);
-        assertTrue("fixture (" + variant + ") missing builderPos: " + fixture, bp != null);
         return bp[0] + " " + bp[1] + " " + bp[2];
     }
 

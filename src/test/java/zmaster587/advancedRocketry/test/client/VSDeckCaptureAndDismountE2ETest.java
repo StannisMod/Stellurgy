@@ -12,6 +12,7 @@ import zmaster587.advancedRocketry.test.Events;
 import zmaster587.advancedRocketry.test.Reply;
 import zmaster587.advancedRocketry.test.PilotSeat;
 import zmaster587.advancedRocketry.test.FixtureSite;
+import zmaster587.advancedRocketry.test.RocketFixture;
 import zmaster587.advancedRocketry.test.ShipFrameCheck;
 import zmaster587.advancedRocketry.test.ShipIdentity;
 import zmaster587.advancedRocketry.test.ShipInfo;
@@ -60,7 +61,6 @@ public class VSDeckCaptureAndDismountE2ETest extends AbstractSharedVsClientE2ETe
         return "vs-deck-capture";
     }
 
-    private static final String BUILDER_POS = "builderPos";
     private static final String PLAYER_Y = "playerY";
     private static final String OBSTACLES = "shipSupportObstacles";
     private static final String DUMMY_ID = "dummyId";
@@ -74,6 +74,59 @@ public class VSDeckCaptureAndDismountE2ETest extends AbstractSharedVsClientE2ETe
      * load and still fails a scenario that never gets there rather than waiting out a budget.
      */
     private static final int DECK_LINK_BUDGET_TICKS = 240;
+
+    /**
+     * How far the CLIENT's rendering of a body's height may sit from the SERVER's, in blocks, on a
+     * LEVEL deck.
+     *
+     * <p>The TEST'S OWN — a replication tolerance, not a production threshold: nothing in the mod
+     * decides how far apart the two sides may be, and the real contract is "the same place". Two
+     * blocks is under the height of a body, so anything past it is the failure this class exists
+     * for: the client drawing him below the deck the server is holding him on.</p>
+     */
+    private static final double CLIENT_SERVER_Y_AGREEMENT_BLOCKS = 2.0;
+
+    /**
+     * The same quantity on a TILTED or ROLLED deck, where it is wider.
+     *
+     * <p>Also the test's own, and it is a separate constant rather than a relaxation of the one
+     * above because the reason is different: on a tilt the two sides interpolate a body's position
+     * through different poses of the same hull, so their disagreement grows with the angle. Keeping
+     * them apart is what stops a later "these are both about 2, merge them" from quietly widening
+     * the level case.</p>
+     */
+    private static final double CLIENT_SERVER_Y_AGREEMENT_TILTED_BLOCKS = 3.0;
+
+    /**
+     * How far BELOW the hull's own reported altitude a dismounted pilot may settle and still count
+     * as having stayed up ON the ship, in blocks.
+     *
+     * <p>The TEST'S OWN, and a RELATION rather than an altitude: it is a body's standing height
+     * plus the thickness of the deck he is on, which is what "he is on it, not under it" means at
+     * any altitude. The bound it replaces was an absolute {@code 66.0} — the old ground level plus
+     * a block — and it stopped discriminating anything the day the fixture moved into the band.</p>
+     */
+    private static final double PILOT_MAY_SETTLE_BELOW_HULL_BLOCKS = 4.0;
+
+    /**
+     * The angular rate that separates a ship a turn command MOVED from one it left dead, in rad/s.
+     *
+     * <p>The TEST'S OWN sensitivity bar. Production's own commanded rate is a full order of
+     * magnitude above it (the attitude hold slews at about 2 rad/s), so what this refuses is zero
+     * and near-zero — a computer that took the command and did nothing — rather than a slow turn.</p>
+     */
+    private static final double TURN_COMMAND_OMEGA_RAD_PER_S = 0.1;
+
+    /**
+     * How far two independent readings of the SAME ship-up direction may disagree, as a unit-vector
+     * component.
+     *
+     * <p>The TEST'S OWN, and the number is small on purpose: both readings come from the same
+     * client tick through two different production paths (the movement rotation and the camera
+     * quaternion), so they are the same quantity twice and the only honest allowance is float
+     * noise. Four assertions in this class compare such a pair.</p>
+     */
+    private static final double FRAME_AGREEMENT_EPSILON = 0.02;
 
     // The bugs this class exists for are all CLIENT facts — a player falls through a deck on his OWN
     // client while the server holds him on it, which is exactly why an armour stand read through a
@@ -189,7 +242,7 @@ public class VSDeckCaptureAndDismountE2ETest extends AbstractSharedVsClientE2ETe
         System.out.println("[deckcap] grounded serverY=" + serverY + " clientY=" + clientY);
         assertTrue("the client must render the player ON the deck where the server holds him, not "
                 + "fallen through it: serverY=" + serverY + " clientY=" + clientY,
-                Math.abs(clientY - serverY) < 2.0);
+                Math.abs(clientY - serverY) < CLIENT_SERVER_Y_AGREEMENT_BLOCKS);
 
         // And he must not keep sinking through it over time. The window stays a window — expiry is
         // not the failure — but the client's resolver records EVERY release with the gate that
@@ -202,6 +255,9 @@ public class VSDeckCaptureAndDismountE2ETest extends AbstractSharedVsClientE2ETe
         String sinkReleases = clientEvents.since(sinkMark, "deck_released");
         Events.assertInstrumentRan(sinkReleases, "deck_capture_events",
                 "the client held the player on the deck for the whole window");
+        // THE TEST'S OWN: a body that is held does not sink at all, and a block and a half is
+        // under the height of one — so what this refuses is a body going DOWN through the deck
+        // between two reads, while tolerating the sub-block settle of being re-seated on it.
         assertTrue("the client player must stay on the deck, not sink through it: " + clientY + " -> "
                 + clientYLater, clientY - clientYLater < 1.5);
         assertTrue("the client must not let go of a player standing still on a grounded deck; a"
@@ -299,9 +355,15 @@ public class VSDeckCaptureAndDismountE2ETest extends AbstractSharedVsClientE2ETe
         // The ship must keep hovering, not drop, when the pilot stands up. The computer's own
         // unmanned decision rides in the message: `held=false` says station-keeping was never on,
         // which is a different defect from a hold that engaged and under-thrust.
+        // THE TEST'S OWN. The contract is that the hold keeps the hull where it was, so the honest
+        // statement is zero; two blocks is the sag a station-keeping hull shows while it corrects,
+        // and a hull that is actually falling is metres down inside this window.
         assertTrue("a hovering ship must not fall when the pilot dismounts: it dropped from " + shipYPre
                 + " to " + shipYPost + ". The computer's unmanned decision was " + hold,
                 shipYPre - shipYPost < 2.0);
+        // THE TEST'S OWN, and a SIGN with slack rather than a rate: what it refuses is a hull that
+        // has begun to accelerate downward. Vanilla gravity alone reaches this within a few ticks,
+        // so a hull still above it is one something is holding.
         assertTrue("a hovering ship must not start falling when the pilot dismounts (velY=" + velYPost
                 + "). The computer's unmanned decision was " + hold, velYPost > -0.5);
 
@@ -319,6 +381,9 @@ public class VSDeckCaptureAndDismountE2ETest extends AbstractSharedVsClientE2ETe
                         + " mid-hover", DECK_LINK_BUDGET_TICKS);
         assertTrue("the dismounted pilot must be resolved on the deck, not handed to vanilla: " + capture.raw(),
                 capture.verdict && capture.shipSupportObstacles > 0);
+        // THE TEST'S OWN, and deliberately between the level bound and the tilted one: the pilot is
+        // in the act of standing UP here, so the two sides are interpolating a body that is moving
+        // as well as a hull that is tilted.
         assertTrue("the client must render the dismounted pilot on the deck where the server holds him: "
                 + "serverY=" + serverY + " clientY=" + clientY, Math.abs(clientY - serverY) < 2.5);
 
@@ -425,7 +490,7 @@ public class VSDeckCaptureAndDismountE2ETest extends AbstractSharedVsClientE2ETe
         assertTrue("the player must be resolved on the reloaded deck, not fall through it: " + capture.raw(),
                 capture.verdict && capture.shipSupportObstacles > 0);
         assertTrue("the client must render him ON the reloaded deck, not fallen through: serverY="
-                + serverY + " clientY=" + clientY, Math.abs(clientY - serverY) < 2.0);
+                + serverY + " clientY=" + clientY, Math.abs(clientY - serverY) < CLIENT_SERVER_Y_AGREEMENT_BLOCKS);
 
         } finally {
             // In a `finally` and not at the end of the happy path: a scenario that fails here would
@@ -632,6 +697,9 @@ public class VSDeckCaptureAndDismountE2ETest extends AbstractSharedVsClientE2ETe
         System.out.println("[deckcap] reload-hover startY=" + startY + " hoverY=" + hoverY
                 + " afterReloadY=" + afterY + " loaded=" + reloaded + " restored=" + restored
                 + " unmanned=" + heldAfter);
+        // THE TEST'S OWN, and wider than the live-dismount bound above for a stated reason: a
+        // reload re-creates the hull and its hold from NBT, so the hull sags while the restored
+        // computer takes its first corrective ticks. A hull that fell out of the sky is metres down.
         assertTrue("a hovering ship must KEEP hovering across a reload, not fall out of the sky: it was "
                 + "at " + hoverY + " and after reload is at " + afterY
                 + ". What the computer restored from NBT: " + restored
@@ -685,6 +753,10 @@ public class VSDeckCaptureAndDismountE2ETest extends AbstractSharedVsClientE2ETe
         // to be there is news about how a craft holds a commanded attitude — not a dice roll to be
         // stepped over. The client-side capture packet snaps the fresh dismount onto the deck and
         // holds it there, like a crew member who rode in and holds at 90 degrees.
+        // BOTH ENDS ARE THE TEST'S OWN, and both are premises: under 0.25 of deck-normal Y the
+        // craft is too near vertical for a body to stand on it at all, and over 0.80 it is near
+        // enough level that the tilt this leg is about barely exists. Production draws neither
+        // line — it holds whatever attitude it was pointed at.
         assertTrue("arrangement: the craft must sit in the steep-but-standable envelope before the"
                 + " subject is exercised (upY=" + tilted + ")", tilted >= 0.25 && tilted < 0.80);
 
@@ -722,16 +794,25 @@ public class VSDeckCaptureAndDismountE2ETest extends AbstractSharedVsClientE2ETe
         System.out.println("[deckcap] tilted-dismount capture=" + capture.raw() + " clientY=" + clientY
                 + " serverY=" + serverY);
 
-        // The ship hovers well above the by=64 ground (its solid top at y=65). The contract is that the
-        // pilot does NOT fall through/off to the ground: his SETTLED height must stay up on the ship, not
-        // drop to ~65. A single-instant "aboard" read is unreliable (it can catch him mid-fall while still
-        // nominally inside the AABB), so we assert the settled trajectory instead.
-        assertTrue("standing up on a tilted ship must keep the pilot UP on it, not drop him to the ~65 "
-                + "ground: settledMinY=" + settledMin + " shipPosY=" + seat[1] + " Ytraj=" + traj
+        // THE BOUND IS THE SHIP'S OWN ALTITUDE, not a number, and this is a literal that had
+        // silently stopped meaning what it said. It read `settledMin > 66.0` under a comment about
+        // "the by=64 ground (its solid top at y=65)" — true while every fixture stood at y=64, and
+        // false the moment the site moved into the open-air band: at a hull near y≈150 a bound of
+        // 66 is satisfied by a body four score blocks BELOW the deck, which is the exact outcome
+        // the assertion exists to catch. The contract is "he stayed up ON THE SHIP", so the
+        // reference is the ship, and the slack below it is a body's own height plus the deck's
+        // thickness.
+        //
+        // A single-instant "aboard" read is unreliable (it can catch him mid-fall while still
+        // nominally inside the AABB), so the SETTLED trajectory is what is asserted.
+        double stayedUpFloor = seat[1] - PILOT_MAY_SETTLE_BELOW_HULL_BLOCKS;
+        assertTrue("standing up on a tilted ship must keep the pilot UP ON IT, not drop him away:"
+                + " settledMinY=" + settledMin + " shipPosY=" + seat[1] + " floor=" + stayedUpFloor
+                + " Ytraj=" + traj
                 + ". The client's releases in this window (each with the gate that performed it): "
-                + releases, settledMin > 66.0);
+                + releases, settledMin > stayedUpFloor);
         assertTrue("the client and server must agree on the ex-pilot's height on the tilted ship: serverY="
-                + serverY + " clientY=" + clientY, Math.abs(clientY - serverY) < 3.0);
+                + serverY + " clientY=" + clientY, Math.abs(clientY - serverY) < CLIENT_SERVER_Y_AGREEMENT_TILTED_BLOCKS);
     }
 
     @Test
@@ -844,10 +925,14 @@ public class VSDeckCaptureAndDismountE2ETest extends AbstractSharedVsClientE2ETe
                 settledMin > shipPosY - 2.5);
         // Held, not sliding: a captured body is stationary on the stationary rolled ship (small tail swing);
         // a body sliding off shows a large monotonic settle.
+        // THE TEST'S OWN: the quantity is the OSCILLATION of the settled trajectory, so the
+        // contract is that it is small and bounded rather than monotonic. A block and a half is
+        // under a body's height; a body sliding off a rolled deck shows many blocks of one-way
+        // travel.
         assertTrue("the captured ex-pilot must be HELD on the " + label + " deck, not sliding (settled Y "
                 + "oscillation=" + osc + "): " + traj, osc < 1.5);
         assertTrue("the client and server must agree on the ex-pilot's height (serverY=" + serverY
-                + " clientY=" + clientY + ")", Math.abs(clientY - serverY) < 3.0);
+                + " clientY=" + clientY + ")", Math.abs(clientY - serverY) < CLIENT_SERVER_Y_AGREEMENT_TILTED_BLOCKS);
     }
 
     @Test
@@ -900,6 +985,9 @@ public class VSDeckCaptureAndDismountE2ETest extends AbstractSharedVsClientE2ETe
         // inverted here is a real change in how a craft holds an adopted attitude — which is a thing
         // this suite should go red for, not skip over. The skip it replaces hid this scenario for as
         // long as the spin arrangement was failing, and a scenario nobody sees fail is not a test.
+        // THE TEST'S OWN arrangement fact, and a strict one because this leg's whole subject is
+        // the inverted case: -0.85 of deck-normal Y is about 150 degrees over, well past the
+        // point where world-up and ship-up could be confused for one another.
         assertTrue("arrangement: the craft must be INVERTED before the subject is exercised (upY="
                 + invertedUpY + "): " + info0, invertedUpY < -0.85);
 
@@ -949,7 +1037,7 @@ public class VSDeckCaptureAndDismountE2ETest extends AbstractSharedVsClientE2ETe
                 + " clientY=" + clientY + " serverY=" + serverY);
 
         assertTrue("after ENTERING an inverted ship, a turn command must move it, not leave it dead "
-                + "(omega=" + omegaAfter + ")", omegaAfter > 0.1);
+                + "(omega=" + omegaAfter + ")", omegaAfter > TURN_COMMAND_OMEGA_RAD_PER_S);
         assertTrue("after LEAVING an inverted ship, the pilot must stay resolved on the deck, not fall "
                 + "through: " + capture.raw(), capture.verdict);
     }
@@ -978,6 +1066,9 @@ public class VSDeckCaptureAndDismountE2ETest extends AbstractSharedVsClientE2ETe
         double shipUpY = deckCamera("shipUpY");
         // An ASSERT: the attitude is commanded, so not being there is news, not a dice roll. And it
         // is read from the CLIENT's own camera state, which is what the pilot below is looking at.
+        // THE TEST'S OWN, and looser than its server-side sibling above on purpose: this one is
+        // read off the CLIENT's camera state, which lags the hull it is drawing, so the same
+        // attitude reads shallower here. What it asserts is the same premise — past horizontal.
         assertTrue("arrangement: the craft must be inverted ON THE CLIENT before its controls are"
                 + " tested there (shipUpY=" + shipUpY + ")", shipUpY < -0.4);
         double omegaSettled = shipInfo().omega;
@@ -999,10 +1090,12 @@ public class VSDeckCaptureAndDismountE2ETest extends AbstractSharedVsClientE2ETe
                 () -> shipInfo().omega, o -> o > 0.1, 2, 30).value;
         System.out.println("[deckcap] inverted-control cursor=" + cursor + " omegaTurning=" + omegaTurning);
 
+        // THE TEST'S OWN sensitivity bar, in the cursor's own normalised units: what it refuses is
+        // a deflection that did not register at all. A hard deflection drives the cursor toward 1.
         assertTrue("a hard flight-cursor deflection must register on the client even when inverted "
                 + "(cursor=" + cursor + ")", Math.abs(cursor) > 0.2);
         assertTrue("a seated pilot must still be able to TURN the ship when it is inverted - commanding a "
-                + "turn must spin it up, not leave it dead (omega=" + omegaTurning + ")", omegaTurning > 0.1);
+                + "turn must spin it up, not leave it dead (omega=" + omegaTurning + ")", omegaTurning > TURN_COMMAND_OMEGA_RAD_PER_S);
     }
 
     /** Feed a raw mouse delta to the client's own ship-pilot handler, as the window's mouse would. */
@@ -1129,6 +1222,10 @@ public class VSDeckCaptureAndDismountE2ETest extends AbstractSharedVsClientE2ETe
         // mixin says so — so "it stayed engaged" is still read off the client's render flag.
         assertTrue("the deck camera must stay engaged on a held tilted deck (camOn " + camOn + "/" + n
                 + "): " + trace, camOn == n);
+        // THE TEST'S OWN, in degrees: the ship is STATIONARY, so the honest statement is that the
+        // levelled roll does not change at all. Five degrees is the float noise of recomputing an
+        // Euler angle from a quaternion each frame; the defect it exists for is the pole, where
+        // the same attitude yields wildly different angles between frames.
         assertTrue("the levelled camera roll must be STABLE while the ship is stationary, not jitter at "
                 + "the Euler pole (jitter=" + rollJitter + " deg): " + trace, rollJitter < 5.0);
         assertTrue("the client player must not be dragged through the deck (Y oscillation=" + yOsc
@@ -1169,6 +1266,9 @@ public class VSDeckCaptureAndDismountE2ETest extends AbstractSharedVsClientE2ETe
         // The attitude controller converges shy of a full 180 (axis-angle is singular there), settling
         // near 135deg - deck-up well past horizontal and pointing downward. That is a strongly non-trivial
         // attitude, which is all the consistency check needs.
+        // THE TEST'S OWN arrangement fact. The controller settles shy of a full 180 (axis-angle is
+        // singular there), near 135 degrees, so this asks for what it can actually reach: deck-up
+        // well below horizontal, which is all the consistency check underneath needs.
         assertTrue("ship must be strongly inverted (deck-up points well below horizontal): "
                 + tc.raw(), tc.upQuatY() < -0.5);
 
@@ -1183,11 +1283,11 @@ public class VSDeckCaptureAndDismountE2ETest extends AbstractSharedVsClientE2ETe
         System.out.println("[deckcap] inverted upDis=" + upDis + " fwdDis=" + fwdDis
                 + " posRt=" + posRt + " rotRt=" + rotRt);
         assertTrue("movement rotate and camera quaternion must agree on ship-up (disagree=" + upDis
-                + "): " + tc.raw(), upDis < 0.02);
+                + "): " + tc.raw(), upDis < FRAME_AGREEMENT_EPSILON);
         assertTrue("movement rotate and camera quaternion must agree on ship-forward (disagree=" + fwdDis
-                + ")", fwdDis < 0.02);
-        assertTrue("world<->subspace position round-trip must be exact (err=" + posRt + ")", posRt < 0.02);
-        assertTrue("world<->subspace rotation round-trip must be exact (err=" + rotRt + ")", rotRt < 0.02);
+                + ")", fwdDis < FRAME_AGREEMENT_EPSILON);
+        assertTrue("world<->subspace position round-trip must be exact (err=" + posRt + ")", posRt < FRAME_AGREEMENT_EPSILON);
+        assertTrue("world<->subspace rotation round-trip must be exact (err=" + rotRt + ")", rotRt < FRAME_AGREEMENT_EPSILON);
     }
 
     // ---- helpers (self-contained, mirroring the other tier-2 e2e classes) ----------------------
@@ -1293,13 +1393,8 @@ public class VSDeckCaptureAndDismountE2ETest extends AbstractSharedVsClientE2ETe
         // HEIGHT 24 is the ENVELOPE, not the hull: ~10 blocks of hull, a deck on top of it, a body
         // standing (~2) and jumping (~1.25) there, and the room the scenarios below dismount, drop
         // and roll in. A check sized to what is BUILT is green in exactly the case that failed.
-        site.requireClear(this::exec, 2, 24,
+        return RocketFixture.assembleAt(site, this::exec, VARIANT, 2, 24,
                 "the hull, the deck a pilot dismounts onto, and the air he jumps into above it");
-        String fixture = exec("artest fixture rocket 0 " + baseX + " " + baseY + " " + baseZ + " " + VARIANT);
-        assertTrue("fixture (" + VARIANT + ") failed: " + fixture, Reply.of(fixture).ok());
-        int[] bp = Reply.of(fixture).blockPos(BUILDER_POS);
-        assertTrue("fixture missing builderPos: " + fixture, bp != null);
-        return exec("artest rocket assemble 0 " + bp[0] + " " + bp[1] + " " + bp[2]);
     }
 
     /** This scenario's ship, asked by identity, as the probe answered it. */

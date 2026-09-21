@@ -6,6 +6,7 @@ import org.junit.Test;
 
 
 import zmaster587.advancedRocketry.test.FixtureSite;
+import zmaster587.advancedRocketry.test.RocketFixture;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
@@ -23,7 +24,6 @@ import static org.junit.Assert.assertTrue;
  */
 public class RocketInfrastructureSmokeTest extends AbstractSharedServerTest {
 
-    private static final String BUILDER_POS = "builderPos";
     private static final String ENT_ID = "entityId";
     private static final String CONN = "connectedCount";
     private static final String FLUID_AMOUNT = "totalAmount";
@@ -357,14 +357,9 @@ public class RocketInfrastructureSmokeTest extends AbstractSharedServerTest {
         // The site owns the coordinates; these aliases keep the body below unchanged.
         final int baseX = site.x, baseY = site.y, baseZ = site.z;
         // FIRST link: the volume is EMPTY, measured by the air fill's own `placed`.
-        site.requireClear(cmd -> String.join("\n", client().execute(cmd)), 2, 10,
+        int[] bp = RocketFixture.placeAt(site, cmd -> String.join("\n", client().execute(cmd)),
+                variant, 2, 10,
                 "the craft this infrastructure links to stands in this volume");
-
-        String fx = String.join("\n", client().execute(
-                "artest fixture rocket 0 " + baseX + " " + baseY + " " + baseZ + " " + variant));
-        assertTrue("fixture rocket (" + variant + ") failed: " + fx, Reply.of(fx).ok());
-        int[] bp = Reply.of(fx).blockPos(BUILDER_POS);
-        assertTrue("could not parse builderPos: " + fx, bp != null);
         int bx = bp[0],
                 by = bp[1],
                 bz = bp[2];

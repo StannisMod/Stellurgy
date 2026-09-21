@@ -5,6 +5,7 @@ import org.junit.Test;
 
 
 import zmaster587.advancedRocketry.test.FixtureSite;
+import zmaster587.advancedRocketry.test.RocketFixture;
 
 import static org.junit.Assert.assertTrue;
 
@@ -35,7 +36,6 @@ import static org.junit.Assert.assertTrue;
  */
 public class RocketItemUnloaderActiveTransferTest extends AbstractSharedServerTest {
 
-    private static final String BUILDER_POS = "builderPos";
     private static final String ENT_ID = "entityId";
     private static final String TOTAL_PLACED = "totalPlaced";
     private static final String TILES_WITH_CAP = "tilesWithCapability";
@@ -127,16 +127,8 @@ public class RocketItemUnloaderActiveTransferTest extends AbstractSharedServerTe
         final int baseX = site.x, baseY = site.y, baseZ = site.z;
         // FIRST link: the volume is EMPTY, measured by the air fill's own `placed`. Open air, so
         // this ASSERTS rather than digs.
-        site.requireClear(cmd -> exec(cmd), 2, 10,
+        String assemble = RocketFixture.assembleAt(site, cmd -> exec(cmd), variant, 2, 10,
                 "the craft the unloader empties stands in this volume");
-        String fx = exec("artest fixture rocket 0 " + baseX + " " + baseY + " " + baseZ
-                + " " + variant);
-        assertTrue("fixture rocket (" + variant + ") failed: " + fx,
-                Reply.of(fx).ok());
-        int[] bp = Reply.of(fx).blockPos(BUILDER_POS);
-        assertTrue("could not parse builderPos: " + fx, bp != null);
-        String assemble = exec("artest rocket assemble 0 "
-                + bp[0] + " " + bp[1] + " " + bp[2]);
         assertTrue("rocket assemble failed: " + assemble,
                 Reply.of(assemble).ok());
         Reply emReply = Reply.of(assemble);

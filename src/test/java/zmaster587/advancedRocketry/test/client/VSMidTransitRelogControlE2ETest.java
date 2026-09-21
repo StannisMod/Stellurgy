@@ -104,17 +104,9 @@ public class VSMidTransitRelogControlE2ETest extends AbstractSharedVsClientE2ETe
         // would be a real risk taken for no contract.
         final zmaster587.advancedRocketry.test.FixtureSite site =
                 zmaster587.advancedRocketry.test.FixtureSite.openAir(originDim, 40, 40);
-        int bx = site.x, by = site.y, bz = site.z;
-        site.requireClear(this::exec, 2, 16,
+        String assembled = zmaster587.advancedRocketry.test.RocketFixture.assembleAt(
+                site, this::exec, "with-pilot-seat", 2, 16,
                 "the craft that is flown, relogged and flown again inside this cell");
-        String fixture = exec("artest fixture rocket " + originDim + " " + bx + " " + by + " " + bz
-                + " with-pilot-seat");
-        scenario().requireArranged("fixture (with-pilot-seat) failed: " + fixture,
-                Reply.of(fixture).ok());
-        int[] bp = Reply.of("artest fixture rocket", fixture).blockPos("builderPos");
-        scenario().requireArranged("fixture missing builderPos: " + fixture, bp != null);
-        String assembled = exec("artest rocket assemble " + originDim
-                + " " + bp[0] + " " + bp[1] + " " + bp[2]);
         scenario().requireArranged("a with-pilot-seat build must route to a ship: " + assembled,
                 (Reply.of(assembled).integer("rocketCount") == 0));
         assertTrue("the piloted origin ship never assembled/loaded in the pool cell (dim "

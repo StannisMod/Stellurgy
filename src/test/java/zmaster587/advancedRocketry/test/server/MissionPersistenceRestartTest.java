@@ -13,6 +13,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 
 import zmaster587.advancedRocketry.test.FixtureSite;
+import zmaster587.advancedRocketry.test.RocketFixture;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
@@ -53,7 +54,6 @@ import static org.junit.Assert.assertTrue;
  */
 public class MissionPersistenceRestartTest {
 
-    private static final String BUILDER_POS = "builderPos";
     private static final String MISSION_ID = "missionId";
     private static final String DURATION = "duration";
 
@@ -86,16 +86,8 @@ public class MissionPersistenceRestartTest {
         final int baseY = site.y, baseZ = site.z;
         // FIRST link: the volume this craft is built in is EMPTY. The site stands in open air, so
         // this ASSERTS rather than digs, and the fill inside it force-loads every chunk in the box.
-        site.requireClear(cmd -> ok(boot.client().execute(cmd)), 2, 10,
+        RocketFixture.assembleAt(site, cmd -> ok(boot.client().execute(cmd)), "simple", 2, 10,
                 "the craft whose mission must survive the restart is built in this volume");
-        String fixture = ok(boot.client().execute(
-                "artest fixture rocket 0 " + baseX + " " + baseY + " " + baseZ + " simple"));
-        int[] bp = Reply.of(fixture).blockPos(BUILDER_POS);
-        assertTrue("fixture missing builderPos: " + fixture, bp != null);
-        int bx = bp[0];
-        int by = bp[1];
-        int bz = bp[2];
-        ok(boot.client().execute("artest rocket assemble 0 " + bx + " " + by + " " + bz));
         String list = ok(boot.client().execute("artest rocket list 0"));
         java.util.List<RocketList.Entry> built = RocketList.of(list);
         assertTrue("no rocket after assemble: " + list, !built.isEmpty());

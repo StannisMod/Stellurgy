@@ -13,6 +13,7 @@ import zmaster587.advancedRocketry.test.Events;
 import zmaster587.advancedRocketry.test.Reply;
 
 import zmaster587.advancedRocketry.test.FixtureSite;
+import zmaster587.advancedRocketry.test.RocketFixture;
 
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
@@ -65,7 +66,6 @@ public class VSUnassembledCraftTakesNoOrdersE2ETest extends AbstractSharedVsClie
         return "vs-unassembled-craft-orders";
     }
 
-    private static final String BUILDER_POS = "builderPos";
     private static final String DUMMY_ID = "dummyId";
     private static final String COUNT = "count";
 
@@ -410,22 +410,14 @@ public class VSUnassembledCraftTakesNoOrdersE2ETest extends AbstractSharedVsClie
                 heldId != null && heldId.isEmpty());
     }
 
+    /**
+     * FIRST link, and it ASSERTS where the warmup+fill pair DUG. HEIGHT 16: the hull, plus the air
+     * above it this scenario watches for a craft that must NOT move.
+     */
     private String assembleShip() throws Exception {
-        int cx1 = (SHIP_X - 2) >> 4, cz1 = (SHIP_Z - 2) >> 4;
-        int cx2 = (SHIP_X + 7) >> 4, cz2 = (SHIP_Z + 7) >> 4;
-        assertTrue("chunk warmup failed",
-                Reply.of(exec("artest chunk warmup 0 " + cx1 + " " + cz1 + " " + cx2 + " " + cz2)
-                        ).ok());
-        assertTrue("pre-clear failed",
-                Reply.of(exec("artest fill 0 " + (SHIP_X - 2) + " " + (SHIP_Y + 1) + " " + (SHIP_Z - 2)
-                        + " " + (SHIP_X + 7) + " " + (SHIP_Y + 10) + " " + (SHIP_Z + 7) + " minecraft:air")
-                        ).ok());
-        String fixture = exec("artest fixture rocket 0 " + SHIP_X + " " + SHIP_Y + " " + SHIP_Z
-                + " with-pilot-seat");
-        assertTrue("fixture (with-pilot-seat) failed: " + fixture, Reply.of(fixture).ok());
-        int[] bp = Reply.of(fixture).blockPos(BUILDER_POS);
-        assertTrue("fixture missing builderPos: " + fixture, bp != null);
-        return exec("artest rocket assemble 0 " + bp[0] + " " + bp[1] + " " + bp[2]);
+        return RocketFixture.assembleAt(FixtureSite.openAir(0, SHIP_X, SHIP_Z), this::exec,
+                "with-pilot-seat", 2, 16,
+                "the loose craft that must take no orders, and the air it must not climb into");
     }
 
     // ---- Observation helpers ---------------------------------------------------------------------

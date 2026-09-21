@@ -7,6 +7,7 @@ import zmaster587.advancedRocketry.test.GameTicks;
 
 
 import zmaster587.advancedRocketry.test.FixtureSite;
+import zmaster587.advancedRocketry.test.RocketFixture;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
@@ -44,7 +45,6 @@ public class RocketEventPayloadContractTest extends AbstractSharedServerTest {
 
     private static final int DESCENT_TIMER = 40; // mirrors EntityRocket.DESCENT_TIMER
 
-    private static final String BUILDER_POS = "builderPos";
     private static final String ENTITY_ID = "entityId";
     private static final String PRELAUNCH_ID = "preLaunchEntityId";
     private static final String PRELAUNCH_DIM = "preLaunchDim";
@@ -278,19 +278,15 @@ public class RocketEventPayloadContractTest extends AbstractSharedServerTest {
     }
 
     private int buildAndAssemble(int baseX) throws Exception {
-        int cx1 = (baseX - 2) >> 4, cz1 = (CZ - 2) >> 4;
-        int cx2 = (baseX + 7) >> 4, cz2 = (CZ + 7) >> 4;
-        exec("artest chunk warmup 0 " + cx1 + " " + cz1 + " " + cx2 + " " + cz2);
-        exec("artest fill 0 " + (baseX - 2) + " " + (CY + 1) + " " + (CZ - 2)
-                + " " + (baseX + 7) + " " + (CY + 10) + " " + (CZ + 7)
-                + " minecraft:air");
-        String fixture = exec("artest fixture rocket 0 " + baseX + " " + CY + " " + CZ
-                + " simple");
-        assertTrue("fixture build failed: " + fixture, Reply.of(fixture).ok());
-        int[] bp = Reply.of(fixture).blockPos(BUILDER_POS);
-        assertTrue("no builderPos: " + fixture, bp != null);
-        String assemble = exec("artest rocket assemble 0 "
-                + bp[0] + " " + bp[1] + " " + bp[2]);
+        // FIRST link, and it ASSERTS where the pair it replaces DUG: a chunk warmup plus an air
+        // fill over CY+1..CY+10 whose own answer — how many blocks were standing there — was
+        // thrown away, and whose two replies were not even read for `ok`. The site is in the band,
+        // and the fill inside the shared builder force-loads every chunk in its box, which is what
+        // the warmup was for.
+        String assemble = RocketFixture.assembleAt(
+                FixtureSite.openAir(0, baseX, CZ),
+                cmd -> exec(cmd), "simple", 2, 10,
+                "the craft whose launch events this contract reads stands in this volume");
         assertTrue("assemble must succeed: " + assemble,
                 Reply.of(assemble).ok());
         Reply eimReply = Reply.of(assemble);

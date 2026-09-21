@@ -10,6 +10,7 @@ import org.junit.Test;
 
 
 import zmaster587.advancedRocketry.test.FixtureSite;
+import zmaster587.advancedRocketry.test.RocketFixture;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
@@ -40,7 +41,6 @@ public class ShipArrivalKeepsItsPilotSeatInASuperheatedAtmosphereTest extends Ab
 
     /** World a ship is given to become loadable - the old 40 x 250 ms. */
 
-    private static final String BUILDER_POS = "builderPos";
 
     /** Where the ship is built, and the clear sky it crosses into. Well clear of other fixtures. */
     private static final int SRC_X = 5300, SRC_Y = FixtureSite.OPEN_AIR_Y, SRC_Z = 5300;
@@ -65,9 +65,13 @@ public class ShipArrivalKeepsItsPilotSeatInASuperheatedAtmosphereTest extends Ab
 
         // The craft is BUILT while the world is still temperate — a player builds at home and lands
         // elsewhere, and building in the fire is a different story than arriving in it.
-        clearArea(SRC_X, SRC_Z);
-        clearArea(DST_X, DST_Z);
-        String coords = placeFixture(SRC_X, SRC_Y, SRC_Z);
+        // ONLY THE DESTINATION IS CLEARED HERE, and the source is not: the fixture's own first link
+        // ASSERTS its volume is empty, and a clear run immediately before that assertion would make
+        // it unfailable — the clear would be the thing that made it true. The destination is a
+        // different question: nothing builds there, the crossing ARRIVES there, and clearing the
+        // arrival area is an arrangement act rather than a claim about it.
+        clearArrivalArea(DST_X, DST_Z);
+        String coords = placeFixture(SRC_X, SRC_Z);
         String asm = exec("artest rocket assemble 0 " + coords);
         assertTrue("with VS an AFC-bearing build must route to a ship (no rocket): " + asm,
                 (Reply.of(asm).integer("rocketCount") == 0));
@@ -179,13 +183,21 @@ public class ShipArrivalKeepsItsPilotSeatInASuperheatedAtmosphereTest extends Ab
         return ShipReadiness.loadedCount(this::exec, dim);
     }
 
-    private void clearArea(int baseX, int baseZ) throws Exception {
+    /**
+     * Empty the volume the crossing ARRIVES into. This is an arrangement ACT, not a claim: nothing
+     * is built here and no assertion downstream reads this volume's prior contents, so clearing it
+     * and asserting it were never the same question. Its Y is the DESTINATION's, which used to be
+     * read off the SOURCE's constant — the two are the same number today and are different
+     * quantities, so the one this box is about is the one it now names.
+     */
+    private void clearArrivalArea(int baseX, int baseZ) throws Exception {
         int cx1 = (baseX - 4) >> 4, cz1 = (baseZ - 4) >> 4;
         int cx2 = (baseX + 20) >> 4, cz2 = (baseZ + 20) >> 4;
         assertTrue("chunk warmup failed",
                 Reply.of(exec("artest chunk warmup 0 " + cx1 + " " + cz1 + " " + cx2 + " " + cz2)).ok());
-        assertTrue("pre-clear failed", Reply.of(exec("artest fill 0 " + (baseX - 4) + " " + (SRC_Y - 2) + " " + (baseZ - 4)
-                + " " + (baseX + 20) + " " + (SRC_Y + 12) + " " + (baseZ + 20) + " minecraft:air")).ok());
+        assertTrue("the arrival area could not be cleared",
+                Reply.of(exec("artest fill 0 " + (baseX - 4) + " " + (DST_Y - 2) + " " + (baseZ - 4)
+                + " " + (baseX + 20) + " " + (DST_Y + 12) + " " + (baseZ + 20) + " minecraft:air")).ok());
     }
 
     private void clearPos(int x, int y, int z) throws Exception {
@@ -202,11 +214,15 @@ public class ShipArrivalKeepsItsPilotSeatInASuperheatedAtmosphereTest extends Ab
         return exec("artest space get-block 0 " + x + " " + y + " " + z);
     }
 
-    private String placeFixture(int baseX, int baseY, int baseZ) throws Exception {
-        String fixture = exec("artest fixture rocket 0 " + baseX + " " + baseY + " " + baseZ + " with-pilot-seat");
-        assertTrue("fixture failed: " + fixture, Reply.of(fixture).ok());
-        int[] bp = Reply.of(fixture).blockPos(BUILDER_POS);
-        assertTrue("fixture missing builderPos: " + fixture, bp != null);
+    /**
+     * WHERE the craft stands, and the first link that says its volume is empty — the clear the
+     * shared builder runs ASSERTS on an open-air site, so a block found standing here is an
+     * arrangement failure that names itself instead of a craft that quietly fails to assemble.
+     */
+    private String placeFixture(int baseX, int baseZ) throws Exception {
+        int[] bp = RocketFixture.placeAt(FixtureSite.openAir(0, baseX, baseZ), this::exec,
+                "with-pilot-seat", 2, 10,
+                "the craft whose pilot seat must survive the arrival stands in this volume");
         return bp[0] + " " + bp[1] + " " + bp[2];
     }
 

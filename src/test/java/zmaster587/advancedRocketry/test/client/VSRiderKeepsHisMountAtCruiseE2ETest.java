@@ -63,7 +63,6 @@ public class VSRiderKeepsHisMountAtCruiseE2ETest extends AbstractSharedVsClientE
     }
 
     private static final String PLAYER_NAME = "player";
-    private static final String BUILDER_POS = "builderPos";
 
     /**
      * The mount is registered with a tracking range of 16 blocks and an anchor republished every 20
@@ -153,16 +152,8 @@ public class VSRiderKeepsHisMountAtCruiseE2ETest extends AbstractSharedVsClientE
         final zmaster587.advancedRocketry.test.FixtureSite site =
                 zmaster587.advancedRocketry.test.FixtureSite.openAir(dim, 40, 40);
         int bx = site.x, by = site.y, bz = site.z;
-        site.requireClear(this::exec, 2, 16,
+        String assembled = zmaster587.advancedRocketry.test.RocketFixture.assembleAt(site, this::exec, "with-pilot-seat", 2, 16,
                 "the craft whose rider must stay aboard through the cruise");
-
-        String fixture = exec("artest fixture rocket " + dim + " " + bx + " " + by + " " + bz
-                + " with-pilot-seat");
-        scenario().requireArranged("with-pilot-seat fixture failed: " + fixture, readBool(fixture, "ok"));
-        int[] bp = Reply.of(fixture).blockPos(BUILDER_POS);
-        scenario().requireArranged("fixture missing builderPos: " + fixture, bp != null);
-        String assembled = exec("artest rocket assemble " + dim
-                + " " + bp[0] + " " + bp[1] + " " + bp[2]);
         scenario().requireArranged("a with-pilot-seat build must route to a ship: " + assembled,
                 (Reply.of(assembled).integer("rocketCount") == 0));
         scenario().requireArranged("the ship never assembled/loaded in the cell (dim " + dim + ")",

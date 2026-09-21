@@ -237,22 +237,8 @@ public class VSFlightSmoothnessAcrossJumpE2ETest extends AbstractSharedVsClientE
         final zmaster587.advancedRocketry.test.FixtureSite site =
                 zmaster587.advancedRocketry.test.FixtureSite.openAir(originDim, 40, 40);
         int bx = site.x, by = site.y, bz = site.z;
-        site.requireClear(this::exec, 2, 16,
+        String assembled = zmaster587.advancedRocketry.test.RocketFixture.assembleAt(site, this::exec, "with-pilot-seat", 2, 16,
                 "the craft whose flight smoothness is measured across the jump");
-        // The BIGGEST flyable tier-2 variant the catalogue has, not the bare one. Mass and block
-        // count are on the causal path for every one of the four clocks — the physics step's cost,
-        // the volume of ship state synced per tick, the chunk work a moving hull does — and the
-        // report is about a real ship, not a builder's minimum. Using the largest existing variant
-        // rather than hand-placing a new one keeps the fixture inside the rules the catalogue
-        // already enforces (tower-bounded scan, anchor connectivity, flyability).
-        String fixture = exec("artest fixture rocket " + originDim + " " + bx + " " + by + " " + bz
-                + " with-pilot-seat");
-        scenario().requireArranged("fixture (with-pilot-seat) failed: " + fixture,
-                Reply.of(fixture).ok());
-        int[] bp = Reply.of("artest fixture rocket", fixture).blockPos("builderPos");
-        scenario().requireArranged("fixture missing builderPos: " + fixture, bp != null);
-        String assembled = exec("artest rocket assemble " + originDim + " " + bp[0] + " "
-                + bp[1] + " " + bp[2]);
         scenario().requireArranged("a with-pilot-seat build must route to a ship: " + assembled,
                 (Reply.of(assembled).integer("rocketCount") == 0));
         scenario().requireArranged("the origin ship never assembled/loaded in dim " + originDim,

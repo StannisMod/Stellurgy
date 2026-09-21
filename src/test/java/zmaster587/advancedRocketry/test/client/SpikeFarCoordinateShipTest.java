@@ -545,7 +545,17 @@ public class SpikeFarCoordinateShipTest extends AbstractClientE2ETest {
         return null;
     }
 
-    /** @return the assemble reply, or {@code null} if the fixture itself never landed */
+    /**
+     * DELIBERATELY NOT ON THE SHARED BUILDER, and this is the read rather than an oversight.
+     *
+     * <p>{@code RocketFixture} raises an ARRANGEMENT FAILURE when a fixture will not lay, which is
+     * right for every scenario whose subject is what happens afterwards. This one's subject is the
+     * laying: it sweeps |x| out to sixteen million asking WHERE the build stops working, so a
+     * refusal is the measurement and must be recorded and walked past rather than thrown. It also
+     * lays its own stone pad, because at those coordinates the world is ocean.</p>
+     *
+     * @return the assemble reply, or {@code null} if the fixture itself never landed
+     */
     private String assembleFixture(int x) throws Exception {
         String fixture = exec("artest fixture rocket 0 " + x + " " + BASE_Y + " " + ARENA_Z
                 + " " + VARIANT);

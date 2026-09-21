@@ -9,6 +9,7 @@ import zmaster587.advancedRocketry.test.Reply;
 import zmaster587.advancedRocketry.test.PilotSeat;
 import zmaster587.advancedRocketry.test.Events;
 import zmaster587.advancedRocketry.test.FixtureSite;
+import zmaster587.advancedRocketry.test.RocketFixture;
 import zmaster587.advancedRocketry.test.Plot;
 import zmaster587.advancedRocketry.test.ShipIdentity;
 
@@ -57,7 +58,6 @@ public class VSShipAtmosphereFrameSpikeTest extends AbstractSharedVsClientE2ETes
         return "vs-ship-atmosphere-frame";
     }
 
-    private static final String BUILDER_POS = "builderPos";
     private static final String COUNT = "count";
     private static final String ATM_TYPE = "type";
     private static final String CACHED_ATM = "cachedAtmosphere";
@@ -382,13 +382,7 @@ public class VSShipAtmosphereFrameSpikeTest extends AbstractSharedVsClientE2ETes
         // the air fill's own `placed`. Open air, so this ASSERTS rather than digs. It matters more
         // here than in most: the subject is a SEALED cabin, and a shell whose stone is continuous
         // with the pit's wall is not the shape this leg believes it built.
-        site.requireClear(this::exec, 2, 16,
+        return RocketFixture.assembleAt(site, this::exec, VARIANT, 2, 16,
                 "the hull, and the sealed cabin raised on it");
-        String fixture = exec("artest fixture rocket 0 " + baseX + " " + baseY + " " + baseZ
-                + " " + VARIANT);
-        assertTrue("fixture (" + VARIANT + ") failed: " + fixture, Reply.of(fixture).ok());
-        int[] bp = Reply.of(fixture).blockPos(BUILDER_POS);
-        assertTrue("fixture missing builderPos: " + fixture, bp != null);
-        return exec("artest rocket assemble 0 " + bp[0] + " " + bp[1] + " " + bp[2]);
     }
 }

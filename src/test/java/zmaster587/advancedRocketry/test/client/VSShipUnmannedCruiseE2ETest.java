@@ -11,6 +11,7 @@ import zmaster587.advancedRocketry.test.Reply;
 import zmaster587.advancedRocketry.test.ShipInfo;
 import zmaster587.advancedRocketry.test.Events;
 import zmaster587.advancedRocketry.test.FixtureSite;
+import zmaster587.advancedRocketry.test.RocketFixture;
 
 import static org.junit.Assert.assertTrue;
 
@@ -39,7 +40,6 @@ public class VSShipUnmannedCruiseE2ETest extends AbstractSharedVsClientE2ETest {
         return "vs-ship-unmanned-cruise";
     }
 
-    private static final String BUILDER_POS = "builderPos";
     private static final String POS_Y = "posY";
     private static final String DUMMY_ID = "dummyId";
 
@@ -260,13 +260,7 @@ public class VSShipUnmannedCruiseE2ETest extends AbstractSharedVsClientE2ETest {
         // air fill's own `placed`. Open air, so this ASSERTS rather than digging the shaft it
         // replaces — a craft that cruises out of a pit meets its rim, and the red then names the
         // cruise. The fill force-loads every chunk in the box, so the warmup lost nothing.
-        site.requireClear(this::exec, 2, 16,
+        return RocketFixture.assembleAt(site, this::exec, VARIANT, 2, 16,
                 "the hull, and the first blocks of the lane it cruises along");
-        String fixture = exec("artest fixture rocket 0 " + baseX + " " + baseY + " " + baseZ
-                + " " + VARIANT);
-        assertTrue("fixture (" + VARIANT + ") failed: " + fixture, Reply.of(fixture).ok());
-        int[] bp = Reply.of(fixture).blockPos(BUILDER_POS);
-        assertTrue("fixture missing builderPos: " + fixture, bp != null);
-        return exec("artest rocket assemble 0 " + bp[0] + " " + bp[1] + " " + bp[2]);
     }
 }

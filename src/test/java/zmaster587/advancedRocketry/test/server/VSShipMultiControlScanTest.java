@@ -5,6 +5,7 @@ import org.junit.Test;
 
 import zmaster587.advancedRocketry.test.Reply;
 import zmaster587.advancedRocketry.test.FixtureSite;
+import zmaster587.advancedRocketry.test.RocketFixture;
 
 import static org.junit.Assert.assertTrue;
 
@@ -28,7 +29,6 @@ import static org.junit.Assert.assertTrue;
  */
 public class VSShipMultiControlScanTest extends AbstractSharedServerTest {
 
-    private static final String BUILDER_POS = "builderPos";
 
     @Test
     public void aSecondFlightComputerIsRejectedAtScan() throws Exception {
@@ -78,13 +78,9 @@ public class VSShipMultiControlScanTest extends AbstractSharedServerTest {
         // ASSERTS rather than digs, and its fill force-loads every chunk in the box — so the warmup
         // it replaces lost nothing. Nothing here ever flies: the subject is the assembly SCAN, and
         // the height covers the tower the scan reads.
-        site.requireClear(cmd -> String.join("\n", client().execute(cmd)), 2, 10,
+        int[] bp = RocketFixture.placeAt(site, cmd -> String.join("\n", client().execute(cmd)),
+                variant, 2, 10,
                 "the build the assembly scan is about stands in this volume");
-        String fixture = String.join("\n", client().execute(
-                "artest fixture rocket 0 " + baseX + " " + baseY + " " + baseZ + " " + variant));
-        assertTrue("fixture (" + variant + ") failed: " + fixture, Reply.of(fixture).ok());
-        int[] bp = Reply.of(fixture).blockPos(BUILDER_POS);
-        assertTrue("fixture (" + variant + ") missing builderPos: " + fixture, bp != null);
         return bp[0] + " " + bp[1] + " " + bp[2];
     }
 }

@@ -55,21 +55,15 @@ public class UvAssemblerOutputEntityClassTest extends AbstractSharedServerTest {
 
     @Test
     public void rocketAssemblerProducesEntityRocketNotStationDeployed() throws Exception {
-        // Pre-clear above the launchpad — the existing rocket fixture's
-        // buildAndAssemble helper does this; replicate inline because we
-        // don't want that helper's package coupling here.
-        exec("artest chunk warmup 0 " + ((CX_ROCKET - 2) >> 4) + " " + ((CZ - 2) >> 4)
-                + " " + ((CX_ROCKET + 7) >> 4) + " " + ((CZ + 7) >> 4));
-        exec("artest fill 0 " + (CX_ROCKET - 2) + " " + (CY + 1) + " " + (CZ - 2)
-                + " " + (CX_ROCKET + 7) + " " + (CY + 10) + " " + (CZ + 7) + " minecraft:air");
-
-        String fixture = exec("artest fixture rocket 0 " + CX_ROCKET + " " + CY + " " + CZ
-                + " simple");
-        assertTrue("rocket fixture must build: " + fixture, Reply.of(fixture).ok());
-        int[] builder = parseBuilder(fixture);
-
-        String assemble = exec("artest rocket assemble 0 " + builder[0] + " "
-                + builder[1] + " " + builder[2]);
+        // FIRST link, ASSERTING where the pair it replaces DUG — and the comment that stood here
+        // said out loud what it was doing: "the existing rocket fixture's buildAndAssemble helper
+        // does this; replicate inline because we don't want that helper's package coupling". The
+        // copy came over and the reason stayed behind, which is how the pit reached two dozen
+        // files. There is a shared builder now and no package to couple to.
+        String assemble = zmaster587.advancedRocketry.test.RocketFixture.assembleAt(
+                zmaster587.advancedRocketry.test.FixtureSite.openAir(0, CX_ROCKET, CZ),
+                cmd -> exec(cmd), "simple", 2, 10,
+                "the craft whose assembled entity class this scenario reads");
         assertTrue("rocket assemble must succeed: " + assemble,
                 Reply.of(assemble).ok());
 

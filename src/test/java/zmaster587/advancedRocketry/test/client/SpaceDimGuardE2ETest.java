@@ -178,31 +178,31 @@ public class SpaceDimGuardE2ETest extends AbstractSharedClientE2ETest {
         } catch (AssertionError arrangement) {
             scenario().arrangementFailed(arrangement.getMessage());
         }
+        // THE MARK GOES BEFORE THE STIMULUS, one statement above the teleport that puts the body
+        // where the guard must act on it — which is what makes the wait below a link and not a
+        // sample taken after the fact.
+        long guardMark = events.markInstrumented();
         exec("tp @a 50000 100 50000");
 
-        // STILL A POLL, and deliberately: the station branch commits through
-        // Entity.setPositionAndUpdate, for which no event exists — the vocabulary's
-        // `space_guard_relocated` was deferred, and the only existing witness (`pos_jump`) records
-        // a position write only when |Δy| > 16, so a station whose spawnY sits within 16 blocks of
-        // y=100 moves 50 000 blocks in X/Z and is recorded nowhere. The wait therefore samples the
-        // body's own X, which is a value and not a link; what the migration CAN do is name the
-        // branch afterwards, which the absence assertion at the end of this method does.
+        // THE GUARD'S OWN ACT, awaited as a record. This was a poll of the body's X until it had
+        // moved a block, defended in place by the fact that the station branch commits through
+        // `Entity.setPositionAndUpdate` and nothing recorded it: `teleporter_placed` covers only the
+        // OTHER branch, and `pos_jump` fires on a position write only when the VERTICAL move passes
+        // its threshold — while this guard moves a body fifty thousand blocks sideways and leaves Y
+        // roughly alone. So the one act this scenario is about was invisible.
         //
-        // The original waited exactly 5 ticks, reasoning that the guard runs every tick and that
-        // further ticks only let gravity drag the player away from spawnY — true of the wait's
-        // PURPOSE, but a fixed wait says how long we are willing to wait, and under a loaded run the
-        // server's player tick does not arrive on our schedule (measured 2026-08-07: the player was
-        // still standing at 50000 when the five ticks were up, and the leg indicted production for
-        // it). Polling exits at the EARLIEST tick the teleport is visible, which is also the least
-        // free-fall the posY check below can be handed.
+        // A missing record is not a ground for a poll; it is the work. The seam now speaks:
+        // `space_guard_relocated`, recorded by a TEST-ONLY mixin at the exact invoke the guard
+        // commits through, carrying where the body was actually left. What this buys over the poll
+        // is not the wait — it is the failure. A poll that expired said "he is still at 50000",
+        // which is equally true of a guard that declined, a guard that never ran, and a server that
+        // never received the teleport.
+        events.await(guardMark, "space_guard_relocated",
+                "the space-dimension guard must MOVE a body standing in no station's slot onto a"
+                        + " station spawn — this is the act the scenario is about, and it is a"
+                        + " discrete decision production takes, not a value that settles",
+                GUARD_LINK_BUDGET_TICKS);
         PlayerState after = PlayerState.read(this::exec);
-        int waitedTicks = 0;
-        while (waitedTicks < 120 && Math.abs(after.x - 50000.5) < 1.0) {
-            bot().waitTicks(2);
-            waitedTicks += 2;
-            after = PlayerState.read(this::exec);
-        }
-        scenario().record("ticksUntilGuardMovedHim", waitedTicks);
         int dim = after.dim;
         assertEquals("player must remain in the space dim — he should be teleported to the "
                 + "station's spawn, not back to overworld; dim=" + dim + " " + after,

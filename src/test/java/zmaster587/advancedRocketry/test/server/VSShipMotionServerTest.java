@@ -2,6 +2,7 @@ package zmaster587.advancedRocketry.test.server;
 
 import zmaster587.advancedRocketry.test.Reply;
 import zmaster587.advancedRocketry.test.FixtureSite;
+import zmaster587.advancedRocketry.test.RocketFixture;
 import zmaster587.advancedRocketry.test.GameTicks;
 import zmaster587.advancedRocketry.test.ShipIdentity;
 import zmaster587.advancedRocketry.test.ShipInfo;
@@ -35,7 +36,6 @@ import static org.junit.Assert.assertTrue;
  */
 public class VSShipMotionServerTest extends AbstractSharedServerTest {
 
-    private static final String BUILDER_POS = "builderPos";
 
     private static final String VARIANT = "with-advanced-flight-computer";
 
@@ -184,12 +184,8 @@ public class VSShipMotionServerTest extends AbstractSharedServerTest {
         // air, so this ASSERTS rather than digs, and it still force-loads every chunk in the box on
         // the way through — so the warmup this replaces lost nothing. The height covers the hull
         // plus the lane it is commanded along, not the pad.
-        site.requireClear(this::exec, 2, 10,
+        int[] bp = RocketFixture.placeAt(site, this::exec, variant, 2, 10,
                 "the craft is built here and then driven horizontally out of this volume");
-        String fixture = exec("artest fixture rocket 0 " + baseX + " " + baseY + " " + baseZ + " " + variant);
-        assertTrue("fixture (" + variant + ") failed: " + fixture, Reply.of(fixture).ok());
-        int[] bp = Reply.of(fixture).blockPos(BUILDER_POS);
-        assertTrue("fixture missing builderPos: " + fixture, bp != null);
         int bx = bp[0],
                 by = bp[1],
                 bz = bp[2];

@@ -12,6 +12,7 @@ import zmaster587.advancedRocketry.test.DeckCapture;
 import zmaster587.advancedRocketry.test.Events;
 import zmaster587.advancedRocketry.test.Reply;
 import zmaster587.advancedRocketry.test.FixtureSite;
+import zmaster587.advancedRocketry.test.RocketFixture;
 import zmaster587.advancedRocketry.test.ShipIdentity;
 
 import static org.junit.Assert.assertEquals;
@@ -36,7 +37,6 @@ public class VSCrewRelogPersistenceE2ETest extends AbstractSharedVsClientE2ETest
         return "vs-crew-relog";
     }
 
-    private static final String BUILDER_POS = "builderPos";
     private static final String POS_X = "posX";
     private static final String POS_Y = "posY";
     private static final String POS_Z = "posZ";
@@ -1328,13 +1328,8 @@ public class VSCrewRelogPersistenceE2ETest extends AbstractSharedVsClientE2ETest
         //
         // HEIGHT 24 is the ENVELOPE: hull, deck, a body standing and walking on it, and the room the
         // hull rolls through.
-        site.requireClear(this::exec, 2, 24,
+        return RocketFixture.assembleAt(site, this::exec, VARIANT, 2, 24,
                 "the hull, the deck the crew member is held on, and the air he walks and rolls through");
-        String fixture = exec("artest fixture rocket 0 " + baseX + " " + baseY + " " + baseZ + " " + VARIANT);
-        assertTrue("fixture (" + VARIANT + ") failed: " + fixture, Reply.of(fixture).ok());
-        int[] bp = Reply.of(fixture).blockPos(BUILDER_POS);
-        assertTrue("fixture missing builderPos: " + fixture, bp != null);
-        return exec("artest rocket assemble 0 " + bp[0] + " " + bp[1] + " " + bp[2]);
     }
 
     /** This scenario's ship, asked by identity — no distance term to be wrong about. */

@@ -7,6 +7,7 @@ import org.junit.Test;
 
 
 import zmaster587.advancedRocketry.test.FixtureSite;
+import zmaster587.advancedRocketry.test.RocketFixture;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
@@ -64,7 +65,6 @@ import static org.junit.Assert.assertTrue;
  */
 public class NuclearEngineRocketAssemblyTest extends AbstractSharedServerTest {
 
-    private static final String BUILDER_POS = "builderPos";
     private static final String ROCKET_LIST_ID = "id";
 
     @Test
@@ -113,13 +113,9 @@ public class NuclearEngineRocketAssemblyTest extends AbstractSharedServerTest {
         // FIRST link: the volume this build stands in is EMPTY. The site is in open air, so this
         // ASSERTS rather than digs, and its fill force-loads every chunk in the box — the warmup it
         // replaces lost nothing. Nothing flies here: the subject is the assembly scan's REFUSAL.
-        site.requireClear(cmd -> String.join("\n", client().execute(cmd)), 2, 10,
+        int[] bp = RocketFixture.placeAt(site, cmd -> String.join("\n", client().execute(cmd)),
+                variant, 2, 10,
                 "the build the assembly scan must reject stands in this volume");
-        String fixture = String.join("\n", client().execute(
-                "artest fixture rocket 0 " + baseX + " " + baseY + " " + baseZ + " " + variant));
-        assertTrue("fixture (" + variant + ") failed: " + fixture, Reply.of(fixture).ok());
-        int[] bp = Reply.of(fixture).blockPos(BUILDER_POS);
-        assertTrue("fixture (" + variant + ") missing builderPos: " + fixture, bp != null);
         int bx = bp[0],
                 by = bp[1],
                 bz = bp[2];
@@ -134,14 +130,9 @@ public class NuclearEngineRocketAssemblyTest extends AbstractSharedServerTest {
         final int baseX = site.x, baseY = site.y, baseZ = site.z;
         // FIRST link: the volume this craft is built in is EMPTY. Open air, so it ASSERTS rather
         // than digs, and the fill inside it force-loads every chunk in the box.
-        site.requireClear(cmd -> String.join("\n", client().execute(cmd)), 2, 10,
+        int[] bp = RocketFixture.placeAt(site, cmd -> String.join("\n", client().execute(cmd)),
+                variant, 2, 10,
                 "the craft whose thrust is read stands in this volume");
-
-        String fixture = String.join("\n", client().execute(
-                "artest fixture rocket 0 " + baseX + " " + baseY + " " + baseZ + " " + variant));
-        assertTrue("fixture (" + variant + ") failed: " + fixture, Reply.of(fixture).ok());
-        int[] bp = Reply.of(fixture).blockPos(BUILDER_POS);
-        assertTrue("fixture (" + variant + ") missing builderPos: " + fixture, bp != null);
         int bx = bp[0],
                 by = bp[1],
                 bz = bp[2];

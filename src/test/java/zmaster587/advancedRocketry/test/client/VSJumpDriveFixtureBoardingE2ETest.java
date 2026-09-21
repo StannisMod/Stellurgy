@@ -16,6 +16,7 @@ import zmaster587.advancedRocketry.test.Events;
 import zmaster587.advancedRocketry.test.Reply;
 import zmaster587.advancedRocketry.test.ShipInfo;
 import zmaster587.advancedRocketry.test.FixtureSite;
+import zmaster587.advancedRocketry.test.RocketFixture;
 
 import static org.junit.Assert.assertTrue;
 
@@ -67,7 +68,6 @@ public class VSJumpDriveFixtureBoardingE2ETest extends AbstractSharedVsClientE2E
         return "vs-jump-drive-boarding";
     }
 
-    private static final String BUILDER_POS = "builderPos";
     /** Field-name PREFIXES: each names a triple the probe writes as {@code <prefix>X/Y/Z}. */
     private static final String SEAT_SUB = "seat";
     private static final String AFC_SUB = "afc";
@@ -625,15 +625,8 @@ public class VSJumpDriveFixtureBoardingE2ETest extends AbstractSharedVsClientE2E
         // pre-clear it replaces was throwing away. Open air, so this ASSERTS rather than digs.
         // The height goes past this fixture's 12: the jump-drive variant is the tallest in the
         // catalogue and the pilot walks its deck, so the envelope is the hull plus the room above it.
-        site.requireClear(this::exec, 2, 20,
+        return RocketFixture.assembleAt(site, this::exec, VARIANT, 2, 20,
                 "the jump-drive hull, and the deck the pilot boards it across");
-        String fixture = exec("artest fixture rocket 0 " + site.x + " " + site.y + " " + site.z
-                + " " + VARIANT);
-        scenario().requireArranged("fixture (" + VARIANT + ") failed: " + fixture,
-                Reply.of(fixture).ok());
-        int[] bp = Reply.of(fixture).blockPos(BUILDER_POS);
-        scenario().requireArranged("fixture missing builderPos: " + fixture, bp != null);
-        return exec("artest rocket assemble 0 " + bp[0] + " " + bp[1] + " " + bp[2]);
     }
 
     // ---- tiny parsing ---------------------------------------------------------------------------

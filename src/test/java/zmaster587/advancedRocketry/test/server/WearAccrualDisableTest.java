@@ -6,6 +6,7 @@ import org.junit.Test;
 
 
 import zmaster587.advancedRocketry.test.FixtureSite;
+import zmaster587.advancedRocketry.test.RocketFixture;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
@@ -37,20 +38,10 @@ public class WearAccrualDisableTest extends AbstractSharedServerTest {
      * the fill inside it force-loads every chunk in the box - so nothing downstream lost a
      * guarantee it had.</p>
      */
-    private void requireClearSite(FixtureSite site) throws Exception {
-        site.requireClear(this::cmd, 2, 10, "the craft is built and worn in this volume");
-    }
 
     private int buildAndAssemble(FixtureSite site) throws Exception {
-        // The site owns the coordinates; these aliases keep the body below unchanged.
-        final int baseX = site.x, baseY = site.y, baseZ = site.z;
-        requireClearSite(site);
-        String fixture = cmd("artest fixture rocket 0 " + baseX + " " + baseY + " " + baseZ + " simple");
-        assertTrue("fixture build failed: " + fixture, Reply.of(fixture).ok());
-        int[] bp = Reply.of(fixture).blockPos(BUILDER_POS);
-        assertTrue("no builderPos: " + fixture, bp != null);
-        String assemble = cmd("artest rocket assemble 0 "
-                + bp[0] + " " + bp[1] + " " + bp[2]);
+        String assemble = RocketFixture.assembleAt(site, this::cmd, "simple", 2, 10,
+                "the craft is built and worn in this volume");
         assertTrue("assemble failed: " + assemble, Reply.of(assemble).ok());
         String list = cmd("artest rocket list 0");
         java.util.List<RocketList.Entry> built = RocketList.of(list);

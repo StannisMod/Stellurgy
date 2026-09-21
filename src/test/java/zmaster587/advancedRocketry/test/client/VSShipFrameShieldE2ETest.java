@@ -11,6 +11,7 @@ import zmaster587.advancedRocketry.test.Events;
 import zmaster587.advancedRocketry.test.Reply;
 import zmaster587.advancedRocketry.test.ShipInfo;
 import zmaster587.advancedRocketry.test.FixtureSite;
+import zmaster587.advancedRocketry.test.RocketFixture;
 
 import static org.junit.Assert.assertTrue;
 
@@ -45,7 +46,6 @@ public class VSShipFrameShieldE2ETest extends AbstractSharedVsClientE2ETest {
         return "vs-ship-frame-shield";
     }
 
-    private static final String BUILDER_POS = "builderPos";
     private static final String EMITTER_COUNT = "count";
     /** The emitters of a {@code shield emitters} reply — every geometric field below is theirs. */
     private static final String EMITTERS = "emitters";
@@ -316,12 +316,7 @@ public class VSShipFrameShieldE2ETest extends AbstractSharedVsClientE2ETest {
         // the ten-block shaft it replaces was a hazard for this subject in particular: a shell whose
         // radius is checked against blocks is checked against the pit's walls as readily as against
         // the craft. The fill force-loads every chunk in the box, so the warmup lost nothing.
-        site.requireClear(this::exec, 2, 20,
+        return RocketFixture.assembleAt(site, this::exec, VARIANT, 2, 20,
                 "the hull, and the shell the emitter projects around it");
-        String fixture = exec("artest fixture rocket 0 " + baseX + " " + baseY + " " + baseZ + " " + VARIANT);
-        assertTrue("fixture (" + VARIANT + ") failed: " + fixture, Reply.of(fixture).ok());
-        int[] bp = Reply.of(fixture).blockPos(BUILDER_POS);
-        assertTrue("fixture missing builderPos: " + fixture, bp != null);
-        return exec("artest rocket assemble 0 " + bp[0] + " " + bp[1] + " " + bp[2]);
     }
 }

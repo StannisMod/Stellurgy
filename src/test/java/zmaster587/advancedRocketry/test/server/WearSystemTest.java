@@ -7,6 +7,7 @@ import org.junit.Test;
 
 
 import zmaster587.advancedRocketry.test.FixtureSite;
+import zmaster587.advancedRocketry.test.RocketFixture;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
@@ -26,30 +27,17 @@ import static org.junit.Assert.assertTrue;
  */
 public class WearSystemTest extends AbstractSharedServerTest {
 
-    private static final String BUILDER_POS = "builderPos";
-
     /**
-     * FIRST link: the volume this craft is built in is EMPTY, and a failure names what was in it.
+     * FIRST link and the build, in one call: the volume this craft is built in is EMPTY, and a
+     * failure names what was in it.
      *
-     * <p>The site stands in open air, so this ASSERTS rather than digs. It still warms the chunks -
-     * the fill inside it force-loads every chunk in the box - so nothing downstream lost a
+     * <p>The site stands in open air, so this ASSERTS rather than digs. It still warms the chunks —
+     * the fill inside it force-loads every chunk in the box — so nothing downstream lost a
      * guarantee it had.</p>
      */
-    private void requireClearSite(FixtureSite site) throws Exception {
-        site.requireClear(cmd -> String.join("\n", client().execute(cmd)), 2, 10,
-                "the craft is built and worn in this volume");
-    }
-
     private int[] buildFixture(FixtureSite site) throws Exception {
-        // The site owns the coordinates; these aliases keep the body below unchanged.
-        final int baseX = site.x, baseY = site.y, baseZ = site.z;
-        requireClearSite(site);
-        String fixture = String.join("\n", client().execute(
-                "artest fixture rocket 0 " + baseX + " " + baseY + " " + baseZ + " simple"));
-        assertTrue("fixture build failed: " + fixture, Reply.of(fixture).ok());
-        int[] bp = Reply.of(fixture).blockPos(BUILDER_POS);
-        assertTrue("no builderPos: " + fixture, bp != null);
-        return new int[]{bp[0], bp[1], bp[2]};
+        return RocketFixture.placeAt(site, cmd -> String.join("\n", client().execute(cmd)),
+                "simple", 2, 10, "the craft is built and worn in this volume");
     }
 
     private int assembleAndGetId(int[] builderPos) throws Exception {

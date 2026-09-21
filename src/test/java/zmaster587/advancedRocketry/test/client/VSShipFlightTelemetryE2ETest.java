@@ -21,6 +21,7 @@ import zmaster587.advancedRocketry.test.PilotSeat;
 import zmaster587.advancedRocketry.test.ShipFrameCheck;
 import zmaster587.advancedRocketry.test.ShipInfo;
 import zmaster587.advancedRocketry.test.FixtureSite;
+import zmaster587.advancedRocketry.test.RocketFixture;
 
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
@@ -55,7 +56,6 @@ public class VSShipFlightTelemetryE2ETest extends AbstractSharedVsClientE2ETest 
         return "vs-flight-telemetry";
     }
 
-    private static final String BUILDER_POS = "builderPos";
 
     /**
      * Client ticks the brake is given to act before anything is judged.
@@ -1108,12 +1108,7 @@ public class VSShipFlightTelemetryE2ETest extends AbstractSharedVsClientE2ETest 
         //
         // HEIGHT 24 is the ENVELOPE: ~10 of hull, the deck on top, a body standing and jumping on
         // it, and the room a craft rolled upside down by the mouse sweeps.
-        site.requireClear(this::exec, 2, 24,
+        return RocketFixture.assembleAt(site, this::exec, VARIANT, 2, 24,
                 "the hull, the deck a body rides, and the air the craft rolls and climbs through");
-        String fixture = exec("artest fixture rocket 0 " + baseX + " " + baseY + " " + baseZ + " " + VARIANT);
-        assertTrue("fixture (" + VARIANT + ") failed: " + fixture, Reply.of(fixture).ok());
-        int[] bp = Reply.of(fixture).blockPos(BUILDER_POS);
-        assertTrue("fixture missing builderPos: " + fixture, bp != null);
-        return exec("artest rocket assemble 0 " + bp[0] + " " + bp[1] + " " + bp[2]);
     }
 }

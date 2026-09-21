@@ -44,8 +44,13 @@ public class FixtureGroundOnPinnedSeedTest extends AbstractHeadlessServerTest {
      * maintenance cost of never repeating the weeks this test exists because of.
      */
     private static final Object[][] FIXTURES = {
-            {"VSPilotSeatRelogControl", Plot.CLEAN_GROUND_X, Plot.CLEAN_GROUND_Y, Plot.CLEAN_GROUND_Z},
-            {"VSShipRenderPoseSkew", Plot.CLEAN_GROUND_X, Plot.CLEAN_GROUND_Y, Plot.CLEAN_GROUND_Z},
+            // RETIRED 2026-09-21, both of them, and for the reason the rows themselves recorded:
+            // neither VSPilotSeatRelogControl nor VSShipRenderPoseSkew is a ground SUBJECT. They
+            // were put on surveyed ground because the alternative at the time was being buried in a
+            // mountain, and each carried a note saying it belonged in the open-air band as soon as
+            // the lift stopped targeting an absolute altitude. It does, and they moved. Guarding
+            // their old ground would now assert a contract neither class has — the failure mode this
+            // table's own VSNavComputer note is about.
             // RETIRED FOR GOOD, and the reason changed on 2026-09-14. The row used to read
             // "VSShipEntryRefused", a class that no longer exists — its two scenarios were folded
             // into a group class sharing one client, and that group went on standing at the old

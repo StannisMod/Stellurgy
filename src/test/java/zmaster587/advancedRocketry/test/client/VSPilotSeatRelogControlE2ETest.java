@@ -12,8 +12,8 @@ import zmaster587.advancedRocketry.test.SeatMount;
 import zmaster587.advancedRocketry.test.Reply;
 import zmaster587.advancedRocketry.test.ShipInfo;
 import zmaster587.advancedRocketry.test.Events;
-
-import zmaster587.advancedRocketry.test.Plot;
+import zmaster587.advancedRocketry.test.FixtureSite;
+import zmaster587.advancedRocketry.test.RocketFixture;
 
 import static org.junit.Assert.assertTrue;
 
@@ -54,19 +54,11 @@ public class VSPilotSeatRelogControlE2ETest extends AbstractSharedVsClientE2ETes
         return "vs-pilot-seat-relog-control";
     }
 
-    private static final String BUILDER_POS = "builderPos";
     private static final String DUMMY_ID = "dummyId";
 
     private static final String VARIANT = "with-pilot-seat";
-    // The surveyed-clean ground of the pinned seed. The old 7200/7200 was inside a mountain whose
-    // surface is y=80..93, so this fixture's ship was assembled in rock and could not climb — which
-    // was ledgered as a control-chain defect (#161) for eleven days.
     /** How long the CLIENT is given to PERFORM a seating the server has already done, in ticks. */
     private static final int SEAT_LINK_BUDGET_TICKS = 200;
-
-    private static final int BX = Plot.CLEAN_GROUND_X;
-    private static final int BY = Plot.CLEAN_GROUND_Y;
-    private static final int BZ = Plot.CLEAN_GROUND_Z;
 
     /** A demonstrable climb: well above settle jitter, cheap to reach. */
     private static final double MIN_CLIMB = 1.0;
@@ -94,9 +86,16 @@ public class VSPilotSeatRelogControlE2ETest extends AbstractSharedVsClientE2ETes
     public void aPilotWhoRelogsSeatedKeepsControlOfHisShip() throws Exception {
 
         // ---- ARRANGE: build + assemble a piloted ship, seat the client player on it. ------------
+        // WHERE, asked of the allocator rather than answered by three constants: this scenario's own
+        // plot, in the open-air band. It stood on the surveyed clean GROUND until 2026-09-21, which
+        // was the right answer while a lift to an ABSOLUTE altitude collided with that band; the
+        // lift takes a CLEARANCE above the craft's own pad now, so nothing ties this scenario to
+        // terrain. Its subject is a pilot's control across a relog, and control has no opinion about
+        // what is under the hull.
+        final FixtureSite site = site();
         long awayMark = clientEvents().mark();
-        exec("tp @a " + (BX + 600) + " 120 " + (BZ + 600) + " 0 0");
-        awaitClientPlacedNear(awayMark, BX + 600, BZ + 600,
+        exec("tp @a " + (site.x + 600) + " 120 " + (site.z + 600) + " 0 0");
+        awaitClientPlacedNear(awayMark, site.x + 600, site.z + 600,
                 "the assembly below must run with no observer near it, and the observer is a client");
         // THE MULTIPLIER STAYS on the CLIMB budgets below, and on the LOAD wait: what those wait on
         // is wall-clock work — a physical value converging, VS building the ship off the game loop —
@@ -108,14 +107,14 @@ public class VSPilotSeatRelogControlE2ETest extends AbstractSharedVsClientE2ETes
         int budget = 40;
         Events events = events();
         long spawnMark = events.markInstrumented();
-        String assemble = assembleFixture(BX, BY, BZ);
+        String assemble = assembleFixture(site);
         scenario().requireArranged("a with-pilot-seat build must route to a ship: " + assemble,
                 (Reply.of(assemble).integer("rocketCount") == 0));
         shipId = awaitShipSpawned(events, spawnMark,
                 "assembly must create a NEW VS ship in the queryable registry (async spawn)");
         long approachMark = clientEvents().mark();
-        exec("tp @a " + (BX + 0.5) + " " + (BY + 6) + " " + (BZ + 0.5) + " 0 0");
-        awaitClientPlacedNear(approachMark, BX + 0.5, BZ + 0.5,
+        exec("tp @a " + (site.x + 0.5) + " " + (site.y + 6) + " " + (site.z + 0.5) + " 0 0");
+        awaitClientPlacedNear(approachMark, site.x + 0.5, site.z + 0.5,
                 "the client's ARRIVAL is what loads the ship, so the load wait below is waiting on"
                         + " something only an arrived client can cause");
 
@@ -322,22 +321,16 @@ public class VSPilotSeatRelogControlE2ETest extends AbstractSharedVsClientE2ETes
         return riding != null && riding.has("riding") && riding.get("riding").getAsBoolean();
     }
 
-    private String assembleFixture(int baseX, int baseY, int baseZ) throws Exception {
-        int cx1 = (baseX - 2) >> 4, cz1 = (baseZ - 2) >> 4;
-        int cx2 = (baseX + 7) >> 4, cz2 = (baseZ + 7) >> 4;
-        scenario().requireArranged("chunk warmup failed",
-                Reply.of(exec("artest chunk warmup 0 " + cx1 + " " + cz1 + " " + cx2 + " " + cz2)
-                        ).ok());
-        scenario().requireArranged("pre-clear failed",
-                Reply.of(exec("artest fill 0 " + (baseX - 2) + " " + (baseY + 1) + " " + (baseZ - 2)
-                        + " " + (baseX + 7) + " " + (baseY + 10) + " " + (baseZ + 7) + " minecraft:air")
-                        ).ok());
-        String fixture = exec("artest fixture rocket 0 " + baseX + " " + baseY + " " + baseZ + " " + VARIANT);
-        scenario().requireArranged("fixture (" + VARIANT + ") failed: " + fixture,
-                Reply.of(fixture).ok());
-        int[] bp = Reply.of(fixture).blockPos(BUILDER_POS);
-        scenario().requireArranged("fixture missing builderPos: " + fixture, bp != null);
-        return exec("artest rocket assemble 0 " + bp[0] + " " + bp[1] + " " + bp[2]);
+    /**
+     * HEIGHT 16: ~10 blocks of hull, plus the first blocks of the climb this scenario's whole claim
+     * is about — the craft is lifted clear of its pad and then flown upward under a held key.
+     *
+     * <p>The chunk warmup that stood beside the old pre-clear is gone with it: the air fill
+     * force-loads every chunk in its own box, so the first link was already doing that job.</p>
+     */
+    private String assembleFixture(FixtureSite site) throws Exception {
+        return RocketFixture.assembleAt(site, this::exec, VARIANT, 2, 16,
+                "the hull, and the first blocks of the climb the relogged pilot commands");
     }
 
 }

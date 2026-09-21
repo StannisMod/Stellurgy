@@ -11,6 +11,7 @@ import zmaster587.advancedRocketry.test.Events;
 import zmaster587.advancedRocketry.test.Reply;
 import zmaster587.advancedRocketry.test.PilotSeat;
 import zmaster587.advancedRocketry.test.FixtureSite;
+import zmaster587.advancedRocketry.test.RocketFixture;
 
 import static org.junit.Assert.assertTrue;
 
@@ -50,7 +51,6 @@ public class VSPilotStationDestructionE2ETest extends AbstractSharedVsClientE2ET
         return "vs-pilot-station";
     }
 
-    private static final String BUILDER_POS = "builderPos";
     private static final String POS_Y = "posY";
     private static final String DUMMY_ID = "dummyId";
 
@@ -375,13 +375,7 @@ public class VSPilotStationDestructionE2ETest extends AbstractSharedVsClientE2ET
         // air fill's own `placed`. Open air, so this ASSERTS rather than digs — a craft climbing on
         // a held key out of a ten-block pit meets its rim, and the red then accuses the destruction
         // handler this class exists to test.
-        site.requireClear(this::exec, 2, 16,
+        return RocketFixture.assembleAt(site, this::exec, VARIANT, 2, 16,
                 "the hull, and the first blocks of the lane it climbs before the seat is broken");
-        String fixture = exec("artest fixture rocket 0 " + baseX + " " + baseY + " " + baseZ
-                + " " + VARIANT);
-        assertTrue("fixture (" + VARIANT + ") failed: " + fixture, Reply.of(fixture).ok());
-        int[] bp = Reply.of(fixture).blockPos(BUILDER_POS);
-        assertTrue("fixture missing builderPos: " + fixture, bp != null);
-        return exec("artest rocket assemble 0 " + bp[0] + " " + bp[1] + " " + bp[2]);
     }
 }

@@ -7,6 +7,7 @@ import org.junit.Test;
 
 import zmaster587.advancedRocketry.test.RocketList;
 import zmaster587.advancedRocketry.test.FixtureSite;
+import zmaster587.advancedRocketry.test.RocketFixture;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
@@ -50,7 +51,6 @@ import static org.junit.Assert.assertTrue;
  */
 public class RocketStationCauseEffectTest extends AbstractSharedServerTest {
 
-    private static final String BUILDER_POS = "builderPos";
     private static final String ROCKET_LIST_ID = "id";
     /** The station's own id. The regex this replaces anchored on the NEXT field so as not to match
      *  some other {@code id}; reading by name needs no such anchor. */
@@ -68,20 +68,9 @@ public class RocketStationCauseEffectTest extends AbstractSharedServerTest {
         // stands in open air, so this ASSERTS rather than digs - anything standing here
         // means the arrangement is wrong, and it is said now instead of arriving many
         // links later wearing some mechanic's name.
-        site.requireClear(cmd -> ok(client().execute(cmd)), 2, 10,
+        String assemble = RocketFixture.assembleAt(site, cmd -> ok(client().execute(cmd)),
+                "simple", 2, 10,
                 "the craft is built and flown in this volume");
-
-        String fixture = ok(client().execute(
-                "artest fixture rocket 0 " + baseX + " " + baseY + " " + baseZ + " simple"));
-        assertTrue("fixture failed: " + fixture, Reply.of(fixture).ok());
-        int[] bp = Reply.of(fixture).blockPos(BUILDER_POS);
-        assertTrue("fixture missing builderPos: " + fixture, bp != null);
-        int bx = bp[0];
-        int by = bp[1];
-        int bz = bp[2];
-
-        String assemble = ok(client().execute(
-                "artest rocket assemble 0 " + bx + " " + by + " " + bz));
         assertTrue("assemble failed: " + assemble, Reply.of(assemble).ok());
 
         String list = ok(client().execute("artest rocket list 0"));

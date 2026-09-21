@@ -1,7 +1,9 @@
 package zmaster587.advancedRocketry.test.server;
 
 import com.github.stannismod.forge.testing.junit.AbstractHeadlessServerTest;
+import zmaster587.advancedRocketry.test.FixtureSite;
 import zmaster587.advancedRocketry.test.Reply;
+import zmaster587.advancedRocketry.test.RocketFixture;
 import zmaster587.advancedRocketry.test.GameTicks;
 import zmaster587.advancedRocketry.test.ShipIdentity;
 import zmaster587.advancedRocketry.test.ShipReadiness;
@@ -43,9 +45,14 @@ import static org.junit.Assert.assertTrue;
  */
 public class VSDoubleQueuedShipLoadDoesNotKillTheServerE2ETest extends AbstractHeadlessServerTest {
 
-    private static final String BUILDER_POS = "builderPos";
-
-    private static final int BASE_X = 8200, BASE_Z = 8200, BUILD_Y = 80;
+    /**
+     * The craft's base, and the altitude every pose question in this class is asked against.
+     * The Y was a bare 80 with no reason attached until 2026-09-21 — neither ground nor band,
+     * simply a number — and it is the band now, which is the one answer that is the same on
+     * every seed.
+     */
+    private static final int BASE_X = 8200, BASE_Z = 8200,
+            BUILD_Y = FixtureSite.OPEN_AIR_Y;
 
     /** How far the ship's own pose may sit from the anchor it was assembled on. */
     private static final double POSE_TOLERANCE = 64.0;
@@ -102,9 +109,8 @@ public class VSDoubleQueuedShipLoadDoesNotKillTheServerE2ETest extends AbstractH
     // --- arrangement --------------------------------------------------------------------------------
 
     private void buildShip() throws Exception {
-        clearArea(BASE_X, BUILD_Y);
         int registryBefore = queryableShips();
-        String coords = placeFixture(BASE_X, BUILD_Y, BASE_Z, "with-pilot-seat");
+        String coords = placeFixture(FixtureSite.openAir(0, BASE_X, BASE_Z), "with-pilot-seat");
         String asm = exec("artest rocket assemble 0 " + coords);
         assertTrue("with VS an AFC-bearing build must route to a ship (no rocket): " + asm,
                 (Reply.of(asm).integer("rocketCount") == 0));
@@ -183,21 +189,17 @@ public class VSDoubleQueuedShipLoadDoesNotKillTheServerE2ETest extends AbstractH
         return String.join("\n", client().execute(cmd));
     }
 
-    private void clearArea(int baseX, int baseY) throws Exception {
-        int cx1 = (baseX - 4) >> 4, cz1 = (BASE_Z - 4) >> 4;
-        int cx2 = (baseX + 20) >> 4, cz2 = (BASE_Z + 20) >> 4;
-        assertTrue("chunk warmup failed",
-                Reply.of(exec("artest chunk warmup 0 " + cx1 + " " + cz1 + " " + cx2 + " " + cz2)).ok());
-        assertTrue("pre-clear failed", Reply.of(exec("artest fill 0 " + (baseX - 4) + " " + (baseY - 2) + " " + (BASE_Z - 4)
-                + " " + (baseX + 20) + " " + (baseY + 12) + " " + (BASE_Z + 20)
-                + " minecraft:air")).ok());
-    }
-
-    private String placeFixture(int baseX, int baseY, int baseZ, String variant) throws Exception {
-        String fixture = exec("artest fixture rocket 0 " + baseX + " " + baseY + " " + baseZ + " " + variant);
-        assertTrue("fixture (" + variant + ") failed: " + fixture, Reply.of(fixture).ok());
-        int[] bp = Reply.of(fixture).blockPos(BUILDER_POS);
-        assertTrue("fixture (" + variant + ") missing builderPos: " + fixture, bp != null);
+    /**
+     * WHERE this scenario's craft stands, and the first link that says the volume is empty.
+     *
+     * <p>What stood here was a pair — a {@code clearArea} running a chunk warmup and an air fill
+     * over {@code y-2 .. y+12}, and a {@code placeFixture} laying the blocks. The fill DUG and
+     * threw away its own answer; the shared builder ASSERTS, and its fill force-loads the same
+     * chunks the warmup did.</p>
+     */
+    private String placeFixture(FixtureSite site, String variant) throws Exception {
+        int[] bp = RocketFixture.placeAt(site, this::exec, variant, 4, 12,
+                "the craft whose load is queued twice stands in this volume");
         return bp[0] + " " + bp[1] + " " + bp[2];
     }
 

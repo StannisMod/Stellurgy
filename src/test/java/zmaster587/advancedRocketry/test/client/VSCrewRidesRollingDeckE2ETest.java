@@ -10,6 +10,7 @@ import zmaster587.advancedRocketry.test.PlayerShipData;
 import zmaster587.advancedRocketry.test.Events;
 import zmaster587.advancedRocketry.test.Reply;
 import zmaster587.advancedRocketry.test.FixtureSite;
+import zmaster587.advancedRocketry.test.RocketFixture;
 import zmaster587.advancedRocketry.test.ShipIdentity;
 import zmaster587.advancedRocketry.test.ShipInfo;
 
@@ -44,7 +45,6 @@ public class VSCrewRidesRollingDeckE2ETest extends AbstractSharedVsClientE2ETest
     }
 
     private static final String COUNT = "count";
-    private static final String BUILDER_POS = "builderPos";
     private static final String LOCAL_X = "localX";
     private static final String LOCAL_Y = "localY";
     private static final String LOCAL_Z = "localZ";
@@ -81,13 +81,8 @@ public class VSCrewRidesRollingDeckE2ETest extends AbstractSharedVsClientE2ETest
         //
         // HEIGHT 24 is the ENVELOPE: ~10 of hull, the deck on top, a body standing and jumping
         // there, and the room the hull sweeps as it rolls.
-        site.requireClear(this::exec, 2, 24,
+        return RocketFixture.assembleAt(site, this::exec, variant, 2, 24,
                 "the hull, the deck a crew member rides, and the air it rolls through");
-        String fixture = exec("artest fixture rocket 0 " + baseX + " " + baseY + " " + baseZ + " " + variant);
-        assertTrue("fixture (" + variant + ") failed: " + fixture, Reply.of(fixture).ok());
-        int[] bp = Reply.of(fixture).blockPos(BUILDER_POS);
-        assertTrue("fixture missing builderPos: " + fixture, bp != null);
-        return exec("artest rocket assemble 0 " + bp[0] + " " + bp[1] + " " + bp[2]);
     }
 
     @Test

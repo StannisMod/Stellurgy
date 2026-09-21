@@ -5,6 +5,7 @@ import zmaster587.advancedRocketry.test.SeatMount;
 import zmaster587.advancedRocketry.test.Events;
 import zmaster587.advancedRocketry.test.Reply;
 import zmaster587.advancedRocketry.test.FixtureSite;
+import zmaster587.advancedRocketry.test.RocketFixture;
 import zmaster587.advancedRocketry.test.GameTicks;
 
 import com.google.gson.JsonObject;
@@ -75,7 +76,6 @@ public class VSPilotSeatTakenWhileOfflineE2ETest extends AbstractSharedVsClientE
     // Nothing asks for it any more: the notice is a rendering, and what it announced is asserted off
     // the seat and the returning pilot's own position.
 
-    private static final String BUILDER_POS = "builderPos";
     private static final String DUMMY_ID = "dummyId";
     private static final String OCCUPANT_UUID = "occupantUuid";
     private static final String BOUND_COUNT = "boundCount";
@@ -317,14 +317,8 @@ public class VSPilotSeatTakenWhileOfflineE2ETest extends AbstractSharedVsClientE
         // FIRST link: the volume is EMPTY, measured by the air fill's own `placed` — the number the
         // pre-clear it replaces was throwing away. Open air, so this ASSERTS rather than digs, and
         // it raises an ArrangementFailure, the same type scenario().requireArranged does.
-        site.requireClear(this::exec, 2, 16,
+        return RocketFixture.assembleAt(site, this::exec, VARIANT, 2, 16,
                 "the hull whose seat is taken and re-taken across a relog");
-        String fixture = exec("artest fixture rocket 0 " + baseX + " " + baseY + " " + baseZ + " " + VARIANT);
-        scenario().requireArranged("fixture (" + VARIANT + ") failed: " + fixture,
-                Reply.of(fixture).ok());
-        int[] bp = Reply.of(fixture).blockPos(BUILDER_POS);
-        scenario().requireArranged("fixture missing builderPos: " + fixture, bp != null);
-        return exec("artest rocket assemble 0 " + bp[0] + " " + bp[1] + " " + bp[2]);
     }
 
     private static boolean isRiding(JsonObject riding) {

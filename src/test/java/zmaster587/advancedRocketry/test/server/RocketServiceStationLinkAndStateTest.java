@@ -1,6 +1,8 @@
 package zmaster587.advancedRocketry.test.server;
 
 import zmaster587.advancedRocketry.test.Reply;
+import zmaster587.advancedRocketry.test.FixtureSite;
+import zmaster587.advancedRocketry.test.RocketFixture;
 import org.junit.Test;
 
 
@@ -45,12 +47,16 @@ import static zmaster587.advancedRocketry.test.server.WorldCommandFixtures.exec;
  */
 public class RocketServiceStationLinkAndStateTest extends AbstractSharedServerTest {
 
-    private static final String BUILDER_POS = "builderPos";
     private static final String ENTITY_ID = "entityId";
     private static final String LINKED_ID = "linkedRocketId";
     private static final String PARTS_COUNT = "partsToRepairCount";
 
-    private static final int CY_PAD       = 64;
+    /**
+     * The one anchor every Y in this class is derived from — the craft's base and the service
+     * station standing ten blocks from it. A hard-coded 64 until 2026-09-21; the class moves as
+     * a unit, because the link it asserts is between two things that must stay level.
+     */
+    private static final int CY_PAD       = FixtureSite.OPEN_AIR_Y;
     private static final int CZ_PAD       = 7000;
     private static final int CX_NO_LINK   = 7000;
     private static final int CX_WITH_LINK = 7400;
@@ -96,21 +102,11 @@ public class RocketServiceStationLinkAndStateTest extends AbstractSharedServerTe
     public void linkedFreshRocketAppearsInServiceStationStateWithZeroWornParts()
             throws Exception {
         // Build + assemble a standard rocket fixture far from any other patch.
-        int cx1 = (CX_WITH_LINK - 2) >> 4, cz1 = (CZ_PAD - 2) >> 4;
-        int cx2 = (CX_WITH_LINK + 7) >> 4, cz2 = (CZ_PAD + 7) >> 4;
-        exec("artest chunk warmup 0 " + cx1 + " " + cz1 + " " + cx2 + " " + cz2);
-        exec("artest fill 0 " + (CX_WITH_LINK - 2) + " " + (CY_PAD + 1) + " "
-                + (CZ_PAD - 2) + " " + (CX_WITH_LINK + 7) + " " + (CY_PAD + 10)
-                + " " + (CZ_PAD + 7) + " minecraft:air");
-
-        String fixture = exec("artest fixture rocket 0 " + CX_WITH_LINK + " "
-                + CY_PAD + " " + CZ_PAD + " simple");
-        assertTrue("fixture must build: " + fixture, Reply.of(fixture).ok());
-        int[] bp = Reply.of(fixture).blockPos(BUILDER_POS);
-        assertTrue("fixture missing builderPos: " + fixture, bp != null);
-
-        String assemble = exec("artest rocket assemble 0 "
-                + bp[0] + " " + bp[1] + " " + bp[2]);
+        // FIRST link, ASSERTING where the warmup+fill pair DUG and threw its own answer away.
+        String assemble = RocketFixture.assembleAt(
+                FixtureSite.openAir(0, CX_WITH_LINK, CZ_PAD),
+                cmd -> exec(cmd), "simple", 2, 10,
+                "the fresh craft the service station is linked to stands in this volume");
         assertTrue("assemble must succeed: " + assemble,
                 Reply.of(assemble).ok());
         Reply eimReply = Reply.of(assemble);

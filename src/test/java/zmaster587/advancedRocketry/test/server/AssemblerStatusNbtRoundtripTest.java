@@ -5,6 +5,7 @@ import org.junit.Test;
 
 
 import zmaster587.advancedRocketry.test.FixtureSite;
+import zmaster587.advancedRocketry.test.RocketFixture;
 
 import static org.junit.Assert.assertTrue;
 
@@ -34,7 +35,6 @@ import static org.junit.Assert.assertTrue;
  */
 public class AssemblerStatusNbtRoundtripTest extends AbstractSharedServerTest {
 
-    private static final String BUILDER_POS = "builderPos";
     private static final String THREW = "threw";
     private static final String PEER_STATUS = "peerStatus";
 
@@ -50,12 +50,8 @@ public class AssemblerStatusNbtRoundtripTest extends AbstractSharedServerTest {
         // stands in open air, so this ASSERTS rather than digs - anything standing here
         // means the arrangement is wrong, and it is said now instead of arriving many
         // links later wearing some mechanic's name.
-        site.requireClear(cmd -> ok(client().execute(cmd)), 2, 10,
+        int[] bp = RocketFixture.placeAt(site, cmd -> ok(client().execute(cmd)), "simple", 2, 10,
                 "the craft is built and flown in this volume");
-        String fixture = ok(client().execute(
-                "artest fixture rocket 0 " + baseX + " " + baseY + " " + baseZ + " simple"));
-        int[] bp = Reply.of(fixture).blockPos(BUILDER_POS);
-        assertTrue("fixture missing builderPos: " + fixture, bp != null);
         return new int[]{
                 bp[0],
                 bp[1],

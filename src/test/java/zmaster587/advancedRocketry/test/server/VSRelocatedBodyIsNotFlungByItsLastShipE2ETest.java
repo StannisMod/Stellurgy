@@ -11,6 +11,7 @@ import org.junit.Test;
 
 
 import zmaster587.advancedRocketry.test.FixtureSite;
+import zmaster587.advancedRocketry.test.RocketFixture;
 
 import static org.junit.Assert.assertTrue;
 
@@ -52,7 +53,6 @@ import static org.junit.Assert.assertTrue;
  */
 public class VSRelocatedBodyIsNotFlungByItsLastShipE2ETest extends AbstractSharedServerTest {
 
-    private static final String BUILDER_POS = "builderPos";
 
     /** A loaded overworld region of this class's own, well clear of every other server e2e. */
     private static final int SRC_X = 10600, SRC_Y = FixtureSite.OPEN_AIR_Y, SRC_Z = 10600;
@@ -92,8 +92,7 @@ public class VSRelocatedBodyIsNotFlungByItsLastShipE2ETest extends AbstractShare
         // No player stands anywhere near this craft, and an unattended ship unloads: without this the
         // ship is REGISTERED and not LOADED, which has no transform to read and no physics to tick.
 
-        clearArea(SRC_X, SRC_Z);
-        String coords = placeFixture(SRC_X, SRC_Y, SRC_Z, "with-pilot-deck");
+        String coords = placeFixture(FixtureSite.openAir(0, SRC_X, SRC_Z), "with-pilot-deck");
         String asm = exec("artest rocket assemble 0 " + coords);
         assertTrue("with VS an AFC-bearing build must route to a ship (no rocket): " + asm,
                 (Reply.of(asm).integer("rocketCount") == 0));
@@ -223,20 +222,18 @@ public class VSRelocatedBodyIsNotFlungByItsLastShipE2ETest extends AbstractShare
         return ShipReadiness.loadedCount(this::exec, dim);
     }
 
-    private void clearArea(int baseX, int baseZ) throws Exception {
-        int cx1 = (baseX - 8) >> 4, cz1 = (baseZ - 8) >> 4;
-        int cx2 = (baseX + 24) >> 4, cz2 = (baseZ + 24) >> 4;
-        assertTrue("chunk warmup failed",
-                Reply.of(exec("artest chunk warmup 0 " + cx1 + " " + cz1 + " " + cx2 + " " + cz2)).ok());
-        assertTrue("pre-clear failed", Reply.of(exec("artest fill 0 " + (baseX - 4) + " " + (SRC_Y - 2) + " " + (baseZ - 4)
-                + " " + (baseX + 20) + " " + (SRC_Y + 12) + " " + (baseZ + 20) + " minecraft:air")).ok());
-    }
-
-    private String placeFixture(int baseX, int baseY, int baseZ, String variant) throws Exception {
-        String fixture = exec("artest fixture rocket 0 " + baseX + " " + baseY + " " + baseZ + " " + variant);
-        assertTrue("fixture (" + variant + ") failed: " + fixture, Reply.of(fixture).ok());
-        int[] bp = Reply.of(fixture).blockPos(BUILDER_POS);
-        assertTrue("fixture (" + variant + ") missing builderPos: " + fixture, bp != null);
+    /**
+     * WHERE this scenario's craft stands, and the first link that says the volume is empty.
+     *
+     * <p>What stood here was a pair — a {@code clearArea} that ran a chunk warmup and an air fill
+     * over {@code y-2 .. y+12}, and a {@code placeFixture} that laid the blocks. The fill DUG
+     * rather than asked and threw away its own answer. The shared builder asks, and on an open-air
+     * site anything found is an arrangement failure that names itself; the warmup went with it,
+     * because the fill force-loads every chunk in its own box.</p>
+     */
+    private String placeFixture(FixtureSite site, String variant) throws Exception {
+        int[] bp = RocketFixture.placeAt(site, this::exec, variant, 4, 12,
+                "the craft whose last passenger must not be flung when it is relocated");
         return bp[0] + " " + bp[1] + " " + bp[2];
     }
 

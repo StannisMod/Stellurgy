@@ -12,6 +12,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 
 import zmaster587.advancedRocketry.test.FixtureSite;
+import zmaster587.advancedRocketry.test.RocketFixture;
 
 import static org.junit.Assert.assertTrue;
 
@@ -35,7 +36,6 @@ import static org.junit.Assert.assertTrue;
  */
 public class RocketInfrastructureLinkPersistenceTest {
 
-    private static final String BUILDER_POS = "builderPos";
     private static final String ENT_ID = "entityId";
 
     private Path workDir;
@@ -66,21 +66,19 @@ public class RocketInfrastructureLinkPersistenceTest {
                 "artest place 0 " + sx + " " + sy + " " + sz + " advancedrocketry:fuelingStation"));
         assertTrue("place fueling station failed: " + place, Reply.of(place).bool("placed"));
 
-        // Pre-clear + build + assemble rocket. Place rocket far enough away
-        // (+20 X) so the pre-clear region doesn't wipe the fueling station.
-        firstBoot.client().execute("artest fill 0 " + (sx + 18) + " " + (sy + 1) + " " + (sz - 2)
-                + " " + (sx + 27) + " " + (sy + 11) + " " + (sz + 7) + " minecraft:air");
-        String fx = String.join("\n", firstBoot.client().execute(
-                "artest fixture rocket 0 " + (sx + 20) + " 64 " + sz + " simple"));
-        assertTrue("fixture rocket failed on first boot: " + fx, Reply.of(fx).ok());
-        int[] bp = Reply.of(fx).blockPos(BUILDER_POS);
-        assertTrue("could not parse builderPos: " + fx, bp != null);
-        int bx = bp[0],
-                by = bp[1],
-                bz = bp[2];
-
-        String assemble = String.join("\n", firstBoot.client().execute(
-                "artest rocket assemble 0 " + bx + " " + by + " " + bz));
+        // A FIXTURE STAGED IN TERRAIN, FOUND WHILE MIGRATING THIS CLASS AND FIXED HERE. The clear
+        // above ran at `sy+1 .. sy+11` — sy is the open-air band — while the fixture itself was
+        // built at a LITERAL 64, so the craft was assembled in whatever the seed generated at
+        // ground level and the cleared volume stood empty eighty-six blocks over its head. The two
+        // numbers were a hundred lines apart and neither knew about the other; the site is one
+        // object now, so they cannot disagree again.
+        //
+        // The station stays 20 blocks west of the craft: the halo below reaches 4 out from the
+        // launchpad's footprint and must NOT reach the station, which is what the old comment about
+        // "far enough away" was guarding by hand.
+        String assemble = RocketFixture.assembleAt(FixtureSite.openAir(0, sx + 20, sz),
+                cmd -> String.join("\n", firstBoot.client().execute(cmd)), "simple", 4, 11,
+                "the craft the fueling station is linked to stands in this volume");
         assertTrue("rocket assemble failed on first boot: " + assemble, Reply.of(assemble).ok());
         Reply emReply = Reply.of(assemble);
         assertTrue("rocket entityId missing: " + assemble, emReply.has(ENT_ID));
@@ -105,7 +103,10 @@ public class RocketInfrastructureLinkPersistenceTest {
         // nothing until something pokes that chunk back in.
         secondBoot.client().execute("forceload add " + (sx + 20) + " " + sz + " "
                 + (sx + 27) + " " + (sz + 7));
-        secondBoot.client().execute("artest block at 0 " + (sx + 20) + " 64 " + sz);
+        // The poke reads the craft's OWN column, not a literal 64 — the third place in this file
+        // that number appeared, and the one that would have gone on "working" (any block read
+        // loads the chunk) while pointing eighty-six blocks below the thing it names.
+        secondBoot.client().execute("artest block at 0 " + (sx + 20) + " " + sy + " " + sz);
 
         String rockets = String.join("\n", secondBoot.client().execute("artest rocket list 0"));
         // The claim is about the LIST: `rocket list` answers `{"rockets":[{"id":…}]}`, so an `id`

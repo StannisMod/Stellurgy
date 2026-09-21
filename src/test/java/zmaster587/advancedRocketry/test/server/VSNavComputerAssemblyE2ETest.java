@@ -48,6 +48,13 @@ public class VSNavComputerAssemblyE2ETest extends AbstractSharedServerTest {
     @Test
     public void aBuiltNavigationComputerIsLinkedToItsShipByTheAssembler() throws Exception {
 
+        // DELIBERATELY NOT ON THE SHARED BUILDER, and this is the read rather than an oversight.
+        // Every other rocket fixture in the suite goes through `RocketFixture`, whose first act is
+        // to make room — assert an open-air volume is empty, or clear a ground one. Here the
+        // surroundings ARE the arrangement: the craft is built inside a hill on purpose (the note
+        // above), and both of those verbs would remove the hill and quietly change the experiment
+        // this class was left standing to preserve. So the four steps stay written out, and the
+        // reason they are is written with them.
         String fixture = exec("artest fixture rocket 0 " + BASE_X + " " + BASE_Y + " " + BASE_Z
                 + " with-nav-computer");
         assertTrue("the with-nav-computer fixture must build: " + fixture, Reply.of(fixture).ok());

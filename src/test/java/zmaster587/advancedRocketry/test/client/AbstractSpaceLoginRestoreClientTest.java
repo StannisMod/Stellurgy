@@ -30,6 +30,7 @@ import zmaster587.advancedRocketry.test.ShipIdentity;
 import zmaster587.advancedRocketry.test.ShipInfo;
 
 import zmaster587.advancedRocketry.test.FixtureSite;
+import zmaster587.advancedRocketry.test.RocketFixture;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
@@ -1272,8 +1273,7 @@ public abstract class AbstractSpaceLoginRestoreClientTest {
         // Build a PILOTED tier-2 ship on the ground and assemble it with the real assembler - which
         // is what mints the durable ship id the aboard record and the ledger are both keyed by.
         Events events = events();
-        clearArea(SRC_X, SRC_Z);
-        String coords = placeFixture(SRC_X, SRC_Y, SRC_Z, VARIANT);
+        String coords = placeFixture(FixtureSite.openAir(LAUNCH_DIM, SRC_X, SRC_Z), VARIANT);
         // The mark BEFORE the assembler is told, so the ship this arrangement is about cannot be
         // missed between two counts and cannot be confused with one that already existed.
         long assemblyMark = events.mark();
@@ -1396,8 +1396,7 @@ public abstract class AbstractSpaceLoginRestoreClientTest {
                 Reply.of(launch).ok() && Reply.of(launch).has("cellKey"));
 
         Events events = events();
-        clearArea(SRC_X, SRC_Z);
-        String coords = placeFixture(SRC_X, SRC_Y, SRC_Z, VARIANT);
+        String coords = placeFixture(FixtureSite.openAir(LAUNCH_DIM, SRC_X, SRC_Z), VARIANT);
         long assemblyMark = events.mark();
         String assembled = exec("artest rocket assemble " + LAUNCH_DIM + " " + coords);
         assertTrue("a build carrying a flight computer must become a ship, not a rocket: " + assembled,
@@ -1932,25 +1931,25 @@ public abstract class AbstractSpaceLoginRestoreClientTest {
     }
 
     /** Clear the build site so the fixture is not welded to whatever terrain generated there. */
-    protected void clearArea(int baseX, int baseZ) throws Exception {
-        int cx1 = (baseX - 4) >> 4, cz1 = (baseZ - 4) >> 4;
-        int cx2 = (baseX + 20) >> 4, cz2 = (baseZ + 20) >> 4;
-        assertTrue("chunk warmup failed", Reply.of(exec("artest chunk warmup " + LAUNCH_DIM
-                + " " + cx1 + " " + cz1 + " " + cx2 + " " + cz2)).ok());
-        assertTrue("pre-clear failed", Reply.of(exec("artest fill " + LAUNCH_DIM
-                + " " + (baseX - 4) + " " + (SRC_Y - 2) + " " + (baseZ - 4)
-                + " " + (baseX + 20) + " " + (SRC_Y + 12) + " " + (baseZ + 20)
-                + " minecraft:air")).ok());
-    }
 
     /** Place a fixture build and return its build-controller position, as the assembler wants it. */
-    protected String placeFixture(int baseX, int baseY, int baseZ, String variant) throws Exception {
-        String fixture = exec("artest fixture rocket " + LAUNCH_DIM
-                + " " + baseX + " " + baseY + " " + baseZ + " " + variant);
-        assertTrue("fixture (" + variant + ") failed: " + fixture, Reply.of(fixture).ok());
-        int[] builder = Reply.of(fixture).blockPos(BUILDER_POS);
-        assertTrue("fixture (" + variant + ") missing builderPos: " + fixture, builder != null);
-        return builder[0] + " " + builder[1] + " " + builder[2];
+    /**
+     * WHERE this scenario's craft stands, and the first link that says the volume is empty.
+     *
+     * <p>What stood here was a pair: a {@code clearArea} that ran a chunk warmup and an air fill
+     * over {@code y-2 .. y+12}, and a {@code placeFixture} that laid the blocks. The fill DUG
+     * rather than asked, and threw away its own answer — {@code placed}, the count of blocks that
+     * were standing in the volume. The shared builder asks instead, and on an open-air site
+     * anything found is an arrangement failure that names itself. The warmup went with it: the
+     * fill force-loads every chunk in its own box, so the first link was already doing that job.</p>
+     *
+     * <p>HALO 4 and HEIGHT 12 are the old volume's own numbers, kept rather than re-derived:
+     * they are what this scenario's green runs were taken over.</p>
+     */
+    private String placeFixture(FixtureSite site, String variant) throws Exception {
+        int[] bp = RocketFixture.placeAt(site, this::exec, variant, 4, 12,
+                "the craft this scenario builds stands in this volume");
+        return bp[0] + " " + bp[1] + " " + bp[2];
     }
 
     protected static String readShipId(String json) {

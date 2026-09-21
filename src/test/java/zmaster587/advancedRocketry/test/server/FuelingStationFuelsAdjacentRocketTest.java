@@ -65,40 +65,23 @@ public class FuelingStationFuelsAdjacentRocketTest extends AbstractHeadlessServe
 
     @Test
     public void stationDrainsTankAndRocketFuelRisesAfterLinkAndTick() throws Exception {
-        // ─── 0. Pre-clear terrain above the pad ────────────────────────
-        // Natural overworld terrain (trees/hills) poking into the scan's
-        // bbCache volume confuses scanRocket's component detection, making
-        // fuel-tank counts depend on the biome at (RX,RZ) — the rocket then
-        // assembles with cap=0 and this test flakes under the parallel
-        // full-suite run (passes in isolation). Warm the chunks first so
-        // cross-chunk populate() (trees/leaves) has landed, THEN clear it —
-        // same mitigation as RocketAssemblySmokeTest#buildAndAssemble.
-        int cx1 = (RX - 2) >> 4, cz1 = (RZ - 2) >> 4;
-        int cx2 = (RX + 7) >> 4, cz2 = (RZ + 7) >> 4;
-        String warmup = join(client().execute(
-                "artest chunk warmup 0 " + cx1 + " " + cz1 + " " + cx2 + " " + cz2));
-        assertTrue("chunk warmup failed: " + warmup, Reply.of(warmup).ok());
-        String fillAir = join(client().execute(
-                "artest fill 0 " + (RX - 2) + " " + (RY + 1) + " " + (RZ - 2)
-                        + " " + (RX + 7) + " " + (RY + 10) + " " + (RZ + 7) + " minecraft:air"));
-        assertTrue("pre-clear failed: " + fillAir, Reply.of(fillAir).ok());
-
-        // ─── 1. Build + assemble rocket fixture ────────────────────────
-        String fixture = join(client().execute(
-                "artest fixture rocket 0 " + RX + " " + RY + " " + RZ));
-        assertTrue("rocket fixture failed: " + fixture,
-                Reply.of(fixture).ok());
-
-        // The fixture places the rocket builder at (RX+2, RY+1, RZ-1).
-        int builderX = RX + 2;
-        int builderY = RY + 1;
-        int builderZ = RZ - 1;
-        // /artest fixture rocket already assembles internally. A re-assemble
-        // here is idempotent: status comes back as ALREADY_ASSEMBLED with
-        // the existing rocket's entityId. We accept either SUCCESS or
-        // ALREADY_ASSEMBLED — only the entityId matters downstream.
-        String assemble = join(client().execute(
-                "artest rocket assemble 0 " + builderX + " " + builderY + " " + builderZ));
+        // ─── 0+1. The volume is EMPTY, then the craft is built and assembled in it ─────
+        //
+        // What stood here was three things the shared builder now does in one call, and the reason
+        // the first of them existed is worth keeping: natural overworld terrain poking into the
+        // scan's bbCache volume confuses scanRocket's component detection, so the fuel-tank count
+        // came out biome-dependent and the rocket assembled with cap=0. That was mitigated by a
+        // chunk warmup plus a fill; in the open-air band there is no terrain to poke, the clear
+        // ASSERTS instead of digging, and its fill force-loads the same chunks the warmup did.
+        //
+        // The builder position is the fixture's OWN answer now. It was three arithmetic
+        // expressions — `RX+2, RY+1, RZ-1` — under a comment saying where the fixture "places" it:
+        // a copy of production's layout kept in a test, which goes silently wrong the day the
+        // layout moves.
+        String assemble = zmaster587.advancedRocketry.test.RocketFixture.assembleAt(
+                FixtureSite.openAir(0, RX, RZ), cmd -> join(client().execute(cmd)),
+                "simple", 2, 10,
+                "the craft the fueling station fills stands in this volume");
         assertTrue("rocket assemble probe errored: " + assemble,
                 Reply.of(assemble).ok()
                         && ("SUCCESS".equals(Reply.of(assemble).text("status"))

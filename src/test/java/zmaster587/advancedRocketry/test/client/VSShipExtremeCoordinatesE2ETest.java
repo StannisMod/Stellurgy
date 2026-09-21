@@ -13,6 +13,7 @@ import zmaster587.advancedRocketry.test.Reply;
 import zmaster587.advancedRocketry.test.PilotSeat;
 import zmaster587.advancedRocketry.test.ShipInfo;
 import zmaster587.advancedRocketry.test.FixtureSite;
+import zmaster587.advancedRocketry.test.RocketFixture;
 
 import static org.junit.Assert.assertTrue;
 
@@ -77,7 +78,6 @@ public class VSShipExtremeCoordinatesE2ETest extends AbstractSharedVsClientE2ETe
         return "vs-ship-extreme-coordinates";
     }
 
-    private static final String BUILDER_POS = "builderPos";
     private static final String DUMMY_ID = "dummyId";
     private static final String ORIGIN_DIM = "originDim";
 
@@ -482,14 +482,7 @@ public class VSShipExtremeCoordinatesE2ETest extends AbstractSharedVsClientE2ETe
         // number the pre-clear it replaces was throwing away. The cell this builds in is void, so
         // there is no terrain to escape — what the band buys here is ONE definition of where a
         // fixture stands, shared with every other class, instead of a 64 nobody chose.
-        site.requireClear(this::exec, 2, 16,
+        return RocketFixture.assembleAt(site, this::exec, variant, 2, 16,
                 "the craft that is then flown to the far edge of the realized pose band");
-        String fixture = exec("artest fixture rocket " + dim + " " + baseX + " " + baseY + " "
-                + baseZ + " " + variant);
-        assertTrue("fixture (" + variant + ") failed: " + fixture, Reply.of(fixture).ok());
-        int[] bp = Reply.of(fixture).blockPos(BUILDER_POS);
-        assertTrue("fixture missing builderPos: " + fixture, bp != null);
-        return exec("artest rocket assemble " + dim + " " + bp[0] + " " + bp[1]
-                + " " + bp[2]);
     }
 }

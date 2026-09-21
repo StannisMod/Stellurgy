@@ -14,6 +14,7 @@ import zmaster587.advancedRocketry.test.SeatMount;
 import zmaster587.advancedRocketry.test.Reply;
 import zmaster587.advancedRocketry.test.Events;
 import zmaster587.advancedRocketry.test.FixtureSite;
+import zmaster587.advancedRocketry.test.RocketFixture;
 
 import static org.junit.Assert.assertTrue;
 
@@ -96,7 +97,6 @@ public class VSPreAssemblyBoardingPilotControlE2ETest extends AbstractSharedVsCl
         return "vs-pre-assembly-boarding";
     }
 
-    private static final String BUILDER_POS = "builderPos";
     private static final String POS_Y = "posY";
 
     /**
@@ -1063,12 +1063,8 @@ public class VSPreAssemblyBoardingPilotControlE2ETest extends AbstractSharedVsCl
         // this ASSERTS rather than digs. It matters here because the player WALKS to the loose
         // craft and clicks its seat before anything is assembled — a pit puts him on a rim a metre
         // above the block he is aiming at, and the red then reads as the right-click path.
-        site.requireClear(this::exec, 2, 16,
+        int[] bp = RocketFixture.placeAt(site, this::exec, variant, 2, 16,
                 "the loose craft, and the air the player stands and clicks in beside it");
-        String fixture = exec("artest fixture rocket 0 " + baseX + " " + baseY + " " + baseZ + " " + variant);
-        scenario().requireArranged("fixture (" + variant + ") failed: " + fixture, Reply.of(fixture).ok());
-        int[] bp = Reply.of(fixture).blockPos(BUILDER_POS);
-        scenario().requireArranged("fixture missing builderPos: " + fixture, bp != null);
         builderX = bp[0];
         builderY = bp[1];
         builderZ = bp[2];

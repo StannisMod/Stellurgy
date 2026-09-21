@@ -17,6 +17,7 @@ import zmaster587.advancedRocketry.test.Reply;
 import java.util.Locale;
 
 import zmaster587.advancedRocketry.test.Plot;
+import zmaster587.advancedRocketry.test.RocketFixture;
 import zmaster587.advancedRocketry.test.RocketList;
 import zmaster587.advancedRocketry.test.TelescopeReading;
 
@@ -85,7 +86,6 @@ public class MachineGuiClientGroupE2ETest extends AbstractSharedClientE2ETest {
     /** {@code zmaster587.advancedRocketry.api.Constants.STAR_ID_OFFSET}. */
     private static final int STAR_ID_OFFSET = 10000;
 
-    private static final String BUILDER_POS = "builderPos";
 
     // Navigation console button ids — the console's own module ids, which libVulpes puts straight
     // on the GuiButton.
@@ -326,10 +326,16 @@ public class MachineGuiClientGroupE2ETest extends AbstractSharedClientE2ETest {
         scenario().requireArranged("pad footing fill must succeed: " + footing,
                 Reply.of(footing).ok());
 
-        String fixture = exec("artest fixture rocket " + dim + " " + baseX + " " + Y + " " + baseZ);
-        scenario().requireArranged("fixture rocket failed: " + fixture, Reply.of(fixture).ok());
-        int[] bp = Reply.of(fixture).blockPos(BUILDER_POS);
-        scenario().requireArranged("fixture response missing builderPos: " + fixture, bp != null);
+        // NO ASSEMBLE HERE, and that is the scenario: the player clicks SCAN and then BUILD on the
+        // assembler's own GUI, so the craft must be LAID and left. The variant is written out as
+        // "simple" rather than left to the probe's default — the command carried no variant at all
+        // until 2026-09-21, and a default is a decision taken by whoever is not looking.
+        // The site is ALLOCATED from this scenario's plot rather than built from the same two
+        // coordinates by hand: an allocated site is the one whose working volume is checked against
+        // the plot's own bounds, and the halo below (7, sized to the 12-block footing laid above)
+        // is exactly the kind of reach that check exists for.
+        int[] bp = RocketFixture.placeAt(plot().siteAt(8, 8), this::exec, "simple", 7, 12,
+                "the craft the player builds from the assembler's GUI, and the platform it stands on");
         int bx = bp[0];
         int by = bp[1];
         int bz = bp[2];

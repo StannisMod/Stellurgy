@@ -27,6 +27,7 @@ import zmaster587.advancedRocketry.test.LedgerEntry;
 import zmaster587.advancedRocketry.test.Reply;
 import zmaster587.advancedRocketry.test.CellInfo;
 import zmaster587.advancedRocketry.test.FixtureSite;
+import zmaster587.advancedRocketry.test.RocketFixture;
 import zmaster587.advancedRocketry.test.Plot;
 import zmaster587.advancedRocketry.test.client.ClientEvents;
 
@@ -95,7 +96,6 @@ public class M1PlanetToPlanetMilestoneE2ETest {
      */
     private static final int SLOT_APPLIED_TICKS = 40;
 
-    private static final String BUILDER_POS = "builderPos";
     private static final String COUNT = "count";
     private static final String LEDGER = "ledger";
     private static final String SLOT_DIMS = "slotDims";
@@ -1793,13 +1793,8 @@ public class M1PlanetToPlanetMilestoneE2ETest {
         // digging a shaft. The height covers the tallest variant in the catalogue plus the deck the
         // player walks to reach its console; the climb to the orbit line is production's business
         // and no pre-clear could cover it.
-        site.requireClear(this::exec, 2, 20,
+        int[] bp = RocketFixture.placeAt(site, this::exec, VARIANT, 2, 20,
                 "the jump-capable craft, and the deck the player boards and works it from");
-        String fixture = exec("artest fixture rocket 0 " + bx + " " + by + " " + bz + " " + VARIANT);
-        requireArranged("fixture (" + VARIANT + ") failed: " + fixture,
-                Reply.of(fixture).ok());
-        int[] bp = Reply.of(fixture).blockPos(BUILDER_POS);
-        requireArranged("fixture missing builderPos: " + fixture, bp != null);
         return new int[]{bp[0], bp[1],
                 bp[2]};
     }

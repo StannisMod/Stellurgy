@@ -16,6 +16,7 @@ import zmaster587.advancedRocketry.test.Events;
 import zmaster587.advancedRocketry.test.Reply;
 
 import zmaster587.advancedRocketry.test.FixtureSite;
+import zmaster587.advancedRocketry.test.RocketFixture;
 
 import zmaster587.advancedRocketry.test.Plot;
 import zmaster587.advancedRocketry.test.RocketInfo;
@@ -80,7 +81,6 @@ import static org.junit.Assert.assertTrue;
 @FixMethodOrder(MethodSorters.NAME_ASCENDING)
 public class FreeFlightModeE2ETest extends AbstractSharedClientE2ETest {
 
-    private static final String BUILDER_POS = "builderPos";
     private static final String ROCKET_ID = "id";
 
     /** How long the CLIENT is given to perform a seating or a release the server has already done,
@@ -188,9 +188,6 @@ public class FreeFlightModeE2ETest extends AbstractSharedClientE2ETest {
     }
 
     private int buildAndAssemble() throws Exception {
-        final int baseX = baseX();
-        final int baseY = BASE_Y;
-        final int baseZ = baseZ();
         // FIRST link: the whole FLIGHT COLUMN is empty, not just the build site — fifty blocks of
         // it, because that is how far this rocket climbs inside the window. The reach is inherited
         // from the pre-clear this replaces, which needed it for a different reason: the world here
@@ -201,17 +198,9 @@ public class FreeFlightModeE2ETest extends AbstractSharedClientE2ETest {
         //
         // The site is in the open-air band now, so the column starts empty and this ASSERTS that,
         // on the air fill's own `placed`, rather than digging and hoping.
-        site().requireClear(this::exec, 2, 50,
+        final FixtureSite site = site();
+        int[] bp = RocketFixture.placeAt(site, this::exec, "simple", 2, 50,
                 "the rocket is assembled here and climbs fifty blocks up this column");
-
-        String fixture = exec("artest fixture rocket 0 " + baseX + " " + baseY + " "
-                + baseZ + " simple");
-        assertTrue("fixture failed: " + fixture, Reply.of(fixture).ok());
-        int[] bp = Reply.of(fixture).blockPos(BUILDER_POS);
-        assertTrue("fixture response missing builderPos: " + fixture, bp != null);
-        int bx = bp[0];
-        int by = bp[1];
-        int bz = bp[2];
 
         // Pad-bounds detection occasionally races chunk/structure state on the
         // shared world; retry the assemble a couple of times before failing.
@@ -219,11 +208,16 @@ public class FreeFlightModeE2ETest extends AbstractSharedClientE2ETest {
         // only the command's own verdict — delete it and the assemble stops happening, not
         // merely stop being watched. The assertion below reads the last response, after the
         // driving has stopped.
-        String assemble = exec("artest rocket assemble 0 " + bx + " " + by + " " + bz);
+        //
+        // The retry re-LAYS the fixture rather than re-running the whole builder: the volume's
+        // emptiness was established once, above, and asserting it again after a partial build
+        // would fail on this scenario's own blocks.
+        String assemble = RocketFixture.assembleBuilt(site, this::exec, bp);
         for (int attempt = 0; attempt < 3 && !Reply.of(assemble).ok(); attempt++) {
             bot().waitTicks(5);
-            exec("artest fixture rocket 0 " + baseX + " " + baseY + " " + baseZ + " simple");
-            assemble = exec("artest rocket assemble 0 " + bx + " " + by + " " + bz);
+            exec("artest fixture rocket " + site.dim + " " + site.x + " " + site.y
+                    + " " + site.z + " simple");
+            assemble = RocketFixture.assembleBuilt(site, this::exec, bp);
         }
         assertTrue("assemble failed: " + assemble, Reply.of(assemble).ok());
 

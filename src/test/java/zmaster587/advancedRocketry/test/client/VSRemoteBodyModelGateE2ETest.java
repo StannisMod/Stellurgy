@@ -10,7 +10,9 @@ import org.junit.runners.MethodSorters;
 
 import zmaster587.advancedRocketry.test.DeckCapture;
 import zmaster587.advancedRocketry.test.Events;
+import zmaster587.advancedRocketry.test.FixtureSite;
 import zmaster587.advancedRocketry.test.Reply;
+import zmaster587.advancedRocketry.test.RocketFixture;
 import zmaster587.advancedRocketry.test.ShipInfo;
 
 import zmaster587.advancedRocketry.test.Plot;
@@ -812,21 +814,29 @@ public class VSRemoteBodyModelGateE2ETest extends AbstractSharedVsClientE2ETest 
         return where;
     }
 
+    /**
+     * THE ONE GROUND SITE LEFT IN THE CLIENT TIER, and it is a ground site because the terrain is
+     * this class's subject rather than its setting: leg A stands a body on real world blocks beside
+     * the hull and asserts it is DRAWN there, and the support probe under it resolves against world
+     * blocks. A hull hanging in the open-air band has no such ground to stand on.
+     *
+     * <p>What stood here was the pit: a chunk warmup plus a fill of {@code baseY+1..baseY+10}.
+     * Three things replace it and none is the same fill under a new name. The volume is cleared by
+     * the SITE, which refuses to dig an open-air one, so the shape cannot spread back. The warmup is
+     * gone because the fill force-loads every chunk in its own box. And the clear now REPORTS what
+     * it displaced — the number the pre-clear threw away: on the surveyed clean plot these
+     * scenarios stand on it is expected to be 0, and a non-zero one is the reading that tells a
+     * later red whether the body was on ground or in a hole.</p>
+     *
+     * <p>HEIGHT 12, against the old fill's 10: ~10 blocks of hull, plus the body released on its
+     * deck at {@code by+5..by+7} and the headroom a standing body needs above that.</p>
+     */
     private String assembleFixture(int baseX, int baseY, int baseZ) throws Exception {
-        int cx1 = (baseX - 2) >> 4, cz1 = (baseZ - 2) >> 4;
-        int cx2 = (baseX + 7) >> 4, cz2 = (baseZ + 7) >> 4;
-        assertTrue("chunk warmup failed",
-                Reply.of(exec("artest chunk warmup 0 " + cx1 + " " + cz1 + " " + cx2 + " " + cz2)
-                        ).ok());
-        assertTrue("pre-clear failed",
-                Reply.of(exec("artest fill 0 " + (baseX - 2) + " " + (baseY + 1) + " " + (baseZ - 2)
-                        + " " + (baseX + 7) + " " + (baseY + 10) + " " + (baseZ + 7) + " minecraft:air")
-                        ).ok());
-        String fixture = exec("artest fixture rocket 0 " + baseX + " " + baseY + " " + baseZ + " " + VARIANT);
-        assertTrue("fixture (" + VARIANT + ") failed: " + fixture, Reply.of(fixture).ok());
-        int[] bp = Reply.of(fixture).blockPos(BUILDER_POS);
-        assertTrue("fixture missing builderPos: " + fixture, bp != null);
-        return exec("artest rocket assemble 0 " + bp[0] + " " + bp[1] + " " + bp[2]);
+        FixtureSite site = FixtureSite.onGround(0, baseX, baseY, baseZ,
+                "a body stands on real world blocks beside the hull and must be DRAWN standing on"
+                        + " them, and its support is resolved against those blocks");
+        return RocketFixture.assembleAt(site, this::exec, VARIANT, 2, 12,
+                "the hull, and the deck a subject is staged on above this surveyed plot");
     }
 
     /** This scenario's ship, asked by identity — no distance term to be wrong about. */

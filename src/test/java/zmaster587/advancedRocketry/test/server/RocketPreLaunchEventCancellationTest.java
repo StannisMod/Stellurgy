@@ -6,6 +6,7 @@ import org.junit.Test;
 
 
 import zmaster587.advancedRocketry.test.FixtureSite;
+import zmaster587.advancedRocketry.test.RocketFixture;
 import zmaster587.advancedRocketry.test.RocketInfo;
 
 import static org.junit.Assert.assertEquals;
@@ -54,7 +55,6 @@ import static zmaster587.advancedRocketry.test.server.WorldCommandFixtures.exec;
  */
 public class RocketPreLaunchEventCancellationTest extends AbstractSharedServerTest {
 
-    private static final String BUILDER_POS = "builderPos";
     private static final String ENTITY_ID = "entityId";
     private static final String OBSERVED = "observed";
     private static final String CANCELLED = "cancelled";
@@ -132,24 +132,13 @@ public class RocketPreLaunchEventCancellationTest extends AbstractSharedServerTe
     // ─── helpers ───────────────────────────────────────────────────────
 
     private int buildAndAssemble(int baseX) throws Exception {
-        // Reproduces RocketAssemblySmokeTest.buildAndAssemble's hygiene
-        // without depending on its package-private helper.
-        int cx1 = (baseX - 2) >> 4, cz1 = (CZ - 2) >> 4;
-        int cx2 = (baseX + 7) >> 4, cz2 = (CZ + 7) >> 4;
-        exec("artest chunk warmup 0 " + cx1 + " " + cz1 + " " + cx2 + " " + cz2);
-        exec("artest fill 0 " + (baseX - 2) + " " + (CY + 1) + " " + (CZ - 2)
-                + " " + (baseX + 7) + " " + (CY + 10) + " " + (CZ + 7)
-                + " minecraft:air");
-
-        String fixture = exec("artest fixture rocket 0 " + baseX + " " + CY + " " + CZ
-                + " simple");
-        assertTrue("fixture build failed: " + fixture,
-                Reply.of(fixture).ok());
-        int[] bp = Reply.of(fixture).blockPos(BUILDER_POS);
-        assertTrue("fixture missing builderPos: " + fixture, bp != null);
-
-        String assemble = exec("artest rocket assemble 0 "
-                + bp[0] + " " + bp[1] + " " + bp[2]);
+        // FIRST link, and it ASSERTS where the pair it replaces DUG. The comment that stood here
+        // said it "reproduces RocketAssemblySmokeTest's hygiene without depending on its helper" —
+        // which is the copied-idiom shape exactly: the copy came over, the reason stayed behind,
+        // and both fills threw away the one number they measured. There is a shared builder now.
+        String assemble = RocketFixture.assembleAt(FixtureSite.openAir(0, baseX, CZ),
+                cmd -> exec(cmd), "simple", 2, 10,
+                "the craft whose pre-launch event this scenario cancels stands in this volume");
         assertTrue("assemble must succeed: " + assemble,
                 Reply.of(assemble).ok());
 

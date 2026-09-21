@@ -5,6 +5,7 @@ import org.junit.Test;
 
 
 import zmaster587.advancedRocketry.test.FixtureSite;
+import zmaster587.advancedRocketry.test.RocketFixture;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
@@ -33,7 +34,6 @@ import static org.junit.Assert.assertTrue;
  */
 public class RocketRequireFuelDisableAssemblesTest extends AbstractSharedServerTest {
 
-    private static final String BUILDER_POS = "builderPos";
     private static final String STATUS = "status";
 
     private String cmd(String c) throws Exception {
@@ -52,14 +52,9 @@ public class RocketRequireFuelDisableAssemblesTest extends AbstractSharedServerT
         // stands in open air, so this ASSERTS rather than digs - anything standing here
         // means the arrangement is wrong, and it is said now instead of arriving many
         // links later wearing some mechanic's name.
-        site.requireClear(cmd -> String.join("\n", client().execute(cmd)), 2, 10,
+        return RocketFixture.assembleAt(site, cmd -> String.join("\n", client().execute(cmd)),
+                "simple", 2, 10,
                 "the craft is built and flown in this volume");
-        String fixture = cmd("artest fixture rocket 0 " + baseX + " " + baseY + " " + baseZ + " simple");
-        assertTrue("fixture build failed: " + fixture, Reply.of(fixture).ok());
-        int[] bp = Reply.of(fixture).blockPos(BUILDER_POS);
-        assertTrue("no builderPos: " + fixture, bp != null);
-        return cmd("artest rocket assemble 0 "
-                + bp[0] + " " + bp[1] + " " + bp[2]);
     }
 
     private static String status(String assembleResponse) {

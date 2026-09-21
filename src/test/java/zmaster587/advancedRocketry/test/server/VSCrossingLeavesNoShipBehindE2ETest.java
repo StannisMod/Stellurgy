@@ -8,6 +8,7 @@ import org.junit.Test;
 
 
 import zmaster587.advancedRocketry.test.FixtureSite;
+import zmaster587.advancedRocketry.test.RocketFixture;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
@@ -51,7 +52,6 @@ import static org.junit.Assert.assertTrue;
  */
 public class VSCrossingLeavesNoShipBehindE2ETest extends AbstractSharedServerTest {
 
-    private static final String BUILDER_POS = "builderPos";
 
     private static final int BASE_Z = 5400;
     /** Where a ship is built, and the clear-sky altitude every crossing lands at. */
@@ -198,12 +198,10 @@ public class VSCrossingLeavesNoShipBehindE2ETest extends AbstractSharedServerTes
 
     /** Build one tier-2 ship at {@code (baseX, BUILD_Y, BASE_Z)} and wait until VS has really created it. */
     private void buildShipAt(int baseX) throws Exception {
-        clearArea(baseX, BUILD_Y);
         for (int i = 1; i <= 3; i++) {
-            clearArea(baseX + i * HOP, SKY_Y);
         }
         int registryBefore = queryableShips();
-        String coords = placeFixture(baseX, BUILD_Y, BASE_Z, "with-pilot-seat");
+        String coords = placeFixture(FixtureSite.openAir(0, baseX, BASE_Z), "with-pilot-seat");
         String asm = exec("artest rocket assemble 0 " + coords);
         assertTrue("with VS an AFC-bearing build must route to a ship (no rocket): " + asm,
                 (Reply.of(asm).integer("rocketCount") == 0));
@@ -279,21 +277,23 @@ public class VSCrossingLeavesNoShipBehindE2ETest extends AbstractSharedServerTes
         return String.join("\n", client().execute(cmd));
     }
 
-    private void clearArea(int baseX, int baseY) throws Exception {
-        int cx1 = (baseX - 4) >> 4, cz1 = (BASE_Z - 4) >> 4;
-        int cx2 = (baseX + 20) >> 4, cz2 = (BASE_Z + 20) >> 4;
-        assertTrue("chunk warmup failed",
-                Reply.of(exec("artest chunk warmup 0 " + cx1 + " " + cz1 + " " + cx2 + " " + cz2)).ok());
-        assertTrue("pre-clear failed", Reply.of(exec("artest fill 0 " + (baseX - 4) + " " + (baseY - 2) + " " + (BASE_Z - 4)
-                + " " + (baseX + 20) + " " + (baseY + 12) + " " + (BASE_Z + 20)
-                + " minecraft:air")).ok());
-    }
 
-    private String placeFixture(int baseX, int baseY, int baseZ, String variant) throws Exception {
-        String fixture = exec("artest fixture rocket 0 " + baseX + " " + baseY + " " + baseZ + " " + variant);
-        assertTrue("fixture (" + variant + ") failed: " + fixture, Reply.of(fixture).ok());
-        int[] bp = Reply.of(fixture).blockPos(BUILDER_POS);
-        assertTrue("fixture (" + variant + ") missing builderPos: " + fixture, bp != null);
+    /**
+     * WHERE this scenario's craft stands, and the first link that says the volume is empty.
+     *
+     * <p>What stood here was a pair: a {@code clearArea} that ran a chunk warmup and an air fill
+     * over {@code y-2 .. y+12}, and a {@code placeFixture} that laid the blocks. The fill DUG
+     * rather than asked, and threw away its own answer — {@code placed}, the count of blocks that
+     * were standing in the volume. The shared builder asks instead, and on an open-air site
+     * anything found is an arrangement failure that names itself. The warmup went with it: the
+     * fill force-loads every chunk in its own box, so the first link was already doing that job.</p>
+     *
+     * <p>HALO 4 and HEIGHT 12 are the old volume's own numbers, kept rather than re-derived:
+     * they are what this scenario's green runs were taken over.</p>
+     */
+    private String placeFixture(FixtureSite site, String variant) throws Exception {
+        int[] bp = RocketFixture.placeAt(site, this::exec, variant, 4, 12,
+                "the craft this scenario builds stands in this volume");
         return bp[0] + " " + bp[1] + " " + bp[2];
     }
 

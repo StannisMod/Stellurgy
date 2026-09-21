@@ -12,6 +12,7 @@ import zmaster587.advancedRocketry.test.PilotSeat;
 import zmaster587.advancedRocketry.test.ShipInfo;
 import zmaster587.advancedRocketry.test.Events;
 import zmaster587.advancedRocketry.test.FixtureSite;
+import zmaster587.advancedRocketry.test.RocketFixture;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
@@ -69,7 +70,6 @@ public class VSAssembledShipRealRightClickBoardingE2ETest extends AbstractShared
         return "vs-assembled-ship-right-click-boarding";
     }
 
-    private static final String BUILDER_POS = "builderPos";
 
     /** This scenario's ship, by identity — captured at its build site before anything moves. */
     private String shipUuid;
@@ -377,13 +377,7 @@ public class VSAssembledShipRealRightClickBoardingE2ETest extends AbstractShared
         // pre-clear it replaces was throwing away. Open air, so this ASSERTS rather than digs, and
         // it matters for a RIGHT-CLICK subject in particular: a player on a pit's rim aims over the
         // block he means, and the miss reads as the interaction path refusing him.
-        site.requireClear(this::exec, 2, 16,
+        return RocketFixture.assembleAt(site, this::exec, variant, 2, 16,
                 "the hull, and the air the player stands and right-clicks in beside its seat");
-        String fixture = exec("artest fixture rocket 0 " + baseX + " " + baseY + " " + baseZ + " " + variant);
-        scenario().requireArranged("fixture (" + variant + ") failed: " + fixture,
-                Reply.of(fixture).ok());
-        int[] bp = Reply.of(fixture).blockPos(BUILDER_POS);
-        scenario().requireArranged("fixture missing builderPos: " + fixture, bp != null);
-        return exec("artest rocket assemble 0 " + bp[0] + " " + bp[1] + " " + bp[2]);
     }
 }

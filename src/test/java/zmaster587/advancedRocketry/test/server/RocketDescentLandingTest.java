@@ -5,6 +5,7 @@ import org.junit.Test;
 import zmaster587.advancedRocketry.test.RocketInfo;
 import zmaster587.advancedRocketry.test.RocketList;
 import zmaster587.advancedRocketry.test.FixtureSite;
+import zmaster587.advancedRocketry.test.RocketFixture;
 import zmaster587.advancedRocketry.test.GameTicks;
 
 
@@ -41,7 +42,6 @@ public class RocketDescentLandingTest extends AbstractSharedServerTest {
 
     private static final int DESCENT_TIMER = 40; // mirrors EntityRocket.DESCENT_TIMER
 
-    private static final String BUILDER_POS = "builderPos";
     private static final String ROCKET_LIST_ID = "id";
     /** The field the TICK reply answers with — that verb's own, not {@code rocket info}'s. */
     private static final String TICKS_EXISTED = "ticksExisted";
@@ -79,16 +79,8 @@ public class RocketDescentLandingTest extends AbstractSharedServerTest {
         final int baseX = site.x, baseY = site.y, baseZ = site.z;
         // FIRST link: the volume this craft is built in is EMPTY. The site stands in open air, so
         // this ASSERTS rather than digs, and the fill inside it force-loads every chunk in the box.
-        site.requireClear(cmd -> ok(client().execute(cmd)), 2, 10,
+        RocketFixture.assembleAt(site, cmd -> ok(client().execute(cmd)), "simple", 2, 10,
                 "the craft is built in this volume and then teleported to its descent altitude");
-        String fixture = ok(client().execute(
-                "artest fixture rocket 0 " + baseX + " " + baseY + " " + baseZ + " simple"));
-        int[] bp = Reply.of(fixture).blockPos(BUILDER_POS);
-        assertTrue("fixture missing builderPos: " + fixture, bp != null);
-        int bx = bp[0];
-        int by = bp[1];
-        int bz = bp[2];
-        ok(client().execute("artest rocket assemble 0 " + bx + " " + by + " " + bz));
         String list = ok(client().execute("artest rocket list 0"));
         java.util.List<RocketList.Entry> built = RocketList.of(list);
         assertTrue("no rocket after assemble: " + list, !built.isEmpty());

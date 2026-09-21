@@ -7,6 +7,7 @@ import org.junit.Test;
 
 
 import zmaster587.advancedRocketry.test.FixtureSite;
+import zmaster587.advancedRocketry.test.RocketFixture;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
@@ -51,7 +52,6 @@ import static org.junit.Assert.assertTrue;
  */
 public class RocketMonitoringStationLaunchTriggerTest extends AbstractSharedServerTest {
 
-    private static final String BUILDER_POS = "builderPos";
     private static final String ENT_ID = "entityId";
     private static final String OBSERVED = "observed";
     private static final String WAS_POWERED = "wasPowered";
@@ -140,18 +140,9 @@ public class RocketMonitoringStationLaunchTriggerTest extends AbstractSharedServ
         final int baseX = site.x, baseY = site.y, baseZ = site.z;
         // FIRST link: the volume is EMPTY, measured by the air fill's own `placed`. Open air, so
         // this ASSERTS rather than digs.
-        site.requireClear(cmd -> join(client().execute(cmd)), 2, 10,
+        String assemble = RocketFixture.assembleAt(site, cmd -> join(client().execute(cmd)),
+                "simple", 2, 10,
                 "the craft whose launch the station triggers stands in this volume");
-        String fx = join(client().execute("artest fixture rocket 0 " + baseX
-                + " " + baseY + " " + baseZ + " simple"));
-        assertTrue("fixture rocket failed: " + fx, Reply.of(fx).ok());
-        int[] bp = Reply.of(fx).blockPos(BUILDER_POS);
-        assertTrue("builderPos missing: " + fx, bp != null);
-        int bx = bp[0];
-        int by = bp[1];
-        int bz = bp[2];
-        String assemble = join(client().execute("artest rocket assemble 0 "
-                + bx + " " + by + " " + bz));
         assertTrue("rocket assemble failed: " + assemble, Reply.of(assemble).ok());
         Reply emReply = Reply.of(assemble);
         assertTrue("entityId missing: " + assemble, emReply.has(ENT_ID));

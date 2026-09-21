@@ -12,6 +12,7 @@ import zmaster587.advancedRocketry.test.Reply;
 import zmaster587.advancedRocketry.test.PilotSeat;
 import zmaster587.advancedRocketry.test.ShipInfo;
 import zmaster587.advancedRocketry.test.FixtureSite;
+import zmaster587.advancedRocketry.test.RocketFixture;
 import zmaster587.advancedRocketry.test.ShipIdentity;
 
 import static org.junit.Assert.assertTrue;
@@ -38,7 +39,6 @@ public class VSCrewInteriorBoardingE2ETest extends AbstractSharedVsClientE2ETest
         return "vs-crew-boarding";
     }
 
-    private static final String BUILDER_POS = "builderPos";
     private static final String DUMMY_ID = "dummyId";
 
     private static final String VARIANT = "with-pilot-deck";
@@ -873,14 +873,9 @@ public class VSCrewInteriorBoardingE2ETest extends AbstractSharedVsClientE2ETest
         // body is released in the cavity under that roof. It also has to fit: `artest fill` caps a
         // volume at 32768 and a 42x42 footprint leaves room for 18 layers (31752), so a taller box
         // here would be refused by the probe rather than by a reviewer.
-        site.requireClear(this::exec, 18, 18,
+        return RocketFixture.assembleAt(site, this::exec, variant, 18, 18,
                 "the hull, the cockpit cavity a body is released inside, and the whole volume the"
                         + " assembly flood can escape into");
-        String fixture = exec("artest fixture rocket 0 " + baseX + " " + baseY + " " + baseZ + " " + variant);
-        assertTrue("fixture (" + variant + ") failed: " + fixture, Reply.of(fixture).ok());
-        int[] bp = Reply.of(fixture).blockPos(BUILDER_POS);
-        assertTrue("fixture missing builderPos: " + fixture, bp != null);
-        return exec("artest rocket assemble 0 " + bp[0] + " " + bp[1] + " " + bp[2]);
     }
 
     /** This scenario's ship, asked by identity — no distance term to be wrong about. */

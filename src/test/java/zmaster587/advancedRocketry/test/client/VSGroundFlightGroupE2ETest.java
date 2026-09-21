@@ -13,6 +13,7 @@ import zmaster587.advancedRocketry.test.Reply;
 import zmaster587.advancedRocketry.test.PilotSeat;
 import zmaster587.advancedRocketry.test.ShipInfo;
 import zmaster587.advancedRocketry.test.FixtureSite;
+import zmaster587.advancedRocketry.test.RocketFixture;
 import zmaster587.advancedRocketry.test.Plot;
 
 import static org.junit.Assert.assertTrue;
@@ -77,7 +78,6 @@ public class VSGroundFlightGroupE2ETest extends AbstractSharedVsClientE2ETest {
         return new Plot.Lane(SHIP_LANE.originX, SHIP_LANE.originZ, 192, 192);
     }
 
-    private static final String BUILDER_POS = "builderPos";
     /**
      * The travel along {@code axis} since {@code before}, or {@code null} when the ship is no longer
      * reporting a position at all.
@@ -890,13 +890,7 @@ public class VSGroundFlightGroupE2ETest extends AbstractSharedVsClientE2ETest {
         // FIRST link: the volume is EMPTY, measured by the air fill's own `placed` — the number the
         // pre-clear it replaces was throwing away. Open air, so this ASSERTS rather than digs, and
         // the scenarios below fly, rotate and ride the craft out of this volume.
-        site.requireClear(this::exec, 2, 16,
+        return RocketFixture.assembleAt(site, this::exec, variant, 2, 16,
                 "the hull, and the first blocks of the lane it flies and rotates through");
-        String fixture = exec("artest fixture rocket 0 " + baseX + " " + baseY + " " + baseZ
-                + " " + variant);
-        assertTrue("fixture (" + variant + ") failed: " + fixture, Reply.of(fixture).ok());
-        int[] bp = Reply.of(fixture).blockPos(BUILDER_POS);
-        assertTrue("fixture missing builderPos: " + fixture, bp != null);
-        return exec("artest rocket assemble 0 " + bp[0] + " " + bp[1] + " " + bp[2]);
     }
 }

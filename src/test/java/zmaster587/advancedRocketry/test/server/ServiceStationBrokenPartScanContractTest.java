@@ -1,6 +1,8 @@
 package zmaster587.advancedRocketry.test.server;
 
+import zmaster587.advancedRocketry.test.FixtureSite;
 import zmaster587.advancedRocketry.test.Reply;
+import zmaster587.advancedRocketry.test.RocketFixture;
 import org.junit.Test;
 
 
@@ -60,7 +62,6 @@ import static zmaster587.advancedRocketry.test.server.WorldCommandFixtures.exec;
  */
 public class ServiceStationBrokenPartScanContractTest extends AbstractSharedServerTest {
 
-    private static final String BUILDER_POS = "builderPos";
     private static final String ENTITY_ID = "entityId";
     private static final String PART_POS = "partPos";
     private static final String PARTS_COUNT = "partsToRepairCount";
@@ -69,7 +70,12 @@ public class ServiceStationBrokenPartScanContractTest extends AbstractSharedServ
 
     // Isolation lanes — keep each test on its own block of coordinates so
     // parallel-fork chunk shuffling can't cross-contaminate.
-    private static final int CY_PAD          = 64;
+    /**
+     * The one anchor every Y in this class is derived from — the craft's base and the service
+     * station standing ten blocks from it. A hard-coded 64 until 2026-09-21; the class moves
+     * as a unit, because the link it asserts is between two things that must stay level.
+     */
+    private static final int CY_PAD          = FixtureSite.OPEN_AIR_Y;
     private static final int CZ_PAD          = 7400;
     private static final int CX_SINGLE       = 8100;
     private static final int CX_MULTI        = 8500;
@@ -80,7 +86,7 @@ public class ServiceStationBrokenPartScanContractTest extends AbstractSharedServ
      *  monotonic baseline counter that drives the GUI progress bar). */
     @Test
     public void injectedBrokenPartAppearsInPartsToRepairAfterLink() throws Exception {
-        RocketFixture rf = buildAndAssembleRocket(CX_SINGLE);
+        AssembledRocket rf = buildAndAssembleRocket(CX_SINGLE);
 
         String inject = exec("artest infra inject-broken-part " + rf.rocketId + " 5");
         assertTrue("inject must succeed for advRocketmotor (simple variant has 2): "
@@ -106,7 +112,7 @@ public class ServiceStationBrokenPartScanContractTest extends AbstractSharedServ
      *  so this is the maximum the fixture can support. */
     @Test
     public void multipleInjectionsAreAllScanned() throws Exception {
-        RocketFixture rf = buildAndAssembleRocket(CX_MULTI);
+        AssembledRocket rf = buildAndAssembleRocket(CX_MULTI);
 
         String inject1 = exec("artest infra inject-broken-part " + rf.rocketId + " 3");
         assertTrue("first inject must succeed: " + inject1,
@@ -131,7 +137,7 @@ public class ServiceStationBrokenPartScanContractTest extends AbstractSharedServ
      *  on link, not on every tick. */
     @Test
     public void postLinkInjectionRequiresRescanToBecomeVisible() throws Exception {
-        RocketFixture rf = buildAndAssembleRocket(CX_POST_LINK);
+        AssembledRocket rf = buildAndAssembleRocket(CX_POST_LINK);
 
         // Link first — at this point the rocket has zero worn parts.
         int sx = CX_POST_LINK + 10, sy = CY_PAD, sz = CZ_PAD;
@@ -164,33 +170,27 @@ public class ServiceStationBrokenPartScanContractTest extends AbstractSharedServ
 
     // --- fixture helpers --------------------------------------------------
 
-    private static final class RocketFixture {
+    /**
+     * This scenario's assembled craft, by id. It was called {@code RocketFixture} until
+     * 2026-09-21, which is now the name of the shared builder every fixture is laid by — two
+     * different things one word away from each other in the same file.
+     */
+    private static final class AssembledRocket {
         final int rocketId;
-        RocketFixture(int id) { this.rocketId = id; }
+        AssembledRocket(int id) { this.rocketId = id; }
     }
 
-    private RocketFixture buildAndAssembleRocket(int baseX) throws Exception {
-        int cx1 = (baseX - 2) >> 4, cz1 = (CZ_PAD - 2) >> 4;
-        int cx2 = (baseX + 7) >> 4, cz2 = (CZ_PAD + 7) >> 4;
-        exec("artest chunk warmup 0 " + cx1 + " " + cz1 + " " + cx2 + " " + cz2);
-        exec("artest fill 0 " + (baseX - 2) + " " + (CY_PAD + 1) + " " + (CZ_PAD - 2)
-                + " " + (baseX + 7) + " " + (CY_PAD + 10) + " " + (CZ_PAD + 7)
-                + " minecraft:air");
-
-        String fixture = exec("artest fixture rocket 0 " + baseX + " " + CY_PAD
-                + " " + CZ_PAD + " simple");
-        assertTrue("rocket fixture must build: " + fixture,
-                Reply.of(fixture).ok());
-        int[] bp = Reply.of(fixture).blockPos(BUILDER_POS);
-        assertTrue("fixture missing builderPos: " + fixture, bp != null);
-
-        String assemble = exec("artest rocket assemble 0 " + bp[0] + " "
-                + bp[1] + " " + bp[2]);
+    private AssembledRocket buildAndAssembleRocket(int baseX) throws Exception {
+        // FIRST link, ASSERTING where the warmup+fill pair DUG and threw its own answer away.
+        // Halo 7: this scenario stands a service station ten blocks east of the craft.
+        String assemble = RocketFixture.assembleAt(FixtureSite.openAir(0, baseX, CZ_PAD),
+                cmd -> exec(cmd), "simple", 7, 10,
+                "the craft whose worn parts the station scans, and the ground it stands on");
         assertTrue("assemble must succeed: " + assemble,
                 Reply.of(assemble).ok());
         Reply eimReply = Reply.of(assemble);
         assertTrue("no entityId in assemble: " + assemble, eimReply.has(ENTITY_ID));
-        return new RocketFixture(Integer.parseInt(eimReply.text(ENTITY_ID)));
+        return new AssembledRocket(Integer.parseInt(eimReply.text(ENTITY_ID)));
     }
 
     private void placeServiceStation(int sx, int sy, int sz) throws Exception {

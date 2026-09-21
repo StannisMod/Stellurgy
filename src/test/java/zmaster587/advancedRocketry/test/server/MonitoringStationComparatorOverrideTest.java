@@ -93,7 +93,7 @@ public class MonitoringStationComparatorOverrideTest extends AbstractSharedServe
     @Test
     public void linkedMonitorComparatorOutputRisesWithRocketPosY() throws Exception {
         // Build + assemble a rocket near (CX_ALTITUDE, CY, CZ).
-        int rocketId = buildAndAssemble(CX_ALTITUDE, CY, CZ);
+        int rocketId = buildAndAssemble(CX_ALTITUDE, CZ);
 
         // Place the monitor at the same column (chunk-co-located so the
         // monitor's chunk and the rocket's chunk are always loaded
@@ -133,25 +133,15 @@ public class MonitoringStationComparatorOverrideTest extends AbstractSharedServe
 
     // -- helpers ----------------------------------------------------------
 
-    private int buildAndAssemble(int baseX, int baseY, int baseZ) throws Exception {
+    private int buildAndAssemble(int baseX, int baseZ) throws Exception {
         // FIRST link: the volume is EMPTY, measured by the air fill's own `placed` — the number the
         // pre-clear it replaces was throwing away. The site is in the band, so this ASSERTS rather
         // than digs, and its fill force-loads every chunk in the box, which is what the warmup did.
-        zmaster587.advancedRocketry.test.FixtureSite.openAir(0, baseX, baseZ)
-                .requireClear(cmd -> exec(cmd), 2, 10,
-                        "the craft the monitoring station reports on stands in this volume");
-        String fixture = exec("artest fixture rocket 0 " + baseX + " " + baseY + " " + baseZ
-                + " simple");
-        assertTrue("fixture build failed: " + fixture, Reply.of(fixture).ok());
-        int[] bp = Reply.of(fixture).blockPos(BUILDER_POS);
-        assertTrue("no builderPos: " + fixture, bp != null);
-        String assemble = exec("artest rocket assemble 0 "
-                + bp[0] + " " + bp[1] + " " + bp[2]);
-        assertTrue("assemble must succeed: " + assemble,
-                Reply.of(assemble).ok());
-        Reply eimReply = Reply.of(assemble);
-        assertTrue("no entityId: " + assemble, eimReply.has(ENTITY_ID));
-        return Integer.parseInt(eimReply.text(ENTITY_ID));
+        return zmaster587.advancedRocketry.test.RocketFixture.rocketEntityId(
+                zmaster587.advancedRocketry.test.RocketFixture.assembleAt(
+                        zmaster587.advancedRocketry.test.FixtureSite.openAir(0, baseX, baseZ),
+                        cmd -> exec(cmd), "simple", 2, 10,
+                        "the craft the monitoring station reports on stands in this volume"));
     }
 
     private static int extract(String src, String field) {

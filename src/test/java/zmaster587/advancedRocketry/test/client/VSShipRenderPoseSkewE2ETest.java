@@ -14,7 +14,9 @@ import zmaster587.advancedRocketry.test.Reply;
 import zmaster587.advancedRocketry.test.ShipIdentity;
 import zmaster587.advancedRocketry.test.ShipInfo;
 
+import zmaster587.advancedRocketry.test.FixtureSite;
 import zmaster587.advancedRocketry.test.Plot;
+import zmaster587.advancedRocketry.test.RocketFixture;
 
 import static org.junit.Assert.assertTrue;
 
@@ -54,7 +56,6 @@ import static org.junit.Assert.assertTrue;
  */
 public class VSShipRenderPoseSkewE2ETest extends AbstractClientE2ETest {
 
-    private static final String BUILDER_POS = "builderPos";
     private static final String WORLD_X = "worldX";
     private static final String WORLD_Y = "worldY";
     private static final String WORLD_Z = "worldZ";
@@ -98,19 +99,25 @@ public class VSShipRenderPoseSkewE2ETest extends AbstractClientE2ETest {
 
     @Test
     public void theSurfaceABodyStandsOnIsTheSurfaceTheRendererDraws() throws Exception {
-        // The surveyed-clean ground of the pinned seed. The old 7220/7220 sat inside the same
-        // mountain as its neighbour: surface y=80..99, stone x173 across the footprint.
+        // IT MOVED TO THE BAND, 2026-09-21, which is what the note standing here said it would do.
+        // Nothing in this scenario is about terrain contact — a body stands on the DECK and the
+        // claim is about what the renderer draws under him — so surveyed ground was only ever a
+        // stopgap for a site that had been buried in a mountain. What held the move up was a lift to
+        // an absolute altitude that collided with the band; the lift takes a clearance above the
+        // craft's own pad now.
         //
-        // This is not a ground SUBJECT - nothing here is about terrain contact - so the site belongs
-        // in the open-air band and will move there. Surveyed ground is what it stands on until then,
-        // and it is a strict improvement on being buried.
-        final int bx = Plot.CLEAN_GROUND_X, by = Plot.CLEAN_GROUND_Y, bz = Plot.CLEAN_GROUND_Z;
+        // The plot is allocated rather than hand-picked even though this class boots one world for
+        // one scenario: an allocated site is the one whose working volume gets checked against its
+        // own bounds, and a coordinate chosen by hand is exactly the unchecked state the site type
+        // exists to retire.
+        final FixtureSite site = Plot.forScenario(0, "vs-ship-render-pose-skew", 0,
+                Plot.Lane.DEFAULT).site();
 
         // ---- Leg A (control): a PARKED ship's render transform converges onto its tick pose, so
         // the skew of a body standing on its deck bounds the instrument's noise floor. A large
         // reading here would indict the instrument (or a constant pose offset), not ship motion.
         Events events = events();
-        double[] ship = buildShip(events, bx, by, bz);
+        double[] ship = buildShip(events, site);
         // The mark goes before the teleport, so the capture cannot happen between two reads.
         long captureMark = events.markInstrumented();
         exec("tp @a " + ship[0] + " " + (ship[1] + 4) + " " + ship[2] + " 0 0");
@@ -486,7 +493,8 @@ public class VSShipRenderPoseSkewE2ETest extends AbstractClientE2ETest {
     }
 
     /** Build a ship at this base and wait for it to load with the client present; returns its world pos. */
-    private double[] buildShip(Events events, int bx, int by, int bz) throws Exception {
+    private double[] buildShip(Events events, FixtureSite site) throws Exception {
+        final int bx = site.x, by = site.y, bz = site.z;
         exec("tp @a " + (bx + 600) + " 120 " + (bz + 600) + " 0 0");
         bot().waitTicks(10);
 
@@ -497,7 +505,7 @@ public class VSShipRenderPoseSkewE2ETest extends AbstractClientE2ETest {
         // its ship past vertical and then flies it upward on purpose, so a positional lookup would
         // drift off its own subject.
         long spawnMark = events.markInstrumented();
-        String assemble = assembleFixture(bx, by, bz);
+        String assemble = assembleFixture(site);
         assertTrue("a with-pilot-seat build must route to a ship: " + assemble,
                 (Reply.of(assemble).integer("rocketCount") == 0));
         String spawned = events.await(spawnMark, "ship_spawned", "the assembly must become a ship in"
@@ -546,21 +554,18 @@ public class VSShipRenderPoseSkewE2ETest extends AbstractClientE2ETest {
         return where;
     }
 
-    private String assembleFixture(int baseX, int baseY, int baseZ) throws Exception {
-        int cx1 = (baseX - 2) >> 4, cz1 = (baseZ - 2) >> 4;
-        int cx2 = (baseX + 7) >> 4, cz2 = (baseZ + 7) >> 4;
-        assertTrue("chunk warmup failed",
-                Reply.of(exec("artest chunk warmup 0 " + cx1 + " " + cz1 + " " + cx2 + " " + cz2)
-                        ).ok());
-        assertTrue("pre-clear failed",
-                Reply.of(exec("artest fill 0 " + (baseX - 2) + " " + (baseY + 1) + " " + (baseZ - 2)
-                        + " " + (baseX + 7) + " " + (baseY + 10) + " " + (baseZ + 7) + " minecraft:air")
-                        ).ok());
-        String fixture = exec("artest fixture rocket 0 " + baseX + " " + baseY + " " + baseZ + " " + VARIANT);
-        assertTrue("fixture (" + VARIANT + ") failed: " + fixture, Reply.of(fixture).ok());
-        int[] bp = Reply.of(fixture).blockPos(BUILDER_POS);
-        assertTrue("fixture missing builderPos: " + fixture, bp != null);
-        return exec("artest rocket assemble 0 " + bp[0] + " " + bp[1] + " " + bp[2]);
+    /**
+     * HEIGHT 22: ~10 blocks of hull, the deck a body stands on, and the room above it this scenario
+     * drops a body through — {@link #clearDropColumn} reaches {@code y+14} around the ship's own
+     * position, and the fixture's envelope has to cover the part of that column standing over the
+     * pad rather than leaving the rim of an uncleared volume at its edge.
+     *
+     * <p>The chunk warmup that stood beside the old pre-clear is gone with it: the air fill
+     * force-loads every chunk in its own box.</p>
+     */
+    private String assembleFixture(FixtureSite site) throws Exception {
+        return RocketFixture.assembleAt(site, this::exec, VARIANT, 2, 22,
+                "the hull, the deck a body stands on, and the column he is dropped down");
     }
 
     /** This scenario's ship, asked by identity — no distance term to be wrong about. */

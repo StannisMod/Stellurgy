@@ -186,6 +186,74 @@ public final class FixtureSite {
                         + " while the cause is a block nobody asked about");
     }
 
+    /**
+     * MAKE ROOM for what this scenario is about to build, and answer what was standing in the way.
+     *
+     * <p>Which of the two halves runs is decided by the site, and the site was declared by name one
+     * line of the caller's own code earlier: {@link #openAir} ASSERTS the volume was already empty,
+     * {@link #onGround} CLEARS it and reports the terrain it removed. That is not a default being
+     * picked quietly — both halves are public, both announce themselves, and neither can be reached
+     * without having first said which kind of site this is and, for a ground site, why.</p>
+     *
+     * <p>It exists because the build is the thing that must not happen over an unexamined volume,
+     * and a builder that can only be called with a room is the only form that makes that
+     * structural. See {@link RocketFixture}.</p>
+     *
+     * @return how many blocks were displaced: always 0 for an open-air site, which would otherwise
+     *         have failed, and the terrain removed for a ground one
+     */
+    public int makeRoom(Events.Probe probe, int halo, int height, String what) throws Exception {
+        if (isOnGround()) {
+            return clearAbove(probe, halo, height, what);
+        }
+        requireClear(probe, halo, height, what);
+        return 0;
+    }
+
+    /**
+     * The GROUND half: clear the volume ABOVE a ground site, and report what came out of it.
+     *
+     * <p>A ground site keeps its terrain because the terrain is the subject — a body walking on
+     * world blocks beside a hull, a descent, a landing. The ground itself therefore stays, and what
+     * has to be empty is the air ABOVE it, which is where the hull and everything staged on it go.
+     * {@link #requireClear} cannot serve that: it asserts the volume was ALREADY empty, and on
+     * generated terrain that is a claim nobody can make.</p>
+     *
+     * <p><b>It reports rather than asserts, and that is the difference that matters.</b> This is the
+     * verb the pit pre-clear should always have been: the same fill, with its own {@code placed}
+     * read back and handed to the caller instead of thrown away. A scenario standing on a surveyed
+     * clean plot expects 0 and can say so; one standing in a forest expects a number and can print
+     * it. What is refused is silence.</p>
+     *
+     * @return the number of non-air blocks that were standing in the volume, per {@code placed}
+     */
+    public int clearAbove(Events.Probe probe, int halo, int height, String what) throws Exception {
+        if (!isOnGround()) {
+            ArrangementFailure.arrangementFailed(
+                    what + " — this is an OPEN-AIR site, and digging one is how the ten-block shaft"
+                            + " this type exists to end was arrived at. A site in the band starts"
+                            + " empty; if it is not, that is a finding and requireClear is the verb"
+                            + " that raises it");
+        }
+        int x1 = x - halo, z1 = z - halo;
+        int x2 = x + PAD + halo, z2 = z + PAD + halo;
+        String reply = probe.exec("artest fill " + dim
+                + " " + x1 + " " + (y + 1) + " " + z1
+                + " " + x2 + " " + (y + height) + " " + z2
+                + " minecraft:air");
+        ArrangementFailure.requireArranged(
+                what + " — the volume above this ground site could not be cleared: " + reply,
+                reply != null && Reply.of(reply).ok());
+        int placed = intOf(reply, PLACED);
+        // SAID OUT LOUD, every run, because this is the number the pre-clear threw away for a year.
+        // A ground site on a surveyed plot reads 0 here; a non-zero is not a failure — the terrain is
+        // this site's subject and clearing it is what was asked — but it is the one reading that
+        // tells a later red whether the scenario's body was standing on ground or in a hole.
+        System.out.println("[site] cleared " + placed + " of " + intOf(reply, VOLUME)
+                + " blocks above " + this + " for: " + what);
+        return placed;
+    }
+
     @Override
     public String toString() {
         return "FixtureSite[" + dim + " " + x + "," + y + "," + z

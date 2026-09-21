@@ -6,6 +6,7 @@ import org.junit.Test;
 
 
 import zmaster587.advancedRocketry.test.FixtureSite;
+import zmaster587.advancedRocketry.test.RocketFixture;
 
 import static org.junit.Assert.assertTrue;
 
@@ -20,7 +21,6 @@ import static org.junit.Assert.assertTrue;
  */
 public class RocketLaunchSmokeTest extends AbstractHeadlessServerTest {
 
-    private static final String BUILDER_POS = "builderPos";
     private static final String ENT_ID = "entityId";
 
     @Test
@@ -31,14 +31,9 @@ public class RocketLaunchSmokeTest extends AbstractHeadlessServerTest {
         // FIRST link: the volume this craft is built and LAUNCHED out of is EMPTY. The site stands
         // in open air, so this ASSERTS rather than digs; the height covers the hull and the first
         // blocks of its climb, which is the only part of the lane the scenario stays to watch.
-        site.requireClear(cmd -> String.join("\n", client().execute(cmd)), 2, 10,
+        int[] bp = RocketFixture.placeAt(site, cmd -> String.join("\n", client().execute(cmd)),
+                "simple", 2, 10,
                 "the craft is built here and launched straight up out of this volume");
-        String fixture = String.join("\n", client().execute(
-                "artest fixture rocket 0 " + baseX + " " + baseY + " " + baseZ));
-        assertTrue("fixture rocket failed: " + fixture, Reply.of(fixture).ok());
-
-        int[] bp = Reply.of(fixture).blockPos(BUILDER_POS);
-        assertTrue("missing builderPos: " + fixture, bp != null);
         int bx = bp[0],
                 by = bp[1],
                 bz = bp[2];
