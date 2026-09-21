@@ -19,27 +19,46 @@ import zmaster587.advancedRocketry.test.Plot;
  * class-scoped harness lifecycle base class.
  *
  * <p>{@link AbstractHeadlessServerTest} starts a fresh dedicated-server JVM
- * per {@code @Test} method (its {@code @Before}/{@code @After} lifecycle).
- * For a class with N independent test methods, that's N × ~10-15 s of
- * server cold-start cost. With 136 server tests today, the total wall
- * time at {@code -Pforks=3} is ~17 min.</p>
+ * per {@code @Test} method (its {@code @Before}/{@code @After} lifecycle),
+ * so a class with N independent methods pays N server cold starts.</p>
  *
  * <p>This base class is the opt-in alternative: <strong>one</strong>
  * server JVM is started in {@code @BeforeClass} and closed in
  * {@code @AfterClass}. All {@code @Test} methods in the subclass share
- * that harness. For a 6-method class, this saves 5 × ~12 s ≈ 60 s of
- * wall time per class.</p>
+ * that harness, so the class pays ONE cold start however many methods it
+ * carries.</p>
+ *
+ * <p><b>What a cold start costs, measured 2026-09-21 rather than estimated:</b>
+ * a single-class re-run took 74 s of wall clock against 25.7 s of test
+ * execution, which leaves <b>~40 s per class</b> once the build tool's own
+ * ~10 s is taken off. Across a full unfiltered server tier — 231 classes,
+ * 669 tests, 26 m 41 s at 8 parallel forks — test execution is 5 016 s,
+ * i.e. <b>39 % of the tier's wall clock; the rest is cold starts</b>. The
+ * 174 classes on this base carry 569 of those tests and execute for 716 s
+ * between them, against roughly 6 960 s of cold start. <b>So the win this
+ * class exists for is real and it is nowhere near taken</b>: one class per
+ * subject still means one server per subject, and the median class here
+ * runs for 2.4 seconds.</p>
  *
  * <h2>Contract for subclasses</h2>
  *
  * Every {@code @Test} method MUST be:
  *
  * <ol>
- *   <li><b>Position-isolated</b>: if the test places blocks, the
- *       positions must not collide with any other method in the same
- *       class. Convention: each method picks a unique {@code BASE_X}
- *       offset (e.g. method 1 at x=100, method 2 at x=200, etc.) or
- *       includes a hash of its method name in the position.</li>
+ *   <li><b>Position-isolated — ASK for a site, do not choose coordinates.</b>
+ *       {@link #site()} hands this scenario its own plot, in the open-air
+ *       band, and the clear that follows asserts the volume stays inside
+ *       it. <b>This used to read "each method picks a unique BASE_X
+ *       offset, or includes a hash of its method name in the position",
+ *       and that convention is what {@link #site()} replaced</b>: a
+ *       convention is something every method has to remember, and on
+ *       2026-09-21 one of them did not. Three scenarios of one class built
+ *       at a single hand-picked site, and the second met the first one's
+ *       scaffolding — the fixture's tower, its rocket builder and the
+ *       creative plug are not taken into an assembled craft, so eight
+ *       blocks were left standing where the next scenario built. It had
+ *       been silent for as long as the class had existed and surfaced only
+ *       once the pre-clear became an assertion.</li>
  *   <li><b>Id-fresh</b>: stations / satellites / rockets created via
  *       probes get auto-allocated ids; subclasses must read the new id
  *       from each create response and not assume a specific id range.</li>
@@ -56,14 +75,29 @@ import zmaster587.advancedRocketry.test.Plot;
  * <h2>When NOT to use this base</h2>
  *
  * <ul>
- *   <li>Persistence-restart tests (need a fresh workDir / multi-boot
+ *   <li>Persistence-restart tests (a fresh workDir / a multi-boot
  *       sequence): stay on the per-method {@link AbstractHeadlessServerTest}
- *       or manage the harness manually.</li>
+ *       or manage the harness manually. <b>Such a class is a candidate for
+ *       SPLITTING, never for merging</b> — the restart is its subject.</li>
  *   <li>Tests with global mutations (atmosphere density, weather state)
  *       that are hard to clean up between methods.</li>
  *   <li>Tests that depend on the server's initial registry being pristine
- *       (e.g. counting fresh registry entries).</li>
+ *       (e.g. counting fresh registry entries). <b>The precondition is
+ *       ASSERTED, not obtained by ordering</b>: JUnit 4 promises no method
+ *       order, so "it runs first" is not a property a test may hold.</li>
+ *   <li>A reading that only ever INCREASES. A cumulative counter cannot be
+ *       reset by any {@code @Before}, so a threshold on one is satisfied by
+ *       whatever ran before you, and moving the counter test-side does not
+ *       help — it is cumulative because of what it COUNTS.</li>
  * </ul>
+ *
+ * <p><b>"It has its own config / workDir" is NOT on that list, and never
+ * was an axis.</b> When seven client classes were audited for staying off
+ * their shared base "because of their config", three wrote no config at
+ * all — their justification was a comment — and the four that did wanted
+ * one key, the same value twice, and a flag that was already settable at
+ * runtime. A constraint written in a comment is second-hand testimony;
+ * check it at the source before it keeps a class alone.</p>
  *
  * <h2>Failure isolation</h2>
  *

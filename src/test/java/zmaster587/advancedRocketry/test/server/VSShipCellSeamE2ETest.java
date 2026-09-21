@@ -17,6 +17,7 @@ import org.junit.runners.MethodSorters;
 
 
 import zmaster587.advancedRocketry.test.FixtureSite;
+import zmaster587.advancedRocketry.test.Plot;
 import zmaster587.advancedRocketry.test.RocketFixture;
 
 import static org.junit.Assert.assertEquals;
@@ -63,8 +64,9 @@ public class VSShipCellSeamE2ETest extends AbstractSharedServerTest {
     private static final double EXACTLY_ZERO = 1e-9;
 
 
-    /** Where this test builds its ship — its own region, clear of the entry/descent legs. */
-    private static final int SRC_X = 6800, SRC_Y = FixtureSite.OPEN_AIR_Y, SRC_Z = 6800;
+    /** Where this class's plots live — its own region, clear of the entry/descent legs. */
+    private static final int SRC_X = 6800, SRC_Z = 6800;
+
     /** A world Y comfortably above the default orbit ceiling (ARConfiguration.orbit = 1000). */
     private static final int ABOVE_CEILING_Y = 1200;
 
@@ -134,6 +136,27 @@ public class VSShipCellSeamE2ETest extends AbstractSharedServerTest {
      * slop cannot confuse them.
      */
     private static final double ARRIVAL_TOLERANCE = 2_000d;
+
+    /**
+     * One plot per scenario, on this class's own proven ground.
+     *
+     * <p>The origin is backed off by {@link Plot#FIXTURE_INSET} so the fixture of whichever
+     * scenario runs FIRST stands exactly where this test's green runs were taken, and each further
+     * scenario is handed the NEXT plot on the lane instead of the same patch of world. That the
+     * first one lands on the old coordinates rather than somewhere down the lane is not luck: the
+     * harness runs one class per JVM ({@code forkEvery 1L}, {@code build.gradle:465}), so this
+     * class's plot indices start at zero.</p>
+     *
+     * <p>All three scenarios used to build at one hand-picked site, and that is not a style
+     * question: {@code artest fixture rocket} lays a structure tower, a rocket builder and a
+     * creative plug beside the hull, and {@code rocket assemble} takes the HULL into the ship and
+     * leaves those eight blocks standing. The second scenario then builds over the first one's
+     * scaffolding — silently, until the pre-clear became an assertion.</p>
+     */
+    @Override
+    protected Plot.Lane lane() {
+        return new Plot.Lane(SRC_X - Plot.FIXTURE_INSET, SRC_Z - Plot.FIXTURE_INSET, Plot.SIZE);
+    }
 
     @Test
     public void aShipFlownPastItsCellFaceIsCarriedIntoTheNeighbourAndStaysThere() throws Exception {
@@ -561,7 +584,7 @@ public class VSShipCellSeamE2ETest extends AbstractSharedServerTest {
         assertTrue("entry setup failed: " + setup, Reply.of(setup).ok());
 
         // --- Arrangement: get a ship into a cell through the production on-ramp ------------------
-        String coords = placeFixture(FixtureSite.openAir(0, SRC_X, SRC_Z), "with-pilot-seat");
+        String coords = placeFixture(site(), "with-pilot-seat");
         String asm = exec("artest rocket assemble 0 " + coords);
         assertTrue("with VS an AFC-bearing build must route to a ship (no rocket): " + asm,
                 (Reply.of(asm).integer("rocketCount") == 0));
