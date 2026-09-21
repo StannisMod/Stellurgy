@@ -21,6 +21,22 @@ public final class ClientBot implements Closeable {
     private final BufferedReader reader;
     private final BufferedWriter writer;
 
+    /**
+     * What the channel was last asked, when it last ANSWERED, and how many answers it has given.
+     *
+     * <p>These exist for one purpose: a read that times out must be able to say something about the
+     * SUBJECT. Measured 2026-09-21 — a full-tier run lost a test to a bare
+     * {@code SocketTimeoutException} whose stack named {@code SocketInputStream.read} and nothing
+     * else, which is indistinguishable from the outside between a busy box and a client wedged by
+     * the very thing under test. Every occurrence then costs a triage that cannot conclude.</p>
+     *
+     * <p>Written and read only under the {@code writer} monitor or immediately around the read that
+     * follows it, on the one thread that owns this channel.</p>
+     */
+    private volatile String lastCommandSent = "(none yet)";
+    private volatile long lastAnswerNanos = System.nanoTime();
+    private volatile long answersReceived;
+
     ClientBot(Socket socket) throws IOException {
         this.socket = socket;
         this.socket.setTcpNoDelay(true);
@@ -750,22 +766,74 @@ public final class ClientBot implements Closeable {
     }
 
     private JsonObject execute(JsonObject command) throws IOException {
+        String sent = command.toString();
         synchronized (writer) {
-            writer.write(command.toString());
+            lastCommandSent = sent;
+            writer.write(sent);
             writer.newLine();
             writer.flush();
         }
 
-        String line = reader.readLine();
-        if (line == null) {
-            throw new IOException("Client bridge closed unexpectedly");
+        String line;
+        try {
+            line = reader.readLine();
+        } catch (java.net.SocketTimeoutException timedOut) {
+            throw new IOException(describeTimeout(sent), timedOut);
         }
+        if (line == null) {
+            throw new IOException("Client bridge closed unexpectedly after " + answersReceived
+                    + " answered command(s); the last one asked was " + abbreviate(sent), null);
+        }
+        lastAnswerNanos = System.nanoTime();
+        answersReceived++;
 
         JsonElement parsed = new JsonParser().parse(line);
         if (!parsed.isJsonObject()) {
             throw new IOException("Malformed client bridge response: " + line);
         }
         return parsed.getAsJsonObject();
+    }
+
+    /**
+     * What to say when the command channel stops answering.
+     *
+     * <p><b>It names the subject, because the exception cannot.</b> A bare
+     * {@code SocketTimeoutException} says only that a socket read expired: the same stack is
+     * produced by a loaded box, by a client that crashed mid-command, and by a client wedged by the
+     * behaviour the test is about. This prints what distinguishes them — the command that was
+     * outstanding, how long this read was allowed, how long the channel had been answering happily
+     * before it, and how many commands it had answered.</p>
+     *
+     * <p><b>Nothing is probed here, deliberately.</b> {@link #isAlive} would write to the same
+     * channel and read the next line — and after a timeout the next line may be the LATE reply to
+     * the command that just expired, which the probe would then read as its own answer. So the
+     * diagnosis is built from what is already known, and the caller is told plainly that the
+     * channel is now out of step and must not be reused.</p>
+     */
+    private String describeTimeout(String sent) {
+        long idleMillis = (System.nanoTime() - lastAnswerNanos) / 1_000_000L;
+        int budgetMillis;
+        try {
+            budgetMillis = socket.getSoTimeout();
+        } catch (IOException unreadable) {
+            budgetMillis = -1;
+        }
+        return "the client bridge did not answer within " + budgetMillis + " ms."
+                + " Outstanding command: " + abbreviate(sent) + "."
+                + " It had answered " + answersReceived + " command(s), the last one "
+                + idleMillis + " ms before this read began to wait."
+                + " THE CHANNEL IS NOW OUT OF STEP: a late reply to this command would be read as"
+                + " the answer to the next one, so this bot must not be reused."
+                + " Three things produce this and they want different fixes — a client killed or"
+                + " crashed mid-command (look for its process and its log tail), a client wedged by"
+                + " the behaviour under test (the outstanding command above says which), and a box"
+                + " so loaded that " + budgetMillis + " ms was not enough (the answered count and"
+                + " the idle time above say whether it had been keeping up).";
+    }
+
+    /** A command line, short enough to read in a stack trace and long enough to name the verb. */
+    private static String abbreviate(String line) {
+        return line.length() <= 300 ? line : line.substring(0, 300) + "… (" + line.length() + " chars)";
     }
 
     private JsonObject assertOk(JsonObject response) throws IOException {
@@ -776,15 +844,37 @@ public final class ClientBot implements Closeable {
         return response;
     }
 
+    /**
+     * Wait for the client bridge's {@code READY}.
+     *
+     * <p>{@code timeout} is APPLIED, and used to be ignored: the parameter was accepted and the
+     * read ran on whatever the socket's own timeout happened to be, so a caller asking for thirty
+     * seconds waited two minutes. The old code also reported a non-{@code READY} first line as
+     * "Timed out waiting for readiness", which is a different fault wearing the timeout's name —
+     * the two are separated here.</p>
+     */
     private void awaitReady(Duration timeout) throws IOException {
-        String line = reader.readLine();
+        int previous = socket.getSoTimeout();
+        String line;
+        try {
+            socket.setSoTimeout((int) Math.max(1L, timeout.toMillis()));
+            line = reader.readLine();
+        } catch (java.net.SocketTimeoutException timedOut) {
+            throw new IOException("the client bridge never signalled READY within "
+                    + timeout.toMillis() + " ms. Nothing has been asked of it yet, so this is the"
+                    + " client failing to come up rather than a command wedging it: look at the"
+                    + " client's own log for how far its start got.", timedOut);
+        } finally {
+            socket.setSoTimeout(previous);
+        }
         if (line == null) {
             throw new IOException("Client bridge disconnected before signaling readiness");
         }
         if ("READY".equals(line)) {
             return;
         }
-        throw new IOException("Timed out waiting for client bridge readiness");
+        throw new IOException("the client bridge's first line was not READY but "
+                + abbreviate(line) + " — the channel is speaking, and saying something else");
     }
 
     private static JsonObject command(String command) {

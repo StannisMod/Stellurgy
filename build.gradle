@@ -336,6 +336,11 @@ def configureHeadlessTest = { Test t, String packageGlob ->
 
 tasks.register('testUnit', Test) {
     configureHeadlessTest(it, 'zmaster587/advancedRocketry/test/unit/**')
+    // The vendored harness compiles into this source set but sat in no tier's include rules, so
+    // its own unit tests could not be run by anything. They belong in the fast tier: they need no
+    // Minecraft and no bridge, and they cover seams (a package-private constructor, a timeout
+    // diagnosis) that a real-client tier can only reach by starting a client.
+    include 'com/github/stannismod/forge/testing/**'
 }
 
 tasks.register('testIntegration', Test) {
