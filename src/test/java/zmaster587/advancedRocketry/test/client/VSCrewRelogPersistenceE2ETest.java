@@ -813,8 +813,22 @@ public class VSCrewRelogPersistenceE2ETest extends AbstractSharedVsClientE2ETest
         // Relog persistence. The ABOARD half is the link above — it fails there, with the sequence
         // of modes production committed — so what is left is the other half: he is still AT the
         // deck spot he logged out on, never handed to world gravity for a visible fall.
+        // WHAT ENDED THE EPISODE, and it takes BOTH records to answer. `deck_released` names a
+        // release and its reason — but an episode can also end with no release at all: a capture
+        // that OVERWRITES the state ends the previous one silently, and the only tell is the `from`
+        // field of the `deck_entered` naming the new holder. Reading the releases alone would
+        // report "nothing released him" for a body that was taken off his ship by a second capture.
+        // TWO MARKS AND NOT ONE. The client and the server keep SEPARATE sequences, so a server
+        // mark read against the client log answers about the wrong numbering; each side is read
+        // with its own.
         assertTrue("after a relog the player must still be AT his deck spot, not fallen off "
-                + "(preY=" + preY + " postY=" + postY + "): " + capNow.raw(),
+                + "(preY=" + preY + " postY=" + postY + "): " + capNow.raw()
+                + "\n  CLIENT releases since the relog: "
+                + clientEvents().since(clientRelogMark, "deck_released")
+                + "\n  CLIENT captures since the relog (read `from` for a silent hand-over): "
+                + clientEvents().since(clientRelogMark, "deck_entered")
+                + "\n  SERVER releases since the relog: " + events.since(relogMark, "deck_released")
+                + "\n  SERVER captures since the relog: " + events.since(relogMark, "deck_entered"),
                 Math.abs(postY - preY) < BACK_AT_HIS_SPOT_BLOCKS);
     }
 
