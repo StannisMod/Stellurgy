@@ -38,6 +38,15 @@ import static org.junit.Assert.assertTrue;
  */
 public class VSSeatDummyFacesTheShipE2ETest extends AbstractSharedServerTest {
 
+    /**
+     * How far the ship — and its mount with it — must have turned from the assembled heading, in
+     * degrees.
+     *
+     * <p>The TEST'S OWN sensitivity bar: below a right angle the assertion below could pass on a
+     * mount whose rotation never moved, which is the defect it exists for.</p>
+     */
+    private static final double TURNED_WELL_AWAY_DEG = 45.0;
+
 
     private static final int SRC_X = 8800, SRC_Y = FixtureSite.OPEN_AIR_Y, SRC_Z = 8800;
 
@@ -104,7 +113,7 @@ public class VSSeatDummyFacesTheShipE2ETest extends AbstractSharedServerTest {
         assertTrue("the ship itself must have turned well away from its assembled heading, or the "
                         + "assertion below cannot fail (ship yaw " + shipYawBefore + " -> " + shipYawAfter
                         + ", turned " + shipTurned + " deg)",
-                shipTurned > 45.0);
+                shipTurned > TURNED_WELL_AWAY_DEG);
 
         // ── THE SUBJECT ─────────────────────────────────────────────────────────────────────────
         double mountYawAfter = mountYaw(seatX, seatY, seatZ);
@@ -112,7 +121,7 @@ public class VSSeatDummyFacesTheShipE2ETest extends AbstractSharedServerTest {
                         + "a mount that reports the wrong heading to everything that asks it (mount yaw "
                         + mountYawBefore + " -> " + mountYawAfter + " while the ship turned " + shipTurned
                         + " deg)",
-                Math.abs(wrapDegrees(mountYawAfter - mountYawBefore)) > 45.0);
+                Math.abs(wrapDegrees(mountYawAfter - mountYawBefore)) > TURNED_WELL_AWAY_DEG);
         assertTrue("the mount must face where its ship faces (mount yaw " + mountYawAfter
                         + " vs ship yaw " + shipYawAfter + ")",
                 Math.abs(wrapDegrees(mountYawAfter - shipYawAfter)) <= YAW_TOLERANCE_DEG);

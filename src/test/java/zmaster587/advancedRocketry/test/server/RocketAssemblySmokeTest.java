@@ -31,6 +31,17 @@ import static org.junit.Assert.assertTrue;
  */
 public class RocketAssemblySmokeTest extends AbstractSharedServerTest {
 
+    /**
+     * The smallest storage chunk that can ENCLOSE the placed components, in blocks.
+     *
+     * <p>Both are the test's own, and both are readings of the fixture rather than tunings: the
+     * craft it builds is three blocks across and five tall, so a storage chunk smaller than this
+     * has cut something off.</p>
+     */
+    private static final int FIXTURE_FOOTPRINT_BLOCKS = 3;
+    /** @see #FIXTURE_FOOTPRINT_BLOCKS */
+    private static final int FIXTURE_HEIGHT_BLOCKS = 5;
+
     private static final String ROCKET_LIST_ID = "id";
     private static final String STATUS = "status";
 
@@ -61,9 +72,9 @@ public class RocketAssemblySmokeTest extends AbstractSharedServerTest {
         // Fixture geometry: rocket spans dx∈[-1,+1], dy∈[0,4], dz==0; bbCache
         // covers the pad — so the chunk encloses at least the placed blocks.
         assertTrue("storage chunk must enclose the placed components (sx>=3): " + info.raw(),
-                sx >= 3);
+                sx >= FIXTURE_FOOTPRINT_BLOCKS);
         assertTrue("storage chunk must enclose the vertical extent (sy>=5): " + info.raw(),
-                sy >= 5);
+                sy >= FIXTURE_HEIGHT_BLOCKS);
     }
 
     /**

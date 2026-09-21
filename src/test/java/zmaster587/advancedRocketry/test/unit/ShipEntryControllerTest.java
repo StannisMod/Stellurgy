@@ -40,6 +40,10 @@ import static org.junit.Assert.assertTrue;
  */
 public class ShipEntryControllerTest {
 
+    /** The clamp this scenario sets, in blocks — the arrangement's own number, cited by the
+     *  assertion that the entry line drops below it. */
+    private static final int ORBIT_CLAMP = 1000;
+
     private static final UUID SHIP = UUID.fromString("00000000-0000-0000-0000-0000000000AA");
     private static final BlockPos AFC = new BlockPos(1, 65, 1);
     private static final int LAUNCH_DIM = 0;
@@ -369,7 +373,7 @@ public class ShipEntryControllerTest {
         // The stock-config collision: orbit 1000, clamp 1000 -> the line moves below the clamp.
         int line = ShipEntryController.effectiveEntryCeiling(1000, 1000.0);
         assertTrue("with orbit == clamp the line must drop below the clamp (got " + line + ")",
-                line < 1000);
+                line < ORBIT_CLAMP);
         assertTrue("a ship must be able to EXCEED the line before the clamp stops it (line " + line
                         + ", clamp 1000)",
                 ShipEntryController.shouldTriggerEntry(false, 1000.0, line));

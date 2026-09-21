@@ -37,6 +37,10 @@ import static org.junit.Assert.assertTrue;
  */
 public class JackHammerContractTest {
 
+    /** The mining speed a jackhammer must beat, and what it is measured against: vanilla's iron
+     *  pick reads 6.0f, so this is "noticeably faster" rather than a tuned target. */
+    private static final float FASTER_THAN_IRON_PICK = 10.0f;
+
     @BeforeClass
     public static void bootstrap() {
         MinecraftBootstrap.ensure();
@@ -65,7 +69,7 @@ public class JackHammerContractTest {
         // returns 6.0f; the jackhammer must noticeably exceed that.
         assertTrue("jackhammer must mine ROCK noticeably faster than "
                 + "vanilla iron pick (vanilla=6.0f); got " + speed,
-                speed > 10.0f);
+                speed > FASTER_THAN_IRON_PICK);
     }
 
     @Test
@@ -75,7 +79,7 @@ public class JackHammerContractTest {
         float speed = h.getDestroySpeed(stack, stateOf(Blocks.IRON_BLOCK));
         assertTrue("jackhammer must mine IRON material noticeably faster "
                 + "than vanilla iron pick (vanilla=6.0f); got " + speed,
-                speed > 10.0f);
+                speed > FASTER_THAN_IRON_PICK);
     }
 
     @Test

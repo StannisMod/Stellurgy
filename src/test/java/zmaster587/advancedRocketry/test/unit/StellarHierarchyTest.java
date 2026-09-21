@@ -25,6 +25,17 @@ import static org.junit.Assert.assertTrue;
  */
 public class StellarHierarchyTest {
 
+    /**
+     * The separations a pair reads at, in degrees of sky.
+     *
+     * <p>Both are the test's own, and they are the words made measurable: a CLOSE pair reads as two
+     * suns almost together (under ten degrees) and a WIDE companion is somewhere else in the sky
+     * entirely (past sixty). The generator draws no such line.</p>
+     */
+    private static final float CLOSE_PAIR_DEG = 10f;
+    /** @see #CLOSE_PAIR_DEG */
+    private static final float WIDE_COMPANION_DEG = 60f;
+
     private static StellarBody star(String name, float size) {
         StellarBody s = new StellarBody();
         s.setName(name);
@@ -141,9 +152,9 @@ public class StellarHierarchyTest {
         float wideAngle = wide.apparentSeparationDegrees(100);
 
         assertTrue("a close pair reads as two suns almost together, saw " + closeAngle,
-                closeAngle > 0f && closeAngle < 10f);
+                closeAngle > 0f && closeAngle < CLOSE_PAIR_DEG);
         assertTrue("a wide companion is somewhere else in the sky entirely, saw " + wideAngle,
-                wideAngle > 60f);
+                wideAngle > WIDE_COMPANION_DEG);
         assertEquals("a star nobody orbits has no separation from itself", 0f,
                 primary.apparentSeparationDegrees(100), 0f);
     }

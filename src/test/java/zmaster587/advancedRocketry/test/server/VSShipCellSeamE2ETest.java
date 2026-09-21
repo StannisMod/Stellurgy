@@ -57,6 +57,12 @@ import static org.junit.Assert.fail;
 public class VSShipCellSeamE2ETest extends AbstractSharedServerTest {
 
 
+
+    /** What counts as EXACTLY ZERO for a commanded rate. Float noise, not a tolerance: the
+     *  arrangement sets it to zero and the assertion reads it back through a double. */
+    private static final double EXACTLY_ZERO = 1e-9;
+
+
     /** Where this test builds its ship — its own region, clear of the entry/descent legs. */
     private static final int SRC_X = 6800, SRC_Y = FixtureSite.OPEN_AIR_Y, SRC_Z = 6800;
     /** A world Y comfortably above the default orbit ceiling (ARConfiguration.orbit = 1000). */
@@ -516,7 +522,7 @@ public class VSShipCellSeamE2ETest extends AbstractSharedServerTest {
         assertTrue("the arrived craft could not be told to get under way, so nothing below is about "
                         + "a moving deck: " + underWay,
                 Math.abs(extractDouble(underWay, "cruiseUp") - DECK_CRUISE_BLOCKS_PER_SECOND)
-                        < 1e-9);
+                        < EXACTLY_ZERO);
 
         // Let the craft fly on.
         double beforeY = arrivedShip(carriedSlot, arranged.arShipId).y;
@@ -771,7 +777,7 @@ public class VSShipCellSeamE2ETest extends AbstractSharedServerTest {
         assertTrue("the computer still holds a cruise after being told to stop, so the deck will "
                         + "accelerate away from whatever is put on it and no carry assertion below "
                         + "would be about a carry: " + stopped,
-                Math.abs(cruiseF) < 1e-9 && Math.abs(cruiseR) < 1e-9 && Math.abs(cruiseU) < 1e-9);
+                Math.abs(cruiseF) < EXACTLY_ZERO && Math.abs(cruiseR) < EXACTLY_ZERO && Math.abs(cruiseU) < EXACTLY_ZERO);
 
         return finishPastTheFace(setup, arShipId, sourceCell, sourceSlot, settledVsId);
     }

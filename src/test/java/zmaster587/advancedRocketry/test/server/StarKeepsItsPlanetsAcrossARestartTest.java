@@ -38,6 +38,10 @@ import static org.junit.Assert.assertTrue;
  */
 public class StarKeepsItsPlanetsAcrossARestartTest {
 
+    /** Planets the authored star carries — the arrangement's own count, read back on a fresh
+     *  world. Not a threshold. */
+    private static final int AUTHORED_PLANETS = 2;
+
     private static final String PLANETS = "planets";
     private static final String NAMING = "dimsNamingThisStar";
     private static final String RETINUE = "maxRetinue";
@@ -133,7 +137,7 @@ public class StarKeepsItsPlanetsAcrossARestartTest {
         // Without this the comparison below could be satisfied by a fresh boot that was already empty,
         // which is the vacuous pass this test exists to avoid.
         assertTrue("the authored planets must be attached on a FRESH world (planets=" + freshPlanets
-                + "): " + fresh, freshPlanets >= 2);
+                + "): " + fresh, freshPlanets >= AUTHORED_PLANETS);
 
         firstBoot.close();
         firstBoot = null;

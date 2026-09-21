@@ -38,6 +38,14 @@ import static org.junit.Assert.fail;
 @FixMethodOrder(MethodSorters.NAME_ASCENDING)
 public class VSChairMountArrivesAsItselfE2ETest extends AbstractSharedVsClientE2ETest {
 
+    /**
+     * How far below the platform's own surface the player may settle and still be ON it, in blocks.
+     *
+     * <p>The TEST'S OWN: a body that fell off is out of reach of the chair, which is what the leg
+     * needs; 0.6 is under a body's step height.</p>
+     */
+    private static final double ON_THE_PLATFORM_BLOCKS = 0.6;
+
     @Override
     protected String subsystem() {
         return "vs-chair-mount-identity";
@@ -100,7 +108,7 @@ public class VSChairMountArrivesAsItselfE2ETest extends AbstractSharedVsClientE2
         scenario().requireArranged("the player must end up standing ON the platform - one that fell"
                         + " off it is out of reach of the chair (expected y~" + (FY + 1)
                         + ", measured " + standY + "): " + stood,
-                Math.abs(standY - (FY + 1)) <= 0.6);
+                Math.abs(standY - (FY + 1)) <= ON_THE_PLATFORM_BLOCKS);
         String placed = exec("artest block at 0 " + CX + " " + CY + " " + CZ);
         scenario().requireArranged("the chair block must still be there when the player reaches for"
                 + " it: " + placed, CHAIR_BLOCK.equals(

@@ -42,6 +42,14 @@ import static org.junit.Assert.assertTrue;
  */
 public class DockingPortNbtAndPacketTest extends AbstractSharedServerTest {
 
+    /**
+     * The smallest a packet carrying a string may be, in bytes.
+     *
+     * <p>The TEST'S OWN, and it is arithmetic rather than a tuning: a length prefix plus at least
+     * one character cannot fit in four bytes, so a packet at or under this wrote nothing.</p>
+     */
+    private static final int MIN_STRING_PACKET_BYTES = 4;
+
     private static final int BASE_X = 9000;
     /**
      * The open-air band, not terrain. This was a hard-coded 64 until 2026-09-14 and the scenarios
@@ -180,7 +188,7 @@ public class DockingPortNbtAndPacketTest extends AbstractSharedServerTest {
         // Pin "more than 4 bytes consumed" so we know the length prefix +
         // payload actually flowed.
         assertTrue("packet id=0 must consume > 4 bytes (length prefix + chars): "
-                + rt, Integer.parseInt(extract(rt, PACKET_BYTES)) > 4);
+                + rt, Integer.parseInt(extract(rt, PACKET_BYTES)) > MIN_STRING_PACKET_BYTES);
     }
 
     @Test

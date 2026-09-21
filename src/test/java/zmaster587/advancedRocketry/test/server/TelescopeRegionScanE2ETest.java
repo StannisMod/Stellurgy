@@ -28,6 +28,13 @@ import static org.junit.Assert.assertTrue;
  */
 public class TelescopeRegionScanE2ETest extends AbstractSharedServerTest {
 
+    /** How far a telescope's horizon must reach, in light years, for other stars to be within it.
+     *  The TEST'S OWN bar on "interstellar". */
+    private static final double INTERSTELLAR_LY = 4d;
+
+    /** And how many lattice steps that buys — more than one star's own territory. */
+    private static final int MORE_THAN_ONE_TERRITORY_STEPS = 2;
+
     /**
      * How much WORLD a survey is allowed to make progress in before it is inspected - the old
      * 1 500 ms and 2 000 ms, said in the ticks the survey actually advances on.
@@ -344,16 +351,16 @@ public class TelescopeRegionScanE2ETest extends AbstractSharedServerTest {
 
         TelescopeReading idle = scope(x);
         assertTrue("a telescope's horizon must reach other stars, in light years: " + idle.reachLy,
-                idle.reachLy >= 4d);
+                idle.reachLy >= INTERSTELLAR_LY);
         assertTrue("and must buy more than one star's territory: " + idle.reachSteps,
-                idle.reachSteps >= 2);
+                idle.reachSteps >= MORE_THAN_ONE_TERRITORY_STEPS);
 
         TelescopeReading aimed = TelescopeReading.of(
                         exec("artest telescope scan " + where(x) + " 1 0 0 " + idle.reachSteps))
                 .requireOk("the survey did not start");
         assertTrue("an aim at the horizon must land an interstellar distance away: "
                         + aimed.distanceLy() + " ly",
-                aimed.distanceLy() >= 4d);
+                aimed.distanceLy() >= INTERSTELLAR_LY);
         exec("artest telescope abort " + where(x));
     }
 

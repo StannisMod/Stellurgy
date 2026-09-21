@@ -82,6 +82,8 @@ import static org.junit.Assert.assertTrue;
 @FixMethodOrder(MethodSorters.NAME_ASCENDING)
 public class VacuumAndSuitClientGroupE2ETest extends AbstractSharedClientE2ETest {
 
+
+
     private static final int PAD_Y = Plot.DEFAULT_Y;
     private static final int PAD_DX = 16;
     private static final int PAD_DZ = 16;
@@ -453,7 +455,7 @@ public class VacuumAndSuitClientGroupE2ETest extends AbstractSharedClientE2ETest
             double healthStart = health(bot().reportState());
             scenario().measuring("health before the vacuum window").record("healthStart", healthStart);
             scenario().requireArranged("player must start at full health: " + healthStart,
-                    healthStart >= 20.0);
+                    healthStart >= FULL_HEALTH);
 
             // Both marks BEFORE the vacuum exists, or the first drain of a three-millibucket tank
             // happens between the flip and the mark and the chain starts mid-way.
@@ -711,7 +713,7 @@ public class VacuumAndSuitClientGroupE2ETest extends AbstractSharedClientE2ETest
             double healthStart = health(bot().reportState());
             scenario().record("healthStart", healthStart);
             scenario().requireArranged("player must start at full health, got " + healthStart,
-                    healthStart >= 20.0);
+                    healthStart >= FULL_HEALTH);
 
             Events events = events();
             long mark = events.markInstrumented();
@@ -766,7 +768,7 @@ public class VacuumAndSuitClientGroupE2ETest extends AbstractSharedClientE2ETest
             double healthStart = health(bot().reportState());
             scenario().record("healthStart", healthStart);
             scenario().requireArranged("player should start at full health, got " + healthStart,
-                    healthStart >= 20.0);
+                    healthStart >= FULL_HEALTH);
 
             Events events = events();
             long mark = events.markInstrumented();

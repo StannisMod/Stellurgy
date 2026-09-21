@@ -19,6 +19,10 @@ import static org.junit.Assert.assertTrue;
  */
 public class WorldgenSmokeTest extends AbstractHeadlessServerTest {
 
+    /** The smallest bedrock count a vanilla chunk column may plausibly hold — the test's own bar
+     *  on "worldgen ran at all", far under what a real column carries. */
+    private static final long MIN_BEDROCK = 50L;
+
     // Generated terrain IS this test's subject, and it is what the harness hands out by default.
     // Do not give this class requiresFlatTerrain(): a flat world has no decoration pass, so its
     // iron count is zero and the AR oregen tripwire below would measure the preset, not the
@@ -40,7 +44,7 @@ public class WorldgenSmokeTest extends AbstractHeadlessServerTest {
         assertEquals("expected 9 chunks scanned", 9L, parseLong(CHUNKS, bedrock));
         long bedrockCount = parseLong(COUNT, bedrock);
         assertTrue("vanilla bedrock count too low: " + bedrockCount + " in " + bedrock,
-                bedrockCount >= 50L);
+                bedrockCount >= MIN_BEDROCK);
 
         String iron = String.join("\n", client().execute(
                 "artest worldgen ore-stats 0 0 0 1 minecraft:iron_ore"));

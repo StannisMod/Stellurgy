@@ -49,6 +49,41 @@ import static org.junit.Assert.assertTrue;
 @FixMethodOrder(MethodSorters.NAME_ASCENDING)
 public class VSGroundFlightGroupE2ETest extends AbstractSharedVsClientE2ETest {
 
+    /**
+     * How far a quaternion dot product must fall below 1 for the hull to have MOVED at all.
+     *
+     * <p>The TEST'S OWN: 1.0 is "unmoved", and the dot falls off as the cosine of half the angle,
+     * so 0.98 is about sixteen degrees — far above float noise and far below the commanded turn.
+     * The same number is the convergence bar read the other way, and both cite this constant so the
+     * pair cannot drift apart.</p>
+     */
+    private static final double ATTITUDE_MOVED_DOT = 0.98;
+
+    /**
+     * How far the CLIENT's rendered rider climb may sit from the SERVER's ship climb, in blocks.
+     *
+     * <p>The TEST'S OWN replication tolerance: the two are the same climb read on two sides, one
+     * interpolated. Three blocks is under a craft's own height, so a rider left behind still
+     * fails.</p>
+     */
+    private static final double RIDER_TRACKS_SHIP_BLOCKS = 3.0;
+
+    /**
+     * How far the camera yaw may move under a hard sideways mouse look, in degrees.
+     *
+     * <p>The TEST'S OWN: the view is LOCKED while piloting, so the honest statement is that it does
+     * not move. Fifteen degrees is frame settle; a free-look would swing through ninety.</p>
+     */
+    private static final double VIEW_STAYS_LOCKED_DEG = 15.0;
+
+    /**
+     * How far the camera yaw may sit from the ship's own nose, in degrees.
+     *
+     * <p>The TEST'S OWN, and tighter than {@link #VIEW_STAYS_LOCKED_DEG} because it compares the
+     * camera against the thing it is locked TO rather than against its own previous value.</p>
+     */
+    private static final double CAMERA_ON_THE_NOSE_DEG = 12.0;
+
     @Override
     protected String subsystem() {
         return "vs-ground-flight";
@@ -419,7 +454,7 @@ public class VSGroundFlightGroupE2ETest extends AbstractSharedVsClientE2ETest {
         assertTrue("commanded yaw (via torque) must rotate the loaded ship "
                         + "(min |quat dot| over the window=" + minDot + ", last=" + dot
                         + ", 1.0 = unmoved)",
-                minDot < 0.98);
+                minDot < ATTITUDE_MOVED_DOT);
 
         // ATTITUDE HOLD: command an absolute target orientation (90° yaw about world Y) and the
         // controller must drive the ship's attitude TO it and converge — the interface Free
@@ -442,7 +477,7 @@ public class VSGroundFlightGroupE2ETest extends AbstractSharedVsClientE2ETest {
         assertTrue("attitude-hold must converge the ship to the commanded orientation and still be"
                         + " there at the end of the window (|dot to target|=" + convDot
                         + ", 1.0 = exact)",
-                convDot > 0.98);
+                convDot > ATTITUDE_MOVED_DOT);
 
         // FULL FREE FLIGHT PATH: hand the flight computer a held pilot input. Its server tick
         // reads the ship's attitude, runs FreeFlightPhysics, and publishes to the controller —
@@ -741,7 +776,7 @@ public class VSGroundFlightGroupE2ETest extends AbstractSharedVsClientE2ETest {
                 camYAfter - camYBefore > 1.0);
         assertTrue("the client rider climb must TRACK the server ship climb (client="
                         + (riderYAfter - riderYBefore) + " server=" + (serverYAfter - yBefore) + ")",
-                Math.abs((riderYAfter - riderYBefore) - (serverYAfter - yBefore)) < 3.0);
+                Math.abs((riderYAfter - riderYBefore) - (serverYAfter - yBefore)) < RIDER_TRACKS_SHIP_BLOCKS);
 
         // --- The OTHER TWO translation axes, in world coordinates. The vertical key above proves
         // exactly ONE channel of the pilot path; nose and lateral are separate fields of the same
@@ -820,10 +855,10 @@ public class VSGroundFlightGroupE2ETest extends AbstractSharedVsClientE2ETest {
         float shipNoseYaw = shipNoseYaw(shipInfoById(shipId));
         assertTrue("a hard sideways mouse look must NOT free-look the camera — the view stays locked "
                         + "(camYawBefore=" + camYawBefore + " camYawAfter=" + camYawAfter + ")",
-                angDiff(camYawAfter, camYawBefore) < 15.0);
+                angDiff(camYawAfter, camYawBefore) < VIEW_STAYS_LOCKED_DEG);
         assertTrue("the CLIENT camera yaw must be LOCKED to the ship nose, not where the mouse pointed "
                         + "(camYawAfter=" + camYawAfter + " shipNose=" + shipNoseYaw + ")",
-                angDiff(camYawAfter, shipNoseYaw) < 12.0);
+                angDiff(camYawAfter, shipNoseYaw) < CAMERA_ON_THE_NOSE_DEG);
 
         exec("artest player dismount");
     }

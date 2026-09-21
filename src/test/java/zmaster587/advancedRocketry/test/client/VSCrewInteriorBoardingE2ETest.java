@@ -34,6 +34,42 @@ import static org.junit.Assert.assertTrue;
 @FixMethodOrder(MethodSorters.NAME_ASCENDING)
 public class VSCrewInteriorBoardingE2ETest extends AbstractSharedVsClientE2ETest {
 
+    /**
+     * How far a body may settle from where it was on an INVERTED hull, in blocks.
+     *
+     * <p>The TEST'S OWN: the claim is that he stayed with the ship, and the failure it refuses is
+     * falling out of it — which is many blocks. Two and a half is the room a body has inside the
+     * cockpit cavity it is released in.</p>
+     */
+    private static final double STAYED_WITH_THE_SHIP_BLOCKS = 2.5;
+
+    /**
+     * The same bound where deck gravity must carry him BACK, in blocks — tighter, because the
+     * failure here is settling on the roof about three world blocks below.
+     */
+    private static final double CARRIED_BACK_TO_DECK_BLOCKS = 1.5;
+
+    /**
+     * How far from his own subspace stand a re-seated body may be, in blocks.
+     *
+     * <p>The TEST'S OWN: a seat top is about a block above the floor it stands on, so this allows a
+     * landing on the seat rather than beside it, and nothing further.</p>
+     */
+    private static final double RESEATED_AT_HIS_STAND_BLOCKS = 1.1;
+
+    /**
+     * How far an ascending body must rise ALONG THE DECK NORMAL, and how far it may stray across
+     * it, in subspace blocks.
+     *
+     * <p>Both are the test's own, and the pair is the whole claim: the climb is along the deck's
+     * own +Y rather than the world's. The lateral bound is deliberately close to the vertical one,
+     * so a body climbing at 45 degrees — which is what a world-frame ascent looks like on a rolled
+     * deck — fails.</p>
+     */
+    private static final double ASCENT_ALONG_NORMAL_BLOCKS = 1.2;
+    /** @see #ASCENT_ALONG_NORMAL_BLOCKS */
+    private static final double ASCENT_LATERAL_BLOCKS = 1.6;
+
     @Override
     protected String subsystem() {
         return "vs-crew-boarding";
@@ -319,7 +355,7 @@ public class VSCrewInteriorBoardingE2ETest extends AbstractSharedVsClientE2ETest
                 !modesSettled.hullStand);
         assertTrue("the body must stay WITH the inverted ship at its deck spot, not fall out "
                 + "(preY=" + preY + " settledY=" + settledY + ", cap=" + capEnd.raw() + "): " + trace,
-                Math.abs(settledY - preY) < 2.5 && capEnd.alreadyTracked);
+                Math.abs(settledY - preY) < STAYED_WITH_THE_SHIP_BLOCKS && capEnd.alreadyTracked);
         // ...and by THIS ship. "He is held" and "he is held by the craft this scenario built"
         // are different claims, and on a world three scenarios share only the second one is the
         // contract. The id is in the reply already.
@@ -498,12 +534,12 @@ public class VSCrewInteriorBoardingE2ETest extends AbstractSharedVsClientE2ETest
                 !modesSettled.hullStand);
         assertTrue("deck gravity must carry the body BACK to the deck, not let it settle on the "
                 + "roof ~3 world blocks below (preY=" + preY + " settledY=" + settledY + "): " + trace,
-                Math.abs(settledY - preY) < 1.5 && capEnd.alreadyTracked);
+                Math.abs(settledY - preY) < CARRIED_BACK_TO_DECK_BLOCKS && capEnd.alreadyTracked);
         capEnd.requireAnchoredOn( scenarioShipId,
                 "deck gravity must carry the body back to THIS ship's deck");
         assertTrue("the body must re-seat at its deck stand in subspace (subY " + subEnd[1]
                 + " vs stand " + sub0[1] + "; seat-top landing allowed): " + trace,
-                Math.abs(subEnd[1] - sub0[1]) <= 1.1);
+                Math.abs(subEnd[1] - sub0[1]) <= RESEATED_AT_HIS_STAND_BLOCKS);
         assertTrue("the client camera must engage for the reclaimed interior body "
                 + "(shipCamActive=" + shipCam + ")", shipCam);
     }
@@ -630,7 +666,7 @@ public class VSCrewInteriorBoardingE2ETest extends AbstractSharedVsClientE2ETest
         // The census position is block-floored, so allow a block of lateral jitter; a WORLD-up
         // ascent at 60 deg would drift the deck plane by ~1.7x the climb (several blocks here).
         assertTrue("holding ascend must climb along the DECK NORMAL (subspace +Y): dySub=" + dySub
-                + " dxzSub=" + dxzSub + " :: " + trace, dySub > 1.2 && dxzSub < 1.6);
+                + " dxzSub=" + dxzSub + " :: " + trace, dySub > ASCENT_ALONG_NORMAL_BLOCKS && dxzSub < ASCENT_LATERAL_BLOCKS);
 
         // Descend back toward the deck first - the flight-off double-tap itself adds a little
         // climb, and toggling at the stay region's edge exits it mid-flight (leaving the stay

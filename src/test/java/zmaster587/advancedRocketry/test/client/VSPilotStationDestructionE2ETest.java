@@ -46,6 +46,23 @@ import static org.junit.Assert.assertTrue;
 @FixMethodOrder(MethodSorters.NAME_ASCENDING)
 public class VSPilotStationDestructionE2ETest extends AbstractSharedVsClientE2ETest {
 
+    /**
+     * How far the hull may move after its seat is destroyed, in blocks.
+     *
+     * <p>The TEST'S OWN: the contract is that it HOLDS, so the honest statement is zero and two
+     * blocks is the sag of a hold correcting itself. A ship still flying the dead pilot's last
+     * command climbs many.</p>
+     */
+    private static final double HELD_AFTER_DESTRUCTION_BLOCKS = 2.0;
+
+    /**
+     * How far the seated bot must have flown the ship before its station may be destroyed.
+     *
+     * <p>The TEST'S OWN sensitivity bar: without it the leg would pass on a ship nobody was
+     * flying, which is the only state in which "it stopped" proves nothing.</p>
+     */
+    private static final double WAS_FLYING_BLOCKS = 2.0;
+
     @Override
     protected String subsystem() {
         return "vs-pilot-station";
@@ -114,7 +131,7 @@ public class VSPilotStationDestructionE2ETest extends AbstractSharedVsClientE2ET
             double y2 = shipY(ship.id);
             assertTrue("after the seat is destroyed the ship must HOLD, never fly the dead pilot's "
                             + "last command (y1=" + y1 + " y2=" + y2 + ")",
-                    Math.abs(y2 - y1) < 2.0);
+                    Math.abs(y2 - y1) < HELD_AFTER_DESTRUCTION_BLOCKS);
         } finally {
             bot().releaseKey(Keyboard.KEY_R);
         }
@@ -273,7 +290,7 @@ public class VSPilotStationDestructionE2ETest extends AbstractSharedVsClientE2ET
         double yAfter = lift.value;
         scenario().requireArranged("the seated bot must be flying the ship before its station can be "
                         + "destroyed (y0=" + y0 + " yAfter=" + yAfter + ")",
-                yAfter - y0 > 2.0);
+                yAfter - y0 > WAS_FLYING_BLOCKS);
         return ship;
     }
 

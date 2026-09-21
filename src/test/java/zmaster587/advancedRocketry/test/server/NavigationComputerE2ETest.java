@@ -31,6 +31,19 @@ public class NavigationComputerE2ETest extends AbstractSharedServerTest {
     /** The gate's own refusal, as the lang key production hands the player. */
     private static final String MESSAGE = "message";
 
+    /**
+     * What this scenario BUILT, restated so the assertions read as arithmetic on it.
+     *
+     * <p>Neither is a threshold: the source crystal is seeded with three addresses and the ship's
+     * with two, so "the copy reports three", "the ship ends with five" and "the source still has
+     * three" are the arrangement's own numbers read back. They are named because the same three and
+     * five appear in five assertions across two methods, and a seeding that changed would otherwise
+     * leave them silently asserting the old world.</p>
+     */
+    private static final int SOURCE_ADDRESSES = 3;
+    /** @see #SOURCE_ADDRESSES */
+    private static final int SHIP_ADDRESSES_AFTER_COPY = 5;
+
     @Test
     public void copyingACrystalAddsToTheShipWithoutTakingFromTheSource() throws Exception {
         placeComputer(A);
@@ -40,11 +53,11 @@ public class NavigationComputerE2ETest extends AbstractSharedServerTest {
         String copied = exec("artest nav copy " + A);
 
         assertTrue("the copy must report the three new addresses: " + copied,
-                (Reply.of(copied).integer("changed") == 3));
+                (Reply.of(copied).integer("changed") == SOURCE_ADDRESSES));
         assertTrue("the ship's crystal must hold everything it had plus everything copied: " + copied,
-                (Reply.of(copied).integer("ship") == 5));
+                (Reply.of(copied).integer("ship") == SHIP_ADDRESSES_AFTER_COPY));
         assertTrue("a copy must never take an address off the source crystal: " + copied,
-                (Reply.of(copied).integer("source") == 3));
+                (Reply.of(copied).integer("source") == SOURCE_ADDRESSES));
     }
 
     @Test
@@ -60,7 +73,7 @@ public class NavigationComputerE2ETest extends AbstractSharedServerTest {
         assertTrue("the source must be blank after an erase: " + erased,
                 (Reply.of(erased).integer("source") == 0));
         assertTrue("erasing the source must not touch what the ship knows: " + status.raw(),
-                status.shipCrystals == 5);
+                status.shipCrystals == SHIP_ADDRESSES_AFTER_COPY);
     }
 
     @Test
@@ -196,7 +209,7 @@ public class NavigationComputerE2ETest extends AbstractSharedServerTest {
 
         assertTrue("channel 0 must move nothing: " + synced, (Reply.of(synced).integer("changed") == 0));
         assertTrue("a computer nobody put on a channel must not pool its knowledge: " + self.raw(),
-                self.shipCrystals == 3);
+                self.shipCrystals == SOURCE_ADDRESSES);
     }
 
     private void placeComputer(String at) throws Exception {

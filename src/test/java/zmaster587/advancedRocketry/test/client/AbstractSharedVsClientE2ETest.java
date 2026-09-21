@@ -58,6 +58,15 @@ import static org.junit.Assert.assertTrue;
 public abstract class AbstractSharedVsClientE2ETest extends AbstractSharedClientE2ETest {
 
     /**
+     * How far a lifted craft may sit from the altitude the lift asked for, in blocks.
+     *
+     * <p>The TEST'S OWN: the lift is a rigid teleport, so the honest statement is that it arrived.
+     * Twenty blocks is well inside the clearance the lift buys and far outside the settle of a
+     * craft that took it.</p>
+     */
+    private static final double LIFT_LANDED_WITHIN_BLOCKS = 20.0;
+
+    /**
      * Where a ship class's plots live.
      *
      * <p><b>It was called {@code SHIP_PARKING_LANE} until 2026-09-14, and the rename records a
@@ -495,7 +504,7 @@ public abstract class AbstractSharedVsClientE2ETest extends AbstractSharedClient
         double y = ShipInfo.isLoaded(after) ? ShipInfo.of(after).y : Double.NaN;
         scenario().requireArranged("the lifted craft must still be loaded and report its new"
                 + " altitude (asked BY IDENTITY, so this cannot be a neighbour): " + after,
-                !Double.isNaN(y) && Math.abs(y - toY) < 20.0);
+                !Double.isNaN(y) && Math.abs(y - toY) < LIFT_LANDED_WITHIN_BLOCKS);
         // The whole point of the lift, ASSERTED rather than assumed: it is only worth doing if the
         // craft is level when it arrives, and a craft that was already tipped on the pad stays tipped
         // through a rigid move.

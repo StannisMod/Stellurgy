@@ -53,6 +53,10 @@ import static org.junit.Assert.assertTrue;
  */
 public class VSRelocatedBodyIsNotFlungByItsLastShipE2ETest extends AbstractSharedServerTest {
 
+    /** The angular rate that says the hull left behind IS rotating, in rad/s — a sensitivity
+     *  control, and float noise is the only thing under it. */
+    private static final double HULL_IS_ROTATING = 1e-3;
+
 
     /** A loaded overworld region of this class's own, well clear of every other server e2e. */
     private static final int SRC_X = 10600, SRC_Y = FixtureSite.OPEN_AIR_Y, SRC_Z = 10600;
@@ -196,7 +200,7 @@ public class VSRelocatedBodyIsNotFlungByItsLastShipE2ETest extends AbstractShare
         // CONTROL 3 — the hull really is rotating. A hull that only translates offers a delta that
         // distance does not amplify, and this test would pass on a ship standing perfectly still.
         assertTrue("sensitivity control — the hull left behind is not rotating, so nothing was"
-                + " offered to the subject at all:" + evidence, omega > 1e-3);
+                + " offered to the subject at all:" + evidence, omega > HULL_IS_ROTATING);
 
         // THE VERDICT: a body that is no longer anywhere near a hull is not carried by it, however
         // recently it stood on it.

@@ -51,6 +51,9 @@ import static org.junit.Assert.fail;
  */
 public class XMLPlanetLoaderTest {
 
+    /** The first dimension id an auto-allocation may take: vanilla reserves 0, -1 and 1. */
+    private static final int FIRST_FREE_DIM = 2;
+
     @BeforeClass
     public static void bootstrap() {
         MinecraftBootstrap.ensure();
@@ -116,7 +119,7 @@ public class XMLPlanetLoaderTest {
                 zmaster587.advancedRocketry.api.Constants.INVALID_PLANET, props.getId());
         // Vanilla dims 0/-1/1 are reserved; allocator skips them.
         assertTrue("auto-allocated dim should be ≥ 2 (vanilla reserved 0/-1/1), got " + props.getId(),
-                props.getId() >= 2);
+                props.getId() >= FIRST_FREE_DIM);
     }
 
     @Test

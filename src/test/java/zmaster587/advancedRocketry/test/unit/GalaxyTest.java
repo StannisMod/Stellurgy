@@ -26,6 +26,10 @@ import static org.junit.Assert.assertTrue;
  */
 public class GalaxyTest {
 
+    /** How long a galactic turn must take, in ticks, to DWARF any play session. The TEST'S OWN,
+     *  and the comparison is with a human lifetime of play rather than with any constant. */
+    private static final double DWARFS_A_PLAY_SESSION_TICKS = 1e11d;
+
     private static final double RADIUS = 1500d;
 
     private static GalaxyGenConfig.GalaxyType spiral() {
@@ -192,7 +196,7 @@ public class GalaxyTest {
         Galaxy g = flat(spiral());
         double turnTicks = g.rotationPeriodTicks(RADIUS * 0.5d);
         assertTrue("a galactic turn must dwarf any play session (" + turnTicks + " ticks)",
-                turnTicks > 1e11d);
+                turnTicks > DWARFS_A_PLAY_SESSION_TICKS);
         assertFalse("but it must be a finite number of ticks", Double.isInfinite(turnTicks));
     }
 

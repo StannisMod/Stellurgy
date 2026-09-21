@@ -50,6 +50,15 @@ import static org.junit.Assert.assertTrue;
 @FixMethodOrder(MethodSorters.NAME_ASCENDING)
 public class VSPilotSeatMountMessagesE2ETest extends AbstractSharedVsClientE2ETest {
 
+    /**
+     * How far from the seat the client may observably stand, in blocks SQUARED.
+     *
+     * <p>PRODUCTION'S reach restated: the server drops a block interaction beyond reach plus three,
+     * which is this distance squared. The gate exists so a dropped click is reported as the
+     * arrangement it is rather than as a seat that declined.</p>
+     */
+    private static final double WITHIN_REACH_DIST_SQ = 25.0;
+
     @Override
     protected String subsystem() {
         return "vs-pilot-seat-messages";
@@ -333,7 +342,7 @@ public class VSPilotSeatMountMessagesE2ETest extends AbstractSharedVsClientE2ETe
             }
         }
         scenario().requireArranged("the client must observably stand within reach of the seat, or the "
-                + "right-click is dropped before the block sees it. state=" + state, distSq < 25.0);
+                + "right-click is dropped before the block sees it. state=" + state, distSq < WITHIN_REACH_DIST_SQ);
     }
 
     /** Server-side clear + client-observed empty hand (a held stack can eat the right-click). */

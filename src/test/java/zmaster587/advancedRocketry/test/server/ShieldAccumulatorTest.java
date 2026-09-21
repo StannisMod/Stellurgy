@@ -32,6 +32,19 @@ import static org.junit.Assert.assertTrue;
  */
 public class ShieldAccumulatorTest extends AbstractSharedServerTest {
 
+    /**
+     * The reserves this class reads, in power units.
+     *
+     * <p>All three are the test's own bars on an ARRANGEMENT rather than contract thresholds: the
+     * accumulator must have built a bulk reserve before anything about its behaviour can be read,
+     * and the haemorrhage leg needs a reserve big enough that a leak is visible against it.</p>
+     */
+    private static final long BULK_RESERVE = 100_000L;
+    /** @see #BULK_RESERVE */
+    private static final long CHARGED_RESERVE = 150_000L;
+    /** @see #BULK_RESERVE */
+    private static final long RESERVE_AFTER_DRAW = 120_000L;
+
     private static final int DIM = 0;
     private static final int Y = FixtureSite.OPEN_AIR_Y;
     private static final int FE_PER_ITERATION = 4000;
@@ -75,7 +88,7 @@ public class ShieldAccumulatorTest extends AbstractSharedServerTest {
         // 60 iterations of 4000 FE -> shield is 240k of supply; a generator's own buffer is a small
         // fraction of that. The reserve must be genuinely bulk, not a smoothing buffer.
         assertTrue("accumulator failed to build a bulk reserve (stored=" + stored + "): it is not "
-                        + "storing the network's surplus:\n" + acc.raw(), stored > 100_000L);
+                        + "storing the network's surplus:\n" + acc.raw(), stored > BULK_RESERVE);
     }
 
     @Test
@@ -95,7 +108,7 @@ public class ShieldAccumulatorTest extends AbstractSharedServerTest {
         }
         long reserveBefore = read(ax, gz).shieldStored();
         assertTrue("precondition: accumulator did not charge (stored=" + reserveBefore + ")",
-                reserveBefore > 150_000L);
+                reserveBefore > CHARGED_RESERVE);
 
         // Attach the emitter to the charged accumulator and cut generation (no more FE). Drain any
         // residue left in the generator's small buffer so the accumulator is the only real source.
@@ -121,7 +134,7 @@ public class ShieldAccumulatorTest extends AbstractSharedServerTest {
         assertTrue("accumulator reserve haemorrhaged (before=" + reserveBefore + " after="
                         + reserveAfter + "): energy is leaving the source faster than the emitter "
                         + "receives it — the network is not conserving energy.",
-                reserveAfter > 120_000L);
+                reserveAfter > RESERVE_AFTER_DRAW);
     }
 
     private void chargeIteration(int gx, int gz) throws Exception {

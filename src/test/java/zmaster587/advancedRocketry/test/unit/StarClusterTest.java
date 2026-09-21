@@ -30,6 +30,27 @@ public class StarClusterTest {
 
     private static final long SEED = 0x51A25L;
 
+    /**
+     * The cluster SIZE this scenario builds, and therefore the range its indices must fall in.
+     *
+     * <p>Not a threshold: it is the arrangement's own argument, cited by the assertion that reads
+     * the answer. Written as two separate 25s — one in the constructor, one in the bound — until
+     * 2026-09-21, so a fixture of a different size would have gone on asserting the old range.</p>
+     */
+    private static final int CLUSTER_SIZE = 25;
+
+    /**
+     * The share of a dwarf galaxy's stars its NUCLEUS may hold.
+     *
+     * <p>The TEST'S OWN: a nucleus is a concentration, not the galaxy, so half is the line past
+     * which the word stops meaning anything. The generator publishes no such split.</p>
+     */
+    private static final double MAX_NUCLEUS_SHARE = 0.5d;
+
+    /** Clusters a sweep must find before a per-cluster statistic is read — the test's own sample
+     *  bar, under which a clean result describes the sweep rather than the subject. */
+    private static final int MIN_CLUSTERS_CHECKED = 3;
+
     private static GalaxyGenConfig cfg() {
         return GalaxyGenConfig.defaults();
     }
@@ -70,10 +91,10 @@ public class StarClusterTest {
         // be the one whose bounds contain it. A mismatch here is a system addressed by a cell it does
         // not sit in.
         long coarseEdge = 40_018_890L;
-        StarCluster c = new StarCluster(type(25), 25, 0L, 0L, 0L, 3L);
+        StarCluster c = new StarCluster(type(CLUSTER_SIZE), CLUSTER_SIZE, 0L, 0L, 0L, 3L);
         for (long offset : new long[] {0L, 1L, coarseEdge / 3L, coarseEdge / 2L, coarseEdge - 1L}) {
             long i = c.subCellIndex(offset, coarseEdge);
-            assertTrue("index " + i + " out of range for offset " + offset, i >= 0 && i < 25);
+            assertTrue("index " + i + " out of range for offset " + offset, i >= 0 && i < CLUSTER_SIZE);
             assertTrue("offset " + offset + " is not inside the sub-cell it resolved to",
                     offset >= c.subCellLow(i, coarseEdge)
                             && offset < c.subCellLow(i, coarseEdge) + c.subCellEdge(i, coarseEdge));
@@ -152,7 +173,7 @@ public class StarClusterTest {
                 "a %.0f ly galaxy gets nucleus k=%d; its core holds %.4f of the galaxy's own stars",
                 dwarfRadius, k, coreShare));
         assertTrue("a dwarf's nucleus holds " + String.format("%.2f", coreShare)
-                        + " of its whole galaxy", coreShare < 0.5d);
+                        + " of its whole galaxy", coreShare < MAX_NUCLEUS_SHARE);
     }
 
     /** A galaxy of a stated radius, at the origin — the subject when the SIZE is what is under test. */
@@ -185,7 +206,7 @@ public class StarClusterTest {
                 checked++;
             }
         }
-        assertTrue("the sweep must find clusters", checked > 3);
+        assertTrue("the sweep must find clusters", checked > MIN_CLUSTERS_CHECKED);
     }
 
     @Test
@@ -265,7 +286,7 @@ public class StarClusterTest {
                     Math.floorDiv(anchor.get().sectorX(), (long) tiny));
             checked++;
         }
-        assertTrue(checked > 3);
+        assertTrue(checked > MIN_CLUSTERS_CHECKED);
     }
 
     @Test
@@ -288,7 +309,7 @@ public class StarClusterTest {
                 checked++;
             }
         }
-        assertTrue(checked > 3);
+        assertTrue(checked > MIN_CLUSTERS_CHECKED);
     }
 
     /**

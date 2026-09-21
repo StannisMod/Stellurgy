@@ -73,6 +73,13 @@ import static zmaster587.advancedRocketry.test.client.ClientGuiTestSupport.scree
 @FixMethodOrder(MethodSorters.NAME_ASCENDING)
 public class MachineGuiClientGroupE2ETest extends AbstractSharedClientE2ETest {
 
+    /**
+     * The cargo this scenario FIRES, and therefore what the destination must hold.
+     *
+     * <p>Not a threshold: it is the arrangement's own stack, read back at the other end.</p>
+     */
+    private static final int FIRED_CARGO_COUNT = 16;
+
     private static final int Y = Plot.DEFAULT_Y;
 
     /** Where a scenario's machine stands inside its plot, and where the player stands to reach it. */
@@ -486,7 +493,7 @@ public class MachineGuiClientGroupE2ETest extends AbstractSharedClientE2ETest {
         assertTrue("status must read FIRED after a successful shot; fire=" + fire,
                 "FIRED".equals(readGroup(fire, FIRE_STATUS)));
         assertTrue("destination output port must contain >= 16 cobblestone after firing; fire="
-                + fire, readInt(fire, DEST_MATCHED) >= 16);
+                + fire, readInt(fire, DEST_MATCHED) >= FIRED_CARGO_COUNT);
         assertEquals("source input port must be drained after firing; fire=" + fire,
                 0, readInt(fire, SRC_REMAINING));
     }

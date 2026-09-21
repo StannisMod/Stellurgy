@@ -55,6 +55,17 @@ import static org.junit.Assert.assertTrue;
  */
 public class MachineDomainSmokeSuite extends AbstractSharedServerTest {
 
+    /** The cells a 3x3x3 fill covers. Not a threshold: the arrangement's own geometry. */
+    private static final int FILL_3X3X3_VOLUME = 27;
+
+    /**
+     * The smallest blob a sealed interior may report.
+     *
+     * <p>The TEST'S OWN: the sealed room's own interior is this many cells, so a blob below it has
+     * leaked out of the volume the test built.</p>
+     */
+    private static final int SEALED_INTERIOR_CELLS = 18;
+
     // ── Shared regex patterns ─────────────────────────────────────────────
 
     private static final String TICKED = "ticked";
@@ -191,7 +202,7 @@ public class MachineDomainSmokeSuite extends AbstractSharedServerTest {
         String fill = join(client().execute(
                 "artest fill 0 210 " + probeY + " 210 212 " + (probeY + 2) + " 212 minecraft:stone"));
         assertTrue("fill 3x3x3 stone failed: " + fill,
-                Reply.of(fill).ok() && (Reply.of(fill).integer("volume") == 27));
+                Reply.of(fill).ok() && (Reply.of(fill).integer("volume") == FILL_3X3X3_VOLUME));
 
         // Step 1 — build the multiblock fixture. Its Y is the band: a cutting multiblock is
         // validated by its own STRUCTURE, so it wants nothing under it.
@@ -358,7 +369,7 @@ public class MachineDomainSmokeSuite extends AbstractSharedServerTest {
                 "true", matchOrFail(VENT_SEALED, sealed));
         int sealedBlobSize = Integer.parseInt(matchOrFail(VENT_BLOB_SIZE, sealed));
         assertTrue("vent blob must include the interior (>=18): " + sealed,
-                sealedBlobSize >= 18);
+                sealedBlobSize >= SEALED_INTERIOR_CELLS);
 
         String atm = join(client().execute(
                 "artest atmosphere get 0 " + bx + " " + (by + 1) + " " + bz));

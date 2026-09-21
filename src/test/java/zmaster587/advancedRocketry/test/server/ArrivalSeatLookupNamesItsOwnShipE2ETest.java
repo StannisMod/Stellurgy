@@ -35,6 +35,14 @@ import static org.junit.Assert.assertTrue;
  */
 public class ArrivalSeatLookupNamesItsOwnShipE2ETest extends AbstractSharedServerTest {
 
+    /**
+     * How many ships must be loaded for a lookup to be able to pick the WRONG one.
+     *
+     * <p>The TEST'S OWN, and it is the whole arrangement: with one ship in the world every lookup
+     * is right by accident, so this leg cannot exhibit the defect it exists for.</p>
+     */
+    private static final int SHIPS_FOR_AMBIGUITY = 2;
+
     /** World a ship is given to become loadable - the old 40 x 250 ms. */
 
     /** The craft that HAS a pilot seat — the one an arrival would be asking about. */
@@ -58,13 +66,13 @@ public class ArrivalSeatLookupNamesItsOwnShipE2ETest extends AbstractSharedServe
                 + placeFixture(FixtureSite.openAir(0, SEATLESS_X, SEATLESS_Z), "with-nav-computer"));
         assertTrue("the seatless craft did not become a ship either: " + seatlessAsm,
                 (Reply.of(seatlessAsm).integer("rocketCount") == 0));
-        assertTrue("the ships never loaded", loadedShips(0) >= 2);
+        assertTrue("the ships never loaded", loadedShips(0) >= SHIPS_FOR_AMBIGUITY);
 
         // ARRANGEMENT CHECK, before either leg: the two crafts must be two REGISTERED ships, or the
         // whole question ("which one does the lookup answer for") does not exist in this world.
         String all = exec("artest vs ship-count-all 0");
         assertTrue("fewer than two ships are registered, so no lookup can pick the wrong one: " + all,
-                extractInt(all, "count") >= 2);
+                extractInt(all, "count") >= SHIPS_FOR_AMBIGUITY);
 
         // THE IDENTITY COMES FROM THE ASSEMBLY THAT MINTED IT, not from a lookup at a position.
         //

@@ -28,6 +28,10 @@ import static org.junit.Assert.assertTrue;
  */
 public class WeightSystemTest extends AbstractSharedServerTest {
 
+    /** The sentinel the override test installs. The baseline must DIFFER from it, or the override
+     *  leg would pass without overriding anything. */
+    private static final double OVERRIDE_SENTINEL = 99.0;
+
     private static final String WEIGHT = "weight";
 
     private void reset() throws Exception {
@@ -77,7 +81,7 @@ public class WeightSystemTest extends AbstractSharedServerTest {
     public void individualOverrideBeatsMaterial() throws Exception {
         reset();
         double material = itemWeight("minecraft:stone", 1);
-        assertTrue("baseline material weight must differ from the override sentinel", material != 99.0);
+        assertTrue("baseline material weight must differ from the override sentinel", material != OVERRIDE_SENTINEL);
 
         String set = String.join("\n", client().execute("artest weight set minecraft:stone 99.0"));
         assertTrue("weight set failed: " + set, Reply.of(set).ok());

@@ -30,6 +30,15 @@ import static org.junit.Assert.assertTrue;
  */
 public class FreeFlightAttitudeTest {
 
+    /**
+     * How far the world nose must move for a commanded pitch to have been APPLIED.
+     *
+     * <p>The TEST'S OWN sensitivity bar: the commanded pitch is many times it, so what this refuses
+     * is a nose that did not move. The same number read upward is what says an INVERTED craft
+     * raises its nose under the same input, which is the body-frame claim.</p>
+     */
+    private static final double NOSE_MOVED = 0.1;
+
     private static final double DELTA = 1e-6;
     /** Looser tolerance for accumulated 360-step integration drift. */
     private static final double LOOP_DELTA = 1e-3;
@@ -79,7 +88,7 @@ public class FreeFlightAttitudeTest {
     public void pitchDownDropsWorldNoseAtIdentity() {
         Quat q = FreeFlightPhysics.integrateBodyRates(Quat.IDENTITY, 20, 0, 0);
         double[] b = FreeFlightPhysics.bodyBasisFromQuat(q);
-        assertTrue("nose should drop (forward.y < 0)", b[1] < -0.1);
+        assertTrue("nose should drop (forward.y < 0)", b[1] < -NOSE_MOVED);
     }
 
     @Test
@@ -90,7 +99,7 @@ public class FreeFlightAttitudeTest {
         // i.e. still a body-frame pitch, unaffected by the world-frame heading.
         Quat q = FreeFlightPhysics.integrateBodyRates(yawed, 20, 0, 0);
         double[] b = FreeFlightPhysics.bodyBasisFromQuat(q);
-        assertTrue("nose should drop after yaw (forward.y < 0)", b[1] < -0.1);
+        assertTrue("nose should drop after yaw (forward.y < 0)", b[1] < -NOSE_MOVED);
     }
 
     /** The headline #4 contract: pitch input is body-frame, so an inverted
@@ -104,9 +113,9 @@ public class FreeFlightAttitudeTest {
         Quat inverted = FreeFlightPhysics.integrateBodyRates(Quat.IDENTITY, 0, 0, 180);
         double[] afterPitch = FreeFlightPhysics.bodyBasisFromQuat(
                 FreeFlightPhysics.integrateBodyRates(inverted, 20, 0, 0));
-        assertTrue("upright: same pitch drops the world nose", upright[1] < -0.1);
+        assertTrue("upright: same pitch drops the world nose", upright[1] < -NOSE_MOVED);
         assertTrue("inverted: same pitch RAISES the world nose (body-frame)",
-                afterPitch[1] > 0.1);
+                afterPitch[1] > NOSE_MOVED);
     }
 
     // -- loops: integrate past ±90° with no clamp -------------------------

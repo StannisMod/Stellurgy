@@ -34,6 +34,15 @@ import static zmaster587.advancedRocketry.test.ArrangementFailure.requireArrange
 public class SpaceLoginRestoreDeckCrewE2ETest extends AbstractSpaceLoginRestoreClientTest {
 
     /**
+     * How far past vertical the hull must be before the relog leg means anything — deck-normal Y.
+     *
+     * <p>The TEST'S OWN arrangement fact: at -0.9 the craft is about 155 degrees over, which is
+     * where a body that is not being carried falls off instead of sliding. Without it this leg is
+     * silently the upright one again.</p>
+     */
+    private static final double INVERTED_UP_Y = -0.9;
+
+    /**
      * How long the space subsystem's logout handler is given to run, in SERVER ticks - the old
      * 40 x 250 ms. The client cannot supply a clock here: it is the thing that went away, so the
      * budget is spent on {@link zmaster587.advancedRocketry.test.GameTicks#server()}.
@@ -210,7 +219,7 @@ public class SpaceLoginRestoreDeckCrewE2ETest extends AbstractSpaceLoginRestoreC
         bot().waitTicks(20);
         String info = jsonOf(exec("artest vs ship-info " + slotDim + " id " + rolledShipId));
         requireArranged("the ship must be (near-)inverted before the relog, or this leg is "
-                + "silently the upright one again (upY=" + upY + "): " + info, upY < -0.9);
+                + "silently the upright one again (upY=" + upY + "): " + info, upY < INVERTED_UP_Y);
         DeckCapture capInverted = DeckCapture.read(this::exec);
         requireArranged("he must still be captured on the INVERTED deck: " + capInverted.raw(),
                 capInverted.alreadyTracked);

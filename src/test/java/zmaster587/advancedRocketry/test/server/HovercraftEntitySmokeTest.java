@@ -26,6 +26,10 @@ import static org.junit.Assert.assertTrue;
  */
 public class HovercraftEntitySmokeTest extends AbstractHeadlessServerTest {
 
+    /** The world's build ceiling, in blocks — vanilla's own, cited so the range check reads as the
+     *  world bound it is rather than as a tuned number. */
+    private static final double WORLD_CEILING_Y = 256;
+
     private static final String ENTITY_ID = "entityId";
 
     @Test
@@ -75,7 +79,7 @@ public class HovercraftEntitySmokeTest extends AbstractHeadlessServerTest {
         double finalY = entity(entityId).requireAlive("the hovercraft must still exist to be"
                 + " measured").posY();
         assertTrue("hovercraft must not fall below world floor (got " + finalY + ")",
-                finalY > 0 && finalY < 256);
+                finalY > 0 && finalY < WORLD_CEILING_Y);
     }
 
     /** What the server says about one entity in the overworld. */

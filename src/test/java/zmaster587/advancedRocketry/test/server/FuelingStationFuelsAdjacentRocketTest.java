@@ -40,6 +40,15 @@ import static org.junit.Assert.assertTrue;
  */
 public class FuelingStationFuelsAdjacentRocketTest extends AbstractHeadlessServerTest {
 
+    /**
+     * The fuel capacity a fresh craft must have, and the tank the station must hold, in mB.
+     *
+     * <p>Both are the test's own bars on an ARRANGEMENT: the transfer legs below are about fuel
+     * moving, so a craft with no capacity or a station with an empty tank would make them vacuous.
+     * A thousand millibuckets is a fraction of either.</p>
+     */
+    private static final int AMPLE_FUEL_MB = 1000;
+
     /** Rocket pad center coords — isolated patch (no collisions). */
     private static final int RX = 2800;
     private static final int RY = FixtureSite.OPEN_AIR_Y;
@@ -104,7 +113,7 @@ public class FuelingStationFuelsAdjacentRocketTest extends AbstractHeadlessServe
         int fuelCapacity = preMono.integer("capacity");
         assertTrue("fresh rocket should have ample mono-propellant capacity: cap=" + fuelCapacity
                         + " response=" + preFuel,
-                fuelCapacity > 1000);
+                fuelCapacity > AMPLE_FUEL_MB);
 
         // ─── 3. Link station -> rocket ──────────────────────────────────
         String link = join(client().execute(
@@ -144,7 +153,7 @@ public class FuelingStationFuelsAdjacentRocketTest extends AbstractHeadlessServe
         int initialTank = FluidStored.of(preTank).amountOf(STATION_FUEL);
         assertTrue("station tank must be at least 1 000 mB before tick: " + initialTank
                         + " response=" + preTank,
-                initialTank >= 1000);
+                initialTank >= AMPLE_FUEL_MB);
 
         // ─── 5. Force-tick station -> drains tank + fills rocket ────────
         // 200 ticks via the clock-advancing variant: TileFuelingStation

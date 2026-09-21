@@ -37,6 +37,12 @@ import static org.junit.Assert.assertTrue;
  */
 public class SystemContentTest {
 
+    /** The two dimension ids this scenario's fixture authors. Not thresholds: the arrangement's
+     *  own numbers, read back from the body it produced. */
+    private static final int AUTHORED_DIM_A = 700;
+    /** @see #AUTHORED_DIM_A */
+    private static final int AUTHORED_DIM_B = 701;
+
     @BeforeClass
     public static void bootstrap() {
         MinecraftBootstrap.ensure();
@@ -107,7 +113,7 @@ public class SystemContentTest {
         assertEquals("both authored planets become bodies", 2, planets);
         assertNotNull(aPlanet);
         assertTrue("an authored planet body is a descend target (real dim)", aPlanet.isDescendTarget());
-        assertTrue(aPlanet.dimId() == 700 || aPlanet.dimId() == 701);
+        assertTrue(aPlanet.dimId() == AUTHORED_DIM_A || aPlanet.dimId() == AUTHORED_DIM_B);
 
         // Distinct orbits land in distinct cells (per-body cells are real, not a shared one).
         SystemBody first = null;

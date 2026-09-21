@@ -53,6 +53,34 @@ import static org.junit.Assert.assertTrue;
 public class LangKeyCrossReferenceTest {
 
     /**
+     * How many characters an exemption's reason must carry before it counts as a REASON.
+     *
+     * <p>The TEST'S OWN, and a shape rather than a measurement: twenty characters is long enough
+     * that "todo" and "n/a" fail and a sentence passes. What it defends is the rule that an
+     * exemption states why the key may be absent.</p>
+     */
+    private static final int EXEMPTION_REASON_CHARS = 20;
+
+    /** How many exemptions may stand at once — few enough to review by eye, which is the rule. */
+    private static final int MAX_EXEMPTIONS = 10;
+
+    /**
+     * The smallest source tree this scan will believe, in java files.
+     *
+     * <p>The TEST'S OWN, and an instrument check: AR holds hundreds of files, so a scan that found
+     * fewer has a broken walk rather than a small project — and every count below it would then be
+     * reading nothing.</p>
+     */
+    private static final int MIN_SOURCE_FILES = 200;
+
+    /** The same check one level down: localization literals the scan must find, or its call
+     *  patterns have stopped matching the code they are aimed at. */
+    private static final int MIN_LOCALIZATION_LITERALS = 100;
+
+    /** The known localization entry points the scan must cover. */
+    private static final int KNOWN_ENTRY_POINTS = 5;
+
+    /**
      * Localization entry points. Each pattern captures the first string literal
      * argument. {@code tr(} is AR's own TheOneProbe helper.
      */
@@ -178,10 +206,10 @@ public class LangKeyCrossReferenceTest {
     public void everyExemptionCarriesAReason() {
         for (Map.Entry<String, String> e : EXEMPT.entrySet()) {
             assertTrue("exemption " + e.getKey() + " must state why the key may be absent",
-                    e.getValue() != null && e.getValue().length() > 20);
+                    e.getValue() != null && e.getValue().length() > EXEMPTION_REASON_CHARS);
         }
         assertTrue("exemptions must stay few enough to review by eye",
-                EXEMPT.size() <= 10);
+                EXEMPT.size() <= MAX_EXEMPTIONS);
     }
 
     /**
@@ -196,7 +224,7 @@ public class LangKeyCrossReferenceTest {
                 Files.isDirectory(sources));
         List<Path> files = javaFilesUnder(sources);
         assertTrue("expected the AR source tree to hold hundreds of java files, found "
-                + files.size(), files.size() > 200);
+                + files.size(), files.size() > MIN_SOURCE_FILES);
 
         int literals = 0;
         for (Path file : files) {
@@ -211,13 +239,13 @@ public class LangKeyCrossReferenceTest {
         assertTrue("expected the scan to find a substantial number of localization "
                 + "literals, found " + literals + " — a collapse to near zero means the "
                 + "call patterns stopped matching, not that the mod stopped localizing",
-                literals > 100);
+                literals > MIN_LOCALIZATION_LITERALS);
     }
 
     /** Kept so a future reader sees which call shapes are covered. */
     @Test
     public void callPatternsCoverTheKnownLocalizationEntryPoints() {
         assertTrue("at least the five known entry points must be covered",
-                Arrays.asList(CALLS).size() >= 5);
+                Arrays.asList(CALLS).size() >= KNOWN_ENTRY_POINTS);
     }
 }

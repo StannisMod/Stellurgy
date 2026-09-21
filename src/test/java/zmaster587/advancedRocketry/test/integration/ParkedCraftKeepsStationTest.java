@@ -37,6 +37,18 @@ import static org.junit.Assert.assertTrue;
  */
 public class ParkedCraftKeepsStationTest {
 
+    /**
+     * How far the body must travel while the craft is abandoned, in blocks.
+     *
+     * <p>Both are the test's own sensitivity bars on the ARRANGEMENT: keeping station with a body
+     * that did not move costs nothing, so a leg run against a stationary body proves nothing about
+     * station-keeping. The planet's bar is ten thousand blocks and the moon's a hundred
+     * thousand.</p>
+     */
+    private static final double PLANET_TRAVELLED_BLOCKS = 10_000d;
+    /** @see #PLANET_TRAVELLED_BLOCKS */
+    private static final double MOON_TRAVELLED_BLOCKS = 100_000d;
+
     @BeforeClass
     public static void bootstrap() {
         MinecraftBootstrap.ensure();
@@ -74,7 +86,7 @@ public class ParkedCraftKeepsStationTest {
         double planetTravel = earth.absoluteAt(0L).distanceTo(earth.absoluteAt(ABANDONED_TICKS));
         assertTrue("the planet must travel a long way while the craft is abandoned, or keeping "
                         + "station with it costs nothing (travelled " + planetTravel + " blocks)",
-                planetTravel > 10_000d);
+                planetTravel > PLANET_TRAVELLED_BLOCKS);
 
         GalacticCoord parked = parkedBeside(earth, 0L);
         double at0 = rangeFrom(earth, parked, 0L);
@@ -123,7 +135,7 @@ public class ParkedCraftKeepsStationTest {
         // move relative to its own cell — that is the thing being asserted, not the arrangement.
         double moonTravel = luna.absoluteAt(0L).minus(luna.absoluteAt(ABANDONED_TICKS)).length();
         assertTrue("the moon must move over the window, or keeping station with it is vacuous "
-                        + "(travelled " + moonTravel + " blocks)", moonTravel > 100_000d);
+                        + "(travelled " + moonTravel + " blocks)", moonTravel > MOON_TRAVELLED_BLOCKS);
 
         // A quarter of the cell out, which is a distance the moon's own cell can hold. One descent
         // shell out cannot be used here and the leg below is why.

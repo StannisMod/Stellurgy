@@ -27,6 +27,10 @@ import static org.junit.Assert.assertTrue;
  */
 public class WarpArrivalConcurrentModificationTest extends AbstractHeadlessServerTest {
 
+    /** The stations this scenario warps — the arrangement's own count, and the proof that the
+     *  loop processed EVERY one rather than aborting part-way. */
+    private static final int WARPED_STATIONS = 3;
+
     private static final int SPACE_DIM = -2;
     private static final String THREW = "threw";
     private static final String COUNT = "count";
@@ -51,7 +55,7 @@ public class WarpArrivalConcurrentModificationTest extends AbstractHeadlessServe
         assertTrue("all warped stations must arrive at the destination orbit (dim 0), proving the "
                         + "loop processed EVERY station (the buggy loop aborted / dropped after the "
                         + "first): arrived=" + arrived + " count=" + count + " in " + r,
-                count == 3 && arrived == count);
+                count == WARPED_STATIONS && arrived == count);
     }
 
     private String exec(String cmd) throws Exception {

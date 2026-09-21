@@ -43,6 +43,30 @@ import static org.junit.Assert.fail;
  */
 public class TelescopeRegionScanTest {
 
+    /**
+     * The nearest few stars a tuning must reach, in lattice steps, or nothing is discoverable.
+     *
+     * <p>The TEST'S OWN: three steps is the first shell of neighbours, so what this refuses is a
+     * telescope that can see nothing at all rather than one that sees little.</p>
+     */
+    private static final int MIN_REACH_STEPS = 3;
+
+    /** The same reach read as a LENGTH: it must be interstellar, in light years. */
+    private static final double MIN_REACH_LY = 3d;
+
+    /**
+     * The cells a 3x3x3 region holds — the ceiling a survey may never cover more than, and the
+     * count the fixture's own sweep must actually reach.
+     *
+     * <p>Not a threshold but the geometry restated: the region is three cells on a side. It is
+     * named because the same 27 is a CEILING in one assertion and a FLOOR in another, and the two
+     * are the same fact about the same region.</p>
+     */
+    private static final int REGION_CELLS = 27;
+
+    /** Cells the fixture region must hold to be worth sweeping at all — the test's own bar. */
+    private static final int MIN_REGION_CELLS = 3;
+
     private static final GalacticCoord HOME = GalacticCoord.ofSectorLocal(0, 0, 0, 0, 0, 0);
 
     /**
@@ -135,7 +159,7 @@ public class TelescopeRegionScanTest {
                 tuning.maxRangeLightYears() >= 1d);
         assertTrue("and must reach at least the nearest few stars, or nothing is discoverable: "
                         + tuning.maxRangeSteps() + " steps",
-                tuning.maxRangeSteps() >= 3);
+                tuning.maxRangeSteps() >= MIN_REACH_STEPS);
 
         RegionScan aimed = RegionScan.directed(HOME, 1, 0, 0, 3, 0L, tuning);
         assertEquals("an aim of three stars must land three territories out, not three cells",
@@ -143,7 +167,7 @@ public class TelescopeRegionScanTest {
                 cell(aimed.distanceCells(), 0, 0).cellKey());
         assertTrue("and that distance, read as a length, must be interstellar: "
                         + aimed.distanceLightYears() + " ly",
-                aimed.distanceLightYears() >= 3d);
+                aimed.distanceLightYears() >= MIN_REACH_LY);
     }
 
     @Test
@@ -170,7 +194,7 @@ public class TelescopeRegionScanTest {
                 Math.toRadians(20d), 1000, 100, 3, STEP);
         RegionScan scan = RegionScan.directed(HOME, 1, 1, 0, wide.maxRangeSteps(), 0L, wide);
 
-        assertTrue("the fixture must be a region worth sweeping", scan.totalCells() > 3);
+        assertTrue("the fixture must be a region worth sweeping", scan.totalCells() > MIN_REGION_CELLS);
         assertEquals("a step may never resolve more cells than its budget",
                 3, scan.cellsDueAt(scan.stepDeadline()));
     }
@@ -183,7 +207,7 @@ public class TelescopeRegionScanTest {
         RegionScan scan = RegionScan.directed(HOME, 1, 0, 0, greedy.maxRangeSteps(), 0L, greedy);
 
         assertTrue("a survey may never cover more than its ceiling: " + scan.totalCells(),
-                scan.totalCells() <= 27);
+                scan.totalCells() <= REGION_CELLS);
     }
 
     @Test
@@ -492,7 +516,7 @@ public class TelescopeRegionScanTest {
                 Math.toRadians(1d), 512, 100, 4, config.minSpacing);
         RegionScan scan = RegionScan.directed(HOME, 1, 0, 0, live.maxRangeSteps(), 0L, live);
         int looks = scan.totalCells();
-        assertTrue("the fixture must be a real sweep", looks >= 27);
+        assertTrue("the fixture must be a real sweep", looks >= REGION_CELLS);
 
         CrystalMemory crystal = new CrystalMemory();
         TelescopeScan.resolveBatch(registry, scan, 0, looks, crystal, 7_000L, dimId -> "Body-" + dimId);

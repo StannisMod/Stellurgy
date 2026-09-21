@@ -53,6 +53,16 @@ import static org.junit.Assert.assertTrue;
 @FixMethodOrder(MethodSorters.NAME_ASCENDING)
 public class VSShipAtmosphereFrameSpikeTest extends AbstractSharedVsClientE2ETest {
 
+    /**
+     * How far apart the subspace and world frames must be, in blocks, for their comparison to mean
+     * anything.
+     *
+     * <p>The TEST'S OWN sensitivity bar: if the two frames nearly coincide the comparison is
+     * vacuous, and a hundred blocks is far beyond any settle while far inside the distance the
+     * craft is flown.</p>
+     */
+    private static final double FRAMES_GENUINELY_DIFFER_BLOCKS = 100.0;
+
     @Override
     protected String subsystem() {
         return "vs-ship-atmosphere-frame";
@@ -206,7 +216,7 @@ public class VSShipAtmosphereFrameSpikeTest extends AbstractSharedVsClientE2ETes
         scenario().requireArranged("the two frames must genuinely differ, else the comparison is "
                         + "vacuous (subspace=" + vx + "," + vy + "," + vz + " world=" + w[0] + ","
                         + w[1] + "," + w[2] + " separation=" + separation + ")",
-                separation > 100.0);
+                separation > FRAMES_GENUINELY_DIFFER_BLOCKS);
 
         assertTrue("RESULT-2: the sealed cabin's SUBSPACE cell reports " + subAtm
                         + " (expected PressurizedAir — the blob is keyed in ship-block addresses)",

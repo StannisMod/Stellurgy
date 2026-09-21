@@ -52,6 +52,16 @@ import static org.junit.Assert.assertTrue;
 @FixMethodOrder(MethodSorters.NAME_ASCENDING)
 public class VSFlightSmoothnessAcrossJumpE2ETest extends AbstractSharedVsClientE2ETest {
 
+    /**
+     * How many samples a recording channel must hold before its smoothness may be read.
+     *
+     * <p>The TEST'S OWN, and an INSTRUMENT CONTROL rather than a contract: a mute channel and a
+     * perfectly smooth one produce the same empty statistic, so a leg with fewer samples than this
+     * is describing the recorder. Ten is a fraction of what either channel produces in the shortest
+     * window this class opens.</p>
+     */
+    private static final int MIN_CHANNEL_SAMPLES = 10;
+
     @Override
     protected String subsystem() {
         return "vs-flight-smoothness";
@@ -808,17 +818,17 @@ public class VSFlightSmoothnessAcrossJumpE2ETest extends AbstractSharedVsClientE
         assertTrue("INSTRUMENT CONTROL (" + which + "): the physics-thread channel must have "
                 + "recorded samples. A mute channel cannot be distinguished from a perfectly "
                 + "smooth one, so every reading below it would be a silence read as a pass. " + leg,
-                leg.physSamples >= 10);
+                leg.physSamples >= MIN_CHANNEL_SAMPLES);
         assertTrue("INSTRUMENT CONTROL (" + which + "): the server-tick channel must have recorded "
-                + "samples. " + leg, leg.gameSamples >= 10);
+                + "samples. " + leg, leg.gameSamples >= MIN_CHANNEL_SAMPLES);
         assertTrue("INSTRUMENT CONTROL (" + which + "): the CLIENT tick channel must have recorded "
                 + "samples — this is the harness reading a static in the other JVM, so a zero here "
                 + "usually means the read found the wrong class rather than a stalled client. " + leg,
-                leg.clientTickSamples >= 10);
+                leg.clientTickSamples >= MIN_CHANNEL_SAMPLES);
         assertTrue("INSTRUMENT CONTROL (" + which + "): the rendered-FRAME channel must have "
                 + "recorded samples. This is the only clock that sees what the pilot looks at; "
                 + "without it the test cannot answer the half of the report that is about the "
-                + "picture rather than the motion. " + leg, leg.frameSamples >= 10);
+                + "picture rather than the motion. " + leg, leg.frameSamples >= MIN_CHANNEL_SAMPLES);
         // TWO physics bodies driving one flight computer. Not an instrument fault — the recorder
         // keys its rings by dimension AND block, so a second writer here is a second SHIP claiming
         // the same computer, which is a state no build should be able to reach. It is checked among

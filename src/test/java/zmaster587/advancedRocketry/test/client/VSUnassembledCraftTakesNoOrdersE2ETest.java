@@ -61,6 +61,14 @@ import static org.junit.Assert.assertTrue;
 @FixMethodOrder(MethodSorters.NAME_ASCENDING)
 public class VSUnassembledCraftTakesNoOrdersE2ETest extends AbstractSharedVsClientE2ETest {
 
+    /**
+     * How far from the seat the client may observably stand, in blocks SQUARED.
+     *
+     * <p>PRODUCTION'S reach restated: the server drops a block interaction beyond reach plus three.
+     * The gate exists so a dropped click is reported as the arrangement it is.</p>
+     */
+    private static final double WITHIN_REACH_DIST_SQ = 25.0;
+
     @Override
     protected String subsystem() {
         return "vs-unassembled-craft-orders";
@@ -388,7 +396,7 @@ public class VSUnassembledCraftTakesNoOrdersE2ETest extends AbstractSharedVsClie
             }
         }
         scenario().requireArranged("the client must observably stand within reach of the seat, or the "
-                + "right-click is dropped before the block sees it. state=" + state, distSq < 25.0);
+                + "right-click is dropped before the block sees it. state=" + state, distSq < WITHIN_REACH_DIST_SQ);
     }
 
     /** Server-side clear + client-observed empty hand (a held stack can eat the right-click). */

@@ -65,6 +65,14 @@ import static org.junit.Assert.assertTrue;
 @FixMethodOrder(MethodSorters.NAME_ASCENDING)
 public class ItemRightClickClientGroupE2ETest extends AbstractSharedClientE2ETest {
 
+    /**
+     * How near straight down the client must be looking before the click, in degrees of pitch.
+     *
+     * <p>The TEST'S OWN arrangement gate: the item's ray reaches five blocks, so an aim even a few
+     * degrees off traces into empty air and the click answers nothing. Ninety is straight down.</p>
+     */
+    private static final double LOOKING_STRAIGHT_DOWN_DEG = 89.0;
+
     private static final int Y = Plot.DEFAULT_Y;
 
     /**
@@ -511,12 +519,12 @@ public class ItemRightClickClientGroupE2ETest extends AbstractSharedClientE2ETes
         for (int i = 0; i < 20; i++) {
             bot().waitTicks(2);
             pitch = bot().reportState().get("playerPitch").getAsDouble();
-            if (pitch > 89.0) break;
+            if (pitch > LOOKING_STRAIGHT_DOWN_DEG) break;
         }
         scenario().record("clientPitch", pitch);
         scenario().requireArranged("the client must be looking straight down before the click, or"
                 + " the item's 5-block ray traces into empty air; client pitch=" + pitch,
-                pitch > 89.0);
+                pitch > LOOKING_STRAIGHT_DOWN_DEG);
 
         scenario().asserting("the client sees exactly one spawned hovercraft, and loses the stack");
         Events events = events();

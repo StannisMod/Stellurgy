@@ -33,6 +33,20 @@ import static org.junit.Assert.assertTrue;
  */
 public class ShipTransitManagerTest {
 
+    /**
+     * The clock this scenario hands the manager, and therefore the tick an ETA must be past to have
+     * been computed FROM NOW rather than from zero.
+     *
+     * <p>Not a threshold: it is the arrangement's own now, supplied as the time source and read
+     * back in the assertion. It appeared as two separate {@code 1000L}s with nothing tying
+     * them.</p>
+     */
+    private static final long NOW_TICK = 1000L;
+
+    /** How many re-seat attempts say the crosser KEEPS TRYING rather than settling into a dead
+     *  state. The TEST'S OWN: a handful would be a retry, hundreds is persistence. */
+    private static final int KEEPS_TRYING_CALLS = 300;
+
     private static GalacticCoord cell(long s) {
         return GalacticCoord.ofSectorLocal(s, 0L, 0L, 0L, 0L, 0L);
     }
@@ -339,7 +353,7 @@ public class ShipTransitManagerTest {
         SpaceManager space = new SpaceManager(new FakeBinder(10, 11), () -> 0L, never());
         ShipLedger ledger = new ShipLedger();
         ShipTransitManager mgr = new ShipTransitManager(space, new HyperspaceTiles(), new FakeCrosser(),
-                ledger, () -> 1000L);
+                ledger, () -> NOW_TICK);
         UUID ship = UUID.randomUUID();
 
         int originDim = space.materialize(cell(1));
@@ -350,7 +364,7 @@ public class ShipTransitManagerTest {
         assertNotNull("the ledger now records the in-flight ship (no depart amnesia)", e);
         assertEquals(ShipLedger.State.IN_TRANSIT, e.state);
         assertEquals("ledger holds the transit TARGET", cell(2), e.coord);
-        assertTrue("an ETA (arrivalTick) is computed from now", mgr.arrivalTick(ship.toString()) > 1000L);
+        assertTrue("an ETA (arrivalTick) is computed from now", mgr.arrivalTick(ship.toString()) > NOW_TICK);
     }
 
     @Test
@@ -967,7 +981,7 @@ public class ShipTransitManagerTest {
         assertTrue("a jump whose crew cannot be put aboard stays in transit indefinitely - the ship is "
                 + "not lost, the ledger keeps saying so, and a restart resumes it", mgr.isInTransit("s"));
         assertTrue("...and it keeps TRYING rather than settling into a dead state",
-                crosser.reseatCalls.size() > 300);
+                crosser.reseatCalls.size() > KEEPS_TRYING_CALLS);
     }
 
     @Test

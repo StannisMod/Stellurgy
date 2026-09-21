@@ -39,6 +39,9 @@ import static org.junit.Assert.assertTrue;
  */
 public class RailgunCargoReceiveContractTest extends AbstractSharedServerTest {
 
+    /** The cargo this scenario sends, and therefore what the destination must hold. */
+    private static final int SENT_CARGO_COUNT = 16;
+
     private static final int CX = 4700;
     private static final int CY = FixtureSite.OPEN_AIR_Y;
     private static final int CZ = 4700;
@@ -93,7 +96,7 @@ public class RailgunCargoReceiveContractTest extends AbstractSharedServerTest {
                         + "onReceiveCargo (the player-visible 'cargo "
                         + "arrives at destination' contract); matched="
                         + matched + " receive=" + receive,
-                matched >= 16);
+                matched >= SENT_CARGO_COUNT);
     }
 
     // -- helpers ----------------------------------------------------------

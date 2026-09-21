@@ -57,6 +57,27 @@ import static org.junit.Assert.assertTrue;
 @FixMethodOrder(MethodSorters.NAME_ASCENDING)
 public class VehicleRideClientGroupE2ETest extends AbstractSharedClientE2ETest {
 
+    /**
+     * How far a throttled hovercraft must travel laterally over the window, in blocks.
+     *
+     * <p>The TEST'S OWN sensitivity bar: what it refuses is a craft that did not move at all.</p>
+     */
+    private static final double THROTTLED_MOVED_BLOCKS = 0.1;
+
+    /**
+     * How far the SERVER's craft X may sit from the CLIENT's view of it, in blocks — the test's own
+     * replication tolerance, about the craft's own width.
+     */
+    private static final double CLIENT_SERVER_X_BLOCKS = 4.0;
+
+    /**
+     * How far an UNMOUNTED hovercraft may drift laterally, in blocks.
+     *
+     * <p>The TEST'S OWN: it hovers in place, so the honest statement is zero; half a block is the
+     * settle of a body with no input.</p>
+     */
+    private static final double HOVERS_IN_PLACE_BLOCKS = 0.5;
+
     /** LWJGL key codes for the vanilla default binds. */
     private static final int KEY_W = 17;
     private static final int KEY_LSHIFT = 42;
@@ -265,11 +286,11 @@ public class VehicleRideClientGroupE2ETest extends AbstractSharedClientE2ETest {
         assertTrue("throttled hovercraft must move at least 0.1 blocks laterally over 40 ticks "
                         + "(got " + lateralDist + "): before=(" + xBefore + "," + zBefore + ")"
                         + " after=(" + xAfter + "," + zAfter + ")",
-                lateralDist > 0.1);
+                lateralDist > THROTTLED_MOVED_BLOCKS);
 
         EntityState postInfo = craft(craftId);
         assertTrue("server craft X must agree with the client view: " + postInfo.raw(),
-                Math.abs(postInfo.posX() - xAfter) < 4.0);
+                Math.abs(postInfo.posX() - xAfter) < CLIENT_SERVER_X_BLOCKS);
 
         exec("artest player dismount");
     }
@@ -303,7 +324,7 @@ public class VehicleRideClientGroupE2ETest extends AbstractSharedClientE2ETest {
         assertTrue("unmounted hovercraft must hover in place laterally; drift=" + lateralDrift
                         + " before=(" + xBefore + "," + zBefore + ") after=(" + xAfter + ","
                         + zAfter + ")",
-                lateralDrift < 0.5);
+                lateralDrift < HOVERS_IN_PLACE_BLOCKS);
     }
 
     // ── elevator capsule ──────────────────────────────────────────────────────

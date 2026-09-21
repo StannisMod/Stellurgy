@@ -79,6 +79,30 @@ import static zmaster587.advancedRocketry.test.ArrangementFailure.requireArrange
 public class M1PlanetToPlanetMilestoneE2ETest {
 
     /**
+     * How many addresses the console must list for the pilot to have SOMEWHERE to fly.
+     *
+     * <p>The TEST'S OWN: one address is a list with no choice in it, so two is the smallest number
+     * at which the screen is doing its job.</p>
+     */
+    private static final int MIN_DESTINATIONS_LISTED = 2;
+
+    /**
+     * How near the body a pilot must get by flying at it, in blocks of remaining offset.
+     *
+     * <p>The TEST'S OWN: six blocks is inside the craft's own length, which is what "he arrived"
+     * means for a body he then has to descend onto.</p>
+     */
+    private static final double ARRIVED_BESIDE_IT_BLOCKS = 6;
+
+    /**
+     * How far above the pad's surface the client may report the body and still be STANDING on it.
+     *
+     * <p>The TEST'S OWN: still falling here means the descent has not finished, which is a
+     * different finding from having landed badly.</p>
+     */
+    private static final double STANDING_ON_THE_PAD_BLOCKS = 1.5;
+
+    /**
      * How long the jump trigger's verdict may take to appear after the key goes down, in ticks.
      *
      * <p>A deadline for a discrete decision, not a settle: the press is answered on the tick the
@@ -595,7 +619,7 @@ public class M1PlanetToPlanetMilestoneE2ETest {
                         + "him only the cell he is already in. listed=" + listed
                         + " nav=" + navStatus + " slots=" + bot().reportSlots()
                         + " | screen=" + screenOf(bot().reportState()),
-                listed >= 2);
+                listed >= MIN_DESTINATIONS_LISTED);
 
         // Reopen the window: its buttons are built when the screen is, so the list the pilot clicks
         // on is the one he sees after the crystal is in. Closing and looking again is what he does.
@@ -1000,7 +1024,7 @@ public class M1PlanetToPlanetMilestoneE2ETest {
                             + " flown=" + flown
                             + " ledger=" + exec("artest space ledger-get " + shipId)
                             + " bodies=" + feed,
-                    stalled < 6);
+                    stalled < ARRIVED_BESIDE_IT_BLOCKS);
 
             int comp = 0;
             for (int i = 1; i < 3; i++) {
@@ -1872,7 +1896,7 @@ public class M1PlanetToPlanetMilestoneE2ETest {
         requireArranged("and he must STAY on it: the client reports y=" + y + " where the pad's"
                         + " surface is " + (by + 1) + ". Still falling here means the floor arrived"
                         + " and something else is taking him off it. state=" + state,
-                Math.abs(y - (by + 1)) < 1.5);
+                Math.abs(y - (by + 1)) < STANDING_ON_THE_PAD_BLOCKS);
     }
 
     /** Server-side clear plus a client-observed empty hand (a held stack eats the use press). */

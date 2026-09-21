@@ -34,6 +34,17 @@ import static org.junit.Assert.assertTrue;
  */
 public class SatelliteTickBehaviourTest extends AbstractSharedServerTest {
 
+    /** The satellite's declared storage, in power units — the cap the battery must not exceed. */
+    private static final long TYPE_POWER_STORAGE = 500L;
+
+    /**
+     * The most data points 100 ticks at a collection time of about 20 can produce.
+     *
+     * <p>Not a threshold but arithmetic on the arrangement: five collections plus one for the
+     * boundary. Named so the window and the expectation move together.</p>
+     */
+    private static final int MAX_DATA_POINTS = 6;
+
     private static final String ID = "id";
     private static final String PRE_STORED = "preStored";
     private static final String POST_STORED = "postStored";
@@ -91,7 +102,7 @@ public class SatelliteTickBehaviourTest extends AbstractSharedServerTest {
                 + "max=" + max, 500L, max);
         assertTrue("battery must cap at powerStorage=500 even when "
                 + "per-tick accrual would overflow; postStored=" + post,
-                post <= 500L);
+                post <= TYPE_POWER_STORAGE);
         // Cap should bite immediately — first tick (acceptEnergy(999, false))
         // clamps to 500. After 10 ticks, definitely at 500.
         assertEquals("battery must be exactly at cap after 10 saturating ticks; "
@@ -120,7 +131,7 @@ public class SatelliteTickBehaviourTest extends AbstractSharedServerTest {
         // Upper bound sanity — 100 ticks with collectionTime=20 cannot
         // exceed ~6 data fires (allowing one off-by-one).
         assertTrue("100 ticks at collectionTime≈20 cannot produce more "
-                + "than ~6 data points; delta=" + delta, delta <= 6);
+                + "than ~6 data points; delta=" + delta, delta <= MAX_DATA_POINTS);
     }
 
     /** Pin: {@code DataStorage.addData} caps at {@code maxData}. */

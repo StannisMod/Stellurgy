@@ -29,6 +29,10 @@ import static org.junit.Assert.assertTrue;
  */
 public class HyperdriveStatsTest {
 
+    /** The impact that says the dampener did SOMETHING to the crew — the test's own sensitivity
+     *  bar, and zero is the only thing under it. */
+    private static final float ANY_IMPACT = 0.0F;
+
     /** A world made of a set of positions, so a scan can be driven with no Minecraft at all. */
     private static ComponentScan.Component blocks(final String kind, final Set<BlockPos> present) {
         return new ComponentScan.Component() {
@@ -181,7 +185,7 @@ public class HyperdriveStatsTest {
         long residual = DampenerField.residualSpeed(400_000L, crew, faraway, 500_000L);
 
         assertEquals("which is why a big ship needs several", 400_000L, residual);
-        assertTrue(DampenerField.crewImpact(residual) > 0.0F);
+        assertTrue(DampenerField.crewImpact(residual) > ANY_IMPACT);
     }
 
     @Test
@@ -193,7 +197,7 @@ public class HyperdriveStatsTest {
 
         assertEquals("tier decides how much it eats, not whether it eats everything",
                 400_000L, residual);
-        assertTrue(DampenerField.crewImpact(residual) > 0.0F);
+        assertTrue(DampenerField.crewImpact(residual) > ANY_IMPACT);
     }
 
     @Test

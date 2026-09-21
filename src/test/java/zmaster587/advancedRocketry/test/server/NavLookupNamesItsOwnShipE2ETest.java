@@ -41,6 +41,14 @@ import static zmaster587.advancedRocketry.test.ArrangementFailure.requireArrange
  */
 public class NavLookupNamesItsOwnShipE2ETest extends AbstractSharedServerTest {
 
+    /**
+     * How many ships must be loaded for a lookup to be able to pick the WRONG one.
+     *
+     * <p>The TEST'S OWN, and it is the whole arrangement: with one ship in the world every lookup
+     * is right by accident.</p>
+     */
+    private static final int SHIPS_FOR_AMBIGUITY = 2;
+
     /** World a ship is given to become loadable — the same budget the sibling two-ship test uses. */
 
     /**
@@ -65,7 +73,7 @@ public class NavLookupNamesItsOwnShipE2ETest extends AbstractSharedServerTest {
                 + placeFixture(FixtureSite.openAir(0, SHIP_B_X, SHIP_B_Z), "with-nav-computer"));
         requireArranged("the second craft did not become a ship either: " + asmB,
                 (Reply.of(asmB).integer("rocketCount") == 0));
-        requireArranged("the ships never loaded", loadedShips(0) >= 2);
+        requireArranged("the ships never loaded", loadedShips(0) >= SHIPS_FOR_AMBIGUITY);
 
         // ARRANGEMENT CHECK, before anything is asked: there must be TWO registered ships, or the
         // question this test exists to ask ("which one does the lookup answer for") does not exist
@@ -73,7 +81,7 @@ public class NavLookupNamesItsOwnShipE2ETest extends AbstractSharedServerTest {
         String all = exec("artest vs ship-count-all 0");
         requireArranged("fewer than two ships are registered, so no lookup can pick the "
                 + "wrong one and this run cannot exhibit the defect: " + all,
-                extractInt(all, "count") >= 2);
+                extractInt(all, "count") >= SHIPS_FOR_AMBIGUITY);
 
         // Each craft asked for by the name ITS OWN assembler minted. This test is about a lookup
         // picking the wrong ship of two, so deriving the two ids from a lookup at two points was the

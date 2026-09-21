@@ -56,6 +56,15 @@ import static org.junit.Assert.assertTrue;
  */
 public class VSShipRenderPoseSkewE2ETest extends AbstractClientE2ETest {
 
+    /**
+     * The steep inversion the hull leg needs, as deck-normal Y.
+     *
+     * <p>The TEST'S OWN arrangement fact: the commanded roll is about 160 degrees and the attitude
+     * controller settles shy of a full turn, so this asks for what it can reach — past
+     * vertical.</p>
+     */
+    private static final double STEEP_INVERSION_UP_Y = -0.3;
+
     private static final String WORLD_X = "worldX";
     private static final String WORLD_Y = "worldY";
     private static final String WORLD_Z = "worldZ";
@@ -193,7 +202,7 @@ public class VSShipRenderPoseSkewE2ETest extends AbstractClientE2ETest {
                 + " (the gate is < -0.3)");
         assertTrue("the ship must reach the steep inversion before the hull leg (upY=" + upY
                 + " after " + ROLL_WINDOW_TICKS + " ticks of a commanded 160-degree roll): "
-                + info.raw(), upY < -0.3);
+                + info.raw(), upY < STEEP_INVERSION_UP_Y);
         // The drop point must be FREE AIR, and nothing here guaranteed that it was. The fixture is
         // assembled into a 10-block band cleared inside whatever ground the base sits in, and the
         // rolled ship then sinks, so shipY+7 can land INSIDE the world's own terrain. Measured once:

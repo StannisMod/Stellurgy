@@ -43,6 +43,9 @@ import static zmaster587.advancedRocketry.test.server.WorldCommandFixtures.exec;
  */
 public class BlackHoleGeneratorPoweredCycleTest extends AbstractSharedServerTest {
 
+    /** A full stack — what the hatch fill asks for, read back from its reply. Not a threshold. */
+    private static final int FULL_STACK = 64;
+
     /** AR planet ID offset for star dims —
      *  {@link zmaster587.advancedRocketry.api.Constants#STAR_ID_OFFSET}. */
     private static final int STAR_ID_OFFSET = 10000;
@@ -211,7 +214,7 @@ public class BlackHoleGeneratorPoweredCycleTest extends AbstractSharedServerTest
                 + inputPos[0] + " " + inputPos[1] + " " + inputPos[2]
                 + " 0 minecraft:dirt 64 0");
         assertTrue("hatch fill failed: " + resp,
-                Reply.of(resp).ok() || (Reply.of(resp).integer("count") == 64));
+                Reply.of(resp).ok() || (Reply.of(resp).integer("count") == FULL_STACK));
     }
 
     private void enableMachine(int dim, int cx, int cy, int cz) throws Exception {

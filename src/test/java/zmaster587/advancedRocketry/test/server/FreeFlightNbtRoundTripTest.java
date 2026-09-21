@@ -29,6 +29,14 @@ import static org.junit.Assert.assertTrue;
  */
 public class FreeFlightNbtRoundTripTest extends AbstractSharedServerTest {
 
+    /**
+     * How far a restored attitude must be from the identity quaternion, summed over its axes.
+     *
+     * <p>The TEST'S OWN sensitivity bar: an identity attitude is what a round-trip that lost
+     * everything produces, so this refuses exactly that.</p>
+     */
+    private static final double NON_IDENTITY_ATTITUDE = 0.1;
+
 
     private static String ok(java.util.List<String> resp) {
         return String.join("\n", resp);
@@ -91,7 +99,7 @@ public class FreeFlightNbtRoundTripTest extends AbstractSharedServerTest {
         // assertions above are not trivially satisfied by an all-zero write.
         assertTrue("round-trip attitude must be non-identity: " + r,
                 Math.abs(num(r, "peerQuatX")) + Math.abs(num(r, "peerQuatY"))
-                        + Math.abs(num(r, "peerQuatZ")) > 0.1);
+                        + Math.abs(num(r, "peerQuatZ")) > NON_IDENTITY_ATTITUDE);
 
         // Flight-assist toggle + velocity setpoint survive.
         assertTrue("flight-assist ON must survive: " + r, bool(r, "peerFaOn"));

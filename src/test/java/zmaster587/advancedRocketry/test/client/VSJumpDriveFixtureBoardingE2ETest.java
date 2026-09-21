@@ -63,6 +63,15 @@ import static org.junit.Assert.assertTrue;
 @FixMethodOrder(MethodSorters.NAME_ASCENDING)
 public class VSJumpDriveFixtureBoardingE2ETest extends AbstractSharedVsClientE2ETest {
 
+    /**
+     * How far two readings of the SAME point may differ, in blocks, when one is mapped through the
+     * ship's transform and the other read off the seat probe.
+     *
+     * <p>The TEST'S OWN, and it is float noise rather than a tolerance: both describe one block's
+     * centre, so half a block is already generous.</p>
+     */
+    private static final double SAME_POINT_BLOCKS = 0.5;
+
     @Override
     protected String subsystem() {
         return "vs-jump-drive-boarding";
@@ -280,7 +289,7 @@ public class VSJumpDriveFixtureBoardingE2ETest extends AbstractSharedVsClientE2E
                         + "console's aim point below is computed by an instrument that does not work."
                         + " probe=" + java.util.Arrays.toString(seatWorld)
                         + " mapped=" + java.util.Arrays.toString(seatMapped),
-                seatMapped != null && horizontalDistance(seatWorld, seatMapped) < 0.5);
+                seatMapped != null && horizontalDistance(seatWorld, seatMapped) < SAME_POINT_BLOCKS);
 
         // ---- 2a) Board the PILOT SEAT with a real use-key press. ---------------------------------
         Aim seatAim = aimAt(afcSub, seatSub, OFF_STAND, 0.5, 0.2, 0.5, budget);

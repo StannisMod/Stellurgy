@@ -33,6 +33,10 @@ import static org.junit.Assert.assertTrue;
  */
 public class ShipDeckCameraAndAttitudeHoldTest {
 
+    /** Samples the spread must cover before it is said to EXERCISE the levelling — the test's own
+     *  sample bar, under which a clean result describes the sweep. */
+    private static final int MIN_SPREAD_SAMPLES = 100;
+
     /** Angular tolerance (degrees) for camera yaw/pitch/roll round-trips. */
     private static final double ANGLE_DELTA = 1e-3;
     /** Tolerance for comparing the ACTION of two rotations on a test vector. */
@@ -122,7 +126,7 @@ public class ShipDeckCameraAndAttitudeHoldTest {
                 }
             }
         }
-        assertTrue("the spread must actually exercise the levelling", checked > 100);
+        assertTrue("the spread must actually exercise the levelling", checked > MIN_SPREAD_SAMPLES);
     }
 
     /**

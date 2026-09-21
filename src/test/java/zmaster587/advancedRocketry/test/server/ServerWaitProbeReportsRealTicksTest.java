@@ -29,6 +29,18 @@ import static org.junit.Assert.assertTrue;
  */
 public class ServerWaitProbeReportsRealTicksTest extends AbstractSharedServerTest {
 
+    /**
+     * The budget this scenario hands the wait probe, in ticks, and the slice of it a satisfied
+     * condition may spend.
+     *
+     * <p>Neither is a tuning: the budget is the arrangement's own argument, and the slice is the
+     * test's own bar on "it returned promptly" — a tenth of the budget, so a probe that ran to the
+     * end still fails.</p>
+     */
+    private static final int WAIT_BUDGET_TICKS = 400;
+    /** @see #WAIT_BUDGET_TICKS */
+    private static final int PROMPT_RETURN_TICKS = 40;
+
     /** Small enough to stay fast, large enough that a scheduler hiccup cannot fake it. */
     private static final int TICKS = 20;
 
@@ -130,7 +142,7 @@ public class ServerWaitProbeReportsRealTicksTest extends AbstractSharedServerTes
         long after = GameTicks.read(client(), GameTicks.server());
 
         assertTrue("and it must not have burned a 400-tick budget to say so: " + before + " -> "
-                + after, after - before < 40);
+                + after, after - before < PROMPT_RETURN_TICKS);
     }
 
     /** A condition that comes true partway through is answered when it does, not at the budget. */
@@ -144,7 +156,7 @@ public class ServerWaitProbeReportsRealTicksTest extends AbstractSharedServerTes
         long spent = GameTicks.read(client(), GameTicks.server()) - before;
 
         assertTrue("it must not have run to its 400-tick budget once the condition held: " + spent,
-                spent < 400);
+                spent < WAIT_BUDGET_TICKS);
     }
 
     /**

@@ -49,6 +49,21 @@ import static org.junit.Assert.assertTrue;
  */
 public class SpaceStationDockUndockTest extends AbstractSharedServerTest {
 
+    /**
+     * The pads this scenario ADDS, and therefore the coordinates its replies must echo.
+     *
+     * <p>None of these is a threshold: each is an argument the test passes to {@code add-pad},
+     * read back from the dock reply. They are named because the same numbers appeared twice apiece
+     * — once in the command, once in the assertion — with nothing tying the two together.</p>
+     */
+    private static final int PAD_BETA_X = 30;
+    /** @see #PAD_BETA_X */
+    private static final int PAD_BETA_Z = 40;
+    /** The pad freed by the undock, which the next dock must reclaim. @see #PAD_BETA_X */
+    private static final int PAD_RECLAIMED_X = 50;
+    /** The pad the PREVIEW dock reports without taking. @see #PAD_BETA_X */
+    private static final int PAD_PREVIEW_X = 70;
+
     private static final String ID_PATTERN = "id";
 
     private int createStation() throws Exception {
@@ -103,7 +118,7 @@ public class SpaceStationDockUndockTest extends AbstractSharedServerTest {
     @Test
     public void dockClaimsAutoLandPadAndMarksOccupied() throws Exception {
         int id = createStation();
-        ok(client().execute("artest station add-pad " + id + " 30 40 beta"));
+        ok(client().execute("artest station add-pad " + id + " " + PAD_BETA_X + " " + PAD_BETA_Z + " beta"));
         ok(client().execute("artest station set-autoland " + id + " 30 40 true"));
 
         String dock = ok(client().execute("artest station dock " + id));
@@ -113,7 +128,7 @@ public class SpaceStationDockUndockTest extends AbstractSharedServerTest {
         // prefix trap has already been measured on this producer's pad list.
         Reply docked = Reply.of("artest station dock", dock);
         assertTrue("dock response must echo the chosen pad coords: " + dock,
-                docked.integer("x") == 30 && docked.integer("z") == 40);
+                docked.integer("x") == PAD_BETA_X && docked.integer("z") == PAD_BETA_Z);
 
         // After dock with commit=true, THE pad's occupied flag must flip — asked of the pad at
         // (30, 40) rather than of the list, which would answer for any occupied pad.
@@ -147,7 +162,7 @@ public class SpaceStationDockUndockTest extends AbstractSharedServerTest {
         // And the next dock call must successfully reclaim it.
         String reclaim = ok(client().execute("artest station dock " + id));
         assertTrue("post-undock dock must reclaim the just-freed pad: " + reclaim,
-                Reply.of(reclaim).ok() && (Reply.of(reclaim).integer("x") == 50));
+                Reply.of(reclaim).ok() && (Reply.of(reclaim).integer("x") == PAD_RECLAIMED_X));
     }
 
     @Test
@@ -161,7 +176,7 @@ public class SpaceStationDockUndockTest extends AbstractSharedServerTest {
 
         String preview = ok(client().execute("artest station dock " + id + " false"));
         assertTrue("preview dock must report ok and the pad coords: " + preview,
-                Reply.of(preview).ok() && (Reply.of(preview).integer("x") == 70));
+                Reply.of(preview).ok() && (Reply.of(preview).integer("x") == PAD_PREVIEW_X));
 
         StationPads.Pad previewed = pads(id).at(70, 80);
         assertFalse("preview dock must NOT mark the pad occupied: " + previewed.raw(),

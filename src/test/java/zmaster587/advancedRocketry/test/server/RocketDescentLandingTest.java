@@ -40,6 +40,10 @@ import static org.junit.Assert.assertTrue;
  */
 public class RocketDescentLandingTest extends AbstractSharedServerTest {
 
+    /** The altitude the descent STARTS at, in blocks — the arrangement's own number, cited by the
+     *  assertion that says gravity pulled the craft below it. */
+    private static final double DESCENT_START_Y = 300.0;
+
     private static final int DESCENT_TIMER = 40; // mirrors EntityRocket.DESCENT_TIMER
 
     private static final String ROCKET_LIST_ID = "id";
@@ -193,7 +197,7 @@ public class RocketDescentLandingTest extends AbstractSharedServerTest {
         double posYAfter = rocketInfo(id).posY;
         assertTrue("gravity must have pulled the rocket downwards under "
                 + "real ticking (posY=" + posYAfter + ", started at 300)",
-                posYAfter < 300.0);
+                posYAfter < DESCENT_START_Y);
     }
 
     @Test

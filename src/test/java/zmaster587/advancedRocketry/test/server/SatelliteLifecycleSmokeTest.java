@@ -29,6 +29,16 @@ import static org.junit.Assert.assertTrue;
  */
 public class SatelliteLifecycleSmokeTest extends AbstractSharedServerTest {
 
+    /** Satellite types the registry must offer — the test's own bar on "the catalogue is not
+     *  empty", well under what the mod ships. */
+    private static final int MIN_SATELLITE_TYPES = 5;
+
+    /** The generation and storage this satellite type declares, read back from its info. Neither is
+     *  a threshold: both are the type's own numbers. */
+    private static final int TYPE_POWER_GEN = 250;
+    /** @see #TYPE_POWER_GEN */
+    private static final int TYPE_POWER_STORAGE = 5000;
+
     private static final String ID_PATTERN = "id";
 
     @Test
@@ -40,7 +50,7 @@ public class SatelliteLifecycleSmokeTest extends AbstractSharedServerTest {
         int totalQuotes = countOccurrences(types, "\"");
         int actualCount = (totalQuotes - 2) / 2; // -2 for "satelliteTypes" key quotes
         assertTrue("expected ≥5 satellite types, got " + actualCount + ": " + types,
-                actualCount >= 5);
+                actualCount >= MIN_SATELLITE_TYPES);
 
         // Create real satellite via the legacy create path used by the prior
         // smoke. The 10 per-type assertions below cover the remaining types.
@@ -49,8 +59,8 @@ public class SatelliteLifecycleSmokeTest extends AbstractSharedServerTest {
         Reply.of(list).element("satellites", "id", String.valueOf(satId));
         String info = String.join("\n", client().execute("artest satellite info 0 " + satId));
         assertTrue("info missing/wrong type: " + info, "solarEnergy".equals(Reply.of(info).text("type")));
-        assertTrue("info missing/wrong powerGen: " + info, (Reply.of(info).integer("powerGen") == 250));
-        assertTrue("info missing/wrong powerStorage: " + info, (Reply.of(info).integer("powerStorage") == 5000));
+        assertTrue("info missing/wrong powerGen: " + info, (Reply.of(info).integer("powerGen") == TYPE_POWER_GEN));
+        assertTrue("info missing/wrong powerStorage: " + info, (Reply.of(info).integer("powerStorage") == TYPE_POWER_STORAGE));
     }
 
     @Test

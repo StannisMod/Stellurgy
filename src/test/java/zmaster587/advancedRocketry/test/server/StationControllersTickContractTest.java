@@ -40,6 +40,15 @@ import static zmaster587.advancedRocketry.test.server.WorldCommandFixtures.exec;
  */
 public class StationControllersTickContractTest extends AbstractSharedServerTest {
 
+    /**
+     * The gravity a station must walk BELOW after the controller has ticked.
+     *
+     * <p>The TEST'S OWN: the default is 1.0, so this is "measurably below default" — the
+     * player-visible contract that a gravity controller does something — rather than a target the
+     * controller aims at.</p>
+     */
+    private static final double MEASURABLY_BELOW_DEFAULT_GRAVITY = 0.9;
+
     private static final int SPACE_DIM = -2;
 
     private static final String STATION_ID = "id";
@@ -184,7 +193,7 @@ public class StationControllersTickContractTest extends AbstractSharedServerTest
                         + "(the player-visible 'gravity controller does "
                         + "something' contract); postGravity=" + postGravity
                         + " postInfo=" + postInfo.raw(),
-                postGravity < 0.9);
+                postGravity < MEASURABLY_BELOW_DEFAULT_GRAVITY);
     }
 
     /**

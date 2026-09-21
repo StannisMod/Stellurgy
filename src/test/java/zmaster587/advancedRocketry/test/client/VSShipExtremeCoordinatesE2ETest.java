@@ -73,6 +73,21 @@ import static org.junit.Assert.assertTrue;
 @FixMethodOrder(MethodSorters.NAME_ASCENDING)
 public class VSShipExtremeCoordinatesE2ETest extends AbstractSharedVsClientE2ETest {
 
+    /**
+     * How far a rigid teleport may leave the craft from where it was SENT, in blocks.
+     *
+     * <p>The TEST'S OWN, and wide because the subject is extreme coordinates: at a magnitude of
+     * millions a double's own spacing is metres, so two hundred blocks is the precision the
+     * arrangement can claim rather than a tolerance for drift.</p>
+     */
+    private static final double TELEPORT_LANDED_WITHIN_BLOCKS = 200;
+
+    /**
+     * How far the CLIENT's rendered rider may sit from the SERVER's ship climb, in blocks — the
+     * test's own replication tolerance, under a craft's own height.
+     */
+    private static final double RIDER_TRACKS_SHIP_BLOCKS = 3.0;
+
     @Override
     protected String subsystem() {
         return "vs-ship-extreme-coordinates";
@@ -295,7 +310,7 @@ public class VSShipExtremeCoordinatesE2ETest extends AbstractSharedVsClientE2ETe
         // the rider to the request conflates them.
         assertTrue("teleport-ship must leave the ship at the altitude it was given: commanded="
                         + EXTREME_Y + " ship=" + shipYAfterTp,
-                Math.abs(shipYAfterTp - EXTREME_Y) < 200);
+                Math.abs(shipYAfterTp - EXTREME_Y) < TELEPORT_LANDED_WITHIN_BLOCKS);
         climbLeg("extreme Y");
 
         // ── Leg 2: A SECOND RELOCATION, which is suspect finding (3) of the class javadoc — "after a
@@ -327,7 +342,7 @@ public class VSShipExtremeCoordinatesE2ETest extends AbstractSharedVsClientE2ETe
                 + " teleport: " + afterSecond, ShipInfo.isLoaded(afterSecond));
         assertTrue("the second teleport must leave the craft where it was sent: commanded X "
                         + (BX + SECOND_RELOCATION_X) + " ship=" + afterSecond,
-                Math.abs(ShipInfo.of(afterSecond).x - (BX + SECOND_RELOCATION_X)) < 200);
+                Math.abs(ShipInfo.of(afterSecond).x - (BX + SECOND_RELOCATION_X)) < TELEPORT_LANDED_WITHIN_BLOCKS);
         requireStillAboard("after the craft's SECOND relocation", secondMark, secondServerMark);
 
         // The subject: does he still fly it? `climbLeg` holds the real vertical key, asserts the
@@ -426,7 +441,7 @@ public class VSShipExtremeCoordinatesE2ETest extends AbstractSharedVsClientE2ETe
         String serverPlayer = exec("artest player health");
         assertTrue("[" + label + "] the CLIENT rider must track the server ship's climb (client="
                 + riderDelta + " server=" + serverDelta + "); server player: " + serverPlayer,
-                Math.abs(riderDelta - serverDelta) < 3.0);
+                Math.abs(riderDelta - serverDelta) < RIDER_TRACKS_SHIP_BLOCKS);
     }
 
     /**

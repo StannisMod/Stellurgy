@@ -25,6 +25,9 @@ import static org.junit.Assert.assertTrue;
  */
 public class SatelliteIdChipPersistenceTest {
 
+    /** The power this scenario stores before the restart, read back after it. Not a threshold. */
+    private static final int STORED_POWER = 4000;
+
     private static final String ID = "id";
 
     private Path workDir;
@@ -72,6 +75,6 @@ public class SatelliteIdChipPersistenceTest {
         assertTrue("satellite must survive restart and resolve by id "
                 + satId + ": " + postBoot, "composition".equals(Reply.of(postBoot).text("type")));
         assertTrue("powerStorage must persist across restart: " + postBoot,
-                (Reply.of(postBoot).integer("powerStorage") == 4000));
+                (Reply.of(postBoot).integer("powerStorage") == STORED_POWER));
     }
 }

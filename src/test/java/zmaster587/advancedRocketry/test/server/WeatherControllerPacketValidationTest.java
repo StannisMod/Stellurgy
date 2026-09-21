@@ -26,6 +26,22 @@ import static org.junit.Assert.assertTrue;
  */
 public class WeatherControllerPacketValidationTest extends AbstractSharedServerTest {
 
+    /**
+     * The bounds the server must clamp a weather packet into.
+     *
+     * <p>PRODUCTION'S range restated: flood level tops out here and the mode id is one of
+     * {@code {0,1,2}}. The clamp is the contract — an out-of-range flood drives the unbounded flood
+     * loop this class exists for — so the numbers are named once and every leg cites them.</p>
+     */
+    private static final int MAX_FLOOD_LEVEL = 180;
+    /** @see #MAX_FLOOD_LEVEL */
+    private static final int MAX_MODE_ID = 2;
+
+    /** The in-range values this scenario sends, which must come back unchanged. */
+    private static final int IN_RANGE_MODE = 2;
+    /** @see #IN_RANGE_MODE */
+    private static final int IN_RANGE_FLOOD = 90;
+
     private static final String ID = "id";
     private static final String MODE = "mode_id";
     private static final String FLOOD = "floodlevel";
@@ -65,12 +81,12 @@ public class WeatherControllerPacketValidationTest extends AbstractSharedServerT
         assertTrue("server must clamp the flood level to <= 180 (got " + flood
                         + "); an out-of-range value drives the unbounded flood "
                         + "loop DoS (C048): " + apply,
-                flood <= 180);
+                flood <= MAX_FLOOD_LEVEL);
         assertTrue("server must clamp the flood level to >= 1 (got " + flood + "): " + apply,
                 flood >= 1);
         assertTrue("server must reject an out-of-range mode id, keeping it in "
                         + "{0,1,2} (got " + mode + "): " + apply,
-                mode >= 0 && mode <= 2);
+                mode >= 0 && mode <= MAX_MODE_ID);
     }
 
     /** A negative flood level from the wire must be clamped up to the minimum. */
@@ -100,8 +116,8 @@ public class WeatherControllerPacketValidationTest extends AbstractSharedServerT
         int mode = intField(MODE, apply, "mode_id");
         int flood = intField(FLOOD, apply, "floodlevel");
         assertTrue("an in-range mode (2) must be preserved, got " + mode + ": " + apply,
-                mode == 2);
+                mode == IN_RANGE_MODE);
         assertTrue("an in-range flood level (90) must be preserved, got " + flood + ": " + apply,
-                flood == 90);
+                flood == IN_RANGE_FLOOD);
     }
 }

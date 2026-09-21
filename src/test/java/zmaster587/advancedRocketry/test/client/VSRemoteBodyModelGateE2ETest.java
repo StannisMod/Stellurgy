@@ -100,6 +100,29 @@ import static org.junit.Assert.assertTrue;
 @FixMethodOrder(MethodSorters.NAME_ASCENDING)
 public class VSRemoteBodyModelGateE2ETest extends AbstractSharedVsClientE2ETest {
 
+    /**
+     * How far the pushed rotation must reach, in degrees, to be the ship's REAL attitude rather
+     * than a token tilt.
+     *
+     * <p>The TEST'S OWN: past ninety degrees the deck is beyond vertical, where a model drawn in
+     * the world frame and one drawn in the ship's cannot be confused.</p>
+     */
+    private static final double REAL_ATTITUDE_DEG = 90.0;
+
+    /**
+     * The steep roll both legs need, as deck-normal Y. The TEST'S OWN arrangement fact: -0.85 is
+     * about 150 degrees over.
+     */
+    private static final double STEEP_ROLL_UP_Y = -0.85;
+
+    /**
+     * How far the client's actual aim may sit from the commanded one, in degrees.
+     *
+     * <p>The TEST'S OWN: the aim is set and then read back, so this is the float round-trip of a
+     * yaw through the client plus one tick of settle — not a budget for drift.</p>
+     */
+    private static final double AIMED_AT_THE_SUBJECT_DEG = 15.0;
+
     @Override
     protected String subsystem() {
         return "vs-remote-body-render";
@@ -357,7 +380,7 @@ public class VSRemoteBodyModelGateE2ETest extends AbstractSharedVsClientE2ETest 
                 rotated > 0);
         assertTrue("the pushed rotation must be the ship's real attitude, not a token tilt :: "
                         + legWindow,
-                Events.number(legWindow, "maxDeg") > 90.0);
+                Events.number(legWindow, "maxDeg") > REAL_ATTITUDE_DEG);
     }
 
     // ---- helpers (self-contained, mirroring the other tier-2 e2e classes) ----------------------
@@ -588,7 +611,7 @@ public class VSRemoteBodyModelGateE2ETest extends AbstractSharedVsClientE2ETest 
         System.out.println("[modelgate] upY after " + ROLL_WINDOW_TICKS + " ticks: " + upY
                 + " (the gate is < -0.85)");
         assertTrue("the ship must reach the steep roll for either leg to mean anything (upY=" + upY + ")",
-                upY < -0.85);
+                upY < STEEP_ROLL_UP_Y);
     }
 
     /** Candidate spots beside the ship, nearest first: the one that is inside the ship's world box
@@ -738,7 +761,7 @@ public class VSRemoteBodyModelGateE2ETest extends AbstractSharedVsClientE2ETest 
         assertTrue(String.format(java.util.Locale.ROOT,
                         "the client must actually be aimed at the subject: wanted yaw %.1f, got %.1f",
                         yaw, gotYaw),
-                Math.abs(wrap180(gotYaw - yaw)) < 15.0);
+                Math.abs(wrap180(gotYaw - yaw)) < AIMED_AT_THE_SUBJECT_DEG);
     }
 
     private static double wrap180(double deg) {

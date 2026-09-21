@@ -48,6 +48,10 @@ import static org.junit.Assert.assertTrue;
  */
 public class RocketFlightCycleDepthTest extends AbstractSharedServerTest {
 
+    /** The orbit-reached delta the probe may report: one event, or the two a shared world can
+     *  produce when a sibling craft reaches orbit in the same window. */
+    private static final int ORBIT_REACHED_DELTA_MAX = 2;
+
     private static final String ROCKET_LIST_ID = "id";
     private static final String AR_DIMS_ARRAY = "arDimensions";
     private static final String LAUNCH_COUNT = "launch";
@@ -118,7 +122,7 @@ public class RocketFlightCycleDepthTest extends AbstractSharedServerTest {
         // its response; must be >= 1 (event fired during the call).
         assertTrue("force-orbit-reached must report a non-zero orbitReachedEventDelta: "
                 + resp, (Reply.of(resp).integer("orbitReachedEventDelta") == 1)
-                    || (Reply.of(resp).integer("orbitReachedEventDelta") == 2));
+                    || (Reply.of(resp).integer("orbitReachedEventDelta") == ORBIT_REACHED_DELTA_MAX));
 
         String after = ok(client().execute("artest rocket event-counts"));
         int orbitAfter = parseGroup(ORBIT_COUNT, after, "orbitReached after");

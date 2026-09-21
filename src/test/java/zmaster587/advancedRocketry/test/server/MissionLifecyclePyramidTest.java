@@ -40,6 +40,14 @@ import static org.junit.Assert.assertTrue;
  */
 public class MissionLifecyclePyramidTest extends AbstractSharedServerTest {
 
+    /**
+     * The progress an advance of 2500 against a duration of 1000 must reach.
+     *
+     * <p>Not a threshold but the arrangement's own arithmetic: 2500/1000 is 2.5, so progress must
+     * be at least 2. Named so the two numbers above and the expectation cannot drift apart.</p>
+     */
+    private static final double MIN_PROGRESS_AFTER_ADVANCE = 2.0;
+
     private static final String ROCKET_LIST_ID = "id";
     private static final String MISSION_ID = "missionId";
     private static final String PROGRESS = "progress";
@@ -105,7 +113,7 @@ public class MissionLifecyclePyramidTest extends AbstractSharedServerTest {
         long mid = buildRocketAndStartGasMission(7100, 1000);
         double p = progressFromAdvance(mid, 2500);
         assertTrue("after advance 2500 / duration 1000, progress must be ≥ 2.0; got " + p,
-                p >= 2.0);
+                p >= MIN_PROGRESS_AFTER_ADVANCE);
     }
 
     /** Below progress=1.0 the mission is not yet completable — verify

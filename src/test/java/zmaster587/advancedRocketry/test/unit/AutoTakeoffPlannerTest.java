@@ -16,6 +16,9 @@ import static org.junit.Assert.assertTrue;
  */
 public class AutoTakeoffPlannerTest {
 
+    /** The ceiling the corridor must clear, in blocks — the arrangement's own orbit line. */
+    private static final double CEILING_BLOCKS = 1000.0;
+
     private static final double EPS = 1e-9;
 
     @Test
@@ -44,7 +47,7 @@ public class AutoTakeoffPlannerTest {
         double len = AutoTakeoffPlanner.corridorLength(100.0, 1000.0);
         double[] dir = AutoTakeoffPlanner.climbDirection(1.0, 0.0);
         // Climbing `len` along the diagonal must lift the ship strictly past the ceiling.
-        assertTrue("the corridor clears the ceiling", 100.0 + dir[1] * len > 1000.0);
+        assertTrue("the corridor clears the ceiling", 100.0 + dir[1] * len > CEILING_BLOCKS);
         assertEquals("already at/above orbit needs no corridor",
                 0.0, AutoTakeoffPlanner.corridorLength(1000.0, 1000.0), 0.0);
     }

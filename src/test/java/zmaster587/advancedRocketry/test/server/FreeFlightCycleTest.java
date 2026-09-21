@@ -37,6 +37,29 @@ import static org.junit.Assert.assertTrue;
  */
 public class FreeFlightCycleTest extends AbstractSharedServerTest {
 
+    /**
+     * The vertical input this scenario SENDS, echoed back by the assertion that reads the reply.
+     *
+     * <p>Not a threshold: it is the arrangement's own argument. Named so the command and the
+     * expectation cannot drift apart.</p>
+     */
+    private static final double COMMANDED_VERT = -0.5;
+
+    /**
+     * The clamp production applies to an out-of-range axis.
+     *
+     * <p>PRODUCTION'S bound, restated here because it is what the two overshoot legs assert: an
+     * input past the end of the range comes back AT the end of it.</p>
+     */
+    private static final double AXIS_CLAMP = -1.0;
+
+    /**
+     * The upward motion that says a full vertical throttle BUILT something, in blocks/tick.
+     *
+     * <p>The TEST'S OWN sensitivity bar: what it refuses is a craft that did not move.</p>
+     */
+    private static final double THROTTLE_BUILT_MOTION = 0.1;
+
     private static final String MOTION_X = "motionX";
     private static final String MOTION_Z = "motionZ";
     /** The field {@code free-flight-tick} answers with — that verb's own, not {@code rocket info}'s. */
@@ -194,7 +217,7 @@ public class FreeFlightCycleTest extends AbstractSharedServerTest {
         assertTrue("applied response must echo fwd=1.0: " + applied,
                 (Reply.of(applied).number("fwd") == 1.0));
         assertTrue("applied response must echo vert=-0.5: " + applied,
-                (Reply.of(applied).number("vert") == -0.5));
+                (Reply.of(applied).number("vert") == COMMANDED_VERT));
 
         // Info must round-trip the input — proves server-side storage path
         // is wired into the probe surface that clients/UI will read.
@@ -220,7 +243,7 @@ public class FreeFlightCycleTest extends AbstractSharedServerTest {
                 "artest rocket free-flight-tick " + id + " 10"));
         double my = parseDouble(tickRes, MOTION_Y, "motionY");
         assertTrue("full vertical throttle must build upward motion "
-                        + "(got motionY=" + my + ")", my > 0.1);
+                        + "(got motionY=" + my + ")", my > THROTTLE_BUILT_MOTION);
     }
 
     @Test
@@ -318,11 +341,11 @@ public class FreeFlightCycleTest extends AbstractSharedServerTest {
         assertTrue("clamp positive overshoot to 1.0: " + resp,
                 (Reply.of(resp).number("fwd") == 1.0));
         assertTrue("clamp negative overshoot to -1.0: " + resp,
-                (Reply.of(resp).number("vert") == -1.0));
+                (Reply.of(resp).number("vert") == AXIS_CLAMP));
         assertTrue("clamp yaw +∞ish to 1.0: " + resp,
                 (Reply.of(resp).number("yaw") == 1.0));
         assertTrue("clamp pitch -∞ish to -1.0: " + resp,
-                (Reply.of(resp).number("pitch") == -1.0));
+                (Reply.of(resp).number("pitch") == AXIS_CLAMP));
         assertTrue("clamp brake to 1.0: " + resp,
                 (Reply.of(resp).number("brake") == 1.0));
     }

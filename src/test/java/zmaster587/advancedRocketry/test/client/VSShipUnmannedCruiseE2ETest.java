@@ -32,6 +32,23 @@ import static org.junit.Assert.assertTrue;
 @FixMethodOrder(MethodSorters.NAME_ASCENDING)
 public class VSShipUnmannedCruiseE2ETest extends AbstractSharedVsClientE2ETest {
 
+    /**
+     * How far the held key must have climbed before the dismount can test anything, in blocks.
+     *
+     * <p>The TEST'S OWN sensitivity bar: without a real climb the leg would be asking whether a
+     * ship that was never moving kept moving.</p>
+     */
+    private static final double RAMPED_A_CLIMB_BLOCKS = 2.0;
+
+    /**
+     * How far the unmanned ship must go on climbing, in blocks, for the cruise to have SURVIVED
+     * the dismount.
+     *
+     * <p>The TEST'S OWN, and deliberately above {@link #RAMPED_A_CLIMB_BLOCKS}: the claim is that
+     * it kept going, so the bar has to exceed what it had already done.</p>
+     */
+    private static final double KEPT_CRUISING_BLOCKS = 4.0;
+
     /** How long the CLIENT is given to PERFORM a seating the server has already done, in ticks. */
     private static final int SEAT_LINK_BUDGET_TICKS = 200;
 
@@ -149,7 +166,7 @@ public class VSShipUnmannedCruiseE2ETest extends AbstractSharedVsClientE2ETest {
                 matchingRecords(ramped, "\"via\":\"pilot\"") > 0);
         scenario().requireArranged("the held key must have ramped a real climb before the dismount "
                         + "can test anything (y0=" + y0 + " yRamped=" + yRamped + ")",
-                yRamped - y0 > 2.0);
+                yRamped - y0 > RAMPED_A_CLIMB_BLOCKS);
         bot().waitTicks(10);
 
         // Dismount mid-cruise. (The probe dismount stands in for any exit that is not the brake
@@ -171,7 +188,7 @@ public class VSShipUnmannedCruiseE2ETest extends AbstractSharedVsClientE2ETest {
         assertTrue("an unmanned ship with Flight Assist on and a non-zero cruise setpoint must "
                         + "KEEP CRUISING after the pilot dismounts — that is what makes it an "
                         + "autopilot (yDismount=" + yDismount + " after 2s=" + yUnmanned + ")",
-                yUnmanned - yDismount > 4.0);
+                yUnmanned - yDismount > KEPT_CRUISING_BLOCKS);
 
         // Re-mounting must not interrupt (or reset) the executing cruise: the seat's dummy is
         // REUSED and the ship flies on while the returned pilot holds no key.
@@ -189,7 +206,7 @@ public class VSShipUnmannedCruiseE2ETest extends AbstractSharedVsClientE2ETest {
         assertTrue("a re-mounted pilot receives the executing cruise BACK — the ship must not "
                         + "stop or reset because he sat down (yRemount=" + yRemount
                         + " after 2s=" + yAfter + ")",
-                yAfter - yRemount > 4.0);
+                yAfter - yRemount > KEPT_CRUISING_BLOCKS);
     }
 
     // ---- helpers -------------------------------------------------------------------------------

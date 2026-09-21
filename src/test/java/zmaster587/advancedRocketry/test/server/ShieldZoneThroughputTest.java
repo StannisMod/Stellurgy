@@ -36,6 +36,10 @@ import static org.junit.Assert.assertTrue;
  */
 public class ShieldZoneThroughputTest extends AbstractSharedServerTest {
 
+    /** The reserve the accumulator must have built before throughput can be read — the test's own
+     *  arrangement bar, in power units. */
+    private static final long CHARGED_RESERVE = 150_000L;
+
     private static final int DIM = 0;
     private static final int Y = FixtureSite.OPEN_AIR_Y;
     private static final int FE_PER_ITERATION = 4000;
@@ -87,7 +91,7 @@ public class ShieldZoneThroughputTest extends AbstractSharedServerTest {
         }
         long reserveBefore = read(ax, gz).shieldStored();
         assertTrue("precondition: accumulator did not build a bulk reserve (stored=" + reserveBefore + ")",
-                reserveBefore > 150_000L);
+                reserveBefore > CHARGED_RESERVE);
 
         place("affs:field_generator", ax, ez);
         // Ensure the coil has ample free space (drain a little via self-drain, no refill needed), so the

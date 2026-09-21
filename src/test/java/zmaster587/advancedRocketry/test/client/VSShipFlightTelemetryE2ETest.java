@@ -51,6 +51,10 @@ import static org.junit.Assert.assertTrue;
 @FixMethodOrder(MethodSorters.NAME_ASCENDING)
 public class VSShipFlightTelemetryE2ETest extends AbstractSharedVsClientE2ETest {
 
+    /** The cursor deflection a RAW mouse delta must produce. The test's own sensitivity bar; see
+     *  {@link #CURSOR_DEFLECTED}, which is the same quantity for the harness's own deltas. */
+    private static final double RAW_CURSOR_DEFLECTED = 0.2;
+
     @Override
     protected String subsystem() {
         return "vs-flight-telemetry";
@@ -312,7 +316,7 @@ public class VSShipFlightTelemetryE2ETest extends AbstractSharedVsClientE2ETest 
         }
         double cursorDeflected = flightCursorX("after twelve raw mouse deltas");
         assertTrue("a raw mouse delta must deflect the client's flight cursor (got "
-                + cursorDeflected + ")", Math.abs(cursorDeflected) > 0.2);
+                + cursorDeflected + ")", Math.abs(cursorDeflected) > RAW_CURSOR_DEFLECTED);
 
         // Poll omega until the deflected cursor has actually spun the ship up. This one STAYS a poll,
         // and the reason is the shape of its question rather than habit: "has it started turning" is

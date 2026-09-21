@@ -35,6 +35,15 @@ import static org.junit.Assert.assertTrue;
  */
 public class MissionOreCompletionTest extends AbstractSharedServerTest {
 
+    /**
+     * How many entries a zero-drilling-power mission may return.
+     *
+     * <p>The TEST'S OWN: the refill chip is the only entry the contract expects, and the allowance
+     * of one more is there because a sibling test's rocket can contribute a duplicate in the shared
+     * world. Anything above that is the mission handing out ore it never mined.</p>
+     */
+    private static final int MAX_ZERO_POWER_ENTRIES = 2;
+
     private static final String MISSION_ID = "missionId";
 
     private static String ok(java.util.List<String> resp) {
@@ -103,7 +112,7 @@ public class MissionOreCompletionTest extends AbstractSharedServerTest {
         assertTrue("drillingPower=0 -> only the refill chip (≤ 2 entries to allow "
                         + "a duplicate from a sibling test rocket); got " + entries
                         + "; resp=" + cargo.raw(),
-                entries >= 1 && entries <= 2);
+                entries >= 1 && entries <= MAX_ZERO_POWER_ENTRIES);
     }
 
     /** The ore-mining completion path spawns a plain EntityRocket (line

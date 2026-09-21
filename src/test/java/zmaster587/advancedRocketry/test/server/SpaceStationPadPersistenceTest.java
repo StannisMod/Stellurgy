@@ -46,6 +46,9 @@ import static org.junit.Assert.assertTrue;
  */
 public class SpaceStationPadPersistenceTest {
 
+    /** The pad this scenario claims, before and after the restart. The arrangement's own X. */
+    private static final int PAD_B_X = 200;
+
     /** The station's own id. The regex this replaces anchored on the NEXT field so as not
      *  to match some other `id`; reading by name needs no such anchor. */
     private static final String STATION_ID = "id";
@@ -91,7 +94,7 @@ public class SpaceStationPadPersistenceTest {
         String dock = String.join("\n",
                 firstBoot.client().execute("artest station dock " + stationId));
         assertTrue("boot1 dock must claim padB: " + dock,
-                Reply.of(dock).ok() && (Reply.of(dock).integer("x") == 200));
+                Reply.of(dock).ok() && (Reply.of(dock).integer("x") == PAD_B_X));
 
         // Sanity dump before restart.
         StationPads padsBefore = pads(firstBoot, stationId);
@@ -175,7 +178,7 @@ public class SpaceStationPadPersistenceTest {
         String dock2 = String.join("\n", secondBoot.client().execute(
                 "artest station dock " + stationId));
         assertTrue("post-restart dock must reclaim padB: " + dock2,
-                Reply.of(dock2).ok() && (Reply.of(dock2).integer("x") == 200));
+                Reply.of(dock2).ok() && (Reply.of(dock2).integer("x") == PAD_B_X));
     }
 
     /**

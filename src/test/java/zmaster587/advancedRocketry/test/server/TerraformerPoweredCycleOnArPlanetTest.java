@@ -43,6 +43,10 @@ import static zmaster587.advancedRocketry.test.server.WorldCommandFixtures.exec;
  */
 public class TerraformerPoweredCycleOnArPlanetTest extends AbstractSharedServerTest {
 
+    /** The terraformer's own ceiling, in atmosphere-density units: the planet must start below it
+     *  or the cycle has nothing to do. */
+    private static final int TERRAFORMER_CEILING = 1600;
+
     private static final String CURRENT_ATMOS = "currentAtmosphere";
     private static final String POWER_POS = "powerPos";
     private static final String LIQUID_INPUT_POS = "liquidInputPos";
@@ -131,7 +135,7 @@ public class TerraformerPoweredCycleOnArPlanetTest extends AbstractSharedServerT
         exec("ar planet set " + newDim + " atmosphereDensity 100");
         int densityBefore = readDensity();
         assertTrue("arrangement: the planet must start below the terraformer's ceiling, got "
-                + densityBefore, densityBefore < 1600);
+                + densityBefore, densityBefore < TERRAFORMER_CEILING);
         // Refill loop: terraformer needs BOTH N2 and O2 each tick.
         // TileFluidHatch holds one fluid per tank — so split: hatch 0+1
         // are N2 sources, hatch 2+3 are O2 sources. The controller's

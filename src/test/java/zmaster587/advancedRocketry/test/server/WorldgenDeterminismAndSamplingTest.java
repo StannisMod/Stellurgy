@@ -34,6 +34,10 @@ import static org.junit.Assert.assertTrue;
  */
 public class WorldgenDeterminismAndSamplingTest extends AbstractSharedServerTest {
 
+    /** The world's build ceiling, in blocks — vanilla's own, cited so the range check reads as the
+     *  world bound it is. */
+    private static final int WORLD_CEILING_Y = 256;
+
     private static final String AR_DIMS_ARRAY_PATTERN = "arDimensions";
     private static final String TOP_Y_PATTERN = "topY";
     private static final String BIOME_PATTERN = "biome";
@@ -74,7 +78,7 @@ public class WorldgenDeterminismAndSamplingTest extends AbstractSharedServerTest
         String biome = group(BIOME_PATTERN, sample, "biome");
         String topBlock = group(TOP_BLOCK_PATTERN, sample, "topBlock");
 
-        assertTrue("topY out of valid range [0,256]: " + topY, topY >= 0 && topY <= 256);
+        assertTrue("topY out of valid range [0,256]: " + topY, topY >= 0 && topY <= WORLD_CEILING_Y);
         assertNotNull(biome);
         assertNotNull(topBlock);
         // topBlock has a registry-style id; "minecraft:air" can happen if the

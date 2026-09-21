@@ -37,6 +37,10 @@ import static org.junit.Assert.assertTrue;
  */
 public class FreeFlightPhysicsTest {
 
+    /** The lateral drift that counts as SHRUNK, in blocks/tick — the test's own bar: the drift
+     *  starts many times this and the claim is that damping pulls it down. */
+    private static final double DRIFT_SHRANK = 0.5;
+
     private static final double DELTA = 1e-6;
 
     /** A healthy gross thrust acceleration (well above default gravity). */
@@ -385,8 +389,8 @@ public class FreeFlightPhysicsTest {
     @Test
     public void liftoffDampsHorizontalDriftAndKeepsOrientation() {
         Step s = FreeFlightPhysics.liftoffStep(65.0, 65.0, 0.5, 0, -0.5, 33f, -12f, THRUST);
-        assertTrue("X drift must shrink", Math.abs(s.motionX) < 0.5);
-        assertTrue("Z drift must shrink", Math.abs(s.motionZ) < 0.5);
+        assertTrue("X drift must shrink", Math.abs(s.motionX) < DRIFT_SHRANK);
+        assertTrue("Z drift must shrink", Math.abs(s.motionZ) < DRIFT_SHRANK);
         assertEquals("yaw untouched by the assist", 33f, s.yaw, DELTA);
         assertEquals("pitch untouched by the assist", -12f, s.pitch, DELTA);
     }

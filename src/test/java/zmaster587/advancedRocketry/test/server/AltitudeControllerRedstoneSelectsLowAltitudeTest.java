@@ -26,6 +26,16 @@ import static zmaster587.advancedRocketry.test.server.WorldCommandFixtures.exec;
  */
 public class AltitudeControllerRedstoneSelectsLowAltitudeTest extends AbstractSharedServerTest {
 
+    /**
+     * The altitude below which a target counts as LOW, in blocks.
+     *
+     * <p>The TEST'S OWN, and it is a line between two production behaviours rather than a tuned
+     * number: with redstone on and no signal the controller takes the minimum, which is a handful
+     * of blocks, while the defect floors it to the GUI's own default near 200. Anything under this
+     * is unambiguously the first.</p>
+     */
+    private static final int LOW_ALTITUDE_BLOCKS = 190;
+
     private static final int SPACE_DIM = -2;
     private static final String STATION_ID = "id";
 
@@ -61,7 +71,7 @@ public class AltitudeControllerRedstoneSelectsLowAltitudeTest extends AbstractSh
         assertTrue("C142: with redstone ON and no signal (power 0), the altitude target must be "
                         + "a LOW altitude (Math.min gives 4), not floored to the GUI max 190 by the old "
                         + "Math.max. Got targetOrbitalDistance=" + target + " info=" + postInfo.raw(),
-                target < 190);
+                target < LOW_ALTITUDE_BLOCKS);
     }
 
     /** What the server says about one station. */

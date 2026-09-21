@@ -33,6 +33,10 @@ import static org.junit.Assert.assertTrue;
  */
 public class PlanetRealizationTest {
 
+    /** How far a procedural planet must travel in a year, in blocks, to be GOING ROUND its star
+     *  rather than standing at a fixed point. The TEST'S OWN sensitivity bar. */
+    private static final double ORBITED_BLOCKS = 1000d;
+
     private static final long SEED = 0x5EED5EEDL;
 
     @After
@@ -301,7 +305,7 @@ public class PlanetRealizationTest {
         long later = 24000L * 48L;
         double planetTravelled = planet.absoluteAt(0L).minus(planet.absoluteAt(later)).length();
         assertTrue("a procedural planet must go round its star, not stand at a fixed point"
-                + " (it moved " + planetTravelled + " blocks in a year)", planetTravelled > 1000d);
+                + " (it moved " + planetTravelled + " blocks in a year)", planetTravelled > ORBITED_BLOCKS);
 
         double separationNow = planet.absoluteAt(0L).minus(moon.absoluteAt(0L)).length();
         double separationLater = planet.absoluteAt(later).minus(moon.absoluteAt(later)).length();

@@ -35,6 +35,9 @@ import static org.junit.Assert.assertTrue;
  */
 public class MissionGasCompletionTest extends AbstractSharedServerTest {
 
+    /** The oxygen the mission delivers, in mB — the arrangement's own amount, read back. */
+    private static final int DELIVERED_OXYGEN_MB = 64000;
+
     private static final String MISSION_ID = "missionId";
 
     private static String ok(java.util.List<String> resp) {
@@ -152,6 +155,6 @@ public class MissionGasCompletionTest extends AbstractSharedServerTest {
         // Each filled tile holds 64000 mB of oxygen — production literal
         // at MissionGasCollection.java:50 (FluidStack(type, 64000)).
         assertTrue("fluid contents must include oxygen 64000 mB: " + cargo.raw(),
-                cargo.fluidAmount("oxygen") == 64000);
+                cargo.fluidAmount("oxygen") == DELIVERED_OXYGEN_MB);
     }
 }

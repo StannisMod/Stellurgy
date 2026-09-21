@@ -41,6 +41,8 @@ import static org.junit.Assert.assertTrue;
 @FixMethodOrder(MethodSorters.NAME_ASCENDING)
 public class VSShipFrameShieldE2ETest extends AbstractSharedVsClientE2ETest {
 
+
+
     @Override
     protected String subsystem() {
         return "vs-ship-frame-shield";
@@ -196,7 +198,7 @@ public class VSShipFrameShieldE2ETest extends AbstractSharedVsClientE2ETest {
                 subToWorld > MAPPED_OUT_OF_SUBSPACE_BLOCKS);
         assertTrue("the shell's world centre is not near the ship's world position (worldXZ=" + wx1 + ","
                 + wz1 + " ship=" + bx + "," + bz + ") — the shell is not on the hull:\n" + emitters,
-                Math.abs(wx1 - (bx + 0.5)) < 24.0 && Math.abs(wz1 - (bz + 0.5)) < SHELL_NOT_AT_SHIP_BLOCKS);
+                Math.abs(wx1 - (bx + 0.5)) < SHELL_NOT_AT_SHIP_BLOCKS && Math.abs(wz1 - (bz + 0.5)) < SHELL_NOT_AT_SHIP_BLOCKS);
 
         // Check 3 (before pushing, while the ship is roughly settled): charge the emitter and deflect an
         // inbound arrow off the ship-framed shell. Re-read the world centre immediately so the arrow is

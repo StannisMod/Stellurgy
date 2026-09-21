@@ -26,6 +26,9 @@ import static org.junit.Assert.assertTrue;
  */
 public class OrbitalLaserDrillMultiblockTest extends AbstractSharedServerTest {
 
+    /** The ticks this scenario ASKS the force-tick verb for, read back from its reply. */
+    private static final int FORCED_TICKS = 20;
+
     private static final int CX = 8500;
     private static final int CY = FixtureSite.OPEN_AIR_Y;
     private static final int CZ = 8500;
@@ -92,7 +95,7 @@ public class OrbitalLaserDrillMultiblockTest extends AbstractSharedServerTest {
         assertTrue("force-tick must not error: " + tick,
                 Reply.of(tick).ok());
         assertTrue("force-tick must report 20 ticks completed: " + tick,
-                (Reply.of(tick).integer("ticked") == 20));
+                (Reply.of(tick).integer("ticked") == FORCED_TICKS));
 
         // (c) Plug's energy capability still exposed after 20 ticks (no
         // capability loss from idle ticking).

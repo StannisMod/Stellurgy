@@ -24,6 +24,14 @@ import static org.junit.Assert.assertTrue;
  */
 public class RocketInfrastructureSmokeTest extends AbstractSharedServerTest {
 
+    /**
+     * The largest link distance that is still a FINITE value, in blocks.
+     *
+     * <p>The TEST'S OWN: what it refuses is a sentinel or an overflow reported as a distance, not a
+     * particular reach. Ten thousand blocks is far beyond any link the mod grants.</p>
+     */
+    private static final int FINITE_LINK_DISTANCE_BLOCKS = 10_000;
+
     private static final String ENT_ID = "entityId";
     private static final String CONN = "connectedCount";
     private static final String FLUID_AMOUNT = "totalAmount";
@@ -88,7 +96,7 @@ public class RocketInfrastructureSmokeTest extends AbstractSharedServerTest {
                 Reply.of(fueling).has("maxLinkDistance"));
         int fuelingMax = extractInt(fueling, "maxLinkDistance");
         assertTrue("fueling station maxLinkDistance must be a positive finite value: " + fueling,
-                fuelingMax > 0 && fuelingMax < 10_000);
+                fuelingMax > 0 && fuelingMax < FINITE_LINK_DISTANCE_BLOCKS);
 
         int lx = 910;
         ok(client().execute("artest place 0 " + lx + " 65 900 advancedrocketry:loader 3"));

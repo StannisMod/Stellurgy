@@ -20,6 +20,20 @@ import static org.junit.Assert.assertTrue;
  */
 public class AstronomicalBodyHelperTest {
 
+    /**
+     * What a close companion does to the light, as a FACTOR of the lone star's.
+     *
+     * <p>The TEST'S OWN, and the pair is the claim: a companion beside the star nearly doubles the
+     * light (so the reading must be past 1.9) while a distant one adds only a little (so it must
+     * stay under 1.1). Neither is a production constant — they are the shape the law must have.</p>
+     */
+    private static final double CLOSE_COMPANION_FACTOR = 1.9;
+    /** @see #CLOSE_COMPANION_FACTOR */
+    private static final double DISTANT_COMPANION_FACTOR = 1.1;
+
+    /** Two ordinary stars, as a factor — the brightness a DIMMED pair must never reach. */
+    private static final double TWO_ORDINARY_STARS = 2;
+
     private static StellarBody sunLikeStar() {
         StellarBody star = new StellarBody();
         // Defaults: size=1.0, blackHole=false, subStars=[]. Set temperature to a Sol-like value.
@@ -135,8 +149,8 @@ public class AstronomicalBodyHelperTest {
         double closeBrightness = AstronomicalBodyHelper.getStellarBrightness(close, 100);
         double wideBrightness = AstronomicalBodyHelper.getStellarBrightness(wide, 100);
 
-        assertTrue("a close companion nearly doubles the light", closeBrightness > 1.9 * alone);
-        assertTrue("a distant one adds only a little", wideBrightness < 1.1 * alone);
+        assertTrue("a close companion nearly doubles the light", closeBrightness > CLOSE_COMPANION_FACTOR * alone);
+        assertTrue("a distant one adds only a little", wideBrightness < DISTANT_COMPANION_FACTOR * alone);
         assertTrue("but it is never nothing", wideBrightness > alone);
     }
 
@@ -182,7 +196,7 @@ public class AstronomicalBodyHelperTest {
         assertEquals("a black hole and its companion each light the world on their own terms",
                 holeAlone + sunAlone, together, 1e-9);
         assertTrue("the hole stays dimmed: the pair is never as bright as two ordinary stars",
-                together < 2 * sunAlone);
+                together < TWO_ORDINARY_STARS * sunAlone);
     }
 
     @Test

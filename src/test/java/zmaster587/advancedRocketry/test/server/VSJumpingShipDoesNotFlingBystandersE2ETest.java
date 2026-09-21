@@ -42,6 +42,10 @@ import static org.junit.Assert.assertTrue;
  */
 public class VSJumpingShipDoesNotFlingBystandersE2ETest extends AbstractSharedServerTest {
 
+    /** The angular rate that says the departed hull IS rotating, in rad/s — a sensitivity control,
+     *  and float noise is the only thing under it. */
+    private static final double HULL_IS_ROTATING = 1e-3;
+
 
     /** A loaded overworld region of this class's own, well clear of every other server e2e. */
     private static final int SRC_X = 9400, SRC_Y = FixtureSite.OPEN_AIR_Y, SRC_Z = 9400;
@@ -183,7 +187,7 @@ public class VSJumpingShipDoesNotFlingBystandersE2ETest extends AbstractSharedSe
         // CONTROL 3 — the hull really is rotating. A hull that only translates offers a delta that
         // distance does not amplify, and this test would pass on a ship standing perfectly still.
         assertTrue("sensitivity control — the departed hull is not rotating, so nothing was offered"
-                + " to the subject at all:" + evidence, omega > 1e-3);
+                + " to the subject at all:" + evidence, omega > HULL_IS_ROTATING);
 
         // THE VERDICT: a ship's jump is not a velocity, so a body it left behind stays where it was.
         assertTrue("a ship that jumped away must not throw the body it was carrying: it drifted "

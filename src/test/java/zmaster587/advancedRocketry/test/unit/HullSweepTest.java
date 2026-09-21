@@ -26,6 +26,14 @@ import static org.junit.Assert.assertTrue;
  */
 public class HullSweepTest {
 
+    /** The displacement this sweep ASKS for, per axis, in blocks. Not thresholds: the
+     *  arrangement's own request, cited by the assertions that read the answer back. */
+    private static final double WANT_DX = 0.9;
+    /** @see #WANT_DX */
+    private static final double WANT_DY = 0.7;
+    /** @see #WANT_DX */
+    private static final double WANT_DZ = 0.4;
+
     private static final double SLOP_TOL = 1.0E-4;
 
     private static final double[][] IDENTITY = {{1, 0, 0}, {0, 1, 0}, {0, 0, 1}};
@@ -195,9 +203,9 @@ public class HullSweepTest {
         assertTrue("finite dx", Double.isFinite(r.dx));
         assertTrue("finite dy", Double.isFinite(r.dy));
         assertTrue("finite dz", Double.isFinite(r.dz));
-        assertTrue("|dx| bounded by want", Math.abs(r.dx) <= 0.9 + 1.0E-9);
-        assertTrue("|dy| bounded by want", Math.abs(r.dy) <= 0.7 + 1.0E-9);
-        assertTrue("|dz| bounded by want", Math.abs(r.dz) <= 0.4 + 1.0E-9);
+        assertTrue("|dx| bounded by want", Math.abs(r.dx) <= WANT_DX + 1.0E-9);
+        assertTrue("|dy| bounded by want", Math.abs(r.dy) <= WANT_DY + 1.0E-9);
+        assertTrue("|dz| bounded by want", Math.abs(r.dz) <= WANT_DZ + 1.0E-9);
     }
 
     @Test

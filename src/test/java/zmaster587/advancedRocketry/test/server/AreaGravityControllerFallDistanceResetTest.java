@@ -44,6 +44,15 @@ import static org.junit.Assert.assertTrue;
  */
 public class AreaGravityControllerFallDistanceResetTest extends AbstractSharedServerTest {
 
+    /**
+     * The fall distance that counts as RESET, in blocks.
+     *
+     * <p>The TEST'S OWN: production sets it to zero, so half a block is float noise. The same
+     * number read the other way is what says the out-of-radius entity was NOT touched — it still
+     * carries the ~7.5 it accumulated.</p>
+     */
+    private static final double FALL_DISTANCE_RESET_BLOCKS = 0.5;
+
     private static final int CX = 5560;
     private static final int CY = FixtureSite.OPEN_AIR_Y;
     private static final int CZ = 5560;
@@ -94,12 +103,12 @@ public class AreaGravityControllerFallDistanceResetTest extends AbstractSharedSe
         assertTrue("controller must reset fallDistance of the IN-radius entity "
                         + "to 0 (the 'no fall damage in gravity field' contract); "
                         + "in=" + in + " out=" + out,
-                in < 0.5);
+                in < FALL_DISTANCE_RESET_BLOCKS);
         assertTrue("controller must NOT touch the OUT-of-radius entity "
                         + "(spatial gate); it should still read ~7.5 — which also "
                         + "confirms set-fall-distance took effect; "
                         + "in=" + in + " out=" + out,
-                out > 0.5);
+                out > FALL_DISTANCE_RESET_BLOCKS);
     }
 
     private int spawnPinnedStand(double x, double y, double z) throws Exception {
