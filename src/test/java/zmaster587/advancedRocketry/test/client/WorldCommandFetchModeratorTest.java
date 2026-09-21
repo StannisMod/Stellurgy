@@ -146,6 +146,34 @@ public class WorldCommandFetchModeratorTest {
      * How long one link of the fetch may take — a deadline for a discrete event, the same 200 ticks
      * the position poll it replaces was capped at.
      */
+    /**
+     * How near its staged spot a bot must be for the BASELINE to hold, in blocks.
+     *
+     * <p>The TEST'S OWN: both bots are teleported to a known point, so the honest statement is that
+     * they are there; two blocks is the settle of a body landing on a platform.</p>
+     */
+    private static final double BASELINE_NEAR_BLOCKS = 2.0;
+
+    /**
+     * How near bot1's pre-fetch position bot2 must land, in blocks, for the fetch to have PLACED
+     * him there.
+     *
+     * <p>The TEST'S OWN, and tighter than the baseline because the fetch is a placement rather than
+     * a landing: a block and a half is under a body's width. The CLIENT's rendering and the
+     * SERVER's record are both held to it, which is the pair this class exists to compare.</p>
+     */
+    private static final double FETCHED_TO_BLOCKS = 1.5;
+
+    /**
+     * How far bot2 must have MOVED from where he was, in blocks, for the fetch to have done
+     * anything at all.
+     *
+     * <p>The TEST'S OWN sensitivity bar: the two bots are staged far apart, so ten blocks cannot be
+     * reached by settling and is easily cleared by a real fetch. Without it a fetch that did
+     * nothing would pass every other assertion in the method.</p>
+     */
+    private static final double FETCH_MOVED_HIM_BLOCKS = 10.0;
+
     private static final int LINK_BUDGET_TICKS = 200;
 
     /** Moderator (bot1, op) fetches bot2 from position B to position A. */
@@ -178,12 +206,12 @@ public class WorldCommandFetchModeratorTest {
         double bot2PreZ = bot2Pre.z;
         assertTrue("baseline: bot1 should be near (" + sx + "," + sz + "), got ("
                         + bot1PreX + "," + bot1PreZ + ")",
-                Math.abs(bot1PreX - (sx + 0.5)) < 2.0
-                        && Math.abs(bot1PreZ - (sz + 0.5)) < 2.0);
+                Math.abs(bot1PreX - (sx + 0.5)) < BASELINE_NEAR_BLOCKS
+                        && Math.abs(bot1PreZ - (sz + 0.5)) < BASELINE_NEAR_BLOCKS);
         assertTrue("baseline: bot2 should be near (" + tx + "," + tz + "), got ("
                         + bot2PreX + "," + bot2PreZ + ")",
-                Math.abs(bot2PreX - (tx + 0.5)) < 2.0
-                        && Math.abs(bot2PreZ - (tz + 0.5)) < 2.0);
+                Math.abs(bot2PreX - (tx + 0.5)) < BASELINE_NEAR_BLOCKS
+                        && Math.abs(bot2PreZ - (tz + 0.5)) < BASELINE_NEAR_BLOCKS);
         // The two bots MUST be at clearly distinct positions for the
         // moderator-fetch result to be observable.
         assertNotEquals("baseline: bots must start at distinct X coords",
@@ -229,19 +257,19 @@ public class WorldCommandFetchModeratorTest {
         assertTrue("post-fetch: bot2's CLIENT must render itself at bot1's pre-fetch X ("
                         + bot1PreX + "), got " + bot2PostX
                         + " — the server's own placement record: " + placed,
-                Math.abs(bot2PostX - bot1PreX) < 1.5);
+                Math.abs(bot2PostX - bot1PreX) < FETCHED_TO_BLOCKS);
         assertTrue("post-fetch: bot2's CLIENT must render itself at bot1's pre-fetch Z ("
                         + bot1PreZ + "), got " + bot2PostZ,
-                Math.abs(bot2PostZ - bot1PreZ) < 1.5);
+                Math.abs(bot2PostZ - bot1PreZ) < FETCHED_TO_BLOCKS);
         // And NOT at its prior position any more.
         assertTrue("post-fetch: bot2 must have moved away from its prior X ("
                         + bot2PreX + "), got " + bot2PostX,
-                Math.abs(bot2PostX - bot2PreX) > 10.0);
+                Math.abs(bot2PostX - bot2PreX) > FETCH_MOVED_HIM_BLOCKS);
 
         // Cross-side oracle: the server agrees about bot2's new position.
         PlayerPosition bot2Post = PlayerPosition.of(this::exec, BOT2_NAME);
         assertTrue("server must agree bot2 sits at bot1's pre-fetch X: " + bot2Post.raw(),
-                Math.abs(bot2Post.x - bot1PreX) < 1.5);
+                Math.abs(bot2Post.x - bot1PreX) < FETCHED_TO_BLOCKS);
     }
 
 }

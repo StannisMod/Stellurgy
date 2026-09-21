@@ -86,6 +86,131 @@ public class FreeFlightModeE2ETest extends AbstractSharedClientE2ETest {
     /** How long the CLIENT is given to perform a seating or a release the server has already done,
      *  in ticks — a ceiling on one round trip. */
     private static final int SEAT_LINK_BUDGET_TICKS = 200;
+
+    /**
+     * How far the craft must rise for a vertical-thrust leg to have measured a CLIMB, in blocks.
+     *
+     * <p>The TEST'S OWN sensitivity bar: two blocks is many times the settle jitter of a craft
+     * sitting on its pad, and far under what a live climb covers in the same window. What it
+     * refuses is a craft that did not move.</p>
+     */
+    private static final double CLIMBED_BLOCKS = 2.0;
+
+    /**
+     * How far the heading must turn for a yaw input to have ARRIVED, in degrees.
+     *
+     * <p>The TEST'S OWN: ten degrees over eight ticks is far above the drift of a craft holding its
+     * heading and far below what the commanded rate produces.</p>
+     */
+    private static final double YAW_TURNED_DEG = 10.0;
+
+    /**
+     * How far the CLIENT's rendering of the craft may sit from the SERVER's position, in blocks.
+     *
+     * <p>The TEST'S OWN replication tolerance — nothing in the mod decides how far apart the two
+     * sides may be, and the contract is "the same craft". Six blocks is a craft's own length, so a
+     * client drawing it somewhere else entirely still fails.</p>
+     */
+    private static final double CLIENT_TRACKS_SERVER_BLOCKS = 6.0;
+
+    /**
+     * How far the craft must strafe for the inventory key to have been RE-BOUND to strafing, in
+     * blocks, signed because the direction is the claim.
+     *
+     * <p>The TEST'S OWN: the key is held for a fixed window and the craft is at yaw 0, so a
+     * negative X of more than a block is unambiguous — and a key that opened an inventory instead
+     * moves it nowhere.</p>
+     */
+    private static final double STRAFED_BLOCKS = -1.0;
+
+    /**
+     * The upward motion that says vertical thrust is being PRODUCED, in blocks/tick.
+     *
+     * <p>The TEST'S OWN precondition bar, and small on purpose: it gates a leg whose subject is
+     * what happens when that thrust is cut, so all it has to establish is that there was some.</p>
+     */
+    private static final double PRODUCING_CLIMB = 0.01;
+
+    /**
+     * What counts as BRAKED for a craft whose vertical input has been cut, in blocks/tick.
+     *
+     * <p>The TEST'S OWN: the contract is a hover, so the honest statement is zero and this is the
+     * residual of the brake settling. A craft still climbing is an order of magnitude above it.</p>
+     */
+    private static final double BRAKED_TO_HOVER = 0.05;
+
+    /**
+     * What counts as NEAR-STATIONARY for a craft already hovering, in blocks/tick — a shade wider
+     * than {@link #BRAKED_TO_HOVER} because the hover is sampled over a window rather than at the
+     * instant the brake finished.
+     */
+    private static final double HOVER_STATIONARY = 0.06;
+
+    /**
+     * The vertical-rate SETPOINT that says the ramp ran while the key was held, in blocks/s.
+     *
+     * <p>The TEST'S OWN sensitivity bar on production's own ramped value: what it refuses is a
+     * setpoint that never left zero.</p>
+     */
+    private static final double VRT_SETPOINT_RAMPED = 0.4;
+
+    /**
+     * The actual vertical velocity that says the craft is CHASING that setpoint, in blocks/s.
+     *
+     * <p>The TEST'S OWN, and deliberately well under the setpoint bar above: the claim is that the
+     * craft follows, not that it has arrived.</p>
+     */
+    private static final double VELOCITY_CHASES_SETPOINT = 0.1;
+
+    /**
+     * How far the camera may sit from the craft's own attitude on any rendered frame, in degrees.
+     *
+     * <p>The TEST'S OWN. The two are the same attitude read on different frames, one interpolated,
+     * so this is frame lag rather than a budget for drift — and the defect it refuses is a camera
+     * DETACHED from the craft, which diverges without bound.</p>
+     */
+    private static final double CAMERA_TRACKS_NOSE_DEG = 20.0;
+
+    /**
+     * How close the camera yaw must come to the server's craft heading once the turn stops, in
+     * degrees.
+     *
+     * <p>The TEST'S OWN: two degrees is the residual of an interpolated camera settling onto a
+     * heading the server has already stopped changing.</p>
+     */
+    private static final double CAMERA_CONVERGED_DEG = 2.0;
+
+    /**
+     * How far the nose must pitch for a mouse drag to have travelled the whole swipe&rarr;rate&rarr;
+     * server path, in degrees.
+     *
+     * <p>The TEST'S OWN sensitivity bar: twenty degrees cannot be reached by frame noise, and a
+     * drag that never reached the server produces none of it.</p>
+     */
+    private static final double NOSE_PITCHED_DEG = 20.0;
+
+    /**
+     * How far the craft must BANK for a horizontal mouse move to have been read as roll, in
+     * degrees.
+     */
+    private static final double BANKED_DEG = 15.0;
+
+    /**
+     * How far the heading may drift while the craft banks, in degrees.
+     *
+     * <p>The TEST'S OWN, and the pair with {@link #BANKED_DEG} is the whole claim: roll must not
+     * COUPLE into yaw. It is deliberately under the bank bar, so a run where the two moved together
+     * fails.</p>
+     */
+    private static final double YAW_DRIFT_WHILE_BANKING_DEG = 12.0;
+
+    /**
+     * How far a commanded roll must integrate server-side to have been APPLIED, in degrees.
+     *
+     * <p>The TEST'S OWN sensitivity bar, and lower than {@link #BANKED_DEG} because it is read over
+     * a shorter window: what it refuses is a command the server ignored.</p>
+     */
+    private static final double SERVER_ROLL_INTEGRATED_DEG = 3.0;
     /**
      * How much of the fuel the rocket calls PRIMARY it is carrying, or {@code -1} when the reply
      * names no primary fuel or holds no entry for it.
@@ -569,7 +694,7 @@ public class FreeFlightModeE2ETest extends AbstractSharedClientE2ETest {
 
         assertTrue("FF rocket must gain real altitude under vertical thrust "
                         + "(yBefore=" + yBefore + " yAfter=" + yAfter + ")",
-                yAfter - yBefore > 2.0);
+                yAfter - yBefore > CLIMBED_BLOCKS);
         assertTrue("rocket must still be in flight while climbing: " + after.raw(),
                 after.inFlight);
 
@@ -621,7 +746,7 @@ public class FreeFlightModeE2ETest extends AbstractSharedClientE2ETest {
 
         assertTrue("yaw input must rotate heading over 8 ticks "
                         + "(before=" + yawBefore + " after=" + yawAfter + ")",
-                Math.abs(yawAfter - yawBefore) > 10.0);
+                Math.abs(yawAfter - yawBefore) > YAW_TURNED_DEG);
 
         exec("artest rocket free-flight-input " + rocketId + " 0 0 0 0 0");
         exec("artest player dismount");
@@ -671,7 +796,7 @@ public class FreeFlightModeE2ETest extends AbstractSharedClientE2ETest {
         // 1) Real key -> real packet -> server physics.
         assertTrue("holding real R must drive a server-side climb via the packet path "
                         + "(before=" + svrYBefore + " after=" + svrYAfter + ")",
-                svrYAfter - svrYBefore > 2.0);
+                svrYAfter - svrYBefore > CLIMBED_BLOCKS);
         assertTrue("rocket must stay in flight while climbing: " + svrInfo.raw(),
                 svrInfo.inFlight);
 
@@ -679,7 +804,7 @@ public class FreeFlightModeE2ETest extends AbstractSharedClientE2ETest {
         //    ct=50 poscorrection smoothing that this fix bypasses for FF.
         assertTrue("client-rendered rocket Y must track server Y within a few blocks "
                         + "(client=" + cliY + " server=" + svrYAfter + ")",
-                Math.abs(cliY - svrYAfter) < 6.0);
+                Math.abs(cliY - svrYAfter) < CLIENT_TRACKS_SERVER_BLOCKS);
 
         exec("artest player dismount");
     }
@@ -904,7 +1029,7 @@ public class FreeFlightModeE2ETest extends AbstractSharedClientE2ETest {
                 + "(would also freeze steering): " + screenDuring, "", screenDuring);
         assertTrue("inventory key must instead strafe the craft (-X at yaw 0) while piloting "
                         + "(xBefore=" + xBefore + " xAfter=" + xAfter + ")",
-                xAfter - xBefore < -1.0);
+                xAfter - xBefore < STRAFED_BLOCKS);
         assertTrue("rocket must stay in flight (override must not have frozen control): "
                 + info.raw(), info.inFlight);
 
@@ -960,7 +1085,7 @@ public class FreeFlightModeE2ETest extends AbstractSharedClientE2ETest {
         double y1 = climbInfo.posY;
         double myUp = climbInfo.motionY;
         bot().releaseKey(Keyboard.KEY_R);
-        assertTrue("R must climb (y0=" + y0 + " y1=" + y1 + ")", y1 - y0 > 2.0);
+        assertTrue("R must climb (y0=" + y0 + " y1=" + y1 + ")", y1 - y0 > CLIMBED_BLOCKS);
 
         // F is downward thrust: it must reduce the vertical velocity vs the climb.
         bot().holdKey(Keyboard.KEY_F);
@@ -987,7 +1112,7 @@ public class FreeFlightModeE2ETest extends AbstractSharedClientE2ETest {
         bot().waitTicks(12);
         double myClimb = rocketInfo(rocketId).motionY;
         assertTrue("precondition: R must be producing upward motion, got " + myClimb,
-                myClimb > 0.01);
+                myClimb > PRODUCING_CLIMB);
 
         // Now also hold X (cut) — vertical input is zeroed; with FA-off coast the
         // craft no longer accelerates upward (motionY stops growing).
@@ -1035,7 +1160,7 @@ public class FreeFlightModeE2ETest extends AbstractSharedClientE2ETest {
         bot().releaseKey(Keyboard.KEY_X);
 
         assertTrue("cut must brake the climb into a hover (was " + myMoving
-                + ", now " + myCut + ")", Math.abs(myCut) < 0.05);
+                + ", now " + myCut + ")", Math.abs(myCut) < BRAKED_TO_HOVER);
         assertTrue("the hover must hold altitude, not land: " + info.raw(), info.inFlight);
 
         exec("artest rocket free-flight-input " + rocketId + " 0 0 0 0 0");
@@ -1097,7 +1222,7 @@ public class FreeFlightModeE2ETest extends AbstractSharedClientE2ETest {
         assertTrue("craft must hover ~1 block above the pad (y0=" + y0 + " y=" + y + ")",
                 y > y0 + 0.5 && y < y0 + 1.6);
         assertTrue("hover must be near-stationary (motionY=" + my + ")",
-                Math.abs(my) < 0.06);
+                Math.abs(my) < HOVER_STATIONARY);
 
         // The pilot SEES the engine state: the rendered HUD reports ENGINES ON
         // (or the transient "Engines started" flash right after the start).
@@ -1207,9 +1332,9 @@ public class FreeFlightModeE2ETest extends AbstractSharedClientE2ETest {
         double sp = Double.parseDouble(m.group(1));
         double act = Double.parseDouble(m.group(2));
         assertTrue("VRT setpoint must have ramped up while R held (got " + sp + ")",
-                sp > 0.4);
+                sp > VRT_SETPOINT_RAMPED);
         assertTrue("actual velocity must chase the setpoint (got " + act + ")",
-                act > 0.1);
+                act > VELOCITY_CHASES_SETPOINT);
         assertTrue("HUD must show the speed readout: " + hudClimb,
                 hudClimb.contains("SPD"));
 
@@ -1313,7 +1438,7 @@ public class FreeFlightModeE2ETest extends AbstractSharedClientE2ETest {
         String camWindow = closeFlightCameraWindow(camMark, "the manoeuvring leg");
         double maxErr = Events.number(camWindow, "maxErrDeg");
         assertTrue("camera must never detach from the craft on any rendered frame "
-                + "(worst frame divergence " + maxErr + "°)", maxErr < 20.0);
+                + "(worst frame divergence " + maxErr + "°)", maxErr < CAMERA_TRACKS_NOSE_DEG);
 
         // At-rest exactness, measured atomically on the render thread (a bot
         // reading camera and craft in two calls can straddle a tracker
@@ -1357,7 +1482,7 @@ public class FreeFlightModeE2ETest extends AbstractSharedClientE2ETest {
                 + "° settled=" + settledErr + "° (the bound is 2.0°)");
         assertTrue("camera yaw must converge to the server craft heading at some point after the"
                 + " turn->idle edge (best residual over the window " + convErr + "°, settled "
-                + settledErr + "°)", convErr < 2.0);
+                + settledErr + "°)", convErr < CAMERA_CONVERGED_DEG);
 
         exec("artest rocket free-flight-input " + rocketId + " 0 0 0 0 0");
         exec("artest player dismount");
@@ -1408,9 +1533,9 @@ public class FreeFlightModeE2ETest extends AbstractSharedClientE2ETest {
         bot().releaseKey(Keyboard.KEY_R);
 
         assertTrue("mouse drag must pitch the nose down through the real "
-                + "swipe->rate->server path (got " + nosePitch + "°)", nosePitch > 20.0);
+                + "swipe->rate->server path (got " + nosePitch + "°)", nosePitch > NOSE_PITCHED_DEG);
         assertTrue("camera must stay locked to the nose during the drag "
-                + "(worst frame divergence " + maxErr + "°)", maxErr < 20.0);
+                + "(worst frame divergence " + maxErr + "°)", maxErr < CAMERA_TRACKS_NOSE_DEG);
 
         exec("artest rocket free-flight-input " + rocketId + " 0 0 0 0 0");
         exec("artest player dismount");
@@ -1443,10 +1568,10 @@ public class FreeFlightModeE2ETest extends AbstractSharedClientE2ETest {
         bot().releaseKey(Keyboard.KEY_R);
 
         assertTrue("mouse-horizontal must BANK the craft — client camera roll must "
-                + "grow (roll=" + camRoll + "°)", Math.abs(camRoll) > 15.0);
+                + "grow (roll=" + camRoll + "°)", Math.abs(camRoll) > BANKED_DEG);
         assertTrue("mouse-horizontal must NOT change the heading — client yaw drifted "
                 + angDiff(yaw1, yaw0) + "° (roll must not couple into yaw)",
-                angDiff(yaw1, yaw0) < 12.0);
+                angDiff(yaw1, yaw0) < YAW_DRIFT_WHILE_BANKING_DEG);
 
         exec("artest rocket free-flight-input " + rocketId + " 0 0 0 0 0");
         exec("artest player dismount");
@@ -1595,7 +1720,7 @@ public class FreeFlightModeE2ETest extends AbstractSharedClientE2ETest {
         exec("artest player dismount");
 
         assertTrue("commanded roll must integrate server-side (roll0=" + roll0
-                + " roll1=" + roll1 + ")", angDiff(roll1, roll0) > 3.0);
+                + " roll1=" + roll1 + ")", angDiff(roll1, roll0) > SERVER_ROLL_INTEGRATED_DEG);
         assertTrue("client must survive rendering the banked craft (camera-roll mixin)",
                 stillRiding);
     }

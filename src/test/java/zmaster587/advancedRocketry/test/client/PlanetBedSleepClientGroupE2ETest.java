@@ -60,6 +60,39 @@ public class PlanetBedSleepClientGroupE2ETest extends AbstractSharedClientE2ETes
     private static final int DIM_SKIP = 9501;
 
     private static final int ROTATIONAL_PERIOD = 30000;
+
+    /**
+     * The band the STAGED night time must fall in, in ticks.
+     *
+     * <p>The lower end is the arrangement's own number — the clock is set to 20 000 — and the width
+     * is the test's: a few hundred ticks pass between staging and reading, so the gate tolerates
+     * drift without tolerating a clock that was never staged.</p>
+     */
+    private static final int STAGED_NIGHT_TICKS = 20000;
+    /** @see #STAGED_NIGHT_TICKS */
+    private static final int STAGED_NIGHT_DRIFT_TICKS = 2000;
+
+    /**
+     * How near a multiple of the planet's own rotational period the clock must land, in ticks, for
+     * the skip to have landed ON planetary dawn.
+     *
+     * <p>The TEST'S OWN: the defect it exists for is vanilla rounding the skip to its own 24 000,
+     * which lands the planet's clock nowhere near its dawn. A tenth of the period is far inside
+     * that error and far outside tick drift.</p>
+     */
+    private static final int PLANETARY_DAWN_TOLERANCE_TICKS = 2400;
+
+    /** A vanilla day, in ticks — the overworld clock's own wrap, cited so the unaffected-clock gate
+     *  reads as the wrap it is rather than as a tuned bound. */
+    private static final int VANILLA_DAY_TICKS = 24000;
+
+    /**
+     * How near the sleeping platform the player must stand, in blocks, to be able to reach the bed.
+     *
+     * <p>The TEST'S OWN: the server drops a right-click from further away, so this is the
+     * arrangement asserting what production is about to require.</p>
+     */
+    private static final double ON_THE_PLATFORM_BLOCKS = 2.0;
     private static final String PLAYER = "ForgeTestClient";
     private static final String FLAG = "allowTimeSkipOnPlanets";
 
@@ -221,7 +254,8 @@ public class PlanetBedSleepClientGroupE2ETest extends AbstractSharedClientE2ETes
         JsonObject before = dimTimeJson(DIM_SKIP);
         long staged = before.get("worldTime").getAsLong();
         assertTrue("planet clock must be at the staged night time (~20000, tick drift "
-                + "tolerated): " + before, staged >= 20000 && staged < 22000);
+                + "tolerated): " + before, staged >= STAGED_NIGHT_TICKS
+                        && staged < STAGED_NIGHT_TICKS + STAGED_NIGHT_DRIFT_TICKS);
 
         // The real player right-clicks the bed foot (server normalizes to the head) -> production
         // trySleep -> fully asleep after 100 ticks -> the sleep skip runs WorldServer's setWorldTime
@@ -261,14 +295,14 @@ public class PlanetBedSleepClientGroupE2ETest extends AbstractSharedClientE2ETes
                 + planetTime, planetTime >= ROTATIONAL_PERIOD);
         assertTrue("sleep skip must land ON planetary dawn (multiple of " + ROTATIONAL_PERIOD
                         + ", vanilla 24000-rounding would miss it): " + planetTime,
-                planetTime % ROTATIONAL_PERIOD < 2400);
+                planetTime % ROTATIONAL_PERIOD < PLANETARY_DAWN_TOLERANCE_TICKS);
 
         // Per-dim isolation: the overworld's clock keeps ticking from 20000 — the planet's sleep skip
         // must NOT touch it.
         long overworldTime = dimTime(0);
         assertTrue("overworld clock must be unaffected by the planet's sleep skip "
                         + "(expected ~20000 + elapsed, got " + overworldTime + ")",
-                overworldTime >= 20000 && overworldTime < 24000);
+                overworldTime >= STAGED_NIGHT_TICKS && overworldTime < VANILLA_DAY_TICKS);
     }
 
     // ── arrangement, shared by both scenarios ────────────────────────────────────────────────────
@@ -356,7 +390,7 @@ public class PlanetBedSleepClientGroupE2ETest extends AbstractSharedClientE2ETes
                         + ", got " + standingY + "). He cannot reach the bed from there and the"
                         + " server will drop his right-click on its reach check without a word: "
                         + where,
-                Math.abs(standingY - BED_Y) < 2.0);
+                Math.abs(standingY - BED_Y) < ON_THE_PLATFORM_BLOCKS);
         scenario().record("stagedOn", dim).record("standingY", standingY);
     }
 

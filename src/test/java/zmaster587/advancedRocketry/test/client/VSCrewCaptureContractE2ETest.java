@@ -270,6 +270,177 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
      */
     private static final double DECK_LOOK_SWEEP_TOLERANCE_DEG = 20.0;
 
+    /**
+     * How far a body must rise above the surface it was standing on before it counts as having
+     * JUMPED, in blocks.
+     *
+     * <p>The TEST'S OWN, sized against vanilla rather than production: a vanilla jump leaves the
+     * ground with {@code motionY = 0.42} and apexes about 1.25 blocks up, so half a block sits
+     * comfortably inside a real jump and comfortably outside the sub-block bob of a body being
+     * re-seated by the deck it stands on.</p>
+     */
+    private static final double JUMP_LEFT_THE_DECK_BLOCKS = 0.5;
+
+    /**
+     * How far from the deck's own Y a body may settle and still be ON it, in blocks.
+     *
+     * <p>The TEST'S OWN. A block is 1.0, so a body within a block and a half of the deck is
+     * standing on it or on something it carries; anything further has fallen through the hull or
+     * been thrown off it, which is the pair of outcomes the landing leg refuses.</p>
+     */
+    private static final double LANDED_ON_THE_DECK_BLOCKS = 1.5;
+
+    /**
+     * The deck-normal Y above which the parked craft counts as UPRIGHT — the premise the
+     * ground-walker legs need to be false.
+     *
+     * <p>The TEST'S OWN, and deliberately loose: the commanded 45 degrees reads about 0.71, so any
+     * real tilt is far under this. What it refuses is an upright ship, where the frame aliasing
+     * those legs exist to forbid barely arises at all.</p>
+     */
+    private static final double TILTED_ENOUGH_UP_Y = 0.95;
+
+    /**
+     * How much a body's Y may change between two consecutive reads and still count as AT REST, in
+     * blocks.
+     *
+     * <p>The TEST'S OWN — a bound on "has stopped", not on anything production decides. Vanilla
+     * gravity reaches 0.08 blocks/tick after a single tick and keeps accelerating, so a falling
+     * body covers far more than this between two reads.</p>
+     */
+    private static final double AT_REST_Y_CHANGE_BLOCKS = 0.05;
+
+    /**
+     * How far a body walking on FLAT GROUND may move vertically across the whole walk, in blocks.
+     *
+     * <p>The TEST'S OWN: the ground is flat because the scenario laid it, so the honest statement is
+     * that his Y does not change. Two blocks tolerates a vanilla step up and a jump; the defect it
+     * refuses is a body snatched into the tilted ship's frame, which moves him by the lever arm
+     * between him and the hull — many blocks.</p>
+     */
+    private static final double GROUND_WALK_Y_SPREAD_BLOCKS = 2.0;
+
+    /**
+     * How far a DECLARED position may move between the two server reads either side of a client
+     * that tried to commit a forty-block step, in blocks.
+     *
+     * <p>The TEST'S OWN, and a bound on the SERVER's record rather than on production's guard:
+     * AR's own external-move guard is far tighter (a fifth of a block plus three times the carry),
+     * so what this pins is that a divergence of that size never survives to be declared at all.
+     * Four blocks is well under the forty the client attempted and well over an ordinary tick.</p>
+     */
+    private static final double DECLARED_STEP_BLOCKS = 4.0;
+
+    /**
+     * How far a body must rise for the double-tap to have actually started CREATIVE FLIGHT, in
+     * blocks.
+     *
+     * <p>The TEST'S OWN, sized against vanilla again: a non-flying player holding space jumps and
+     * lands, apexing about 1.25 blocks, so a full 1.5 cannot be reached by jumping.</p>
+     */
+    private static final double CREATIVE_FLIGHT_RISE_BLOCKS = 1.5;
+
+    /**
+     * How far a flying body may be given back downward before it counts as YANKED, in blocks.
+     *
+     * <p>The TEST'S OWN: a steady ascent, deck-frame or world-frame, never gives back more than a
+     * fraction of a block. The defect this names is the war's signature — the body pulled back
+     * toward the seat it left.</p>
+     */
+    private static final double FLYING_BODY_MAX_DROP_BLOCKS = 0.75;
+
+    /**
+     * How far apart the world-up eye and the RENDERED camera eye must be for the ray legs to prove
+     * anything, in blocks.
+     *
+     * <p>The TEST'S OWN sensitivity bar: on a level ship the two coincide, and nothing below could
+     * then fail whatever the code did. At this roll they separate by more than this.</p>
+     */
+    private static final double EYE_DIVERGENCE_BLOCKS = 0.6;
+
+    /**
+     * How far the craft must roll FURTHER for the turn-with-the-deck leg to prove anything, in
+     * degrees.
+     *
+     * <p>The TEST'S OWN sensitivity bar, and it is several times
+     * {@link #AIM_FOLLOWS_DECK_TOLERANCE_DEG} — so a roll that satisfies it cannot be mistaken for
+     * a world-glued aim standing still.</p>
+     */
+    private static final double FURTHER_ROLL_DEG = 15.0;
+
+    /**
+     * How far the aim may sit from the roll it is supposed to have followed, in degrees.
+     *
+     * <p>The TEST'S OWN: the two attitudes are sampled a few ticks apart while the hull is still
+     * turning. What it refuses is an aim that did not turn at all, which is the whole roll away.</p>
+     */
+    private static final double AIM_FOLLOWS_DECK_TOLERANCE_DEG = 8.0;
+
+    /**
+     * How far the rendered camera's angles may sit from the player's own world aim, in degrees.
+     *
+     * <p>The TEST'S OWN: one is the player's aim and the other the partial-tick interpolation of it
+     * the renderer was handed, sampled on different frames. The defect it refuses is a camera
+     * pointing somewhere else entirely — the whole roll away, not three degrees.</p>
+     */
+    private static final double CAMERA_AIM_AGREEMENT_DEG = 3.0;
+
+    /**
+     * How far a body must travel under a held walk key for the walk to have HAPPENED, in blocks.
+     *
+     * <p>The TEST'S OWN sensitivity bar: vanilla walks about 0.215 blocks/tick, so a window of a
+     * second and a half covers many times this. What it refuses is a body that did not move.</p>
+     */
+    private static final double WALKED_A_WALKING_DISTANCE_BLOCKS = 0.3;
+
+    /**
+     * How far the direction a body WALKED may sit from the deck heading the mouse steers, in
+     * degrees.
+     *
+     * <p>The TEST'S OWN, and wide on purpose: the walk is measured over a short displacement on a
+     * deck rolled to about 90 degrees, where a block of lateral settle turns into several degrees
+     * of apparent heading. What it refuses is a walk that went somewhere else — the ninety degrees
+     * of a body moving in the world frame while the player steers in the deck's.</p>
+     */
+    private static final double WALK_HEADING_TOLERANCE_DEG = 30.0;
+
+    /**
+     * How far the deck normal must move while nobody is watching the craft, for the unwatched
+     * interval to span any motion at all.
+     *
+     * <p>The TEST'S OWN sensitivity bar: a tenth of the deck normal is about six degrees of tilt —
+     * far above the settle jitter of a parked hull and far below the commanded manoeuvre.</p>
+     */
+    private static final double ARRANGEMENT_MOVED_UP_Y = 0.1;
+
+    /**
+     * What counts as a manoeuvre being OVER: the hull's residual translation, in blocks per tick.
+     *
+     * <p>The TEST'S OWN. It is the test's because production never declares a manoeuvre finished —
+     * the hold simply keeps applying torque toward a target it has already reached.</p>
+     */
+    private static final double SETTLED_BLOCKS_PER_TICK = 0.05;
+    /** The rotational half of {@link #SETTLED_BLOCKS_PER_TICK}, in rad/s. The drive above commands
+     *  about 2 rad/s, twenty times this. */
+    private static final double SETTLED_OMEGA_RAD_PER_S = 0.1;
+
+    /**
+     * How far the aim may leave its cone about the deck normal under a HORIZONTAL mouse move, as a
+     * cosine.
+     *
+     * <p>The TEST'S OWN. The quantity is a dot product of two unit vectors, and the contract is
+     * that a horizontal move does not change it at all; 0.05 of cosine is about three degrees, the
+     * float rounding of a yaw round-trip through the client. A world-frame aim at this roll leaves
+     * the cone by tens of degrees.</p>
+     */
+    private static final double AIM_STAYS_ON_CONE = 0.05;
+
+    /**
+     * The same quantity while the DECK ITSELF is rolling under a still mouse — a shade wider,
+     * because the two readings are taken against attitudes a few ticks apart.
+     */
+    private static final double AIM_STAYS_ON_CONE_WHILE_ROLLING = 0.06;
+
     // ---- Staying aboard: a jump from the top deck must not release the capture ------------------
 
     @Test
@@ -390,7 +561,7 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
         // inside a real jump and comfortably outside the sub-block bob of a body being re-seated by
         // the deck. What it refuses is a "jump" that never left the surface at all.
         assertTrue("the jump must actually leave the deck (apex=" + apex + " deckY=" + deckY + ")",
-                apex - deckY > 0.5);
+                apex - deckY > JUMP_LEFT_THE_DECK_BLOCKS);
         // Counted on the SHIP, not on the type: `held` is already `since(mark, "deck_carry")`, so
         // the type needle only asks whether the reply is non-empty — a question the reply's own
         // filter has answered. The ship is the part that is not already known.
@@ -406,7 +577,7 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
         // is standing on it or on something it is carrying; anything further has fallen through the
         // hull or been thrown off it, which is the pair of outcomes this leg exists to refuse.
         assertTrue("the player must land back ON the deck, not through it: deckY=" + deckY
-                + " settledY=" + settledY, Math.abs(settledY - deckY) < 1.5);
+                + " settledY=" + settledY, Math.abs(settledY - deckY) < LANDED_ON_THE_DECK_BLOCKS);
     }
 
     // ---- Boarding vs bystanders: terra firma near a ship never captures -------------------------
@@ -435,7 +606,7 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
         // aliasing this scenario exists to forbid barely arises.
         scenario().requireArranged("the parked ship must actually be tilted before a ground walker"
                 + " can alias into its frame at all (upY=" + info.upY() + ", level is 1.0): "
-                + info.raw(), info.upY() < 0.95);
+                + info.raw(), info.upY() < TILTED_ENOUGH_UP_Y);
         double sx = info.x, sz = info.z;
 
         // Put the REAL client player on the GROUND beside the hull, inside the grown world box, and
@@ -469,7 +640,7 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
         // keeps accelerating), so what survives the check is a body whose Y has stopped moving.
         scenario().requireArranged("the walker must come to REST on the platform before the walk"
                 + " begins, or the excursion below is measured against a falling body (y="
-                + firstY + " then " + groundY + ")", Math.abs(groundY - firstY) < 0.05);
+                + firstY + " then " + groundY + ")", Math.abs(groundY - firstY) < AT_REST_Y_CHANGE_BLOCKS);
 
         // The gate's own decisions for THIS walk, from a mark taken before the first step. The
         // negative below ("never captured") is satisfied by a walker the ship frame never looked at,
@@ -534,7 +705,7 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
         // the walk may include, and refuses the defect — a body snatched into the tilted ship's
         // frame, which moves him by the lever arm between him and the hull, many blocks away.
         assertTrue("his world-frame walk must stay on the ground - no ship-frame yank (y "
-                + yMin + ".." + yMax + " around " + groundY + ")", yMax - yMin < 2.0);
+                + yMin + ".." + yMax + " around " + groundY + ")", yMax - yMin < GROUND_WALK_Y_SPREAD_BLOCKS);
     }
 
     // ---- #47: a still crew member on a steeply-rolled deck is not dragged sideways --------------
@@ -1144,7 +1315,7 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
         // a body standing on a deck, and a divergence that large does not survive to be declared.
         assertTrue("a forty-block client-side step must not reach the server as a declared position:"
                 + " it arrived as y " + startY + " -> " + endY + " :: " + boundTrace,
-                Math.abs(endY - startY) < 4.0);
+                Math.abs(endY - startY) < DECLARED_STEP_BLOCKS);
         assertTrue("the body must still hold its deck after all of that: " + capture.raw(),
                 capture.alreadyTracked);
         // "The bound was consulted while he stood on the deck" is the `assertInstrumentRan` above and
@@ -1262,11 +1433,11 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
         // Instrument-fires: the double-tap really put the client into creative flight - a
         // non-flying player holding space would jump and land, never rising a full 1.5 blocks.
         assertTrue("the double-tap must actually start creative flight (y " + y0 + " -> max " + yMax
-                + "): " + win, yMax - y0 > 1.5);
+                + "): " + win, yMax - y0 > CREATIVE_FLIGHT_RISE_BLOCKS);
         // The war's signature: the body yanked back toward the seat. A steady ascent (deck-frame
         // or world-frame - this ship is upright) never gives back more than a fraction of a block.
         assertTrue("a flying ex-pilot must never be yanked back down (maxDrop=" + maxDrop + "): "
-                + win, maxDrop < 0.75);
+                + win, maxDrop < FLYING_BODY_MAX_DROP_BLOCKS);
         // Risen far above the open fixture, he has left the stay region: world-frame, and no
         // re-capture pulling at him from below.
         //
@@ -1801,7 +1972,7 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
         // coincide and nothing below could fail.
         assertTrue("the world-up eye must diverge from the camera eye at this roll (worldEyeVsCam="
                 + worldEyeVsCam + ", upY=" + upY + "); a level-ship run cannot falsify the "
-                + "claim below", worldEyeVsCam > 0.6);
+                + "claim below", worldEyeVsCam > EYE_DIVERGENCE_BLOCKS);
 
         // THE STATED CONTRACT, EXECUTED. This test's own header says the crew member must resolve
         // the SAME subspace deck block whatever the roll - and until now it asserted only that each
@@ -2052,7 +2223,7 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
         scenario().requireArranged("the craft must actually MOVE while nobody watches it, or the"
                 + " interval under test spans no motion at all (deck normal upY " + upBefore
                 + " -> " + upAfter + " over " + driveIterations + " ticks)",
-                Math.abs(upAfter - upBefore) > 0.1);
+                Math.abs(upAfter - upBefore) > ARRANGEMENT_MOVED_UP_Y);
         // BOTH ARE THE TEST'S OWN, and both are bounds on "has stopped": a translation under a
         // twentieth of a block per tick and a rotation under a tenth of a radian per second are
         // residuals, not a manoeuvre — the drive above commands about 2 rad/s, twenty times the
@@ -2061,7 +2232,7 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
         scenario().requireArranged("the manoeuvre must be OVER when the body arrives, or a carry"
                 + " equal to the deck's real motion would be correct and this scenario would pin"
                 + " nothing (settled " + settledPerTick + " blocks/tick, omega " + settledOmega
-                + ")", settledPerTick < 0.05 && settledOmega < 0.1);
+                + ")", settledPerTick < SETTLED_BLOCKS_PER_TICK && settledOmega < SETTLED_OMEGA_RAD_PER_S);
         scenario().requireArranged("the body must reach the deck and be captured, or no carry was"
                 + " ever installed and the assertion below is about nothing :: " + contact
                 + " :: captures in the window: " + captures, captured);
@@ -2198,7 +2369,7 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
             // drift. A world-frame aim at this roll leaves the cone by tens of degrees.
             assertTrue("a horizontal mouse move must not move the aim off its cone about the deck "
                             + "normal (start=" + cone0 + " now=" + cone + ") :: " + steps,
-                    Math.abs(cone - cone0) < 0.05);
+                    Math.abs(cone - cone0) < AIM_STAYS_ON_CONE);
             prev = look;
         }
         System.out.println("[crewcap] deck-look sweep=" + swept + " :: " + steps);
@@ -2237,7 +2408,7 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
         // (8), so a roll that satisfies this cannot be mistaken for a world-glued aim standing
         // still.
         assertTrue("the ship must actually roll further for this leg to prove anything (rolled "
-                + rolledBy + " deg more, upY " + up[1] + " -> " + up2[1] + ")", rolledBy > 15.0);
+                + rolledBy + " deg more, upY " + up[1] + " -> " + up2[1] + ")", rolledBy > FURTHER_ROLL_DEG);
         // Read ONCE, and proved to be about THIS ship: the two execs this replaces
         // printed one sample and asserted a second, and neither said which craft
         // held the body.
@@ -2256,7 +2427,7 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
         // two readings are taken against attitudes a few ticks apart.
         assertTrue("with the mouse still, the aim must stay on its cone about the deck normal as "
                 + "the ship rolls (cone " + coneBefore + " -> " + coneAfter + ")",
-                Math.abs(coneAfter - coneBefore) < 0.06);
+                Math.abs(coneAfter - coneBefore) < AIM_STAYS_ON_CONE_WHILE_ROLLING);
         // THE TEST'S OWN, and the shape is what matters: the BOUND is a tolerance, while the value
         // it is compared against is the roll the ship actually performed, read back a few lines
         // above rather than written down. Eight degrees is the slack between two attitudes sampled
@@ -2264,7 +2435,7 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
         // that did not turn at all, which is the whole `rolledBy` away (at least 15 by the gate).
         assertTrue("with the mouse still, the world aim must TURN WITH the deck by the extra roll, "
                 + "not stay world-glued (ship rolled " + rolledBy + " deg, aim turned "
-                + aimTurned + ")", Math.abs(aimTurned - rolledBy) < 8.0);
+                + aimTurned + ")", Math.abs(aimTurned - rolledBy) < AIM_FOLLOWS_DECK_TOLERANCE_DEG);
 
         // One transform for the view and the aim: the camera the renderer was handed points where
         // the derived world look points (two independent code paths on the client).
@@ -2295,7 +2466,8 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
                 // one is the player's aim and the other is the partial-tick interpolation of it the
                 // renderer was handed, sampled on different frames. The defect it refuses is a camera
                 // pointing somewhere else entirely — the whole roll away, not three degrees.
-                , yawDiff < 3.0 && Math.abs(camPitch - playerPitch) < 3.0);
+                , yawDiff < CAMERA_AIM_AGREEMENT_DEG
+                        && Math.abs(camPitch - playerPitch) < CAMERA_AIM_AGREEMENT_DEG);
 
         // (3) The MOVEMENT half of the same transform: on this near-vertical (~85 degree) deck,
         // holding the REAL forward key must walk the body along the deck heading the mouse
@@ -2367,10 +2539,10 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
         System.out.println("[crewcap] deck-walk best mag=" + bestMag + " walked=" + bestWalkedYaw
                 + " held=" + bestHeldYaw + " :: " + legs);
         assertTrue("holding W must walk the body a walking-sized distance along the deck, still "
-                + "captured, in at least one of four headings :: " + legs, bestMag > 0.3);
+                + "captured, in at least one of four headings :: " + legs, bestMag > WALKED_A_WALKING_DISTANCE_BLOCKS);
         assertTrue("on a ~90-degree deck the walk direction must match the deck heading the "
                 + "mouse steers (walked " + bestWalkedYaw + " deg, held " + bestHeldYaw
-                + " deg) :: " + legs, Math.abs(wrap180(bestWalkedYaw - bestHeldYaw)) < 30.0);
+                + " deg) :: " + legs, Math.abs(wrap180(bestWalkedYaw - bestHeldYaw)) < WALK_HEADING_TOLERANCE_DEG);
 
         // (diag, print-only) Jump-smoothness discriminators on THIS actively attitude-holding
         // (hunting) ship: per-frame step statistics of the ABSOLUTE body path vs the path

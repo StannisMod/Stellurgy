@@ -26,6 +26,80 @@ import static org.junit.Assert.assertTrue;
  */
 public class FreeFlightAssistsE2ETest extends AbstractSharedServerTest {
 
+    /**
+     * The cruise speed that says a released key did NOT bleed the craft's momentum, in blocks/tick.
+     *
+     * <p>The TEST'S OWN sensitivity bar: the craft is commanded up to a cruise and the key is then
+     * let go, so what this refuses is a craft that stopped the moment the input did. The commanded
+     * cruise is several times it.</p>
+     */
+    private static final double STILL_CRUISING = 0.5;
+
+    /**
+     * What counts as STOPPED for a cruise the pilot has cut, in blocks/tick.
+     *
+     * <p>The TEST'S OWN: the contract is a halt, so the honest statement is zero and this is the
+     * residual of the ease-out. It doubles as the altitude-hold bound in the same breath, because
+     * both are "this axis is no longer moving".</p>
+     */
+    private static final double EASED_TO_A_STOP = 0.05;
+
+    /**
+     * How far the cruise must have turned onto -X after a 90-degree yaw, in blocks/tick, and how
+     * much may be left on the old axis.
+     *
+     * <p>Both are the test's own. The first is a sensitivity bar on the NEW axis; the second is the
+     * residue allowed on the old one, and it is deliberately smaller, because the claim is that the
+     * cruise TURNED rather than that it merely gained a component.</p>
+     */
+    private static final double CRUISE_TURNED_ONTO_X = -0.5;
+    /** @see #CRUISE_TURNED_ONTO_X */
+    private static final double CRUISE_LEFT_ON_OLD_AXIS = 0.35;
+
+    /**
+     * The cruise that says the craft is COASTING before an assist leg is run, in blocks/tick.
+     *
+     * <p>The TEST'S OWN precondition bar: it gates a leg whose subject is what the assist does to a
+     * coast, so all it must establish is that there was one.</p>
+     */
+    private static final double COASTING = 0.2;
+
+    /**
+     * The flight assist's own cruise ceiling, in blocks/tick, as this scenario's two legs straddle
+     * it.
+     *
+     * <p><b>This one is PRODUCTION'S number restated here rather than read.</b> It is the ceiling
+     * the assist tracks, and the two legs are defined by being under it and over it — so the
+     * constant is named once and both legs cite it, instead of the same 3.0 appearing twice as an
+     * unexplained literal. If the assist's ceiling moves, this is the line that has to move with
+     * it, and the failure will say so.</p>
+     */
+    private static final double ASSIST_CEILING = 3.0;
+
+    /**
+     * How far below the ceiling the craft may fall while the assist TRACKS it, in blocks/tick.
+     *
+     * <p>The TEST'S OWN: the claim is that the assist holds the craft at the ceiling rather than
+     * braking it to a halt, so what this refuses is an overshoot all the way down.</p>
+     */
+    private static final double TRACKS_WITHOUT_OVERSHOOT = 2.0;
+
+    /**
+     * How much the cruise may change when flight assist is RE-ENABLED, in blocks/tick.
+     *
+     * <p>The TEST'S OWN: the contract is that re-enabling captures the existing cruise rather than
+     * resetting it, so the honest statement is zero and this is the settle of one capture.</p>
+     */
+    private static final double RE_ENABLE_KEEPS_CRUISE = 0.25;
+
+    /**
+     * What counts as SILENT for an engine that is not thrusting, in production's power units.
+     *
+     * <p>The TEST'S OWN, and it is float noise rather than a tolerance: a coasting craft commands
+     * no thrust at all, so the only allowance is the last bits of a double.</p>
+     */
+    private static final double ENGINE_SILENT = 1e-3;
+
 
     private static String ok(java.util.List<String> resp) {
         return String.join("\n", resp);
@@ -129,7 +203,7 @@ public class FreeFlightAssistsE2ETest extends AbstractSharedServerTest {
 
         RocketInfo info = rocketInfo(id);
         assertTrue("released key must NOT bleed the cruise (motionZ=" + info.motionZ
-                + ", expected to keep cruising +Z): " + info.raw(), info.motionZ > 0.5);
+                + ", expected to keep cruising +Z): " + info.raw(), info.motionZ > STILL_CRUISING);
         assertTrue("setpoint must persist on the server: " + info.raw(), info.hasFaSetpoint());
     }
 
@@ -152,9 +226,9 @@ public class FreeFlightAssistsE2ETest extends AbstractSharedServerTest {
 
         RocketInfo info = rocketInfo(id);
         assertTrue("cut must ease the cruise to a stop (motionZ=" + info.motionZ + ")",
-                Math.abs(info.motionZ) < 0.05);
+                Math.abs(info.motionZ) < EASED_TO_A_STOP);
         assertTrue("cut must HOLD ALTITUDE, not drop the craft (motionY=" + info.motionY + ")",
-                Math.abs(info.motionY) < 0.05);
+                Math.abs(info.motionY) < EASED_TO_A_STOP);
         assertTrue("hovering craft must still be in flight: " + info.raw(), info.inFlight);
     }
 
@@ -178,7 +252,8 @@ public class FreeFlightAssistsE2ETest extends AbstractSharedServerTest {
         RocketInfo info = rocketInfo(id);
         assertTrue("after a 90° yaw the cruise must point -X (mx=" + info.motionX
                         + " mz=" + info.motionZ + ")",
-                info.motionX < -0.5 && Math.abs(info.motionZ) < 0.35);
+                info.motionX < CRUISE_TURNED_ONTO_X
+                        && Math.abs(info.motionZ) < CRUISE_LEFT_ON_OLD_AXIS);
     }
 
     @Test
@@ -218,17 +293,17 @@ public class FreeFlightAssistsE2ETest extends AbstractSharedServerTest {
         ok(client().execute("artest rocket free-flight-input " + id + " 0 0 0 0 0"));
         ok(client().execute("artest rocket free-flight-tick " + id + " 2"));
         double mzBefore = rocketInfo(id).motionZ;
-        assertTrue("precondition: must be coasting (+Z), got " + mzBefore, mzBefore > 0.2);
+        assertTrue("precondition: must be coasting (+Z), got " + mzBefore, mzBefore > COASTING);
         assertTrue("precondition: this leg tests the capture, so the cruise must be UNDER the assist "
                         + "ceiling (" + mzBefore + " vs 3.0) — above it the contract is the clamp below",
-                mzBefore < 3.0);
+                mzBefore < ASSIST_CEILING);
 
         // FA back on -> setpoint captured -> cruise continues, no jerk.
         ok(client().execute("artest rocket set-flight-assist " + id + " on"));
         ok(client().execute("artest rocket free-flight-tick " + id + " 20"));
         double mzAfter = rocketInfo(id).motionZ;
         assertTrue("FA re-enable must keep the cruise (was " + mzBefore + ", now "
-                + mzAfter + ")", Math.abs(mzAfter - mzBefore) < 0.25);
+                + mzAfter + ")", Math.abs(mzAfter - mzBefore) < RE_ENABLE_KEEPS_CRUISE);
     }
 
     /**
@@ -256,7 +331,7 @@ public class FreeFlightAssistsE2ETest extends AbstractSharedServerTest {
         ok(client().execute("artest rocket free-flight-tick " + id + " 2"));
         double mzBefore = rocketInfo(id).motionZ;
         assertTrue("precondition: the cruise must exceed the assist ceiling, got " + mzBefore,
-                mzBefore > 3.0);
+                mzBefore > ASSIST_CEILING);
 
         ok(client().execute("artest rocket set-flight-assist " + id + " on"));
         ok(client().execute("artest rocket free-flight-tick " + id + " 20"));
@@ -264,7 +339,7 @@ public class FreeFlightAssistsE2ETest extends AbstractSharedServerTest {
         assertTrue("the assist must bring an overfast craft DOWN toward its ceiling (was " + mzBefore
                 + ", now " + mzAfter + ")", mzAfter < mzBefore);
         assertTrue("and must not overshoot below it — it tracks the ceiling, it does not brake to a "
-                        + "halt (now " + mzAfter + ")", mzAfter > 2.0);
+                        + "halt (now " + mzAfter + ")", mzAfter > TRACKS_WITHOUT_OVERSHOOT);
     }
 
     @Test
@@ -317,6 +392,6 @@ public class FreeFlightAssistsE2ETest extends AbstractSharedServerTest {
         ok(client().execute("artest rocket free-flight-tick " + id + " 3"));
         double powCoast = rocketInfo(id).enginePower;
         assertTrue("coasting with no thrust must be silent (enginePower=" + powCoast + ")",
-                powCoast < 1e-3);
+                powCoast < ENGINE_SILENT);
     }
 }

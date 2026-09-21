@@ -71,6 +71,69 @@ public class ClusteredGalaxyGeneratorTest {
     /** The shipped spacing: what the sampled galaxy is is what the game ships. */
     private static final int SPACING = GalaxyGenConfig.DEFAULT_MIN_SPACING;
 
+    // ---- SAMPLE BARS -----------------------------------------------------------------------
+    //
+    // Every constant in this block is THE TEST'S OWN: how many observations a statistic below needs
+    // before it may speak. The generator publishes no minimum sample, and a clean result taken under
+    // one of these lines would be describing the sweep rather than the subject.
+
+    /** Systems a sweep must find before a per-system statistic is read. */
+    private static final int MIN_SYSTEMS_CHECKED = 5;
+    /** The same bar where the statistic is a SPREAD across systems rather than a presence. */
+    private static final int MIN_SYSTEMS_FOR_SPREAD = 10;
+    /** Systems behind the star-archetype histogram, which is a claim about proportions. */
+    private static final int MIN_ARCHETYPE_SAMPLE = 20;
+    /** Moons the sweep must find before moon placement is judged. */
+    private static final int MIN_MOONS_CHECKED = 10;
+
+    // ---- BOUNDS THAT ARE NOT SAMPLE BARS ----------------------------------------------------
+
+    /**
+     * How near a cell face a seat must come, as a fraction of the cell, for the placement to be
+     * demonstrably NOT centred.
+     *
+     * <p>The TEST'S OWN: a quarter is the middle half's edge, so a seat inside it could have come
+     * from a generator that always centres. What this refuses is exactly that generator.</p>
+     */
+    private static final double OFF_CENTRE_FACE_FRACTION = 0.25d;
+
+    /**
+     * The size band each star ARCHETYPE is drawn within, in Sol radii.
+     *
+     * <p>These are the archetypes the test itself configures a few lines above — the common dwarf
+     * at temperature 50 and the rare giant at 250 — so both pairs are THE TEST'S OWN arrangement
+     * restated as an expectation. They are not production's table; what is pinned is that a drawn
+     * star stays inside the band its own archetype declares.</p>
+     */
+    private static final float DWARF_SIZE_MIN = 0.5f;
+    /** @see #DWARF_SIZE_MIN */
+    private static final float DWARF_SIZE_MAX = 1.0f;
+    /** @see #DWARF_SIZE_MIN */
+    private static final float GIANT_SIZE_MIN = 2.0f;
+    /** @see #DWARF_SIZE_MIN */
+    private static final float GIANT_SIZE_MAX = 3.0f;
+
+    /**
+     * How far a body's CELL NAME may sit from where the body actually is, in cells.
+     *
+     * <p>A cell is the unit the name addresses, so the honest bound is one — and this is two,
+     * because the name is a static-frame reading and the position a drawn orbit, which can round to
+     * either side. The unit is production's ({@code GalacticCoord}'s cell size); the FACTOR is the
+     * test's.</p>
+     */
+    private static final double NAME_AGREES_WITHIN_CELLS = 2d;
+
+    /**
+     * The world count this scenario ASKS FOR when it asks for few.
+     *
+     * <p>Not a threshold at all but the arrangement's own argument, repeated in the assertion that
+     * reads the answer: asking for two must not hand out more than two. It is named so that the
+     * request and the expectation cannot drift apart.</p>
+     */
+    private static final int FEW_WORLDS_REQUESTED = 2;
+    /** The other side of the same comparison — what "many" asks for. @see #FEW_WORLDS_REQUESTED */
+    private static final int MANY_WORLDS_REQUESTED = 10;
+
     /**
      * A config at the shipped galaxy lattice, varying only how full a galaxy's densest point is. Every
      * sweep in this class sits near the ORIGIN, which is the home galaxy's centre, so {@code density}
@@ -135,7 +198,7 @@ public class ClusteredGalaxyGeneratorTest {
                     gen.systemAt(SEED, anchor.plusLocal(GalacticCoord.CELL, 0L, 0L)).isPresent());
             checked++;
         }
-        assertTrue(checked > 5);
+        assertTrue(checked > MIN_SYSTEMS_CHECKED);
     }
 
     @Test
@@ -173,7 +236,7 @@ public class ClusteredGalaxyGeneratorTest {
         GalaxyGenConfig config = cfg(1.0d, SPACING); // every cube occupied: the tightest case
         ClusteredGalaxyGenerator gen = new ClusteredGalaxyGenerator(config);
         List<GalacticCoord> seats = anchors(gen, SEED, SPACING, 2);
-        assertTrue("the sweep must find systems", seats.size() > 10);
+        assertTrue("the sweep must find systems", seats.size() > MIN_SYSTEMS_FOR_SPREAD);
         double floorBlocks = UniverseScale.SEPARATION_FLOOR_AU * AstronomicalBodyHelper.BLOCKS_PER_AU;
         for (int i = 0; i < seats.size(); i++) {
             for (int j = i + 1; j < seats.size(); j++) {
@@ -201,9 +264,9 @@ public class ClusteredGalaxyGeneratorTest {
             nearestFaceFraction = Math.min(nearestFaceFraction, (s - offset) / (double) s);
             checked++;
         }
-        assertTrue(checked > 10);
+        assertTrue(checked > MIN_SYSTEMS_FOR_SPREAD);
         assertTrue("some seat must sit well outside the middle quarter, nearest face fraction was "
-                + nearestFaceFraction, nearestFaceFraction < 0.25d);
+                + nearestFaceFraction, nearestFaceFraction < OFF_CENTRE_FACE_FRACTION);
     }
 
     @Test
@@ -339,13 +402,13 @@ public class ClusteredGalaxyGeneratorTest {
                 // size must lie in the archetype's range
                 float size = sys.star().get().getSize();
                 if (temp == 50) {
-                    assertTrue(size >= 0.5f && size <= 1.0f);
+                    assertTrue(size >= DWARF_SIZE_MIN && size <= DWARF_SIZE_MAX);
                 } else if (temp == 250) {
-                    assertTrue(size >= 2.0f && size <= 3.0f);
+                    assertTrue(size >= GIANT_SIZE_MIN && size <= GIANT_SIZE_MAX);
                 }
             }
         }
-        assertTrue("sample must contain systems", total > 20);
+        assertTrue("sample must contain systems", total > MIN_ARCHETYPE_SAMPLE);
         assertEquals("every star temperature must come from the configured archetypes", 0, other);
         assertTrue("the weighted-100 archetype must dominate the weighted-1 one", common > rare);
         assertTrue("both archetypes should appear in a large sample", seenTemps.contains("50"));
@@ -492,11 +555,11 @@ public class ClusteredGalaxyGeneratorTest {
                 double named = body.name().staticFrameDistanceTo(anchor);
                 assertTrue("the body's cell name (" + named + " blocks out) must agree with where it "
                                 + "is (" + placed + ")",
-                        Math.abs(named - placed) <= 2d * GalacticCoord.CELL);
+                        Math.abs(named - placed) <= NAME_AGREES_WITHIN_CELLS * GalacticCoord.CELL);
                 checked++;
             }
         }
-        assertTrue("the sweep must find bodies", checked > 10);
+        assertTrue("the sweep must find bodies", checked > MIN_SYSTEMS_FOR_SPREAD);
     }
 
     @Test
@@ -513,7 +576,7 @@ public class ClusteredGalaxyGeneratorTest {
                 checked++;
             }
         }
-        assertTrue(checked > 10);
+        assertTrue(checked > MIN_SYSTEMS_FOR_SPREAD);
     }
 
     @Test
@@ -693,12 +756,12 @@ public class ClusteredGalaxyGeneratorTest {
         ClusteredGalaxyGenerator g = new ClusteredGalaxyGenerator(defaultsCfg());
         GalacticCoord anchor = cell(0, 0, 0);
 
-        int few = majorBodies(g.authoredRetinueFor(SEED, anchor, authoredStar(), 0, 2,
+        int few = majorBodies(g.authoredRetinueFor(SEED, anchor, authoredStar(), 0, FEW_WORLDS_REQUESTED,
                 java.util.Collections.<String>emptySet()));
-        int many = majorBodies(g.authoredRetinueFor(SEED, anchor, authoredStar(), 0, 10,
+        int many = majorBodies(g.authoredRetinueFor(SEED, anchor, authoredStar(), 0, MANY_WORLDS_REQUESTED,
                 java.util.Collections.<String>emptySet()));
 
-        assertTrue("asking for two must not hand out more than two worlds, got " + few, few <= 2);
+        assertTrue("asking for two must not hand out more than two worlds, got " + few, few <= FEW_WORLDS_REQUESTED);
         assertTrue("asking for ten must hand out more than asking for two (" + few + " -> " + many
                 + ")", many > few);
     }
@@ -789,7 +852,7 @@ public class ClusteredGalaxyGeneratorTest {
         }
         System.out.println("checked " + checkedMoons + " moons against " + checkedParents + " parents");
         assertTrue("arrangement: the sweep must find moons to check, or this proves nothing",
-                checkedMoons >= 10);
+                checkedMoons >= MIN_MOONS_CHECKED);
     }
 
     // ── the constants say what they mean ──────────────────────────────────────

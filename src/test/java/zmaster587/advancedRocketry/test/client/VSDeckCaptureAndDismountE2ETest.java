@@ -128,6 +128,106 @@ public class VSDeckCaptureAndDismountE2ETest extends AbstractSharedVsClientE2ETe
      */
     private static final double FRAME_AGREEMENT_EPSILON = 0.02;
 
+    /**
+     * How far a HELD body may move vertically between two reads, in blocks.
+     *
+     * <p>The TEST'S OWN: a body that is held does not sink at all, and a block and a half is under
+     * the height of one — so what this refuses is a body going DOWN through the deck, while
+     * tolerating the sub-block settle of being re-seated on it. The oscillation bound of a body
+     * held on a ROLLED deck is the same quantity and the same number.</p>
+     */
+    private static final double HELD_BODY_Y_MOVEMENT_BLOCKS = 1.5;
+
+    /**
+     * How far a station-keeping hull may SAG when its pilot stands up, in blocks.
+     *
+     * <p>The TEST'S OWN: the contract is that the hold keeps it where it was, so the honest
+     * statement is zero. Two blocks is the correction a hold shows; a hull that is actually falling
+     * is metres down inside this window.</p>
+     */
+    private static final double HOVER_SAG_BLOCKS = 2.0;
+
+    /**
+     * The vertical velocity below which a hull counts as having STARTED TO FALL, in blocks/tick.
+     *
+     * <p>The TEST'S OWN, and a SIGN with slack rather than a rate: vanilla gravity alone passes it
+     * within a few ticks, so a hull still above it is one something is holding.</p>
+     */
+    private static final double STARTED_FALLING_VEL_Y = -0.5;
+
+    /**
+     * The client/server agreement for a pilot in the ACT of standing up, in blocks.
+     *
+     * <p>The TEST'S OWN, and deliberately between {@link #CLIENT_SERVER_Y_AGREEMENT_BLOCKS} and
+     * {@link #CLIENT_SERVER_Y_AGREEMENT_TILTED_BLOCKS}: here the two sides interpolate a body that
+     * is MOVING as well as a hull that is tilted.</p>
+     */
+    private static final double CLIENT_SERVER_Y_AGREEMENT_DISMOUNT_BLOCKS = 2.5;
+
+    /**
+     * How far a hovering hull may sag ACROSS A RELOAD, in blocks.
+     *
+     * <p>The TEST'S OWN, and wider than {@link #HOVER_SAG_BLOCKS} for a stated reason: a reload
+     * re-creates the hull and its hold from NBT, so it sags while the restored computer takes its
+     * first corrective ticks. A hull that fell out of the sky is metres down.</p>
+     */
+    private static final double RELOAD_SAG_BLOCKS = 3.0;
+
+    /**
+     * The band of deck-normal Y in which a craft is STEEP BUT STANDABLE.
+     *
+     * <p>Both ends are the test's own, and both are premises: under 0.25 the craft is too near
+     * vertical for a body to stand on at all, and over 0.80 it is near enough level that the tilt
+     * the leg is about barely exists. Production draws neither line — it holds whatever attitude it
+     * was pointed at.</p>
+     */
+    private static final double STANDABLE_TILT_MIN_UP_Y = 0.25;
+    /** @see #STANDABLE_TILT_MIN_UP_Y */
+    private static final double STANDABLE_TILT_MAX_UP_Y = 0.80;
+
+    /**
+     * How far past vertical the craft must be for the INVERTED legs, as read on the server.
+     *
+     * <p>The TEST'S OWN arrangement fact, and strict because those legs' whole subject is the
+     * inverted case: -0.85 is about 150 degrees over, well past the point where world-up and
+     * ship-up could be confused.</p>
+     */
+    private static final double INVERTED_UP_Y = -0.85;
+
+    /**
+     * The same premise read off the CLIENT's camera state, which is looser on purpose: the camera
+     * lags the hull it draws, so the same attitude reads shallower there.
+     */
+    private static final double INVERTED_UP_Y_ON_CLIENT = -0.4;
+
+    /**
+     * The attitude the controller actually SETTLES at when asked to inverted, as deck-up Y.
+     *
+     * <p>The TEST'S OWN: axis-angle is singular at a full 180, so the hold converges near 135
+     * degrees. This asks for what it can reach — deck-up well below horizontal — which is all the
+     * consistency check underneath needs.</p>
+     */
+    private static final double STRONGLY_INVERTED_UP_Y = -0.5;
+
+    /**
+     * How far a hard flight-cursor deflection must move the cursor to have REGISTERED, in the
+     * cursor's own normalised units.
+     *
+     * <p>The TEST'S OWN sensitivity bar: a hard deflection drives the cursor toward 1, so what this
+     * refuses is an input that did not arrive.</p>
+     */
+    private static final double CURSOR_DEFLECTED = 0.2;
+
+    /**
+     * How far the levelled camera roll may move while the ship is STATIONARY, in degrees.
+     *
+     * <p>The TEST'S OWN: the ship is not moving, so the honest statement is that the roll does not
+     * change at all. Five degrees is the float noise of recomputing an Euler angle from a
+     * quaternion each frame, and the defect it exists for is the pole — where the same attitude
+     * yields wildly different angles between frames.</p>
+     */
+    private static final double LEVELLED_ROLL_JITTER_DEG = 5.0;
+
     // The bugs this class exists for are all CLIENT facts — a player falls through a deck on his OWN
     // client while the server holds him on it, which is exactly why an armour stand read through a
     // server probe could never reproduce them. So every wait below reads the base's
@@ -259,7 +359,7 @@ public class VSDeckCaptureAndDismountE2ETest extends AbstractSharedVsClientE2ETe
         // under the height of one — so what this refuses is a body going DOWN through the deck
         // between two reads, while tolerating the sub-block settle of being re-seated on it.
         assertTrue("the client player must stay on the deck, not sink through it: " + clientY + " -> "
-                + clientYLater, clientY - clientYLater < 1.5);
+                + clientYLater, clientY - clientYLater < HELD_BODY_Y_MOVEMENT_BLOCKS);
         assertTrue("the client must not let go of a player standing still on a grounded deck; a"
                 + " release here names the gate that dropped him: " + sinkReleases,
                 Events.countRecordsWithField(sinkReleases, "reason") == 0);
@@ -360,12 +460,12 @@ public class VSDeckCaptureAndDismountE2ETest extends AbstractSharedVsClientE2ETe
         // and a hull that is actually falling is metres down inside this window.
         assertTrue("a hovering ship must not fall when the pilot dismounts: it dropped from " + shipYPre
                 + " to " + shipYPost + ". The computer's unmanned decision was " + hold,
-                shipYPre - shipYPost < 2.0);
+                shipYPre - shipYPost < HOVER_SAG_BLOCKS);
         // THE TEST'S OWN, and a SIGN with slack rather than a rate: what it refuses is a hull that
         // has begun to accelerate downward. Vanilla gravity alone reaches this within a few ticks,
         // so a hull still above it is one something is holding.
         assertTrue("a hovering ship must not start falling when the pilot dismounts (velY=" + velYPost
-                + "). The computer's unmanned decision was " + hold, velYPost > -0.5);
+                + "). The computer's unmanned decision was " + hold, velYPost > STARTED_FALLING_VEL_Y);
 
         // The pilot must stay aboard: resolved on the deck in the ship frame, and rendered there by his
         // own client - not dropped into the world. The client's capture is a link and is awaited as
@@ -385,7 +485,7 @@ public class VSDeckCaptureAndDismountE2ETest extends AbstractSharedVsClientE2ETe
         // in the act of standing UP here, so the two sides are interpolating a body that is moving
         // as well as a hull that is tilted.
         assertTrue("the client must render the dismounted pilot on the deck where the server holds him: "
-                + "serverY=" + serverY + " clientY=" + clientY, Math.abs(clientY - serverY) < 2.5);
+                + "serverY=" + serverY + " clientY=" + clientY, Math.abs(clientY - serverY) < CLIENT_SERVER_Y_AGREEMENT_DISMOUNT_BLOCKS);
 
         exec("artest player dismount"); // clean state for any following test
     }
@@ -703,7 +803,7 @@ public class VSDeckCaptureAndDismountE2ETest extends AbstractSharedVsClientE2ETe
         assertTrue("a hovering ship must KEEP hovering across a reload, not fall out of the sky: it was "
                 + "at " + hoverY + " and after reload is at " + afterY
                 + ". What the computer restored from NBT: " + restored
-                + " | what it then decided unmanned: " + heldAfter, hoverY - afterY < 3.0);
+                + " | what it then decided unmanned: " + heldAfter, hoverY - afterY < RELOAD_SAG_BLOCKS);
 
         } finally {
             ShipReadiness.holdShipsLoaded(this::exec,
@@ -758,7 +858,7 @@ public class VSDeckCaptureAndDismountE2ETest extends AbstractSharedVsClientE2ETe
         // enough level that the tilt this leg is about barely exists. Production draws neither
         // line — it holds whatever attitude it was pointed at.
         assertTrue("arrangement: the craft must sit in the steep-but-standable envelope before the"
-                + " subject is exercised (upY=" + tilted + ")", tilted >= 0.25 && tilted < 0.80);
+                + " subject is exercised (upY=" + tilted + ")", tilted >= STANDABLE_TILT_MIN_UP_Y && tilted < STANDABLE_TILT_MAX_UP_Y);
 
         double[] seat = readShipInfoXYZ(shipInfo());
         // The seat dismount seeds the ex-pilot's capture on the CLIENT, and that is the link this
@@ -930,7 +1030,7 @@ public class VSDeckCaptureAndDismountE2ETest extends AbstractSharedVsClientE2ETe
         // under a body's height; a body sliding off a rolled deck shows many blocks of one-way
         // travel.
         assertTrue("the captured ex-pilot must be HELD on the " + label + " deck, not sliding (settled Y "
-                + "oscillation=" + osc + "): " + traj, osc < 1.5);
+                + "oscillation=" + osc + "): " + traj, osc < HELD_BODY_Y_MOVEMENT_BLOCKS);
         assertTrue("the client and server must agree on the ex-pilot's height (serverY=" + serverY
                 + " clientY=" + clientY + ")", Math.abs(clientY - serverY) < CLIENT_SERVER_Y_AGREEMENT_TILTED_BLOCKS);
     }
@@ -989,7 +1089,7 @@ public class VSDeckCaptureAndDismountE2ETest extends AbstractSharedVsClientE2ETe
         // the inverted case: -0.85 of deck-normal Y is about 150 degrees over, well past the
         // point where world-up and ship-up could be confused for one another.
         assertTrue("arrangement: the craft must be INVERTED before the subject is exercised (upY="
-                + invertedUpY + "): " + info0, invertedUpY < -0.85);
+                + invertedUpY + "): " + info0, invertedUpY < INVERTED_UP_Y);
 
         // ENTER the seat on the inverted ship — located inside THIS ship, not "the first seat in
         // the world" (see mountPilotSeatOfShipAt). The mark is taken here rather than inside the
@@ -1070,7 +1170,7 @@ public class VSDeckCaptureAndDismountE2ETest extends AbstractSharedVsClientE2ETe
         // read off the CLIENT's camera state, which lags the hull it is drawing, so the same
         // attitude reads shallower here. What it asserts is the same premise — past horizontal.
         assertTrue("arrangement: the craft must be inverted ON THE CLIENT before its controls are"
-                + " tested there (shipUpY=" + shipUpY + ")", shipUpY < -0.4);
+                + " tested there (shipUpY=" + shipUpY + ")", shipUpY < INVERTED_UP_Y_ON_CLIENT);
         double omegaSettled = shipInfo().omega;
         System.out.println("[deckcap] inverted-control shipUpY=" + shipUpY + " omegaSettled=" + omegaSettled);
 
@@ -1093,7 +1193,7 @@ public class VSDeckCaptureAndDismountE2ETest extends AbstractSharedVsClientE2ETe
         // THE TEST'S OWN sensitivity bar, in the cursor's own normalised units: what it refuses is
         // a deflection that did not register at all. A hard deflection drives the cursor toward 1.
         assertTrue("a hard flight-cursor deflection must register on the client even when inverted "
-                + "(cursor=" + cursor + ")", Math.abs(cursor) > 0.2);
+                + "(cursor=" + cursor + ")", Math.abs(cursor) > CURSOR_DEFLECTED);
         assertTrue("a seated pilot must still be able to TURN the ship when it is inverted - commanding a "
                 + "turn must spin it up, not leave it dead (omega=" + omegaTurning + ")", omegaTurning > TURN_COMMAND_OMEGA_RAD_PER_S);
     }
@@ -1227,7 +1327,7 @@ public class VSDeckCaptureAndDismountE2ETest extends AbstractSharedVsClientE2ETe
         // Euler angle from a quaternion each frame; the defect it exists for is the pole, where
         // the same attitude yields wildly different angles between frames.
         assertTrue("the levelled camera roll must be STABLE while the ship is stationary, not jitter at "
-                + "the Euler pole (jitter=" + rollJitter + " deg): " + trace, rollJitter < 5.0);
+                + "the Euler pole (jitter=" + rollJitter + " deg): " + trace, rollJitter < LEVELLED_ROLL_JITTER_DEG);
         assertTrue("the client player must not be dragged through the deck (Y oscillation=" + yOsc
                 + "): " + trace, yOsc < 1.0);
     }
@@ -1270,7 +1370,7 @@ public class VSDeckCaptureAndDismountE2ETest extends AbstractSharedVsClientE2ETe
         // singular there), near 135 degrees, so this asks for what it can actually reach: deck-up
         // well below horizontal, which is all the consistency check underneath needs.
         assertTrue("ship must be strongly inverted (deck-up points well below horizontal): "
-                + tc.raw(), tc.upQuatY() < -0.5);
+                + tc.raw(), tc.upQuatY() < STRONGLY_INVERTED_UP_Y);
 
         // THE decisive check: the MOVEMENT frame (VS vector rotate, used by ShipFrameTravel) and the
         // CAMERA/gravity frame (the attitude quaternion) must describe the SAME rotation. A disagreement

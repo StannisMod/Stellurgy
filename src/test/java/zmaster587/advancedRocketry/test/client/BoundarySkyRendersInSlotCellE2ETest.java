@@ -234,6 +234,64 @@ public class BoundarySkyRendersInSlotCellE2ETest extends AbstractSharedClientE2E
     private static final int DIFF = 24;
 
     /**
+     * Pixels of the OVERWORLD zenith that must differ from its background before this class's
+     * instrument is trusted at all.
+     *
+     * <p>The TEST'S OWN, and it is a HARNESS control rather than a contract: the overworld sky is a
+     * starfield, so a capture of it that is nearly uniform means the client is not running the sky
+     * pass — and every measurement below would then be reading a black frame.</p>
+     */
+    private static final int OVERWORLD_STARFIELD_PIXELS = 200;
+
+    /**
+     * The smallest frame a capture may be and still be A FRAME, in pixels.
+     *
+     * <p>The TEST'S OWN: what this refuses is a zero-sized or stub image, not a particular
+     * resolution. The numbers are the smallest window the harness ever opens.</p>
+     */
+    private static final int MIN_FRAME_WIDTH = 320;
+    /** @see #MIN_FRAME_WIDTH */
+    private static final int MIN_FRAME_HEIGHT = 240;
+
+    /**
+     * How much of the frame CENTRE may change at a bearing with no body in it, as a fraction.
+     *
+     * <p>The TEST'S OWN: the control's whole point is that nothing is drawn there, so the honest
+     * statement is zero and this is the noise of two captures of the same sky. Compare
+     * {@link #BILLBOARD_COVERS_CENTRE}, which is eight times it — the gap between the two is what
+     * makes the pair a measurement.</p>
+     */
+    private static final double EMPTY_BEARING_CENTRE_CHANGE = 0.05;
+
+    /**
+     * Pixels of an orbit cell's sky that must differ from its background, so the cell is not a void.
+     *
+     * <p>The TEST'S OWN sensitivity bar on "the sky carries stars": far above the handful that
+     * compression noise produces and far below a full starfield.</p>
+     */
+    private static final int ORBIT_CELL_STAR_PIXELS = 25;
+
+    /**
+     * How much of the frame centre a billboard must cover when the camera is on its bearing, as a
+     * fraction.
+     *
+     * <p>The TEST'S OWN, and the claim is a body filling the middle of the view rather than an
+     * exact area: 0.40 is far above {@link #EMPTY_BEARING_CENTRE_CHANGE} and reachable by any body
+     * actually drawn there.</p>
+     */
+    private static final double BILLBOARD_COVERS_CENTRE = 0.40;
+
+    /**
+     * How far the client's actual look may sit from the commanded one when a frame is captured, in
+     * degrees.
+     *
+     * <p>The TEST'S OWN, and tight on purpose: the aim is SET and nothing follows it, so a wrong
+     * look here is not a race but a command that did not take. Half a degree is the float
+     * round-trip of a yaw through the client.</p>
+     */
+    private static final float LOOK_LANDED_DEG = 0.5f;
+
+    /**
      * Render distance held while capturing. Must be >= 4 or vanilla skips the sky pass entirely; it also
      * sets the sky projection's far plane to twice this many blocks, which has to clear the ~100-unit
      * radius the sky geometry is drawn at.
@@ -322,7 +380,7 @@ public class BoundarySkyRendersInSlotCellE2ETest extends AbstractSharedClientE2E
                     + " sky at altitude " + OVERWORLD_CAPTURE_Y + " must be a starfield, but only " + owSky
                     + "px differ from the background " + rgb(owBackground) + " " + describe(overworldZenith)
                     + ". Nothing below this line could mean anything. renderDistance=" + rd
-                    + " (" + outDir.resolve("overworld_zenith.png") + ")", owSky >= 200);
+                    + " (" + outDir.resolve("overworld_zenith.png") + ")", owSky >= OVERWORLD_STARFIELD_PIXELS);
 
             // Arrange the space stack, then settle a ship in the cell. The settle MATERIALIZES the cell,
             // and the slot it lands in is the answer this test uses everywhere below: the feed is keyed
@@ -464,7 +522,7 @@ public class BoundarySkyRendersInSlotCellE2ETest extends AbstractSharedClientE2E
 
         int w = slotFirstFrame.getWidth();
         int h = slotFirstFrame.getHeight();
-        assertTrue("captures must be a real frame, got " + w + "x" + h, w >= 320 && h >= 240);
+        assertTrue("captures must be a real frame, got " + w + "x" + h, w >= MIN_FRAME_WIDTH && h >= MIN_FRAME_HEIGHT);
 
         // ------------------------------------------- Leg 2: each aimed body, by exact cancellation.
         // Same camera, same starfield, same ring - only the body data changed, so any pixel that differs
@@ -531,7 +589,7 @@ public class BoundarySkyRendersInSlotCellE2ETest extends AbstractSharedClientE2E
         assertTrue("a bearing with no body within 100 degrees must not gain one; centre="
                 + pct(emptyCentre) + " frame=" + pct(emptyFrame)
                 + " (" + outDir.resolve("before_empty.png") + " vs "
-                + outDir.resolve("after_empty.png") + ")", emptyCentre <= 0.05);
+                + outDir.resolve("after_empty.png") + ")", emptyCentre <= EMPTY_BEARING_CENTRE_CHANGE);
 
         // ------------------------------------------------------------------------ Leg 4: the starfield.
         // The empty-bearing frame holds no body and nothing else is drawn in a cell sky, so anything
@@ -541,7 +599,7 @@ public class BoundarySkyRendersInSlotCellE2ETest extends AbstractSharedClientE2E
         long stars = differsCount(emptyAfter, 0, w, 0, starTop, starBackground);
         assertTrue("an orbit cell must not be an empty void - the sky must carry stars; differing="
                 + stars + "px against background " + rgb(starBackground) + " " + describe(emptyAfter)
-                + " (" + outDir.resolve("after_empty.png") + ")", stars >= 25);
+                + " (" + outDir.resolve("after_empty.png") + ")", stars >= ORBIT_CELL_STAR_PIXELS);
 
         // ------------------------------------------ Leg 5: every body says what it is - the sky
         // writes each body's name and its distance under the billboard, one label per body, on by
@@ -854,12 +912,12 @@ public class BoundarySkyRendersInSlotCellE2ETest extends AbstractSharedClientE2E
                 w / 2 - box, w / 2 + box, h / 2 - box, h / 2 + box);
         assertTrue("the billboard must cover the frame centre when the camera is on the bearing the"
                 + " SERVER reports for " + where + "; centre=" + pct(centreChanged),
-                centreChanged >= 0.40);
+                centreChanged >= BILLBOARD_COVERS_CENTRE);
 
         double vsEmpty = diffFraction(afterFrame, emptyFrame,
                 w / 2 - box, w / 2 + box, h / 2 - box, h / 2 + box);
         assertTrue("aiming at " + where + " must not look like aiming at empty sky; centre difference="
-                + pct(vsEmpty), vsEmpty >= 0.40);
+                + pct(vsEmpty), vsEmpty >= BILLBOARD_COVERS_CENTRE);
     }
 
     /**
@@ -992,7 +1050,8 @@ public class BoundarySkyRendersInSlotCellE2ETest extends AbstractSharedClientE2E
                         + " when the frame is captured — the teleport landed before the aim was"
                         + " set and nothing follows it, so a wrong look here is not a race. got "
                         + state,
-                Math.abs(gotPitch - pitch) < 0.5f && Math.abs(wrapDegrees(gotYaw - yaw)) < 0.5f);
+                Math.abs(gotPitch - pitch) < LOOK_LANDED_DEG
+                        && Math.abs(wrapDegrees(gotYaw - yaw)) < LOOK_LANDED_DEG);
         assertTrue("the client must be back at the capture altitude " + y + " before the frame is taken,"
                 + " got " + clientY, clientY > y - 20 && clientY <= y + 1);
         // Re-hide immediately before the capture: a toast can arrive at any tick, and vanilla draws

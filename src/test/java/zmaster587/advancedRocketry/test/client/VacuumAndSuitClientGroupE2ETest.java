@@ -98,6 +98,24 @@ public class VacuumAndSuitClientGroupE2ETest extends AbstractSharedClientE2ETest
      * {@code % 10} clock, so eight ticks of it is 80 game ticks; 200 is the budget the health poll
      * this replaced already allowed, kept whole for every link.
      */
+    /**
+     * Vanilla's own full health, in half-hearts — what a player starts a scenario at.
+     *
+     * <p>PRODUCTION'S number in the sense that matters: {@code EntityPlayer}'s max health is 20,
+     * and every "he must start unhurt" gate in this class is asking for exactly that rather than
+     * for a tolerance. It is named once so the four gates cannot drift apart.</p>
+     */
+    private static final double FULL_HEALTH = 20.0;
+
+    /**
+     * A full oxygen tank, in the units {@code chestAir} reports.
+     *
+     * <p>PRODUCTION'S capacity, restated: the equip verb fills the tank and answers {@code 1000},
+     * and every drain assertion below is "less than full". Naming it makes the pair — the equip
+     * that fills and the drains that must reduce — one decision instead of five literals.</p>
+     */
+    private static final int FULL_TANK = 1000;
+
     private static final int LINK_BUDGET_TICKS = 200;
 
     /** The window an ABSENCE is asserted over: eight atmosphere ticks, the same 80 the three
@@ -145,7 +163,7 @@ public class VacuumAndSuitClientGroupE2ETest extends AbstractSharedClientE2ETest
         scenario().requireArranged("the player must be standing unhurt on his platform before the"
                 + " window opens — anything less means he arrived falling or inside a block, and"
                 + " every damage assertion below would be measuring that instead of the vacuum;"
-                + " client health=" + health, health >= 20.0);
+                + " client health=" + health, health >= FULL_HEALTH);
     }
 
     /** Reads the dim's baseline density so {@link #restoreDim} can put it back. */
@@ -657,9 +675,9 @@ public class VacuumAndSuitClientGroupE2ETest extends AbstractSharedClientE2ETest
                     .record("healthAfter", healthAfter);
 
             assertTrue("chest air must decrease in vacuum with suit; before=1000 after="
-                    + chestAirAfter + " drains=" + drains, chestAirAfter < 1000);
+                    + chestAirAfter + " drains=" + drains, chestAirAfter < FULL_TANK);
             assertTrue("client-rendered chest air must reflect the drain; client=" + clientAir
-                    + " server=" + chestAirAfter, clientAir >= 0 && clientAir < 1000);
+                    + " server=" + chestAirAfter, clientAir >= 0 && clientAir < FULL_TANK);
             // Health lost to anything other than vacuum (suffocation, fall, …) is a fixture failure
             // rather than a suit failure, and the message must say which — so the damage SOURCE
             // goes in the text beside the delta.
@@ -799,7 +817,7 @@ public class VacuumAndSuitClientGroupE2ETest extends AbstractSharedClientE2ETest
             scenario().requireArranged("equip-space-chest must succeed: " + equip,
                     Reply.of(equip).ok());
             scenario().requireArranged("equip-space-chest must report oxygen filled in tank: "
-                    + equip, (Reply.of(equip).integer("tankFilled") == 1000));
+                    + equip, (Reply.of(equip).integer("tankFilled") == FULL_TANK));
             assertEquals("baseline chestAir read via ItemAirUtils -> ItemSpaceChest.getAirRemaining"
                     + " -> sum of FluidStack amounts must equal 1000",
                     1000, readChestAirComponentRoute());
@@ -839,10 +857,10 @@ public class VacuumAndSuitClientGroupE2ETest extends AbstractSharedClientE2ETest
             // >= 0 as well as < 1000: the -1 this reader answers for an armour slot the client has
             // not been sent at all is below 1000 too, and would read as a drain it never saw.
             assertTrue("client-rendered chest state must reflect the drain; client=" + clientAirAfter
-                    + " server=" + chestAirAfter, clientAirAfter >= 0 && clientAirAfter < 1000);
+                    + " server=" + chestAirAfter, clientAirAfter >= 0 && clientAirAfter < FULL_TANK);
             assertTrue("chest air must decrease through the CHEST sub-inventory route in vacuum;"
                     + " before=1000 after=" + chestAirAfter + " drains=" + drains,
-                    chestAirAfter < 1000);
+                    chestAirAfter < FULL_TANK);
             assertTrue("a full suit must keep isImmune=true while the tank has oxygen; healthStart="
                     + healthStart + " healthAfter=" + healthAfter, healthAfter >= healthStart);
         } finally {

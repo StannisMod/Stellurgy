@@ -38,6 +38,71 @@ public class PlanetDerivationTest {
 
     private static final long SEED = 0xBEEF1234L;
 
+    // ---- SAMPLE BARS -----------------------------------------------------------------------
+    //
+    // Every constant in this block is THE TEST'S OWN, and they are all the same KIND of number: how
+    // many observations a statistic below needs before it is allowed to say anything. None of them
+    // is production's — the generator publishes no minimum sample — and none is a contract: they are
+    // the line under which a clean result would be describing the sweep rather than the subject.
+    // They are named individually because they are bars on DIFFERENT populations, and a single
+    // shared number would tie a sweep over stars to a sweep over presets.
+
+    /** Worlds a derivation sweep must produce before their albedo spread means anything. */
+    private static final int MIN_WORLDS_DERIVED = 100;
+    /** Distinct albedos that sweep must have crossed, or it proves nothing about the defect. */
+    private static final int MIN_ALBEDOS_SEEN = 2;
+    /** Distinct stellar metallicities a sweep must see before "it varies" is a finding. */
+    private static final int MIN_METALLICITIES_SEEN = 10;
+    /** Systems a sweep must have checked before its spin statistics are read. */
+    private static final int MIN_SYSTEMS_CHECKED = 300;
+    /** Worlds behind the atmosphere histogram — large, because the claim is about a TAIL. */
+    private static final int MIN_ATMOSPHERE_SAMPLE = 2000;
+    /** Distinct world KINDS the derivation must produce, or its variety claim is empty. */
+    private static final int MIN_WORLD_KINDS = 6;
+    /** Worlds in the hot zone a sweep must sample before reading what forms there. */
+    private static final int MIN_HOT_ZONE_SAMPLE = 100;
+    /** Giants the cold zone must produce, or the zone claim has nothing behind it. */
+    private static final int MIN_COLD_GIANTS = 5;
+    /** Worlds in EACH weight class before the two averages may be compared. */
+    private static final int MIN_PER_WEIGHT_CLASS = 20;
+    /** Worlds behind the breathable-rarity claim. */
+    private static final int MIN_BREATHABLE_SAMPLE = 500;
+    /** Draws an installed generator must win out of 500 at a 99:1 weight. */
+    private static final int MIN_INSTALLED_GENERATOR_DRAWS = 400;
+    /** Draws EACH overlapping preset must win, or first-match would satisfy the test. */
+    private static final int MIN_DRAWS_PER_PRESET = 100;
+
+    // ---- BOUNDS THAT ARE NOT SAMPLE BARS ----------------------------------------------------
+
+    /**
+     * How far a drawn day length may sit from a vanilla day, as a FACTOR either way.
+     *
+     * <p>The centre is vanilla's own: a Minecraft day is {@value #VANILLA_DAY_TICKS} ticks. The
+     * FACTOR is the test's, and it is the band the derivation is documented to draw within.</p>
+     */
+    private static final int VANILLA_DAY_TICKS = 24000;
+    /** @see #VANILLA_DAY_TICKS */
+    private static final int DAY_LENGTH_FACTOR = 5;
+
+    /**
+     * The radius, in Earths, at or above which a body is a GIANT rather than a moon.
+     *
+     * <p>The TEST'S OWN, and a definitional line rather than a tuned one: what it asserts is that
+     * the derivation never hands back a moon the size of a small planet.</p>
+     */
+    private static final double GIANT_RADIUS_EARTHS = 1.5d;
+
+    /**
+     * The band a renormalised draw ratio must land in when one weighted option is removed.
+     *
+     * <p>The TEST'S OWN: with the fallback gone the survivors should split about 2:1, and both ends
+     * exist to catch the two ways that can fail — collapsing into the fallback (below) and one
+     * survivor taking everything (above).</p>
+     */
+    private static final double RENORMALISED_RATIO_MIN = 1.5d;
+    /** @see #RENORMALISED_RATIO_MIN */
+    private static final double RENORMALISED_RATIO_MAX = 2.5d;
+
     @After
     public void restoreGlobals() {
         // Both are process-wide seams; a test that installs one must not leak it into the next class.
@@ -114,9 +179,9 @@ public class PlanetDerivationTest {
                 compared++;
             }
         }
-        assertTrue("the sweep must actually derive worlds", compared > 100);
+        assertTrue("the sweep must actually derive worlds", compared > MIN_WORLDS_DERIVED);
         assertTrue("and it must cross types whose albedo is NOT Earth's, or it proves nothing about "
-                + "the defect it exists for - saw " + albedosSeen, albedosSeen.size() > 2);
+                + "the defect it exists for - saw " + albedosSeen, albedosSeen.size() > MIN_ALBEDOS_SEEN);
     }
 
     /**
@@ -140,7 +205,8 @@ public class PlanetDerivationTest {
             int spin = p.rotationalPeriodTicks();
             seen++;
             assertTrue("a day must stay inside the drawn band: " + spin,
-                    spin >= 24000 / 5 && spin <= 24000 * 5);
+                    spin >= VANILLA_DAY_TICKS / DAY_LENGTH_FACTOR
+                && spin <= VANILLA_DAY_TICKS * DAY_LENGTH_FACTOR);
             Integer earlier = spinByGravity.put(p.gravityPercent(), spin);
             if (earlier != null && earlier.intValue() != spin) {
                 sameGravityDifferentDay = true;
@@ -212,7 +278,7 @@ public class PlanetDerivationTest {
                 planet.massEarths() == moon.massEarths()
                         && planet.radiusEarths() == moon.radiusEarths());
         assertEquals(SystemBodyKind.MOON, moon.kind());
-        assertTrue("a moon is never a giant", moon.radiusEarths() < 1.5d);
+        assertTrue("a moon is never a giant", moon.radiusEarths() < GIANT_RADIUS_EARTHS);
     }
 
     @Test
@@ -230,7 +296,7 @@ public class PlanetDerivationTest {
         for (long x = -30; x <= 30; x++) {
             seen.add(PlanetDerivation.metallicityOf(SEED, cell(x, 0, 0)));
         }
-        assertTrue("metallicity must genuinely vary between stars", seen.size() > 10);
+        assertTrue("metallicity must genuinely vary between stars", seen.size() > MIN_METALLICITIES_SEEN);
     }
 
     // ─── The type a world gets ─────────────────────────────────────────────────
@@ -251,7 +317,7 @@ public class PlanetDerivationTest {
                 checked++;
             }
         }
-        assertTrue(checked > 300);
+        assertTrue(checked > MIN_SYSTEMS_CHECKED);
     }
 
     @Test
@@ -274,7 +340,7 @@ public class PlanetDerivationTest {
                 }
             }
         }
-        assertTrue("sample must be large", total > 2000);
+        assertTrue("sample must be large", total > MIN_ATMOSPHERE_SAMPLE);
         // The message NAMES the gap: a bare count would say a hole exists without saying where, and the
         // whole value of this test is that it hands the author the range to widen.
         assertTrue("the stock presets must cover every world the derivation can produce; uncovered "
@@ -293,7 +359,7 @@ public class PlanetDerivationTest {
             }
         }
         assertTrue("the derivation must produce many kinds of world, saw " + names,
-                names.size() >= 6);
+                names.size() >= MIN_WORLD_KINDS);
     }
 
     // ─── Zoning emerges from the physics ───────────────────────────────────────
@@ -329,8 +395,8 @@ public class PlanetDerivationTest {
                 }
             }
         }
-        assertTrue("the hot zone must actually be sampled", checkedHot > 100);
-        assertTrue("giants must actually form in the cold", giantsCold > 5);
+        assertTrue("the hot zone must actually be sampled", checkedHot > MIN_HOT_ZONE_SAMPLE);
+        assertTrue("giants must actually form in the cold", giantsCold > MIN_COLD_GIANTS);
     }
 
     @Test
@@ -391,7 +457,7 @@ public class PlanetDerivationTest {
                 }
             }
         }
-        assertTrue("both weight classes must be sampled", light > 20 && heavy > 20);
+        assertTrue("both weight classes must be sampled", light > MIN_PER_WEIGHT_CLASS && heavy > MIN_PER_WEIGHT_CLASS);
         assertTrue("a heavy world must hold more air on average (" + (lightAverage / light) + " vs "
                         + (heavyAverage / heavy) + ")",
                 heavyAverage / heavy > lightAverage / light);
@@ -413,7 +479,7 @@ public class PlanetDerivationTest {
                 }
             }
         }
-        assertTrue("sample must be large", total > 500);
+        assertTrue("sample must be large", total > MIN_BREATHABLE_SAMPLE);
         assertTrue("a breathable world must stay rare, saw " + oxygen + "/" + total,
                 oxygen * 20 < total);
     }
@@ -524,7 +590,7 @@ public class PlanetDerivationTest {
         double ratio = nativeDraws / (double) templateDraws;
         assertTrue("weights must renormalize among the survivors, not collapse into the fallback "
                         + "(saw " + nativeDraws + ":" + templateDraws + ")",
-                ratio > 1.5d && ratio < 2.5d);
+                ratio > RENORMALISED_RATIO_MIN && ratio < RENORMALISED_RATIO_MAX);
     }
 
     @Test
@@ -542,7 +608,7 @@ public class PlanetDerivationTest {
             }
         }
         assertTrue("an installed generator must dominate at weight 99:1, saw " + foreign + "/500",
-                foreign > 400);
+                foreign > MIN_INSTALLED_GENERATOR_DRAWS);
     }
 
     @Test
@@ -576,7 +642,7 @@ public class PlanetDerivationTest {
         }
         assertTrue("both overlapping presets must be reachable — first match would never draw the "
                         + "second: " + counts,
-                counts.getOrDefault("rare", 0) > 100);
+                counts.getOrDefault("rare", 0) > MIN_DRAWS_PER_PRESET);
         assertTrue("the heavier preset must dominate: " + counts,
                 counts.getOrDefault("common", 0) > counts.getOrDefault("rare", 0) * 3);
     }

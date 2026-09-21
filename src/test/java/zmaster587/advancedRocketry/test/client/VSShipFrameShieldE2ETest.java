@@ -59,6 +59,40 @@ public class VSShipFrameShieldE2ETest extends AbstractSharedVsClientE2ETest {
      *  replaces allowed between them are kept. */
     private static final int FRAME_BUDGET_TICKS = 200;
 
+    /** A block position is three numbers. Named so the shape check reads as the shape it is. */
+    private static final int BLOCK_POS_COMPONENTS = 3;
+
+    /**
+     * How far the shell's world centre must be from the RAW subspace block position, in blocks, for
+     * the frame to have mapped it out to the flying hull at all.
+     *
+     * <p>The TEST'S OWN: the hull is flown far from the shipyard the subspace address lives in, so
+     * a centre still near that address is one nothing transformed. Sixty-four blocks is well beyond
+     * any settle and well within the distance the hull is moved.</p>
+     */
+    private static final double MAPPED_OUT_OF_SUBSPACE_BLOCKS = 64.0;
+
+    /**
+     * How near the hull the shell's centre must sit to count as ON it, in blocks.
+     *
+     * <p>The TEST'S OWN: the craft is about ten blocks across and the shell is drawn around it, so
+     * thirty-two is generous enough to survive a settle and far tighter than the distance to the
+     * subspace address the previous constant rules out.</p>
+     */
+    private static final double SHELL_ON_THE_HULL_BLOCKS = 32.0;
+
+    /** The same quantity asserted the other way: the shell must NOT be near the ship's position at
+     *  the moment the raw address is still what the frame reports. */
+    private static final double SHELL_NOT_AT_SHIP_BLOCKS = 24.0;
+
+    /** How far the hull must actually move before its tracking can be judged, in blocks. */
+    private static final double HULL_MOVED_BLOCKS = 1.5;
+
+    /** How far the shell must move WITH it, in blocks — the test's own sensitivity bar on
+     *  "it is not frozen". Deliberately under {@link #HULL_MOVED_BLOCKS}: the claim is that it
+     *  followed, not that it matched. */
+    private static final double SHELL_MOVED_BLOCKS = 0.5;
+
     @Test
     public void shieldRidesTheAssembledShipAndDeflectsOnBoard() throws Exception {
 
@@ -133,7 +167,7 @@ public class VSShipFrameShieldE2ETest extends AbstractSharedVsClientE2ETest {
         // reply-level accessors read a reply's `events` array.
         String[] pos = String.valueOf(Events.text(frame, "pos")).split(",");
         assertTrue("a field_frame_resolved record must name the emitter's block pos: " + frame,
-                pos.length == 3);
+                pos.length == BLOCK_POS_COMPONENTS);
         int spX = Integer.parseInt(pos[0]), spY = Integer.parseInt(pos[1]), spZ = Integer.parseInt(pos[2]);
 
         // The probe's agreeing view, read ONCE now that the decision has been recorded. It is not
@@ -159,10 +193,10 @@ public class VSShipFrameShieldE2ETest extends AbstractSharedVsClientE2ETest {
         double subToWorld = dist(spX + 0.5, spY + 0.5, spZ + 0.5, wx1, wy1, wz1);
         assertTrue("the shell's world centre coincides with the raw subspace block pos (subToWorld="
                 + subToWorld + ") — the frame did not map the centre out to the flying hull:\n" + emitters,
-                subToWorld > 64.0);
+                subToWorld > MAPPED_OUT_OF_SUBSPACE_BLOCKS);
         assertTrue("the shell's world centre is not near the ship's world position (worldXZ=" + wx1 + ","
                 + wz1 + " ship=" + bx + "," + bz + ") — the shell is not on the hull:\n" + emitters,
-                Math.abs(wx1 - (bx + 0.5)) < 24.0 && Math.abs(wz1 - (bz + 0.5)) < 24.0);
+                Math.abs(wx1 - (bx + 0.5)) < 24.0 && Math.abs(wz1 - (bz + 0.5)) < SHELL_NOT_AT_SHIP_BLOCKS);
 
         // Check 3 (before pushing, while the ship is roughly settled): charge the emitter and deflect an
         // inbound arrow off the ship-framed shell. Re-read the world centre immediately so the arrow is
@@ -203,7 +237,7 @@ public class VSShipFrameShieldE2ETest extends AbstractSharedVsClientE2ETest {
         double[] ship1 = shipPos(shipId);
         double[] shell1 = shellCenter();
         assertTrue("precondition: the shell must sit on the hull before it moves (shell=" + str(shell1)
-                + " ship=" + str(ship1) + ")", dist(shell1, ship1) < 32.0);
+                + " ship=" + str(ship1) + ")", dist(shell1, ship1) < SHELL_ON_THE_HULL_BLOCKS);
         // A STIMULUS loop, deliberately left as one: it is not waiting for a link but accumulating a
         // physical displacement under repeated velocity writes the substrate keeps overwriting, and
         // "the hull has moved far enough to test tracking" is a measured quantity, not an event.
@@ -220,13 +254,13 @@ public class VSShipFrameShieldE2ETest extends AbstractSharedVsClientE2ETest {
         double shipMoved = dist(ship1, ship2);
         double shellMoved = dist(shell1, shell2);
         scenario().requireArranged("the hull must actually move to test tracking (shipMoved=" + shipMoved
-                + ") — perturb harder if VS pinned it", shipMoved > 1.5);
+                + ") — perturb harder if VS pinned it", shipMoved > HULL_MOVED_BLOCKS);
         assertTrue("the shell's world centre did not move with the hull (shellMoved=" + shellMoved
                 + " shipMoved=" + shipMoved + ") — it is frozen, not tracking the flying hull:\n" + moved,
-                shellMoved > 0.5);
+                shellMoved > SHELL_MOVED_BLOCKS);
         assertTrue("the shell detached from the hull after it moved (shell=" + str(shell2) + " ship="
                 + str(ship2) + " dist=" + dist(shell2, ship2) + ") — the shell does not ride the hull:\n"
-                + moved, dist(shell2, ship2) < 32.0);
+                + moved, dist(shell2, ship2) < SHELL_ON_THE_HULL_BLOCKS);
         assertTrue("the shell's surface velocity stayed zero on a moving ship (speed=" + speed + ") — the "
                 + "relative-velocity input is dead, so a cruising ship would bill its own crew:\n" + moved,
                 speed > 0.0);

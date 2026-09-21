@@ -50,6 +50,36 @@ public class TelescopeConeSurveyTest {
     private static final long SEED = 0xC0FFEEL;
     private static final long STEP = GalaxyGenConfig.DEFAULT_MIN_SPACING;
 
+    /**
+     * The aperture edge, in light years, that the cloud test straddles.
+     *
+     * <p>The TEST'S OWN, and it is the arrangement's own number read back: the star is placed just
+     * inside this in clear sky, and the claim is that a cloud puts the SAME star outside it. Both
+     * sides of the comparison cite it, so the pair cannot drift.</p>
+     */
+    private static final double APERTURE_EDGE_LY = 10d;
+
+    /** Looks a pointing must hold before it is worth walking — more than its own axis. */
+    private static final int MIN_LOOKS_WORTH_WALKING = 40;
+
+    /** How many STEPS out the walk's reach is measured against. @see #MIN_LOOKS_WORTH_WALKING */
+    private static final int REACH_STEPS = 40;
+
+    /** How many STEPS deep the walk must actually get, which is the pointing's own depth. */
+    private static final int DEPTH_STEPS = 29;
+
+    /** The range, in light years, at which a sun-like star at the shipped aperture is USEFUL. */
+    private static final double USEFUL_REACH_LY = 100d;
+
+    /** The range that makes an aperture absurd — the arrangement of the ceiling test. */
+    private static final double ABSURD_REACH_LY = 100_000d;
+
+    /** The ceiling a survey must fit under, in cells. The claim is that it is BOUNDED. */
+    private static final int SURVEY_CELL_CEILING = 5_000;
+
+    /** How long the walk may take, in ms. The TEST'S OWN: "well under a second of CPU". */
+    private static final long WALK_BUDGET_MS = 2_000L;
+
     private double previousMargin;
 
     @org.junit.Before
@@ -138,7 +168,7 @@ public class TelescopeConeSurveyTest {
         // the other. The bracket is what makes the sum above a MECHANIC rather than arithmetic.
         assertTrue("a star inside the aperture in clear sky must be outside it behind a cloud: "
                         + clear + " -> " + dusty,
-                clear < 10d && dusty > 10d);
+                clear < APERTURE_EDGE_LY && dusty > APERTURE_EDGE_LY);
     }
 
     @Test
@@ -168,7 +198,7 @@ public class TelescopeConeSurveyTest {
         double halfAngle = Math.toRadians(15d);
         ConeWalk cone = ConeWalk.aimed(HOME, 1, 0, 0, halfAngle, 40 * STEP, STEP);
 
-        assertTrue("a pointing worth walking must hold more than its axis", cone.totalLooks() > 40);
+        assertTrue("a pointing worth walking must hold more than its axis", cone.totalLooks() > MIN_LOOKS_WORTH_WALKING);
         for (int i = 0; i < cone.totalLooks(); i++) {
             GalacticCoord look = cone.lookAt(i);
             double axial = look.sectorX();
@@ -180,7 +210,7 @@ public class TelescopeConeSurveyTest {
             assertTrue("a look must lie inside the cone: " + look.cellKey() + " is "
                             + Math.toDegrees(Math.atan2(across, axial)) + " degrees off axis",
                     across <= axial * Math.tan(halfAngle) + STEP);
-            assertTrue("and inside the reach", axial <= 40 * STEP);
+            assertTrue("and inside the reach", axial <= REACH_STEPS * STEP);
         }
     }
 
@@ -211,7 +241,7 @@ public class TelescopeConeSurveyTest {
                     + " after " + deepestSoFar, depth >= deepestSoFar);
             deepestSoFar = depth;
         }
-        assertTrue("the walk must reach the pointing's own depth", deepestSoFar >= 29 * STEP);
+        assertTrue("the walk must reach the pointing's own depth", deepestSoFar >= DEPTH_STEPS * STEP);
     }
 
     @Test
@@ -258,7 +288,7 @@ public class TelescopeConeSurveyTest {
         double sunLike = StellarMagnitude.luminositySuns(1.15d, 100);
         double reach = StellarMagnitude.detectionRangeLightYears(sunLike, 8d);
         assertTrue("arrangement: a sun-like star at the shipped aperture must reach a useful way",
-                reach > 100d);
+                reach > USEFUL_REACH_LY);
 
         UniverseRegistry near = oneStarAt(reach * 0.5d, 1.15f, 100);
         assertEquals("a star well inside the aperture must register", 1,
@@ -576,7 +606,7 @@ public class TelescopeConeSurveyTest {
         assertTrue("arrangement: a pointing that finds nothing would pass every bound above",
                 detections > 0);
         assertTrue("and the walk must cost well under a second of CPU: " + elapsedMs + " ms",
-                elapsedMs < 2_000L);
+                elapsedMs < WALK_BUDGET_MS);
     }
 
     @Test
@@ -587,12 +617,12 @@ public class TelescopeConeSurveyTest {
         RegionScan.Tuning greedy = new RegionScan.Tuning(25d, archetypes(), Math.toRadians(5d),
                 5_000, 20, 100, STEP);
         assertTrue("arrangement: this aperture must reach absurdly far",
-                greedy.maxRangeLightYears() > 100_000d);
+                greedy.maxRangeLightYears() > ABSURD_REACH_LY);
 
         RegionScan scan = RegionScan.directed(HOME, 1, 0, 0, greedy.maxRangeSteps(), 0L, greedy);
 
         assertTrue("the survey must fit under the ceiling: " + scan.totalCells(),
-                scan.totalCells() <= 5_000);
+                scan.totalCells() <= SURVEY_CELL_CEILING);
         assertTrue("and must still be a survey rather than a single look", scan.totalCells() > 1);
         assertTrue("its reach must have been SHORTENED, which is what a budget can do to a horizon",
                 scan.distanceCells() < greedy.maxRangeSteps() * STEP);

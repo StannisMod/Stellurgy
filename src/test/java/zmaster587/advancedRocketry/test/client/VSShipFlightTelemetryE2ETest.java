@@ -116,6 +116,132 @@ public class VSShipFlightTelemetryE2ETest extends AbstractSharedVsClientE2ETest 
     /** The client's own flight-cursor dead-zone: inside it the ship is commanded no rotation at all. */
     private static final double CURSOR_DEADZONE = 0.05;
 
+    /**
+     * How far a raw mouse delta must push the client's flight cursor for the deflection to have
+     * REGISTERED, in the cursor's own normalised units.
+     *
+     * <p>The TEST'S OWN sensitivity bar: a hard deflection drives the cursor toward 1, so what this
+     * refuses is an input that did not arrive at all — not a small one.</p>
+     */
+    private static final double CURSOR_DEFLECTED = 0.2;
+
+    /**
+     * The angular rate that separates a ship a deflection MOVED from one it left dead, in rad/s.
+     *
+     * <p>The TEST'S OWN sensitivity bar. The commanded rate is an order of magnitude above it, so
+     * this refuses zero rather than a slow turn.</p>
+     */
+    private static final double SHIP_IS_TURNING_RAD_PER_S = 0.05;
+
+    /**
+     * What counts as ZERO for a rate this scenario has just cancelled.
+     *
+     * <p>The TEST'S OWN, and it is float noise rather than a tolerance: the arrangement sets the
+     * value to zero and the assertion reads it back through a double round-trip, so the only
+     * honest allowance is the last bits.</p>
+     */
+    private static final double EXACTLY_ZERO = 1e-6;
+
+    /**
+     * How level an UPRIGHT ship must leave the pilot's camera, in degrees of roll.
+     *
+     * <p>The TEST'S OWN. The contract is "level", so the honest statement is zero; fifteen degrees
+     * is the slack of reading an Euler roll off an interpolated camera quaternion, and the defect
+     * it refuses is a camera rolled with a hull that is not.</p>
+     */
+    private static final double UPRIGHT_CAMERA_ROLL_DEG = 15.0;
+
+    /**
+     * How far past vertical the craft must be rolled before the inverted-camera leg means anything
+     * — the world-frame Y of its up.
+     *
+     * <p>The TEST'S OWN arrangement fact: production has no opinion about "past vertical"; the
+     * scenario commands the roll and this says the command took.</p>
+     */
+    private static final double ROLLED_PAST_VERTICAL_UP_Y = -0.3;
+
+    /**
+     * How far the pilot's camera must have rolled WITH an inverted hull, in degrees.
+     *
+     * <p>The TEST'S OWN: past a hundred degrees the camera is unmistakably over with the ship
+     * rather than lagging it, and the defect it refuses is a camera that stayed world-level while
+     * the hull turned over.</p>
+     */
+    private static final double INVERTED_CAMERA_ROLL_DEG = 100.0;
+
+    /**
+     * How far the camera's roll may sit from the SHIP's own, as a fraction of the ship's roll.
+     *
+     * <p>The TEST'S OWN: the two are the same quantity read on different frames, one of them
+     * interpolated, so the allowance is a fraction rather than a number of degrees — which keeps it
+     * meaningful at any roll.</p>
+     */
+    private static final double CAMERA_ROLL_AGREEMENT_FRACTION = 0.15;
+
+    /**
+     * The band an eye offset must fall in for it to be AN EYE HEIGHT, in blocks.
+     *
+     * <p>Vanilla's standing eye height is 1.62 above the feet, and both ends are the test's own
+     * slack around it: under 0.8 the offset is too small to be an eye at all, over 2.5 it is
+     * something other than a standing body's head.</p>
+     */
+    private static final double EYE_HEIGHT_MIN_BLOCKS = 0.8;
+    /** @see #EYE_HEIGHT_MIN_BLOCKS */
+    private static final double EYE_HEIGHT_MAX_BLOCKS = 2.5;
+
+    /**
+     * How many distinct colours a captured frame must carry to be a VIEW rather than a wall.
+     *
+     * <p>The TEST'S OWN, and the number is small because the discrimination is: a frame rendered
+     * from inside a solid block is one flat colour plus compression noise, while any view of the
+     * world is hundreds. Eight is far above the first and far below the second.</p>
+     */
+    private static final int DISTINCT_COLOURS_OF_A_VIEW = 8;
+
+    /**
+     * How far a crew member may move from where he stands on a rolled deck, in blocks.
+     *
+     * <p>The TEST'S OWN — the contract is that he stays put, so this is slack rather than a budget:
+     * two blocks is about a body's width, and a body sliding off a 75-degree deck travels many.</p>
+     */
+    private static final double CREW_STAYS_PUT_BLOCKS = 2.0;
+
+    /**
+     * How many times the aboard-body capture may be dropped and retaken while the deck ROTATES.
+     *
+     * <p>The TEST'S OWN. The contract is that a rotating deck does not hand its crew back at all;
+     * the allowance covers the genuine boundaries this scenario crosses, and the defect it refuses
+     * is thrash — a capture cycling every few ticks.</p>
+     */
+    private static final int ROTATION_CAPTURE_DROPS = 8;
+
+    /**
+     * How fast a station-keeping hull may be moving vertically at its worst sample, in blocks/tick.
+     *
+     * <p>The TEST'S OWN: the contract is that it does not sink, so the honest statement is zero
+     * and this is the residual of a hold correcting itself. Vanilla gravity alone passes it within
+     * a couple of ticks.</p>
+     */
+    private static final double STATION_KEEPING_MAX_SINK_RATE = 0.05;
+
+    /**
+     * How far a station-keeping hull may drift from the altitude it is holding, in blocks.
+     *
+     * <p>The TEST'S OWN, for the same reason: a hold corrects around its target rather than
+     * sitting exactly on it, and a third of a block is under the hull's own block size.</p>
+     */
+    private static final double STATION_KEEPING_MAX_DRIFT_BLOCKS = 0.3;
+
+    /**
+     * What counts as STOPPED for a hull whose flight cursor has been centred, in rad/s.
+     *
+     * <p>The TEST'S OWN, and numerically the same as {@link #CURSOR_DEADZONE} by coincidence rather
+     * than by derivation — that one is a cursor deflection and this is an angular rate, two
+     * different quantities that happen to share a number. They are separate constants so that
+     * moving the dead zone cannot silently move what "stopped turning" means.</p>
+     */
+    private static final double CURSOR_DEADZONE_OMEGA = 0.05;
+
     // ---- Test 1: the flight panel + the spin brake -------------------------------------------
 
     @Test
@@ -199,7 +325,7 @@ public class VSShipFlightTelemetryE2ETest extends AbstractSharedVsClientE2ETest 
                 o -> o >= 0.05, 2, 60);
         double spinning = spin.value;
         assertTrue("a deflected flight cursor must actually spin the ship (omega=" + spinning + ")",
-                spinning > 0.05);
+                spinning > SHIP_IS_TURNING_RAD_PER_S);
 
         // Marked BEFORE the centring, because the packet that says "stop" is a CHANGE: the client
         // sends an idle input on the tick the cursor enters its dead-zone and never repeats it (a
@@ -261,9 +387,9 @@ public class VSShipFlightTelemetryE2ETest extends AbstractSharedVsClientE2ETest 
                         + " The cut key is what a pilot uses and it zeroes the setpoint; if this"
                         + " reply carries a non-zero cruise the cut did not take: " + cruiseAfterCut,
                 Reply.of(cruiseAfterCut).bool("afcResolved")
-                        && Math.abs(readDouble(cruiseAfterCut, CRUISE_FWD)) < 1e-6
-                        && Math.abs(readDouble(cruiseAfterCut, CRUISE_RIGHT)) < 1e-6
-                        && Math.abs(readDouble(cruiseAfterCut, CRUISE_UP)) < 1e-6);
+                        && Math.abs(readDouble(cruiseAfterCut, CRUISE_FWD)) < EXACTLY_ZERO
+                        && Math.abs(readDouble(cruiseAfterCut, CRUISE_RIGHT)) < EXACTLY_ZERO
+                        && Math.abs(readDouble(cruiseAfterCut, CRUISE_UP)) < EXACTLY_ZERO);
 
         bot().waitTicks(BRAKE_SETTLE_TICKS);
         java.util.List<Double> hold = ClientPoll.observe(bot()::waitTicks,
@@ -350,7 +476,7 @@ public class VSShipFlightTelemetryE2ETest extends AbstractSharedVsClientE2ETest 
                 + "\n  WHO WAS DRIVING, from the physics recorder — `writers` above 1 means a stale"
                 + " flight computer is still commanding this ship beside the live one, which is a"
                 + " different fault from a brake that does not brake: " + drivers,
-                settled <= 0.05);
+                settled <= CURSOR_DEADZONE_OMEGA);
 
         exec("artest player dismount");
         reportClientHealth("seatedPilotSeesLiveVelocityAndACentredCursorStopsTheShipTurning");
@@ -368,7 +494,7 @@ public class VSShipFlightTelemetryE2ETest extends AbstractSharedVsClientE2ETest 
 
         double rollUpright = deckCamera("roll");
         assertTrue("an upright ship must leave the camera level (roll=" + rollUpright + ")",
-                Math.abs(rollUpright) < 15.0);
+                Math.abs(rollUpright) < UPRIGHT_CAMERA_ROLL_DEG);
 
         // Roll the ship all the way over. The pilot's own attitude reference owns the angular channel
         // while he is seated, so steer it the way he does: hold the cursor hard over until it is there.
@@ -379,17 +505,17 @@ public class VSShipFlightTelemetryE2ETest extends AbstractSharedVsClientE2ETest 
         double shipUpY = deckCamera("shipUpY");
         double rollInverted = deckCamera("roll");
         assertTrue("the ship must actually have rolled past vertical (its up points " + shipUpY + ")",
-                shipUpY < -0.3);
+                shipUpY < ROLLED_PAST_VERTICAL_UP_Y);
 
         // 1. The camera turns over with the deck. Vanilla has no roll for a player camera at all, so it
         //    is zero unless AR supplies it - and it must be the SHIP's roll, not merely some roll: for a
         //    craft rolled about its nose, the cosine of the camera roll IS the world Y of the ship's up.
         assertTrue("an inverted ship must turn the pilot's camera over with it (roll=" + rollInverted
-                + " deg)", Math.abs(rollInverted) > 100.0);
+                + " deg)", Math.abs(rollInverted) > INVERTED_CAMERA_ROLL_DEG);
         double impliedUpY = Math.cos(Math.toRadians(rollInverted));
         assertTrue("the camera roll must BE the ship's roll: a camera rolled " + rollInverted
                         + " deg implies a ship up of " + impliedUpY + ", but the ship's is " + shipUpY,
-                Math.abs(impliedUpY - shipUpY) < 0.15);
+                Math.abs(impliedUpY - shipUpY) < CAMERA_ROLL_AGREEMENT_FRACTION);
 
         // 2. The eye follows the SHIP's up, not the world's. This is the "camera sinks into the floor"
         //    bug: with the eye pinned to world +Y, an inverted pilot's eye is a metre and a half INSIDE
@@ -401,7 +527,8 @@ public class VSShipFlightTelemetryE2ETest extends AbstractSharedVsClientE2ETest 
                         + " but the eye sits " + (eyeY - playerY) + " above the body",
                 (eyeY - playerY) * shipUpY > 0.0);
         assertTrue("the eye offset must be about an eye height (" + Math.abs(eyeY - playerY) + ")",
-                Math.abs(eyeY - playerY) > 0.8 && Math.abs(eyeY - playerY) < 2.5);
+                Math.abs(eyeY - playerY) > EYE_HEIGHT_MIN_BLOCKS
+                        && Math.abs(eyeY - playerY) < EYE_HEIGHT_MAX_BLOCKS);
 
         // 3. And the client is actually DRAWING something: capture the frame. An eye buried in a solid
         //    block renders a single flat colour; a cockpit does not. The capture needs the framebuffer,
@@ -423,7 +550,7 @@ public class VSShipFlightTelemetryE2ETest extends AbstractSharedVsClientE2ETest 
         System.out.println("[tier2] captured " + png + " (" + frame.getWidth() + "x" + frame.getHeight()
                 + ", distinct colours=" + distinctColours(frame) + ")");
         assertTrue("a rendered frame from inside a solid block is one flat colour; the pilot must see "
-                + "the world (distinct colours=" + distinctColours(frame) + ")", distinctColours(frame) > 8);
+                + "the world (distinct colours=" + distinctColours(frame) + ")", distinctColours(frame) > DISTINCT_COLOURS_OF_A_VIEW);
 
         exec("artest player dismount");
         reportClientHealth("anInvertedShipTurnsThePilotsCameraOverAndKeepsHisEyeOutOfTheDeck");
@@ -482,7 +609,7 @@ public class VSShipFlightTelemetryE2ETest extends AbstractSharedVsClientE2ETest 
         System.out.println("[tier2][TC] rolled-deck frame disagreement up=" + tcUp + " fwd=" + tcFwd);
         assertTrue("the movement frame and the camera frame must be ONE rotation on a 75-degree deck, so "
                 + "the keys/mouse inversion is the aim-frame (Path B), not a frame-source split "
-                + "(up=" + tcUp + " fwd=" + tcFwd + ")", tcUp < 1e-6 && tcFwd < 1e-6);
+                + "(up=" + tcUp + " fwd=" + tcFwd + ")", tcUp < EXACTLY_ZERO && tcFwd < EXACTLY_ZERO);
 
         double drift = distance(restingOnDeck, afterRoll);
         System.out.println("[tier2] crew on rolled deck: start=" + java.util.Arrays.toString(restingOnDeck)
@@ -492,7 +619,7 @@ public class VSShipFlightTelemetryE2ETest extends AbstractSharedVsClientE2ETest 
         // moves there, whatever the ship does in the world. Before the movement frame followed the
         // deck, this body slid off and lodged in a corner metres away.
         assertTrue("a crew member must stay where he stands on a deck rolled 75 degrees; he moved "
-                + drift + " blocks across it", drift < 2.0);
+                + drift + " blocks across it", drift < CREW_STAYS_PUT_BLOCKS);
 
         // And he must still be standing on it, not falling.
         PlayerShipData data = PlayerShipData.byId(this::exec, 0, crewId);
@@ -554,7 +681,7 @@ public class VSShipFlightTelemetryE2ETest extends AbstractSharedVsClientE2ETest 
         assertTrue("a rotating deck must not thrash the aboard-body capture (external-move drops for"
                 + " entity " + crewId + "=" + drops + " during a 2 rad/s spin). Every release"
                 + " recorded for any body since the spin began, with production's own reason: "
-                + released, drops < 8);
+                + released, drops < ROTATION_CAPTURE_DROPS);
         // This scenario leaves the bot standing on a hull that was just spun at 2 rad/s and is left
         // steeply tilted, and the scenario that follows it opens on the shared base's full-health
         // gate. Read out what the client renders here, so a leftover is attributed to the window
@@ -728,9 +855,9 @@ public class VSShipFlightTelemetryE2ETest extends AbstractSharedVsClientE2ETest 
         // The bug held a steady -0.16 blk/s sink; the fix holds ~0. A threshold well under the bug and
         // well over solver noise separates them cleanly.
         assertTrue("a station-keeping ship must not sink: its vertical velocity peaked at " + worstVelY
-                + " blk/s (the bug held ~-0.16)", Math.abs(worstVelY) < 0.05);
+                + " blk/s (the bug held ~-0.16)", Math.abs(worstVelY) < STATION_KEEPING_MAX_SINK_RATE);
         assertTrue("a station-keeping ship must hold its altitude: it drifted " + (yEnd - yStart)
-                + " blocks over ~6 s (the bug sank ~1 block)", Math.abs(yEnd - yStart) < 0.3);
+                + " blocks over ~6 s (the bug sank ~1 block)", Math.abs(yEnd - yStart) < STATION_KEEPING_MAX_DRIFT_BLOCKS);
 
         exec("artest player dismount");
         reportClientHealth("aStationKeepingShipHoldsAltitudeInsteadOfSinking");
@@ -850,7 +977,7 @@ public class VSShipFlightTelemetryE2ETest extends AbstractSharedVsClientE2ETest 
     private double centreFlightCursor() throws Exception {
         double cursor = flightCursorX("before centring");
         for (int i = 0; i < 200 && Math.abs(cursor) >= CURSOR_DEADZONE * 0.5; i++) {
-            int step = Math.abs(cursor) > 0.2 ? 30 : 2;
+            int step = Math.abs(cursor) > CURSOR_DEFLECTED ? 30 : 2;
             mouseDelta(cursor > 0 ? -step : step, 0);
             bot().waitTicks(1);
             cursor = flightCursorX("while centring, nudge " + i);

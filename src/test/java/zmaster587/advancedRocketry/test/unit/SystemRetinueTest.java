@@ -61,6 +61,60 @@ public class SystemRetinueTest {
      */
     private static final int CRAMPED_SPACING = 1_000;
 
+    // ---- SAMPLE BARS -----------------------------------------------------------------------
+    //
+    // Every constant here is THE TEST'S OWN, and all are one KIND of number: how many observations a
+    // statistic below needs before it may speak. The generator publishes no minimum sample and none
+    // of these is a contract — they are the line under which a clean result would be describing the
+    // sweep rather than the subject. They are separate constants because they bar DIFFERENT
+    // populations, and one shared number would tie a sweep over systems to a sweep over moons.
+
+    /** Systems a sweep must find before a per-system statistic is read. */
+    private static final int MIN_SYSTEMS_CHECKED = 5;
+    /** The same bar where the statistic is a spread rather than a presence. */
+    private static final int MIN_SYSTEMS_FOR_SPREAD = 10;
+    /** The same bar for the star-count claim, which needs a wide sweep to find a rare triple. */
+    private static final int MIN_SYSTEMS_FOR_STAR_COUNTS = 20;
+    /** Systems with companions a sweep must contain before companion behaviour is read. */
+    private static final int MIN_COMPANION_SYSTEMS = 3;
+    /** Moons a sweep must produce, or "the generator makes moons" has nothing behind it. */
+    private static final int MIN_MOONS = 3;
+    /** The smallest sweep any of the retinue claims is read from. */
+    private static final int MIN_SWEEP = 3;
+
+    // ---- BOUNDS THAT ARE NOT SAMPLE BARS ----------------------------------------------------
+
+    /**
+     * Stars one system must be able to hold, at most, across the whole sweep.
+     *
+     * <p>The TEST'S OWN, and a claim about the GENERATOR's reach rather than a threshold on any one
+     * system: a sweep that never produced a multiple star would satisfy every other assertion in
+     * that method while proving the feature does not exist.</p>
+     */
+    private static final int MIN_MOST_STARS = 2;
+
+    /**
+     * The band an ORDINARY system's body count must fall in, as a median over the sweep.
+     *
+     * <p>Both ends are the test's own, and they are a shape rather than a tuning: "a handful". The
+     * pair exists because the two failures are opposite — a generator that makes everything barren
+     * (below) and one that makes everything a crowd (above).</p>
+     */
+    private static final int ORDINARY_SYSTEM_MIN_BODIES = 4;
+    /** @see #ORDINARY_SYSTEM_MIN_BODIES */
+    private static final int ORDINARY_SYSTEM_MAX_BODIES = 8;
+
+    /**
+     * How many bodies the BIGGEST system in the sweep must hold, so that a rare system is a FIND
+     * rather than an ordinary one with a body or two extra.
+     *
+     * <p>The TEST'S OWN, and deliberately far above {@link #ORDINARY_SYSTEM_MAX_BODIES}: the claim
+     * is about the distribution's tail, and a bar close to the median would be satisfied by a
+     * generator with no tail at all.</p>
+     */
+    private static final int RARE_SYSTEM_MIN_BODIES = 15;
+
+
     /** A galaxy dense enough to sample: every cube occupied, so a small sweep finds many systems. */
     private static ClusteredGalaxyGenerator gen(int minSpacing) {
         return new ClusteredGalaxyGenerator(new GalaxyGenConfig(minSpacing, 0.9d,
@@ -126,7 +180,7 @@ public class SystemRetinueTest {
             }
             checked++;
         }
-        assertTrue("the sweep must actually find systems", checked > 5);
+        assertTrue("the sweep must actually find systems", checked > MIN_SYSTEMS_CHECKED);
     }
 
     @Test
@@ -148,7 +202,7 @@ public class SystemRetinueTest {
             }
             checked++;
         }
-        assertTrue(checked > 5);
+        assertTrue(checked > MIN_SYSTEMS_CHECKED);
     }
 
     // ─── what a system loses when it does not fit ──────────────────────────────
@@ -178,7 +232,7 @@ public class SystemRetinueTest {
             assertEquals("system " + anchor.cellKey() + " lost a body it had room for", wanted, got);
             checked++;
         }
-        assertTrue(checked > 10);
+        assertTrue(checked > MIN_SYSTEMS_FOR_SPREAD);
     }
 
     @Test
@@ -212,7 +266,7 @@ public class SystemRetinueTest {
             }
             checked++;
         }
-        assertTrue(checked > 10);
+        assertTrue(checked > MIN_SYSTEMS_FOR_SPREAD);
         assertTrue("the cramped fixture must actually be cramped, or this proves nothing",
                 droppedSomewhere > 0);
     }
@@ -247,7 +301,7 @@ public class SystemRetinueTest {
             }
         }
         assertTrue("the sweep must find multiple systems, saw " + multiple + " of "
-                + anchors(g, SEED, SPACING, 3).size() + " anchors", multiple > 10);
+                + anchors(g, SEED, SPACING, 3).size() + " anchors", multiple > MIN_SYSTEMS_FOR_SPREAD);
         assertTrue("a companion must cost its system something, or the band is not being applied",
                 lostSome > 0);
         assertTrue("but it must not cost every system everything, saw " + lostSome + "/" + multiple,
@@ -274,12 +328,12 @@ public class SystemRetinueTest {
             }
             mostStars = Math.max(mostStars, stars);
         }
-        assertTrue("the sweep must find systems", systems > 20);
+        assertTrue("the sweep must find systems", systems > MIN_SYSTEMS_FOR_STAR_COUNTS);
         assertTrue("multiple systems must exist at all", multiple > 0);
         assertTrue("and single ones must stay the majority, saw " + multiple + "/" + systems,
                 multiple * 2 < systems * 3);
         assertTrue("a system must be able to hold three stars, saw at most " + mostStars,
-                mostStars >= 2);
+                mostStars >= MIN_MOST_STARS);
     }
 
     @Test
@@ -302,7 +356,7 @@ public class SystemRetinueTest {
             }
             checked++;
         }
-        assertTrue(checked > 20);
+        assertTrue(checked > MIN_SYSTEMS_FOR_STAR_COUNTS);
     }
 
     @Test
@@ -337,7 +391,7 @@ public class SystemRetinueTest {
                 checkedCompanions++;
             }
         }
-        assertTrue("the sweep must contain companions", checkedCompanions > 3);
+        assertTrue("the sweep must contain companions", checkedCompanions > MIN_COMPANION_SYSTEMS);
     }
 
     @Test
@@ -367,7 +421,7 @@ public class SystemRetinueTest {
                 }
             }
         }
-        assertTrue("the sweep must contain multiple systems with worlds", checked > 10);
+        assertTrue("the sweep must contain multiple systems with worlds", checked > MIN_SYSTEMS_FOR_SPREAD);
     }
 
     // ─── E1: a long-tailed body count ──────────────────────────────────────────
@@ -384,9 +438,9 @@ public class SystemRetinueTest {
         int smallest = counts.get(0);
 
         assertTrue("an ordinary system must be a handful of bodies, saw a median of " + median,
-                median >= 4 && median <= 8);
+                median >= ORDINARY_SYSTEM_MIN_BODIES && median <= ORDINARY_SYSTEM_MAX_BODIES);
         assertTrue("a rare system must be genuinely large — a find, not just a bit bigger; biggest "
-                + "seen was " + biggest, biggest >= 15);
+                + "seen was " + biggest, biggest >= RARE_SYSTEM_MIN_BODIES);
         assertTrue("and no system may be empty", smallest >= 1);
         // The tail must be a TAIL: large systems rare, not a second mode.
         int large = 0;
@@ -436,7 +490,7 @@ public class SystemRetinueTest {
                     + ", belt " + outermostBelt + ")", outermostBelt > outermostMajor);
             checked++;
         }
-        assertTrue(checked > 5);
+        assertTrue(checked > MIN_SYSTEMS_CHECKED);
     }
 
     @Test
@@ -504,8 +558,8 @@ public class SystemRetinueTest {
             }
             checked++;
         }
-        assertTrue(checked > 5);
-        assertTrue("a sweep of systems must produce moons", moons > 3);
+        assertTrue(checked > MIN_SYSTEMS_CHECKED);
+        assertTrue("a sweep of systems must produce moons", moons > MIN_MOONS);
     }
 
     @Test
@@ -580,7 +634,7 @@ public class SystemRetinueTest {
                     cellDistance(anchor, outer) >= cellDistance(anchor, inner));
             checked++;
         }
-        assertTrue(checked > 3);
+        assertTrue(checked > MIN_SWEEP);
     }
 
     // ─── determinism of the whole retinue ──────────────────────────────────────
@@ -598,7 +652,7 @@ public class SystemRetinueTest {
             assertEquals(viaAnchor, g.bodiesFor(SEED, viaAnchor.get(viaAnchor.size() - 1).name()));
             checked++;
         }
-        assertTrue(checked > 3);
+        assertTrue(checked > MIN_SWEEP);
     }
 
     private static long cellDistance(GalacticCoord anchor, SystemBody body) {

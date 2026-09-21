@@ -211,9 +211,9 @@ public class VSCrewRelogPersistenceE2ETest extends AbstractSharedVsClientE2ETest
                 + "\n[roll-hold] pose trace :: " + clientEvents().since(poseTraceMark, "client_deck_pose_tick"));
 
         scenario().requireArranged("the ship must actually have rotated, or nothing was driven (upY="
-                + upY + ")" + observed, upY < -0.9);
+                + upY + ")" + observed, upY < INVERTED_UP_Y);
         scenario().requireArranged("the client must have resolved the body through the roll, or a clean "
-                + "result describes the instrument" + observed, resolvedDuringRoll >= 20);
+                + "result describes the instrument" + observed, resolvedDuringRoll >= RESOLVED_TICKS_MIN);
         assertEquals("CONTROL: the guard must be quiet while the ship is still - otherwise the count "
                 + "during the roll is not attributable to the rotation" + observed,
                 0L, dropsDuringRest);
@@ -241,7 +241,7 @@ public class VSCrewRelogPersistenceE2ETest extends AbstractSharedVsClientE2ETest
         scenario().requireArranged("the deck must have stepped out from under him by several times "
                         + "the bar, or this fixture cannot exhibit the lag at all (deckStep="
                         + deckStep + ", bar=" + SEAT_MISS_TOLERANCE + ")" + observed,
-                deckStep > 5.0 * SEAT_MISS_TOLERANCE);
+                deckStep > DECK_STEP_SLACK_MULTIPLE * SEAT_MISS_TOLERANCE);
         assertTrue("a crew member must stand on his deck point at the pose the ship holds NOW, not "
                         + "at the one it held a tick ago: he was found " + rollSeatMiss + " blocks "
                         + "off the point this class committed for him (bar " + SEAT_MISS_TOLERANCE
@@ -275,6 +275,82 @@ public class VSCrewRelogPersistenceE2ETest extends AbstractSharedVsClientE2ETest
      * the same defect is the same angle through a longer arm.</p>
      */
     private static final double SEAT_MISS_TOLERANCE = 0.02D;
+
+    /**
+     * How far past vertical the craft must be for an inverted-deck leg to mean anything — the
+     * world-frame Y of the deck normal.
+     *
+     * <p>The TEST'S OWN arrangement fact: production holds whatever attitude it was pointed at and
+     * has no opinion about "inverted". At -0.9 the hull is about 155 degrees over, which is where
+     * a body that is NOT being carried falls off rather than sliding.</p>
+     */
+    private static final double INVERTED_UP_Y = -0.9D;
+
+    /**
+     * How many client ticks must have RESOLVED the body through a window before any count taken over
+     * that window can be read.
+     *
+     * <p>The TEST'S OWN, and it is an instrument check rather than a contract: a clean result over
+     * a window the resolver never ran in describes the instrument, not the subject. Twenty ticks is
+     * a second of resolution.</p>
+     */
+    private static final int RESOLVED_TICKS_MIN = 20;
+
+    /**
+     * How many of those ticks must have carried a WALK INPUT before a walk can be judged.
+     *
+     * <p>The TEST'S OWN: half of {@link #RESOLVED_TICKS_MIN}, because the key is pressed inside the
+     * window rather than held across all of it. What it refuses is a key that never reached the
+     * client's movement path at all.</p>
+     */
+    private static final int INPUT_TICKS_MIN = 10;
+
+    /**
+     * How many times {@link #SEAT_MISS_TOLERANCE} the deck must step out from under the body for
+     * this fixture to exhibit the lag at all.
+     *
+     * <p>The TEST'S OWN sensitivity bar, and a MULTIPLE rather than a distance on purpose: it is
+     * stated against the very bar the subject is then judged by, which is what makes a pass mean
+     * the arrangement was hard rather than easy. Written as a bare {@code 5.0} beside that bar
+     * until 2026-09-21, where it read as a number of blocks.</p>
+     */
+    private static final double DECK_STEP_SLACK_MULTIPLE = 5.0;
+
+    /**
+     * How far from his own deck spot a restored body may be and still count as AT it, in blocks.
+     *
+     * <p>The TEST'S OWN: a block and a half is about a body's width, so what it refuses is a body
+     * that fell off the deck or came back somewhere else entirely.</p>
+     */
+    private static final double BACK_AT_HIS_SPOT_BLOCKS = 1.5;
+
+    /**
+     * How far the crew member must walk on the deck before logging out, in blocks.
+     *
+     * <p>The TEST'S OWN sensitivity bar: the leg's whole subject is coming back to a place he
+     * WALKED to, so he has to have gone somewhere first.</p>
+     */
+    private static final double WALKED_ON_DECK_BLOCKS = 0.75;
+
+    /**
+     * How far a restored body may move ALONG THE DECK NORMAL before it counts as sinking through
+     * it, in blocks.
+     *
+     * <p>The TEST'S OWN, and a separate constant from {@link #WALKED_ON_DECK_BLOCKS} although the
+     * two carry the same number today: one is a distance ACROSS the deck that must be exceeded, the
+     * other a distance THROUGH it that must not be. Merging them would tie a sensitivity bar to a
+     * contract bound.</p>
+     */
+    private static final double DID_NOT_SINK_BLOCKS = 0.75;
+
+    /**
+     * How far from its own build base the ship may have loaded, in blocks.
+     *
+     * <p>The TEST'S OWN: a craft settles and drifts between assembly and the first read, and
+     * twenty-four blocks is well inside its own plot while being far under the distance to any
+     * neighbour's. What it pins is that the identity resolved to the craft THIS scenario built.</p>
+     */
+    private static final double LOADED_AT_ITS_BASE_BLOCKS = 24.0;
 
     /**
      * How long a commanded half-turn is given to finish, in ticks.
@@ -384,9 +460,9 @@ public class VSCrewRelogPersistenceE2ETest extends AbstractSharedVsClientE2ETest
 
         // ARRANGEMENT first, so a clean result can never be the instrument's silence.
         scenario().requireArranged("the client must have resolved the body through both windows, or "
-                + "neither count means anything" + observed, resolvedIdle >= 20 && resolvedWalk >= 20);
+                + "neither count means anything" + observed, resolvedIdle >= RESOLVED_TICKS_MIN && resolvedWalk >= RESOLVED_TICKS_MIN);
         scenario().requireArranged("the resolver must have SEEN the walk input, or the key never "
-                + "reached the client's movement path" + observed, inputTicks >= 10);
+                + "reached the client's movement path" + observed, inputTicks >= INPUT_TICKS_MIN);
         scenario().requireArranged("he must actually have covered ground on the deck" + observed,
                 walked > 1.0);
         scenario().requireArranged("he must have stayed ON the deck for the whole walk - a body that "
@@ -565,7 +641,8 @@ public class VSCrewRelogPersistenceE2ETest extends AbstractSharedVsClientE2ETest
                         && stalledTicks(idleStall) <= STALL_MS / 200);
         scenario().requireArranged("the client must have resolved the body through every window"
                         + observed,
-                resolvedControl >= 20 && resolvedIdleStall >= 20 && resolvedAfterStall >= 20);
+                resolvedControl >= RESOLVED_TICKS_MIN && resolvedIdleStall >= RESOLVED_TICKS_MIN
+                        && resolvedAfterStall >= RESOLVED_TICKS_MIN);
         scenario().requireArranged("he must have covered ground both times he walked - the walk"
                         + " across the freeze has to drive the two sides at least "
                         + STIMULUS_SLACK_MULTIPLE + "x the guard's own slack (" + GUARD_SLACK_BLOCKS
@@ -685,7 +762,7 @@ public class VSCrewRelogPersistenceE2ETest extends AbstractSharedVsClientE2ETest
                 + " (upY went " + upYBefore + " -> " + upY + " across " + ROLL_WINDOW_TICKS
                 + " ticks). If those two are equal the attitude hold never started and the window is"
                 + " innocent; if they differ it was still slewing and the window is short.",
-                upY < -0.9);
+                upY < INVERTED_UP_Y);
         DeckCapture capBefore = DeckCapture.read(this::exec);
         assertTrue("the player must still be captured on the inverted deck before the relog: "
                 + capBefore.raw(), capBefore.alreadyTracked);
@@ -737,7 +814,7 @@ public class VSCrewRelogPersistenceE2ETest extends AbstractSharedVsClientE2ETest
         // deck spot he logged out on, never handed to world gravity for a visible fall.
         assertTrue("after a relog the player must still be AT his deck spot, not fallen off "
                 + "(preY=" + preY + " postY=" + postY + "): " + capNow.raw(),
-                Math.abs(postY - preY) < 1.5);
+                Math.abs(postY - preY) < BACK_AT_HIS_SPOT_BLOCKS);
     }
 
     /**
@@ -805,7 +882,7 @@ public class VSCrewRelogPersistenceE2ETest extends AbstractSharedVsClientE2ETest
         // never exists and a green below would mean nothing.
         assertTrue("the crew member must actually cover ground on the deck before logging out "
                 + "(moved " + distance(beforeWalk, walking) + " blocks)",
-                distance(beforeWalk, walking) > 0.75);
+                distance(beforeWalk, walking) > WALKED_ON_DECK_BLOCKS);
 
         // Log out WHILE the body still carries that walk. The release above only stops the input;
         // the velocity is still on the entity for several ticks of drag, and it is what gets saved.
@@ -895,17 +972,17 @@ public class VSCrewRelogPersistenceE2ETest extends AbstractSharedVsClientE2ETest
                 + "entity (moved " + alongDeck(justAfter, oneSecondLater) + " blocks along the deck "
                 + "in 20 ticks with no input; the client's own seed verdicts since the relog were "
                 + seeds + ", the last of them " + seedOutcome + ")" + path,
-                alongDeck(justAfter, oneSecondLater) < 0.35);
+                alongDeck(justAfter, oneSecondLater) < SHIP_FRAME_DRIFT_TOLERANCE);
         assertTrue("and he must not sink through it either (moved "
                 + Math.abs(justAfter[1] - oneSecondLater[1]) + " blocks along the deck normal)" + path,
-                Math.abs(justAfter[1] - oneSecondLater[1]) < 0.75);
+                Math.abs(justAfter[1] - oneSecondLater[1]) < DID_NOT_SINK_BLOCKS);
 
         // And he must STAY put - not merely have stopped by then.
         double afterCreep = alongDeck(oneSecondLater, later);
         assertTrue("a restored crew member must not creep along the deck once he has landed on it "
                 + "(after the relog he moved " + afterCreep
                 + " blocks along the deck in 30 ticks; the same body before the relog moved "
-                + idleCreep + " over the same window)" + path, afterCreep < 0.35);
+                + idleCreep + " over the same window)" + path, afterCreep < SHIP_FRAME_DRIFT_TOLERANCE);
 
         // The two CLIENT-side pins, and the reason they exist alongside the sampled trace above.
         //
@@ -932,7 +1009,7 @@ public class VSCrewRelogPersistenceE2ETest extends AbstractSharedVsClientE2ETest
         // WITNESS: "it did not travel" and "nothing was recorded" are the same number otherwise.
         assertTrue("the client must have resolved the body through the observation window, or the "
                 + "two pins below cannot fail (" + covered + " ticks recorded)\n" + history,
-                covered > 20);
+                covered > RESOLVED_TICKS_MIN);
         assertTrue("the deck point the client holds him at must not travel along the deck with no "
                 + "input (moved " + heldTravel + " blocks, bar " + SHIP_FRAME_DRIFT_TOLERANCE + ")\n"
                 + history, heldTravel < SHIP_FRAME_DRIFT_TOLERANCE);
@@ -946,7 +1023,7 @@ public class VSCrewRelogPersistenceE2ETest extends AbstractSharedVsClientE2ETest
         // and the body is still decelerating, so a few tenths of a block are the instrument's.
         assertTrue("he must come back where he logged out (deck point " + fmt(logoutOffset)
                 + "), not " + distance(logoutOffset, later) + " blocks away at " + fmt(later),
-                distance(logoutOffset, later) < 1.5);
+                distance(logoutOffset, later) < BACK_AT_HIS_SPOT_BLOCKS);
     }
 
     // ---- helpers (self-contained, mirroring the other tier-2 e2e classes) ----------------------
@@ -1314,7 +1391,7 @@ public class VSCrewRelogPersistenceE2ETest extends AbstractSharedVsClientE2ETest
         assertTrue("the ship this scenario built must have loaded AT ITS OWN BASE - the identity is"
                         + " the assembly's own record, so this pins where the fixture came up rather"
                         + " than which ship answered: " + info,
-                distance(where, new double[]{bx, by, bz}) < 24.0);
+                distance(where, new double[]{bx, by, bz}) < LOADED_AT_ITS_BASE_BLOCKS);
         return where;
     }
 
